@@ -90,6 +90,15 @@ tags:
       id: "assistant-message"
     timeout: 60000
 
+# Dismiss support/share sheet if it appeared
+- runFlow:
+    when:
+      visible:
+        text: "Support Open-Source AI"
+    commands:
+      - tapOn:
+          text: "Maybe later"
+
 # Verify input is ready for next message
 - assertVisible:
     id: "chat-input"

@@ -108,6 +108,15 @@ tags:
       - tapOn:
           text: "OK"
 
+# Dismiss support/share sheet if it appeared
+- runFlow:
+    when:
+      visible:
+        text: "Support Open-Source AI"
+    commands:
+      - tapOn:
+          text: "Maybe later"
+
 # Verify input is ready
 - assertVisible:
     id: "chat-input"
