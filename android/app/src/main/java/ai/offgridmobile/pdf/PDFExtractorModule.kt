@@ -25,10 +25,26 @@ class PDFExtractorModule(reactContext: ReactApplicationContext) : ReactContextBa
         page.close()
     }
 
+    private fun isPathAllowed(filePath: String): Boolean {
+        val canonical = File(filePath).canonicalPath
+        val allowedBasePaths = listOf(
+            reactApplicationContext.filesDir.canonicalPath,
+            reactApplicationContext.cacheDir.canonicalPath,
+        ) + (reactApplicationContext.getExternalFilesDir(null)?.canonicalPath?.let { listOf(it) } ?: emptyList()) +
+            (reactApplicationContext.externalCacheDir?.canonicalPath?.let { listOf(it) } ?: emptyList())
+
+        return allowedBasePaths.any { canonical.startsWith(it) }
+    }
+
     @ReactMethod
     fun extractText(filePath: String, maxChars: Double, promise: Promise) {
         Thread {
             try {
+                if (!isPathAllowed(filePath)) {
+                    promise.reject("PDF_ERROR", "Access denied: file path is outside allowed directories")
+                    return@Thread
+                }
+
                 val file = File(filePath)
                 if (!file.exists()) {
                     promise.reject("PDF_ERROR", "File not found: $filePath")

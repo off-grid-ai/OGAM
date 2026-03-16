@@ -13,8 +13,10 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileInputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import java.util.concurrent.Executors
 
 class DownloadManagerModule(reactContext: ReactApplicationContext) :
@@ -144,6 +146,7 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
         val modelId = params.getString("modelId") ?: ""
         val totalBytes = if (params.hasKey("totalBytes")) params.getDouble("totalBytes").toLong() else 0L
         val hideNotification = params.hasKey("hideNotification") && params.getBoolean("hideNotification")
+        val expectedSha256 = params.getString("expectedSha256")
 
         // Validate URL against allowed download hosts to prevent SSRF
         val parsedHost = try { URL(url).host } catch (_: Exception) { null }
@@ -202,6 +205,9 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
                     put("totalBytes", totalBytes)
                     put("status", "pending")
                     put("startedAt", System.currentTimeMillis())
+                    if (!expectedSha256.isNullOrBlank()) {
+                        put("expectedSha256", expectedSha256)
+                    }
                 }
                 persistDownload(downloadId, downloadInfo)
 
@@ -360,6 +366,91 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
         } catch (e: Exception) {
             promise.reject("MOVE_ERROR", "Failed to move completed download: ${e.message}", e)
         }
+    }
+
+    /**
+     * Verify the SHA-256 checksum of a completed download.
+     * If no expectedSha256 was provided at download time, logs a warning and resolves with
+     * a "skipped" result to maintain backward compatibility.
+     */
+    @ReactMethod
+    fun verifyChecksum(downloadId: Double, promise: Promise) {
+        executor.execute {
+            try {
+                val id = downloadId.toLong()
+                val downloadInfo = getDownloadInfo(id)
+                    ?: throw IllegalArgumentException("Download info not found for ID: $id")
+
+                val expectedHash = downloadInfo.optString("expectedSha256", "")
+                val fileName = downloadInfo.optString("fileName", "")
+
+                if (expectedHash.isBlank()) {
+                    android.util.Log.w("DownloadManager",
+                        "No expected SHA-256 hash for download $id ($fileName). " +
+                        "Skipping checksum verification. Provide expectedSha256 in startDownload params for integrity checking.")
+                    val result = Arguments.createMap().apply {
+                        putString("status", "skipped")
+                        putString("reason", "No expected hash provided")
+                    }
+                    promise.resolve(result)
+                    return@execute
+                }
+
+                // Find the downloaded file
+                val statusInfo = queryDownloadStatus(id)
+                val localUri = statusInfo.getString("localUri")
+                var file: File? = null
+                if (!localUri.isNullOrEmpty()) {
+                    try {
+                        val uri = android.net.Uri.parse(localUri)
+                        uri.path?.let { path ->
+                            val f = File(path)
+                            if (f.exists()) file = f
+                        }
+                    } catch (_: Exception) {}
+                }
+                if (file == null) {
+                    file = File(
+                        reactApplicationContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+                        fileName
+                    )
+                }
+
+                if (file == null || !file!!.exists()) {
+                    throw IllegalArgumentException("Downloaded file not found")
+                }
+
+                val actualHash = computeSha256(file!!)
+                val matches = actualHash.equals(expectedHash, ignoreCase = true)
+
+                if (!matches) {
+                    android.util.Log.e("DownloadManager",
+                        "SHA-256 mismatch for $fileName: expected=$expectedHash, actual=$actualHash")
+                }
+
+                val result = Arguments.createMap().apply {
+                    putString("status", if (matches) "verified" else "mismatch")
+                    putString("expectedHash", expectedHash)
+                    putString("actualHash", actualHash)
+                    putBoolean("matches", matches)
+                }
+                promise.resolve(result)
+            } catch (e: Exception) {
+                promise.reject("CHECKSUM_ERROR", "Failed to verify checksum: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun computeSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(8192)
+        FileInputStream(file).use { fis ->
+            var bytesRead: Int
+            while (fis.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     @ReactMethod

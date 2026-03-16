@@ -54,7 +54,11 @@
         </intent-filter>
       </activity>
 
-      <!-- Receiver for background download completion events -->
+      <!-- Receiver for background download completion events.
+           SECURITY NOTE: exported="true" is required to receive DOWNLOAD_COMPLETE from the
+           system DownloadManager. The receiver validates the download ID against our persisted
+           list and queries DownloadManager directly, so spoofed intents with fake IDs are
+           harmlessly ignored (findDownload returns null, applyDownloadResult returns null). -->
       <receiver
           android:name=".download.DownloadCompleteBroadcastReceiver"
           android:exported="true">

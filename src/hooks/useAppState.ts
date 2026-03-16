@@ -8,6 +8,8 @@ export interface UseAppStateCallbacks {
 
 export const useAppState = (callbacks: UseAppStateCallbacks) => {
   const appState = useRef(AppState.currentState);
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
@@ -15,12 +17,12 @@ export const useAppState = (callbacks: UseAppStateCallbacks) => {
         appState.current.match(/inactive|background/) &&
         nextAppState === 'active'
       ) {
-        callbacks.onForeground?.();
+        callbacksRef.current.onForeground?.();
       } else if (
         appState.current === 'active' &&
         nextAppState.match(/inactive|background/)
       ) {
-        callbacks.onBackground?.();
+        callbacksRef.current.onBackground?.();
       }
 
       appState.current = nextAppState;
@@ -29,7 +31,7 @@ export const useAppState = (callbacks: UseAppStateCallbacks) => {
     return () => {
       subscription.remove();
     };
-  }, [callbacks]);
+  }, []);
 
   return {
     currentState: appState.current,

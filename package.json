@@ -90,5 +90,10 @@
   "engines": {
     "node": ">=20"
   },
-  "op-sqlite": {}
+  "op-sqlite": {},
+  "overrides": {
+    "xml2js": ">=0.5.0",
+    "xmldom": "npm:@xmldom/xmldom@>=0.9.0",
+    "markdown-it": ">=14.1.1"
+  }
 }

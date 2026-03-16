@@ -49,7 +49,7 @@ export function AnimatedEntry({
     opacity.value = withDelay(computedDelay, withTiming(targetOpacity, { duration }));
     translateY.value = withDelay(computedDelay, withTiming(targetTranslateY, { duration }));
 
-  }, [trigger]);
+  }, [trigger, reducedMotion, index, maxItems, from, animate, computedDelay, duration, opacity, translateY]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
