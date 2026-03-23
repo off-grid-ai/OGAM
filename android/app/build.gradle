@@ -168,6 +168,9 @@ android {
 
 kapt {
     correctErrorTypes = true
+    arguments {
+        arg("dagger.hilt.android.internal.disableAndroidSuperclassValidation", "true")
+    }
 }
 
 configurations.all {

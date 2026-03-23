@@ -6,15 +6,16 @@ buildscript {
         targetSdkVersion = 36
         ndkVersion = "27.1.12297006"
         kotlinVersion = "2.1.20"
+        agpVersion = "8.7.3"
     }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle")
+        classpath("com.android.tools.build:gradle:8.7.3")
         classpath("com.facebook.react:react-native-gradle-plugin")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20")
         // Kotlin Compose Compiler plugin (Kotlin 2.0+ bundled approach)
         classpath("org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.1.20")
         // Hilt dependency injection
