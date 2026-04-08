@@ -364,27 +364,17 @@ export const AudioMessageBubble: React.FC<AudioMessageBubbleProps> = ({
     </Text>
   );
 
-  // ── Seekable progress bar — tap to jump to a position ──
-  const handleProgressTap = useCallback((e: any) => {
-    e.target.measure((_x: number, _y: number, width: number) => {
-      const fraction = Math.max(0, Math.min(1, e.nativeEvent.locationX / width));
+  // ── Seek handler — tap on the waveform area to jump to a position ──
+  const waveformRef = useRef<View>(null);
+  const handleWaveformSeek = useCallback((e: any) => {
+    if (!isThisActive || isLoading) return;
+    const locationX = e.nativeEvent.locationX;
+    waveformRef.current?.measure((_x: number, _y: number, width: number) => {
+      if (!width) return;
+      const fraction = Math.max(0, Math.min(1, locationX / width));
       handleSeek(fraction);
     });
-  }, [handleSeek]);
-
-  const progressBar = isThisActive ? (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={handleProgressTap}
-      style={styles.progressTouchable}
-    >
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` as any, backgroundColor: colors.primary }]} />
-      </View>
-      {/* Seek thumb dot */}
-      <View style={[styles.progressThumb, { left: `${Math.round(progress * 100)}%` as any, backgroundColor: colors.primary }]} />
-    </TouchableOpacity>
-  ) : null;
+  }, [isThisActive, isLoading, handleSeek]);
 
   return (
     <View style={[styles.bubble, isUser && styles.bubbleUser]} testID={`audio-bubble-${messageId}`}>
@@ -402,17 +392,32 @@ export const AudioMessageBubble: React.FC<AudioMessageBubbleProps> = ({
             {playButton}
             {isLoading
               ? <ThinkingDots colors={colors} />
-              : <WaveformBars
-                  data={waveformData}
-                  colors={colors}
-                  isPlaying={isThisAudible}
-                />}
+              : (
+                <TouchableOpacity
+                  ref={waveformRef as any}
+                  activeOpacity={0.9}
+                  onPress={handleWaveformSeek}
+                  disabled={!isThisActive}
+                  style={styles.waveformSeekArea}
+                >
+                  <WaveformBars
+                    data={waveformData}
+                    colors={colors}
+                    isPlaying={isThisAudible}
+                  />
+                  {isThisActive && (
+                    <View style={styles.progressTrack}>
+                      <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` as any, backgroundColor: colors.primary }]} />
+                      <View style={[styles.progressThumb, { left: `${Math.round(progress * 100)}%` as any, backgroundColor: colors.primary }]} />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )}
             {durationText}
             {speedChip}
           </>
         )}
       </View>
-      {progressBar}
 
       {/* Transcript toggle — only for user voice recordings */}
       {isUser && transcript ? (
@@ -489,17 +494,15 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.metaSmall,
     color: colors.textSecondary,
   },
-  progressTouchable: {
-    paddingVertical: 8,
-    marginTop: -SPACING.xs,
-    position: 'relative' as const,
-    justifyContent: 'center' as const,
+  waveformSeekArea: {
+    flex: 1,
   },
   progressTrack: {
-    height: 4,
-    backgroundColor: `${colors.primary}20`,
+    height: 3,
+    backgroundColor: `${colors.primary}15`,
     borderRadius: 2,
-    overflow: 'hidden' as const,
+    marginTop: 4,
+    position: 'relative' as const,
   },
   progressFill: {
     height: '100%' as const,
@@ -508,11 +511,11 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   progressThumb: {
     position: 'absolute' as const,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginLeft: -6,
-    top: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginLeft: -5,
+    top: -3.5,
   },
   transcriptToggle: {
     flexDirection: 'row' as const,
