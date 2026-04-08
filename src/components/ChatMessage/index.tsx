@@ -160,7 +160,9 @@ const ToolCallWithThinking: React.FC<{
   return (
     <View style={styles.systemInfoContainer}>
       {!!tc?.thinking && (
-        <ThinkingBlock parsedContent={tc} showThinking={showThinking} onToggle={onToggle} styles={styles} />
+        <View style={styles.thinkingBlockWrapper}>
+          <ThinkingBlock parsedContent={tc} showThinking={showThinking} onToggle={onToggle} styles={styles} />
+        </View>
       )}
       {hasText && (
         <View testID="tool-call-pre-text" style={styles.toolCallPreText}>

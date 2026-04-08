@@ -33,17 +33,17 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flex: 1,
   },
   listContent: {
-    paddingTop: SPACING.lg,
+    paddingTop: SPACING.md,
     paddingBottom: SPACING.xxl,
   },
   section: {
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.md,
   },
   sectionHeader: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.lg,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
     gap: SPACING.sm,
   },
   sectionTitle: {
@@ -63,7 +63,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   downloadCard: {
     marginHorizontal: SPACING.lg,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   downloadHeader: {
     flexDirection: 'row' as const,
@@ -160,18 +160,46 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   emptyCard: {
     marginHorizontal: SPACING.lg,
     alignItems: 'center' as const,
-    paddingVertical: SPACING.xxl,
-    gap: SPACING.sm,
+    paddingVertical: SPACING.xl,
+    gap: SPACING.xs,
   },
   emptyText: {
-    ...TYPOGRAPHY.body,
-    color: colors.textSecondary,
-    marginTop: SPACING.sm,
-  },
-  emptySubtext: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,
+    marginTop: SPACING.xs,
+  },
+  emptySubtext: {
+    ...TYPOGRAPHY.meta,
+    color: colors.textMuted,
     textAlign: 'center' as const,
+  },
+  filterBarContent: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  filterChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: SPACING.sm + 2,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  filterChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: `${colors.primary}15`,
+  },
+  filterChipText: {
+    ...TYPOGRAPHY.meta,
+    color: colors.textSecondary,
+  },
+  filterChipTextActive: {
+    color: colors.primary,
   },
   storageSection: {
     paddingHorizontal: SPACING.lg,
