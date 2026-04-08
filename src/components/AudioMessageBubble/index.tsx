@@ -309,7 +309,7 @@ export const AudioMessageBubble: React.FC<AudioMessageBubbleProps> = ({
     setLocalElapsed(seekSeconds);
     // Stop current playback and re-speak from the seek point
     stop();
-    setTimeout(() => speak(remaining, messageId), 100);
+    setTimeout(() => speak(remaining, messageId), 200);
   }, [transcript, audioPath, stop, speak, messageId]);
 
   const speedChip = (
@@ -365,15 +365,12 @@ export const AudioMessageBubble: React.FC<AudioMessageBubbleProps> = ({
   );
 
   // ── Seek handler — tap on the waveform area to jump to a position ──
-  const waveformRef = useRef<View>(null);
+  const seekAreaWidth = useRef(0);
   const handleWaveformSeek = useCallback((e: any) => {
-    if (!isThisActive || isLoading) return;
+    if (!isThisActive || isLoading || !seekAreaWidth.current) return;
     const locationX = e.nativeEvent.locationX;
-    waveformRef.current?.measure((_x: number, _y: number, width: number) => {
-      if (!width) return;
-      const fraction = Math.max(0, Math.min(1, locationX / width));
-      handleSeek(fraction);
-    });
+    const fraction = Math.max(0, Math.min(1, locationX / seekAreaWidth.current));
+    handleSeek(fraction);
   }, [isThisActive, isLoading, handleSeek]);
 
   return (
@@ -394,9 +391,9 @@ export const AudioMessageBubble: React.FC<AudioMessageBubbleProps> = ({
               ? <ThinkingDots colors={colors} />
               : (
                 <TouchableOpacity
-                  ref={waveformRef as any}
                   activeOpacity={0.9}
                   onPress={handleWaveformSeek}
+                  onLayout={(e) => { seekAreaWidth.current = e.nativeEvent.layout.width; }}
                   disabled={!isThisActive}
                   style={styles.waveformSeekArea}
                 >
