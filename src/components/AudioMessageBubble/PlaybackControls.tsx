@@ -180,12 +180,14 @@ export const SeekBar: React.FC<{
   );
 };
 
-/** Transcript toggle and content */
+/** Transcript with word-level highlighting based on playback progress */
 export const TranscriptSection: React.FC<{
   transcript?: string;
   colors: ThemeColors;
   styles: any;
-}> = ({ transcript, colors, styles }) => {
+  /** 0–1 playback progress, used for word highlighting */
+  progress?: number;
+}> = ({ transcript, colors, styles, progress = 0 }) => {
   const [showTranscript, setShowTranscript] = useState(false);
 
   if (!transcript) return null;
@@ -207,10 +209,45 @@ export const TranscriptSection: React.FC<{
       </TouchableOpacity>
       {showTranscript && (
         <View style={styles.transcriptContent}>
-          <MarkdownText>{transcript}</MarkdownText>
+          {progress > 0 ? (
+            <HighlightedTranscript text={transcript} progress={progress} colors={colors} styles={styles} />
+          ) : (
+            <MarkdownText>{transcript}</MarkdownText>
+          )}
         </View>
       )}
     </>
+  );
+};
+
+/** Renders transcript with words highlighted up to the current playback position */
+const HighlightedTranscript: React.FC<{
+  text: string;
+  progress: number;
+  colors: ThemeColors;
+  styles: any;
+}> = ({ text, progress, colors, styles }) => {
+  const words = text.split(/(\s+)/); // preserve whitespace
+  const totalChars = text.length;
+  const highlightUpTo = Math.floor(progress * totalChars);
+
+  let charCount = 0;
+  return (
+    <Text style={styles.transcriptText}>
+      {words.map((word, i) => {
+        const wordStart = charCount;
+        charCount += word.length;
+        const isSpoken = wordStart < highlightUpTo;
+        return (
+          <Text
+            key={i}
+            style={{ color: isSpoken ? colors.text : colors.textMuted }}
+          >
+            {word}
+          </Text>
+        );
+      })}
+    </Text>
   );
 };
 

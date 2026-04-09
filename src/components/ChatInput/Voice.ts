@@ -63,6 +63,9 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
   const startRecording = async () => {
     recordingConversationIdRef.current = conversationId || null;
     setDirectError(null);
+    // Stop any TTS playback before recording — mic and speaker shouldn't overlap
+    const tts = useTTSStore.getState();
+    if (tts.isSpeaking) { tts.stop(); }
 
     if (supportsDirectAudio()) {
       try {

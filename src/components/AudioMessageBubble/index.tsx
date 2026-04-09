@@ -214,7 +214,7 @@ export const AudioMessageBubble: React.FC<AudioMessageBubbleProps> = ({
         <SeekBar displayProgress={progress} colors={colors} styles={styles} onSeek={handleSeek} />
       )}
 
-      <TranscriptSection transcript={transcript} colors={colors} styles={styles} />
+      <TranscriptSection transcript={transcript} colors={colors} styles={styles} progress={progress} />
     </View>
   );
 };
@@ -286,5 +286,9 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   transcriptContent: {
     paddingTop: SPACING.xs,
+  },
+  transcriptText: {
+    ...TYPOGRAPHY.bodySmall,
+    lineHeight: 20,
   },
 });

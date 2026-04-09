@@ -195,14 +195,12 @@ export const useTTSStore = create<TTSState>()(
 
         // ── Kokoro fast path (Android 13+ / iOS 17+, model ready) ────────────
         if (get().kokoroReady && isExecutorchSupported()) {
-          ttsService.stop(); // ensure OuteTTS is silent
-          // Always stop Kokoro and wait for native ExecuTorch worker to fully
-          // clean up — a previous call (or seek) may have left its internal state
-          // as "generating" even though isSpeaking was reset by our finally block.
+          ttsService.stop();
           kokoroRef.stop(true);
-          await new Promise<void>((r) => setTimeout(r, 300));
-
+          // Set state immediately so UI shows loading for the new message right away
+          // (before the 300ms native cleanup wait)
           set({ isSpeaking: true, isPaused: false, isAudioPlaying: false, isGeneratingAudio: false, currentMessageId: messageId, playbackElapsed: 0, error: null });
+          await new Promise<void>((r) => setTimeout(r, 300));
           try {
             kokoroRef.setKeepAlive(false);
             await kokoroRef.speak(text, settings.speed);
