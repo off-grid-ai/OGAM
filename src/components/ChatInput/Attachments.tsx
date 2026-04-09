@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useRef, useState } from 'react';
 
 let _attachmentIdSeq = 0;
 const nextAttachmentId = () => `${Date.now()}-${(++_attachmentIdSeq).toString(36)}`;
 import { ActionSheetIOS, Platform, View, Text, Image, ScrollView, TouchableOpacity } from 'react-native';
 import { launchImageLibrary, launchCamera, Asset } from 'react-native-image-picker';
-import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
+import { types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import { MediaAttachment } from '../../types';
@@ -12,108 +12,40 @@ import { documentService } from '../../services/documentService';
 import { AlertState, showAlert, hideAlert } from '../CustomAlert';
 import { createStyles } from './styles';
 import logger from '../../utils/logger';
+import {
+  __resetDocumentPickerCoordinatorForTests,
+  pickDocumentWithCoordinator,
+  useDocumentPickerActive,
+} from '../../utils/documentPickerCoordinator';
 
 // ─── useAttachments hook ──────────────────────────────────────────────────────
-let pickerRequestSeq = 0;
-type ActivePickerRequest = { id: number; source: string; startedAt: number };
-
-const PICKER_WATCHDOG_MS = 10000;
-const PICKER_STALE_RESET_MS = 15000;
-let globalPickerRequest: ActivePickerRequest | null = null;
-let globalPickerWatchdog: ReturnType<typeof setTimeout> | null = null;
-const pickerStateListeners = new Set<(request: ActivePickerRequest | null) => void>();
-
-const notifyPickerState = () => {
-  pickerStateListeners.forEach(listener => listener(globalPickerRequest));
-};
-
-const subscribePickerState = (listener: (request: ActivePickerRequest | null) => void) => {
-  pickerStateListeners.add(listener);
-  listener(globalPickerRequest);
-  return () => {
-    pickerStateListeners.delete(listener);
-  };
-};
-
-const startPickerWatchdog = (request: ActivePickerRequest) => {
-  if (globalPickerWatchdog) clearTimeout(globalPickerWatchdog);
-  globalPickerWatchdog = setTimeout(() => {
-    if (!globalPickerRequest || globalPickerRequest.id !== request.id) return;
-    logger.warn('[ChatInput][Attachments]', 'picker-watchdog-timeout', {
-      requestId: request.id,
-      source: request.source,
-      durationMs: Date.now() - request.startedAt,
-    });
-    resetGlobalPickerRequest('watchdog-timeout');
-  }, PICKER_WATCHDOG_MS);
-};
-
-const clearPickerWatchdog = () => {
-  if (globalPickerWatchdog) {
-    clearTimeout(globalPickerWatchdog);
-    globalPickerWatchdog = null;
-  }
-};
-
-const resetGlobalPickerRequest = (reason: string) => {
-  const staleRequest = globalPickerRequest;
-  clearPickerWatchdog();
-  globalPickerRequest = null;
-  notifyPickerState();
-  logger.warn('[ChatInput][Attachments]', 'picker-lock-reset', {
-    reason,
-    requestId: staleRequest?.id ?? null,
-    source: staleRequest?.source ?? null,
-    durationMs: staleRequest ? Date.now() - staleRequest.startedAt : null,
-  });
-};
-
 export const __resetAttachmentPickerForTests = () => {
-  clearPickerWatchdog();
-  globalPickerRequest = null;
-  notifyPickerState();
+  __resetDocumentPickerCoordinatorForTests();
 };
 
 export function useAttachments(setAlertState: (state: AlertState) => void) {
   const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
-  const [isPickerActive, setIsPickerActive] = useState(Boolean(globalPickerRequest));
+  const isDocumentPickerActive = useDocumentPickerActive();
+  const [isMediaPickerActive, setIsMediaPickerActive] = useState(false);
+  const mediaPickerInFlightRef = useRef(false);
 
-  useEffect(() => subscribePickerState((request) => {
-    setIsPickerActive(Boolean(request));
-  }), []);
-
-  const runPicker = async (source: string, action: (requestId: number) => Promise<void>) => {
-    if (globalPickerRequest) {
-      const durationMs = Date.now() - globalPickerRequest.startedAt;
-      if (durationMs >= PICKER_STALE_RESET_MS) {
-        resetGlobalPickerRequest('stale-before-new-request');
-      }
-    }
-
-    if (globalPickerRequest) {
-      logger.warn('[ChatInput][Attachments]', 'picker-blocked-busy', {
-        source,
-        activeRequest: `${globalPickerRequest.source}#${globalPickerRequest.id}`,
-        durationMs: Date.now() - globalPickerRequest.startedAt,
-      });
+  const runMediaPicker = async (source: 'photo-library' | 'camera', action: () => Promise<void>) => {
+    if (mediaPickerInFlightRef.current) {
+      logger.warn('[ChatInput][Attachments]', 'media-picker-blocked-busy', { source });
       return;
     }
-    const requestId = ++pickerRequestSeq;
-    const startedAt = Date.now();
-    const request = { id: requestId, source, startedAt };
-    globalPickerRequest = request;
-    notifyPickerState();
-    startPickerWatchdog(request);
+
+    mediaPickerInFlightRef.current = true;
+    setIsMediaPickerActive(true);
     try {
-      await action(requestId);
+      await action();
     } finally {
-      clearPickerWatchdog();
-      if (globalPickerRequest?.id === requestId) {
-        globalPickerRequest = null;
-        notifyPickerState();
-      }
+      mediaPickerInFlightRef.current = false;
+      setIsMediaPickerActive(false);
     }
   };
+
+  const isPickerActive = isDocumentPickerActive || isMediaPickerActive;
 
   const addAttachments = (assets: Asset[]) => {
     const newAttachments: MediaAttachment[] = assets
@@ -135,14 +67,13 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
   };
 
   const pickFromLibrary = async () => {
-    await runPicker('photo-library', async (requestId) => {
+    await runMediaPicker('photo-library', async () => {
       try {
         const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8, maxWidth: 1024, maxHeight: 1024 });
         if (result.assets && result.assets.length > 0) addAttachments(result.assets);
       } catch (pickError) {
         logger.error('Error picking image:', pickError);
         logger.warn('[ChatInput][Attachments]', 'image-library-error', {
-          requestId,
           error: pickError instanceof Error ? pickError.message : String(pickError),
         });
       }
@@ -150,14 +81,13 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
   };
 
   const pickFromCamera = async () => {
-    await runPicker('camera', async (requestId) => {
+    await runMediaPicker('camera', async () => {
       try {
         const result = await launchCamera({ mediaType: 'photo', quality: 0.8, maxWidth: 1024, maxHeight: 1024 });
         if (result.assets && result.assets.length > 0) addAttachments(result.assets);
       } catch (cameraError) {
         logger.error('Error taking photo:', cameraError);
         logger.warn('[ChatInput][Attachments]', 'camera-error', {
-          requestId,
           error: cameraError instanceof Error ? cameraError.message : String(cameraError),
         });
       }
@@ -165,20 +95,6 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
   };
 
   const handlePickImage = () => {
-    if (globalPickerRequest) {
-      const durationMs = Date.now() - globalPickerRequest.startedAt;
-      if (durationMs >= PICKER_STALE_RESET_MS) {
-        resetGlobalPickerRequest('stale-before-image-alert');
-      }
-    }
-
-    if (globalPickerRequest) {
-      logger.warn('[ChatInput][Attachments]', 'image-alert-blocked-busy', {
-        activeRequest: `${globalPickerRequest.source}#${globalPickerRequest.id}`,
-        durationMs: Date.now() - globalPickerRequest.startedAt,
-      });
-      return;
-    }
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
@@ -221,37 +137,34 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
   };
 
   const handlePickDocument = async () => {
-    await runPicker('document', async (requestId) => {
-      try {
-        const result = await pick({
-          type: [types.allFiles],
-          allowMultiSelection: false,
-          presentationStyle: 'fullScreen',
-        });
-        const file = result[0];
-        if (!file) return;
-        const fileName = file.name || 'document';
-        if (!documentService.isSupported(fileName)) {
-          setAlertState(showAlert(
-            'Unsupported File',
-            `"${fileName}" is not supported. Supported types: txt, md, csv, json, pdf, and code files.`,
-            [{ text: 'OK' }],
-          ));
-          return;
-        }
-        const attachment = await documentService.processDocumentFromPath(file.uri, fileName);
-        if (attachment) setAttachments(prev => [...prev, attachment]);
-      } catch (pickError: any) {
-        if (isErrorWithCode(pickError) && pickError.code === errorCodes.OPERATION_CANCELED) return;
-        logger.error('Error picking document:', pickError);
-        logger.warn('[ChatInput][Attachments]', 'document-picker-error', {
-          requestId,
-          message: pickError?.message || null,
-          code: pickError?.code || null,
-        });
-        setAlertState(showAlert('Error', pickError.message || 'Failed to read document', [{ text: 'OK' }]));
+    try {
+      const result = await pickDocumentWithCoordinator('chat-attachment', {
+        type: [types.allFiles],
+        allowMultiSelection: false,
+        presentationStyle: 'fullScreen',
+      });
+      const file = result?.[0];
+      if (!file) return;
+      const fileName = file.name || 'document';
+      if (!documentService.isSupported(fileName)) {
+        setAlertState(showAlert(
+          'Unsupported File',
+          `"${fileName}" is not supported. Supported types: txt, md, csv, json, pdf, and code files.`,
+          [{ text: 'OK' }],
+        ));
+        return;
       }
-    });
+      const attachment = await documentService.processDocumentFromPath(file.uri, fileName);
+      if (attachment) setAttachments(prev => [...prev, attachment]);
+    } catch (pickError: any) {
+      if (isErrorWithCode(pickError) && pickError.code === errorCodes.OPERATION_CANCELED) return;
+      logger.error('Error picking document:', pickError);
+      logger.warn('[ChatInput][Attachments]', 'document-picker-error', {
+        message: pickError?.message || null,
+        code: pickError?.code || null,
+      });
+      setAlertState(showAlert('Error', pickError.message || 'Failed to read document', [{ text: 'OK' }]));
+    }
   };
 
   const clearAttachments = () => setAttachments([]);

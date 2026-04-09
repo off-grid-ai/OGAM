@@ -7,18 +7,19 @@ import {
   Switch,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
-import { pick } from '@react-native-documents/picker';
 import { useTheme, useThemedStyles } from '../theme';
 import { createStyles } from './KnowledgeBaseScreen.styles';
 import { useProjectStore } from '../stores';
 import { ragService } from '../services/rag';
 import type { RagDocument } from '../services/rag';
 import { RootStackParamList } from '../navigation/types';
+import { pickDocumentWithCoordinator } from '../utils/documentPickerCoordinator';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'KnowledgeBase'>;
@@ -58,7 +59,11 @@ export const KnowledgeBaseScreen: React.FC = () => {
 
   const handleAddDocument = async () => {
     try {
-      const files = await pick({ mode: 'import', allowMultiSelection: true });
+      const files = await pickDocumentWithCoordinator('knowledge-base-screen', {
+        mode: 'import',
+        allowMultiSelection: true,
+        ...(Platform.OS === 'ios' ? { presentationStyle: 'fullScreen' as const } : {}),
+      });
       if (!files?.length) return;
 
       for (let i = 0; i < files.length; i++) {

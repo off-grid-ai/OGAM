@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
-import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
+import { types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import { showAlert, AlertState, initialAlertState } from '../../components/CustomAlert';
 import { useFocusTrigger } from '../../hooks/useFocusTrigger';
 import { useAppStore } from '../../stores';
@@ -17,6 +17,7 @@ import { useTextModels } from './useTextModels';
 import { useImageModels } from './useImageModels';
 import { useNotifRationale } from './useNotifRationale';
 import { importGgufFiles, getErrorMessage } from './importHelpers';
+import { pickDocumentWithCoordinator } from '../../utils/documentPickerCoordinator';
 
 type ZipImportDeps = {
   addDownloadedImageModel: (model: ONNXImageModel) => void;
@@ -122,7 +123,11 @@ export function useModelsScreen() {
   const handleImportLocalModel = async () => {
     if (isImporting) return;
     try {
-      const result = await pick({ type: [types.allFiles], allowMultiSelection: true });
+      const result = await pickDocumentWithCoordinator('models-import', {
+        type: [types.allFiles],
+        allowMultiSelection: true,
+        ...(Platform.OS === 'ios' ? { presentationStyle: 'fullScreen' as const } : {}),
+      });
       setIsImporting(true);
 
       if (!result || result.length === 0) {
