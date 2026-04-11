@@ -14,6 +14,15 @@ import { useTheme } from './src/theme';
 import { hardwareService, modelManager, authService, ragService, remoteServerManager } from './src/services';
 import logger from './src/utils/logger';
 import { useAppStore, useAuthStore, useRemoteServerStore } from './src/stores';
+import { useTTSStore } from './src/stores/ttsStore';
+import { initExecutorch } from 'react-native-executorch';
+import { BareResourceFetcher } from 'react-native-executorch-bare-resource-fetcher';
+import { KokoroTTSManager } from './src/components/KokoroTTSManager';
+import { isExecutorchSupported } from './src/constants/kokoroModels';
+
+// Initialise executorch resource fetcher once at module load time.
+// This must run before any useTextToSpeech hook is mounted.
+initExecutorch({ resourceFetcher: BareResourceFetcher });
 import { LockScreen } from './src/screens';
 import { useAppState } from './src/hooks/useAppState';
 
@@ -191,6 +200,9 @@ function App() {
       // Initialize RAG database tables
       ragService.ensureReady().catch((err) => logger.error('Failed to initialize RAG service on startup', err));
 
+      // Sync TTS download state so TTSButton / audio mode know models are available
+      useTTSStore.getState().checkDownloadStatus().catch(() => {});
+
       // Show the UI immediately
       setIsInitializing(false);
 
@@ -235,6 +247,7 @@ function App() {
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+        {isExecutorchSupported() && <KokoroTTSManager />}
         <NavigationContainer
           theme={{
             dark: isDark,

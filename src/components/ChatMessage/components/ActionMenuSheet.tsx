@@ -12,11 +12,13 @@ interface ActionMenuSheetProps {
   canEdit: boolean;
   canRetry: boolean;
   canGenerateImage: boolean;
+  canSpeak: boolean;
   styles: any;
   onCopy: () => void;
   onEdit: () => void;
   onRetry: () => void;
   onGenerateImage: () => void;
+  onSpeak: () => void;
 }
 
 export function ActionMenuSheet({
@@ -26,11 +28,13 @@ export function ActionMenuSheet({
   canEdit,
   canRetry,
   canGenerateImage,
+  canSpeak,
   styles,
   onCopy,
   onEdit,
   onRetry,
   onGenerateImage,
+  onSpeak,
 }: ActionMenuSheetProps) {
   const { colors } = useTheme();
 
@@ -87,6 +91,18 @@ export function ActionMenuSheet({
           >
             <Icon name="image" size={18} color={colors.textSecondary} />
             <Text style={styles.actionSheetText}>Generate Image</Text>
+          </AnimatedPressable>
+        )}
+
+        {!isUser && canSpeak && (
+          <AnimatedPressable
+            testID="action-speak"
+            hapticType="selection"
+            style={styles.actionSheetItem}
+            onPress={onSpeak}
+          >
+            <Icon name="volume-2" size={18} color={colors.textSecondary} />
+            <Text style={styles.actionSheetText}>Speak</Text>
           </AnimatedPressable>
         )}
       </View>

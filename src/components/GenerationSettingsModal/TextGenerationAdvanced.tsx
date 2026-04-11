@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import Slider from '@react-native-community/slider';
-import { useTheme, useThemedStyles } from '../../theme';
+import { NumericStepper } from '../NumericStepper';
+import { useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { CacheType } from '../../types';
 import {
@@ -15,7 +15,6 @@ import { createStyles } from './styles';
 // ─── GPU Acceleration ─────────────────────────────────────────────────────────
 
 export const GpuAccelerationToggle: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
   const { gpuLayersEffective, handleGpuToggle } = useTextGenerationAdvanced();
@@ -51,24 +50,15 @@ export const GpuAccelerationToggle: React.FC = () => {
 
       {settings.enableGpu && (
         <View style={styles.gpuLayersInline}>
-          <View style={styles.settingHeader}>
-            <Text style={styles.settingLabel}>GPU Layers</Text>
-            <Text style={styles.settingValue}>{gpuLayersEffective}</Text>
-          </View>
+          <Text style={styles.settingLabel}>GPU Layers</Text>
           <Text style={styles.settingDescription}>
             Layers offloaded to GPU. Higher = faster but may crash on low-VRAM devices. Requires model reload.
           </Text>
-          <Slider
-            testID="gpu-layers-slider"
-            style={styles.slider}
-            minimumValue={1}
-            maximumValue={GPU_LAYERS_MAX}
-            step={1}
+          <NumericStepper
+            testID="gpu-layers-stepper"
             value={gpuLayersEffective}
-            onSlidingComplete={(value: number) => updateSettings({ gpuLayers: value })}
-            minimumTrackTintColor={colors.primary}
-            maximumTrackTintColor={colors.surfaceLight}
-            thumbTintColor={colors.primary}
+            min={1} max={GPU_LAYERS_MAX} step={1}
+            onChange={(value) => updateSettings({ gpuLayers: value })}
           />
         </View>
       )}
@@ -199,56 +189,34 @@ export const ModelLoadingStrategyToggle: React.FC = () => {
 // ─── CPU Threads & Batch Size ────────────────────────────────────────────────
 
 export const CpuThreadsSlider: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
-  const value = settings.nThreads ?? 6;
 
   return (
     <View style={styles.modeToggleContainer}>
-      <View style={styles.settingHeader}>
-        <Text style={styles.settingLabel}>CPU Threads</Text>
-        <Text style={styles.settingValue}>{value}</Text>
-      </View>
+      <Text style={styles.settingLabel}>CPU Threads</Text>
       <Text style={styles.settingDescription}>Parallel threads for inference</Text>
-      <Slider
-        style={styles.slider}
-        minimumValue={1}
-        maximumValue={12}
-        step={1}
-        value={value}
-        onSlidingComplete={(v: number) => updateSettings({ nThreads: v })}
-        minimumTrackTintColor={colors.primary}
-        maximumTrackTintColor={colors.surfaceLight}
-        thumbTintColor={colors.primary}
+      <NumericStepper
+        value={settings.nThreads ?? 6}
+        min={1} max={12} step={1}
+        onChange={(v) => updateSettings({ nThreads: v })}
       />
     </View>
   );
 };
 
 export const BatchSizeSlider: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
-  const value = settings.nBatch ?? 512;
 
   return (
     <View style={styles.modeToggleContainer}>
-      <View style={styles.settingHeader}>
-        <Text style={styles.settingLabel}>Batch Size</Text>
-        <Text style={styles.settingValue}>{value}</Text>
-      </View>
+      <Text style={styles.settingLabel}>Batch Size</Text>
       <Text style={styles.settingDescription}>Tokens processed per batch</Text>
-      <Slider
-        style={styles.slider}
-        minimumValue={32}
-        maximumValue={512}
-        step={32}
-        value={value}
-        onSlidingComplete={(v: number) => updateSettings({ nBatch: v })}
-        minimumTrackTintColor={colors.primary}
-        maximumTrackTintColor={colors.surfaceLight}
-        thumbTintColor={colors.primary}
+      <NumericStepper
+        value={settings.nBatch ?? 512}
+        min={32} max={512} step={32}
+        onChange={(v) => updateSettings({ nBatch: v })}
       />
     </View>
   );

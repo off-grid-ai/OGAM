@@ -83,6 +83,7 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
       onOpenProject={() => setShowProjectSelector(true)}
       onOpenGallery={imageCount > 0 ? () => navigation.navigate('Gallery', { conversationId: activeConversationId }) : undefined}
       onDeleteConversation={activeConversation ? handleDeleteConversation : undefined}
+      onOpenTTSSettings={() => { setShowSettingsPanel(false); navigation.navigate('TTSSettings'); }}
       conversationImageCount={imageCount}
       activeProjectName={activeProject?.name || null}
       isRemote={isRemote}

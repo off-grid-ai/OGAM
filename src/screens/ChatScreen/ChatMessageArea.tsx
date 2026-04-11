@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { View, FlatList, Text, Keyboard, ActivityIndicator, Platform } from 'react-native';
+import { View, FlatList, Text, Keyboard, ActivityIndicator, Platform, StyleSheet } from 'react-native';
+import { useTTSStore } from '../../stores/ttsStore';
 import Icon from 'react-native-vector-icons/Feather';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { AttachStep } from 'react-native-spotlight-tour';
@@ -28,6 +29,10 @@ export type ChatMessageAreaProps = {
 export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   flatListRef, isNearBottomRef, chat, styles, colors, handleScroll, renderItem, chatSpotlight,
 }) => {
+  // Hide FlatList until initial layout + scroll is complete to prevent visible scroll jump
+  const [isListReady, setIsListReady] = useState(false);
+  const hasScrolledRef = React.useRef(false);
+  const interfaceMode = useTTSStore((s) => s.settings.interfaceMode);
   const tabNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [inputHeight, setInputHeight] = useState(84);
   const activeModelRepoId = chat.activeModelId?.split('/').slice(0, 2).join('/');
@@ -52,12 +57,26 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
       ) : (
         <FlatList
           ref={flatListRef}
+          style={isListReady ? undefined : hiddenStyle.hidden}
           data={chat.displayMessages}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
+          extraData={interfaceMode}
           contentContainerStyle={styles.messageList}
           onScroll={handleScroll}
-          onContentSizeChange={(_w, _h) => { if (isNearBottomRef.current) flatListRef.current?.scrollToEnd({ animated: false }); }}
+          onContentSizeChange={(_w, h) => {
+            if (!hasScrolledRef.current && h > 0) {
+              // Initial layout: force scroll to bottom regardless of isNearBottom
+              flatListRef.current?.scrollToEnd({ animated: false });
+              hasScrolledRef.current = true;
+              // Reveal after a frame so the scroll position settles
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => setIsListReady(true));
+              });
+            } else if (isNearBottomRef.current) {
+              flatListRef.current?.scrollToEnd({ animated: false });
+            }
+          }}
           onLayout={() => { }}
           scrollEventThrottle={16}
           keyboardDismissMode="on-drag"
@@ -140,3 +159,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
     </>
   );
 };
+
+const hiddenStyle = StyleSheet.create({
+  hidden: { opacity: 0 },
+});

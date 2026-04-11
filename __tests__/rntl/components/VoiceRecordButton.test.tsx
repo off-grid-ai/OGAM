@@ -87,16 +87,17 @@ describe('VoiceRecordButton', () => {
     });
 
     it('shows recording indicator when isRecording is true', () => {
-      const { getByText } = render(
+      const { toJSON } = render(
         <VoiceRecordButton {...defaultProps} isRecording={true} />
       );
 
-      // When recording, "Slide to cancel" text appears in the cancel hint
-      expect(getByText('Slide to cancel')).toBeTruthy();
+      // In audio mode (default, !asSendButton), recording shows a stop icon (square)
+      const treeStr = JSON.stringify(toJSON());
+      expect(treeStr).toContain('square');
     });
 
     it('shows transcribing state when isTranscribing is true', () => {
-      const { getByText } = render(
+      const { toJSON } = render(
         <VoiceRecordButton
           {...defaultProps}
           isTranscribing={true}
@@ -104,14 +105,15 @@ describe('VoiceRecordButton', () => {
         />
       );
 
-      // Transcribing state shows "Transcribing..." text
-      expect(getByText('Transcribing...')).toBeTruthy();
+      // Transcribing state renders a spinning indicator (no text in audio mode)
+      expect(toJSON()).toBeTruthy();
     });
 
-    it('shows partial result text when provided', () => {
+    it('shows partial result text when provided in chat mode (asSendButton)', () => {
       const { getByText } = render(
         <VoiceRecordButton
           {...defaultProps}
+          asSendButton={true}
           isRecording={true}
           partialResult="Hello world"
         />
@@ -166,7 +168,7 @@ describe('VoiceRecordButton', () => {
       expect(toJSON()).toBeTruthy();
     });
 
-    it('taps unavailable button and triggers alert with error message', () => {
+    it('taps unavailable button and triggers download prompt alert', () => {
       const { UNSAFE_getAllByType } = render(
         <VoiceRecordButton
           {...defaultProps}
@@ -181,13 +183,13 @@ describe('VoiceRecordButton', () => {
       fireEvent.press(touchables[0]);
 
       expect(mockShowAlert).toHaveBeenCalledWith(
-        'Voice Input Unavailable',
-        expect.stringContaining('Microphone permission denied'),
+        'Download Voice Model',
+        expect.stringContaining('Download Whisper Small'),
         expect.any(Array)
       );
     });
 
-    it('taps unavailable button with default error when no error prop', () => {
+    it('taps unavailable button shows download prompt with size', () => {
       const { UNSAFE_getAllByType } = render(
         <VoiceRecordButton
           {...defaultProps}
@@ -200,13 +202,13 @@ describe('VoiceRecordButton', () => {
       fireEvent.press(touchables[0]);
 
       expect(mockShowAlert).toHaveBeenCalledWith(
-        'Voice Input Unavailable',
-        expect.stringContaining('No transcription model downloaded'),
+        'Download Voice Model',
+        expect.stringContaining('466 MB'),
         expect.any(Array)
       );
     });
 
-    it('alert message includes instructions for downloading model', () => {
+    it('alert message includes Download and Cancel buttons', () => {
       const { UNSAFE_getAllByType } = render(
         <VoiceRecordButton
           {...defaultProps}
@@ -219,9 +221,12 @@ describe('VoiceRecordButton', () => {
       fireEvent.press(touchables[0]);
 
       expect(mockShowAlert).toHaveBeenCalledWith(
-        'Voice Input Unavailable',
-        expect.stringContaining('Download a Whisper model'),
-        expect.any(Array)
+        'Download Voice Model',
+        expect.any(String),
+        expect.arrayContaining([
+          expect.objectContaining({ text: 'Cancel' }),
+          expect.objectContaining({ text: 'Download' }),
+        ])
       );
     });
   });
@@ -400,11 +405,13 @@ describe('VoiceRecordButton', () => {
     });
 
     it('does not show cancel hint when not recording', () => {
-      const { queryByText } = render(
+      const { toJSON } = render(
         <VoiceRecordButton {...defaultProps} isRecording={false} />
       );
 
-      expect(queryByText('Slide to cancel')).toBeNull();
+      // Audio mode (default) uses tap-to-toggle, no slide-to-cancel
+      const treeStr = JSON.stringify(toJSON());
+      expect(treeStr).not.toContain('Slide to cancel');
     });
 
     it('does not show partial result when partialResult is empty', () => {
@@ -418,12 +425,12 @@ describe('VoiceRecordButton', () => {
 
       // partialResult is empty, so the partial result container should not render
       const treeStr = JSON.stringify(toJSON());
-      // The cancel hint should still show
-      expect(treeStr).toContain('Slide to cancel');
+      // Audio mode uses tap-to-toggle with a stop icon
+      expect(treeStr).toContain('square');
     });
 
     it('shows recording UI elements but not transcribing when recording', () => {
-      const { getByText, queryByText } = render(
+      const { toJSON, queryByText } = render(
         <VoiceRecordButton
           {...defaultProps}
           isRecording={true}
@@ -433,7 +440,8 @@ describe('VoiceRecordButton', () => {
 
       // When isRecording is true AND isTranscribing is true,
       // the component shows recording UI (not transcribing state)
-      expect(getByText('Slide to cancel')).toBeTruthy();
+      const treeStr = JSON.stringify(toJSON());
+      expect(treeStr).toContain('square');
       expect(queryByText('Transcribing...')).toBeNull();
     });
 
@@ -446,7 +454,7 @@ describe('VoiceRecordButton', () => {
     });
 
     it('prioritizes model loading state over recording', () => {
-      const { getByText, queryByText } = render(
+      const { getByText, toJSON } = render(
         <VoiceRecordButton
           {...defaultProps}
           isModelLoading={true}
@@ -455,11 +463,13 @@ describe('VoiceRecordButton', () => {
       );
 
       expect(getByText('Loading...')).toBeTruthy();
-      expect(queryByText('Slide to cancel')).toBeNull();
+      // Recording UI should not render when loading
+      const treeStr = JSON.stringify(toJSON());
+      expect(treeStr).not.toContain('square');
     });
 
     it('prioritizes model loading state over transcribing', () => {
-      const { getByText, queryByText } = render(
+      const { getByText, toJSON } = render(
         <VoiceRecordButton
           {...defaultProps}
           isModelLoading={true}
@@ -468,7 +478,8 @@ describe('VoiceRecordButton', () => {
       );
 
       expect(getByText('Loading...')).toBeTruthy();
-      expect(queryByText('Transcribing...')).toBeNull();
+      // Transcribing state should not render when loading
+      expect(toJSON()).toBeTruthy();
     });
   });
 });

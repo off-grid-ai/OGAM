@@ -1,5 +1,5 @@
 import type { ThemeColors, ThemeShadows } from '../../theme';
-import { FONTS } from '../../constants';
+import { FONTS, TYPOGRAPHY, SPACING } from '../../constants';
 import { Platform } from 'react-native';
 
 export const PILL_ICON_SIZE = 32;
@@ -207,5 +207,26 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     fontFamily: FONTS.mono,
     fontWeight: '500' as const,
     color: colors.primary,
+  },
+  // Audio mode layout
+  audioModeRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: SPACING.md,
+    paddingVertical: SPACING.xs,
+  },
+  // Voice cycle button — shows icon + voice name
+  audioVoiceButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    height: 32,
+    borderRadius: 16,
+  },
+  audioVoiceLabel: {
+    ...TYPOGRAPHY.meta,
+    color: colors.textSecondary,
   },
 });

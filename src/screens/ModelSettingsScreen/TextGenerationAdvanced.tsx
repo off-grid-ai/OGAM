@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Switch, Platform } from 'react-native';
-import Slider from '@react-native-community/slider';
 import { Button } from '../../components/Button';
+import { NumericStepper } from '../../components/NumericStepper';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { CacheType } from '../../types';
@@ -52,24 +52,15 @@ const GpuSection: React.FC<GpuSectionProps> = ({
 
       {isGpuEnabled && (
         <View style={styles.sliderSection}>
-          <View style={styles.sliderHeader}>
-            <Text style={styles.sliderLabel}>GPU Layers</Text>
-            <Text style={styles.sliderValue}>{gpuLayersEffective}</Text>
-          </View>
+          <Text style={styles.sliderLabel}>GPU Layers</Text>
           <Text style={styles.sliderDesc}>
             Layers offloaded to GPU. Higher = faster but may crash on low-VRAM devices.
           </Text>
-          <Slider
-            testID="gpu-layers-slider"
-            style={styles.slider}
-            minimumValue={1}
-            maximumValue={GPU_LAYERS_MAX}
-            step={1}
+          <NumericStepper
+            testID="gpu-layers-stepper"
             value={gpuLayersEffective}
-            onSlidingComplete={(value) => updateSettings({ gpuLayers: value })}
-            minimumTrackTintColor={colors.primary}
-            maximumTrackTintColor={colors.surface}
-            thumbTintColor={colors.primary}
+            min={1} max={GPU_LAYERS_MAX} step={1}
+            onChange={(value) => updateSettings({ gpuLayers: value })}
           />
         </View>
       )}
@@ -207,78 +198,42 @@ export const TextGenerationAdvanced: React.FC = () => {
   return (
     <>
       <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Top P</Text>
-          <Text style={styles.sliderValue}>{(settings?.topP || 0.9).toFixed(2)}</Text>
-        </View>
+        <Text style={styles.sliderLabel}>Top P</Text>
         <Text style={styles.sliderDesc}>Nucleus sampling threshold</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={0.1}
-          maximumValue={1.0}
-          step={0.05}
+        <NumericStepper
           value={settings?.topP || 0.9}
-          onSlidingComplete={(value) => updateSettings({ topP: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
+          min={0.1} max={1.0} step={0.05} decimals={2}
+          onChange={(value) => updateSettings({ topP: value })}
         />
       </View>
 
       <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Repeat Penalty</Text>
-          <Text style={styles.sliderValue}>{(settings?.repeatPenalty || 1.1).toFixed(2)}</Text>
-        </View>
+        <Text style={styles.sliderLabel}>Repeat Penalty</Text>
         <Text style={styles.sliderDesc}>Penalize repeated tokens</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1.0}
-          maximumValue={2.0}
-          step={0.05}
+        <NumericStepper
           value={settings?.repeatPenalty || 1.1}
-          onSlidingComplete={(value) => updateSettings({ repeatPenalty: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
+          min={1.0} max={2.0} step={0.05} decimals={2}
+          onChange={(value) => updateSettings({ repeatPenalty: value })}
         />
       </View>
 
       <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>CPU Threads</Text>
-          <Text style={styles.sliderValue}>{settings?.nThreads || 6}</Text>
-        </View>
+        <Text style={styles.sliderLabel}>CPU Threads</Text>
         <Text style={styles.sliderDesc}>Parallel threads for inference</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1}
-          maximumValue={12}
-          step={1}
+        <NumericStepper
           value={settings?.nThreads || 6}
-          onSlidingComplete={(value) => updateSettings({ nThreads: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
+          min={1} max={12} step={1}
+          onChange={(value) => updateSettings({ nThreads: value })}
         />
       </View>
 
       <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Batch Size</Text>
-          <Text style={styles.sliderValue}>{settings?.nBatch || 256}</Text>
-        </View>
+        <Text style={styles.sliderLabel}>Batch Size</Text>
         <Text style={styles.sliderDesc}>Tokens processed per batch</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={32}
-          maximumValue={512}
-          step={32}
+        <NumericStepper
           value={settings?.nBatch || 256}
-          onSlidingComplete={(value) => updateSettings({ nBatch: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
+          min={32} max={512} step={32}
+          onChange={(value) => updateSettings({ nBatch: value })}
         />
       </View>
 

@@ -51,10 +51,20 @@ jest.mock('../../../src/services/documentService', () => ({
 // Mock the stores
 const mockUseWhisperStore = jest.fn();
 const mockUseAppStore = jest.fn();
+const mockUseTTSStore = jest.fn(() => ({
+  settings: { interfaceMode: 'chat', enabled: false, speed: 1.0 },
+  isBackboneDownloaded: false,
+  isVocoderDownloaded: false,
+  isModelLoaded: false,
+  loadModels: jest.fn(),
+  unloadModels: jest.fn(),
+  updateSettings: jest.fn(),
+}));
 
 jest.mock('../../../src/stores', () => ({
   useWhisperStore: () => mockUseWhisperStore(),
   useAppStore: () => mockUseAppStore(),
+  useTTSStore: () => mockUseTTSStore(),
 }));
 
 // Mock the whisper hook

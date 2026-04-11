@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { AlertState, initialAlertState } from '../../components';
-import { useAppStore, useChatStore, useProjectStore, useRemoteServerStore } from '../../stores';
+import { useAppStore, useChatStore, useProjectStore, useRemoteServerStore, useTTSStore } from '../../stores';
+import '../../types/tts';
 import logger from '../../utils/logger';
 import {
   llmService, generationService, imageGenerationService, activeModelService,
@@ -15,9 +17,15 @@ import { startGenerationFn, handleSendFn, handleStopFn, handleSelectProjectFn } 
 import { handleRetryMessageFn, handleEditMessageFn, handleDeleteConversationFn, handleGenerateImageFromMsgFn } from './useChatMessageHandlers';
 import { getDisplayMessages, getPlaceholderText, ChatMessageItem, StreamingState } from './types';
 import { saveImageToGallery } from './useSaveImage';
+import { stripControlTokens, stripMarkdownForSpeech } from '../../utils/messageContent';
 
 export type { AlertState, ChatMessageItem, StreamingState };
 export { getDisplayMessages, getPlaceholderText };
+
+function _triggerAudioModeGeneration(conversationId: string, messageId: string, content: string) {
+  useChatStore.getState().updateMessageAudio(conversationId, messageId, { isAudioModeMessage: true });
+  useTTSStore.getState().speak(stripMarkdownForSpeech(stripControlTokens(content)), messageId);
+}
 
 type ChatScreenRouteProp = RouteProp<RootStackParamList, 'Chat'>;
 
@@ -54,6 +62,26 @@ export const useChatScreen = () => {
   const [pendingProjectId, setPendingProjectId] = useState<string | undefined>(route.params?.projectId);
   const lastMessageCountRef = useRef(0);
   const generatingForConversationRef = useRef<string | null>(null);
+
+  // Stop TTS when navigating away, app backgrounded, or screen locked
+  useEffect(() => {
+    const unsubBlur = navigation.addListener('blur', () => {
+      useTTSStore.getState().stop();
+    });
+    // beforeRemove fires on back button — more reliable than blur for native-stack
+    const unsubRemove = navigation.addListener('beforeRemove', () => {
+      useTTSStore.getState().stop();
+    });
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      const tts = useTTSStore.getState();
+      if (nextState !== 'active') {
+        if (tts.isSpeaking && !tts.isPaused) { tts.pause(); }
+      } else {
+        if (tts.isSpeaking && tts.isPaused) { tts.resume(); }
+      }
+    });
+    return () => { unsubBlur(); unsubRemove(); appStateSub.remove(); };
+  }, [navigation]);
   const modelLoadStartTimeRef = useRef<number | null>(null);
   const startGenerationRef = useRef<(id: string, text: string) => Promise<void>>(null as any);
   const addMessageRef = useRef<typeof addMessage>(null as any);
@@ -199,6 +227,95 @@ export const useChatScreen = () => {
     lastMessageCountRef.current = curr;
   }, [displayMessages.length]);
   useEffect(() => { lastMessageCountRef.current = 0; setAnimateLastN(0); }, [activeConversationId]);
+  const prevStreamingRef = useRef(false);
+  const ttsStreamRef = useRef<{ nextPos: number; pending: string[]; isPlaying: boolean }>({
+    nextPos: 0, pending: [], isPlaying: false,
+  });
+
+  // Buffer-based streaming TTS: feed text to Kokoro as soon as enough runway accumulates.
+  // No sentence detection — just split at word boundaries when buffer exceeds threshold.
+  // Works even at low tok/sec because the threshold is much smaller than a full sentence.
+  useEffect(() => {
+    if (!isStreamingForThisConversation) return;
+    const tts = useTTSStore.getState();
+    if (tts.settings.interfaceMode !== 'audio') return;
+    if (!tts.kokoroReady && !tts.isModelLoaded) return;
+    if (!streamingMessage) return;
+
+    const ref = ttsStreamRef.current;
+    const stripped = stripControlTokens(streamingMessage);
+    const buffered = stripped.slice(ref.nextPos);
+
+    // Need enough chars for Kokoro to have meaningful speech (~2-3 seconds worth)
+    const MIN_CHARS = 50;
+    if (buffered.length < MIN_CHARS) return;
+
+    // Split at the last word boundary so we don't cut mid-word
+    const lastSpace = buffered.lastIndexOf(' ');
+    if (lastSpace <= 0) return;
+
+    const chunk = buffered.slice(0, lastSpace).trim();
+    ref.nextPos += lastSpace + 1;
+    if (!chunk) return;
+
+    ref.pending.push(stripMarkdownForSpeech(chunk));
+    logger.log('[StreamTTS] chunk queued, pending=', ref.pending.length, 'isPlaying=', ref.isPlaying);
+
+    if (!ref.isPlaying) {
+      const playNext = () => {
+        // If another message took over playback (e.g. user tapped a recording), stop the chain
+        const currentId = useTTSStore.getState().currentMessageId;
+        if (currentId !== null && currentId !== 'streaming') {
+          logger.log('[StreamTTS] chain interrupted, currentId=', currentId);
+          ref.pending = [];
+          ref.isPlaying = false;
+          return;
+        }
+        const next = ref.pending.shift();
+        if (!next) { ref.isPlaying = false; logger.log('[StreamTTS] chain done, no more pending'); return; }
+        ref.isPlaying = true;
+        logger.log('[StreamTTS] playing next chunk, remaining=', ref.pending.length);
+        useTTSStore.getState().speak(next, 'streaming').finally(playNext);
+      };
+      playNext();
+    }
+  }, [streamingMessage, isStreamingForThisConversation]);
+
+  useEffect(() => {
+    const was = prevStreamingRef.current;
+    prevStreamingRef.current = isStreamingForThisConversation;
+    if (!was || isStreamingForThisConversation || !activeConversationId) return;
+    const { nextPos: alreadySpoken } = ttsStreamRef.current;
+    ttsStreamRef.current = { nextPos: 0, pending: [], isPlaying: false };
+    const tts = useTTSStore.getState();
+    if (tts.settings.interfaceMode !== 'audio') return;
+    const conv = useChatStore.getState().conversations.find((c) => c.id === activeConversationId);
+    const last = (conv?.messages ?? []).at(-1);
+    if (!last || last.role !== 'assistant' || last.isSystemInfo || last.toolCalls?.length || last.audioPath) return;
+    // Stamp as audio-mode. Estimate duration from word count (avg 2.5 words/sec)
+    const wordCount = last.content.split(/\s+/).filter(Boolean).length;
+    const speed = useTTSStore.getState().settings.speed || 1;
+    const estDuration = Math.max(1, wordCount / (2.5 * speed));
+    logger.log('[StreamTTS] post-stream: messageId=', last.id, 'alreadySpoken=', alreadySpoken, 'wordCount=', wordCount, 'estDuration=', estDuration);
+    useChatStore.getState().updateMessageAudio(activeConversationId, last.id, {
+      isAudioModeMessage: true,
+      audioDurationSeconds: estDuration,
+    });
+    // Only speak if a TTS engine is available
+    if (!tts.kokoroReady && !tts.isModelLoaded) { logger.log('[StreamTTS] post-stream: no TTS engine available'); return; }
+    // Strip thinking/control tokens — must match how positions were tracked during streaming
+    const cleanContent = stripMarkdownForSpeech(stripControlTokens(last.content));
+    const remaining = cleanContent.slice(alreadySpoken).trim();
+    logger.log('[StreamTTS] post-stream: remaining chars=', remaining.length, 'isSpeaking=', tts.isSpeaking, 'currentMessageId=', tts.currentMessageId);
+    if (remaining) {
+      useTTSStore.getState().speak(remaining, last.id);
+    } else if (useTTSStore.getState().currentMessageId === 'streaming') {
+      // All text was already spoken by streaming chunks — transfer ownership
+      // to the real message ID so the AudioMessageBubble's seekbar works.
+      logger.log('[StreamTTS] post-stream: transferring ownership from streaming to', last.id);
+      useTTSStore.setState({ currentMessageId: last.id });
+    }
+  }, [isStreamingForThisConversation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startGeneration = async (targetConversationId: string, messageText: string) => {
     await startGenerationFn(genDeps, { setDebugInfo, targetConversationId, messageText });

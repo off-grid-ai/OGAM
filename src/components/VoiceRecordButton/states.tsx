@@ -43,7 +43,6 @@ export const TranscribingState: React.FC<TranscribingStateProps> = ({ asSendButt
       <Animated.View style={[styles.button, asSendButton ? styles.buttonAsSendLoading : styles.buttonTranscribing, { transform: [{ rotate: spin }] }]}>
         {asSendButton ? <Icon name="mic" size={18} color={colors.info} /> : <View style={styles.loadingIndicator} />}
       </Animated.View>
-      {!asSendButton && <Text style={styles.transcribingText}>Transcribing...</Text>}
     </View>
   );
 };
@@ -52,16 +51,30 @@ export const TranscribingState: React.FC<TranscribingStateProps> = ({ asSendButt
 
 interface UnavailableButtonProps {
   asSendButton: boolean;
+  /** 0–1 while downloading, undefined when idle */
+  downloadProgress?: number;
 }
 
-export const UnavailableButton: React.FC<UnavailableButtonProps> = ({ asSendButton }) => {
+export const UnavailableButton: React.FC<UnavailableButtonProps> = ({ asSendButton, downloadProgress }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const isDownloading = downloadProgress !== undefined;
+
+  if (asSendButton) {
+    return (
+      <View style={[styles.button, styles.buttonAsSendUnavailable]}>
+        <Icon name={isDownloading ? 'download' : 'mic-off'} size={18} color={colors.textMuted} />
+      </View>
+    );
+  }
 
   return (
-    <View style={[styles.button, asSendButton ? styles.buttonAsSendUnavailable : styles.buttonUnavailable]}>
-      {asSendButton ? (
-        <Icon name="mic-off" size={18} color={colors.textMuted} />
+    <View style={[styles.button, styles.buttonUnavailable]}>
+      {isDownloading ? (
+        <>
+          <Icon name="download" size={14} color={colors.textMuted} />
+          <Text style={styles.loadingText}>{Math.round(downloadProgress * 100)}%</Text>
+        </>
       ) : (
         <>
           <View style={styles.micIcon}>

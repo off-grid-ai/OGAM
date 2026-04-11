@@ -212,20 +212,23 @@ describe('DownloadManagerScreen', () => {
   });
 
   it('shows empty state when no downloads', () => {
-    const { getByText } = render(<DownloadManagerScreen />);
-    expect(getByText('No active downloads')).toBeTruthy();
+    const { getByText, queryByText } = render(<DownloadManagerScreen />);
+    // Active Downloads section is hidden when there are no active items
+    expect(queryByText('Active Downloads')).toBeNull();
     expect(getByText('No models downloaded yet')).toBeTruthy();
   });
 
   it('shows section headers for active and completed', () => {
-    const { getByText } = render(<DownloadManagerScreen />);
-    expect(getByText('Active Downloads')).toBeTruthy();
+    const { getByText, queryByText } = render(<DownloadManagerScreen />);
+    // Active Downloads section is hidden when empty
+    expect(queryByText('Active Downloads')).toBeNull();
+    // Downloaded Models section is always shown
     expect(getByText('Downloaded Models')).toBeTruthy();
   });
 
   it('shows empty subtext when no models downloaded', () => {
     const { getByText } = render(<DownloadManagerScreen />);
-    expect(getByText('Go to the Models tab to browse and download models')).toBeTruthy();
+    expect(getByText('No models downloaded yet')).toBeTruthy();
   });
 
   it('renders completed text model with details', () => {
@@ -305,11 +308,12 @@ describe('DownloadManagerScreen', () => {
     expect(getByText(/Total storage used/)).toBeTruthy();
   });
 
-  it('shows count badges for active and completed sections', () => {
+  it('shows count badge for completed section', () => {
     setupSingleModelState();
 
     const { getByText } = render(<DownloadManagerScreen />);
-    expect(getByText('0')).toBeTruthy();
+    // Active section is hidden when empty (no "0" badge)
+    // Completed section shows count of 1
     expect(getByText('1')).toBeTruthy();
   });
 
@@ -344,7 +348,8 @@ describe('DownloadManagerScreen', () => {
 
     const { UNSAFE_getAllByType } = render(<DownloadManagerScreen />);
     const touchables = UNSAFE_getAllByType(TouchableOpacity);
-    const cancelButtons = touchables.filter((_: any, i: number) => i > 0);
+    // Skip back button (1) + filter chips (6) = 7 touchables before content
+    const cancelButtons = touchables.filter((_: any, i: number) => i > 6);
     if (cancelButtons.length > 0) {
       fireEvent.press(cancelButtons[0]);
     }
@@ -820,8 +825,8 @@ describe('DownloadManagerScreen', () => {
 
     const { UNSAFE_getAllByType, getByTestId } = render(<DownloadManagerScreen />);
     const touchables = UNSAFE_getAllByType(TouchableOpacity);
-    // Press the cancel button (second touchable after back button)
-    const cancelButtons = touchables.filter((_: any, i: number) => i > 0);
+    // Skip back button (1) + filter chips (6) = 7 touchables before content
+    const cancelButtons = touchables.filter((_: any, i: number) => i > 6);
     fireEvent.press(cancelButtons[0]);
 
     // Press "Yes" to confirm
@@ -852,7 +857,8 @@ describe('DownloadManagerScreen', () => {
 
     const { UNSAFE_getAllByType, getByTestId } = render(<DownloadManagerScreen />);
     const touchables = UNSAFE_getAllByType(TouchableOpacity);
-    const cancelButtons = touchables.filter((_: any, i: number) => i > 0);
+    // Skip back button (1) + filter chips (6) = 7 touchables before content
+    const cancelButtons = touchables.filter((_: any, i: number) => i > 6);
     fireEvent.press(cancelButtons[0]);
 
     await act(async () => {
@@ -880,7 +886,8 @@ describe('DownloadManagerScreen', () => {
 
     const { UNSAFE_getAllByType, getByTestId } = render(<DownloadManagerScreen />);
     const touchables = UNSAFE_getAllByType(TouchableOpacity);
-    const cancelButtons = touchables.filter((_: any, i: number) => i > 0);
+    // Skip back button (1) + filter chips (6) = 7 touchables before content
+    const cancelButtons = touchables.filter((_: any, i: number) => i > 6);
     fireEvent.press(cancelButtons[0]);
 
     await act(async () => {
@@ -1029,7 +1036,8 @@ describe('DownloadManagerScreen', () => {
 
     // Find the cancel button for the RNFS download (which has no downloadId)
     const touchables = result.UNSAFE_getAllByType(TouchableOpacity);
-    const cancelButtons = touchables.filter((_: any, i: number) => i > 0);
+    // Skip back button (1) + filter chips (6) = 7 touchables before content
+    const cancelButtons = touchables.filter((_: any, i: number) => i > 6);
     if (cancelButtons.length > 0) {
       fireEvent.press(cancelButtons[0]);
 
@@ -1367,8 +1375,8 @@ describe('DownloadManagerScreen', () => {
 
     // Find and press cancel button on the active download
     const touchables = result.UNSAFE_getAllByType(TouchableOpacity);
-    // Find cancel buttons (skip back button)
-    const cancelButtons = touchables.filter((_: any, i: number) => i > 0);
+    // Skip back button (1) + filter chips (6) = 7 touchables before content
+    const cancelButtons = touchables.filter((_: any, i: number) => i > 6);
     if (cancelButtons.length > 0) {
       fireEvent.press(cancelButtons[0]);
 

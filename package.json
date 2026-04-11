@@ -20,7 +20,9 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
+    "@dr.pogodin/react-native-fs": "^2.38.1",
     "@gorhom/bottom-sheet": "^5.2.8",
+    "@kesha-antonov/react-native-background-downloader": "^4.5.4",
     "@op-engineering/op-sqlite": "^15.2.5",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/blur": "^4.4.1",
@@ -42,7 +44,10 @@
     "patch-package": "^8.0.1",
     "react": "19.2.0",
     "react-native": "0.83.1",
+    "react-native-audio-api": "^0.11.7",
     "react-native-device-info": "^15.0.1",
+    "react-native-executorch": "^0.8.1",
+    "react-native-executorch-bare-resource-fetcher": "^0.8.0",
     "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "^2.30.0",
     "react-native-haptic-feedback": "^2.3.3",

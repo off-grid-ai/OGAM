@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, InteractionManager } from 'react-native';
+import { useTTSStore } from '../../stores/ttsStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSpotlightTour } from 'react-native-spotlight-tour';
@@ -101,6 +102,22 @@ export const ChatScreen: React.FC = () => {
       setTimeout(() => { flatListRef.current?.scrollToEnd({ animated: true }); }, 100);
     }
   }, [chat.activeConversation?.messages.length]);
+
+  // Reset scroll when switching between chat/audio interface modes
+  const interfaceMode = useTTSStore((s) => s.settings.interfaceMode);
+  const prevModeRef = React.useRef(interfaceMode);
+  React.useEffect(() => {
+    if (prevModeRef.current !== interfaceMode) {
+      prevModeRef.current = interfaceMode;
+      isNearBottomRef.current = true;
+      chat.setShowScrollToBottom(false);
+      // FlatList re-renders via extraData; onContentSizeChange fires and scrolls.
+      // Backup: scroll after items have had time to re-measure.
+      setTimeout(() => { flatListRef.current?.scrollToEnd({ animated: false }); }, 300);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interfaceMode]);
+
   const alertEl = (
     <CustomAlert
       visible={chat.alertState.visible}

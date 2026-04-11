@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Switch, Platform, TouchableOpacity } from 'react-native';
-import Slider from '@react-native-community/slider';
 import { AdvancedToggle, Card } from '../../components';
+import { NumericStepper } from '../../components/NumericStepper';
 import { Button } from '../../components/Button';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
@@ -114,49 +114,28 @@ const DetectionMethodRow: React.FC = () => {
 // ─── Advanced Section ────────────────────────────────────────────────────────
 
 const ImageAdvancedSection: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
 
   return (
     <>
       <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Guidance Scale</Text>
-          <Text style={styles.sliderValue}>{(settings?.imageGuidanceScale || 7.5).toFixed(1)}</Text>
-        </View>
+        <Text style={styles.sliderLabel}>Guidance Scale</Text>
         <Text style={styles.sliderDesc}>Higher = follows prompt more strictly</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1}
-          maximumValue={20}
-          step={0.5}
+        <NumericStepper
           value={settings?.imageGuidanceScale || 7.5}
-          onSlidingComplete={(value) => updateSettings({ imageGuidanceScale: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
+          min={1} max={20} step={0.5} decimals={1}
+          onChange={(value) => updateSettings({ imageGuidanceScale: value })}
         />
       </View>
 
       <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Image Threads</Text>
-          <Text style={styles.sliderValue}>{settings?.imageThreads ?? 4}</Text>
-        </View>
-        <Text style={styles.sliderDesc}>
-          CPU threads used for image generation (applies on next image model load)
-        </Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1}
-          maximumValue={8}
-          step={1}
+        <Text style={styles.sliderLabel}>Image Threads</Text>
+        <Text style={styles.sliderDesc}>CPU threads used for image generation (applies on next image model load)</Text>
+        <NumericStepper
           value={settings?.imageThreads ?? 4}
-          onSlidingComplete={(value) => updateSettings({ imageThreads: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
+          min={1} max={8} step={1}
+          onChange={(value) => updateSettings({ imageThreads: value })}
         />
       </View>
 
@@ -212,40 +191,23 @@ export const ImageGenerationSection: React.FC = () => {
       </Text>
 
       <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Image Steps</Text>
-          <Text style={styles.sliderValue}>{settings?.imageSteps || 8}</Text>
-        </View>
+        <Text style={styles.sliderLabel}>Image Steps</Text>
         <Text style={styles.sliderDesc}>More steps = better quality but slower (4-8 fast, 20-50 high quality)</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={4}
-          maximumValue={50}
-          step={1}
+        <NumericStepper
           value={settings?.imageSteps || 8}
-          onSlidingComplete={(value) => updateSettings({ imageSteps: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
+          min={4} max={50} step={1}
+          onChange={(value) => updateSettings({ imageSteps: value })}
         />
       </View>
 
       <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Image Size</Text>
-          <Text style={styles.sliderValue}>{settings?.imageWidth ?? 256}x{settings?.imageHeight ?? 256}</Text>
-        </View>
+        <Text style={styles.sliderLabel}>Image Size</Text>
         <Text style={styles.sliderDesc}>Output resolution (smaller = faster, larger = more detail)</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={128}
-          maximumValue={512}
-          step={64}
+        <NumericStepper
           value={settings?.imageWidth ?? 256}
-          onSlidingComplete={(value) => updateSettings({ imageWidth: value, imageHeight: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
+          min={128} max={512} step={64}
+          formatValue={(v) => `${v}x${v}`}
+          onChange={(value) => updateSettings({ imageWidth: value, imageHeight: value })}
         />
       </View>
 

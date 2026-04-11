@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Switch } from 'react-native';
-import Slider from '@react-native-community/slider';
 import { AdvancedToggle, Card } from '../../components';
+import { NumericStepper } from '../../components/NumericStepper';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { createStyles } from './styles';
@@ -26,56 +26,40 @@ export const TextGenerationSection: React.FC = () => {
   const contextLengthLabel = contextLength >= 1024
     ? `${(contextLength / 1024).toFixed(0)}K`
     : String(contextLength);
-  const ctxSliderMax = modelMaxContext || FALLBACK_MAX_CONTEXT;
+  const ctxMax = modelMaxContext || FALLBACK_MAX_CONTEXT;
 
   return (
     <Card style={styles.section}>
       <Text style={styles.settingHelp}>Configure LLM behavior for text responses.</Text>
 
-      {/* ── Basic Settings ── */}
-
       <View style={styles.sliderSection}>
         <View style={styles.sliderHeader}>
           <Text style={styles.sliderLabel}>Temperature</Text>
-          <Text style={styles.sliderValue}>{(settings?.temperature || 0.7).toFixed(2)}</Text>
         </View>
         <Text style={styles.sliderDesc}>Higher = more creative, Lower = more focused</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={0}
-          maximumValue={2}
-          step={0.05}
+        <NumericStepper
           value={settings?.temperature || 0.7}
-          onSlidingComplete={(value) => updateSettings({ temperature: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
+          min={0} max={2} step={0.05} decimals={2}
+          onChange={(value) => updateSettings({ temperature: value })}
         />
       </View>
 
       <View style={styles.sliderSection}>
         <View style={styles.sliderHeader}>
           <Text style={styles.sliderLabel}>Max Tokens</Text>
-          <Text style={styles.sliderValue}>{maxTokensLabel}</Text>
         </View>
         <Text style={styles.sliderDesc}>Maximum response length</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={64}
-          maximumValue={8192}
-          step={64}
+        <NumericStepper
           value={maxTokens}
-          onSlidingComplete={(value) => updateSettings({ maxTokens: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
+          min={64} max={8192} step={64}
+          formatValue={() => maxTokensLabel}
+          onChange={(value) => updateSettings({ maxTokens: value })}
         />
       </View>
 
       <View style={styles.sliderSection}>
         <View style={styles.sliderHeader}>
           <Text style={styles.sliderLabel}>Context Length</Text>
-          <Text style={styles.sliderValue}>{contextLengthLabel}</Text>
         </View>
         <Text style={styles.sliderDesc}>KV cache size — larger uses more RAM (requires reload)</Text>
         {contextLength > HIGH_CONTEXT_THRESHOLD && (
@@ -83,16 +67,11 @@ export const TextGenerationSection: React.FC = () => {
             High context uses significant RAM and may crash on some devices
           </Text>
         )}
-        <Slider
-          style={styles.slider}
-          minimumValue={512}
-          maximumValue={ctxSliderMax}
-          step={1024}
+        <NumericStepper
           value={contextLength}
-          onSlidingComplete={(value) => updateSettings({ contextLength: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
+          min={512} max={ctxMax} step={1024}
+          formatValue={() => contextLengthLabel}
+          onChange={(value) => updateSettings({ contextLength: value })}
         />
       </View>
 

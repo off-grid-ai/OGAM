@@ -223,6 +223,46 @@ class HuggingFaceService {
     };
   }
 
+  /** Search HuggingFace for Whisper/ASR models (returns repos that may contain ggml .bin files). */
+  async searchWhisperRepos(query: string, limit = 20): Promise<Array<{ id: string; author: string; downloads: number; lastModified?: string }>> {
+    const params = new URLSearchParams({
+      search: query || 'whisper',
+      pipeline_tag: 'automatic-speech-recognition',
+      sort: 'downloads',
+      direction: '-1',
+      limit: limit.toString(),
+    });
+    try {
+      const results = await this.fetchJson<HFModelSearchResult[]>(`${this.apiUrl}/models?${params.toString()}`);
+      return results.map(r => ({
+        id: r.id,
+        author: r.author || r.id.split('/')[0] || '',
+        downloads: r.downloads || 0,
+        lastModified: r.lastModified,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Fetch ggml-compatible .bin files from any HuggingFace model repo tree. */
+  async getWhisperFiles(modelId: string): Promise<Array<{ name: string; downloadUrl: string; sizeMb: number }>> {
+    try {
+      const files: Array<{ type: string; path: string; size?: number; lfs?: { size: number } }> =
+        await this.fetchJson(`${this.apiUrl}/models/${modelId}/tree/main`);
+      return files
+        .filter(f => f.type === 'file' && f.path.endsWith('.bin') && f.path.toLowerCase().includes('ggml'))
+        .map(f => ({
+          name: f.path.split('/').pop() || f.path,
+          downloadUrl: `${this.baseUrl}/${modelId}/resolve/main/${f.path}`,
+          sizeMb: Math.round((f.lfs?.size || f.size || 0) / (1024 * 1024)),
+        }))
+        .sort((a, b) => a.sizeMb - b.sizeMb);
+    } catch {
+      return [];
+    }
+  }
+
 }
 
 export const huggingFaceService = new HuggingFaceService();

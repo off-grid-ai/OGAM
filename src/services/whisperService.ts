@@ -11,12 +11,21 @@ export interface TranscriptionResult {
 }
 export type TranscriptionCallback = (result: TranscriptionResult) => void;
 
+const GGML_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main';
+
 export const WHISPER_MODELS = [
-  { id: 'tiny.en', name: 'Whisper Tiny (English)', size: 75, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin', description: 'Fastest, English only, good for basic transcription' },
-  { id: 'tiny', name: 'Whisper Tiny (Multilingual)', size: 75, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin', description: 'Fast, supports multiple languages' },
-  { id: 'base.en', name: 'Whisper Base (English)', size: 142, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin', description: 'Better accuracy, English only' },
-  { id: 'base', name: 'Whisper Base (Multilingual)', size: 142, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin', description: 'Better accuracy, multiple languages' },
-  { id: 'small.en', name: 'Whisper Small (English)', size: 466, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin', description: 'High accuracy, English only, needs more RAM' },
+  // ── English-only ──────────────────────────────────────────────────────────
+  { id: 'tiny.en',   name: 'Tiny',   size: 75,   lang: 'en',    url: `${GGML_BASE}/ggml-tiny.en.bin`,   description: 'Fastest, English only' },
+  { id: 'base.en',   name: 'Base',   size: 142,  lang: 'en',    url: `${GGML_BASE}/ggml-base.en.bin`,   description: 'Better accuracy, English only' },
+  { id: 'small.en',  name: 'Small',  size: 466,  lang: 'en',    url: `${GGML_BASE}/ggml-small.en.bin`,  description: 'High accuracy, English only' },
+  { id: 'medium.en', name: 'Medium', size: 1500, lang: 'en',    url: `${GGML_BASE}/ggml-medium.en.bin`, description: 'Near human-level, English only, ~2 GB RAM' },
+  // ── Multilingual ──────────────────────────────────────────────────────────
+  { id: 'tiny',           name: 'Tiny',             size: 75,   lang: 'multi', url: `${GGML_BASE}/ggml-tiny.bin`,           description: 'Fastest, 99 languages' },
+  { id: 'base',           name: 'Base',             size: 142,  lang: 'multi', url: `${GGML_BASE}/ggml-base.bin`,           description: 'Better accuracy, 99 languages' },
+  { id: 'small',          name: 'Small',            size: 466,  lang: 'multi', url: `${GGML_BASE}/ggml-small.bin`,          description: 'High accuracy, 99 languages' },
+  { id: 'medium',         name: 'Medium',           size: 1500, lang: 'multi', url: `${GGML_BASE}/ggml-medium.bin`,         description: 'Near human-level, 99 languages, ~2 GB RAM' },
+  { id: 'large-v3-turbo', name: 'Large v3 Turbo',  size: 809,  lang: 'multi', url: `${GGML_BASE}/ggml-large-v3-turbo.bin`, description: 'Fast + accurate, distilled large, 99 languages' },
+  { id: 'large-v3',       name: 'Large v3',         size: 1550, lang: 'multi', url: `${GGML_BASE}/ggml-large-v3.bin`,       description: 'Best quality, 99 languages, ~3 GB RAM' },
 ];
 
 class WhisperService {
@@ -62,6 +71,30 @@ class WhisperService {
     logger.log(`[Whisper] Downloaded to ${destPath}`);
     return destPath;
   }
+  async downloadFromUrl(url: string, modelId: string, onProgress?: (progress: number) => void): Promise<string> {
+    await this.ensureModelsDirExists();
+    const destPath = this.getModelPath(modelId);
+    if (await RNFS.exists(destPath)) return destPath;
+    logger.log(`[Whisper] Downloading from URL: ${url}`);
+    const download = RNFS.downloadFile({
+      fromUrl: url, toFile: destPath, progressDivider: 1,
+      progress: (res) => { onProgress?.(res.bytesWritten / res.contentLength); },
+    });
+    const result = await download.promise;
+    if (result.statusCode !== 200) {
+      await RNFS.unlink(destPath).catch(() => {});
+      throw new Error(`Download failed with status ${result.statusCode}`);
+    }
+    try {
+      await this.validateModelFile(destPath);
+    } catch (validationError) {
+      await RNFS.unlink(destPath).catch(() => {});
+      throw validationError;
+    }
+    logger.log(`[Whisper] Downloaded to ${destPath}`);
+    return destPath;
+  }
+
   async deleteModel(modelId: string): Promise<void> {
     const path = this.getModelPath(modelId);
     if (await RNFS.exists(path)) await RNFS.unlink(path);

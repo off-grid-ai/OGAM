@@ -10,8 +10,12 @@ export interface ChatMessageProps {
   onGenerateImage?: (prompt: string) => void;
   showActions?: boolean;
   canGenerateImage?: boolean;
+  canSpeak?: boolean;
+  onSpeak?: () => void;
   showGenerationDetails?: boolean;
   animateEntry?: boolean;
+  /** Extra element rendered at the end of the meta row (e.g. TTSButton) */
+  metaExtra?: React.ReactNode;
 }
 
 export interface ParsedContent {

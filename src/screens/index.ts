@@ -17,6 +17,7 @@ export { PassphraseSetupScreen } from './PassphraseSetupScreen';
 export { DownloadManagerScreen } from './DownloadManagerScreen';
 export { ModelSettingsScreen } from './ModelSettingsScreen';
 export { VoiceSettingsScreen } from './VoiceSettingsScreen';
+export { TTSSettingsScreen } from './TTSSettingsScreen';
 export { DeviceInfoScreen } from './DeviceInfoScreen';
 export { StorageSettingsScreen } from './StorageSettingsScreen';
 export { SecuritySettingsScreen } from './SecuritySettingsScreen';

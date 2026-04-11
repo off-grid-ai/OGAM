@@ -126,12 +126,12 @@ describe('useKeyboardAwarePopover', () => {
       expect(mockKeyboardDismiss).not.toHaveBeenCalled();
     });
 
-    it('measures trigger position with custom offsetX', () => {
+    it('measures trigger position from button coords', () => {
       const mockMeasureInWindow = jest.fn((callback) => {
         callback(10, 100, 50, 30);
       });
 
-      const { result } = renderHook(() => useKeyboardAwarePopover(20));
+      const { result } = renderHook(() => useKeyboardAwarePopover());
 
       // Set up mock ref
       (result.current.triggerRef as any).current = {
@@ -143,9 +143,9 @@ describe('useKeyboardAwarePopover', () => {
       });
 
       expect(mockMeasureInWindow).toHaveBeenCalled();
-      // anchor.y = screenH - y = 800 - 100 = 700
-      // anchor.x = offsetX = 20
-      expect(result.current.anchor).toEqual({ y: 700, x: 20 });
+      // anchor.y = screenH - btnY = 800 - 100 = 700
+      // anchor.x = screenW - (btnX + btnW) = 400 - (10 + 50) = 340
+      expect(result.current.anchor).toEqual({ y: 700, x: 340 });
     });
 
     it('handles missing measureInWindow gracefully', () => {
@@ -175,7 +175,8 @@ describe('useKeyboardAwarePopover', () => {
       });
 
       // y = screenH - (undefined ?? 0) = 800 - 0 = 800
-      expect(result.current.anchor).toEqual({ y: 800, x: 12 }); // SPACING.md = 12
+      // x = screenW - (btnX + btnW) = 400 - (10 + 50) = 340
+      expect(result.current.anchor).toEqual({ y: 800, x: 340 });
     });
   });
 
@@ -361,8 +362,8 @@ describe('useKeyboardAwarePopover', () => {
     });
   });
 
-  describe('offsetX parameter', () => {
-    it('uses default SPACING.md when offsetX not provided', () => {
+  describe('button position measurement', () => {
+    it('computes anchorX as right-edge distance from screen right', () => {
       const mockMeasureInWindow = jest.fn((callback) => {
         callback(10, 100, 50, 30);
       });
@@ -377,16 +378,16 @@ describe('useKeyboardAwarePopover', () => {
         result.current.show();
       });
 
-      // SPACING.md = 12
-      expect(result.current.anchor.x).toBe(12);
+      // screenW=400, btnX=10, btnW=50 → x = 400 - (10+50) = 340
+      expect(result.current.anchor.x).toBe(340);
     });
 
-    it('uses custom offsetX when provided', () => {
+    it('computes anchorY as distance from button top to screen bottom', () => {
       const mockMeasureInWindow = jest.fn((callback) => {
         callback(10, 100, 50, 30);
       });
 
-      const { result } = renderHook(() => useKeyboardAwarePopover(50));
+      const { result } = renderHook(() => useKeyboardAwarePopover());
 
       (result.current.triggerRef as any).current = {
         measureInWindow: mockMeasureInWindow,
@@ -396,7 +397,8 @@ describe('useKeyboardAwarePopover', () => {
         result.current.show();
       });
 
-      expect(result.current.anchor.x).toBe(50);
+      // screenH=800, btnY=100 → y = 800 - 100 = 700
+      expect(result.current.anchor.y).toBe(700);
     });
   });
 });

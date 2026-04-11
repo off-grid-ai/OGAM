@@ -3,15 +3,15 @@
  *
  * Tests for the voice settings screen including:
  * - Title display
- * - Description text about Whisper
- * - Download options when no model
+ * - Privacy note text
+ * - English and Multilingual model sections
  * - Back button navigation
- * - Downloaded model state (name, status badge, remove button)
+ * - Active model state (name, badge, remove button)
  * - Download progress display
  * - Model download trigger
  * - Remove model confirmation alert
  * - Error display and clear
- * - Privacy card display
+ * - Search bar
  *
  * Priority: P1 (High)
  */
@@ -82,6 +82,7 @@ jest.mock('../../../src/components/Button', () => ({
 }));
 
 const mockDownloadModel = jest.fn();
+const mockDownloadFromUrl = jest.fn();
 const mockDeleteModel = jest.fn();
 const mockClearError = jest.fn();
 
@@ -90,6 +91,7 @@ let mockWhisperStoreValues: any = {
   isDownloading: false,
   downloadProgress: 0,
   downloadModel: mockDownloadModel,
+  downloadFromUrl: mockDownloadFromUrl,
   deleteModel: mockDeleteModel,
   error: null,
   clearError: mockClearError,
@@ -101,11 +103,22 @@ jest.mock('../../../src/stores', () => ({
 
 jest.mock('../../../src/services', () => ({
   WHISPER_MODELS: [
-    { id: 'tiny', name: 'Whisper Tiny', size: '75', description: 'Fastest, lower accuracy' },
-    { id: 'base', name: 'Whisper Base', size: '141', description: 'Good accuracy' },
-    { id: 'small', name: 'Whisper Small', size: '461', description: 'Better accuracy' },
-    { id: 'medium', name: 'Whisper Medium', size: '1500', description: 'Best accuracy' },
+    { id: 'tiny.en', name: 'Tiny', size: 75, lang: 'en', description: 'Fastest, English only' },
+    { id: 'base.en', name: 'Base', size: 142, lang: 'en', description: 'Better accuracy, English only' },
+    { id: 'small.en', name: 'Small', size: 466, lang: 'en', description: 'High accuracy, English only' },
+    { id: 'medium.en', name: 'Medium', size: 1500, lang: 'en', description: 'Near human-level, English only' },
+    { id: 'tiny', name: 'Tiny', size: 75, lang: 'multi', description: 'Fastest, 99 languages' },
+    { id: 'base', name: 'Base', size: 142, lang: 'multi', description: 'Better accuracy, 99 languages' },
+    { id: 'small', name: 'Small', size: 466, lang: 'multi', description: 'High accuracy, 99 languages' },
+    { id: 'medium', name: 'Medium', size: 1500, lang: 'multi', description: 'Near human-level, 99 languages' },
   ],
+}));
+
+jest.mock('../../../src/services/huggingface', () => ({
+  huggingFaceService: {
+    searchWhisperRepos: jest.fn().mockResolvedValue([]),
+    getWhisperFiles: jest.fn().mockResolvedValue([]),
+  },
 }));
 
 import { VoiceSettingsScreen } from '../../../src/screens/VoiceSettingsScreen';
@@ -134,6 +147,7 @@ describe('VoiceSettingsScreen', () => {
       isDownloading: false,
       downloadProgress: 0,
       downloadModel: mockDownloadModel,
+      downloadFromUrl: mockDownloadFromUrl,
       deleteModel: mockDeleteModel,
       error: null,
       clearError: mockClearError,
@@ -149,19 +163,16 @@ describe('VoiceSettingsScreen', () => {
       expect(getByText('Voice Transcription')).toBeTruthy();
     });
 
-    it('shows description text about Whisper', () => {
+    it('shows privacy note about on-device transcription', () => {
       const { getByText } = render(<VoiceSettingsScreen />);
       expect(
-        getByText(/Download a Whisper model to enable on-device voice input/),
+        getByText(/All transcription runs on-device/),
       ).toBeTruthy();
     });
 
-    it('shows privacy card', () => {
-      const { getByText } = render(<VoiceSettingsScreen />);
-      expect(getByText('Privacy First')).toBeTruthy();
-      expect(
-        getByText(/Voice transcription happens entirely on your device/),
-      ).toBeTruthy();
+    it('shows search bar', () => {
+      const { getByPlaceholderText } = render(<VoiceSettingsScreen />);
+      expect(getByPlaceholderText('Search models or HuggingFace...')).toBeTruthy();
     });
 
     it('back button calls goBack', () => {
@@ -178,48 +189,46 @@ describe('VoiceSettingsScreen', () => {
   // No Model Downloaded - Download Options
   // ============================================================================
   describe('download options (no model)', () => {
-    it('shows download options when no model is downloaded', () => {
+    it('shows English model section', () => {
       const { getByText } = render(<VoiceSettingsScreen />);
-      expect(getByText('Whisper Tiny')).toBeTruthy();
-      expect(getByText('Whisper Base')).toBeTruthy();
-      expect(getByText('Whisper Small')).toBeTruthy();
+      expect(getByText('ENGLISH ONLY')).toBeTruthy();
     });
 
-    it('shows only first 3 models (slice(0, 3))', () => {
-      const { queryByText } = render(<VoiceSettingsScreen />);
-      // 4th model (medium) should NOT be shown due to .slice(0, 3)
-      expect(queryByText('Whisper Medium')).toBeNull();
+    it('shows Multilingual model section', () => {
+      const { getByText } = render(<VoiceSettingsScreen />);
+      expect(getByText(/MULTILINGUAL/)).toBeTruthy();
     });
 
-    it('shows "Select a model to download" label', () => {
-      const { getByText } = render(<VoiceSettingsScreen />);
-      expect(getByText('Select a model to download:')).toBeTruthy();
+    it('shows model names in English section', () => {
+      const { getAllByText } = render(<VoiceSettingsScreen />);
+      // "Tiny" appears in both English and Multilingual sections
+      expect(getAllByText('Tiny').length).toBeGreaterThanOrEqual(1);
     });
 
-    it('shows model size for each option', () => {
-      const { getByText } = render(<VoiceSettingsScreen />);
-      expect(getByText('75 MB')).toBeTruthy();
-      expect(getByText('141 MB')).toBeTruthy();
-      expect(getByText('461 MB')).toBeTruthy();
+    it('shows model size for options', () => {
+      const { getAllByText } = render(<VoiceSettingsScreen />);
+      // Sizes appear in both English and Multilingual sections
+      expect(getAllByText('75 MB').length).toBeGreaterThanOrEqual(1);
+      expect(getAllByText('142 MB').length).toBeGreaterThanOrEqual(1);
+      expect(getAllByText('466 MB').length).toBeGreaterThanOrEqual(1);
     });
 
-    it('shows model description for each option', () => {
+    it('shows model description for options', () => {
       const { getByText } = render(<VoiceSettingsScreen />);
-      expect(getByText('Fastest, lower accuracy')).toBeTruthy();
-      expect(getByText('Good accuracy')).toBeTruthy();
-      expect(getByText('Better accuracy')).toBeTruthy();
+      expect(getByText('Fastest, English only')).toBeTruthy();
+      expect(getByText('Better accuracy, English only')).toBeTruthy();
     });
 
     it('calls downloadModel when a model option is pressed', () => {
-      const { getByText } = render(<VoiceSettingsScreen />);
-      fireEvent.press(getByText('Whisper Base'));
-      expect(mockDownloadModel).toHaveBeenCalledWith('base');
+      const { getByTestId } = render(<VoiceSettingsScreen />);
+      fireEvent.press(getByTestId('model-download-base.en'));
+      expect(mockDownloadModel).toHaveBeenCalledWith('base.en');
     });
 
     it('calls downloadModel with correct id for tiny model', () => {
-      const { getByText } = render(<VoiceSettingsScreen />);
-      fireEvent.press(getByText('Whisper Tiny'));
-      expect(mockDownloadModel).toHaveBeenCalledWith('tiny');
+      const { getByTestId } = render(<VoiceSettingsScreen />);
+      fireEvent.press(getByTestId('model-download-tiny.en'));
+      expect(mockDownloadModel).toHaveBeenCalledWith('tiny.en');
     });
   });
 
@@ -230,28 +239,28 @@ describe('VoiceSettingsScreen', () => {
     beforeEach(() => {
       mockWhisperStoreValues = {
         ...mockWhisperStoreValues,
-        downloadedModelId: 'base',
+        downloadedModelId: 'base.en',
       };
     });
 
-    it('shows downloaded model name', () => {
+    it('shows active model section label', () => {
       const { getByText } = render(<VoiceSettingsScreen />);
-      expect(getByText('Whisper Base')).toBeTruthy();
+      expect(getByText('ACTIVE MODEL')).toBeTruthy();
     });
 
-    it('shows "Downloaded" status badge', () => {
+    it('shows downloaded model name with language', () => {
       const { getByText } = render(<VoiceSettingsScreen />);
-      expect(getByText('Downloaded')).toBeTruthy();
+      expect(getByText(/Base — English/)).toBeTruthy();
     });
 
-    it('shows "Remove Model" button', () => {
+    it('shows "Active" status badge', () => {
       const { getByText } = render(<VoiceSettingsScreen />);
-      expect(getByText('Remove Model')).toBeTruthy();
+      expect(getByText('Active')).toBeTruthy();
     });
 
-    it('does not show download options when model is downloaded', () => {
-      const { queryByText } = render(<VoiceSettingsScreen />);
-      expect(queryByText('Select a model to download:')).toBeNull();
+    it('shows "Remove" button', () => {
+      const { getByText } = render(<VoiceSettingsScreen />);
+      expect(getByText('Remove')).toBeTruthy();
     });
 
     it('shows model id as fallback when model not found in WHISPER_MODELS', () => {
@@ -263,11 +272,11 @@ describe('VoiceSettingsScreen', () => {
       expect(getByText('unknown-model')).toBeTruthy();
     });
 
-    it('pressing Remove Model shows confirmation alert', () => {
+    it('pressing Remove shows confirmation alert', () => {
       const { getByText } = render(<VoiceSettingsScreen />);
-      fireEvent.press(getByText('Remove Model'));
+      fireEvent.press(getByText('Remove'));
       expect(mockShowAlert).toHaveBeenCalledWith(
-        'Remove Whisper Model',
+        'Remove Voice Model',
         'This will disable voice input until you download a model again.',
         expect.arrayContaining([
           expect.objectContaining({ text: 'Cancel', style: 'cancel' }),
@@ -292,11 +301,6 @@ describe('VoiceSettingsScreen', () => {
     it('shows downloading state with percentage', () => {
       const { getByText } = render(<VoiceSettingsScreen />);
       expect(getByText('Downloading... 45%')).toBeTruthy();
-    });
-
-    it('does not show download options during download', () => {
-      const { queryByText } = render(<VoiceSettingsScreen />);
-      expect(queryByText('Select a model to download:')).toBeNull();
     });
 
     it('shows 0% at start of download', () => {
@@ -334,13 +338,13 @@ describe('VoiceSettingsScreen', () => {
   // Error State
   // ============================================================================
   describe('error state', () => {
-    it('shows error message when whisperError is set', () => {
+    it('shows error message with tap to dismiss when whisperError is set', () => {
       mockWhisperStoreValues = {
         ...mockWhisperStoreValues,
         error: 'Download failed: network error',
       };
       const { getByText } = render(<VoiceSettingsScreen />);
-      expect(getByText('Download failed: network error')).toBeTruthy();
+      expect(getByText('Download failed: network error (tap to dismiss)')).toBeTruthy();
     });
 
     it('calls clearError when error is tapped', () => {
@@ -349,7 +353,7 @@ describe('VoiceSettingsScreen', () => {
         error: 'Download failed',
       };
       const { getByText } = render(<VoiceSettingsScreen />);
-      fireEvent.press(getByText('Download failed'));
+      fireEvent.press(getByText('Download failed (tap to dismiss)'));
       expect(mockClearError).toHaveBeenCalled();
     });
 

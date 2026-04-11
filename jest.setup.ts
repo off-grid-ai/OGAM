@@ -149,6 +149,61 @@ jest.mock('whisper.rn', () => ({
   },
 }), { virtual: true });
 
+// react-native-audio-api mock
+jest.mock('react-native-audio-api', () => ({
+  AudioContext: jest.fn().mockImplementation(() => ({
+    createBuffer: jest.fn().mockReturnValue({ copyToChannel: jest.fn() }),
+    createBufferSource: jest.fn().mockReturnValue({
+      connect: jest.fn(),
+      start: jest.fn(),
+      stop: jest.fn(),
+      playbackRate: { value: 1.0 },
+      onEnded: null,
+      buffer: null,
+    }),
+    destination: {},
+    close: jest.fn(),
+  })),
+  AudioRecorder: jest.fn().mockImplementation(() => ({
+    enableFileOutput: jest.fn().mockReturnValue({ status: 'success', path: '/mock/audio/input.wav' }),
+    start: jest.fn().mockReturnValue({ status: 'success', path: '/mock/audio/input.wav' }),
+    stop: jest.fn().mockReturnValue({ status: 'success', path: '/mock/audio/input.wav', size: 1024, duration: 1.0 }),
+    pause: jest.fn(),
+    resume: jest.fn(),
+    isRecording: jest.fn().mockReturnValue(false),
+    isPaused: jest.fn().mockReturnValue(false),
+  })),
+  FileFormat: { Wav: 0, Caf: 1, M4A: 2, Flac: 3 },
+  FileDirectory: { Document: 0, Cache: 1 },
+}), { virtual: true });
+
+// @react-native-community/slider mock
+jest.mock('@react-native-community/slider', () => {
+  const { View } = require('react-native');
+  return { __esModule: true, default: View };
+});
+
+// react-native-executorch mock
+const mockVoiceConfig = { id: 'mock_voice' };
+jest.mock('react-native-executorch', () => ({
+  useTextToSpeech: jest.fn(() => ({
+    isReady: true,
+    downloadProgress: 1,
+    error: null,
+    stream: jest.fn(() => Promise.resolve()),
+    streamStop: jest.fn(),
+  })),
+  KOKORO_MEDIUM: 'kokoro-medium',
+  KOKORO_VOICE_AF_HEART: mockVoiceConfig,
+  KOKORO_VOICE_AF_RIVER: mockVoiceConfig,
+  KOKORO_VOICE_AF_SARAH: mockVoiceConfig,
+  KOKORO_VOICE_AM_ADAM: mockVoiceConfig,
+  KOKORO_VOICE_AM_MICHAEL: mockVoiceConfig,
+  KOKORO_VOICE_AM_SANTA: mockVoiceConfig,
+  KOKORO_VOICE_BF_EMMA: mockVoiceConfig,
+  KOKORO_VOICE_BM_DANIEL: mockVoiceConfig,
+}));
+
 // react-native-fs mock
 jest.mock('react-native-fs', () => ({
   DocumentDirectoryPath: '/mock/documents',

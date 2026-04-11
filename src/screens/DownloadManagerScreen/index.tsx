@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { Card } from '../../components';
@@ -7,13 +7,35 @@ import { CustomAlert, hideAlert } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useNavigation } from '@react-navigation/native';
 import { createStyles } from './styles';
-import { ActiveDownloadCard, CompletedDownloadCard, formatBytes } from './items';
+import { ActiveDownloadCard, CompletedDownloadCard, formatBytes, type DownloadItem } from './items';
 import { useDownloadManager } from './useDownloadManager';
+
+type FilterType = 'all' | 'text' | 'vision' | 'image' | 'tts' | 'stt';
+
+const FILTERS: { id: FilterType; label: string }[] = [
+  { id: 'all',    label: 'All' },
+  { id: 'text',   label: 'Text' },
+  { id: 'vision', label: 'Vision' },
+  { id: 'image',  label: 'Image Gen' },
+  { id: 'tts',    label: 'Text to Speech' },
+  { id: 'stt',    label: 'Speech to Text' },
+];
+
+function matchesFilter(item: DownloadItem, filter: FilterType): boolean {
+  if (filter === 'all')    return true;
+  if (filter === 'vision') return item.modelType === 'text' && !!item.isVisionModel;
+  if (filter === 'text')   return item.modelType === 'text' && !item.isVisionModel;
+  if (filter === 'image')  return item.modelType === 'image';
+  if (filter === 'tts')    return item.modelType === 'tts';
+  if (filter === 'stt')    return item.modelType === 'stt';
+  return true;
+}
 
 export const DownloadManagerScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const {
     isRefreshing,
     activeItems,
@@ -27,6 +49,30 @@ export const DownloadManagerScreen: React.FC = () => {
     totalStorageUsed,
   } = useDownloadManager();
 
+  const filteredActive = activeItems.filter(item => matchesFilter(item, activeFilter));
+  const filteredCompleted = completedItems.filter(item => matchesFilter(item, activeFilter));
+
+  const renderHeader = useCallback(() => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.filterBarContent}
+    >
+      {FILTERS.map(f => {
+        const active = activeFilter === f.id;
+        return (
+          <TouchableOpacity
+            key={f.id}
+            style={[styles.filterChip, active && styles.filterChipActive]}
+            onPress={() => setActiveFilter(f.id)}
+          >
+            <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{f.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  ), [activeFilter, colors, styles]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']} testID="downloaded-models-screen">
       <View style={styles.header}>
@@ -39,52 +85,47 @@ export const DownloadManagerScreen: React.FC = () => {
 
       <FlatList
         data={[{ key: 'content' }]}
+        ListHeaderComponent={renderHeader}
         renderItem={() => (
           <View style={styles.content}>
-            {/* Active Downloads */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Icon name="download" size={18} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Active Downloads</Text>
-                <View style={styles.countBadge}>
-                  <Text style={styles.countText}>{activeItems.length}</Text>
+            {/* Active Downloads — only show when there are active items */}
+            {filteredActive.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Icon name="download" size={16} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Active Downloads</Text>
+                  <View style={styles.countBadge}>
+                    <Text style={styles.countText}>{filteredActive.length}</Text>
+                  </View>
                 </View>
-              </View>
-              {activeItems.length > 0 ? (
-                activeItems.map(item => (
+                {filteredActive.map(item => (
                   <View key={`active-${item.modelId}-${item.fileName}`}>
                     <ActiveDownloadCard item={item} onRemove={handleRemoveDownload} />
                   </View>
-                ))
-              ) : (
-                <Card style={styles.emptyCard}>
-                  <Icon name="inbox" size={32} color={colors.textMuted} />
-                  <Text style={styles.emptyText}>No active downloads</Text>
-                </Card>
-              )}
-            </View>
+                ))}
+              </View>
+            )}
 
-            {/* Completed Downloads */}
+            {/* Downloaded Models */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Icon name="check-circle" size={18} color={colors.success} />
+                <Icon name="check-circle" size={16} color={colors.success} />
                 <Text style={styles.sectionTitle}>Downloaded Models</Text>
                 <View style={styles.countBadge}>
-                  <Text style={styles.countText}>{completedItems.length}</Text>
+                  <Text style={styles.countText}>{filteredCompleted.length}</Text>
                 </View>
               </View>
-              {completedItems.length > 0 ? (
-                completedItems.map(item => (
+              {filteredCompleted.length > 0 ? (
+                filteredCompleted.map(item => (
                   <View key={`completed-${item.modelId}-${item.fileName}`}>
                     <CompletedDownloadCard item={item} onDelete={handleDeleteItem} onRepairVision={handleRepairVision} />
                   </View>
                 ))
               ) : (
                 <Card style={styles.emptyCard}>
-                  <Icon name="package" size={32} color={colors.textMuted} />
-                  <Text style={styles.emptyText}>No models downloaded yet</Text>
-                  <Text style={styles.emptySubtext}>
-                    Go to the Models tab to browse and download models
+                  <Icon name="package" size={24} color={colors.textMuted} />
+                  <Text style={styles.emptyText}>
+                    {activeFilter === 'all' ? 'No models downloaded yet' : `No ${FILTERS.find(f => f.id === activeFilter)?.label ?? ''} models`}
                   </Text>
                 </Card>
               )}

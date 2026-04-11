@@ -14,6 +14,7 @@ interface WhisperState {
 
   // Actions
   downloadModel: (modelId: string) => Promise<void>;
+  downloadFromUrl: (url: string, modelId: string) => Promise<void>;
   loadModel: () => Promise<void>;
   unloadModel: () => Promise<void>;
   deleteModel: () => Promise<void>;
@@ -45,6 +46,23 @@ export const useWhisperStore = create<WhisperState>()(
           });
 
           // Auto-load after download
+          await get().loadModel();
+        } catch (error) {
+          set({
+            isDownloading: false,
+            downloadProgress: 0,
+            error: error instanceof Error ? error.message : 'Download failed',
+          });
+        }
+      },
+
+      downloadFromUrl: async (url: string, modelId: string) => {
+        set({ isDownloading: true, downloadProgress: 0, error: null });
+        try {
+          await whisperService.downloadFromUrl(url, modelId, (progress) => {
+            set({ downloadProgress: progress });
+          });
+          set({ downloadedModelId: modelId, isDownloading: false, downloadProgress: 1 });
           await get().loadModel();
         } catch (error) {
           set({

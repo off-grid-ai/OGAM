@@ -12,7 +12,7 @@ import { createStyles } from './styles';
 
 export type DownloadItem = {
   type: 'active' | 'completed';
-  modelType: 'text' | 'image';
+  modelType: 'text' | 'image' | 'tts' | 'stt';
   downloadId?: number;
   modelId: string;
   fileName: string;
@@ -222,9 +222,9 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
       <View style={styles.downloadHeader}>
         <View style={styles.modelTypeIcon}>
           <Icon
-            name={item.modelType === 'image' ? 'image' : 'message-square'}
+            name={item.modelType === 'image' ? 'image' : item.modelType === 'tts' ? 'volume-2' : item.modelType === 'stt' ? 'mic' : item.isVisionModel ? 'eye' : 'message-square'}
             size={16}
-            color={item.modelType === 'image' ? colors.info : colors.primary}
+            color={item.modelType === 'image' ? colors.info : item.modelType === 'tts' || item.modelType === 'stt' ? colors.success : item.isVisionModel ? colors.warning : colors.primary}
           />
         </View>
         <View style={styles.downloadInfo}>

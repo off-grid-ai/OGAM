@@ -644,14 +644,13 @@ describe('ModelSettingsScreen', () => {
         expect(useAppStore.getState().settings.enableGpu).toBe(true);
       });
 
-      it('updates gpuLayers when GPU Layers slider completes', () => {
+      it('updates gpuLayers when GPU Layers stepper is incremented', () => {
         useAppStore.getState().updateSettings({ enableGpu: true, flashAttn: false, gpuLayers: 6 });
         const { getByTestId } = renderWithSections('text');
 
-        const slider = getByTestId('gpu-layers-slider');
-        fireEvent(slider, 'slidingComplete', 12);
+        fireEvent.press(getByTestId('gpu-layers-stepper-increment'));
 
-        expect(useAppStore.getState().settings.gpuLayers).toBe(12);
+        expect(useAppStore.getState().settings.gpuLayers).toBe(7);
       });
     });
   });

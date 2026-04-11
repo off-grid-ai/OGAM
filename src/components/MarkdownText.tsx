@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { Linking, Pressable, Text, StyleSheet } from 'react-native';
+import { Linking, Text } from 'react-native';
 import Markdown from '@ronradtke/react-native-markdown-display';
 import { useTheme } from '../theme';
 import type { ThemeColors } from '../theme';
@@ -14,21 +14,17 @@ export function preprocessMarkdown(text: string): string {
   return text.replaceAll(/(\d)\*(?=\d)/g, String.raw`$1\*`);
 }
 
-const linkWrapperStyles = StyleSheet.create({
-  pressable: { flexShrink: 1, paddingBottom: 6 },
-});
-
-/** Custom link rule that constrains the Pressable wrapper width */
+/** Custom link rule — renders as inline Text so it wraps correctly inside list items */
 function createLinkRule(onPress: (url: string) => void) {
-  return (node: any, renderChildren: any, _parent: any) => (
-    <Pressable
+  return (node: any, children: any, ...[, styles]: any[]) => (
+    <Text
       key={node.key}
       accessibilityRole="link"
-      style={linkWrapperStyles.pressable}
+      style={styles.link}
       onPress={() => onPress(node.attributes?.href ?? '')}
     >
-      <Text>{renderChildren}</Text>
-    </Pressable>
+      {children}
+    </Text>
   );
 }
 

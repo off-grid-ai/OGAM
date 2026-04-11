@@ -125,16 +125,16 @@ export interface ModelRecommendation {
 // Media attachment types
 export interface MediaAttachment {
   id: string;
-  type: 'image' | 'document';
+  type: 'image' | 'document' | 'audio';
   uri: string;
   mimeType?: string;
   width?: number;
   height?: number;
   fileName?: string;
-  /** For documents: the extracted text content */
-  textContent?: string;
-  /** For documents: file size in bytes */
-  fileSize?: number;
+  textContent?: string; // documents: extracted text
+  fileSize?: number; // documents: file size in bytes
+  audioFormat?: 'wav' | 'mp3'; // audio attachments: format for model input
+  audioDurationSeconds?: number; // audio attachments: recorded duration in seconds
 }
 
 // Generation metadata - details about how a message was generated
@@ -187,6 +187,8 @@ export interface Message {
   toolCalls?: Array<{ id?: string; name: string; arguments: string }>;
   /** Tool name (for tool result messages) */
   toolName?: string;
+  /** True when this assistant message was generated while interfaceMode === 'audio' */
+  isAudioModeMessage?: boolean;
 }
 
 export interface Conversation {
