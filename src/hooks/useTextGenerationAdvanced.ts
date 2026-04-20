@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { Platform } from 'react-native';
 import { useAppStore } from '../stores';
 import { CacheType, INFERENCE_BACKENDS } from '../types';
+import { hardwareService } from '../services/hardware';
 
 /** Feature flag: Set to true to enable HTP/Hexagon NPU support. Currently disabled. */
 const HTP_ENABLED = false;
@@ -31,8 +33,17 @@ export function useTextGenerationAdvanced() {
   // OpenCL and HTP force f16 in the native loader, so lock the UI to match.
   const cacheDisabled = gpuForcesF16;
   const displayCacheType = cacheDisabled ? 'f16' : currentCacheType;
+  const [resolvedThreadCount, setResolvedThreadCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (settings?.nThreads !== 0) return;
+    hardwareService.getRecommendedThreadCount().then(setResolvedThreadCount);
+  }, [settings?.nThreads]);
+
   const cpuThreadsSliderValue = settings?.nThreads && settings.nThreads > 0 ? settings.nThreads : 1;
-  const cpuThreadsDisplayValue = settings?.nThreads === 0 ? 'Auto' : String(settings?.nThreads ?? 6);
+  const cpuThreadsDisplayValue = settings?.nThreads === 0
+    ? (resolvedThreadCount != null ? `Auto (${resolvedThreadCount})` : 'Auto')
+    : String(settings?.nThreads ?? 6);
 
   const handleFlashAttnToggle = (flashAttn: boolean) => {
     if (!flashAttn && isQuantizedCache) {

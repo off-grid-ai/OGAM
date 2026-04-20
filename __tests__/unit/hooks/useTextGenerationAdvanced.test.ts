@@ -21,14 +21,16 @@ describe('useTextGenerationAdvanced', () => {
     expect(result.current.displayCacheType).toBe('f16');
   });
 
-  it('shows Auto for cpu threads when nThreads uses the auto sentinel', () => {
+  it('shows Auto (N) for cpu threads when nThreads uses the auto sentinel', async () => {
     act(() => {
       useAppStore.getState().updateSettings({ nThreads: 0 });
     });
 
     const { result } = renderHook(() => useTextGenerationAdvanced());
 
-    expect(result.current.cpuThreadsDisplayValue).toBe('Auto');
+    await act(async () => {});
+
+    expect(result.current.cpuThreadsDisplayValue).toMatch(/^Auto \(\d+\)$/);
     expect(result.current.cpuThreadsSliderValue).toBe(1);
   });
 });

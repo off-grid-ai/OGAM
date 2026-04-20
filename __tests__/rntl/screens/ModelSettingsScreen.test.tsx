@@ -433,10 +433,10 @@ describe('ModelSettingsScreen', () => {
   // Performance Settings
   // ============================================================================
   describe('performance settings', () => {
-    it('shows CPU Threads slider label and auto value when nThreads uses the auto sentinel', () => {
-      const { getByText } = renderWithSections('text');
+    it('shows CPU Threads slider label and auto value when nThreads uses the auto sentinel', async () => {
+      const { getByText, findByText } = renderWithSections('text');
       expect(getByText('CPU Threads')).toBeTruthy();
-      expect(getByText('Auto')).toBeTruthy();
+      await findByText(/^Auto \(\d+\)$/);
     });
 
     it('shows Batch Size slider label and default value', () => {
