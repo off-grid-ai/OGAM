@@ -101,7 +101,7 @@ class DownloadForegroundService : Service() {
                 } else {
                     context.startService(intent)
                 }
-            } catch (e: Exception) {
+            } catch (e: IllegalStateException) {
                 // App is in the background on Android 12+ — notification skipped,
                 // but WorkManager continues the download unaffected.
                 android.util.Log.w("DownloadService", "Skipping foreground notification (background): ${e.message}")
@@ -118,10 +118,19 @@ class DownloadForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = buildNotificationFromState()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: IllegalStateException) {
+            // startForeground() can throw on Android 15+ when the dataSync time budget
+            // is exhausted. Calling stopSelf() here prevents the service sitting in limbo,
+            // which would otherwise trigger ForegroundServiceDidNotStartInTimeException.
+            // WorkManager continues the download unaffected without the notification.
+            android.util.Log.w("DownloadService", "startForeground failed, stopping service: ${e.message}")
+            stopSelf()
         }
         return START_NOT_STICKY
     }
