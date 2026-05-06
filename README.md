@@ -24,7 +24,7 @@
 
 <sub><b>BUILT BY</b></sub>
 
-<a href="https://mobile.wednesday.is/hire-ai-native-mobile-squad"><img src="https://mobile.wednesday.is/logos/wednesday-logo.svg" alt="Wednesday Solutions" height="104" /></a>
+<a href="https://mobile.wednesday.is/hire-ai-native-mobile-squad"><picture><source media="(prefers-color-scheme: dark)" srcset="https://mobile.wednesday.is/logos/wednesday-logo.svg" /><img src="src/assets/wednesday-logo.svg" alt="Wednesday Solutions" height="104" /></picture></a>
 
 </div>
 
