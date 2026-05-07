@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/alichherawalla-off-grid-mobile-ai-badge.png)](https://mseep.ai/app/alichherawalla-off-grid-mobile-ai)
+
 <div align="center">
 
 <img src="src/assets/logo.png" alt="Off Grid Logo" width="120" />
