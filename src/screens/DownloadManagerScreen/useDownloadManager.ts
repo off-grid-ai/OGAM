@@ -191,6 +191,10 @@ async function retryIosImageDownload(entry: DownloadEntry, setAlertState: (s: Al
     logger.error('[DownloadManager] retryIosImageDownload: missing imageModelDownloadUrl for zip download', { modelId: entry.modelId });
     return;
   }
+  // Cancel the stale native row so it doesn't accumulate in the native DB across
+  // retries. proceedWithDownload starts a fresh row — without this the old failed
+  // row stays persisted and re-hydrates after the next app kill.
+  await backgroundDownloadService.cancelDownload(entry.downloadId).catch(() => {});
   const modelId = entry.modelId.replace('image:', '');
   const appState = useAppStore.getState();
   const deps = {
