@@ -8,6 +8,7 @@ import type { ThemeColors, ThemeShadows } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
 import { MadeWithLove } from '../../components/MadeWithLove';
 import { PRO_URL } from '../../utils/proPrompt';
+import { useAppStore } from '../../stores';
 
 const FEATURES = [
   { icon: 'mic', title: 'Voice AI + Personas', desc: 'Talk to named AI assistants with personality and memory.' },
@@ -21,6 +22,12 @@ export const ProDetailScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const setHasRegisteredPro = useAppStore((s) => s.setHasRegisteredPro);
+
+  const handleCTA = () => {
+    setHasRegisteredPro(true);
+    Linking.openURL(PRO_URL);
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -53,7 +60,7 @@ export const ProDetailScreen: React.FC = () => {
           Register now - we'll send your purchase link when it's live.
         </Text>
 
-        <TouchableOpacity style={styles.ctaButton} onPress={() => Linking.openURL(PRO_URL)}>
+        <TouchableOpacity style={styles.ctaButton} onPress={handleCTA}>
           <Text style={styles.ctaText}>I am in 🔥</Text>
         </TouchableOpacity>
 
