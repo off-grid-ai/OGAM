@@ -69,30 +69,30 @@ const FALLBACK_SUBNETS = ['192.168.1', '192.168.0'];
  * Returns the first reachable subnet base, or null if none respond.
  * Uses a short timeout so we bail fast when on cellular.
  */
-async function findReachableSubnet(subnets: string[]): Promise<string | null> {
+async function findReachableSubnet(subnets: string[], log: (msg: string) => void): Promise<string | null> {
   const GATEWAY_TIMEOUT_MS = 800;
   const results = await Promise.all(
     subnets.map(async (base) => {
       const gateway = `${base}.1`;
-      // Try any HTTP connection to the gateway — we don't care about the response,
-      // just that something is listening on the local network.
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), GATEWAY_TIMEOUT_MS);
       try {
         await fetch(`http://${gateway}:80/`, { signal: controller.signal }); // NOSONAR — LAN gateway probe
         clearTimeout(timer);
+        log(`Gateway ${gateway}:80 responded`);
         return base;
       } catch {
         clearTimeout(timer);
-        // Also try the Ollama port since routers may not serve HTTP on :80
         const controller2 = new AbortController();
         const timer2 = setTimeout(() => controller2.abort(), GATEWAY_TIMEOUT_MS);
         try {
           await fetch(`http://${gateway}:11434/`, { signal: controller2.signal }); // NOSONAR — LAN Ollama probe
           clearTimeout(timer2);
+          log(`Gateway ${gateway}:11434 responded`);
           return base;
         } catch {
           clearTimeout(timer2);
+          log(`Gateway ${gateway} did not respond on :80 or :11434`);
           return null;
         }
       }
@@ -107,53 +107,64 @@ async function findReachableSubnet(subnets: string[]): Promise<string | null> {
  * Throws with a human-readable message if setup fails (no WiFi IP, non-private network).
  * Errors during probing are swallowed — only setup errors propagate.
  */
-export async function discoverLANServers(): Promise<DiscoveredServer[]> {
+export async function discoverLANServers(onLog?: (msg: string) => void): Promise<DiscoveredServer[]> {
+  const log = (msg: string) => {
+    logger.warn('[Discovery]', msg);
+    onLog?.(msg);
+  };
+
   let runningOnEmulator: boolean;
   try {
     runningOnEmulator = await isEmulator();
   } catch (err) {
-    logger.warn('[Discovery] isEmulator() threw:', (err as Error).message);
+    log(`isEmulator() threw: ${(err as Error).message} — assuming not emulator`);
     runningOnEmulator = false;
   }
   if (runningOnEmulator) {
-    logger.warn('[Discovery] Running on emulator — skipping LAN scan (emulator network stack cannot handle concurrent probes)');
+    log('Running on emulator — skipping scan (emulator network stack cannot handle concurrent probes)');
     return [];
   }
+
+  log('Not an emulator — proceeding');
 
   let ip: string | null;
   try {
     ip = await getIpAddress();
   } catch (err) {
-    logger.warn('[Discovery] getIpAddress threw:', (err as Error).message);
+    log(`getIpAddress() threw: ${(err as Error).message}`);
     ip = null;
   }
+
+  const ipv6 = ip ? isIPv6(ip) : false;
+  const privateV4 = ip ? isPrivateIPv4(ip) : false;
+  log(`Device IP: ${ip ?? 'null'} | IPv6: ${ipv6} | privateIPv4: ${privateV4}`);
 
   let subnetsToScan: string[];
 
   if (!ip || ip === '0.0.0.0' || ip === '127.0.0.1') {
-    logger.warn('[Discovery] No WiFi IP (got:', ip || 'null', ') — skipping LAN scan');
+    log(`No usable IP (got: ${ip ?? 'null'}) — skipping scan`);
     return [];
-  } else if (isIPv6(ip)) {
-    // IPv6 primary address — could be WiFi or cellular, but we can't scan IPv4 subnets
-    // without a real IP. Quick-probe the two most common gateways before committing to a
-    // full subnet scan so we don't waste time on cellular.
-    logger.warn('[Discovery] Got IPv6 address:', ip, '— quick-probing common gateways');
-    const reachableSubnet = await findReachableSubnet(FALLBACK_SUBNETS);
-    if (!reachableSubnet) {
-      logger.warn('[Discovery] No gateway responded — likely not on WiFi, skipping scan');
-      return [];
+  } else if (ipv6) {
+    log(`IPv6 address detected — probing gateways on fallback subnets: ${FALLBACK_SUBNETS.join(', ')}`);
+    const reachableSubnet = await findReachableSubnet(FALLBACK_SUBNETS, log);
+    if (reachableSubnet) {
+      log(`Gateway responded on subnet ${reachableSubnet} — scanning that subnet only`);
+      subnetsToScan = [reachableSubnet];
+    } else {
+      log('No gateway responded — scanning all fallback subnets anyway (device may still be on WiFi)');
+      subnetsToScan = FALLBACK_SUBNETS;
     }
-    subnetsToScan = [reachableSubnet];
   } else {
     const base = subnetBase(ip);
     if (!base) {
-      logger.warn('[Discovery] IP is not on a private network:', ip, '— skipping LAN scan');
+      log(`IP ${ip} is not on a private network — skipping scan`);
       return [];
     }
+    log(`IPv4 private address — subnet base: ${base}`);
     subnetsToScan = [base];
   }
 
-  logger.log('[Discovery] Scanning subnets:', subnetsToScan.map(s => `${s}.0/24`).join(', '));
+  log(`Scanning ${subnetsToScan.length} subnet(s): ${subnetsToScan.map(s => `${s}.0/24`).join(', ')} | ${subnetsToScan.length * 254 * PROVIDERS.length} total probes | batch size: ${BATCH_SIZE} | timeout: ${TIMEOUT_MS}ms`);
 
   try {
     const discovered: DiscoveredServer[] = [];
@@ -164,26 +175,27 @@ export async function discoverLANServers(): Promise<DiscoveredServer[]> {
       const endpoint = `http://${target}:${provider.port}`; // NOSONAR — LAN endpoint
       if (!seenEndpoints.has(endpoint)) {
         seenEndpoints.add(endpoint);
-        logger.log(`[Discovery] Found ${provider.name} at ${target}:${provider.port}`);
+        log(`Found ${provider.name} at ${target}:${provider.port}`);
         discovered.push({ endpoint, type: provider.type, name: `${provider.name} (${target})` });
       }
     };
 
-    // Scan all subnets in parallel — each subnet is independent
     await Promise.all(subnetsToScan.map(async (base) => {
       for (const provider of PROVIDERS) {
+        log(`Probing ${base}.1-254 for ${provider.name} on port ${provider.port}...`);
         const tasks = Array.from({ length: 254 }, (_, i) => {
           const target = `${base}.${i + 1}`;
           return () => probe(target, provider.port, provider.probePath).then(recordIfFound(target, provider));
         });
         await runBatch(tasks);
+        log(`Done probing ${base}.x for ${provider.name}`);
       }
     }));
 
-    logger.log('[Discovery] Scan complete, found:', discovered.length, 'servers');
+    log(`Scan complete — found ${discovered.length} server(s)`);
     return discovered;
   } catch (error) {
-    logger.warn('[Discovery] Scan error during probing:', error);
+    log(`Scan error: ${error instanceof Error ? error.message : String(error)}`);
     return [];
   }
 }
