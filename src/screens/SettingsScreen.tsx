@@ -139,16 +139,18 @@ export const SettingsScreen: React.FC = () => {
               </View>
               <View style={styles.proFeatureGrid}>
                 {[
-                  { icon: 'mic', label: 'VOICE' },
-                  { icon: 'star', label: 'MCPs' },
-                  { icon: 'calendar', label: 'CALENDAR' },
-                  { icon: 'message-square', label: 'MESSAGING' },
-                ].map(f => (
-                  <View key={f.label} style={styles.proFeatureItem}>
-                    <View style={styles.proFeatureIconWrap}>
-                      <Icon name={f.icon} size={16} color={colors.primary} />
-                    </View>
-                    <Text style={styles.proFeatureLabel}>{f.label}</Text>
+                  [{ icon: 'mic', label: 'VOICE' }, { icon: 'star', label: 'MCPs' }],
+                  [{ icon: 'calendar', label: 'CALENDAR' }, { icon: 'message-square', label: 'MESSAGING' }],
+                ].map((row, i) => (
+                  <View key={i} style={styles.proFeatureRow}>
+                    {row.map(f => (
+                      <View key={f.label} style={styles.proFeatureItem}>
+                        <View style={styles.proFeatureIconWrap}>
+                          <Icon name={f.icon} size={16} color={colors.primary} />
+                        </View>
+                        <Text style={styles.proFeatureLabel}>{f.label}</Text>
+                      </View>
+                    ))}
                   </View>
                 ))}
               </View>
@@ -440,17 +442,20 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   proCardHeaderText: { flex: 1, marginRight: SPACING.md },
   proFeatureGrid: {
-    flexDirection: 'row' as const,
-    flexWrap: 'wrap' as const,
+    flexDirection: 'column' as const,
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.md,
     gap: SPACING.sm,
   },
+  proFeatureRow: {
+    flexDirection: 'row' as const,
+    gap: SPACING.sm,
+  },
   proFeatureItem: {
+    flex: 1,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: SPACING.sm,
-    width: '48%' as const,
   },
   proFeatureIconWrap: {
     width: 32,

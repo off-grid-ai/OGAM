@@ -165,33 +165,22 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     gap: SPACING.sm,
   },
-  logoGrid: {
-    gap: 3,
-  },
-  logoDotRow: {
-    flexDirection: 'row' as const,
-    gap: 3,
-  },
+  logoGrid: { gap: 3 },
+  logoDotRow: { flexDirection: 'row' as const, gap: 3 },
   logoDot: {
     width: 6,
     height: 6,
     borderRadius: 1,
     backgroundColor: colors.primary,
   },
-  logoText: {
-    ...TYPOGRAPHY.body,
-    color: colors.text,
-  },
+  logoText: { ...TYPOGRAPHY.body, color: colors.text },
   getProButton: {
     backgroundColor: colors.primary,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: 20,
   },
-  getProButtonText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: '#FFFFFF',
-  },
+  getProButtonText: { ...TYPOGRAPHY.bodySmall, color: '#FFFFFF' },
 
   // Hero
   hero: {
@@ -365,32 +354,4 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     letterSpacing: 0.5,
   },
 
-  // Footer
-  footer: {
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.xl,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    alignItems: 'center' as const,
-    gap: SPACING.md,
-  },
-  footerBrand: {
-    ...TYPOGRAPHY.body,
-    color: colors.text,
-  },
-  footerLinks: {
-    flexDirection: 'row' as const,
-    gap: SPACING.lg,
-    flexWrap: 'wrap' as const,
-    justifyContent: 'center' as const,
-  },
-  footerLink: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-  },
-  footerCopy: {
-    ...TYPOGRAPHY.meta,
-    color: colors.textMuted,
-    textAlign: 'center' as const,
-  },
 });
