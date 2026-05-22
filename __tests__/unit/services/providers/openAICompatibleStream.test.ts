@@ -24,6 +24,8 @@ function makeState(overrides: Partial<OpenAIStreamState> = {}): OpenAIStreamStat
     fullReasoningContent: '',
     toolCalls: [],
     currentToolCall: null,
+    completeCalled: false,
+    streamErrorOccurred: false,
     ...overrides,
   };
 }
@@ -162,7 +164,7 @@ describe('processDelta', () => {
     processDelta({
       tool_calls: [{ function: { arguments: ':"NY"}' } }],
     }, state, { thinkingEnabled: true, callbacks, thinkTagParser });
-    expect(state.currentToolCall!.function.arguments).toBe('{"city":"NY"}');
+    expect(state.currentToolCall!.function!.arguments).toBe('{"city":"NY"}');
   });
 
   it('suppresses think-tag reasoning when thinkingEnabled=false', () => {

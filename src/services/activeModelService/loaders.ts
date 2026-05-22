@@ -144,7 +144,7 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
     try {
       addDebugLog('log', `[LiteRT] Calling liteRTService.loadModel (timeout ${timeoutMs / 1000}s, vision=${ctx.model.liteRTVision ?? false}, maxNumTokens=${maxTokens}).`);
       await Promise.race([
-        liteRTService.loadModel(ctx.model.filePath, preferredBackend, ctx.model.liteRTVision ?? false, maxTokens),
+        liteRTService.loadModel(ctx.model.filePath, preferredBackend, { supportsVision: ctx.model.liteRTVision ?? false, maxNumTokens: maxTokens }),
         timeoutPromise,
       ]);
     } finally {

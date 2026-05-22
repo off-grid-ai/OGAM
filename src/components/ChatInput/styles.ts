@@ -208,4 +208,9 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     fontWeight: '500' as const,
     color: colors.primary,
   },
+  contextRingWrapper: {
+    paddingHorizontal: 6,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+  },
 });

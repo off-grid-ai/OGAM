@@ -222,7 +222,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             returnKeyType="default"
           />
           {contextUsage && contextUsage.used > 0 && contextUsage.max > 0 && (
-            <View style={{ paddingHorizontal: 6, justifyContent: 'center', alignItems: 'center' }}>
+            <View style={styles.contextRingWrapper}>
               <ContextRing used={contextUsage.used} max={contextUsage.max} />
             </View>
           )}

@@ -211,7 +211,7 @@ const LITERT_FEATURED = [
 
 const FeaturedLiteRTCard: React.FC<{ model: typeof LITERT_FEATURED[number]; styles: any; colors: any }> = ({ model, styles, colors }) => (
   <TouchableOpacity
-    style={[styles.featuredCard]}
+    style={styles.featuredCard}
     onPress={() => Linking.openURL(model.url)}
     activeOpacity={0.85}
   >

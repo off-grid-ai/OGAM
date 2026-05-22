@@ -85,11 +85,11 @@ class LiteRTService {
   // loadModel
   // ---------------------------------------------------------------------------
 
-  async loadModel(modelPath: string, preferredBackend: LiteRTBackend, supportsVision = false, maxNumTokens = 4096): Promise<void> {
+  async loadModel(modelPath: string, preferredBackend: LiteRTBackend, opts: { supportsVision?: boolean; maxNumTokens?: number } = {}): Promise<void> {
     if (!this.isAvailable()) {
       throw new Error('LiteRT is not available on this platform');
     }
-
+    const { supportsVision = false, maxNumTokens = 4096 } = opts;
     this.configuredMaxTokens = maxNumTokens;
     logger.log(TAG, `loadModel — path=${modelPath} backend=${preferredBackend} supportsVision=${supportsVision} maxNumTokens=${maxNumTokens}`);
 
