@@ -2747,7 +2747,7 @@ describe('ModelManager', () => {
         sourceUri: '/path/to/model.gguf',
         fileName: 'model.gguf',
       });
-      expect(result.engine).toBeUndefined();
+      expect(result.engine).toBe('llama');
       expect(result.liteRTVision).toBeUndefined();
     });
   });

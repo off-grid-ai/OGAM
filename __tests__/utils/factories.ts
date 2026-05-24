@@ -142,6 +142,8 @@ export interface DownloadedModelFactoryOptions {
   mmProjPath?: string;
   mmProjFileName?: string;
   mmProjFileSize?: number;
+  engine?: 'llama' | 'litert';
+  liteRTVision?: boolean;
 }
 
 export const createDownloadedModel = (options: DownloadedModelFactoryOptions = {}): DownloadedModel => ({
@@ -154,11 +156,12 @@ export const createDownloadedModel = (options: DownloadedModelFactoryOptions = {
   quantization: options.quantization ?? 'Q4_K_M',
   downloadedAt: options.downloadedAt ?? new Date().toISOString(),
   credibility: options.credibility,
+  engine: options.engine ?? 'llama',
   isVisionModel: options.isVisionModel,
   mmProjPath: options.mmProjPath,
   mmProjFileName: options.mmProjFileName,
   mmProjFileSize: options.mmProjFileSize,
-});
+} as DownloadedModel);
 
 export const createVisionModel = (options: DownloadedModelFactoryOptions = {}): DownloadedModel =>
   createDownloadedModel({

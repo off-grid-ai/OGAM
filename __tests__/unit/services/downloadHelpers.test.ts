@@ -115,6 +115,7 @@ describe('getOrphanedTextFiles', () => {
     makeDownloadedModel({
       filePath: `${MODELS_DIR}/model.gguf`,
       mmProjPath: `${MODELS_DIR}/mmproj.gguf`,
+      engine: 'llama',
     }),
   ]);
 

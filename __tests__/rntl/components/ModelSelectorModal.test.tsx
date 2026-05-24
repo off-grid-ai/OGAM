@@ -263,6 +263,7 @@ describe('ModelSelectorModal', () => {
             filePath: '/path/vision.gguf',
             fileSize: 4000000000,
             quantization: 'Q4_K_M',
+            engine: 'llama',
             isVisionModel: true,
           },
         ],
