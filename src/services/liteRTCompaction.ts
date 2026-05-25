@@ -22,6 +22,7 @@ export type InstallToolHandlerFn = (h: ToolHandler) => () => void;
 const NEUTRAL_TOOL_HANDLER: ToolHandler = async () =>
   'No tool needed. Reply in plain text with the summary requested.';
 
+// eslint-disable-next-line max-params
 export async function summarizeSession(
   sendMessage: SendMessageFn,
   isReady: boolean,
