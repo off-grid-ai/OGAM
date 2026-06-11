@@ -169,7 +169,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
               imageOnly: chat.imageModelLoaded && !chat.hasTextModel,
             })}
             onToolsPress={() => chat.setShowToolPicker(true)}
-            enabledToolCount={totalToolCount}
+            enabledToolCount={chat.enabledTools.length}
             showSettingsDot={showSettingsDot}
             mcpToolCount={extToolCount}
             onMcpPress={handleMcpPress}
