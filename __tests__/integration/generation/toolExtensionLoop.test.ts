@@ -71,8 +71,8 @@ function makeFakeExtension(executorMock: jest.Mock): ToolExtension {
 }
 
 function makeCtx(overrides: Partial<ToolLoopContext> = {}): ToolLoopContext {
-  const conversationId = 'test-conv-1';
-  useChatStore.getState().createConversation(conversationId);
+  // createConversation takes a modelId and returns the generated conversation UUID
+  const conversationId = useChatStore.getState().createConversation('test-model');
   return {
     conversationId,
     messages: [
