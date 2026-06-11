@@ -1982,6 +1982,8 @@ PODS:
     - React-RCTFBReactNativeSpec
     - ReactCommon/turbomodule/core
     - SocketRocket
+  - react-native-add-calendar-event (5.0.0):
+    - React-Core
   - react-native-blur (4.4.1):
     - boost
     - DoubleConversion
@@ -2797,6 +2799,8 @@ PODS:
     - React-perflogger (= 0.83.1)
     - React-utils (= 0.83.1)
     - SocketRocket
+  - RNCalendarEvents (2.2.0):
+    - React
   - RNCAsyncStorage (2.2.0):
     - boost
     - DoubleConversion
@@ -3328,6 +3332,7 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
+  - react-native-add-calendar-event (from `../node_modules/react-native-add-calendar-event`)
   - "react-native-blur (from `../node_modules/@react-native-community/blur`)"
   - "react-native-document-picker (from `../node_modules/@react-native-documents/picker`)"
   - "react-native-document-viewer (from `../node_modules/@react-native-documents/viewer`)"
@@ -3368,6 +3373,7 @@ DEPENDENCIES:
   - ReactAppDependencyProvider (from `build/generated/ios/ReactAppDependencyProvider`)
   - ReactCodegen (from `build/generated/ios/ReactCodegen`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
+  - RNCalendarEvents (from `../node_modules/react-native-calendar-events`)
   - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
   - RNDeviceInfo (from `../node_modules/react-native-device-info`)
   - RNFS (from `../node_modules/react-native-fs`)
@@ -3486,6 +3492,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   React-microtasksnativemodule:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
+  react-native-add-calendar-event:
+    :path: "../node_modules/react-native-add-calendar-event"
   react-native-blur:
     :path: "../node_modules/@react-native-community/blur"
   react-native-document-picker:
@@ -3566,6 +3574,8 @@ EXTERNAL SOURCES:
     :path: build/generated/ios/ReactCodegen
   ReactCommon:
     :path: "../node_modules/react-native/ReactCommon"
+  RNCalendarEvents:
+    :path: "../node_modules/react-native-calendar-events"
   RNCAsyncStorage:
     :path: "../node_modules/@react-native-async-storage/async-storage"
   RNDeviceInfo:
@@ -3603,7 +3613,7 @@ SPEC CHECKSUMS:
   FBLazyVector: 309703e71d3f2f1ed7dc7889d58309c9d77a95a4
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
-  hermes-engine: 4d40ce008f57c9348a66614a3167581aa861e379
+  hermes-engine: 8c6be38f94b3bf8b864981980e64e55f08e467ec
   llama-rn: 796fa53f37f89e2c77cd6c462ad1172ee96d4c80
   lottie-ios: a881093fab623c467d3bce374367755c272bdd59
   lottie-react-native: 691b8363e8c591fb78a78254ff2517258891456b
@@ -3644,6 +3654,7 @@ SPEC CHECKSUMS:
   React-logger: b8483fa08e0d62e430c76d864309d90576ca2f68
   React-Mapbuffer: 7b72a669e94662359dad4f42b5af005eb24b4e83
   React-microtasksnativemodule: cdc02da075f2857803ed63f24f5f72fc40e094c0
+  react-native-add-calendar-event: 4eb42bdf84beb58de81f6d2ce1778a7632223dfe
   react-native-blur: 6af83e7e3c4c1446a188d9b2c493600fc4beb173
   react-native-document-picker: dc2d83366e47e89e7c51e8a41eab99c1d54e941c
   react-native-document-viewer: 8c6ed07e7e27352743fa98e8dd6d288ad925b884
@@ -3684,6 +3695,7 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: 0eb286cc274abb059ee601b862ebddac2e681d01
   ReactCodegen: 3d48510bcef445f6403c0004047d4d9cbb915435
   ReactCommon: ac934cb340aee91282ecd6f273a26d24d4c55cae
+  RNCalendarEvents: f90f73666b6bcbb3cc8a491ffbb5e48c0db3de37
   RNCAsyncStorage: 29f0230e1a25f36c20b05f65e2eb8958d6526e82
   RNDeviceInfo: 36d7f232bfe7c9b5c494cb7793230424ed32c388
   RNFS: 89de7d7f4c0f6bafa05343c578f61118c8282ed8
@@ -3701,6 +3713,6 @@ SPEC CHECKSUMS:
   whisper-rn: 7566faf9b7d78e39ab9fc634cb90fdee81177793
   Yoga: 5456bb010373068fc92221140921b09d126b116e
 
-PODFILE CHECKSUM: 31818a1f7d1207c486dba2e42df373cf65ace073
+PODFILE CHECKSUM: 30f084aba7ca9595d2440626582f30bcd67c6464
 
 COCOAPODS: 1.16.2

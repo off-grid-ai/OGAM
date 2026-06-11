@@ -23,6 +23,10 @@
 <!-- To check and request battery optimization exemption for uninterrupted downloads -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- For reading and creating calendar events -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
     <application
       android:name=".MainApplication"
       android:label="@string/app_name"

@@ -1,5 +1,7 @@
-import { Platform } from 'react-native';
+import { Platform, Linking } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
+import RNCalendarEvents from 'react-native-calendar-events';
+import * as RNAddCalendarEvent from 'react-native-add-calendar-event';
 import { ToolCall, ToolResult } from './types';
 import logger from '../../utils/logger';
 
@@ -44,6 +46,23 @@ async function dispatchTool(call: ToolCall): Promise<string> {
       const url = requireString(call, 'url');
       if (!url) throw new Error('Missing required parameter: url');
       return handleReadUrl(url);
+    }
+    case 'send_email': {
+      const to = requireString(call, 'to');
+      if (!to) throw new Error('Missing required parameter: to');
+      return handleSendEmail(to, call.arguments.subject, call.arguments.body);
+    }
+    case 'create_calendar_event': {
+      const title = requireString(call, 'title');
+      const startDate = requireString(call, 'start_date');
+      const endDate = requireString(call, 'end_date');
+      if (!title) throw new Error('Missing required parameter: title');
+      if (!startDate) throw new Error('Missing required parameter: start_date');
+      if (!endDate) throw new Error('Missing required parameter: end_date');
+      return handleCreateCalendarEvent(title, startDate, endDate, call.arguments.location, call.arguments.notes);
+    }
+    case 'read_calendar_events': {
+      return handleReadCalendarEvents(call.arguments.start_date, call.arguments.end_date);
     }
     default:
       throw new Error(`Unknown tool: ${call.name}`);
@@ -389,4 +408,55 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
   return bytes < 1024 ** 3 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+}
+
+async function handleSendEmail(to: string, subject?: string, body?: string): Promise<string> {
+  const parts: string[] = [];
+  if (subject) parts.push(`subject=${encodeURIComponent(subject)}`);
+  if (body) parts.push(`body=${encodeURIComponent(body)}`);
+  const url = `mailto:${encodeURIComponent(to)}${parts.length ? `?${parts.join('&')}` : ''}`;
+  await Linking.openURL(url);
+  return `Mail app opened with a draft to ${to}${subject ? ` (subject: "${subject}")` : ''}.`;
+}
+
+async function handleCreateCalendarEvent(
+  title: string,
+  startDate: string,
+  endDate: string,
+  location?: string,
+  notes?: string,
+): Promise<string> {
+  if (!(RNAddCalendarEvent as any)?.presentEventCreatingDialog) {
+    throw new Error('Calendar package not available. Rebuild the app to use this tool.');
+  }
+  const result = await RNAddCalendarEvent.presentEventCreatingDialog({
+    title,
+    startDate: new Date(startDate).toISOString(),
+    endDate: new Date(endDate).toISOString(),
+    ...(location ? { location } : {}),
+    ...(notes ? { notes } : {}),
+  });
+  if (result.action === 'CANCELED') {
+    return 'Calendar event creation was cancelled by the user.';
+  }
+  return `Calendar event "${title}" saved from ${startDate} to ${endDate}${location ? ` at ${location}` : ''}.`;
+}
+
+async function handleReadCalendarEvents(startDateStr?: string, endDateStr?: string): Promise<string> {
+  if (!(RNCalendarEvents as any)?.requestPermissions) {
+    throw new Error('Calendar package not available. Rebuild the app to use this tool.');
+  }
+  const status = await RNCalendarEvents.requestPermissions(true);
+  if (status !== 'authorized') throw new Error('Calendar permission denied');
+  const startDt = startDateStr ? new Date(startDateStr) : new Date();
+  const endDt = endDateStr ? new Date(endDateStr) : new Date(startDt.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const events = await RNCalendarEvents.fetchAllEvents(startDt.toISOString(), endDt.toISOString());
+  if (events.length === 0) {
+    return `No calendar events found between ${startDt.toDateString()} and ${endDt.toDateString()}.`;
+  }
+  return events.map(e => {
+    const s = new Date(e.startDate).toLocaleString();
+    const en = e.endDate ? new Date(e.endDate).toLocaleString() : 'unknown';
+    return `- ${e.title}\n  Start: ${s}\n  End: ${en}${e.location ? `\n  Location: ${e.location}` : ''}${e.notes ? `\n  Notes: ${e.notes}` : ''}`;
+  }).join('\n\n');
 }
