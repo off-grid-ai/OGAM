@@ -320,7 +320,7 @@ export const SettingsScreen: React.FC = () => {
         </AnimatedEntry>
 
         {/* Pro feature sections registered at runtime by @offgrid/pro */}
-        {getSettingsSections().map((Section, i) => <Section key={i} />)}
+        {getSettingsSections().map((Section, i) => <Section key={Section.displayName ?? String(i)} />)}
 
         {/* Reset Onboarding */}
         <AnimatedEntry index={10} staggerMs={40} trigger={focusTrigger}>

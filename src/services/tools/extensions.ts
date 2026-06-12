@@ -14,7 +14,7 @@ export interface ToolExtension {
 const extensions: ToolExtension[] = [];
 
 export function registerToolExtension(ext: ToolExtension): void {
-  if (!extensions.find(e => e.id === ext.id)) extensions.push(ext);
+  if (!extensions.some(e => e.id === ext.id)) extensions.push(ext);
 }
 
 export function getToolExtensions(): ToolExtension[] {

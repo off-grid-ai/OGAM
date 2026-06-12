@@ -15,7 +15,7 @@ import {
   _clearExtensionsForTesting,
   ToolExtension,
 } from '../../../src/services/tools/extensions';
-import type { ToolCall, ToolResult } from '../../../src/services/tools/types';
+import type { ToolCall } from '../../../src/services/tools/types';
 import { useChatStore } from '../../../src/stores';
 import { resetStores } from '../../utils/testHelpers';
 
@@ -113,7 +113,7 @@ describe('tool extension loop integration', () => {
     it('appends extension hint to the system prompt sent to LLM', async () => {
       const executorMock = jest.fn().mockResolvedValue({
         name: MCP_TOOL_NAME, content: MCP_RESULT, durationMs: 5,
-      } as ToolResult);
+      });
       registerToolExtension(makeFakeExtension(executorMock));
 
       // First call: model returns an MCP tool call tag; second: final answer
@@ -133,7 +133,7 @@ describe('tool extension loop integration', () => {
     it('routes execution to the extension executor, not built-in executeToolCall', async () => {
       const executorMock = jest.fn().mockResolvedValue({
         name: MCP_TOOL_NAME, content: MCP_RESULT, durationMs: 5,
-      } as ToolResult);
+      });
       registerToolExtension(makeFakeExtension(executorMock));
 
       llmService.generateResponseWithTools
@@ -155,7 +155,7 @@ describe('tool extension loop integration', () => {
     it('stores tool result in chat store', async () => {
       const executorMock = jest.fn().mockResolvedValue({
         name: MCP_TOOL_NAME, content: MCP_RESULT, durationMs: 5,
-      } as ToolResult);
+      });
       registerToolExtension(makeFakeExtension(executorMock));
 
       llmService.generateResponseWithTools
@@ -174,7 +174,7 @@ describe('tool extension loop integration', () => {
     it('strips extension syntax from visible text', async () => {
       const executorMock = jest.fn().mockResolvedValue({
         name: MCP_TOOL_NAME, content: MCP_RESULT, durationMs: 5,
-      } as ToolResult);
+      });
       registerToolExtension(makeFakeExtension(executorMock));
 
       llmService.generateResponseWithTools

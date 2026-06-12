@@ -1,5 +1,5 @@
-const path = require('path');
-const fs = require('fs');
+const path = require('node:path');
+const fs = require('node:fs');
 const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
 
 const proPackagePath = path.resolve(__dirname, 'pro');

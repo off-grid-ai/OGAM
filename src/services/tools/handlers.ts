@@ -419,13 +419,15 @@ async function handleSendEmail(to: string, subject?: string, body?: string): Pro
   const parts: string[] = [];
   if (subject) parts.push(`subject=${encodeURIComponent(subject)}`);
   if (body) parts.push(`body=${encodeURIComponent(body)}`);
-  const url = `mailto:${encodeURIComponent(to)}${parts.length ? `?${parts.join('&')}` : ''}`;
+  const query = parts.length ? `?${parts.join('&')}` : '';
+  const url = `mailto:${encodeURIComponent(to)}${query}`;
   try {
     await Linking.openURL(url);
   } catch {
-    throw new Error('Could not open the mail app. Please ensure a mail client is configured on your device.');
+    throw new TypeError('Could not open the mail app. Please ensure a mail client is configured on your device.');
   }
-  return `Mail app opened with a draft to ${to}${subject ? ` (subject: "${subject}")` : ''}.`;
+  const subjectSuffix = subject ? ` (subject: "${subject}")` : '';
+  return `Mail app opened with a draft to ${to}${subjectSuffix}.`;
 }
 
 async function handleCreateCalendarEvent(
@@ -437,8 +439,8 @@ async function handleCreateCalendarEvent(
   }
   const start = new Date(startDate);
   const end = new Date(endDate);
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-    throw new Error('Invalid date format. Please provide valid ISO 8601 dates.');
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    throw new TypeError('Invalid date format. Please provide valid ISO 8601 dates.');
   }
   // requestPermissions(false) asks for read/write on Android; iOS is always read/write.
   const status = await RNCalendarEvents.requestPermissions(false);
@@ -450,7 +452,8 @@ async function handleCreateCalendarEvent(
     // notes is iOS-only and description is Android-only, so set both from the same input.
     ...(notes ? { notes, description: notes } : {}),
   });
-  return `Calendar event "${title}" saved from ${startDate} to ${endDate}${location ? ` at ${location}` : ''}.`;
+  const locationSuffix = location ? ` at ${location}` : '';
+  return `Calendar event "${title}" saved from ${startDate} to ${endDate}${locationSuffix}.`;
 }
 
 async function handleReadCalendarEvents(startDateStr?: string, endDateStr?: string): Promise<string> {
@@ -460,12 +463,12 @@ async function handleReadCalendarEvents(startDateStr?: string, endDateStr?: stri
   const status = await RNCalendarEvents.requestPermissions(true);
   if (status !== 'authorized') throw new Error('Calendar permission denied');
   const startDt = startDateStr ? new Date(startDateStr) : new Date();
-  if (isNaN(startDt.getTime())) {
-    throw new Error('Invalid start date format.');
+  if (Number.isNaN(startDt.getTime())) {
+    throw new TypeError('Invalid start date format.');
   }
   const endDt = endDateStr ? new Date(endDateStr) : new Date(startDt.getTime() + 7 * 24 * 60 * 60 * 1000);
-  if (isNaN(endDt.getTime())) {
-    throw new Error('Invalid end date format.');
+  if (Number.isNaN(endDt.getTime())) {
+    throw new TypeError('Invalid end date format.');
   }
   const events = await RNCalendarEvents.fetchAllEvents(startDt.toISOString(), endDt.toISOString());
   if (events.length === 0) {
@@ -474,6 +477,8 @@ async function handleReadCalendarEvents(startDateStr?: string, endDateStr?: stri
   return events.map(e => {
     const s = new Date(e.startDate).toLocaleString();
     const en = e.endDate ? new Date(e.endDate).toLocaleString() : 'unknown';
-    return `- ${e.title}\n  Start: ${s}\n  End: ${en}${e.location ? `\n  Location: ${e.location}` : ''}${e.notes ? `\n  Notes: ${e.notes}` : ''}`;
+    const loc = e.location ? `\n  Location: ${e.location}` : '';
+    const notes = e.notes ? `\n  Notes: ${e.notes}` : '';
+    return `- ${e.title}\n  Start: ${s}\n  End: ${en}${loc}${notes}`;
   }).join('\n\n');
 }

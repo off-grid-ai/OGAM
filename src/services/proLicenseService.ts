@@ -47,7 +47,7 @@ export async function checkProStatus(): Promise<boolean> {
 async function syncWithRevenueCat(): Promise<void> {
   try {
     const info = await Purchases.getCustomerInfo();
-    const isPro = typeof info.entitlements.active[ENTITLEMENT_ID] !== 'undefined';
+    const isPro = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
     await writeLicense(isPro);
     const { useAppStore } = require('../stores/appStore');
     useAppStore.getState().setHasRegisteredPro(isPro);
@@ -73,7 +73,7 @@ export async function presentProPaywall(): Promise<boolean> {
 
 export async function restorePro(): Promise<boolean> {
   const info = await Purchases.restorePurchases();
-  const isPro = typeof info.entitlements.active[ENTITLEMENT_ID] !== 'undefined';
+  const isPro = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
   await writeLicense(isPro);
   const { useAppStore } = require('../stores/appStore');
   useAppStore.getState().setHasRegisteredPro(isPro);

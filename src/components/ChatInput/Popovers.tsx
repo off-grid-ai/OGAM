@@ -117,7 +117,8 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
 
   const toolIconColor = showToolsWarning ? TOOL_WARNING_COLOR : tools.iconColor;
   const toolBadgeBg = showToolsWarning ? TOOL_WARNING_COLOR : tools.badgeBg;
-  const mcpBadgeBg = showMcpWarning ? TOOL_WARNING_COLOR : (mcpToolCount > 0 ? colors.primary : colors.textMuted);
+  const mcpDefaultBg = mcpToolCount > 0 ? colors.primary : colors.textMuted;
+  const mcpBadgeBg = showMcpWarning ? TOOL_WARNING_COLOR : mcpDefaultBg;
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
