@@ -109,17 +109,23 @@ describe('tool extension loop integration', () => {
     });
   });
 
+  function setupProExtension(
+    firstResponse = `<mcp_call>${MCP_TOOL_NAME}</mcp_call>`,
+    secondResponse = 'Done.',
+  ): jest.Mock {
+    const executorMock = jest.fn().mockResolvedValue({
+      name: MCP_TOOL_NAME, content: MCP_RESULT, durationMs: 5,
+    });
+    registerToolExtension(makeFakeExtension(executorMock));
+    llmService.generateResponseWithTools
+      .mockResolvedValueOnce({ fullResponse: firstResponse, toolCalls: [] })
+      .mockResolvedValueOnce({ fullResponse: secondResponse, toolCalls: [] });
+    return executorMock;
+  }
+
   describe('pro path — extension registered', () => {
     it('appends extension hint to the system prompt sent to LLM', async () => {
-      const executorMock = jest.fn().mockResolvedValue({
-        name: MCP_TOOL_NAME, content: MCP_RESULT, durationMs: 5,
-      });
-      registerToolExtension(makeFakeExtension(executorMock));
-
-      // First call: model returns an MCP tool call tag; second: final answer
-      llmService.generateResponseWithTools
-        .mockResolvedValueOnce({ fullResponse: `<mcp_call>${MCP_TOOL_NAME}</mcp_call>`, toolCalls: [] })
-        .mockResolvedValueOnce({ fullResponse: 'Done.', toolCalls: [] });
+      setupProExtension();
 
       const ctx = makeCtx();
       await runToolLoop(ctx);
@@ -131,14 +137,7 @@ describe('tool extension loop integration', () => {
     });
 
     it('routes execution to the extension executor, not built-in executeToolCall', async () => {
-      const executorMock = jest.fn().mockResolvedValue({
-        name: MCP_TOOL_NAME, content: MCP_RESULT, durationMs: 5,
-      });
-      registerToolExtension(makeFakeExtension(executorMock));
-
-      llmService.generateResponseWithTools
-        .mockResolvedValueOnce({ fullResponse: `<mcp_call>${MCP_TOOL_NAME}</mcp_call>`, toolCalls: [] })
-        .mockResolvedValueOnce({ fullResponse: 'Done.', toolCalls: [] });
+      const executorMock = setupProExtension();
 
       const ctx = makeCtx();
       await runToolLoop(ctx);
@@ -153,14 +152,7 @@ describe('tool extension loop integration', () => {
     });
 
     it('stores tool result in chat store', async () => {
-      const executorMock = jest.fn().mockResolvedValue({
-        name: MCP_TOOL_NAME, content: MCP_RESULT, durationMs: 5,
-      });
-      registerToolExtension(makeFakeExtension(executorMock));
-
-      llmService.generateResponseWithTools
-        .mockResolvedValueOnce({ fullResponse: `<mcp_call>${MCP_TOOL_NAME}</mcp_call>`, toolCalls: [] })
-        .mockResolvedValueOnce({ fullResponse: 'Done.', toolCalls: [] });
+      setupProExtension();
 
       const ctx = makeCtx();
       await runToolLoop(ctx);
@@ -172,14 +164,7 @@ describe('tool extension loop integration', () => {
     });
 
     it('strips extension syntax from visible text', async () => {
-      const executorMock = jest.fn().mockResolvedValue({
-        name: MCP_TOOL_NAME, content: MCP_RESULT, durationMs: 5,
-      });
-      registerToolExtension(makeFakeExtension(executorMock));
-
-      llmService.generateResponseWithTools
-        .mockResolvedValueOnce({ fullResponse: `Thinking...<mcp_call>${MCP_TOOL_NAME}</mcp_call>`, toolCalls: [] })
-        .mockResolvedValueOnce({ fullResponse: 'Final answer.', toolCalls: [] });
+      setupProExtension(`Thinking...<mcp_call>${MCP_TOOL_NAME}</mcp_call>`, 'Final answer.');
 
       const ctx = makeCtx();
       await runToolLoop(ctx);

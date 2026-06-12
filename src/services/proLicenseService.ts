@@ -12,6 +12,11 @@ const RC_API_KEY_ANDROID = 'test_UDUmOVwoEWFUtYONRUfQOOjVisB';
 
 type ProLicense = { isPro: boolean; verifiedAt: number };
 
+function setProInStore(isPro: boolean): void {
+  const { useAppStore } = require('../stores/appStore');
+  useAppStore.getState().setHasRegisteredPro(isPro);
+}
+
 export function configureRevenueCat(): void {
   Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.ERROR);
   Purchases.configure({
@@ -49,8 +54,7 @@ async function syncWithRevenueCat(): Promise<void> {
     const info = await Purchases.getCustomerInfo();
     const isPro = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
     await writeLicense(isPro);
-    const { useAppStore } = require('../stores/appStore');
-    useAppStore.getState().setHasRegisteredPro(isPro);
+    setProInStore(isPro);
   } catch {
     // No network — cached value stands
   }
@@ -62,8 +66,7 @@ export async function presentProPaywall(): Promise<boolean> {
     case PAYWALL_RESULT.PURCHASED:
     case PAYWALL_RESULT.RESTORED: {
       await writeLicense(true);
-      const { useAppStore } = require('../stores/appStore');
-      useAppStore.getState().setHasRegisteredPro(true);
+      setProInStore(true);
       return true;
     }
     default:
@@ -75,13 +78,11 @@ export async function restorePro(): Promise<boolean> {
   const info = await Purchases.restorePurchases();
   const isPro = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
   await writeLicense(isPro);
-  const { useAppStore } = require('../stores/appStore');
-  useAppStore.getState().setHasRegisteredPro(isPro);
+  setProInStore(isPro);
   return isPro;
 }
 
 export async function clearProForTesting(): Promise<void> {
   await Keychain.resetGenericPassword({ service: KEYCHAIN_SERVICE });
-  const { useAppStore } = require('../stores/appStore');
-  useAppStore.getState().setHasRegisteredPro(false);
+  setProInStore(false);
 }

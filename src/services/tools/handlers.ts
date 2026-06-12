@@ -430,21 +430,25 @@ async function handleSendEmail(to: string, subject?: string, body?: string): Pro
   return `Mail app opened with a draft to ${to}${subjectSuffix}.`;
 }
 
+async function ensureCalendarPermission(readonly: boolean): Promise<void> {
+  if (!(RNCalendarEvents as any)?.requestPermissions) {
+    throw new Error('Calendar package not available. Rebuild the app to use this tool.');
+  }
+  const status = await RNCalendarEvents.requestPermissions(readonly);
+  if (status !== 'authorized') throw new Error('Calendar permission denied');
+}
+
 async function handleCreateCalendarEvent(
   event: { title: string; startDate: string; endDate: string; location?: string; notes?: string },
 ): Promise<string> {
   const { title, startDate, endDate, location, notes } = event;
-  if (!(RNCalendarEvents as any)?.saveEvent) {
-    throw new Error('Calendar package not available. Rebuild the app to use this tool.');
-  }
   const start = new Date(startDate);
   const end = new Date(endDate);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     throw new TypeError('Invalid date format. Please provide valid ISO 8601 dates.');
   }
   // requestPermissions(false) asks for read/write on Android; iOS is always read/write.
-  const status = await RNCalendarEvents.requestPermissions(false);
-  if (status !== 'authorized') throw new Error('Calendar permission denied');
+  await ensureCalendarPermission(false);
   await RNCalendarEvents.saveEvent(title, {
     startDate: start.toISOString(),
     endDate: end.toISOString(),
@@ -457,11 +461,7 @@ async function handleCreateCalendarEvent(
 }
 
 async function handleReadCalendarEvents(startDateStr?: string, endDateStr?: string): Promise<string> {
-  if (!(RNCalendarEvents as any)?.requestPermissions) {
-    throw new Error('Calendar package not available. Rebuild the app to use this tool.');
-  }
-  const status = await RNCalendarEvents.requestPermissions(true);
-  if (status !== 'authorized') throw new Error('Calendar permission denied');
+  await ensureCalendarPermission(true);
   const startDt = startDateStr ? new Date(startDateStr) : new Date();
   if (Number.isNaN(startDt.getTime())) {
     throw new TypeError('Invalid start date format.');
