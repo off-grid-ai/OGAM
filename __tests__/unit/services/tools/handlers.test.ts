@@ -27,6 +27,18 @@ jest.mock('../../../../src/services/rag', () => ({
   },
 }));
 
+const mockSaveEvent = jest.fn();
+const mockRequestPermissions = jest.fn();
+const mockFetchAllEvents = jest.fn();
+jest.mock('react-native-calendar-events', () => ({
+  __esModule: true,
+  default: {
+    saveEvent: (...args: any[]) => mockSaveEvent(...args),
+    requestPermissions: (...args: any[]) => mockRequestPermissions(...args),
+    fetchAllEvents: (...args: any[]) => mockFetchAllEvents(...args),
+  },
+}));
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -559,6 +571,126 @@ describe('Tool Handlers', () => {
 
       const result = await runTool('web_search', { query: 'test' });
       expect(result.error).toBeUndefined();
+    });
+  });
+
+  // ==========================================================================
+  // Calendar handlers
+  // ==========================================================================
+  describe('calendar handlers', () => {
+    beforeEach(() => {
+      mockSaveEvent.mockReset();
+      mockRequestPermissions.mockReset();
+      mockFetchAllEvents.mockReset();
+    });
+
+    describe('create_calendar_event', () => {
+      const validArgs = {
+        title: 'Dentist',
+        start_date: '2026-07-01T09:00:00.000Z',
+        end_date: '2026-07-01T10:00:00.000Z',
+        location: 'Clinic',
+        notes: 'bring insurance card',
+      };
+
+      it('requests write permission and saves the event', async () => {
+        mockRequestPermissions.mockResolvedValue('authorized');
+        mockSaveEvent.mockResolvedValue('event-id-1');
+
+        const result = await runTool('create_calendar_event', validArgs);
+
+        expect(result.error).toBeUndefined();
+        expect(mockRequestPermissions).toHaveBeenCalledWith(false);
+        expect(mockSaveEvent).toHaveBeenCalledWith(
+          'Dentist',
+          expect.objectContaining({
+            startDate: '2026-07-01T09:00:00.000Z',
+            endDate: '2026-07-01T10:00:00.000Z',
+            location: 'Clinic',
+            // notes (iOS) and description (Android) both set from the same input
+            notes: 'bring insurance card',
+            description: 'bring insurance card',
+          }),
+        );
+        expect(result.content).toContain('Dentist');
+      });
+
+      it('returns an error when permission is denied', async () => {
+        mockRequestPermissions.mockResolvedValue('denied');
+
+        const result = await runTool('create_calendar_event', validArgs);
+
+        expect(result.error).toBe('Calendar permission denied');
+        expect(mockSaveEvent).not.toHaveBeenCalled();
+      });
+
+      it('returns an error for invalid dates', async () => {
+        mockRequestPermissions.mockResolvedValue('authorized');
+
+        const result = await runTool('create_calendar_event', {
+          title: 'Bad',
+          start_date: 'not-a-date',
+          end_date: 'also-bad',
+        });
+
+        expect(result.error).toContain('Invalid date format');
+        expect(mockSaveEvent).not.toHaveBeenCalled();
+      });
+
+      it('omits optional fields when not provided', async () => {
+        mockRequestPermissions.mockResolvedValue('authorized');
+        mockSaveEvent.mockResolvedValue('event-id-2');
+
+        await runTool('create_calendar_event', {
+          title: 'Standup',
+          start_date: '2026-07-01T09:00:00.000Z',
+          end_date: '2026-07-01T09:15:00.000Z',
+        });
+
+        const details = mockSaveEvent.mock.calls[0][1];
+        expect(details).not.toHaveProperty('location');
+        expect(details).not.toHaveProperty('notes');
+        expect(details).not.toHaveProperty('description');
+      });
+    });
+
+    describe('read_calendar_events', () => {
+      it('returns a formatted list of events', async () => {
+        mockRequestPermissions.mockResolvedValue('authorized');
+        mockFetchAllEvents.mockResolvedValue([
+          {
+            title: 'Lunch',
+            startDate: '2026-07-01T12:00:00.000Z',
+            endDate: '2026-07-01T13:00:00.000Z',
+            location: 'Cafe',
+          },
+        ]);
+
+        const result = await runTool('read_calendar_events', {});
+
+        expect(result.error).toBeUndefined();
+        expect(result.content).toContain('Lunch');
+        expect(result.content).toContain('Cafe');
+      });
+
+      it('reports when no events are found', async () => {
+        mockRequestPermissions.mockResolvedValue('authorized');
+        mockFetchAllEvents.mockResolvedValue([]);
+
+        const result = await runTool('read_calendar_events', {});
+
+        expect(result.error).toBeUndefined();
+        expect(result.content).toContain('No calendar events found');
+      });
+
+      it('returns an error when permission is denied', async () => {
+        mockRequestPermissions.mockResolvedValue('denied');
+
+        const result = await runTool('read_calendar_events', {});
+
+        expect(result.error).toBe('Calendar permission denied');
+        expect(mockFetchAllEvents).not.toHaveBeenCalled();
+      });
     });
   });
 });

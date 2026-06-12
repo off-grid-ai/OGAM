@@ -1,7 +1,6 @@
 import { Platform, Linking } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import RNCalendarEvents from 'react-native-calendar-events';
-import * as RNAddCalendarEvent from 'react-native-add-calendar-event';
 import { ToolCall, ToolResult } from './types';
 import logger from '../../utils/logger';
 
@@ -433,7 +432,7 @@ async function handleCreateCalendarEvent(
   event: { title: string; startDate: string; endDate: string; location?: string; notes?: string },
 ): Promise<string> {
   const { title, startDate, endDate, location, notes } = event;
-  if (!(RNAddCalendarEvent as any)?.presentEventCreatingDialog) {
+  if (!(RNCalendarEvents as any)?.saveEvent) {
     throw new Error('Calendar package not available. Rebuild the app to use this tool.');
   }
   const start = new Date(startDate);
@@ -441,16 +440,16 @@ async function handleCreateCalendarEvent(
   if (isNaN(start.getTime()) || isNaN(end.getTime())) {
     throw new Error('Invalid date format. Please provide valid ISO 8601 dates.');
   }
-  const result = await RNAddCalendarEvent.presentEventCreatingDialog({
-    title,
+  // requestPermissions(false) asks for read/write on Android; iOS is always read/write.
+  const status = await RNCalendarEvents.requestPermissions(false);
+  if (status !== 'authorized') throw new Error('Calendar permission denied');
+  await RNCalendarEvents.saveEvent(title, {
     startDate: start.toISOString(),
     endDate: end.toISOString(),
     ...(location ? { location } : {}),
-    ...(notes ? { notes } : {}),
+    // notes is iOS-only and description is Android-only, so set both from the same input.
+    ...(notes ? { notes, description: notes } : {}),
   });
-  if (result.action === 'CANCELED') {
-    return 'Calendar event creation was cancelled by the user.';
-  }
   return `Calendar event "${title}" saved from ${startDate} to ${endDate}${location ? ` at ${location}` : ''}.`;
 }
 
