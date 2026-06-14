@@ -35,6 +35,9 @@ description: Join the waitlist for early access to Off Grid. Be among the first 
     </div>
     <p class="ea-status" id="eaStatus" aria-live="polite"></p>
   </form>
+  <p class="ea-slack-direct">
+    Already in Slack? <a href="https://off-grid-mobile.slack.com/archives/C0B4KMHNP61" target="_blank" rel="noopener">Jump straight to #pro-waitlist</a> - that's where the alpha builds drop.
+  </p>
 </div>
 
 ---

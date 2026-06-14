@@ -709,6 +709,9 @@ body { font-family: var(--font); color: var(--text-primary); background: var(--b
 .ea-submit:disabled { background: var(--text-muted); cursor: default; }
 
 .ea-status { font-size: 0.8125rem; margin-top: 10px; min-height: 1.2em; }
+.ea-slack-direct { font-size: 0.8125rem; color: var(--text-muted); margin: 12px 0 0; }
+.ea-slack-direct a { color: var(--accent); text-decoration: none; }
+.ea-slack-direct a:hover { text-decoration: underline; }
 .ea-status-success { color: var(--accent); }
 .ea-status-error { color: #ef4444; }
 
