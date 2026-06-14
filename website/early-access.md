@@ -143,7 +143,7 @@ Round 2 alpha is $30 one-time (Round 1 sold out at the same price). When it ship
         });
       }
       emailInput.value = '';
-      status.innerHTML = "You're on the list. <strong>Access happens in Slack.</strong> <a href=\"https://join.slack.com/t/off-grid-mobile/shared_invite/zt-3w2utgk0w-EDiDZBq6KmSZZwEw5Tkhnw\" target=\"_blank\" rel=\"noopener\">Join the workspace</a>, then head to <a href=\"https://off-grid-mobile.slack.com/archives/C0B0GBSCT88\" target=\"_blank\" rel=\"noopener\">#alpha-access</a> - that's where builds drop.";
+      status.innerHTML = "You're on the list. <strong>Access happens in <a href=\"https://off-grid-mobile.slack.com/archives/C0B4KMHNP61\" target=\"_blank\" rel=\"noopener\">#pro-waitlist on Slack</a></strong> - join the channel to get the alpha builds when they drop.";
       status.className = 'ea-status ea-status-success';
       form.querySelector('.ea-submit').disabled = true;
     });
