@@ -50,7 +50,6 @@ The free OSS keeps shipping, MIT, forever - that's not changing. Pro is an optio
 - **Custom personas** - system prompts, voice, persistent memory per assistant
 - **End-to-end voice mode** - Whisper STT (already shipping) + Kokoro TTS, all on-device
 - **Calendar + email + MCP servers** - Linear, Notion, GitHub, your own MCP. Drafts only; you approve every send.
-- **Larger models** - full size range, including 7B on flagship phones, 13B on iPads / M-series Macs
 - **Future Pro features** - included for the supported lifetime of the app
 
 **[→ Get Pro access](https://offgridmobileai.co/pay/)**
