@@ -18,6 +18,12 @@ plugins:
 
 posthog_token: "phc_u7cnV9P3cTovsfPTE2nhB7g5G4qdtZJ5dgMzv7ryfKWs"
 
+# RevenueCat Web Purchase Link id (the path segment in pay.rev.cat/<id>/...).
+# This is public by design - it appears in every customer's checkout URL, so it
+# is safe to commit. It is a link path id, not a secret/auth token. The pay page
+# builds: https://pay.rev.cat/<revenuecat_link_id>/<app_user_id>?email=<email>
+revenuecat_link_id: "avvnmcnfsgbmjaee"
+
 logo: /assets/logo.png
 cover: /assets/cover.png
 
@@ -27,3 +33,5 @@ exclude:
   - Gemfile.lock
   - node_modules
   - vendor
+  - .bundle
+  - _site

@@ -669,6 +669,7 @@ body { font-family: var(--font); color: var(--text-primary); background: var(--b
 }
 .ea-input::placeholder { color: var(--text-muted); }
 .ea-input:focus { border-color: var(--accent); }
+.ea-input-error, .ea-input-error:focus { border-color: #ef4444; }
 
 .ea-form-footer { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .ea-pricing-note { font-size: 0.75rem; color: var(--text-muted); margin: 0; }

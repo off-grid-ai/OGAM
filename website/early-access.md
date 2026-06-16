@@ -38,6 +38,9 @@ description: Join the waitlist for early access to Off Grid. Be among the first 
   <p class="ea-slack-direct">
     Already in Slack? <a href="https://off-grid-mobile.slack.com/archives/C0B4KMHNP61" target="_blank" rel="noopener">Jump straight to #pro-waitlist</a> - that's where the alpha builds drop.
   </p>
+  <p class="ea-slack-direct">
+    Already on the list, or got a promo code? <a href="{{ '/pay' | relative_url }}">Skip the wait and pay here</a> - your code applies at checkout.
+  </p>
 </div>
 
 ---

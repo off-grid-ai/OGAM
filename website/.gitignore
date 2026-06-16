@@ -1,0 +1,6 @@
+# Jekyll build output and local bundler state - never commit these.
+_site/
+.jekyll-cache/
+.jekyll-metadata
+.bundle/
+vendor/
