@@ -175,11 +175,19 @@ function App() {
       // Configure RevenueCat and read the cached entitlement before Pro features load.
       // configureRevenueCat is sync; checkProStatus reads the keychain cache immediately
       // and fires a background RC network sync so the next launch stays fresh.
-      configureRevenueCat();
-      await checkProStatus();
+      //
+      // Pro is optional: a failure here (missing native module, keychain locked,
+      // bad RC config) must never abort app init or hang the splash screen, so the
+      // whole block is isolated and only logs on error.
+      try {
+        configureRevenueCat();
+        await checkProStatus();
 
-      // Load pro features — only activates if the keychain entitlement is set.
-      await loadProFeatures();
+        // Load pro features — only activates if the keychain entitlement is set.
+        await loadProFeatures();
+      } catch (proError) {
+        logger.error('[App] Pro initialization failed, continuing without Pro:', proError);
+      }
 
       // Show the UI immediately
       setIsInitializing(false);

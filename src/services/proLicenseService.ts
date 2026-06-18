@@ -38,10 +38,19 @@ export function configureRevenueCat(): void {
 async function writeLicense(isPro: boolean): Promise<void> {
   const license: ProLicense = { isPro, verifiedAt: Date.now() };
   logger.log(`[RC] writeLicense isPro=${isPro}`);
-  await Keychain.setGenericPassword('license', JSON.stringify(license), {
-    service: KEYCHAIN_SERVICE,
-    accessible: Keychain.ACCESSIBLE.AFTER_FIRST_UNLOCK,
-  });
+  try {
+    await Keychain.setGenericPassword('license', JSON.stringify(license), {
+      service: KEYCHAIN_SERVICE,
+      accessible: Keychain.ACCESSIBLE.AFTER_FIRST_UNLOCK,
+    });
+  } catch (e) {
+    // A keychain write failure (locked keychain, unsupported platform) must not
+    // surface as a "Purchase failed"/"Restore failed" after the user was charged.
+    // The entitlement is still live on RevenueCat and the next background sync
+    // re-writes the cache, so log and continue rather than throwing.
+    const message = e instanceof Error ? e.message : String(e);
+    logger.error(`[RC] writeLicense failed to persist to keychain: ${message}`);
+  }
 }
 
 export async function readProFromKeychain(): Promise<boolean> {
@@ -106,7 +115,11 @@ export async function presentProPaywall(): Promise<boolean> {
     offering.availablePackages.forEach(p =>
       logger.log(`[RC]   package=${p.identifier} product=${p.product?.identifier ?? 'NONE'} price=${p.product?.priceString ?? 'NONE'}`),
     );
-    const pkg = offering.availablePackages[0];
+    // Prefer the lifetime package explicitly. Relying on availablePackages[0] is
+    // fragile: RC can reorder packages or add new ones (monthly/yearly) later.
+    const pkg =
+      offering.availablePackages.find(p => p.identifier === '$rc_lifetime') ??
+      offering.availablePackages[0];
     if (!pkg) {
       logger.error('[RC] presentProPaywall ABORT: no package in offering (no store product for this platform — check the package has an Android/iOS product)');
       throw new Error('No package available');

@@ -5,6 +5,7 @@ import {
   restorePro,
   clearProForTesting,
   configureRevenueCat,
+  resetProIdentityForTesting,
 } from '../../../src/services/proLicenseService';
 
 jest.mock('react-native-purchases', () => ({
@@ -118,6 +119,31 @@ describe('proLicenseService', () => {
       expect(await presentProPaywall()).toBe(false);
       expect(mockSetHasRegisteredPro).not.toHaveBeenCalled();
     });
+
+    it('still reports success when the keychain write fails after a granted purchase', async () => {
+      Purchases.getOfferings.mockResolvedValueOnce(makeOffering());
+      Purchases.purchasePackage.mockResolvedValueOnce({
+        customerInfo: { entitlements: { active: ENTITLEMENT_ACTIVE }, originalAppUserId: 'anon' },
+      });
+      // A keychain failure must not turn a charged purchase into a "Purchase failed".
+      mockSetGenericPassword.mockRejectedValueOnce(new Error('keychain locked'));
+      expect(await presentProPaywall()).toBe(true);
+      expect(mockSetHasRegisteredPro).toHaveBeenCalledWith(true);
+    });
+
+    it('falls back to the first package when no $rc_lifetime package exists', async () => {
+      const offering = makeOffering();
+      offering.current.availablePackages = [
+        { identifier: '$rc_monthly', product: { identifier: 'off_grid_pro_monthly', priceString: '$1.99' } },
+      ];
+      Purchases.getOfferings.mockResolvedValueOnce(offering);
+      Purchases.purchasePackage.mockResolvedValueOnce({
+        customerInfo: { entitlements: { active: ENTITLEMENT_ACTIVE }, originalAppUserId: 'anon' },
+      });
+      mockSetGenericPassword.mockResolvedValueOnce(true);
+      expect(await presentProPaywall()).toBe(true);
+      expect(Purchases.purchasePackage).toHaveBeenCalledWith(offering.current.availablePackages[0]);
+    });
   });
 
   describe('restorePro()', () => {
@@ -145,6 +171,21 @@ describe('proLicenseService', () => {
     });
   });
 
+  describe('presentProPaywall() error paths', () => {
+    it('throws when there is no current offering', async () => {
+      Purchases.getOfferings.mockResolvedValueOnce({ all: {}, current: null });
+      await expect(presentProPaywall()).rejects.toThrow('No offering available');
+    });
+
+    it('throws when the current offering has no packages', async () => {
+      Purchases.getOfferings.mockResolvedValueOnce({
+        all: {},
+        current: { identifier: 'default', availablePackages: [] },
+      });
+      await expect(presentProPaywall()).rejects.toThrow('No package available');
+    });
+  });
+
   describe('configureRevenueCat()', () => {
     it('configures RC SDK on iOS', () => {
       const Platform = require('react-native').Platform;
@@ -158,6 +199,48 @@ describe('proLicenseService', () => {
       Platform.OS = 'android';
       configureRevenueCat();
       expect(Purchases.configure).toHaveBeenCalledTimes(1);
+    });
+
+    it('rethrows when the RC SDK fails to configure', () => {
+      Purchases.configure.mockImplementationOnce(() => {
+        throw new Error('native module missing');
+      });
+      expect(() => configureRevenueCat()).toThrow('native module missing');
+    });
+  });
+
+  describe('resetProIdentityForTesting()', () => {
+    it('skips logOut for an anonymous user and clears the keychain', async () => {
+      Purchases.getCustomerInfo.mockResolvedValueOnce({
+        originalAppUserId: '$RCAnonymousID:abc',
+        entitlements: { active: {} },
+        allPurchaseDates: {},
+      });
+      await resetProIdentityForTesting();
+      expect(Purchases.logOut).not.toHaveBeenCalled();
+      expect(mockResetGenericPassword).toHaveBeenCalledTimes(1);
+      expect(mockSetHasRegisteredPro).toHaveBeenCalledWith(false);
+    });
+
+    it('logs out an identified user before clearing the keychain', async () => {
+      Purchases.getCustomerInfo
+        .mockResolvedValueOnce({
+          originalAppUserId: 'real-user-123',
+          entitlements: { active: {} },
+          allPurchaseDates: {},
+        })
+        .mockResolvedValueOnce({ originalAppUserId: '$RCAnonymousID:new', entitlements: { active: {} } });
+      Purchases.logOut.mockResolvedValueOnce(undefined);
+      await resetProIdentityForTesting();
+      expect(Purchases.logOut).toHaveBeenCalledTimes(1);
+      expect(mockResetGenericPassword).toHaveBeenCalledTimes(1);
+    });
+
+    it('continues clearing the keychain when the RC lookup throws', async () => {
+      Purchases.getCustomerInfo.mockRejectedValueOnce(new Error('network down'));
+      await resetProIdentityForTesting();
+      expect(mockResetGenericPassword).toHaveBeenCalledTimes(1);
+      expect(mockSetHasRegisteredPro).toHaveBeenCalledWith(false);
     });
   });
 });

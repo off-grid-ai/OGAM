@@ -25,8 +25,7 @@ function showRestartPrompt(): void {
 }
 
 export const ProDetailScreen: React.FC = () => {
-  const { isDark } = useTheme();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   const hasRegisteredPro = useAppStore((s) => s.hasRegisteredPro);
   const [loading, setLoading] = useState(false);
