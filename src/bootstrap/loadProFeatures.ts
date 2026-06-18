@@ -1,6 +1,7 @@
 import { registerToolExtension } from '../services/tools/extensions';
 import { registerScreen } from '../navigation/screenRegistry';
 import { registerSettingsSection } from '../components/settings/sectionRegistry';
+import { readProFromKeychain } from '../services/proLicenseService';
 
 export async function loadProFeatures(): Promise<void> {
   let pro: any;
@@ -13,7 +14,10 @@ export async function loadProFeatures(): Promise<void> {
     return; // proStub.js returns null — free build via metro extraNodeModules
   }
 
-  // Run synchronously before any await so screens are registered before the
-  // navigator renders (App.tsx doesn't await loadProFeatures).
+  const isPro = await readProFromKeychain();
+  if (!isPro) {
+    return; // paid features stay dormant until the user purchases
+  }
+
   pro.activate({ registerToolExtension, registerScreen, registerSettingsSection });
 }

@@ -9,15 +9,18 @@ import {
 
 jest.mock('react-native-purchases', () => ({
   __esModule: true,
-  default: { setLogLevel: jest.fn(), configure: jest.fn(), getCustomerInfo: jest.fn(), restorePurchases: jest.fn() },
+  default: {
+    setLogLevel: jest.fn(),
+    configure: jest.fn(),
+    getCustomerInfo: jest.fn().mockResolvedValue({ entitlements: { active: {} }, originalAppUserId: 'anon', allPurchaseDates: {} }),
+    restorePurchases: jest.fn(),
+    getOfferings: jest.fn(),
+    purchasePackage: jest.fn(),
+    invalidateCustomerInfoCache: jest.fn().mockResolvedValue(undefined),
+    logOut: jest.fn(),
+  },
   LOG_LEVEL: { DEBUG: 'debug', ERROR: 'error' },
-}), { virtual: true });
-
-jest.mock('react-native-purchases-ui', () => ({
-  __esModule: true,
-  default: { presentPaywall: jest.fn() },
-  PAYWALL_RESULT: { PURCHASED: 'PURCHASED', RESTORED: 'RESTORED', NOT_PRESENTED: 'NOT_PRESENTED', ERROR: 'ERROR', CANCELLED: 'CANCELLED' },
-}), { virtual: true });
+}));
 
 jest.mock('react-native-keychain', () => ({
   getGenericPassword: jest.fn(),
@@ -34,10 +37,18 @@ jest.mock('../../../src/stores/appStore', () => ({
 const { getGenericPassword: mockGetGenericPassword, setGenericPassword: mockSetGenericPassword, resetGenericPassword: mockResetGenericPassword } =
   require('react-native-keychain');
 const Purchases = require('react-native-purchases').default;
-const RevenueCatUI = require('react-native-purchases-ui').default;
-const { PAYWALL_RESULT } = require('react-native-purchases-ui');
 
-const ENTITLEMENT_ACTIVE = { 'offgrid Pro': { productIdentifier: 'pro_monthly' } };
+const makeOffering = () => ({
+  all: {},
+  current: {
+    identifier: 'default',
+    availablePackages: [
+      { identifier: '$rc_lifetime', product: { identifier: 'off_grid_pro_lifetime', priceString: '$9.99' } },
+    ],
+  },
+});
+
+const ENTITLEMENT_ACTIVE = { pro: { productIdentifier: 'pro_monthly' } };
 const ENTITLEMENT_EMPTY = {};
 
 describe('proLicenseService', () => {
@@ -82,22 +93,28 @@ describe('proLicenseService', () => {
   });
 
   describe('presentProPaywall()', () => {
-    it('returns true and writes license when PURCHASED', async () => {
-      RevenueCatUI.presentPaywall.mockResolvedValueOnce(PAYWALL_RESULT.PURCHASED);
+    it('returns true and writes license when the purchase grants the entitlement', async () => {
+      Purchases.getOfferings.mockResolvedValueOnce(makeOffering());
+      Purchases.purchasePackage.mockResolvedValueOnce({
+        customerInfo: { entitlements: { active: ENTITLEMENT_ACTIVE }, originalAppUserId: 'anon' },
+      });
       mockSetGenericPassword.mockResolvedValueOnce(true);
       expect(await presentProPaywall()).toBe(true);
       expect(mockSetHasRegisteredPro).toHaveBeenCalledWith(true);
     });
 
-    it('returns true and writes license when RESTORED', async () => {
-      RevenueCatUI.presentPaywall.mockResolvedValueOnce(PAYWALL_RESULT.RESTORED);
-      mockSetGenericPassword.mockResolvedValueOnce(true);
-      expect(await presentProPaywall()).toBe(true);
-      expect(mockSetHasRegisteredPro).toHaveBeenCalledWith(true);
+    it('returns false when the purchase does not grant the entitlement', async () => {
+      Purchases.getOfferings.mockResolvedValueOnce(makeOffering());
+      Purchases.purchasePackage.mockResolvedValueOnce({
+        customerInfo: { entitlements: { active: ENTITLEMENT_EMPTY }, originalAppUserId: 'anon' },
+      });
+      expect(await presentProPaywall()).toBe(false);
+      expect(mockSetHasRegisteredPro).not.toHaveBeenCalled();
     });
 
-    it('returns false when CANCELLED', async () => {
-      RevenueCatUI.presentPaywall.mockResolvedValueOnce(PAYWALL_RESULT.CANCELLED);
+    it('returns false when the user cancels', async () => {
+      Purchases.getOfferings.mockResolvedValueOnce(makeOffering());
+      Purchases.purchasePackage.mockRejectedValueOnce({ userCancelled: true });
       expect(await presentProPaywall()).toBe(false);
       expect(mockSetHasRegisteredPro).not.toHaveBeenCalled();
     });

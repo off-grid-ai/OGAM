@@ -216,6 +216,24 @@ jest.mock('react-native-keychain', () => ({
   resetGenericPassword: jest.fn(() => Promise.resolve(true)),
 }));
 
+// react-native-purchases mock — the real package loads a native module that
+// is unavailable in the node test env, so any (even transitive / coverage-only)
+// require would throw. Suites that need behaviour override this with a local mock.
+jest.mock('react-native-purchases', () => ({
+  __esModule: true,
+  default: {
+    setLogLevel: jest.fn(),
+    configure: jest.fn(),
+    getCustomerInfo: jest.fn(() => Promise.resolve({ entitlements: { active: {} }, originalAppUserId: 'anon', allPurchaseDates: {} })),
+    restorePurchases: jest.fn(() => Promise.resolve({ entitlements: { active: {} } })),
+    getOfferings: jest.fn(() => Promise.resolve({ all: {}, current: null })),
+    purchasePackage: jest.fn(() => Promise.resolve({ customerInfo: { entitlements: { active: {} } } })),
+    invalidateCustomerInfoCache: jest.fn(() => Promise.resolve()),
+    logOut: jest.fn(() => Promise.resolve()),
+  },
+  LOG_LEVEL: { DEBUG: 'debug', ERROR: 'error' },
+}));
+
 // @react-native-voice/voice mock
 jest.mock('@react-native-voice/voice', () => ({
   start: jest.fn(() => Promise.resolve()),

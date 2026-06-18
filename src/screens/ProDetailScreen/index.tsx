@@ -1,13 +1,13 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Linking, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import LinearGradient from 'react-native-linear-gradient';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
-import { PRO_URL } from '../../utils/proPrompt';
 import { useAppStore } from '../../stores';
+import { presentProPaywall, restorePro, resetProIdentityForTesting } from '../../services/proLicenseService';
 
 const INTEGRATIONS = [
   { icon: 'mic', title: 'Voice', desc: 'Local speech-to-text\nprocessing.' },
@@ -16,15 +16,49 @@ const INTEGRATIONS = [
   { icon: 'message-square', title: 'Messaging', desc: 'Slack,\nTelegram & more.' },
 ];
 
+function showRestartPrompt(): void {
+  Alert.alert(
+    'Pro activated',
+    'Force-close and reopen the app to unlock Pro features.',
+    [{ text: 'OK' }],
+  );
+}
 
 export const ProDetailScreen: React.FC = () => {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
+  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const setHasRegisteredPro = useAppStore((s) => s.setHasRegisteredPro);
+  const hasRegisteredPro = useAppStore((s) => s.hasRegisteredPro);
+  const [loading, setLoading] = useState(false);
 
-  const handleCTA = () => {
-    setHasRegisteredPro(true);
-    Linking.openURL(PRO_URL);
+  const handleGetPro = async () => {
+    setLoading(true);
+    try {
+      const purchased = await presentProPaywall();
+      if (purchased) {
+        showRestartPrompt();
+      }
+    } catch {
+      Alert.alert('Purchase failed', 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    setLoading(true);
+    try {
+      const restored = await restorePro();
+      if (restored) {
+        showRestartPrompt();
+      } else {
+        Alert.alert('No purchases found', 'No active Pro subscription was found for this account.');
+      }
+    } catch {
+      Alert.alert('Restore failed', 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -49,9 +83,20 @@ export const ProDetailScreen: React.FC = () => {
             </View>
             <Text style={styles.logoText}>Off Grid Pro</Text>
           </View>
-          <TouchableOpacity style={styles.getProButton} onPress={handleCTA}>
-            <Text style={styles.getProButtonText}>Get Pro</Text>
-          </TouchableOpacity>
+          {hasRegisteredPro ? (
+            <View style={styles.proActiveBadge}>
+              <Icon name="check" size={12} color="#FFFFFF" />
+              <Text style={styles.proActiveBadgeText}>Pro Active</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.getProButton, loading && styles.buttonDisabled]}
+              onPress={handleGetPro}
+              disabled={loading}
+            >
+              <Text style={styles.getProButtonText}>{loading ? 'Loading...' : 'Get Pro'}</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Hero */}
@@ -134,10 +179,44 @@ export const ProDetailScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* CTA */}
-        <TouchableOpacity style={styles.ctaButton} onPress={handleCTA}>
-          <Text style={styles.ctaText}>I am in 🔥</Text>
-         </TouchableOpacity>
+        {/* CTA / Pro active */}
+        {hasRegisteredPro ? (
+          <>
+            <View style={styles.proActiveCard}>
+              <Icon name="check-circle" size={20} color={colors.primary} />
+              <Text style={styles.proActiveText}>Pro is active on this account.</Text>
+            </View>
+            {__DEV__ && (
+              <TouchableOpacity
+                style={styles.restoreButton}
+                onPress={async () => {
+                  await resetProIdentityForTesting();
+                  Alert.alert('Dev reset', 'RC identity reset. Restart the app to test purchase from scratch.');
+                }}
+              >
+                <Text style={styles.restoreText}>[DEV] Reset Pro identity</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={[styles.ctaButton, loading && styles.buttonDisabled]}
+              onPress={handleGetPro}
+              disabled={loading}
+            >
+              <Text style={styles.ctaText}>{loading ? 'Loading...' : 'Get Pro'}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.restoreButton}
+              onPress={handleRestore}
+              disabled={loading}
+            >
+              <Text style={styles.restoreText}>Restore purchases</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
       </ScrollView>
     </SafeAreaView>
@@ -183,6 +262,16 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderRadius: 20,
   },
   getProButtonText: { ...TYPOGRAPHY.bodySmall, color: '#FFFFFF' },
+  proActiveBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.xs,
+    backgroundColor: colors.primary,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 20,
+  },
+  proActiveBadgeText: { ...TYPOGRAPHY.bodySmall, color: '#FFFFFF' },
 
   // Hero
   hero: {
@@ -348,19 +437,48 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   // CTA
   ctaButton: {
     marginHorizontal: SPACING.xl,
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.md,
     backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: SPACING.lg,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    gap: SPACING.sm,
   },
   ctaText: {
     ...TYPOGRAPHY.body,
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
+  restoreButton: {
+    marginHorizontal: SPACING.xl,
+    marginBottom: SPACING.xl,
+    paddingVertical: SPACING.md,
+    alignItems: 'center' as const,
+  },
+  restoreText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
 
+  // Pro active state
+  proActiveCard: {
+    marginHorizontal: SPACING.xl,
+    marginBottom: SPACING.xl,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: SPACING.sm,
+    paddingVertical: SPACING.lg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  proActiveText: {
+    ...TYPOGRAPHY.body,
+    color: colors.primary,
+  },
 });

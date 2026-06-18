@@ -10,9 +10,15 @@ jest.mock('../../../src/components/settings/sectionRegistry', () => ({
   registerSettingsSection: jest.fn(),
 }));
 
+const mockReadProFromKeychain = jest.fn();
+jest.mock('../../../src/services/proLicenseService', () => ({
+  readProFromKeychain: (...args: any[]) => mockReadProFromKeychain(...args),
+}));
+
 describe('loadProFeatures()', () => {
   beforeEach(() => {
     jest.resetModules();
+    mockReadProFromKeychain.mockResolvedValue(false);
   });
 
   it('returns without error when @offgrid/pro package is not installed', async () => {
@@ -25,9 +31,18 @@ describe('loadProFeatures()', () => {
     await expect(loadProFeatures()).resolves.toBeUndefined();
   });
 
-  it('calls pro.activate with the three registries when package is present', async () => {
+  it('does not call pro.activate when there is no entitlement', async () => {
     const mockActivate = jest.fn();
     jest.mock('@offgrid/pro', () => ({ activate: mockActivate }), { virtual: true });
+    mockReadProFromKeychain.mockResolvedValueOnce(false);
+    await loadProFeatures();
+    expect(mockActivate).not.toHaveBeenCalled();
+  });
+
+  it('calls pro.activate with the three registries when entitlement is active', async () => {
+    const mockActivate = jest.fn();
+    jest.mock('@offgrid/pro', () => ({ activate: mockActivate }), { virtual: true });
+    mockReadProFromKeychain.mockResolvedValueOnce(true);
     await loadProFeatures();
     expect(mockActivate).toHaveBeenCalledWith(
       expect.objectContaining({
