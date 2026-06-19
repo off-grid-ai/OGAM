@@ -8,12 +8,12 @@
 
 **Chat. Generate images. Use tools. See. Listen. All on your phone or Mac. All offline. Zero data leaves your device.**
 
-[![GitHub stars](https://img.shields.io/github/stars/alichherawalla/off-grid-mobile?style=social)](https://github.com/alichherawalla/off-grid-mobile)
+[![GitHub stars](https://img.shields.io/github/stars/off-grid-ai/mobile?style=social)](https://github.com/off-grid-ai/mobile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Google Play](https://img.shields.io/badge/Google%20Play-Download-brightgreen?logo=google-play)](https://play.google.com/store/apps/details?id=ai.offgridmobile)
 [![App Store](https://img.shields.io/badge/App%20Store-Download-blue?logo=apple)](https://apps.apple.com/us/app/off-grid-local-ai/id6759299882)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20macOS-green.svg)](#install)
-[![codecov](https://codecov.io/gh/alichherawalla/off-grid-mobile/graph/badge.svg)](https://codecov.io/gh/alichherawalla/off-grid-mobile)
+[![codecov](https://codecov.io/gh/off-grid-ai/mobile/graph/badge.svg)](https://codecov.io/gh/off-grid-ai/mobile)
 [![Slack](https://img.shields.io/badge/Slack-Join%20Community-4A154B?logo=slack)](https://join.slack.com/t/off-grid-mobile/shared_invite/zt-3q7kj5gr6-rVzx5gl5LKPQh4mUE2CCvA)
 
 </div>
@@ -152,15 +152,15 @@ Tested on Snapdragon 8 Gen 2/3, Apple A17 Pro. Results vary by model size and qu
 </tr></table>
 </div>
 
-Or grab the latest APK from [**GitHub Releases**](https://github.com/alichherawalla/off-grid-mobile/releases/latest).
+Or grab the latest APK from [**GitHub Releases**](https://github.com/off-grid-ai/mobile/releases/latest).
 
 > **macOS**: The iOS App Store version runs natively on Apple Silicon Macs via Mac Catalyst / iPad compatibility.
 
 ### Build from source
 
 ```bash
-git clone https://github.com/alichherawalla/off-grid-mobile.git
-cd off-grid-mobile
+git clone https://github.com/off-grid-ai/mobile.git
+cd mobile
 npm install
 
 # Android
@@ -178,8 +178,8 @@ npm run ios
 
 ## Testing
 
-[![CI](https://github.com/alichherawalla/off-grid-mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/alichherawalla/off-grid-mobile/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/alichherawalla/off-grid-mobile/graph/badge.svg)](https://codecov.io/gh/alichherawalla/off-grid-mobile)
+[![CI](https://github.com/off-grid-ai/mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/off-grid-ai/mobile/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/off-grid-ai/mobile/graph/badge.svg)](https://codecov.io/gh/off-grid-ai/mobile)
 
 Tests run across three platforms on every PR:
 
@@ -232,7 +232,7 @@ Built on the shoulders of giants:
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=alichherawalla/off-grid-mobile&type=date&legend=top-left)](https://www.star-history.com/#alichherawalla/off-grid-mobile&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=off-grid-ai/mobile&type=date&legend=top-left)](https://www.star-history.com/#off-grid-ai/mobile&type=date&legend=top-left)
 
 <div align="center">
 

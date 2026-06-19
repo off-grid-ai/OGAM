@@ -125,7 +125,7 @@ jobs:
         run: |
           IPA_SIZE=$(stat -f%z "$RUNNER_TEMP/export/OffgridMobile-v${{ env.VERSION }}.ipa")
           TODAY=$(date +%Y-%m-%d)
-          DOWNLOAD_URL="https://github.com/alichherawalla/off-grid-mobile/releases/download/v${{ env.VERSION }}/OffgridMobile-v${{ env.VERSION }}.ipa"
+          DOWNLOAD_URL="https://github.com/off-grid-ai/mobile/releases/download/v${{ env.VERSION }}/OffgridMobile-v${{ env.VERSION }}.ipa"
 
           # Update altstore-source.json using node for reliable JSON manipulation
           node -e "

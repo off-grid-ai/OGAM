@@ -72,4 +72,4 @@ The same intelligence layer that made some people more effective for two centuri
 
 ---
 
-*[Download Off Grid for iPhone](https://apps.apple.com/us/app/off-grid-local-ai/id6759299882?utm_source=offgrid-docs&utm_medium=website&utm_campaign=vision) or [Android](https://play.google.com/store/apps/details?id=ai.offgridmobile&utm_source=offgrid-docs&utm_medium=website&utm_campaign=vision). Open source. [View on GitHub](https://github.com/alichherawalla/off-grid-mobile?utm_source=offgrid-docs&utm_medium=website&utm_campaign=vision).*
+*[Download Off Grid for iPhone](https://apps.apple.com/us/app/off-grid-local-ai/id6759299882?utm_source=offgrid-docs&utm_medium=website&utm_campaign=vision) or [Android](https://play.google.com/store/apps/details?id=ai.offgridmobile&utm_source=offgrid-docs&utm_medium=website&utm_campaign=vision). Open source. [View on GitHub](https://github.com/off-grid-ai/mobile?utm_source=offgrid-docs&utm_medium=website&utm_campaign=vision).*

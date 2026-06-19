@@ -17,7 +17,7 @@ Run your first local AI model in under 5 minutes. No account. No API key. No int
 
 **Android:** [Get it on Google Play](https://play.google.com/store/apps/details?id=ai.offgridmobile&utm_source=offgrid-docs&utm_medium=website&utm_campaign=download) - requires Android 10+, 4GB RAM+
 
-Or grab the latest APK directly from [GitHub Releases](https://github.com/alichherawalla/off-grid-mobile/releases/latest?utm_source=offgrid-docs&utm_medium=website&utm_campaign=github).
+Or grab the latest APK directly from [GitHub Releases](https://github.com/off-grid-ai/mobile/releases/latest?utm_source=offgrid-docs&utm_medium=website&utm_campaign=github).
 
 ---
 
@@ -65,4 +65,4 @@ Put your phone in airplane mode. Everything still works.
 
 Stuck, or want to share what you're building? [Join the Slack community](https://join.slack.com/t/off-grid-mobile/shared_invite/zt-3swt3s84k-R0CHRwISaUpExV2~3qUUdQ).
 
-The app is open source - [view it on GitHub](https://github.com/alichherawalla/off-grid-mobile?utm_source=offgrid-docs&utm_medium=website&utm_campaign=github).
+The app is open source - [view it on GitHub](https://github.com/off-grid-ai/mobile?utm_source=offgrid-docs&utm_medium=website&utm_campaign=github).

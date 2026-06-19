@@ -1296,8 +1296,8 @@ OffgridMobile/
 
 ```bash
 # Clone repository
-git clone https://github.com/alichherawalla/off-grid-mobile.git
-cd off-grid-mobile
+git clone https://github.com/off-grid-ai/mobile.git
+cd mobile
 
 # Install JavaScript dependencies
 npm install

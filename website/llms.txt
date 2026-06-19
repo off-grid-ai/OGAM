@@ -31,8 +31,8 @@ Cloud AI providers have routine access to every query sent to their models. Off 
 
 - iOS App: https://apps.apple.com/us/app/off-grid-local-ai/id6759299882?utm_source=offgrid-docs&utm_medium=website&utm_campaign=download
 - Android App: https://play.google.com/store/apps/details?id=ai.offgridmobile&utm_source=offgrid-docs&utm_medium=website&utm_campaign=download
-- GitHub: https://github.com/alichherawalla/off-grid-mobile?utm_source=offgrid-docs&utm_medium=website&utm_campaign=github
-- GitHub Releases (APK): https://github.com/alichherawalla/off-grid-mobile/releases/latest?utm_source=offgrid-docs&utm_medium=website&utm_campaign=github
+- GitHub: https://github.com/off-grid-ai/mobile?utm_source=offgrid-docs&utm_medium=website&utm_campaign=github
+- GitHub Releases (APK): https://github.com/off-grid-ai/mobile/releases/latest?utm_source=offgrid-docs&utm_medium=website&utm_campaign=github
 - Slack Community: https://join.slack.com/t/off-grid-mobile/shared_invite/zt-3swt3s84k-R0CHRwISaUpExV2~3qUUdQ
 - Docs: https://docs.offgridmobileai.co
 - Author: Mohammed Ali Chherawalla (https://dev.to/alichherawalla)

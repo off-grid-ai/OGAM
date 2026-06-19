@@ -95,4 +95,4 @@ That's what we're building with Off Grid.
 
 ---
 
-*Open source. No account. No telemetry. [View on GitHub](https://github.com/alichherawalla/off-grid-mobile?utm_source=offgrid-docs&utm_medium=website&utm_campaign=github) · [Join the community](https://join.slack.com/t/off-grid-mobile/shared_invite/zt-3swt3s84k-R0CHRwISaUpExV2~3qUUdQ) · [Download the app](https://apps.apple.com/us/app/off-grid-local-ai/id6759299882?utm_source=offgrid-docs&utm_medium=website&utm_campaign=mission)*
+*Open source. No account. No telemetry. [View on GitHub](https://github.com/off-grid-ai/mobile?utm_source=offgrid-docs&utm_medium=website&utm_campaign=github) · [Join the community](https://join.slack.com/t/off-grid-mobile/shared_invite/zt-3swt3s84k-R0CHRwISaUpExV2~3qUUdQ) · [Download the app](https://apps.apple.com/us/app/off-grid-local-ai/id6759299882?utm_source=offgrid-docs&utm_medium=website&utm_campaign=mission)*

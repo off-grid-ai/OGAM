@@ -31,7 +31,7 @@ Off Grid does not integrate with any third-party analytics, advertising, or trac
 
 ## Contact
 
-If you have questions, open an issue at: https://github.com/alichherawalla/off-grid-mobile/issues
+If you have questions, open an issue at: https://github.com/off-grid-ai/mobile/issues
 
 ## Changes
 

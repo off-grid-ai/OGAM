@@ -3,10 +3,10 @@
   "identifier": "ai.offgridmobile.source",
   "subtitle": "On-device AI apps",
   "description": "AltStore source for Off Grid — run LLMs, generate images, and transcribe speech entirely on-device.",
-  "iconURL": "https://raw.githubusercontent.com/alichherawalla/offline-mobile-llm-manager/main/ios/OffgridMobile/Images.xcassets/AppIcon.appiconset/icon.png",
+  "iconURL": "https://raw.githubusercontent.com/off-grid-ai/mobile/main/ios/OffgridMobile/Images.xcassets/AppIcon.appiconset/icon-1024.png",
   "headerURL": "",
-  "website": "https://github.com/alichherawalla/off-grid-mobile",
-  "sourceURL": "https://raw.githubusercontent.com/alichherawalla/offline-mobile-llm-manager/main/altstore-source.json",
+  "website": "https://github.com/off-grid-ai/mobile",
+  "sourceURL": "https://raw.githubusercontent.com/off-grid-ai/mobile/main/altstore-source.json",
   "apps": [
     {
       "name": "Off Grid",
@@ -14,21 +14,21 @@
       "developerName": "Off Grid",
       "subtitle": "On-device AI",
       "localizedDescription": "Run large language models, generate images with Stable Diffusion, and transcribe speech with Whisper — all on-device, fully offline, no cloud required.",
-      "iconURL": "https://raw.githubusercontent.com/alichherawalla/offline-mobile-llm-manager/main/ios/OffgridMobile/Images.xcassets/AppIcon.appiconset/icon.png",
+      "iconURL": "https://raw.githubusercontent.com/off-grid-ai/mobile/main/ios/OffgridMobile/Images.xcassets/AppIcon.appiconset/icon-1024.png",
       "tintColor": "000000",
       "versions": [
         {
           "version": "0.0.42",
           "date": "2026-02-14",
           "size": 13056961,
-          "downloadURL": "https://github.com/alichherawalla/off-grid-mobile/releases/download/v0.0.42/OffgridMobile-v0.0.42.ipa",
+          "downloadURL": "https://github.com/off-grid-ai/mobile/releases/download/v0.0.42/OffgridMobile-v0.0.42.ipa",
           "localizedDescription": "Update to v0.0.42"
         },
         {
           "version": "0.0.32",
           "date": "2026-02-14",
           "size": 0,
-          "downloadURL": "https://github.com/alichherawalla/off-grid-mobile/releases/latest/download/OffgridMobile.ipa",
+          "downloadURL": "https://github.com/off-grid-ai/mobile/releases/latest/download/OffgridMobile.ipa",
           "localizedDescription": "Initial AltStore release."
         }
       ]
