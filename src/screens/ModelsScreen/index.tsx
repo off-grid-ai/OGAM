@@ -1,5 +1,5 @@
 import React, { useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import { MainTabParamList } from '../../navigation/types';
@@ -14,6 +14,7 @@ import { initialFilterState } from './constants';
 import { TextModelsTab } from './TextModelsTab';
 import { ImageModelsTab } from './ImageModelsTab';
 import { VoiceModelsUpsell } from './VoiceModelsUpsell';
+import { TranscriptionModelsTab } from './TranscriptionModelsTab';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
 export const ModelsScreen: React.FC = () => {
@@ -101,8 +102,12 @@ export const ModelsScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Tab Bar */}
-        <View style={styles.tabBar}>
+        {/* Tab Bar (horizontally scrollable — four tabs don't fit on a phone) */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBar}
+        >
           <TouchableOpacity
             style={styles.tabItem}
             onPress={() => {
@@ -142,7 +147,20 @@ export const ModelsScreen: React.FC = () => {
             <Text style={[styles.tabText, vm.activeTab === 'voice' && styles.tabTextActive]}>Voice Models</Text>
             {vm.activeTab === 'voice' && <View style={styles.tabIndicator} />}
           </TouchableOpacity>
-        </View>
+          <TouchableOpacity
+            style={styles.tabItem}
+            testID="transcription-models-tab"
+            onPress={() => {
+              vm.setActiveTab('transcription');
+              vm.setFilterState(initialFilterState);
+              vm.setTextFiltersVisible(false);
+              vm.setImageFiltersVisible(false);
+            }}
+          >
+            <Text style={[styles.tabText, vm.activeTab === 'transcription' && styles.tabTextActive]}>Transcription Models</Text>
+            {vm.activeTab === 'transcription' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {/* Text Models Tab */}
@@ -234,6 +252,9 @@ export const ModelsScreen: React.FC = () => {
           ? <VoiceModelsPanel />
           : <VoiceModelsUpsell onGetPro={() => vm.navigation.navigate('ProDetail')} />
       )}
+
+      {/* Transcription Models Tab (speech-to-text, core). */}
+      {vm.activeTab === 'transcription' && <TranscriptionModelsTab />}
 
       <CustomAlert {...vm.alertState} onClose={() => vm.setAlertState(hideAlert())} />
     </SafeAreaView>
