@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../../../components/AppSheet';
@@ -22,24 +22,33 @@ export const WhisperPickerSheet: React.FC<Props> = ({ visible, onClose }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const downloadedModelId = useWhisperStore((s) => s.downloadedModelId);
+  const presentModelIds = useWhisperStore((s) => s.presentModelIds);
   const isDownloading = useWhisperStore((s) => s.isDownloading);
   const downloadProgress = useWhisperStore((s) => s.downloadProgress);
   const downloadModel = useWhisperStore((s) => s.downloadModel);
-  const deleteModel = useWhisperStore((s) => s.deleteModel);
+  const selectModel = useWhisperStore((s) => s.selectModel);
+  const deleteModelById = useWhisperStore((s) => s.deleteModelById);
+  const refreshPresentModels = useWhisperStore((s) => s.refreshPresentModels);
+
+  useEffect(() => {
+    if (visible && !isDownloading) refreshPresentModels();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, isDownloading]);
 
   return (
     <AppSheet visible={visible} onClose={onClose} title="TRANSCRIPTION MODEL" enableDynamicSizing>
       <View style={styles.content}>
         {WHISPER_MODELS.map((m) => {
-          const isActive = downloadedModelId === m.id;
-          const busy = isDownloading && !isActive;
+          const active = downloadedModelId === m.id;
+          const present = presentModelIds.includes(m.id);
+          const busy = isDownloading && !present;
           return (
             <AnimatedPressable
               key={m.id}
-              style={[styles.row, isActive && styles.rowActive]}
+              style={[styles.row, active && styles.rowActive]}
               hapticType="selection"
               disabled={isDownloading}
-              onPress={() => { if (!isActive) downloadModel(m.id); }}
+              onPress={() => { if (present) { if (!active) selectModel(m.id); } else downloadModel(m.id); }}
             >
               <View style={styles.rowInfo}>
                 <Text style={styles.name} numberOfLines={1}>
@@ -50,9 +59,10 @@ export const WhisperPickerSheet: React.FC<Props> = ({ visible, onClose }) => {
               </View>
               {(() => {
                 if (busy) return <ActivityIndicator size="small" color={colors.primary} />;
-                if (isActive) {
+                if (active) return <Icon name="check" size={16} color={colors.primary} />;
+                if (present) {
                   return (
-                    <AnimatedPressable hapticType="selection" hitSlop={8} onPress={() => deleteModel()}>
+                    <AnimatedPressable hapticType="selection" hitSlop={8} onPress={() => deleteModelById(m.id)}>
                       <Icon name="trash-2" size={16} color={colors.textMuted} />
                     </AnimatedPressable>
                   );

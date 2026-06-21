@@ -11,7 +11,7 @@
  * The whisper store tracks a single active model; downloading another switches
  * the active one.
  */
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { ModelCard } from '../../components';
@@ -37,28 +37,33 @@ interface WhisperCardProps {
   model: typeof WHISPER_MODELS[number];
   index: number;
   downloadedModelId: string | null;
+  presentModelIds: string[];
   downloadingId: string | null;
   downloadProgress: number;
   onDownload: (id: string) => void;
-  onDelete: () => void;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
 }
 
 const WhisperCard: React.FC<WhisperCardProps> = ({
-  model, index, downloadedModelId, downloadingId, downloadProgress, onDownload, onDelete,
+  model, index, downloadedModelId, presentModelIds, downloadingId, downloadProgress, onDownload, onSelect, onDelete,
 }) => {
-  const downloaded = downloadedModelId === model.id;
+  const present = presentModelIds.includes(model.id);
+  const active = downloadedModelId === model.id;
   const downloading = downloadingId === model.id;
   return (
     <ModelCard
       compact
       model={{ id: model.id, name: model.name, author: formatSize(model.size), description: model.description }}
-      isDownloaded={downloaded && !downloading}
+      isDownloaded={present && !downloading}
+      isActive={active}
       isDownloading={downloading}
       downloadProgress={downloadProgress}
       testID={`transcription-model-card-${index}`}
-      onPress={!downloaded && !downloading ? () => onDownload(model.id) : undefined}
-      onDownload={!downloaded && !downloading ? () => onDownload(model.id) : undefined}
-      onDelete={downloaded ? onDelete : undefined}
+      // Present but not active → tap to use; not present → tap to download.
+      onPress={downloading ? undefined : (present ? (active ? undefined : () => onSelect(model.id)) : () => onDownload(model.id))}
+      onDownload={!present && !downloading ? () => onDownload(model.id) : undefined}
+      onDelete={present ? () => onDelete(model.id) : undefined}
     />
   );
 };
@@ -80,21 +85,32 @@ export const TranscriptionModelsTab: React.FC = () => {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
-    downloadedModelId, downloadProgress, downloadModel, downloadFromUrl, deleteModel,
-    error: whisperError, clearError,
+    downloadedModelId, presentModelIds, downloadProgress, downloadModel, downloadFromUrl,
+    selectModel, deleteModelById, refreshPresentModels, error: whisperError, clearError,
   } = useWhisperStore();
+
+  // Probe disk on mount and whenever a download finishes, so every on-disk model
+  // (not just the active one) shows as downloaded.
+  useEffect(() => {
+    if (!downloadingId) refreshPresentModels();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [downloadingId]);
 
   const handleDownload = useCallback((id: string) => {
     setDownloadingId(id);
     downloadModel(id).catch(err => logger.error('[Transcription] download failed:', err)).finally(() => setDownloadingId(null));
   }, [downloadModel]);
 
-  const handleDelete = useCallback(() => {
-    setAlertState(showAlert('Remove Transcription Model', 'This deletes the model and disables voice input until you download one again.', [
+  const handleSelect = useCallback((id: string) => {
+    selectModel(id).catch(err => logger.error('[Transcription] select failed:', err));
+  }, [selectModel]);
+
+  const handleDelete = useCallback((id: string) => {
+    setAlertState(showAlert('Remove Transcription Model', 'This deletes the model files for this language/size.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => { setAlertState(hideAlert()); deleteModel(); } },
+      { text: 'Remove', style: 'destructive', onPress: () => { setAlertState(hideAlert()); deleteModelById(id); } },
     ]));
-  }, [deleteModel]);
+  }, [deleteModelById]);
 
   const handleSearch = useCallback((q: string) => {
     setSearchQuery(q);
@@ -150,9 +166,11 @@ export const TranscriptionModelsTab: React.FC = () => {
       model={model}
       index={index}
       downloadedModelId={downloadedModelId}
+      presentModelIds={presentModelIds}
       downloadingId={downloadingId}
       downloadProgress={downloadProgress}
       onDownload={handleDownload}
+      onSelect={handleSelect}
       onDelete={handleDelete}
     />
   );

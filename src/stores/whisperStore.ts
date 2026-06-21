@@ -5,8 +5,10 @@ import { whisperService, WHISPER_MODELS } from '../services';
 import { modelResidencyManager } from '../services/modelResidency';
 
 interface WhisperState {
-  // Downloaded model ID
+  // Active (selected) model ID
   downloadedModelId: string | null;
+  // All models present on disk (multiple can be downloaded; one is active).
+  presentModelIds: string[];
   isDownloading: boolean;
   downloadProgress: number;
   isModelLoading: boolean;
@@ -16,9 +18,15 @@ interface WhisperState {
   // Actions
   downloadModel: (modelId: string) => Promise<void>;
   downloadFromUrl: (url: string, modelId: string) => Promise<void>;
+  /** Activate an already-downloaded model without re-downloading. */
+  selectModel: (modelId: string) => Promise<void>;
   loadModel: () => Promise<void>;
   unloadModel: () => Promise<void>;
   deleteModel: () => Promise<void>;
+  /** Delete a specific on-disk model (active or not). */
+  deleteModelById: (modelId: string) => Promise<void>;
+  /** Re-probe which models are present on disk. */
+  refreshPresentModels: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -26,6 +34,7 @@ export const useWhisperStore = create<WhisperState>()(
   persist(
     (set, get) => ({
       downloadedModelId: null,
+      presentModelIds: [],
       isDownloading: false,
       downloadProgress: 0,
       isModelLoading: false,
@@ -40,11 +49,12 @@ export const useWhisperStore = create<WhisperState>()(
             set({ downloadProgress: progress });
           });
 
-          set({
+          set((s) => ({
             downloadedModelId: modelId,
+            presentModelIds: s.presentModelIds.includes(modelId) ? s.presentModelIds : [...s.presentModelIds, modelId],
             isDownloading: false,
             downloadProgress: 1,
-          });
+          }));
 
           // Auto-load after download
           await get().loadModel();
@@ -148,6 +158,33 @@ export const useWhisperStore = create<WhisperState>()(
             error: error instanceof Error ? error.message : 'Failed to delete model',
           });
         }
+      },
+
+      selectModel: async (modelId: string) => {
+        if (get().downloadedModelId === modelId && get().isModelLoaded) return;
+        set({ downloadedModelId: modelId, error: null });
+        await get().loadModel();
+      },
+
+      deleteModelById: async (modelId: string) => {
+        try {
+          if (get().downloadedModelId === modelId) await whisperService.unloadModel();
+          await whisperService.deleteModel(modelId);
+          set((s) => ({
+            presentModelIds: s.presentModelIds.filter((id) => id !== modelId),
+            ...(s.downloadedModelId === modelId ? { downloadedModelId: null, isModelLoaded: false } : {}),
+          }));
+        } catch (error) {
+          set({ error: error instanceof Error ? error.message : 'Failed to delete model' });
+        }
+      },
+
+      refreshPresentModels: async () => {
+        const present: string[] = [];
+        for (const m of WHISPER_MODELS) {
+          if (await whisperService.isModelDownloaded(m.id)) present.push(m.id);
+        }
+        set({ presentModelIds: present });
       },
 
       clearError: () => {
