@@ -39,12 +39,23 @@ jest.mock('../../../src/bootstrap/hookRegistry', () => ({
   HOOKS: { audioPreload: 'audio.preload' },
 }));
 
+let mockTextGenerating = false;
+let mockImageGenerating = false;
+jest.mock('../../../src/services/generationService', () => ({
+  generationService: { getState: () => ({ isGenerating: mockTextGenerating }) },
+}));
+jest.mock('../../../src/services/imageGenerationService', () => ({
+  imageGenerationService: { getState: () => ({ isGenerating: mockImageGenerating }) },
+}));
+
 import { preloadSelectedModels, _resetPreloaderForTesting } from '../../../src/services/modelPreloader';
 
 describe('preloadSelectedModels', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     _resetPreloaderForTesting();
+    mockTextGenerating = false;
+    mockImageGenerating = false;
     mockCanLoad.mockReturnValue(true);
     mockGetActiveModels.mockReturnValue({ text: { isLoaded: false }, image: { isLoaded: false } });
     mockAppState = {
@@ -56,21 +67,20 @@ describe('preloadSelectedModels', () => {
     mockWhisperState = { downloadedModelId: 'w1', isModelLoaded: false, loadModel: jest.fn(() => Promise.resolve()) };
   });
 
-  it('warms all selected models in order when they fit', async () => {
+  it('warms text, TTS and STT in order — but never the image model', async () => {
     await preloadSelectedModels();
     expect(mockLoadText).toHaveBeenCalledWith('txt');
-    expect(mockLoadImage).toHaveBeenCalledWith('img');
     expect(mockCallHook).toHaveBeenCalledWith('audio.preload');
     expect(mockWhisperState.loadModel).toHaveBeenCalled();
+    // Image is deliberately excluded from boot preload (loads on demand).
+    expect(mockLoadImage).not.toHaveBeenCalled();
   });
 
-  it('skips a model that would require eviction (does not block lower priority)', async () => {
-    // Image doesn't fit; text/tts/stt still load.
-    mockCanLoad.mockImplementation((spec: any) => spec.key !== 'image');
+  it('never preloads the image model even when it would fit', async () => {
+    mockCanLoad.mockReturnValue(true);
     await preloadSelectedModels();
-    expect(mockLoadText).toHaveBeenCalled();
     expect(mockLoadImage).not.toHaveBeenCalled();
-    expect(mockCallHook).toHaveBeenCalledWith('audio.preload');
+    expect(mockLoadText).toHaveBeenCalled();
     expect(mockWhisperState.loadModel).toHaveBeenCalled();
   });
 
@@ -85,6 +95,29 @@ describe('preloadSelectedModels', () => {
     await preloadSelectedModels();
     await preloadSelectedModels();
     expect(mockLoadText).toHaveBeenCalledTimes(1);
+  });
+
+  it('warms nothing once aborted (user became active)', async () => {
+    const { abortPreload } = require('../../../src/services/modelPreloader');
+    abortPreload();
+    await preloadSelectedModels();
+    expect(mockLoadText).not.toHaveBeenCalled();
+    expect(mockWhisperState.loadModel).not.toHaveBeenCalled();
+  });
+
+  it('warms nothing when a text generation is already active', async () => {
+    mockTextGenerating = true;
+    await preloadSelectedModels();
+    expect(mockLoadText).not.toHaveBeenCalled();
+    expect(mockLoadImage).not.toHaveBeenCalled();
+    expect(mockWhisperState.loadModel).not.toHaveBeenCalled();
+  });
+
+  it('warms nothing when an image generation is already active', async () => {
+    mockImageGenerating = true;
+    await preloadSelectedModels();
+    expect(mockLoadText).not.toHaveBeenCalled();
+    expect(mockLoadImage).not.toHaveBeenCalled();
   });
 
   it('no-ops for unselected modalities', async () => {

@@ -19,7 +19,12 @@ jest.mock('../../../src/services', () => ({
 }));
 
 jest.mock('../../../src/services/modelResidency', () => ({
-  modelResidencyManager: { register: jest.fn(), release: jest.fn() },
+  modelResidencyManager: {
+    register: jest.fn(),
+    release: jest.fn(),
+    makeRoomFor: jest.fn(() => Promise.resolve({ evicted: [], fits: true })),
+    runExclusive: jest.fn((_label: string, fn: () => Promise<unknown>) => fn()),
+  },
 }));
 
 import { useWhisperStore } from '../../../src/stores/whisperStore';

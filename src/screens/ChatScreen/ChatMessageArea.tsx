@@ -177,7 +177,9 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
         />
       )}
       <ModelStatusBar
-        loading={chat.isModelLoading}
+        // While generating for this chat the loading state is shown inside the
+        // reply bubble ("Loading <model>…"), so don't also show it in this bar.
+        loading={chat.isModelLoading && !chat.isGeneratingForThisConversation}
         classifying={chat.isClassifying}
         modelName={chat.loadingModel?.name}
         styles={styles}

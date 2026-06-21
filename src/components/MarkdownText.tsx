@@ -28,6 +28,36 @@ function createLinkRule(onPress: (url: string) => void) {
   );
 }
 
+/** Drop the trailing newline markdown-it appends to code blocks. */
+function trimTrailingNewline(content: string): string {
+  return typeof content === 'string' && content.endsWith('\n') ? content.slice(0, -1) : content;
+}
+
+/**
+ * Make rendered text selectable so users can long-press to select and copy
+ * partial text (selectable propagates to nested inline Text). `textgroup` wraps
+ * all paragraph/inline text; fence/code_block cover code so it can be copied too.
+ */
+const selectableRules = {
+  // rest-param signature (node, children, parent, styles, inheritedStyles) keeps
+  // within the param limit while matching the markdown lib's rule API.
+  textgroup: (node: any, children: any, ...[, styles]: any[]) => (
+    <Text key={node.key} style={styles.textgroup} selectable>
+      {children}
+    </Text>
+  ),
+  fence: (node: any, _children: any, ...[, styles, inheritedStyles = {}]: any[]) => (
+    <Text key={node.key} style={[inheritedStyles, styles.fence]} selectable>
+      {trimTrailingNewline(node.content)}
+    </Text>
+  ),
+  code_block: (node: any, _children: any, ...[, styles, inheritedStyles = {}]: any[]) => (
+    <Text key={node.key} style={[inheritedStyles, styles.code_block]} selectable>
+      {trimTrailingNewline(node.content)}
+    </Text>
+  ),
+};
+
 interface MarkdownTextProps {
   children: string;
   dimmed?: boolean;
@@ -46,7 +76,10 @@ export function MarkdownText({ children, dimmed }: MarkdownTextProps) {
   }, []);
 
   const processed = useMemo(() => preprocessMarkdown(children), [children]);
-  const rules = useMemo(() => ({ link: createLinkRule(handleLinkPress) }), [handleLinkPress]);
+  const rules = useMemo(
+    () => ({ link: createLinkRule(handleLinkPress), ...selectableRules }),
+    [handleLinkPress],
+  );
 
   return (
     <Markdown style={markdownStyles} onLinkPress={handleLinkPress} rules={rules}>

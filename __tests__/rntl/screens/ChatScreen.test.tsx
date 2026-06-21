@@ -88,6 +88,7 @@ jest.mock('../../../src/services/generationService', () => ({
     }),
     isGeneratingFor: jest.fn(() => false),
     enqueueMessage: jest.fn(),
+    drainQueue: jest.fn(),
     removeFromQueue: jest.fn(),
     clearQueue: jest.fn(),
     setQueueProcessor: jest.fn(),

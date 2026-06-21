@@ -40,10 +40,10 @@ const mockEngine = {
     durationSeconds: 2.5,
     waveformData: new Array(200).fill(0.1),
   }),
-  playFromFile: jest.fn().mockResolvedValue(undefined),
   stop: jest.fn(),
   pause: jest.fn(),
   resume: jest.fn(),
+  setSpeed: jest.fn(),
 };
 
 jest.mock('../../../pro/audio/engine', () => ({
@@ -74,6 +74,7 @@ const resetState = () => {
     currentMessageId: null,
     currentAmplitude: 0,
     playbackElapsed: 0,
+    playbackStatus: 'idle',
     playSessionId: 0,
     error: null,
     isReady: true,
@@ -117,7 +118,7 @@ describe('ttsStore', () => {
     });
 
     it('toggles off when same message is already speaking', async () => {
-      useTTSStore.setState({ isSpeaking: true, currentMessageId: 'msg1' });
+      useTTSStore.setState({ playbackStatus: 'playing', currentMessageId: 'msg1' });
 
       await getState().speak('hello', 'msg1');
 
@@ -172,29 +173,6 @@ describe('ttsStore', () => {
       expect(result.path).toBe('/cache/c1/m1.pcm');
       expect(result.waveformData).toHaveLength(200);
       expect(result.durationSeconds).toBe(2.5);
-    });
-  });
-
-  // ── Play Message ──────────────────────────────────────────────────────
-
-  describe('playMessage', () => {
-    it('delegates to engine.playFromFile', async () => {
-      await getState().playMessage('msg1', '/cache/conv1/msg1.pcm');
-
-      expect(mockEngine.playFromFile).toHaveBeenCalledWith('/cache/conv1/msg1.pcm', expect.objectContaining({
-        speed: 1.0,
-        startOffset: 0,
-        messageId: 'msg1',
-      }));
-    });
-
-    it('stops if same message is already playing', async () => {
-      useTTSStore.setState({ isSpeaking: true, currentMessageId: 'msg1' });
-
-      await getState().playMessage('msg1', '/cache/conv1/msg1.pcm');
-
-      expect(mockEngine.stop).toHaveBeenCalled();
-      expect(mockEngine.playFromFile).not.toHaveBeenCalled();
     });
   });
 

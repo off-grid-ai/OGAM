@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
+import { useUiModeStore } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import Icon from 'react-native-vector-icons/Feather';
 import { stripControlTokens } from '../../utils/messageContent';
@@ -11,7 +12,7 @@ import { createStyles } from './styles';
 import { MessageAttachments } from './components/MessageAttachments';
 import { MessageContent } from './components/MessageContent';
 import { GenerationMeta } from './components/GenerationMeta';
-import { ActionMenuSheet, EditSheet } from './components/ActionMenuSheet';
+import { ActionMenuSheet, EditSheet, SelectTextSheet } from './components/ActionMenuSheet';
 import { MarkdownText } from '../MarkdownText';
 import { parseThinkingContent, formatTime, formatDuration, buildMessageData } from './utils';
 import { ThinkingBlock } from './components/ThinkingBlock';
@@ -193,7 +194,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const ttsCanSpeak = callHook<boolean>(HOOKS.audioCanSpeak) ?? false;
+  const interfaceMode = useUiModeStore((s) => s.interfaceMode);
   const [showActionMenu, setShowActionMenu] = useState(false);
+  const [showSelectText, setShowSelectText] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(message.content);
   const [showThinking, setShowThinking] = useState(!!isStreaming);
@@ -226,6 +229,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     setEditedContent(message.content);
     setShowActionMenu(false);
     setTimeout(() => setIsEditing(true), 350);
+  };
+
+  const handleSelectText = () => {
+    setShowActionMenu(false);
+    // Let the action sheet finish closing before opening the select-text sheet.
+    setTimeout(() => setShowSelectText(true), 350);
   };
 
   const handleSaveEdit = () => {
@@ -338,6 +347,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         onRetry={handleRetry}
         onGenerateImage={handleGenerateImage}
         onSpeak={handleSpeak}
+        onSelectText={interfaceMode === 'chat' ? handleSelectText : undefined}
+      />
+      <SelectTextSheet
+        visible={showSelectText}
+        onClose={() => setShowSelectText(false)}
+        content={displayContent}
+        styles={styles}
       />
       <EditSheet
         visible={isEditing}

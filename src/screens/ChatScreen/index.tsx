@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Keyboard, KeyboardAvoidingView, InteractionManager, Platform } from 'react-native';
+import { FlatList, Keyboard, KeyboardAvoidingView, InteractionManager, Platform, View, Dimensions } from 'react-native';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -34,6 +34,27 @@ export const ChatScreen: React.FC = () => {
   const chat = useChatScreen();
   const { goTo, current } = useSpotlightTour();
   const pendingNextRef = useRef<number | null>(null);
+
+  // Android keyboard avoidance. We can't use KeyboardAvoidingView behavior="padding"
+  // here: under edge-to-edge the OS doesn't resize the window, and KeyboardAvoidingView
+  // derives its padding from the keyboard's screenY, which on hide stops at the top of
+  // the gesture nav bar — leaving a residual gap equal to the nav-bar height. Instead we
+  // pad by the real distance from the content bottom to the keyboard top. contentBottom
+  // is the keyboard's screenY when hidden (the bottom of the drawable area, above the nav
+  // bar); on show, pad = contentBottom - keyboardTop. iOS keeps KeyboardAvoidingView.
+  const [androidKbPad, setAndroidKbPad] = useState(0);
+  const contentBottomRef = useRef(Dimensions.get('window').height);
+  useEffect(() => {
+    if (Platform.OS !== 'android') return undefined;
+    const showSub = Keyboard.addListener('keyboardDidShow', e => {
+      setAndroidKbPad(Math.max(contentBottomRef.current - e.endCoordinates.screenY, 0));
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', e => {
+      if (e?.endCoordinates?.screenY) contentBottomRef.current = e.endCoordinates.screenY;
+      setAndroidKbPad(0);
+    });
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
 
   const [sharePromptVisible, setSharePromptVisible] = useState(false);
   useEffect(() => subscribeSharePrompt(() => setSharePromptVisible(true)), []);
@@ -204,9 +225,13 @@ export const ChatScreen: React.FC = () => {
   // Bottom safe-area is applied on the input footer (ChatMessageArea), not here
   // — otherwise the inset stacks on top of the input's own padding and leaves a
   // gap below the bar.
+  const KbWrapper: any = Platform.OS === 'ios' ? KeyboardAvoidingView : View;
+  const kbWrapperProps: any = Platform.OS === 'ios'
+    ? { style: styles.keyboardView, behavior: 'padding', keyboardVerticalOffset: 0 }
+    : { style: [styles.keyboardView, { paddingBottom: androidKbPad }] };
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <KeyboardAvoidingView testID="chat-screen" style={styles.keyboardView} behavior="padding" keyboardVerticalOffset={0}>
+      <KbWrapper testID="chat-screen" {...kbWrapperProps}>
         <ChatHeader
           styles={styles} colors={colors}
           activeConversation={chat.activeConversation}
@@ -258,7 +283,7 @@ export const ChatScreen: React.FC = () => {
           handleSaveImage={chat.handleSaveImage}
           isRemote={chat.activeModelInfo?.isRemote}
         />
-      </KeyboardAvoidingView>
+      </KbWrapper>
       {alertEl}
       <SharePromptSheet visible={sharePromptVisible} onClose={() => setSharePromptVisible(false)} />
       <ProAhaSheet

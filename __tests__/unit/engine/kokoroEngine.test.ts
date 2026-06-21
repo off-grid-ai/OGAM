@@ -26,6 +26,7 @@ const noopHandle: KokoroBridgeHandle = {
   stop: jest.fn(),
   pause: jest.fn(),
   resume: jest.fn(),
+  setSpeed: jest.fn(),
   setKeepAlive: jest.fn(),
 };
 

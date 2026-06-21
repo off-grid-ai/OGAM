@@ -14,11 +14,10 @@ type Setters = {
 
 const idle: LoadingState = { isLoading: false, type: null, modelName: null };
 
-/** Wait for the loading overlay Modal to fully render before blocking the bridge. */
+/** Yield one interaction cycle so the inline "Loading…" card paints before the
+ *  (potentially bridge-blocking) native load starts. No full-screen overlay now. */
 const waitForOverlay = () =>
-  new Promise<void>(resolve =>
-    InteractionManager.runAfterInteractions(() => setTimeout(resolve, 350)),
-  );
+  new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
 
 /** Wait for the picker sheet Modal to animate out before opening a new Modal (alert). */
 const waitForSheetClose = () =>

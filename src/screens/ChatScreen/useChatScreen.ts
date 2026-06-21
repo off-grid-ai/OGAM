@@ -14,7 +14,7 @@ import { liteRTService } from '../../services/litert';
 import { Message, MediaAttachment, Project, DownloadedModel, DebugInfo, RemoteModel, INFERENCE_BACKENDS } from '../../types';
 import { RootStackParamList } from '../../navigation/types';
 import { ensureModelLoadedFn, ensureTextModelForChatFn, handleModelSelectFn, handleUnloadModelFn, initiateModelLoad, useChatImageModelEffects, useChatModelStateSync } from './useChatModelActions';
-import { startGenerationFn, handleSendFn, handleStopFn, handleSelectProjectFn } from './useChatGenerationActions';
+import { startGenerationFn, handleSendFn, handleStopFn, handleSelectProjectFn, dispatchGenerationFn } from './useChatGenerationActions';
 import { handleRetryMessageFn, handleEditMessageFn, handleDeleteConversationFn, handleGenerateImageFromMsgFn } from './useChatMessageHandlers';
 import { getDisplayMessages, getPlaceholderText, ChatMessageItem, StreamingState } from './types';
 import { saveImageToGallery } from './useSaveImage';
@@ -76,7 +76,6 @@ export const useChatScreen = () => {
     activeModelService.loadTextModel(lastTextModelId)
       .catch(() => {})
       .finally(() => { setIsModelLoading(false); setLoadingModel(null); });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Stop TTS when navigating away, app backgrounded, or screen locked.
@@ -100,7 +99,8 @@ export const useChatScreen = () => {
   }, [navigation]);
   const modelLoadStartTimeRef = useRef<number | null>(null);
   const startGenerationRef = useRef<(id: string, text: string) => Promise<void>>(null as any);
-  const addMessageRef = useRef<typeof addMessage>(null as any);
+  // Always-current genDeps for the queue drain (avoids a stale-closure capture).
+  const genDepsRef = useRef<any>(null);
 
   const {
     activeModelId, downloadedModels, settings, activeImageModelId,
@@ -123,7 +123,6 @@ export const useChatScreen = () => {
   } = useChatStore();
 
   const { projects, getProject } = useProjectStore();
-  addMessageRef.current = addMessage;
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
 
@@ -195,6 +194,7 @@ export const useChatScreen = () => {
     createConversation,
     pendingProjectId,
   };
+  genDepsRef.current = genDeps;
 
   const modelDeps = {
     activeModel, activeModelId: activeModelInfo.modelId, activeModelInfo, hasActiveModel, activeConversationId, isStreaming, settings,
@@ -216,9 +216,10 @@ export const useChatScreen = () => {
     });
   }, []);
 
+  // Drain queued messages through the same routing layer as a fresh send.
   const handleQueuedSend = useCallback(async (item: QueuedMessage) => {
-    addMessageRef.current(item.conversationId, { role: 'user', content: item.text, attachments: item.attachments });
-    await startGenerationRef.current(item.conversationId, item.messageText);
+    await dispatchGenerationFn(genDepsRef.current,
+      { text: item.text, attachments: item.attachments, conversationId: item.conversationId }, startGenerationRef.current);
   }, []);
 
   useEffect(() => {
@@ -251,7 +252,8 @@ export const useChatScreen = () => {
   useChatImageModelEffects({ setDownloadedImageModels, settings, activeImageModelId, downloadedModels });
   useChatModelStateSync({ activeModelInfo, activeModelId, activeModel, modelDeps, activeRemoteModel, activeRemoteTextModelId, isModelLoading, setSupportsVision, setSupportsToolCalling, setSupportsThinking });
 
-  const displayMessages = getDisplayMessages(activeConversation?.messages || [], { isThinking, streamingMessage, streamingReasoningContent, isStreamingForThisConversation });
+  const isGeneratingForThisConversation = !!generatingForConversationRef.current && generatingForConversationRef.current === activeConversationId;
+  const displayMessages = getDisplayMessages(activeConversation?.messages || [], { isThinking, streamingMessage, streamingReasoningContent, isStreamingForThisConversation, isModelLoading, loadingModelName: loadingModel?.name, isGeneratingForThisConversation });
 
   useEffect(() => {
     const prev = lastMessageCountRef.current, curr = displayMessages.length;
@@ -267,7 +269,6 @@ export const useChatScreen = () => {
     if (isStreamingForThisConversation) {
       callHook(HOOKS.audioStop);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStreamingForThisConversation]);
 
   // When streaming ends, the pro audio feature speaks the final assistant
@@ -357,7 +358,7 @@ export const useChatScreen = () => {
     imageGenerationProgress: imageGenState.progress,
     imageGenerationStatus: imageGenState.status,
     imagePreviewPath: imageGenState.previewPath,
-    isStreaming, isThinking, isCompacting, hasPendingSettings, handleReloadTextModel, displayMessages, downloadedModels, hasAvailableModels, projects, settings,
+    isStreaming, isThinking, isCompacting, isGeneratingForThisConversation, hasPendingSettings, handleReloadTextModel, displayMessages, downloadedModels, hasAvailableModels, projects, settings,
     navigation, hardwareService,
     handleSend,
     handleStop: () => handleStopFn(genDeps),

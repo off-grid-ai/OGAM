@@ -1326,7 +1326,7 @@ describe('HomeScreen', () => {
   // Loading Overlay
   // ============================================================================
   describe('loading overlay', () => {
-    it('renders loading overlay when loading text model', async () => {
+    it('shows an inline loading indicator (not a blocking overlay) when loading text model', async () => {
       const model = createDownloadedModel({ name: 'Loading Model' });
       useAppStore.setState({ downloadedModels: [model] });
 
@@ -1345,15 +1345,15 @@ describe('HomeScreen', () => {
         fireEvent.press(getByTestId('model-item'));
       });
 
-      // Loading overlay should show - "Loading Text Model" is unique to the overlay
+      // Inline card indicator (background load) — no full-screen overlay.
       await waitFor(() => {
-        expect(queryByText('Loading Text Model')).toBeTruthy();
+        expect(queryByText('Loading...')).toBeTruthy();
       });
-      // Drain any pending RAF-chain timers to prevent leaking into next test
+      expect(queryByText('Loading Text Model')).toBeNull(); // overlay removed
       await act(async () => { await new Promise<void>(r => setTimeout(r, 300)); });
     });
 
-    it('renders loading overlay when loading image model', async () => {
+    it('shows an inline loading indicator (not a blocking overlay) when loading image model', async () => {
       const imageModel = createONNXImageModel({ name: 'Loading Image' });
       useAppStore.setState({ downloadedImageModels: [imageModel] });
 
@@ -1372,9 +1372,9 @@ describe('HomeScreen', () => {
       });
 
       await waitFor(() => {
-        expect(queryByText('Loading Image Model')).toBeTruthy();
+        expect(queryByText('Loading...')).toBeTruthy();
       });
-      // Drain any pending RAF-chain timers (RAF→RAF→setTimeout200ms) to prevent leaking into next test
+      expect(queryByText('Loading Image Model')).toBeNull(); // overlay removed
       await act(async () => { await new Promise<void>(r => setTimeout(r, 300)); });
     });
 

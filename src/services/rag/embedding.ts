@@ -2,6 +2,7 @@ import { initLlama, LlamaContext } from 'llama.rn';
 import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import logger from '../../utils/logger';
+import { modelResidencyManager } from '../modelResidency';
 
 const EMBEDDING_MODEL_FILENAME = 'all-MiniLM-L6-v2-Q8_0.gguf';
 const EMBEDDING_DIMENSION = 384;
@@ -26,16 +27,20 @@ class EmbeddingService {
   private async doLoad(): Promise<void> {
     const modelPath = await this.ensureModelCopied();
     logger.log('[Embedding] Loading embedding model...');
-    this.context = await initLlama({
-      model: modelPath,
-      embedding: true,
-      n_gpu_layers: 0,
-      n_ctx: EMBEDDING_CTX_SIZE,
-      n_batch: EMBEDDING_CTX_SIZE,
-      n_threads: 2,
-      use_mlock: false,
-      use_mmap: true,
-    } as any);
+    // Load through the residency manager's global lock so this small RAG model
+    // never initializes alongside another model load (the single load gateway).
+    this.context = await modelResidencyManager.runExclusive('load:embedding', () =>
+      initLlama({
+        model: modelPath,
+        embedding: true,
+        n_gpu_layers: 0,
+        n_ctx: EMBEDDING_CTX_SIZE,
+        n_batch: EMBEDDING_CTX_SIZE,
+        n_threads: 2,
+        use_mlock: false,
+        use_mmap: true,
+      } as any),
+    );
     logger.log('[Embedding] Model loaded successfully');
   }
 

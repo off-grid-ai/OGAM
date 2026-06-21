@@ -15,6 +15,11 @@ import { planEviction, computeBudgetMB, Resident, ResidentType } from './policy'
 
 type UnloadFn = () => Promise<void>;
 
+/** Keep this much real RAM free for the OS and other apps (never hand it to models). */
+const AVAILABILITY_HEADROOM_MB = 1024;
+/** Hard floor so a small model can always load, even under memory pressure. */
+const MIN_BUDGET_MB = 1024;
+
 interface RegisteredResident extends Resident {
   unload: UnloadFn;
 }
@@ -37,6 +42,35 @@ class ModelResidencyManager {
   private readonly residents = new Map<string, RegisteredResident>();
   private budgetOverrideMB: number | null = null;
 
+  /**
+   * Global FIFO lock. Every model load/unload (text, image, whisper, tts,
+   * classifier) runs through here, so only ONE heavy model operation touches
+   * memory at a time. This is what makes the budget safe to enforce: makeRoomFor
+   * + the actual load + register happen atomically, never racing a second load.
+   *
+   * Re-entrancy rule: an eviction unload (registered via `register`) runs INSIDE
+   * a held lock, so it must be the NON-locking internal unload — it must never
+   * call runExclusive again, or it deadlocks. Public load/unload methods acquire
+   * the lock; the internal `_do…` variants they call do not.
+   */
+  private opChain: Promise<void> = Promise.resolve();
+
+  async runExclusive<T>(label: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.opChain;
+    let release: () => void = () => {};
+    this.opChain = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    await prev.catch(() => {});
+    logger.log(`[ModelResidency] ▶ ${label}`);
+    try {
+      return await fn();
+    } finally {
+      logger.log(`[ModelResidency] ✓ ${label}`);
+      release();
+    }
+  }
+
   /** Force a specific budget (tests / low-memory tuning). null → derive from device RAM. */
   setBudgetOverrideMB(mb: number | null): void {
     this.budgetOverrideMB = mb;
@@ -44,7 +78,17 @@ class ModelResidencyManager {
 
   getBudgetMB(): number {
     if (this.budgetOverrideMB != null) return this.budgetOverrideMB;
-    return computeBudgetMB(hardwareService.getTotalMemoryGB() * 1024);
+    // Two caps, take the smaller:
+    //  - physical: a fraction of total RAM (the absolute ceiling).
+    //  - dynamic: real free RAM right now + what our own resident models would
+    //    free if evicted, minus headroom. This is what stops loading into swap —
+    //    the physical cap alone trusted total RAM the device didn't actually have
+    //    free (the OOM-freeze cause). Floored so a small model always loads.
+    const physicalCapMB = computeBudgetMB(hardwareService.getTotalMemoryGB() * 1024);
+    const availableMB = hardwareService.getAvailableMemoryGB() * 1024;
+    const residentMB = [...this.residents.values()].reduce((sum, r) => sum + r.sizeMB, 0);
+    const dynamicMB = availableMB + residentMB - AVAILABILITY_HEADROOM_MB;
+    return Math.round(Math.max(MIN_BUDGET_MB, Math.min(physicalCapMB, dynamicMB)));
   }
 
   getResidents(): Resident[] {
@@ -90,9 +134,16 @@ class ModelResidencyManager {
    * the evicted keys.
    */
   async makeRoomFor(spec: ResidentSpec): Promise<{ evicted: string[]; fits: boolean }> {
+    // Re-read real free RAM so the budget reflects current pressure, not a stale
+    // boot-time snapshot (other apps may have grabbed memory since).
+    await hardwareService.refreshMemoryInfo().catch(() => {});
     const plan = planEviction(this.getResidents(), spec, this.getBudgetMB());
     if (!plan.fits) {
-      logger.log(`[ModelResidency] ${spec.key} (${spec.sizeMB}MB) does not fit budget ${this.getBudgetMB()}MB even after eviction`);
+      // The model won't fit even after the planned evictions — so DON'T evict.
+      // Otherwise we'd strand the device with nothing (e.g. evict text to load
+      // image, then fail to load image → both gone). The caller blocks the load.
+      logger.log(`[ModelResidency] ${spec.key} (${spec.sizeMB}MB) does not fit budget ${this.getBudgetMB()}MB even after eviction — not evicting`);
+      return { evicted: [], fits: false };
     }
     for (const victim of plan.evict) {
       const reg = this.residents.get(victim.key);
@@ -139,6 +190,7 @@ class ModelResidencyManager {
   _reset(): void {
     this.residents.clear();
     this.budgetOverrideMB = null;
+    this.opChain = Promise.resolve();
   }
 }
 

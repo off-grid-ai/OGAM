@@ -17,7 +17,6 @@ import { useHomeScreenSpotlight } from './hooks/useHomeScreenSpotlight';
 import { ActiveModelsSection } from './components/ActiveModelsSection';
 import { RecentConversations } from './components/RecentConversations';
 import { ModelPickerSheet } from './components/ModelPickerSheet';
-import { LoadingOverlay } from './components/LoadingOverlay';
 
 type HomeScreenProps = {
   navigation: HomeScreenNavigationProp;
@@ -226,8 +225,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         onAddServer={() => navigation.navigate('RemoteServers')}
       />
 
-      {/* Full-screen loading overlay */}
-      <LoadingOverlay loadingState={loadingState} />
+      {/* Model loading happens in the background — the active-model card shows an
+          inline "Loading…" indicator, so no full-screen blocking overlay. */}
 
       {/* Custom Alert Modal */}
       <CustomAlert

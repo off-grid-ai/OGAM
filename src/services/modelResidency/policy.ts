@@ -3,8 +3,10 @@
  *
  * Decides which on-device models stay in RAM. A phone can't hold every model
  * at once, so before loading a model we evict others to fit a RAM budget:
- *  - it's purely budget-driven: models co-reside as long as they fit, so a
- *    high-RAM device can keep e.g. a text + image model loaded together;
+ *  - text and image generation models are mutually exclusive — loading one
+ *    evicts the other (each plus its working set is too heavy to keep both);
+ *  - otherwise it's budget-driven: small models (whisper/tts/classifier)
+ *    co-reside as long as they fit;
  *  - pinned models (e.g. the ~100MB SMOL classifier) are never evicted;
  *  - when the incoming model doesn't fit, evict least-recently-used until it
  *    does (so a constrained device naturally ends up with one model).
@@ -72,6 +74,20 @@ export function planEviction(
       .filter(r => r.key !== incoming.key && !isEvicted(r))
       .reduce((sum, r) => sum + r.sizeMB, 0);
   const incomingCostMB = alreadyResident ? 0 : incoming.sizeMB;
+
+  // 1. Mutual exclusion for generation models: text and image never co-reside.
+  // Each one (plus its runtime working set) is too heavy to keep both warm, so
+  // loading one always evicts the other. Whisper/TTS/classifier are small and
+  // unaffected. Pinned residents are still never evicted.
+  const GENERATION_TYPES = new Set<ResidentType>(['text', 'image']);
+  if (GENERATION_TYPES.has(incoming.type)) {
+    for (const r of current) {
+      if (r.pinned || r.key === incoming.key || isEvicted(r)) continue;
+      if (GENERATION_TYPES.has(r.type) && r.type !== incoming.type) {
+        evict.push(r);
+      }
+    }
+  }
 
   // 2. Evict least-recently-used (non-pinned) until the incoming model fits.
   while (usedMB() + incomingCostMB > budgetMB) {

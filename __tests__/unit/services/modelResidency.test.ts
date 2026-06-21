@@ -25,17 +25,17 @@ describe('computeBudgetMB', () => {
 });
 
 describe('planEviction', () => {
-  it('lets a text + image model co-reside when the budget fits both', () => {
+  it('evicts the image model when loading text, even if both fit the budget (mutual exclusion)', () => {
     const current = [R('img', 'image', 400, 1)];
     const plan = planEviction(current, { key: 'txt', type: 'text', sizeMB: 800 }, 4000);
-    expect(plan.evict).toEqual([]); // 400 + 800 <= 4000, both stay
+    expect(plan.evict.map(e => e.key)).toEqual(['img']); // text & image never co-reside
     expect(plan.fits).toBe(true);
   });
 
-  it('evicts the other generation model only when the budget is too tight for both', () => {
-    const current = [R('img', 'image', 400, 1)];
-    const plan = planEviction(current, { key: 'txt', type: 'text', sizeMB: 800 }, 1000);
-    expect(plan.evict.map(e => e.key)).toEqual(['img']); // 400 + 800 > 1000 → evict
+  it('keeps a small whisper model resident alongside a generation model', () => {
+    const current = [R('whisper', 'whisper', 200, 1)];
+    const plan = planEviction(current, { key: 'txt', type: 'text', sizeMB: 800 }, 4000);
+    expect(plan.evict).toEqual([]); // whisper is not a generation model → not evicted
     expect(plan.fits).toBe(true);
   });
 
@@ -120,5 +120,40 @@ describe('ModelResidencyManager', () => {
     await modelResidencyManager.ensureResident({ key: 'txt', type: 'text', sizeMB: 800 }, { load: async () => {}, unload: async () => {} }, 2);
     expect(unloadClassifier).not.toHaveBeenCalled();
     expect(modelResidencyManager.isResident('smol')).toBe(true);
+  });
+
+  describe('runExclusive (global model lock)', () => {
+    it('serializes operations — a second op waits for the first to finish', async () => {
+      const order: string[] = [];
+      let releaseFirst: () => void = () => {};
+      const first = modelResidencyManager.runExclusive('first', async () => {
+        order.push('first:start');
+        await new Promise<void>(r => { releaseFirst = r; });
+        order.push('first:end');
+      });
+      const second = modelResidencyManager.runExclusive('second', async () => {
+        order.push('second:start');
+      });
+      // Second must not start while first holds the lock.
+      await new Promise(r => setImmediate(r));
+      expect(order).toEqual(['first:start']);
+      releaseFirst();
+      await Promise.all([first, second]);
+      expect(order).toEqual(['first:start', 'first:end', 'second:start']);
+    });
+
+    it('releases the lock even when the operation throws', async () => {
+      await expect(
+        modelResidencyManager.runExclusive('boom', async () => { throw new Error('boom'); }),
+      ).rejects.toThrow('boom');
+      // A following op still runs (lock was released).
+      const ran = await modelResidencyManager.runExclusive('after', async () => 'ok');
+      expect(ran).toBe('ok');
+    });
+
+    it('returns the operation result', async () => {
+      const res = await modelResidencyManager.runExclusive('val', async () => 42);
+      expect(res).toBe(42);
+    });
   });
 });

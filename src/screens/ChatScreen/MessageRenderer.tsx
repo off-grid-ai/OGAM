@@ -67,8 +67,9 @@ export const MessageRenderer: React.FC<MessageRendererProps> = (props) => {
   // Chat Mode: the speak button (pro slot) lives in the meta row.
   const Speak = getSlot(SLOTS.messageSpeakButton);
   const isPlainAssistant = msg.role === 'assistant' && !msg.isSystemInfo && !msg.toolCalls?.length;
+  // No speaker on an in-progress reply (streaming, or the thinking/loading dots).
   const ttsMeta =
-    isPlainAssistant && !isStreamingThis && Speak
+    isPlainAssistant && !isStreamingThis && !(msg as Message).isThinking && Speak
       ? <Speak text={stripControlTokens(msg.content)} messageId={msg.id} />
       : undefined;
 

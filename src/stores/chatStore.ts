@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Message, Conversation, GenerationMeta } from '../types';
 import { stripControlTokens, stripStreamingControlTokens } from '../utils/messageContent';
 import { generateId } from '../utils/generateId';
+import { callHook, HOOKS } from '../bootstrap/hookRegistry';
 
 function nextUpdatedAt(previousUpdatedAt?: string): string {
   const now = Date.now();
@@ -251,6 +252,9 @@ export const useChatStore = create<ChatState>()(
           isStreaming: true,
           isThinking: false,
         }));
+        // Feed the growing answer to pro audio for real-time sentence-by-sentence
+        // TTS (no-op unless voice mode + engine ready; free builds register nothing).
+        callHook(HOOKS.audioOnStreamingToken, get().streamingMessage);
       },
 
       appendToStreamingReasoningContent: (token) => {

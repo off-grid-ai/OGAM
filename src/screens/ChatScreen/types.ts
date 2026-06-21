@@ -14,6 +14,9 @@ export type StreamingState = {
   streamingMessage: string;
   streamingReasoningContent: string;
   isStreamingForThisConversation: boolean;
+  isModelLoading?: boolean;
+  loadingModelName?: string;
+  isGeneratingForThisConversation?: boolean;
 };
 
 let _lastDisplayBranch = '';
@@ -22,6 +25,14 @@ export function getDisplayMessages(
   streaming: StreamingState,
 ): (Message | ChatMessageItem)[] {
   const { isThinking, streamingMessage, streamingReasoningContent, isStreamingForThisConversation } = streaming;
+  // Model still loading for the in-progress reply: show it in the bubble so the
+  // wait is explained ("Loading <model>…") instead of bare dots.
+  if (streaming.isModelLoading && streaming.isGeneratingForThisConversation && !streamingMessage) {
+    return [
+      ...allMessages,
+      { id: 'thinking', role: 'assistant' as const, content: streaming.loadingModelName ? `Loading ${streaming.loadingModelName}...` : 'Loading model...', timestamp: Date.now(), isThinking: true },
+    ];
+  }
   if (isThinking && isStreamingForThisConversation) {
     if (_lastDisplayBranch !== 'thinking') {
       _lastDisplayBranch = 'thinking';

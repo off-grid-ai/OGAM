@@ -90,14 +90,19 @@ export const useWhisperStore = create<WhisperState>()(
 
         try {
           const modelPath = whisperService.getModelPath(downloadedModelId);
-          await whisperService.loadModel(modelPath);
-          set({ isModelLoaded: true, isModelLoading: false, error: null });
-          // Account for the loaded STT model in the residency budget.
           const sizeMB = WHISPER_MODELS.find(m => m.id === downloadedModelId)?.size ?? 200;
-          modelResidencyManager.register(
-            { key: 'whisper', type: 'whisper', sizeMB },
-            () => get().unloadModel(),
-          );
+          // Load through the residency manager's global lock so STT never loads
+          // alongside another model. Make room for it first (evict to budget),
+          // then register so future loads can evict it.
+          await modelResidencyManager.runExclusive('load:whisper', async () => {
+            await modelResidencyManager.makeRoomFor({ key: 'whisper', type: 'whisper', sizeMB });
+            await whisperService.loadModel(modelPath);
+            modelResidencyManager.register(
+              { key: 'whisper', type: 'whisper', sizeMB },
+              () => get().unloadModel(),
+            );
+          });
+          set({ isModelLoaded: true, isModelLoading: false, error: null });
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : 'Failed to load model';
           // If the model file is missing or corrupted, clear the downloaded state

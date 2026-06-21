@@ -19,6 +19,7 @@ import {
   handleSendFn,
   handleStopFn,
   handleSelectProjectFn,
+  dispatchGenerationFn,
 } from '../../../src/screens/ChatScreen/useChatGenerationActions';
 import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
 import { createDownloadedModel } from '../../utils/factories';
@@ -47,6 +48,7 @@ jest.mock('../../../src/services/generationService', () => ({
     generateWithTools: jest.fn(),
     stopGeneration: jest.fn(),
     enqueueMessage: jest.fn(),
+    drainQueue: jest.fn(),
     getState: jest.fn(() => ({ isGenerating: false })),
   },
 }));
@@ -54,6 +56,7 @@ jest.mock('../../../src/services/imageGenerationService', () => ({
   imageGenerationService: {
     generateImage: jest.fn(),
     cancelGeneration: jest.fn(),
+    getState: jest.fn(() => ({ isGenerating: false })),
   },
 }));
 jest.mock('../../../src/services/llm', () => ({
@@ -111,6 +114,7 @@ const mockStopGenerationService = generationService.stopGeneration as jest.Mock;
 const mockEnqueueMessage = generationService.enqueueMessage as jest.Mock;
 const mockGetGenerationState = generationService.getState as jest.Mock;
 const mockGenerateImage = imageGenerationService.generateImage as jest.Mock;
+const mockGetImageGenState = imageGenerationService.getState as jest.Mock;
 const mockCancelGeneration = imageGenerationService.cancelGeneration as jest.Mock;
 const mockGetLoadedModelPath = llmService.getLoadedModelPath as jest.Mock;
 const mockIsModelLoaded = llmService.isModelLoaded as jest.Mock;
@@ -168,6 +172,7 @@ beforeEach(() => {
   mockClearKVCache.mockResolvedValue(undefined);
   mockDeleteGeneratedImage.mockResolvedValue(undefined);
   mockGetGenerationState.mockReturnValue({ isGenerating: false });
+  mockGetImageGenState.mockReturnValue({ isGenerating: false });
   mockEnqueueMessage.mockReturnValue(undefined);
   mockSearchProject.mockResolvedValue({ chunks: [], truncated: false });
   mockGetDocsByProject.mockResolvedValue([]);
@@ -523,6 +528,30 @@ describe('handleSendFn', () => {
     expect(deps.addMessage).toHaveBeenCalledWith('conv-1', expect.objectContaining({ role: 'user' }));
     expect(startGeneration).toHaveBeenCalledWith('conv-1', 'hello');
   });
+
+  it('queues a text message instead of starting one while an image generation is running', async () => {
+    mockGetImageGenState.mockReturnValue({ isGenerating: true });
+    const startGeneration = jest.fn(() => Promise.resolve());
+    const deps = makeGenerationDeps();
+    await handleSendFn(deps, { text: 'hello', imageMode: 'auto', startGeneration, setDebugInfo: jest.fn() });
+    // Never starts a second heavy op; the message is queued and routing is skipped.
+    expect(startGeneration).not.toHaveBeenCalled();
+    expect(mockClassifyIntent).not.toHaveBeenCalled();
+    expect(mockEnqueueMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'conv-1', text: 'hello' }),
+    );
+  });
+
+  it('queues a text message while a text generation is running', async () => {
+    mockGetGenerationState.mockReturnValue({ isGenerating: true });
+    const startGeneration = jest.fn(() => Promise.resolve());
+    const deps = makeGenerationDeps();
+    await handleSendFn(deps, { text: 'hello', imageMode: 'auto', startGeneration, setDebugInfo: jest.fn() });
+    expect(startGeneration).not.toHaveBeenCalled();
+    expect(mockEnqueueMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'conv-1', text: 'hello' }),
+    );
+  });
 });
 
 // ─────────────────────────────────────────────
@@ -550,11 +579,71 @@ describe('handleStopFn', () => {
 // startGenerationFn
 // ─────────────────────────────────────────────
 
+describe('dispatchGenerationFn (single routing layer)', () => {
+  it('routes a text message to text generation even with an image model loaded', async () => {
+    // Regression for the flaky "text question generated an image" bug: a text
+    // model is selected, an image model is loaded. "Hi" classifies as text → must
+    // go to the text executor, never image generation.
+    const startText = jest.fn(() => Promise.resolve());
+    const deps = makeGenerationDeps({ imageModelLoaded: true, activeImageModel: baseImageModel, hasTextModel: true });
+    await dispatchGenerationFn(deps, { text: 'Hi', conversationId: 'conv-1' }, startText);
+    expect(mockGenerateImage).not.toHaveBeenCalled();
+    expect(startText).toHaveBeenCalledWith('conv-1', 'Hi');
+    expect(deps.addMessage).toHaveBeenCalledWith('conv-1', expect.objectContaining({ role: 'user' }));
+  });
+
+  it('routes an image request to image generation', async () => {
+    mockClassifyIntent.mockResolvedValueOnce('image');
+    const startText = jest.fn(() => Promise.resolve());
+    const deps = makeGenerationDeps({
+      imageModelLoaded: true, activeImageModel: baseImageModel,
+      settings: { ...makeGenerationDeps().settings, autoDetectMethod: 'llm' },
+    });
+    await dispatchGenerationFn(deps, { text: 'draw a cat', conversationId: 'conv-1' }, startText);
+    expect(mockGenerateImage).toHaveBeenCalled();
+    expect(startText).not.toHaveBeenCalled();
+  });
+
+  it('honors force image mode', async () => {
+    const startText = jest.fn(() => Promise.resolve());
+    const deps = makeGenerationDeps({ imageModelLoaded: true, activeImageModel: baseImageModel });
+    await dispatchGenerationFn(deps, { text: 'anything', conversationId: 'conv-1', imageMode: 'force' }, startText);
+    expect(mockGenerateImage).toHaveBeenCalled();
+    expect(startText).not.toHaveBeenCalled();
+  });
+
+  it('stashes the message when text routing needs a model that is not chosen', async () => {
+    const startText = jest.fn(() => Promise.resolve());
+    const ensureTextModelForChat = jest.fn(() => Promise.resolve(false));
+    const setPendingMessage = jest.fn();
+    const deps = makeGenerationDeps({
+      imageModelLoaded: true, activeImageModel: baseImageModel,
+      hasTextModel: false, ensureTextModelForChat, setPendingMessage,
+    });
+    await dispatchGenerationFn(deps, { text: 'Hi', conversationId: 'conv-1' }, startText);
+    expect(startText).not.toHaveBeenCalled();
+    expect(mockGenerateImage).not.toHaveBeenCalled();
+    expect(setPendingMessage).toHaveBeenCalledWith('Hi', undefined);
+  });
+});
+
 describe('startGenerationFn', () => {
   it('returns early when no activeModel', async () => {
     const deps = makeGenerationDeps({ activeModel: undefined, hasActiveModel: false });
     await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hi' });
     expect(mockGenerateResponse).not.toHaveBeenCalled();
+  });
+
+  it('never routes to image — image-vs-text is decided upstream in dispatch', async () => {
+    // Regression: startGenerationFn is a pure text executor. Even with an image
+    // model loaded and the text model not resident in RAM, it must generate text,
+    // never an image (routing lives in dispatchGenerationFn).
+    mockGetLoadedModelPath.mockReturnValueOnce(null).mockReturnValue('/path/model.gguf');
+    mockIsModelLoaded.mockReturnValue(true);
+    const deps = makeGenerationDeps({ imageModelLoaded: true, activeImageModel: baseImageModel });
+    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'Hi' });
+    expect(mockGenerateImage).not.toHaveBeenCalled();
+    expect(mockGenerateResponse).toHaveBeenCalled();
   });
 
   it('calls generateResponse and invokes first-token callback', async () => {

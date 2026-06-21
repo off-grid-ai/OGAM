@@ -301,6 +301,17 @@ class GenerationService {
 
   setQueueProcessor(processor: QueueProcessor | null): void { this.queueProcessor = processor; }
 
+  /**
+   * Process queued messages now. Text generation drains its own queue on
+   * completion, but image generation finishes outside this service, so the
+   * image path calls this to release messages that queued behind it. No-op if a
+   * text generation is currently running.
+   */
+  drainQueue(): void {
+    if (this.state.isGenerating) return;
+    this.processNextInQueue();
+  }
+
   private processNextInQueue(): void {
     if (this.state.queuedMessages.length === 0 || !this.queueProcessor) return;
     const all = this.state.queuedMessages;

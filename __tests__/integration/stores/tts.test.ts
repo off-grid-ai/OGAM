@@ -45,10 +45,10 @@ const mockEngine = {
     durationSeconds: 1.5,
     waveformData: new Array(200).fill(0.2),
   }),
-  playFromFile: jest.fn().mockResolvedValue(undefined),
   stop: jest.fn(),
   pause: jest.fn(),
   resume: jest.fn(),
+  setSpeed: jest.fn(),
 };
 
 jest.mock('../../../pro/audio/engine', () => ({
@@ -79,6 +79,7 @@ const resetStore = () => {
     currentMessageId: null,
     currentAmplitude: 0,
     playbackElapsed: 0,
+    playbackStatus: 'idle',
     playSessionId: 0,
     error: null,
     isReady: true,
@@ -136,7 +137,7 @@ describe('TTS integration', () => {
 
   // ── Audio Mode full flow ──────────────────────────────────────────────
 
-  describe('Audio Mode: generateAndSave → playMessage → stop', () => {
+  describe('Audio Mode: generateAndSave → stop', () => {
     beforeEach(() => {
       useTTSStore.setState({
         settings: { ...getState().settings, interfaceMode: 'audio' },
@@ -144,21 +145,13 @@ describe('TTS integration', () => {
     });
 
     it('completes the full Audio Mode flow', async () => {
-      // GenerateAndSave
       const result = await getState().generateAndSave('hello audio', 'conv1', 'msg1');
 
       expect(result.path).toBe('/cache/c1/m1.pcm');
       expect(result.waveformData).toHaveLength(200);
       expect(result.durationSeconds).toBe(1.5);
 
-      // PlayMessage
-      const playPromise = getState().playMessage('msg1', '/cache/c1/m1.pcm');
-      expect(getState().currentMessageId).toBe('msg1');
-
-      await playPromise;
-
-      // StopPlayback
-      getState().stopPlayback();
+      getState().stop();
       expect(mockEngine.stop).toHaveBeenCalled();
     });
   });

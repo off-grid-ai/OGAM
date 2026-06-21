@@ -299,6 +299,28 @@ const createActionStyles = (colors: ThemeColors) => ({
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.xl,
   },
+  selectTextContent: {
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.xl,
+  },
+  selectTextHint: {
+    ...TYPOGRAPHY.meta,
+    color: colors.textMuted,
+    marginBottom: SPACING.sm,
+  },
+  selectTextScroll: {
+    maxHeight: 360,
+    backgroundColor: colors.surface,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: SPACING.md,
+  },
+  selectTextBody: {
+    ...TYPOGRAPHY.body,
+    fontFamily: FONTS.mono,
+    color: colors.text,
+  },
   editInput: {
     ...TYPOGRAPHY.body,
     fontFamily: FONTS.mono,
