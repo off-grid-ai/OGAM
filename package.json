@@ -45,6 +45,7 @@
     "node-html-parser": "^7.1.0",
     "patch-package": "^8.0.1",
     "react": "19.2.0",
+    "react-compiler-runtime": "^1.0.0",
     "react-native": "0.83.1",
     "react-native-audio-api": "^0.11.7",
     "react-native-calendar-events": "^2.2.0",
