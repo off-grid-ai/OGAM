@@ -34,6 +34,9 @@ export const SLOTS = {
   appRoot: 'app.root',
   /** Replaces the chat input row when audio (voice) interface mode is active. */
   chatInputAudioMode: 'chatInput.audioMode',
+  /** Voice-mode empty-state hero (big "tap to speak" mic) shown in the message
+   *  area when an audio conversation has no messages yet. */
+  chatEmptyAudio: 'chatEmpty.audio',
   /** Renders a chat message in audio mode (user/assistant bubbles, thinking,
    *  streaming) — owns the whole audio-mode message presentation. */
   messageAudioMode: 'message.audioMode',

@@ -18,6 +18,7 @@ import { useTheme } from '../../theme';
 import { useAppStore } from '../../stores';
 import { getToolExtensions } from '../../services/tools/extensions';
 import { getRegisteredScreens } from '../../navigation/screenRegistry';
+import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
@@ -113,6 +114,11 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   return (
     <>
       {chat.displayMessages.length === 0 ? (
+        // Voice mode gets its own welcome hero (big "tap to speak" mic); free
+        // builds / chat mode fall back to the standard empty chat.
+        (() => {
+          const AudioEmpty = getSlot(SLOTS.chatEmptyAudio);
+          return AudioEmpty && interfaceMode === 'audio' ? <AudioEmpty /> : (
         <EmptyChat
           styles={styles} colors={colors}
           activeModel={chat.activeModel}
@@ -121,6 +127,8 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           setShowProjectSelector={chat.setShowProjectSelector}
           isRemote={chat.activeModelInfo?.isRemote}
         />
+          );
+        })()
       ) : (
         <FlatList
           ref={flatListRef}
