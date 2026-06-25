@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Keyboard, KeyboardAvoidingView, InteractionManager, Platform } from 'react-native';
+import { FlatList, Keyboard, InteractionManager, Platform } from 'react-native';
+// Edge-to-edge-aware KeyboardAvoidingView. RN's own version leaves a residual
+// padding band on Android under edge-to-edge (adjustResize is a no-op there);
+// this one reconciles the keyboard frame against the navigation-bar inset.
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
