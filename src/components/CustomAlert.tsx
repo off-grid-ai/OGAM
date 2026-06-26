@@ -24,6 +24,7 @@ export interface CustomAlertProps {
   onClose?: () => void;
   loading?: boolean;
   closeLabel?: string;
+  prominentMessage?: boolean;
 }
 
 export const CustomAlert: React.FC<CustomAlertProps> = ({
@@ -34,6 +35,7 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
   onClose,
   loading = false,
   closeLabel = 'Done',
+  prominentMessage = false,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -55,7 +57,7 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
         {loading ? (
           <ActivityIndicator size="small" color={colors.primary} style={styles.loadingIndicator} />
         ) : null}
-        {message ? <Text style={styles.message}>{message}</Text> : null}
+        {message ? <Text style={[styles.message, prominentMessage && styles.messageProminent]}>{message}</Text> : null}
         <View style={styles.buttonContainer}>
           {buttons.map((button, index) => (
             <TouchableOpacity
@@ -91,6 +93,7 @@ export interface AlertState {
   buttons?: AlertButton[];
   loading?: boolean;
   closeLabel?: string;
+  prominentMessage?: boolean;
 }
 
 export const initialAlertState: AlertState = {
@@ -114,19 +117,6 @@ export const showAlert = (
   loading: false,
 });
 
-// Helper function to show loading alert (returns state to set)
-export const showLoadingAlert = (
-  title: string,
-  message?: string,
-  buttons?: AlertButton[],
-): AlertState => ({
-  visible: true,
-  title,
-  message,
-  buttons,
-  loading: true,
-});
-
 // Helper function to hide alert (returns state to set)
 export const hideAlert = (): AlertState => initialAlertState;
 
@@ -146,6 +136,11 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     textAlign: 'center' as const,
     lineHeight: 20,
     marginBottom: SPACING.lg,
+  },
+  messageProminent: {
+    ...TYPOGRAPHY.body,
+    color: colors.text,
+    lineHeight: 22,
   },
   buttonContainer: {
     flexDirection: 'row' as const,

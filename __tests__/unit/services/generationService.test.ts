@@ -1795,4 +1795,30 @@ describe('generationService', () => {
       // reasoningBuffer should have content (flushed)
     });
   });
+
+  describe('drainQueue', () => {
+    it('processes queued messages through the queue processor when idle', () => {
+      const processor = jest.fn().mockResolvedValue(undefined);
+      generationService.setQueueProcessor(processor);
+      generationService.enqueueMessage({ id: 'q1', conversationId: 'c1', text: 'hi', messageText: 'hi' });
+
+      generationService.drainQueue();
+
+      expect(processor).toHaveBeenCalledTimes(1);
+      expect(processor.mock.calls[0][0]).toMatchObject({ text: 'hi', conversationId: 'c1' });
+      expect(generationService.getState().queuedMessages).toHaveLength(0);
+    });
+
+    it('is a no-op while a generation is in progress', () => {
+      const processor = jest.fn().mockResolvedValue(undefined);
+      generationService.setQueueProcessor(processor);
+      generationService.enqueueMessage({ id: 'q1', conversationId: 'c1', text: 'hi', messageText: 'hi' });
+      (generationService as any).state.isGenerating = true;
+
+      generationService.drainQueue();
+
+      expect(processor).not.toHaveBeenCalled();
+      expect(generationService.getState().queuedMessages).toHaveLength(1);
+    });
+  });
 });

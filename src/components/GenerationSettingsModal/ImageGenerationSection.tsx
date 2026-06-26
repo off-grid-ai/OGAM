@@ -232,38 +232,44 @@ const ClassifierModelPicker: React.FC = () => {
 
 const ImageAdvancedSection: React.FC = () => {
   const styles = useThemedStyles(createStyles);
-  const { settings, updateSettings } = useAppStore();
+  const { settings, updateSettings, downloadedModels } = useAppStore();
   const isAutoMode = settings.imageGenerationMode === 'auto';
   const isLlmDetect = settings.autoDetectMethod === 'llm';
+  // Prompt enhancement runs a text model, so it needs one available.
+  const hasTextModel = downloadedModels.length > 0;
+  const enhanceOn = settings.enhanceImagePrompts && hasTextModel;
 
   return (
     <>
       <ImageQualityAdvancedSliders />
       {isAutoMode && <AutoDetectMethodToggle />}
       {isAutoMode && isLlmDetect && <ClassifierModelPicker />}
-      <View style={styles.modeToggleContainer}>
+      <View style={[styles.modeToggleContainer, !hasTextModel && styles.dimmed]}>
         <View style={styles.modeToggleInfo}>
           <Text style={styles.modeToggleLabel}>Enhance Image Prompts</Text>
           <Text style={styles.modeToggleDesc}>
-            {settings.enhanceImagePrompts
-              ? 'Text model refines your prompt before image generation (slower but better results)'
-              : 'Use your prompt directly for image generation (faster)'}
+            {!hasTextModel
+              ? 'Download a text model to enable prompt enhancement'
+              : enhanceOn
+                ? 'Text model refines your prompt before image generation (slower but better results)'
+                : 'Use your prompt directly for image generation (faster)'}
           </Text>
         </View>
         <View style={styles.modeToggleButtons}>
           <TouchableOpacity
-            style={[styles.modeButton, !settings.enhanceImagePrompts && styles.modeButtonActive]}
+            style={[styles.modeButton, !enhanceOn && styles.modeButtonActive]}
             onPress={() => updateSettings({ enhanceImagePrompts: false })}
           >
-            <Text style={[styles.modeButtonText, !settings.enhanceImagePrompts && styles.modeButtonTextActive]}>
+            <Text style={[styles.modeButtonText, !enhanceOn && styles.modeButtonTextActive]}>
               Off
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.modeButton, settings.enhanceImagePrompts && styles.modeButtonActive]}
+            style={[styles.modeButton, enhanceOn && styles.modeButtonActive]}
+            disabled={!hasTextModel}
             onPress={() => updateSettings({ enhanceImagePrompts: true })}
           >
-            <Text style={[styles.modeButtonText, settings.enhanceImagePrompts && styles.modeButtonTextActive]}>
+            <Text style={[styles.modeButtonText, enhanceOn && styles.modeButtonTextActive]}>
               On
             </Text>
           </TouchableOpacity>

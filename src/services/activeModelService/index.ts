@@ -1,7 +1,9 @@
 // ActiveModelService — THE ONLY PLACE models should be loaded/unloaded from.
 import { llmService } from '../llm';
+import { liteRTService } from '../litert';
 import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
 import { hardwareService } from '../hardware';
+import { modelResidencyManager } from '../modelResidency';
 import { useAppStore } from '../../stores';
 import { ONNXImageModel } from '../../types';
 import type {
@@ -36,14 +38,6 @@ class ActiveModelService {
   private loadedImageModelThreads: number | null = null;
   private textLoadPromise: Promise<void> | null = null;
   private imageLoadPromise: Promise<void> | null = null;
-  /** Serializes text model load/unload so only one operation runs at a time. */
-  private textMutex: Promise<void> = Promise.resolve();
-  private acquireTextMutex(): { release: () => void; ready: Promise<void> } {
-    let release: () => void = () => {};
-    const prev = this.textMutex;
-    this.textMutex = new Promise<void>(resolve => { release = resolve; });
-    return { release, ready: prev.catch(() => {}) };
-  }
   getActiveModels(): ActiveModelInfo {
     const store = useAppStore.getState();
     const textModel =
@@ -55,7 +49,10 @@ class ActiveModelService {
     return {
       text: {
         model: textModel,
-        isLoaded: llmService.isModelLoaded(),
+        // Engine-aware: a text model lives in llmService (GGUF) or liteRTService
+        // (LiteRT). Checking only llmService reported a loaded LiteRT model as
+        // not-loaded, which made the preloader and UI treat it as absent.
+        isLoaded: llmService.isModelLoaded() || liteRTService.isModelLoaded(),
         isLoading: this.loadingState.text,
       },
       image: {
@@ -69,6 +66,21 @@ class ActiveModelService {
     const info = this.getActiveModels();
     return info.text.isLoaded || info.image.isLoaded;
   }
+  /**
+   * Whether the currently-active text model accepts audio input directly (no
+   * Whisper STT needed). Engine-aware dispatch lives here so UI/hooks never
+   * branch on engine type: LiteRT reports via its loaded model's audio flag,
+   * llama.cpp via the multimodal projector's reported audio support.
+   */
+  supportsAudioInput(): boolean {
+    const store = useAppStore.getState();
+    const model = store.downloadedModels.find(m => m.id === store.activeModelId);
+    if (!model) return false;
+    if (model.engine === 'litert') {
+      return liteRTService.supportsAudio();
+    }
+    return llmService.isModelLoaded() && !!llmService.getMultimodalSupport()?.audio;
+  }
   getLoadedModelIds(): {
     textModelId: string | null;
     imageModelId: string | null;
@@ -81,61 +93,103 @@ class ActiveModelService {
   getPerformanceStats() {
     return llmService.getPerformanceStats();
   }
+  /**
+   * Whether `modelId` is the currently-loaded text model. Engine-aware: LiteRT
+   * models live in liteRTService, llama/GGUF models in llmService. Checking only
+   * llmService reported a loaded LiteRT model as not-loaded, so the fast path
+   * below missed and re-loaded it (unload+load) every time the chat called
+   * loadTextModel — the "second loader" seen only for LiteRT models.
+   */
+  private isTextModelCurrent(modelId: string): boolean {
+    if (this.loadedTextModelId !== modelId) return false;
+    const model = useAppStore.getState().downloadedModels.find(m => m.id === modelId);
+    return model?.engine === 'litert'
+      ? liteRTService.isModelLoaded()
+      : llmService.isModelLoaded();
+  }
+
   async loadTextModel(
     modelId: string,
     timeoutMs: number = 120000,
   ): Promise<void> {
-    // Fast path — model already loaded
-    if (this.loadedTextModelId === modelId && llmService.isModelLoaded()) {
+    // Fast path — model already loaded (no lock; just sync the store).
+    if (this.isTextModelCurrent(modelId)) {
       const store = useAppStore.getState();
       if (store.activeModelId !== modelId) {
         store.setActiveModelId(modelId);
       }
       return;
     }
-    // Serialize: wait for any in-flight text model operation to finish
-    const mutex = this.acquireTextMutex();
-    try {
-      await mutex.ready;
-      // Re-check after acquiring — a concurrent call may have loaded it
-      if (this.loadedTextModelId === modelId && llmService.isModelLoaded()) {
-        const store = useAppStore.getState();
-        if (store.activeModelId !== modelId) {
-          store.setActiveModelId(modelId);
-        }
-        return;
-      }
+    // Everything else goes through the residency manager's global lock so no two
+    // model operations ever touch memory at once (the single load gateway).
+    await modelResidencyManager.runExclusive(`load:text:${modelId}`, () =>
+      this.doLoadTextModelLocked(modelId, timeoutMs),
+    );
+  }
+  private async doLoadTextModelLocked(
+    modelId: string,
+    timeoutMs: number,
+  ): Promise<void> {
+    // Re-check after acquiring — a queued call may have loaded it already.
+    if (this.isTextModelCurrent(modelId)) {
       const store = useAppStore.getState();
-      const model = store.downloadedModels.find(m => m.id === modelId);
-      if (!model) {
-        throw new Error('Model not found');
+      if (store.activeModelId !== modelId) {
+        store.setActiveModelId(modelId);
       }
-      this.loadingState.text = true;
-      this.notifyListeners();
-      this.textLoadPromise = doLoadTextModel({
-        model,
-        modelId,
-        store,
-        timeoutMs,
-        loadedTextModelId: this.loadedTextModelId,
-        onLoaded: id => {
-          this.loadedTextModelId = id;
-        },
-        onError: () => {
-          this.loadedTextModelId = null;
-        },
-        onFinally: () => {
-          this.loadingState.text = false;
-          this.textLoadPromise = null;
-          this.notifyListeners();
-        },
-      });
-      await this.textLoadPromise;
-    } finally {
-      mutex.release();
+      return;
     }
+    const store = useAppStore.getState();
+    const model = store.downloadedModels.find(m => m.id === modelId);
+    if (!model) {
+      throw new Error('Model not found');
+    }
+    // Use estimated runtime RAM (file size + overhead), not just file size,
+    // so the residency budget reflects the model's real memory footprint.
+    const textSizeMB = Math.round((hardwareService.estimateModelRam(model) || 0) / (1024 * 1024));
+    // Residency manager is authoritative: evict other generation models (and
+    // extras) to fit the RAM budget before loading this text model. The evicted
+    // models' unload fns are the non-locking internal variants (we already hold
+    // the lock here), so this never deadlocks.
+    await modelResidencyManager.makeRoomFor({ key: 'text', type: 'text', sizeMB: textSizeMB });
+    this.loadingState.text = true;
+    this.notifyListeners();
+    this.textLoadPromise = doLoadTextModel({
+      model,
+      modelId,
+      store,
+      timeoutMs,
+      loadedTextModelId: this.loadedTextModelId,
+      onLoaded: id => {
+        this.loadedTextModelId = id;
+        modelResidencyManager.register(
+          { key: 'text', type: 'text', sizeMB: textSizeMB },
+          () => this.doUnloadTextModelLocked(true), // eviction keeps the selection
+        );
+      },
+      onError: () => {
+        this.loadedTextModelId = null;
+      },
+      onFinally: () => {
+        this.loadingState.text = false;
+        this.textLoadPromise = null;
+        this.notifyListeners();
+      },
+    });
+    await this.textLoadPromise;
   }
   async unloadTextModel(): Promise<void> {
+    await modelResidencyManager.runExclusive('unload:text', () =>
+      this.doUnloadTextModelLocked(),
+    );
+  }
+  /**
+   * Non-locking unload core. Safe to call from inside a held lock (eviction).
+   * `keepSelection` is true for residency EVICTION: free the RAM but keep the
+   * model SELECTED (activeModelId) so the UI still shows it and it reloads on
+   * demand — clearing the selection here is what made chat fall back to "Load a
+   * model" and thrash. A user-initiated unload passes false to fully deselect.
+   */
+  private async doUnloadTextModelLocked(keepSelection = false): Promise<void> {
     if (this.textLoadPromise !== null) {
       await this.textLoadPromise;
     }
@@ -151,7 +205,10 @@ class ActiveModelService {
         await llmService.unloadModel();
       }
       this.loadedTextModelId = null;
-      useAppStore.getState().setActiveModelId(null);
+      if (!keepSelection) {
+        useAppStore.getState().setActiveModelId(null);
+      }
+      modelResidencyManager.release('text');
     } finally {
       this.loadingState.text = false;
       this.notifyListeners();
@@ -171,19 +228,34 @@ class ActiveModelService {
         };
       }
     }
-    const totalMemGB = hardwareService.getTotalMemoryGB();
-    if (totalMemGB <= 4 && this.loadedTextModelId && llmService.isModelLoaded()) {
-      await this.unloadTextModel();
-    }
-    const memCheck = await this.checkMemoryForModel(modelId, 'image');
-    if (memCheck.severity === 'critical') {
-      return { canLoad: false, error: memCheck.message };
+    // Residency manager is authoritative for memory: evict other generation
+    // models (and extras) to fit the RAM budget before loading this image
+    // model. (Replaces the old per-load critical-memory gate.) If it can't fit
+    // even after eviction, block the load.
+    const { fits } = await modelResidencyManager.makeRoomFor({
+      key: 'image',
+      type: 'image',
+      sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)),
+    });
+    if (!fits) {
+      return {
+        canLoad: false,
+        error: `Not enough memory to load ${model.name}. Free up space or choose a smaller model.`,
+      };
     }
     return { canLoad: true };
   }
   async loadImageModel(
     modelId: string,
     timeoutMs: number = 180000,
+  ): Promise<void> {
+    await modelResidencyManager.runExclusive(`load:image:${modelId}`, () =>
+      this.doLoadImageModelLocked(modelId, timeoutMs),
+    );
+  }
+  private async doLoadImageModelLocked(
+    modelId: string,
+    timeoutMs: number,
   ): Promise<void> {
     const store = useAppStore.getState();
     const imageThreads = store.settings?.imageThreads ?? 4;
@@ -196,15 +268,6 @@ class ActiveModelService {
         if (store.activeImageModelId !== modelId) {
           store.setActiveImageModelId(modelId);
         }
-        return;
-      }
-    }
-    if (this.imageLoadPromise !== null) {
-      await this.imageLoadPromise;
-      if (
-        this.loadedImageModelId === modelId &&
-        this.loadedImageModelThreads === imageThreads
-      ) {
         return;
       }
     }
@@ -230,6 +293,10 @@ class ActiveModelService {
       onLoaded: (id, threads) => {
         this.loadedImageModelId = id;
         this.loadedImageModelThreads = threads;
+        modelResidencyManager.register(
+          { key: 'image', type: 'image', sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)) },
+          () => this.doUnloadImageModelLocked(true), // eviction keeps the selection
+        );
       },
       onError: () => {
         this.loadedImageModelId = null;
@@ -244,6 +311,16 @@ class ActiveModelService {
     await this.imageLoadPromise;
   }
   async unloadImageModel(): Promise<void> {
+    await modelResidencyManager.runExclusive('unload:image', () =>
+      this.doUnloadImageModelLocked(),
+    );
+  }
+  /**
+   * Non-locking unload core. Safe to call from inside a held lock (eviction).
+   * `keepSelection` true for residency eviction (free RAM, keep the model
+   * selected so it reloads on demand); false for a user-initiated unload.
+   */
+  private async doUnloadImageModelLocked(keepSelection = false): Promise<void> {
     if (this.imageLoadPromise !== null) {
       await this.imageLoadPromise;
     }
@@ -264,7 +341,10 @@ class ActiveModelService {
       }
       this.loadedImageModelId = null;
       this.loadedImageModelThreads = null;
-      store.setActiveImageModelId(null);
+      if (!keepSelection) {
+        store.setActiveImageModelId(null);
+      }
+      modelResidencyManager.release('image');
     } finally {
       this.loadingState.image = false;
       this.notifyListeners();

@@ -981,61 +981,17 @@ describe('IntentClassifier', () => {
           useLLM: true,
           classifierModel,
           onStatusChange,
-          modelLoadingStrategy: 'performance',
         }
       );
 
       expect(result).toBe('image');
       // Should have loaded the classifier model
       expect(mockActiveModelService.loadTextModel).toHaveBeenCalledWith('classifier-model');
-      // Should have restored the original model (performance mode)
+      // Should always restore the original model after classifying
       expect(mockActiveModelService.loadTextModel).toHaveBeenCalledWith('original-model');
       expect(onStatusChange).toHaveBeenCalledWith(expect.stringContaining('Loading'));
       expect(onStatusChange).toHaveBeenCalledWith('Analyzing request...');
       expect(onStatusChange).toHaveBeenCalledWith('Restoring text model...');
-    });
-
-    test('should not swap back in memory mode', async () => {
-      const classifierModel = {
-        id: 'classifier-model',
-        name: 'Classifier',
-        author: 'test',
-        filePath: '/path/to/classifier.gguf',
-        fileName: 'classifier.gguf',
-        fileSize: 1000,
-        quantization: 'Q4',
-        downloadedAt: new Date().toISOString(),
-        engine: 'llama' as const,
-      };
-
-      mockLlmService.getLoadedModelPath.mockReturnValue('/path/to/different.gguf');
-      mockLlmService.isModelLoaded.mockReturnValue(true);
-      mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream) => {
-          onStream?.({ content: 'NO' });
-          return 'NO';
-        }
-      );
-      mockActiveModelService.getActiveModels.mockReturnValue({
-        text: { model: { id: 'original-model' } as any, isLoaded: true, isLoading: false },
-        image: { model: null, isLoaded: false, isLoading: false },
-      });
-      mockActiveModelService.loadTextModel.mockResolvedValue(undefined);
-
-      const result = await intentClassifier.classifyIntent(
-        'something uncertain without clear patterns',
-        {
-          useLLM: true,
-          classifierModel,
-          modelLoadingStrategy: 'memory',
-        }
-      );
-
-      expect(result).toBe('text');
-      // Should have loaded the classifier model
-      expect(mockActiveModelService.loadTextModel).toHaveBeenCalledWith('classifier-model');
-      // Should NOT have restored original model (memory mode)
-      expect(mockActiveModelService.loadTextModel).not.toHaveBeenCalledWith('original-model');
     });
 
     test('should not swap model when classifier model path matches current', async () => {

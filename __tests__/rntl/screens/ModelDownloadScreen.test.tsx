@@ -215,7 +215,9 @@ jest.mock('../../../src/screens/ModelDownloadHelpers', () => {
   };
 });
 
+import { Platform } from 'react-native';
 import { ModelDownloadScreen } from '../../../src/screens/ModelDownloadScreen';
+import { LITERT_PARENT_ID, CURATED_LITERT_ENTRIES } from '../../../src/services/curatedLiteRTRegistry';
 
 const MOCK_FILE = {
   name: 'model-Q4_K_M.gguf',
@@ -557,5 +559,82 @@ describe('ModelDownloadScreen', () => {
     });
 
     expect(mockShowAlert).toHaveBeenCalledWith('No Servers Found', expect.stringContaining('WiFi'));
+  });
+
+  // ===========================================================================
+  // Curated LiteRT models (Android-only)
+  // ===========================================================================
+  describe('LiteRT models', () => {
+    const originalOS = Platform.OS;
+    // E2B (smaller, no confirm) first; E4B (larger) carries the confirm dialog.
+    const e4bEntry = CURATED_LITERT_ENTRIES.find(e => e.confirmDownload)!;
+
+    afterEach(() => { Platform.OS = originalOS; });
+
+    it('renders curated LiteRT cards on Android', async () => {
+      Platform.OS = 'android';
+      const result = render(<ModelDownloadScreen navigation={mockNavigation} />);
+      await flushPromises();
+
+      expect(result.getByTestId('litert-model-0')).toBeTruthy();
+      expect(result.getByTestId('litert-model-1')).toBeTruthy();
+    });
+
+    it('does NOT render LiteRT cards on iOS', async () => {
+      Platform.OS = 'ios';
+      const result = render(<ModelDownloadScreen navigation={mockNavigation} />);
+      await flushPromises();
+
+      expect(result.queryByTestId('litert-model-0')).toBeNull();
+    });
+
+    it('filters out LiteRT models that exceed RAM headroom', async () => {
+      Platform.OS = 'android';
+      // 4GB device: 60% headroom = 2.4GB; both curated models are larger.
+      mockHardwareService.getTotalMemoryGB.mockReturnValue(4);
+      const result = render(<ModelDownloadScreen navigation={mockNavigation} />);
+      await flushPromises();
+
+      expect(result.queryByTestId('litert-model-0')).toBeNull();
+    });
+
+    it('downloading a LiteRT model uses the curated parent id', async () => {
+      Platform.OS = 'android';
+      mockDownloadModelBackground.mockResolvedValue({ downloadId: 7 });
+      const result = render(<ModelDownloadScreen navigation={mockNavigation} />);
+      await flushPromises();
+
+      await act(async () => { fireEvent.press(result.getByTestId('litert-model-0-download')); });
+
+      expect(mockDownloadModelBackground).toHaveBeenCalledWith(
+        LITERT_PARENT_ID,
+        expect.objectContaining({ name: expect.stringMatching(/\.litertlm$/) }),
+      );
+    });
+
+    it('a LiteRT model with a confirm dialog warns before downloading', async () => {
+      Platform.OS = 'android';
+      mockDownloadModelBackground.mockResolvedValue({ downloadId: 8 });
+      const result = render(<ModelDownloadScreen navigation={mockNavigation} />);
+      await flushPromises();
+
+      // litert-model-1 is the larger E4B model that carries confirmDownload.
+      await act(async () => { fireEvent.press(result.getByTestId('litert-model-1-download')); });
+
+      expect(mockShowAlert).toHaveBeenCalledWith(
+        e4bEntry.confirmDownload!.title,
+        e4bEntry.confirmDownload!.message,
+        expect.any(Array),
+      );
+      // Download is gated behind the confirmation, not fired yet.
+      expect(mockDownloadModelBackground).not.toHaveBeenCalled();
+
+      // Confirming proceeds with the download.
+      await act(async () => { fireEvent.press(result.getByTestId('alert-button-Download anyway')); });
+      expect(mockDownloadModelBackground).toHaveBeenCalledWith(
+        LITERT_PARENT_ID,
+        expect.objectContaining({ name: e4bEntry.fileName }),
+      );
+    });
   });
 });

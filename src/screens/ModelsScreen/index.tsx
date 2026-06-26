@@ -1,5 +1,5 @@
 import React, { useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import { MainTabParamList } from '../../navigation/types';
@@ -13,11 +13,18 @@ import { createStyles } from './styles';
 import { initialFilterState } from './constants';
 import { TextModelsTab } from './TextModelsTab';
 import { ImageModelsTab } from './ImageModelsTab';
+import { VoiceModelsUpsell } from './VoiceModelsUpsell';
+import { TranscriptionModelsTab } from './TranscriptionModelsTab';
+import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
 export const ModelsScreen: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const vm = useModelsScreen();
+  // Pro fills this slot with the real voice-models panel (engine + downloads).
+  // The Voice tab always renders; when the slot is empty (free / non-pro) we
+  // show an upsell so users can see what Pro adds.
+  const VoiceModelsPanel = useSlot(SLOTS.modelsScreenVoiceTab);
   const route = useRoute<RouteProp<MainTabParamList, 'ModelsTab'>>();
 
   // Reset to model list view when tab loses focus (e.g. user switches away)
@@ -95,8 +102,12 @@ export const ModelsScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Tab Bar */}
-        <View style={styles.tabBar}>
+        {/* Tab Bar (horizontally scrollable — four tabs don't fit on a phone) */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBar}
+        >
           <TouchableOpacity
             style={styles.tabItem}
             onPress={() => {
@@ -123,7 +134,33 @@ export const ModelsScreen: React.FC = () => {
               {vm.activeTab === 'image' && <View style={styles.tabIndicator} />}
             </TouchableOpacity>
           </AttachStep>
-        </View>
+          <TouchableOpacity
+            style={styles.tabItem}
+            testID="voice-models-tab"
+            onPress={() => {
+              vm.setActiveTab('voice');
+              vm.setFilterState(initialFilterState);
+              vm.setTextFiltersVisible(false);
+              vm.setImageFiltersVisible(false);
+            }}
+          >
+            <Text style={[styles.tabText, vm.activeTab === 'voice' && styles.tabTextActive]}>Voice Models</Text>
+            {vm.activeTab === 'voice' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.tabItem}
+            testID="transcription-models-tab"
+            onPress={() => {
+              vm.setActiveTab('transcription');
+              vm.setFilterState(initialFilterState);
+              vm.setTextFiltersVisible(false);
+              vm.setImageFiltersVisible(false);
+            }}
+          >
+            <Text style={[styles.tabText, vm.activeTab === 'transcription' && styles.tabTextActive]}>Transcription Models</Text>
+            {vm.activeTab === 'transcription' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {/* Text Models Tab */}
@@ -208,6 +245,16 @@ export const ModelsScreen: React.FC = () => {
           isRecommendedModel={vm.isRecommendedModel}
         />
       )}
+
+      {/* Voice Models Tab: pro panel when registered, otherwise an upsell. */}
+      {vm.activeTab === 'voice' && (
+        VoiceModelsPanel
+          ? <VoiceModelsPanel />
+          : <VoiceModelsUpsell onGetPro={() => vm.navigation.navigate('ProDetail')} />
+      )}
+
+      {/* Transcription Models Tab (speech-to-text, core). */}
+      {vm.activeTab === 'transcription' && <TranscriptionModelsTab />}
 
       <CustomAlert {...vm.alertState} onClose={() => vm.setAlertState(hideAlert())} />
     </SafeAreaView>

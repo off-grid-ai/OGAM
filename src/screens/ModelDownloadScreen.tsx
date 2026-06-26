@@ -4,6 +4,7 @@ import {
   Text,
   ScrollView,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,6 +23,12 @@ import { discoverLANServers } from '../services/networkDiscovery';
 import { ModelFile, DownloadedModel, RemoteServer } from '../types';
 import { RootStackParamList } from '../navigation/types';
 import { fetchModelFiles, NetworkSection } from './ModelDownloadHelpers';
+import {
+  LITERT_PARENT_ID,
+  buildCuratedLiteRTFiles,
+  getCuratedLiteRTEntry,
+  CuratedLiteRTEntry,
+} from '../services/curatedLiteRTRegistry';
 import { makeModelKey } from '../utils/modelKey';
 import logger from '../utils/logger';
 
@@ -52,6 +59,39 @@ const RecommendedModelCard: React.FC<RecommendedCardProps> = ({ model, recFile, 
     downloadProgress={progress?.progress}
     isCompatible={model.minRam <= totalRamGB && (!model.maxRam || totalRamGB <= model.maxRam)}
     isTrending={isTrending}
+    onPress={() => {}}
+    onDownload={downloaded ? undefined : onDownload}
+    onCancel={progress ? onCancel : undefined}
+  />
+);
+
+interface LiteRTCardProps {
+  file: ModelFile;
+  index: number;
+  curatedEntry: CuratedLiteRTEntry | undefined;
+  progress: { progress: number } | null | undefined;
+  downloaded: DownloadedModel | undefined;
+  totalRamGB: number;
+  onDownload: () => void;
+  onCancel: () => void;
+}
+
+// Curated LiteRT models surface at the top of the on-device list (Android only;
+// the LiteRT engine is Android-only). They download straight through the same
+// handlers as the GGUF cards — `file.downloadUrl` and the `.litertlm` extension
+// route the request to the LiteRT engine with no extra wiring.
+const LiteRTModelCard: React.FC<LiteRTCardProps> = ({ file, index, curatedEntry, progress, downloaded, totalRamGB, onDownload, onCancel }) => (
+  <ModelCard
+    testID={`litert-model-${index}`}
+    compact
+    model={{ id: LITERT_PARENT_ID, name: curatedEntry?.displayName ?? file.name, author: 'google', description: curatedEntry?.highlight, modelType: 'vision' }}
+    file={file}
+    downloadedModel={downloaded}
+    isDownloaded={!!downloaded}
+    isDownloading={!!progress}
+    downloadProgress={progress?.progress}
+    isCompatible={file.size / (1024 ** 3) < totalRamGB * 0.6}
+    recommended={{ pillLabel: 'Recommended', highlightText: curatedEntry?.highlight }}
     onPress={() => {}}
     onDownload={downloaded ? undefined : onDownload}
     onCancel={progress ? onCancel : undefined}
@@ -217,6 +257,33 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
 
   const totalRamGB = hardwareService.getTotalMemoryGB();
 
+  // Curated LiteRT models — Android-only, filtered to what fits in RAM (same
+  // 60%-of-RAM headroom the model browser uses). No HF fetch needed; the files
+  // come straight from the curated registry with their download URLs baked in.
+  const liteRTFiles = React.useMemo(
+    () => (Platform.OS === 'android'
+      ? buildCuratedLiteRTFiles().filter((f) => f.size / (1024 ** 3) < totalRamGB * 0.6)
+      : []),
+    [totalRamGB],
+  );
+
+  const handleLiteRTDownload = (file: ModelFile) => {
+    const curatedEntry = getCuratedLiteRTEntry(file.name);
+    const proceed = () => handleDownload(LITERT_PARENT_ID, file);
+    if (curatedEntry?.confirmDownload) {
+      setAlertState(showAlert(
+        curatedEntry.confirmDownload.title,
+        curatedEntry.confirmDownload.message,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setAlertState(hideAlert()) },
+          { text: 'Download anyway', style: 'default', onPress: () => { setAlertState(hideAlert()); proceed(); } },
+        ],
+      ));
+      return;
+    }
+    proceed();
+  };
+
   // One best-fit trending model per family (ideal ≈ 40% of RAM, penalise > 75%)
   const trendingModelIds = React.useMemo(() => {
     const score = (m: (typeof RECOMMENDED_MODELS)[number]) => {
@@ -282,6 +349,27 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
             </View>
           </Card>
 
+          {liteRTFiles.map((file, index) => {
+            const modelKey = makeModelKey(LITERT_PARENT_ID, file.name);
+            const dlEntry = storeDownloads[modelKey];
+            const progress = dlEntry && isActiveStatus(dlEntry.status)
+              ? { progress: dlEntry.progress }
+              : null;
+            return (
+              <LiteRTModelCard
+                key={file.name}
+                file={file}
+                index={index}
+                curatedEntry={getCuratedLiteRTEntry(file.name)}
+                progress={progress}
+                downloaded={downloadedModels.find(d => d.id === `${LITERT_PARENT_ID}/${file.name}`)}
+                totalRamGB={totalRamGB}
+                onDownload={() => handleLiteRTDownload(file)}
+                onCancel={() => handleCancelDownload(LITERT_PARENT_ID, file.name)}
+              />
+            );
+          })}
+
           {recommendedModels.filter((model) => modelFiles[model.id]?.length).map((model, index) => {
             const recFile = modelFiles[model.id][0];
             const modelKey = makeModelKey(model.id, recFile.name);
@@ -305,7 +393,7 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
             );
           })}
 
-          {recommendedModels.length === 0 && (
+          {recommendedModels.length === 0 && liteRTFiles.length === 0 && (
             <Card style={styles.warningCard}>
               <Text style={styles.warningTitle}>Limited Compatibility</Text>
               <Text style={styles.warningText}>Your device has limited memory. You can still browse and download smaller models from the model browser.</Text>

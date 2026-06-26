@@ -416,7 +416,7 @@ describe('Generation Flow Integration', () => {
           onComplete: expect.any(Function),
           onError: expect.any(Function),
         }),
-        ['file:///one.png', 'file:///two.png'],
+        { imageUris: ['file:///one.png', 'file:///two.png'], audioUris: [] },
       );
 
       const [, callbacks] = mockLiteRTService.sendMessage.mock.calls[0];

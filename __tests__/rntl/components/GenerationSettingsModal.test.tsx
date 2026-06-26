@@ -90,7 +90,6 @@ const defaultSettings = {
   inferenceBackend: 'cpu' as const,
   gpuLayers: 99,
   flashAttn: false,
-  modelLoadingStrategy: 'memory',
   showGenerationDetails: false,
   classifierModelId: null,
 };
@@ -221,12 +220,12 @@ describe('GenerationSettingsModal', () => {
     );
 
     // Performance settings should be collapsed initially
-    expect(queryByText('Model Loading Strategy')).toBeNull();
+    expect(queryByText('CPU Threads')).toBeNull();
 
     fireEvent.press(getByText('TEXT GENERATION'));
     fireEvent.press(getByTestId('modal-text-advanced-toggle'));
 
-    expect(getByText('Model Loading Strategy')).toBeTruthy();
+    expect(getByText('CPU Threads')).toBeTruthy();
   });
 
   it('calls updateSettings when Reset to Defaults is pressed', () => {
@@ -567,6 +566,8 @@ describe('GenerationSettingsModal', () => {
   });
 
   it('calls updateSettings to enable enhance image prompts', () => {
+    // Enhancement needs a text model available, else the toggle is disabled.
+    mockStoreValues.downloadedModels = [{ id: 'text-1' } as any];
     const { getByText, getByTestId, getAllByText } = render(
       <GenerationSettingsModal {...defaultProps} />,
     );
@@ -629,43 +630,6 @@ describe('GenerationSettingsModal', () => {
   // ============================================================================
   // NEW TESTS: Performance section details
   // ============================================================================
-  it('shows model loading strategy toggle in text generation section', () => {
-    const { getByText, getByTestId } = render(
-      <GenerationSettingsModal {...defaultProps} />,
-    );
-
-    fireEvent.press(getByText('TEXT GENERATION'));
-    fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-
-    expect(getByText('Save Memory')).toBeTruthy();
-    expect(getByText('Fast')).toBeTruthy();
-  });
-
-  it('calls updateSettings when switching model loading strategy to performance', () => {
-    const { getByText, getByTestId } = render(
-      <GenerationSettingsModal {...defaultProps} />,
-    );
-
-    fireEvent.press(getByText('TEXT GENERATION'));
-    fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-    fireEvent.press(getByText('Fast'));
-
-    expect(mockUpdateSettings).toHaveBeenCalledWith({ modelLoadingStrategy: 'performance' });
-  });
-
-  it('calls updateSettings when switching model loading strategy to memory', () => {
-    mockStoreValues.settings = { ...defaultSettings, modelLoadingStrategy: 'performance' };
-
-    const { getByText, getByTestId } = render(
-      <GenerationSettingsModal {...defaultProps} />,
-    );
-
-    fireEvent.press(getByText('TEXT GENERATION'));
-    fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-    fireEvent.press(getByText('Save Memory'));
-
-    expect(mockUpdateSettings).toHaveBeenCalledWith({ modelLoadingStrategy: 'memory' });
-  });
 
   it('shows generation details toggle in text generation section', () => {
     const { getByText } = render(
@@ -821,10 +785,10 @@ describe('GenerationSettingsModal', () => {
 
     fireEvent.press(getByText('TEXT GENERATION'));
     fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-    expect(getByText('Model Loading Strategy')).toBeTruthy();
+    expect(getByText('CPU Threads')).toBeTruthy();
 
     fireEvent.press(getByText('TEXT GENERATION'));
-    expect(queryByText('Model Loading Strategy')).toBeNull();
+    expect(queryByText('CPU Threads')).toBeNull();
   });
 
   // ============================================================================
@@ -853,7 +817,7 @@ describe('GenerationSettingsModal', () => {
     // Find slider elements (mocked as View with testID='slider')
     const { View } = require('react-native');
     const sliders = UNSAFE_getAllByType(View).filter(
-      (v: any) => v.props.testID === 'slider',
+      (v: any) => v.props.testID?.endsWith('-slider'),
     );
     // First slider in image section is imageSteps
     if (sliders.length > 0 && sliders[0].props.onSlidingComplete) {
@@ -863,13 +827,13 @@ describe('GenerationSettingsModal', () => {
   });
 
   it('calls handleSliderComplete on text generation slider (no-op)', () => {
-    const { getByText, getAllByTestId } = render(
+    const { getByText, queryAllByTestId } = render(
       <GenerationSettingsModal {...defaultProps} />,
     );
 
     fireEvent.press(getByText('TEXT GENERATION'));
 
-    const sliders = getAllByTestId('slider');
+    const sliders = queryAllByTestId('slider');
     // onSlidingComplete is a no-op but should not throw
     if (sliders.length > 0 && sliders[0].props.onSlidingComplete) {
       expect(() => sliders[0].props.onSlidingComplete(0.5)).not.toThrow();
@@ -877,13 +841,13 @@ describe('GenerationSettingsModal', () => {
   });
 
   it('calls handleSliderChange on text slider value change', () => {
-    const { getByText, getAllByTestId } = render(
+    const { getByText, queryAllByTestId } = render(
       <GenerationSettingsModal {...defaultProps} />,
     );
 
     fireEvent.press(getByText('TEXT GENERATION'));
 
-    const sliders = getAllByTestId('slider');
+    const sliders = queryAllByTestId('slider');
     if (sliders.length > 0 && sliders[0].props.onValueChange) {
       sliders[0].props.onValueChange(0.5);
       expect(mockUpdateSettings).toHaveBeenCalled();
@@ -1001,7 +965,7 @@ describe('GenerationSettingsModal', () => {
         fireEvent.press(getByText('TEXT GENERATION'));
         fireEvent.press(getByTestId('modal-text-advanced-toggle'));
         // gpuLayersEffective = Math.min(undefined ?? 1, 99) = 1
-        expect(getByText('1')).toBeTruthy();
+        expect(getByTestId('gpu-layers-stepper-value').props.children).toBe('1');
       });
 
       it('does not clamp gpuLayers when turning flash attn On with undefined layers', () => {
@@ -1080,10 +1044,9 @@ describe('GenerationSettingsModal', () => {
         fireEvent.press(getByTestId('modal-text-advanced-toggle'));
         mockUpdateSettings.mockClear();
 
-        const slider = getByTestId('gpu-layers-slider');
-        slider.props.onSlidingComplete(12);
+        fireEvent(getByTestId('gpu-layers-stepper-slider'), 'slidingComplete', 7);
 
-        expect(mockUpdateSettings).toHaveBeenCalledWith({ gpuLayers: 12 });
+        expect(mockUpdateSettings).toHaveBeenCalledWith({ gpuLayers: 7 });
       });
     });
   });

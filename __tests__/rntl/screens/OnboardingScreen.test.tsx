@@ -243,7 +243,7 @@ describe('OnboardingScreen', () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
     fireEvent.press(getByText('Wednesday'));
     expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining('mobile.wednesday.is/hire-ai-native-mobile-squad'),
+      expect.stringContaining('wednesday.is/hire-ai-native-mobile-squad'),
     );
     spy.mockRestore();
   });

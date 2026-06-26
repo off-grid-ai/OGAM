@@ -9,6 +9,7 @@ const mockLiteRTModule = {
   resetConversation: jest.fn(),
   sendMessage: jest.fn(),
   sendMessageWithImages: jest.fn(),
+  sendMessageWithAudio: jest.fn(),
   stopGeneration: jest.fn(),
   unloadModel: jest.fn(),
   getMemoryInfo: jest.fn(),
@@ -141,11 +142,77 @@ describe('LiteRTService', () => {
         onError: jest.fn(),
       };
 
-      await isolatedService.sendMessage('hello', callbacks, ['file:///one.png', 'file:///two.png']);
+      await isolatedService.sendMessage('hello', callbacks, { imageUris: ['file:///one.png', 'file:///two.png'] });
 
       expect(callbacks.onError).not.toHaveBeenCalled();
       expect(isolatedLiteRTModule.sendMessageWithImages).toHaveBeenCalledWith('hello', ['file:///one.png', 'file:///two.png']);
       expect(isolatedLiteRTModule.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('uses sendMessageWithAudio (not images/text) when audio URIs are provided', async () => {
+      const isolatedLiteRTModule = {
+        loadModel: jest.fn(),
+        resetConversation: jest.fn(),
+        sendMessage: jest.fn().mockResolvedValue(undefined),
+        sendMessageWithImages: jest.fn().mockResolvedValue(undefined),
+        sendMessageWithAudio: jest.fn().mockResolvedValue(undefined),
+        stopGeneration: jest.fn(),
+        unloadModel: jest.fn(),
+        getMemoryInfo: jest.fn(),
+      };
+      const isolatedEmitter = { addListener: jest.fn(() => ({ remove: jest.fn() })) };
+
+      jest.resetModules();
+      jest.doMock('react-native', () => ({
+        NativeModules: { LiteRTModule: isolatedLiteRTModule },
+        NativeEventEmitter: jest.fn(() => isolatedEmitter),
+        Platform: {
+          OS: 'android',
+          select: (spec: Record<string, any>) => spec.android ?? spec.default ?? null,
+        },
+      }));
+      jest.doMock('../../../src/utils/logger', () => {
+        const log = jest.fn();
+        return { __esModule: true, default: { log, error: log, warn: log } };
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { liteRTService: isolatedService } = require('../../../src/services/litert');
+      (isolatedService as any).loaded = true;
+
+      const callbacks = {
+        onToken: jest.fn(),
+        onReasoning: jest.fn(),
+        onComplete: jest.fn(),
+        onError: jest.fn(),
+      };
+
+      await isolatedService.sendMessage('hi', callbacks, { audioUris: ['file:///clip.wav'] });
+
+      expect(callbacks.onError).not.toHaveBeenCalled();
+      expect(isolatedLiteRTModule.sendMessageWithAudio).toHaveBeenCalledWith('hi', ['file:///clip.wav']);
+      expect(isolatedLiteRTModule.sendMessageWithImages).not.toHaveBeenCalled();
+      expect(isolatedLiteRTModule.sendMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('supportsAudio', () => {
+    it('returns false when no model is loaded', () => {
+      (liteRTService as any).loaded = false;
+      (liteRTService as any).modelSupportsAudio = true;
+      expect(liteRTService.supportsAudio()).toBe(false);
+    });
+
+    it('returns false when the loaded model has no audio capability', () => {
+      (liteRTService as any).loaded = true;
+      (liteRTService as any).modelSupportsAudio = false;
+      expect(liteRTService.supportsAudio()).toBe(false);
+    });
+
+    it('returns true only when loaded and the model supports audio', () => {
+      (liteRTService as any).loaded = true;
+      (liteRTService as any).modelSupportsAudio = true;
+      expect(liteRTService.supportsAudio()).toBe(true);
     });
   });
 

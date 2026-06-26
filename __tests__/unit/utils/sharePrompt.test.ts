@@ -1,4 +1,5 @@
-import { shouldShowSharePrompt, subscribeSharePrompt, emitSharePrompt } from '../../../src/utils/sharePrompt';
+import { Linking } from 'react-native';
+import { shouldShowSharePrompt, subscribeSharePrompt, emitSharePrompt, shareOnX } from '../../../src/utils/sharePrompt';
 
 describe('shouldShowSharePrompt', () => {
   it('returns false for count 1 (first generation is skipped)', () => {
@@ -31,6 +32,23 @@ describe('shouldShowSharePrompt', () => {
 
   it('returns false for count 0', () => {
     expect(shouldShowSharePrompt(0)).toBe(false);
+  });
+});
+
+describe('shareOnX', () => {
+  const openURL = Linking.openURL as jest.Mock;
+
+  beforeEach(() => {
+    openURL.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('opens the X web intent prefilled with the share text, ready to post', async () => {
+    await shareOnX();
+    expect(openURL).toHaveBeenCalledTimes(1);
+    const url = openURL.mock.calls[0][0];
+    expect(url).toMatch(/^https:\/\/x\.com\/intent\/post\?text=/);
+    expect(decodeURIComponent(url)).toContain('Off Grid AI is background intelligence');
+    expect(decodeURIComponent(url)).toContain('getoffgridai.co/early-access');
   });
 });
 

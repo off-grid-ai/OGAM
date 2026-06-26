@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Switch, Platform, TouchableOpacity } from 'react-native';
-import Slider from '@react-native-community/slider';
+import { SliderSetting } from '../SliderSetting';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { useClearGpuCache } from '../../hooks/useImageGenerationSettings';
@@ -24,70 +24,35 @@ const ClearGPUCacheButton: React.FC = () => {
   );
 };
 
-/** Basic sliders: Image Steps + Image Size */
+/** Basic controls: Image Steps + Image Size */
 export const ImageQualityBasicSliders: React.FC = () => {
-  const { colors } = useTheme();
-  const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
 
   return (
     <>
-      <View style={styles.settingGroup}>
-        <View style={styles.settingHeader}>
-          <Text style={styles.settingLabel}>Image Steps</Text>
-          <Text style={styles.settingValue}>{settings.imageSteps || 8}</Text>
-        </View>
-        <Text style={styles.settingDescription}>
-          4-8 steps for speed, 20-50 for quality
-        </Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={4}
-          maximumValue={50}
-          step={1}
-          value={settings.imageSteps || 8}
-          onSlidingComplete={(value) => updateSettings({ imageSteps: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surfaceLight}
-          thumbTintColor={colors.primary}
-        />
-        <View style={styles.sliderLabels}>
-          <Text style={styles.sliderMinMax}>4</Text>
-          <Text style={styles.sliderMinMax}>50</Text>
-        </View>
-      </View>
+      <SliderSetting
+        testID="image-steps"
+        label="Image Steps"
+        description="4-8 steps for speed, 20-50 for quality"
+        value={settings.imageSteps || 8}
+        min={4} max={50} step={1}
+        onChange={(value) => updateSettings({ imageSteps: value })}
+      />
 
-      <View style={styles.settingGroup}>
-        <View style={styles.settingHeader}>
-          <Text style={styles.settingLabel}>Image Size</Text>
-          <Text style={styles.settingValue}>
-            {settings.imageWidth ?? 256}x{settings.imageHeight ?? 256}
-          </Text>
-        </View>
-        <Text style={styles.settingDescription}>
-          Output resolution (smaller = faster, larger = more detail)
-        </Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={128}
-          maximumValue={512}
-          step={64}
-          value={settings.imageWidth ?? 256}
-          onSlidingComplete={(value) => updateSettings({ imageWidth: value, imageHeight: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surfaceLight}
-          thumbTintColor={colors.primary}
-        />
-        <View style={styles.sliderLabels}>
-          <Text style={styles.sliderMinMax}>128</Text>
-          <Text style={styles.sliderMinMax}>512</Text>
-        </View>
-      </View>
+      <SliderSetting
+        testID="image-size"
+        label="Image Size"
+        description="Output resolution (smaller = faster, larger = more detail)"
+        value={settings.imageWidth ?? 256}
+        min={128} max={512} step={64}
+        formatValue={(v) => `${v}x${v}`}
+        onChange={(value) => updateSettings({ imageWidth: value, imageHeight: value })}
+      />
     </>
   );
 };
 
-/** Advanced sliders: Guidance Scale, Image Threads, GPU Acceleration */
+/** Advanced controls: Guidance Scale, Image Threads, GPU Acceleration */
 export const ImageQualityAdvancedSliders: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -95,55 +60,23 @@ export const ImageQualityAdvancedSliders: React.FC = () => {
 
   return (
     <>
-      <View style={styles.settingGroup}>
-        <View style={styles.settingHeader}>
-          <Text style={styles.settingLabel}>Guidance Scale</Text>
-          <Text style={styles.settingValue}>{(settings.imageGuidanceScale || 7.5).toFixed(1)}</Text>
-        </View>
-        <Text style={styles.settingDescription}>
-          Higher = follows prompt more strictly (5-15 range)
-        </Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1}
-          maximumValue={20}
-          step={0.5}
-          value={settings.imageGuidanceScale || 7.5}
-          onSlidingComplete={(value) => updateSettings({ imageGuidanceScale: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surfaceLight}
-          thumbTintColor={colors.primary}
-        />
-        <View style={styles.sliderLabels}>
-          <Text style={styles.sliderMinMax}>1</Text>
-          <Text style={styles.sliderMinMax}>20</Text>
-        </View>
-      </View>
+      <SliderSetting
+        testID="guidance-scale"
+        label="Guidance Scale"
+        description="Higher = follows prompt more strictly (5-15 range)"
+        value={settings.imageGuidanceScale || 7.5}
+        min={1} max={20} step={0.5} decimals={1}
+        onChange={(value) => updateSettings({ imageGuidanceScale: value })}
+      />
 
-      <View style={styles.settingGroup}>
-        <View style={styles.settingHeader}>
-          <Text style={styles.settingLabel}>Image Threads</Text>
-          <Text style={styles.settingValue}>{settings.imageThreads ?? 4}</Text>
-        </View>
-        <Text style={styles.settingDescription}>
-          CPU threads used for image generation. Takes effect next time the image model loads.
-        </Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1}
-          maximumValue={8}
-          step={1}
-          value={settings.imageThreads ?? 4}
-          onSlidingComplete={(value) => updateSettings({ imageThreads: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surfaceLight}
-          thumbTintColor={colors.primary}
-        />
-        <View style={styles.sliderLabels}>
-          <Text style={styles.sliderMinMax}>1</Text>
-          <Text style={styles.sliderMinMax}>8</Text>
-        </View>
-      </View>
+      <SliderSetting
+        testID="image-threads"
+        label="Image Threads"
+        description="CPU threads used for image generation. Takes effect next time the image model loads."
+        value={settings.imageThreads ?? 4}
+        min={1} max={8} step={1}
+        onChange={(value) => updateSettings({ imageThreads: value })}
+      />
 
       {Platform.OS === 'android' && (
         <View style={styles.settingGroup}>
@@ -157,7 +90,7 @@ export const ImageQualityAdvancedSliders: React.FC = () => {
             />
           </View>
           <Text style={styles.settingDescription}>
-            Use GPU for faster image generation. First run may be slower while optimizing for your device. For best performance, use NPU models on supported Snapdragon devices.
+            Use GPU for faster image generation. First run may be slower while optimizing for your device.
           </Text>
           {(settings.imageUseOpenCL ?? true) && <ClearGPUCacheButton />}
         </View>

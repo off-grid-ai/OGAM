@@ -17,6 +17,8 @@ describe('Tool Registry', () => {
   // ========================================================================
   describe('AVAILABLE_TOOLS', () => {
     it('has exactly 6 tools with correct IDs', () => {
+      // Email + calendar tools are pro-gated and live in the pro package
+      // (EmailCalendarExtension), so they are not part of the core registry.
       expect(AVAILABLE_TOOLS).toHaveLength(6);
 
       const ids = AVAILABLE_TOOLS.map(t => t.id);

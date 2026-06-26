@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Switch, Platform } from 'react-native';
-import Slider from '@react-native-community/slider';
 import { Button } from '../../components/Button';
+import { SliderSetting } from '../../components/SliderSetting';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { CacheType, InferenceBackend, LiteRTBackend, INFERENCE_BACKENDS } from '../../types';
@@ -34,7 +34,6 @@ const ANDROID_BASE_BACKENDS: BackendOption[] = [
 const HTP_BACKEND: BackendOption = { id: INFERENCE_BACKENDS.HTP, label: 'HTP' };
 
 const BackendSelectorSection: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
   const { gpuLayersEffective } = useTextGenerationAdvanced();
@@ -83,26 +82,14 @@ const BackendSelectorSection: React.FC = () => {
       </View>
 
       {showLayers && (
-        <View style={styles.sliderSection}>
-          <View style={styles.sliderHeader}>
-            <Text style={styles.sliderLabel}>
-              {current === INFERENCE_BACKENDS.HTP ? 'NPU Layers' : 'GPU Layers'}
-            </Text>
-            <Text style={styles.sliderValue}>{gpuLayersEffective}</Text>
-          </View>
-          <Slider
-            testID="gpu-layers-slider"
-            style={styles.slider}
-            minimumValue={1}
-            maximumValue={GPU_LAYERS_MAX}
-            step={1}
-            value={gpuLayersEffective}
-            onSlidingComplete={(value) => updateSettings({ gpuLayers: value })}
-            minimumTrackTintColor={colors.primary}
-            maximumTrackTintColor={colors.surface}
-            thumbTintColor={colors.primary}
-          />
-        </View>
+        <SliderSetting
+          testID="gpu-layers-stepper"
+          label={current === INFERENCE_BACKENDS.HTP ? 'NPU Layers' : 'GPU Layers'}
+          description="Layers offloaded to GPU. Higher = faster but may crash on low-VRAM devices."
+          value={gpuLayersEffective}
+          min={1} max={GPU_LAYERS_MAX} step={1}
+          onChange={(value) => updateSettings({ gpuLayers: value })}
+        />
       )}
     </>
   );
@@ -218,140 +205,56 @@ const KvCacheSection: React.FC<{ cacheDisabled: boolean }> = ({ cacheDisabled })
   );
 };
 
-// ─── Model Loading Strategy ───────────────────────────────────────────────────
-
-const ModelLoadingStrategySection: React.FC = () => {
-  const styles = useThemedStyles(createStyles);
-  const { settings, updateSettings } = useAppStore();
-
-  return (
-    <>
-      <View style={styles.toggleRow}>
-        <View style={styles.toggleInfo}>
-          <Text style={styles.toggleLabel}>Model Loading Strategy</Text>
-          <Text style={styles.toggleDesc}>
-            {settings?.modelLoadingStrategy === 'performance'
-              ? 'Keep models loaded for faster responses'
-              : 'Load models on demand to save memory'}
-          </Text>
-        </View>
-      </View>
-      <View style={styles.strategyButtons}>
-        <Button
-          title="Save Memory"
-          variant="secondary"
-          size="small"
-          testID="strategy-memory-button"
-          active={settings?.modelLoadingStrategy === 'memory'}
-          onPress={() => updateSettings({ modelLoadingStrategy: 'memory' })}
-          style={styles.flex1}
-        />
-        <Button
-          title="Fast"
-          variant="secondary"
-          size="small"
-          testID="strategy-performance-button"
-          active={settings?.modelLoadingStrategy === 'performance'}
-          onPress={() => updateSettings({ modelLoadingStrategy: 'performance' })}
-          style={styles.flex1}
-        />
-      </View>
-    </>
-  );
-};
-
 // ─── Llama Advanced ──────────────────────────────────────────────────────────
 
 export const TextGenerationAdvanced: React.FC = () => {
   const { colors } = useTheme();
-  const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
-  const { cacheDisabled, cpuThreadsDisplayValue, cpuThreadsSliderValue } = useTextGenerationAdvanced();
+  const { cacheDisabled, cpuThreadsSliderValue } = useTextGenerationAdvanced();
 
   const trackColor = { false: colors.surfaceLight, true: `${colors.primary}80` };
 
   return (
     <>
-      <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Top P</Text>
-          <Text style={styles.sliderValue}>{(settings?.topP || 0.9).toFixed(2)}</Text>
-        </View>
-        <Text style={styles.sliderDesc}>Nucleus sampling threshold</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={0.1}
-          maximumValue={1}
-          step={0.05}
-          value={settings?.topP || 0.9}
-          onSlidingComplete={(value) => updateSettings({ topP: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
-        />
-      </View>
+      <SliderSetting
+        testID="llama-top-p"
+        label="Top P"
+        description="Nucleus sampling threshold"
+        value={settings?.topP || 0.9}
+        min={0.1} max={1.0} step={0.05} decimals={2}
+        onChange={(value) => updateSettings({ topP: value })}
+      />
 
-      <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Repeat Penalty</Text>
-          <Text style={styles.sliderValue}>{(settings?.repeatPenalty || 1.1).toFixed(2)}</Text>
-        </View>
-        <Text style={styles.sliderDesc}>Penalize repeated tokens</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1.0}
-          maximumValue={2.0}
-          step={0.05}
-          value={settings?.repeatPenalty || 1.1}
-          onSlidingComplete={(value) => updateSettings({ repeatPenalty: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
-        />
-      </View>
+      <SliderSetting
+        testID="repeat-penalty"
+        label="Repeat Penalty"
+        description="Penalize repeated tokens"
+        value={settings?.repeatPenalty || 1.1}
+        min={1.0} max={2.0} step={0.05} decimals={2}
+        onChange={(value) => updateSettings({ repeatPenalty: value })}
+      />
 
-      <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>CPU Threads</Text>
-          <Text style={styles.sliderValue}>{cpuThreadsDisplayValue}</Text>
-        </View>
-        <Text style={styles.sliderDesc}>Parallel threads for inference</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1}
-          maximumValue={12}
-          step={1}
-          value={cpuThreadsSliderValue}
-          onSlidingComplete={(value) => updateSettings({ nThreads: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
-        />
-      </View>
+      <SliderSetting
+        testID="cpu-threads"
+        label="CPU Threads"
+        description="Parallel threads for inference"
+        value={cpuThreadsSliderValue}
+        min={1} max={12} step={1}
+        onChange={(value) => updateSettings({ nThreads: value })}
+      />
 
-      <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Batch Size</Text>
-          <Text style={styles.sliderValue}>{settings?.nBatch || 256}</Text>
-        </View>
-        <Text style={styles.sliderDesc}>Tokens processed per batch</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={32}
-          maximumValue={512}
-          step={32}
-          value={settings?.nBatch || 256}
-          onSlidingComplete={(value) => updateSettings({ nBatch: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
-        />
-      </View>
+      <SliderSetting
+        testID="batch-size"
+        label="Batch Size"
+        description="Tokens processed per batch"
+        value={settings?.nBatch || 256}
+        min={32} max={512} step={32}
+        onChange={(value) => updateSettings({ nBatch: value })}
+      />
 
       <BackendSelectorSection />
       <FlashAttentionSection trackColor={trackColor} />
       <KvCacheSection cacheDisabled={cacheDisabled} />
-      <ModelLoadingStrategySection />
     </>
   );
 };
@@ -359,30 +262,18 @@ export const TextGenerationAdvanced: React.FC = () => {
 // ─── LiteRT Advanced ─────────────────────────────────────────────────────────
 
 export const LiteRTTextGenerationAdvanced: React.FC = () => {
-  const { colors } = useTheme();
-  const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
 
   return (
     <>
-      <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Top P</Text>
-          <Text style={styles.sliderValue}>{(settings?.liteRTTopP || 0.9).toFixed(2)}</Text>
-        </View>
-        <Text style={styles.sliderDesc}>Nucleus sampling threshold</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={0.1}
-          maximumValue={1}
-          step={0.05}
-          value={settings?.liteRTTopP || 0.9}
-          onSlidingComplete={(value) => updateSettings({ liteRTTopP: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
-        />
-      </View>
+      <SliderSetting
+        testID="litert-top-p"
+        label="Top P"
+        description="Nucleus sampling threshold"
+        value={settings?.liteRTTopP || 0.9}
+        min={0.1} max={1.0} step={0.05} decimals={2}
+        onChange={(value) => updateSettings({ liteRTTopP: value })}
+      />
 
       <LiteRTBackendSelectorSection />
     </>

@@ -7,12 +7,13 @@
 
 import React from 'react';
 import { Linking } from 'react-native';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { SharePromptSheet } from '../../../src/components/SharePromptSheet';
 import { useAppStore } from '../../../src/stores/appStore';
-import { GITHUB_URL, SHARE_ON_X_URL } from '../../../src/utils/sharePrompt';
+import { GITHUB_URL } from '../../../src/utils/sharePrompt';
 
 jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as any);
+jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(false);
 
 function renderSheet(onClose = jest.fn()) {
   const result = render(<SharePromptSheet visible={true} onClose={onClose} />);
@@ -41,12 +42,16 @@ describe('SharePromptSheet', () => {
     expect(useAppStore.getState().hasEngagedSharePrompt).toBe(true);
   });
 
-  it('opens Twitter URL, marks engaged, and closes on Share press', () => {
+  it('shares to X, marks engaged, and closes on Share press', async () => {
     const { getByText, onClose } = renderSheet();
     fireEvent.press(getByText('Share on X'));
-    expect(Linking.openURL).toHaveBeenCalledWith(SHARE_ON_X_URL);
+    // Engagement + close are synchronous; the X open resolves on the next tick
+    // (uses the x.com/intent/post web intent).
     expect(onClose).toHaveBeenCalled();
     expect(useAppStore.getState().hasEngagedSharePrompt).toBe(true);
+    await waitFor(() => {
+      expect(Linking.openURL).toHaveBeenCalledWith(expect.stringMatching(/^https:\/\/x\.com\/intent\/post/));
+    });
   });
 
   it('closes without marking engaged on Maybe later press', () => {

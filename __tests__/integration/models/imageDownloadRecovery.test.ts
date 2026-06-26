@@ -36,7 +36,7 @@ const { useDownloadStore } = require('../../../src/stores/downloadStore');
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
 const mockUnzip = unzip as jest.MockedFunction<typeof unzip>;
 
-type DirItem = RNFS.ReadDirItem;
+type DirItem = RNFS.ReadDirResItemT;
 
 function makeFileItem(path: string): DirItem {
   const name = path.split('/').pop() || path;

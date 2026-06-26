@@ -31,7 +31,7 @@ export type SizeFilter = 'all' | 'tiny' | 'small' | 'medium' | 'large';
 export type SortOption = 'recommended' | 'bestfit' | 'size' | 'downloads' | 'recency';
 export type FilterDimension = 'org' | 'type' | 'source' | 'size' | 'quant' | 'sort' | null;
 export type ImageFilterDimension = 'backend' | 'style' | 'sdVersion' | null;
-export type ModelTab = 'text' | 'image';
+export type ModelTab = 'text' | 'image' | 'voice' | 'transcription';
 
 export interface FilterState {
   orgs: string[];

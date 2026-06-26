@@ -22,7 +22,7 @@ import { extractBaseName, findMatchingMmProj } from '../../../../src/services/mo
 import { getCuratedLiteRTEntry, buildCuratedLiteRTUrl, CURATED_LITERT_ENTRIES } from '../../../../src/services/curatedLiteRTRegistry';
 import type RNFS from 'react-native-fs';
 
-function makeFile(name: string): RNFS.ReadDirItem {
+function makeFile(name: string): RNFS.ReadDirResItemT {
   return { name, path: `/models/${name}`, isFile: () => true, size: 1000, isDirectory: () => false, ctime: new Date(), mtime: new Date() };
 }
 

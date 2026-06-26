@@ -59,6 +59,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingVertical: SPACING.sm,
     marginBottom: SPACING.sm,
   },
+  dimmed: { opacity: 0.5 },
   toggleInfo: { flex: 1, marginRight: SPACING.md },
   toggleLabel: { ...TYPOGRAPHY.body, color: colors.text },
   toggleDesc: {

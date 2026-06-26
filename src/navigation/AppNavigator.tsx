@@ -31,7 +31,6 @@ import {
   DocumentPreviewScreen,
   DownloadManagerScreen,
   ModelSettingsScreen,
-  VoiceSettingsScreen,
   DeviceInfoScreen,
   StorageSettingsScreen,
   SecuritySettingsScreen,
@@ -39,11 +38,13 @@ import {
   RemoteServersScreen,
   ProDetailScreen,
   AboutScreen,
+  ToolsScreen,
 } from '../screens';
 import {
   RootStackParamList,
   MainTabParamList,
 } from './types';
+import { getRegisteredScreens } from './screenRegistry';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -230,7 +231,6 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="DocumentPreview" component={DocumentPreviewScreen} />
         <RootStack.Screen name="ModelSettings" component={ModelSettingsScreen} />
         <RootStack.Screen name="RemoteServers" component={RemoteServersScreen} />
-        <RootStack.Screen name="VoiceSettings" component={VoiceSettingsScreen} />
         <RootStack.Screen name="DeviceInfo" component={DeviceInfoScreen} />
         <RootStack.Screen name="StorageSettings" component={StorageSettingsScreen} />
         <RootStack.Screen name="SecuritySettings" component={SecuritySettingsScreen} />
@@ -244,6 +244,7 @@ export const AppNavigator: React.FC = () => {
           component={AboutScreen}
           options={{ headerShown: false }}
         />
+        <RootStack.Screen name="Tools" component={ToolsScreen} />
         <RootStack.Screen
           name="DownloadManager"
           component={DownloadManagerScreen}
@@ -254,6 +255,9 @@ export const AppNavigator: React.FC = () => {
           component={GalleryScreen}
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
         />
+        {getRegisteredScreens().map(s => (
+          <RootStack.Screen key={s.name} name={s.name as any} component={s.component} />
+        ))}
       </RootStack.Navigator>
     </SpotlightTourProvider>
   );

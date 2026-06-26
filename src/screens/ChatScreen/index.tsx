@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Keyboard, KeyboardAvoidingView, InteractionManager, Platform } from 'react-native';
+import { FlatList, Keyboard, InteractionManager, Platform } from 'react-native';
+// Edge-to-edge-aware KeyboardAvoidingView. RN's own version leaves a residual
+// padding band on Android under edge-to-edge (adjustResize is a no-op there);
+// this one reconciles the keyboard frame against the navigation-bar inset.
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { useUiModeStore } from '../../stores/uiModeStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,9 +21,14 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
 import { useChatScreen } from './useChatScreen';
 import { MessageRenderer } from './MessageRenderer';
-import { NoModelScreen, LoadingScreen, ChatHeader } from './ChatScreenComponents';
+import { NoModelScreen, ChatHeader } from './ChatScreenComponents';
 import { ChatModalSection } from './ChatModalSection';
 import { ChatMessageArea } from './ChatMessageArea';
+import { ModelsManagerSheet, ModelRowType } from '../../components/models/ModelsManagerSheet';
+import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
+import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
+import { useWhisperStore } from '../../stores/whisperStore';
+import { WHISPER_MODELS } from '../../services';
 
 function countConversationImages(conv: Conversation | undefined): number {
   return (conv?.messages || []).reduce((n: number, m: Message) =>
@@ -32,7 +42,30 @@ export const ChatScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const chat = useChatScreen();
   const { goTo, current } = useSpotlightTour();
+
+  // Collapsed Models control (shared with home): header "Models" → manager sheet.
+  const [modelsManagerOpen, setModelsManagerOpen] = useState(false);
+  const [whisperOpen, setWhisperOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const voiceSummary = useUiModeStore((s) => s.voiceSummary);
+  const whisperModelId = useWhisperStore((s) => s.downloadedModelId);
+  const modelLabels: Record<ModelRowType, string> = {
+    text: chat.activeModelName ?? chat.activeModel?.name ?? '—',
+    image: chat.activeImageModel?.name ?? '—',
+    voice: voiceSummary ?? '—',
+    speech: WHISPER_MODELS.find((m) => m.id === whisperModelId)?.name ?? '—',
+  };
+  const openModelRow = (type: ModelRowType) => {
+    setModelsManagerOpen(false);
+    if (type === 'text' || type === 'image') chat.setShowModelSelector(true);
+    else if (type === 'speech') setWhisperOpen(true);
+    else setVoiceOpen(true);
+  };
   const pendingNextRef = useRef<number | null>(null);
+
+  // Keyboard avoidance is handled by KeyboardAvoidingView behavior="padding"
+  // (same as main, on both platforms). The custom androidKbPad mechanism that
+  // previously lived here floated the input mid-screen, so it was removed.
 
   const [sharePromptVisible, setSharePromptVisible] = useState(false);
   useEffect(() => subscribeSharePrompt(() => setSharePromptVisible(true)), []);
@@ -72,7 +105,7 @@ export const ChatScreen: React.FC = () => {
       const task = InteractionManager.runAfterInteractions(() => goTo(pending));
       return () => task.cancel();
     }
-  }, []);
+  }, [goTo]);
   const chainingRef = useRef(false);
   // When the spotlight tour stops after step 3, fire the chained step 12
   useEffect(() => {
@@ -126,12 +159,29 @@ export const ChatScreen: React.FC = () => {
     });
     return () => sub.remove();
   }, []);
+
+  // Reset scroll when switching between chat/audio interface modes
+  const interfaceMode = useUiModeStore((s) => s.interfaceMode);
+  const prevModeRef = React.useRef(interfaceMode);
+  React.useEffect(() => {
+    if (prevModeRef.current !== interfaceMode) {
+      prevModeRef.current = interfaceMode;
+      isNearBottomRef.current = true;
+      chat.setShowScrollToBottom(false);
+      // FlatList re-renders via extraData; onContentSizeChange fires and scrolls.
+      // Backup: scroll after items have had time to re-measure.
+      setTimeout(() => { flatListRef.current?.scrollToEnd({ animated: false }); }, 300);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interfaceMode]);
+
   const alertEl = (
     <CustomAlert
       visible={chat.alertState.visible}
       title={chat.alertState.title}
       message={chat.alertState.message}
       buttons={chat.alertState.buttons}
+      prominentMessage={chat.alertState.prominentMessage}
       onClose={() => chat.setAlertState(hideAlert())}
     />
   );
@@ -153,22 +203,9 @@ export const ChatScreen: React.FC = () => {
     );
   }
 
-  if (chat.isModelLoading) {
-    const sizeSource = chat.loadingModel ?? chat.activeModel;
-    const modelName = chat.loadingModel?.name || chat.activeModelName || 'Unknown';
-    return (
-      <>
-        <LoadingScreen
-          styles={styles} colors={colors}
-          navigation={chat.navigation}
-          loadingModelName={modelName}
-          modelSize={sizeSource ? chat.hardwareService.formatModelSize(sizeSource) : ''}
-          hasVision={!!((chat.loadingModel?.engine === 'llama' && chat.loadingModel.mmProjPath) || (chat.activeModel?.engine === 'llama' && chat.activeModel.mmProjPath))}
-        />
-        {alertEl}
-      </>
-    );
-  }
+  // Model loading is shown inline (a "Loading model" bar above the input via
+  // ChatMessageArea), so the chat stays visible while a text/image model loads —
+  // no full-screen takeover.
 
   const handleScroll = (event: any) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -196,22 +233,34 @@ export const ChatScreen: React.FC = () => {
 
   const imageCount = countConversationImages(chat.activeConversation);
 
+  // Bottom safe-area is applied on the input footer (ChatMessageArea), not here
+  // — otherwise the inset stacks on top of the input's own padding and leaves a
+  // gap below the bar.
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView testID="chat-screen" style={styles.keyboardView} behavior="padding" keyboardVerticalOffset={0}>
         <ChatHeader
           styles={styles} colors={colors}
           activeConversation={chat.activeConversation}
-          activeModel={chat.activeModel}
-          activeModelName={chat.activeModelName}
-          activeImageModel={chat.activeImageModel}
           activeProject={chat.activeProject}
           navigation={chat.navigation}
-          setShowModelSelector={chat.setShowModelSelector}
+          onOpenModels={() => setModelsManagerOpen(true)}
           setShowSettingsPanel={chat.setShowSettingsPanel}
           setShowProjectSelector={chat.setShowProjectSelector}
           isRemote={chat.activeModelInfo?.isRemote}
         />
+        <ModelsManagerSheet
+          visible={modelsManagerOpen}
+          onClose={() => setModelsManagerOpen(false)}
+          labels={modelLabels}
+          loadingState={{ isLoading: !!chat.isModelLoading, type: 'text' }}
+          isEjecting={false}
+          hasActiveModel={false}
+          onOpenRow={openModelRow}
+          onEject={() => {}}
+        />
+        <WhisperPickerSheet visible={whisperOpen} onClose={() => setWhisperOpen(false)} />
+        <VoiceModelsSheet visible={voiceOpen} onClose={() => setVoiceOpen(false)} />
         <ChatMessageArea
           flatListRef={flatListRef}
           isNearBottomRef={isNearBottomRef}

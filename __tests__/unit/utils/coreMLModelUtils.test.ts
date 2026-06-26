@@ -18,7 +18,7 @@ import {
 } from '../../../src/utils/coreMLModelUtils';
 
 // ============================================================================
-// Type helpers for RNFS.ReadDirItem
+// Type helpers for RNFS.ReadDirResItemT
 // ============================================================================
 
 interface MockReadDirItem {

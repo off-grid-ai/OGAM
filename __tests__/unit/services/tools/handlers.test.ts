@@ -561,4 +561,5 @@ describe('Tool Handlers', () => {
       expect(result.error).toBeUndefined();
     });
   });
+
 });

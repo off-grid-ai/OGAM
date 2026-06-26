@@ -3,7 +3,7 @@
  * Simple modal showing captured debug logs with copy and clear options
  */
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -27,11 +27,7 @@ interface DebugLogsScreenProps {
 export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClose }) => {
   const theme = useTheme();
   const styles = useThemedStyles(createStyles);
-  const { logs, clearLogs, loadFromStorage } = useDebugLogsStore() as any; // NOSONAR - zustand store
-
-  useEffect(() => {
-    loadFromStorage();
-  }, []);
+  const { logs, clearLogs } = useDebugLogsStore();
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -148,5 +144,3 @@ export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClo
     </Modal>
   );
 };
-
-export default DebugLogsScreen;

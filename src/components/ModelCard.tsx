@@ -79,15 +79,16 @@ function resolveCredibility(
 const DownloadProgressSection: React.FC<{
   progress: number;
   bytes?: { downloaded: number; total: number };
-}> = ({ progress, bytes }) => {
+  tight?: boolean;
+}> = ({ progress, bytes, tight }) => {
   const styles = useThemedStyles(createStyles);
   return (
   <View style={styles.progressSection}>
-    <View style={styles.progressContainer}>
+    <View style={[styles.progressContainer, tight && styles.progressContainerTight]}>
       <View style={styles.progressBar}>
         <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
-      <Text style={styles.progressText}>{Math.round(progress * 100)}%</Text>
+      <Text style={[styles.progressText, tight && styles.progressTextTight]}>{Math.round(progress * 100)}%</Text>
     </View>
     {bytes && bytes.total > 0 && (
       <Text style={styles.progressBytesText}>
@@ -241,7 +242,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
           )}
 
           {isDownloading && (
-            <DownloadProgressSection progress={downloadProgress} bytes={downloadBytes} />
+            <DownloadProgressSection progress={downloadProgress} bytes={downloadBytes} tight={!!recommended} />
           )}
           {failedState && (
             <FailedSection

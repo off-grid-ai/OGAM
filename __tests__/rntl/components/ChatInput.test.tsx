@@ -51,11 +51,24 @@ jest.mock('../../../src/services/documentService', () => ({
 // Mock the stores
 const mockUseWhisperStore = jest.fn();
 const mockUseAppStore = jest.fn();
+const mockUseUiModeStore = jest.fn((selector?: (s: { interfaceMode: string }) => unknown) => {
+  const state = { interfaceMode: 'chat' };
+  return selector ? selector(state) : state;
+});
 
-jest.mock('../../../src/stores', () => ({
-  useWhisperStore: () => mockUseWhisperStore(),
-  useAppStore: () => mockUseAppStore(),
-}));
+jest.mock('../../../src/stores', () => {
+  const useUiModeStore = (selector?: (s: { interfaceMode: string }) => unknown) => mockUseUiModeStore(selector);
+  useUiModeStore.getState = () => ({ interfaceMode: 'chat' });
+  // activeModelService.supportsAudioInput() reads useAppStore.getState(), so the
+  // mocked store needs getState too (mirrors the hook return).
+  const useAppStore = () => mockUseAppStore();
+  useAppStore.getState = () => mockUseAppStore();
+  return {
+    useWhisperStore: () => mockUseWhisperStore(),
+    useAppStore,
+    useUiModeStore,
+  };
+});
 
 // Mock the whisper hook
 const mockUseWhisperTranscription = jest.fn();
@@ -110,6 +123,12 @@ describe('ChatInput', () => {
     mockUseAppStore.mockReturnValue({
       settings: { thinkingEnabled: false },
       updateSettings: jest.fn(),
+      downloadedModels: [],
+      activeModelId: null,
+      // handleImageModeToggle now gates on whether an image model is DOWNLOADED.
+      // With no downloaded image models, toggling shows the 'No Image Model' alert.
+      downloadedImageModels: [],
+      setActiveImageModelId: jest.fn(),
     });
 
     mockUseWhisperTranscription.mockReturnValue({
@@ -1124,6 +1143,35 @@ describe('ChatInput', () => {
       pressImageModeToggle(result);
 
       expect(result.getByText('No Image Model')).toBeTruthy();
+    });
+
+    it('selects the first downloaded image model and cycles mode when one is available', () => {
+      // Gating is now on DOWNLOADED (not loaded) image models. With a downloaded
+      // model present, toggling selects it and proceeds without the alert.
+      const setActiveImageModelId = jest.fn();
+      mockUseAppStore.mockReturnValue({
+        settings: { thinkingEnabled: false },
+        updateSettings: jest.fn(),
+        downloadedModels: [],
+        activeModelId: null,
+        downloadedImageModels: [{ id: 'img-1' }],
+        setActiveImageModelId,
+      });
+
+      const onImageModeChange = jest.fn();
+      const result = render(
+        <ChatInput
+          {...defaultProps}
+          imageModelLoaded={false}
+          onImageModeChange={onImageModeChange}
+        />
+      );
+
+      pressImageModeToggle(result);
+
+      expect(setActiveImageModelId).toHaveBeenCalledWith('img-1');
+      expect(result.queryByText('No Image Model')).toBeNull();
+      expect(onImageModeChange).toHaveBeenCalledWith('force');
     });
   });
 

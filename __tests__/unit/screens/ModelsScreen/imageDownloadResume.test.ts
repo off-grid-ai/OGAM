@@ -47,7 +47,7 @@ const mockMoveCompletedDownload = backgroundDownloadService.moveCompletedDownloa
 const mockRegisterAndNotify = registerAndNotify as jest.MockedFunction<typeof registerAndNotify>;
 const mockGetImageModelsDirectory = modelManager.getImageModelsDirectory as jest.MockedFunction<typeof modelManager.getImageModelsDirectory>;
 
-type DirItem = RNFS.ReadDirItem;
+type DirItem = RNFS.ReadDirResItemT;
 
 const imageModelsDir = '/mock/image_models';
 

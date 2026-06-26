@@ -8,6 +8,7 @@ export type { Intent } from './intentClassifier';
 export { voiceService } from './voiceService';
 export { authService } from './authService';
 export { whisperService, WHISPER_MODELS } from './whisperService';
+// ttsService deprecated — logic absorbed into OuteTTSEngine (src/engine/tts/engines/outetts/).
 export type { TranscriptionResult, TranscriptionCallback } from './whisperService';
 export { backgroundDownloadService } from './backgroundDownloadService';
 export { activeModelService } from './activeModelService';

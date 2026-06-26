@@ -102,10 +102,18 @@ jest.mock('../../../src/services/hardware', () => ({
   },
 }));
 
-// Mock AppSheet to render children directly when visible
+// Mock AppSheet to render children directly when visible. The real AppSheet
+// fires onClosed after its slide-out animation completes; mirror that here (via
+// an effect when it goes invisible) so deferred actions wired through onClosed
+// — closeManagerThen -> runPendingAfterClose, which opens the pickers and the
+// eject alert — actually run in tests.
 jest.mock('../../../src/components/AppSheet', () => ({
-  AppSheet: ({ visible, onClose, title, children }: any) => {
+  AppSheet: ({ visible, onClose, onClosed, title, children }: any) => {
+    const { useEffect } = require('react');
     const { View, Text, TouchableOpacity } = require('react-native');
+    useEffect(() => {
+      if (!visible) { onClosed?.(); }
+    }, [visible, onClosed]);
     if (!visible) return null;
     return (
       <View testID="app-sheet">
@@ -220,6 +228,20 @@ const renderHomeScreen = () => {
   );
 };
 
+// The per-type model cards were replaced by a collapsed summary row that opens a
+// ModelsManagerSheet; the actual text/image pickers are opened from rows in that
+// sheet. These helpers reproduce that flow so picker tests stay focused on the
+// picker behaviour rather than the navigation chrome.
+type RenderResult = ReturnType<typeof renderHomeScreen>;
+const openTextPicker = ({ getByTestId }: RenderResult) => {
+  fireEvent.press(getByTestId('models-summary'));
+  fireEvent.press(getByTestId('models-row-text'));
+};
+const openImagePicker = ({ getByTestId }: RenderResult) => {
+  fireEvent.press(getByTestId('models-summary'));
+  fireEvent.press(getByTestId('models-row-image'));
+};
+
 describe('HomeScreen', () => {
   beforeEach(() => {
     resetStores();
@@ -291,84 +313,68 @@ describe('HomeScreen', () => {
   });
 
   // ============================================================================
-  // Text Model Card
+  // Models Summary Row
+  //
+  // The per-type model cards were replaced by a single collapsed control
+  // (ModelsSummaryRow, testID "models-summary"). It renders a "Models" label,
+  // a chevron, and four captioned type icons: Text, Image, Voice, Speech.
+  // Active types use the primary color; inactive ones are dimmed. There is no
+  // per-model name text on the home screen anymore — the active model name now
+  // lives inside the ModelsManagerSheet rows.
   // ============================================================================
-  describe('text model card', () => {
-    it('shows "No models" when downloadedModels is empty', () => {
-      const { getAllByText } = renderHomeScreen();
-      expect(getAllByText('No models').length).toBeGreaterThanOrEqual(1);
+  describe('models summary row', () => {
+    it('renders the collapsed models summary control', () => {
+      const { getByTestId } = renderHomeScreen();
+      expect(getByTestId('models-summary')).toBeTruthy();
     });
 
-    it('shows "Tap to select" when models downloaded but none active', () => {
-      const model = createDownloadedModel();
-      useAppStore.setState({ downloadedModels: [model] });
-
+    it('shows the Models label and the four type captions', () => {
       const { getByText } = renderHomeScreen();
-      expect(getByText('Tap to select')).toBeTruthy();
+      expect(getByText('Models')).toBeTruthy();
+      expect(getByText('Text')).toBeTruthy();
+      expect(getByText('Image')).toBeTruthy();
+      expect(getByText('Voice')).toBeTruthy();
+      expect(getByText('Speech')).toBeTruthy();
     });
 
-    it('shows active model name when model is loaded', () => {
+    it('shows the active text model name inside the manager sheet (not on the home screen)', () => {
       const model = createDownloadedModel({ name: 'Llama-3.2-3B' });
       useAppStore.setState({
         downloadedModels: [model],
         activeModelId: model.id,
       });
 
-      const { getByText } = renderHomeScreen();
+      const { getByText, getByTestId, queryByText } = renderHomeScreen();
+      // The name is not rendered directly on the home screen.
+      expect(queryByText('Llama-3.2-3B')).toBeNull();
+
+      // Open the manager sheet — the text row shows the active model name.
+      fireEvent.press(getByTestId('models-summary'));
       expect(getByText('Llama-3.2-3B')).toBeTruthy();
     });
 
-    it('shows quantization and estimated RAM for active model', () => {
-      const model = createDownloadedModel({
-        name: 'Phi-3-mini',
-        quantization: 'Q4_K_M',
-        fileSize: 4 * 1024 * 1024 * 1024,
-      });
-      useAppStore.setState({
-        downloadedModels: [model],
-        activeModelId: model.id,
-      });
-
-      const { getByText } = renderHomeScreen();
-      expect(getByText(/Q4_K_M/)).toBeTruthy();
-    });
-  });
-
-  // ============================================================================
-  // Image Model Card
-  // ============================================================================
-  describe('image model card', () => {
-    it('shows active image model name', () => {
+    it('shows the active image model name inside the manager sheet', () => {
       const imageModel = createONNXImageModel({ name: 'SDXL Turbo' });
       useAppStore.setState({
         downloadedImageModels: [imageModel],
         activeImageModelId: imageModel.id,
       });
 
-      const { getByText } = renderHomeScreen();
+      const { getByText, getByTestId } = renderHomeScreen();
+      fireEvent.press(getByTestId('models-summary'));
       expect(getByText('SDXL Turbo')).toBeTruthy();
     });
 
-    it('shows style for active image model', () => {
-      const imageModel = createONNXImageModel({
-        name: 'Dreamshaper',
-        style: 'creative',
-      });
-      useAppStore.setState({
-        downloadedImageModels: [imageModel],
-        activeImageModelId: imageModel.id,
-      });
+    it('opens the manager sheet when the summary row is pressed', () => {
+      const { getByTestId, queryByTestId } = renderHomeScreen();
+      expect(queryByTestId('models-row-text')).toBeNull();
 
-      const { getByText } = renderHomeScreen();
-      expect(getByText(/creative/)).toBeTruthy();
-    });
+      fireEvent.press(getByTestId('models-summary'));
 
-    it('shows "Tap to select" when image models exist but none active', () => {
-      const imageModel = createONNXImageModel();
-      useAppStore.setState({ downloadedImageModels: [imageModel] });
-
-      const { getAllByText } = renderHomeScreen();
-      expect(getAllByText('Tap to select').length).toBeGreaterThanOrEqual(1);
+      expect(queryByTestId('models-row-text')).toBeTruthy();
+      expect(queryByTestId('models-row-image')).toBeTruthy();
+      expect(queryByTestId('models-row-voice')).toBeTruthy();
+      expect(queryByTestId('models-row-speech')).toBeTruthy();
     });
   });
 
@@ -567,37 +573,42 @@ describe('HomeScreen', () => {
   // ============================================================================
   // Eject All Button
   // ============================================================================
+  // The "Eject All Models" button now lives inside the ModelsManagerSheet (opened
+  // from the summary row), and only shows when at least one model is active.
   describe('eject all button', () => {
-    it('shows eject all button when text model is active', async () => {
+    it('shows eject all button in the manager sheet when text model is active', async () => {
       const model = createDownloadedModel();
       useAppStore.setState({
         downloadedModels: [model],
         activeModelId: model.id,
       });
 
-      const { getByText } = renderHomeScreen();
+      const { getByText, getByTestId } = renderHomeScreen();
       await act(async () => {
         await new Promise(resolve => setTimeout(resolve, 0));
       });
+      fireEvent.press(getByTestId('models-summary'));
       expect(getByText('Eject All Models')).toBeTruthy();
     }, 15000);
 
-    it('shows eject all button when image model is active', async () => {
+    it('shows eject all button in the manager sheet when image model is active', async () => {
       const imageModel = createONNXImageModel();
       useAppStore.setState({
         downloadedImageModels: [imageModel],
         activeImageModelId: imageModel.id,
       });
 
-      const { getByText } = renderHomeScreen();
+      const { getByText, getByTestId } = renderHomeScreen();
       await act(async () => {
         await new Promise(resolve => setTimeout(resolve, 0));
       });
+      fireEvent.press(getByTestId('models-summary'));
       expect(getByText('Eject All Models')).toBeTruthy();
     }, 15000);
 
     it('does not show eject button when no models active', () => {
-      const { queryByText } = renderHomeScreen();
+      const { getByTestId, queryByText } = renderHomeScreen();
+      fireEvent.press(getByTestId('models-summary'));
       expect(queryByText('Eject All Models')).toBeNull();
     });
 
@@ -609,6 +620,7 @@ describe('HomeScreen', () => {
       });
 
       const { getByText, getByTestId } = renderHomeScreen();
+      fireEvent.press(getByTestId('models-summary'));
       fireEvent.press(getByText('Eject All Models'));
 
       // CustomAlert should show
@@ -625,6 +637,7 @@ describe('HomeScreen', () => {
       });
 
       const { getByText, getByTestId } = renderHomeScreen();
+      fireEvent.press(getByTestId('models-summary'));
       fireEvent.press(getByText('Eject All Models'));
 
       await act(async () => {
@@ -644,6 +657,7 @@ describe('HomeScreen', () => {
       });
 
       const { getByText, getByTestId, queryByTestId } = renderHomeScreen();
+      fireEvent.press(getByTestId('models-summary'));
       fireEvent.press(getByText('Eject All Models'));
 
       await act(async () => {
@@ -664,6 +678,7 @@ describe('HomeScreen', () => {
       });
 
       const { getByText, getByTestId } = renderHomeScreen();
+      fireEvent.press(getByTestId('models-summary'));
       fireEvent.press(getByText('Eject All Models'));
       fireEvent.press(getByTestId('alert-button-Cancel'));
 
@@ -772,8 +787,10 @@ describe('HomeScreen', () => {
   // ============================================================================
   // Estimated RAM Display
   // ============================================================================
+  // The estimated RAM per model is now shown in the picker items rather than on a
+  // home-screen card (the home screen only shows the collapsed summary row).
   describe('estimated RAM display', () => {
-    it('shows estimated RAM for active text model in card', () => {
+    it('shows estimated RAM for a text model in the picker', () => {
       const model = createDownloadedModel({
         name: 'Test Model',
         fileSize: 4 * 1024 * 1024 * 1024,
@@ -783,11 +800,12 @@ describe('HomeScreen', () => {
         activeModelId: model.id,
       });
 
-      const { getByText } = renderHomeScreen();
-      expect(getByText(/6\.0 GB/)).toBeTruthy();
+      const result = renderHomeScreen();
+      openTextPicker(result);
+      expect(result.getByText(/6\.0 GB/)).toBeTruthy();
     });
 
-    it('shows estimated RAM for active image model in card', () => {
+    it('shows estimated RAM for an image model in the picker', () => {
       const imageModel = createONNXImageModel({
         name: 'Test Image Model',
         size: 2 * 1024 * 1024 * 1024,
@@ -797,60 +815,55 @@ describe('HomeScreen', () => {
         activeImageModelId: imageModel.id,
       });
 
-      const { getByText } = renderHomeScreen();
-      expect(getByText(/3\.6 GB/)).toBeTruthy();
+      const result = renderHomeScreen();
+      openImagePicker(result);
+      expect(result.getByText(/3\.6 GB/)).toBeTruthy();
     });
   });
 
   // ============================================================================
   // Model Picker Sheet
   // ============================================================================
+  // Pickers are opened from rows in the ModelsManagerSheet (see openTextPicker /
+  // openImagePicker). The ModelPickerSheet itself is unchanged.
   describe('model picker sheet', () => {
-    it('opens text model picker when text card is pressed', () => {
+    it('opens text model picker when the text manager row is pressed', () => {
       const model = createDownloadedModel({ name: 'Llama' });
       useAppStore.setState({ downloadedModels: [model] });
 
-      const { getByText, queryByTestId } = renderHomeScreen();
-      expect(queryByTestId('app-sheet')).toBeNull();
+      const result = renderHomeScreen();
+      const { queryByText, queryAllByTestId } = result;
+      // No picker open yet (manager sheet is not open either).
+      expect(queryByText('Browse more models')).toBeNull();
 
-      // Press the "Tap to select" text model card
-      fireEvent.press(getByText('Tap to select'));
+      openTextPicker(result);
 
-      expect(queryByTestId('app-sheet')).toBeTruthy();
-      expect(queryByTestId('app-sheet-title')?.props.children).toBe('Text Models');
+      // Picker sheet shows its title (manager sheet has closed).
+      expect(queryAllByTestId('app-sheet-title').map(n => n.props.children)).toContain('Text Models');
     });
 
-    it('opens image model picker when image card is pressed', () => {
+    it('opens image model picker when the image manager row is pressed', () => {
       const imageModel = createONNXImageModel({ name: 'TestImg' });
       useAppStore.setState({ downloadedImageModels: [imageModel] });
 
-      const { getByTestId, queryByTestId } = renderHomeScreen();
+      const result = renderHomeScreen();
+      openImagePicker(result);
 
-      fireEvent.press(getByTestId('image-model-card'));
-
-      expect(queryByTestId('app-sheet')).toBeTruthy();
-      expect(queryByTestId('app-sheet-title')?.props.children).toBe('Image Models');
+      expect(result.queryAllByTestId('app-sheet-title').map(n => n.props.children)).toContain('Image Models');
     });
 
     it('shows "No text models available" when picker opened with no models', () => {
-      const { getByText, queryByText } = renderHomeScreen();
+      const result = renderHomeScreen();
+      openTextPicker(result);
 
-      // Use "Select Model" button for models-exist case, but for no-models case
-      // the card shows "No models" - press the Text card area
-      // Since our mock AnimatedPressable wraps with TouchableOpacity, we can press it
-
-      // Open text picker - the text model card area
-      fireEvent.press(getByText('Text'));
-
-      expect(queryByText('No text models available')).toBeTruthy();
+      expect(result.queryByText('No text models available')).toBeTruthy();
     });
 
     it('shows "No image models available" when image picker opened with no models', () => {
-      const { getByTestId, queryByText } = renderHomeScreen();
+      const result = renderHomeScreen();
+      openImagePicker(result);
 
-      fireEvent.press(getByTestId('image-model-card'));
-
-      expect(queryByText('No image models available')).toBeTruthy();
+      expect(result.queryByText('No image models available')).toBeTruthy();
     });
 
     it('shows model items in text picker', () => {
@@ -858,22 +871,22 @@ describe('HomeScreen', () => {
       const model2 = createDownloadedModel({ name: 'Model Beta' });
       useAppStore.setState({ downloadedModels: [model1, model2] });
 
-      const { getByText, getAllByTestId } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
+      const result = renderHomeScreen();
+      openTextPicker(result);
 
-      expect(getAllByTestId('model-item').length).toBe(2);
-      expect(getByText('Model Alpha')).toBeTruthy();
-      expect(getByText('Model Beta')).toBeTruthy();
+      expect(result.getAllByTestId('model-item').length).toBe(2);
+      expect(result.getByText('Model Alpha')).toBeTruthy();
+      expect(result.getByText('Model Beta')).toBeTruthy();
     });
 
     it('shows model items in image picker', () => {
       const imageModel = createONNXImageModel({ name: 'SD Turbo' });
       useAppStore.setState({ downloadedImageModels: [imageModel] });
 
-      const { getByTestId, getByText } = renderHomeScreen();
-      fireEvent.press(getByTestId('image-model-card'));
+      const result = renderHomeScreen();
+      openImagePicker(result);
 
-      expect(getByText('SD Turbo')).toBeTruthy();
+      expect(result.getByText('SD Turbo')).toBeTruthy();
     });
 
     it('shows unload button when text model is active', () => {
@@ -883,10 +896,10 @@ describe('HomeScreen', () => {
         activeModelId: model.id,
       });
 
-      const { getByText, queryByTestId } = renderHomeScreen();
-      fireEvent.press(getByText('Active Model'));
+      const result = renderHomeScreen();
+      openTextPicker(result);
 
-      expect(queryByTestId('unload-text-model-button')).toBeTruthy();
+      expect(result.queryByTestId('unload-text-model-button')).toBeTruthy();
     });
 
     it('shows "Unload current model" when image model is active', () => {
@@ -896,57 +909,57 @@ describe('HomeScreen', () => {
         activeImageModelId: imageModel.id,
       });
 
-      const { getByTestId, queryByText } = renderHomeScreen();
-      fireEvent.press(getByTestId('image-model-card'));
+      const result = renderHomeScreen();
+      openImagePicker(result);
 
-      expect(queryByText('Unload current model')).toBeTruthy();
+      expect(result.queryByText('Unload current model')).toBeTruthy();
     });
 
-    it('shows check icon for active text model', () => {
+    it('shows model item for active text model', () => {
       const model = createDownloadedModel({ name: 'Checked Model' });
       useAppStore.setState({
         downloadedModels: [model],
         activeModelId: model.id,
       });
 
-      const { getByText, getByTestId } = renderHomeScreen();
-      fireEvent.press(getByText('Checked Model'));
+      const result = renderHomeScreen();
+      openTextPicker(result);
 
       // The model item should exist
-      expect(getByTestId('model-item')).toBeTruthy();
+      expect(result.getByTestId('model-item')).toBeTruthy();
     });
 
     it('closes picker when close button pressed', () => {
       const model = createDownloadedModel();
       useAppStore.setState({ downloadedModels: [model] });
 
-      const { getByText, queryByTestId, getByTestId } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
+      const result = renderHomeScreen();
+      openTextPicker(result);
 
-      expect(queryByTestId('app-sheet')).toBeTruthy();
+      expect(result.getByText('Browse more models')).toBeTruthy();
 
-      fireEvent.press(getByTestId('close-sheet'));
+      fireEvent.press(result.getByTestId('close-sheet'));
 
-      expect(queryByTestId('app-sheet')).toBeNull();
+      expect(result.queryByText('Browse more models')).toBeNull();
     });
 
     it('shows "Browse more models" link in picker', () => {
       const model = createDownloadedModel();
       useAppStore.setState({ downloadedModels: [model] });
 
-      const { getByText } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
+      const result = renderHomeScreen();
+      openTextPicker(result);
 
-      expect(getByText('Browse more models')).toBeTruthy();
+      expect(result.getByText('Browse more models')).toBeTruthy();
     });
 
     it('navigates to ModelsTab when "Browse more models" pressed', () => {
       const model = createDownloadedModel();
       useAppStore.setState({ downloadedModels: [model] });
 
-      const { getByText } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
-      fireEvent.press(getByText('Browse more models'));
+      const result = renderHomeScreen();
+      openTextPicker(result);
+      fireEvent.press(result.getByText('Browse more models'));
 
       expect(mockNavigate).toHaveBeenCalledWith('ModelsTab', { initialTab: 'text' });
     });
@@ -958,190 +971,102 @@ describe('HomeScreen', () => {
       });
       useAppStore.setState({ downloadedModels: [model] });
 
-      const { getByText } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
+      const result = renderHomeScreen();
+      openTextPicker(result);
 
       // Shows ~6.0 GB RAM (4 * 1.5 = 6.0)
-      expect(getByText(/6\.0 GB RAM/)).toBeTruthy();
+      expect(result.getByText(/6\.0 GB RAM/)).toBeTruthy();
     });
 
     it('shows vision indicator for vision models in picker', () => {
       const visionModel = createVisionModel({ name: 'LLaVA Vision' });
       useAppStore.setState({ downloadedModels: [visionModel] });
 
-      const { getByText, getAllByText } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
+      const result = renderHomeScreen();
+      openTextPicker(result);
 
-      expect(getAllByText(/Vision/).length).toBeGreaterThanOrEqual(1);
+      expect(result.getAllByText(/Vision/).length).toBeGreaterThanOrEqual(1);
     });
   });
 
   // ============================================================================
   // Model Selection (from picker)
   // ============================================================================
+  // Selecting a model on the home screen is now MARK-ONLY. It marks the model
+  // active in the store and closes the picker. The actual load is deferred to
+  // the first chat message, so selection must NOT call loadTextModel/
+  // loadImageModel/checkMemoryForModel and must NOT show memory dialogs.
   describe('model selection from picker', () => {
-    it('calls checkMemoryForModel when text model selected', async () => {
+    it('marks text model active without loading or checking memory', async () => {
       const model = createDownloadedModel({ name: 'Pick Me' });
       useAppStore.setState({ downloadedModels: [model] });
 
-      const { getByText, getByTestId } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
+      const result = renderHomeScreen();
+      openTextPicker(result);
 
       await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
+        fireEvent.press(result.getByTestId('model-item'));
       });
 
       await waitFor(() => {
-        expect(mockCheckMemoryForModel).toHaveBeenCalledWith(model.id, 'text');
+        expect(useAppStore.getState().activeModelId).toBe(model.id);
       });
-    });
-
-    it('loads text model when memory check passes', async () => {
-      mockCheckMemoryForModel.mockResolvedValue({
-        canLoad: true,
-        severity: 'safe',
-        message: '',
-      });
-
-      const model = createDownloadedModel({ name: 'Safe Model' });
-      useAppStore.setState({ downloadedModels: [model] });
-
-      const { getByText, getByTestId } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      await waitFor(() => {
-        expect(mockLoadTextModel).toHaveBeenCalledWith(model.id);
-      });
-    });
-
-    it('shows critical alert when memory insufficient', async () => {
-      mockCheckMemoryForModel.mockResolvedValue({
-        canLoad: false,
-        severity: 'critical',
-        message: 'Not enough memory',
-      });
-
-      const model = createDownloadedModel({ name: 'Big Model' });
-      useAppStore.setState({ downloadedModels: [model] });
-
-      const { getByText, getByTestId, queryByText } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      await waitFor(() => {
-        expect(queryByText('Insufficient Memory')).toBeTruthy();
-      });
-      // Should not load the model
+      // Remembers the explicit choice for lazy reload.
+      expect(useAppStore.getState().lastTextModelId).toBe(model.id);
+      // Mark-only: no eager load and no memory check on selection.
       expect(mockLoadTextModel).not.toHaveBeenCalled();
-    });
-
-    it('shows warning alert when memory is low', async () => {
-      mockCheckMemoryForModel.mockResolvedValue({
-        canLoad: true,
-        severity: 'warning',
-        message: 'Low memory warning',
-      });
-
-      const model = createDownloadedModel({ name: 'Warning Model' });
-      useAppStore.setState({ downloadedModels: [model] });
-
-      const { getByText, getByTestId, queryByText } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      await waitFor(() => {
-        expect(queryByText('Low Memory Warning')).toBeTruthy();
-        expect(queryByText('Load Anyway')).toBeTruthy();
-      });
-    });
-
-    it('loads model when "Load Anyway" pressed after warning', async () => {
-      mockCheckMemoryForModel.mockResolvedValue({
-        canLoad: true,
-        severity: 'warning',
-        message: 'Low memory warning',
-      });
-
-      const model = createDownloadedModel({ name: 'Warning Model' });
-      useAppStore.setState({ downloadedModels: [model] });
-
-      const { getByText, getByTestId } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      // Wait for sheet-close delay before alert appears
-      await act(async () => { await new Promise<void>(r => setTimeout(r, 400)); });
-
-      await act(async () => {
-        fireEvent.press(getByText('Load Anyway'));
-      });
-
-      await waitFor(() => {
-        expect(mockLoadTextModel).toHaveBeenCalledWith(model.id);
-      });
-    });
-
-    it('does not reload already active text model', async () => {
-      const model = createDownloadedModel({ name: 'Already Active' });
-      useAppStore.setState({
-        downloadedModels: [model],
-        activeModelId: model.id,
-      });
-      (activeModelService.getLoadedModelIds as jest.Mock).mockReturnValue({ textModelId: model.id, imageModelId: null });
-
-      const { getByText, getByTestId } = renderHomeScreen();
-      fireEvent.press(getByText('Already Active'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      // checkMemoryForModel should not be called for already active model
       expect(mockCheckMemoryForModel).not.toHaveBeenCalled();
     });
 
-    it('calls checkMemoryForModel when image model selected', async () => {
+    it('marks image model active without loading or checking memory', async () => {
       const imageModel = createONNXImageModel({ name: 'Pick Image' });
       useAppStore.setState({ downloadedImageModels: [imageModel] });
 
-      const { getByTestId } = renderHomeScreen();
-      fireEvent.press(getByTestId('image-model-card'));
+      const result = renderHomeScreen();
+      openImagePicker(result);
 
       await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
+        fireEvent.press(result.getByTestId('model-item'));
       });
 
       await waitFor(() => {
-        expect(mockCheckMemoryForModel).toHaveBeenCalledWith(imageModel.id, 'image');
+        expect(useAppStore.getState().activeImageModelId).toBe(imageModel.id);
       });
+      expect(mockLoadImageModel).not.toHaveBeenCalled();
+      expect(mockCheckMemoryForModel).not.toHaveBeenCalled();
     });
 
-    it('loads image model when memory check passes', async () => {
-      const imageModel = createONNXImageModel({ name: 'Safe Image' });
-      useAppStore.setState({ downloadedImageModels: [imageModel] });
+    it('does not show a memory dialog when selecting a text model', async () => {
+      const model = createDownloadedModel({ name: 'Big Model' });
+      useAppStore.setState({ downloadedModels: [model] });
 
-      const { getByTestId } = renderHomeScreen();
-      fireEvent.press(getByTestId('image-model-card'));
+      const result = renderHomeScreen();
+      openTextPicker(result);
 
       await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
+        fireEvent.press(result.getByTestId('model-item'));
+      });
+      await act(async () => { await new Promise<void>(r => setTimeout(r, 50)); });
+
+      expect(result.queryByText('Insufficient Memory')).toBeNull();
+      expect(result.queryByText('Low Memory Warning')).toBeNull();
+      expect(result.queryByText('Load Anyway')).toBeNull();
+    });
+
+    it('closes the picker after selecting a text model', async () => {
+      const model = createDownloadedModel({ name: 'Close After' });
+      useAppStore.setState({ downloadedModels: [model] });
+
+      const result = renderHomeScreen();
+      openTextPicker(result);
+      expect(result.getByText('Browse more models')).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.press(result.getByTestId('model-item'));
       });
 
       await waitFor(() => {
-        expect(mockLoadImageModel).toHaveBeenCalledWith(imageModel.id);
+        expect(result.queryByText('Browse more models')).toBeNull();
       });
     });
   });
@@ -1157,11 +1082,11 @@ describe('HomeScreen', () => {
         activeModelId: model.id,
       });
 
-      const { getByText, getByTestId } = renderHomeScreen();
-      fireEvent.press(getByText('Unload Me'));
+      const result = renderHomeScreen();
+      openTextPicker(result);
 
       await act(async () => {
-        fireEvent.press(getByTestId('unload-text-model-button'));
+        fireEvent.press(result.getByTestId('unload-text-model-button'));
       });
 
       await waitFor(() => {
@@ -1176,11 +1101,11 @@ describe('HomeScreen', () => {
         activeImageModelId: imageModel.id,
       });
 
-      const { getByTestId, getByText } = renderHomeScreen();
-      fireEvent.press(getByTestId('image-model-card'));
+      const result = renderHomeScreen();
+      openImagePicker(result);
 
       await act(async () => {
-        fireEvent.press(getByText('Unload current model'));
+        fireEvent.press(result.getByText('Unload current model'));
       });
 
       await waitFor(() => {
@@ -1197,15 +1122,15 @@ describe('HomeScreen', () => {
         activeModelId: model.id,
       });
 
-      const { getByText, getByTestId, queryByText } = renderHomeScreen();
-      fireEvent.press(getByText('Fail Unload'));
+      const result = renderHomeScreen();
+      openTextPicker(result);
 
       await act(async () => {
-        fireEvent.press(getByTestId('unload-text-model-button'));
+        fireEvent.press(result.getByTestId('unload-text-model-button'));
       });
 
       await waitFor(() => {
-        expect(queryByText('Failed to unload model')).toBeTruthy();
+        expect(result.queryByText('Failed to unload model')).toBeTruthy();
       });
     });
 
@@ -1218,15 +1143,15 @@ describe('HomeScreen', () => {
         activeImageModelId: imageModel.id,
       });
 
-      const { getByTestId, getByText, queryByText } = renderHomeScreen();
-      fireEvent.press(getByTestId('image-model-card'));
+      const result = renderHomeScreen();
+      openImagePicker(result);
 
       await act(async () => {
-        fireEvent.press(getByText('Unload current model'));
+        fireEvent.press(result.getByText('Unload current model'));
       });
 
       await waitFor(() => {
-        expect(queryByText('Failed to unload model')).toBeTruthy();
+        expect(result.queryByText('Failed to unload model')).toBeTruthy();
       });
     });
   });
@@ -1235,52 +1160,6 @@ describe('HomeScreen', () => {
   // Model Load Error Handling
   // ============================================================================
   describe('model load error handling', () => {
-    it('shows error alert when text model load fails', async () => {
-      mockLoadTextModel.mockRejectedValue(new Error('Load crashed'));
-      mockCheckMemoryForModel.mockResolvedValue({
-        canLoad: true,
-        severity: 'safe',
-        message: '',
-      });
-
-      const model = createDownloadedModel({ name: 'Crash Model' });
-      useAppStore.setState({ downloadedModels: [model] });
-
-      const { getByText, getByTestId, queryByText } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      await waitFor(() => {
-        expect(queryByText(/Failed to load model/)).toBeTruthy();
-      });
-    });
-
-    it('shows error alert when image model load fails', async () => {
-      mockLoadImageModel.mockRejectedValue(new Error('Image load failed'));
-      mockCheckMemoryForModel.mockResolvedValue({
-        canLoad: true,
-        severity: 'safe',
-        message: '',
-      });
-
-      const imageModel = createONNXImageModel({ name: 'Crash Image' });
-      useAppStore.setState({ downloadedImageModels: [imageModel] });
-
-      const { getByTestId, queryByText } = renderHomeScreen();
-      fireEvent.press(getByTestId('image-model-card'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      await waitFor(() => {
-        expect(queryByText(/Failed to load model/)).toBeTruthy();
-      });
-    });
-
     it('shows error when eject all fails', async () => {
       mockUnloadAllModels.mockRejectedValue(new Error('Eject failed'));
 
@@ -1291,6 +1170,7 @@ describe('HomeScreen', () => {
       });
 
       const { getByText, getByTestId, queryByTestId } = renderHomeScreen();
+      fireEvent.press(getByTestId('models-summary'));
       fireEvent.press(getByText('Eject All Models'));
 
       await act(async () => {
@@ -1325,60 +1205,11 @@ describe('HomeScreen', () => {
   // ============================================================================
   // Loading Overlay
   // ============================================================================
-  describe('loading overlay', () => {
-    it('renders loading overlay when loading text model', async () => {
-      const model = createDownloadedModel({ name: 'Loading Model' });
-      useAppStore.setState({ downloadedModels: [model] });
-
-      // Make loadTextModel hang to keep loading state
-      mockLoadTextModel.mockImplementation(() => new Promise(() => {}));
-      mockCheckMemoryForModel.mockResolvedValue({
-        canLoad: true,
-        severity: 'safe',
-        message: '',
-      });
-
-      const { getByText, getByTestId, queryByText } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      // Loading overlay should show - "Loading Text Model" is unique to the overlay
-      await waitFor(() => {
-        expect(queryByText('Loading Text Model')).toBeTruthy();
-      });
-      // Drain any pending RAF-chain timers to prevent leaking into next test
-      await act(async () => { await new Promise<void>(r => setTimeout(r, 300)); });
-    });
-
-    it('renders loading overlay when loading image model', async () => {
-      const imageModel = createONNXImageModel({ name: 'Loading Image' });
-      useAppStore.setState({ downloadedImageModels: [imageModel] });
-
-      mockLoadImageModel.mockImplementation(() => new Promise(() => {}));
-      mockCheckMemoryForModel.mockResolvedValue({
-        canLoad: true,
-        severity: 'safe',
-        message: '',
-      });
-
-      const { getByTestId, queryByText } = renderHomeScreen();
-      fireEvent.press(getByTestId('image-model-card'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      await waitFor(() => {
-        expect(queryByText('Loading Image Model')).toBeTruthy();
-      });
-      // Drain any pending RAF-chain timers (RAF→RAF→setTimeout200ms) to prevent leaking into next test
-      await act(async () => { await new Promise<void>(r => setTimeout(r, 300)); });
-    });
-
-    it('shows "Unloading..." text in card when unloading without model name', async () => {
+  // While a model loads, the collapsed summary row shows an inline
+  // ActivityIndicator and the ModelsManagerSheet rows show "Loading…" for the
+  // type that is loading. The full-screen LoadingOverlay is also shown.
+  describe('loading indicator', () => {
+    it('shows "Loading…" in the manager text row while unloading a text model', async () => {
       const model = createDownloadedModel({ name: 'To Unload' });
       useAppStore.setState({
         downloadedModels: [model],
@@ -1388,17 +1219,18 @@ describe('HomeScreen', () => {
       // Make unload hang
       mockUnloadTextModel.mockImplementation(() => new Promise(() => {}));
 
-      const { getByText, getByTestId, queryByText } = renderHomeScreen();
-      fireEvent.press(getByText('To Unload'));
+      const result = renderHomeScreen();
+      openTextPicker(result);
 
       await act(async () => {
-        fireEvent.press(getByTestId('unload-text-model-button'));
+        fireEvent.press(result.getByTestId('unload-text-model-button'));
       });
+      await act(async () => { await new Promise<void>(r => setTimeout(r, 50)); });
 
-      // Card should show "Unloading..." since modelName is null during unload
+      // The text row shows "Loading…" (loadingState.type === 'text') during unload.
+      fireEvent.press(result.getByTestId('models-summary'));
       await waitFor(() => {
-        expect(queryByText('Unloading...')).toBeTruthy();
-        expect(queryByText('Loading...')).toBeTruthy();
+        expect(result.queryByText('Loading…')).toBeTruthy();
       });
     });
   });
@@ -1416,18 +1248,19 @@ describe('HomeScreen', () => {
       expect(getByTestId('home-screen')).toBeTruthy();
     });
 
-    it('shows estimated RAM usage for loaded text model', () => {
+    it('shows estimated RAM usage for a loaded text model in the picker', () => {
       const model = createDownloadedModel({ fileSize: 4 * 1024 * 1024 * 1024 });
       useAppStore.setState({
         downloadedModels: [model],
         activeModelId: model.id,
       });
 
-      const { getByText } = renderHomeScreen();
-      expect(getByText(/GB/)).toBeTruthy();
+      const result = renderHomeScreen();
+      openTextPicker(result);
+      expect(result.getAllByText(/GB/).length).toBeGreaterThanOrEqual(1);
     });
 
-    it('shows combined RAM when both models loaded', () => {
+    it('shows RAM estimates in both pickers when both models loaded', () => {
       const model = createDownloadedModel({ fileSize: 4 * 1024 * 1024 * 1024 });
       const imageModel = createONNXImageModel({ size: 2 * 1024 * 1024 * 1024 });
       useAppStore.setState({
@@ -1437,8 +1270,13 @@ describe('HomeScreen', () => {
         activeImageModelId: imageModel.id,
       });
 
-      const { getAllByText } = renderHomeScreen();
-      expect(getAllByText(/GB/).length).toBeGreaterThanOrEqual(2);
+      const result = renderHomeScreen();
+      openTextPicker(result);
+      expect(result.getAllByText(/GB/).length).toBeGreaterThanOrEqual(1);
+      // Close the text picker, then open the image picker.
+      fireEvent.press(result.getByTestId('close-sheet'));
+      openImagePicker(result);
+      expect(result.getAllByText(/GB/).length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders without crashing when both models loaded', () => {
@@ -1459,133 +1297,6 @@ describe('HomeScreen', () => {
   // ============================================================================
   // Loading Card States
   // ============================================================================
-  describe('loading card states', () => {
-    it('shows loading state in text card during load', async () => {
-      const model = createDownloadedModel({ name: 'Model X' });
-      useAppStore.setState({ downloadedModels: [model] });
-
-      mockLoadTextModel.mockImplementation(() => new Promise(() => {}));
-      mockCheckMemoryForModel.mockResolvedValue({
-        canLoad: true,
-        severity: 'safe',
-        message: '',
-      });
-
-      const { getByText, getByTestId, queryByText } = renderHomeScreen();
-      fireEvent.press(getByText('Tap to select'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      // Text card should show loading state
-      await waitFor(() => {
-        expect(queryByText('Loading...')).toBeTruthy();
-      });
-      // Drain pending RAF-chain timers to prevent leaking into the image model memory check tests
-      await act(async () => { await new Promise<void>(r => setTimeout(r, 300)); });
-    });
-  });
-
-  // ============================================================================
-  // Image Model Memory Check (canLoad=false and warning paths)
-  // ============================================================================
-  describe('image model memory checks', () => {
-    it('shows critical alert when image model memory insufficient', async () => {
-      mockCheckMemoryForModel.mockResolvedValue({
-        canLoad: false,
-        severity: 'critical',
-        message: 'Not enough memory for image model',
-      });
-
-      const imageModel = createONNXImageModel({ name: 'Big Image Model' });
-      useAppStore.setState({ downloadedImageModels: [imageModel] });
-
-      const { getByTestId, queryByText } = renderHomeScreen();
-      fireEvent.press(getByTestId('image-model-card'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      await waitFor(() => {
-        expect(queryByText('Insufficient Memory')).toBeTruthy();
-        expect(queryByText('Not enough memory for image model')).toBeTruthy();
-      });
-      expect(mockLoadImageModel).not.toHaveBeenCalled();
-    });
-
-    it('shows warning alert when image model memory is low', async () => {
-      mockCheckMemoryForModel.mockResolvedValue({
-        canLoad: true,
-        severity: 'warning',
-        message: 'Low memory for image model',
-      });
-
-      const imageModel = createONNXImageModel({ name: 'Warn Image Model' });
-      useAppStore.setState({ downloadedImageModels: [imageModel] });
-
-      const { getByTestId, queryByText } = renderHomeScreen();
-      fireEvent.press(getByTestId('image-model-card'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      await waitFor(() => {
-        expect(queryByText('Low Memory')).toBeTruthy();
-        expect(queryByText('Load Anyway')).toBeTruthy();
-      });
-    });
-
-    it('loads image model when "Load Anyway" pressed after warning', async () => {
-      mockCheckMemoryForModel.mockResolvedValue({
-        canLoad: true,
-        severity: 'warning',
-        message: 'Low memory for image model',
-      });
-
-      const imageModel = createONNXImageModel({ name: 'Warn Image' });
-      useAppStore.setState({ downloadedImageModels: [imageModel] });
-
-      const { getByTestId, getByText } = renderHomeScreen();
-      fireEvent.press(getByTestId('image-model-card'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      // Wait for sheet-close delay before alert appears
-      await act(async () => { await new Promise<void>(r => setTimeout(r, 400)); });
-
-      await act(async () => {
-        fireEvent.press(getByText('Load Anyway'));
-      });
-
-      await waitFor(() => {
-        expect(mockLoadImageModel).toHaveBeenCalledWith(imageModel.id);
-      });
-    });
-
-    it('does not reload already active image model', async () => {
-      const imageModel = createONNXImageModel({ name: 'Already Active Image' });
-      useAppStore.setState({
-        downloadedImageModels: [imageModel],
-        activeImageModelId: imageModel.id,
-      });
-      (activeModelService.getLoadedModelIds as jest.Mock).mockReturnValue({ textModelId: null, imageModelId: imageModel.id });
-
-      const { getByTestId } = renderHomeScreen();
-      fireEvent.press(getByTestId('image-model-card'));
-
-      await act(async () => {
-        fireEvent.press(getByTestId('model-item'));
-      });
-
-      expect(mockCheckMemoryForModel).not.toHaveBeenCalled();
-    });
-  });
-
   // ============================================================================
   // Delete Conversation (full flow with swipe actions)
   // ============================================================================
@@ -1659,15 +1370,15 @@ describe('HomeScreen', () => {
   describe('empty picker browse navigation', () => {
     it('navigates to ModelsTab from empty text picker Browse Models button', () => {
       // No text models downloaded
-      const { getByText, getAllByText } = renderHomeScreen();
+      const result = renderHomeScreen();
 
-      // Open text model picker via the Text card
-      fireEvent.press(getByText('Text'));
+      // Open the empty text picker via the manager sheet's text row.
+      openTextPicker(result);
 
       // Inside the empty picker, there's a "Browse Models" button
       // There are multiple "Browse Models" - one in setup card, one in picker
-      const browseButtons = getAllByText('Browse Models');
-      // The second one should be in the picker
+      const browseButtons = result.getAllByText('Browse Models');
+      // The last one is in the picker.
       fireEvent.press(browseButtons[browseButtons.length - 1]);
 
       expect(mockNavigate).toHaveBeenCalledWith('ModelsTab', { initialTab: 'text' });
@@ -1675,13 +1386,13 @@ describe('HomeScreen', () => {
 
     it('navigates to ModelsTab from empty image picker Browse Models button', () => {
       // No image models downloaded
-      const { getByTestId, getAllByText } = renderHomeScreen();
+      const result = renderHomeScreen();
 
-      // Open image model picker
-      fireEvent.press(getByTestId('image-model-card'));
+      // Open the empty image picker via the manager sheet's image row.
+      openImagePicker(result);
 
       // Inside the empty picker, there's a "Browse Models" button
-      const browseButtons = getAllByText('Browse Models');
+      const browseButtons = result.getAllByText('Browse Models');
       fireEvent.press(browseButtons[browseButtons.length - 1]);
 
       expect(mockNavigate).toHaveBeenCalledWith('ModelsTab', { initialTab: 'image' });

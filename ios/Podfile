@@ -35,12 +35,34 @@ target 'OffgridMobile' do
       # :ccache_enabled => true
     )
     
+    # fmt 11.0.2's consteval format-string check is broken under the clang in
+    # Xcode 26+, failing with "call to consteval function ... is not a constant
+    # expression" when compiling fmt and the Yoga/React-* pods that include it.
+    # base.h defines FMT_USE_CONSTEVAL unconditionally (no #ifndef guard), so a
+    # -D define can't override it. Neutralize the detection so it falls back to
+    # runtime checking, which is exactly what fmt does for older toolchains.
+    fmt_base = File.join(installer.sandbox.root, 'fmt', 'include', 'fmt', 'base.h')
+    if File.exist?(fmt_base)
+      contents = File.read(fmt_base)
+      guard = '// Detect consteval, C++20 constexpr extensions and std::is_constant_evaluated.'
+      if contents.include?(guard) && !contents.include?('FMT_FORCE_NO_CONSTEVAL')
+        contents = contents.sub(
+          guard,
+          "#define FMT_FORCE_NO_CONSTEVAL 1\n#define FMT_USE_CONSTEVAL 0\n#if 0  // forced off for Xcode 26+ clang\n#{guard}"
+        )
+        # close the `#if 0` we opened, right before FMT_CONSTEVAL is defined from it
+        contents = contents.sub("#if FMT_USE_CONSTEVAL\n", "#endif  // forced FMT_USE_CONSTEVAL off\n#if FMT_USE_CONSTEVAL\n")
+        File.chmod(0644, fmt_base)
+        File.write(fmt_base, contents)
+        Pod::UI.puts "Patched fmt base.h to disable broken consteval path".yellow
+      end
+    end
+
     # Set C++20 for all pods and deployment target
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
         config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++20'
         config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '17.0'
-        # Suppress fmt consteval errors on newer Xcode/clang
         if target.name == 'fmt'
           config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
           config.build_settings['OTHER_CPLUSPLUSFLAGS'] = '$(inherited) -Wno-error'

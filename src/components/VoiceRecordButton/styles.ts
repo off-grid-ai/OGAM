@@ -33,6 +33,16 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  // Audio (voice) mode: a larger, clearly-circular bordered mic so it reads as
+  // the primary "press to speak" action.
+  buttonAudio: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
   buttonAsSendUnavailable: {
     width: 44,
     height: 44,

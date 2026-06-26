@@ -5,7 +5,7 @@ import { AppSheet } from './AppSheet';
 import { useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { SPACING, TYPOGRAPHY } from '../constants';
-import { GITHUB_URL, SHARE_ON_X_URL } from '../utils/sharePrompt';
+import { GITHUB_URL, shareOnX } from '../utils/sharePrompt';
 import { useAppStore } from '../stores/appStore';
 
 interface SharePromptSheetProps {
@@ -17,9 +17,10 @@ export const SharePromptSheet: React.FC<SharePromptSheetProps> = ({ visible, onC
   const styles = useThemedStyles(createStyles);
   const setEngaged = useAppStore(s => s.setHasEngagedSharePrompt);
 
-  const handleEngage = (url: string) => {
+  const handleEngage = (action: string | (() => void)) => {
     setEngaged(true);
-    Linking.openURL(url);
+    if (typeof action === 'string') Linking.openURL(action);
+    else action();
     onClose();
   };
 
@@ -35,7 +36,7 @@ export const SharePromptSheet: React.FC<SharePromptSheetProps> = ({ visible, onC
           <Text style={styles.buttonText}>Star on GitHub</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.button} onPress={() => handleEngage(SHARE_ON_X_URL)}>
+        <TouchableOpacity style={styles.button} onPress={() => handleEngage(shareOnX)}>
           <Icon name="share-2" size={18} color={styles.buttonText.color} />
           <Text style={styles.buttonText}>Share on X</Text>
         </TouchableOpacity>

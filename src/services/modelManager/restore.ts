@@ -105,7 +105,11 @@ interface RestoreEntryOpts {
 }
 
 function buildMetadataFromActiveDownload(download: RestorableDownloadInfo, modelsDir: string): PersistedDownloadInfo | null {
-  if (!download.modelId || download.modelId.startsWith('image:')) return null;
+  // image: (image models) and whisper- (STT models) are owned by their own
+  // managers, not the text model manager. Recovering them here registered them
+  // as text models, so they showed up under Text in the model selector and the
+  // Download Manager's downloaded list.
+  if (!download.modelId || download.modelId.startsWith('image:') || download.modelId.startsWith('whisper-')) return null;
   const mainFileSize = download.totalBytes;
   const combinedTotal = download.combinedTotalBytes || download.totalBytes;
   const mmProjFileSize = Math.max(combinedTotal - mainFileSize, 0);

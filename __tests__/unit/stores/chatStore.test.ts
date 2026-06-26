@@ -556,6 +556,25 @@ describe('chatStore', () => {
       expect(message.content).toBe('This is the final response.');
     });
 
+    it('retains Qwen3 reasoning when only the closing </think> tag is emitted', () => {
+      // Qwen3's chat template injects the opening <think>, so the model emits
+      // only the closing tag. The finalizer must still capture the reasoning,
+      // matching the live renderer, or the thinking block vanishes on completion.
+      const store = useChatStore.getState();
+      const convId = store.createConversation('test-model');
+
+      store.startStreaming(convId);
+      useChatStore.setState({
+        streamingMessage: 'The user is asking what is happening.</think>Hello! How can I help?',
+        streamingForConversationId: convId,
+      });
+      store.finalizeStreamingMessage(convId);
+
+      const message = getChatState().conversations[0].messages[0];
+      expect(message.reasoningContent).toBe('The user is asking what is happening.');
+      expect(message.content).toBe('Hello! How can I help?');
+    });
+
     it('does not extract thinking when streamingReasoningContent is already populated', () => {
       const store = useChatStore.getState();
       const convId = store.createConversation('test-model');
@@ -1167,6 +1186,41 @@ describe('chatStore', () => {
       expect(state.streamingMessage).toBe('');
       expect(state.isThinking).toBe(true);
       expect(state.isStreaming).toBe(false);
+    });
+  });
+
+  describe('streaming TTS answer gating (only the answer is spoken)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { registerHook, _clearHooksForTesting } = require('../../../src/bootstrap/hookRegistry');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { useAppStore } = require('../../../src/stores/appStore');
+    let spoken: string[];
+
+    beforeEach(() => {
+      _clearHooksForTesting();
+      spoken = [];
+      registerHook('audio.onStreamingToken', (t: string) => spoken.push(t));
+    });
+
+    it('withholds inline reasoning until </think>, then speaks only the answer (thinking on)', () => {
+      useAppStore.setState({ settings: { ...useAppStore.getState().settings, thinkingEnabled: true } });
+      const store = useChatStore.getState();
+      const convId = store.createConversation('m');
+      store.startStreaming(convId);
+      store.appendToStreamingMessage('The user is asking ');
+      store.appendToStreamingMessage('about the weather.');
+      expect(spoken.at(-1)).toBe(''); // still in the (inline) thinking phase
+      store.appendToStreamingMessage('</think>Hello there!');
+      expect(spoken.at(-1)).toBe('Hello there!'); // only the answer after </think>
+    });
+
+    it('speaks content normally when thinking is disabled', () => {
+      useAppStore.setState({ settings: { ...useAppStore.getState().settings, thinkingEnabled: false } });
+      const store = useChatStore.getState();
+      const convId = store.createConversation('m');
+      store.startStreaming(convId);
+      store.appendToStreamingMessage('Hello there!');
+      expect(spoken.at(-1)).toBe('Hello there!');
     });
   });
 });

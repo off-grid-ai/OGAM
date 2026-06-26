@@ -12,7 +12,7 @@ import { createStyles } from './styles';
 
 export type DownloadItem = {
   type: 'active' | 'completed';
-  modelType: 'text' | 'image';
+  modelType: 'text' | 'image' | 'tts' | 'stt';
   downloadId?: string;
   modelKey?: string;
   modelId: string;
@@ -41,18 +41,6 @@ export function formatBytes(bytes: number): string {
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${(bytes / Math.pow(k, i)).toFixed(i > 1 ? 2 : 0)} ${sizes[i]}`;
-}
-
-export function extractQuantization(fileName: string): string {
-  if (fileName.toLowerCase().includes('coreml')) return 'Core ML';
-  const upperName = fileName.toUpperCase();
-  const patterns = ['Q2_K', 'Q3_K_S', 'Q3_K_M', 'Q4_0', 'Q4_K_S', 'Q4_K_M', 'Q5_K_S', 'Q5_K_M', 'Q6_K', 'Q8_0'];
-  for (const pattern of patterns) {
-    if (upperName.includes(pattern.replace('_', ''))) return pattern;
-    if (upperName.includes(pattern)) return pattern;
-  }
-  const match = /[QqFf]\d+_?[KkMmSs]*/.exec(fileName);
-  return match ? match[0].toUpperCase() : 'Unknown';
 }
 
 export function getStatusText(status: string): string {
@@ -192,9 +180,9 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
       <View style={styles.downloadHeader}>
         <View style={styles.modelTypeIcon}>
           <Icon
-            name={item.modelType === 'image' ? 'image' : 'message-square'}
+            name={item.modelType === 'image' ? 'image' : item.modelType === 'tts' ? 'volume-2' : item.modelType === 'stt' ? 'mic' : item.isVisionModel ? 'eye' : 'message-square'}
             size={16}
-            color={item.modelType === 'image' ? colors.info : colors.primary}
+            color={item.modelType === 'image' ? colors.info : item.modelType === 'tts' || item.modelType === 'stt' ? colors.success : item.isVisionModel ? colors.warning : colors.primary}
           />
         </View>
         <View style={styles.downloadInfo}>

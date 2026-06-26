@@ -1,13 +1,25 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Modal, TouchableWithoutFeedback } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, Modal, TouchableWithoutFeedback, Dimensions } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../theme';
 import { ImageModeState } from '../../types';
 import { useAppStore } from '../../stores';
 import { triggerHaptic } from '../../utils/haptics';
 import { FONTS } from '../../constants';
+import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
 const TOOL_WARNING_COLOR = '#F59E0B';
+
+// Popovers are anchored from the screen's right edge (`right: anchorX`) and
+// extend leftward. When the trigger is far left (e.g. the audio-mode "+"), a
+// large anchorX would push the popover off the left edge — clamp so its left
+// edge stays ~8px inside the screen.
+const POPOVER_WIDTH = 220;
+const clampPopoverRight = (anchorX: number): number => {
+  const screenW = Dimensions.get('window').width;
+  return Math.max(8, Math.min(anchorX, screenW - POPOVER_WIDTH - 8));
+};
 
 // ─── Shared Styles ──────────────────────────────────────────────────────────
 
@@ -70,6 +82,8 @@ interface QuickSettingsPopoverProps {
   supportsToolCalling: boolean;
   enabledToolCount: number;
   onToolsPress?: () => void;
+  mcpToolCount?: number;
+  onMcpPress?: () => void;
 }
 
 function getImageModeBadge(mode: ImageModeState, colors: any) {
@@ -85,9 +99,10 @@ function getToolsStyle(supported: boolean, count: number, colors: any) {
   let badgeLabel = 'N/A';
 
   if (supported) {
-    const hasEnabledTools = count > 0;
-    iconColor = hasEnabledTools ? colors.primary : colors.text;
-    badgeBg = hasEnabledTools ? colors.primary : colors.textMuted;
+    // The icon and badge stay neutral - this row is a utility count, not an
+    // on/off state, so it should not read as "active/highlighted" in green.
+    iconColor = colors.text;
+    badgeBg = colors.textMuted;
     labelColor = colors.text;
     badgeLabel = String(count);
   }
@@ -99,6 +114,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
   visible, onClose, anchorY, anchorX,
   imageMode, onImageModeToggle, imageModelLoaded, supportsThinking,
   supportsToolCalling, enabledToolCount, onToolsPress,
+  mcpToolCount = 0, onMcpPress,
 }) => {
   const { colors } = useTheme();
   const { settings, updateSettings, toolCountHintDismissed } = useAppStore();
@@ -107,9 +123,18 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
 
   const imgBadge = getImageModeBadge(imageMode, colors);
   const tools = getToolsStyle(supportsToolCalling, enabledToolCount, colors);
-  const showToolWarning = supportsToolCalling && enabledToolCount > 3 && !toolCountHintDismissed;
-  const toolIconColor = showToolWarning ? TOOL_WARNING_COLOR : tools.iconColor;
-  const toolBadgeBg = showToolWarning ? TOOL_WARNING_COLOR : tools.badgeBg;
+  // The "Voice" row is provided by the pro audio feature via a slot. Free
+  // builds render nothing here.
+  const AudioRow = getSlot(SLOTS.quickSettingsAudioRow);
+
+  // Tools and MCP warnings are independent — each turns amber at 3+
+  const showToolsWarning = supportsToolCalling && enabledToolCount >= 3 && !toolCountHintDismissed;
+  const showMcpWarning = mcpToolCount >= 3;
+
+  const toolIconColor = showToolsWarning ? TOOL_WARNING_COLOR : tools.iconColor;
+  const toolBadgeBg = showToolsWarning ? TOOL_WARNING_COLOR : tools.badgeBg;
+  const mcpDefaultBg = mcpToolCount > 0 ? colors.primary : colors.textMuted;
+  const mcpBadgeBg = showMcpWarning ? TOOL_WARNING_COLOR : mcpDefaultBg;
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
@@ -120,7 +145,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
               backgroundColor: colors.surface,
               borderColor: colors.border,
               bottom: anchorY + 8,
-              right: anchorX,
+              right: clampPopoverRight(anchorX),
             }]}>
               <TouchableOpacity
                 testID="quick-image-mode"
@@ -155,6 +180,8 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                 </TouchableOpacity>
               )}
 
+              {AudioRow && <AudioRow styles={popoverStyles} onClose={onClose} />}
+
               <TouchableOpacity
                 testID="quick-tools"
                 style={popoverStyles.row}
@@ -169,6 +196,24 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                 <View style={[popoverStyles.badge, { backgroundColor: toolBadgeBg }]}>
                   <Text style={[popoverStyles.badgeText, { color: colors.background }]}>{tools.badgeLabel}</Text>
                 </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                testID="quick-pro-tools"
+                style={popoverStyles.row}
+                onPress={() => {
+                  triggerHaptic('impactLight');
+                  onClose();
+                  onMcpPress?.();
+                }}
+              >
+                <IconMC name="crown" size={16} color={showMcpWarning ? TOOL_WARNING_COLOR : colors.primary} />
+                <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>Pro Tools</Text>
+                {mcpToolCount > 0 && (
+                  <View style={[popoverStyles.badge, { backgroundColor: mcpBadgeBg }]}>
+                    <Text style={[popoverStyles.badgeText, { color: colors.background }]}>{mcpToolCount}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
           </TouchableWithoutFeedback>
@@ -207,7 +252,7 @@ export const AttachPickerPopover: React.FC<AttachPickerPopoverProps> = ({
               backgroundColor: colors.surface,
               borderColor: colors.border,
               bottom: anchorY + 8,
-              right: anchorX,
+              right: clampPopoverRight(anchorX),
             }]}>
               <TouchableOpacity
                 testID="attach-photo"

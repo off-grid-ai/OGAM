@@ -1,7 +1,5 @@
 import { useAppStore } from '../stores/appStore';
 
-export const PRO_URL = 'https://offgridmobileai.co?utm_source=app&utm_medium=cta&utm_campaign=pro_preorder';
-
 // Fires at count 3, then every 10 starting at 15 (3, 15, 25, 35...)
 // Share sheet fires at 2, 10, 20, 30... so these never collide
 const PRO_AHA_THRESHOLD = 3;

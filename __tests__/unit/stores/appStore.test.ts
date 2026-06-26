@@ -113,6 +113,25 @@ describe('appStore', () => {
       expect(models[0].name).toBe('Updated');
     });
 
+    it('setDownloadedModels excludes Whisper STT models (they belong to Voice, not Text)', () => {
+      const { setDownloadedModels } = useAppStore.getState();
+      const text = createDownloadedModel({ id: 'qwen', fileName: 'qwen.gguf' });
+      const whisperById = createDownloadedModel({ id: 'whisper-small.en', fileName: 'ggml-small.en.bin' });
+      const whisperByFile = createDownloadedModel({ id: 'recovered_x', fileName: 'ggml-base.en.bin' });
+
+      setDownloadedModels([text, whisperById, whisperByFile]);
+
+      const models = getAppState().downloadedModels;
+      expect(models).toHaveLength(1);
+      expect(models[0].id).toBe('qwen');
+    });
+
+    it('addDownloadedModel ignores Whisper STT models', () => {
+      const { addDownloadedModel } = useAppStore.getState();
+      addDownloadedModel(createDownloadedModel({ id: 'whisper-small.en', fileName: 'ggml-small.en.bin' }));
+      expect(getAppState().downloadedModels).toHaveLength(0);
+    });
+
     it('removeDownloadedModel removes model by ID', () => {
       const { addDownloadedModel, removeDownloadedModel } = useAppStore.getState();
       const model1 = createDownloadedModel({ id: 'model-1' });
@@ -138,6 +157,16 @@ describe('appStore', () => {
       removeDownloadedModel('active-model');
 
       expect(getAppState().activeModelId).toBeNull();
+    });
+
+    it('setLastTextModelId records the selected text model as a preference', () => {
+      const { setLastTextModelId } = useAppStore.getState();
+      expect(getAppState().lastTextModelId).toBeNull();
+      setLastTextModelId('my-text-model');
+      expect(getAppState().lastTextModelId).toBe('my-text-model');
+      // Independent of activeModelId, so it survives residency eviction.
+      useAppStore.getState().setActiveModelId(null);
+      expect(getAppState().lastTextModelId).toBe('my-text-model');
     });
 
     it('removeDownloadedModel preserves activeModelId if different model removed', () => {
@@ -699,38 +728,10 @@ describe('appStore', () => {
       expect(merged.imageModelDownloadIds).toEqual({});
     });
 
-    it('migrates persisted modelLoadingStrategy memory to performance', () => {
-      const persistedState = {
-        settings: { modelLoadingStrategy: 'memory' },
-      };
-      const currentState = useAppStore.getState();
-      const merged: any = { ...currentState, ...persistedState };
-
-      if (persistedState?.settings?.modelLoadingStrategy === 'memory') {
-        merged.settings = { ...merged.settings, modelLoadingStrategy: 'performance' };
-      }
-
-      expect(merged.settings.modelLoadingStrategy).toBe('performance');
-    });
-
-    it('does not override explicit performance setting during migration', () => {
-      const persistedState = {
-        settings: { modelLoadingStrategy: 'performance' },
-      };
-      const currentState = useAppStore.getState();
-      const merged: any = { ...currentState, ...persistedState };
-
-      if ((persistedState as any)?.settings?.modelLoadingStrategy === 'memory') {
-        merged.settings = { ...merged.settings, modelLoadingStrategy: 'performance' };
-      }
-
-      expect(merged.settings.modelLoadingStrategy).toBe('performance');
-    });
-
-    it('actual store merge function migrates modelLoadingStrategy memory→performance', async () => {
+    it('strips the removed modelLoadingStrategy setting on rehydrate', async () => {
       const AsyncStorage = require('@react-native-async-storage/async-storage');
 
-      // Write persisted state with old 'memory' default into AsyncStorage (as Zustand persist would)
+      // Old persisted state still carrying the removed setting.
       const persistedPayload = JSON.stringify({
         state: {
           settings: { modelLoadingStrategy: 'memory' },
@@ -739,12 +740,10 @@ describe('appStore', () => {
       });
       await AsyncStorage.setItem('local-llm-app-storage', persistedPayload);
 
-      // Trigger Zustand persist to rehydrate from storage — this calls the actual merge function
       await (useAppStore as any).persist.rehydrate();
 
-      expect(useAppStore.getState().settings.modelLoadingStrategy).toBe('performance');
+      expect((useAppStore.getState().settings as any).modelLoadingStrategy).toBeUndefined();
 
-      // Clean up storage mock
       await AsyncStorage.removeItem('local-llm-app-storage');
     });
   });
@@ -789,15 +788,6 @@ describe('appStore', () => {
       expect(settings.gpuLayers).toBe(32);
     });
 
-    it('handles model loading strategy', () => {
-      const { updateSettings } = useAppStore.getState();
-
-      updateSettings({ modelLoadingStrategy: 'performance' });
-      expect(getAppState().settings.modelLoadingStrategy).toBe('performance');
-
-      updateSettings({ modelLoadingStrategy: 'memory' });
-      expect(getAppState().settings.modelLoadingStrategy).toBe('memory');
-    });
   });
 
   // ============================================================================
@@ -913,10 +903,6 @@ describe('appStore', () => {
 
     it('has enhanceImagePrompts disabled by default', () => {
       expect(getAppState().settings.enhanceImagePrompts).toBe(false);
-    });
-
-    it('has modelLoadingStrategy set to performance by default', () => {
-      expect(getAppState().settings.modelLoadingStrategy).toBe('performance');
     });
 
     it('has gpuLayers set to 99 by default', () => {

@@ -55,6 +55,7 @@ jest.mock('../../../src/services/llm', () => ({
     generateResponseWithTools: jest.fn(),
     supportsThinking: jest.fn(() => false),
     isThinkingEnabled: jest.fn(() => false),
+    supportsToolCalling: jest.fn(() => false),
     stopGeneration: jest.fn().mockResolvedValue(undefined),
     isModelLoaded: jest.fn(() => true),
   },
@@ -241,7 +242,41 @@ describe('runToolLoop', () => {
 
       expect(mockedLiteRTService.generateRaw).toHaveBeenCalledWith(
         'Compare these images',
-        ['file:///one.png', 'file:///two.png'],
+        expect.objectContaining({ imageUris: ['file:///one.png', 'file:///two.png'] }),
+        expect.objectContaining({
+          onToken: expect.any(Function),
+          onReasoning: expect.any(Function),
+        }),
+      );
+    });
+
+    it('forwards an audio attachment even when the turn has no text', async () => {
+      mockAppState = {
+        ...mockAppState,
+        downloadedModels: [{ id: 'litert-1', engine: 'litert' }],
+        activeModelId: 'litert-1',
+      };
+      mockedLiteRTService.isModelLoaded.mockReturnValue(true);
+
+      const ctx = createContext({
+        messages: [
+          makeMessage({ role: 'system', content: 'You are helpful.' }),
+          makeMessage({
+            role: 'user',
+            content: '',
+            attachments: [
+              { id: 'aud-1', type: 'audio', uri: 'file:///clip.wav' },
+            ],
+          }),
+        ],
+      });
+
+      await runToolLoop(ctx);
+
+      // The empty-text guard must NOT short-circuit an audio-only turn.
+      expect(mockedLiteRTService.generateRaw).toHaveBeenCalledWith(
+        '',
+        expect.objectContaining({ audioUris: ['file:///clip.wav'] }),
         expect.objectContaining({
           onToken: expect.any(Function),
           onReasoning: expect.any(Function),
@@ -284,6 +319,83 @@ describe('runToolLoop', () => {
 
       // LLM was called twice (initial + after tool result)
       expect(mockedGenerateResponseWithTools).toHaveBeenCalledTimes(2);
+    });
+
+    // Text-format tool-call parsing — small local models emit tool calls as text
+    // (no structured tool_calls). resolveToolCalls must recover them.
+    describe('text tool-call format parsing', () => {
+      // Returns the given text as the first turn's response (no structured calls),
+      // then a plain final answer on the second turn.
+      function mockTextToolCall(text: string) {
+        mockExecuteToolCall.mockResolvedValue(makeToolResult());
+        mockedGenerateResponseWithTools
+          .mockResolvedValueOnce({ fullResponse: text, toolCalls: [] })
+          .mockResolvedValueOnce({ fullResponse: 'Final answer.', toolCalls: [] });
+      }
+
+      it('parses Gemma native <|tool_call> with JSON args', async () => {
+        mockTextToolCall('<|tool_call>call:web_search{"query":"weather"}<tool_call|>');
+        await runToolLoop(createContext());
+        expect(mockExecuteToolCall).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'web_search', arguments: { query: 'weather' } }),
+        );
+      });
+
+      it('parses Gemma <|tool_call> with unquoted keys (fixUnquotedKeys)', async () => {
+        mockTextToolCall('<|tool_call>call:web_search{query: "rain"}<tool_call|>');
+        await runToolLoop(createContext());
+        expect(mockExecuteToolCall).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'web_search', arguments: { query: 'rain' } }),
+        );
+      });
+
+      it('parses an unclosed Gemma <|tool_call> at end of text', async () => {
+        mockTextToolCall('Let me check. <|tool_call>call:web_search{"query":"news"}');
+        await runToolLoop(createContext());
+        expect(mockExecuteToolCall).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'web_search', arguments: { query: 'news' } }),
+        );
+      });
+
+      it('parses Gemma colon-style args', async () => {
+        mockTextToolCall('<|tool_call>call:web_search:query: today<tool_call|>');
+        await runToolLoop(createContext());
+        expect(mockExecuteToolCall).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'web_search' }),
+        );
+      });
+
+      it('parses <tool_call> function-call style: name({...})', async () => {
+        mockTextToolCall('<tool_call>web_search({"query":"stocks"})</tool_call>');
+        await runToolLoop(createContext());
+        expect(mockExecuteToolCall).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'web_search', arguments: { query: 'stocks' } }),
+        );
+      });
+
+      it('parses <tool_call> bare style: name{...}', async () => {
+        mockTextToolCall('<tool_call>web_search{"query":"prices"}</tool_call>');
+        await runToolLoop(createContext());
+        expect(mockExecuteToolCall).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'web_search', arguments: { query: 'prices' } }),
+        );
+      });
+
+      it('parses standard <tool_call> JSON {name, arguments}', async () => {
+        mockTextToolCall('<tool_call>{"name":"web_search","arguments":{"query":"json"}}</tool_call>');
+        await runToolLoop(createContext());
+        expect(mockExecuteToolCall).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'web_search', arguments: { query: 'json' } }),
+        );
+      });
+
+      it('backfills an empty web_search query from the last user message (no-args style)', async () => {
+        mockTextToolCall('<tool_call>web_search</tool_call>');
+        await runToolLoop(createContext({ messages: [makeMessage({ content: 'find recent AI news' })] }));
+        expect(mockExecuteToolCall).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'web_search', arguments: { query: 'find recent AI news' } }),
+        );
+      });
     });
 
     it('adds assistant and tool result messages to chat store', async () => {

@@ -432,6 +432,51 @@ describe('ModelsScreen', () => {
   });
 
   // ============================================================================
+  // Voice Models Tab (locked teaser when pro is absent)
+  // ============================================================================
+  describe('voice models tab', () => {
+    it('always shows the Voice Models tab button', async () => {
+      const { getByTestId } = renderModelsScreen();
+
+      await waitFor(() => {
+        expect(getByTestId('voice-models-tab')).toBeTruthy();
+      });
+    });
+
+    it('shows the upsell when no voice engine is registered', async () => {
+      const { getByTestId } = renderModelsScreen();
+
+      await waitFor(() => expect(getByTestId('voice-models-tab')).toBeTruthy());
+
+      await act(async () => {
+        fireEvent.press(getByTestId('voice-models-tab'));
+      });
+
+      await waitFor(() => {
+        expect(getByTestId('voice-models-upsell')).toBeTruthy();
+      });
+    });
+
+    it('navigates to ProDetail when Get Pro is pressed', async () => {
+      const { getByTestId, getByText } = renderModelsScreen();
+
+      await waitFor(() => expect(getByTestId('voice-models-tab')).toBeTruthy());
+
+      await act(async () => {
+        fireEvent.press(getByTestId('voice-models-tab'));
+      });
+
+      await waitFor(() => expect(getByText('Get Pro')).toBeTruthy());
+
+      await act(async () => {
+        fireEvent.press(getByText('Get Pro'));
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith('ProDetail');
+    });
+  });
+
+  // ============================================================================
   // Download badge
   // ============================================================================
   describe('download badge', () => {

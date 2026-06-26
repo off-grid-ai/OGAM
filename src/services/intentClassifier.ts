@@ -1,6 +1,6 @@
 import { llmService } from './llm';
 import { activeModelService } from './activeModelService';
-import { DownloadedModel, ModelLoadingStrategy } from '../types';
+import { DownloadedModel } from '../types';
 import logger from '../utils/logger';
 
 export type Intent = 'image' | 'text';
@@ -10,8 +10,6 @@ interface ClassifyOptions {
   classifierModel?: DownloadedModel | null;
   currentModelPath?: string | null;
   onStatusChange?: (status: string) => void;
-  /** Model loading strategy - 'performance' keeps models loaded, 'memory' loads on demand */
-  modelLoadingStrategy?: ModelLoadingStrategy;
 }
 
 // Cache for common patterns to avoid repeated LLM calls
@@ -280,16 +278,11 @@ Answer:`;
       );
     } finally {
       // Swap back to original model if we changed it
-      // In 'memory' mode, we don't reload the original model to save memory
-      // The ChatScreen will reload it on-demand when needed for text generation
-      const strategy = opts.modelLoadingStrategy ?? 'performance';
-      if (needsModelSwap && originalModelId && strategy === 'performance') {
-        logger.log('[IntentClassifier] Swapping back to original model (performance mode)');
+      // Restore the original text model after classifying. The residency
+      // manager handles fitting it back into memory (evicting as needed).
+      if (needsModelSwap && originalModelId) {
         opts.onStatusChange?.('Restoring text model...');
-        // Use activeModelService singleton to load
         await activeModelService.loadTextModel(originalModelId);
-      } else if (needsModelSwap && strategy === 'memory') {
-        logger.log('[IntentClassifier] Keeping classifier model loaded (memory mode - will reload text model on demand)');
       }
     }
 

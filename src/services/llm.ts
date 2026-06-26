@@ -298,6 +298,15 @@ class LLMService {
     this.activeCompletionPromise = completionWork.then(() => { }, () => { });
     try { await completionWork; return fullResponse.trim(); } finally { this.isGenerating = false; this.activeCompletionPromise = null; }
   }
+
+  /** Ephemeral, tools-free routing pass for two-pass tool selection (not user-facing). */
+  async generateToolSelection(systemPrompt: string, userText: string): Promise<string> {
+    const messages: Message[] = [
+      { id: 'tool-select-sys', role: 'system', content: systemPrompt, timestamp: 0 },
+      { id: 'tool-select-user', role: 'user', content: userText, timestamp: 0 },
+    ];
+    return this.generateWithMaxTokens(messages, 64);
+  }
   async stopGeneration(): Promise<void> {
     if (this.context) { try { await this.context.stopCompletion(); } catch (e) { logger.log('[LLM] Stop error:', e); } }
     this.isGenerating = false;
@@ -315,8 +324,8 @@ class LLMService {
     return { gpu: this.gpuEnabled, gpuBackend: resolveGpuBackend(this.gpuEnabled, this.gpuDevices), gpuLayers: this.activeGpuLayers, reasonNoGPU: this.gpuReason };
   }
   isCurrentlyGenerating(): boolean { return this.isGenerating; }
-  private formatMessages(messages: Message[]): string { return formatLlamaMessages(messages, this.supportsVision()); }
-  private convertToOAIMessages(messages: Message[]): RNLlamaOAICompatibleMessage[] { return buildOAIMessages(messages); }
+  private formatMessages(messages: Message[]): string { return formatLlamaMessages(messages, this.supportsVision(), this.multimodalSupport?.audio ?? false); }
+  private convertToOAIMessages(messages: Message[]): RNLlamaOAICompatibleMessage[] { return buildOAIMessages(messages, this.multimodalSupport?.audio ?? false); }
   async getModelInfo() { return this.context ? { contextLength: APP_CONFIG.maxContextLength, vocabSize: 0 } : null; }
   async tokenize(text: string) {
     if (!this.context) throw new Error('No model loaded');

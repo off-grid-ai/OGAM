@@ -1,7 +1,6 @@
 import { create } from 'zustand';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const STORAGE_KEY = '@debug_logs';
+const MAX_IN_MEMORY = 500;
 
 export interface DebugLogEntry {
   timestamp: number;
@@ -11,30 +10,16 @@ export interface DebugLogEntry {
 
 interface DebugLogsState {
   logs: DebugLogEntry[];
-  loaded: boolean;
+  addLog: (entry: DebugLogEntry) => void;
   clearLogs: () => void;
-  loadFromStorage: () => Promise<void>;
 }
 
-export const useDebugLogsStore = create<DebugLogsState>((set, get) => ({
+export const useDebugLogsStore = create<DebugLogsState>((set) => ({
   logs: [],
-  loaded: false,
-  clearLogs: () => {
-    set({ logs: [] });
-    AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
-  },
-  loadFromStorage: async () => {
-    if (get().loaded) return;
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const logs: DebugLogEntry[] = JSON.parse(raw);
-        set({ logs, loaded: true });
-      } else {
-        set({ loaded: true });
-      }
-    } catch {
-      set({ loaded: true });
-    }
-  },
+  addLog: (entry) => set((state) => ({
+    logs: state.logs.length >= MAX_IN_MEMORY
+      ? [...state.logs.slice(-(MAX_IN_MEMORY - 1)), entry]
+      : [...state.logs, entry],
+  })),
+  clearLogs: () => set({ logs: [] }),
 }));

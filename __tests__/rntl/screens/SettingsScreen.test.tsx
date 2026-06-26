@@ -48,6 +48,9 @@ const mockSetOnboardingComplete = jest.fn();
 const mockSetThemeMode = jest.fn();
 const mockCompleteChecklistStep = jest.fn();
 const mockResetChecklist = jest.fn();
+// Mutated per-test to drive Pro banner visibility. `mock`-prefixed so jest.mock's
+// hoisted factory is allowed to reference it.
+const mockProState = { hasRegisteredPro: false, proBannerDismissed: false };
 jest.mock('../../../src/stores', () => ({
   useAppStore: jest.fn((selector?: any) => {
     const state = {
@@ -56,6 +59,9 @@ jest.mock('../../../src/stores', () => ({
       setThemeMode: mockSetThemeMode,
       completeChecklistStep: mockCompleteChecklistStep,
       resetChecklist: mockResetChecklist,
+      setProBannerDismissed: jest.fn(),
+      hasRegisteredPro: mockProState.hasRegisteredPro,
+      proBannerDismissed: mockProState.proBannerDismissed,
     };
     return selector ? selector(state) : state;
   }),
@@ -81,6 +87,19 @@ jest.mock('@react-navigation/native', () => ({
 describe('SettingsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockProState.hasRegisteredPro = false;
+    mockProState.proBannerDismissed = false;
+  });
+
+  it('shows the Pro upsell banner when Pro is not active and not dismissed', () => {
+    const { getByText } = render(<SettingsScreen />);
+    expect(getByText(/democratized/i)).toBeTruthy();
+  });
+
+  it('hides the Pro upsell banner once Pro is active', () => {
+    mockProState.hasRegisteredPro = true;
+    const { queryByText } = render(<SettingsScreen />);
+    expect(queryByText(/democratized/i)).toBeNull();
   });
 
   it('renders "Settings" title', () => {
@@ -96,16 +115,23 @@ describe('SettingsScreen', () => {
   it('renders navigation items', () => {
     const { getByText } = render(<SettingsScreen />);
     expect(getByText('Model Settings')).toBeTruthy();
-    expect(getByText('Voice Transcription')).toBeTruthy();
+    expect(getByText('Remote Servers')).toBeTruthy();
     expect(getByText('Security')).toBeTruthy();
     expect(getByText('Device Information')).toBeTruthy();
     expect(getByText('Storage')).toBeTruthy();
   });
 
+  it('does not render the removed Voice Transcription / Text to Speech rows', () => {
+    const { queryByText } = render(<SettingsScreen />);
+    expect(queryByText('Voice Transcription')).toBeNull();
+    expect(queryByText('Text to Speech')).toBeNull();
+    expect(queryByText('On-device speech to text')).toBeNull();
+  });
+
   it('renders navigation item descriptions', () => {
     const { getByText } = render(<SettingsScreen />);
     expect(getByText('System prompt, generation, and performance')).toBeTruthy();
-    expect(getByText('On-device speech to text')).toBeTruthy();
+    expect(getByText('Connect to Ollama, LM Studio, and more')).toBeTruthy();
     expect(getByText('Passphrase and app lock')).toBeTruthy();
     expect(getByText('Hardware and compatibility')).toBeTruthy();
     expect(getByText('Models and data usage')).toBeTruthy();
@@ -120,8 +146,8 @@ describe('SettingsScreen', () => {
   it('navigates to each settings screen', () => {
     const { getByText } = render(<SettingsScreen />);
 
-    fireEvent.press(getByText('Voice Transcription'));
-    expect(mockNavigate).toHaveBeenCalledWith('VoiceSettings');
+    fireEvent.press(getByText('Remote Servers'));
+    expect(mockNavigate).toHaveBeenCalledWith('RemoteServers');
 
     fireEvent.press(getByText('Security'));
     expect(mockNavigate).toHaveBeenCalledWith('SecuritySettings');

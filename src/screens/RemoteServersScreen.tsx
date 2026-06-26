@@ -252,5 +252,3 @@ export const RemoteServersScreen: React.FC = () => {
     </SafeAreaView>
   );
 };
-
-export default RemoteServersScreen;

@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <uses-permission android:name="com.android.vending.BILLING" tools:node="remove" />
+
     <!-- For voice recording -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
@@ -22,6 +24,10 @@
 
 <!-- To check and request battery optimization exemption for uninterrupted downloads -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- For reading and creating calendar events -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 
     <application
       android:name=".MainApplication"
@@ -53,6 +59,13 @@
         <intent-filter>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent-filter>
+        <!-- MCP OAuth redirect: offgrid://oauth/callback returns from the browser -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="offgrid" android:host="oauth" />
         </intent-filter>
       </activity>
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { Linking, Pressable, Text, StyleSheet } from 'react-native';
+import { Linking, Text } from 'react-native';
 import Markdown from '@ronradtke/react-native-markdown-display';
 import { useTheme } from '../theme';
 import type { ThemeColors } from '../theme';
@@ -14,23 +14,49 @@ export function preprocessMarkdown(text: string): string {
   return text.replaceAll(/(\d)\*(?=\d)/g, String.raw`$1\*`);
 }
 
-const linkWrapperStyles = StyleSheet.create({
-  pressable: { flexShrink: 1, paddingBottom: 6 },
-});
-
-/** Custom link rule that constrains the Pressable wrapper width */
+/** Custom link rule — renders as inline Text so it wraps correctly inside list items */
 function createLinkRule(onPress: (url: string) => void) {
-  return (node: any, renderChildren: any, _parent: any) => (
-    <Pressable
+  return (node: any, children: any, ...[, styles]: any[]) => (
+    <Text
       key={node.key}
       accessibilityRole="link"
-      style={linkWrapperStyles.pressable}
+      style={styles.link}
       onPress={() => onPress(node.attributes?.href ?? '')}
     >
-      <Text>{renderChildren}</Text>
-    </Pressable>
+      {children}
+    </Text>
   );
 }
+
+/** Drop the trailing newline markdown-it appends to code blocks. */
+function trimTrailingNewline(content: string): string {
+  return typeof content === 'string' && content.endsWith('\n') ? content.slice(0, -1) : content;
+}
+
+/**
+ * Make rendered text selectable so users can long-press to select and copy
+ * partial text (selectable propagates to nested inline Text). `textgroup` wraps
+ * all paragraph/inline text; fence/code_block cover code so it can be copied too.
+ */
+const selectableRules = {
+  // rest-param signature (node, children, parent, styles, inheritedStyles) keeps
+  // within the param limit while matching the markdown lib's rule API.
+  textgroup: (node: any, children: any, ...[, styles]: any[]) => (
+    <Text key={node.key} style={styles.textgroup} selectable>
+      {children}
+    </Text>
+  ),
+  fence: (node: any, _children: any, ...[, styles, inheritedStyles = {}]: any[]) => (
+    <Text key={node.key} style={[inheritedStyles, styles.fence]} selectable>
+      {trimTrailingNewline(node.content)}
+    </Text>
+  ),
+  code_block: (node: any, _children: any, ...[, styles, inheritedStyles = {}]: any[]) => (
+    <Text key={node.key} style={[inheritedStyles, styles.code_block]} selectable>
+      {trimTrailingNewline(node.content)}
+    </Text>
+  ),
+};
 
 interface MarkdownTextProps {
   children: string;
@@ -50,7 +76,10 @@ export function MarkdownText({ children, dimmed }: MarkdownTextProps) {
   }, []);
 
   const processed = useMemo(() => preprocessMarkdown(children), [children]);
-  const rules = useMemo(() => ({ link: createLinkRule(handleLinkPress) }), [handleLinkPress]);
+  const rules = useMemo(
+    () => ({ link: createLinkRule(handleLinkPress), ...selectableRules }),
+    [handleLinkPress],
+  );
 
   return (
     <Markdown style={markdownStyles} onLinkPress={handleLinkPress} rules={rules}>

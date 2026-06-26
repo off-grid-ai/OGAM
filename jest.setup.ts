@@ -15,6 +15,20 @@ try {
 
 const shouldPrintJestConsole = process.env.DEBUG_JEST_CONSOLE === '1';
 
+// react-native-keyboard-controller ships a jest mock; without it, any test that
+// renders App or ChatScreen pulls in its native module and crashes.
+jest.mock('react-native-keyboard-controller', () =>
+  require('react-native-keyboard-controller/jest'),
+);
+
+// react-native-edge-to-edge drives the system bars natively; stub its components
+// so tests rendering App don't reach the native module.
+jest.mock('react-native-edge-to-edge', () => ({
+  SystemBars: () => null,
+  StatusBar: () => null,
+  NavigationBar: () => null,
+}));
+
 // ============================================================================
 // AsyncStorage Mock
 // ============================================================================
@@ -149,6 +163,86 @@ jest.mock('whisper.rn', () => ({
   },
 }), { virtual: true });
 
+// react-native-audio-api mock
+jest.mock('react-native-audio-api', () => ({
+  AudioContext: jest.fn().mockImplementation(() => ({
+    createBuffer: jest.fn().mockReturnValue({ copyToChannel: jest.fn() }),
+    createBufferSource: jest.fn().mockReturnValue({
+      connect: jest.fn(),
+      start: jest.fn(),
+      stop: jest.fn(),
+      playbackRate: { value: 1.0 },
+      onEnded: null,
+      buffer: null,
+    }),
+    destination: {},
+    state: 'suspended',
+    resume: jest.fn().mockResolvedValue(undefined),
+    suspend: jest.fn().mockResolvedValue(undefined),
+    close: jest.fn().mockResolvedValue(undefined),
+  })),
+  AudioManager: {
+    setAudioSessionOptions: jest.fn(),
+    setAudioSessionActivity: jest.fn().mockResolvedValue(true),
+  },
+  AudioRecorder: jest.fn().mockImplementation(() => ({
+    enableFileOutput: jest.fn().mockReturnValue({ status: 'success', path: '/mock/audio/input.wav' }),
+    start: jest.fn().mockReturnValue({ status: 'success', path: '/mock/audio/input.wav' }),
+    stop: jest.fn().mockReturnValue({ status: 'success', path: '/mock/audio/input.wav', size: 1024, duration: 1.0 }),
+    pause: jest.fn(),
+    resume: jest.fn(),
+    isRecording: jest.fn().mockReturnValue(false),
+    isPaused: jest.fn().mockReturnValue(false),
+  })),
+  FileFormat: { Wav: 0, Caf: 1, M4A: 2, Flac: 3 },
+  FileDirectory: { Document: 0, Cache: 1 },
+}), { virtual: true });
+
+// @react-native-community/slider mock
+jest.mock('@react-native-community/slider', () => {
+  const { View } = require('react-native');
+  return { __esModule: true, default: View };
+});
+
+// react-native-executorch mock
+const mockVoiceConfig = { id: 'mock_voice' };
+jest.mock('react-native-executorch', () => ({
+  useTextToSpeech: jest.fn(() => ({
+    isReady: true,
+    downloadProgress: 1,
+    error: null,
+    stream: jest.fn(() => Promise.resolve()),
+    streamStop: jest.fn(),
+  })),
+  KOKORO_MEDIUM: {
+    modelName: 'kokoro-medium',
+    durationPredictorSource: 'https://example.test/kokoro/medium/duration_predictor.pte',
+    synthesizerSource: 'https://example.test/kokoro/medium/synthesizer.pte',
+  },
+  KOKORO_VOICE_AF_HEART: mockVoiceConfig,
+  KOKORO_VOICE_AF_RIVER: mockVoiceConfig,
+  KOKORO_VOICE_AF_SARAH: mockVoiceConfig,
+  KOKORO_VOICE_AM_ADAM: mockVoiceConfig,
+  KOKORO_VOICE_AM_MICHAEL: mockVoiceConfig,
+  KOKORO_VOICE_AM_SANTA: mockVoiceConfig,
+  KOKORO_VOICE_BF_EMMA: mockVoiceConfig,
+  KOKORO_VOICE_BM_DANIEL: mockVoiceConfig,
+}));
+
+// react-native-executorch-bare-resource-fetcher mock.
+// Default: nothing on disk. Tests override listDownloadedModels per case.
+jest.mock(
+  'react-native-executorch-bare-resource-fetcher',
+  () => ({
+    BareResourceFetcher: {
+      listDownloadedModels: jest.fn(async () => [] as string[]),
+      listDownloadedFiles: jest.fn(async () => [] as string[]),
+      deleteResources: jest.fn(async () => {}),
+    },
+  }),
+  { virtual: true },
+);
+
 // react-native-fs mock
 jest.mock('react-native-fs', () => ({
   DocumentDirectoryPath: '/mock/documents',
@@ -214,6 +308,27 @@ jest.mock('react-native-keychain', () => ({
   setGenericPassword: jest.fn(() => Promise.resolve(true)),
   getGenericPassword: jest.fn(() => Promise.resolve(false)),
   resetGenericPassword: jest.fn(() => Promise.resolve(true)),
+}));
+
+// react-native-purchases mock — the real package loads a native module that
+// is unavailable in the node test env, so any (even transitive / coverage-only)
+// require would throw. Suites that need behaviour override this with a local mock.
+jest.mock('react-native-purchases', () => ({
+  __esModule: true,
+  default: {
+    setLogLevel: jest.fn(),
+    configure: jest.fn(),
+    getCustomerInfo: jest.fn(() => Promise.resolve({ entitlements: { active: {} }, originalAppUserId: 'anon', allPurchaseDates: {} })),
+    restorePurchases: jest.fn(() => Promise.resolve({ entitlements: { active: {} } })),
+    getOfferings: jest.fn(() => Promise.resolve({ all: {}, current: null })),
+    purchasePackage: jest.fn(() => Promise.resolve({ customerInfo: { entitlements: { active: {} } } })),
+    logIn: jest.fn(() => Promise.resolve({ customerInfo: { entitlements: { active: {} }, originalAppUserId: 'anon' }, created: false })),
+    invalidateCustomerInfoCache: jest.fn(() => Promise.resolve()),
+    logOut: jest.fn(() => Promise.resolve()),
+    ENTITLEMENT_VERIFICATION_MODE: { DISABLED: 'DISABLED', INFORMATIONAL: 'INFORMATIONAL' },
+    VERIFICATION_RESULT: { NOT_REQUESTED: 'NOT_REQUESTED', VERIFIED: 'VERIFIED', FAILED: 'FAILED', VERIFIED_ON_DEVICE: 'VERIFIED_ON_DEVICE' },
+  },
+  LOG_LEVEL: { DEBUG: 'debug', ERROR: 'error' },
 }));
 
 // @react-native-voice/voice mock

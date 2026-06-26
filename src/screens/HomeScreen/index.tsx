@@ -8,20 +8,31 @@ import { OnboardingSheet } from '../../components/onboarding/OnboardingSheet';
 import { PulsatingIcon } from '../../components/onboarding/PulsatingIcon';
 import { useOnboardingSheet } from '../../components/onboarding/useOnboardingSheet';
 import { useFocusTrigger } from '../../hooks/useFocusTrigger';
+import { AttachStep } from 'react-native-spotlight-tour';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useThemedStyles, useTheme } from '../../theme';
 import { createStyles } from './styles';
 import { useHomeScreen, HomeScreenNavigationProp } from './hooks/useHomeScreen';
 import { useHomeScreenSpotlight } from './hooks/useHomeScreenSpotlight';
-import { ActiveModelsSection } from './components/ActiveModelsSection';
 import { RecentConversations } from './components/RecentConversations';
 import { ModelPickerSheet } from './components/ModelPickerSheet';
 import { LoadingOverlay } from './components/LoadingOverlay';
+import { ModelsSummaryRow } from '../../components/models/ModelsSummaryRow';
+import { ModelsManagerSheet, ModelRowType } from '../../components/models/ModelsManagerSheet';
+import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
+import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
+import { useWhisperStore } from '../../stores/whisperStore';
+import { WHISPER_MODELS } from '../../services';
+import { useUiModeStore } from '../../stores/uiModeStore';
 
 type HomeScreenProps = {
   navigation: HomeScreenNavigationProp;
 };
+
+// AttachStep wraps children in a View that otherwise shrinks to content width;
+// stretch it so the Models summary row fills the column like the other cards.
+const stretchStyle = { alignSelf: 'stretch' as const };
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const focusTrigger = useFocusTrigger();
@@ -73,6 +84,47 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     downloadedImageModelsCount: downloadedImageModels.length,
   });
 
+  // ── Collapsed Models control ──────────────────────────────────────────────
+  const [modelsManagerOpen, setModelsManagerOpen] = React.useState(false);
+  // Action queued by the manager (open a picker, or eject) — run only after the
+  // manager sheet has fully closed, so we never present a second modal while
+  // this one is mid-dismiss (that wedges iOS's modal system). Run from onClosed.
+  const pendingAfterCloseRef = React.useRef<(() => void) | null>(null);
+  const [whisperOpen, setWhisperOpen] = React.useState(false);
+  const [voiceOpen, setVoiceOpen] = React.useState(false);
+  const whisperModelId = useWhisperStore((s) => s.downloadedModelId);
+  const voiceSummary = useUiModeStore((s) => s.voiceSummary);
+
+  const modelLabels: Record<ModelRowType, string> = {
+    text: activeTextModel?.name ?? '—',
+    image: activeImageModel?.name ?? '—',
+    voice: voiceSummary ?? '—',
+    speech: WHISPER_MODELS.find((m) => m.id === whisperModelId)?.name ?? '—',
+  };
+
+  // Stash an action and close the manager; the action runs from the manager's
+  // onClosed once it has fully dismissed — so opening a picker or the eject
+  // confirmation never collides with the manager's own dismissal.
+  const closeManagerThen = (action: () => void) => {
+    pendingAfterCloseRef.current = action;
+    setModelsManagerOpen(false);
+  };
+
+  const openModelRow = (type: ModelRowType) => {
+    closeManagerThen(() => {
+      if (type === 'text') setPickerType('text');
+      else if (type === 'image') setPickerType('image');
+      else if (type === 'speech') setWhisperOpen(true);
+      else setVoiceOpen(true);
+    });
+  };
+
+  const runPendingAfterClose = () => {
+    const action = pendingAfterCloseRef.current;
+    pendingAfterCloseRef.current = null;
+    action?.();
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View testID="home-screen" style={styles.scrollView}>
@@ -87,25 +139,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          {/* Active Models Section */}
+          {/* Collapsed Models summary — tap to open the manager sheet. Both the
+              text (1) and image (13) tour steps anchor here now. */}
           <AnimatedEntry index={0} staggerMs={50} trigger={focusTrigger}>
-            <ActiveModelsSection
-              loadingState={loadingState}
-              activeTextModel={activeTextModel ?? undefined}
-              activeImageModel={activeImageModel ?? undefined}
-              downloadedModels={downloadedModels}
-              downloadedImageModels={downloadedImageModels}
-              remoteTextModelsCount={remoteTextModels.length}
-              remoteImageModelsCount={remoteImageModels.length}
-              activeModelId={activeModelId}
-              activeImageModelId={activeImageModelId}
-              activeRemoteTextModelId={activeRemoteTextModelId}
-              activeRemoteImageModelId={activeRemoteImageModelId}
-              isEjecting={isEjecting}
-              onPressTextModel={() => setPickerType('text')}
-              onPressImageModel={() => setPickerType('image')}
-              onEjectAll={handleEjectAll}
-            />
+            <AttachStep index={1} style={stretchStyle}>
+              <AttachStep index={13} style={stretchStyle}>
+                <ModelsSummaryRow
+                  labels={modelLabels}
+                  isLoading={loadingState.isLoading}
+                  onPress={() => setModelsManagerOpen(true)}
+                />
+              </AttachStep>
+            </AttachStep>
           </AnimatedEntry>
 
           {/* New Chat Button */}
@@ -226,7 +271,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         onAddServer={() => navigation.navigate('RemoteServers')}
       />
 
-      {/* Full-screen loading overlay */}
+      {/* Collapsed Models control: manager sheet + per-type pickers */}
+      <ModelsManagerSheet
+        visible={modelsManagerOpen}
+        onClose={() => setModelsManagerOpen(false)}
+        onClosed={runPendingAfterClose}
+        labels={modelLabels}
+        loadingState={loadingState}
+        isEjecting={isEjecting}
+        hasActiveModel={!!(activeModelId || activeImageModelId || activeRemoteTextModelId || activeRemoteImageModelId)}
+        onOpenRow={openModelRow}
+        onEject={() => closeManagerThen(handleEjectAll)}
+      />
+      <WhisperPickerSheet visible={whisperOpen} onClose={() => setWhisperOpen(false)} />
+      <VoiceModelsSheet visible={voiceOpen} onClose={() => setVoiceOpen(false)} />
+
+      {/* Full-screen model-loading overlay (animated progress + rotating tips). */}
       <LoadingOverlay loadingState={loadingState} />
 
       {/* Custom Alert Modal */}

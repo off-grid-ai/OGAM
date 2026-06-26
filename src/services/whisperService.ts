@@ -12,12 +12,21 @@ export interface TranscriptionResult {
 }
 export type TranscriptionCallback = (result: TranscriptionResult) => void;
 
+const GGML_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main';
+
 export const WHISPER_MODELS = [
-  { id: 'tiny.en', name: 'Whisper Tiny (English)', size: 75, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin', description: 'Fastest, English only, good for basic transcription' },
-  { id: 'tiny', name: 'Whisper Tiny (Multilingual)', size: 75, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin', description: 'Fast, supports multiple languages' },
-  { id: 'base.en', name: 'Whisper Base (English)', size: 142, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin', description: 'Better accuracy, English only' },
-  { id: 'base', name: 'Whisper Base (Multilingual)', size: 142, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin', description: 'Better accuracy, multiple languages' },
-  { id: 'small.en', name: 'Whisper Small (English)', size: 466, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin', description: 'High accuracy, English only, needs more RAM' },
+  // ── English-only ──────────────────────────────────────────────────────────
+  { id: 'tiny.en',   name: 'Tiny',   size: 75,   lang: 'en',    url: `${GGML_BASE}/ggml-tiny.en.bin`,   description: 'Fastest, English only' },
+  { id: 'base.en',   name: 'Base',   size: 142,  lang: 'en',    url: `${GGML_BASE}/ggml-base.en.bin`,   description: 'Better accuracy, English only' },
+  { id: 'small.en',  name: 'Small',  size: 466,  lang: 'en',    url: `${GGML_BASE}/ggml-small.en.bin`,  description: 'High accuracy, English only' },
+  { id: 'medium.en', name: 'Medium', size: 1500, lang: 'en',    url: `${GGML_BASE}/ggml-medium.en.bin`, description: 'Near human-level, English only, ~2 GB RAM' },
+  // ── Multilingual ──────────────────────────────────────────────────────────
+  { id: 'tiny',           name: 'Tiny',             size: 75,   lang: 'multi', url: `${GGML_BASE}/ggml-tiny.bin`,           description: 'Fastest, 99 languages' },
+  { id: 'base',           name: 'Base',             size: 142,  lang: 'multi', url: `${GGML_BASE}/ggml-base.bin`,           description: 'Better accuracy, 99 languages' },
+  { id: 'small',          name: 'Small',            size: 466,  lang: 'multi', url: `${GGML_BASE}/ggml-small.bin`,          description: 'High accuracy, 99 languages' },
+  { id: 'medium',         name: 'Medium',           size: 1500, lang: 'multi', url: `${GGML_BASE}/ggml-medium.bin`,         description: 'Near human-level, 99 languages, ~2 GB RAM' },
+  { id: 'large-v3-turbo', name: 'Large v3 Turbo',  size: 809,  lang: 'multi', url: `${GGML_BASE}/ggml-large-v3-turbo.bin`, description: 'Fast + accurate, distilled large, 99 languages' },
+  { id: 'large-v3',       name: 'Large v3',         size: 1550, lang: 'multi', url: `${GGML_BASE}/ggml-large-v3.bin`,       description: 'Best quality, 99 languages, ~3 GB RAM' },
 ];
 
 class WhisperService {
@@ -51,7 +60,14 @@ class WhisperService {
         url: model.url,
         fileName,
         modelId: `whisper-${modelId}`,
-        totalBytes: 0,
+        // Tag as speech-to-text so the Download Manager files an in-progress
+        // download under Voice. Without it the entry defaulted to 'text' and
+        // STT models showed up under Text (and never under the Voice filter).
+        modelType: 'stt',
+        // WHISPER_MODELS sizes are in MB; seed totalBytes so progress renders
+        // before the first byte arrives. The native layer refines this from the
+        // server's Content-Length once the download starts.
+        totalBytes: model.size * 1024 * 1024,
       },
       destPath,
       onProgress: onProgress
@@ -80,6 +96,43 @@ class WhisperService {
     logger.log(`[Whisper] Downloaded to ${destPath}`);
     return destPath;
   }
+  async downloadFromUrl(url: string, modelId: string, onProgress?: (progress: number) => void): Promise<string> {
+    await this.ensureModelsDirExists();
+    const destPath = this.getModelPath(modelId);
+    if (await RNFS.exists(destPath)) return destPath;
+    const download = RNFS.downloadFile({
+      fromUrl: url, toFile: destPath, progressDivider: 1,
+      progress: (res) => { onProgress?.(res.bytesWritten / res.contentLength); },
+    });
+    const result = await download.promise;
+    if (result.statusCode !== 200) {
+      await RNFS.unlink(destPath).catch(() => {});
+      throw new Error(`Download failed with status ${result.statusCode}`);
+    }
+    try {
+      await this.validateModelFile(destPath);
+    } catch (validationError) {
+      await RNFS.unlink(destPath).catch(() => {});
+      throw validationError;
+    }
+    return destPath;
+  }
+
+  /** List every downloaded ggml whisper model on disk (for the Download Manager). */
+  async listDownloadedModels(): Promise<Array<{ modelId: string; fileName: string; sizeBytes: number; filePath: string }>> {
+    const dir = this.getModelsDir();
+    if (!(await RNFS.exists(dir))) return [];
+    const entries = await RNFS.readDir(dir);
+    return entries
+      .filter(f => f.isFile() && f.name.startsWith('ggml-') && f.name.endsWith('.bin'))
+      .map(f => ({
+        modelId: f.name.replace(/^ggml-/, '').replace(/\.bin$/, ''),
+        fileName: f.name,
+        sizeBytes: Number(f.size) || 0,
+        filePath: f.path,
+      }));
+  }
+
   async deleteModel(modelId: string): Promise<void> {
     if (this.activeDownloadId !== null) {
       await backgroundDownloadService.cancelDownload(this.activeDownloadId).catch(() => {});

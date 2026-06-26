@@ -250,6 +250,7 @@ const createToggleStyles = (colors: ThemeColors) => ({
   modeToggleContainer: {
     marginBottom: SPACING.lg,
   },
+  dimmed: { opacity: 0.5 },
   modeToggleInfo: {
     marginBottom: SPACING.md,
   },

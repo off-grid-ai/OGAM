@@ -72,6 +72,7 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
     @Volatile private var conversation: com.google.ai.edge.litertlm.Conversation? = null
     private var activeBackend: String = "cpu"
     private var supportsVision: Boolean = false
+    private var supportsAudio: Boolean = false
     private var currentJob: Job? = null
 
     // Pending tool calls waiting for JS to respond via respondToToolCall()
@@ -85,9 +86,9 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
     // -------------------------------------------------------------------------
 
     @ReactMethod
-    fun loadModel(modelPath: String, backendStr: String, visionEnabled: Boolean, maxNumTokens: Int, promise: Promise) {
+    fun loadModel(modelPath: String, backendStr: String, visionEnabled: Boolean, audioEnabled: Boolean, maxNumTokens: Int, promise: Promise) {
         val safe = SafePromise(promise, TAG)
-        Log.i(TAG, "loadModel — path=$modelPath backend=$backendStr vision=$visionEnabled maxNumTokens=$maxNumTokens")
+        Log.i(TAG, "loadModel — path=$modelPath backend=$backendStr vision=$visionEnabled audio=$audioEnabled maxNumTokens=$maxNumTokens")
 
         scope.launch {
             try {
@@ -98,11 +99,12 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 val requestedBackend = parseBackend(backendStr)
                 Log.i(TAG, "loadModel — attempting backend chain from $backendStr")
 
-                val resolvedBackend = initializeWithFallback(modelPath, requestedBackend, visionEnabled)
+                val resolvedBackend = initializeWithFallback(modelPath, requestedBackend, visionEnabled, audioEnabled)
                 activeBackend = backendName(resolvedBackend)
                 supportsVision = visionEnabled
+                supportsAudio = audioEnabled
 
-                Log.i(TAG, "loadModel — success on backend=$activeBackend vision=$supportsVision")
+                Log.i(TAG, "loadModel — success on backend=$activeBackend vision=$supportsVision audio=$supportsAudio")
                 safe.resolve(activeBackend)
             } catch (e: Exception) {
                 Log.e(TAG, "loadModel — all backends failed: ${e.message}", e)
@@ -126,7 +128,7 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    private suspend fun tryInitBackend(modelPath: String, backend: Backend, name: String, visionEnabled: Boolean): Boolean {
+    private suspend fun tryInitBackend(modelPath: String, backend: Backend, name: String, visionEnabled: Boolean, audioEnabled: Boolean): Boolean {
         var eng: Engine? = null
         return try {
             val cfg = EngineConfig(
@@ -135,6 +137,10 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 maxNumTokens = configuredMaxTokens,
                 cacheDir = null,
                 visionBackend = if (visionEnabled) Backend.GPU() else null,
+                // Audio sub-model runs on CPU — the USM conformer encoder has no
+                // GPU/NPU delegate in litert-lm, and CPU keeps it off the GPU path
+                // that vision/decoder use.
+                audioBackend = if (audioEnabled) Backend.CPU() else null,
             )
             eng = Engine(cfg)
             withTimeout(initTimeoutMs(backend, configuredMaxTokens)) { eng.initialize() }
@@ -151,7 +157,7 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    private suspend fun initializeWithFallback(modelPath: String, requested: Backend, visionEnabled: Boolean): Backend {
+    private suspend fun initializeWithFallback(modelPath: String, requested: Backend, visionEnabled: Boolean, audioEnabled: Boolean): Backend {
         val chain = buildBackendChain(requested)
 
         // GPU/NPU failures can be transient (e.g. VRAM not yet released after a model switch).
@@ -168,9 +174,9 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                     Log.i(TAG, "initializeWithFallback — $name retry $attempt/$maxAttempts after ${gpuRetryDelayMs}ms")
                     delay(gpuRetryDelayMs)
                 } else {
-                    Log.i(TAG, "initializeWithFallback — trying $name vision=$visionEnabled")
+                    Log.i(TAG, "initializeWithFallback — trying $name vision=$visionEnabled audio=$audioEnabled")
                 }
-                if (tryInitBackend(modelPath, backend, name, visionEnabled)) return backend
+                if (tryInitBackend(modelPath, backend, name, visionEnabled, audioEnabled)) return backend
             }
 
             if (backend != chain.last()) {
@@ -269,22 +275,47 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    private suspend fun buildSendContents(imageUris: List<String>, text: String, safe: SafePromise): Contents? {
-        if (imageUris.isEmpty() || !supportsVision) return Contents.of(text)
+    private fun buildSendContents(imageUris: List<String>, audioUris: List<String>, text: String, safe: SafePromise): Contents? {
+        val usableImages = if (supportsVision) imageUris else emptyList()
+        val usableAudio = if (supportsAudio) audioUris else emptyList()
+        if (usableImages.isEmpty() && usableAudio.isEmpty()) {
+            if (audioUris.isNotEmpty() && !supportsAudio) {
+                Log.w(TAG, "buildSendContents — audio was provided but supportsAudio=false; " +
+                    "dropping audio and sending text-only (textLen=${text.length}). " +
+                    "Model was loaded without audioEnabled.")
+            }
+            return Contents.of(text)
+        }
         return try {
             val contents = mutableListOf<Content>()
-            imageUris.forEach { imageUri ->
+            usableImages.forEach { imageUri ->
                 contents += Content.ImageBytes(readImageAsPngBytes(imageUri))
             }
-            contents += Content.Text(text)
+            usableAudio.forEach { audioUri ->
+                // litert-lm decodes Content.AudioBytes with miniaudio, which needs a
+                // real audio container (WAV/MP3/FLAC with header) — NOT headerless PCM.
+                // Pass the full .wav file bytes (RIFF header intact) so miniaudio can
+                // decode + resample it. Stripping to raw PCM fails native init with
+                // "miniaudio decoder, error code: -10" (MA_INVALID_FILE).
+                val audioBytes = File(stripFileScheme(audioUri)).readBytes()
+                contents += Content.AudioBytes(audioBytes)
+            }
+            // Text goes after media, and only when present — an empty text turn
+            // alongside audio produces no reply.
+            if (text.isNotEmpty()) {
+                contents += Content.Text(text)
+            }
             Contents.of(*contents.toTypedArray())
         } catch (e: Exception) {
-            Log.e(TAG, "sendMessage — failed to read/decode image: ${e.message}", e)
-            sendEvent(EVENT_ERROR, "Failed to read image: ${e.message}")
-            safe.reject("LITERT_IMG_ERROR", "Failed to read image: ${e.message}", e)
+            Log.e(TAG, "sendMessage — failed to read media: ${e.message}", e)
+            sendEvent(EVENT_ERROR, "Failed to read media: ${e.message}")
+            safe.reject("LITERT_MEDIA_ERROR", "Failed to read media: ${e.message}", e)
             null
         }
     }
+
+    private fun stripFileScheme(uri: String): String =
+        if (uri.startsWith("file://")) Uri.parse(uri).path ?: uri.removePrefix("file://") else uri
 
     // -------------------------------------------------------------------------
     // sendMessage — sends only the current user turn, library holds history
@@ -294,7 +325,7 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
     fun sendMessage(text: String, imageUri: String?, promise: Promise) {
         val safe = SafePromise(promise, TAG)
         Log.i(TAG, "sendMessage — text length=${text.length} hasImage=${imageUri != null}")
-        sendMessageInternal(text, imageUri?.let { listOf(it) } ?: emptyList(), safe)
+        sendMessageInternal(text, imageUri?.let { listOf(it) } ?: emptyList(), emptyList(), safe)
     }
 
     @ReactMethod
@@ -302,10 +333,25 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
         val safe = SafePromise(promise, TAG)
         val uris = readableArrayToStringList(imageUris)
         Log.i(TAG, "sendMessageWithImages — text length=${text.length} imageCount=${uris.size}")
-        sendMessageInternal(text, uris, safe)
+        sendMessageInternal(text, uris, emptyList(), safe)
     }
 
-    private fun sendMessageInternal(text: String, imageUris: List<String>, safe: SafePromise) {
+    @ReactMethod
+    fun sendMessageWithAudio(text: String, audioUris: ReadableArray?, promise: Promise) {
+        val safe = SafePromise(promise, TAG)
+        val uris = readableArrayToStringList(audioUris)
+        sendMessageInternal(text, emptyList(), uris, safe)
+    }
+
+    @ReactMethod
+    fun sendMessageWithMedia(text: String, imageUris: ReadableArray?, audioUris: ReadableArray?, promise: Promise) {
+        val safe = SafePromise(promise, TAG)
+        val imgs = readableArrayToStringList(imageUris)
+        val auds = readableArrayToStringList(audioUris)
+        sendMessageInternal(text, imgs, auds, safe)
+    }
+
+    private fun sendMessageInternal(text: String, imageUris: List<String>, audioUris: List<String>, safe: SafePromise) {
         scope.launch {
             currentJob?.join()
 
@@ -318,10 +364,15 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
 
             currentJob = launch {
                 try {
-                    val contents = buildSendContents(imageUris, text, safe) ?: return@launch
+                    val contents = buildSendContents(imageUris, audioUris, text, safe) ?: return@launch
 
+                    var tokenCount = 0
                     conv.sendMessageAsync(contents)
-                        .collect { message -> dispatchStreamToken(message) }
+                        .collect { message ->
+                            tokenCount++
+                            if (tokenCount == 1) Log.i(TAG, "sendMessage — first message from model (audio=${audioUris.size} image=${imageUris.size})")
+                            dispatchStreamToken(message)
+                        }
 
                     sendEvent(EVENT_COMPLETE, buildBenchmarkJson(conv))
                     safe.resolve(null)

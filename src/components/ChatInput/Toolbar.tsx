@@ -35,6 +35,3 @@ export const QueueRow: React.FC<QueueRowProps> = ({ queueCount, queuedTexts, onC
     </View>
   );
 };
-
-// Legacy export kept for any direct imports
-export const ChatToolbar = QueueRow;

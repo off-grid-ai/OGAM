@@ -21,6 +21,12 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 export interface AppSheetProps {
   visible: boolean;
   onClose: () => void;
+  /**
+   * Fired AFTER the sheet has fully closed (close animation done, modal hidden).
+   * Use this to safely present another sheet without colliding with this one's
+   * dismissal — iOS can't present a modal while another is mid-dismiss.
+   */
+  onClosed?: () => void;
   onHeaderClosePress?: () => void;
   snapPoints?: (string | number)[];
   enableDynamicSizing?: boolean;
@@ -91,6 +97,7 @@ function createSheetPanResponder({
 export const AppSheet: React.FC<AppSheetProps> = ({
   visible,
   onClose,
+  onClosed,
   onHeaderClosePress,
   snapPoints,
   enableDynamicSizing = false,
@@ -113,6 +120,11 @@ export const AppSheet: React.FC<AppSheetProps> = ({
   // Keep onClose ref current for PanResponder
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+
+  // Keep onClosed ref current so the animateOut completion always calls the
+  // latest callback without recreating the close handlers.
+  const onClosedRef = useRef(onClosed);
+  onClosedRef.current = onClosed;
 
   // Guards backdrop-tap dismiss during animate-in.
   // Using a ref (not state) so there are zero re-renders — a state-based
@@ -210,7 +222,10 @@ export const AppSheet: React.FC<AppSheetProps> = ({
       setModalVisible(true);
 
     } else if (modalVisible) {
-      animateOut(() => setModalVisible(false));
+      animateOut(() => {
+        setModalVisible(false);
+        onClosedRef.current?.();
+      });
     }
   }, [visible]);
 
@@ -238,6 +253,7 @@ export const AppSheet: React.FC<AppSheetProps> = ({
     animateOut(() => {
       setModalVisible(false);
       onCloseRef.current();
+      onClosedRef.current?.();
     });
   }, [animateOut]);
 

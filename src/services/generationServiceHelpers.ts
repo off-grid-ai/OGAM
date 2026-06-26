@@ -66,6 +66,12 @@ function buildLiteRTMeta(svc: any, modelName: string | undefined): GenerationMet
 }
 
 export function buildGenerationMetaImpl(svc: any): GenerationMeta {
+  const meta = buildBaseGenerationMeta(svc);
+  const routed = svc.state?.routedToolNames;
+  if (Array.isArray(routed) && routed.length > 0) meta.routedToolNames = routed;
+  return meta;
+}
+function buildBaseGenerationMeta(svc: any): GenerationMeta {
   if (svc.isUsingRemoteProvider()) {
     const remoteStore = useRemoteServerStore.getState();
     const activeServer = remoteStore.getActiveServer();
@@ -140,6 +146,7 @@ export function buildToolLoopHandlersImpl(svc: any) {
       svc.state.streamingContent = content;
       useChatStore.getState().appendToStreamingMessage(content);
     },
+    onToolsRouted: (names: string[]) => { svc.state.routedToolNames = names; },
   };
 }
 
@@ -164,6 +171,7 @@ export async function prepareGenerationImpl(svc: any, conversationId: string): P
     isGenerating: true, isThinking: true, conversationId,
     streamingContent: '', startTime: Date.now(),
   });
+  svc.state.routedToolNames = undefined; // reset so a prior turn's tools don't leak
   useChatStore.getState().startStreaming(conversationId);
   // Drain pending native stop so LLM is idle before we start.
   if (svc.pendingStop !== null) await svc.pendingStop;
@@ -200,6 +208,22 @@ function assertLiteRTImageSupport(
   }
 }
 
+function assertLiteRTAudioSupport(
+  audioUris: string[] | undefined,
+  svc: any,
+  chatStore: ReturnType<typeof useChatStore.getState>,
+): void {
+  if (!audioUris || audioUris.length === 0) return;
+  const { downloadedModels, activeModelId } = useAppStore.getState();
+  const activeModel = downloadedModels.find((m: any) => m.id === activeModelId);
+  const liteRTActiveModel = activeModel?.engine === 'litert' ? activeModel : null;
+  if (!liteRTActiveModel?.liteRTAudio) {
+    chatStore.clearStreamingMessage();
+    svc.resetState();
+    throw new Error('This model does not support audio input. Remove the audio clip or switch to an audio-capable model.');
+  }
+}
+
 async function runLiteRTResponseImpl(svc: any, req: GenerationRequest): Promise<void> {
   const { conversationId, messages, onFirstToken } = req;
   const chatStore = useChatStore.getState();
@@ -218,8 +242,12 @@ async function runLiteRTResponseImpl(svc: any, req: GenerationRequest): Promise<
   const imageUris = allAttachments
     .filter((a: any) => a.type === 'image' && typeof a.uri === 'string' && a.uri.trim().length > 0)
     .map((a: any) => a.uri);
+  const audioUris = allAttachments
+    .filter((a: any) => a.type === 'audio' && typeof a.uri === 'string' && a.uri.trim().length > 0)
+    .map((a: any) => a.uri);
 
   assertLiteRTImageSupport(imageUris, svc, chatStore);
+  assertLiteRTAudioSupport(audioUris, svc, chatStore);
 
   const history = buildLiteRTHistory(messages);
 
@@ -278,7 +306,7 @@ async function runLiteRTResponseImpl(svc: any, req: GenerationRequest): Promise<
           svc.resetState();
         },
       },
-      imageUris,
+      { imageUris, audioUris },
     );
   } catch (error: any) {
     if (svc.abortRequested) return;

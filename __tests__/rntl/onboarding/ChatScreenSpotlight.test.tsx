@@ -154,7 +154,6 @@ jest.mock('../../../src/components', () => ({
   ProjectSelectorSheet: () => null,
   DebugSheet: () => null,
   ...require('../../utils/spotlightMocks').createCustomAlertMock(),
-  ToolPickerSheet: () => null,
   SharePromptSheet: () => null,
   ProAhaSheet: () => null,
 }));

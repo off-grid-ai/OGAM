@@ -12,7 +12,7 @@ import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { GITHUB_URL } from '../utils/sharePrompt';
 import packageJson from '../../package.json';
 
-const WEDNESDAY_MOBILE_URL = 'https://mobile.wednesday.is/hire-ai-native-mobile-squad?utm_source=off-grid-mobile-app&utm_medium=about-screen&utm_campaign=in-app';
+const WEDNESDAY_MOBILE_URL = 'https://wednesday.is';
 
 export const AboutScreen: React.FC = () => {
   const navigation = useNavigation();

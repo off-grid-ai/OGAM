@@ -109,6 +109,14 @@ android {
     testOptions {
         unitTests {
             includeAndroidResources = true
+            // Amazon IAP's com.amazon.device.iap.ResponseReceiver (pulled in transitively
+            // via RevenueCat) ships pre-Java-7 bytecode without stackmap frames. Robolectric
+            // instantiates every receiver in the merged manifest during app setup, and that
+            // class fails strict bytecode verification on JDK 17+ (VerifyError: "Expecting a
+            // stackmap frame at branch target"). Relax verification for the unit-test JVM only.
+            all {
+                jvmArgs '-noverify'
+            }
         }
     }
     buildTypes {

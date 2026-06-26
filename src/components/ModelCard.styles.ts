@@ -163,7 +163,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderRadius: 14,
   },
   compactNameRecommended: {
-    ...TYPOGRAPHY.h2,
+    ...TYPOGRAPHY.h3,
     color: colors.text,
   },
   recommendedHighlight: {
@@ -248,6 +248,14 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textSecondary,
     width: 40,
     textAlign: 'right' as const,
+  },
+  // LiteRT card only: tighten the gap and hug the percentage to the bar so it
+  // doesn't appear to float. Other model cards keep the default spacing.
+  progressContainerTight: {
+    gap: 8,
+  },
+  progressTextTight: {
+    textAlign: 'left' as const,
   },
   progressBytesText: {
     ...TYPOGRAPHY.meta,

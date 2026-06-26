@@ -54,8 +54,8 @@ export function extractBaseName(fileName: string): string {
 
 export function findMatchingMmProj(
   baseName: string,
-  mmProjFiles: RNFS.ReadDirItem[],
-): RNFS.ReadDirItem | undefined {
+  mmProjFiles: RNFS.ReadDirResItemT[],
+): RNFS.ReadDirResItemT | undefined {
   const noSeparators = baseName.replaceAll('-', '').replaceAll('_', '');
   return mmProjFiles.find(mf => {
     const lower = mf.name.toLowerCase();
@@ -63,7 +63,7 @@ export function findMatchingMmProj(
   });
 }
 
-function linkMmProjToModel(model: DownloadedModel, mmProjFiles: RNFS.ReadDirItem[]): void {
+function linkMmProjToModel(model: DownloadedModel, mmProjFiles: RNFS.ReadDirResItemT[]): void {
   if (model.engine !== 'llama') return;
   if (model.mmProjPath) return;
   if (!looksLikeVisionModel(model)) return;

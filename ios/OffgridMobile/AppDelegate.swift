@@ -18,7 +18,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     // Pass the completion handler to RNFS so it can finalize the background
     // URL session and signal iOS that all events have been processed.
     // Without this, iOS may penalise the app for not calling the handler promptly.
-    RNFSManager.setCompletionHandlerForIdentifier(identifier, completionHandler: completionHandler)
+    RNFSBackgroundDownloads.setCompletionHandlerForIdentifier(identifier, completionHandler: completionHandler)
   }
 
   func application(

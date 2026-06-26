@@ -118,8 +118,8 @@ describe('stripControlTokens', () => {
       expect(stripControlTokens('<|im_start|>assistant\n<|im_end|>')).toBe('');
     });
 
-    it('preserves whitespace in content', () => {
-      expect(stripControlTokens('  Hello  World  ')).toBe('  Hello  World  ');
+    it('trims leading/trailing whitespace in content', () => {
+      expect(stripControlTokens('  Hello  World  ')).toBe('Hello  World');
     });
 
     it('preserves HTML-like tags that are not control tokens', () => {

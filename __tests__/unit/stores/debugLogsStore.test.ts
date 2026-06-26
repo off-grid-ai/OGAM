@@ -1,68 +1,27 @@
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(() => Promise.resolve(null)),
-  setItem: jest.fn(() => Promise.resolve()),
-  removeItem: jest.fn(() => Promise.resolve()),
-}));
-
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDebugLogsStore } from '../../../src/stores/debugLogsStore';
 
-const mockedGetItem = AsyncStorage.getItem as jest.Mock;
-const mockedRemoveItem = AsyncStorage.removeItem as jest.Mock;
-
-beforeEach(() => {
-  jest.clearAllMocks();
-  useDebugLogsStore.setState({ logs: [], loaded: false } as any);
-});
-
 describe('debugLogsStore', () => {
-  describe('loadFromStorage', () => {
-    it('loads logs from AsyncStorage when raw data exists', async () => {
-      const stored = [{ timestamp: 1000, level: 'log', message: 'hello' }];
-      mockedGetItem.mockResolvedValueOnce(JSON.stringify(stored));
+  beforeEach(() => useDebugLogsStore.getState().clearLogs());
 
-      await useDebugLogsStore.getState().loadFromStorage();
-
-      expect(useDebugLogsStore.getState().logs).toHaveLength(1);
-      expect(useDebugLogsStore.getState().logs[0].message).toBe('hello');
-      expect(useDebugLogsStore.getState().loaded).toBe(true);
-    });
-
-    it('sets loaded=true and keeps empty logs when AsyncStorage has no data', async () => {
-      mockedGetItem.mockResolvedValueOnce(null);
-
-      await useDebugLogsStore.getState().loadFromStorage();
-
-      expect(useDebugLogsStore.getState().logs).toHaveLength(0);
-      expect(useDebugLogsStore.getState().loaded).toBe(true);
-    });
-
-    it('skips the read when already loaded', async () => {
-      useDebugLogsStore.setState({ loaded: true } as any);
-
-      await useDebugLogsStore.getState().loadFromStorage();
-
-      expect(mockedGetItem).not.toHaveBeenCalled();
-    });
-
-    it('sets loaded=true and keeps empty logs when AsyncStorage throws', async () => {
-      mockedGetItem.mockRejectedValueOnce(new Error('storage error'));
-
-      await useDebugLogsStore.getState().loadFromStorage();
-
-      expect(useDebugLogsStore.getState().loaded).toBe(true);
-      expect(useDebugLogsStore.getState().logs).toHaveLength(0);
-    });
+  it('appends log entries in order', () => {
+    useDebugLogsStore.getState().addLog({ timestamp: 1, level: 'log', message: 'a' });
+    useDebugLogsStore.getState().addLog({ timestamp: 2, level: 'warn', message: 'b' });
+    expect(useDebugLogsStore.getState().logs.map(l => l.message)).toEqual(['a', 'b']);
   });
 
-  describe('clearLogs', () => {
-    it('empties the logs array and calls AsyncStorage.removeItem', () => {
-      useDebugLogsStore.setState({ logs: [{ timestamp: 1, level: 'log', message: 'x' }] } as any);
+  it('caps the buffer at the in-memory limit, dropping the oldest', () => {
+    for (let i = 0; i < 520; i++) {
+      useDebugLogsStore.getState().addLog({ timestamp: i, level: 'log', message: `m${i}` });
+    }
+    const { logs } = useDebugLogsStore.getState();
+    expect(logs.length).toBe(500);
+    expect(logs[0].message).toBe('m20'); // oldest 20 dropped
+    expect(logs[logs.length - 1].message).toBe('m519'); // newest kept
+  });
 
-      useDebugLogsStore.getState().clearLogs();
-
-      expect(useDebugLogsStore.getState().logs).toHaveLength(0);
-      expect(mockedRemoveItem).toHaveBeenCalled();
-    });
+  it('clearLogs empties the buffer', () => {
+    useDebugLogsStore.getState().addLog({ timestamp: 1, level: 'error', message: 'x' });
+    useDebugLogsStore.getState().clearLogs();
+    expect(useDebugLogsStore.getState().logs).toEqual([]);
   });
 });

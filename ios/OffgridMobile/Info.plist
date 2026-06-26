@@ -18,6 +18,17 @@
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>ai.offgridmobile.oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>offgrid</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleSignature</key>
@@ -26,6 +37,11 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>twitter</string>
+		<string>x</string>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
@@ -49,6 +65,10 @@
 	<string>This app needs permission to save generated images to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your photo library to attach images to conversations.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Used to read and create calendar events on your request.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Used to read and create calendar events on your request.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>This app uses on-device speech recognition to transcribe voice input.</string>
 	<key>RCTNewArchEnabled</key>

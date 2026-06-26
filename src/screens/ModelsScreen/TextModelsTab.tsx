@@ -20,7 +20,7 @@ import { TextFiltersSection } from './TextFiltersSection';
 import { FilterState, SortOption } from './types';
 import { SORT_OPTIONS } from './constants';
 import { formatNumber, getTextModelCompatibility } from './utils';
-import { CURATED_LITERT_ENTRIES, buildCuratedLiteRTUrl, getCuratedLiteRTEntry } from '../../services/curatedLiteRTRegistry';
+import { CURATED_LITERT_ENTRIES, buildCuratedLiteRTFiles, getCuratedLiteRTEntry, LITERT_PARENT_ID } from '../../services/curatedLiteRTRegistry';
 import { backgroundDownloadService, modelManager } from '../../services';
 import { useAppStore } from '../../stores';
 
@@ -284,7 +284,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
   );
 };
 
-export const LITERT_PARENT_ID = 'offgrid/litert-recommended';
+export { LITERT_PARENT_ID };
 
 // LiteRT-specific per-file metadata (display name + highlight) used to render
 // individual file cards in the detail view. Derived from the curated registry —
@@ -304,17 +304,7 @@ export const LITERT_RECOMMENDED_MODEL: ModelInfo = {
   description: 'Hardware-accelerated inference with vision support.',
   downloads: 0, likes: 0, tags: ['litert'], lastModified: '',
   modelType: 'vision',
-  files: CURATED_LITERT_ENTRIES.map(e => ({
-    name: e.fileName,
-    size: e.sizeBytes,
-    // Repurpose the quant chip slot as an engine label for curated LiteRT
-    // entries. Llama files keep their real quant strings (Q4_K_M etc.); this
-    // value never appears on a .gguf card. Mixed-precision is what the actual
-    // weights use, but "LiteRT" is what's useful to the reader.
-    quantization: 'LiteRT',
-    downloadUrl: buildCuratedLiteRTUrl(e),
-    liteRTVision: e.liteRTVision,
-  })),
+  files: buildCuratedLiteRTFiles(),
 };
 
 const LITERT_PARENT_RECOMMENDED = {

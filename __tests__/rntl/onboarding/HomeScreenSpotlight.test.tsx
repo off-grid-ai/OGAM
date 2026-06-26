@@ -146,23 +146,12 @@ jest.mock('../../../src/components/onboarding/useOnboardingSheet', () => ({
 }));
 
 // Mock the HomeScreen sub-components
-jest.mock('../../../src/screens/HomeScreen/components/ActiveModelsSection', () => ({
-  ActiveModelsSection: () => {
-    const { View, Text } = require('react-native');
-    return <View testID="active-models-section"><Text>Models</Text></View>;
-  },
-}));
-
 jest.mock('../../../src/screens/HomeScreen/components/RecentConversations', () => ({
   RecentConversations: () => null,
 }));
 
 jest.mock('../../../src/screens/HomeScreen/components/ModelPickerSheet', () => ({
   ModelPickerSheet: () => null,
-}));
-
-jest.mock('../../../src/screens/HomeScreen/components/LoadingOverlay', () => ({
-  LoadingOverlay: () => null,
 }));
 
 import { HomeScreen } from '../../../src/screens/HomeScreen';

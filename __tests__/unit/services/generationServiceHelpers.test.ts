@@ -421,6 +421,56 @@ describe('generateResponseImpl — LiteRT path', () => {
     });
     expect(clear).toHaveBeenCalled();
   });
+
+  it('routes an audio attachment to sendMessage as audioUris when the model supports audio', async () => {
+    mockedGetState.mockReturnValue({
+      ...makeLiteRTState(),
+      downloadedModels: [{ id: 'litert-1', name: 'Gemma 4 E2B', engine: 'litert', liteRTAudio: true }],
+      activeModelId: 'litert-1',
+    });
+    (useChatStore.getState as jest.Mock).mockReturnValue({
+      startStreaming: jest.fn(), clearStreamingMessage: jest.fn(),
+      appendToStreamingMessage: jest.fn(), finalizeStreamingMessage: jest.fn(),
+    });
+    mockedLiteRT.sendMessage.mockImplementation((_t: any, callbacks: any) => {
+      callbacks.onComplete('', '', null);
+      return Promise.resolve();
+    });
+
+    await generateResponseImpl(makeLiteRTSvc(), {
+      conversationId: 'conv-1',
+      messages: [{
+        id: '1', timestamp: 0, role: 'user' as const, content: '',
+        attachments: [{ id: 'a', type: 'audio' as const, uri: 'file:///clip.wav' }],
+      }],
+    });
+
+    expect(mockedLiteRT.sendMessage).toHaveBeenCalledWith('', expect.any(Object), { imageUris: [], audioUris: ['file:///clip.wav'] });
+  });
+
+  it('rejects an audio attachment when the active model has no audio support', async () => {
+    mockedGetState.mockReturnValue({
+      ...makeLiteRTState(),
+      downloadedModels: [{ id: 'litert-1', name: 'Gemma vision-only', engine: 'litert', liteRTAudio: false }],
+      activeModelId: 'litert-1',
+    });
+    const clear = jest.fn();
+    (useChatStore.getState as jest.Mock).mockReturnValue({
+      startStreaming: jest.fn(), clearStreamingMessage: clear,
+      appendToStreamingMessage: jest.fn(), finalizeStreamingMessage: jest.fn(),
+    });
+
+    await expect(generateResponseImpl(makeLiteRTSvc(), {
+      conversationId: 'conv-1',
+      messages: [{
+        id: '1', timestamp: 0, role: 'user' as const, content: '',
+        attachments: [{ id: 'a', type: 'audio' as const, uri: 'file:///clip.wav' }],
+      }],
+    })).rejects.toThrow(/does not support audio/);
+
+    expect(clear).toHaveBeenCalled();
+    expect(mockedLiteRT.sendMessage).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

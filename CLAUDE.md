@@ -46,6 +46,25 @@ The emotional arc for all content: **Recognition -> Return -> Freedom**. Name wh
 - Never use `lucide-react` or any other icon library — only `react-native-vector-icons`.
 - Follow the 5-category text hierarchy: TITLE → BODY → SUBTITLE/DESCRIPTION → META.
 
+## Reuse Before Building
+
+**Before writing any new component, style, hook, or service, search for an existing one and reuse it.** Building a parallel version of something that already exists creates visual and behavioural drift (e.g. a search box that looks different from every other search box).
+
+- For UI: grep `src/components/` and the relevant screen folder for an existing component or shared style (e.g. `ModelCard`, `Card`, `Button`, shared `searchContainer`/`searchInput` styles) before creating your own. Two screens that show the same kind of thing must use the same component.
+- For logic: check for an existing hook/service/store action (`grep -rn`) before adding a new one.
+- If an existing component is close but not exact, extend it with a prop rather than forking a copy.
+- Only build new when nothing fits — and say so in the PR description.
+
+## Architecture & Abstractions (SOLID)
+
+**Design to abstractions, not concrete implementations.** When there are multiple interchangeable implementations of a thing (TTS engines, model backends, providers, storage), the rest of the app must depend on a single interface/service layer — never branch on a concrete type.
+
+- **No leaking implementation details upward.** UI and stores must not do `instanceof SpecificEngine`, check `engineId === 'kokoro'`, or branch on capabilities to decide *how* to do something. Push that decision behind the abstraction (the engine/provider implements it; or a service layer dispatches once). If you find yourself writing `if (engine X) … else …` in a component, the abstraction is wrong.
+- **Single uniform entry point.** Prefer one polymorphic method (e.g. `engine.play(text, opts)`) that every implementation satisfies over several mechanism-specific methods (`speak` vs `playFromFile`) that callers must choose between.
+- **Service layer between UI and implementations.** Implementations (engines/adapters) are swappable; a service abstracts them and exposes a normalized API + state. Adding a new implementation must require zero changes to UI/store.
+- **Dependency Inversion / Liskov:** any implementation must be substitutable through the interface without callers knowing which one is active. Normalize gaps (e.g. an engine that can't report playback position) inside the service, not in the UI.
+- Apply the rest of SOLID: single responsibility per module, open for extension (add an implementation) / closed for modification (don't touch callers), segregated interfaces (don't force implementations to stub methods they can't support — model that with the abstraction).
+
 ## Pre-Commit Quality Gates
 
 All quality gates run automatically via Husky on every `git commit`, scoped to the file types you staged:

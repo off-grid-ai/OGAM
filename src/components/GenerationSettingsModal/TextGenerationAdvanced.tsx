@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Platform, View, Text, TouchableOpacity } from 'react-native';
-import Slider from '@react-native-community/slider';
-import { useTheme, useThemedStyles } from '../../theme';
+import { SliderSetting } from '../SliderSetting';
+import { useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { CacheType, InferenceBackend, LiteRTBackend, INFERENCE_BACKENDS } from '../../types';
 import {
@@ -37,7 +37,6 @@ const HTP_BACKEND: BackendOption = {
 };
 
 export const BackendSelector: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
   const { gpuLayersEffective } = useTextGenerationAdvanced();
@@ -82,21 +81,13 @@ export const BackendSelector: React.FC = () => {
 
       {showLayers && (
         <View style={styles.gpuLayersInline}>
-          <View style={styles.settingHeader}>
-            <Text style={styles.settingLabel}>{layersLabel}</Text>
-            <Text style={styles.settingValue}>{gpuLayersEffective}</Text>
-          </View>
-          <Slider
-            testID="gpu-layers-slider"
-            style={styles.slider}
-            minimumValue={1}
-            maximumValue={GPU_LAYERS_MAX}
-            step={1}
+          <SliderSetting
+            testID="gpu-layers-stepper"
+            label={layersLabel}
+            description="Layers offloaded to GPU. Higher = faster but may crash on low-VRAM devices. Requires model reload."
             value={gpuLayersEffective}
-            onSlidingComplete={(value: number) => updateSettings({ gpuLayers: value })}
-            minimumTrackTintColor={colors.primary}
-            maximumTrackTintColor={colors.surfaceLight}
-            thumbTintColor={colors.primary}
+            min={1} max={GPU_LAYERS_MAX} step={1}
+            onChange={(value) => updateSettings({ gpuLayers: value })}
           />
         </View>
       )}
@@ -219,99 +210,40 @@ export const KvCacheTypeToggle: React.FC = () => {
   );
 };
 
-// ─── Model Loading Strategy ───────────────────────────────────────────────────
-
-export const ModelLoadingStrategyToggle: React.FC = () => {
-  const styles = useThemedStyles(createStyles);
-  const { settings, updateSettings } = useAppStore();
-  const isPerformance = settings.modelLoadingStrategy === 'performance';
-  const isMemory = settings.modelLoadingStrategy === 'memory';
-
-  return (
-    <View style={styles.modeToggleContainer}>
-      <View style={styles.modeToggleInfo}>
-        <Text style={styles.modeToggleLabel}>Model Loading Strategy</Text>
-        <Text style={styles.modeToggleDesc}>
-          {isPerformance
-            ? 'Keep models loaded for faster responses (uses more memory)'
-            : 'Load models on demand to save memory (slower switching)'}
-        </Text>
-      </View>
-      <View style={styles.modeToggleButtons}>
-        <TouchableOpacity
-          style={[styles.modeButton, isMemory && styles.modeButtonActive]}
-          onPress={() => updateSettings({ modelLoadingStrategy: 'memory' })}
-        >
-          <Text style={[styles.modeButtonText, isMemory && styles.modeButtonTextActive]}>
-            Save Memory
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.modeButton, isPerformance && styles.modeButtonActive]}
-          onPress={() => updateSettings({ modelLoadingStrategy: 'performance' })}
-        >
-          <Text style={[styles.modeButtonText, isPerformance && styles.modeButtonTextActive]}>
-            Fast
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
-
 // ─── CPU Threads & Batch Size ────────────────────────────────────────────────
 
 export const CpuThreadsSlider: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { updateSettings } = useAppStore();
-  const { cpuThreadsDisplayValue, cpuThreadsSliderValue } = useTextGenerationAdvanced();
+  const { cpuThreadsSliderValue } = useTextGenerationAdvanced();
 
   return (
     <View style={styles.modeToggleContainer}>
-      <View style={styles.settingHeader}>
-        <Text style={styles.settingLabel}>CPU Threads</Text>
-        <Text style={styles.settingValue}>{cpuThreadsDisplayValue}</Text>
-      </View>
-      <Text style={styles.settingDescription}>Parallel threads for inference</Text>
-      <Slider
-        style={styles.slider}
-        minimumValue={1}
-        maximumValue={12}
-        step={1}
+      <SliderSetting
+        testID="cpu-threads-stepper"
+        label="CPU Threads"
+        description="Parallel threads for inference"
         value={cpuThreadsSliderValue}
-        onSlidingComplete={(v: number) => updateSettings({ nThreads: v })}
-        minimumTrackTintColor={colors.primary}
-        maximumTrackTintColor={colors.surfaceLight}
-        thumbTintColor={colors.primary}
+        min={1} max={12} step={1}
+        onChange={(v) => updateSettings({ nThreads: v })}
       />
     </View>
   );
 };
 
 export const BatchSizeSlider: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
-  const value = settings.nBatch ?? 512;
 
   return (
     <View style={styles.modeToggleContainer}>
-      <View style={styles.settingHeader}>
-        <Text style={styles.settingLabel}>Batch Size</Text>
-        <Text style={styles.settingValue}>{value}</Text>
-      </View>
-      <Text style={styles.settingDescription}>Tokens processed per batch</Text>
-      <Slider
-        style={styles.slider}
-        minimumValue={32}
-        maximumValue={512}
-        step={32}
-        value={value}
-        onSlidingComplete={(v: number) => updateSettings({ nBatch: v })}
-        minimumTrackTintColor={colors.primary}
-        maximumTrackTintColor={colors.surfaceLight}
-        thumbTintColor={colors.primary}
+      <SliderSetting
+        testID="batch-size-stepper"
+        label="Batch Size"
+        description="Tokens processed per batch"
+        value={settings.nBatch ?? 512}
+        min={32} max={512} step={32}
+        onChange={(v) => updateSettings({ nBatch: v })}
       />
     </View>
   );

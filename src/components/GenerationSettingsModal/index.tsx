@@ -9,6 +9,7 @@ import { createStyles } from './styles';
 import { ConversationActionsSection } from './ConversationActionsSection';
 import { ImageGenerationSection } from './ImageGenerationSection';
 import { TextGenerationSection } from './TextGenerationSection';
+import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
 const DEFAULT_SETTINGS = {
   temperature: 0.7,
@@ -26,6 +27,7 @@ interface GenerationSettingsModalProps {
   onOpenProject?: () => void;
   onOpenGallery?: () => void;
   onDeleteConversation?: () => void;
+  onOpenTTSSettings?: () => void;
   conversationImageCount?: number;
   activeProjectName?: string | null;
   isRemote?: boolean;
@@ -37,6 +39,7 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
   onOpenProject,
   onOpenGallery,
   onDeleteConversation,
+  onOpenTTSSettings,
   conversationImageCount = 0,
   activeProjectName,
   isRemote,
@@ -48,6 +51,10 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
   const [performanceStats, setPerformanceStats] = useState(llmService.getPerformanceStats());
   const [imageSettingsOpen, setImageSettingsOpen] = useState(false);
   const [textSettingsOpen, setTextSettingsOpen] = useState(false);
+  const [ttsSettingsOpen, setTtsSettingsOpen] = useState(false);
+  // TTS settings come from the pro audio feature via a slot. Free builds have
+  // no TTS section.
+  const TtsSection = getSlot(SLOTS.generationSettingsTts);
 
   useEffect(() => {
     if (visible) {
@@ -141,6 +148,27 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
               </View>
             )}
             <TextGenerationSection />
+          </>
+        )}
+
+        {/* TTS SETTINGS (pro audio feature) */}
+        {TtsSection && (
+          <>
+            <TouchableOpacity
+              style={styles.accordionHeader}
+              onPress={() => setTtsSettingsOpen(!ttsSettingsOpen)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.accordionTitle}>TEXT TO SPEECH</Text>
+              <Icon
+                name={ttsSettingsOpen ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={colors.textMuted}
+              />
+            </TouchableOpacity>
+            {ttsSettingsOpen && (
+              <TtsSection onNavigateToTTSSettings={onOpenTTSSettings} />
+            )}
           </>
         )}
 

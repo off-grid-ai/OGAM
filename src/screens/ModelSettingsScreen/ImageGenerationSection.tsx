@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Switch, Platform, TouchableOpacity } from 'react-native';
-import Slider from '@react-native-community/slider';
 import { AdvancedToggle, Card } from '../../components';
+import { SliderSetting } from '../../components/SliderSetting';
 import { Button } from '../../components/Button';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
@@ -13,24 +13,33 @@ import { createStyles } from './styles';
 const EnhanceImageToggle: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const { settings, updateSettings } = useAppStore();
+  const { settings, updateSettings, downloadedModels } = useAppStore();
   const trackColor = { false: colors.surfaceLight, true: `${colors.primary}80` };
+  // Enhancement runs the prompt through a text model, so it needs one available.
+  const hasTextModel = downloadedModels.length > 0;
+  const enabled = (settings?.enhanceImagePrompts ?? false) && hasTextModel;
+
+  let description: string;
+  if (!hasTextModel) {
+    description = 'Download a text model to enable prompt enhancement';
+  } else if (settings?.enhanceImagePrompts) {
+    description = 'Text model refines your prompt before image generation (slower but better results)';
+  } else {
+    description = 'Use your prompt directly for image generation (faster)';
+  }
 
   return (
-    <View style={styles.toggleRow}>
+    <View style={[styles.toggleRow, !hasTextModel && styles.dimmed]}>
       <View style={styles.toggleInfo}>
         <Text style={styles.toggleLabel}>Enhance Image Prompts</Text>
-        <Text style={styles.toggleDesc}>
-          {settings?.enhanceImagePrompts
-            ? 'Text model refines your prompt before image generation (slower but better results)'
-            : 'Use your prompt directly for image generation (faster)'}
-        </Text>
+        <Text style={styles.toggleDesc}>{description}</Text>
       </View>
       <Switch
-        value={settings?.enhanceImagePrompts ?? false}
+        value={enabled}
+        disabled={!hasTextModel}
         onValueChange={(value) => updateSettings({ enhanceImagePrompts: value })}
         trackColor={trackColor}
-        thumbColor={settings?.enhanceImagePrompts ? colors.primary : colors.textMuted}
+        thumbColor={enabled ? colors.primary : colors.textMuted}
       />
     </View>
   );
@@ -114,51 +123,27 @@ const DetectionMethodRow: React.FC = () => {
 // ─── Advanced Section ────────────────────────────────────────────────────────
 
 const ImageAdvancedSection: React.FC = () => {
-  const { colors } = useTheme();
-  const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
 
   return (
     <>
-      <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Guidance Scale</Text>
-          <Text style={styles.sliderValue}>{(settings?.imageGuidanceScale || 7.5).toFixed(1)}</Text>
-        </View>
-        <Text style={styles.sliderDesc}>Higher = follows prompt more strictly</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1}
-          maximumValue={20}
-          step={0.5}
-          value={settings?.imageGuidanceScale || 7.5}
-          onSlidingComplete={(value) => updateSettings({ imageGuidanceScale: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
-        />
-      </View>
+      <SliderSetting
+        testID="image-guidance-scale"
+        label="Guidance Scale"
+        description="Higher = follows prompt more strictly"
+        value={settings?.imageGuidanceScale || 7.5}
+        min={1} max={20} step={0.5} decimals={1}
+        onChange={(value) => updateSettings({ imageGuidanceScale: value })}
+      />
 
-      <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Image Threads</Text>
-          <Text style={styles.sliderValue}>{settings?.imageThreads ?? 4}</Text>
-        </View>
-        <Text style={styles.sliderDesc}>
-          CPU threads used for image generation (applies on next image model load)
-        </Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1}
-          maximumValue={8}
-          step={1}
-          value={settings?.imageThreads ?? 4}
-          onSlidingComplete={(value) => updateSettings({ imageThreads: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
-        />
-      </View>
+      <SliderSetting
+        testID="image-threads"
+        label="Image Threads"
+        description="CPU threads used for image generation (applies on next image model load)"
+        value={settings?.imageThreads ?? 4}
+        min={1} max={8} step={1}
+        onChange={(value) => updateSettings({ imageThreads: value })}
+      />
 
       <DetectionMethodRow />
       <EnhanceImageToggle />
@@ -211,43 +196,24 @@ export const ImageGenerationSection: React.FC = () => {
           : 'In Manual mode, you must tap the IMG button in chat to generate images.'}
       </Text>
 
-      <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Image Steps</Text>
-          <Text style={styles.sliderValue}>{settings?.imageSteps || 8}</Text>
-        </View>
-        <Text style={styles.sliderDesc}>More steps = better quality but slower (4-8 fast, 20-50 high quality)</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={4}
-          maximumValue={50}
-          step={1}
-          value={settings?.imageSteps || 8}
-          onSlidingComplete={(value) => updateSettings({ imageSteps: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
-        />
-      </View>
+      <SliderSetting
+        testID="image-steps"
+        label="Image Steps"
+        description="More steps = better quality but slower (4-8 fast, 20-50 high quality)"
+        value={settings?.imageSteps || 8}
+        min={4} max={50} step={1}
+        onChange={(value) => updateSettings({ imageSteps: value })}
+      />
 
-      <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Image Size</Text>
-          <Text style={styles.sliderValue}>{settings?.imageWidth ?? 256}x{settings?.imageHeight ?? 256}</Text>
-        </View>
-        <Text style={styles.sliderDesc}>Output resolution (smaller = faster, larger = more detail)</Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={128}
-          maximumValue={512}
-          step={64}
-          value={settings?.imageWidth ?? 256}
-          onSlidingComplete={(value) => updateSettings({ imageWidth: value, imageHeight: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
-        />
-      </View>
+      <SliderSetting
+        testID="image-size"
+        label="Image Size"
+        description="Output resolution (smaller = faster, larger = more detail)"
+        value={settings?.imageWidth ?? 256}
+        min={128} max={512} step={64}
+        formatValue={(v) => `${v}x${v}`}
+        onChange={(value) => updateSettings({ imageWidth: value, imageHeight: value })}
+      />
 
       <AdvancedToggle isExpanded={showAdvanced} onPress={() => setShowAdvanced(!showAdvanced)} testID="image-advanced-toggle" />
 

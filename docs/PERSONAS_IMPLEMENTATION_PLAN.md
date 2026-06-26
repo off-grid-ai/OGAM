@@ -31,7 +31,8 @@ export type Capability =
   | 'voice'         // STT + TTS
   | 'vision'        // image understanding
   | 'image-gen'     // image generation
-  | 'rag';          // knowledge base search
+  | 'rag'           // knowledge base search (user-uploaded documents)
+  | 'memory-rag';   // cross-conversation RAG — past messages indexed and retrieved
 
 export type SkillTriggerEvent =
   | 'message_received'    // new message in connected app
@@ -109,8 +110,9 @@ export interface Persona {
   capabilities: Capability[];
 
   // What this persona knows
-  knowledgeBaseIds: string[];        // attached RAG knowledge bases (use projectId as KB id)
-  memoryFacts: PersonaMemoryFact[];  // persistent learned facts
+  knowledgeBaseIds: string[];        // attached RAG knowledge bases (user-uploaded documents)
+  conversationMemoryEnabled: boolean; // true = all past conversations for this persona are embedded + searchable
+  memoryFacts: PersonaMemoryFact[];  // persistent learned facts (LLM-extracted, concise)
 
   // What this persona does automatically
   skills: Skill[];
@@ -227,8 +229,9 @@ export const DEFAULT_PERSONAS: Omit<Persona, 'createdAt' | 'updatedAt'>[] = [
     systemPrompt: 'You are Jarvis, a capable and concise personal assistant. You help with anything — questions, tasks, planning, thinking. You are direct, warm, and never verbose unless asked.',
     icon: 'cpu',
     accentColor: '#6366F1',
-    capabilities: ['text', 'voice', 'vision'],
+    capabilities: ['text', 'voice', 'vision', 'memory-rag'],
     knowledgeBaseIds: [],
+    conversationMemoryEnabled: true,  // Jarvis indexes all past conversations — gives it cross-chat intelligence
     memoryFacts: [],
     skills: [],
     integrationIds: [],
@@ -417,6 +420,113 @@ export function buildMemoryContext(facts: PersonaMemoryFact[]): string {
   return `\n\nWhat you know about the user:\n${facts.map(f => `- ${f.content}`).join('\n')}`;
 }
 ```
+
+### conversationRagService.ts (new — cross-conversation memory)
+
+This is what makes Jarvis actually intelligent across sessions. Rather than relying only on extracted `memoryFacts` (brief summaries) or the current context window, Jarvis embeds every conversation message into a per-persona vector store. When a new message arrives, relevant past exchanges are retrieved and injected as context — so Jarvis remembers "we discussed your onboarding last Tuesday" without you having to repeat it.
+
+**How it's different from document KB:**
+
+| | Document KB (`knowledgeBaseIds`) | Conversation RAG (`conversationMemoryEnabled`) |
+|---|---|---|
+| Source | User-uploaded PDFs, notes | Past conversation messages |
+| Indexed when | User uploads a file | After each assistant response |
+| Retrieved by | User explicitly asking about docs | Automatically on every message |
+| Scoped to | Attached knowledge bases | All conversations for this persona |
+
+```typescript
+// src/services/conversationRagService.ts
+
+/**
+ * Indexes completed conversation messages into the persona's vector store.
+ * Called after each assistant turn completes (streaming done).
+ *
+ * Each chunk stored = ~4–6 messages grouped by semantic coherence, not
+ * arbitrary token windows. This preserves conversational context.
+ */
+export async function indexConversationTurn(
+  personaId: string,
+  conversationId: string,
+  messages: Message[],   // recent messages to embed (typically last 4–6)
+): Promise<void> {
+  const chunks = chunkMessagesForEmbedding(messages);
+  for (const chunk of chunks) {
+    const embedding = await embeddingService.embed(chunk.text);
+    await vectorStore.upsert({
+      id: `${conversationId}:${chunk.startIndex}`,
+      embedding,
+      metadata: {
+        personaId,
+        conversationId,
+        timestamp: chunk.timestamp,
+        preview: chunk.text.slice(0, 120),
+      },
+    });
+  }
+}
+
+/**
+ * Retrieves the most relevant past conversation context for the current message.
+ * Returns plain text ready to inject into the system prompt.
+ */
+export async function retrieveRelevantHistory(
+  personaId: string,
+  currentMessage: string,
+  topK = 3,
+): Promise<string> {
+  const queryEmbedding = await embeddingService.embed(currentMessage);
+  const results = await vectorStore.search({
+    embedding: queryEmbedding,
+    filter: { personaId },
+    topK,
+    minScore: 0.72,   // only inject if meaningfully relevant
+  });
+
+  if (results.length === 0) return '';
+
+  const snippets = results.map(r =>
+    `[${formatRelativeDate(r.metadata.timestamp)}]\n${r.metadata.preview}`
+  );
+  return `\n\nRelevant context from past conversations:\n${snippets.join('\n\n---\n\n')}`;
+}
+
+/**
+ * Groups messages into semantically coherent chunks for embedding.
+ * Avoids splitting a user question from its assistant answer.
+ */
+function chunkMessagesForEmbedding(messages: Message[]): EmbeddingChunk[] {
+  // Pair each user message with its following assistant response
+  // Output: chunks of ~300–400 tokens each
+}
+```
+
+**System prompt injection** (in `llm.ts` or wherever the prompt is assembled):
+
+```typescript
+// When conversationMemoryEnabled is true for the active persona:
+if (persona.conversationMemoryEnabled) {
+  const history = await conversationRagService.retrieveRelevantHistory(
+    persona.id,
+    latestUserMessage,
+  );
+  systemPrompt += history;
+}
+```
+
+**Indexing trigger** (after streaming completes, in chatStore or the streaming callback):
+
+```typescript
+// After assistant response is done streaming:
+if (persona.conversationMemoryEnabled) {
+  conversationRagService.indexConversationTurn(
+    persona.id,
+    conversationId,
+    recentMessages.slice(-6),
+  ).catch(() => {});  // fire-and-forget, non-blocking
+}
+```
+
+**Storage:** Uses the existing `ragService` vector store, namespaced by `personaId`. No new storage layer needed — just a new indexing source.
 
 ---
 
@@ -926,6 +1036,11 @@ export interface Message {
 18. Memory injection into system prompt
 19. `PersonaMemoryScreen`
 20. Memory bar in chat (new fact notification)
+21. `conversationRagService.ts` — cross-conversation RAG for `memory-rag` capability
+    - Index each conversation turn after streaming completes (fire-and-forget)
+    - Retrieve relevant history and inject into system prompt before each LLM call
+    - Jarvis has `conversationMemoryEnabled: true` by default; other personas opt in via PersonaEditScreen
+    - Reuses existing `ragService` vector store, namespaced by `personaId`
 
 ### Phase 5 — Integrations in Chat (tool calls)
 21. Wire integration tool registry entries

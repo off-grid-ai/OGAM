@@ -1,10 +1,8 @@
 import type { ThemeColors, ThemeShadows } from '../../theme';
-import { FONTS } from '../../constants';
+import { FONTS, TYPOGRAPHY, SPACING } from '../../constants';
 import { Platform } from 'react-native';
 
 export const PILL_ICON_SIZE = 32;
-const NUM_PILL_ICONS = 2;
-export const PILL_ICONS_WIDTH = PILL_ICON_SIZE * NUM_PILL_ICONS;
 export const ANIM_DURATION_IN = 180;
 export const ANIM_DURATION_OUT = 200;
 const TOOL_WARNING_COLOR = '#F59E0B';
@@ -117,10 +115,10 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden' as const,
-    paddingLeft: 14,
+    paddingLeft: 16,
     paddingRight: 4,
-    paddingVertical: 4,
-    minHeight: 48,
+    paddingVertical: 6,
+    minHeight: 56,
   },
   pillInput: {
     flex: 1,
@@ -220,5 +218,26 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     fontFamily: FONTS.mono,
     fontWeight: '500' as const,
     color: colors.primary,
+  },
+  // Audio mode layout
+  audioModeRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: SPACING.md,
+    paddingVertical: SPACING.xs,
+  },
+  // Voice cycle button — shows icon + voice name
+  audioVoiceButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    height: 32,
+    borderRadius: 16,
+  },
+  audioVoiceLabel: {
+    ...TYPOGRAPHY.meta,
+    color: colors.textSecondary,
   },
 });

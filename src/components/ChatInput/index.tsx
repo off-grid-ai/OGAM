@@ -7,12 +7,15 @@ import { VoiceRecordButton } from '../VoiceRecordButton';
 import { AttachStep } from 'react-native-spotlight-tour';
 import { triggerHaptic } from '../../utils/haptics';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
-import { createStyles, PILL_ICONS_WIDTH, ANIM_DURATION_IN, ANIM_DURATION_OUT } from './styles';
+import { createStyles, PILL_ICON_SIZE, ANIM_DURATION_IN, ANIM_DURATION_OUT } from './styles';
 import { QueueRow } from './Toolbar';
 import { AttachmentPreview, useAttachments } from './Attachments';
 import { useVoiceInput } from './Voice';
 import { QuickSettingsPopover, AttachPickerPopover } from './Popovers';
 import { useKeyboardAwarePopover } from './useKeyboardAwarePopover';
+import { useAppStore } from '../../stores';
+import { useUiModeStore } from '../../stores';
+import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
 interface ChatInputProps {
   onSend: (message: string, attachments?: MediaAttachment[], imageMode?: ImageModeState) => void;
@@ -31,14 +34,25 @@ interface ChatInputProps {
   onToolsPress?: () => void;
   enabledToolCount?: number;
   supportsToolCalling?: boolean;
+  mcpToolCount?: number;
+  onMcpPress?: () => void;
   supportsThinking?: boolean;
   onRepairVision?: () => void;
-  /** When set, mounts a single AttachStep for that index. Only one at a time to avoid waypoint dots. */
   activeSpotlight?: number | null;
   showSettingsDot?: boolean;
 }
 
 const IMAGE_MODE_CYCLE: ImageModeState[] = ['auto', 'force', 'disabled'];
+
+/**
+ * Expanded width of the collapsing pill-icons row. '+' and the settings gear
+ * are always present; the thinking toggle and the pro mode-toggle are
+ * conditional. Sizing to the real count prevents the rightmost icons from
+ * being clipped by the row's `overflow: hidden`.
+ */
+// Attach + quick-settings only. The Chat/Voice mode toggle is no longer in this
+// (collapsing) row — it's rendered persistently above the input instead.
+const computePillIconsWidth = (): number => PILL_ICON_SIZE * 2;
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
@@ -60,6 +74,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   enabledToolCount = 0,
   supportsToolCalling = false,
   supportsThinking = false,
+  mcpToolCount = 0,
+  onMcpPress,
   onRepairVision,
   activeSpotlight = null,
   showSettingsDot = false,
@@ -71,7 +87,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const quickSettings = useKeyboardAwarePopover();
   const attachPicker = useKeyboardAwarePopover();
+  const voicePicker = useKeyboardAwarePopover();
   const inputRef = useRef<TextInput>(null);
+  const attachmentsRef = useRef<MediaAttachment[]>([]);
   const hasText = message.length > 0;
   const iconsAnim = useRef(new Animated.Value(0)).current;
 
@@ -83,9 +101,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }).start();
   }, [hasText, iconsAnim]);
 
-  const { attachments, removeAttachment, clearAttachments, handlePickImage, handlePickDocument } = useAttachments(setAlertState);
+  const { attachments, removeAttachment, clearAttachments, handlePickImage, handlePickDocument, addAudioAttachment } = useAttachments(setAlertState);
+  attachmentsRef.current = attachments;
+  const interfaceMode = useUiModeStore((s) => s.interfaceMode);
+  const isAudioMode = interfaceMode === 'audio';
 
-  const { isRecording, isModelLoading, isTranscribing, partialResult, error, voiceAvailable, startRecording, stopRecording, clearResult } = useVoiceInput({
+  const { isRecording, isModelLoading, isTranscribing, partialResult, error, voiceAvailable, startRecording, stopRecording, cancelRecording } = useVoiceInput({
     conversationId,
     onTranscript: (text) => {
       setMessage(prev => {
@@ -93,7 +114,32 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         return prefix + text;
       });
     },
+    onAudioAttachment: (uri, format, durationSeconds) => {
+      addAudioAttachment(uri, format, durationSeconds);
+    },
+    onAutoSend: isAudioMode ? (text, audio) => {
+      const audioAttachment: MediaAttachment = {
+        id: `audio-${Date.now()}`,
+        type: 'audio',
+        uri: audio.uri,
+        audioFormat: audio.format,
+        audioDurationSeconds: audio.durationSeconds,
+        fileName: audio.uri.split('/').pop(),
+      };
+      triggerHaptic('impactMedium');
+      const all = [...attachmentsRef.current, audioAttachment];
+      onSend(text, all, imageMode);
+      clearAttachments();
+    } : undefined,
   });
+
+  const { settings: appSettings, updateSettings: updateAppSettings } = useAppStore();
+  const thinkingEnabled = appSettings.thinkingEnabled;
+
+  const handleThinkingToggle = () => {
+    triggerHaptic('impactLight');
+    updateAppSettings({ thinkingEnabled: !thinkingEnabled });
+  };
 
   const canSend = (message.trim().length > 0 || attachments.length > 0) && !disabled;
 
@@ -111,7 +157,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleImageModeToggle = () => {
-    if (!imageModelLoaded) { setAlertState(showAlert('No Image Model', 'Download an image generation model from the Models screen to enable this feature.', [{ text: 'OK' }])); quickSettings.hide(); return; }
+    // Gate on whether an image model is DOWNLOADED, not whether it was selected
+    // on the Home screen. If one is downloaded but not yet selected, select it
+    // here (it loads lazily on the next send). Only warn when none exist.
+    if (!imageModelLoaded) {
+      const { downloadedImageModels, setActiveImageModelId } = useAppStore.getState();
+      if (downloadedImageModels.length === 0) {
+        setAlertState(showAlert('No Image Model', 'Download an image generation model from the Models screen to enable this feature.', [{ text: 'OK' }]));
+        quickSettings.hide();
+        return;
+      }
+      setActiveImageModelId(downloadedImageModels[0].id);
+    }
     const newMode = IMAGE_MODE_CYCLE[(IMAGE_MODE_CYCLE.indexOf(imageMode) + 1) % IMAGE_MODE_CYCLE.length];
     setImageMode(newMode);
     onImageModeChange?.(newMode);
@@ -162,6 +219,59 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
+  // ─── Audio mode: pro renders the mic-only layout via a slot ─────────────────
+  // Free builds have no audio slot, so interfaceMode never becomes 'audio' and
+  // this branch is skipped entirely.
+  const AudioInput = getSlot(SLOTS.chatInputAudioMode);
+  if (isAudioMode && AudioInput) {
+    return (
+      <AudioInput
+        styles={styles}
+        disabled={disabled}
+        onSend={onSend}
+        isGenerating={isGenerating}
+        imageMode={imageMode}
+        imageModelLoaded={imageModelLoaded}
+        supportsThinking={supportsThinking}
+        supportsToolCalling={supportsToolCalling}
+        enabledToolCount={enabledToolCount}
+        thinkingEnabled={thinkingEnabled}
+        attachments={attachments}
+        onRemoveAttachment={removeAttachment}
+        onClearAttachments={clearAttachments}
+        queueCount={queueCount}
+        queuedTexts={queuedTexts}
+        onClearQueue={onClearQueue}
+        isRecording={isRecording}
+        voiceAvailable={voiceAvailable}
+        isModelLoading={isModelLoading}
+        isTranscribing={isTranscribing}
+        partialResult={partialResult}
+        error={error}
+        onStartRecording={startRecording}
+        onStopRecording={stopRecording}
+        onCancelRecording={cancelRecording}
+        onStop={onStop}
+        onImageModeToggle={handleImageModeToggle}
+        onThinkingToggle={handleThinkingToggle}
+        onToolsPress={onToolsPress}
+        onMcpPress={onMcpPress}
+        mcpToolCount={mcpToolCount}
+        onVisionPress={handleVisionPress}
+        onPickDocument={handlePickDocument}
+        attachPicker={attachPicker}
+        voicePicker={voicePicker}
+        quickSettings={quickSettings}
+        supportsVision={supportsVision}
+        alertState={alertState}
+        setAlertState={setAlertState}
+      />
+    );
+  }
+
+  // Pro-only inline Chat↔Audio toggle (empty slot in free builds → null).
+  const pillIconsExpandedWidth = computePillIconsWidth();
+
   const actionButton = canSend ? (
     <TouchableOpacity
       testID="send-button"
@@ -190,11 +300,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       disabled={disabled}
       onStartRecording={startRecording}
       onStopRecording={stopRecording}
-      onCancelRecording={() => { stopRecording(); clearResult(); }}
+      onCancelRecording={cancelRecording}
     />
   );
 
-  const content = (
+  return (
     <View style={styles.container}>
       <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
       <QueueRow
@@ -203,7 +313,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onClearQueue={onClearQueue}
       />
       <View style={styles.mainRow}>
-        {/* Pill: text input + right icons */}
         <View style={styles.pill}>
           <TextInput
             ref={inputRef}
@@ -219,16 +328,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             blurOnSubmit={false}
             returnKeyType="default"
           />
-          {/* Icons collapse when user starts typing, reappear when input is empty */}
           <Animated.View
             pointerEvents={hasText ? 'none' : 'auto'}
             style={[styles.pillIcons, {
-              width: iconsAnim.interpolate({ inputRange: [0, 1], outputRange: [PILL_ICONS_WIDTH, 0] }),
+              width: iconsAnim.interpolate({ inputRange: [0, 1], outputRange: [pillIconsExpandedWidth, 0] }),
               opacity: iconsAnim.interpolate({ inputRange: [0, 0.4], outputRange: [1, 0], extrapolate: 'clamp' }),
               overflow: 'hidden' as const,
             }]}
           >
-            {/* Attach button — opens picker for image or document */}
             <TouchableOpacity
               ref={attachPicker.triggerRef}
               testID="attach-button"
@@ -237,14 +344,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               disabled={disabled}
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
-              <Icon
-                name="plus"
-                size={20}
-                color={disabled ? colors.textMuted : colors.textSecondary}
-              />
+              <Icon name="plus" size={20} color={disabled ? colors.textMuted : colors.textSecondary} />
             </TouchableOpacity>
-
-            {/* Quick settings button */}
             <TouchableOpacity
               ref={quickSettings.triggerRef}
               testID="quick-settings-button"
@@ -258,11 +359,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 {showSettingsDot && <View style={styles.toolWarningDot} />}
               </View>
             </TouchableOpacity>
-
           </Animated.View>
         </View>
 
-        {/* Circular action button — conditionally wrapped with AttachStep */}
         {activeSpotlight === 12 ? (
           <AttachStep index={12} style={spotlightStyles.centered}>{actionButton}</AttachStep>
         ) : actionButton}
@@ -292,8 +391,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         supportsToolCalling={supportsToolCalling}
         enabledToolCount={enabledToolCount}
         onToolsPress={onToolsPress}
+        mcpToolCount={mcpToolCount}
+        onMcpPress={onMcpPress}
       />
-
       <CustomAlert
         visible={alertState.visible}
         title={alertState.title}
@@ -303,11 +403,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       />
     </View>
   );
-
-  return content;
 };
 
 const spotlightStyles = StyleSheet.create({
   centered: { alignSelf: 'center' },
 });
-

@@ -123,7 +123,9 @@ describe('WhisperService', () => {
       const result = await whisperService.downloadModel('tiny.en');
 
       expect(mockedBDS.downloadFileTo).toHaveBeenCalledWith(expect.objectContaining({
-        params: expect.objectContaining({ url: WHISPER_MODELS[0].url }),
+        // modelType 'stt' files the in-progress download under Voice in the
+        // Download Manager (without it the entry defaulted to 'text').
+        params: expect.objectContaining({ url: WHISPER_MODELS[0].url, modelType: 'stt' }),
         destPath: '/mock/documents/whisper-models/ggml-tiny.en.bin',
       }));
       expect(result).toBe('/mock/documents/whisper-models/ggml-tiny.en.bin');

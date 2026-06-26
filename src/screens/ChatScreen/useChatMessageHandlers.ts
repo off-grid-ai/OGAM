@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction } from 'react';
 import { showAlert, AlertState } from '../../components';
 import { Message } from '../../types';
+import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import {
   regenerateResponseFn, executeDeleteConversationFn, handleImageGenerationFn,
 } from './useChatGenerationActions';
@@ -20,6 +21,8 @@ export async function handleRetryMessageFn(
   message: Message, genDeps: GenerationDeps, p: RetryParams,
 ): Promise<void> {
   if (!p.activeConversationId || !p.hasActiveModel) return;
+  // Stop any in-flight TTS before deleting messages (no-op without pro audio)
+  callHook(HOOKS.audioStop);
   const msgs = p.activeConversation?.messages || [];
   if (message.role === 'user') {
     const idx = msgs.findIndex((m: Message) => m.id === message.id);

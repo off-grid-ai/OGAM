@@ -15,7 +15,6 @@ export type RootStackParamList = {
   // Former SettingsStack
   ModelSettings: undefined;
   RemoteServers: undefined;
-  VoiceSettings: undefined;
   DeviceInfo: undefined;
   StorageSettings: undefined;
   SecuritySettings: undefined;
@@ -24,6 +23,7 @@ export type RootStackParamList = {
   Gallery: { conversationId?: string } | undefined;
   ProDetail: undefined;
   About: undefined;
+  Tools: undefined;
 };
 
 // Tab navigator — simple, no sub-stacks
@@ -31,6 +31,6 @@ export type MainTabParamList = {
   HomeTab: undefined;
   ChatsTab: undefined;
   ProjectsTab: undefined;
-  ModelsTab: { initialTab?: 'text' | 'image'; repairModelId?: string } | undefined;
+  ModelsTab: { initialTab?: 'text' | 'image' | 'voice' | 'transcription'; repairModelId?: string } | undefined;
   SettingsTab: undefined;
 };

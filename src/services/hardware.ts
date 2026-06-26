@@ -49,13 +49,36 @@ class HardwareService {
     this.cachedDeviceInfo = {
       totalMemory,
       usedMemory,
-      availableMemory: totalMemory - usedMemory,
+      availableMemory: await this.computeAvailableBytes(totalMemory, usedMemory),
       deviceModel,
       systemName,
       systemVersion,
       isEmulator,
     };
     return this.cachedDeviceInfo;
+  }
+  /**
+   * Real free memory the system can hand out RIGHT NOW. On Android this reads
+   * `MemAvailable` from /proc/meminfo (what the kernel will give without
+   * swapping) — NOT `total − thisApp'sUsage`, which ignores every other app and
+   * the OS and wildly over-reports on a loaded device (the cause of the OOM
+   * freeze: the budget thought ~11GB was free when ~1.3GB was). Falls back to
+   * total − used if /proc is unreadable or on iOS.
+   */
+  private async computeAvailableBytes(totalMemory: number, usedMemory: number): Promise<number> {
+    const sys = await this.readSystemAvailableBytes();
+    return sys != null ? sys : totalMemory - usedMemory;
+  }
+  private async readSystemAvailableBytes(): Promise<number | null> {
+    if (Platform.OS !== 'android') return null;
+    try {
+      const meminfo = await RNFS.readFile('/proc/meminfo', 'utf8');
+      const match = /MemAvailable:\s+(\d+)\s*kB/.exec(meminfo);
+      if (match) return Number.parseInt(match[1], 10) * 1024;
+    } catch {
+      /* /proc unreadable — fall back to the DeviceInfo estimate */
+    }
+    return null;
   }
   async refreshMemoryInfo(): Promise<DeviceInfoType> {
     // Force fresh fetch of all memory info
@@ -69,7 +92,7 @@ class HardwareService {
     if (this.cachedDeviceInfo) {
       this.cachedDeviceInfo.totalMemory = totalMemory;
       this.cachedDeviceInfo.usedMemory = usedMemory;
-      this.cachedDeviceInfo.availableMemory = totalMemory - usedMemory;
+      this.cachedDeviceInfo.availableMemory = await this.computeAvailableBytes(totalMemory, usedMemory);
     }
     return this.cachedDeviceInfo!;
   }
@@ -191,6 +214,15 @@ class HardwareService {
   }
   estimateModelRam(model: { fileSize?: number; size?: number; mmProjFileSize?: number }, multiplier = 1.5): number {
     return this.getModelTotalSize(model) * multiplier;
+  }
+  /**
+   * Image diffusion models hold a far larger runtime working set than their file
+   * size — UNet activations, VAE decode buffers, and (on QNN/NPU) reserved
+   * accelerator memory — so the file-size×1.5 used for LLM weights badly
+   * under-counts them. Budget ~2.5× so residency doesn't co-load them into swap.
+   */
+  estimateImageModelRam(model: { fileSize?: number; size?: number; mmProjFileSize?: number }): number {
+    return this.estimateModelRam(model, 2.5);
   }
   formatModelRam(model: { fileSize?: number; size?: number; mmProjFileSize?: number }, multiplier = 1.5): string {
     return `~${(this.estimateModelRam(model, multiplier) / (1024 * 1024 * 1024)).toFixed(1)} GB`;

@@ -42,6 +42,7 @@ export const resetStores = (): void => {
     modelRecommendation: null,
     downloadedModels: [],
     activeModelId: null,
+    lastTextModelId: null,
     isLoadingModel: false,
     settings: {
       systemPrompt: 'You are a helpful AI assistant running locally on the user\'s device. Be concise and helpful.',
@@ -61,7 +62,6 @@ export const resetStores = (): void => {
       imageWidth: 512,
       imageHeight: 512,
       imageUseOpenCL: true,
-      modelLoadingStrategy: 'performance',
       enableGpu: true,
       inferenceBackend: 'cpu' as const,
       gpuLayers: 99,
@@ -536,6 +536,7 @@ export const resetRemoteServerStore = (): void => {
 export const resetWhisperStore = (): void => {
   useWhisperStore.setState({
     downloadedModelId: null,
+    presentModelIds: [],
     isDownloading: false,
     downloadProgress: 0,
     isModelLoading: false,

@@ -166,7 +166,9 @@ export async function syncCompletedBackgroundDownloads(opts: SyncDownloadsOpts):
   for (const download of activeDownloads) {
     const metadata = persistedDownloads[download.downloadId];
     if (!metadata) continue;
-    if (metadata.modelId.startsWith('image:')) continue;
+    // image: (image models) and whisper- (STT models) belong to their own
+    // managers; recovering them here mis-registered them as text models.
+    if (metadata.modelId.startsWith('image:') || metadata.modelId.startsWith('whisper-')) continue;
 
     if (download.status === 'completed') {
       if (isMmProjStillRunning(metadata, activeDownloads)) continue;

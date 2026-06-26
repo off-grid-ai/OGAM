@@ -70,7 +70,7 @@ class ModelManager {
 
   async linkOrphanMmProj(): Promise<void> {
     const models = await this.getDownloadedModels();
-    let dirFiles: RNFS.ReadDirItem[] = [];
+    let dirFiles: RNFS.ReadDirResItemT[] = [];
     try {
       dirFiles = await RNFS.readDir(this.modelsDir);
     } catch {
@@ -87,7 +87,7 @@ class ModelManager {
 
       if (m.mmProjPath) {
         // Clear link if the stored file no longer exists OR doesn't name-match this model
-        const nameMatch = findMatchingMmProj(baseName, [{ name: m.mmProjPath.split('/').pop() ?? '', path: m.mmProjPath, isFile: () => true } as RNFS.ReadDirItem]);
+        const nameMatch = findMatchingMmProj(baseName, [{ name: m.mmProjPath.split('/').pop() ?? '', path: m.mmProjPath, isFile: () => true } as RNFS.ReadDirResItemT]);
         const fileExists = await RNFS.exists(m.mmProjPath).catch(() => false);
         if (!fileExists || !nameMatch) {
           logger.log(`[linkOrphanMmProj] ${m.id} — clearing bad link: ${m.mmProjPath}`);

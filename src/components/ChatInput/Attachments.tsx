@@ -111,9 +111,21 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
     }
   };
 
+  const addAudioAttachment = (uri: string, audioFormat: 'wav' | 'mp3', audioDurationSeconds?: number) => {
+    const attachment: MediaAttachment = {
+      id: nextAttachmentId(),
+      type: 'audio',
+      uri,
+      audioFormat,
+      audioDurationSeconds,
+      fileName: uri.split('/').pop(),
+    };
+    setAttachments(prev => [...prev, attachment]);
+  };
+
   const clearAttachments = () => setAttachments([]);
 
-  return { attachments, removeAttachment, clearAttachments, handlePickImage, handlePickDocument };
+  return { attachments, removeAttachment, clearAttachments, handlePickImage, handlePickDocument, addAudioAttachment };
 }
 
 // ─── AttachmentPreview component ─────────────────────────────────────────────
@@ -145,6 +157,11 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({ attachment
               source={{ uri: attachment.uri }}
               style={styles.attachmentImage}
             />
+          ) : attachment.type === 'audio' ? (
+            <View testID={`audio-preview-${attachment.id}`} style={styles.documentPreview}>
+              <Icon name="mic" size={24} color={colors.primary} />
+              <Text style={styles.documentName} numberOfLines={2}>Voice</Text>
+            </View>
           ) : (
             <View testID={`document-preview-${attachment.id}`} style={styles.documentPreview}>
               <Icon name="file-text" size={24} color={colors.primary} />

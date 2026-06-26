@@ -12,7 +12,7 @@ export type DownloadStatus =
   | 'failed'
   | 'cancelled'
 
-export type ModelType = 'text' | 'image'
+export type ModelType = 'text' | 'image' | 'stt' | 'tts'
 
 export interface DownloadEntry {
   modelKey: ModelKey

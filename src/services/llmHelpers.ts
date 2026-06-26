@@ -9,9 +9,7 @@ import logger from '../utils/logger';
 /** Feature flag: Set to true to enable HTP/Hexagon NPU support. Currently disabled. */
 const HTP_ENABLED = false;
 
-export const SYSTEM_PROMPT_RESERVE = 256;
 export const RESPONSE_RESERVE = 512;
-export const CONTEXT_SAFETY_MARGIN = 0.85;
 const DEFAULT_THREADS = 4; // targets performance cores only; over-threading onto efficiency cores (A520) hurts
 const DEFAULT_BATCH = 512;
 export const DEFAULT_GPU_LAYERS = Platform.OS === 'ios' ? 99 : 0;

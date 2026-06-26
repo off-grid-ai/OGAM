@@ -1,31 +1,61 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Linking, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import LinearGradient from 'react-native-linear-gradient';
+import { Button } from '../../components';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
-import { PRO_URL } from '../../utils/proPrompt';
 import { useAppStore } from '../../stores';
+import { PRO_PAY_PAGE_URL } from '../../services/proLicenseService';
+import { loadProFeatures } from '../../bootstrap/loadProFeatures';
+import { getPricingCopy } from '../../utils/proPricing';
+import { ProManageSection } from './ProManageSection';
+import { ProUnlockModal } from './ProUnlockModal';
 
-const INTEGRATIONS = [
-  { icon: 'mic', title: 'Voice', desc: 'Local speech-to-text\nprocessing.' },
-  { icon: 'calendar', title: 'Calendar', desc: 'Seamless event\nscheduling.' },
-  { icon: 'mail', title: 'Email', desc: 'Private inbox\nsummarization.' },
-  { icon: 'message-square', title: 'Messaging', desc: 'Slack,\nTelegram & more.' },
+// Off Grid AI Pro is the ambient intelligence layer across desktop + phone, not a
+// mobile feature list. These pillars mirror the early-access page framing.
+const PILLARS = [
+  {
+    icon: 'layers',
+    title: 'Ambient across your life',
+    desc: 'A quiet layer in the background - your laptop, your phone, the meetings in the room, the tabs you read.',
+  },
+  {
+    icon: 'sunrise',
+    title: 'Proactive, not reactive',
+    desc: 'It briefs you on the day, surfaces what you left open, and drafts the reply before you remember you owe it.',
+  },
+  {
+    icon: 'shield',
+    title: 'Private by architecture',
+    desc: 'The model runs on your own hardware. No training on your data, no server to leak. Open source, so you can check.',
+  },
+  {
+    icon: 'refresh-cw',
+    title: 'One mind across devices',
+    desc: 'Your laptop knows your work, your phone knows your life. They sync over your own network, never a cloud relay.',
+  },
+  {
+    icon: 'check-circle',
+    title: 'It acts, you approve',
+    desc: 'It drafts the reply, files the ticket, updates the doc - never on its own. Every action is yours to approve.',
+  },
 ];
 
-
 export const ProDetailScreen: React.FC = () => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const setHasRegisteredPro = useAppStore((s) => s.setHasRegisteredPro);
+  const hasRegisteredPro = useAppStore((s) => s.hasRegisteredPro);
+  const [verifyModalVisible, setVerifyModalVisible] = useState(false);
+  const pricing = getPricingCopy();
 
-  const handleCTA = () => {
-    setHasRegisteredPro(true);
-    Linking.openURL(PRO_URL);
-  };
+  const openPayPage = () => { Linking.openURL(PRO_PAY_PAGE_URL).catch(() => {}); };
+  const openVerifyModal = () => setVerifyModalVisible(true);
+
+  // Activation verified: load the pro bundle now so Pro lights up live (the
+  // reactive appRoot slot mounts the engine without a restart). Registries dedupe.
+  const handleUnlocked = () => { loadProFeatures(true).catch(() => {}); };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -47,112 +77,105 @@ export const ProDetailScreen: React.FC = () => {
                 <View style={styles.logoDot} />
               </View>
             </View>
-            <Text style={styles.logoText}>Off Grid Pro</Text>
+            <Text style={styles.logoText}>Off Grid AI Pro</Text>
           </View>
-          <TouchableOpacity style={styles.getProButton} onPress={handleCTA}>
-            <Text style={styles.getProButtonText}>Get Pro</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Hero */}
-        <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Technical Efficiency.</Text>
-          <Text style={styles.heroPrimary}>Privacy First.</Text>
-          <Text style={styles.heroSubtitle}>
-            Elevate your local AI workflow with premium integrations designed for power users.
-          </Text>
-        </View>
-
-        {/* Promo Banner */}
-        <View style={styles.promoBannerWrapper}>
-          <LinearGradient
-            colors={['#2D4A38', '#1C2B22', '#141F19']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={styles.promoOfferRow}>
-            <Icon name="star" size={13} color={colors.primary} />
-            <Text style={styles.promoOfferLabel}>LIMITED TIME OFFER</Text>
-          </View>
-          <Text style={styles.promoTitle}>Lifetime PRO Access</Text>
-          <Text style={styles.promoSubtitle}>
-            Unlock all current and future integrations forever.
-          </Text>
-        </View>
-
-        {/* Core Integrations */}
-        <View style={styles.integrationsSection}>
-          <Text style={styles.sectionLabel}>CORE INTEGRATIONS</Text>
-
-          <View style={styles.gridRow}>
-            {INTEGRATIONS.slice(0, 2).map(item => (
-              <View key={item.title} style={styles.gridCard}>
-                <View style={styles.gridIconWrap}>
-                  <Icon name={item.icon} size={20} color={colors.primary} />
-                </View>
-                <Text style={styles.gridCardTitle}>{item.title}</Text>
-                <Text style={styles.gridCardDesc}>{item.desc}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.gridRow}>
-            {INTEGRATIONS.slice(2, 4).map(item => (
-              <View key={item.title} style={styles.gridCard}>
-                <View style={styles.gridIconWrap}>
-                  <Icon name={item.icon} size={20} color={colors.primary} />
-                </View>
-                <Text style={styles.gridCardTitle}>{item.title}</Text>
-                <Text style={styles.gridCardDesc}>{item.desc}</Text>
-              </View>
-            ))}
-          </View>
-
-          {/* MCP Access full-width */}
-          <View style={styles.mcpCard}>
-            <LinearGradient
-              colors={isDark ? ['#141414', '#141414', '#1A2B1E'] : ['#FFFFFF', '#FFFFFF', '#E8F5EE']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={styles.mcpIconWrap}>
-              <Icon name="cpu" size={20} color={colors.primary} />
+          {hasRegisteredPro ? (
+            <View style={styles.proActiveBadge}>
+              <Icon name="check" size={12} color={colors.primary} />
+              <Text style={styles.proActiveBadgeText}>Pro Active</Text>
             </View>
-            <View style={styles.mcpContent}>
-              <View style={styles.mcpTitleRow}>
-                <Text style={styles.mcpTitle}>MCP Access</Text>
-                <View style={styles.advancedBadge}>
-                  <Text style={styles.advancedBadgeText}>ADVANCED</Text>
-                </View>
-              </View>
-              <Text style={styles.mcpDesc}>
-                Full Model Context Protocol support for bespoke tool chaining and logic loops.
+          ) : (
+            <View style={styles.headerActions}>
+              {/* License-key entry, discoverable without scrolling. */}
+              <TouchableOpacity
+                style={styles.headerKeyButton}
+                onPress={openVerifyModal}
+                accessibilityLabel="I have a license key"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Icon name="key" size={16} color={colors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.getProButton} onPress={openPayPage}>
+                <Text style={styles.getProButtonText}>Get Pro</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {hasRegisteredPro ? (
+          /* Pro active: skip the marketing, show subscription + devices. */
+          <ProManageSection />
+        ) : (
+          <>
+            {/* Hero */}
+            <View style={styles.hero}>
+              <Text style={styles.heroTitle}>Intelligence, democratized.</Text>
+              <Text style={styles.heroPrimary}>On your device.</Text>
+              <Text style={styles.heroSubtitle}>
+                Ambient and proactive. It sees your day, remembers it, and gets ahead of you - and the model runs on your own hardware, so nothing is sent anywhere.
               </Text>
             </View>
-          </View>
-        </View>
 
-        {/* CTA */}
-        <TouchableOpacity style={styles.ctaButton} onPress={handleCTA}>
-          <Text style={styles.ctaText}>I am in 🔥</Text>
-         </TouchableOpacity>
+            {/* Pricing — flat themed surface, flips at the July 1 cutover. */}
+            <View style={styles.pricingBanner}>
+              <View style={styles.pricingLabelRow}>
+                <Icon name="zap" size={13} color={colors.primary} />
+                <Text style={styles.pricingLabel}>{pricing.label}</Text>
+              </View>
+              <Text style={styles.pricingTitle}>{pricing.title}</Text>
+              <Text style={styles.pricingSubtitle}>{pricing.subtitle}</Text>
+            </View>
 
+            {/* Ambient pillars */}
+            <View style={styles.pillarsSection}>
+              <Text style={styles.sectionLabel}>ONE PRIVATE LAYER</Text>
+              {PILLARS.map((p) => (
+                <View key={p.title} style={styles.pillarRow}>
+                  <View style={styles.pillarIconWrap}>
+                    <Icon name={p.icon} size={18} color={colors.primary} />
+                  </View>
+                  <View style={styles.pillarText}>
+                    <Text style={styles.pillarTitle}>{p.title}</Text>
+                    <Text style={styles.pillarDesc}>{p.desc}</Text>
+                  </View>
+                </View>
+              ))}
+              <Text style={styles.julyNote}>
+                We are building this through July. The full layer lands over the month, added as it ships.
+              </Text>
+            </View>
+
+            {/* CTAs — shared Button (outline). Buy is primary, verify is secondary. */}
+            <Button
+              title={pricing.cta}
+              variant="primary"
+              size="large"
+              onPress={openPayPage}
+              style={styles.ctaButton}
+            />
+            <Button
+              title="I have a license key"
+              variant="secondary"
+              onPress={openVerifyModal}
+              style={styles.verifyButton}
+            />
+          </>
+        )}
       </ScrollView>
+
+      <ProUnlockModal
+        visible={verifyModalVisible}
+        onClose={() => setVerifyModalVisible(false)}
+        onUnlocked={handleUnlocked}
+      />
     </SafeAreaView>
   );
 };
 
 const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   flex: { flex: 1 },
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    paddingBottom: SPACING.xxl,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { paddingBottom: SPACING.xxl },
 
   // Header
   header: {
@@ -162,46 +185,47 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
   },
-  logoRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.sm,
-  },
+  logoRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm },
   logoGrid: { gap: 3 },
   logoDotRow: { flexDirection: 'row' as const, gap: 3 },
-  logoDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 1,
-    backgroundColor: colors.primary,
-  },
+  logoDot: { width: 6, height: 6, borderRadius: 1, backgroundColor: colors.primary },
   logoText: { ...TYPOGRAPHY.body, color: colors.text },
+  headerActions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm },
+  headerKeyButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
   getProButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.primary,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    borderRadius: 20,
+    borderRadius: 8,
   },
-  getProButtonText: { ...TYPOGRAPHY.bodySmall, color: '#FFFFFF' },
+  getProButtonText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
+  proActiveBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.xs,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 8,
+  },
+  proActiveBadgeText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
 
   // Hero
-  hero: {
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.xl,
-    alignItems: 'center' as const,
-  },
-  heroTitle: {
-    ...TYPOGRAPHY.h1,
-    color: colors.text,
-    textAlign: 'center' as const,
-    marginBottom: SPACING.xs,
-  },
-  heroPrimary: {
-    ...TYPOGRAPHY.h1,
-    color: colors.primary,
-    textAlign: 'center' as const,
-    marginBottom: SPACING.md,
-  },
+  hero: { paddingHorizontal: SPACING.xl, paddingVertical: SPACING.xl, alignItems: 'center' as const },
+  heroTitle: { ...TYPOGRAPHY.h1, color: colors.text, textAlign: 'center' as const },
+  heroPrimary: { ...TYPOGRAPHY.h1, color: colors.primary, textAlign: 'center' as const, marginBottom: SPACING.md },
   heroSubtitle: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
@@ -209,103 +233,39 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     lineHeight: 20,
   },
 
-  // Promo Banner — fixed dark-green branded surface
-  promoBannerWrapper: {
-    alignSelf: 'stretch' as const,
+  // Pricing banner
+  pricingBanner: {
     marginHorizontal: SPACING.xl,
     marginBottom: SPACING.xl,
-    borderRadius: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.xl,
-    overflow: 'hidden' as const,
+    ...shadows.small,
   },
-  promoOfferRow: {
+  pricingLabelRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     gap: SPACING.xs,
     marginBottom: SPACING.sm,
   },
-  promoOfferLabel: {
-    ...TYPOGRAPHY.label,
-    color: colors.primary,
-    letterSpacing: 0.8,
-  },
-  promoTitle: {
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: '600' as const,
-    letterSpacing: -0.5,
-    color: '#FFFFFF',
-    textAlign: 'center' as const,
-    marginBottom: SPACING.xs,
-  },
-  promoSubtitle: {
-    fontSize: 13,
-    fontWeight: '400' as const,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center' as const,
-    lineHeight: 18,
-  },
+  pricingLabel: { ...TYPOGRAPHY.label, color: colors.primary, letterSpacing: 0.8 },
+  pricingTitle: { ...TYPOGRAPHY.display, color: colors.text, textAlign: 'center' as const, marginBottom: SPACING.xs },
+  pricingSubtitle: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, textAlign: 'center' as const, lineHeight: 18 },
 
-  // Integrations grid
-  integrationsSection: {
-    paddingHorizontal: SPACING.xl,
-    marginBottom: SPACING.xl,
-  },
+  // Pillars
+  pillarsSection: { paddingHorizontal: SPACING.xl, marginBottom: SPACING.lg },
   sectionLabel: {
     ...TYPOGRAPHY.label,
     color: colors.textMuted,
     letterSpacing: 1,
-    textAlign: 'center' as const,
     marginBottom: SPACING.md,
   },
-  gridRow: {
-    flexDirection: 'row' as const,
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  gridCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: SPACING.lg,
-    alignItems: 'center' as const,
-    ...shadows.small,
-  },
-  gridIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.surfaceLight,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginBottom: SPACING.sm,
-  },
-  gridCardTitle: {
-    ...TYPOGRAPHY.body,
-    color: colors.text,
-    textAlign: 'center' as const,
-    marginBottom: SPACING.xs,
-  },
-  gridCardDesc: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-    textAlign: 'center' as const,
-    lineHeight: 18,
-  },
-
-  // MCP Card
-  mcpCard: {
-    flexDirection: 'row' as const,
-    borderRadius: 12,
-    padding: SPACING.lg,
-    gap: SPACING.md,
-    alignItems: 'flex-start' as const,
-    overflow: 'hidden' as const,
-    ...shadows.small,
-  },
-  mcpIconWrap: {
+  pillarRow: { flexDirection: 'row' as const, gap: SPACING.md, paddingVertical: SPACING.md, alignItems: 'flex-start' as const },
+  pillarIconWrap: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -313,54 +273,12 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  mcpContent: {
-    flex: 1,
-  },
-  mcpTitleRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.sm,
-    marginBottom: SPACING.xs,
-    flexWrap: 'wrap' as const,
-  },
-  mcpTitle: {
-    ...TYPOGRAPHY.body,
-    color: colors.text,
-  },
-  advancedBadge: {
-    borderRadius: 4,
-    paddingHorizontal: SPACING.xs + 2,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  advancedBadgeText: {
-    ...TYPOGRAPHY.labelSmall,
-    color: colors.primary,
-    letterSpacing: 0.5,
-  },
-  mcpDesc: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-    lineHeight: 18,
-  },
+  pillarText: { flex: 1, gap: 3 as number },
+  pillarTitle: { ...TYPOGRAPHY.body, color: colors.text },
+  pillarDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, lineHeight: 18 },
+  julyNote: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, lineHeight: 18, marginTop: SPACING.md },
 
-  // CTA
-  ctaButton: {
-    marginHorizontal: SPACING.xl,
-    marginBottom: SPACING.xl,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: SPACING.lg,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: SPACING.sm,
-  },
-  ctaText: {
-    ...TYPOGRAPHY.body,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-
+  // CTAs (Button supplies its own colours/border; these are layout-only).
+  ctaButton: { marginHorizontal: SPACING.xl, marginTop: SPACING.sm, marginBottom: SPACING.md },
+  verifyButton: { marginHorizontal: SPACING.xl, marginBottom: SPACING.xl },
 });

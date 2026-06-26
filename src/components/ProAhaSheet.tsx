@@ -5,6 +5,7 @@ import { AppSheet } from './AppSheet';
 import { useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { SPACING, TYPOGRAPHY, PRO_AHA_FEATURES } from '../constants';
+import { getPricingCopy } from '../utils/proPricing';
 
 interface ProAhaSheetProps {
   visible: boolean;
@@ -14,6 +15,7 @@ interface ProAhaSheetProps {
 
 export const ProAhaSheet: React.FC<ProAhaSheetProps> = ({ visible, onClose, onRegister }) => {
   const styles = useThemedStyles(createStyles);
+  const pricing = getPricingCopy();
 
   const handleCta = () => {
     onClose();
@@ -21,12 +23,10 @@ export const ProAhaSheet: React.FC<ProAhaSheetProps> = ({ visible, onClose, onRe
   };
 
   return (
-    <AppSheet visible={visible} onClose={onClose} enableDynamicSizing title="Off Grid PRO">
+    <AppSheet visible={visible} onClose={onClose} enableDynamicSizing title="Off Grid AI Pro">
       <View style={styles.content}>
-        <Text style={styles.headline}>Loving Off Grid?</Text>
-        <Text style={styles.subheadline}>
-          Help us build what's next - and get it free for life.
-        </Text>
+        <Text style={styles.headline}>It already knows what you did today.</Text>
+        <Text style={styles.subheadline}>{pricing.sheetSubheadline}</Text>
 
         <View style={styles.featureList}>
           {PRO_AHA_FEATURES.map(feature => (
@@ -37,12 +37,10 @@ export const ProAhaSheet: React.FC<ProAhaSheetProps> = ({ visible, onClose, onRe
           ))}
         </View>
 
-        <Text style={styles.guarantee}>
-          Ship in 12 weeks or full refund. No questions asked.
-        </Text>
+        <Text style={styles.guarantee}>{pricing.sheetFooter}</Text>
 
         <TouchableOpacity style={styles.ctaButton} onPress={handleCta}>
-          <Text style={styles.ctaText}>I am in 🔥</Text>
+          <Text style={styles.ctaText}>{pricing.cta}</Text>
         </TouchableOpacity>
       </View>
     </AppSheet>

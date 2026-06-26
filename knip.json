@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "App.tsx",
+    "__tests__/**/*.test.{ts,tsx}",
+    "__tests__/utils/**/*.{ts,tsx}",
+    "src/bootstrap/loadProFeatures.ts"
+  ],
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignore": ["src/types/**"],
+  "ignoreBinaries": ["swiftlint", "xcpretty", "maestro"],
+  "paths": {
+    "@offgrid/core/*": ["src/*"],
+    "@/*": ["src/*"]
+  },
+  "ignoreExportsUsedInFile": true
+}

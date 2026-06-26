@@ -356,6 +356,8 @@ describe('ModelSettingsScreen', () => {
 
     it('toggles enhance image prompts', () => {
       expect(useAppStore.getState().settings.enhanceImagePrompts).toBe(false);
+      // Enhancement needs a text model available, else the toggle is disabled.
+      useAppStore.setState({ downloadedModels: [{ id: 'text-1' } as any] });
 
       const { getAllByRole } = renderWithSections('image');
       const switches = getAllByRole('switch');
@@ -372,15 +374,23 @@ describe('ModelSettingsScreen', () => {
     });
 
     it('shows enhance prompts on description', () => {
+      useAppStore.setState({ downloadedModels: [{ id: 'text-1' } as any] });
       useAppStore.getState().updateSettings({ enhanceImagePrompts: true });
       const { getByText } = renderWithSections('image');
       expect(getByText(/Text model refines your prompt/)).toBeTruthy();
     });
 
     it('shows enhance prompts off description', () => {
+      useAppStore.setState({ downloadedModels: [{ id: 'text-1' } as any] });
       useAppStore.getState().updateSettings({ enhanceImagePrompts: false });
       const { getByText } = renderWithSections('image');
       expect(getByText(/Use your prompt directly/)).toBeTruthy();
+    });
+
+    it('disables enhance prompts when no text model is available', () => {
+      useAppStore.setState({ downloadedModels: [] });
+      const { getByText } = renderWithSections('image');
+      expect(getByText(/Download a text model to enable/)).toBeTruthy();
     });
   });
 
@@ -433,10 +443,13 @@ describe('ModelSettingsScreen', () => {
   // Performance Settings
   // ============================================================================
   describe('performance settings', () => {
-    it('shows CPU Threads slider label and auto value when nThreads uses the auto sentinel', async () => {
-      const { getByText, findByText } = renderWithSections('text');
+    it('shows CPU Threads stepper with numeric value when nThreads uses the auto sentinel', () => {
+      // The CPU Threads control migrated from a Slider (which displayed an
+      // "Auto (N)" label) to a NumericStepper that shows the resolved numeric
+      // value. With the auto sentinel (nThreads: 0) the stepper value is 1.
+      const { getByText, queryByText } = renderWithSections('text');
       expect(getByText('CPU Threads')).toBeTruthy();
-      await findByText(/^Auto \(\d+\)$/);
+      expect(queryByText(/^Auto \(\d+\)$/)).toBeNull();
     });
 
     it('shows Batch Size slider label and default value', () => {
@@ -445,28 +458,6 @@ describe('ModelSettingsScreen', () => {
       expect(getByText('512')).toBeTruthy();
     });
 
-    it('shows Model Loading Strategy label', () => {
-      const { getByText } = renderWithSections('text');
-      expect(getByText('Model Loading Strategy')).toBeTruthy();
-    });
-
-    it('shows Save Memory and Fast buttons', () => {
-      const { getByText } = renderWithSections('text');
-      expect(getByText('Save Memory')).toBeTruthy();
-      expect(getByText('Fast')).toBeTruthy();
-    });
-
-    it('shows memory strategy description when memory mode', () => {
-      useAppStore.getState().updateSettings({ modelLoadingStrategy: 'memory' });
-      const { getByText } = renderWithSections('text');
-      expect(getByText(/Load models on demand/)).toBeTruthy();
-    });
-
-    it('shows performance strategy description when performance mode', () => {
-      useAppStore.getState().updateSettings({ modelLoadingStrategy: 'performance' });
-      const { getByText } = renderWithSections('text');
-      expect(getByText(/Keep models loaded/)).toBeTruthy();
-    });
   });
 
   // ============================================================================
@@ -477,7 +468,7 @@ describe('ModelSettingsScreen', () => {
       const { UNSAFE_getAllByType } = renderWithSections('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
-      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.startsWith('slider-'));
+      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.endsWith('-slider'));
 
       const tempSlider = sliders.find((s: any) => s.props.value === 0.7);
       if (tempSlider) {
@@ -490,7 +481,7 @@ describe('ModelSettingsScreen', () => {
       const { UNSAFE_getAllByType } = renderWithSections('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
-      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.startsWith('slider-'));
+      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.endsWith('-slider'));
 
       const maxTokensSlider = sliders.find((s: any) => s.props.value === 1024);
       if (maxTokensSlider) {
@@ -503,7 +494,7 @@ describe('ModelSettingsScreen', () => {
       const { UNSAFE_getAllByType } = renderWithSections('image');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
-      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.startsWith('slider-'));
+      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.endsWith('-slider'));
 
       const stepsSlider = sliders.find((s: any) => s.props.value === 8 && s.props.maximumValue === 50);
       if (stepsSlider) {
@@ -516,7 +507,7 @@ describe('ModelSettingsScreen', () => {
       const { UNSAFE_getAllByType } = renderWithSections('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
-      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.startsWith('slider-'));
+      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.endsWith('-slider'));
 
       const threadsSlider = sliders.find((s: any) => s.props.value === 1 && s.props.maximumValue === 12);
       if (threadsSlider) {
@@ -529,7 +520,7 @@ describe('ModelSettingsScreen', () => {
       const { UNSAFE_getAllByType } = renderWithSections('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
-      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.startsWith('slider-'));
+      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.endsWith('-slider'));
 
       const ctxSlider = sliders.find((s: any) => s.props.value === 4096 && s.props.maximumValue === 32768);
       if (ctxSlider) {
@@ -542,23 +533,6 @@ describe('ModelSettingsScreen', () => {
   // ============================================================================
   // Model Loading Strategy Buttons
   // ============================================================================
-  describe('model loading strategy buttons', () => {
-    it('updates to memory strategy when "Save Memory" is pressed', () => {
-      useAppStore.getState().updateSettings({ modelLoadingStrategy: 'performance' });
-      const { getByTestId } = renderWithSections('text');
-
-      fireEvent.press(getByTestId('strategy-memory-button'));
-      expect(useAppStore.getState().settings.modelLoadingStrategy).toBe('memory');
-    });
-
-    it('updates to performance strategy when "Fast" is pressed', () => {
-      useAppStore.getState().updateSettings({ modelLoadingStrategy: 'memory' });
-      const { getByTestId } = renderWithSections('text');
-
-      fireEvent.press(getByTestId('strategy-performance-button'));
-      expect(useAppStore.getState().settings.modelLoadingStrategy).toBe('performance');
-    });
-  });
 
   // ============================================================================
   // Back Button
@@ -649,10 +623,9 @@ describe('ModelSettingsScreen', () => {
         useAppStore.getState().updateSettings({ inferenceBackend: 'opencl', flashAttn: false, gpuLayers: 6 });
         const { getByTestId } = renderWithSections('text');
 
-        const slider = getByTestId('gpu-layers-slider');
-        fireEvent(slider, 'slidingComplete', 12);
+        fireEvent(getByTestId('gpu-layers-stepper-slider'), 'slidingComplete', 7);
 
-        expect(useAppStore.getState().settings.gpuLayers).toBe(12);
+        expect(useAppStore.getState().settings.gpuLayers).toBe(7);
       });
     });
   });
@@ -665,7 +638,7 @@ describe('ModelSettingsScreen', () => {
       const { UNSAFE_getAllByType } = renderWithSections('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
-      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.startsWith('slider-'));
+      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.endsWith('-slider'));
 
       const topPSlider = sliders.find((s: any) => s.props.value === 0.9 && s.props.maximumValue === 1.0);
       if (topPSlider) {
@@ -678,7 +651,7 @@ describe('ModelSettingsScreen', () => {
       const { UNSAFE_getAllByType } = renderWithSections('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
-      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.startsWith('slider-'));
+      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.endsWith('-slider'));
 
       const rpSlider = sliders.find((s: any) => s.props.value === 1.1 && s.props.maximumValue === 2.0);
       if (rpSlider) {
@@ -691,7 +664,7 @@ describe('ModelSettingsScreen', () => {
       const { UNSAFE_getAllByType } = renderWithSections('text');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
-      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.startsWith('slider-'));
+      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.endsWith('-slider'));
 
       const batchSlider = sliders.find((s: any) => s.props.value === 256 && s.props.maximumValue === 512);
       if (batchSlider) {
@@ -704,7 +677,7 @@ describe('ModelSettingsScreen', () => {
       const { UNSAFE_getAllByType } = renderWithSections('image');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
-      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.startsWith('slider-'));
+      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.endsWith('-slider'));
 
       const gsSlider = sliders.find((s: any) => s.props.value === 7.5 && s.props.maximumValue === 20);
       if (gsSlider) {
@@ -717,7 +690,7 @@ describe('ModelSettingsScreen', () => {
       const { UNSAFE_getAllByType } = renderWithSections('image');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
-      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.startsWith('slider-'));
+      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.endsWith('-slider'));
 
       const itSlider = sliders.find((s: any) => s.props.value === 4 && s.props.maximumValue === 8);
       if (itSlider) {
@@ -730,7 +703,7 @@ describe('ModelSettingsScreen', () => {
       const { UNSAFE_getAllByType } = renderWithSections('image');
       const { View } = require('react-native');
       const allViews = UNSAFE_getAllByType(View);
-      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.startsWith('slider-'));
+      const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.endsWith('-slider'));
 
       const sizeSlider = sliders.find((s: any) => s.props.value === 512 && s.props.maximumValue === 512 && s.props.minimumValue === 128);
       if (sizeSlider) {
@@ -819,7 +792,6 @@ describe('ModelSettingsScreen', () => {
           imageWidth: undefined as any,
           imageHeight: undefined as any,
           imageUseOpenCL: undefined as any,
-          modelLoadingStrategy: undefined as any,
           enableGpu: undefined as any,
           inferenceBackend: undefined as any,
           gpuLayers: undefined as any,

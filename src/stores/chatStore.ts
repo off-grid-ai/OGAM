@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Message, Conversation, GenerationMeta } from '../types';
 import { stripControlTokens, stripStreamingControlTokens } from '../utils/messageContent';
 import { generateId } from '../utils/generateId';
+import { callHook, HOOKS } from '../bootstrap/hookRegistry';
 
 function nextUpdatedAt(previousUpdatedAt?: string): string {
   const now = Date.now();
@@ -51,7 +52,48 @@ function extractChannelThinking(rawContent: string): { reasoningContent: string 
   // Qwen channel format: <|channel|>analysis<|message|>[thinking]<|channel|>final<|message|>[response]
   const qwen = sliceThinkingBlock(rawContent, '<|channel|>analysis<|message|>', '<|channel|>final<|message|>');
   if (qwen) return qwen;
+  // <think>...</think> format (Qwen 3.5, DeepSeek, etc.)
+  const thinkTags = sliceThinkingBlock(rawContent, '<think>', '</think>');
+  if (thinkTags) return thinkTags;
+
+  // Qwen3-style: the chat template injects the opening <think> into the prompt,
+  // so the model emits only the closing </think> (reasoning, then </think>, then
+  // answer, with no opener). The live renderer (parseThinkingContent) already
+  // treats this as a thinking block; finalize must use the same rule, or the
+  // block the user just watched appear gets dropped on completion.
+  const closeTag = '</think>';
+  const closeIdx = rawContent.toLowerCase().indexOf(closeTag);
+  if (closeIdx !== -1) {
+    const reasoning = rawContent.slice(0, closeIdx).trim();
+    if (reasoning) {
+      return {
+        reasoningContent: reasoning,
+        responseContent: rawContent.slice(closeIdx + closeTag.length),
+      };
+    }
+  }
+
   return { reasoningContent: undefined, responseContent: rawContent };
+}
+
+/**
+ * The portion of the in-progress stream that is safe to SPEAK in voice mode —
+ * never the reasoning/thinking. Models that stream reasoning on a separate
+ * channel leave streamingMessage answer-only. Models that inline reasoning (e.g.
+ * Qwen3, whose chat template injects the opening <think> so only a closing
+ * </think> is emitted) are sliced at </think>; until that tag arrives we withhold
+ * (return '') while thinking is enabled, so the thought process is never spoken
+ * sentence-by-sentence. onStreamingEnd still speaks the final answer if nothing
+ * streamed.
+ */
+function speakableStreamingAnswer(streamingMessage: string, streamingReasoning: string): string {
+  if (streamingReasoning.length > 0) return streamingMessage; // reasoning came separately
+  const closeIdx = streamingMessage.toLowerCase().lastIndexOf('</think>');
+  if (closeIdx !== -1) return streamingMessage.slice(closeIdx + '</think>'.length);
+  // No close tag yet: inline reasoning may still be in progress. Withhold while
+  // thinking is enabled; otherwise the content is the answer and is safe to speak.
+  const { useAppStore } = require('./appStore');
+  return useAppStore.getState().settings?.thinkingEnabled ? '' : streamingMessage;
 }
 
 /** Derive conversation title from the first user message. */
@@ -86,6 +128,7 @@ interface ChatState {
   addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>) => Message;
   updateMessageContent: (conversationId: string, messageId: string, content: string) => void;
   updateMessageThinking: (conversationId: string, messageId: string, isThinking: boolean) => void;
+  updateMessageAudio: (conversationId: string, messageId: string, audio: { audioPath?: string; waveformData?: number[]; audioDurationSeconds?: number; isGeneratingAudio?: boolean; isAudioModeMessage?: boolean }) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   deleteMessagesAfter: (conversationId: string, messageId: string) => void;
   startStreaming: (conversationId: string) => void;
@@ -198,6 +241,10 @@ export const useChatStore = create<ChatState>()(
         }));
       },
 
+      updateMessageAudio: (conversationId, messageId, audio) => {
+        set((state) => ({ conversations: mapConversation(state.conversations, conversationId, (conv) => updateMessageInConv(conv, messageId, (msg) => ({ ...msg, ...audio }))) }));
+      },
+
       deleteMessage: (conversationId, messageId) => {
         set((state) => ({
           conversations: mapConversation(state.conversations, conversationId, (conv) => ({
@@ -242,6 +289,10 @@ export const useChatStore = create<ChatState>()(
           isStreaming: true,
           isThinking: false,
         }));
+        // Feed only the ANSWER to pro audio for real-time sentence-by-sentence
+        // TTS (never the reasoning) — no-op unless voice mode + engine ready;
+        // free builds register nothing.
+        callHook(HOOKS.audioOnStreamingToken, speakableStreamingAnswer(get().streamingMessage, get().streamingReasoningContent));
       },
 
       appendToStreamingReasoningContent: (token) => {

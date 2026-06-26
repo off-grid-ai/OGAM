@@ -10,6 +10,7 @@ import {
   huggingFaceService,
   backgroundDownloadService,
 } from '../../services';
+import { useVoiceDownloadItems } from './useVoiceDownloadItems';
 import { DownloadedModel, ONNXImageModel } from '../../types';
 import { DownloadItem, formatBytes } from './items';
 import logger from '../../utils/logger';
@@ -240,6 +241,33 @@ async function retryIosTextDownload(
   await reattachRetriedTextDownload({ ...item, downloadId: info.downloadId }, setDownloadedModels);
 }
 
+/** Map the text + image model stores into completed Download Manager items. */
+function modelStoreCompletedItems(
+  downloadedModels: DownloadedModel[],
+  downloadedImageModels: ONNXImageModel[],
+): DownloadItem[] {
+  return [
+    ...downloadedModels.map((model): DownloadItem => {
+      const totalSize = hardwareService.getModelTotalSize(model);
+      return {
+        type: 'completed', modelType: 'text', modelId: model.id, fileName: model.fileName,
+        author: model.author, quantization: model.quantization, fileSize: totalSize,
+        bytesDownloaded: totalSize, progress: 1, status: 'completed',
+        downloadedAt: model.downloadedAt, filePath: model.filePath,
+        isVisionModel: model.engine === 'llama' ? model.isVisionModel : undefined,
+        mmProjPath: model.engine === 'llama' ? model.mmProjPath : undefined,
+        mmProjFileName: model.engine === 'llama' ? model.mmProjFileName : undefined,
+        name: model.name,
+      };
+    }),
+    ...downloadedImageModels.map((model): DownloadItem => ({
+      type: 'completed', modelType: 'image', modelId: model.id, fileName: model.name,
+      author: 'Image Generation', quantization: '', fileSize: model.size,
+      bytesDownloaded: model.size, progress: 1, status: 'completed', filePath: model.modelPath,
+    })),
+  ];
+}
+
 export function useDownloadManager(): UseDownloadManagerResult {
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const repairingVisionIds = useDownloadStore(s => s.repairingVisionIds);
@@ -255,45 +283,16 @@ export function useDownloadManager(): UseDownloadManagerResult {
   const downloads = useDownloadStore(state => state.downloads);
   const removeDownloadEntry = useDownloadStore(state => state.remove);
 
+  // Voice (TTS) + transcription (STT) downloaded models, loaded from disk.
+  const { voiceItems, buildDeleteAlert: buildVoiceDeleteAlert } = useVoiceDownloadItems(() => setAlertState(hideAlert()));
+
   const activeItems: DownloadItem[] = Object.values(downloads)
     .filter(e => e.status !== 'completed' && e.status !== 'cancelled')
     .map(entryToActiveItem);
 
   const completedItems: DownloadItem[] = [
-    ...downloadedModels.map((model): DownloadItem => {
-        const totalSize = hardwareService.getModelTotalSize(model);
-        return {
-          type: 'completed',
-          modelType: 'text',
-          modelId: model.id,
-          fileName: model.fileName,
-          author: model.author,
-          quantization: model.quantization,
-          fileSize: totalSize,
-          bytesDownloaded: totalSize,
-          progress: 1,
-          status: 'completed',
-          downloadedAt: model.downloadedAt,
-          filePath: model.filePath,
-          isVisionModel: model.engine === 'llama' ? model.isVisionModel : undefined,
-          mmProjPath: model.engine === 'llama' ? model.mmProjPath : undefined,
-          mmProjFileName: model.engine === 'llama' ? model.mmProjFileName : undefined,
-          name: model.name,
-        };
-      }),
-    ...downloadedImageModels.map((model): DownloadItem => ({
-      type: 'completed',
-      modelType: 'image',
-      modelId: model.id,
-      fileName: model.name,
-      author: 'Image Generation',
-      quantization: '',
-      fileSize: model.size,
-      bytesDownloaded: model.size,
-      progress: 1,
-      status: 'completed',
-      filePath: model.modelPath,
-    })),
+    ...modelStoreCompletedItems(downloadedModels, downloadedImageModels),
+    ...voiceItems,
   ];
 
   const totalStorageUsed = completedItems.reduce((sum, item) => sum + item.fileSize, 0);
@@ -413,6 +412,10 @@ export function useDownloadManager(): UseDownloadManagerResult {
   };
 
   const handleDeleteItem = (item: DownloadItem) => {
+    if (item.modelType === 'tts' || item.modelType === 'stt') {
+      setAlertState(buildVoiceDeleteAlert(item));
+      return;
+    }
     if (item.modelType === 'image') {
       const model = downloadedImageModels.find(m => m.id === item.modelId);
       if (!model) return;

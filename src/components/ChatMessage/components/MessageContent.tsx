@@ -61,6 +61,17 @@ export function MessageContent({
         </Text>
       );
     }
+    // No content but may have thinking — render ThinkingBlock alone (audio mode above-bubble use case)
+    if (parsedContent.thinking) {
+      return (
+        <ThinkingBlock
+          parsedContent={parsedContent}
+          showThinking={showThinking}
+          onToggle={onToggleThinking}
+          styles={styles}
+        />
+      );
+    }
     return null;
   }
 
