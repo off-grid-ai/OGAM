@@ -12,12 +12,17 @@ set -euo pipefail
 DEVICE_ID="${IOS_DEVICE_ID:-00008101-000919E936F0801E}"
 PROFILE="${IOS_PROFILE:-Off Grid iPhone 12}"
 TEAM="${IOS_TEAM:-84V6KCAC49}"
+# Debug (default) runs from Metro with live reload but is slow and gives bogus
+# perf numbers. Release embeds the JS bundle and compiles native with
+# optimizations - use it to measure real on-device model performance:
+#   IOS_CONFIG=Release npm run ios:device
+CONFIG="${IOS_CONFIG:-Debug}"
 BUNDLE_ID="ai.offgridmobile"
 
 cd "$(dirname "$0")/../ios"
 
-echo "Building (manual signing, profile: $PROFILE) for device $DEVICE_ID ..."
-xcodebuild -workspace OffgridMobile.xcworkspace -scheme OffgridMobile -configuration Debug \
+echo "Building ($CONFIG, manual signing, profile: $PROFILE) for device $DEVICE_ID ..."
+xcodebuild -workspace OffgridMobile.xcworkspace -scheme OffgridMobile -configuration "$CONFIG" \
   -destination "id=$DEVICE_ID" \
   -derivedDataPath build/device \
   CODE_SIGN_STYLE=Manual \
@@ -26,7 +31,7 @@ xcodebuild -workspace OffgridMobile.xcworkspace -scheme OffgridMobile -configura
   CODE_SIGN_IDENTITY="Apple Development" \
   build
 
-APP="build/device/Build/Products/Debug-iphoneos/OffgridMobile.app"
+APP="build/device/Build/Products/$CONFIG-iphoneos/OffgridMobile.app"
 echo "Installing $APP ..."
 xcrun devicectl device install app --device "$DEVICE_ID" "$APP"
 
