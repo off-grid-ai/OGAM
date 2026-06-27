@@ -1,7 +1,33 @@
 import { initWhisper, WhisperContext, RealtimeTranscribeEvent, AudioSessionIos } from 'whisper.rn';
+import * as WhisperRn from 'whisper.rn';
 import { Platform, PermissionsAndroid } from 'react-native';
 import RNFS from 'react-native-fs';
 import logger from '../utils/logger';
+
+// Pipe whisper.cpp's native logs (system_info with the real n_threads, model
+// load info, encode/decode timings) into our logger so they show in both the
+// JS debug-log screen and logcat. Wired once, lazily. Accessed via a cast
+// because the local whisper.rn type shim doesn't declare these (they exist at
+// runtime in whisper.rn >= 0.5).
+let nativeWhisperLogWired = false;
+function wireNativeWhisperLog(): void {
+  if (nativeWhisperLogWired) return;
+  nativeWhisperLogWired = true;
+  const w = WhisperRn as unknown as {
+    toggleNativeLog?: (enabled: boolean) => void;
+    addNativeLogListener?: (l: (level: string, text: string) => void) => void;
+  };
+  try {
+    w.toggleNativeLog?.(true);
+    w.addNativeLogListener?.((level: string, text: string) => {
+      const msg = text.trim();
+      if (msg) logger.log(`[whisper.cpp:${level}] ${msg}`);
+    });
+    logger.log('[Whisper] native logging enabled');
+  } catch (e) {
+    logger.warn(`[Whisper] could not enable native logging: ${String(e)}`);
+  }
+}
 import { backgroundDownloadService } from './backgroundDownloadService';
 import { useDownloadStore } from '../stores/downloadStore';
 import { makeModelKey } from '../utils/modelKey';
@@ -40,6 +66,7 @@ class WhisperService {
   private contextReleasePromise: Promise<void> = Promise.resolve();
   private transcriptionFullyStopped: Promise<void> = Promise.resolve();
   private activeDownloadId: string | null = null;
+  private fileTranscribeStop: (() => void | Promise<void>) | null = null;
 
   getModelsDir(): string { return `${RNFS.DocumentDirectoryPath}/whisper-models`; }
   async ensureModelsDirExists(): Promise<void> {
@@ -224,7 +251,8 @@ class WhisperService {
     logger.log(`[Whisper] Model file validated: ${modelPath} (${Math.round(fileSize / (1024 * 1024))} MB)`);
   }
 
-  async loadModel(modelPath: string): Promise<void> {
+  async loadModel(modelPath: string, options?: { useGpu?: boolean; useFlashAttn?: boolean }): Promise<void> {
+    wireNativeWhisperLog();
     if (this.context && this.currentModelPath !== modelPath) await this.unloadModel();
     if (this.context && this.currentModelPath === modelPath) return;
     if (this.isReleasingContext) {
@@ -236,9 +264,16 @@ class WhisperService {
     // Native initWithModelPath calls abort() on invalid files, crashing the app.
     await this.validateModelFile(modelPath);
 
-    logger.log(`[Whisper] Loading model: ${modelPath}`);
+    logger.log(`[Whisper] Loading model: ${modelPath} useGpu=${options?.useGpu ?? false} useFlashAttn=${options?.useFlashAttn ?? false}`);
     try {
-      this.context = await initWhisper({ filePath: modelPath });
+      // useGpu/useFlashAttn are real whisper.rn runtime options but are absent
+      // from this version's WhisperContextOptions type, so pass via a cast.
+      const initOpts: Record<string, unknown> = {
+        filePath: modelPath,
+        useGpu: options?.useGpu ?? false,
+        useFlashAttn: options?.useFlashAttn ?? false,
+      };
+      this.context = await initWhisper(initOpts as unknown as Parameters<typeof initWhisper>[0]);
       this.currentModelPath = modelPath;
       logger.log('[Whisper] Model loaded successfully');
     } catch (error) {
@@ -446,19 +481,103 @@ class WhisperService {
     options?: {
       language?: string;
       onProgress?: (progress: number) => void;
+      // Fires every time Whisper finishes decoding a chunk (~30s of audio).
+      // `text` is the cumulative transcript so far, ready to drop straight
+      // into the UI. Use this for progressive display on long files.
+      onPartial?: (text: string) => void;
+      maxThreads?: number;
+      nProcessors?: number;
     }
   ): Promise<string> {
+    wireNativeWhisperLog();
     if (!this.context) {
       throw new Error('No Whisper model loaded');
     }
 
-    const { promise } = this.context.transcribe(filePath, {
-      language: options?.language || 'en',
-      onProgress: options?.onProgress,
-    });
+    const language = options?.language || 'auto';
+    const maxThreads = options?.maxThreads ?? 0;
+    const nProcessors = options?.nProcessors ?? 1;
+    const loadedPath = this.currentModelPath ?? '(unknown)';
+    const gpu = (this.context as unknown as { gpu?: boolean }).gpu;
 
-    const { result } = await promise;
-    return result;
+    logger.log(
+      `[Whisper] transcribeFile START path=${filePath} lang=${language} ` +
+        `maxThreads=${maxThreads} nProcessors=${nProcessors} ` +
+        `model=${loadedPath} gpu=${gpu}`,
+    );
+    const tStart = Date.now();
+    let lastProgressLog = 0;
+
+    // 'auto' means "let Whisper sniff the first ~30s of audio and pick".
+    // whisper.rn does this when the language field is omitted entirely;
+    // passing the string 'auto' would be interpreted as a literal code.
+    const transcribeOpts: Record<string, unknown> = {
+      onProgress: (progress: number) => {
+        if (progress - lastProgressLog >= 10 || progress >= 100) {
+          lastProgressLog = progress;
+          logger.log(
+            `[Whisper] transcribe progress ${progress.toFixed(0)}% ` +
+              `elapsed=${((Date.now() - tStart) / 1000).toFixed(1)}s`,
+          );
+        }
+        options?.onProgress?.(progress);
+      },
+    };
+    if (language !== 'auto') transcribeOpts.language = language;
+    if (maxThreads > 0) transcribeOpts.maxThreads = maxThreads;
+    if (nProcessors > 1) transcribeOpts.nProcessors = nProcessors;
+
+    // whisper.rn fires onNewSegments after every decoded chunk; `result` is
+    // the cumulative text. nProcessors > 1 disables this in whisper.cpp
+    // (parallel chunks can't stream in order), so it only fires when nProcessors == 1.
+    if (options?.onPartial) {
+      transcribeOpts.onNewSegments = (eventData: { result: string }) => {
+        try {
+          options.onPartial?.(eventData.result);
+        } catch (err) {
+          logger.warn(`[Whisper] onPartial callback threw: ${String(err)}`);
+        }
+      };
+    }
+
+    const { stop, promise } = this.context.transcribe(
+      filePath,
+      transcribeOpts as Parameters<WhisperContext['transcribe']>[1],
+    );
+    this.fileTranscribeStop = stop;
+
+    try {
+      const { result } = await promise;
+      const totalMs = Date.now() - tStart;
+      logger.log(
+        `[Whisper] transcribeFile DONE elapsed=${(totalMs / 1000).toFixed(1)}s ` +
+          `outputLen=${result.length} preview="${result.slice(0, 100)}"`,
+      );
+      return result;
+    } catch (e) {
+      const totalMs = Date.now() - tStart;
+      logger.error(`[Whisper] transcribeFile FAILED after ${(totalMs / 1000).toFixed(1)}s`, e);
+      throw e;
+    } finally {
+      this.fileTranscribeStop = null;
+    }
+  }
+
+  /**
+   * Cancels an in-flight file transcription. The Stop button calls this so
+   * whisper.cpp actually stops, otherwise the next Transcribe tap throws
+   * "Context is already transcribing".
+   */
+  async stopFileTranscription(): Promise<void> {
+    const fn = this.fileTranscribeStop;
+    this.fileTranscribeStop = null;
+    if (!fn) {
+      logger.log('[Whisper] stopFileTranscription: no active file transcription');
+      return;
+    }
+    logger.log('[Whisper] stopFileTranscription: cancelling native job');
+    try { await fn(); }
+    catch (e) { logger.warn(`[Whisper] stopFileTranscription threw: ${String(e)}`); }
   }
 }
 

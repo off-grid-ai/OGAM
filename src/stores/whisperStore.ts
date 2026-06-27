@@ -27,7 +27,7 @@ interface WhisperState {
   downloadFromUrl: (url: string, modelId: string) => Promise<void>;
   /** Activate an already-downloaded model without re-downloading. */
   selectModel: (modelId: string) => Promise<void>;
-  loadModel: () => Promise<void>;
+  loadModel: (options?: { useGpu?: boolean; useFlashAttn?: boolean }) => Promise<void>;
   unloadModel: () => Promise<void>;
   deleteModel: () => Promise<void>;
   /** Delete a specific on-disk model (active or not). */
@@ -115,7 +115,7 @@ export const useWhisperStore = create<WhisperState>()(
         }
       },
 
-      loadModel: async () => {
+      loadModel: async (options?: { useGpu?: boolean; useFlashAttn?: boolean }) => {
         const { downloadedModelId, isModelLoading } = get();
         if (!downloadedModelId) {
           set({ error: 'No model downloaded' });
@@ -137,7 +137,7 @@ export const useWhisperStore = create<WhisperState>()(
           // then register so future loads can evict it.
           await modelResidencyManager.runExclusive('load:whisper', async () => {
             await modelResidencyManager.makeRoomFor({ key: 'whisper', type: 'whisper', sizeMB });
-            await whisperService.loadModel(modelPath);
+            await whisperService.loadModel(modelPath, options);
             modelResidencyManager.register(
               { key: 'whisper', type: 'whisper', sizeMB },
               () => get().unloadModel(),
