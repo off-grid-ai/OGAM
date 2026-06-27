@@ -18,6 +18,10 @@
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -29,19 +33,15 @@
 			</array>
 		</dict>
 	</array>
-	<key>CFBundleShortVersionString</key>
-	<string>$(MARKETING_VERSION)</string>
-	<key>CFBundleSignature</key>
-	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>twitter</string>
 		<string>x</string>
 	</array>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
@@ -53,6 +53,10 @@
 		<string>_ollama._tcp</string>
 		<string>_lmstudio._tcp</string>
 	</array>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Used to read and create calendar events on your request.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Used to read and create calendar events on your request.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>This app needs access to your camera to take photos and attach them to conversations.</string>
 	<key>NSFaceIDUsageDescription</key>
@@ -65,10 +69,6 @@
 	<string>This app needs permission to save generated images to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your photo library to attach images to conversations.</string>
-	<key>NSCalendarsUsageDescription</key>
-	<string>Used to read and create calendar events on your request.</string>
-	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Used to read and create calendar events on your request.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>This app uses on-device speech recognition to transcribe voice input.</string>
 	<key>RCTNewArchEnabled</key>
@@ -94,6 +94,10 @@
 		<string>FontAwesome6_Solid.ttf</string>
 		<string>SimpleLineIcons.ttf</string>
 		<string>FontAwesome6_Brands.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
