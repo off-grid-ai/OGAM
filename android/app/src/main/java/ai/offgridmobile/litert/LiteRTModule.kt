@@ -64,6 +64,25 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
             val scalar = maxOf(1.0, maxNumTokens.toDouble() / DEFAULT_CONTEXT_TOKENS)
             return minOf((base * scalar).toLong(), 180_000L)
         }
+
+        /** Headroom reserved for the OS and rest of the app, never given to the KV cache. */
+        private const val TOKEN_BUDGET_HEADROOM_MB = 768L
+        /** Never clamp below this — a model should still load with a usable context. */
+        private const val MIN_TOKEN_FLOOR = 1024
+        /** Conservative upper bound on KV-cache cost per token (MB) for litert at these sizes. */
+        private const val KV_MB_PER_TOKEN = 0.15
+
+        /**
+         * Pure token-budget clamp (no Android deps, unit-testable). Reserve model weights
+         * + headroom; spend the rest on KV cache at [KV_MB_PER_TOKEN]/token. Never returns
+         * more than [requested] and never below [MIN_TOKEN_FLOOR].
+         */
+        fun clampMaxTokens(requested: Int, availMb: Long, modelMb: Long): Int {
+            val kvBudgetMb = availMb - modelMb - TOKEN_BUDGET_HEADROOM_MB
+            if (kvBudgetMb <= 0) return minOf(requested, MIN_TOKEN_FLOOR)
+            val affordableTokens = (kvBudgetMb / KV_MB_PER_TOKEN).toInt()
+            return requested.coerceAtMost(maxOf(MIN_TOKEN_FLOOR, affordableTokens))
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -92,7 +111,11 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
 
         scope.launch {
             try {
-                configuredMaxTokens = maxNumTokens
+                // Clamp the token budget to what free RAM can actually hold. The KV cache
+                // grows with the budget, and an over-budget request aborts engine creation
+                // (SIGABRT in nativeCreateEngine) or segfaults during inference. Degrading
+                // to a smaller context keeps the app working instead of crashing.
+                configuredMaxTokens = resolveSafeMaxTokens(modelPath, maxNumTokens)
                 // Unload any existing engine first
                 cleanupEngine()
 
@@ -136,7 +159,11 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 backend = backend,
                 maxNumTokens = configuredMaxTokens,
                 cacheDir = null,
-                visionBackend = if (visionEnabled) Backend.GPU() else null,
+                // Vision delegate follows the main backend tier. Forcing the Mali GPU
+                // delegate even when the main backend has fallen to CPU is a SIGSEGV
+                // source (libGLES_mali) on weak/low-VRAM GPUs; on the CPU tier the vision
+                // sub-model runs on CPU too, so the CPU fallback can actually succeed.
+                visionBackend = if (visionEnabled) visionBackendFor(backend) else null,
                 // Audio sub-model runs on CPU — the USM conformer encoder has no
                 // GPU/NPU delegate in litert-lm, and CPU keeps it off the GPU path
                 // that vision/decoder use.
@@ -563,6 +590,41 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
         is Backend.NPU -> "npu"
         is Backend.GPU -> "gpu"
         else           -> "cpu"
+    }
+
+    /** Vision delegate matched to the main backend tier (CPU main -> CPU vision). */
+    private fun visionBackendFor(mainBackend: Backend): Backend =
+        if (mainBackend is Backend.CPU) Backend.CPU() else Backend.GPU()
+
+    /** Current free system RAM in MB. */
+    private fun availableRamMb(): Long {
+        val am = reactContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val info = ActivityManager.MemoryInfo()
+        am.getMemoryInfo(info)
+        return info.availMem / (1024 * 1024)
+    }
+
+    /**
+     * Clamp the requested token budget to what free RAM can hold. The KV cache grows
+     * with the budget, so an over-budget request aborts engine creation or segfaults
+     * during inference under memory pressure. We reserve the model weights plus headroom
+     * and estimate the rest as KV cache, never going below a 1024-token floor so a model
+     * still loads. Returns the requested value unchanged when memory is comfortable or
+     * when we can't measure it.
+     */
+    private fun resolveSafeMaxTokens(modelPath: String, requested: Int): Int {
+        return try {
+            val avail = availableRamMb()
+            val modelMb = (File(modelPath).length() / (1024 * 1024)).coerceAtLeast(0)
+            val safe = clampMaxTokens(requested, avail, modelMb)
+            if (safe < requested) {
+                Log.w(TAG, "resolveSafeMaxTokens — clamping tokens $requested -> $safe (avail=${avail}MB, model=${modelMb}MB)")
+            }
+            safe
+        } catch (e: Exception) {
+            Log.w(TAG, "resolveSafeMaxTokens — failed, using requested $requested: ${e.message}")
+            requested
+        }
     }
 
     /**
