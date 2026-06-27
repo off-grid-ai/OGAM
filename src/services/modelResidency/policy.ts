@@ -17,7 +17,7 @@
  * can be unit-tested without touching native model loading.
  */
 
-export type ResidentType = 'text' | 'image' | 'whisper' | 'tts' | 'classifier';
+export type ResidentType = 'text' | 'image' | 'whisper' | 'tts' | 'classifier' | 'embedding';
 
 export interface Resident {
   /** Unique model id. */
@@ -77,10 +77,10 @@ export function planEviction(
       .reduce((sum, r) => sum + r.sizeMB, 0);
   const incomingCostMB = alreadyResident ? 0 : incoming.sizeMB;
 
-  // Speech (whisper) and TTS are small always-resident sidecars: never evicted
-  // for capacity, and they never trigger eviction of the active generation model.
-  // Only text and image are heavy enough to swap.
-  const SIDECAR_TYPES = new Set<ResidentType>(['whisper', 'tts']);
+  // Speech (whisper), TTS, and the RAG/MCP embedding model are small always-resident
+  // sidecars: never evicted for capacity, and they never trigger eviction of the
+  // active generation model. Only text and image are heavy enough to swap.
+  const SIDECAR_TYPES = new Set<ResidentType>(['whisper', 'tts', 'embedding']);
 
   // 1. Mutual exclusion for generation models: text and image never co-reside.
   // Each one (plus its runtime working set) is too heavy to keep both warm, so
