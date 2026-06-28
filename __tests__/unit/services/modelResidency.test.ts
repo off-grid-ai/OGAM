@@ -110,19 +110,6 @@ describe('planEviction', () => {
     const plan = planEviction(current, { key: 'huge', type: 'text', sizeMB: 5000 }, 1000);
     expect(plan.fits).toBe(false);
   });
-
-  it('oneAtATime (strict sequential) evicts EVERY other non-pinned model, keeps pinned', () => {
-    const current = [
-      R('text', 'text', 400, 1),
-      R('tts', 'tts', 320, 2),
-      R('cls', 'classifier', 100, 3, true), // pinned → stays
-    ];
-    // Loading STT on a tight device evicts both text and tts so only one heavy
-    // model (whisper) + the pinned classifier are resident.
-    const plan = planEviction(current, { key: 'whisper', type: 'whisper', sizeMB: 200 }, 4000, { oneAtATime: true });
-    expect(plan.evict.map(e => e.key).sort()).toEqual(['text', 'tts']);
-    expect(plan.fits).toBe(true);
-  });
 });
 
 describe('ModelResidencyManager', () => {

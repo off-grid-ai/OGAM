@@ -62,12 +62,10 @@ export function computeBudgetMB(
  * Plan which residents to evict so `incoming` fits within `budgetMB`.
  * Never evicts pinned residents or the incoming model itself.
  */
-// eslint-disable-next-line max-params -- residents, incoming, budget + an options bag; clearer than merging budget into opts and re-threading every caller.
 export function planEviction(
   current: Resident[],
   incoming: IncomingModel,
   budgetMB: number,
-  opts?: { oneAtATime?: boolean },
 ): EvictionPlan {
   const evict: Resident[] = [];
   const isEvicted = (r: Resident) => evict.some(e => e.key === r.key);
@@ -135,19 +133,6 @@ export function planEviction(
         .sort((a, b) => a.lastUsedAt - b.lastUsedAt)[0]; // least-recently-used peer sidecar
       if (!peer) break; // only the LLM (or nothing) left — don't evict it
       evict.push(peer);
-    }
-  }
-
-  // 4. STRICT SEQUENTIAL (memory-tight devices, e.g. ≤4 GB): only ONE non-pinned
-  // model may be resident at a time. Evict every other non-pinned resident so the
-  // mic (STT), the LLM, and TTS never coexist — each turn runs one heavy model,
-  // then frees it for the next. Honors pinned + canEvict (an actively-playing TTS
-  // stays). This is what keeps a 4 GB device from accumulating past the per-process
-  // limit; it costs reload latency between stages, which is the right trade there.
-  if (opts?.oneAtATime) {
-    for (const r of current) {
-      if (r.pinned || r.key === incoming.key || isEvicted(r)) continue;
-      evict.push(r);
     }
   }
 

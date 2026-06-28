@@ -54,10 +54,6 @@ async function preloadText(): Promise<void> {
 }
 
 async function preloadTts(): Promise<void> {
-  // Strict sequential (≤4 GB): never warm a SECOND model — it would only evict the
-  // text model we just warmed (one-heavy-model-at-a-time), and the idle baseline is
-  // what tips the device over. TTS loads on demand when the user speaks.
-  if (hardwareService.getTotalMemoryGB() <= 4) return;
   // Pro implements the audio.preload hook (fits-gated + registers the engine);
   // no-op in free builds.
   const pending = callHook<Promise<void>>(HOOKS.audioPreload);
@@ -65,7 +61,6 @@ async function preloadTts(): Promise<void> {
 }
 
 async function preloadStt(): Promise<void> {
-  if (hardwareService.getTotalMemoryGB() <= 4) return; // strict sequential — load on demand
   const whisper = useWhisperStore.getState();
   if (!whisper.downloadedModelId || whisper.isModelLoaded) return;
   const sizeMB = WHISPER_MODELS.find(m => m.id === whisper.downloadedModelId)?.size ?? 200;

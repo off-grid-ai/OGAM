@@ -20,12 +20,8 @@ jest.mock('../../../src/services/activeModelService', () => ({
   },
 }));
 
-let mockTotalGB = 8; // roomy by default so preloading runs; ≤4 → strict (skip secondary preloads)
 jest.mock('../../../src/services/hardware', () => ({
-  hardwareService: {
-    estimateModelRam: (m: any) => (m.fileSize || m.size || 0) * 1.5,
-    getTotalMemoryGB: () => mockTotalGB,
-  },
+  hardwareService: { estimateModelRam: (m: any) => (m.fileSize || m.size || 0) * 1.5 },
 }));
 
 jest.mock('../../../src/services/whisperService', () => ({
@@ -58,7 +54,6 @@ describe('preloadSelectedModels', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     _resetPreloaderForTesting();
-    mockTotalGB = 8; // roomy by default
     mockTextGenerating = false;
     mockImageGenerating = false;
     mockCanLoad.mockReturnValue(true);
@@ -87,14 +82,6 @@ describe('preloadSelectedModels', () => {
     expect(mockLoadImage).not.toHaveBeenCalled();
     expect(mockLoadText).toHaveBeenCalled();
     expect(mockWhisperState.loadModel).toHaveBeenCalled();
-  });
-
-  it('on a memory-tight device (≤4GB) warms only text — NOT a second model (strict sequential)', async () => {
-    mockTotalGB = 4;
-    await preloadSelectedModels();
-    expect(mockLoadText).toHaveBeenCalledWith('txt'); // the one primary model is still warmed
-    expect(mockCallHook).not.toHaveBeenCalledWith('audio.preload'); // TTS not pre-warmed
-    expect(mockWhisperState.loadModel).not.toHaveBeenCalled(); // STT not pre-warmed
   });
 
   it('skips models that are already loaded', async () => {

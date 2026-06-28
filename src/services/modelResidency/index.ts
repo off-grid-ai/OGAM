@@ -181,10 +181,7 @@ class ModelResidencyManager {
     await hardwareService.refreshMemoryInfo().catch(() => {});
     // planningResidents() pins anything whose owner vetoes eviction right now
     // (canEvict()===false), so a capacity load never unloads an in-use model.
-    // On a memory-tight device, run STRICT SEQUENTIAL: one heavy model at a time.
-    let oneAtATime = false;
-    try { oneAtATime = hardwareService.getTotalMemoryGB() <= 4; } catch { /* default off */ }
-    const plan = planEviction(this.planningResidents(), spec, this.getBudgetMB(), { oneAtATime });
+    const plan = planEviction(this.planningResidents(), spec, this.getBudgetMB());
     if (!plan.fits) {
       // The model won't fit even after the planned evictions — so DON'T evict.
       // Otherwise we'd strand the device with nothing (e.g. evict text to load
