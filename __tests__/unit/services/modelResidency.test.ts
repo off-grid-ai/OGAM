@@ -7,6 +7,7 @@
  */
 import { planEviction, computeBudgetMB, Resident } from '../../../src/services/modelResidency/policy';
 import { modelResidencyManager } from '../../../src/services/modelResidency';
+import { hardwareService } from '../../../src/services/hardware';
 
 const R = (key: string, type: any, sizeMB: number, lastUsedAt: number, pinned = false): Resident =>
   ({ key, type, sizeMB, lastUsedAt, pinned });
@@ -192,6 +193,34 @@ describe('ModelResidencyManager', () => {
     it('returns the operation result', async () => {
       const res = await modelResidencyManager.runExclusive('val', async () => 42);
       expect(res).toBe(42);
+    });
+  });
+
+  describe('reclaimSttForGeneration (memory-tight sequencing)', () => {
+    beforeEach(() => modelResidencyManager._reset());
+    afterEach(() => jest.restoreAllMocks());
+
+    it('frees the idle Whisper model before generation on a tight (≤6GB) device', async () => {
+      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(4);
+      const unload = jest.fn().mockResolvedValue(undefined);
+      modelResidencyManager.register({ key: 'whisper', type: 'whisper', sizeMB: 466 }, unload, 1);
+      await modelResidencyManager.reclaimSttForGeneration();
+      expect(unload).toHaveBeenCalled();
+      expect(modelResidencyManager.isResident('whisper')).toBe(false);
+    });
+
+    it('keeps Whisper warm on a roomy (>6GB) device', async () => {
+      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(8);
+      const unload = jest.fn().mockResolvedValue(undefined);
+      modelResidencyManager.register({ key: 'whisper', type: 'whisper', sizeMB: 466 }, unload, 1);
+      await modelResidencyManager.reclaimSttForGeneration();
+      expect(unload).not.toHaveBeenCalled();
+      expect(modelResidencyManager.isResident('whisper')).toBe(true);
+    });
+
+    it('is a no-op when Whisper is not resident', async () => {
+      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(4);
+      await expect(modelResidencyManager.reclaimSttForGeneration()).resolves.toBeUndefined();
     });
   });
 });

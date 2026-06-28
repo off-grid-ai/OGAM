@@ -10,6 +10,7 @@ import { getToolExtensions } from '../../services/tools/extensions';
 import { liteRTService } from '../../services/litert';
 import { ensureDefaultClassifier } from '../../services/classifierProvisioning';
 import { abortPreload } from '../../services/modelPreloader';
+import { modelResidencyManager } from '../../services/modelResidency';
 import { embeddingService } from '../../services/rag/embedding';
 import { useChatStore, useProjectStore, useRemoteServerStore } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
@@ -384,9 +385,8 @@ export async function handleSendFn(deps: GenerationDeps, call: SendCall): Promis
   const { text, attachments, imageMode, startGeneration } = call;
   abortPreload(); // user acted — stop background warming so it can't block them
   if (!deps.hasActiveModel) { deps.setAlertState(showAlert('No Model Selected', 'Please select a model first.')); return; }
-  // Stop stale TTS on the genuine new-turn send (NOT in a streaming-flag effect —
-  // that bounced per tool-call round and aborted the live answer). See useChatScreen.
-  callHook(HOOKS.audioStop);
+  callHook(HOOKS.audioStop); // stop stale TTS on the new turn (not a streaming-flag effect — see useChatScreen)
+  await modelResidencyManager.reclaimSttForGeneration(); // free idle Whisper before LLM+TTS so they don't OOM on tight devices
   let targetConversationId = deps.activeConversationId;
   if (!targetConversationId) {
     const fallbackModelId = deps.activeModelInfo?.modelId || deps.activeImageModel?.id;
@@ -424,6 +424,7 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
   const { userMessage } = call;
   logger.log(`[RESEND-SM] regenerate start userMsg=${userMessage.id} conv=${deps.activeConversationId} hasActiveModel=${deps.hasActiveModel} isRemote=${deps.activeModelInfo?.isRemote} hasActiveModelObj=${!!deps.activeModel}`);
   if (!deps.activeConversationId || !deps.hasActiveModel) { logger.log('[RESEND-SM] regenerate BAIL: no conv or no active model'); return; }
+  await modelResidencyManager.reclaimSttForGeneration(); // free idle Whisper before the LLM reload (memory-tight)
   const targetConversationId = deps.activeConversationId;
   const messageText = appendAttachmentText(userMessage.content, userMessage.attachments);
   const shouldGenerateImage = await shouldRouteToImageGenerationFn(deps, messageText);
