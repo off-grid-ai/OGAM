@@ -118,6 +118,24 @@ export function planEviction(
     }
   }
 
+  // 3. A SIDECAR must also fit the budget — but it may only reclaim RAM from PEER
+  // sidecars, never from the active generation model. On a memory-tight device
+  // (e.g. 4 GB) loading TTS evicts the now-idle Whisper (STT) model — "if there's
+  // no budget, remove STT, then load TTS" — so the mic and speaker models don't
+  // coexist and tip the app past the jetsam limit. If it still doesn't fit after
+  // evicting peers, `fits` is false and the caller bails gracefully (no TTS)
+  // instead of loading into an OOM kill. Evicting the LLM here would break an
+  // in-flight streaming answer, so generation models are deliberately untouched.
+  if (SIDECAR_TYPES.has(incoming.type)) {
+    while (usedMB() + incomingCostMB > budgetMB) {
+      const peer = current
+        .filter(r => !r.pinned && r.key !== incoming.key && !isEvicted(r) && SIDECAR_TYPES.has(r.type))
+        .sort((a, b) => a.lastUsedAt - b.lastUsedAt)[0]; // least-recently-used peer sidecar
+      if (!peer) break; // only the LLM (or nothing) left — don't evict it
+      evict.push(peer);
+    }
+  }
+
   return {
     evict,
     fits: usedMB() + incomingCostMB <= budgetMB,

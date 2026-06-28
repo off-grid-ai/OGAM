@@ -76,8 +76,25 @@ describe('planEviction', () => {
     const current = [R('txt', 'text', 800, 1)];
     const plan = planEviction(current, { key: 'whisper', type: 'whisper', sizeMB: 150 }, 900);
     // Loading whisper coexists with the text model rather than swapping it out,
-    // even though it overshoots the budget.
+    // even though it overshoots the budget (only PEER sidecars are reclaimable).
     expect(plan.evict).toEqual([]);
+  });
+
+  it('loading TTS evicts the idle STT (peer sidecar) to fit, never the LLM', () => {
+    const current = [R('txt', 'text', 500, 1), R('whisper', 'whisper', 150, 5)];
+    // used 650 + tts 200 = 850 > 700; evict the peer sidecar (whisper) → 500+200=700 fits.
+    const plan = planEviction(current, { key: 'tts', type: 'tts', sizeMB: 200 }, 700);
+    expect(plan.evict.map(e => e.key)).toEqual(['whisper']);
+    expect(plan.fits).toBe(true);
+  });
+
+  it('loading TTS never evicts the LLM — reports fits=false so the caller bails (no OOM)', () => {
+    const current = [R('txt', 'text', 800, 1)];
+    // No peer sidecar to reclaim; the LLM is off-limits → don't evict it, just say
+    // it doesn't fit so TTS degrades gracefully instead of loading into a jetsam kill.
+    const plan = planEviction(current, { key: 'tts', type: 'tts', sizeMB: 320 }, 700);
+    expect(plan.evict).toEqual([]);
+    expect(plan.fits).toBe(false);
   });
 
   it('charges no cost for a model that is already resident', () => {
