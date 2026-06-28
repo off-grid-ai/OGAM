@@ -522,6 +522,51 @@ describe('Image Generation Flow Integration', () => {
     });
   });
 
+  describe('Prompt enhancement model loading (mutual exclusion)', () => {
+    it('shows the generating card even when enhancement is enabled but skipped (no text model)', async () => {
+      setupImageModelState();
+      useAppStore.setState({
+        activeModelId: null,
+        lastTextModelId: null,
+        settings: { ...useAppStore.getState().settings, enhanceImagePrompts: true } as any,
+      });
+      mockLlmService.isModelLoaded.mockReturnValue(false);
+
+      let resolveGen: (v: any) => void;
+      mockLocalDreamService.generateImage.mockImplementation(
+        () => new Promise((r) => { resolveGen = r; }),
+      );
+
+      const gen = imageGenerationService.generateImage({ prompt: 'a cat' });
+      await flushPromises();
+
+      // The card must show despite enhancement being enabled-but-skipped (was the bug).
+      expect(imageGenerationService.getState().isGenerating).toBe(true);
+      // With no text model available, enhancement must not attempt an on-demand load.
+      expect(mockActiveModelService.loadTextModel).not.toHaveBeenCalled();
+
+      resolveGen!({ id: 'x', prompt: 'a cat', imagePath: '/p.png', width: 512, height: 512, seed: 1 });
+      await gen;
+    });
+
+    it('auto-loads the text model on demand to enhance when it is not loaded', async () => {
+      setupImageModelState();
+      useAppStore.setState({
+        activeModelId: 'text-1',
+        settings: { ...useAppStore.getState().settings, enhanceImagePrompts: true } as any,
+      });
+      // Not loaded initially; becomes loaded after the on-demand load.
+      mockLlmService.isModelLoaded.mockReturnValueOnce(false).mockReturnValue(true);
+      mockActiveModelService.loadTextModel.mockResolvedValue();
+      mockLlmService.generateResponse.mockResolvedValue('enhanced prompt');
+
+      await imageGenerationService.generateImage({ prompt: 'a cat' });
+
+      expect(mockActiveModelService.loadTextModel).toHaveBeenCalledWith('text-1');
+      expect(mockLlmService.generateResponse).toHaveBeenCalled();
+    });
+  });
+
   describe('Prompt Enhancement with Conversation Context', () => {
     const setupEnhancement = () => {
       const imageModel = setupImageModelState();

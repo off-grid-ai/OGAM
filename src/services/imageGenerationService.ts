@@ -136,12 +136,36 @@ class ImageGenerationService {
       logger.log('[ImageGen] Enhancement disabled, using original prompt');
       return params.prompt;
     }
-    const isTextModelLoaded = llmService.isModelLoaded();
+    let isTextModelLoaded = llmService.isModelLoaded();
     const isLlmGenerating = llmService.isCurrentlyGenerating();
     logger.log('[ImageGen] 🎨 Starting prompt enhancement - Model loaded:', isTextModelLoaded, 'LLM generating:', isLlmGenerating);
     if (!isTextModelLoaded) {
-      logger.warn('[ImageGen] No text model loaded, skipping enhancement');
-      return params.prompt;
+      // Text and image models are mutually exclusive (one resident at a time), so
+      // during image gen the text model usually isn't loaded. Load it on demand to
+      // enhance; _ensureImageModelLoaded swaps back to the image model afterwards.
+      // This costs two heavy model loads per enhanced generation — the accepted
+      // price for the feature when one-at-a-time residency is in force.
+      const { activeModelId, lastTextModelId } = useAppStore.getState();
+      const textModelId = activeModelId ?? lastTextModelId;
+      if (!textModelId) {
+        logger.warn('[ImageGen] No text model available, skipping enhancement');
+        return params.prompt;
+      }
+      this.updateState({
+        isGenerating: true, prompt: params.prompt, conversationId: params.conversationId || null,
+        status: 'Loading text model to enhance prompt...', previewPath: null,
+        progress: { step: 0, totalSteps: steps }, error: null, result: null,
+      });
+      try {
+        await activeModelService.loadTextModel(textModelId);
+        isTextModelLoaded = llmService.isModelLoaded();
+      } catch (err) {
+        logger.warn('[ImageGen] Failed to load text model for enhancement, using original prompt:', err);
+      }
+      if (!isTextModelLoaded) {
+        logger.warn('[ImageGen] Text model still not loaded after on-demand load, skipping enhancement');
+        return params.prompt;
+      }
     }
     this.updateState({
       isGenerating: true, prompt: params.prompt, conversationId: params.conversationId || null,
@@ -311,15 +335,17 @@ class ImageGenerationService {
     logger.log('[ImageGen] enhanceImagePrompts setting:', settings.enhanceImagePrompts);
     this.cancelRequested = false;
 
-    if (!settings.enhanceImagePrompts) {
-      this.updateState({
-        isGenerating: true, prompt: params.prompt, conversationId: params.conversationId || null,
-        status: 'Preparing image generation...', previewPath: null,
-        progress: { step: 0, totalSteps: steps }, error: null, result: null,
-      });
-    } else {
-      this.updateState({ status: 'Preparing image generation...' });
-    }
+    // Establish the generating state unconditionally — not only when enhancement
+    // is off. When enhancement is ON but _enhancePrompt bailed early (e.g. no text
+    // model loaded, so enhancement was skipped), it never set isGenerating, so the
+    // in-progress card never appeared. Setting it here fixes that; on the
+    // enhancement-ran path this just swaps the 'Enhancing…' status for 'Preparing…'
+    // before the image model loads.
+    this.updateState({
+      isGenerating: true, prompt: params.prompt, conversationId: params.conversationId || null,
+      status: 'Preparing image generation...', previewPath: null,
+      progress: { step: 0, totalSteps: steps }, error: null, result: null,
+    });
 
     const loaded = await this._ensureImageModelLoaded(activeImageModelId, activeImageModel, settings.imageThreads ?? 4);
     if (!loaded) return null;
