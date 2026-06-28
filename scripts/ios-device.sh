@@ -9,7 +9,24 @@
 #   IOS_DEVICE_ID, IOS_PROFILE, IOS_TEAM
 set -euo pipefail
 
-DEVICE_ID="${IOS_DEVICE_ID:-00008101-000919E936F0801E}"
+# Auto-detect the currently-connected physical iOS device (first one online).
+# Override with IOS_DEVICE_ID to target a specific device. We read the hardware
+# UDID from `xctrace` — what `xcodebuild -destination id=` and `devicectl
+# --device` both accept — taking only the "== Devices ==" (connected) section and
+# skipping the Mac (no OS-version in parens) and the offline-devices section.
+detect_device_id() {
+  xcrun xctrace list devices 2>/dev/null \
+    | awk '/^== Devices ==/{s=1;next} /^==/{s=0} s' \
+    | grep -E '\([0-9]+\.[0-9.]+\)' \
+    | sed -E 's/.*\(([0-9A-Fa-f-]+)\)[[:space:]]*$/\1/' \
+    | head -1
+}
+
+DEVICE_ID="${IOS_DEVICE_ID:-$(detect_device_id)}"
+if [ -z "$DEVICE_ID" ]; then
+  echo "No connected iOS device found. Plug in and trust a device, or set IOS_DEVICE_ID." >&2
+  exit 1
+fi
 PROFILE="${IOS_PROFILE:-Off Grid iPhone 12}"
 TEAM="${IOS_TEAM:-84V6KCAC49}"
 BUNDLE_ID="ai.offgridmobile"
