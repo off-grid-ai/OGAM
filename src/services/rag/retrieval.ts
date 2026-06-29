@@ -58,6 +58,7 @@ class RetrievalService {
       name: entry.name,
       content: entry.content,
       position: entry.position,
+      metadata: entry.metadata,
       score: cosineSimilarity(queryVec, entry.embedding),
     }));
 

@@ -1,5 +1,5 @@
 import { ragDatabase } from './database';
-import { chunkDocument } from './chunking';
+import { chunkDocument, type Chunk } from './chunking';
 import { retrievalService } from './retrieval';
 import { embeddingService } from './embedding';
 import { documentService } from '../documentService';
@@ -76,6 +76,42 @@ class RagService {
 
     onProgress?.({ stage: 'done', message: 'Done' });
     logger.log(`[RAG] Indexed ${fileName}: ${chunks.length} chunks`);
+    return docId;
+  }
+
+  /**
+   * Index pre-built chunks of in-memory text (e.g. a recording transcript) under
+   * a project, without reading from a file. Each chunk may carry metadata
+   * (recordingId, startMs, eventTitle) so a search hit can cite + seek its source.
+   * Does not de-dupe; callers that re-index should delete the old doc first.
+   */
+  async indexText(params: {
+    projectId: string;
+    docName: string;
+    docPath: string;
+    chunks: Chunk[];
+    fileSize?: number;
+  }): Promise<number> {
+    const { projectId, docName, docPath, chunks, fileSize } = params;
+    await this.ensureReady();
+    if (chunks.length === 0) throw new Error('No content to index');
+
+    const size = fileSize ?? chunks.reduce((n, c) => n + c.content.length, 0);
+    const docId = ragDatabase.insertDocument({ projectId, name: docName, path: docPath, size });
+    const rowIds = ragDatabase.insertChunks(docId, chunks);
+
+    try {
+      await embeddingService.load();
+      const texts = chunks.map((c) => c.content);
+      const embeddings = await embeddingService.embedBatch(texts);
+      const entries = rowIds.map((rowId, i) => ({ chunkRowid: rowId, docId, embedding: embeddings[i] }));
+      ragDatabase.insertEmbeddingsBatch(entries);
+      logger.log(`[RAG] Generated ${embeddings.length} embeddings for ${docName}`);
+    } catch (err) {
+      logger.error('[RAG] indexText embedding failed (non-fatal):', err);
+    }
+
+    logger.log(`[RAG] Indexed text "${docName}": ${chunks.length} chunks`);
     return docId;
   }
 

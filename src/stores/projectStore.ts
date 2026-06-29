@@ -11,6 +11,8 @@ interface ProjectState {
 
   // Actions
   createProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Project;
+  /** Add a project with a fixed id if one with that id doesn't already exist (idempotent). Used to seed system projects like "Recordings". */
+  ensureProject: (project: Omit<Project, 'createdAt' | 'updatedAt'>) => void;
   updateProject: (id: string, updates: Partial<Omit<Project, 'id' | 'createdAt'>>) => void;
   deleteProject: (id: string) => void;
   getProject: (id: string) => Project | undefined;
@@ -100,6 +102,14 @@ export const useProjectStore = create<ProjectState>()(
         }));
 
         return project;
+      },
+
+      ensureProject: (projectData) => {
+        if (get().projects.some((p) => p.id === projectData.id)) return;
+        const now = new Date().toISOString();
+        set((state) => ({
+          projects: [...state.projects, { ...projectData, createdAt: now, updatedAt: now }],
+        }));
       },
 
       updateProject: (id, updates) => {

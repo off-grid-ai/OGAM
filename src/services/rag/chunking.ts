@@ -7,6 +7,9 @@ export interface ChunkOptions {
 export interface Chunk {
   content: string;
   position: number;
+  // Optional per-chunk metadata (e.g. recordingId, startMs, eventTitle for
+  // recordings) so a search hit can cite and seek back to its source moment.
+  metadata?: Record<string, unknown>;
 }
 
 const DEFAULT_CHUNK_SIZE = 500;
