@@ -295,8 +295,13 @@ class LLMService {
     const { settings } = useAppStore.getState();
     let fullResponse = '';
     const ctx = this.context;
+    // These internal generations (summarize, tool-selection) never want the
+    // model to "think" - reasoning wastes the token budget, is slow + hot, and
+    // leaks into the output. Force thinking OFF (for models that gate it via the
+    // thinking channel; prose chain-of-thought is additionally curbed by prompts).
+    const params = { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift() }), ...buildThinkingCompletionParams(false, this.isGemma4Model()), n_predict: maxTokens };
     const completionWork = safeCompletion(ctx, () => ctx.completion(
-      { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift() }), n_predict: maxTokens },
+      params,
       (data) => { if (this.isGenerating && data.token) { fullResponse += data.token; onToken?.(data.token); } },
     ), 'generateWithMaxTokens');
     this.activeCompletionPromise = completionWork.then(() => { }, () => { });
