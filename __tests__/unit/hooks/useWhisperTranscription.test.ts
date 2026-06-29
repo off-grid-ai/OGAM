@@ -17,6 +17,13 @@ jest.mock('../../../src/services/whisperService', () => ({
     stopTranscription: jest.fn(),
     forceReset: jest.fn(),
   },
+  // Pure helper used by finalizeTranscription — strip whisper no-speech markers,
+  // return '' when only markers/punctuation remain (mirrors the real impl).
+  cleanTranscription: (raw: string) => {
+    if (!raw) return '';
+    const s = raw.replace(/\[[^\]]*\]/g, ' ').replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+    return /[a-z0-9]/i.test(s) ? s : '';
+  },
 }));
 
 jest.mock('../../../src/stores/whisperStore', () => ({

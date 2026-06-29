@@ -458,8 +458,29 @@ class WhisperService {
     });
 
     const { result } = await promise;
-    return result;
+    return cleanTranscription(result);
   }
+}
+
+/**
+ * Normalize a raw Whisper transcription: strip the non-speech markers Whisper
+ * emits for silence/noise — [BLANK_AUDIO], [ Silence ], [MUSIC], (inaudible),
+ * (speaking foreign language), etc. — and return '' when nothing but markers
+ * (or punctuation) remains. Without this, a silent/too-short clip returned the
+ * literal "[BLANK_AUDIO]" token, which then got SENT as the message text instead
+ * of being treated as "couldn't hear that". The single place this rule lives, so
+ * every path (file + realtime) treats no-speech identically.
+ */
+export function cleanTranscription(raw: string): string {
+  if (!raw) return '';
+  const stripped = raw
+    .replace(/\[[^\]]*\]/g, ' ') // [BLANK_AUDIO], [ Silence ], [MUSIC]
+    .replace(/\([^)]*\)/g, ' ')  // (silence), (speaking foreign language)
+    .replace(/\s+/g, ' ')
+    .trim();
+  // Only markers / punctuation left → no real speech.
+  if (!/[a-z0-9]/i.test(stripped)) return '';
+  return stripped;
 }
 
 export const whisperService = new WhisperService();
