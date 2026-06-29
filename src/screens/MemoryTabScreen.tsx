@@ -43,7 +43,7 @@ const MemoryPaywall: React.FC = () => {
         <View style={styles.iconCircle}>
           <Icon name="mic" size={28} color={colors.primary} />
         </View>
-        <Text style={styles.title}>Memory</Text>
+        <Text style={styles.title}>Recorder</Text>
         <Text style={styles.body}>
           Record continuously and transcribe on your phone. The audio and the
           transcript stay on the device - nothing is uploaded.

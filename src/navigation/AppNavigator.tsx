@@ -176,7 +176,7 @@ const MainTabs: React.FC = () => {
         <Tab.Screen
           name="MemoryTab"
           component={MemoryTabScreen}
-          options={{ tabBarLabel: 'Memory', tabBarButtonTestID: 'memory-tab' }}
+          options={{ tabBarLabel: 'Recorder', tabBarButtonTestID: 'recorder-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}
