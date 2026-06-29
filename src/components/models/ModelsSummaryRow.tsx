@@ -90,8 +90,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   typeStack: { alignItems: 'center' as const, gap: SPACING.xs },
   caption: { ...TYPOGRAPHY.metaSmall, color: colors.textMuted },
   captionActive: { color: colors.textSecondary },
-  // Large numeral spanning the icon+caption height. display weight (200) keeps it
-  // within the ≤400 rule; lineHeight matches the stack so it sits vertically centered.
-  count: { ...TYPOGRAPHY.display, fontSize: 26, lineHeight: 30, color: colors.textMuted },
+  // Numeral to the right of the icon+label. Thin (weight 200) and only modestly
+  // larger than the icon so it reads as a quiet secondary count, not a loud hero —
+  // matches the restrained terminal look. lineHeight spans the stack for centering.
+  count: { ...TYPOGRAPHY.display, fontSize: 18, lineHeight: 34, color: colors.textMuted },
   countActive: { color: colors.primary },
 });
