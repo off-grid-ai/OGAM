@@ -118,6 +118,12 @@ interface AppState {
   shownSpotlights: Record<string, boolean>;
   markSpotlightShown: (key: string) => void;
   resetShownSpotlights: () => void;
+  /** Image models that have completed at least one generation. The FIRST run for a
+   *  model compiles/warms the backend (OpenCL kernels on Android, the CoreML model
+   *  on iOS) and takes ~120s — this drives the one-time warm-up notice on BOTH
+   *  platforms, persisted so it only shows once per model. */
+  warmedImageModels: string[];
+  markImageModelWarmed: (modelId: string) => void;
   textGenerationCount: number;
   imageGenerationCount: number;
   incrementTextGenerationCount: () => number;
@@ -349,6 +355,11 @@ export const useAppStore = create<AppState>()(
       markSpotlightShown: (key) =>
         set((state) => ({ shownSpotlights: { ...state.shownSpotlights, [key]: true } })),
       resetShownSpotlights: () => set({ shownSpotlights: {} }),
+      warmedImageModels: [],
+      markImageModelWarmed: (modelId) =>
+        set((state) => state.warmedImageModels.includes(modelId)
+          ? state
+          : { warmedImageModels: [...state.warmedImageModels, modelId] }),
       textGenerationCount: 0,
       imageGenerationCount: 0,
       incrementTextGenerationCount: () => { const c = get().textGenerationCount + 1; set({ textGenerationCount: c }); return c; },
@@ -383,6 +394,7 @@ export const useAppStore = create<AppState>()(
         activeImageModelId: state.activeImageModelId,
         generatedImages: state.generatedImages,
         shownSpotlights: state.shownSpotlights,
+        warmedImageModels: state.warmedImageModels,
         textGenerationCount: state.textGenerationCount, imageGenerationCount: state.imageGenerationCount,
         hasEngagedSharePrompt: state.hasEngagedSharePrompt,
         hasRegisteredPro: state.hasRegisteredPro,

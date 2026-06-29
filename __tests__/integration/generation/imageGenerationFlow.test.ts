@@ -77,6 +77,9 @@ describe('Image Generation Flow Integration', () => {
       downloadedImageModels: [imageModel],
       activeImageModelId: 'img-model-1',
       generatedImages: [],
+      // Pre-warmed by default so tests exercise the regular (not the ~120s one-time
+      // warm-up) status. The first-run notice is covered by its own test below.
+      warmedImageModels: ['img-model-1'],
       settings: {
         imageSteps: 20,
         imageGuidanceScale: 7.5,
@@ -1550,6 +1553,33 @@ describe('Image Generation Flow Integration', () => {
 
       // Should include the "Generating image (5/20)..." status from else branch
       expect(statusUpdates.some(s => s?.includes('Generating image'))).toBe(true);
+    });
+  });
+
+  describe('first-run warm-up notice (platform-agnostic, via warmedImageModels)', () => {
+    it('shows the ~120s one-time notice when the model has never generated, then marks it warmed', async () => {
+      const imageModel = setupImageModelState();
+      // Override the helper's pre-warm: this model has never generated.
+      useAppStore.setState({ warmedImageModels: [] });
+      // No OpenCL signal — proves the notice is driven by the warmed flag alone
+      // (so it fires on iOS/CoreML, which has no kernel cache).
+      useAppStore.setState({ settings: { ...useAppStore.getState().settings, imageUseOpenCL: false } });
+      mockLocalDreamService.isModelLoaded.mockResolvedValue(true);
+      mockLocalDreamService.getLoadedThreads.mockReturnValue(4);
+      mockLocalDreamService.generateImage.mockResolvedValue({
+        id: 'img-1', prompt: 'test', imagePath: '/path/img.png',
+        width: 512, height: 512, steps: 20, seed: 1, modelId: imageModel.id,
+        createdAt: new Date().toISOString(),
+      });
+
+      const statusUpdates: (string | null)[] = [];
+      const unsub = imageGenerationService.subscribe(s => { if (s.status) statusUpdates.push(s.status); });
+      await imageGenerationService.generateImage({ prompt: 'test' });
+      unsub();
+
+      expect(statusUpdates.some(s => s?.includes('one-time'))).toBe(true);
+      // A successful generation warms the model so the notice never shows again.
+      expect(useAppStore.getState().warmedImageModels).toContain(imageModel.id);
     });
   });
 

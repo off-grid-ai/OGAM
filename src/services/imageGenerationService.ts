@@ -311,6 +311,9 @@ class ImageGenerationService {
     result.modelId = activeImageModel.id;
     if (params.conversationId) result.conversationId = params.conversationId;
     useAppStore.getState().addGeneratedImage(result);
+    // First successful generation warmed the backend — don't show the ~120s
+    // one-time notice for this model again (persisted across launches).
+    useAppStore.getState().markImageModelWarmed(activeImageModel.id);
     useAppStore.getState().completeChecklistStep('triedImageGen');
     this._checkSharePrompt();
     if (params.conversationId) {
@@ -330,21 +333,26 @@ class ImageGenerationService {
   private async _runGenerationAndSave(opts: RunGenerationOptions): Promise<GeneratedImage | null> {
     const { params, enhancedPrompt, activeImageModel, steps, guidanceScale, imageWidth, imageHeight, useOpenCL } = opts;
 
-    // Check if this is the first GPU run (no OpenCL kernel cache yet)
-    let isFirstGpuRun = false;
+    // The first generation for a model compiles/warms the backend and takes ~120s.
+    // This is platform-agnostic: on iOS the CoreML model compiles on first use, on
+    // Android the OpenCL kernels compile. The persisted `warmedImageModels` flag is
+    // the single cross-platform signal (so the notice shows once on every device);
+    // the OpenCL kernel-cache check is an extra Android signal in case the cache was
+    // cleared after the flag was set.
+    let isFirstRun = !useAppStore.getState().warmedImageModels.includes(activeImageModel.id);
     if (useOpenCL) {
       try {
         const hasCache = await onnxImageGeneratorService.hasKernelCache(activeImageModel.modelPath);
-        isFirstGpuRun = !hasCache;
+        isFirstRun = isFirstRun || !hasCache;
       } catch (e) {
-        // If check fails, assume cache exists to avoid false positives
+        // If check fails, don't add a false first-run signal (keep the warmed-flag result).
         logger.warn('[ImageGen] Failed to check for OpenCL kernel cache:', e);
       }
     }
 
     this.updateState({
       phase: 'generating',
-      status: isFirstGpuRun
+      status: isFirstRun
         ? 'Optimizing GPU for your device (~120s, one-time)...'
         : 'Starting image generation...',
     });
@@ -355,7 +363,7 @@ class ImageGenerationService {
         (progress) => {
           if (this.cancelRequested) return;
           const displayStep = Math.min(progress.step, steps);
-          if (isFirstGpuRun) {
+          if (isFirstRun) {
             this.updateState({
               progress: { step: displayStep, totalSteps: steps },
               status: displayStep <= 1
