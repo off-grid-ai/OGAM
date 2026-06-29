@@ -11,7 +11,7 @@
 import { Platform } from 'react-native';
 import { modelManager } from '../../modelManager';
 import { backgroundDownloadService } from '../../backgroundDownloadService';
-import { huggingFaceService } from '../../huggingFace';
+import { huggingFaceService } from '../../huggingface';
 import { hardwareService } from '../../hardware';
 import { useAppStore } from '../../../stores';
 import { useDownloadStore, isActiveStatus, DownloadEntry } from '../../../stores/downloadStore';
