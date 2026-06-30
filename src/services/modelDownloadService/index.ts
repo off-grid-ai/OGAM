@@ -135,7 +135,7 @@ class ModelDownloadService {
         logger.log(
           `[DL-SM] ${d.id} ${prev ?? 'new'} → ${d.status}` +
           ` bytes=${d.bytesDownloaded}/${d.sizeBytes} progress=${(d.progress * 100).toFixed(0)}%` +
-          (d.error ? ` error="${d.error}"` : ''),
+          `${d.error ? ` error="${d.error}"` : ''}`,
         );
         this.lastStatus.set(d.id, d.status);
       }

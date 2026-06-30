@@ -17,7 +17,6 @@
 */
 
 import React from 'react';
-import { Platform } from 'react-native';
 import { render, fireEvent, act } from '@testing-library/react-native';
 
 // Navigation is globally mocked in jest.setup.ts
@@ -124,7 +123,7 @@ jest.mock('../../../src/services', () => ({
 }));
 
 // Get references to the mocked services after jest.mock is applied
-const { modelManager: mockModelManager, backgroundDownloadService: mockBackgroundDownloadService, hardwareService: mockHardwareService, activeModelService: mockActiveModelService } = jest.requireMock('../../../src/services');
+const { modelManager: mockModelManager, backgroundDownloadService: mockBackgroundDownloadService, hardwareService: mockHardwareService } = jest.requireMock('../../../src/services');
 
 // The Download Manager is a thin View: it dispatches cancel/retry/remove INTENTS to
 // ModelDownloadService (the single owner) and never performs the mechanism itself.
