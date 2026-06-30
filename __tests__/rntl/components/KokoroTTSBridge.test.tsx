@@ -15,6 +15,7 @@
 import React from 'react';
 import { render, act, waitFor } from '@testing-library/react-native';
 import { AudioContext, AudioManager } from 'react-native-audio-api';
+import { useTextToSpeech } from 'react-native-executorch';
 import { BareResourceFetcher } from 'react-native-executorch-bare-resource-fetcher';
 import { KokoroEngine } from '../../../pro/audio/engine/tts/engines/kokoro/KokoroEngine';
 import { useTTSStore } from '../../../pro/audio/ttsStore';
@@ -94,5 +95,45 @@ describe('KokoroTTSBridge mount gating', () => {
     // The context created for playback starts 'suspended' and must be resumed.
     const ctx = (AudioContext as jest.Mock).mock.results.at(-1)?.value;
     expect(ctx.resume).toHaveBeenCalled();
+  });
+
+  // Regression for the seekbar-frozen / button-resets-immediately bug: executorch's
+  // tts.stream resolves at SYNTHESIS end (~100ms) having only SCHEDULED the audio
+  // buffers, which then play for seconds. speak() must resolve at TRUE audio end (the
+  // last buffer's onEnded), not at synthesis end — otherwise the engine reports
+  // 'ready' and the playback machine goes idle while audio is still draining.
+  it('REGRESSION: speak() resolves at audio end (last buffer onEnded), not at synthesis end', async () => {
+    listDownloadedModels.mockResolvedValue(onDisk());
+    setDownloadedFlag(true);
+    // Simulate executorch: synthesize a chunk, SCHEDULE it (do NOT await playback),
+    // then end synthesis while the buffer is still "playing".
+    const stream = jest.fn(async ({ onNext, onEnd }: any) => {
+      onNext(new Float32Array(8)); // fire-and-forget — schedules a buffer (inflight++)
+      await onEnd?.();             // synthesis complete; audio still playing
+    });
+    (useTextToSpeech as jest.Mock).mockReturnValue({ isReady: true, downloadProgress: 1, error: null, stream, streamStop: jest.fn() });
+
+    const engine = new KokoroEngine();
+    const Bridge = engine.getBridgeComponent() as React.FC;
+    render(<Bridge />);
+    await waitFor(() => expect(engine.getPhase()).toBe('ready'));
+
+    let resolved = false;
+    await act(async () => {
+      const p = engine.speak('hello').then(() => { resolved = true; });
+      // Let synthesis run to completion (stream resolves) but the buffer keep "playing".
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+      // Synthesis ended, audio not done → speak must NOT have resolved; engine busy.
+      expect(resolved).toBe(false);
+      expect(engine.getPhase()).toBe('processing');
+      // Fire the scheduled buffer's onEnded → audio truly done → speak resolves.
+      const ctx = (AudioContext as jest.Mock).mock.results.at(-1)?.value;
+      const src = ctx.createBufferSource.mock.results.at(-1)?.value;
+      src.onEnded?.();
+      await p;
+    });
+    expect(resolved).toBe(true);
+    expect(engine.getPhase()).toBe('ready');
   });
 });
