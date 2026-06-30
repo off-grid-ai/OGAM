@@ -143,6 +143,7 @@ export async function checkMemoryForModel(
       totalRequiredMemoryGB: 0,
       remainingAfterLoadGB: 0,
       message: 'Model not found',
+      resolvableByUnload: false,
     };
   }
 
@@ -159,17 +160,21 @@ export async function checkMemoryForModel(
   let severity: MemoryCheckSeverity;
   let canLoad: boolean;
   let message: string;
+  // Resolvable when the model fits on its own but other loaded models push the
+  // total over budget — unloading them frees enough room. Set only on a block.
+  let resolvableByUnload = false;
 
   if (totalRequiredMemoryGB > memoryBudgetGB) {
     severity = 'critical';
     canLoad = false;
-    message =
-      currentlyLoadedMemoryGB > 0
-        ? `Cannot load ${modelName} (~${requiredStr} GB) while other models are loaded. ` +
-          `Total would be ~${totalStr} GB, exceeding your device's ~${budgetStr} GB safe limit (60% of RAM). ` +
-          `Unload the other model first, or choose a smaller model.`
-        : `${modelName} requires ~${requiredStr} GB which exceeds your device's ~${budgetStr} GB safe limit (60% of RAM). ` +
-          `This model is too large for your device. Choose a smaller model.`;
+    resolvableByUnload =
+      currentlyLoadedMemoryGB > 0 && requiredMemoryGB <= memoryBudgetGB;
+    message = resolvableByUnload
+      ? `Cannot load ${modelName} (~${requiredStr} GB) while other models are loaded. ` +
+        `Total would be ~${totalStr} GB, exceeding your device's ~${budgetStr} GB safe limit (60% of RAM). ` +
+        `Unload the other model first, or choose a smaller model.`
+      : `${modelName} requires ~${requiredStr} GB which exceeds your device's ~${budgetStr} GB safe limit (60% of RAM). ` +
+        `This model is too large for your device. Choose a smaller model.`;
   } else if (totalRequiredMemoryGB > warningThresholdGB) {
     severity = 'warning';
     canLoad = true;
@@ -192,6 +197,7 @@ export async function checkMemoryForModel(
     totalRequiredMemoryGB,
     remainingAfterLoadGB: remainingBudgetGB,
     message,
+    resolvableByUnload,
   };
 }
 
@@ -267,5 +273,6 @@ export async function checkMemoryForDualModel(
     totalRequiredMemoryGB: totalRequiredGB,
     remainingAfterLoadGB: remainingBudgetGB,
     message,
+    resolvableByUnload: false,
   };
 }

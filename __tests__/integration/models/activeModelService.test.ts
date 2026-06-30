@@ -1030,8 +1030,45 @@ describe('ActiveModelService Integration', () => {
     });
   });
 
-  describe('checkMemoryForModel critical with other models message', () => {
-    it('includes other models in critical message', async () => {
+  describe('checkMemoryForModel critical message and resolvableByUnload', () => {
+    it('marks block resolvable and mentions other models when the model fits alone but the total is over budget', async () => {
+      // 8GB device -> 4.8GB budget. Text 2GB*1.5=3.0GB fits alone (<=4.8),
+      // image 2GB*1.5=3.0GB already loaded -> total 6.0GB > 4.8GB budget.
+      const textModel = createDownloadedModel({
+        id: 'fits-alone-text',
+        fileSize: 2 * 1024 * 1024 * 1024,
+      });
+      const imageModel = createONNXImageModel({
+        id: 'img-already',
+        size: 2 * 1024 * 1024 * 1024,
+      });
+      useAppStore.setState({
+        downloadedModels: [textModel],
+        downloadedImageModels: [imageModel],
+        settings: { imageThreads: 4 } as any,
+      });
+
+      // Load image model so it counts as "other loaded" memory
+      mockLocalDreamService.isModelLoaded.mockResolvedValue(true);
+      await activeModelService.loadImageModel('img-already');
+
+      mockHardwareService.getDeviceInfo.mockResolvedValue(
+        createDeviceInfo({ totalMemory: 8 * 1024 * 1024 * 1024 })
+      );
+
+      const result = await activeModelService.checkMemoryForModel('fits-alone-text', 'text');
+
+      expect(result.severity).toBe('critical');
+      expect(result.canLoad).toBe(false);
+      // Unloading the loaded image model would free enough room, so the UI can
+      // offer a one-tap recovery instead of a dead-end alert.
+      expect(result.resolvableByUnload).toBe(true);
+      expect(result.message).toContain('other models are loaded');
+    });
+
+    it('marks block NOT resolvable when the model is too large even on its own', async () => {
+      // 8GB device -> 4.8GB budget. Text 6GB*1.5=9GB exceeds budget by itself,
+      // so unloading other models cannot help.
       const textModel = createDownloadedModel({
         id: 'huge-text',
         fileSize: 6 * 1024 * 1024 * 1024,
@@ -1046,11 +1083,9 @@ describe('ActiveModelService Integration', () => {
         settings: { imageThreads: 4 } as any,
       });
 
-      // Load image model
       mockLocalDreamService.isModelLoaded.mockResolvedValue(true);
       await activeModelService.loadImageModel('img-already');
 
-      // 8GB device - 6GB text * 1.5 = 9GB + image model memory = way over budget
       mockHardwareService.getDeviceInfo.mockResolvedValue(
         createDeviceInfo({ totalMemory: 8 * 1024 * 1024 * 1024 })
       );
@@ -1059,7 +1094,8 @@ describe('ActiveModelService Integration', () => {
 
       expect(result.severity).toBe('critical');
       expect(result.canLoad).toBe(false);
-      expect(result.message).toContain('other models are loaded');
+      expect(result.resolvableByUnload).toBe(false);
+      expect(result.message).toContain('too large for your device');
     });
   });
 

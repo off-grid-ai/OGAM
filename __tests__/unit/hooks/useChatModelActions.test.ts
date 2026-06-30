@@ -19,6 +19,7 @@ jest.mock('../../../src/services/activeModelService', () => ({
   activeModelService: {
     loadTextModel: jest.fn(),
     unloadTextModel: jest.fn(),
+    unloadAllModels: jest.fn(),
     checkMemoryForModel: jest.fn(),
     getActiveModels: jest.fn(),
   },
@@ -39,6 +40,7 @@ const { llmService } = require('../../../src/services/llm');
 
 const mockLoadTextModel = activeModelService.loadTextModel as jest.Mock;
 const mockUnloadTextModel = activeModelService.unloadTextModel as jest.Mock;
+const mockUnloadAllModels = activeModelService.unloadAllModels as jest.Mock;
 const mockCheckMemoryForModel = activeModelService.checkMemoryForModel as jest.Mock;
 const mockGetActiveModels = activeModelService.getActiveModels as jest.Mock;
 const mockGetMultimodalSupport = llmService.getMultimodalSupport as jest.Mock;
@@ -102,6 +104,36 @@ function makeDeps(overrides: Partial<any> = {}) {
     modelLoadStartTimeRef: makeRef<number | null>(null),
     ...overrides,
   };
+}
+
+/** Stubs a critical memory block that unloading other models would resolve. */
+function mockResolvableBlock() {
+  mockCheckMemoryForModel.mockResolvedValueOnce({
+    canLoad: false,
+    severity: 'critical',
+    message: 'other models are loaded',
+    resolvableByUnload: true,
+  });
+  mockGetMultimodalSupport.mockReturnValueOnce({ vision: false });
+}
+
+/** Finds an alert button by label from the first setAlertState call. */
+function alertButton(deps: any, text: string) {
+  return deps.setAlertState.mock.calls[0][0].buttons.find((b: any) => b.text === text);
+}
+
+/**
+ * Flushes the waitForRenderFrame timer and the unload→load promise chain.
+ * The two entry points order the timer and the unload promise differently
+ * (startLoad-then-unload vs unload-then-proceed), so interleave timer advances
+ * with microtask flushes to drain whichever ordering applies.
+ */
+async function flushRecoveryChain() {
+  for (let i = 0; i < 4; i++) {
+    jest.advanceTimersByTime(400);
+    await Promise.resolve();
+    await Promise.resolve();
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -260,6 +292,47 @@ describe('initiateModelLoad — Load Anyway button', () => {
     jest.useRealTimers();
   });
 
+  it('offers "Unload others & load" (not "Load Anyway") when the block is resolvable by unloading', async () => {
+    jest.useFakeTimers();
+    mockResolvableBlock();
+    mockUnloadAllModels.mockResolvedValueOnce({ textUnloaded: true, imageUnloaded: false });
+    mockLoadTextModel.mockResolvedValueOnce(undefined);
+
+    const deps = makeDeps();
+    await initiateModelLoad(deps, false);
+
+    const unloadBtn = alertButton(deps, 'Unload others & load');
+    expect(unloadBtn).toBeDefined();
+    // No "Load Anyway" override on a resolvable block — recovery is the safe default.
+    expect(alertButton(deps, 'Load Anyway')).toBeUndefined();
+
+    unloadBtn.onPress();
+    expect(deps.setIsModelLoading).toHaveBeenCalledWith(true);
+    await flushRecoveryChain();
+
+    expect(mockUnloadAllModels).toHaveBeenCalled();
+    expect(mockLoadTextModel).toHaveBeenCalled();
+    jest.useRealTimers();
+  });
+
+  it('still loads (does not leave UI stuck) when unloadAllModels rejects during recovery', async () => {
+    jest.useFakeTimers();
+    mockResolvableBlock();
+    mockUnloadAllModels.mockRejectedValueOnce(new Error('unload failed'));
+    mockLoadTextModel.mockResolvedValueOnce(undefined);
+
+    const deps = makeDeps();
+    await initiateModelLoad(deps, false);
+
+    alertButton(deps, 'Unload others & load').onPress();
+    await flushRecoveryChain();
+
+    // The rejection is caught and logged; the load proceeds rather than hanging.
+    expect(mockUnloadAllModels).toHaveBeenCalled();
+    expect(mockLoadTextModel).toHaveBeenCalled();
+    jest.useRealTimers();
+  });
+
   it('doLoadTextModel does not post system message when showGenerationDetails=false', async () => {
     jest.useFakeTimers();
     mockCheckMemoryForModel.mockResolvedValueOnce({ canLoad: false, message: 'OOM', severity: 'critical' });
@@ -327,6 +400,48 @@ describe('handleModelSelectFn — Load Anyway button', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
 
     expect(deps.setIsModelLoading).toHaveBeenCalled();
+  });
+
+  it('offers "Unload others & load" and unloads then loads when block is resolvable', async () => {
+    jest.useFakeTimers();
+    mockResolvableBlock();
+    mockUnloadAllModels.mockResolvedValueOnce({ textUnloaded: true, imageUnloaded: false });
+    mockLoadTextModel.mockResolvedValueOnce(undefined);
+
+    const deps = makeDeps();
+    await handleModelSelectFn(deps, createDownloadedModel({ id: 'model-z' }));
+
+    const unloadBtn = alertButton(deps, 'Unload others & load');
+    expect(unloadBtn).toBeDefined();
+    expect(alertButton(deps, 'Load Anyway')).toBeUndefined();
+
+    unloadBtn.onPress();
+    // Loading indicator is shown before unloading begins so the UI doesn't
+    // look frozen during the (potentially multi-second) unload.
+    expect(deps.setIsModelLoading).toHaveBeenCalledWith(true);
+    await flushRecoveryChain();
+
+    expect(mockUnloadAllModels).toHaveBeenCalled();
+    expect(mockLoadTextModel).toHaveBeenCalledWith('model-z');
+    jest.useRealTimers();
+  });
+
+  it('still loads (does not leave UI stuck) when unloadAllModels rejects', async () => {
+    jest.useFakeTimers();
+    mockResolvableBlock();
+    mockUnloadAllModels.mockRejectedValueOnce(new Error('unload failed'));
+    mockLoadTextModel.mockResolvedValueOnce(undefined);
+
+    const deps = makeDeps();
+    await handleModelSelectFn(deps, createDownloadedModel({ id: 'model-z' }));
+
+    alertButton(deps, 'Unload others & load').onPress();
+    await flushRecoveryChain();
+
+    // Rejection is caught and logged; load still proceeds rather than hanging.
+    expect(mockUnloadAllModels).toHaveBeenCalled();
+    expect(mockLoadTextModel).toHaveBeenCalledWith('model-z');
+    jest.useRealTimers();
   });
 
   it('executes Load Anyway callback in low memory warning', async () => {

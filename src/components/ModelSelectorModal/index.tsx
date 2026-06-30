@@ -12,7 +12,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore, useRemoteServerStore } from '../../stores';
 import { DownloadedModel, ONNXImageModel, RemoteModel } from '../../types';
 import { activeModelService, llmService, remoteServerManager } from '../../services';
-import { CustomAlert, AlertState, initialAlertState, showAlert } from '../CustomAlert';
+import { CustomAlert, AlertState, initialAlertState, showAlert, showLoadingAlert } from '../CustomAlert';
 import { createAllStyles } from './styles';
 import { TextTab } from './TextTab';
 import { ImageTab } from './ImageTab';
@@ -97,8 +97,9 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   // Vision-language models (supportsVision) are text models and belong in the text tab.
   const remoteVisionModels = useMemo(() => [], []);
 
-  const handleSelectImageModel = async (model: ONNXImageModel) => {
-    if (activeImageModelId === model.id) return;
+  // Performs the actual image-model load and post-load wiring. Shared by the
+  // direct path and the "unload others & load" recovery path.
+  const loadImageModelNow = async (model: ONNXImageModel) => {
     setIsLoadingImage(true);
     try {
       await activeModelService.loadImageModel(model.id);
@@ -112,6 +113,52 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
     } finally {
       setIsLoadingImage(false);
     }
+  };
+
+  // Unloads whatever is currently loaded (text and/or image) to free RAM, then
+  // loads the requested image model. Used by the recovery action so the user is
+  // never left at a dead end when another model is occupying memory.
+  const unloadOthersAndLoadImageModel = async (model: ONNXImageModel) => {
+    setAlertState(showLoadingAlert('Freeing memory', 'Unloading other models…'));
+    try {
+      await activeModelService.unloadAllModels();
+    } catch (error) {
+      logger.error('Failed to unload models before image load:', error);
+    } finally {
+      setAlertState(initialAlertState);
+    }
+    await loadImageModelNow(model);
+  };
+
+  const handleSelectImageModel = async (model: ONNXImageModel) => {
+    if (activeImageModelId === model.id) return;
+
+    // Check memory up front so we can offer a one-tap recovery instead of a
+    // dead-end "Failed to Load" alert when another model is occupying RAM.
+    const memoryCheck = await activeModelService.checkMemoryForModel(model.id, 'image');
+    if (!memoryCheck.canLoad) {
+      if (memoryCheck.resolvableByUnload) {
+        setAlertState(
+          showAlert('Not enough memory', memoryCheck.message, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Unload others & load',
+              style: 'default',
+              onPress: () => {
+                setAlertState(initialAlertState);
+                unloadOthersAndLoadImageModel(model);
+              },
+            },
+          ]),
+        );
+      } else {
+        // Too large for this device even on its own — unloading cannot help.
+        setAlertState(showAlert('Model too large', memoryCheck.message));
+      }
+      return;
+    }
+
+    await loadImageModelNow(model);
   };
 
   const handleUnloadImageModel = async () => {

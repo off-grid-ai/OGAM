@@ -48,6 +48,10 @@ jest.mock('../../../src/services', () => ({
     loadImageModel: jest.fn().mockResolvedValue(undefined),
     unloadImageModel: jest.fn().mockResolvedValue(undefined),
     unloadTextModel: jest.fn().mockResolvedValue(undefined),
+    unloadAllModels: jest.fn().mockResolvedValue({ textUnloaded: true, imageUnloaded: true }),
+    checkMemoryForModel: jest
+      .fn()
+      .mockResolvedValue({ canLoad: true, severity: 'safe', message: '', resolvableByUnload: false }),
   },
   llmService: {
     isModelLoaded: jest.fn(() => false),
@@ -78,6 +82,15 @@ describe('ModelSelectorModal', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // clearAllMocks wipes implementations; restore the defaults the component relies on.
+    activeModelService.checkMemoryForModel.mockResolvedValue({
+      canLoad: true,
+      severity: 'safe',
+      message: '',
+      resolvableByUnload: false,
+    });
+    activeModelService.loadImageModel.mockResolvedValue(undefined);
+    activeModelService.unloadAllModels.mockResolvedValue({ textUnloaded: true, imageUnloaded: true });
     mockUseAppStore.mockReturnValue({
       downloadedModels: [
         {
@@ -650,6 +663,70 @@ describe('ModelSelectorModal', () => {
       });
 
       expect(activeModelService.loadImageModel).toHaveBeenCalledWith('img1');
+    });
+
+    // Shared setup for the blocked-load recovery tests below.
+    const blockedImageStore = () =>
+      mockUseAppStore.mockReturnValue({
+        downloadedModels: [],
+        downloadedImageModels: [
+          { id: 'img1', name: 'SD Model', size: 2000000000, style: 'Creative' },
+        ],
+        activeImageModelId: null,
+      });
+    const mockMemoryCheck = (resolvableByUnload: boolean, message: string) =>
+      activeModelService.checkMemoryForModel.mockResolvedValue({
+        canLoad: false,
+        severity: 'critical',
+        resolvableByUnload,
+        message,
+      });
+    const renderImageTab = () =>
+      render(<ModelSelectorModal {...defaultProps} initialTab="image" />);
+
+    it('offers an unload-and-load recovery instead of loading when blocked by other models', async () => {
+      mockMemoryCheck(true, 'Cannot load SD Model while other models are loaded.');
+      blockedImageStore();
+
+      const { getByText } = renderImageTab();
+      await act(async () => {
+        fireEvent.press(getByText('SD Model'));
+      });
+
+      // The model is NOT loaded yet — the user is shown a recovery action.
+      expect(activeModelService.loadImageModel).not.toHaveBeenCalled();
+      expect(getByText('Unload others & load')).toBeTruthy();
+    });
+
+    it('unloads other models then loads the image model when recovery action is pressed', async () => {
+      mockMemoryCheck(true, 'Cannot load SD Model while other models are loaded.');
+      blockedImageStore();
+
+      const { getByText } = renderImageTab();
+      await act(async () => {
+        fireEvent.press(getByText('SD Model'));
+      });
+      await act(async () => {
+        fireEvent.press(getByText('Unload others & load'));
+      });
+
+      expect(activeModelService.unloadAllModels).toHaveBeenCalled();
+      expect(activeModelService.loadImageModel).toHaveBeenCalledWith('img1');
+    });
+
+    it('shows an informational alert with no recovery when the model is too large to load at all', async () => {
+      mockMemoryCheck(false, 'SD Model is too large for your device. Choose a smaller model.');
+      blockedImageStore();
+
+      const { getByText, queryByText } = renderImageTab();
+      await act(async () => {
+        fireEvent.press(getByText('SD Model'));
+      });
+
+      expect(activeModelService.loadImageModel).not.toHaveBeenCalled();
+      expect(activeModelService.unloadAllModels).not.toHaveBeenCalled();
+      expect(queryByText('Unload others & load')).toBeNull();
+      expect(getByText('Model too large')).toBeTruthy();
     });
 
     it('does not call loadImageModel when pressing the currently active image model', async () => {

@@ -14,6 +14,14 @@ export interface MemoryCheckResult {
   totalRequiredMemoryGB: number;
   remainingAfterLoadGB: number;
   message: string;
+  /**
+   * True when a critical block is caused by OTHER models already being loaded,
+   * i.e. unloading them would free enough room for this one. When false on a
+   * critical result, the model is too large for the device even on its own and
+   * unloading cannot help. The UI uses this to decide whether to offer an
+   * "unload others & load" recovery action instead of a dead-end alert.
+   */
+  resolvableByUnload: boolean;
 }
 
 export interface ActiveModelInfo {
