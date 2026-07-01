@@ -1,8 +1,5 @@
-/**
- * Standalone async image download handlers - no hooks.
- * All download state flows through useDownloadStore via the stable
- * image:<id> modelKey. The store is the single source of truth.
- */
+/** Standalone async image download handlers - no hooks. All download state flows
+ *  through useDownloadStore via the stable image:<id> modelKey (single source of truth). */
 import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
@@ -64,11 +61,8 @@ function clearMultifileRuntime(modelId: string) {
 }
 
 function isCancelledError(error: unknown): boolean {
-  // Recognize both the local assertNotCancelled sentinel AND the cross-service
-  // cancellation convention (an Error carrying `.cancelled`, message "Download
-  // cancelled") that backgroundDownloadService raises for a user-cancelled active
-  // OR queued download. Without the `.cancelled` check a cancelled part would fall
-  // through to setMultifileFailed and show as a failure.
+  // Local assertNotCancelled sentinel OR the cross-service `.cancelled` convention
+  // backgroundDownloadService raises for a user-cancelled active/queued download.
   if (!(error instanceof Error)) return false;
   return error.message === USER_CANCELLED_ERROR
     || (error as Error & { cancelled?: boolean }).cancelled === true;
@@ -96,11 +90,9 @@ export async function cancelSyntheticImageDownload(modelId: string): Promise<voi
   const runtime = activeMultifileDownloads.get(modelId);
   if (!runtime) return;
   runtime.cancelled = true;
-  // Drop the part still waiting for a concurrency slot RIGHT NOW. A queued part has no
-  // native downloadId (currentDownloadId is undefined), so cancelDownload can't reach
-  // it — without this it would sit in the queue, eventually promote, briefly start, and
-  // only then be cancelled by wireCurrentDownloadPromise: a held slot + wasted transfer.
-  // The queue key is the part's modelId param, which equals makeImageModelKey(modelId).
+  // Drop a part still waiting for a slot NOW — it has no native downloadId yet, so
+  // cancelDownload can't reach it (else it promotes, briefly starts, then cancels).
+  // The queue key is the part's modelId param, == makeImageModelKey(modelId).
   backgroundDownloadService.cancelQueued(makeImageModelKey(modelId));
   if (runtime.currentDownloadId) {
     await backgroundDownloadService.cancelDownload(runtime.currentDownloadId).catch(() => {});
@@ -169,13 +161,10 @@ async function downloadSequentialFiles(opts: {
   }
 }
 
-/** Verify every multi-file part is present and non-empty before registering. A
- *  download can resolve "successfully" yet have written a missing/0-byte file (e.g. a
- *  200 with no body), which would otherwise register a broken model that fails to
- *  load later with a cryptic error. We check existence + non-empty (NOT an exact size
- *  match — descriptor sizes are metadata that can drift from the real bytes, and a
- *  strict match would wrongly fail valid downloads). Throws so the caller's catch
- *  fails the download (retry-able) instead of registering garbage. */
+/** Verify every part is present and non-empty before registering — a download can
+ *  resolve "successfully" yet write a 0-byte file (200 with no body). Existence +
+ *  non-empty only (NOT exact size: descriptor sizes drift from real bytes). Throws so
+ *  the caller's catch fails it (retry-able) instead of registering garbage. */
 async function validateMultifileComplete(modelDir: string, files: MultifileDownloadSpec[]): Promise<void> {
   for (const file of files) {
     const filePath = `${modelDir}/${file.relativePath}`;
@@ -198,9 +187,8 @@ export async function registerAndNotify(
   const { imageModel, modelName } = opts;
   await modelManager.addDownloadedImageModel(imageModel);
   deps.addDownloadedImageModel(imageModel);
-  // Auto-load the first image model unless the onboarding spotlight flow is
-  // still active - Step 13 needs activeImageModelId to be null so the
-  // "Load your image model" spotlight can fire on HomeScreen.
+  // Auto-load the first image model unless onboarding is still active (Step 13 needs
+  // activeImageModelId null so the "Load your image model" spotlight fires on Home).
   if (!deps.activeImageModelId && deps.triedImageGen) deps.setActiveImageModelId(imageModel.id);
   removeStoreEntry(imageModel.id);
   deps.setAlertState(showAlert('Success', `${modelName} downloaded successfully!`));
@@ -401,9 +389,8 @@ export async function proceedWithDownload(
     return;
   }
 
-  // Zip flow: native WorkManager handles the download. useDownloads at app
-  // root routes progress/error events to the store automatically. We only
-  // wire the completion to run the zip-extract finalization.
+  // Zip flow: native WorkManager handles the download; useDownloads at app root routes
+  // progress/error to the store. We only wire completion to run zip-extract finalization.
   const fileName = `${modelInfo.id}.zip`;
   const metadata: ImageMetadata = {
     imageDownloadType: 'zip',

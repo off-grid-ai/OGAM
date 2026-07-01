@@ -269,8 +269,7 @@ function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, _message
 export async function startGenerationFn(deps: GenerationDeps, call: StartGenerationCall): Promise<void> {
   const { setDebugInfo, targetConversationId, messageText } = call;
   if (!deps.hasActiveModel) return;
-  // Pure text executor. Image-vs-text routing happens upstream in
-  // dispatchGenerationFn — this function only ever generates text.
+  // Pure text executor — image-vs-text routing happens upstream in dispatchGenerationFn.
   generationSession.begin(targetConversationId);
   // For remote models, skip local model loading
   if (!deps.activeModelInfo?.isRemote && deps.activeModel &&
@@ -404,10 +403,7 @@ export async function handleSendFn(deps: GenerationDeps, call: SendCall): Promis
 }
 export async function handleStopFn(deps: Pick<GenerationDeps, 'isGeneratingImage'>): Promise<void> {
   generationSession.end('stopped');
-  // Aborting the turn must also stop TTS — otherwise the phone keeps speaking every
-  // sentence already buffered ahead of playback. Same intent as the new-turn path (see
-  // handleSendFn); the manual-stop path had been missing it.
-  callHook(HOOKS.audioStop);
+  callHook(HOOKS.audioStop); // abort must silence TTS too — buffered-ahead sentences keep playing otherwise
   try { await generationService.stopGeneration().catch(() => { }); }
   catch (e) { logger.error('Error stopping generation:', e); }
   if (deps.isGeneratingImage) imageGenerationService.cancelGeneration().catch(() => { });
