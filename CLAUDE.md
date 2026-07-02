@@ -2,7 +2,11 @@
 
 ## Repository Layout
 
-**All Pro feature code lives in the `pro/` submodule (its own git repo, `@offgrid/pro`) — not in core.** When changing or adding a Pro feature (e.g. TTS/audio, MCP/tools, and other paid surfaces), edit files under `pro/` and commit/PR them in that repo. Core only wires Pro in through the slot/hook registries; it never imports Pro code directly. Pro changes are a separate branch + PR from core (see `pro/CLAUDE.md`).
+**`pro/` is a git submodule — its own repository (`@offgrid/pro`), not a folder in this repo.** Core (this repo) tracks a *commit pointer* to a specific `pro` commit; the Pro source lives and is versioned in the submodule's repo. Clone/CI needs `git submodule update --init` or the `pro/` directory is empty. `git status` in core shows submodule pointer changes as `M pro`.
+
+**All Pro feature code lives in `pro/` — not in core.** When changing or adding a Pro feature (e.g. TTS/audio, MCP/tools, and other paid surfaces), edit files under `pro/` and commit/PR them in that repo. Core only wires Pro in through the slot/hook registries; it never imports Pro code directly. Pro changes are a separate branch + PR from core (see `pro/CLAUDE.md`).
+
+**Bumping the pointer (the order matters):** to make core build against new Pro code, (1) commit + **push the `pro` branch first** so the target commit exists on pro's remote, then (2) `git add pro` + commit the pointer bump in core and push. If you bump the pointer to a `pro` commit that isn't pushed, CI can't fetch the submodule and the build fails. When two core branches both bump `pro`, the newer pro commit should supersede — never regress the pointer to an older commit on merge.
 
 ## Device Logs (how to see what's actually happening on the device)
 
