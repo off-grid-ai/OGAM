@@ -292,6 +292,10 @@ export function isToolGrammarError(msg: string): boolean {
 }
 
 /** One remote generation attempt with the given tool set. */
+/** A stream that emitted at least one token before failing — carried on the rejection so
+ *  callers know a retry would DUPLICATE already-streamed output into the same consumer. */
+type StreamedError = Error & { streamed?: boolean };
+
 function remoteGenerateOnce(
   provider: any,
   args: { messages: Message[]; tools: any[]; thinkingEnabled: boolean; onStream?: (data: StreamToken) => void },
@@ -300,11 +304,12 @@ function remoteGenerateOnce(
   const settings = useAppStore.getState().settings;
   const options: GenerationOptions = { temperature: settings.temperature, maxTokens: settings.maxTokens, topP: settings.topP, tools, enableThinking: thinkingEnabled };
   let _fullContent = '';
+  let streamed = false;
   let toolCalls: ToolCall[] = [];
   return new Promise((resolve, reject) => {
     provider.generate(messages, options, {
-      onToken: (token: string) => { _fullContent += token; onStream?.({ content: token }); },
-      onReasoning: (content: string) => { onStream?.({ reasoningContent: content }); },
+      onToken: (token: string) => { _fullContent += token; streamed = true; onStream?.({ content: token }); },
+      onReasoning: (content: string) => { streamed = true; onStream?.({ reasoningContent: content }); },
       onComplete: (result: CompletionResult) => {
         if (result.toolCalls && result.toolCalls.length > 0) {
           toolCalls = result.toolCalls.map(tc => ({
@@ -317,7 +322,11 @@ function remoteGenerateOnce(
         }
         resolve({ fullResponse: result.content, toolCalls });
       },
-      onError: (error: Error) => { logger.error(`[ToolLoop] onError — ${error.message}`); reject(error); },
+      onError: (error: Error) => {
+        logger.error(`[ToolLoop] onError — ${error.message}`);
+        (error as StreamedError).streamed = streamed;
+        reject(error);
+      },
     });
   });
 }
@@ -341,7 +350,10 @@ async function callRemoteLLMWithTools(
     // turn on a "Generation Error", retry once WITHOUT tools so the user still gets an
     // answer. (The real fix is sending grammar-safe schemas — see pruneToolNoise — this
     // is the safety net for a schema/server combo we didn't anticipate.)
-    if (tools.length > 0 && isToolGrammarError(msg)) {
+    // Only retry if the failed attempt streamed NOTHING — otherwise the retry would
+    // stream a second answer into the same consumer, duplicating/corrupting the output.
+    // A grammar 400 fails at request time (before any token), so the common case is clean.
+    if (tools.length > 0 && isToolGrammarError(msg) && !(e as StreamedError).streamed) {
       logger.warn(`[ToolLoop] remote rejected tool grammar; retrying without tools: ${msg.slice(0, 140)}`);
       return remoteGenerateOnce(provider, { messages, tools: [], thinkingEnabled, onStream: opts?.onStream });
     }

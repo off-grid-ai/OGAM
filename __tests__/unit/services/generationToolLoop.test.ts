@@ -1582,6 +1582,19 @@ describe('callRemoteLLMWithTools via forceRemote', () => {
     await expect(runToolLoop(ctx)).rejects.toThrow('internal server error');
     expect(call).toBe(1); // no retry for unrelated errors
   });
+
+  it('does NOT retry a grammar error if tokens already streamed (avoids duplicate output)', async () => {
+    let call = 0;
+    mockProvider.generate.mockImplementation((_msgs: any, _opts: any, callbacks: any) => {
+      call++;
+      callbacks.onToken('partial ');   // streamed before failing
+      callbacks.onError(new Error('HTTP 400: failed to parse grammar'));
+    });
+
+    const ctx = createContext({ forceRemote: true });
+    await expect(runToolLoop(ctx)).rejects.toThrow(/parse grammar/);
+    expect(call).toBe(1); // retry suppressed — a second stream would duplicate output
+  });
 });
 
 describe('isToolGrammarError', () => {
