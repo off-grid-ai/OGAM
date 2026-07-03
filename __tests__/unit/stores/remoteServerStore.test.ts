@@ -640,7 +640,7 @@ describe('remoteServerStore', () => {
       expect(health.lastCheck).toBeDefined();
     });
 
-    it('should set serverHealth unhealthy when discovery returns empty', async () => {
+    it('should set serverHealth healthy when discovery returns empty (reachable server)', async () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: false,
         json: async () => ({}),
@@ -653,7 +653,7 @@ describe('remoteServerStore', () => {
 
       const health = useRemoteServerStore.getState().serverHealth[serverId];
       expect(health).toBeDefined();
-      expect(health.isHealthy).toBe(false);
+      expect(health.isHealthy).toBe(true);
     });
 
     it('should preserve cached models when re-discovery returns empty', async () => {
@@ -681,8 +681,8 @@ describe('remoteServerStore', () => {
 
       // Cached models preserved, not overwritten with []
       expect(useRemoteServerStore.getState().discoveredModels[serverId]).toHaveLength(1);
-      // Health marked unhealthy
-      expect(useRemoteServerStore.getState().serverHealth[serverId].isHealthy).toBe(false);
+      // Health stays healthy (reachable server, no models returned)
+      expect(useRemoteServerStore.getState().serverHealth[serverId].isHealthy).toBe(true);
     });
 
     it('should overwrite cached models when re-discovery returns new models', async () => {

@@ -235,7 +235,10 @@ export const useRemoteServerStore = create<RemoteServerState>()(
             return merged;
           }
 
-          // Empty result — could be transient failure or genuinely no models.
+          // Empty result — server was reachable but has no models, or
+          // both endpoints returned non-OK (fetchModelsFromServer swallows
+          // errors and returns []).  Mark healthy to match testServerConnection
+          // semantics (a reachable server with 0 models is healthy).
           // Preserve cached models if we have them to avoid wiping on a blip.
           set((state) => {
             const hasCachedModels = (state.discoveredModels[serverId] || []).length > 0;
@@ -245,7 +248,7 @@ export const useRemoteServerStore = create<RemoteServerState>()(
                 : { ...state.discoveredModels, [serverId]: [] },
               serverHealth: {
                 ...state.serverHealth,
-                [serverId]: { isHealthy: false, lastCheck: now },
+                [serverId]: { isHealthy: true, lastCheck: now },
               },
               isLoading: false,
               discoveringServerId: null,
