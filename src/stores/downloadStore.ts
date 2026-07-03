@@ -50,6 +50,22 @@ export function isActiveStatus(status: DownloadStatus): boolean {
   return ACTIVE_STATUSES.has(status);
 }
 
+/**
+ * The ONE download-state classification every view must use. `isActiveStatus`
+ * lumps queued (`pending`) in with actively-transferring rows; these split that
+ * so a queued item renders the clock (not "downloading 0%") and an "active"
+ * count can separate the two — consistently across every tab, the card, the
+ * Download Manager count, and the badge. Never re-derive `status === 'pending'`
+ * inline in a view; call these so the classification can't drift per-surface.
+ */
+export function isQueuedStatus(status: DownloadStatus): boolean {
+  return status === 'pending';
+}
+
+export function isDownloadingStatus(status: DownloadStatus): boolean {
+  return isActiveStatus(status) && status !== 'pending';
+}
+
 interface DownloadStoreState {
   downloads: Record<ModelKey, DownloadEntry>
   downloadIdIndex: Record<string, ModelKey>
