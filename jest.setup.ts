@@ -280,6 +280,15 @@ jest.mock('@dr.pogodin/react-native-static-server', () => ({
   })),
 }));
 
+// Native camera-roll module — mocked so tests that transitively import the
+// save-to-gallery flow (via ChatScreen) don't load native code.
+jest.mock('@react-native-camera-roll/camera-roll', () => ({
+  CameraRoll: {
+    saveAsset: jest.fn(() => Promise.resolve('ph://mock-asset')),
+    save: jest.fn(() => Promise.resolve('ph://mock-asset')),
+  },
+}));
+
 // react-native-device-info mock
 jest.mock('react-native-device-info', () => ({
   getTotalMemory: jest.fn(() => Promise.resolve(8 * 1024 * 1024 * 1024)), // 8GB

@@ -130,7 +130,7 @@ describe('ChatMessage — Tool message rendering', () => {
         ],
       });
       // The plot image shows without needing to expand the tool bubble.
-      expect(getByTestId('generated-image-content')).toBeTruthy();
+      expect(getByTestId('generated-image-content-0')).toBeTruthy();
     });
 
     it('opens the image viewer when a plot is tapped (so it can be saved)', () => {
@@ -141,7 +141,7 @@ describe('ChatMessage — Tool message rendering', () => {
         { attachments: [{ id: 'p1', type: 'image', uri: 'file:///docs/python-plots/plot-p1.png', mimeType: 'image/png' }] },
         onImagePress,
       );
-      fireEvent.press(getByTestId('generated-image-content'));
+      fireEvent.press(getByTestId('generated-image-content-0'));
       expect(onImagePress).toHaveBeenCalledWith('file:///docs/python-plots/plot-p1.png');
     });
   });

@@ -156,8 +156,8 @@ export function MessageAttachments({
             key={attachment.id}
             uri={attachment.uri}
             imageStyle={styles.attachmentImage}
-            wrapperTestID={isUser ? `message-attachment-${index}` : 'generated-image'}
-            testID={isUser ? `message-image-${index}` : 'generated-image-content'}
+            wrapperTestID={isUser ? `message-attachment-${index}` : `generated-image-${index}`}
+            testID={isUser ? `message-image-${index}` : `generated-image-content-${index}`}
             onPress={() => onImagePress?.(attachment.uri)}
           />
         )

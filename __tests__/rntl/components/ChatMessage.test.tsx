@@ -486,7 +486,7 @@ describe('ChatMessage', () => {
       const { getByText, getByTestId } = render(<ChatMessage message={message} />);
 
       expect(getByText(/Here is your image/)).toBeTruthy();
-      expect(getByTestId('generated-image')).toBeTruthy();
+      expect(getByTestId('generated-image-0')).toBeTruthy();
     });
   });
 

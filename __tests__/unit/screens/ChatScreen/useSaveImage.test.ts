@@ -3,19 +3,17 @@
  */
 
 jest.mock('react-native', () => ({
-  Platform: { OS: 'ios', select: (obj: any) => obj.ios },
+  Platform: { OS: 'ios', Version: 17, select: (obj: any) => obj.ios },
   PermissionsAndroid: {
     request: jest.fn(),
     PERMISSIONS: { WRITE_EXTERNAL_STORAGE: 'android.permission.WRITE_EXTERNAL_STORAGE' },
+    RESULTS: { GRANTED: 'granted', DENIED: 'denied' },
   },
 }));
 
-jest.mock('react-native-fs', () => ({
-  DocumentDirectoryPath: '/docs',
-  ExternalStorageDirectoryPath: '/ext',
-  exists: jest.fn(),
-  mkdir: jest.fn(),
-  copyFile: jest.fn(),
+const mockSaveAsset = jest.fn();
+jest.mock('@react-native-camera-roll/camera-roll', () => ({
+  CameraRoll: { saveAsset: (...args: any[]) => mockSaveAsset(...args) },
 }));
 
 jest.mock('../../../../src/utils/logger', () => ({
@@ -28,92 +26,81 @@ jest.mock('../../../../src/components', () => ({
 }));
 
 import { Platform, PermissionsAndroid } from 'react-native';
-import RNFS from 'react-native-fs';
 import { saveImageToGallery } from '../../../../src/screens/ChatScreen/useSaveImage';
 
 const mockRequest = PermissionsAndroid.request as jest.Mock;
-const mockExists = RNFS.exists as jest.Mock;
-const mockMkdir = RNFS.mkdir as jest.Mock;
-const mockCopyFile = RNFS.copyFile as jest.Mock;
 
 describe('saveImageToGallery', () => {
   const setAlertState = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockExists.mockResolvedValue(true);
-    mockCopyFile.mockResolvedValue(undefined);
+    mockSaveAsset.mockResolvedValue('ph://saved-asset');
+    mockRequest.mockResolvedValue('granted');
     (Platform as any).OS = 'ios';
+    (Platform as any).Version = 17;
   });
 
   it('does nothing when viewerImageUri is null', async () => {
     await saveImageToGallery(null, setAlertState);
-    expect(mockCopyFile).not.toHaveBeenCalled();
+    expect(mockSaveAsset).not.toHaveBeenCalled();
     expect(setAlertState).not.toHaveBeenCalled();
   });
 
-  it('copies file to iOS documents directory', async () => {
+  it('saves to the photo gallery via CameraRoll (iOS, no permission prompt)', async () => {
     await saveImageToGallery('file:///tmp/image.png', setAlertState);
-    expect(mockCopyFile).toHaveBeenCalledWith(
-      '/tmp/image.png', // NOSONAR
-      expect.stringContaining('/docs/OffgridMobile_Images/'),
-    );
+    expect(mockSaveAsset).toHaveBeenCalledWith('file:///tmp/image.png', { type: 'photo', album: 'OffgridMobile' });
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it('strips file:// prefix from source path', async () => {
+  it('passes the uri through unchanged (CameraRoll handles file:// itself)', async () => {
     await saveImageToGallery('file:///path/to/image.png', setAlertState);
-    const [src] = mockCopyFile.mock.calls[0];
-    expect(src).not.toContain('file://');
-    expect(src).toBe('/path/to/image.png');
+    const [uri] = mockSaveAsset.mock.calls[0];
+    expect(uri).toBe('file:///path/to/image.png');
   });
 
-  it('creates directory when it does not exist', async () => {
-    mockExists.mockResolvedValue(false);
-    await saveImageToGallery('file:///tmp/img.png', setAlertState);
-    expect(mockMkdir).toHaveBeenCalled();
-  });
-
-  it('does not create directory when it already exists', async () => {
-    mockExists.mockResolvedValue(true);
-    await saveImageToGallery('file:///tmp/img.png', setAlertState);
-    expect(mockMkdir).not.toHaveBeenCalled();
-  });
-
-  it('shows Image Saved alert on success (iOS)', async () => {
+  it('shows Image Saved alert on success', async () => {
     await saveImageToGallery('file:///tmp/img.png', setAlertState);
     expect(setAlertState).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Image Saved' }),
     );
   });
 
-  it('shows Error alert when copyFile throws', async () => {
-    mockCopyFile.mockRejectedValue(new Error('disk full'));
+  it('shows Error alert when saveAsset throws', async () => {
+    mockSaveAsset.mockRejectedValue(new Error('disk full'));
     await saveImageToGallery('file:///tmp/img.png', setAlertState);
     expect(setAlertState).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Error' }),
     );
   });
 
-  it('requests WRITE_EXTERNAL_STORAGE permission on android', async () => {
+  it('requests WRITE_EXTERNAL_STORAGE on Android below API 33', async () => {
     (Platform as any).OS = 'android';
+    (Platform as any).Version = 30;
     await saveImageToGallery('file:///tmp/img.png', setAlertState);
     expect(mockRequest).toHaveBeenCalledWith(
       'android.permission.WRITE_EXTERNAL_STORAGE',
       expect.any(Object),
     );
+    expect(mockSaveAsset).toHaveBeenCalled();
   });
 
-  it('saves to ExternalStorage on android', async () => {
+  it('skips the permission prompt on Android 33+ (scoped media)', async () => {
     (Platform as any).OS = 'android';
+    (Platform as any).Version = 34;
     await saveImageToGallery('file:///tmp/img.png', setAlertState);
-    const [, dest] = mockCopyFile.mock.calls[0];
-    expect(dest).toContain('/ext/Pictures/OffgridMobile/');
+    expect(mockRequest).not.toHaveBeenCalled();
+    expect(mockSaveAsset).toHaveBeenCalled();
   });
 
-  it('shows android-specific path in success alert', async () => {
+  it('does not save and warns when Android permission is denied', async () => {
     (Platform as any).OS = 'android';
+    (Platform as any).Version = 30;
+    mockRequest.mockResolvedValue('denied');
     await saveImageToGallery('file:///tmp/img.png', setAlertState);
-    const alert = setAlertState.mock.calls[0][0];
-    expect(alert.message).toContain('Pictures/OffgridMobile');
+    expect(mockSaveAsset).not.toHaveBeenCalled();
+    expect(setAlertState).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Permission needed' }),
+    );
   });
 });

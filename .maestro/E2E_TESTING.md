@@ -123,7 +123,7 @@ Required test IDs:
 - `image-model-loaded-indicator`
 - `image-mode-toggle`
 - `image-generation-progress`
-- `generated-image`
+- `generated-image-<index>` (e.g. `generated-image-0`; index-scoped per attachment)
 - `image-message`
 - `image-viewer`
 
@@ -229,7 +229,7 @@ The following testIDs need to be added to screen components for E2E tests to wor
 <TouchableOpacity testID="conversation-list-button">
 <View testID="assistant-message">  // On assistant message bubbles
 <View testID="image-generation-progress">  // During image gen
-<View testID="generated-image">  // On generated images
+<View testID="generated-image-0">  // On generated images (index-scoped: -0, -1, ...)
 ```
 
 **ModelsScreen.tsx**

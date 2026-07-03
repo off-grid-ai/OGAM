@@ -240,7 +240,7 @@ tags:
 - evalScript: "${console.log('IMAGE_GEN - Wait for image')}"
 - extendedWaitUntil:
     visible:
-      id: "generated-image"
+      id: "generated-image-0"
     timeout: 180000
 
 - evalScript: "${console.log('IMAGE_GEN - Image generated!')}"
@@ -248,7 +248,7 @@ tags:
 
 # Verify image can be tapped
 - tapOn:
-    id: "generated-image"
+    id: "generated-image-0"
 - takeScreenshot: 03-image-viewer
 
 # Close image viewer

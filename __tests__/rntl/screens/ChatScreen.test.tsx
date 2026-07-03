@@ -1890,7 +1890,7 @@ describe('ChatScreen', () => {
     });
 
     it('saves image when Save is pressed', async () => {
-      const RNFS = require('react-native-fs');
+      const { CameraRoll } = require('@react-native-camera-roll/camera-roll');
       const { userMsg } = setupImageViewerChat();
       const { getByTestId, getByText } = renderChatScreen();
 
@@ -1902,9 +1902,9 @@ describe('ChatScreen', () => {
         fireEvent.press(getByText('Save'));
       });
 
-      // Should call RNFS functions to save image
+      // Saves to the device gallery via CameraRoll (real Photos/gallery, not an app folder).
       await waitFor(() => {
-        expect(RNFS.copyFile).toHaveBeenCalled();
+        expect(CameraRoll.saveAsset).toHaveBeenCalled();
       });
     });
   });
