@@ -124,14 +124,18 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, on
             <Text style={styles.quantText}>{item.quantization}</Text>
           </View>
         )}
-        {!!getStatusLabel(item) && (
+        {(!!getStatusLabel(item) || !!getStatusIcon()) && (
           <View style={styles.statusIconRow}>
             {getStatusIcon() && (
-              <Icon name={getStatusIcon()!} size={14} color={getStatusIconColor()} />
+              <Icon name={getStatusIcon()!} size={14} color={getStatusIconColor()} accessibilityLabel={getStatusText(item.status)} />
             )}
-            <Text style={[styles.statusText, item.status === 'failed' && { color: colors.error }]}>
-              {getStatusLabel(item)}
-            </Text>
+            {/* Queued is icon-only (clock) — the word is redundant next to it. Other states
+                (failed/retrying/network) keep their explanatory text. */}
+            {item.status !== 'pending' && !!getStatusLabel(item) && (
+              <Text style={[styles.statusText, item.status === 'failed' && { color: colors.error }]}>
+                {getStatusLabel(item)}
+              </Text>
+            )}
           </View>
         )}
       </View>

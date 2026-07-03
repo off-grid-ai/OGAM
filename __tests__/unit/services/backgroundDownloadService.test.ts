@@ -1296,6 +1296,34 @@ describe('BackgroundDownloadService', () => {
       expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(3);
     });
 
+    it('a sidecar (mmproj) does NOT occupy a slot — 3 vision files (main+sidecar each) all download', async () => {
+      // Regression for "only one download progressing": a vision file is main + mmproj.
+      // If the sidecar counted, 3 files (6 native starts) would fill the 3-cap after ~1.5
+      // files and the rest would queue. Sidecars are exempt, so all 3 mains start.
+      for (const id of ['a', 'b', 'c']) {
+        service.startDownload({ ...params(`${id}-mmproj`), isSidecar: true }); // rides alongside, uncounted
+        service.startDownload(params(id));                                     // the main, counted
+      }
+      await flush();
+      // 3 mains + 3 sidecars = 6 native starts, and NONE queued (sidecars don't count).
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(6);
+      expect(service.getQueuedCount()).toBe(0);
+    });
+
+    it('a 4th vision file queues only its MAIN once the 3 main slots are full', async () => {
+      for (const id of ['a', 'b', 'c']) {
+        service.startDownload({ ...params(`${id}-mmproj`), isSidecar: true });
+        service.startDownload(params(id));
+      }
+      await flush();
+      // 4th file: sidecar starts immediately (uncounted), main queues (cap full with 3 mains).
+      service.startDownload({ ...params('d-mmproj'), isSidecar: true });
+      service.startDownload(params('d'));
+      await flush();
+      expect(service.getQueuedCount()).toBe(1);                               // only d's main waits
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(7); // 3 mains + 4 sidecars
+    });
+
     it('promotes the next queued download when one COMPLETES', async () => {
       ['a', 'b', 'c', 'd', 'e'].forEach((id) => service.startDownload(params(id)));
       await flush();

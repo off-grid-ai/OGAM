@@ -328,13 +328,15 @@ describe('DownloadManagerScreen', () => {
     expect(queryByText('No active downloads')).toBeNull();
   });
 
-  it('surfaces queued (capped) downloads as "Queued" in Active Downloads', () => {
+  it('surfaces a queued (capped) download with the clock icon (icon-only, no "Queued" word)', () => {
     mockBackgroundDownloadService.getQueuedItems.mockReturnValueOnce([
       { modelKey: 'q/waiting.gguf', modelId: 'q/waiting', fileName: 'waiting.gguf', modelType: 'text', totalBytes: 5000 },
     ]);
-    const { getByText } = render(<DownloadManagerScreen />);
+    const { getByText, queryByText, getByLabelText } = render(<DownloadManagerScreen />);
     expect(getByText('waiting.gguf')).toBeTruthy();
-    expect(getByText('Queued')).toBeTruthy();
+    // The word "Queued" was dropped in favor of the clock icon (a11y label "Queued").
+    expect(queryByText('Queued')).toBeNull();
+    expect(getByLabelText('Queued')).toBeTruthy();
   });
 
   it('shows section headers for active and completed', () => {

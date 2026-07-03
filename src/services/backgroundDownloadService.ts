@@ -61,6 +61,14 @@ class BackgroundDownloadService {
     if (!this.isAvailable()) {
       throw new Error('Background downloads not available on this platform');
     }
+    // A sidecar (e.g. a vision model's mmproj) is a dependent sub-download of a main
+    // file — it is NOT admission-controlled and does not occupy a concurrency slot. The
+    // cap governs logical model downloads (the mains); the sidecar rides alongside its
+    // main. (Counting it consumed a second slot per vision file, so only one file could
+    // download at a time.) Start it immediately, uncounted.
+    if (params.isSidecar) {
+      return this.beginDownload(params, false);
+    }
     // Under the cap → start immediately. At the cap → queue and resolve when a slot
     // frees. Callers `await` this and only then attach onComplete/onError to the
     // returned downloadId, so a queued start simply resolves later — listeners still
@@ -82,53 +90,63 @@ class BackgroundDownloadService {
     return p.modelKey ?? p.modelId ?? p.fileName ?? p.url;
   }
 
-  /** Actually start a native download, occupying one concurrency slot. */
-  private async beginDownload(params: DownloadParams): Promise<BackgroundDownloadInfo> {
+  /** Actually start a native download. When `counted` (the default) it occupies one
+   *  concurrency slot; an uncounted start (a sidecar) begins immediately and never
+   *  touches activeIds, so it neither consumes a slot nor blocks the queue. */
+  private async beginDownload(params: DownloadParams, counted = true): Promise<BackgroundDownloadInfo> {
+    if (!counted) return this.startNativeDownload(params); // sidecar: no slot bookkeeping
     // Reserve the slot synchronously (before the first await) so a burst of
     // startDownload() calls in the same tick can't all pass the size check and
     // over-admit past the cap.
     const token = `reserve:${++this.startSeq}`;
     this.activeIds.add(token);
-    // Android 13+: prompt for notification permission so the foreground-service download
-    // notification is visible (the download still runs as an FGS if denied). Best-effort.
-    if (Platform.OS === 'android' && typeof DownloadManagerModule.requestNotificationPermission === 'function') {
-      try { DownloadManagerModule.requestNotificationPermission(); } catch { /* non-fatal */ }
-    }
     try {
-      const result = await DownloadManagerModule.startDownload({
-        url: params.url,
-        fileName: params.fileName,
-        modelId: params.modelId,
-        modelKey: params.modelKey,
-        modelType: params.modelType ?? 'text',
-        quantization: params.quantization,
-        combinedTotalBytes: params.combinedTotalBytes ?? 0,
-        mmProjDownloadId: params.mmProjDownloadId,
-        metadataJson: params.metadataJson,
-        totalBytes: params.totalBytes ?? 0,
-        sha256: params.sha256,
-        hideNotification: params.hideNotification ?? false,
-      });
+      const info = await this.startNativeDownload(params);
       // Swap the reservation for the real download id (still one slot). If cleanup() ran
       // while we awaited the native start, don't re-add — the release listeners are gone,
       // so this id could never be freed and would leak a slot for the service's life.
       this.activeIds.delete(token);
-      if (this.shutDown) { DownloadManagerModule.cancelDownload(result.downloadId).catch(() => {}); return { downloadId: result.downloadId, fileName: result.fileName, modelId: result.modelId, status: 'failed', bytesDownloaded: 0, totalBytes: params.totalBytes ?? 0, startedAt: Date.now() }; }
-      this.activeIds.add(result.downloadId);
-      return {
-        downloadId: result.downloadId,
-        fileName: result.fileName,
-        modelId: result.modelId,
-        status: 'pending',
-        bytesDownloaded: 0,
-        totalBytes: params.totalBytes ?? 0,
-        startedAt: Date.now(),
-      };
+      if (this.shutDown) { DownloadManagerModule.cancelDownload(info.downloadId).catch(() => {}); return { ...info, status: 'failed' }; }
+      this.activeIds.add(info.downloadId);
+      return info;
     } catch (e) {
       this.activeIds.delete(token); // free the reservation, let the queue try the next
       this.pump();
       throw e;
     }
+  }
+
+  /** The raw native start + BackgroundDownloadInfo mapping — no concurrency accounting.
+   *  Sidecars call this directly; the counted path wraps it in slot bookkeeping. */
+  private async startNativeDownload(params: DownloadParams): Promise<BackgroundDownloadInfo> {
+    // Android 13+: prompt for notification permission so the foreground-service download
+    // notification is visible (the download still runs as an FGS if denied). Best-effort.
+    if (Platform.OS === 'android' && typeof DownloadManagerModule.requestNotificationPermission === 'function') {
+      try { DownloadManagerModule.requestNotificationPermission(); } catch { /* non-fatal */ }
+    }
+    const result = await DownloadManagerModule.startDownload({
+      url: params.url,
+      fileName: params.fileName,
+      modelId: params.modelId,
+      modelKey: params.modelKey,
+      modelType: params.modelType ?? 'text',
+      quantization: params.quantization,
+      combinedTotalBytes: params.combinedTotalBytes ?? 0,
+      mmProjDownloadId: params.mmProjDownloadId,
+      metadataJson: params.metadataJson,
+      totalBytes: params.totalBytes ?? 0,
+      sha256: params.sha256,
+      hideNotification: params.hideNotification ?? false,
+    });
+    return {
+      downloadId: result.downloadId,
+      fileName: result.fileName,
+      modelId: result.modelId,
+      status: 'pending',
+      bytesDownloaded: 0,
+      totalBytes: params.totalBytes ?? 0,
+      startedAt: Date.now(),
+    };
   }
 
   /** Free a slot when a download reaches a terminal state, and admit queued starts. */

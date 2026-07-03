@@ -95,10 +95,9 @@ const DownloadProgressSection: React.FC<{
         <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
       <View style={styles.progressLabelRow}>
-        {queued && <Icon name={QUEUED_ICON} size={13} color={colors.textMuted} />}
-        <Text style={[styles.progressText, tight && styles.progressTextTight]}>
-          {queued ? 'Queued' : `${Math.round(progress * 100)}%`}
-        </Text>
+        {queued
+          ? <Icon name={QUEUED_ICON} size={14} color={colors.textMuted} accessibilityLabel="Queued" />
+          : <Text style={[styles.progressText, tight && styles.progressTextTight]}>{`${Math.round(progress * 100)}%`}</Text>}
       </View>
     </View>
     {!queued && bytes && bytes.total > 0 && (

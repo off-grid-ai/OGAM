@@ -151,6 +151,10 @@ async function startBgDownload(opts: StartBgDownloadOpts): Promise<BackgroundDow
       modelType: 'text',
       totalBytes: mmProjFile.size,
       sha256: mmProjFile.sha256,
+      // Dependent sub-download of the main GGUF — doesn't occupy a concurrency slot, so a
+      // vision file's main+mmproj count as ONE logical download against the 3-cap (else
+      // one vision file held two slots and only one file could download at a time).
+      isSidecar: true,
     });
     mmProjDownloadId = mmProjInfo.downloadId;
     logger.log('[DownloadDebug] mmproj sidecar download started', {
