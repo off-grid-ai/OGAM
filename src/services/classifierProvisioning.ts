@@ -59,13 +59,19 @@ export async function ensureDefaultClassifier(): Promise<void> {
     // phantom "downloading 100%" entry in the Download Manager (its uniform id —
     // text:<repo> — never matched the finished model's text:<repo>/<file>, so the
     // one-entry dedup couldn't collapse it).
+    let settled = false;
     await startModelDownload(CLASSIFIER_REPO, file, {
       onRegistered: (model) => {
+        settled = true;
         useAppStore.getState().updateSettings({ classifierModelId: model.id });
         provisioning = false;
       },
-      onError: () => { provisioning = false; },
+      onError: () => { settled = true; provisioning = false; },
     });
+    // startModelDownload can return without firing either callback (already-active
+    // download, or a queued start that was cancelled). Don't leave provisioning stuck
+    // true forever — that would block every future classifier selection attempt.
+    if (!settled) provisioning = false;
   } catch {
     provisioning = false;
   }

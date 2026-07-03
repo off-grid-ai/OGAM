@@ -294,6 +294,16 @@ describe('ModelResidencyManager', () => {
       await expect(modelResidencyManager.reclaimSttForGeneration()).resolves.toBeUndefined();
     });
 
+    it('honors the canEvict veto — does NOT unload Whisper while it is in use', async () => {
+      jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(4);
+      const unload = jest.fn().mockResolvedValue(undefined);
+      // canEvict returns false → the owner vetoes (e.g. still finalizing a transcription).
+      modelResidencyManager.register({ key: 'whisper', type: 'whisper', sizeMB: 466, canEvict: () => false }, unload, 1);
+      await modelResidencyManager.reclaimSttForGeneration();
+      expect(unload).not.toHaveBeenCalled();
+      expect(modelResidencyManager.isResident('whisper')).toBe(true);
+    });
+
     it('serializes the reclaim behind an in-flight load (F3: no unload while the lock is held)', async () => {
       jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(4);
       const order: string[] = [];

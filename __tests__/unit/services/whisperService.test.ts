@@ -515,6 +515,9 @@ describe('WhisperService', () => {
         // did, so mode stayed 'record' and the next TTS ensurePlayback() early-returned
         // → silent speech after dictation.
         await whisperService.stopTranscription();
+        // restore is fire-and-forget in stopTranscription's finally and now runs through
+        // the session owner's serialized queue, so let that microtask settle.
+        await new Promise(resolve => setImmediate(resolve));
         expect(audioSessionManager.getMode()).toBe('playback');
 
         // And a subsequent TTS playback request is actually applied (not skipped).

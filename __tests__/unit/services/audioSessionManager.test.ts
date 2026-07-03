@@ -91,6 +91,23 @@ describe('AudioSessionManager', () => {
       // A throw is how iOS surfaces a denied mic permission; mode must not advance.
       expect(audioSessionManager.getMode()).toBeNull();
     });
+
+    it('serializes concurrent record + playback so the last call wins deterministically (no stale-mode race)', async () => {
+      // Fire recording then playback without awaiting between them. With the check-then-act
+      // race, both read the old mode and apply concurrently — the final category depended on
+      // which setAudioSessionActivity resolved last. Serialized, they run in call order.
+      const order: string[] = [];
+      setOptions.mockImplementation((opts: any) => { order.push(opts.iosCategory); });
+
+      const p1 = audioSessionManager.ensureRecording();
+      const p2 = audioSessionManager.ensurePlayback();
+      await Promise.all([p1, p2]);
+
+      // ensureRecording applied first (playAndRecord); ensurePlayback then saw mode==='record'
+      // and correctly skipped the downgrade — so record is the final, deterministic mode.
+      expect(order).toEqual(['playAndRecord']);
+      expect(audioSessionManager.getMode()).toBe('record');
+    });
   });
 
   describe('Android', () => {

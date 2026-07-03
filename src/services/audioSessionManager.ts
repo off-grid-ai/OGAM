@@ -23,6 +23,18 @@ class AudioSessionManager {
   /** The category currently applied to the AVAudioSession (null = never set). */
   private mode: AudioSessionMode | null = null;
 
+  /** Serializes the check-then-apply of every session op so a mode guard is never
+   *  evaluated against a stale value. Without this, a concurrent ensurePlayback +
+   *  ensureRecording both read the old `mode`, both call apply(), and whichever
+   *  setAudioSessionActivity resolves last silently wins the category — exactly the
+   *  "last writer decides" race this owner exists to eliminate. */
+  private queue: Promise<unknown> = Promise.resolve();
+  private runSerial<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.queue.then(fn, fn);
+    this.queue = next.catch(() => {}); // never let a rejection wedge the chain
+    return next;
+  }
+
   /** The mode last applied (testing/diagnostics). */
   getMode(): AudioSessionMode | null {
     return this.mode;
@@ -38,15 +50,17 @@ class AudioSessionManager {
    */
   async ensurePlayback(): Promise<void> {
     if (Platform.OS !== 'ios') return;
-    if (this.mode === 'record') return;
-    await this.apply('playback');
+    await this.runSerial(async () => {
+      if (this.mode === 'record') return; // checked inside the serialized block → not stale
+      await this.apply('playback');
+    });
   }
 
   /** Ensure a record+playback session is active before recording starts.
    *  (Re)asserts every call, matching the recorder's prior per-start activation. */
   async ensureRecording(): Promise<void> {
     if (Platform.OS !== 'ios') return;
-    await this.apply('record');
+    await this.runSerial(() => this.apply('record'));
   }
 
   /**
@@ -72,7 +86,7 @@ class AudioSessionManager {
     // Returns whether the record session activated; a throw on activation is how
     // iOS surfaces a denied mic permission, so false === denied here (matching the
     // old whisperService.requestPermissions, which returned false on setActive throw).
-    return this.apply('record');
+    return this.runSerial(() => this.apply('record'));
   }
 
   /**
@@ -82,8 +96,10 @@ class AudioSessionManager {
    */
   async restorePlaybackAfterRecording(): Promise<void> {
     if (Platform.OS !== 'ios') return;
-    if (this.mode !== 'record') return;
-    await this.apply('playback');
+    await this.runSerial(async () => {
+      if (this.mode !== 'record') return; // checked inside the serialized block → not stale
+      await this.apply('playback');
+    });
   }
 
   /** @returns true if the session activated, false if activation threw (swallowed). */

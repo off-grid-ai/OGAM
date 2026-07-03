@@ -46,7 +46,7 @@ type ActiveModelInfo = {
  * loadedSettings is persisted, so a relaunch or a llama→LiteRT switch would otherwise pop
  * the banner with nothing changed.
  */
-function computePendingSettings(
+export function computePendingSettings(
   engine: string | undefined,
   settings: Record<string, unknown>,
   loadedSettings: Record<string, unknown> | null | undefined,
@@ -55,8 +55,12 @@ function computePendingSettings(
   // Pending only if BOTH sides are defined AND differ.
   const changed = (live: unknown, loaded: unknown) => loaded !== undefined && live !== loaded;
   if (engine === 'litert') {
+    // Compare the EFFECTIVE token budget (unset = native default 4096) so an
+    // undefined→explicit change still flags a reload (mirror of the false-positive fix).
+    const liveTokens = (settings.liteRTMaxTokens as number | undefined) ?? 4096;
+    const loadedTokens = (loadedSettings.liteRTMaxTokens as number | undefined) ?? 4096;
     return changed(settings.liteRTBackend, loadedSettings.liteRTBackend) ||
-           changed(settings.liteRTMaxTokens, loadedSettings.liteRTMaxTokens);
+           (loadedSettings.liteRTBackend !== undefined && liveTokens !== loadedTokens);
   }
   const effCache = settings.inferenceBackend === INFERENCE_BACKENDS.OPENCL ? 'f16' : settings.cacheType;
   return (

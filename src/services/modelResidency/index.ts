@@ -295,6 +295,7 @@ class ModelResidencyManager {
     await this.runExclusive('reclaim:stt', async () => {
       const w = this.residents.get('whisper');
       if (!w) return; // reclaimed by another op while we waited for the lock
+      if (w.canEvict && !w.canEvict()) return; // in use (e.g. finalizing a transcription) — owner vetoes
       logger.log('[ModelResidency] reclaiming idle STT for generation turn (memory-tight)');
       await w.unload().catch(err => logger.log('[ModelResidency] STT reclaim failed:', err));
       this.residents.delete('whisper');

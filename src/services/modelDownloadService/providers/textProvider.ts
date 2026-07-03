@@ -135,6 +135,11 @@ export const textProvider: DownloadProvider = {
     if (entry) {
       await modelManager.cancelBackgroundDownload(entry.downloadId)
         .catch(err => logger.log(`[DL-SM] ${id} remove: native cancel failed err=${msg(err)}`));
+      // Cancel the mmproj sidecar too (mirrors cancel()) — otherwise removing an in-flight
+      // vision download orphans the mmproj transfer: it keeps occupying a concurrency slot
+      // (never released) and its terminal event has no listener left.
+      if (entry.mmProjDownloadId) await modelManager.cancelBackgroundDownload(entry.mmProjDownloadId)
+        .catch(err => logger.log(`[DL-SM] ${id} remove: mmproj native cancel failed err=${msg(err)}`));
       useDownloadStore.getState().remove(entry.modelKey);
     }
     await modelManager.deleteModel(key)
