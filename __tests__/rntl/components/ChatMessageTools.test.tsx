@@ -23,9 +23,14 @@ const makeMessage = (overrides: Partial<Message>): Message =>
   createMessage({ id: 'msg-1', content: 'test', ...overrides } as any);
 
 /** Shorthand: create a tool result message and render it. */
-function renderToolResult(toolName: string | undefined, content: string, extra: Partial<Message> = {}) {
+function renderToolResult(
+  toolName: string | undefined,
+  content: string,
+  extra: Partial<Message> = {},
+  onImagePress?: (uri: string) => void,
+) {
   const message = makeMessage({ role: 'tool', content, toolName, ...extra });
-  return render(<ChatMessage message={message} />);
+  return render(<ChatMessage message={message} onImagePress={onImagePress} />);
 }
 
 describe('ChatMessage — Tool message rendering', () => {
@@ -126,6 +131,18 @@ describe('ChatMessage — Tool message rendering', () => {
       });
       // The plot image shows without needing to expand the tool bubble.
       expect(getByTestId('generated-image-content')).toBeTruthy();
+    });
+
+    it('opens the image viewer when a plot is tapped (so it can be saved)', () => {
+      const onImagePress = jest.fn();
+      const { getByTestId } = renderToolResult(
+        'run_python',
+        '[1 plot shown to the user]',
+        { attachments: [{ id: 'p1', type: 'image', uri: 'file:///docs/python-plots/plot-p1.png', mimeType: 'image/png' }] },
+        onImagePress,
+      );
+      fireEvent.press(getByTestId('generated-image-content'));
+      expect(onImagePress).toHaveBeenCalledWith('file:///docs/python-plots/plot-p1.png');
     });
   });
 

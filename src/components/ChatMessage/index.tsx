@@ -53,12 +53,13 @@ type ToolResultBubbleProps = {
   content: string;
   hasDetails: boolean;
   attachments?: import('../../types').MediaAttachment[];
+  onImagePress?: (uri: string) => void;
   styles: ReturnType<typeof createStyles>;
   colors: any;
 };
 
 const ToolResultBubble: React.FC<ToolResultBubbleProps> = ({
-  toolIcon, toolLabel, toolName, durationLabel, content, hasDetails, attachments, styles, colors,
+  toolIcon, toolLabel, toolName, durationLabel, content, hasDetails, attachments, onImagePress, styles, colors,
 }) => {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -83,7 +84,7 @@ const ToolResultBubble: React.FC<ToolResultBubbleProps> = ({
       </TouchableOpacity>
       {/* Tool-produced media (e.g. run_python plots) always shows, not behind the collapse. */}
       {!!attachments?.length && (
-        <MessageAttachments attachments={attachments} isUser={false} styles={styles} colors={colors} />
+        <MessageAttachments attachments={attachments} isUser={false} onImagePress={onImagePress} styles={styles} colors={colors} />
       )}
       {expanded && hasDetails && (
         <View style={styles.toolDetailContainer}>
@@ -101,12 +102,12 @@ const RoutedToolsRow: React.FC<{ message: Message; isUser: boolean; isStreaming?
   return <ToolsSentCollapsible names={names} styles={styles} colors={colors} />;
 };
 
-const ToolResultMessage: React.FC<{ message: Message; styles: any; colors: any }> = ({ message, styles, colors }) => {
+const ToolResultMessage: React.FC<{ message: Message; onImagePress?: (uri: string) => void; styles: any; colors: any }> = ({ message, onImagePress, styles, colors }) => {
   const toolIcon = getToolIcon(message.toolName);
   const toolLabel = getToolLabel(message.toolName, message.content);
   const durationLabel = message.generationTimeMs == null ? '' : ` (${message.generationTimeMs}ms)`;
   const hasDetails = !!(message.content && message.content.length > 0 && !message.content.startsWith('No results'));
-  return <ToolResultBubble toolIcon={toolIcon} toolLabel={toolLabel} toolName={message.toolName || 'unknown'} durationLabel={durationLabel} content={message.content} hasDetails={hasDetails} attachments={message.attachments} styles={styles} colors={colors} />;
+  return <ToolResultBubble toolIcon={toolIcon} toolLabel={toolLabel} toolName={message.toolName || 'unknown'} durationLabel={durationLabel} content={message.content} hasDetails={hasDetails} attachments={message.attachments} onImagePress={onImagePress} styles={styles} colors={colors} />;
 };
 
 const ToolCallMessage: React.FC<{ message: Message; styles: any; colors: any }> = ({ message, styles, colors }) => (
@@ -309,7 +310,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     return <SystemInfoMessage content={displayContent} styles={styles}
       alertState={alertState} onCloseAlert={() => setAlertState(hideAlert())} />;
   }
-  if (message.role === 'tool') return <ToolResultMessage message={message} styles={styles} colors={colors} />;
+  if (message.role === 'tool') return <ToolResultMessage message={message} onImagePress={onImagePress} styles={styles} colors={colors} />;
   if (message.role === 'assistant' && message.toolCalls?.length) {
     return <ToolCallWithThinking message={message} showThinking={showThinking}
       onToggle={() => setShowThinking(!showThinking)} styles={styles} colors={colors} />;
