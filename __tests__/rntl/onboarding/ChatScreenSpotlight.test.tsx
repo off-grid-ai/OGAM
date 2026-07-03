@@ -78,6 +78,12 @@ jest.mock('../../../src/services/activeModelService', () => ({
     checkMemoryAvailable: jest.fn(() => ({ safe: true, severity: 'safe' })),
     checkMemoryForModel: jest.fn(() => Promise.resolve({ canLoad: true, severity: 'safe', message: null })),
     subscribe: jest.fn(() => jest.fn()),
+    // Capability dispatch is the single source of truth the ChatScreen hooks
+    // now project from (was recomputed inline via llmService).
+    supportsVision: jest.fn(() => false),
+    supportsToolCalling: jest.fn(() => false),
+    supportsThinking: jest.fn(() => false),
+    supportsAudioInput: jest.fn(() => false),
   },
 }));
 

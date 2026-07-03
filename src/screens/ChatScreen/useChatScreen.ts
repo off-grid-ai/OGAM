@@ -10,7 +10,6 @@ import {
   ImageGenerationState, hardwareService, QueuedMessage,
   contextCompactionService,
 } from '../../services';
-import { liteRTService } from '../../services/litert';
 import { generationSession } from '../../services/generationSession';
 import { useGeneratingConversationId } from '../../hooks/useGenerationSession';
 import { Message, MediaAttachment, Project, DownloadedModel, DebugInfo, RemoteModel, INFERENCE_BACKENDS } from '../../types';
@@ -334,13 +333,12 @@ export const useChatScreen = () => {
     // won't fast-path-skip. The memory gate — including the "Load Anyway" override
     // — is owned by initiateModelLoad, so reload matches normal load exactly (no
     // duplicated/stricter check in the view).
-    if (activeModel?.engine === 'litert') {
-      if (liteRTService.isModelLoaded()) {
-        await liteRTService.unloadModel().catch(() => { });
-      }
-    } else if (llmService.isModelLoaded()) {
-      await activeModelService.unloadTextModel(true);
-    }
+    //
+    // Engine-agnostic: unloadTextModel dispatches to whichever engine (llama or
+    // LiteRT) actually holds the model AND does the residency bookkeeping for
+    // both. The old View branch called liteRTService.unloadModel() directly for
+    // LiteRT, which skipped that bookkeeping (B2) and leaked the engine here.
+    await activeModelService.unloadTextModel(true);
     await initiateModelLoad(modelDeps, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeModelInfo.modelId, activeModelInfo.isRemote, settings, activeModel?.engine]);

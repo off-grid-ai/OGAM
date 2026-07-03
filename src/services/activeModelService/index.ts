@@ -25,6 +25,12 @@ import {
   getResourceUsage as _getResourceUsage,
   syncWithNativeState as _syncWithNativeState,
 } from './utils';
+import {
+  supportsAudioInput as _supportsAudioInput,
+  supportsVision as _supportsVision,
+  supportsToolCalling as _supportsToolCalling,
+  supportsThinking as _supportsThinking,
+} from './capabilities';
 export type {
   ModelType,
   MemoryCheckSeverity,
@@ -68,21 +74,13 @@ class ActiveModelService {
     const info = this.getActiveModels();
     return info.text.isLoaded || info.image.isLoaded;
   }
-  /**
-   * Whether the currently-active text model accepts audio input directly (no
-   * Whisper STT needed). Engine-aware dispatch lives here so UI/hooks never
-   * branch on engine type: LiteRT reports via its loaded model's audio flag,
-   * llama.cpp via the multimodal projector's reported audio support.
-   */
-  supportsAudioInput(): boolean {
-    const store = useAppStore.getState();
-    const model = store.downloadedModels.find(m => m.id === store.activeModelId);
-    if (!model) return false;
-    if (model.engine === 'litert') {
-      return liteRTService.supportsAudio();
-    }
-    return llmService.isModelLoaded() && !!llmService.getMultimodalSupport()?.audio;
-  }
+  // Capability dispatch (audio/vision/tool-calling/thinking) is the SINGLE source
+  // of truth for the engine-aware rule; it lives in ./capabilities so UI/hooks
+  // depend on this service, never on the concrete engine.
+  supportsAudioInput(): boolean { return _supportsAudioInput(); }
+  supportsVision(): boolean { return _supportsVision(); }
+  supportsToolCalling(): boolean { return _supportsToolCalling(); }
+  supportsThinking(): boolean { return _supportsThinking(); }
   getLoadedModelIds(): {
     textModelId: string | null;
     imageModelId: string | null;
@@ -212,15 +210,30 @@ class ActiveModelService {
       await this.textLoadPromise;
     }
     const storeActiveModelId = useAppStore.getState().activeModelId;
-    const isNativeLoaded = llmService.isModelLoaded();
+    // Engine-agnostic: a text model lives in llmService (GGUF) OR liteRTService
+    // (LiteRT). Checking only llmService made a loaded LiteRT model look "not
+    // loaded" here, so unloadTextModel skipped the native unload AND the residency
+    // bookkeeping (nulling loadedTextModelId, release('text')) — which is why the
+    // View had to reach past this service and call liteRTService.unloadModel()
+    // directly (B2), leaking the engine into the View and losing the bookkeeping.
+    // Now BOTH engines route through this one owner with identical bookkeeping.
+    const isLlamaLoaded = llmService.isModelLoaded();
+    const isLiteRTLoaded = liteRTService.isModelLoaded();
+    const isNativeLoaded = isLlamaLoaded || isLiteRTLoaded;
     if (!storeActiveModelId && !this.loadedTextModelId && !isNativeLoaded) {
       return;
     }
     this.loadingState.text = true;
     this.notifyListeners();
     try {
-      if (isNativeLoaded) {
+      // Unload whichever engine actually holds a model. Dispatch by native
+      // loaded-state (authoritative) rather than the selected engine, so a stale
+      // selection can never strand a loaded engine.
+      if (isLlamaLoaded) {
         await llmService.unloadModel();
+      }
+      if (isLiteRTLoaded) {
+        await liteRTService.unloadModel();
       }
       this.loadedTextModelId = null;
       if (!keepSelection) {

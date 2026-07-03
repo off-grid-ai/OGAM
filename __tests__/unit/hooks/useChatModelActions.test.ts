@@ -21,6 +21,10 @@ jest.mock('../../../src/services/activeModelService', () => ({
     unloadTextModel: jest.fn(),
     checkMemoryForModel: jest.fn(),
     getActiveModels: jest.fn(),
+    // Capability rule now lives in the service (single source of truth); the View
+    // only projects it. Tests drive this to assert the projection (was: the View
+    // recomputed vision from llmService.getMultimodalSupport()).
+    supportsVision: jest.fn(() => false),
   },
 }));
 
@@ -41,6 +45,7 @@ const mockLoadTextModel = activeModelService.loadTextModel as jest.Mock;
 const mockUnloadTextModel = activeModelService.unloadTextModel as jest.Mock;
 const mockCheckMemoryForModel = activeModelService.checkMemoryForModel as jest.Mock;
 const mockGetActiveModels = activeModelService.getActiveModels as jest.Mock;
+const mockSupportsVision = activeModelService.supportsVision as jest.Mock;
 const mockGetMultimodalSupport = llmService.getMultimodalSupport as jest.Mock;
 const mockGetLoadedModelPath = llmService.getLoadedModelPath as jest.Mock;
 const mockStopGeneration = llmService.stopGeneration as jest.Mock;
@@ -74,6 +79,7 @@ beforeEach(() => {
   mockCheckMemoryForModel.mockResolvedValue({ canLoad: true, severity: 'safe', message: '' });
   mockGetActiveModels.mockReturnValue({ text: { isLoading: false } });
   mockGetMultimodalSupport.mockReturnValue(null);
+  mockSupportsVision.mockReturnValue(false);
   mockGetLoadedModelPath.mockReturnValue(null);
   mockStopGeneration.mockResolvedValue(undefined);
   mockIsModelLoaded.mockReturnValue(true);
@@ -127,7 +133,8 @@ describe('initiateModelLoad', () => {
 
   it('loads model successfully when not already loading', async () => {
     mockLoadTextModel.mockResolvedValueOnce(undefined);
-    mockGetMultimodalSupport.mockReturnValueOnce({ vision: true });
+    // The View projects the service's single-source-of-truth capability answer.
+    mockSupportsVision.mockReturnValueOnce(true);
     const deps = makeDeps();
     await initiateModelLoad(deps, false);
     expect(deps.setIsModelLoading).toHaveBeenCalledWith(true);

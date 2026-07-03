@@ -109,6 +109,12 @@ jest.mock('../../../src/services/activeModelService', () => ({
     checkMemoryAvailable: jest.fn(() => ({ safe: true, severity: 'safe' })) as any,
     checkMemoryForModel: jest.fn(() => Promise.resolve({ canLoad: true, severity: 'safe', message: null })),
     subscribe: jest.fn(() => jest.fn()),
+    // Capability dispatch is the single source of truth the ChatScreen hooks
+    // now project from (was recomputed inline via llmService).
+    supportsVision: jest.fn(() => false),
+    supportsToolCalling: jest.fn(() => false),
+    supportsThinking: jest.fn(() => false),
+    supportsAudioInput: jest.fn(() => false),
   },
 }));
 
@@ -1764,6 +1770,8 @@ describe('ChatScreen', () => {
 
       (llmService.isModelLoaded as jest.Mock).mockReturnValue(true);
       (llmService.getMultimodalSupport as jest.Mock).mockReturnValue({ vision: true });
+      // The View projects the service's single-source-of-truth capability answer.
+      (activeModelService.supportsVision as jest.Mock).mockReturnValue(true);
 
       const { getByTestId } = renderChatScreen();
       const input = getByTestId('chat-text-input');
@@ -4136,6 +4144,8 @@ describe('ChatScreen', () => {
       (llmService.isModelLoaded as jest.Mock).mockReturnValue(true);
       (llmService.getLoadedModelPath as jest.Mock).mockReturnValue(visionModel.filePath);
       (llmService.getMultimodalSupport as jest.Mock).mockReturnValue({ vision: true });
+      // The View projects the service's single-source-of-truth capability answer.
+      (activeModelService.supportsVision as jest.Mock).mockReturnValue(true);
 
       const { getByTestId } = renderChatScreen();
       await act(async () => {});

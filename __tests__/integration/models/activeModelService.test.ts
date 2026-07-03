@@ -14,6 +14,7 @@ import { useAppStore } from '../../../src/stores/appStore';
 import { activeModelService } from '../../../src/services/activeModelService';
 import { modelResidencyManager } from '../../../src/services/modelResidency';
 import { llmService } from '../../../src/services/llm';
+import { liteRTService } from '../../../src/services/litert';
 import { localDreamGeneratorService } from '../../../src/services/localDreamGenerator';
 import { hardwareService } from '../../../src/services/hardware';
 import {
@@ -1218,6 +1219,72 @@ describe('ActiveModelService Integration', () => {
       expect(getAppState().activeModelId).toBeNull();
       // Native unload should NOT have been called (nothing loaded)
       expect(mockLlmService.unloadModel).not.toHaveBeenCalled();
+    });
+  });
+
+  // B2 regression: the engine-agnostic unload must do the SAME residency
+  // bookkeeping for a LiteRT model as for a llama model. Before the seam fix,
+  // doUnloadTextModelLocked only checked llmService.isModelLoaded(), so a loaded
+  // LiteRT model looked "not loaded" here — the native unload AND the bookkeeping
+  // (clearing activeModelId + loadedTextModelId, release('text')) were skipped, and
+  // the View had to call liteRTService.unloadModel() directly, losing all of it.
+  describe('unloadTextModel dispatches to the LiteRT engine (B2)', () => {
+    it('unloads the LiteRT engine AND clears the selection + tracking', async () => {
+      const litert = createDownloadedModel({
+        id: 'litert-unload',
+        engine: 'litert' as any,
+        fileName: 'm.litertlm',
+        filePath: '/m.litertlm',
+      });
+      useAppStore.setState({ downloadedModels: [litert], activeModelId: 'litert-unload' });
+
+      // llama engine is idle; the LiteRT engine holds the model.
+      mockLlmService.isModelLoaded.mockReturnValue(false);
+      const liteLoaded = jest.spyOn(liteRTService, 'isModelLoaded').mockReturnValue(true);
+      const liteUnload = jest
+        .spyOn(liteRTService, 'unloadModel')
+        .mockResolvedValue(undefined);
+      const release = jest.spyOn(modelResidencyManager, 'release');
+
+      await activeModelService.unloadTextModel();
+
+      // The LiteRT engine was unloaded (not the llama one).
+      expect(liteUnload).toHaveBeenCalled();
+      expect(mockLlmService.unloadModel).not.toHaveBeenCalled();
+      // Residency bookkeeping ran: selection cleared, tracking nulled, slot released.
+      expect(getAppState().activeModelId).toBeNull();
+      expect(activeModelService.getLoadedModelIds().textModelId).toBeNull();
+      expect(release).toHaveBeenCalledWith('text');
+
+      liteLoaded.mockRestore();
+      liteUnload.mockRestore();
+      release.mockRestore();
+    });
+
+    it('keeps the selection on eviction-style unload (keepSelection=true)', async () => {
+      const litert = createDownloadedModel({
+        id: 'litert-keep',
+        engine: 'litert' as any,
+        fileName: 'k.litertlm',
+        filePath: '/k.litertlm',
+      });
+      useAppStore.setState({ downloadedModels: [litert], activeModelId: 'litert-keep' });
+
+      mockLlmService.isModelLoaded.mockReturnValue(false);
+      const liteLoaded = jest.spyOn(liteRTService, 'isModelLoaded').mockReturnValue(true);
+      const liteUnload = jest
+        .spyOn(liteRTService, 'unloadModel')
+        .mockResolvedValue(undefined);
+
+      await activeModelService.unloadTextModel(true);
+
+      expect(liteUnload).toHaveBeenCalled();
+      // RAM freed but selection kept (the reload path relies on this).
+      expect(getAppState().activeModelId).toBe('litert-keep');
+      expect(activeModelService.getLoadedModelIds().textModelId).toBeNull();
+
+      liteLoaded.mockRestore();
+      liteUnload.mockRestore();
     });
   });
 
