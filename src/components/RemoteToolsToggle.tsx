@@ -28,10 +28,21 @@ export const RemoteToolsToggle: React.FC<RemoteToolsToggleProps> = ({ model }) =
   const enabled = model.capabilities.supportsToolCalling;
   const color = enabled ? colors.warning : colors.textMuted;
 
+  // Read the current value from the store at press time: a fast double-tap can
+  // fire twice before the re-render updates the `model` prop, and both presses
+  // would otherwise write the same stale flip instead of cancelling out.
+  const handlePress = () => {
+    const state = useRemoteServerStore.getState();
+    const current =
+      state.getModelById(model.serverId, model.id)?.capabilities.supportsToolCalling
+      ?? model.capabilities.supportsToolCalling;
+    setToolCallingOverride(model.serverId, model.id, !current);
+  };
+
   return (
     <TouchableOpacity
       style={[styles.badge, { backgroundColor: enabled ? `${colors.warning}20` : colors.surfaceLight }]}
-      onPress={() => setToolCallingOverride(model.serverId, model.id, !enabled)}
+      onPress={handlePress}
       hitSlop={HIT_SLOP}
       accessibilityRole="switch"
       accessibilityState={{ checked: enabled }}

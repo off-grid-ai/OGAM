@@ -73,6 +73,23 @@ describe('RemoteToolsToggle', () => {
     expect(state.discoveredModels['srv-1'][0].capabilities.supportsToolCalling).toBe(true);
   });
 
+  it('a fast double-tap without a re-render nets out to the original value', () => {
+    const model = makeModel();
+    useRemoteServerStore.getState().setDiscoveredModels('srv-1', [model]);
+
+    // Both presses hit the same rendered element (the `model` prop is stale
+    // after the first press); the handler must read fresh store state so the
+    // second press undoes the first instead of repeating it.
+    const { getByTestId } = render(<RemoteToolsToggle model={model} />);
+    const badge = getByTestId('tools-toggle-my-custom-model');
+    fireEvent.press(badge);
+    fireEvent.press(badge);
+
+    const state = useRemoteServerStore.getState();
+    expect(state.discoveredModels['srv-1'][0].capabilities.supportsToolCalling).toBe(false);
+    expect(state.toolCallingOverrides['srv-1:my-custom-model']).toBe(false);
+  });
+
   it('pressing the badge stores a disabling override for a model with detected support', () => {
     const model = makeModel({
       capabilities: { supportsVision: false, supportsToolCalling: true, supportsThinking: false },

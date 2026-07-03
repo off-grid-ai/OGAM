@@ -502,6 +502,19 @@ describe('ModelPickerSheet', () => {
       expect(onSelectRemoteTextModel).toHaveBeenCalledWith(remoteModel);
     });
 
+    it('pressing the tools toggle badge does not select the model', () => {
+      const onSelectRemoteTextModel = jest.fn();
+      const { getByTestId } = render(
+        <ModelPickerSheet
+          {...defaultProps}
+          remoteTextModels={[remoteModel]}
+          onSelectRemoteTextModel={onSelectRemoteTextModel}
+        />
+      );
+      fireEvent.press(getByTestId(`tools-toggle-${remoteModel.id}`));
+      expect(onSelectRemoteTextModel).not.toHaveBeenCalled();
+    });
+
     it('shows Vision capability label for vision remote model', () => {
       const visionRemote = makeRemoteModel({ capabilities: { supportsVision: true, supportsToolCalling: false, supportsThinking: false } });
       const { getByText } = render(
