@@ -211,7 +211,7 @@ export const useRemoteServerStore = create<RemoteServerState>()(
         set({ discoveringServerId: serverId, isLoading: true });
 
         try {
-          const models = await fetchModelsFromServer(server);
+          const { models, reachable } = await fetchModelsFromServer(server);
           const now = new Date().toISOString();
 
           if (models.length > 0) {
@@ -235,11 +235,10 @@ export const useRemoteServerStore = create<RemoteServerState>()(
             return merged;
           }
 
-          // Empty result — server was reachable but has no models, or
-          // both endpoints returned non-OK (fetchModelsFromServer swallows
-          // errors and returns []).  Mark healthy to match testServerConnection
-          // semantics (a reachable server with 0 models is healthy).
-          // Preserve cached models if we have them to avoid wiping on a blip.
+          // Empty model list — preserve cached models if we have them to avoid
+          // wiping on a transient blip.  Use the reachable flag to set health:
+          // a reachable server with 0 models is healthy; an unreachable server
+          // (network error / DNS / timeout) is not.
           set((state) => {
             const hasCachedModels = (state.discoveredModels[serverId] || []).length > 0;
             return {
@@ -248,15 +247,16 @@ export const useRemoteServerStore = create<RemoteServerState>()(
                 : { ...state.discoveredModels, [serverId]: [] },
               serverHealth: {
                 ...state.serverHealth,
-                [serverId]: { isHealthy: true, lastCheck: now },
+                [serverId]: { isHealthy: reachable, lastCheck: now },
               },
               isLoading: false,
               discoveringServerId: null,
             };
           });
-          logger.log('[RemoteServer] Discovery returned no models');
+          logger.log('[RemoteServer] Discovery returned no models (reachable:', reachable, ')');
           return models;
         } catch (error) {
+          // Catches unexpected errors (e.g. invalid URL throwing in new URL())
           const now = new Date().toISOString();
           set((state) => ({
             isLoading: false,
@@ -332,14 +332,30 @@ export const useRemoteServerStore = create<RemoteServerState>()(
             testingServerId: null,
           }));
 
-          // Update models if discovered
+          // Update models if discovered — preserve cached models on a
+          // transient empty result (same guard as discoverModels) so a
+          // reachable server doesn't vanish from the picker on one blip.
           if (result.success && result.models) {
-            set((state) => ({
-              discoveredModels: {
-                ...state.discoveredModels,
-                [serverId]: applyToolCallingOverrides(serverId, result.models!, state.toolCallingOverrides),
-              },
-            }));
+            set((state) => {
+              const freshModels = result.models!;
+              if (freshModels.length > 0) {
+                return {
+                  discoveredModels: {
+                    ...state.discoveredModels,
+                    [serverId]: applyToolCallingOverrides(serverId, freshModels, state.toolCallingOverrides),
+                  },
+                };
+              }
+              const hasCachedModels = (state.discoveredModels[serverId] || []).length > 0;
+              return hasCachedModels
+                ? {}
+                : {
+                    discoveredModels: {
+                      ...state.discoveredModels,
+                      [serverId]: [],
+                    },
+                  };
+            });
           }
 
           return result;

@@ -649,7 +649,19 @@ describe('remoteServerDiscovery integration', () => {
       expect(health.isHealthy).toBe(true);
     });
 
-    it('preserves cached models on transient failure and marks healthy', async () => {
+    it('marks server unhealthy when server is unreachable (network error)', async () => {
+      addServer({ id: 'srv-1', endpoint: 'http://192.168.1.10:11434' });
+
+      mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
+
+      await useRemoteServerStore.getState().discoverModels('srv-1');
+
+      const health = useRemoteServerStore.getState().serverHealth['srv-1'];
+      expect(health).toBeDefined();
+      expect(health.isHealthy).toBe(false);
+    });
+
+    it('preserves cached models on transient non-OK response and stays healthy', async () => {
       addServer({ id: 'srv-1', endpoint: 'http://192.168.1.10:11434' });
 
       // First discovery succeeds
@@ -662,7 +674,7 @@ describe('remoteServerDiscovery integration', () => {
       await useRemoteServerStore.getState().discoverModels('srv-1');
       expect(useRemoteServerStore.getState().discoveredModels['srv-1']).toHaveLength(2);
 
-      // Second discovery: server temporarily down (both endpoints 500)
+      // Second discovery: server up but endpoints returning 500
       mockFetch.mockResolvedValue(jsonResponse({}, false, 500));
       await useRemoteServerStore.getState().discoverModels('srv-1');
 
@@ -671,7 +683,7 @@ describe('remoteServerDiscovery integration', () => {
       expect(cached).toHaveLength(2);
       expect(cached[0].id).toBe('llama3');
 
-      // Health stays healthy (fetchModelsFromServer can't distinguish non-OK from unreachable)
+      // Health stays healthy — server is reachable (fetch didn't throw)
       expect(useRemoteServerStore.getState().serverHealth['srv-1'].isHealthy).toBe(true);
 
       // Third discovery: server back up — models refreshed
@@ -685,6 +697,42 @@ describe('remoteServerDiscovery integration', () => {
 
       expect(models).toHaveLength(1);
       expect(models[0].id).toBe('qwen2');
+      expect(useRemoteServerStore.getState().serverHealth['srv-1'].isHealthy).toBe(true);
+    });
+
+    it('preserves cached models when server goes unreachable and marks unhealthy', async () => {
+      addServer({ id: 'srv-1', endpoint: 'http://192.168.1.10:11434' });
+
+      // First discovery succeeds
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/v1/models')) {
+          return Promise.resolve(jsonResponse({ object: 'list', data: [{ id: 'llama3' }] }));
+        }
+        return Promise.resolve(jsonResponse({}, false, 404));
+      });
+      await useRemoteServerStore.getState().discoverModels('srv-1');
+      expect(useRemoteServerStore.getState().discoveredModels['srv-1']).toHaveLength(1);
+
+      // Second discovery: server is down (ECONNREFUSED)
+      mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
+      await useRemoteServerStore.getState().discoverModels('srv-1');
+
+      // Cached models preserved — not wiped to []
+      expect(useRemoteServerStore.getState().discoveredModels['srv-1']).toHaveLength(1);
+      expect(useRemoteServerStore.getState().discoveredModels['srv-1'][0].id).toBe('llama3');
+
+      // Health unhealthy — server is unreachable
+      expect(useRemoteServerStore.getState().serverHealth['srv-1'].isHealthy).toBe(false);
+
+      // Third discovery: server back up — health restored
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/v1/models')) {
+          return Promise.resolve(jsonResponse({ object: 'list', data: [{ id: 'qwen2' }] }));
+        }
+        return Promise.resolve(jsonResponse({}, false, 404));
+      });
+      await useRemoteServerStore.getState().discoverModels('srv-1');
+
       expect(useRemoteServerStore.getState().serverHealth['srv-1'].isHealthy).toBe(true);
     });
 

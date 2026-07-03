@@ -34,7 +34,7 @@ export async function testServerConnection(server: RemoteServer): Promise<Server
     }
 
     // Try to discover models
-    const models = await fetchModelsFromServer(server);
+    const { models } = await fetchModelsFromServer(server);
 
     // Detect server type
     const serverType = await detectServerType(server.endpoint, 5000, server.apiKey);
@@ -80,7 +80,7 @@ export async function testEndpointAndGetModels(
       createdAt: new Date().toISOString(),
       apiKey,
     };
-    const models = await fetchModelsFromServer(tempServer);
+    const { models } = await fetchModelsFromServer(tempServer);
     const serverType = await detectServerType(endpoint, 5000, apiKey);
 
     return {
@@ -100,7 +100,12 @@ export async function testEndpointAndGetModels(
   }
 }
 
-export async function fetchModelsFromServer(server: RemoteServer): Promise<RemoteModel[]> {
+export interface DiscoveryResult {
+  models: RemoteModel[];
+  reachable: boolean;
+}
+
+export async function fetchModelsFromServer(server: RemoteServer): Promise<DiscoveryResult> {
   let url = server.endpoint;
   while (url.endsWith('/')) url = url.slice(0, -1);
 
@@ -111,6 +116,8 @@ export async function fetchModelsFromServer(server: RemoteServer): Promise<Remot
   if (server.apiKey) {
     headers.Authorization = `Bearer ${server.apiKey}`;
   }
+
+  let reachable = false;
 
   // Try OpenAI-compatible endpoint first
   try {
@@ -124,6 +131,7 @@ export async function fetchModelsFromServer(server: RemoteServer): Promise<Remot
     });
 
     clearTimeout(timeoutId);
+    reachable = true;
 
     if (response.ok) {
       const data = await response.json();
@@ -138,18 +146,21 @@ export async function fetchModelsFromServer(server: RemoteServer): Promise<Remot
             fetchModelCapabilities(url, model.id, nameDetect)
           )
         );
-        return generativeModels.map((model: { id: string; owned_by?: string; max_context_length?: number }, i: number) => ({
-          id: model.id,
-          name: model.id,
-          serverId: server.id,
-          capabilities: {
-            supportsVision: modelInfos[i].supportsVision,
-            supportsToolCalling: modelInfos[i].supportsToolCalling ?? detectToolCallingCapability(model.id),
-            supportsThinking: modelInfos[i].supportsThinking ?? false,
-            maxContextLength: modelInfos[i].contextLength,
-          },
-          lastUpdated: new Date().toISOString(),
-        }));
+        return {
+          models: generativeModels.map((model: { id: string; owned_by?: string; max_context_length?: number }, i: number) => ({
+            id: model.id,
+            name: model.id,
+            serverId: server.id,
+            capabilities: {
+              supportsVision: modelInfos[i].supportsVision,
+              supportsToolCalling: modelInfos[i].supportsToolCalling ?? detectToolCallingCapability(model.id),
+              supportsThinking: modelInfos[i].supportsThinking ?? false,
+              maxContextLength: modelInfos[i].contextLength,
+            },
+            lastUpdated: new Date().toISOString(),
+          })),
+          reachable: true,
+        };
       }
 
       // Ollama format via /v1/models: { models: [{ name, ... }] }
@@ -162,21 +173,24 @@ export async function fetchModelsFromServer(server: RemoteServer): Promise<Remot
             fetchModelCapabilities(url, model.name, nameDetect)
           )
         );
-        return generativeModels.map(
-          (model: { name: string; details?: Record<string, unknown> }, i: number) => ({
-            id: model.name,
-            name: model.name,
-            serverId: server.id,
-            capabilities: {
-              supportsVision: modelInfos[i].supportsVision,
-              supportsToolCalling: modelInfos[i].supportsToolCalling ?? detectToolCallingCapability(model.name),
-              supportsThinking: modelInfos[i].supportsThinking ?? false,
-              maxContextLength: modelInfos[i].contextLength,
-            },
-            details: model.details,
-            lastUpdated: new Date().toISOString(),
-          })
-        );
+        return {
+          models: generativeModels.map(
+            (model: { name: string; details?: Record<string, unknown> }, i: number) => ({
+              id: model.name,
+              name: model.name,
+              serverId: server.id,
+              capabilities: {
+                supportsVision: modelInfos[i].supportsVision,
+                supportsToolCalling: modelInfos[i].supportsToolCalling ?? detectToolCallingCapability(model.name),
+                supportsThinking: modelInfos[i].supportsThinking ?? false,
+                maxContextLength: modelInfos[i].contextLength,
+              },
+              details: model.details,
+              lastUpdated: new Date().toISOString(),
+            })
+          ),
+          reachable: true,
+        };
       }
     }
   } catch (error) {
@@ -196,6 +210,7 @@ export async function fetchModelsFromServer(server: RemoteServer): Promise<Remot
     });
 
     clearTimeout(timeoutId);
+    reachable = true;
 
     if (response.ok) {
       const data = await response.json();
@@ -210,27 +225,31 @@ export async function fetchModelsFromServer(server: RemoteServer): Promise<Remot
             fetchModelCapabilities(url, model.name, nameDetect)
           )
         );
-        return generativeModels.map(
-          (model: { name: string; details?: Record<string, unknown> }, i: number) => ({
-            id: model.name,
-            name: model.name,
-            serverId: server.id,
-            capabilities: {
-              supportsVision: modelInfos[i].supportsVision,
-              supportsToolCalling: modelInfos[i].supportsToolCalling ?? detectToolCallingCapability(model.name),
-              supportsThinking: modelInfos[i].supportsThinking ?? false,
-              maxContextLength: modelInfos[i].contextLength,
-            },
-            details: model.details,
-            lastUpdated: new Date().toISOString(),
-          })
-        );
+        return {
+          models: generativeModels.map(
+            (model: { name: string; details?: Record<string, unknown> }, i: number) => ({
+              id: model.name,
+              name: model.name,
+              serverId: server.id,
+              capabilities: {
+                supportsVision: modelInfos[i].supportsVision,
+                supportsToolCalling: modelInfos[i].supportsToolCalling ?? detectToolCallingCapability(model.name),
+                supportsThinking: modelInfos[i].supportsThinking ?? false,
+                maxContextLength: modelInfos[i].contextLength,
+              },
+              details: model.details,
+              lastUpdated: new Date().toISOString(),
+            })
+          ),
+          reachable: true,
+        };
       }
     }
   } catch (error) {
     logger.warn('[RemoteServer] Failed to fetch from /api/tags:', error);
   }
 
-  // No models found
-  return [];
+  // No models found — reachable tells the caller whether the server responded
+  // at all (vs. network error / DNS / timeout).
+  return { models: [], reachable };
 }
