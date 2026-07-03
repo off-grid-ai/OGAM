@@ -1026,6 +1026,19 @@ describe('ModelSelectorModal', () => {
       );
     });
 
+    it('calls onSelectionComplete after selecting a remote model', async () => {
+      const onSelectionComplete = jest.fn();
+      const { getByText } = render(
+        <ModelSelectorModal {...defaultProps} onSelectionComplete={onSelectionComplete} />
+      );
+
+      await act(async () => {
+        fireEvent.press(getByText('llama3'));
+      });
+
+      expect(onSelectionComplete).toHaveBeenCalled();
+    });
+
     it('remote model shows server name as subtitle', () => {
       const { getByText } = render(
         <ModelSelectorModal {...defaultProps} />

@@ -1,9 +1,8 @@
 import React from 'react';
 import {
-  ModelSelectorModal, GenerationSettingsModal,
+  GenerationSettingsModal,
   ProjectSelectorSheet, DebugSheet,
 } from '../../components';
-import { llmService } from '../../services';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
 import { ImageViewerModal } from './ChatScreenComponents';
@@ -18,8 +17,6 @@ type ChatModalSectionProps = {
   setShowProjectSelector: (v: boolean) => void;
   showDebugPanel: boolean;
   setShowDebugPanel: (v: boolean) => void;
-  showModelSelector: boolean;
-  setShowModelSelector: (v: boolean) => void;
   showSettingsPanel: boolean;
   setShowSettingsPanel: (v: boolean) => void;
   debugInfo: any;
@@ -28,10 +25,7 @@ type ChatModalSectionProps = {
   settings: any;
   projects: any[];
   handleSelectProject: (p: any) => void;
-  handleModelSelect: (m: any) => void;
-  handleUnloadModel: () => void;
   handleDeleteConversation: () => void;
-  isModelLoading: boolean;
   imageCount: number;
   activeConversationId: string | null | undefined;
   navigation: any;
@@ -45,11 +39,10 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
   styles, colors,
   showProjectSelector, setShowProjectSelector,
   showDebugPanel, setShowDebugPanel,
-  showModelSelector, setShowModelSelector,
   showSettingsPanel, setShowSettingsPanel,
   debugInfo, activeProject, activeConversation, settings, projects,
-  handleSelectProject, handleModelSelect, handleUnloadModel, handleDeleteConversation,
-  isModelLoading, imageCount, activeConversationId, navigation,
+  handleSelectProject, handleDeleteConversation,
+  imageCount, activeConversationId, navigation,
   viewerImageUri, setViewerImageUri, handleSaveImage,
   isRemote,
 }) => (
@@ -68,15 +61,6 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
       activeProject={activeProject || null}
       settings={settings}
       activeConversation={activeConversation || null}
-    />
-    <ModelSelectorModal
-      visible={showModelSelector}
-      onClose={() => setShowModelSelector(false)}
-      onSelectModel={handleModelSelect}
-      onUnloadModel={handleUnloadModel}
-      isLoading={isModelLoading}
-      currentModelPath={llmService.getLoadedModelPath()}
-      onAddServer={() => navigation.navigate('RemoteServers')}
     />
     <GenerationSettingsModal
       visible={showSettingsPanel}

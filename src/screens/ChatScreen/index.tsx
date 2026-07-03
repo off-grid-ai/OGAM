@@ -25,10 +25,11 @@ import { NoModelScreen, ChatHeader } from './ChatScreenComponents';
 import { ChatModalSection } from './ChatModalSection';
 import { ChatMessageArea } from './ChatMessageArea';
 import { ModelsManagerSheet, ModelRowType } from '../../components/models/ModelsManagerSheet';
+import { ModelSelectorModal } from '../../components';
 import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
-import { WHISPER_MODELS } from '../../services';
+import { WHISPER_MODELS, llmService } from '../../services';
 
 function countConversationImages(conv: Conversation | undefined): number {
   return (conv?.messages || []).reduce((n: number, m: Message) =>
@@ -185,27 +186,7 @@ export const ChatScreen: React.FC = () => {
       onClose={() => chat.setAlertState(hideAlert())}
     />
   );
-  if (!chat.hasActiveModel && chat.displayMessages.length === 0) {
-    return (
-      <>
-        <NoModelScreen
-          styles={styles} colors={colors}
-          navigation={chat.navigation}
-          hasAvailableModels={chat.hasAvailableModels}
-          showModelSelector={chat.showModelSelector}
-          setShowModelSelector={chat.setShowModelSelector}
-          onSelectModel={chat.handleModelSelect}
-          onUnloadModel={chat.handleUnloadModel}
-          isModelLoading={chat.isModelLoading}
-        />
-        {alertEl}
-      </>
-    );
-  }
-
-  // Model loading is shown inline (a "Loading model" bar above the input via
-  // ChatMessageArea), so the chat stays visible while a text/image model loads —
-  // no full-screen takeover.
+  const showNoModel = !chat.hasActiveModel && chat.displayMessages.length === 0;
 
   const handleScroll = (event: any) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -226,6 +207,7 @@ export const ChatScreen: React.FC = () => {
       onCopy={chat.handleCopyMessage}
       onRetry={chat.handleRetryMessage}
       onEdit={chat.handleEditMessage}
+      onRemember={chat.handleRememberMessage}
       onGenerateImage={chat.handleGenerateImageFromMessage}
       onImagePress={chat.handleImagePress}
     />
@@ -238,68 +220,82 @@ export const ChatScreen: React.FC = () => {
   // gap below the bar.
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <KeyboardAvoidingView testID="chat-screen" style={styles.keyboardView} behavior="padding" keyboardVerticalOffset={0}>
-        <ChatHeader
+      {showNoModel ? (
+        <NoModelScreen
           styles={styles} colors={colors}
-          activeConversation={chat.activeConversation}
-          activeProject={chat.activeProject}
           navigation={chat.navigation}
-          onOpenModels={() => setModelsManagerOpen(true)}
-          setShowSettingsPanel={chat.setShowSettingsPanel}
-          setShowProjectSelector={chat.setShowProjectSelector}
-          isRemote={chat.activeModelInfo?.isRemote}
-        />
-        <ModelsManagerSheet
-          visible={modelsManagerOpen}
-          onClose={() => setModelsManagerOpen(false)}
-          labels={modelLabels}
-          loadingState={{ isLoading: !!chat.isModelLoading, type: 'text' }}
-          isEjecting={false}
-          hasActiveModel={false}
-          onOpenRow={openModelRow}
-          onEject={() => {}}
-        />
-        <WhisperPickerSheet visible={whisperOpen} onClose={() => setWhisperOpen(false)} />
-        <VoiceModelsSheet visible={voiceOpen} onClose={() => setVoiceOpen(false)} />
-        <ChatMessageArea
-          flatListRef={flatListRef}
-          isNearBottomRef={isNearBottomRef}
-          chat={chat}
-          styles={styles}
-          colors={colors}
-          handleScroll={handleScroll}
-          renderItem={renderItem}
-          chatSpotlight={chatSpotlight}
-        />
-        <ChatModalSection
-          styles={styles} colors={colors}
-          showProjectSelector={chat.showProjectSelector}
-          setShowProjectSelector={chat.setShowProjectSelector}
-          showDebugPanel={chat.showDebugPanel}
-          setShowDebugPanel={chat.setShowDebugPanel}
-          showModelSelector={chat.showModelSelector}
+          hasAvailableModels={chat.hasAvailableModels}
           setShowModelSelector={chat.setShowModelSelector}
-          showSettingsPanel={chat.showSettingsPanel}
-          setShowSettingsPanel={chat.setShowSettingsPanel}
-          debugInfo={chat.debugInfo}
-          activeProject={chat.activeProject}
-          activeConversation={chat.activeConversation}
-          settings={chat.settings}
-          projects={chat.projects}
-          handleSelectProject={chat.handleSelectProject}
-          handleModelSelect={chat.handleModelSelect}
-          handleUnloadModel={chat.handleUnloadModel}
-          handleDeleteConversation={chat.handleDeleteConversation}
-          isModelLoading={chat.isModelLoading}
-          imageCount={imageCount}
-          activeConversationId={chat.activeConversationId}
-          navigation={chat.navigation}
-          viewerImageUri={chat.viewerImageUri}
-          setViewerImageUri={chat.setViewerImageUri}
-          handleSaveImage={chat.handleSaveImage}
-          isRemote={chat.activeModelInfo?.isRemote}
         />
-      </KeyboardAvoidingView>
+      ) : (
+        <KeyboardAvoidingView testID="chat-screen" style={styles.keyboardView} behavior="padding" keyboardVerticalOffset={0}>
+          <ChatHeader
+            styles={styles} colors={colors}
+            activeConversation={chat.activeConversation}
+            activeProject={chat.activeProject}
+            navigation={chat.navigation}
+            onOpenModels={() => setModelsManagerOpen(true)}
+            setShowSettingsPanel={chat.setShowSettingsPanel}
+            setShowProjectSelector={chat.setShowProjectSelector}
+            isRemote={chat.activeModelInfo?.isRemote}
+          />
+          <ModelsManagerSheet
+            visible={modelsManagerOpen}
+            onClose={() => setModelsManagerOpen(false)}
+            labels={modelLabels}
+            loadingState={{ isLoading: !!chat.isModelLoading, type: 'text' }}
+            isEjecting={false}
+            hasActiveModel={false}
+            onOpenRow={openModelRow}
+            onEject={() => {}}
+          />
+          <WhisperPickerSheet visible={whisperOpen} onClose={() => setWhisperOpen(false)} />
+          <VoiceModelsSheet visible={voiceOpen} onClose={() => setVoiceOpen(false)} />
+          <ChatMessageArea
+            flatListRef={flatListRef}
+            isNearBottomRef={isNearBottomRef}
+            chat={chat}
+            styles={styles}
+            colors={colors}
+            handleScroll={handleScroll}
+            renderItem={renderItem}
+            chatSpotlight={chatSpotlight}
+          />
+          <ChatModalSection
+            styles={styles} colors={colors}
+            showProjectSelector={chat.showProjectSelector}
+            setShowProjectSelector={chat.setShowProjectSelector}
+            showDebugPanel={chat.showDebugPanel}
+            setShowDebugPanel={chat.setShowDebugPanel}
+            showSettingsPanel={chat.showSettingsPanel}
+            setShowSettingsPanel={chat.setShowSettingsPanel}
+            debugInfo={chat.debugInfo}
+            activeProject={chat.activeProject}
+            activeConversation={chat.activeConversation}
+            settings={chat.settings}
+            projects={chat.projects}
+            handleSelectProject={chat.handleSelectProject}
+            handleDeleteConversation={chat.handleDeleteConversation}
+            imageCount={imageCount}
+            activeConversationId={chat.activeConversationId}
+            navigation={chat.navigation}
+            viewerImageUri={chat.viewerImageUri}
+            setViewerImageUri={chat.setViewerImageUri}
+            handleSaveImage={chat.handleSaveImage}
+            isRemote={chat.activeModelInfo?.isRemote}
+          />
+        </KeyboardAvoidingView>
+      )}
+      <ModelSelectorModal
+        visible={chat.showModelSelector}
+        onClose={() => chat.setShowModelSelector(false)}
+        onSelectModel={chat.handleModelSelect}
+        onUnloadModel={chat.handleUnloadModel}
+        isLoading={chat.isModelLoading}
+        currentModelPath={llmService.getLoadedModelPath()}
+        onAddServer={() => rootNavigation.navigate('RemoteServers')}
+        onSelectionComplete={() => chat.setShowModelSelector(false)}
+      />
       {alertEl}
       <SharePromptSheet visible={sharePromptVisible} onClose={() => setSharePromptVisible(false)} />
       <ProAhaSheet
