@@ -144,8 +144,12 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
     id: 'run_python',
     name: 'run_python',
     displayName: 'Python',
-    description: 'Execute Python 3.12 code in a sandboxed on-device interpreter and return stdout, stderr, and the value of the last expression. numpy and pandas are preinstalled; other pure-Python packages install automatically on import when online. Write a complete script and print() what you need to see. Variables persist between calls in the same session.',
+    description: 'Execute Python 3.12 code in a sandboxed on-device interpreter and return stdout, stderr, and the value of the last expression. numpy and pandas are preinstalled and run fully offline. Installing other pure-Python packages reaches the network: import micropip, then await micropip.install("package") - top-level await is supported. Write a complete script and print() what you need to see. Variables persist between calls in the same session.',
     icon: 'terminal',
+    // Core use (numpy/pandas) is offline, but micropip installs fetch from PyPI.
+    // Flag it so the tool list shows the network indicator, matching the app's
+    // transparency convention for any tool that can reach out.
+    requiresNetwork: true,
     parameters: {
       code: {
         type: 'string',

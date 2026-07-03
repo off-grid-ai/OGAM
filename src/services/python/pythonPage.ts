@@ -29,6 +29,14 @@ export interface PythonPageRequest {
   code: string;
 }
 
+/**
+ * Per-stream character ceiling enforced inside the page's stdout/stderr sinks,
+ * before anything is serialized across the WebView bridge. Sized well above the
+ * native-side model cap (6000) so normal output is untouched, but low enough
+ * that a runaway print loop can't build a multi-MB string on a low-RAM device.
+ */
+export const PAGE_MAX_STREAM_CHARS = 100000;
+
 const CSP = [
   "default-src 'self'",
   // Pyodide needs eval for its JS/Python FFI and WASM compilation.
@@ -48,10 +56,49 @@ export function buildPythonPageHtml(): string {
 <script src="pyodide.js"></script>
 <script>
 (function () {
+  // Hard ceiling per stream so unbounded output (e.g. print('a' * 200_000_000))
+  // cannot materialize a giant string, cross the bridge, and OOM the app. The
+  // native side truncates again for the model; this cap protects the device.
+  var MAX_STREAM_CHARS = ${PAGE_MAX_STREAM_CHARS};
+
+  // Python strings can carry lone UTF-16 surrogates (e.g. errors='surrogateescape'
+  // when decoding bytes). Those corrupt the native postMessage bridge, so replace
+  // any unpaired surrogate with U+FFFD before sending.
+  function sanitizeSurrogates(s) {
+    return s.replace(/[\\uD800-\\uDFFF]/g, function (ch, i) {
+      var code = ch.charCodeAt(0);
+      if (code <= 0xDBFF) {
+        var next = s.charCodeAt(i + 1);
+        return (next >= 0xDC00 && next <= 0xDFFF) ? ch : '\\uFFFD';
+      }
+      var prev = s.charCodeAt(i - 1);
+      return (prev >= 0xD800 && prev <= 0xDBFF) ? ch : '\\uFFFD';
+    });
+  }
+
   function post(msg) {
     if (window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(JSON.stringify(msg));
+      window.ReactNativeWebView.postMessage(sanitizeSurrogates(JSON.stringify(msg)));
     }
+  }
+
+  // Bounded accumulator: appends until the ceiling, then stops and flags overflow.
+  function makeSink() {
+    return { text: '', truncated: false };
+  }
+  function append(sink, s) {
+    if (sink.truncated) return;
+    if (sink.text.length >= MAX_STREAM_CHARS) { sink.truncated = true; return; }
+    var remaining = MAX_STREAM_CHARS - sink.text.length;
+    if (s.length > remaining) {
+      sink.text += s.slice(0, remaining);
+      sink.truncated = true;
+    } else {
+      sink.text += s + '\\n';
+    }
+  }
+  function finalize(sink) {
+    return sink.truncated ? sink.text + '\\n[output truncated]' : sink.text;
   }
 
   var bootPromise = (async function () {
@@ -61,25 +108,26 @@ export function buildPythonPageHtml(): string {
   })();
 
   window.__runPython = async function (req) {
-    var out = [];
-    var err = [];
+    var out = makeSink();
+    var err = makeSink();
     try {
       var pyodide = await bootPromise;
-      pyodide.setStdout({ batched: function (s) { out.push(s); } });
-      pyodide.setStderr({ batched: function (s) { err.push(s); } });
+      pyodide.setStdout({ batched: function (s) { append(out, s); } });
+      pyodide.setStderr({ batched: function (s) { append(err, s); } });
       await pyodide.loadPackagesFromImports(req.code);
       var value = await pyodide.runPythonAsync(req.code);
       var repr;
       if (value !== undefined) {
         try {
           repr = String(value);
+          if (repr.length > MAX_STREAM_CHARS) { repr = repr.slice(0, MAX_STREAM_CHARS) + '\\n[result truncated]'; }
         } finally {
           if (value && typeof value.destroy === 'function') { value.destroy(); }
         }
       }
-      post({ type: 'result', id: req.id, ok: true, stdout: out.join('\\n'), stderr: err.join('\\n'), result: repr });
+      post({ type: 'result', id: req.id, ok: true, stdout: finalize(out), stderr: finalize(err), result: repr });
     } catch (e) {
-      post({ type: 'result', id: req.id, ok: false, stdout: out.join('\\n'), stderr: err.join('\\n'), error: String((e && e.message) || e) });
+      post({ type: 'result', id: req.id, ok: false, stdout: finalize(out), stderr: finalize(err), error: String((e && e.message) || e) });
     }
   };
 
@@ -95,7 +143,15 @@ export function buildPythonPageHtml(): string {
 
 /** JS statement string that hands a request to the page. */
 export function buildRunInjection(request: PythonPageRequest): string {
-  return `window.__runPython(${JSON.stringify(request)}); true;`;
+  // JSON.stringify leaves U+2028/U+2029 unescaped; on pre-ES2019 WebView engines
+  // they act as line terminators inside string literals and would break parsing
+  // of the injected statement. Escape them defensively.
+  const LS = String.fromCharCode(0x2028);
+  const PS = String.fromCharCode(0x2029);
+  const payload = JSON.stringify(request)
+    .split(LS).join('\\u2028')
+    .split(PS).join('\\u2029');
+  return `window.__runPython(${payload}); true;`;
 }
 
 export function parsePythonPageMessage(raw: string): PythonPageMessage | null {

@@ -43,16 +43,38 @@ export const PythonRuntimeHost: React.FC = () => {
     return () => pythonRuntimeService.unregisterExecutor();
   }, [active]);
 
-  if (!active) return null;
+  if (!active || !serverOrigin) return null;
+
+  // Model-written (and thus prompt-injectable) Python can reach the DOM via
+  // Pyodide's `import js`. Confine the WebView to the exact loopback origin so
+  // that code cannot navigate the page to an attacker URL and exfiltrate the
+  // injected code string or forge tool-result messages back into the chat.
+  const allowedOrigin = serverOrigin;
+  const isAllowedUrl = (url: string): boolean =>
+    url === `${allowedOrigin}/${PYTHON_PAGE_FILE}` ||
+    url === allowedOrigin ||
+    url.startsWith(`${allowedOrigin}/`);
 
   return (
     <View style={styles.hidden} pointerEvents="none" testID="python-runtime-host">
       <RNWebView
         key={reloadKey}
         ref={webViewRef}
-        source={{ uri: `${serverOrigin}/${PYTHON_PAGE_FILE}` }}
-        onMessage={(event: { nativeEvent: { data: string } }) => pythonRuntimeService.handleWebViewMessage(event.nativeEvent.data)}
-        originWhitelist={['*']}
+        source={{ uri: `${allowedOrigin}/${PYTHON_PAGE_FILE}` }}
+        onMessage={(event: { nativeEvent: { data: string; url?: string } }) =>
+          pythonRuntimeService.handleWebViewMessage(event.nativeEvent.data, event.nativeEvent.url)
+        }
+        originWhitelist={[allowedOrigin]}
+        onShouldStartLoadWithRequest={(req: { url: string }) => isAllowedUrl(req.url)}
+        // The interpreter holds a large WASM+numpy+pandas heap in an off-screen
+        // WebView — a prime target for OS memory reclamation. Surface a renderer
+        // process kill immediately so the service can rebuild, instead of leaving
+        // the next run to hit a 60s boot timeout.
+        onContentProcessDidTerminate={() => pythonRuntimeService.notifyExecutorCrashed('WebView content process terminated')}
+        onRenderProcessGone={() => {
+          pythonRuntimeService.notifyExecutorCrashed('WebView render process gone');
+          return true;
+        }}
         javaScriptEnabled
         allowsBackForwardNavigationGestures={false}
         setSupportMultipleWindows={false}

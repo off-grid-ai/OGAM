@@ -17,8 +17,8 @@ jest.mock('../../../../src/utils/logger', () => ({
   default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-// Stateful fake filesystem
-const mockFiles: Record<string, { content: string; size: number }> = {};
+// Stateful fake filesystem. `sha` is the digest RNFS.hash will report for the file.
+const mockFiles: Record<string, { content: string; size: number; sha?: string }> = {};
 let mockDownloadImpl: (opts: { fromUrl: string; toFile: string; progress?: (p: { bytesWritten: number }) => void }) => Promise<{ statusCode: number }>;
 
 jest.mock('react-native-fs', () => ({
@@ -40,6 +40,10 @@ jest.mock('react-native-fs', () => ({
   stat: jest.fn(async (p: string) => {
     if (!mockFiles[p]) throw new Error(`ENOENT: ${p}`);
     return { size: mockFiles[p].size };
+  }),
+  hash: jest.fn(async (p: string) => {
+    if (!mockFiles[p]) throw new Error(`ENOENT: ${p}`);
+    return mockFiles[p].sha ?? '';
   }),
   downloadFile: jest.fn((opts: any) => ({ promise: mockDownloadImpl(opts) })),
 }));
@@ -76,16 +80,20 @@ function successfulDownloads(): void {
   mockDownloadImpl = async (opts) => {
     const fileName = opts.toFile.split('/').pop()!;
     const asset = PYODIDE_ALL_ASSETS.find(a => a.fileName === fileName);
-    mockFiles[opts.toFile] = { content: 'binary', size: asset ? asset.bytes : 0 };
+    // A well-behaved download lands the exact bytes + digest the manifest expects.
+    mockFiles[opts.toFile] = { content: 'binary', size: asset ? asset.bytes : 0, sha: asset?.sha256 };
     opts.progress?.({ bytesWritten: asset ? asset.bytes : 0 });
     return { statusCode: 200 };
   };
 }
 
+// The loopback URL the native WebView reports as the message source in these tests.
+const TRUSTED_URL = 'http://localhost:8899/index.html';
+
 /** Registers a fake executor and marks the interpreter ready. */
 function registerReadyExecutor(inject: (js: string) => void = () => { }, reload: () => void = () => { }): void {
   pythonRuntimeService.registerExecutor({ inject, reload });
-  pythonRuntimeService.handleWebViewMessage(JSON.stringify({ type: 'ready', version: PYODIDE_VERSION }));
+  pythonRuntimeService.handleWebViewMessage(JSON.stringify({ type: 'ready', version: PYODIDE_VERSION }), TRUSTED_URL);
 }
 
 /** Extracts the injected request payload from buildRunInjection output. */
@@ -163,6 +171,27 @@ describe('pythonRuntimeService', () => {
       expect(usePythonRuntimeStore.getState().status).toBe('error');
     });
 
+    it('rejects a right-size file whose SHA-256 does not match (tamper/MITM)', async () => {
+      mockDownloadImpl = async (opts) => {
+        const fileName = opts.toFile.split('/').pop()!;
+        const asset = PYODIDE_ALL_ASSETS.find(a => a.fileName === fileName);
+        // Correct byte-count, wrong content digest — the exact case size alone misses.
+        mockFiles[opts.toFile] = { content: 'tampered', size: asset ? asset.bytes : 0, sha: 'deadbeef' };
+        return { statusCode: 200 };
+      };
+
+      await expect(pythonRuntimeService.install()).rejects.toThrow('Integrity check failed');
+      expect(usePythonRuntimeStore.getState().status).toBe('error');
+    });
+
+    it('clears a prior install before re-downloading (no orphaned version-tagged assets)', async () => {
+      // Simulate leftovers from an earlier pyodide version still on disk.
+      mockFiles[`${RUNTIME_DIR}/numpy-1.0.0-old.whl`] = { content: 'stale', size: 5 };
+      await pythonRuntimeService.install();
+      expect(mockFiles[`${RUNTIME_DIR}/numpy-1.0.0-old.whl`]).toBeUndefined();
+      expect(usePythonRuntimeStore.getState().status).toBe('installed');
+    });
+
     it('is a no-op when already installed', async () => {
       writeMarker();
       await pythonRuntimeService.refreshStatus();
@@ -214,7 +243,7 @@ describe('pythonRuntimeService', () => {
       return (js) => {
         const req = parseInjectedRequest(js);
         setTimeout(() => {
-          pythonRuntimeService.handleWebViewMessage(JSON.stringify({ type: 'result', id: req.id, ...payload }));
+          pythonRuntimeService.handleWebViewMessage(JSON.stringify({ type: 'result', id: req.id, ...payload }), TRUSTED_URL);
         }, 0);
       };
     }
@@ -227,7 +256,7 @@ describe('pythonRuntimeService', () => {
 
     it('starts the server, injects the request, and resolves with the page result', async () => {
       const injected: string[] = [];
-      const promise = await startExecution('print("hello")\n42', {}, js => {
+      const { promise } = await startExecution('print("hello")\n42', {}, js => {
         injected.push(js);
         respondWith({ ok: true, stdout: 'hello', stderr: '', result: '42' })(js);
       });
@@ -243,7 +272,7 @@ describe('pythonRuntimeService', () => {
     });
 
     it('resolves failed executions with the python error', async () => {
-      const promise = await startExecution('x', {}, respondWith({
+      const { promise } = await startExecution('x', {}, respondWith({
         ok: false, stdout: '', stderr: 'Traceback', error: 'NameError: x',
       }));
 
@@ -255,7 +284,7 @@ describe('pythonRuntimeService', () => {
 
     it('reuses the running server and warm executor across calls', async () => {
       const responder = respondWith({ ok: true, stdout: '', stderr: '' });
-      const promise = await startExecution('1', {}, responder);
+      const { promise } = await startExecution('1', {}, responder);
       await promise;
 
       // Second call: executor already ready, no second server start.
@@ -265,7 +294,7 @@ describe('pythonRuntimeService', () => {
 
     it('times out a hung script and reloads the interpreter', async () => {
       const reload = jest.fn();
-      const promise = await startExecution('while True: pass', { timeoutMs: 30 }, () => { /* never responds */ }, reload);
+      const { promise } = await startExecution('while True: pass', { timeoutMs: 30 }, () => { /* never responds */ }, reload);
 
       await expect(promise).rejects.toThrow('timed out');
       expect(reload).toHaveBeenCalledTimes(1);
@@ -274,22 +303,91 @@ describe('pythonRuntimeService', () => {
     it('rejects when the interpreter fails to boot', async () => {
       pythonRuntimeService.registerExecutor({ inject: () => { }, reload: () => { } });
       const pending = pythonRuntimeService.execute('1');
+      // eslint-disable-next-line jest/valid-expect -- awaited below, after the boot_error is posted
       const expectation = expect(pending).rejects.toThrow('failed to start');
       await tick();
-      pythonRuntimeService.handleWebViewMessage(JSON.stringify({ type: 'boot_error', error: 'wasm compile failed' }));
+      pythonRuntimeService.handleWebViewMessage(JSON.stringify({ type: 'boot_error', error: 'wasm compile failed' }), TRUSTED_URL);
       await expectation;
     });
 
     it('ignores malformed webview messages', () => {
-      expect(() => pythonRuntimeService.handleWebViewMessage('not json')).not.toThrow();
-      expect(() => pythonRuntimeService.handleWebViewMessage('{"type":"other"}')).not.toThrow();
+      expect(() => pythonRuntimeService.handleWebViewMessage('not json', TRUSTED_URL)).not.toThrow();
+      expect(() => pythonRuntimeService.handleWebViewMessage('{"type":"other"}', TRUSTED_URL)).not.toThrow();
+    });
+
+    it('drops any message with no native source URL (fails closed)', async () => {
+      const { promise } = await startExecution('1', { timeoutMs: 5000 }, js => {
+        const req = parseInjectedRequest(js);
+        // Missing url → must be treated as untrusted and dropped...
+        pythonRuntimeService.handleWebViewMessage(JSON.stringify({ type: 'result', id: req.id, ok: true, stdout: 'no-url' }));
+        // ...the same result with the trusted url settles it.
+        setTimeout(() => pythonRuntimeService.handleWebViewMessage(
+          JSON.stringify({ type: 'result', id: req.id, ok: true, stdout: 'trusted' }), TRUSTED_URL), 0);
+      });
+      expect((await promise).stdout).toBe('trusted');
     });
 
     it('rejects in-flight executions when the executor unmounts', async () => {
-      const promise = await startExecution('1', { timeoutMs: 5000 }, () => { /* never responds */ });
+      const { promise } = await startExecution('1', { timeoutMs: 5000 }, () => { /* never responds */ });
+      // eslint-disable-next-line jest/valid-expect -- awaited below, after the executor unregisters
       const expectation = expect(promise).rejects.toThrow('shut down');
       pythonRuntimeService.unregisterExecutor();
       await expectation;
+    });
+
+    it('drops forged result messages from an untrusted origin', async () => {
+      const { promise } = await startExecution('1', { timeoutMs: 5000 }, js => {
+        const req = parseInjectedRequest(js);
+        // An attacker-controlled page (post-navigation) forges a result...
+        pythonRuntimeService.handleWebViewMessage(
+          JSON.stringify({ type: 'result', id: req.id, ok: true, stdout: 'forged' }),
+          'https://attacker.example/',
+        );
+        // ...the genuine loopback page delivers the real one.
+        setTimeout(() => pythonRuntimeService.handleWebViewMessage(
+          JSON.stringify({ type: 'result', id: req.id, ok: true, stdout: 'real' }),
+          'http://localhost:8899/index.html',
+        ), 0);
+      });
+
+      const result = await promise;
+      expect(result.stdout).toBe('real');
+    });
+
+    it('serializes overlapping execute() calls on the shared interpreter', async () => {
+      const events: string[] = [];
+      // Both queue immediately; the first starts the server, then the page mounts.
+      const both = Promise.all([pythonRuntimeService.execute('A'), pythonRuntimeService.execute('B')]);
+      both.catch(() => { });
+      await tick();
+      registerReadyExecutor(js => {
+        const req = parseInjectedRequest(js);
+        events.push(`inject:${req.code}`);
+        setTimeout(() => {
+          events.push(`resolve:${req.code}`);
+          pythonRuntimeService.handleWebViewMessage(JSON.stringify({ type: 'result', id: req.id, ok: true, stdout: '' }), TRUSTED_URL);
+        }, 5);
+      });
+
+      await both;
+
+      // B must not be injected until A has fully resolved — no interleaving.
+      expect(events).toEqual(['inject:A', 'resolve:A', 'inject:B', 'resolve:B']);
+    });
+
+    it('self-heals after a boot timeout by tearing down the dead server', async () => {
+      // execute() requests the executor but the page never signals ready.
+      const promise = pythonRuntimeService.execute('1', { timeoutMs: 50000 });
+      promise.catch(() => { });
+      await tick();
+      // No executor registers / no ready → the boot timer eventually fires.
+      // Speed it up by triggering the crash path directly, as the timer would.
+      pythonRuntimeService.notifyExecutorCrashed('interpreter did not start in time');
+
+      await expect(promise).rejects.toThrow(/unavailable|did not start|shut down/);
+      // Server torn down and origin cleared so the next call rebuilds from scratch.
+      expect(mockServerStop).toHaveBeenCalled();
+      expect(usePythonRuntimeStore.getState().serverOrigin).toBeNull();
     });
   });
 });

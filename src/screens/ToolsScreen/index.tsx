@@ -61,7 +61,7 @@ export const ToolsScreen: React.FC = () => {
   const promptPythonInstall = () => {
     setAlertState(showAlert(
       'Download Python Runtime',
-      'Python needs a one-time 15 MB download (Python 3.12 with numpy and pandas). It runs entirely on your device and works offline afterwards.',
+      'Python needs a one-time 24 MB download (Python 3.12 with numpy and pandas). It runs entirely on your device and works offline afterwards.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -81,6 +81,12 @@ export const ToolsScreen: React.FC = () => {
     if (toolId === 'run_python' && enabling && usePythonRuntimeStore.getState().status !== 'installed') {
       promptPythonInstall();
       return;
+    }
+    // Disabling Python frees the warm interpreter: the Pyodide heap (CPython +
+    // numpy + pandas, several hundred MB once imported) otherwise stays resident
+    // for the app's lifetime and contends with local model inference.
+    if (toolId === 'run_python' && !enabling) {
+      pythonRuntimeService.shutdownExecutor().catch(() => { });
     }
     updateSettings({
       enabledTools: enabling ? [...cur, toolId] : cur.filter(id => id !== toolId),

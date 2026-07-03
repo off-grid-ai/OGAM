@@ -56,7 +56,12 @@ class PythonRuntimeService {
   private readyWaiters: Array<{ resolve: () => void; reject: (e: Error) => void }> = [];
   private pending = new Map<string, PendingExecution>();
   private server: { stop: () => Promise<unknown> } | null = null;
+  private serverPromise: Promise<void> | null = null;
   private installPromise: Promise<void> | null = null;
+  // Serializes execute() calls: stdout/stderr are set globally on the one shared
+  // interpreter each call, and the namespace is shared, so overlapping runs would
+  // cross-contaminate. Tool calls are sequential today, but this makes it safe.
+  private runQueue: Promise<unknown> = Promise.resolve();
 
   getRuntimeDir(): string {
     return `${RNFS.DocumentDirectoryPath}/${PYTHON_RUNTIME_DIR_NAME}`;
@@ -106,6 +111,12 @@ class PythonRuntimeService {
 
     const dir = this.getRuntimeDir();
     try {
+      // Clear any prior install first: asset filenames are version-tagged, so a
+      // version bump would otherwise leave the old ~24 MB of wheels/WASM orphaned
+      // on disk, and a half-written retry could leave stale files behind.
+      if (await RNFS.exists(dir)) {
+        await RNFS.unlink(dir);
+      }
       await RNFS.mkdir(dir);
       let completedBytes = 0;
 
@@ -125,9 +136,16 @@ class PythonRuntimeService {
         if (result.statusCode !== 200) {
           throw new Error(`Download failed for ${asset.fileName} (HTTP ${result.statusCode})`);
         }
+        // SHA-256 is the real integrity gate: this asset is about to be eval'd as
+        // the interpreter/engine, so a same-size tampered file (poisoned edge,
+        // MITM) must not pass. The size check stays as a cheap early-out.
         const stat = await RNFS.stat(toFile);
         if (Number(stat.size) !== asset.bytes) {
           throw new Error(`Size mismatch for ${asset.fileName}: expected ${asset.bytes}, got ${stat.size}`);
+        }
+        const digest = (await RNFS.hash(toFile, 'sha256')).toLowerCase();
+        if (digest !== asset.sha256) {
+          throw new Error(`Integrity check failed for ${asset.fileName}: SHA-256 mismatch`);
         }
         completedBytes += asset.bytes;
         usePythonRuntimeStore.getState().setDownloadProgress(completedBytes / PYODIDE_TOTAL_BYTES);
@@ -166,15 +184,20 @@ class PythonRuntimeService {
 
   /** Stop the server and unmount the WebView; frees the interpreter's memory. */
   async shutdownExecutor(): Promise<void> {
-    const store = usePythonRuntimeStore.getState();
-    store.setExecutorRequested(false);
-    store.setServerOrigin(null);
+    usePythonRuntimeStore.getState().setExecutorRequested(false);
     this.executorReady = false;
     this.rejectAllPending(new Error('Python runtime was shut down'));
     this.flushReadyWaiters(new Error('Python runtime was shut down'));
-    if (this.server) {
-      const server = this.server;
-      this.server = null;
+    await this.stopServer();
+  }
+
+  /** Stop the loopback server and clear its origin so the next run rebuilds it. */
+  private async stopServer(): Promise<void> {
+    this.serverPromise = null;
+    usePythonRuntimeStore.getState().setServerOrigin(null);
+    const server = this.server;
+    this.server = null;
+    if (server) {
       try {
         await server.stop();
       } catch (error) {
@@ -184,11 +207,36 @@ class PythonRuntimeService {
   }
 
   /**
+   * Recover from an interpreter that never came up: a boot timeout, or a WebView
+   * or loopback-server process the OS killed while backgrounded. Tears the server
+   * down so the next execute() rebuilds it from scratch — otherwise a stale
+   * `this.server` reference makes every future call time out forever (Python
+   * "broken until app restart"). Callers reject their own waiter separately.
+   */
+  notifyExecutorCrashed(reason: string): void {
+    logger.warn('[PythonRuntime] Executor crashed, resetting:', reason);
+    this.executorReady = false;
+    this.flushReadyWaiters(new Error(`Python interpreter unavailable: ${reason}`));
+    this.rejectAllPending(new Error(`Python interpreter unavailable: ${reason}`));
+    this.stopServer().catch(() => { /* teardown best-effort */ });
+  }
+
+  /**
    * Run Python code and return captured output. Boots the server + WebView on
    * first use and keeps them warm; interpreter globals persist across calls
    * until a timeout forces a reload.
    */
   async execute(code: string, opts: { timeoutMs?: number } = {}): Promise<PythonExecutionResult> {
+    // Chain onto the previous run so calls never overlap on the shared interpreter.
+    // A prior failure must not break the chain, so swallow it before running ours.
+    const run = this.runQueue
+      .catch(() => { })
+      .then(() => this.runExecution(code, opts));
+    this.runQueue = run.catch(() => { });
+    return run;
+  }
+
+  private async runExecution(code: string, opts: { timeoutMs?: number }): Promise<PythonExecutionResult> {
     if (usePythonRuntimeStore.getState().status === 'unknown') {
       await this.refreshStatus();
     }
@@ -229,10 +277,25 @@ class PythonRuntimeService {
     this.executor = null;
     this.executorReady = false;
     this.rejectAllPending(new Error('Python runtime was shut down'));
+    // Also fail anyone blocked in ensureExecutorReady, so they don't hang until
+    // their own 60s boot timer — symmetric with shutdownExecutor().
+    this.flushReadyWaiters(new Error('Python runtime was shut down'));
   }
 
-  /** Called by PythonRuntimeHost with every WebView message. */
-  handleWebViewMessage(raw: string): void {
+  /**
+   * Called by PythonRuntimeHost with every WebView message. `sourceUrl` is the
+   * native-provided page URL that posted it (WebViewNativeEvent.url, always set):
+   * if the page was ever navigated off the loopback origin (defence in depth
+   * behind onShouldStartLoadWithRequest), a forged result/ready message is
+   * dropped rather than settling a pending execution or the boot handshake.
+   * A missing URL is treated as untrusted — the page can't forge the native URL,
+   * so the only way it's absent is an unexpected build, and failing closed is safe.
+   */
+  handleWebViewMessage(raw: string, sourceUrl?: string): void {
+    if (!sourceUrl || !this.isTrustedOrigin(sourceUrl)) {
+      logger.warn('[PythonRuntime] Dropped message from untrusted origin:', sourceUrl);
+      return;
+    }
     const msg = parsePythonPageMessage(raw);
     if (!msg) return;
 
@@ -262,6 +325,13 @@ class PythonRuntimeService {
     });
   }
 
+  /** True when the URL's origin matches the loopback server we started. */
+  private isTrustedOrigin(sourceUrl: string): boolean {
+    const origin = usePythonRuntimeStore.getState().serverOrigin;
+    if (!origin) return false;
+    return sourceUrl === origin || sourceUrl.startsWith(`${origin}/`);
+  }
+
   private async ensureExecutorReady(): Promise<void> {
     if (this.executorReady && this.executor) return;
 
@@ -272,6 +342,9 @@ class PythonRuntimeService {
       const waiter = { resolve: () => { clearTimeout(bootTimer); resolve(); }, reject: (e: Error) => { clearTimeout(bootTimer); reject(e); } };
       const bootTimer = setTimeout(() => {
         this.readyWaiters = this.readyWaiters.filter(w => w !== waiter);
+        // Self-heal: the interpreter never signalled ready (dead WebView/server
+        // after backgrounding). Rebuild on the next call instead of failing forever.
+        this.notifyExecutorCrashed('interpreter did not start in time');
         reject(new Error('Python interpreter did not start in time'));
       }, EXECUTOR_BOOT_TIMEOUT_MS);
       this.readyWaiters.push(waiter);
@@ -284,6 +357,18 @@ class PythonRuntimeService {
 
   private async ensureServer(): Promise<void> {
     if (this.server) return;
+    // Memoize the in-flight start so two concurrent callers can't each spawn a
+    // StaticServer and orphan one (leaked native process/port). Mirrors installPromise.
+    if (!this.serverPromise) {
+      this.serverPromise = this.startServer().catch((error) => {
+        this.serverPromise = null;
+        throw error;
+      });
+    }
+    return this.serverPromise;
+  }
+
+  private async startServer(): Promise<void> {
     // Lazy require so the native module only loads when Python is actually used.
     const serverModule = require('@dr.pogodin/react-native-static-server'); // NOSONAR
     const StaticServer = serverModule.default ?? serverModule;

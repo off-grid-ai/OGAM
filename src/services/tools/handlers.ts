@@ -398,7 +398,7 @@ async function handleRunPython(code: string): Promise<string> {
     await pythonRuntimeService.refreshStatus();
   }
   if (!pythonRuntimeService.isInstalled()) {
-    return 'The Python runtime is not installed on this device. Tell the user to open Settings > Tools and enable Python (a one-time 15 MB download). After that, Python runs fully offline.';
+    return 'The Python runtime is not installed on this device. Tell the user to open Settings > Tools and enable Python (a one-time 24 MB download). After that, Python runs fully offline.';
   }
 
   const res = await pythonRuntimeService.execute(code);
@@ -411,7 +411,20 @@ async function handleRunPython(code: string): Promise<string> {
   if (sections.length === 0) sections.push('(no output — use print() to see values)');
 
   const output = sections.join('\n');
-  return output.length > MAX_CHARS ? `${output.slice(0, MAX_CHARS)}\n\n[Output truncated]` : output;
+  return output.length > MAX_CHARS ? `${sliceCodePointSafe(output, MAX_CHARS)}\n\n[Output truncated]` : output;
+}
+
+/**
+ * Slice to at most `max` UTF-16 code units without splitting a surrogate pair.
+ * Python output (emoji, some numpy/pandas symbols) uses astral-plane chars; a
+ * naive slice can leave a lone surrogate that corrupts JSON transport downstream.
+ */
+function sliceCodePointSafe(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const code = text.charCodeAt(max - 1);
+  // If the cut lands right after a high surrogate, drop it too.
+  const end = code >= 0xd800 && code <= 0xdbff ? max - 1 : max;
+  return text.slice(0, end);
 }
 
 async function handleSearchKnowledgeBase(query: string, projectId?: string): Promise<string> {

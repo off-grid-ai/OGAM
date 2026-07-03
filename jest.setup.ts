@@ -268,6 +268,18 @@ jest.mock('react-native-fs', () => ({
   hash: jest.fn(() => Promise.resolve('mockhash')),
 }));
 
+// @dr.pogodin/react-native-static-server ships ESM only and pulls in more ESM
+// deps; it is not in transformIgnorePatterns. The python runtime lazy-requires
+// it, so tests that reach ensureServer() must not trip on the untransformed
+// module. Individual tests still override this with their own StaticServer stub.
+jest.mock('@dr.pogodin/react-native-static-server', () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => ({
+    start: jest.fn(() => Promise.resolve('http://localhost:8080')),
+    stop: jest.fn(() => Promise.resolve()),
+  })),
+}));
+
 // react-native-device-info mock
 jest.mock('react-native-device-info', () => ({
   getTotalMemory: jest.fn(() => Promise.resolve(8 * 1024 * 1024 * 1024)), // 8GB

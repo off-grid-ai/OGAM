@@ -10,9 +10,10 @@
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, within, waitFor } from '@testing-library/react-native';
 import { ToolsScreen } from '../../../src/screens/ToolsScreen';
 import { AVAILABLE_TOOLS } from '../../../src/services/tools/registry';
+import { usePythonRuntimeStore } from '../../../src/stores/pythonRuntimeStore';
 import { registerScreen, _clearScreensForTesting } from '../../../src/navigation/screenRegistry';
 import { PRO_TOOLS_SCREEN } from '../../../src/hooks/useIsProActive';
 
@@ -44,6 +45,34 @@ jest.mock('../../../src/stores', () => ({
   ),
 }));
 
+// CustomAlert renders through AppSheet, which needs real theme elevation
+// tokens — replace it with a flat stub exposing title + pressable buttons.
+jest.mock('../../../src/components/CustomAlert', () => {
+  const actual = jest.requireActual('../../../src/components/CustomAlert');
+  const { View, Text } = require('react-native');
+  const StubAlert = ({ visible, title, buttons }: any) => {
+    if (!visible) return null;
+    return (
+      <View testID="custom-alert">
+        <Text>{title}</Text>
+        {(buttons || []).map((b: any) => (
+          <Text key={b.text} onPress={b.onPress}>{b.text}</Text>
+        ))}
+      </View>
+    );
+  };
+  return { ...actual, CustomAlert: StubAlert };
+});
+
+const mockPythonInstall = jest.fn(async (..._args: any[]) => { });
+const mockPythonRefreshStatus = jest.fn(async (..._args: any[]) => { });
+jest.mock('../../../src/services/python/pythonRuntimeService', () => ({
+  pythonRuntimeService: {
+    install: (...args: any[]) => mockPythonInstall(...args),
+    refreshStatus: (...args: any[]) => mockPythonRefreshStatus(...args),
+  },
+}));
+
 jest.mock('react-native-vector-icons/Feather', () => {
   const { Text } = require('react-native');
   return ({ name, ...props }: any) => <Text {...props}>{name}</Text>;
@@ -69,6 +98,13 @@ describe('ToolsScreen', () => {
     jest.clearAllMocks();
     _clearScreensForTesting();
     mockEnabledTools = ['web_search', 'calculator'];
+    usePythonRuntimeStore.setState({
+      status: 'not_installed',
+      downloadProgress: 0,
+      errorMessage: null,
+      executorRequested: false,
+      serverOrigin: null,
+    });
   });
   afterEach(() => {
     _clearScreensForTesting();
@@ -115,5 +151,59 @@ describe('ToolsScreen', () => {
     const { getByText } = render(<ToolsScreen />);
     fireEvent.press(getByText('arrow-left'));
     expect(mockGoBack).toHaveBeenCalledTimes(1);
+  });
+
+  describe('python runtime install flow', () => {
+    function pythonSwitch(utils: ReturnType<typeof render>) {
+      return within(utils.getByTestId('tool-picker-row-run_python')).getByRole('switch');
+    }
+
+    it('prompts for the runtime download instead of enabling when not installed', () => {
+      const utils = render(<ToolsScreen />);
+      fireEvent(pythonSwitch(utils), 'valueChange', true);
+
+      expect(utils.getByTestId('custom-alert')).toBeTruthy();
+      expect(utils.getByText('Download Python Runtime')).toBeTruthy();
+      expect(mockUpdateSettings).not.toHaveBeenCalled();
+      expect(mockPythonInstall).not.toHaveBeenCalled();
+    });
+
+    it('installs the runtime and enables the tool after confirming the download', async () => {
+      const utils = render(<ToolsScreen />);
+      fireEvent(pythonSwitch(utils), 'valueChange', true);
+      fireEvent.press(utils.getByText('Download'));
+
+      await waitFor(() => expect(mockPythonInstall).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledWith({
+        enabledTools: ['web_search', 'calculator', 'run_python'],
+      }));
+    });
+
+    it('shows an error alert when the download fails', async () => {
+      mockPythonInstall.mockRejectedValueOnce(new Error('No internet connection'));
+      const utils = render(<ToolsScreen />);
+      fireEvent(pythonSwitch(utils), 'valueChange', true);
+      fireEvent.press(utils.getByText('Download'));
+
+      await waitFor(() => expect(utils.getByText('Download Failed')).toBeTruthy());
+      expect(mockUpdateSettings).not.toHaveBeenCalled();
+    });
+
+    it('toggles normally once the runtime is installed', () => {
+      usePythonRuntimeStore.setState({ status: 'installed' });
+      const utils = render(<ToolsScreen />);
+      fireEvent(pythonSwitch(utils), 'valueChange', true);
+
+      expect(utils.queryByTestId('custom-alert')).toBeNull();
+      expect(mockUpdateSettings).toHaveBeenCalledWith({
+        enabledTools: ['web_search', 'calculator', 'run_python'],
+      });
+    });
+
+    it('shows download progress in the row while downloading', () => {
+      usePythonRuntimeStore.setState({ status: 'downloading', downloadProgress: 0.42 });
+      const utils = render(<ToolsScreen />);
+      expect(utils.getByText('Downloading Python runtime... 42%')).toBeTruthy();
+    });
   });
 });
