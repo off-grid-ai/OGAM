@@ -176,12 +176,16 @@ export async function fetchModelsFromServer(server: RemoteServer): Promise<Remot
             fetchModelCapabilities(url, model.id, nameDetect)
           )
         );
-        return generativeModels.map((model: { id: string; owned_by?: string; max_context_length?: number }, i: number) => ({
+        return generativeModels.map((model: { id: string; kind?: unknown; owned_by?: string; max_context_length?: number }, i: number) => ({
           id: model.id,
           name: displayModelName(model.id),
           serverId: server.id,
           capabilities: {
-            supportsVision: modelInfos[i].supportsVision,
+            // The gateway declares each model's kind authoritatively; trust kind:'vision'
+            // for vision support. The name/probe-based fallback (modelInfos) can't detect a
+            // gateway vision model whose id doesn't match the name heuristics, which dropped
+            // the attached image client-side (the model then behaved text-only).
+            supportsVision: model.kind === 'vision' || modelInfos[i].supportsVision,
             supportsToolCalling: modelInfos[i].supportsToolCalling ?? detectToolCallingCapability(model.id),
             supportsThinking: modelInfos[i].supportsThinking ?? false,
             maxContextLength: modelInfos[i].contextLength,
