@@ -11,6 +11,7 @@ import {
   parsePythonPageMessage,
   PAGE_MAX_STREAM_CHARS,
   MAX_FIGURES,
+  MAX_IMAGE_CHARS,
 } from '../../../../src/services/python/pythonPage';
 
 describe('buildPythonPageHtml', () => {
@@ -62,6 +63,9 @@ describe('buildPythonPageHtml', () => {
     expect(html).toContain(`var MAX_FIGURES = ${MAX_FIGURES}`);
     expect(html).toContain('get_fignums()[:');
     expect(html).toContain('images: images');
+    // Oversized single figures are dropped before crossing the bridge.
+    expect(html).toContain(`var MAX_IMAGE_CHARS = ${MAX_IMAGE_CHARS}`);
+    expect(html).toContain('b64.length <= MAX_IMAGE_CHARS');
   });
 });
 

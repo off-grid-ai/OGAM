@@ -44,6 +44,9 @@ export const PAGE_MAX_STREAM_CHARS = 100000;
 /** Max matplotlib figures captured per run (protects the bridge from image floods). */
 export const MAX_FIGURES = 4;
 
+/** Max base64 length for a single captured figure (~4 MB PNG) before it's dropped. */
+export const MAX_IMAGE_CHARS = 6000000;
+
 const CSP = [
   "default-src 'self'",
   // Pyodide needs eval for its JS/Python FFI and WASM compilation.
@@ -127,13 +130,18 @@ export function buildPythonPageHtml(): string {
     '    _plt.close("all")\\n' +
     '    return _imgs\\n';
 
+  // Drop any single figure whose base64 exceeds this, so a huge plot can't push
+  // multi-MB across the bridge (kept generous — a normal plot is tens of KB).
+  var MAX_IMAGE_CHARS = ${MAX_IMAGE_CHARS};
+
   async function captureFigures(pyodide) {
     try {
       await pyodide.runPythonAsync(CAPTURE_SRC);
       var proxy = pyodide.globals.get('_capture_figs')();
       var imgs = proxy.toJs();
       if (proxy.destroy) { proxy.destroy(); }
-      return Array.isArray(imgs) ? imgs : [];
+      if (!Array.isArray(imgs)) return [];
+      return imgs.filter(function (b64) { return typeof b64 === 'string' && b64.length <= MAX_IMAGE_CHARS; });
     } catch (e) {
       return [];
     }

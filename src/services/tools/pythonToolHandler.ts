@@ -17,6 +17,14 @@ export type PythonDispatchResult = string | { content: string; attachments?: Med
 
 const MAX_OUTPUT_CHARS = 6000;
 
+/**
+ * Packages install from PyPI via micropip with NO integrity check (unlike the
+ * bundled runtime assets, which are SHA-256 pinned). This is an intentional
+ * capability: the user opts into it by enabling the tool, and a malicious or
+ * typosquatted wheel is confined to the WASM sandbox — it can reach only the
+ * CSP-allowed hosts (pypi.org, files.pythonhosted.org, jsdelivr) and the
+ * in-memory interpreter FS, never the device filesystem or other origins.
+ */
 function parsePackages(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.filter((p): p is string => typeof p === 'string' && p.trim().length > 0).map(p => p.trim());
   if (typeof raw === 'string') return raw.split(',').map(p => p.trim()).filter(Boolean);
