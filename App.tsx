@@ -27,6 +27,7 @@ import { useSlot, SLOTS } from './src/bootstrap/slotRegistry';
 import { LockScreen } from './src/screens';
 import { useAppState } from './src/hooks/useAppState';
 import { useDownloadStore } from './src/stores/downloadStore';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 LogBox.ignoreAllLogs(); // Suppress all logs
 
@@ -365,9 +366,11 @@ const styles = StyleSheet.create({
 // wrap the whole app once here rather than per return-branch in App().
 function AppWithProviders() {
   return (
-    <KeyboardProvider>
-      <App />
-    </KeyboardProvider>
+    <ErrorBoundary>
+      <KeyboardProvider>
+        <App />
+      </KeyboardProvider>
+    </ErrorBoundary>
   );
 }
 
