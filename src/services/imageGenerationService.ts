@@ -8,10 +8,36 @@ import logger from '../utils/logger';
 import { shouldShowSharePrompt, emitSharePrompt } from '../utils/sharePrompt';
 import { checkProPromptForImage } from '../utils/proPrompt';
 import { buildEnhancementMessages, getConversationContext, cleanEnhancedPrompt, buildImageGenMeta } from './imageGenerationHelpers';
+import { reportModelFailure } from './modelFailureHandler';
+import { reasonFromLoadError } from './modelFailureReasons';
 
 const SHARE_PROMPT_DELAY_MS = 2000;
 
+/**
+ * Explicit lifecycle phase — the single source of truth for "what is image
+ * generation doing right now". The UI projects this (it never assembles the
+ * in-progress view from scattered flags), so the progress indicator can't flash
+ * or desync: it's shown for exactly `enhancing | loading | generating | saving`
+ * and hidden otherwise.
+ */
+export type ImageGenPhase =
+  | 'idle'
+  | 'enhancing'  // running the text model to enrich the prompt
+  | 'loading'    // loading the image model into memory
+  | 'generating' // diffusion steps running
+  | 'saving'     // writing the result + adding the chat message
+  | 'done'
+  | 'error'
+  | 'cancelled';
+
+/** True while a generation is actively in flight (drives the progress indicator). */
+export function isInFlight(phase: ImageGenPhase): boolean {
+  return phase === 'enhancing' || phase === 'loading' || phase === 'generating' || phase === 'saving';
+}
+
 export interface ImageGenerationState {
+  phase: ImageGenPhase;
+  /** Derived from phase (isInFlight) — kept for back-compat with existing readers. */
   isGenerating: boolean;
   progress: { step: number; totalSteps: number } | null;
   status: string | null;
@@ -64,18 +90,24 @@ interface UpdateEnhancementOptions {
 // ---------------------------------------------------------------------------
 
 class ImageGenerationService {
-  private state: ImageGenerationState = {
-    isGenerating: false, progress: null, status: null, previewPath: null,
+  // The ONLY stored state is `phase` (+ the data fields). `isGenerating` is NOT
+  // stored — there's no second source to desync. It's computed from phase in
+  // getState() (see below) for back-compat readers.
+  private state: Omit<ImageGenerationState, 'isGenerating'> = {
+    phase: 'idle', progress: null, status: null, previewPath: null,
     prompt: null, conversationId: null, error: null, result: null,
   };
 
   private readonly listeners: Set<ImageGenerationListener> = new Set();
   private cancelRequested: boolean = false;
+  /** Last generate request, so a failure card's Retry button can re-run it. */
+  private _lastParams: GenerateImageParams | null = null;
 
-  getState(): ImageGenerationState { return { ...this.state }; }
+  /** Public snapshot: isGenerating is computed from phase, never stored. */
+  getState(): ImageGenerationState { return { ...this.state, isGenerating: isInFlight(this.state.phase) }; }
 
   isGeneratingFor(conversationId: string): boolean {
-    return this.state.isGenerating && this.state.conversationId === conversationId;
+    return isInFlight(this.state.phase) && this.state.conversationId === conversationId;
   }
 
   subscribe(listener: ImageGenerationListener): () => void {
@@ -90,13 +122,65 @@ class ImageGenerationService {
   }
 
   private updateState(partial: Partial<ImageGenerationState>): void {
-    this.state = { ...this.state, ...partial };
+    // Strip any derived field a caller might pass — phase is the only stored truth.
+    const { isGenerating: _ignored, ...rest } = partial;
+    const prevPhase = this.state.phase;
+    this.state = { ...this.state, ...rest };
+    // [IMG-SM] state-machine trace (kept forever, like [TTS-SM]): every phase
+    // transition logs one line so one repro reads as a linear state machine and a
+    // silent stall/flash is never undiagnosable again.
+    if ('phase' in partial && this.state.phase !== prevPhase) {
+      logger.log(`[IMG-SM] phase ${prevPhase} → ${this.state.phase}${this.state.status ? ` (${this.state.status})` : ''}${this.state.error ? ` error=${this.state.error}` : ''}`);
+    }
     this.notifyListeners();
+    // appStore mirror is a one-way PROJECTION of phase (the UI reads it). Computed
+    // from phase, never a second stored source.
     const appStore = useAppStore.getState();
-    if ('isGenerating' in partial) appStore.setIsGeneratingImage(this.state.isGenerating);
+    if ('phase' in partial) appStore.setIsGeneratingImage(isInFlight(this.state.phase));
     if ('progress' in partial) appStore.setImageGenerationProgress(this.state.progress);
     if ('status' in partial) appStore.setImageGenerationStatus(this.state.status);
     if ('previewPath' in partial) appStore.setImagePreviewPath(this.state.previewPath);
+  }
+
+  /**
+   * The SINGLE owner of generation failure (SRP): move to the error phase AND
+   * surface the reason via the common dismissible failure card (modelFailureHandler)
+   * — NOT a flat chat message. So a failure is never silent, never a chat bubble,
+   * and the handling is defined once. The card detects insufficient-memory from the
+   * error text and offers "Free memory & Retry" (re-runs the last request).
+   * Returns null for `return this._fail(...)`.
+   */
+  private _fail(error: string, _conversationId: string | null = this.state.conversationId): null {
+    this.updateState({ phase: 'error', progress: null, status: null, previewPath: null, error });
+    // On a memory-pressure failure the card offers "Free memory & Retry" — so the retry
+    // must ACTUALLY free memory (eject resident models) before re-running, not just
+    // re-run into the same wall. Derive memory-pressure from the SAME single source the
+    // card's label uses (reasonFromLoadError) so the label and the eject can never
+    // disagree — no second regex to drift.
+    const memoryPressure = reasonFromLoadError(error) === 'insufficient-memory';
+    const onRetry = this._lastParams
+      ? async () => {
+          if (memoryPressure) await activeModelService.ejectAll().catch(() => {});
+          void this.generateImage(this._lastParams as GenerateImageParams);
+        }
+      : undefined;
+    reportModelFailure('image', error, { message: error, onRetry });
+    return null;
+  }
+
+  /**
+   * Prompt enhancement was skipped (best-effort text-model load failed). This is a
+   * SOFT degradation — the image still generates from the original prompt — so it
+   * surfaces as a non-blocking 'warning' on the same dismissible card instead of
+   * being silently swallowed. We pass the underlying reason as the error so the
+   * card can still flag memory pressure when that's the cause.
+   */
+  private _noticeEnhancementSkipped(reason: string): void {
+    reportModelFailure('text', reason, {
+      severity: 'warning',
+      title: 'Prompt enhancement skipped',
+      message: `Generating from your original prompt — ${reason}.`,
+    });
   }
 
   private _checkSharePrompt(): void {
@@ -136,15 +220,48 @@ class ImageGenerationService {
       logger.log('[ImageGen] Enhancement disabled, using original prompt');
       return params.prompt;
     }
-    const isTextModelLoaded = llmService.isModelLoaded();
+    let isTextModelLoaded = llmService.isModelLoaded();
     const isLlmGenerating = llmService.isCurrentlyGenerating();
     logger.log('[ImageGen] 🎨 Starting prompt enhancement - Model loaded:', isTextModelLoaded, 'LLM generating:', isLlmGenerating);
     if (!isTextModelLoaded) {
-      logger.warn('[ImageGen] No text model loaded, skipping enhancement');
-      return params.prompt;
+      // Text and image models are mutually exclusive (one resident at a time), so
+      // during image gen the text model usually isn't loaded. Load it on demand to
+      // enhance; _ensureImageModelLoaded swaps back to the image model afterwards.
+      // This costs two heavy model loads per enhanced generation — the accepted
+      // price for the feature when one-at-a-time residency is in force.
+      const { activeModelId, lastTextModelId } = useAppStore.getState();
+      const textModelId = activeModelId ?? lastTextModelId;
+      if (!textModelId) {
+        logger.warn('[ImageGen] No text model available, skipping enhancement');
+        this._noticeEnhancementSkipped('no text model is selected');
+        return params.prompt;
+      }
+      this.updateState({
+        phase: 'enhancing', prompt: params.prompt, conversationId: params.conversationId || null,
+        status: 'Loading text model to enhance prompt...', previewPath: null,
+        progress: { step: 0, totalSteps: steps }, error: null, result: null,
+      });
+      let loadError: unknown = null;
+      try {
+        await activeModelService.loadTextModel(textModelId);
+        isTextModelLoaded = llmService.isModelLoaded();
+      } catch (err) {
+        loadError = err;
+        logger.warn('[ImageGen] Failed to load text model for enhancement, using original prompt:', err);
+      }
+      if (!isTextModelLoaded) {
+        logger.warn('[ImageGen] Text model still not loaded after on-demand load, skipping enhancement');
+        // Soft, non-blocking notice: the image still generates from the original
+        // prompt — surfaced on the same dismissible card (never silent), and the
+        // text-model error text lets the card flag memory pressure if that's why.
+        this._noticeEnhancementSkipped(
+          loadError instanceof Error ? loadError.message : 'the text model could not load',
+        );
+        return params.prompt;
+      }
     }
     this.updateState({
-      isGenerating: true, prompt: params.prompt, conversationId: params.conversationId || null,
+      phase: 'enhancing', prompt: params.prompt, conversationId: params.conversationId || null,
       status: 'Enhancing prompt with AI...', previewPath: null,
       progress: { step: 0, totalSteps: steps }, error: null, result: null,
     });
@@ -186,15 +303,15 @@ class ImageGenerationService {
     const needsThreadReload = loadedThreads == null || loadedThreads !== desiredThreads;
     if (isImageModelLoaded && loadedPath === activeImageModel.modelPath && !needsThreadReload) return true;
     if (!activeImageModelId) {
-      this.updateState({ error: 'No image model selected', isGenerating: false });
+      this._fail('No image model selected');
       return false;
     }
     try {
-      this.updateState({ status: `Loading ${activeImageModel.name}...` });
+      this.updateState({ phase: 'loading', status: `Loading ${activeImageModel.name}...` });
       await activeModelService.loadImageModel(activeImageModelId);
       return true;
     } catch (error: any) {
-      this.updateState({ isGenerating: false, progress: null, status: null, error: `Failed to load image model: ${error?.message || 'Unknown error'}` });
+      this._fail(`Failed to load image model: ${error?.message || 'Unknown error'}`);
       return false;
     }
   }
@@ -204,6 +321,9 @@ class ImageGenerationService {
     result.modelId = activeImageModel.id;
     if (params.conversationId) result.conversationId = params.conversationId;
     useAppStore.getState().addGeneratedImage(result);
+    // First successful generation warmed the backend — don't show the ~120s
+    // one-time notice for this model again (persisted across launches).
+    useAppStore.getState().markImageModelWarmed(activeImageModel.id);
     useAppStore.getState().completeChecklistStep('triedImageGen');
     this._checkSharePrompt();
     if (params.conversationId) {
@@ -216,27 +336,33 @@ class ImageGenerationService {
         generationMeta: buildImageGenMeta(activeImageModel, { steps: meta.steps, guidanceScale: meta.guidanceScale, result, useOpenCL: meta.useOpenCL }),
       });
     }
-    this.updateState({ isGenerating: false, progress: null, status: null, previewPath: null, result, error: null });
+    this.updateState({ phase: 'done', progress: null, status: null, previewPath: null, result, error: null });
     return result;
   }
 
   private async _runGenerationAndSave(opts: RunGenerationOptions): Promise<GeneratedImage | null> {
     const { params, enhancedPrompt, activeImageModel, steps, guidanceScale, imageWidth, imageHeight, useOpenCL } = opts;
 
-    // Check if this is the first GPU run (no OpenCL kernel cache yet)
-    let isFirstGpuRun = false;
+    // The first generation for a model compiles/warms the backend and takes ~120s.
+    // This is platform-agnostic: on iOS the CoreML model compiles on first use, on
+    // Android the OpenCL kernels compile. The persisted `warmedImageModels` flag is
+    // the single cross-platform signal (so the notice shows once on every device);
+    // the OpenCL kernel-cache check is an extra Android signal in case the cache was
+    // cleared after the flag was set.
+    let isFirstRun = !useAppStore.getState().warmedImageModels.includes(activeImageModel.id);
     if (useOpenCL) {
       try {
         const hasCache = await onnxImageGeneratorService.hasKernelCache(activeImageModel.modelPath);
-        isFirstGpuRun = !hasCache;
+        isFirstRun = isFirstRun || !hasCache;
       } catch (e) {
-        // If check fails, assume cache exists to avoid false positives
+        // If check fails, don't add a false first-run signal (keep the warmed-flag result).
         logger.warn('[ImageGen] Failed to check for OpenCL kernel cache:', e);
       }
     }
 
     this.updateState({
-      status: isFirstGpuRun
+      phase: 'generating',
+      status: isFirstRun
         ? 'Optimizing GPU for your device (~120s, one-time)...'
         : 'Starting image generation...',
     });
@@ -247,7 +373,7 @@ class ImageGenerationService {
         (progress) => {
           if (this.cancelRequested) return;
           const displayStep = Math.min(progress.step, steps);
-          if (isFirstGpuRun) {
+          if (isFirstRun) {
             this.updateState({
               progress: { step: displayStep, totalSteps: steps },
               status: displayStep <= 1
@@ -283,7 +409,7 @@ class ImageGenerationService {
           ? 'Image generation failed — the model encountered an error and was unloaded. Please try again.'
           : errorMsg;
 
-        this.updateState({ isGenerating: false, progress: null, status: null, previewPath: null, error: userMessage });
+        this._fail(userMessage);
       }
       return null;
     }
@@ -294,13 +420,14 @@ class ImageGenerationService {
    * If conversationId is provided, the result will be added as a chat message.
    */
   async generateImage(params: GenerateImageParams): Promise<GeneratedImage | null> {
-    if (this.state.isGenerating) {
+    if (isInFlight(this.state.phase)) {
       logger.log('[ImageGenerationService] Already generating, ignoring request');
       return null;
     }
+    this._lastParams = params; // so a failure card's Retry can re-run this exact request
     const { settings, activeImageModelId, downloadedImageModels } = useAppStore.getState();
     const activeImageModel = downloadedImageModels.find(m => m.id === activeImageModelId);
-    if (!activeImageModel) { this.updateState({ error: 'No image model selected' }); return null; }
+    if (!activeImageModel) return this._fail('No image model selected', params.conversationId || null);
 
     const steps = params.steps || settings.imageSteps || 8;
     const guidanceScale = params.guidanceScale || settings.imageGuidanceScale || 2.0;
@@ -311,15 +438,17 @@ class ImageGenerationService {
     logger.log('[ImageGen] enhanceImagePrompts setting:', settings.enhanceImagePrompts);
     this.cancelRequested = false;
 
-    if (!settings.enhanceImagePrompts) {
-      this.updateState({
-        isGenerating: true, prompt: params.prompt, conversationId: params.conversationId || null,
-        status: 'Preparing image generation...', previewPath: null,
-        progress: { step: 0, totalSteps: steps }, error: null, result: null,
-      });
-    } else {
-      this.updateState({ status: 'Preparing image generation...' });
-    }
+    // Establish the generating state unconditionally — not only when enhancement
+    // is off. When enhancement is ON but _enhancePrompt bailed early (e.g. no text
+    // model loaded, so enhancement was skipped), it never set isGenerating, so the
+    // in-progress card never appeared. Setting it here fixes that; on the
+    // enhancement-ran path this just swaps the 'Enhancing…' status for 'Preparing…'
+    // before the image model loads.
+    this.updateState({
+      phase: 'loading', prompt: params.prompt, conversationId: params.conversationId || null,
+      status: 'Preparing image generation...', previewPath: null,
+      progress: { step: 0, totalSteps: steps }, error: null, result: null,
+    });
 
     const loaded = await this._ensureImageModelLoaded(activeImageModelId, activeImageModel, settings.imageThreads ?? 4);
     if (!loaded) return null;
@@ -329,7 +458,7 @@ class ImageGenerationService {
   }
 
   async cancelGeneration(): Promise<void> {
-    if (!this.state.isGenerating) return;
+    if (!isInFlight(this.state.phase)) return;
     this.cancelRequested = true;
     try { await onnxImageGeneratorService.cancelGeneration(); } catch { /* Ignore */ }
     this.resetState();
@@ -337,7 +466,7 @@ class ImageGenerationService {
 
   private resetState(): void {
     this.updateState({
-      isGenerating: false, progress: null, status: null, previewPath: null,
+      phase: 'idle', progress: null, status: null, previewPath: null,
       prompt: null, conversationId: null, error: null,
       // Keep result so the last generated image is still accessible
     });

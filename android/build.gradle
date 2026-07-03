@@ -21,3 +21,20 @@ buildscript {
 
 apply plugin: "com.facebook.react.rootproject"
 
+// Force every Android subproject (incl. third-party native modules like op-sqlite and
+// react-native-audio-api) onto the ONE pinned NDK. Without this, a module that declares
+// no ndkVersion falls back to the AGP-default NDK (27.0.12077973), which the app never
+// pins or installs — CI then fails to configure with "Failed to install ndk;27.0.12077973".
+// Applied via plugins.withId (runs when the Android plugin is applied) rather than
+// afterEvaluate — the latter threw "Cannot run afterEvaluate when the project is already
+// evaluated" for subprojects the React root plugin had already configured.
+subprojects { subproject ->
+    ["com.android.application", "com.android.library"].each { pluginId ->
+        subproject.plugins.withId(pluginId) {
+            subproject.android {
+                ndkVersion rootProject.ext.ndkVersion
+            }
+        }
+    }
+}
+

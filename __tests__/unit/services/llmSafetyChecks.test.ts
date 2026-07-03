@@ -71,11 +71,11 @@ describe('checkMemoryForModel', () => {
       total: 8 * 1024 * 1024 * 1024,
     });
 
-    const result = await checkMemoryForModel(
-      500 * 1024 * 1024, // 500 MB model
-      2048,
-      mockGetMemory,
-    );
+    const result = await checkMemoryForModel({
+      modelFileSize: 500 * 1024 * 1024, // 500 MB model
+      contextLength: 2048,
+      getAvailableMemory: mockGetMemory,
+    });
     expect(result.safe).toBe(true);
   });
 
@@ -85,11 +85,11 @@ describe('checkMemoryForModel', () => {
       total: 4 * 1024 * 1024 * 1024,
     });
 
-    const result = await checkMemoryForModel(
-      2 * 1024 * 1024 * 1024, // 2 GB model
-      4096,
-      mockGetMemory,
-    );
+    const result = await checkMemoryForModel({
+      modelFileSize: 2 * 1024 * 1024 * 1024, // 2 GB model
+      contextLength: 4096,
+      getAvailableMemory: mockGetMemory,
+    });
     expect(result.safe).toBe(false);
     expect(result.reason).toContain('Not enough memory');
   });
@@ -97,8 +97,30 @@ describe('checkMemoryForModel', () => {
   it('returns safe when memory check throws', async () => {
     mockGetMemory.mockRejectedValue(new Error('not supported'));
 
-    const result = await checkMemoryForModel(500 * 1024 * 1024, 2048, mockGetMemory);
+    const result = await checkMemoryForModel({ modelFileSize: 500 * 1024 * 1024, contextLength: 2048, getAvailableMemory: mockGetMemory });
     expect(result.safe).toBe(true);
+  });
+
+  it('scales KV cache with model size — a large model at high context is unsafe', async () => {
+    // ~5 GB available; a 4 GB model at 8192 ctx. The old fixed ~2 MB KV estimate
+    // wrongly called this safe; the size-scaled estimate flags it.
+    mockGetMemory.mockResolvedValue({
+      available: 5 * 1024 * 1024 * 1024,
+      total: 8 * 1024 * 1024 * 1024,
+    });
+    const result = await checkMemoryForModel({ modelFileSize: 4 * 1024 * 1024 * 1024, contextLength: 8192, getAvailableMemory: mockGetMemory });
+    expect(result.safe).toBe(false);
+  });
+
+  it('a quantized KV cache lowers the estimate enough to fit where f16 would not', async () => {
+    const mem = { available: 3300 * 1024 * 1024, total: 6 * 1024 * 1024 * 1024 };
+    mockGetMemory.mockResolvedValue(mem);
+    const args = { modelFileSize: 2 * 1024 * 1024 * 1024, contextLength: 8192, getAvailableMemory: mockGetMemory };
+    const f16 = await checkMemoryForModel({ ...args, quantizedCache: false });
+    const quant = await checkMemoryForModel({ ...args, quantizedCache: true });
+    expect(quant.estimatedMB).toBeLessThan(f16.estimatedMB);
+    expect(f16.safe).toBe(false);
+    expect(quant.safe).toBe(true);
   });
 });
 

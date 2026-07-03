@@ -54,6 +54,11 @@ export interface RemoteModelCapabilities {
   supportsToolCalling: boolean;
   /** Supports extended thinking (reasoning tokens) */
   supportsThinking: boolean;
+  /**
+   * Whether the server honors `chat_template_kwargs.enable_thinking` to toggle
+   * reasoning per request (discovered from the server, e.g. llama.cpp /props).
+   */
+  acceptsThinkingKwarg?: boolean;
   /** Maximum context window length */
   maxContextLength?: number;
   /** Model family or type hint */

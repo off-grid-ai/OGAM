@@ -47,6 +47,28 @@ describe('ModelCard', () => {
   };
 
   // ============================================================================
+  // Queued vs downloading — the shared card contract every tab now relies on.
+  // Text/Image/STT tabs all feed ModelCard isQueued/isDownloading from the ONE
+  // classifier; this pins the render so a queued download shows the clock (not
+  // "downloading 0%") uniformly — the image/STT queued-icon bug this refactor fixed.
+  // ============================================================================
+  describe('queued vs downloading state', () => {
+    it('renders the Queued clock (accessibilityLabel "Queued") when isQueued', () => {
+      const { getByLabelText } = render(
+        <ModelCard model={baseModel} isQueued downloadProgress={0} />
+      );
+      expect(getByLabelText('Queued')).toBeTruthy();
+    });
+
+    it('does NOT render the Queued clock when actively downloading', () => {
+      const { queryByLabelText } = render(
+        <ModelCard model={baseModel} isDownloading downloadProgress={0.4} />
+      );
+      expect(queryByLabelText('Queued')).toBeNull();
+    });
+  });
+
+  // ============================================================================
   // Basic Rendering
   // ============================================================================
   describe('basic rendering', () => {

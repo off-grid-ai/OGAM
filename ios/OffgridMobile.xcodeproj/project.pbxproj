@@ -15,6 +15,8 @@
 		04B9D6432F38EC7700F1A435 /* DownloadManagerModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 04B9D6402F38EC7700F1A435 /* DownloadManagerModule.m */; };
 		0A7B3D032F3A0B1200CC5FA1 /* PDFExtractorModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D012F3A0B1200CC5FA1 /* PDFExtractorModule.m */; };
 		0A7B3D042F3A0B1200CC5FA1 /* PDFExtractorModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D022F3A0B1200CC5FA1 /* PDFExtractorModule.swift */; };
+		0ADE3D052F3A0B1200CC5FA1 /* DeviceMemoryModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0ADE3D012F3A0B1200CC5FA1 /* DeviceMemoryModule.m */; };
+		0ADE3D062F3A0B1200CC5FA1 /* DeviceMemoryModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ADE3D022F3A0B1200CC5FA1 /* DeviceMemoryModule.swift */; };
 		0A7B3D062F3A0B1200CC5FA1 /* all-MiniLM-L6-v2-Q8_0.gguf in Resources */ = {isa = PBXBuildFile; fileRef = 0A7B3D052F3A0B1200CC5FA1 /* all-MiniLM-L6-v2-Q8_0.gguf */; };
 		0A7B3D072F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D082F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
@@ -44,6 +46,8 @@
 		04B9D6412F38EC7700F1A435 /* DownloadManagerModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManagerModule.swift; sourceTree = "<group>"; };
 		0A7B3D012F3A0B1200CC5FA1 /* PDFExtractorModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PDFExtractorModule.m; sourceTree = "<group>"; };
 		0A7B3D022F3A0B1200CC5FA1 /* PDFExtractorModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFExtractorModule.swift; sourceTree = "<group>"; };
+		0ADE3D012F3A0B1200CC5FA1 /* DeviceMemoryModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DeviceMemoryModule.m; sourceTree = "<group>"; };
+		0ADE3D022F3A0B1200CC5FA1 /* DeviceMemoryModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceMemoryModule.swift; sourceTree = "<group>"; };
 		0A7B3D052F3A0B1200CC5FA1 /* all-MiniLM-L6-v2-Q8_0.gguf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "all-MiniLM-L6-v2-Q8_0.gguf"; sourceTree = "<group>"; };
 		0A7B3D082F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddingModelBundleTests.swift; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* OffgridMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OffgridMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -92,6 +96,8 @@
 				04B9D6402F38EC7700F1A435 /* DownloadManagerModule.m */,
 				0A7B3D012F3A0B1200CC5FA1 /* PDFExtractorModule.m */,
 				0A7B3D022F3A0B1200CC5FA1 /* PDFExtractorModule.swift */,
+				0ADE3D012F3A0B1200CC5FA1 /* DeviceMemoryModule.m */,
+				0ADE3D022F3A0B1200CC5FA1 /* DeviceMemoryModule.swift */,
 				04B9D6412F38EC7700F1A435 /* DownloadManagerModule.swift */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
@@ -376,6 +382,8 @@
 				049521662F390D4500AA4EB4 /* CoreMLDiffusionModule.swift in Sources */,
 				0A7B3D032F3A0B1200CC5FA1 /* PDFExtractorModule.m in Sources */,
 				0A7B3D042F3A0B1200CC5FA1 /* PDFExtractorModule.swift in Sources */,
+				0ADE3D052F3A0B1200CC5FA1 /* DeviceMemoryModule.m in Sources */,
+				0ADE3D062F3A0B1200CC5FA1 /* DeviceMemoryModule.swift in Sources */,
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -407,10 +415,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1782490719;
-				DEVELOPMENT_TEAM = C9KXFTGP83;
+				DEVELOPMENT_TEAM = 84V6KCAC49;
 				ENABLE_BITCODE = NO;
+				CODE_SIGN_ENTITLEMENTS = OffgridMobile/OffgridMobile.entitlements;
 				INFOPLIST_FILE = OffgridMobile/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Off Grid - Local AI";
+				INFOPLIST_KEY_CFBundleDisplayName = "Off Grid AI";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -439,9 +448,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1782490719;
-				DEVELOPMENT_TEAM = C9KXFTGP83;
+				DEVELOPMENT_TEAM = 84V6KCAC49;
+				CODE_SIGN_ENTITLEMENTS = OffgridMobile/OffgridMobile.entitlements;
 				INFOPLIST_FILE = OffgridMobile/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Off Grid - Local AI";
+				INFOPLIST_KEY_CFBundleDisplayName = "Off Grid AI";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (

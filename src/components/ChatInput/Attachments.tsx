@@ -111,14 +111,23 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
     }
   };
 
-  const addAudioAttachment = (uri: string, audioFormat: 'wav' | 'mp3', audioDurationSeconds?: number) => {
+  const addAudioAttachment = (audio: {
+    uri: string;
+    audioFormat: 'wav' | 'mp3';
+    audioDurationSeconds?: number;
+    transcription?: string;
+  }) => {
     const attachment: MediaAttachment = {
       id: nextAttachmentId(),
       type: 'audio',
-      uri,
-      audioFormat,
-      audioDurationSeconds,
-      fileName: uri.split('/').pop(),
+      uri: audio.uri,
+      audioFormat: audio.audioFormat,
+      audioDurationSeconds: audio.audioDurationSeconds,
+      fileName: audio.uri.split('/').pop(),
+      // Reuse `textContent` (the attachment's associated text) for the whisper
+      // transcription. This is display-only for audio: llmMessages sends the
+      // transcription to the model via `message.content`, never from here.
+      ...(audio.transcription?.trim() ? { textContent: audio.transcription.trim() } : {}),
     };
     setAttachments(prev => [...prev, attachment]);
   };

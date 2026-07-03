@@ -11,6 +11,7 @@ export { CustomAlert, showAlert, hideAlert, initialAlertState } from './CustomAl
 export type { AlertButton, AlertState, CustomAlertProps } from './CustomAlert';
 export { CenteredAlert } from './CenteredAlert';
 export type { CenteredAlertProps } from './CenteredAlert';
+export { ModelFailureCard } from './ModelFailureCard';
 export { ThinkingIndicator } from './ThinkingIndicator';
 export { AnimatedPressable } from './AnimatedPressable';
 export type { AnimatedPressableProps } from './AnimatedPressable';

@@ -5,7 +5,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../../components';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
-import { SPACING, TYPOGRAPHY } from '../../constants';
+import { SPACING, TYPOGRAPHY, OFF_GRID_DESKTOP_URL } from '../../constants';
 import { useAppStore } from '../../stores';
 import { PRO_PAY_PAGE_URL } from '../../services/proLicenseService';
 import { loadProFeatures } from '../../bootstrap/loadProFeatures';
@@ -51,6 +51,7 @@ export const ProDetailScreen: React.FC = () => {
   const pricing = getPricingCopy();
 
   const openPayPage = () => { Linking.openURL(PRO_PAY_PAGE_URL).catch(() => {}); };
+  const openDesktop = () => { Linking.openURL(OFF_GRID_DESKTOP_URL).catch(() => {}); };
   const openVerifyModal = () => setVerifyModalVisible(true);
 
   // Activation verified: load the pro bundle now so Pro lights up live (the
@@ -161,6 +162,26 @@ export const ProDetailScreen: React.FC = () => {
             />
           </>
         )}
+
+        {/* Cross-device companion. Pro is one mind across laptop + phone, so every
+            Pro surface points to Off Grid AI Desktop. Shown in both states. */}
+        <TouchableOpacity
+          style={styles.desktopRow}
+          onPress={openDesktop}
+          accessibilityRole="link"
+          accessibilityLabel="Get Off Grid AI Desktop"
+        >
+          <View style={styles.desktopIconWrap}>
+            <Icon name="monitor" size={18} color={colors.primary} />
+          </View>
+          <View style={styles.desktopText}>
+            <Text style={styles.desktopTitle}>Get Off Grid AI Desktop</Text>
+            <Text style={styles.desktopDesc}>
+              Free for your Mac. Run your models there and use them from this phone over your own network.
+            </Text>
+          </View>
+          <Icon name="external-link" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
       </ScrollView>
 
       <ProUnlockModal
@@ -281,4 +302,30 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   // CTAs (Button supplies its own colours/border; these are layout-only).
   ctaButton: { marginHorizontal: SPACING.xl, marginTop: SPACING.sm, marginBottom: SPACING.md },
   verifyButton: { marginHorizontal: SPACING.xl, marginBottom: SPACING.xl },
+
+  // Desktop companion link
+  desktopRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.md,
+    marginHorizontal: SPACING.xl,
+    marginTop: SPACING.sm,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  desktopIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surfaceLight,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  desktopText: { flex: 1, gap: 3 as number },
+  desktopTitle: { ...TYPOGRAPHY.body, color: colors.text },
+  desktopDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, lineHeight: 18 },
 });

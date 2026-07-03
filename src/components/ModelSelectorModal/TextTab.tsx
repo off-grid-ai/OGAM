@@ -10,6 +10,8 @@ export interface TextTabProps {
   downloadedModels: DownloadedModel[];
   remoteModels: Array<{ serverId: string; serverName: string; models: RemoteModel[] }>;
   currentModelPath: string | null;
+  /** The SELECTED model's path (may differ from loaded under deferred loading). */
+  selectedModelPath?: string | null;
   currentRemoteModelId: string | null;
   isAnyLoading: boolean;
   onSelectModel: (model: DownloadedModel) => void;
@@ -20,11 +22,17 @@ export interface TextTabProps {
 }
 
 export const TextTab: React.FC<TextTabProps> = ({
-  downloadedModels, remoteModels, currentModelPath, currentRemoteModelId, isAnyLoading, onSelectModel, onUnloadModel, onSelectRemoteModel, onAddServer, onBrowseModels,
+  downloadedModels, remoteModels, currentModelPath, selectedModelPath = null, currentRemoteModelId, isAnyLoading, onSelectModel, onUnloadModel, onSelectRemoteModel, onAddServer, onBrowseModels,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createAllStyles);
+  // "Loaded" drives the Currently-Loaded + Unload section (only meaningful once a model
+  // is actually in memory). "Active" also counts the selected-but-not-yet-loaded model
+  // so the switcher reads "Switch Model" and highlights the active choice under deferred
+  // loading, instead of looking like a fresh first-pick.
   const hasLoaded = currentModelPath !== null || currentRemoteModelId !== null;
+  const activeLocalPath = currentModelPath ?? selectedModelPath;
+  const hasActive = activeLocalPath !== null || currentRemoteModelId !== null;
   const activeLocalModel = downloadedModels.find(m => m.filePath === currentModelPath);
 
   // Find active remote model info
@@ -64,7 +72,7 @@ export const TextTab: React.FC<TextTabProps> = ({
         </View>
       )}
 
-      <Text style={styles.sectionTitle}>{hasLoaded ? 'Switch Model' : 'Available Models'}</Text>
+      <Text style={styles.sectionTitle}>{hasActive ? 'Switch Model' : 'Available Models'}</Text>
 
       {/* Empty state when no models at all */}
       {downloadedModels.length === 0 && remoteModels.length === 0 && (
@@ -95,16 +103,22 @@ export const TextTab: React.FC<TextTabProps> = ({
             <Text style={styles.sectionSubTitle}>Local Models</Text>
           </View>
           {downloadedModels.map((model) => {
-            const isCurrent = currentModelPath === model.filePath;
+            const isLoaded = currentModelPath === model.filePath;
+            // The selected-but-not-loaded model is highlighted as active, but stays
+            // tappable so tapping it actually loads it (load-on-tap).
+            // Don't highlight a deferred-local selection while a remote model is
+            // current — otherwise both rows render active after a local→remote switch.
+            const isSelected = currentRemoteModelId === null && !currentModelPath && selectedModelPath === model.filePath;
+            const isActive = isLoaded || isSelected;
             return (
               <TouchableOpacity
                 key={model.id}
-                style={[styles.modelItem, isCurrent && styles.modelItemSelected]}
+                style={[styles.modelItem, isActive && styles.modelItemSelected]}
                 onPress={() => onSelectModel(model)}
-                disabled={isAnyLoading || isCurrent}
+                disabled={isAnyLoading || isLoaded}
               >
                 <View style={styles.modelInfo}>
-                  <Text style={[styles.modelName, isCurrent && styles.modelNameSelected]} numberOfLines={1}>
+                  <Text style={[styles.modelName, isActive && styles.modelNameSelected]} numberOfLines={1}>
                     {model.name}
                   </Text>
                   <View style={styles.modelMeta}>
@@ -126,7 +140,7 @@ export const TextTab: React.FC<TextTabProps> = ({
                     )}
                   </View>
                 </View>
-                {isCurrent && (
+                {isLoaded && (
                   <View style={styles.checkmark}>
                     <Icon name="check" size={16} color={colors.background} />
                   </View>

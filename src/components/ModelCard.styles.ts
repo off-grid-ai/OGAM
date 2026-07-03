@@ -243,10 +243,14 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     backgroundColor: colors.primary,
     borderRadius: 4,
   },
+  progressLabelRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+  },
   progressText: {
     ...TYPOGRAPHY.meta,
     color: colors.textSecondary,
-    width: 40,
     textAlign: 'right' as const,
   },
   // LiteRT card only: tighten the gap and hug the percentage to the bar so it

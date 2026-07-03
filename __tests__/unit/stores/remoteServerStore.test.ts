@@ -598,6 +598,38 @@ describe('remoteServerStore', () => {
       expect(useRemoteServerStore.getState().discoveredModels[serverId]).toHaveLength(1);
     });
 
+    it('trusts the gateway kind:"vision" for supportsVision even when name/probe detection would miss it (F7)', async () => {
+      // A gateway vision model whose id matches no name heuristic; probes return no
+      // capability. Without trusting kind, supportsVision would be false and the image
+      // would be dropped client-side so the model behaved text-only.
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          object: 'list',
+          data: [
+            { id: 'gemma-4-e4b-it-Q8_0.gguf', kind: 'vision', owned_by: 'offgrid' },
+            { id: 'plain-chat.gguf', kind: 'chat', owned_by: 'offgrid' },
+          ],
+        }),
+      });
+      (global as any).fetch = mockFetch;
+
+      let serverId = '';
+      actStoreUpdate(() => {
+        serverId = useRemoteServerStore.getState().addServer({
+          name: 'Gateway', endpoint: 'http://mac:7878', providerType: 'openai-compatible',
+        });
+      });
+      let modelsPromise: any;
+      act(() => { modelsPromise = useRemoteServerStore.getState().discoverModels(serverId); });
+      const models = await modelsPromise;
+
+      const vision = models.find((m: any) => m.id === 'gemma-4-e4b-it-Q8_0.gguf');
+      const chat = models.find((m: any) => m.id === 'plain-chat.gguf');
+      expect(vision?.capabilities.supportsVision).toBe(true);
+      expect(chat?.capabilities.supportsVision).toBe(false);
+    });
+
     it('should handle fetch failure and return empty array', async () => {
       // Mock fetch to fail
       const mockFetch = jest.fn().mockRejectedValue(new Error('Network error'));

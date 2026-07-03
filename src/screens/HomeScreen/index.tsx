@@ -18,6 +18,7 @@ import { useHomeScreenSpotlight } from './hooks/useHomeScreenSpotlight';
 import { RecentConversations } from './components/RecentConversations';
 import { ModelPickerSheet } from './components/ModelPickerSheet';
 import { LoadingOverlay } from './components/LoadingOverlay';
+import { DesktopPromoCard } from './components/DesktopPromoCard';
 import { ModelsSummaryRow } from '../../components/models/ModelsSummaryRow';
 import { ModelsManagerSheet, ModelRowType } from '../../components/models/ModelsManagerSheet';
 import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
@@ -93,6 +94,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [whisperOpen, setWhisperOpen] = React.useState(false);
   const [voiceOpen, setVoiceOpen] = React.useState(false);
   const whisperModelId = useWhisperStore((s) => s.downloadedModelId);
+  const whisperPresentCount = useWhisperStore((s) => s.presentModelIds?.length ?? 0);
   const voiceSummary = useUiModeStore((s) => s.voiceSummary);
 
   const modelLabels: Record<ModelRowType, string> = {
@@ -100,6 +102,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     image: activeImageModel?.name ?? '—',
     voice: voiceSummary ?? '—',
     speech: WHISPER_MODELS.find((m) => m.id === whisperModelId)?.name ?? '—',
+  };
+
+  // Downloaded-model counts shown in the Models card (replaces the old stats row).
+  const modelCounts: Partial<Record<ModelRowType, number>> = {
+    text: downloadedModels.length,
+    image: downloadedImageModels.length,
+    speech: whisperPresentCount,
+    voice: voiceSummary ? 1 : 0,
   };
 
   // Stash an action and close the manager; the action runs from the manager's
@@ -131,7 +141,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <Text style={styles.title}>Off Grid</Text>
+              <Text style={styles.title}>Off Grid AI</Text>
               {showIcon && <PulsatingIcon onPress={openSheet} />}
             </View>
             <TouchableOpacity onPress={() => navigation.navigate('ProDetail')} hitSlop={8} style={styles.crownButton}>
@@ -146,6 +156,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               <AttachStep index={13} style={stretchStyle}>
                 <ModelsSummaryRow
                   labels={modelLabels}
+                  counts={modelCounts}
                   isLoading={loadingState.isLoading}
                   onPress={() => setModelsManagerOpen(true)}
                 />
@@ -195,6 +206,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               <AnimatedEntry index={2} staggerMs={50} trigger={focusTrigger}>
                 <RecentConversations
                   conversations={recentConversations}
+                  totalCount={conversations.length}
                   focusTrigger={focusTrigger}
                   onContinueChat={continueChat}
                   onDeleteConversation={handleDeleteConversation}
@@ -220,25 +232,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <Icon name="chevron-right" size={16} color={colors.textMuted} />
           </AnimatedPressable>
 
-          {/* Model Stats */}
-          <AnimatedEntry index={3} staggerMs={50} trigger={focusTrigger}>
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{downloadedModels.length}</Text>
-                <Text style={styles.statLabel}>Text models</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{downloadedImageModels.length}</Text>
-                <Text style={styles.statLabel}>Image models</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{conversations.length}</Text>
-                <Text style={styles.statLabel}>Chats</Text>
-              </View>
-            </View>
-          </AnimatedEntry>
+          {/* Off Grid AI Desktop — live announcement; owns its own copy/dismiss state. */}
+          <DesktopPromoCard />
+
+          {/* Model Stats row removed — the per-type counts now live in the Models
+              card above, and the chat count sits next to "See all". */}
         </ScrollView >
       </View >
 

@@ -3,6 +3,10 @@ export { MODEL_RECOMMENDATIONS, RECOMMENDED_MODELS, TRENDING_FAMILIES, TRENDING_
 // External URLs
 export const WEDNESDAY_URL = 'https://wednesday.is/hire-ai-native-mobile-squad?utm_source=off-grid-mobile-app&utm_medium=made-with-love&utm_campaign=in-app';
 
+// Off Grid AI Desktop: the free, open-source desktop app (not a Pro feature).
+// Linked from Pro screens and from remote-server discovery alike.
+export const OFF_GRID_DESKTOP_URL = 'http://getoffgridai.co/desktop';
+
 export const PRO_AHA_FEATURES = [
   'Ambient across your devices',
   'Proactive, not reactive',

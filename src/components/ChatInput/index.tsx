@@ -11,6 +11,7 @@ import { createStyles, PILL_ICON_SIZE, ANIM_DURATION_IN, ANIM_DURATION_OUT } fro
 import { QueueRow } from './Toolbar';
 import { AttachmentPreview, useAttachments } from './Attachments';
 import { useVoiceInput } from './Voice';
+import { buildVoiceNoteHandlers } from './voiceNoteSend';
 import { QuickSettingsPopover, AttachPickerPopover } from './Popovers';
 import { useKeyboardAwarePopover } from './useKeyboardAwarePopover';
 import { useAppStore } from '../../stores';
@@ -38,6 +39,10 @@ interface ChatInputProps {
   onMcpPress?: () => void;
   supportsThinking?: boolean;
   onRepairVision?: () => void;
+  /** Whether the active text model is a remote (server) model. Remote models
+   * can't be repaired from the Download Manager, so the "no vision" dialog must
+   * not offer that action for them. */
+  isRemote?: boolean;
   activeSpotlight?: number | null;
   showSettingsDot?: boolean;
 }
@@ -53,6 +58,35 @@ const IMAGE_MODE_CYCLE: ImageModeState[] = ['auto', 'force', 'disabled'];
 // Attach + quick-settings only. The Chat/Voice mode toggle is no longer in this
 // (collapsing) row — it's rendered persistently above the input instead.
 const computePillIconsWidth = (): number => PILL_ICON_SIZE * 2;
+
+/**
+ * Alert shown when the user attaches an image to a model without vision support.
+ * Remote (server) models have no local vision-projector file to repair, so the
+ * Download Manager / eye-icon advice is omitted for them — it can't be acted on.
+ */
+const buildNoVisionAlert = (opts: {
+  isRemote: boolean;
+  onRepairVision?: () => void;
+  dismiss: () => void;
+}): AlertState => {
+  if (opts.isRemote) {
+    return showAlert(
+      'Vision Not Supported',
+      'This remote model does not support image input.\n\nSelect a vision-capable model on the server, or switch to a local vision model to send images.',
+      [{ text: 'OK', onPress: opts.dismiss }],
+    );
+  }
+  return showAlert(
+    'Vision Not Supported',
+    'The loaded model does not have vision support.\n\nIf this model supports vision, open Download Manager and tap the eye icon next to the model to repair it.',
+    [
+      { text: 'Cancel', onPress: opts.dismiss },
+      ...(opts.onRepairVision
+        ? [{ text: 'Go to Download Manager', onPress: () => { opts.dismiss(); opts.onRepairVision!(); } }]
+        : [{ text: 'OK' }]),
+    ],
+  );
+};
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
@@ -77,6 +111,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   mcpToolCount = 0,
   onMcpPress,
   onRepairVision,
+  isRemote = false,
   activeSpotlight = null,
   showSettingsDot = false,
 }) => {
@@ -106,31 +141,30 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const interfaceMode = useUiModeStore((s) => s.interfaceMode);
   const isAudioMode = interfaceMode === 'audio';
 
+  // All voice-note send/attach decisions live in buildVoiceNoteHandlers (the
+  // owning logic), not in this View. The View only supplies dependencies and
+  // dispatches; a standalone Chat-mode note and Audio Mode both auto-send through
+  // the one shared path so buildOAIMessages handles text/vision/audio models.
+  const voiceHandlers = buildVoiceNoteHandlers({
+    getComposerText: () => message,
+    getPendingAttachments: () => attachmentsRef.current,
+    isAudioMode,
+    imageMode,
+    onSend,
+    addAudioAttachment,
+    clearAttachments,
+    onHaptic: () => triggerHaptic('impactMedium'),
+    appendTranscript: (text) => setMessage(prev => {
+      const prefix = prev.trim() ? `${prev.trim()} ` : '';
+      return prefix + text;
+    }),
+  });
+
   const { isRecording, isModelLoading, isTranscribing, partialResult, error, voiceAvailable, startRecording, stopRecording, cancelRecording } = useVoiceInput({
     conversationId,
-    onTranscript: (text) => {
-      setMessage(prev => {
-        const prefix = prev.trim() ? `${prev.trim()} ` : '';
-        return prefix + text;
-      });
-    },
-    onAudioAttachment: (uri, format, durationSeconds) => {
-      addAudioAttachment(uri, format, durationSeconds);
-    },
-    onAutoSend: isAudioMode ? (text, audio) => {
-      const audioAttachment: MediaAttachment = {
-        id: `audio-${Date.now()}`,
-        type: 'audio',
-        uri: audio.uri,
-        audioFormat: audio.format,
-        audioDurationSeconds: audio.durationSeconds,
-        fileName: audio.uri.split('/').pop(),
-      };
-      triggerHaptic('impactMedium');
-      const all = [...attachmentsRef.current, audioAttachment];
-      onSend(text, all, imageMode);
-      clearAttachments();
-    } : undefined,
+    onTranscript: voiceHandlers.onTranscript,
+    onAudioAttachment: voiceHandlers.onAudioAttachment,
+    onAutoSend: voiceHandlers.onAutoSend,
   });
 
   const { settings: appSettings, updateSettings: updateAppSettings } = useAppStore();
@@ -176,14 +210,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleVisionPress = () => {
     if (!supportsVision) {
-      setAlertState(showAlert(
-        'Vision Not Supported',
-        'The loaded model does not have vision support.\n\nIf this model supports vision, open Download Manager and tap the eye icon next to the model to repair it.',
-        [
-          { text: 'Cancel', onPress: () => setAlertState(hideAlert()) },
-          ...(onRepairVision ? [{ text: 'Go to Download Manager', onPress: () => { setAlertState(hideAlert()); onRepairVision(); } }] : [{ text: 'OK' }]),
-        ],
-      ));
+      setAlertState(buildNoVisionAlert({ isRemote, onRepairVision, dismiss: () => setAlertState(hideAlert()) }));
       return;
     }
     handlePickImage();

@@ -1,9 +1,13 @@
 package ai.offgridmobile.download
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import android.os.Environment
 import android.os.PowerManager
 import android.provider.Settings
@@ -321,6 +325,20 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
     fun stopProgressPolling() {
         workObservers.keys.toList().forEach { removeWorkObserver(it) }
         workObservers.clear()
+    }
+
+    /** Ask for POST_NOTIFICATIONS (Android 13+) so the foreground-service download
+     *  notification is visible. The download still runs as an FGS if denied; this only
+     *  affects notification visibility. Best-effort, no-op when unavailable/granted. */
+    @ReactMethod
+    fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val activity = reactApplicationContext.currentActivity ?: return
+        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS)
+            == PackageManager.PERMISSION_GRANTED) return
+        try {
+            ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 8123)
+        } catch (_: Exception) { /* activity gone or already prompting */ }
     }
 
     @ReactMethod

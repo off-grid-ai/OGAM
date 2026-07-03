@@ -9,6 +9,9 @@ import type { ModelRowType } from './ModelsManagerSheet';
 
 type Props = {
   labels: Record<ModelRowType, string>;
+  /** Count of downloaded models per type — shown under each caption so the card
+   *  carries information at a glance (replaces the separate stats row). */
+  counts?: Partial<Record<ModelRowType, number>>;
   isLoading: boolean;
   onPress: () => void;
 };
@@ -25,7 +28,7 @@ const TYPE_ICONS: { type: ModelRowType; icon: string; caption: string }[] = [
  * type — emerald + bright caption when that type has an active model, dimmed +
  * muted when not. Tap → manager sheet.
  */
-export const ModelsSummaryRow: React.FC<Props> = ({ labels, isLoading, onPress }) => {
+export const ModelsSummaryRow: React.FC<Props> = ({ labels, counts, isLoading, onPress }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
@@ -40,10 +43,18 @@ export const ModelsSummaryRow: React.FC<Props> = ({ labels, isLoading, onPress }
       <View style={styles.icons}>
         {TYPE_ICONS.map(({ type, icon, caption }) => {
           const active = !!labels[type] && labels[type] !== '—';
+          const count = counts?.[type];
           return (
             <View key={type} style={[styles.iconCol, !active && styles.inactive]}>
-              <Icon name={icon} size={18} color={active ? colors.primary : colors.textMuted} />
-              <Text style={[styles.caption, active && styles.captionActive]}>{caption}</Text>
+              <View style={styles.typeStack}>
+                <Icon name={icon} size={18} color={active ? colors.primary : colors.textMuted} />
+                <Text style={[styles.caption, active && styles.captionActive]}>{caption}</Text>
+              </View>
+              {typeof count === 'number' && (
+                // Big numeral to the RIGHT of the icon+label, tall enough to span
+                // both — fills the gap between types so the row reads at a glance.
+                <Text style={[styles.count, count > 0 && styles.countActive]}>{count}</Text>
+              )}
             </View>
           );
         })}
@@ -74,8 +85,14 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     justifyContent: 'space-between' as const,
     paddingHorizontal: SPACING.sm,
   },
-  iconCol: { alignItems: 'center' as const, gap: SPACING.xs },
+  iconCol: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm },
   inactive: { opacity: 0.35 },
+  typeStack: { alignItems: 'center' as const, gap: SPACING.xs },
   caption: { ...TYPOGRAPHY.metaSmall, color: colors.textMuted },
   captionActive: { color: colors.textSecondary },
+  // Numeral to the right of the icon+label. Thin (weight 200) and only modestly
+  // larger than the icon so it reads as a quiet secondary count, not a loud hero —
+  // matches the restrained terminal look. lineHeight spans the stack for centering.
+  count: { ...TYPOGRAPHY.display, fontSize: 18, lineHeight: 34, color: colors.textMuted },
+  countActive: { color: colors.primary },
 });

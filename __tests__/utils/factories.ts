@@ -339,7 +339,7 @@ export const createGeneratedImage = (options: GeneratedImageFactoryOptions = {})
 
 export interface MediaAttachmentFactoryOptions {
   id?: string;
-  type?: 'image' | 'document';
+  type?: 'image' | 'document' | 'audio';
   uri?: string;
   mimeType?: string;
   width?: number;
@@ -347,6 +347,8 @@ export interface MediaAttachmentFactoryOptions {
   fileName?: string;
   textContent?: string;
   fileSize?: number;
+  audioFormat?: 'wav' | 'mp3';
+  audioDurationSeconds?: number;
 }
 
 export const createMediaAttachment = (options: MediaAttachmentFactoryOptions = {}): MediaAttachment => ({
@@ -373,6 +375,17 @@ export const createDocumentAttachment = (options: Omit<MediaAttachmentFactoryOpt
     textContent: options.textContent ?? 'Extracted document text content',
     fileSize: options.fileSize ?? 1024 * 1024, // 1MB
   });
+
+export const createAudioAttachment = (options: Omit<MediaAttachmentFactoryOptions, 'type'> = {}): MediaAttachment => ({
+  id: options.id ?? generateId('attach'),
+  type: 'audio',
+  uri: options.uri ?? 'file:///mock/voice.wav',
+  fileName: options.fileName ?? 'voice.wav',
+  audioFormat: options.audioFormat ?? 'wav',
+  audioDurationSeconds: options.audioDurationSeconds ?? 3,
+  // `textContent` carries the whisper transcription (display-only for audio).
+  textContent: options.textContent,
+});
 
 // ============================================================================
 // Generation Meta Factory

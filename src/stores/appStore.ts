@@ -118,6 +118,12 @@ interface AppState {
   shownSpotlights: Record<string, boolean>;
   markSpotlightShown: (key: string) => void;
   resetShownSpotlights: () => void;
+  /** Image models that have completed at least one generation. The FIRST run for a
+   *  model compiles/warms the backend (OpenCL kernels on Android, the CoreML model
+   *  on iOS) and takes ~120s — this drives the one-time warm-up notice on BOTH
+   *  platforms, persisted so it only shows once per model. */
+  warmedImageModels: string[];
+  markImageModelWarmed: (modelId: string) => void;
   textGenerationCount: number;
   imageGenerationCount: number;
   incrementTextGenerationCount: () => number;
@@ -127,6 +133,15 @@ interface AppState {
   // PRO pre-order state
   hasRegisteredPro: boolean;
   setHasRegisteredPro: (v: boolean) => void;
+  /**
+   * Authoritative "Pro is unlocked right now" — the same signal loadProFeatures uses
+   * to activate paid features (keychain entitlement OR a __DEV__ unlock), set at boot.
+   * This is the ONE flag every upsell gate must read: hasRegisteredPro alone misses a
+   * keychain/dev-unlocked Pro user, so the upsell wrongly fired for them. Not persisted
+   * — recomputed authoritatively each launch.
+   */
+  isProActive: boolean;
+  setProActive: (v: boolean) => void;
   /** DEV-only: when true, suppresses the __DEV__ Pro auto-unlock so the
    *  free → Pro activation flow can be exercised in a debug build. No effect in
    *  release (__DEV__ is false there). */
@@ -134,6 +149,8 @@ interface AppState {
   setDevProDisabled: (v: boolean) => void;
   proBannerDismissed: boolean;
   setProBannerDismissed: (v: boolean) => void;
+  desktopPromoDismissed: boolean;
+  setDesktopPromoDismissed: (v: boolean) => void;
   proAhaTriggeredBy: 'image' | 'text' | null;
   setProAhaTriggeredBy: (by: 'image' | 'text' | null) => void;
   toolCountHintDismissed: boolean;
@@ -185,6 +202,30 @@ function migrateEnabledTools(merged: any): void {
     merged.settings = { ...merged.settings, enabledTools: [...merged.settings.enabledTools, 'search_knowledge_base'] };
   }
 }
+
+// The removed MCP context auto-boost pinned context to 32768 (and maxTokens to 8192 /
+// liteRTMaxTokens to 32768) on MCP enable and never restored it, causing OOM crashes
+// and tanked tok/s on flagship devices. Reset anyone left at the boost ceiling back to
+// the device-safe defaults. Idempotent: once reset, the values no longer match.
+const MCP_BOOST_CTX_CEILING = 32768;
+const MCP_BOOST_MAX_OUTPUT_TOKENS = 8192;
+function migrateBoostedContext(merged: any): void {
+  const s = merged.settings;
+  if (!s) return;
+  // Match the EXACT values the boost wrote, not `>=`. The boost set these to
+  // precise constants; a `>=` test also clobbers a user who legitimately chose a
+  // large context/maxTokens above the default, which this one-time migration must
+  // not touch.
+  if (s.contextLength === MCP_BOOST_CTX_CEILING) {
+    s.contextLength = DEFAULT_SETTINGS.contextLength;
+    // maxTokens was raised alongside contextLength by the boost; only reset it when the
+    // boost's exact value is present, so a legitimately-large user maxTokens isn't clobbered.
+    if (s.maxTokens === MCP_BOOST_MAX_OUTPUT_TOKENS) s.maxTokens = DEFAULT_SETTINGS.maxTokens;
+  }
+  if (s.liteRTMaxTokens === MCP_BOOST_CTX_CEILING) {
+    s.liteRTMaxTokens = DEFAULT_SETTINGS.liteRTMaxTokens;
+  }
+}
 function migratePersistedState(persistedState: any, currentState: AppState): AppState {
   const merged = {
     ...currentState,
@@ -216,6 +257,7 @@ function migratePersistedState(persistedState: any, currentState: AppState): App
   if (merged.checklistDismissed && merged.onboardingChecklist &&
     !Object.values(merged.onboardingChecklist).every(Boolean)) merged.checklistDismissed = false;
   migrateEnabledTools(merged);
+  migrateBoostedContext(merged);
   return merged as AppState;
 }
 
@@ -324,6 +366,11 @@ export const useAppStore = create<AppState>()(
       markSpotlightShown: (key) =>
         set((state) => ({ shownSpotlights: { ...state.shownSpotlights, [key]: true } })),
       resetShownSpotlights: () => set({ shownSpotlights: {} }),
+      warmedImageModels: [],
+      markImageModelWarmed: (modelId) =>
+        set((state) => state.warmedImageModels.includes(modelId)
+          ? state
+          : { warmedImageModels: [...state.warmedImageModels, modelId] }),
       textGenerationCount: 0,
       imageGenerationCount: 0,
       incrementTextGenerationCount: () => { const c = get().textGenerationCount + 1; set({ textGenerationCount: c }); return c; },
@@ -332,10 +379,14 @@ export const useAppStore = create<AppState>()(
       setHasEngagedSharePrompt: (v) => set({ hasEngagedSharePrompt: v }),
       hasRegisteredPro: false,
       setHasRegisteredPro: (v) => set({ hasRegisteredPro: v }),
+      isProActive: false,
+      setProActive: (v) => set({ isProActive: v }),
       devProDisabled: false,
       setDevProDisabled: (v) => set({ devProDisabled: v }),
       proBannerDismissed: false,
       setProBannerDismissed: (v) => set({ proBannerDismissed: v }),
+      desktopPromoDismissed: false,
+      setDesktopPromoDismissed: (v) => set({ desktopPromoDismissed: v }),
       proAhaTriggeredBy: null,
       setProAhaTriggeredBy: (by) => set({ proAhaTriggeredBy: by }),
       toolCountHintDismissed: false,
@@ -358,11 +409,13 @@ export const useAppStore = create<AppState>()(
         activeImageModelId: state.activeImageModelId,
         generatedImages: state.generatedImages,
         shownSpotlights: state.shownSpotlights,
+        warmedImageModels: state.warmedImageModels,
         textGenerationCount: state.textGenerationCount, imageGenerationCount: state.imageGenerationCount,
         hasEngagedSharePrompt: state.hasEngagedSharePrompt,
         hasRegisteredPro: state.hasRegisteredPro,
         devProDisabled: state.devProDisabled,
         proBannerDismissed: state.proBannerDismissed,
+        desktopPromoDismissed: state.desktopPromoDismissed,
         proAhaTriggeredBy: state.proAhaTriggeredBy,
         loadedSettings: state.loadedSettings,
       }),

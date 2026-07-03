@@ -1,15 +1,23 @@
 package ai.offgridmobile.download
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.util.Log
 import android.os.Environment
 import android.os.StatFs
+import androidx.core.app.NotificationCompat
 import androidx.work.BackoffPolicy
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ForegroundInfo
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkRequest
 import androidx.work.WorkerParameters
@@ -39,6 +47,15 @@ class WorkerDownload(
         val progressInterval = inputData.getLong(KEY_PROGRESS_INTERVAL, DEFAULT_PROGRESS_INTERVAL)
         val download = downloadDao.getDownload(downloadId) ?: return Result.failure()
 
+        // Run as a foreground service so a multi-GB download keeps progressing when the
+        // app is backgrounded or the screen is off. A plain CoroutineWorker gets WorkManager's
+        // ~10-min window + Doze throttling, so large downloads stalled/retry-looped (the
+        // Android-only "downloads never finish in background" bug). Best-effort: on Android
+        // 12+ setForeground can be refused if the app can't start an FGS right now; the
+        // worker still runs (just without the promotion), so never fail the download on it.
+        runCatching { setForeground(createForegroundInfo(download.fileName)) }
+            .onFailure { Log.w(TAG, "setForeground refused; continuing as background worker: ${it.message}") }
+
         if (isStopped) return handleStoppedState(downloadId, download, 0L)
 
         val targetFile = File(download.destination)
@@ -65,6 +82,12 @@ class WorkerDownload(
             cancelHandle?.dispose()
         }
     }
+
+    /** Required by expedited work as the pre-Android-12 foreground fallback. */
+    override suspend fun getForegroundInfo(): ForegroundInfo = buildForegroundInfo(applicationContext, null)
+
+    private fun createForegroundInfo(fileName: String?): ForegroundInfo =
+        buildForegroundInfo(applicationContext, fileName)
 
     private suspend fun checkDiskSpace(downloadId: String, download: DownloadEntity, targetFile: File, existingBytes: Long): Result? {
         if (download.totalBytes <= 0L) return null
@@ -271,6 +294,8 @@ class WorkerDownload(
             .build()
 
         const val DEFAULT_PROGRESS_INTERVAL = 1500L
+        private const val DOWNLOAD_CHANNEL_ID = "model_downloads"
+        private const val DOWNLOAD_NOTIFICATION_ID = 4711
         const val KEY_DOWNLOAD_ID = "download_id"
         const val KEY_PROGRESS = "progress"
         const val KEY_TOTAL = "total"
@@ -295,6 +320,37 @@ class WorkerDownload(
                 200 -> if (contentLength > 0L) contentLength else existingTotal
                 else -> maxOf(existingTotal, contentLength)
             }
+        }
+
+        /** Build the ongoing progress notification that promotes the worker to a
+         *  foreground service (dataSync type). Extracted here so it's testable with a
+         *  Robolectric Context without constructing the worker. */
+        internal fun buildForegroundInfo(ctx: Context, fileName: String?): ForegroundInfo {
+            ensureNotificationChannel(ctx)
+            val notification: Notification = NotificationCompat.Builder(ctx, DOWNLOAD_CHANNEL_ID)
+                .setContentTitle("Downloading model")
+                .setContentText(fileName ?: "Preparing download")
+                .setSmallIcon(android.R.drawable.stat_sys_download)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build()
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ForegroundInfo(DOWNLOAD_NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                ForegroundInfo(DOWNLOAD_NOTIFICATION_ID, notification)
+            }
+        }
+
+        internal fun ensureNotificationChannel(ctx: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+            val mgr = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (mgr.getNotificationChannel(DOWNLOAD_CHANNEL_ID) != null) return
+            mgr.createNotificationChannel(
+                NotificationChannel(DOWNLOAD_CHANNEL_ID, "Model downloads", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "Keeps large model downloads running in the background"
+                }
+            )
         }
 
         internal fun computeFileSha256(file: File): String {
@@ -338,6 +394,10 @@ class WorkerDownload(
                     WorkRequest.MIN_BACKOFF_MILLIS,
                     TimeUnit.MILLISECONDS,
                 )
+                // Start expedited when the OS allows it; fall back to a normal (still
+                // foreground-promoted via setForeground) run otherwise, so we never
+                // fail to enqueue when the expedited quota is exhausted.
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .setInputData(
                     workDataOf(
                         KEY_DOWNLOAD_ID to downloadId,

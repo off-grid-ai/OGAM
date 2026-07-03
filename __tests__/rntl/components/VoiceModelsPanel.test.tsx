@@ -33,18 +33,24 @@ jest.mock('@offgrid/core/components/AnimatedPressable', () => {
   };
 });
 
-let mockDownloaded = true;
 const mockEngine = {
+  id: 'kokoro',
   displayName: 'Kokoro TTS',
   capabilities: { peakRamMB: 82 },
   getRequiredAssets: () => [{ id: 'a', sizeBytes: 82 * 1024 * 1024 }],
-  isFullyDownloaded: () => mockDownloaded,
-  checkAssetStatus: jest.fn(async () => []),
   getActiveVoice: () => null,
 };
 jest.mock('../../../pro/audio/engine', () => ({
   ttsRegistry: { getActiveEngine: () => mockEngine },
 }));
+
+// The panel reads download state from the SAME service the Download Manager does.
+let mockDownloads: any[] = [];
+jest.mock('@offgrid/core/services/modelDownloadService/useModelDownloads', () => ({
+  useModelDownloads: () => mockDownloads,
+}));
+const ttsDl = (status: string, progress = status === 'completed' ? 1 : 0) =>
+  ({ id: 'tts:kokoro', modelType: 'tts', name: 'Kokoro TTS', status, progress });
 
 const actions = {
   setVoice: jest.fn(async () => {}),
@@ -73,14 +79,13 @@ const renderPanel = async () => {
 describe('VoiceModelsPanel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockDownloaded = true;
+    mockDownloads = [ttsDl('completed')];
     mockStoreState = {
       isReady: true,
-      isDownloading: false,
-      overallDownloadProgress: 0,
       error: null,
       voices: VOICES,
       activeVoiceId: 'af_heart',
+      settings: { modelDownloaded: {} },
       ...actions,
     };
   });
@@ -100,7 +105,7 @@ describe('VoiceModelsPanel', () => {
   });
 
   it('shows an opt-in download when the model is not downloaded', async () => {
-    mockDownloaded = false;
+    mockDownloads = []; // service has no tts entry → not downloaded / not downloading
     mockStoreState.isReady = false;
     const { getByText } = await renderPanel();
 
@@ -110,16 +115,44 @@ describe('VoiceModelsPanel', () => {
     await waitFor(() => expect(actions.downloadModels).toHaveBeenCalled());
   });
 
-  it('re-derives download status from disk when the screen regains focus', async () => {
-    // Disk is the source of truth: returning to the panel after a download or
-    // delete elsewhere must re-probe rather than show stale state.
+  it('shows the model as DOWNLOADED (voices) when the service reports completed, even if the engine is not loaded — the mismatch fix', async () => {
+    // Regression for the Download-Manager-vs-Voice-panel mismatch: the service is
+    // the single source. When it says 'completed', the panel shows voices — never a
+    // stale 0% progress bar — regardless of the engine being loaded or any store flag.
+    mockDownloads = [ttsDl('completed')];
+    mockStoreState.isReady = false;
+    mockStoreState.settings = { modelDownloaded: {} };
+    const { getByTestId, queryByText } = await renderPanel();
+    expect(getByTestId('voice-af_heart')).toBeTruthy();
+    expect(queryByText('Download voice')).toBeNull();
+    expect(queryByText('0%')).toBeNull();
+  });
+
+  it('shows live progress while the service reports downloading', async () => {
+    mockDownloads = [ttsDl('downloading', 0.4)];
+    mockStoreState.isReady = false;
+    const { getByText } = await renderPanel();
+    expect(getByText('40%')).toBeTruthy();
+  });
+
+  it('shows progress (not the idle CTA) for queued and paused too — the shared in-progress predicate', async () => {
+    // Regression: the panel used a bare `=== 'downloading'`, so a queued or a
+    // kill-interrupted (paused) TTS download flashed the "Download voice" CTA.
+    for (const status of ['queued', 'paused'] as const) {
+      mockDownloads = [ttsDl(status, 0.4)];
+      mockStoreState.isReady = false;
+      const { getByText, queryByText } = await renderPanel();
+      expect(getByText('40%')).toBeTruthy();
+      expect(queryByText('Download voice')).toBeNull();
+    }
+  });
+
+  it('backfills the persisted-downloaded flag from disk on focus', async () => {
     let focusCb: (() => void) | undefined;
     (useFocusEffect as jest.Mock).mockImplementation((cb: () => void) => { focusCb = cb; });
     await renderPanel();
     actions.checkDownloadStatus.mockClear(); // drop the mount-effect call
-    mockEngine.checkAssetStatus.mockClear();
     await act(async () => { focusCb?.(); await Promise.resolve(); });
     expect(actions.checkDownloadStatus).toHaveBeenCalled();
-    expect(mockEngine.checkAssetStatus).toHaveBeenCalled();
   });
 });

@@ -338,6 +338,74 @@ describe('OpenAICompatibleProvider', () => {
     });
   });
 
+  describe('generate — enable_thinking kwarg gating (capability-driven)', () => {
+    // The gate is a DISCOVERED capability (acceptsThinkingKwarg), not the port.
+    const runGenerate = async (opts: {
+      acceptsThinkingKwarg?: boolean;
+      enableThinking?: boolean;
+      endpoint?: string;
+    }) => {
+      const p = new OpenAICompatibleProvider('s', {
+        endpoint: opts.endpoint ?? 'http://example.com:9999',
+        modelId: 'qwen3',
+      });
+      await p.loadModel('qwen3');
+      if (opts.acceptsThinkingKwarg !== undefined) {
+        p.updateCapabilities({ acceptsThinkingKwarg: opts.acceptsThinkingKwarg });
+      }
+      const mock = httpClient.createStreamingRequest as jest.Mock;
+      mock.mockImplementation((_url, _req, onEvent) => {
+        onEvent({ data: '{"choices":[{"finish_reason":"stop"}]}' });
+        return Promise.resolve();
+      });
+      await p.generate(
+        [{ id: '1', role: 'user', content: 'Hi', timestamp: 0 }],
+        { enableThinking: opts.enableThinking },
+        { onToken: jest.fn(), onComplete: jest.fn(), onError: jest.fn() },
+      );
+      return (mock.mock.calls[0][1].body as Record<string, unknown>);
+    };
+
+    it('sends enable_thinking:true when the server advertised acceptsThinkingKwarg', async () => {
+      const body = await runGenerate({ acceptsThinkingKwarg: true, enableThinking: true });
+      expect(body.chat_template_kwargs).toEqual({ enable_thinking: true });
+    });
+
+    it('sends enable_thinking:false (thinking off) when the capability is present', async () => {
+      const body = await runGenerate({ acceptsThinkingKwarg: true, enableThinking: false });
+      expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
+    });
+
+    it('omits chat_template_kwargs entirely when the server did not advertise the capability', async () => {
+      // A server on ANY port that never reported acceptsThinkingKwarg must not get
+      // the field — unknown fields can be rejected. No port check involved.
+      const body = await runGenerate({ acceptsThinkingKwarg: false, enableThinking: true });
+      expect(body.chat_template_kwargs).toBeUndefined();
+    });
+
+    it('omits chat_template_kwargs by default (capability undiscovered)', async () => {
+      const body = await runGenerate({ enableThinking: true });
+      expect(body.chat_template_kwargs).toBeUndefined();
+    });
+
+    it('does NOT take the OpenAI chat_template_kwargs path for a plain Ollama endpoint (port 11434)', async () => {
+      // Ollama routes through its native /api/chat (think: flag) via a different
+      // NDJSON transport, so the OpenAI createStreamingRequest path — the only one
+      // that can carry chat_template_kwargs — is never invoked for it.
+      const p = new OpenAICompatibleProvider('s', { endpoint: 'http://192.168.1.50:11434', modelId: 'qwen3' });
+      await p.loadModel('qwen3');
+      p.updateCapabilities({ acceptsThinkingKwarg: true });
+      const mock = httpClient.createStreamingRequest as jest.Mock;
+      mock.mockClear();
+      await p.generate(
+        [{ id: '1', role: 'user', content: 'Hi', timestamp: 0 }],
+        { enableThinking: true },
+        { onToken: jest.fn(), onComplete: jest.fn(), onError: jest.fn() },
+      );
+      expect(mock).not.toHaveBeenCalled();
+    });
+  });
+
   describe('stopGeneration', () => {
     it('should abort ongoing generation', async () => {
       await provider.loadModel('test-model');

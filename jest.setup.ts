@@ -205,7 +205,17 @@ jest.mock('@react-native-community/slider', () => {
 });
 
 // react-native-executorch mock
-const mockVoiceConfig = { id: 'mock_voice' };
+// A voice carries its own assets (embedding + tagger + lexicon) in addition to
+// the two shared core .pte models — mirror that so completeness checks
+// (_activeVoiceSources) have a realistic full asset set to validate against.
+const mockVoiceConfig = {
+  id: 'mock_voice',
+  voiceSource: 'https://example.test/kokoro/voices/af_heart.bin',
+  extra: {
+    taggerSource: 'https://example.test/kokoro/tagger.pt',
+    lexiconSource: 'https://example.test/kokoro/lexicon.json',
+  },
+};
 jest.mock('react-native-executorch', () => ({
   useTextToSpeech: jest.fn(() => ({
     isReady: true,
@@ -238,6 +248,7 @@ jest.mock(
       listDownloadedModels: jest.fn(async () => [] as string[]),
       listDownloadedFiles: jest.fn(async () => [] as string[]),
       deleteResources: jest.fn(async () => {}),
+      fetch: jest.fn(async () => {}),
     },
   }),
   { virtual: true },

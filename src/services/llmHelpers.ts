@@ -5,6 +5,7 @@ import { APP_CONFIG } from '../constants';
 import { Message, INFERENCE_BACKENDS } from '../types';
 import { MultimodalSupport, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
+import { ensureNativeLogCapture, resetNativeLogCapture, recentNativeLog } from './llmNativeLog';
 
 /** Feature flag: Set to true to enable HTP/Hexagon NPU support. Currently disabled. */
 const HTP_ENABLED = false;
@@ -48,6 +49,10 @@ export interface ModelLoadParams {
   nBatch: number;
   ctxLen: number;
   nGpuLayers: number;
+  /** Whether the EFFECTIVE KV cache is f16 (OpenCL/HTP coerce to it regardless of the
+   *  user setting). The single source for the memory guard's KV-size estimate — read
+   *  this instead of re-deriving from settings.cacheType, which misses the coercion. */
+  usesF16Cache: boolean;
 }
 
 export function buildModelParams(
@@ -78,10 +83,18 @@ export function buildModelParams(
     baseParams: {
       model: modelPath, use_mlock: false, n_batch: nBatch, n_ubatch: nBatch, n_threads: nThreads,
       use_mmap: !shouldDisableMmap(modelPath), vocab_only: false, flash_attn_type,
-      kv_unified: true, no_extra_bufts: false,
+      // Do NOT force kv_unified — let llama.cpp pick it per architecture. Forcing
+      // `true` (a marginal single-seq perf tweak) hung gemma3n (gemma-4 E2B/E4B):
+      // its interleaved sliding-window + heterogeneous KV layers froze building the
+      // unified KV-cache reuse map ("kv_cache: reusing layers"). The engine's
+      // per-arch default (false) handles SWA models correctly and keeps GPU/Metal.
+      no_extra_bufts: false,
       ...(backend === INFERENCE_BACKENDS.OPENCL ? {} : { cache_type_k: cacheType, cache_type_v: cacheType }),
     },
     nThreads, nBatch, ctxLen, nGpuLayers,
+    // cacheType is already coerced to 'f16' above for OpenCL/HTP; OpenCL also omits the
+    // explicit cache params and llama.cpp defaults to f16 — both are captured here.
+    usesF16Cache: cacheType === 'f16',
   };
 }
 export interface ContextInitResult {
@@ -93,6 +106,11 @@ export interface ContextInitResult {
 const GPU_INIT_TIMEOUT_MS = 8000;
 /** Timeout for HTP/NPU context init -- DSP firmware load takes longer than Adreno. */
 const HTP_INIT_TIMEOUT_MS = 30000;
+/** iOS Metal init timeout. Larger than Android's because a legit large-model
+ *  Metal setup takes longer — but bounded, so a Metal graph that HANGS (e.g.
+ *  gemma3n froze indefinitely at kv-cache/graph construction) falls back to CPU
+ *  instead of spinning the loader forever. */
+const GPU_INIT_TIMEOUT_MS_IOS = 45000;
 /** Race a promise against a timeout; rejects with descriptive error on expiry. */
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
@@ -106,10 +124,24 @@ async function safeRelease(ctx: LlamaContext | null): Promise<void> {
   if (!ctx) return;
   try { await ctx.release(); } catch (e) { logger.warn('[LLM] Error releasing context during fallback:', e); }
 }
-/** On Android, race GPU/HTP init against a timeout to prevent ANRs. */
+/** The bounded time a GPU/HTP context init may take before we fall back to CPU.
+ *  Platform/backend only changes the DURATION (data) — the timeout policy itself
+ *  is uniform. */
+function gpuInitTimeoutMs(isHtp: boolean): number {
+  if (isHtp) return HTP_INIT_TIMEOUT_MS;            // Android HTP/NPU
+  return Platform.OS === 'ios' ? GPU_INIT_TIMEOUT_MS_IOS : GPU_INIT_TIMEOUT_MS;
+}
+/**
+ * Race a GPU/HTP context init against a timeout so a HUNG backend (an iOS Metal
+ * graph that never returns, an Android Adreno ANR) falls back to CPU instead of
+ * spinning the loader forever. This applies on EVERY platform — the only
+ * platform/backend difference is the timeout duration (see gpuInitTimeoutMs).
+ * Previously it was gated to Android, which is exactly why a hung iOS Metal load
+ * (e.g. gemma3n freezing at kv-cache/graph construction) had no escape hatch.
+ */
 async function tryGpuInit(promise: Promise<LlamaContext>, nGpuLayers: number, isHtp: boolean = false): Promise<LlamaContext> {
-  if (nGpuLayers <= 0 || Platform.OS !== 'android') return promise;
-  const timeoutMs = isHtp ? HTP_INIT_TIMEOUT_MS : GPU_INIT_TIMEOUT_MS;
+  if (nGpuLayers <= 0) return promise; // pure-CPU init — nothing to time out
+  const timeoutMs = gpuInitTimeoutMs(isHtp);
   let timedOut = false;
   promise.then(ctx => { if (timedOut) safeRelease(ctx); }).catch(() => {});
   try { return await withTimeout(promise, timeoutMs, isHtp ? 'HTP context init' : 'GPU context init'); }
@@ -124,6 +156,11 @@ export async function initContextWithFallback(
 ): Promise<ContextInitResult> {
   const modelPath = (params as any).model || 'unknown';
   const isHtp = HTP_ENABLED && Array.isArray((params as any).devices) && (params as any).devices.some((d: string) => d.startsWith('HTP'));
+  // Capture llama.cpp's own log so a load failure surfaces its REAL reason
+  // (missing tensor / unknown architecture / wrong size) instead of rnllama's
+  // opaque "Failed to load model". Reset the buffer for this attempt.
+  ensureNativeLogCapture();
+  resetNativeLogCapture();
   logger.log(`[LLM] initContextWithFallback: model=${modelPath}, ctx=${contextLength}, gpuLayers=${nGpuLayers}${isHtp ? ', backend=HTP' : ''}`);
   let gpuAttemptFailed = false;
   try {
@@ -168,7 +205,12 @@ export async function initContextWithFallback(
           cpuMsg && cpuMsg !== finalMsg ? `CPU: ${cpuMsg}` : null,
           `min-ctx: ${finalMsg}`,
         ].filter(Boolean).join(' | ');
-        throw new Error(`Failed to load model even at minimum context (2048). This may indicate insufficient memory, a corrupted model file, or an unsupported model format.\n\nError chain: ${errorParts}`);
+        // Surface llama.cpp's actual reason (rnllama only gives "Failed to load
+        // model"); the native log says e.g. "missing tensor" / "unknown arch".
+        const nativeReason = recentNativeLog();
+        logger.error(`[LLM] llama.cpp native log tail:\n${nativeReason}`);
+        const nativeSuffix = nativeReason ? `\n\nllama.cpp: ${nativeReason}` : '';
+        throw new Error(`Failed to load model even at minimum context (2048). This may indicate insufficient memory, a corrupted model file, or an unsupported model format.\n\nError chain: ${errorParts}${nativeSuffix}`);
       }
     }
   }
@@ -318,12 +360,28 @@ export function getMaxContextForDevice(totalMemoryBytes: number): number {
   if (gb <= 8) return 4096;
   return 8192;
 }
-// Android Adreno GPU caps (≤4GB/≤6GB→0, ≤8GB→12, >8GB→24). iOS unaffected.
+// Android Adreno GPU caps (≤4GB/≤6GB→0, ≤8GB→12, >8GB→24).
 const ANDROID_GPU_LAYER_CAPS: { maxGB: number; layers: number }[] = [{ maxGB: 4, layers: 0 }, { maxGB: 6, layers: 0 }, { maxGB: 8, layers: 12 }];
 const ANDROID_GPU_LAYERS_FALLBACK = 24;
 
-/** Safe GPU layer count based on device RAM. Skips GPU on ≤4 GB to prevent abort(). */
-export function getGpuLayersForDevice(totalMemoryBytes: number, requestedLayers: number): number {
+/**
+ * iOS Metal uses UNIFIED memory: offloaded weights + the compute-graph
+ * (sched_reserve) buffer + KV all draw from system RAM. Full offload (99 layers)
+ * of a non-trivial model on a memory-tight device overflows the Metal allocation
+ * → null buffer → SIGSEGV in lm_ggml_backend_metal_buffer_type_*alloc_buffer (the
+ * #1 crash). Cap the offloaded layers so the weights fit free RAM minus a reserve
+ * for the compute graph + KV + the app/OS. RESERVE is the tuning knob: raise it if
+ * crashes persist on a device, lower it to claw back GPU speed.
+ */
+const IOS_METAL_RESERVE_BYTES = 1.6 * BYTES_PER_GB;
+
+/** Safe GPU layer count for the device + model. Skips GPU on ≤4 GB to prevent abort();
+ *  caps iOS Metal offload to what fits free RAM so the buffer alloc can't overflow. */
+export function getGpuLayersForDevice(
+  totalMemoryBytes: number,
+  requestedLayers: number,
+  opts?: { modelBytes?: number; availableBytes?: number },
+): number {
   const totalGB = totalMemoryBytes / BYTES_PER_GB;
   if (totalGB <= 4) return 0;
 
@@ -332,6 +390,14 @@ export function getGpuLayersForDevice(totalMemoryBytes: number, requestedLayers:
     const tier = ANDROID_GPU_LAYER_CAPS.find(t => totalGB <= t.maxGB);
     const maxLayers = tier ? tier.layers : ANDROID_GPU_LAYERS_FALLBACK;
     return Math.min(requestedLayers, maxLayers);
+  }
+
+  // iOS: cap Metal offload by free RAM vs model size (see IOS_METAL_RESERVE_BYTES).
+  if (Platform.OS === 'ios' && opts?.modelBytes && opts?.availableBytes) {
+    const weightBudget = opts.availableBytes - IOS_METAL_RESERVE_BYTES;
+    if (weightBudget <= 0) return 0; // no headroom → run on CPU rather than crash
+    if (opts.modelBytes <= weightBudget) return requestedLayers; // fits → full offload
+    return Math.max(0, Math.floor(requestedLayers * (weightBudget / opts.modelBytes)));
   }
   return requestedLayers;
 }

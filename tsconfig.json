@@ -10,12 +10,19 @@
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": [
     "**/node_modules", "**/Pods", "pro/**",
+    // Tests that import the private pro/ submodule, which the public repo's CI does
+    // not check out — so tsc cannot resolve their imports there. Keep in lockstep
+    // with jest.config.js testPathIgnorePatterns; both lists exclude the same set.
     "__tests__/unit/audio/**",
+    "__tests__/integration/audio/**",
     "__tests__/unit/engine/**",
+    "__tests__/unit/audioProgressCaption.test.ts",
+    "__tests__/unit/mcp/McpToolExtension.test.ts",
     "__tests__/unit/services/ttsService.test.ts",
     "__tests__/unit/stores/ttsStore.test.ts",
     "__tests__/integration/stores/tts.test.ts",
     "__tests__/rntl/components/ChatInputModeToggle.test.tsx",
+    "__tests__/rntl/components/PlaybackControls.test.tsx",
     "__tests__/rntl/components/VoiceModelsPanel.test.tsx",
     "__tests__/rntl/components/KokoroTTSBridge.test.tsx",
     "__tests__/rntl/components/McpAddServerSheet.test.tsx",

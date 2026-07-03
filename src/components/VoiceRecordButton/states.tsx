@@ -16,13 +16,15 @@ export const LoadingState: React.FC<LoadingStateProps> = ({ asSendButton, loadin
   const styles = useThemedStyles(createStyles);
   const spin = loadingAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
+  // Audio mode: a 56px spinner ring sized exactly like the mic (no smaller button +
+  // "Loading…" text), so the bottom bar height doesn't shift while the model loads.
+  if (!asSendButton) {
+    return <Animated.View testID="voice-loading" style={[styles.button, styles.buttonAudioLoading, { transform: [{ rotate: spin }] }]} />;
+  }
   return (
-    <View style={asSendButton ? undefined : styles.loadingContainer}>
-      <Animated.View style={[styles.button, asSendButton ? styles.buttonAsSendLoading : styles.buttonLoading, { transform: [{ rotate: spin }] }]}>
-        {asSendButton ? <Icon name="mic" size={18} color={colors.primary} /> : <View style={styles.loadingIndicator} />}
-      </Animated.View>
-      {!asSendButton && <Text style={styles.loadingText}>Loading...</Text>}
-    </View>
+    <Animated.View testID="voice-loading" style={[styles.button, styles.buttonAsSendLoading, { transform: [{ rotate: spin }] }]}>
+      <Icon name="mic" size={18} color={colors.primary} />
+    </Animated.View>
   );
 };
 
@@ -38,12 +40,14 @@ export const TranscribingState: React.FC<TranscribingStateProps> = ({ asSendButt
   const styles = useThemedStyles(createStyles);
   const spin = loadingAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
+  // Audio mode: 56px ring matching the mic footprint (see LoadingState).
+  if (!asSendButton) {
+    return <Animated.View style={[styles.button, styles.buttonAudioTranscribing, { transform: [{ rotate: spin }] }]} />;
+  }
   return (
-    <View style={asSendButton ? undefined : styles.loadingContainer}>
-      <Animated.View style={[styles.button, asSendButton ? styles.buttonAsSendLoading : styles.buttonTranscribing, { transform: [{ rotate: spin }] }]}>
-        {asSendButton ? <Icon name="mic" size={18} color={colors.info} /> : <View style={styles.loadingIndicator} />}
-      </Animated.View>
-    </View>
+    <Animated.View style={[styles.button, styles.buttonAsSendLoading, { transform: [{ rotate: spin }] }]}>
+      <Icon name="mic" size={18} color={colors.info} />
+    </Animated.View>
   );
 };
 

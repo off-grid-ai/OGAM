@@ -20,6 +20,7 @@ type ChatModalSectionProps = {
   setShowDebugPanel: (v: boolean) => void;
   showModelSelector: boolean;
   setShowModelSelector: (v: boolean) => void;
+  modelSelectorTab?: 'text' | 'image';
   showSettingsPanel: boolean;
   setShowSettingsPanel: (v: boolean) => void;
   debugInfo: any;
@@ -45,7 +46,7 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
   styles, colors,
   showProjectSelector, setShowProjectSelector,
   showDebugPanel, setShowDebugPanel,
-  showModelSelector, setShowModelSelector,
+  showModelSelector, setShowModelSelector, modelSelectorTab = 'text',
   showSettingsPanel, setShowSettingsPanel,
   debugInfo, activeProject, activeConversation, settings, projects,
   handleSelectProject, handleModelSelect, handleUnloadModel, handleDeleteConversation,
@@ -71,6 +72,7 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
     />
     <ModelSelectorModal
       visible={showModelSelector}
+      initialTab={modelSelectorTab}
       onClose={() => setShowModelSelector(false)}
       onSelectModel={handleModelSelect}
       onUnloadModel={handleUnloadModel}

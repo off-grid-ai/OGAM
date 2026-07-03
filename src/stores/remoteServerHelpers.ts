@@ -21,6 +21,44 @@ import {
 /** Timeout for model discovery fetches (non-critical, background operation) */
 const DISCOVERY_FETCH_TIMEOUT_MS = 5000;
 
+/**
+ * The Off Grid AI Desktop gateway tags every /v1/models entry with a modality
+ * `kind` (chat | vision | image | speech | transcription). Only chat/vision are
+ * text models that belong in the chat model picker — image, speech (TTS) and
+ * transcription (STT) models must not be listed as text. Servers that don't send
+ * `kind` (Ollama, LM Studio) fall back to the name-based generative filter.
+ */
+function isTextModel(model: { id?: string; name?: string; kind?: unknown }): boolean {
+  const kind = typeof model.kind === 'string' ? model.kind : null;
+  if (kind) return kind === 'chat' || kind === 'vision';
+  return isGenerativeModel(model.id ?? model.name ?? '');
+}
+
+const MODEL_FILE_EXT = /\.(gguf|bin|safetensors|task|litertlm|pte)$/i;
+
+/**
+ * Human-readable label for a remote model. Some gateways report the model id as a
+ * full file path (e.g. "/Users/admin/.offgrid/models/Qwen3.5-9B-Q4_K_M.gguf"),
+ * which is unreadable in the picker. Show the basename without the extension while
+ * keeping the raw id for loading.
+ *
+ * Only basename-strip when the id actually LOOKS like a filesystem path — an
+ * absolute POSIX path ("/…"), a Windows path ("C:\…" / "C:/…"), or any string
+ * that ends in a known model file extension. A namespace-style slug ("org/model",
+ * "meta-llama/Llama-3.1-8B") is NOT a path: stripping its prefix would drop the
+ * meaningful namespace and could collapse distinct models to the same label, so
+ * it's returned unchanged.
+ */
+export function displayModelName(id: string): string {
+  const looksLikePath =
+    id.startsWith('/') ||
+    /^[A-Za-z]:[\\/]/.test(id) ||
+    id.includes('\\') ||
+    MODEL_FILE_EXT.test(id);
+  const base = looksLikePath ? (id.split(/[\\/]/).pop() || id) : id;
+  return base.replace(MODEL_FILE_EXT, '');
+}
+
 export async function testServerConnection(server: RemoteServer): Promise<ServerTestResult> {
   try {
     const testResult = await testEndpoint(server.endpoint, 10000, server.apiKey);
@@ -132,20 +170,25 @@ export async function fetchModelsFromServer(server: RemoteServer): Promise<Remot
 
       // OpenAI format: { object: "list", data: [{ id, object, owned_by, ... }] }
       if (data?.object === 'list' && Array.isArray(data.data)) {
-        const generativeModels = data.data.filter((model: { id: string }) => isGenerativeModel(model.id));
+        const generativeModels = data.data.filter((model: { id: string; kind?: unknown }) => isTextModel(model));
         const modelInfos = await Promise.all(
           generativeModels.map((model: { id: string }) =>
             fetchModelCapabilities(url, model.id, nameDetect)
           )
         );
-        return generativeModels.map((model: { id: string; owned_by?: string; max_context_length?: number }, i: number) => ({
+        return generativeModels.map((model: { id: string; kind?: unknown; owned_by?: string; max_context_length?: number }, i: number) => ({
           id: model.id,
-          name: model.id,
+          name: displayModelName(model.id),
           serverId: server.id,
           capabilities: {
-            supportsVision: modelInfos[i].supportsVision,
+            // The gateway declares each model's kind authoritatively; trust kind:'vision'
+            // for vision support. The name/probe-based fallback (modelInfos) can't detect a
+            // gateway vision model whose id doesn't match the name heuristics, which dropped
+            // the attached image client-side (the model then behaved text-only).
+            supportsVision: model.kind === 'vision' || modelInfos[i].supportsVision,
             supportsToolCalling: modelInfos[i].supportsToolCalling ?? detectToolCallingCapability(model.id),
             supportsThinking: modelInfos[i].supportsThinking ?? false,
+            acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
             maxContextLength: modelInfos[i].contextLength,
           },
           lastUpdated: new Date().toISOString(),
@@ -155,7 +198,7 @@ export async function fetchModelsFromServer(server: RemoteServer): Promise<Remot
       // Ollama format via /v1/models: { models: [{ name, ... }] }
       if (Array.isArray(data.models)) {
         const generativeModels = data.models.filter(
-          (model: { name: string }) => isGenerativeModel(model.name)
+          (model: { name: string; kind?: unknown }) => isTextModel(model)
         );
         const modelInfos = await Promise.all(
           generativeModels.map((model: { name: string }) =>
@@ -165,12 +208,13 @@ export async function fetchModelsFromServer(server: RemoteServer): Promise<Remot
         return generativeModels.map(
           (model: { name: string; details?: Record<string, unknown> }, i: number) => ({
             id: model.name,
-            name: model.name,
+            name: displayModelName(model.name),
             serverId: server.id,
             capabilities: {
               supportsVision: modelInfos[i].supportsVision,
               supportsToolCalling: modelInfos[i].supportsToolCalling ?? detectToolCallingCapability(model.name),
               supportsThinking: modelInfos[i].supportsThinking ?? false,
+              acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
               maxContextLength: modelInfos[i].contextLength,
             },
             details: model.details,
@@ -213,12 +257,13 @@ export async function fetchModelsFromServer(server: RemoteServer): Promise<Remot
         return generativeModels.map(
           (model: { name: string; details?: Record<string, unknown> }, i: number) => ({
             id: model.name,
-            name: model.name,
+            name: displayModelName(model.name),
             serverId: server.id,
             capabilities: {
               supportsVision: modelInfos[i].supportsVision,
               supportsToolCalling: modelInfos[i].supportsToolCalling ?? detectToolCallingCapability(model.name),
               supportsThinking: modelInfos[i].supportsThinking ?? false,
+              acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
               maxContextLength: modelInfos[i].contextLength,
             },
             details: model.details,

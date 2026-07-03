@@ -100,7 +100,19 @@ class LiteRTService {
     logger.log(TAG, `loadModel — path=${modelPath} backend=${preferredBackend} supportsVision=${supportsVision} supportsAudio=${supportsAudio} maxNumTokens=${maxNumTokens}`);
 
     try {
-      const actualBackend: string = await LiteRTModule.loadModel(modelPath, preferredBackend, supportsVision, supportsAudio, maxNumTokens);
+      // Native resolves a map { backend, maxNumTokens } — maxNumTokens is the EFFECTIVE
+      // budget after the native RAM clamp (may be < requested). Adopt it so compaction
+      // thresholds + the context-usage bar aren't stale. Tolerate a bare string from an
+      // older native build (backward-compatible).
+      const res: string | { backend: string; maxNumTokens?: number } =
+        await LiteRTModule.loadModel(modelPath, preferredBackend, supportsVision, supportsAudio, maxNumTokens);
+      const actualBackend = typeof res === 'string' ? res : res.backend;
+      if (typeof res === 'object' && typeof res.maxNumTokens === 'number' && res.maxNumTokens > 0) {
+        if (res.maxNumTokens !== this.configuredMaxTokens) {
+          logger.log(TAG, `loadModel — native clamped context ${this.configuredMaxTokens} → ${res.maxNumTokens}`);
+        }
+        this.configuredMaxTokens = res.maxNumTokens;
+      }
       this.activeBackend = actualBackend as LiteRTBackend;
       this.loaded = true;
       this.modelSupportsAudio = supportsAudio;

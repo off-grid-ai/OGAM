@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { Platform } from 'react-native';
 import { AlertState, showAlert, hideAlert, initialAlertState } from '../../components/CustomAlert';
 import { useAppStore } from '../../stores';
 import { useDownloadStore, DownloadEntry } from '../../stores/downloadStore';
 import {
   modelManager,
-  activeModelService,
   hardwareService,
   huggingFaceService,
   backgroundDownloadService,
@@ -14,8 +12,12 @@ import { useVoiceDownloadItems } from './useVoiceDownloadItems';
 import { DownloadedModel, ONNXImageModel } from '../../types';
 import { DownloadItem, formatBytes } from './items';
 import logger from '../../utils/logger';
-import { cancelSyntheticImageDownload, proceedWithDownload } from '../ModelsScreen/imageDownloadActions';
-import { resumeImageDownload } from '../ModelsScreen/imageDownloadResume';
+import { cancelSyntheticImageDownload } from '../ModelsScreen/imageDownloadActions';
+import { parseEntryMetadata, retryImageDownload } from './retryHandlers';
+import { modelDownloadService } from '../../services/modelDownloadService';
+import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
+import { setImageDownloadOps } from '../../services/modelDownloadService/providers/imageProvider';
+import { useEffect } from 'react';
 
 export interface UseDownloadManagerResult {
   activeItems: DownloadItem[];
@@ -30,33 +32,16 @@ export interface UseDownloadManagerResult {
   totalStorageUsed: number;
 }
 
-async function resumeImageFinalization(
-  entry: DownloadEntry,
-  setAlertState: (state: AlertState) => void,
-): Promise<void> {
-  const appState = useAppStore.getState();
-  await resumeImageDownload(entry, {
-    addDownloadedImageModel: appState.addDownloadedImageModel,
-    activeImageModelId: appState.activeImageModelId,
-    setActiveImageModelId: appState.setActiveImageModelId,
-    setAlertState,
-    triedImageGen: appState.onboardingChecklist.triedImageGen,
-  });
-}
-
-function parseEntryMetadata(entry: DownloadEntry): Record<string, any> | null {
-  if (!entry.metadataJson) return null;
-  try {
-    return JSON.parse(entry.metadataJson);
-  } catch {
-    return null;
-  }
-}
-
 function getActiveItemModelId(entry: DownloadEntry, isImage: boolean): string {
   if (isImage && entry.modelId.startsWith('image:')) {
     return entry.modelId.replace('image:', '');
   }
+  // Text canonical id = the modelKey (repo/file), which is exactly what the finished
+  // model's id is (buildDownloadedModel: `${modelId}/${fileName}`). Keying the in-flight
+  // row by the bare repo produced a DIFFERENT uniform id than the completed model, so the
+  // dedup + reconcile never collapsed them → phantom "100%" rows and Active+Downloaded
+  // duplicates for one model. Image/STT already normalize to one id per model.
+  if (entry.modelType === 'text') return entry.modelKey;
   return entry.modelId;
 }
 
@@ -95,6 +80,26 @@ function getActiveItemQuantization(
   return metadata?.imageModelBackend === 'coreml' ? 'Core ML' : '';
 }
 
+/** A start waiting for a concurrency slot (no native downloadId yet) → a "Queued"
+ *  active item. status 'pending' renders as "Queued" in the item row. */
+function queuedToActiveItem(q: { modelKey: string; modelId: string; fileName: string; modelType: string; totalBytes: number }): DownloadItem {
+  return {
+    type: 'active',
+    modelType: q.modelType as DownloadItem['modelType'],
+    modelKey: q.modelKey,
+    // Match getActiveItemModelId: text routes/dedups on the modelKey (repo/file), the
+    // same id the finished model carries; other types pass the modelId through.
+    modelId: q.modelType === 'text' ? q.modelKey : q.modelId,
+    fileName: q.fileName,
+    author: '',
+    quantization: '',
+    fileSize: q.totalBytes,
+    bytesDownloaded: 0,
+    progress: 0,
+    status: 'pending',
+  };
+}
+
 function entryToActiveItem(entry: DownloadEntry): DownloadItem {
   const metadata = parseEntryMetadata(entry);
   const isImage = entry.modelType === 'image';
@@ -115,130 +120,6 @@ function entryToActiveItem(entry: DownloadEntry): DownloadItem {
     reason: entry.errorMessage,
     reasonCode: entry.errorCode as import('../../types').BackgroundDownloadReasonCode | undefined,
   };
-}
-
-async function reattachRetriedTextDownload(
-  item: DownloadItem,
-  setDownloadedModels: (models: DownloadedModel[]) => void,
-): Promise<void> {
-  logger.log('[DownloadDebug] Reattaching text download finalizer after retry', {
-    modelId: item.modelId,
-    fileName: item.fileName,
-    downloadId: item.downloadId,
-  });
-  modelManager.watchDownload(
-    item.downloadId!,
-    async () => {
-      logger.log('[DownloadDebug] Retried text download finalized', {
-        modelId: item.modelId,
-        fileName: item.fileName,
-        downloadId: item.downloadId,
-      });
-      const models = await modelManager.getDownloadedModels();
-      setDownloadedModels(models);
-      const modelKey = useDownloadStore.getState().downloadIdIndex[item.downloadId!] ?? '';
-      if (modelKey) {
-        useDownloadStore.getState().remove(modelKey);
-      }
-    },
-    (error: Error) => {
-      logger.error('[DownloadManager] Retried text download failed:', error);
-      useDownloadStore.getState().setStatus(item.downloadId!, 'failed', {
-        message: error.message,
-      });
-    },
-  );
-}
-
-async function retryFailedMmProj(entry: DownloadEntry | undefined): Promise<boolean> {
-  if (!entry?.mmProjDownloadId || entry.mmProjStatus !== 'failed') return false;
-  useDownloadStore.getState().setStatus(entry.mmProjDownloadId, 'pending');
-  try {
-    logger.log('[DownloadDebug] Retrying failed mmproj sidecar', {
-      modelKey: entry.modelKey,
-      modelId: entry.modelId,
-      mainDownloadId: entry.downloadId,
-      mmProjDownloadId: entry.mmProjDownloadId,
-    });
-    await backgroundDownloadService.retryDownload(entry.mmProjDownloadId);
-    return true;
-  } catch (error) {
-    logger.warn('[DownloadManager] Failed to retry mmproj sidecar:', error);
-    useDownloadStore.getState().setStatus(entry.mmProjDownloadId, 'failed', {
-      message: error instanceof Error ? error.message : String(error),
-    });
-    return false;
-  }
-}
-
-async function retryAndroidDownload(item: DownloadItem, entry: DownloadEntry | undefined, setDownloadedModels: (models: DownloadedModel[]) => void): Promise<void> {
-  const downloadId = item.downloadId as string;
-  useDownloadStore.getState().setStatus(downloadId, 'pending');
-  await backgroundDownloadService.retryDownload(downloadId);
-  if (item.modelType === 'text') {
-    const mmProjRetried = await retryFailedMmProj(entry);
-    if (mmProjRetried) {
-      modelManager.resetMmProjForRetry(downloadId);
-    }
-    await reattachRetriedTextDownload(item, setDownloadedModels);
-  }
-}
-
-async function retryIosImageDownload(entry: DownloadEntry, setAlertState: (s: AlertState) => void): Promise<void> {
-  const meta = parseEntryMetadata(entry);
-  if (!meta) return;
-  const isZip = meta.imageDownloadType === 'zip';
-  if (isZip && !meta.imageModelDownloadUrl) {
-    logger.error('[DownloadManager] retryIosImageDownload: missing imageModelDownloadUrl for zip download', { modelId: entry.modelId });
-    return;
-  }
-  // Cancel the stale native row so it doesn't accumulate in the native DB across
-  // retries. proceedWithDownload starts a fresh row — without this the old failed
-  // row stays persisted and re-hydrates after the next app kill.
-  await backgroundDownloadService.cancelDownload(entry.downloadId).catch(() => {});
-  const modelId = entry.modelId.replace('image:', '');
-  const appState = useAppStore.getState();
-  const deps = {
-    addDownloadedImageModel: appState.addDownloadedImageModel,
-    activeImageModelId: appState.activeImageModelId,
-    setActiveImageModelId: appState.setActiveImageModelId,
-    setAlertState,
-    triedImageGen: appState.onboardingChecklist.triedImageGen,
-  };
-  await proceedWithDownload({
-    id: modelId,
-    name: meta.imageModelName,
-    description: meta.imageModelDescription,
-    downloadUrl: meta.imageModelDownloadUrl ?? '',
-    size: meta.imageModelSize,
-    style: meta.imageModelStyle,
-    backend: meta.imageModelBackend,
-    attentionVariant: meta.imageModelAttentionVariant,
-    huggingFaceRepo: meta.imageModelRepo,
-    huggingFaceFiles: meta.imageModelHuggingFaceFiles,
-    coremlFiles: meta.imageModelCoremlFiles,
-    repo: meta.imageModelRepo,
-  }, deps);
-}
-
-async function retryIosTextDownload(
-  item: DownloadItem,
-  entry: DownloadEntry,
-  setDownloadedModels: (models: DownloadedModel[]) => void,
-): Promise<void> {
-  const meta = parseEntryMetadata(entry);
-  const mmProjFile = entry.mmProjFileName && entry.mmProjFileSize && meta?.mmProjDownloadUrl
-    ? { name: entry.mmProjFileName, size: entry.mmProjFileSize, downloadUrl: meta.mmProjDownloadUrl }
-    : undefined;
-  const file = {
-    name: entry.fileName,
-    size: entry.totalBytes,
-    quantization: entry.quantization,
-    downloadUrl: huggingFaceService.getDownloadUrl(entry.modelId, entry.fileName),
-    ...(mmProjFile ? { mmProjFile } : {}),
-  };
-  const info = await modelManager.downloadModelBackground(entry.modelId, file);
-  await reattachRetriedTextDownload({ ...item, downloadId: info.downloadId }, setDownloadedModels);
 }
 
 /** Map the text + image model stores into completed Download Manager items. */
@@ -275,63 +156,114 @@ export function useDownloadManager(): UseDownloadManagerResult {
   const {
     downloadedModels,
     setDownloadedModels,
-    removeDownloadedModel,
     downloadedImageModels,
-    removeDownloadedImageModel,
   } = useAppStore();
 
   const downloads = useDownloadStore(state => state.downloads);
   const removeDownloadEntry = useDownloadStore(state => state.remove);
 
+  // Downloads waiting for a concurrency slot live only in the service's queue (no
+  // store row yet), so read them from their owner and show them as "Queued". Refresh
+  // on store changes (a completing download drains the queue) and on a light poll.
+  const [queuedItems, setQueuedItems] = useState<DownloadItem[]>([]);
+  useEffect(() => {
+    const refresh = () => setQueuedItems(backgroundDownloadService.getQueuedItems().map(queuedToActiveItem));
+    // On the light poll, also reconcile the concurrency accounting against the native
+    // truth so a leaked slot (e.g. a folded mmproj sidecar) is reclaimed and a stuck
+    // Queued download starts — without waiting for a new start to trigger it.
+    const reconcileAndRefresh = () => { backgroundDownloadService.reconcileActiveIds().catch(() => {}); refresh(); };
+    refresh();
+    // The service owns the queue and notifies on every control op (incl. cancelling a
+    // queued start), so a cancel drops the "Queued" row immediately, not on the poll.
+    const unsubscribe = modelDownloadService.subscribe(refresh);
+    const t = setInterval(reconcileAndRefresh, 1000);
+    return () => { unsubscribe(); clearInterval(t); };
+    // Mount once: the subscription already fires on every store change (that's what
+    // drains the queue) and the interval covers the rest. Depending on `downloads` here
+    // tore down + rebuilt the subscription and interval on EVERY progress tick — pure
+    // churn while a download runs — and refresh reads from the service, not `downloads`.
+  }, []);
+
   // Voice (TTS) + transcription (STT) downloaded models, loaded from disk.
   const { voiceItems, buildDeleteAlert: buildVoiceDeleteAlert } = useVoiceDownloadItems(() => setAlertState(hideAlert()));
 
-  const activeItems: DownloadItem[] = Object.values(downloads)
-    .filter(e => e.status !== 'completed' && e.status !== 'cancelled')
-    .map(entryToActiveItem);
+  // Inject the UI-coupled image cancel/retry into the image provider so control ops
+  // route through the single download service (which logs every [DL-SM] action).
+  // These are the exact paths the manager used inline; they need alerts/resume, so
+  // they can't live in the (UI-free) provider — they're injected here.
+  useEffect(() => {
+    setImageDownloadOps({
+      cancel: async (modelId, entry) => {
+        removeDownloadEntry(entry.modelKey);
+        if (entry.downloadId.startsWith('image-multi:')) {
+          await cancelSyntheticImageDownload(modelId).catch(() => {});
+          const rows = await backgroundDownloadService.getActiveDownloads().catch(() => [] as any[]);
+          await Promise.all(rows.filter(r => r.modelId === `image:${modelId}`)
+            .map(r => backgroundDownloadService.cancelDownload(r.downloadId).catch(() => {})));
+        } else {
+          await backgroundDownloadService.cancelDownload(entry.downloadId).catch(() => {});
+        }
+      },
+      retry: async (_modelId, entry) => {
+        await retryImageDownload(entryToActiveItem(entry), entry, setAlertState);
+      },
+    });
+  }, [removeDownloadEntry]);
+
+  /**
+   * Uniform download id the service routes on. MUST go through uniformDownloadId so
+   * it matches the id the owning provider assigned in list() — re-deriving it inline
+   * (`${type}:${modelId}`) leaked the per-type id scheme and broke STT remove/cancel:
+   * the store keys whisper rows `whisper-<id>` but the provider lists them as the bare
+   * `stt:<id>`, so the raw id missed and the service REFUSED it as not-found.
+   */
+  const idOf = (item: DownloadItem): string => uniformDownloadId(item.modelType, item.modelId);
+
+  // voiceItems (TTS/STT) carries BOTH finished and in-flight rows: a completed model
+  // is type:'completed', while a downloading or failed one is type:'active'. Route by
+  // that type — a downloading Kokoro must land in Active Downloads, NOT Downloaded
+  // Models. (Dumping all of voiceItems into completedItems made an in-progress voice
+  // download render as a finished 82MB model via CompletedDownloadCard, regardless of
+  // its real progress — the "shows downloaded while downloading/queued" bug.)
+  const voiceCompleted = voiceItems.filter(i => i.type === 'completed');
+  const voiceActive = voiceItems.filter(i => i.type === 'active');
 
   const completedItems: DownloadItem[] = [
     ...modelStoreCompletedItems(downloadedModels, downloadedImageModels),
-    ...voiceItems,
+    ...voiceCompleted,
   ];
+
+  // One entry per model. A downloaded (registered, on-disk) model is authoritative, so
+  // a leftover in-flight/failed row for the SAME model is stale — drop it. Otherwise a
+  // model that completed and was then re-started (a stale restore, a re-download)
+  // shows as both a failed "Active" download and a "Downloaded" model — two guys doing
+  // the same thing (e.g. SDXL Core ML appearing in both sections). Keyed by the shared
+  // uniformDownloadId so text/image/stt all dedup the same way.
+  const completedIds = new Set(completedItems.map(idOf));
+  const startedItems = Object.values(downloads)
+    .filter(e => e.status !== 'completed' && e.status !== 'cancelled')
+    .map(entryToActiveItem)
+    .filter(item => !completedIds.has(idOf(item)));
+  // Append queued (not-yet-started) downloads, skipping any already started or already
+  // downloaded — one entry per model, no duplicates across started/queued/completed.
+  const startedKeys = new Set(startedItems.map(i => i.modelKey));
+  const queuedActive = queuedItems.filter(
+    q => !startedKeys.has(q.modelKey) && !completedIds.has(idOf(q)),
+  );
+  // Include the in-flight/failed voice rows here so they render in Active Downloads
+  // (ActiveDownloadCard shows their live progress bar / Retry). Dedup against
+  // completedIds so a voice model that also has a completed row can't double-list.
+  const voiceActiveDeduped = voiceActive.filter(item => !completedIds.has(idOf(item)));
+  const activeItems: DownloadItem[] = [...startedItems, ...queuedActive, ...voiceActiveDeduped];
 
   const totalStorageUsed = completedItems.reduce((sum, item) => sum + item.fileSize, 0);
 
   const executeRemoveDownload = async (item: DownloadItem) => {
     setAlertState(hideAlert());
     try {
-      const modelKey = item.modelKey ?? `${item.modelId}/${item.fileName}`;
-      const entry = downloads[modelKey];
-      logger.log('[DownloadDebug] Removing download entry', {
-        modelKey,
-        modelId: item.modelId,
-        fileName: item.fileName,
-        mainDownloadId: entry?.downloadId,
-        mmProjDownloadId: entry?.mmProjDownloadId,
-      });
-      removeDownloadEntry(modelKey);
-      if (entry) {
-        if (entry.downloadId.startsWith('image-multi:')) {
-          await cancelSyntheticImageDownload(item.modelId).catch(() => {});
-          // After app kill the runtime is gone — cancel native rows so they aren't re-hydrated.
-          try {
-            const activeRows = await backgroundDownloadService.getActiveDownloads();
-            const imageModelId = `image:${item.modelId}`;
-            await Promise.all(
-              activeRows
-                .filter(r => r.modelId === imageModelId)
-                .map(r => backgroundDownloadService.cancelDownload(r.downloadId).catch(() => {})),
-            );
-          } catch {
-            // Best-effort — store entry already removed above.
-          }
-          return;
-        }
-        await modelManager.cancelBackgroundDownload(entry.downloadId).catch(() => {});
-        if (entry.mmProjDownloadId) {
-          await modelManager.cancelBackgroundDownload(entry.mmProjDownloadId).catch(() => {});
-        }
-      }
+      // Single owner: the service cancels the in-flight download (routing to the
+      // owning provider — image uses the injected ops above) and logs [DL-SM].
+      await modelDownloadService.cancel(idOf(item));
     } catch (error) {
       logger.error('[DownloadManager] Failed to remove download:', error);
       setAlertState(showAlert('Error', 'Failed to remove download'));
@@ -339,39 +271,17 @@ export function useDownloadManager(): UseDownloadManagerResult {
   };
 
   const handleRetryDownload = async (item: DownloadItem) => {
-    if (!item.downloadId) return;
-    const modelKey = item.modelKey ?? `${item.modelId}/${item.fileName}`;
-    const entry = downloads[modelKey];
+    // Route purely by id — the service looks up the download and refuses a not-found
+    // id uniformly, so the UI does not gate on downloadId (which leaked the per-type
+    // id scheme: stt re-downloads via whisperService and never has a downloadId).
     try {
-      logger.log('[DownloadDebug] Manual retry requested', { modelKey, modelId: item.modelId, fileName: item.fileName, modelType: item.modelType, mainDownloadId: item.downloadId, mmProjDownloadId: entry?.mmProjDownloadId, status: item.status, mmProjStatus: entry?.mmProjStatus });
-
-      const hasAllBytes = item.fileSize > 0 && item.bytesDownloaded >= item.fileSize;
-      if (item.modelType === 'image' && entry) {
-        let nativeMainStatus: string | undefined;
-        try {
-          const activeRows = await backgroundDownloadService.getActiveDownloads();
-          nativeMainStatus = activeRows.find(row => row.downloadId === item.downloadId)?.status;
-        } catch {
-          // Best-effort native state check only.
-        }
-        if (item.status === 'processing' || hasAllBytes || nativeMainStatus === 'completed') {
-          await resumeImageFinalization(entry, setAlertState);
-          return;
-        }
-      }
-
-      if (Platform.OS === 'android') {
-        await retryAndroidDownload(item, entry, setDownloadedModels);
-      } else if (Platform.OS === 'ios' && item.modelType === 'image' && entry) {
-        await retryIosImageDownload(entry, setAlertState);
-      } else if (Platform.OS === 'ios' && item.modelType === 'text' && entry) {
-        await retryIosTextDownload(item, entry, setDownloadedModels);
-      }
-      backgroundDownloadService.startProgressPolling();
+      // Single owner: the service routes retry to the owning provider (image uses
+      // the injected retry above; text/stt are service-level) and logs [DL-SM].
+      await modelDownloadService.retry(idOf(item));
     } catch (error: any) {
       logger.error('[DownloadManager] Failed to retry download:', error);
       const errorMessage = error?.message || 'Retry failed. Please remove and re-download.';
-      useDownloadStore.getState().setStatus(item.downloadId, 'failed', {
+      if (item.downloadId) useDownloadStore.getState().setStatus(item.downloadId, 'failed', {
         message: errorMessage,
       });
     }
@@ -391,8 +301,9 @@ export function useDownloadManager(): UseDownloadManagerResult {
   const executeDeleteModel = async (model: DownloadedModel) => {
     setAlertState(hideAlert());
     try {
-      await modelManager.deleteModel(model.id);
-      removeDownloadedModel(model.id);
+      // Single owner: provider.remove unloads (n/a for text) + deletes + drops it
+      // from the store, and logs [DL-SM].
+      await modelDownloadService.remove(uniformDownloadId('text', model.id));
     } catch (error) {
       logger.error('[DownloadManager] Failed to delete model:', error);
       setAlertState(showAlert('Error', 'Failed to delete model'));
@@ -402,9 +313,9 @@ export function useDownloadManager(): UseDownloadManagerResult {
   const executeDeleteImageModel = async (model: ONNXImageModel) => {
     setAlertState(hideAlert());
     try {
-      await activeModelService.unloadImageModel();
-      await modelManager.deleteImageModel(model.id);
-      removeDownloadedImageModel(model.id);
+      // Single owner: provider.remove unloads the image model + deletes + drops it
+      // from the store, and logs [DL-SM].
+      await modelDownloadService.remove(uniformDownloadId('image', model.id));
     } catch (error) {
       logger.error('[DownloadManager] Failed to delete image model:', error);
       setAlertState(showAlert('Error', 'Failed to delete image model'));

@@ -68,10 +68,56 @@ class LLMService {
     logger.log(`[LLM] Resolved params: threads=${params.nThreads}, batch=${params.nBatch}, ctx=${params.ctxLen}, gpuLayers=${params.nGpuLayers}`);
     const fileStat = await RNFS.stat(modelPath);
     const fileSize = typeof fileStat.size === 'string' ? Number.parseInt(fileStat.size, 10) : fileStat.size;
-    const memCheck = await checkMemoryForModel(fileSize, params.ctxLen, () => hardwareService.getAppMemoryUsage());
-    if (!memCheck.safe) logger.warn(`[LLM] Memory warning: ${memCheck.reason}`);
-    logger.log(`[LLM] Memory check: estimatedMB=${memCheck.estimatedMB.toFixed(0)}, availableMB=${memCheck.availableMB.toFixed(0)}, safe=${memCheck.safe}`);
+    // Use the EFFECTIVE cache type, not the raw setting: OpenCL/HTP coerce the KV cache
+    // to f16 (see buildModelParams), so keying off settings.cacheType alone would let the
+    // guard use the cheaper quantized estimate and approve a context that then OOMs.
+    const quantizedCache = !params.usesF16Cache;
+    const getMem = () => hardwareService.getAppMemoryUsage();
+    let memCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: params.ctxLen, getAvailableMemory: getMem, quantizedCache });
+    if (!memCheck.safe) {
+      // Don't just warn and load into a near-certain native allocator crash (the iOS
+      // metal_buffer_type_alloc_buffer / Android litert OOM clusters). Reduce context
+      // to the largest size that fits; only block when the weights alone can't fit.
+      const downgrade = await this.resolveSafeContext(fileSize, params.ctxLen, quantizedCache);
+      params.ctxLen = downgrade.ctxLen;
+      memCheck = downgrade.memCheck;
+    }
+    logger.log(`[LLM] Memory check: estimatedMB=${memCheck.estimatedMB.toFixed(0)}, availableMB=${memCheck.availableMB.toFixed(0)}, safe=${memCheck.safe}, ctx=${params.ctxLen}`);
     return { fileSize, memCheck, params };
+  }
+  /**
+   * Find the largest context that fits available memory, stepping down from the
+   * requested size. Throws only when the model weights alone exceed available RAM
+   * (a load that would certainly crash the allocator); otherwise proceeds at the
+   * smallest context, since the estimate is intentionally conservative.
+   */
+  private async resolveSafeContext(
+    fileSize: number,
+    requestedCtx: number,
+    quantizedCache: boolean,
+  ): Promise<{ ctxLen: number; memCheck: Awaited<ReturnType<typeof checkMemoryForModel>> }> {
+    const getMem = () => hardwareService.getAppMemoryUsage();
+    // Step down from the requested size so the LARGEST fitting context wins — a request
+    // of 16384 tries 14336, 12288, ... rather than jumping straight to a hardcoded 8192
+    // ceiling and needlessly shrinking context on devices that could hold more.
+    const STEP = 2048;
+    const fallbacks: number[] = [];
+    for (let ctx = requestedCtx - STEP; ctx >= 1024; ctx -= STEP) fallbacks.push(ctx);
+    for (const ctx of fallbacks) {
+      const mc = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: ctx, getAvailableMemory: getMem, quantizedCache });
+      if (mc.safe) {
+        logger.warn(`[LLM] Memory tight — reducing context ${requestedCtx} → ${ctx} (~${mc.estimatedMB.toFixed(0)}MB of ${mc.availableMB.toFixed(0)}MB available)`);
+        return { ctxLen: ctx, memCheck: mc };
+      }
+    }
+    const minCtx = fallbacks.length ? fallbacks[fallbacks.length - 1] : requestedCtx;
+    const finalCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: minCtx, getAvailableMemory: getMem, quantizedCache });
+    const modelMB = (fileSize * 1.2) / (1024 * 1024);
+    if (finalCheck.availableMB > 0 && modelMB > finalCheck.availableMB) {
+      throw new Error(`Not enough memory to load this model: it needs ~${Math.round(modelMB)}MB but only ${Math.round(finalCheck.availableMB)}MB is available. Close other apps or choose a smaller model.`);
+    }
+    logger.warn(`[LLM] Memory very tight — proceeding at minimum context ${minCtx} (estimate may be conservative)`);
+    return { ctxLen: minCtx, memCheck: finalCheck };
   }
   private async applyLoadedContext(opts: { context: LlamaContext; actualLength: number; gpuAttemptFailed: boolean; nGpuLayers: number; modelPath: string; mmProjPath?: string }): Promise<void> {
     const { context, actualLength, gpuAttemptFailed, nGpuLayers, modelPath, mmProjPath } = opts;
@@ -104,7 +150,7 @@ class LLMService {
       this.currentSettings = { nThreads, nBatch, contextLength: ctxLen };
       logger.log(`[LLM] Loading model: ctx=${ctxLen}, threads=${nThreads}, batch=${nBatch}, fileSize=${(fileSize / (1024 * 1024)).toFixed(0)}MB, availRAM=${memCheck.availableMB.toFixed(0)}MB`);
       try {
-        const { context, gpuAttemptFailed, actualLength } = await this.initWithAutoContext({ baseParams, ctxLen, nGpuLayers });
+        const { context, gpuAttemptFailed, actualLength } = await this.initWithAutoContext({ baseParams, ctxLen, nGpuLayers, fileSize });
         await this.applyLoadedContext({ context, actualLength, gpuAttemptFailed, nGpuLayers, modelPath, mmProjPath });
       } catch (error: any) {
         this.context = null; this.currentModelPath = null; this.multimodalSupport = null;
@@ -116,9 +162,14 @@ class LLMService {
       mutex.release();
     }
   }
-  private async initWithAutoContext(params: { baseParams: object; ctxLen: number; nGpuLayers: number }): Promise<{ context: LlamaContext; gpuAttemptFailed: boolean; actualLength: number }> {
+  private async initWithAutoContext(params: { baseParams: object; ctxLen: number; nGpuLayers: number; fileSize: number }): Promise<{ context: LlamaContext; gpuAttemptFailed: boolean; actualLength: number }> {
     const deviceInfo = await hardwareService.getDeviceInfo();
-    let safeGpuLayers = getGpuLayersForDevice(deviceInfo.totalMemory, params.nGpuLayers);
+    // Pass model size + free RAM so iOS Metal offload is capped to what fits (the
+    // uncapped 99-layer offload was overflowing Metal → SIGSEGV on memory-tight devices).
+    let safeGpuLayers = getGpuLayersForDevice(deviceInfo.totalMemory, params.nGpuLayers, {
+      modelBytes: params.fileSize,
+      availableBytes: deviceInfo.availableMemory,
+    });
     if (safeGpuLayers !== params.nGpuLayers) logger.log(`[LLM] GPU layers capped (${(deviceInfo.totalMemory / BYTES_PER_GB).toFixed(1)}GB RAM, ${Platform.OS}): ${params.nGpuLayers} → ${safeGpuLayers}`);
     let resolvedBaseParams: object = params.baseParams;
     if (Platform.OS === 'android') {
@@ -145,7 +196,15 @@ class LLMService {
         logger.log('[LLM] CPU backend selected');
       }
     }
-    const initial = await initContextWithFallback(resolvedBaseParams, params.ctxLen, safeGpuLayers);
+    // Cap the INITIAL context by device RAM. The KV cache + compute buffers scale
+    // with n_ctx, so loading at the full 4096 on a 4GB phone spikes even a tiny
+    // model past the ~2GB per-process limit → jetsam kill (confirmed: 2098MB on a
+    // 4GB iPhone 12 mid-generation). The scale-down logic below never fired because
+    // it only ever RAISES context; do the floor here so the first load is safe.
+    const deviceCtxCap = getMaxContextForDevice(deviceInfo.totalMemory);
+    const safeCtx = Math.min(params.ctxLen, deviceCtxCap);
+    if (safeCtx !== params.ctxLen) logger.log(`[LLM] context capped for ${(deviceInfo.totalMemory / BYTES_PER_GB).toFixed(1)}GB RAM: ${params.ctxLen} → ${safeCtx}`);
+    const initial = await initContextWithFallback(resolvedBaseParams, safeCtx, safeGpuLayers);
     const modelMax = getModelMaxContext(initial.context);
     const userIsOnDefault = this.currentSettings.contextLength === APP_CONFIG.maxContextLength;
     if (!modelMax || !userIsOnDefault || modelMax <= initial.actualLength) return initial;
@@ -224,10 +283,10 @@ class LLMService {
     this.isGenerating = true;
     const ctx = this.context;
     const completionWork = (async () => {
-      const managed = await this.manageContextWindow(messages);
+      const managed = await this.dropMissingImageAttachments(await this.manageContextWindow(messages));
       const hasImages = managed.some(m => m.attachments?.some(a => a.type === 'image'));
       if (hasImages && !this.multimodalInitialized) logger.warn('[LLM] Images attached but multimodal not initialized - falling back to text-only');
-      logger.log('[LLM] Generation mode:', hasImages && this.multimodalInitialized ? 'VISION' : 'TEXT-ONLY');
+      logger.log('[LLM] Generation mode:', this.hasVisionInputs(managed) ? 'VISION' : 'TEXT-ONLY');
       const oaiMessages = this.convertToOAIMessages(managed);
       const { settings } = useAppStore.getState();
       const startTime = Date.now();
@@ -281,6 +340,47 @@ class LLMService {
   /** No-op pass-through — lets llama.rn's native ctx_shift handle overflow for KV cache reuse. */
   private async manageContextWindow(messages: Message[], _extraReserve = 0): Promise<Message[]> {
     return messages;
+  }
+  /**
+   * Drop image attachments whose files no longer exist before they reach the native
+   * layer. A generated image's uri is a temp/cache path that gets cleaned up, so once
+   * it's in the conversation history EVERY later turn (even a voice note) flips to
+   * VISION mode and the native completion throws "File does not exist or cannot be
+   * opened", killing the whole turn (silent empty bubble). Validating file inputs at
+   * this boundary is the generation layer's own responsibility — a missing image is
+   * simply not sent, so the turn runs (TEXT-ONLY if none remain) instead of crashing.
+   */
+  private async dropMissingImageAttachments(messages: Message[]): Promise<Message[]> {
+    const out: Message[] = [];
+    for (const m of messages) {
+      const attachments = m.attachments;
+      if (!attachments?.some(a => a.type === 'image')) { out.push(m); continue; }
+      const kept: typeof attachments = [];
+      for (const a of attachments) {
+        if (a.type !== 'image') { kept.push(a); continue; }
+        const path = (a.uri || '').replace(/^file:\/\//, '');
+        const exists = path.length > 0 && await RNFS.exists(path).catch(() => false);
+        if (exists) kept.push(a);
+        else logger.warn(`[LLM] dropping missing image attachment (file gone): ${a.uri}`);
+      }
+      out.push(kept.length === attachments.length ? m : { ...m, attachments: kept });
+    }
+    return out;
+  }
+  /**
+   * Whether this turn should run in VISION mode: at least one message carries an
+   * (already-existence-validated by {@link dropMissingImageAttachments}) image
+   * attachment AND the multimodal projector is initialized. If images are present
+   * but multimodal isn't initialized, we fall back to TEXT-ONLY.
+   *
+   * Note: this intentionally scans the WHOLE managed history, not just the latest
+   * user turn — multi-turn vision legitimately references images sent earlier in the
+   * conversation. TODO: if a future change requires scoping vision to the latest turn
+   * only, revisit here (and the corresponding native context handling).
+   */
+  private hasVisionInputs(messages: Message[]): boolean {
+    if (!this.multimodalInitialized) return false;
+    return messages.some(m => m.attachments?.some(a => a.type === 'image'));
   }
   /** Generate a completion with a hard token cap (used for summarization, not user-facing). */
   async generateWithMaxTokens(messages: Message[], maxTokens: number): Promise<string> {

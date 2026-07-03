@@ -93,6 +93,22 @@ const createBubbleStyles = (colors: ThemeColors) => ({
     paddingVertical: 6,
     borderRadius: 8,
   },
+  audioBadge: {
+    flexDirection: 'column' as const,
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: 8,
+    maxWidth: 260,
+  },
+  audioBadgeHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.xs,
+  },
+  audioTranscription: {
+    ...TYPOGRAPHY.bodySmall,
+  },
   documentBadgeUser: {
     backgroundColor: 'rgba(0, 0, 0, 0.15)',
   },

@@ -11,6 +11,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -23,6 +24,7 @@ import { RootStackParamList } from '../navigation/types';
 import { remoteServerManager } from '../services/remoteServerManager';
 import { discoverLANServers } from '../services/networkDiscovery';
 import { CustomAlert, AlertState, initialAlertState, showAlert } from '../components/CustomAlert';
+import { OFF_GRID_DESKTOP_URL } from '../constants';
 import { createStyles } from './RemoteServersScreen.styles';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'RemoteServers'>;
@@ -67,7 +69,14 @@ export const RemoteServersScreen: React.FC = () => {
     try {
       const discovered = await discoverLANServers();
       if (discovered.length === 0) {
-        setAlertState(showAlert('No Servers Found', 'No LLM servers were found on your local network.'));
+        setAlertState(showAlert(
+          'No Servers Found',
+          'No LLM servers were found on your local network. Run Off Grid AI Desktop on your Mac to serve its models here.',
+          [
+            { text: 'Dismiss', style: 'cancel' },
+            { text: 'Get Off Grid AI Desktop', onPress: () => Linking.openURL(OFF_GRID_DESKTOP_URL).catch(() => {}) },
+          ],
+        ));
         return;
       }
       const existingEndpoints = new Set(servers.map(s => s.endpoint));
@@ -130,8 +139,17 @@ export const RemoteServersScreen: React.FC = () => {
             </View>
             <Text style={styles.emptyTitle}>No Remote Servers</Text>
             <Text style={styles.emptyText}>
-              Connect to Ollama, LM Studio, or other LLM servers on your network
+              Connect to Off Grid AI Desktop, Ollama, LM Studio, or other LLM servers on your network
             </Text>
+            <TouchableOpacity
+              style={styles.desktopLink}
+              onPress={() => Linking.openURL(OFF_GRID_DESKTOP_URL).catch(() => {})}
+              accessibilityRole="link"
+              accessibilityLabel="Get Off Grid AI Desktop"
+            >
+              <Icon name="monitor" size={16} color={theme.colors.primary} />
+              <Text style={styles.desktopLinkText}>Get Off Grid AI Desktop</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
               <Icon name="plus" size={20} color={theme.colors.background} />
               <Text style={styles.addButtonText}>Add Server</Text>
@@ -226,9 +244,19 @@ export const RemoteServersScreen: React.FC = () => {
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>About Remote Servers</Text>
           <Text style={styles.infoText}>
-            Connect to LLM servers running on your local network, such as Ollama or LM Studio.{'\n\n'}
+            Connect to LLM servers running on your local network, such as Off Grid AI Desktop, Ollama, or LM Studio.{'\n\n'}
+            Off Grid AI Desktop runs on your Mac and serves its models to this phone over your own network.{'\n\n'}
             Make sure your server is running and accessible from your device. For security, only connect to servers on trusted networks.
           </Text>
+          <TouchableOpacity
+            style={styles.desktopLink}
+            onPress={() => Linking.openURL(OFF_GRID_DESKTOP_URL).catch(() => {})}
+            accessibilityRole="link"
+            accessibilityLabel="Get Off Grid AI Desktop"
+          >
+            <Icon name="monitor" size={16} color={theme.colors.primary} />
+            <Text style={styles.desktopLinkText}>Get Off Grid AI Desktop</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 

@@ -14,6 +14,7 @@ import {
   ModelCardActions,
   RecommendedConfig,
 } from './ModelCardContent';
+import { QUEUED_ICON } from '../utils/downloadStatusIcon';
 
 interface ModelCardProps {
   model: {
@@ -33,6 +34,9 @@ interface ModelCardProps {
   downloadedModel?: DownloadedModel;
   isDownloaded?: boolean;
   isDownloading?: boolean;
+  /** Accepted but waiting for a concurrency slot — shows a "Queued" label instead of a
+   *  0% progress bar, so the user gets clear feedback the tap registered. */
+  isQueued?: boolean;
   downloadProgress?: number;
   downloadBytes?: { downloaded: number; total: number };
   isActive?: boolean;
@@ -80,17 +84,23 @@ const DownloadProgressSection: React.FC<{
   progress: number;
   bytes?: { downloaded: number; total: number };
   tight?: boolean;
-}> = ({ progress, bytes, tight }) => {
+  queued?: boolean;
+}> = ({ progress, bytes, tight, queued }) => {
   const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   return (
   <View style={styles.progressSection}>
     <View style={[styles.progressContainer, tight && styles.progressContainerTight]}>
       <View style={styles.progressBar}>
         <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
-      <Text style={[styles.progressText, tight && styles.progressTextTight]}>{Math.round(progress * 100)}%</Text>
+      <View style={styles.progressLabelRow}>
+        {queued
+          ? <Icon name={QUEUED_ICON} size={14} color={colors.textMuted} accessibilityLabel="Queued" />
+          : <Text style={[styles.progressText, tight && styles.progressTextTight]}>{`${Math.round(progress * 100)}%`}</Text>}
+      </View>
     </View>
-    {bytes && bytes.total > 0 && (
+    {!queued && bytes && bytes.total > 0 && (
       <Text style={styles.progressBytesText}>
         {formatBytes(bytes.downloaded)} / {formatBytes(bytes.total)}
       </Text>
@@ -144,6 +154,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   downloadedModel,
   isDownloaded,
   isDownloading,
+  isQueued,
   downloadProgress = 0,
   downloadBytes,
   isActive,
@@ -241,8 +252,8 @@ export const ModelCard: React.FC<ModelCardProps> = ({
             </View>
           )}
 
-          {isDownloading && (
-            <DownloadProgressSection progress={downloadProgress} bytes={downloadBytes} tight={!!recommended} />
+          {(isDownloading || isQueued) && (
+            <DownloadProgressSection progress={downloadProgress} bytes={downloadBytes} tight={!!recommended} queued={isQueued} />
           )}
           {failedState && (
             <FailedSection

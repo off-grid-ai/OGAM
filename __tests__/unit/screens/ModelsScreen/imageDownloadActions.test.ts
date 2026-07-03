@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
 import {
   downloadHuggingFaceModel,
@@ -16,6 +17,8 @@ jest.mock('react-native-fs', () => ({
   mkdir: jest.fn(() => Promise.resolve()),
   unlink: jest.fn(() => Promise.resolve()),
   writeFile: jest.fn(() => Promise.resolve()),
+  // Default: every part is present + non-empty (validateMultifileComplete passes).
+  stat: jest.fn(() => Promise.resolve({ size: 500000 })),
 }));
 
 jest.mock('react-native-zip-archive', () => ({
@@ -73,6 +76,7 @@ jest.mock('../../../../src/services', () => ({
     moveCompletedDownload: (id: string, targetPath: string) => mockMoveCompletedDownload(id, targetPath),
     startProgressPolling: jest.fn(),
     cancelDownload: jest.fn(() => Promise.resolve()),
+    cancelQueued: jest.fn(() => true),
   },
 }));
 
@@ -167,6 +171,21 @@ describe('imageDownloadActions', () => {
       'image-multi:test-hf-model',
       'failed',
       expect.objectContaining({ message: 'Network failed' }),
+    );
+  });
+
+  it('downloadHuggingFaceModel fails (does NOT register) when a downloaded part is missing/empty', async () => {
+    // A part resolves "successfully" but wrote a 0-byte file → validateMultifileComplete rejects.
+    (RNFS.stat as jest.Mock).mockResolvedValueOnce({ size: 0 });
+    const deps = makeDeps();
+
+    await downloadHuggingFaceModel(makeHFModelInfo(), deps);
+
+    expect(mockAddDownloadedImageModel).not.toHaveBeenCalled();
+    expect(mockStoreApi.setStatus).toHaveBeenCalledWith(
+      'image-multi:test-hf-model',
+      'failed',
+      expect.objectContaining({ message: expect.stringContaining('missing or empty') }),
     );
   });
 
@@ -338,6 +357,36 @@ describe('imageDownloadActions', () => {
 
     const { backgroundDownloadService: svc } = jest.requireMock('../../../../src/services');
     expect(svc.cancelDownload).toHaveBeenCalledWith('native-42');
+  });
+
+  it('cancelSyntheticImageDownload drops a QUEUED part immediately (no native id yet)', async () => {
+    const deps = makeDeps();
+    const modelInfo = makeHFModelInfo();
+    // A queued part: its downloadId never resolves (waiting for a slot) and its file
+    // promise stays pending — the classic "Queued" row. Cancel must still reach it.
+    const idPromise = new Promise<string>(() => {}); // never resolves
+    const filePromise = new Promise<void>(() => {});  // never settles on its own
+    mockDownloadFileTo.mockReturnValue({ downloadIdPromise: idPromise, promise: filePromise });
+
+    downloadHuggingFaceModel(modelInfo, deps); // don't await — it's blocked on the queued part
+    await new Promise(r => setTimeout(r, 0));
+    await cancelSyntheticImageDownload(modelInfo.id);
+
+    const { backgroundDownloadService: svc } = jest.requireMock('../../../../src/services');
+    // Routed to the queue owner by the part's key (== makeImageModelKey), not left to
+    // promote-then-cancel. Native cancelDownload is NOT used (there is no downloadId).
+    expect(svc.cancelQueued).toHaveBeenCalledWith('image:test-hf-model');
+    expect(svc.cancelDownload).not.toHaveBeenCalled();
+  });
+
+  it('multi-file image parts are typed as image downloads (so the queue + cancel route correctly)', async () => {
+    const deps = makeDeps();
+    const modelInfo = makeHFModelInfo();
+    mockDownloadFileTo.mockReturnValue({ downloadIdPromise: Promise.resolve('id'), promise: Promise.resolve() });
+    await downloadHuggingFaceModel(modelInfo, deps);
+    expect(mockDownloadFileTo).toHaveBeenCalledWith(
+      expect.objectContaining({ params: expect.objectContaining({ modelType: 'image' }) }),
+    );
   });
 
   it('downloadHuggingFaceModel does not start if active entry already exists', async () => {

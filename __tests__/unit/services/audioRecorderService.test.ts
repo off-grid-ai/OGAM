@@ -39,6 +39,10 @@ jest.mock(
 );
 
 const { audioRecorderService } = require('../../../src/services/audioRecorderService');
+// The recorder now routes the AVAudioSession through audioSessionManager (single
+// owner). Reset its mode between tests so a prior test's session state doesn't make
+// a later ensureRecording() a no-op.
+const { audioSessionManager } = require('../../../src/services/audioSessionManager');
 
 const originalPlatformOS = Platform.OS;
 
@@ -48,6 +52,7 @@ beforeEach(() => {
   // Reset singleton internal state between tests.
   (audioRecorderService as any).isRecording = false;
   (audioRecorderService as any).recorder = null;
+  audioSessionManager._reset();
   // Default happy-path native results.
   mockStart.mockReturnValue({ status: 'success' });
   mockStop.mockReturnValue({ status: 'success', path: '/mock/input.wav', duration: 2.5 });
@@ -135,6 +140,20 @@ describe('startRecording', () => {
     expect(mockEnableFileOutput).toHaveBeenCalledTimes(1);
     expect(mockStart).toHaveBeenCalledTimes(1);
     expect(audioRecorderService.isCurrentlyRecording()).toBe(true);
+  });
+
+  it('switches to playAndRecord and activates the session before starting capture', async () => {
+    Platform.OS = 'ios';
+
+    await audioRecorderService.startRecording();
+
+    // The session must be switched to playAndRecord AND activated before the
+    // recorder starts.
+    const optionsOrder = mockSetAudioSessionOptions.mock.invocationCallOrder[0];
+    const activityOrder = mockSetAudioSessionActivity.mock.invocationCallOrder[0];
+    const startOrder = mockStart.mock.invocationCallOrder[0];
+    expect(optionsOrder).toBeLessThan(activityOrder);
+    expect(activityOrder).toBeLessThan(startOrder);
   });
 
   it('does not configure the audio session on Android', async () => {

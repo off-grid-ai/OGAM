@@ -8,10 +8,12 @@
  * and startRealtimeTranscription guards / event finish / error paths.
  */
 
-import { initWhisper, AudioSessionIos } from 'whisper.rn';
+import { initWhisper } from 'whisper.rn';
 import { Platform, PermissionsAndroid } from 'react-native';
+import { AudioManager } from 'react-native-audio-api';
 import RNFS from 'react-native-fs';
 import { whisperService } from '../../../src/services/whisperService';
+import { audioSessionManager } from '../../../src/services/audioSessionManager';
 import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
 
 jest.mock('../../../src/services/backgroundDownloadService', () => ({
@@ -23,7 +25,9 @@ jest.mock('../../../src/services/backgroundDownloadService', () => ({
 }));
 
 const mockedBDS = backgroundDownloadService as jest.Mocked<typeof backgroundDownloadService>;
-const mockedAudioSessionIos = AudioSessionIos as jest.Mocked<typeof AudioSessionIos>;
+// The iOS realtime permission path drives audioSessionManager, which calls these.
+const mockSetAudioSessionOptions = AudioManager.setAudioSessionOptions as jest.Mock;
+const mockSetAudioSessionActivity = AudioManager.setAudioSessionActivity as jest.Mock;
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
 const mockedInitWhisper = initWhisper as jest.MockedFunction<typeof initWhisper>;
 
@@ -52,9 +56,10 @@ describe('WhisperService — branch coverage', () => {
       downloadIdPromise: Promise.resolve(0),
       promise: Promise.resolve(),
     } as any);
-    mockedAudioSessionIos.setCategory.mockResolvedValue(undefined as any);
-    mockedAudioSessionIos.setMode.mockResolvedValue(undefined as any);
-    mockedAudioSessionIos.setActive.mockResolvedValue(undefined as any);
+    // clearMocks wipes the activity mock's resolved value each test; re-establish
+    // the default (success) and reset the session owner's mode.
+    mockSetAudioSessionActivity.mockResolvedValue(true);
+    audioSessionManager._reset();
   });
 
   afterEach(() => {
@@ -252,7 +257,8 @@ describe('WhisperService — branch coverage', () => {
     it('returns true when not android or ios', async () => {
       Object.defineProperty(Platform, 'OS', { get: () => 'web' as any });
       expect(await whisperService.requestPermissions()).toBe(true);
-      expect(mockedAudioSessionIos.setCategory).not.toHaveBeenCalled();
+      // Neither the iOS session owner nor Android permissions are touched.
+      expect(mockSetAudioSessionOptions).not.toHaveBeenCalled();
       const requestSpy = jest.spyOn(PermissionsAndroid, 'request');
       expect(requestSpy).not.toHaveBeenCalled();
     });
@@ -274,9 +280,11 @@ describe('WhisperService — branch coverage', () => {
         transcribeRealtime: jest.fn(() => Promise.resolve({ stop: jest.fn(), subscribe: jest.fn() })),
       };
       await loadCtx(ctx);
-      // requestPermissions runs, then we null the context to hit the post-permission guard
-      mockedAudioSessionIos.setActive.mockImplementationOnce(async () => {
+      // requestPermissions runs (now via audioSessionManager → setAudioSessionActivity),
+      // then we null the context to hit the post-permission guard.
+      mockSetAudioSessionActivity.mockImplementationOnce(async () => {
         (whisperService as any).context = null;
+        return true;
       });
 
       await expect(whisperService.startRealtimeTranscription(jest.fn())).rejects.toThrow(

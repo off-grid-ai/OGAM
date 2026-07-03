@@ -17,6 +17,13 @@ jest.mock('../../../src/services/whisperService', () => ({
     stopTranscription: jest.fn(),
     forceReset: jest.fn(),
   },
+  // Pure helper used by finalizeTranscription — strip whisper no-speech markers,
+  // return '' when only markers/punctuation remain (mirrors the real impl).
+  cleanTranscription: (raw: string) => {
+    if (!raw) return '';
+    const s = raw.replace(/\[[^\]]*\]/g, ' ').replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+    return /[a-z0-9]/i.test(s) ? s : '';
+  },
 }));
 
 jest.mock('../../../src/stores/whisperStore', () => ({
@@ -133,6 +140,45 @@ describe('useWhisperTranscription', () => {
     expect(mockWhisperService.startRealtimeTranscription).toHaveBeenCalled();
     expect(result.current.partialResult).toBe('partial');
     expect(result.current.recordingTime).toBe(1);
+  });
+
+  it('cleans whisper markers out of partial results (never shows "[BLANK_AUDIO]" in the UI)', async () => {
+    mockWhisperService.isModelLoaded.mockReturnValue(true);
+    mockWhisperService.startRealtimeTranscription.mockImplementation(
+      async (callback: any) => {
+        // Mid-capture partial with a leading no-speech marker.
+        callback({ isCapturing: true, text: '[BLANK_AUDIO] hello', recordingTime: 1 });
+      },
+    );
+
+    const { result } = renderHook(() => useWhisperTranscription());
+
+    await act(async () => {
+      await result.current.startRecording();
+    });
+
+    // Stripped through cleanTranscription (the single owner of marker stripping).
+    expect(result.current.partialResult).toBe('hello');
+  });
+
+  it('does not let an empty cleaned partial clobber an existing good partial', async () => {
+    mockWhisperService.isModelLoaded.mockReturnValue(true);
+    mockWhisperService.startRealtimeTranscription.mockImplementation(
+      async (callback: any) => {
+        // First a real partial, then a pure-marker partial (silence mid-capture):
+        // the marker-only result cleans to '' and must NOT wipe the good text.
+        callback({ isCapturing: true, text: 'hello world', recordingTime: 1 });
+        callback({ isCapturing: true, text: '[BLANK_AUDIO]', recordingTime: 2 });
+      },
+    );
+
+    const { result } = renderHook(() => useWhisperTranscription());
+
+    await act(async () => {
+      await result.current.startRecording();
+    });
+
+    expect(result.current.partialResult).toBe('hello world');
   });
 
   it('sets error and calls forceReset when startRecording throws', async () => {

@@ -131,7 +131,7 @@ describe('SettingsScreen', () => {
   it('renders navigation item descriptions', () => {
     const { getByText } = render(<SettingsScreen />);
     expect(getByText('System prompt, generation, and performance')).toBeTruthy();
-    expect(getByText('Connect to Ollama, LM Studio, and more')).toBeTruthy();
+    expect(getByText('Connect to Off Grid AI Desktop, Ollama, LM Studio, and more')).toBeTruthy();
     expect(getByText('Passphrase and app lock')).toBeTruthy();
     expect(getByText('Hardware and compatibility')).toBeTruthy();
     expect(getByText('Models and data usage')).toBeTruthy();

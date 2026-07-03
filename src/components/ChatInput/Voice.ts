@@ -5,12 +5,13 @@ import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import { activeModelService } from '../../services/activeModelService';
 import { audioRecorderService } from '../../services/audioRecorderService';
 import { whisperService } from '../../services/whisperService';
+import { recordingController } from '../../services/recordingController';
 import logger from '../../utils/logger';
 
 interface UseVoiceInputParams {
   conversationId?: string | null;
   onTranscript: (text: string) => void;
-  onAudioAttachment?: (uri: string, format: 'wav' | 'mp3', durationSeconds?: number) => void;
+  onAudioAttachment?: (audio: { uri: string; format: 'wav' | 'mp3'; durationSeconds?: number; transcription?: string }) => void;
   /** Called in Audio Mode to auto-send. Includes audio info so caller can build attachment atomically. */
   onAutoSend?: (text: string, audio: { uri: string; format: 'wav' | 'mp3'; durationSeconds: number }) => void;
 }
@@ -121,7 +122,7 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
               }).catch(err => logger.error('[Voice] Background transcription error:', err));
             }
           } else {
-            onAudioAttachmentRef.current?.(path, format, durationSeconds);
+            onAudioAttachmentRef.current?.({ uri: path, format, durationSeconds });
           }
         }
         recordingConversationIdRef.current = null;
@@ -153,7 +154,7 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
           if (onAutoSendRef.current) {
             onAutoSendRef.current(text.trim(), { uri: path, format: 'wav', durationSeconds });
           } else {
-            onAudioAttachmentRef.current?.(path, 'wav', durationSeconds);
+            onAudioAttachmentRef.current?.({ uri: path, format: 'wav', durationSeconds, transcription: text.trim() });
             onTranscriptRef.current(text.trim());
           }
         } else {
@@ -189,6 +190,27 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
     clearResult();
     recordingConversationIdRef.current = null;
   };
+
+  // Register this recorder's concrete intents with the single recording-controller
+  // owner, and report phase transitions to it (the controller is the one source of
+  // truth every mic reads). Stable wrappers call the latest closures via refs so
+  // re-registration isn't needed each render.
+  const startRef = useRef(startRecording);
+  startRef.current = startRecording;
+  const stopRef = useRef(stopRecording);
+  stopRef.current = stopRecording;
+  const cancelRef = useRef(cancelRecording);
+  cancelRef.current = cancelRecording;
+  useEffect(() => {
+    return recordingController.registerHandlers({
+      start: () => startRef.current(),
+      stop: () => stopRef.current(),
+      cancel: () => cancelRef.current(),
+    });
+  }, []);
+  useEffect(() => {
+    recordingController.setPhase(isRecording ? 'recording' : isTranscribing ? 'transcribing' : 'idle');
+  }, [isRecording, isTranscribing]);
 
   useEffect(() => {
     if (recordingConversationIdRef.current && recordingConversationIdRef.current !== conversationId) {

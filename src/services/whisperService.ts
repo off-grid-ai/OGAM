@@ -1,7 +1,8 @@
-import { initWhisper, WhisperContext, RealtimeTranscribeEvent, AudioSessionIos } from 'whisper.rn';
+import { initWhisper, WhisperContext, RealtimeTranscribeEvent } from 'whisper.rn';
 import { Platform, PermissionsAndroid } from 'react-native';
 import RNFS from 'react-native-fs';
 import logger from '../utils/logger';
+import { audioSessionManager } from './audioSessionManager';
 import { backgroundDownloadService } from './backgroundDownloadService';
 import { useDownloadStore } from '../stores/downloadStore';
 import { makeModelKey } from '../utils/modelKey';
@@ -287,16 +288,14 @@ class WhisperService {
       }
     }
     if (Platform.OS === 'ios') {
-      try {
-        // Configure audio session for recording - this also triggers the permission prompt
-        await AudioSessionIos.setCategory('PlayAndRecord', ['AllowBluetooth', 'MixWithOthers']);
-        await AudioSessionIos.setMode('Default');
-        await AudioSessionIos.setActive(true);
-        return true;
-      } catch (error) {
-        logger.error('[Whisper] iOS audio session/permission error:', error);
-        return false;
-      }
+      // Route iOS session setup through audioSessionManager — the SINGLE owner of
+      // the AVAudioSession — instead of calling AudioSessionIos directly. The old
+      // direct path set the category/active flag without updating the manager's
+      // `mode`, so a later TTS ensurePlayback() saw a stale mode and could pick the
+      // wrong session (silent TTS after realtime STT). ensureRecordingPermission
+      // applies the playAndRecord session (which also triggers the mic prompt) AND
+      // updates `mode`, returning false if activation threw (permission denied).
+      return audioSessionManager.ensureRecordingPermission();
     }
     return true;
   }
@@ -422,6 +421,13 @@ class WhisperService {
       logger.error('[WhisperService] Error stopping transcription:', error);
     } finally {
       this.isTranscribing = false;
+      // Hand the audio session back to the single owner. Realtime STT set mode='record'
+      // via ensureRecordingPermission on start; whisper.rn's audioSessionOnStopIos
+      // restores the NATIVE session but leaves this owner's `mode` stuck at 'record', so
+      // the next TTS ensurePlayback() early-returns and playback is silent after
+      // dictation. restorePlaybackAfterRecording resets mode + re-asserts playback
+      // (iOS only; Android is a no-op). Best-effort — never throw into the stop path.
+      audioSessionManager.restorePlaybackAfterRecording().catch(() => {});
     }
   }
 
@@ -458,8 +464,29 @@ class WhisperService {
     });
 
     const { result } = await promise;
-    return result;
+    return cleanTranscription(result);
   }
+}
+
+/**
+ * Normalize a raw Whisper transcription: strip the non-speech markers Whisper
+ * emits for silence/noise — [BLANK_AUDIO], [ Silence ], [MUSIC], (inaudible),
+ * (speaking foreign language), etc. — and return '' when nothing but markers
+ * (or punctuation) remains. Without this, a silent/too-short clip returned the
+ * literal "[BLANK_AUDIO]" token, which then got SENT as the message text instead
+ * of being treated as "couldn't hear that". The single place this rule lives, so
+ * every path (file + realtime) treats no-speech identically.
+ */
+export function cleanTranscription(raw: string): string {
+  if (!raw) return '';
+  const stripped = raw
+    .replace(/\[[^\]]*\]/g, ' ') // [BLANK_AUDIO], [ Silence ], [MUSIC]
+    .replace(/\([^)]*\)/g, ' ')  // (silence), (speaking foreign language)
+    .replace(/\s+/g, ' ')
+    .trim();
+  // Only markers / punctuation left → no real speech.
+  if (!/[a-z0-9]/i.test(stripped)) return '';
+  return stripped;
 }
 
 export const whisperService = new WhisperService();

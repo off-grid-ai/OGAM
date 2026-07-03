@@ -27,6 +27,9 @@ export async function loadProFeatures(isPro?: boolean): Promise<void> {
   // The boot path already read the entitlement in checkProStatus(); reuse it to
   // avoid a second keychain round-trip. Fall back to a read for standalone callers.
   const active = (isPro ?? (await readProFromKeychain())) || DEV_UNLOCK_PRO;
+  // Single source of truth for "Pro is unlocked" — every upsell gate reads this, so a
+  // keychain- or dev-unlocked Pro user never sees the upgrade prompt.
+  useAppStore.getState().setProActive(active);
   if (!active) {
     return; // paid features stay dormant until the user purchases
   }

@@ -144,6 +144,7 @@ export const resetStores = (): void => {
     activeRemoteTextModelId: null,
     activeRemoteImageModelId: null,
   });
+  require('../../src/stores/downloadStore').useDownloadStore.setState({ downloads: {}, downloadIdIndex: {} });
 };
 
 // ============================================================================

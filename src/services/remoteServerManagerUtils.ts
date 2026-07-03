@@ -123,8 +123,9 @@ export async function setActiveRemoteTextModelImpl(
       provider.updateCapabilities({
         supportsVision: discoveredModel.capabilities.supportsVision,
         supportsThinking: discoveredModel.capabilities.supportsThinking,
+        acceptsThinkingKwarg: discoveredModel.capabilities.acceptsThinkingKwarg,
       });
-      logger.log('[RemoteServerManager] Applied discovered capabilities for', modelId, '— supportsVision:', discoveredModel.capabilities.supportsVision, 'supportsThinking:', discoveredModel.capabilities.supportsThinking);
+      logger.log('[RemoteServerManager] Applied discovered capabilities for', modelId, '— supportsVision:', discoveredModel.capabilities.supportsVision, 'supportsThinking:', discoveredModel.capabilities.supportsThinking, 'acceptsThinkingKwarg:', discoveredModel.capabilities.acceptsThinkingKwarg);
     }
     providerRegistry.setActiveProvider(serverId);
     logger.log('[RemoteServerManager] Provider ready:', await provider.isReady());

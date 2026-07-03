@@ -64,10 +64,26 @@ jest.mock('../../../src/components/CustomAlert', () => {
 
 import { useFocusEffect } from '@react-navigation/native';
 import { TranscriptionModelsTab } from '../../../src/screens/ModelsScreen/TranscriptionModelsTab';
+// Real download store (NOT mocked) — the tab derives in-flight STT state from it.
+import { useDownloadStore } from '../../../src/stores/downloadStore';
+
+const seedSttDownload = (modelId: string, status: string, progress = 0) => {
+  useDownloadStore.setState({
+    downloads: {
+      [modelId]: {
+        modelKey: modelId, downloadId: `dl-${modelId}`, modelId: `whisper-${modelId}`,
+        fileName: `ggml-${modelId}.bin`, quantization: '', modelType: 'stt',
+        status, bytesDownloaded: 0, totalBytes: 100, combinedTotalBytes: 100,
+        progress, createdAt: 0,
+      } as any,
+    },
+  });
+};
 
 describe('TranscriptionModelsTab', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useDownloadStore.setState({ downloads: {} });
     mockWhisperState = {
       downloadedModelId: null,
       presentModelIds: [],
@@ -134,6 +150,23 @@ describe('TranscriptionModelsTab', () => {
     );
     act(() => remove.onPress());
     expect(mockWhisperActions.deleteModelById).toHaveBeenCalledWith('tiny.en');
+  });
+
+  it('shows a model as downloadable (not stuck downloading) when its STT download FAILED in the download store', () => {
+    // The bug: the Download Manager marked the STT download failed, but this tab kept
+    // showing progress. Deriving from the canonical store, a failed entry is not active.
+    seedSttDownload('tiny.en', 'failed', 0.4);
+    const { getByTestId } = render(<TranscriptionModelsTab />);
+    // Not stuck "downloading" → the download affordance is offered again.
+    fireEvent.press(getByTestId('transcription-model-card-0-download'));
+    expect(mockWhisperActions.downloadModel).toHaveBeenCalledWith('tiny.en');
+  });
+
+  it('treats an active STT download-store entry as downloading (no re-download affordance)', () => {
+    seedSttDownload('tiny.en', 'running', 0.6);
+    const { queryByTestId } = render(<TranscriptionModelsTab />);
+    // Downloading → no download button and the card is not tappable to re-download.
+    expect(queryByTestId('transcription-model-card-0-download')).toBeNull();
   });
 
   it('re-derives present models from disk when the screen regains focus', () => {

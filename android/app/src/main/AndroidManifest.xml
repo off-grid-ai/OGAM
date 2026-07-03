@@ -25,6 +25,13 @@
 <!-- To check and request battery optimization exemption for uninterrupted downloads -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- Run large model downloads as a foreground service so they keep progressing when
+         the app is backgrounded / the screen is off (WorkManager foreground worker). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Android 13+ needs this to SHOW the ongoing download notification (requested at runtime). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- For reading and creating calendar events -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
@@ -77,5 +84,12 @@
               <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
           </intent-filter>
       </receiver>
+
+      <!-- WorkManager's foreground-service host needs the dataSync type declared, or
+           setForeground() throws on Android 14+ (the model-download FGS, see WorkerDownload). -->
+      <service
+          android:name="androidx.work.impl.foreground.SystemForegroundService"
+          android:foregroundServiceType="dataSync"
+          tools:node="merge" />
     </application>
 </manifest>

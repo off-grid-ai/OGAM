@@ -42,6 +42,9 @@ jest.mock('../../../../src/stores/downloadStore', () => ({
     {
       getState: () => ({
         downloads: mockDownloads,
+        // startModelDownload publishes a queued 'pending' row up-front; mirror the real
+        // store's add (refuses a duplicate modelKey) so the shared download action runs.
+        add: (entry: any) => { if (!mockDownloads[entry.modelKey]) mockDownloads[entry.modelKey] = entry; },
         remove: (modelKey: string) => { delete mockDownloads[modelKey]; },
         setStatus: jest.fn(),
       }),

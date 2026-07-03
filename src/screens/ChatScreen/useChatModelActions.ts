@@ -9,6 +9,7 @@ import { liteRTService } from '../../services/litert';
 import { useAppStore } from '../../stores';
 import { DownloadedModel, RemoteModel, ONNXImageModel } from '../../types';
 import logger from '../../utils/logger';
+import { ModelReadyOutcome, reasonFromLoadError } from './modelReadiness';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -82,9 +83,13 @@ async function doLoadTextModel(deps: ModelActionDeps): Promise<void> {
 export async function initiateModelLoad(
   deps: ModelActionDeps,
   alreadyLoading: boolean,
-): Promise<void> {
+  /** When the load was requested to satisfy a chat turn, resume that turn after a
+   *  successful "Load Anyway". Non-generation callers (model select / reload) omit it,
+   *  so nothing is auto-resumed for them. */
+  onLoadedResume?: () => void,
+): Promise<ModelReadyOutcome> {
   const { activeModel, activeModelId } = deps;
-  if (!activeModel || !activeModelId) return;
+  if (!activeModel || !activeModelId) return { ok: false, reason: 'no-model-selected' };
 
   if (!alreadyLoading) {
     const memoryCheck = await activeModelService.checkMemoryForModel(activeModelId, 'text');
@@ -100,12 +105,16 @@ export async function initiateModelLoad(
               deps.setIsModelLoading(true);
               deps.setLoadingModel(activeModel);
               deps.modelLoadStartTimeRef.current = Date.now();
-              waitForRenderFrame().then(() => doLoadTextModel(deps));
+              // Resume the turn after the forced load so the user's message isn't
+              // silently dropped (they'd otherwise have to retype it).
+              waitForRenderFrame()
+                .then(() => doLoadTextModel(deps))
+                .then(() => { if (onLoadedResume && llmService.isModelLoaded()) onLoadedResume(); });
             }
           },
         ],
       ));
-      return;
+      return { ok: false, reason: 'insufficient-memory', detail: memoryCheck.message, alerted: true };
     }
     deps.setIsModelLoading(true);
     deps.setLoadingModel(activeModel);
@@ -121,10 +130,18 @@ export async function initiateModelLoad(
       const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
       addSystemMsg(deps, `Model loaded: ${activeModel.name} (${loadTime}s)`);
     }
+    return { ok: true };
   } catch (error: any) {
+    const detail = error?.message || 'Unknown error';
+    // Previously this returned void and swallowed the error silently whenever
+    // alreadyLoading was true — the exact bug that produced a generic "Failed to
+    // load model" with no trace and no way to tell which branch failed. Always
+    // return the typed reason now; only the !alreadyLoading path shows the alert
+    // here (behavior-neutral), and the caller decides what to render otherwise.
     if (!alreadyLoading) {
-      deps.setAlertState(showAlert('Error', `Failed to load model: ${error?.message || 'Unknown error'}`));
+      deps.setAlertState(showAlert('Error', `Failed to load model: ${detail}`));
     }
+    return { ok: false, reason: reasonFromLoadError(error), detail, alerted: !alreadyLoading };
   } finally {
     if (!alreadyLoading) {
       deps.setIsModelLoading(false);
@@ -164,17 +181,21 @@ export async function ensureTextModelForChatFn(deps: {
 
 export async function ensureModelLoadedFn(
   deps: ModelActionDeps,
-): Promise<void> {
+  onLoadedResume?: () => void,
+): Promise<ModelReadyOutcome> {
   const { activeModel, activeModelId } = deps;
-  if (!activeModel || !activeModelId) return;
+  if (!activeModel || !activeModelId) return { ok: false, reason: 'no-model-selected' };
   if (activeModel.engine === 'litert') {
     if (liteRTService.isModelLoaded()) {
       deps.setSupportsVision(!!activeModel.liteRTVision);
-      return;
+      return { ok: true };
     }
     deps.setSupportsVision(!!activeModel.liteRTVision);
-    if (deps.activeModelId) await initiateModelLoad(deps, activeModelService.getActiveModels().text.isLoading);
-    return;
+    const outcome = await initiateModelLoad(deps, activeModelService.getActiveModels().text.isLoading, onLoadedResume);
+    if (!outcome.ok) return outcome;
+    return liteRTService.isModelLoaded()
+      ? { ok: true }
+      : { ok: false, reason: 'load-threw', detail: 'LiteRT model not loaded after load' };
   }
   const loadedPath = llmService.getLoadedModelPath();
   const currentVisionSupport = llmService.getMultimodalSupport()?.vision || false;
@@ -182,16 +203,19 @@ export async function ensureModelLoadedFn(
     (activeModel.mmProjPath && !currentVisionSupport);
   if (!needsReload && loadedPath === activeModel.filePath) {
     deps.setSupportsVision(currentVisionSupport);
-    return;
+    return { ok: true };
   }
   const alreadyLoading = activeModelService.getActiveModels().text.isLoading;
-  await initiateModelLoad(deps, alreadyLoading);
+  return initiateModelLoad(deps, alreadyLoading, onLoadedResume);
 }
 
 export async function proceedWithModelLoadFn(
   deps: ModelActionDeps,
   model: DownloadedModel,
 ): Promise<void> {
+  // Close the picker FIRST so the load runs behind the dismissed sheet and the
+  // minimal in-chat loading card shows — not a load running with the sheet still open.
+  deps.setShowModelSelector(false);
   deps.setIsModelLoading(true);
   deps.setLoadingModel(model);
   deps.modelLoadStartTimeRef.current = Date.now();
@@ -213,7 +237,6 @@ export async function proceedWithModelLoadFn(
   } finally {
     deps.setIsModelLoading(false);
     deps.setLoadingModel(null);
-    deps.setShowModelSelector(false);
     deps.modelLoadStartTimeRef.current = null;
   }
 }

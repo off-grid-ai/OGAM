@@ -1,11 +1,14 @@
 /**
  * useVoiceDownloadItems tests
  *
- * Surfaces downloaded voice (TTS, via the downloads.listVoiceModels hook) and
- * transcription (STT/Whisper, core) models in the Download Manager. Verifies
- * loading, the tts/stt mapping, and the delete-confirm alert.
+ * Surfaces voice (TTS) + transcription (STT/Whisper) models in the Download Manager.
+ * TTS state now comes from the SAME ModelDownloadService projection the Voice panel
+ * reads (ttsProvider) — not a parallel `downloads.listVoiceModels` hook — so the two
+ * surfaces can't disagree (the "Kokoro shows downloaded while still downloading" bug).
+ * Delete still routes through the pro delete hook.
  */
 import { renderHook, waitFor, act } from '@testing-library/react-native';
+import type { ModelDownload } from '../../../../src/services/modelDownloadService/types';
 
 const mockListDownloadedModels = jest.fn((..._a: any[]) => Promise.resolve([] as any[]));
 const mockDeleteModel = jest.fn((..._a: any[]) => Promise.resolve());
@@ -13,6 +16,14 @@ jest.mock('../../../../src/services', () => ({
   whisperService: {
     listDownloadedModels: (...a: any[]) => mockListDownloadedModels(...a),
     deleteModel: (...a: any[]) => mockDeleteModel(...a),
+  },
+}));
+
+let mockServiceList: ModelDownload[] = [];
+jest.mock('../../../../src/services/modelDownloadService', () => ({
+  modelDownloadService: {
+    list: jest.fn(async () => mockServiceList),
+    subscribe: jest.fn(() => () => {}),
   },
 }));
 
@@ -24,16 +35,20 @@ jest.mock('../../../../src/bootstrap/hookRegistry', () => ({
 
 import { useVoiceDownloadItems } from '../../../../src/screens/DownloadManagerScreen/useVoiceDownloadItems';
 
+const CAPS = { cancel: false, retry: false, remove: true, resumable: true, determinateProgress: false };
+const ttsEntry = (over: Partial<ModelDownload> = {}): ModelDownload => ({
+  id: 'tts:kokoro', modelType: 'tts', name: 'Kokoro TTS', sizeBytes: 82_000_000,
+  bytesDownloaded: 82_000_000, progress: 1, status: 'completed', capabilities: CAPS, ...over,
+});
+
 describe('useVoiceDownloadItems', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockListDownloadedModels.mockResolvedValue([
       { modelId: 'base.en', fileName: 'ggml-base.en.bin', sizeBytes: 142_000_000, filePath: '/x/ggml-base.en.bin' },
     ]);
-    mockCallHook.mockImplementation((name: string) =>
-      name === 'downloads.listVoiceModels'
-        ? Promise.resolve([{ engineId: 'kokoro', name: 'Kokoro TTS', sizeBytes: 82_000_000 }])
-        : Promise.resolve(undefined));
+    mockServiceList = [ttsEntry()];
+    mockCallHook.mockResolvedValue(undefined);
   });
 
   it('lists transcription (stt) and voice (tts) downloaded models', async () => {
@@ -49,8 +64,75 @@ describe('useVoiceDownloadItems', () => {
     expect(tts?.fileName).toBe('Kokoro TTS');
   });
 
-  it('omits voice models when the pro hook is absent', async () => {
-    mockCallHook.mockReturnValue(undefined);
+  it('shows an in-progress voice download as an ACTIVE item (service says downloading)', async () => {
+    mockServiceList = [ttsEntry({ status: 'downloading', progress: 0.5, bytesDownloaded: 40_000_000 })];
+    const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
+    await waitFor(() => expect(result.current.voiceItems.some(i => i.modelType === 'tts')).toBe(true));
+
+    const tts = result.current.voiceItems.find(i => i.modelType === 'tts')!;
+    expect(tts.type).toBe('active');
+    expect(tts.status).toBe('downloading');
+    expect(tts.progress).toBe(0.5);
+    expect(tts.bytesDownloaded).toBe(40_000_000);
+  });
+
+  it('regression: a downloading TTS model is NEVER rendered as completed (the sync bug)', async () => {
+    // The Download Manager showed Kokoro under "Downloaded Models" while the Voice
+    // panel showed it at 0%. With one source, a service status of 'downloading' can
+    // only ever produce an ACTIVE item here.
+    mockServiceList = [ttsEntry({ status: 'downloading', progress: 0, bytesDownloaded: 0 })];
+    const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
+    await waitFor(() => expect(result.current.voiceItems.some(i => i.modelType === 'tts')).toBe(true));
+
+    const tts = result.current.voiceItems.find(i => i.modelType === 'tts')!;
+    expect(tts.type).toBe('active');
+    expect(result.current.voiceItems.some(i => i.modelType === 'tts' && i.type === 'completed')).toBe(false);
+  });
+
+  it('shows a finished voice download as a COMPLETED item', async () => {
+    mockServiceList = [ttsEntry({ status: 'completed', progress: 1 })];
+    const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
+    await waitFor(() => expect(result.current.voiceItems.some(i => i.modelType === 'tts')).toBe(true));
+
+    const tts = result.current.voiceItems.find(i => i.modelType === 'tts')!;
+    expect(tts.type).toBe('completed');
+    expect(tts.status).toBe('completed');
+  });
+
+  it('surfaces a FAILED voice download as a retryable failed item', async () => {
+    // Regression: a failed Kokoro download used to be dropped entirely (nothing
+    // shown, no way to retry). A service status of 'error' must render as a
+    // failed ACTIVE item with a retryable reason code so the Download Manager
+    // shows the Retry button.
+    mockServiceList = [ttsEntry({
+      status: 'error', progress: 0.3, bytesDownloaded: 24_000_000,
+      error: 'Download interrupted or missing resource',
+    })];
+    const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
+    await waitFor(() => expect(result.current.voiceItems.some(i => i.modelType === 'tts')).toBe(true));
+
+    const tts = result.current.voiceItems.find(i => i.modelType === 'tts')!;
+    expect(tts.type).toBe('active');
+    expect(tts.status).toBe('failed');
+    // Engine message present → prefer it verbatim; leave reasonCode undefined so
+    // the label helper shows the engine text, not a canned code message. Retry
+    // still renders because isRetryable(undefined) === true.
+    expect(tts.reason).toBe('Download interrupted or missing resource');
+    expect(tts.reasonCode).toBeUndefined();
+  });
+
+  it('falls back to the retryable code when the engine gives no failure message', async () => {
+    mockServiceList = [ttsEntry({ status: 'error', progress: 0, bytesDownloaded: 0 })];
+    const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
+    await waitFor(() => expect(result.current.voiceItems.some(i => i.modelType === 'tts')).toBe(true));
+
+    const tts = result.current.voiceItems.find(i => i.modelType === 'tts')!;
+    expect(tts.status).toBe('failed');
+    expect(tts.reasonCode).toBe('download_interrupted');
+  });
+
+  it('omits voice models when the service reports no tts entries', async () => {
+    mockServiceList = [];
     const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
 
     await waitFor(() => expect(result.current.voiceItems).toHaveLength(1));

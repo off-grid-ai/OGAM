@@ -5,16 +5,11 @@ import { SliderSetting } from '../../components/SliderSetting';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore, selectIsLiteRT } from '../../stores';
 import { hardwareService } from '../../services';
-import { isMcpEnabled } from '../../services/mcpContextBoost';
 import { createStyles } from './styles';
 import { TextGenerationAdvanced, LiteRTTextGenerationAdvanced } from './TextGenerationAdvanced';
 
 const formatContext = (v: number) => v >= 1024 ? `${(v / 1024).toFixed(0)}K` : String(v);
 const formatMaxTokens = (v: number) => v >= 1024 ? `${(v / 1024).toFixed(1)}K` : String(v);
-
-// Shown on the context/output rows when MCP tools are enabled — these are raised to
-// the model maximum automatically so the tool schemas fit (see applyMcpContextBoost).
-const MCP_BOOST_NOTE = 'Raised to the model maximum because MCP tools are enabled.';
 
 // ─── Shared ───────────────────────────────────────────────────────────────────
 
@@ -45,7 +40,6 @@ const ShowGenerationDetailsToggle: React.FC = () => {
 // ─── LiteRT Settings ─────────────────────────────────────────────────────────
 
 const LiteRTTextSettings: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
   const modelMaxContext = useAppStore((s) => s.modelMaxContext);
@@ -54,7 +48,6 @@ const LiteRTTextSettings: React.FC = () => {
   const isLargeRam = hardwareService.getTotalMemoryGB() > 8;
   const contextMax = modelMaxContext ?? (isLargeRam ? 32768 : 12288);
   const contextWarnThreshold = isLargeRam ? 16384 : 8192;
-  const mcpOn = isMcpEnabled();
 
   const temperature = settings?.liteRTTemperature ?? 0.7;
   const maxTokens = settings?.liteRTMaxTokens ?? 4096;
@@ -76,8 +69,7 @@ const LiteRTTextSettings: React.FC = () => {
         testID="litert-max-tokens"
         label="Max Tokens"
         description="Total token budget — input, history, and output combined (requires reload)"
-        warning={mcpOn ? MCP_BOOST_NOTE : (maxTokens > contextWarnThreshold ? 'High context uses significant RAM — may slow or crash on some devices' : null)}
-        warningColor={mcpOn ? colors.textSecondary : undefined}
+        warning={maxTokens > contextWarnThreshold ? 'High context uses significant RAM — may slow or crash on some devices' : null}
         value={maxTokens}
         min={512} max={contextMax} step={1024}
         formatValue={formatContext}
@@ -95,14 +87,12 @@ const LiteRTTextSettings: React.FC = () => {
 // ─── Llama Settings ───────────────────────────────────────────────────────────
 
 const LlamaTextSettings: React.FC = () => {
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
   const modelMaxContext = useAppStore((s) => s.modelMaxContext);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const llmSliderMax = modelMaxContext ?? 32768;
-  const mcpOn = isMcpEnabled();
 
   const maxTokens = settings?.maxTokens ?? 512;
   const contextLength = settings?.contextLength ?? 2048;
@@ -124,8 +114,6 @@ const LlamaTextSettings: React.FC = () => {
         testID="llama-max-tokens"
         label="Max Tokens"
         description="Maximum response length"
-        warning={mcpOn ? MCP_BOOST_NOTE : null}
-        warningColor={mcpOn ? colors.textSecondary : undefined}
         value={maxTokens}
         min={64} max={8192} step={64}
         formatValue={formatMaxTokens}
@@ -136,8 +124,7 @@ const LlamaTextSettings: React.FC = () => {
         testID="llama-context-length"
         label="Context Length"
         description="KV cache size — larger uses more RAM (requires reload)"
-        warning={mcpOn ? MCP_BOOST_NOTE : (contextLength > 8192 ? 'High context uses significant RAM and may crash on some devices' : null)}
-        warningColor={mcpOn ? colors.textSecondary : undefined}
+        warning={contextLength > 8192 ? 'High context uses significant RAM and may crash on some devices' : null}
         value={contextLength}
         min={512} max={llmSliderMax} step={1024}
         formatValue={formatContext}

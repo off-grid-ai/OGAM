@@ -293,6 +293,8 @@ jest.mock('../../../src/components', () => ({
       </View>
     );
   },
+  ThinkingIndicator: () => null,
+  ModelFailureCard: () => null,
   ModelSelectorModal: ({ visible, onClose, onSelectModel, onUnloadModel }: any) => {
     const { View, Text, TouchableOpacity } = require('react-native');
     if (!visible) return null;
@@ -431,14 +433,22 @@ jest.mock('../../../src/components/AnimatedPressable', () => ({
 // entry animation, which doesn't flush synchronously in tests, so we render a
 // lightweight stand-in that exposes the same `models-row-*` testIDs and callback.
 jest.mock('../../../src/components/models/ModelsManagerSheet', () => ({
-  ModelsManagerSheet: ({ visible, onOpenRow }: any) => {
+  ModelsManagerSheet: ({ visible, onOpenRow, onClosed }: any) => {
     const { View, Text, TouchableOpacity } = require('react-native');
     if (!visible) return null;
     const rows = ['text', 'image', 'voice', 'speech'];
+    // The real sheet defers opening the target sheet to AppSheet's onClosed (which
+    // fires after the close animation) — presenting while dismissing drops the
+    // present on iOS. Simulate that here: a row tap closes the manager (onOpenRow)
+    // then fires onClosed so the deferred open runs.
     return (
       <View testID="models-manager-sheet">
         {rows.map((type) => (
-          <TouchableOpacity key={type} testID={`models-row-${type}`} onPress={() => onOpenRow(type)}>
+          <TouchableOpacity
+            key={type}
+            testID={`models-row-${type}`}
+            onPress={() => { onOpenRow(type); onClosed?.(); }}
+          >
             <Text>{type}</Text>
           </TouchableOpacity>
         ))}
@@ -4295,6 +4305,71 @@ describe('ChatScreen', () => {
 
       // Should NOT show warning (no model loaded)
       expect(queryByText(/Settings changed/i)).toBeNull();
+    });
+
+    // Regression: a LiteRT model active while loadedSettings has UNDEFINED LiteRT fields
+    // (a stale/cross-engine snapshot — e.g. persisted from a prior session, or written by
+    // the llama loader which omits the liteRT keys) must NOT pop the banner. An undefined
+    // snapshot field means "never captured", not "changed".
+    it('does not show warning for LiteRT model when the snapshot has undefined LiteRT fields', async () => {
+      const model = createDownloadedModel({ id: 'litert-model', engine: 'litert' });
+      useAppStore.setState({
+        activeModelId: model.id,
+        downloadedModels: [model],
+        settings: {
+          ...useAppStore.getState().settings,
+          liteRTBackend: 'gpu',
+          liteRTMaxTokens: 4096,
+        },
+        // Stale snapshot: liteRT fields never captured (undefined).
+        loadedSettings: {
+          liteRTBackend: undefined,
+          liteRTMaxTokens: undefined,
+          contextLength: 2048,
+          nThreads: 4,
+          nBatch: 512,
+          enableGpu: false,
+          gpuLayers: 0,
+          flashAttn: true,
+          cacheType: 'q8_0',
+        } as any,
+      });
+      useChatStore.setState({
+        conversations: [createConversation({ modelId: model.id })],
+        activeConversationId: 'conv-1',
+      });
+
+      const { queryByText } = renderChatScreen();
+      await act(async () => {});
+
+      expect(queryByText(/Settings changed/i)).toBeNull();
+    });
+
+    // Positive: a GENUINE LiteRT change (both sides defined, values differ) still shows it.
+    it('shows warning when a LiteRT setting genuinely changed from the snapshot', async () => {
+      const model = createDownloadedModel({ id: 'litert-model-2', engine: 'litert' });
+      useAppStore.setState({
+        activeModelId: model.id,
+        downloadedModels: [model],
+        settings: {
+          ...useAppStore.getState().settings,
+          liteRTBackend: 'gpu',
+          liteRTMaxTokens: 8192,
+        },
+        loadedSettings: {
+          liteRTBackend: 'gpu',
+          liteRTMaxTokens: 4096, // was loaded at 4096, user raised to 8192
+        } as any,
+      });
+      useChatStore.setState({
+        conversations: [createConversation({ modelId: model.id })],
+        activeConversationId: 'conv-1',
+      });
+
+      const { queryByText } = renderChatScreen();
+      await waitFor(() => {
+        expect(queryByText(/Settings changed/i)).toBeTruthy();
+      });
     });
   });
 });

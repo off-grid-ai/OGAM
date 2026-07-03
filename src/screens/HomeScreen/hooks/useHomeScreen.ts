@@ -188,17 +188,8 @@ export const useHomeScreen = (navigation: HomeScreenNavigationProp) => {
         InteractionManager.runAfterInteractions(() => setTimeout(resolve, 350))
       );
       try {
-        let count = 0;
-        // Unload local models
-        if (hasLocalModels) {
-          const results = await activeModelService.unloadAllModels();
-          count = (results.textUnloaded ? 1 : 0) + (results.imageUnloaded ? 1 : 0);
-        }
-        // Disconnect remote server
-        if (hasRemoteModel) {
-          remoteServerManager.clearActiveRemoteModel();
-          count += 1;
-        }
+        // Single owning side-effect — same path the Chat screen dispatches.
+        const { count } = await activeModelService.ejectAll();
         if (count > 0) {
           setAlertState(showAlert('Done', `Unloaded ${count} model${count > 1 ? 's' : ''}`));
         }

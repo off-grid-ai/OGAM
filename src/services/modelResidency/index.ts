@@ -9,19 +9,27 @@
  *
  * See docs/design/MODEL_ROUTING.md §5.1–5.2.
  */
+import { AppState } from 'react-native';
 import { hardwareService } from '../hardware';
 import logger from '../../utils/logger';
 import { planEviction, computeBudgetMB, Resident, ResidentType } from './policy';
 
 type UnloadFn = () => Promise<void>;
 
-/** Keep this much real RAM free for the OS and other apps (never hand it to models). */
-const AVAILABILITY_HEADROOM_MB = 1024;
 /** Hard floor so a small model can always load, even under memory pressure. */
 const MIN_BUDGET_MB = 1024;
+/** For DIRTY-memory models (CoreML/ONNX image): keep this much real RAM free for the
+ *  OS + other apps so a dirty load never spills into swap. (Not applied to mmap'd
+ *  GGUF — their clean weights don't pressure this limit.) */
+const DIRTY_AVAILABILITY_HEADROOM_MB = 1024;
+/** Small, cheaply-reloadable models reclaimed first under memory pressure. */
+const SIDECAR_TYPES = new Set<ResidentType>(['whisper', 'tts', 'embedding']);
 
 interface RegisteredResident extends Resident {
   unload: UnloadFn;
+  /** Owner's veto: returns false when the model is in use right now (e.g. TTS is
+   *  playing) so residency never evicts it mid-use. Absent → always evictable. */
+  canEvict?: () => boolean;
 }
 
 export interface ResidentSpec {
@@ -29,6 +37,20 @@ export interface ResidentSpec {
   type: ResidentType;
   sizeMB: number;
   pinned?: boolean;
+  /** Owner's veto: returns false while the model is in use (e.g. TTS playing) so
+   *  residency never evicts it mid-use. Absent → always evictable. */
+  canEvict?: () => boolean;
+  /**
+   * Whether the model's weights occupy DIRTY (anonymous, jetsam-counted) memory —
+   * the gap modeled as DATA, not a Platform/type branch in the budget.
+   *  - false (default): mmap-backed GGUF (llama text / whisper). Weights are CLEAN,
+   *    file-backed pages the OS pages freely; they do NOT pressure os_proc_available.
+   *    Bounded by PHYSICAL RAM only — so an 8GB GGUF loads on a 12GB phone.
+   *  - true: CoreML/ONNX image weights load into dirty/GPU memory that DOES count
+   *    against the jetsam limit → also bounded by real free RAM (os_proc_available)
+   *    so it never loads into swap.
+   */
+  dirtyMemory?: boolean;
 }
 
 export interface EnsureResult {
@@ -41,6 +63,47 @@ const stripUnload = ({ unload: _unload, ...rest }: RegisteredResident): Resident
 class ModelResidencyManager {
   private readonly residents = new Map<string, RegisteredResident>();
   private budgetOverrideMB: number | null = null;
+
+  constructor() {
+    // Residency owns the memory-pressure response (single owner of model memory).
+    // It used to be scattered — e.g. the Kokoro bridge had its own memoryWarning
+    // listener freeing itself. Now one place reclaims idle models on a warning.
+    try {
+      AppState.addEventListener('memoryWarning', () => { this.handleMemoryWarning().catch(() => {}); });
+    } catch { /* non-RN env (some tests) — no AppState */ }
+  }
+
+  /** Residents as the pure policy sees them, with a live `canEvict()===false`
+   *  treated as pinned so capacity eviction never unloads a model that's in use. */
+  private planningResidents(): Resident[] {
+    return [...this.residents.values()].map(r => ({
+      ...stripUnload(r),
+      pinned: r.pinned || (r.canEvict ? !r.canEvict() : false),
+    }));
+  }
+
+  /**
+   * Memory-warning response: reclaim idle SIDECAR models (TTS/STT/embedding) —
+   * small and cheap to reload — but never one whose owner vetoes via canEvict()
+   * (e.g. TTS is actively playing). Generation models and pinned residents are
+   * left alone. This is what the Kokoro bridge's own listener used to do, now
+   * centralized so the eviction decision lives in one place.
+   */
+  async handleMemoryWarning(): Promise<void> {
+    // Run under the same FIFO lock as every load/unload: mutating `residents` and
+    // driving native unloads concurrently with an in-flight load is exactly the
+    // race the lock exists to prevent. The sidecar unloads here don't re-acquire the
+    // lock, so this can't deadlock.
+    await this.runExclusive('memory-warning', async () => {
+      for (const [key, r] of [...this.residents.entries()]) {
+        if (r.pinned || !SIDECAR_TYPES.has(r.type)) continue;
+        if (r.canEvict && !r.canEvict()) continue; // in use — owner vetoes
+        logger.log(`[ModelResidency] memory warning → reclaiming idle ${r.type} (${key})`);
+        await r.unload().catch(err => logger.log(`[ModelResidency] memory-warning unload ${key} failed:`, err));
+        this.residents.delete(key);
+      }
+    });
+  }
 
   /**
    * Global FIFO lock. Every model load/unload (text, image, whisper, tts,
@@ -76,16 +139,45 @@ class ModelResidencyManager {
 
   getBudgetMB(): number {
     if (this.budgetOverrideMB != null) return this.budgetOverrideMB;
-    // Two caps, take the smaller:
-    //  - physical: a fraction of total RAM (the absolute ceiling).
-    //  - dynamic: real free RAM right now + what our own resident models would
-    //    free if evicted, minus headroom. This is what stops loading into swap —
-    //    the physical cap alone trusted total RAM the device didn't actually have
-    //    free (the OOM-freeze cause). Floored so a small model always loads.
+    // The budget is the device + platform PHYSICAL-RAM cap (a fraction of total RAM).
+    //
+    // We do NOT min() this with os_proc_available_memory. That metric is the DIRTY
+    // (anonymous) memory headroom before jetsam — but llama.cpp mmaps the GGUF, so a
+    // model's weights are CLEAN, file-backed pages that the OS pages in/out freely and
+    // that do NOT count against the jetsam limit. Budgeting the full model size against
+    // the dirty headroom was a category error: it refused an 8GB mmap'd model (whose
+    // real dirty cost is ~1-2GB of KV+compute) on a 12GB phone that runs it fine. A
+    // GGUF's loadability is bounded by physical RAM (its weights fit as clean pages),
+    // which is exactly computeBudgetMB. Floored so a small model always loads.
     const physicalCapMB = computeBudgetMB(hardwareService.getTotalMemoryGB() * 1024);
+    return Math.round(Math.max(MIN_BUDGET_MB, physicalCapMB));
+  }
+
+  /**
+   * Budget for loading a SPECIFIC model, branching on its memory characteristic
+   * (data, not type): mmap-backed GGUF is bounded by physical RAM only; a dirty
+   * (CoreML/ONNX image) model is ALSO bounded by real free RAM (os_proc_available)
+   * + what evicting our own resident models would free, so it never loads into swap.
+   */
+  private budgetForSpec(spec: ResidentSpec): number {
+    if (this.budgetOverrideMB != null) return this.budgetOverrideMB;
+    const physicalCapMB = computeBudgetMB(hardwareService.getTotalMemoryGB() * 1024);
+    // Dirty-memory PRESSURE — the incoming model is dirty, OR a dirty model (CoreML/ONNX
+    // image) is already resident. A dirty model's working set/compile spike can't be
+    // paged out like clean mmap weights, so while one is present EVERY load (even an
+    // mmap sidecar) must also respect real free RAM, or stacking onto the spike jetsams
+    // the app. With no dirty pressure, mmap GGUF stays bounded by physical RAM only.
+    const dirtyPressure = !!spec.dirtyMemory || [...this.residents.values()].some(r => r.dirtyMemory);
+    if (!dirtyPressure) {
+      // mmap'd, no dirty pressure: physical RAM is the ceiling (clean, file-backed
+      // weights page in even when instantaneous available is low).
+      return Math.round(Math.max(MIN_BUDGET_MB, physicalCapMB));
+    }
+    // Under dirty pressure: also gate on real free RAM (+ evictable residents − OS
+    // headroom). This is the single owner of the live os_proc budget.
     const availableMB = hardwareService.getAvailableMemoryGB() * 1024;
     const residentMB = [...this.residents.values()].reduce((sum, r) => sum + r.sizeMB, 0);
-    const dynamicMB = availableMB + residentMB - AVAILABILITY_HEADROOM_MB;
+    const dynamicMB = availableMB + residentMB - DIRTY_AVAILABILITY_HEADROOM_MB;
     return Math.round(Math.max(MIN_BUDGET_MB, Math.min(physicalCapMB, dynamicMB)));
   }
 
@@ -132,14 +224,23 @@ class ModelResidencyManager {
    * the evicted keys.
    */
   async makeRoomFor(spec: ResidentSpec): Promise<{ evicted: string[]; fits: boolean }> {
-    // Re-read real free RAM so the budget reflects current pressure, not a stale
+    // Re-read real free RAM so the decision reflects current pressure, not a stale
     // boot-time snapshot (other apps may have grabbed memory since).
     await hardwareService.refreshMemoryInfo().catch(() => {});
-    const plan = planEviction(this.getResidents(), spec, this.getBudgetMB());
+    const budgetMB = this.budgetForSpec(spec);
+    const residents = this.planningResidents();
+    const plan = planEviction(residents, spec, budgetMB);
+    // [MEM-SM] trace (kept forever): the exact numbers behind every fit decision.
+    // budgetForSpec already folds in the live os_proc budget under dirty pressure, so
+    // there's one owner of the memory math — planEviction enforces it. Also log the raw
+    // os_proc figures (available/total) so a refusal is explainable: is real free RAM
+    // genuinely low, or is the app footprint bloated?
+    const availMB = Math.round(hardwareService.getAvailableMemoryGB() * 1024);
+    const totalMB = Math.round(hardwareService.getTotalMemoryGB() * 1024);
+    logger.log(`[MEM-SM] makeRoomFor ${spec.key} sizeMB=${spec.sizeMB} dirty=${!!spec.dirtyMemory} budgetMB=${budgetMB} os_procAvailMB=${availMB} totalMB=${totalMB} residents=[${residents.map(r => `${r.key}:${r.sizeMB}${r.pinned ? '(pinned)' : ''}`).join(',')}] fits=${plan.fits} evict=[${plan.evict.map(e => e.key).join(',')}]`);
     if (!plan.fits) {
-      // The model won't fit even after the planned evictions — so DON'T evict.
-      // Otherwise we'd strand the device with nothing (e.g. evict text to load
-      // image, then fail to load image → both gone). The caller blocks the load.
+      // Won't fit even after the planned evictions — DON'T evict (otherwise we'd
+      // strand the device with nothing). The caller blocks the load.
       return { evicted: [], fits: false };
     }
     for (const victim of plan.evict) {
@@ -173,13 +274,32 @@ class ModelResidencyManager {
     this.residents.delete(key);
   }
 
-  /** Evict everything except pinned residents (e.g. on memory-warning). */
-  async evictAll(includePinned = false): Promise<void> {
-    for (const [key, reg] of [...this.residents.entries()]) {
-      if (reg.pinned && !includePinned) continue;
-      await reg.unload().catch(err => logger.log(`[ModelResidency] unload ${key} failed:`, err));
-      this.residents.delete(key);
-    }
+  /**
+   * A generation turn is starting: the mic (STT/Whisper) model is idle while the
+   * LLM runs, and its RAM is better spent on the LLM's inference working set (which
+   * the file-size budget doesn't capture). On a memory-tight device, free it so the
+   * generation working set doesn't tip the app past the jetsam limit (the 4GB
+   * resend OOM). STT reloads on the next record. Roomy devices keep it warm.
+   * Centralizes the "evict idle audio sidecar for generation" decision here.
+   */
+  async reclaimSttForGeneration(): Promise<void> {
+    // Best-effort memory optimization in the generation hot path — must NEVER throw
+    // into it (e.g. if the hardware service isn't available). Bail quietly instead.
+    let totalGB: number;
+    try { totalGB = hardwareService.getTotalMemoryGB(); } catch { return; }
+    if (totalGB > 6) return; // roomy: keep STT warm
+    if (!this.residents.has('whisper')) return;
+    // Serialize with load/unload: this fires on the generation hot path (every send /
+    // regenerate), so without the lock it can race an in-flight whisper load and desync
+    // the residents map. whisper's unload doesn't re-acquire the lock, so no deadlock.
+    await this.runExclusive('reclaim:stt', async () => {
+      const w = this.residents.get('whisper');
+      if (!w) return; // reclaimed by another op while we waited for the lock
+      if (w.canEvict && !w.canEvict()) return; // in use (e.g. finalizing a transcription) — owner vetoes
+      logger.log('[ModelResidency] reclaiming idle STT for generation turn (memory-tight)');
+      await w.unload().catch(err => logger.log('[ModelResidency] STT reclaim failed:', err));
+      this.residents.delete('whisper');
+    });
   }
 
   /** Test helper. */

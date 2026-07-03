@@ -11,7 +11,7 @@ jest.mock('@offgrid/core/utils/logger', () => ({
   default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-const mockEngine = { speak: jest.fn().mockResolvedValue(undefined), getActiveVoice: jest.fn(() => null), displayName: 'Mock' };
+const mockEngine = { speak: jest.fn().mockResolvedValue(undefined), getActiveVoice: jest.fn(() => null), getPhase: jest.fn(() => 'ready'), release: jest.fn().mockResolvedValue(undefined), displayName: 'Mock' };
 jest.mock('../../../pro/audio/engine', () => ({
   ttsRegistry: { getActiveEngine: jest.fn(() => mockEngine) },
 }));

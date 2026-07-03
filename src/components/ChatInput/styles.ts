@@ -202,6 +202,17 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   circleButtonStop: {
     backgroundColor: `${colors.error}`,
   },
+  // Stop control sized to match the audio-mode mic (AUDIO_MIC_SIZE), so the
+  // center slot keeps one footprint across mic / loading / stop — no layout jump
+  // when generation starts or playback runs.
+  circleButtonLarge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: colors.error,
+  },
   circleButtonIdle: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -225,7 +236,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     gap: SPACING.md,
-    paddingVertical: SPACING.xs,
+    paddingVertical: 2, // tight — the mic already gives the row its height
   },
   // Voice cycle button — shows icon + voice name
   audioVoiceButton: {

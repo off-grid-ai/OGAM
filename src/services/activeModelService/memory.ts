@@ -11,11 +11,10 @@ import {
   ModelType,
   MemoryCheckResult,
   MemoryCheckSeverity,
-  getMemoryBudgetPercent,
-  getMemoryWarningPercent,
   TEXT_MODEL_OVERHEAD_MULTIPLIER,
   IMAGE_MODEL_OVERHEAD_MULTIPLIER,
 } from './types';
+import { modelMemoryBudgetMB, modelWarningThresholdMB } from '../memoryBudget';
 
 // ---------------------------------------------------------------------------
 // Budget helpers
@@ -23,14 +22,14 @@ import {
 
 export const getMemoryBudgetGB = async (): Promise<number> => {
   const deviceInfo = await hardwareService.getDeviceInfo();
-  const totalGB = deviceInfo.totalMemory / (1024 * 1024 * 1024);
-  return totalGB * getMemoryBudgetPercent(totalGB);
+  const totalMB = deviceInfo.totalMemory / (1024 * 1024);
+  return modelMemoryBudgetMB(totalMB) / 1024;
 };
 
 export const getMemoryWarningThresholdGB = async (): Promise<number> => {
   const deviceInfo = await hardwareService.getDeviceInfo();
-  const totalGB = deviceInfo.totalMemory / (1024 * 1024 * 1024);
-  return totalGB * getMemoryWarningPercent(totalGB);
+  const totalMB = deviceInfo.totalMemory / (1024 * 1024);
+  return modelWarningThresholdMB(totalMB) / 1024;
 };
 
 // ---------------------------------------------------------------------------
@@ -166,16 +165,16 @@ export async function checkMemoryForModel(
     message =
       currentlyLoadedMemoryGB > 0
         ? `Cannot load ${modelName} (~${requiredStr} GB) while other models are loaded. ` +
-          `Total would be ~${totalStr} GB, exceeding your device's ~${budgetStr} GB safe limit (60% of RAM). ` +
+          `Total would be ~${totalStr} GB, exceeding your device's ~${budgetStr} GB safe limit. ` +
           `Unload the other model first, or choose a smaller model.`
-        : `${modelName} requires ~${requiredStr} GB which exceeds your device's ~${budgetStr} GB safe limit (60% of RAM). ` +
+        : `${modelName} requires ~${requiredStr} GB which exceeds your device's ~${budgetStr} GB safe limit. ` +
           `This model is too large for your device. Choose a smaller model.`;
   } else if (totalRequiredMemoryGB > warningThresholdGB) {
     severity = 'warning';
     canLoad = true;
     message =
       `Loading ${modelName} will use ~${requiredStr} GB. ` +
-      `Total model memory will be ~${totalStr} GB (over 50% of your RAM). ` +
+      `Total model memory will be ~${totalStr} GB, near your device's safe limit. ` +
       `The app may become slow. Continue anyway?`;
   } else {
     severity = 'safe';
@@ -245,12 +244,12 @@ export async function checkMemoryForDualModel(
     canLoad = false;
     message =
       `Cannot load both models. ` +
-      `${namesStr} would require ~${requiredStr} GB, exceeding your device's ~${budgetStr} GB safe limit (60% of RAM).`;
+      `${namesStr} would require ~${requiredStr} GB, exceeding your device's ~${budgetStr} GB safe limit.`;
   } else if (totalRequiredGB > warningThresholdGB) {
     severity = 'warning';
     canLoad = true;
     message =
-      `Loading ${namesStr} will use ~${requiredStr} GB (over 50% of RAM). ` +
+      `Loading ${namesStr} will use ~${requiredStr} GB, near your device's safe limit. ` +
       `Performance may be affected.`;
   } else {
     severity = 'safe';

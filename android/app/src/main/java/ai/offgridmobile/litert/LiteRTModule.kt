@@ -64,6 +64,34 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
             val scalar = maxOf(1.0, maxNumTokens.toDouble() / DEFAULT_CONTEXT_TOKENS)
             return minOf((base * scalar).toLong(), 180_000L)
         }
+
+        /** Headroom reserved for the OS and rest of the app, never given to the KV cache. */
+        private const val TOKEN_BUDGET_HEADROOM_MB = 768L
+        /** Never clamp below this — a model should still load with a usable context. */
+        private const val MIN_TOKEN_FLOOR = 1024
+        /** Conservative upper bound on KV-cache cost per token (MB) for litert at these sizes. */
+        private const val KV_MB_PER_TOKEN = 0.15
+
+        /**
+         * Pure token-budget clamp (no Android deps, unit-testable). Reserve model weights
+         * + headroom; spend the rest on KV cache at [KV_MB_PER_TOKEN]/token. Never returns
+         * more than [requested] and never below [MIN_TOKEN_FLOOR].
+         */
+        fun clampMaxTokens(requested: Int, availMb: Long, modelMb: Long): Int {
+            val kvBudgetMb = availMb - modelMb - TOKEN_BUDGET_HEADROOM_MB
+            if (kvBudgetMb <= 0) {
+                // No KV budget after weights + headroom. Don't force MIN_TOKEN_FLOOR —
+                // that can still overcommit and hit the native OOM this clamp exists to
+                // avoid. Spend only what sits between the weights and available RAM
+                // (eating into the headroom reserve as a last resort), capped at the
+                // floor; if even the weights don't fit, fall to 1 token and let the
+                // caller's memory guard reject the load.
+                val lastResortTokens = ((availMb - modelMb) / KV_MB_PER_TOKEN).toInt()
+                return requested.coerceAtMost(lastResortTokens.coerceIn(1, MIN_TOKEN_FLOOR))
+            }
+            val affordableTokens = (kvBudgetMb / KV_MB_PER_TOKEN).toInt()
+            return requested.coerceAtMost(maxOf(MIN_TOKEN_FLOOR, affordableTokens))
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -92,7 +120,11 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
 
         scope.launch {
             try {
-                configuredMaxTokens = maxNumTokens
+                // Clamp the token budget to what free RAM can actually hold. The KV cache
+                // grows with the budget, and an over-budget request aborts engine creation
+                // (SIGABRT in nativeCreateEngine) or segfaults during inference. Degrading
+                // to a smaller context keeps the app working instead of crashing.
+                configuredMaxTokens = resolveSafeMaxTokens(modelPath, maxNumTokens)
                 // Unload any existing engine first
                 cleanupEngine()
 
@@ -104,8 +136,16 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 supportsVision = visionEnabled
                 supportsAudio = audioEnabled
 
-                Log.i(TAG, "loadModel — success on backend=$activeBackend vision=$supportsVision audio=$supportsAudio")
-                safe.resolve(activeBackend)
+                Log.i(TAG, "loadModel — success on backend=$activeBackend vision=$supportsVision audio=$supportsAudio maxNumTokens=$configuredMaxTokens")
+                // Resolve what we ACTUALLY configured, not just the backend: resolveSafeMaxTokens
+                // may have clamped the context below the requested budget to fit free RAM. JS
+                // adopts the effective value so compaction thresholds + the context-usage bar
+                // reflect reality (they were stale at the requested figure otherwise).
+                val result = com.facebook.react.bridge.Arguments.createMap().apply {
+                    putString("backend", activeBackend)
+                    putInt("maxNumTokens", configuredMaxTokens)
+                }
+                safe.resolve(result)
             } catch (e: Exception) {
                 Log.e(TAG, "loadModel — all backends failed: ${e.message}", e)
                 safe.reject("LITERT_LOAD_ERROR", "Failed to load model: ${e.message}", e)
@@ -114,9 +154,13 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
     }
 
     // 3-tier fallback: NPU → GPU → CPU
+    /** GPU init crashes on Pixel 10 (open LiteRT SDK bug) — skip the GPU delegate
+     *  there, on both the main backend chain and the vision delegate. */
+    private fun shouldSkipGpu(): Boolean =
+        Build.MODEL?.lowercase()?.contains("pixel 10") == true
+
     private fun buildBackendChain(requested: Backend): List<Backend> {
-        // GPU init crashes on Pixel 10 — open LiteRT SDK bug.
-        val skipGpu = Build.MODEL?.lowercase()?.contains("pixel 10") == true
+        val skipGpu = shouldSkipGpu()
         return when (requested) {
             is Backend.NPU -> listOfNotNull(
                 Backend.NPU(nativeLibraryDir = reactContext.applicationInfo.nativeLibraryDir),
@@ -136,7 +180,11 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 backend = backend,
                 maxNumTokens = configuredMaxTokens,
                 cacheDir = null,
-                visionBackend = if (visionEnabled) Backend.GPU() else null,
+                // Vision delegate follows the main backend tier. Forcing the Mali GPU
+                // delegate even when the main backend has fallen to CPU is a SIGSEGV
+                // source (libGLES_mali) on weak/low-VRAM GPUs; on the CPU tier the vision
+                // sub-model runs on CPU too, so the CPU fallback can actually succeed.
+                visionBackend = if (visionEnabled) visionBackendFor(backend) else null,
                 // Audio sub-model runs on CPU — the USM conformer encoder has no
                 // GPU/NPU delegate in litert-lm, and CPU keeps it off the GPU path
                 // that vision/decoder use.
@@ -563,6 +611,43 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
         is Backend.NPU -> "npu"
         is Backend.GPU -> "gpu"
         else           -> "cpu"
+    }
+
+    /** Vision delegate matched to the main backend tier (CPU main -> CPU vision).
+     *  Also honors the Pixel 10 GPU gate: never hand the GPU vision delegate to a
+     *  device where GPU init crashes, even on the NPU/GPU main path. */
+    private fun visionBackendFor(mainBackend: Backend): Backend =
+        if (mainBackend is Backend.CPU || shouldSkipGpu()) Backend.CPU() else Backend.GPU()
+
+    /** Current free system RAM in MB. */
+    private fun availableRamMb(): Long {
+        val am = reactContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val info = ActivityManager.MemoryInfo()
+        am.getMemoryInfo(info)
+        return info.availMem / (1024 * 1024)
+    }
+
+    /**
+     * Clamp the requested token budget to what free RAM can hold. The KV cache grows
+     * with the budget, so an over-budget request aborts engine creation or segfaults
+     * during inference under memory pressure. We reserve the model weights plus headroom
+     * and estimate the rest as KV cache, never going below a 1024-token floor so a model
+     * still loads. Returns the requested value unchanged when memory is comfortable or
+     * when we can't measure it.
+     */
+    private fun resolveSafeMaxTokens(modelPath: String, requested: Int): Int {
+        return try {
+            val avail = availableRamMb()
+            val modelMb = (File(modelPath).length() / (1024 * 1024)).coerceAtLeast(0)
+            val safe = clampMaxTokens(requested, avail, modelMb)
+            if (safe < requested) {
+                Log.w(TAG, "resolveSafeMaxTokens — clamping tokens $requested -> $safe (avail=${avail}MB, model=${modelMb}MB)")
+            }
+            safe
+        } catch (e: Exception) {
+            Log.w(TAG, "resolveSafeMaxTokens — failed, using requested $requested: ${e.message}")
+            requested
+        }
     }
 
     /**

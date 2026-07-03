@@ -17,6 +17,7 @@ const originalOS = Platform.OS;
 const mockDownloadManagerModule = {
   startDownload: jest.fn(),
   cancelDownload: jest.fn(),
+  retryDownload: jest.fn(),
   getActiveDownloads: jest.fn(),
   getDownloadProgress: jest.fn(),
   moveCompletedDownload: jest.fn(),
@@ -201,6 +202,28 @@ describe('BackgroundDownloadService', () => {
       await service.cancelDownload(42);
 
       expect(mockDownloadManagerModule.cancelDownload).toHaveBeenCalledWith(42);
+    });
+
+    it('routes a queued:<modelKey> placeholder id to cancelQueued, NOT native cancel', async () => {
+      // A queued placeholder has no native download — it lives only in startQueue.
+      // Cancelling it must remove the queued start, or the download starts later anyway.
+      // Distinct native ids so 3 unique slots actually fill (activeIds tracks by id).
+      let nextId = 100;
+      mockDownloadManagerModule.startDownload.mockImplementation(() =>
+        Promise.resolve({ downloadId: nextId++, fileName: 'a.gguf', modelId: 'm', status: 'running', bytesDownloaded: 0, totalBytes: 1, startedAt: 0 }));
+      // Fill the 3 concurrency slots so the next start is queued.
+      await service.startDownload({ url: 'u1', fileName: 'f1', modelId: 'a', modelType: 'text' });
+      await service.startDownload({ url: 'u2', fileName: 'f2', modelId: 'b', modelType: 'text' });
+      await service.startDownload({ url: 'u3', fileName: 'f3', modelId: 'c', modelType: 'text' });
+      const queuedPromise = service.startDownload({ url: 'u4', fileName: 'f4', modelId: 'd', modelKey: 'org/repo/f4.gguf', modelType: 'text' });
+      // Swallow the expected rejection so it isn't an unhandled rejection.
+      queuedPromise.catch(() => {});
+      mockDownloadManagerModule.cancelDownload.mockClear();
+
+      await service.cancelDownload('queued:org/repo/f4.gguf');
+
+      expect(mockDownloadManagerModule.cancelDownload).not.toHaveBeenCalled();
+      await expect(queuedPromise).rejects.toMatchObject({ cancelled: true });
     });
 
     it('throws when not available', async () => {
@@ -1239,6 +1262,240 @@ describe('BackgroundDownloadService', () => {
 
       const result = await service.excludeFromBackup('/some/path');
       expect(result).toBe(false);
+    });
+  });
+
+  // ========================================================================
+  // Concurrency queue — never hand more than MAX_CONCURRENT_DOWNLOADS to native
+  // ========================================================================
+  describe('concurrency queue (max 3)', () => {
+    const flush = () => new Promise<void>((r) => setImmediate(r));
+    const params = (id: string) => ({
+      url: `https://example.com/${id}.gguf`,
+      fileName: `${id}.gguf`,
+      modelId: id,
+      modelKey: id,
+      totalBytes: 1000,
+    });
+
+    beforeEach(() => {
+      let seq = 0;
+      mockDownloadManagerModule.startDownload.mockImplementation(async () => ({
+        downloadId: String(++seq),
+        fileName: 'f',
+        modelId: 'm',
+      }));
+    });
+
+    it('starts only 3 immediately and queues the rest', async () => {
+      const ids = ['a', 'b', 'c', 'd', 'e'];
+      ids.forEach((id) => service.startDownload(params(id)));
+      // Slots reserved synchronously, so 2 are queued right away.
+      expect(service.getQueuedCount()).toBe(2);
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(3);
+    });
+
+    it('a sidecar (mmproj) does NOT occupy a slot — 3 vision files (main+sidecar each) all download', async () => {
+      // Regression for "only one download progressing": a vision file is main + mmproj.
+      // If the sidecar counted, 3 files (6 native starts) would fill the 3-cap after ~1.5
+      // files and the rest would queue. Sidecars are exempt, so all 3 mains start.
+      for (const id of ['a', 'b', 'c']) {
+        service.startDownload({ ...params(`${id}-mmproj`), isSidecar: true }); // rides alongside, uncounted
+        service.startDownload(params(id));                                     // the main, counted
+      }
+      await flush();
+      // 3 mains + 3 sidecars = 6 native starts, and NONE queued (sidecars don't count).
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(6);
+      expect(service.getQueuedCount()).toBe(0);
+    });
+
+    it('a 4th vision file queues only its MAIN once the 3 main slots are full', async () => {
+      for (const id of ['a', 'b', 'c']) {
+        service.startDownload({ ...params(`${id}-mmproj`), isSidecar: true });
+        service.startDownload(params(id));
+      }
+      await flush();
+      // 4th file: sidecar starts immediately (uncounted), main queues (cap full with 3 mains).
+      service.startDownload({ ...params('d-mmproj'), isSidecar: true });
+      service.startDownload(params('d'));
+      await flush();
+      expect(service.getQueuedCount()).toBe(1);                               // only d's main waits
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(7); // 3 mains + 4 sidecars
+    });
+
+    it('promotes the next queued download when one COMPLETES', async () => {
+      ['a', 'b', 'c', 'd', 'e'].forEach((id) => service.startDownload(params(id)));
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(3);
+
+      eventHandlers.DownloadComplete({ downloadId: '1' });
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(4);
+      expect(service.getQueuedCount()).toBe(1);
+    });
+
+    it('promotes the next queued download when one ERRORS', async () => {
+      ['a', 'b', 'c', 'd'].forEach((id) => service.startDownload(params(id)));
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(3);
+
+      eventHandlers.DownloadError({ downloadId: '2', reason: 'boom' });
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(4);
+      expect(service.getQueuedCount()).toBe(0);
+    });
+
+    it('promotes the next queued download when one is CANCELLED', async () => {
+      mockDownloadManagerModule.cancelDownload.mockResolvedValue(undefined);
+      ['a', 'b', 'c', 'd'].forEach((id) => service.startDownload(params(id)));
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(3);
+
+      await service.cancelDownload('3');
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(4);
+    });
+
+    it('never exceeds 3 concurrent even as downloads complete', async () => {
+      ['a', 'b', 'c', 'd', 'e', 'f'].forEach((id) => service.startDownload(params(id)));
+      await flush();
+      // 3 active, 3 queued.
+      expect(service.getQueuedCount()).toBe(3);
+      // Complete two: two more admitted, still capped at 3 concurrent.
+      eventHandlers.DownloadComplete({ downloadId: '1' });
+      eventHandlers.DownloadComplete({ downloadId: '2' });
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(5);
+      expect(service.getQueuedCount()).toBe(1);
+    });
+
+    it('coalesces a duplicate start for an already-queued model (queued once, started once)', async () => {
+      ['a', 'b', 'c'].forEach((id) => service.startDownload(params(id)));
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(3);
+      // A double-tap on the same queued model must not enqueue it twice.
+      service.startDownload(params('d'));
+      service.startDownload(params('d'));
+      expect(service.getQueuedCount()).toBe(1);
+      // When a slot frees, 'd' starts exactly once (not twice).
+      eventHandlers.DownloadComplete({ downloadId: '1' });
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(4);
+      expect(service.getQueuedCount()).toBe(0);
+    });
+
+    it('cancelQueued removes a waiting start, settles it as cancelled, and frees the queue', async () => {
+      const promises = ['a', 'b', 'c', 'd'].map((id) => service.startDownload(params(id)));
+      await flush();
+      // 'd' is queued (a,b,c hold the 3 slots) — it has no native downloadId yet.
+      expect(service.getQueuedCount()).toBe(1);
+      let rejected: (Error & { cancelled?: boolean }) | null = null;
+      const dSettled = promises[3].catch((e: Error & { cancelled?: boolean }) => { rejected = e; });
+
+      const removed = service.cancelQueued('d');
+
+      expect(removed).toBe(true);
+      expect(service.getQueuedCount()).toBe(0);
+      await dSettled;
+      // The awaiting startDownload() settles as a user cancellation, not a failure.
+      expect(rejected).not.toBeNull();
+      expect(rejected!.cancelled).toBe(true);
+      // Cancelling a queued start touches NO native download (it never began).
+      expect(mockDownloadManagerModule.cancelDownload).not.toHaveBeenCalled();
+    });
+
+    it('cancelQueued returns false for a key that is not queued', () => {
+      ['a', 'b', 'c'].forEach((id) => service.startDownload(params(id)));
+      expect(service.cancelQueued('nope')).toBe(false);
+    });
+
+    it('adoptActive counts restored downloads against the cap', async () => {
+      // Simulate a relaunch that resumed 3 downloads natively.
+      service.adoptActive(['r1', 'r2', 'r3']);
+      service.startDownload(params('new'));
+      // Cap already full from restored ones → the fresh start is queued.
+      expect(service.getQueuedCount()).toBe(1);
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).not.toHaveBeenCalled();
+
+      // A restored one finishing frees a slot for the queued start.
+      eventHandlers.DownloadComplete({ downloadId: 'r1' });
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(1);
+    });
+
+    it('reconcileActiveIds reclaims leaked slots (e.g. folded mmproj sidecars) and pumps the queue', async () => {
+      // 3 downloads hold the slots, a 4th is queued.
+      ['a', 'b', 'c', 'd'].forEach((id) => service.startDownload(params(id)));
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(3);
+      expect(service.getQueuedCount()).toBe(1);
+
+      // Native truth: only '1' is still transferring — '2' and '3' leaked (their tasks
+      // were folded into a main download, so they never emitted DownloadComplete and
+      // release() was never called). Without reconcile, pump() sees the cap as full
+      // forever and 'd' is wedged — the "1 downloading, N queued" collapse.
+      mockDownloadManagerModule.getActiveDownloads.mockResolvedValue([{ downloadId: '1' }]);
+      await service.reconcileActiveIds();
+      await flush();
+
+      // The two phantom slots are reclaimed, so the queued 'd' starts.
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(4);
+      expect(service.getQueuedCount()).toBe(0);
+    });
+
+    it('retryDownload re-reserves the slot so a retried download counts against the cap', async () => {
+      mockDownloadManagerModule.retryDownload.mockResolvedValue(undefined);
+      ['a', 'b', 'c'].forEach((id) => service.startDownload(params(id))); // ids 1,2,3
+      await flush();
+      // 'a' (id '1') fails -> its slot is released.
+      eventHandlers.DownloadError({ downloadId: '1', reason: 'boom' });
+      await flush();
+
+      // Retry it. Before the fix this restarted the native transfer without re-reserving,
+      // so the cap was silently bypassed and its completion couldn't pump the queue.
+      await service.retryDownload('1');
+
+      // At the cap again -> a fresh start must queue.
+      service.startDownload(params('d'));
+      expect(service.getQueuedCount()).toBe(1);
+
+      // The retried '1' completing frees its slot and promotes the queued 'd'.
+      eventHandlers.DownloadComplete({ downloadId: '1' });
+      await flush();
+      expect(service.getQueuedCount()).toBe(0);
+    });
+
+    it('purgeNativeRecord drops the record and frees the slot WITHOUT dispatching an error', async () => {
+      mockDownloadManagerModule.cancelDownload.mockResolvedValue(undefined);
+      const onErr = jest.fn();
+      service.onAnyError(onErr);
+      service.startDownload(params('a')); // id '1' occupies a slot
+      await flush();
+
+      await service.purgeNativeRecord('1');
+
+      // Native record dropped and slot freed, but (unlike cancelDownload) NO synthetic
+      // DownloadError — a just-finalized model must not flash "failed".
+      expect(mockDownloadManagerModule.cancelDownload).toHaveBeenCalledWith('1');
+      expect(onErr).not.toHaveBeenCalled();
+      // Slot was freed: three fresh starts all begin, none queued.
+      ['b', 'c', 'd'].forEach((id) => service.startDownload(params(id)));
+      expect(service.getQueuedCount()).toBe(0);
+    });
+
+    it('reconcileActiveIds does NOT drop slots the native layer still reports active', async () => {
+      ['a', 'b', 'c', 'd'].forEach((id) => service.startDownload(params(id)));
+      await flush();
+      // All three are genuinely still downloading — reconcile must not free anything.
+      mockDownloadManagerModule.getActiveDownloads.mockResolvedValue([
+        { downloadId: '1' }, { downloadId: '2' }, { downloadId: '3' },
+      ]);
+      await service.reconcileActiveIds();
+      await flush();
+      expect(mockDownloadManagerModule.startDownload).toHaveBeenCalledTimes(3);
+      expect(service.getQueuedCount()).toBe(1);
     });
   });
 });

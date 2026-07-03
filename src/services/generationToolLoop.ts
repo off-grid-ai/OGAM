@@ -7,6 +7,7 @@ import { useChatStore, useRemoteServerStore, useAppStore } from '../stores';
 import { Message } from '../types';
 import { getToolsAsOpenAISchema, executeToolCall } from './tools';
 import type { ToolCall, ToolResult } from './tools/types';
+import { normalizeToolResult, toolErrorResult, toolResultModelContent } from './tools/toolResult';
 import { getToolExtensions } from './tools/extensions';
 import { Platform } from 'react-native';
 import { selectRelevantTools } from './litertToolSelector';
@@ -231,9 +232,29 @@ function getLastUserQuery(messages: Message[]): string {
     if (messages[i].role === 'user' && messages[i].content.trim()) return messages[i].content.trim();
   return '';
 }
+/**
+ * The single defensive seam every tool execution funnels through. A tool that THROWS
+ * (e.g. an MCP server that's down or disconnected) must NOT crash the turn; an empty
+ * result must NOT be mistaken for success. We normalize EVERY outcome to a typed
+ * ToolResult via the toolResult contract, so both the JS loop and the LiteRT native
+ * handler behave identically: success/empty/error all become a typed result whose
+ * model-facing string (toolResultModelContent) explicitly states failure/empty.
+ */
+async function executeToolCallSafely(tc: ToolCall): Promise<ToolResult> {
+  const exts = getToolExtensions();
+  const ext = exts.find(e => e.canHandle(tc.name));
+  const start = Date.now();
+  try {
+    const raw = ext ? await ext.execute(tc) : await executeToolCall(tc);
+    return normalizeToolResult(tc, raw);
+  } catch (err) {
+    logger.error(`[ToolLoop] tool "${tc.name}" threw — surfacing as a typed error result`, err);
+    return toolErrorResult(tc, err, start);
+  }
+}
+
 async function executeToolCalls(ctx: ToolLoopContext, toolCalls: import('./tools/types').ToolCall[], loopMessages: Message[]): Promise<void> {
   const chatStore = useChatStore.getState();
-  const exts = getToolExtensions();
   for (const tc of toolCalls) {
     if (ctx.isAborted()) break;
     // Small models often call web_search with empty args — use user's message as fallback
@@ -245,12 +266,11 @@ async function executeToolCalls(ctx: ToolLoopContext, toolCalls: import('./tools
     }
     if (ctx.projectId) tc.context = { projectId: ctx.projectId };
     ctx.callbacks?.onToolCallStart?.(tc.name, tc.arguments);
-    const ext = exts.find(e => e.canHandle(tc.name));
-    const result = ext ? await ext.execute(tc) : await executeToolCall(tc);
+    const result = await executeToolCallSafely(tc);
     ctx.callbacks?.onToolCallComplete?.(tc.name, result);
     const toolResultMsg: Message = {
       id: `tool-result-${Date.now()}-${tc.id || tc.name}`, role: 'tool',
-      content: result.error ? `Error: ${result.error}` : result.content, timestamp: Date.now(),
+      content: toolResultModelContent(result), timestamp: Date.now(),
       toolCallId: tc.id, toolName: tc.name, generationTimeMs: result.durationMs,
     };
     loopMessages.push(toolResultMsg);
@@ -263,29 +283,33 @@ const CONTEXT_RELEASE_PAUSE_MS = 500;
 function isNonRetryableError(msg: string): boolean {
   return msg.includes('No model loaded') || msg.includes('aborted') || msg.includes('Remote provider');
 }
-/** Call remote LLM provider with tools */
-async function callRemoteLLMWithTools(
-  messages: Message[], tools: any[],
-  opts?: { onStream?: (data: StreamToken) => void; disableThinking?: boolean },
+/** A server rejected the request because it couldn't compile the tool schemas into a
+ *  grammar (llama.cpp: "failed to parse grammar" / "failed to initialize samplers").
+ *  We can't know a server's grammar-compiler limits up front, so we detect it from the
+ *  error and retry without tools rather than hard-failing the turn. Exported for tests. */
+export function isToolGrammarError(msg: string): boolean {
+  return /parse grammar|initialize samplers/i.test(msg);
+}
+
+/** One remote generation attempt with the given tool set. */
+/** A stream that emitted at least one token before failing — carried on the rejection so
+ *  callers know a retry would DUPLICATE already-streamed output into the same consumer. */
+type StreamedError = Error & { streamed?: boolean };
+
+function remoteGenerateOnce(
+  provider: any,
+  args: { messages: Message[]; tools: any[]; thinkingEnabled: boolean; onStream?: (data: StreamToken) => void },
 ): Promise<{ fullResponse: string; toolCalls: ToolCall[] }> {
-  const activeServerId = useRemoteServerStore.getState().activeServerId;
-  if (!activeServerId) throw new Error('No remote provider active');
-  const provider = providerRegistry.getProvider(activeServerId);
-  if (!provider) throw new Error('Remote provider not found');
+  const { messages, tools, thinkingEnabled, onStream } = args;
   const settings = useAppStore.getState().settings;
-  const thinkingEnabled = !opts?.disableThinking && settings.thinkingEnabled && provider.capabilities.supportsThinking;
   const options: GenerationOptions = { temperature: settings.temperature, maxTokens: settings.maxTokens, topP: settings.topP, tools, enableThinking: thinkingEnabled };
-  let _fullContent = '', toolCalls: ToolCall[] = [];
-  const onStream = opts?.onStream;
+  let _fullContent = '';
+  let streamed = false;
+  let toolCalls: ToolCall[] = [];
   return new Promise((resolve, reject) => {
     provider.generate(messages, options, {
-      onToken: (token: string) => {
-        _fullContent += token;
-        onStream?.({ content: token });
-      },
-      onReasoning: (content: string) => {
-        onStream?.({ reasoningContent: content });
-      },
+      onToken: (token: string) => { _fullContent += token; streamed = true; onStream?.({ content: token }); },
+      onReasoning: (content: string) => { streamed = true; onStream?.({ reasoningContent: content }); },
       onComplete: (result: CompletionResult) => {
         if (result.toolCalls && result.toolCalls.length > 0) {
           toolCalls = result.toolCalls.map(tc => ({
@@ -300,10 +324,41 @@ async function callRemoteLLMWithTools(
       },
       onError: (error: Error) => {
         logger.error(`[ToolLoop] onError — ${error.message}`);
+        (error as StreamedError).streamed = streamed;
         reject(error);
       },
     });
   });
+}
+
+/** Call remote LLM provider with tools */
+async function callRemoteLLMWithTools(
+  messages: Message[], tools: any[],
+  opts?: { onStream?: (data: StreamToken) => void; disableThinking?: boolean },
+): Promise<{ fullResponse: string; toolCalls: ToolCall[] }> {
+  const activeServerId = useRemoteServerStore.getState().activeServerId;
+  if (!activeServerId) throw new Error('No remote provider active');
+  const provider = providerRegistry.getProvider(activeServerId);
+  if (!provider) throw new Error('Remote provider not found');
+  const settings = useAppStore.getState().settings;
+  const thinkingEnabled = !opts?.disableThinking && settings.thinkingEnabled && provider.capabilities.supportsThinking;
+  try {
+    return await remoteGenerateOnce(provider, { messages, tools, thinkingEnabled, onStream: opts?.onStream });
+  } catch (e: any) {
+    const msg = e?.message || String(e) || '';
+    // The server couldn't compile our tool schemas into a grammar. Rather than strand the
+    // turn on a "Generation Error", retry once WITHOUT tools so the user still gets an
+    // answer. (The real fix is sending grammar-safe schemas — see pruneToolNoise — this
+    // is the safety net for a schema/server combo we didn't anticipate.)
+    // Only retry if the failed attempt streamed NOTHING — otherwise the retry would
+    // stream a second answer into the same consumer, duplicating/corrupting the output.
+    // A grammar 400 fails at request time (before any token), so the common case is clean.
+    if (tools.length > 0 && isToolGrammarError(msg) && !(e as StreamedError).streamed) {
+      logger.warn(`[ToolLoop] remote rejected tool grammar; retrying without tools: ${msg.slice(0, 140)}`);
+      return remoteGenerateOnce(provider, { messages, tools: [], thinkingEnabled, onStream: opts?.onStream });
+    }
+    throw e;
+  }
 }
 
 async function callLocalWithRetry(
@@ -381,11 +436,14 @@ function buildLiteRTToolCallHandler(ctx: ToolLoopContext, conversationId: string
     ctx.callbacks?.onToolCallStart?.(name, args as Record<string, any>);
     const toolCall: ToolCall = { id: `native-tc-${Date.now()}`, name, arguments: args as Record<string, any> };
     if (ctx.projectId) (toolCall as any).context = { projectId: ctx.projectId };
-    const exts = getToolExtensions();
-    const ext = exts.find(e => e.canHandle(name));
-    const result = ext ? await ext.execute(toolCall) : await executeToolCall(toolCall);
+    // Route EVERY outcome through the same contract as the JS loop: a throw becomes a
+    // typed error result (it never crashes the native turn), and the string handed to
+    // the model (toolResultModelContent) is never empty — a failure/empty is stated
+    // explicitly rather than sent as "" or a bare "Error: ...", so the model can't
+    // mistake it for a successful answer.
+    const result = await executeToolCallSafely(toolCall);
     ctx.callbacks?.onToolCallComplete?.(name, result);
-    const resultContent = result.error ? `Error: ${result.error}` : result.content;
+    const resultContent = toolResultModelContent(result);
     const toolCallMsg: Message = { id: `tc-${Date.now()}-${name}`, role: 'assistant', content: '',
       toolCalls: [{ id: toolCall.id, name, arguments: JSON.stringify(toolCall.arguments) }], timestamp: Date.now() };
     const toolResultMsg: Message = { id: `tr-${Date.now()}-${name}`, role: 'tool', content: resultContent,
@@ -451,24 +509,12 @@ const TOOL_BEHAVIOR_GUIDANCE = '\n\nMake good use of the tools available to you.
 /** Tools that need precise time-of-day to resolve relative phrases like "in half an hour". */
 const TIME_SENSITIVE_TOOL_IDS = ['create_calendar_event', 'read_calendar_events'];
 
-/**
- * Build a current-date(/time) context line for the system prompt. On-device models
- * have no built-in clock, so without this they cannot resolve relative dates
- * ("tomorrow", "next Friday") into the ISO timestamps the calendar tools need.
- *
- * `precise` controls the prompt-cache tradeoff:
- *  - true  -> full minute/second timestamp, so "in half an hour" resolves correctly.
- *    The timestamp changes every turn, which breaks llama.rn prefix-cache reuse from
- *    this point on. Only used when a time-sensitive tool (calendar) is enabled.
- *  - false -> date only. Stable for the whole day, so the prompt cache is preserved;
- *    day-relative phrasing still works, but sub-day phrasing does not.
- *
- * Computed at send-time (not module load) so it stays current across a session.
- */
-function buildDateTimeContext(precise: boolean): string {
+// Shared current-time parts, computed at send-time (on-device models have no clock).
+function nowParts() {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
   let dayOfWeek = '';
   let tz = '';
   try {
@@ -477,13 +523,35 @@ function buildDateTimeContext(precise: boolean): string {
   } catch {
     // toLocaleDateString/Intl can be unavailable on some JS engines; date alone still helps.
   }
+  return { dateStr, timeStr, dayOfWeek, tz };
+}
+
+/**
+ * Date-only context for the SYSTEM prompt. On-device models have no clock, so this
+ * lets them resolve day-relative phrasing ("tomorrow", "next Friday"). The date only
+ * changes once a day, so the system prompt + tool schemas stay byte-identical across
+ * turns and the (expensive ~800-token) prefix is reused from llama.rn's cache instead
+ * of being re-prefilled every turn. The exact time lives elsewhere (see below) so it
+ * never busts this prefix.
+ */
+function buildDateContext(parts: ReturnType<typeof nowParts>): string {
+  const { dateStr, dayOfWeek, tz } = parts;
   const dayPart = dayOfWeek ? ` Today is ${dayOfWeek}.` : '';
   const tzPart = tz ? ` Timezone: ${tz}.` : '';
-  if (precise) {
-    const local = `${dateStr}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-    return `\n\nThe current date and time is ${local} (device local time, format YYYY-MM-DDTHH:MM:SS).${dayPart}${tzPart} When the user refers to relative dates or times such as "today", "tomorrow", "next Friday", or "in half an hour", resolve them against this current date and time.`;
-  }
   return `\n\nThe current date is ${dateStr} (device local date, format YYYY-MM-DD).${dayPart}${tzPart} When the user refers to relative dates such as "today", "tomorrow", or "next Friday", resolve them against this current date.`;
+}
+
+/**
+ * Exact current time, appended to the LATEST USER MESSAGE rather than the system
+ * prompt. The latest user turn is new (uncached) every time anyway, so carrying the
+ * volatile timestamp here costs nothing extra and keeps the system+tools prefix
+ * stable for cache reuse. Lets the model resolve "now" / "in half an hour" precisely.
+ * Only added when a time-sensitive (calendar) tool is enabled.
+ */
+function buildExactTimeNote(parts: ReturnType<typeof nowParts>): string {
+  const { dateStr, timeStr, tz } = parts;
+  const tzPart = tz ? `, ${tz}` : '';
+  return `\n\n(Current local date and time: ${dateStr}T${timeStr}${tzPart}. Use this only to resolve relative times like "now", "right now", or "in half an hour" — do not mention or comment on the current date or time in your reply unless the user explicitly asks.)`;
 }
 
 function augmentSystemPromptForTools(
@@ -492,7 +560,10 @@ function augmentSystemPromptForTools(
   nativeToolCalling = false,
 ): Message[] {
   const sysIdx = messages.findIndex(m => m.role === 'system');
-  if (sysIdx === -1) return messages;
+  if (sysIdx === -1) {
+    logger.log(`[ToolLoop] augmentSystemPrompt: NO system message - date NOT injected (enabledToolIds=[${enabledToolIds.join(',')}])`);
+    return messages;
+  }
   const sys = messages[sysIdx];
   const existing = typeof sys.content === 'string' ? sys.content : '';
   // Extension text hints (e.g. MCP's "call tools using <mcp_tool_call>{…}") only make
@@ -503,9 +574,34 @@ function augmentSystemPromptForTools(
   const extHints = nativeToolCalling
     ? ''
     : getToolExtensions().map(e => e.getSystemPromptHint()).filter(Boolean).join('');
+  // Snapshot the current time ONCE so the system-prompt date and the exact-time note
+  // can never disagree across a midnight/second rollover (both read the same snapshot).
+  const parts = nowParts();
+  // System prompt gets only the STABLE date (changes once a day) + tool guidance, so the
+  // system+tools prefix stays cacheable turn-to-turn.
+  const updatedSys = { ...sys, content: existing + TOOL_BEHAVIOR_GUIDANCE + buildDateContext(parts) + extHints };
+  const out = [...messages.slice(0, sysIdx), updatedSys, ...messages.slice(sysIdx + 1)];
+
+  // For time-sensitive (calendar) tools, append the EXACT time to the latest user
+  // message instead of the system prefix — keeps the big prefix cacheable while still
+  // giving the model sub-day precision.
   const precise = enabledToolIds.some(id => TIME_SENSITIVE_TOOL_IDS.includes(id));
-  const updated = { ...sys, content: existing + TOOL_BEHAVIOR_GUIDANCE + buildDateTimeContext(precise) + extHints };
-  return [...messages.slice(0, sysIdx), updated, ...messages.slice(sysIdx + 1)];
+  let exactTimeAppended = false;
+  if (precise) {
+    for (let i = out.length - 1; i >= 0; i--) {
+      if (out[i].role === 'user' && typeof out[i].content === 'string') {
+        out[i] = { ...out[i], content: (out[i].content as string) + buildExactTimeNote(parts) };
+        exactTimeAppended = true;
+        break;
+      }
+    }
+  }
+  logger.log(
+    `[ToolLoop] augmentSystemPrompt: enabledToolIds=[${enabledToolIds.join(',')}] ` +
+      `timeSensitive(precise)=${precise} nativeToolCalling=${nativeToolCalling} ` +
+      `dateInSystem=true exactTimeOnLatestUser=${exactTimeAppended}`,
+  );
+  return out;
 }
 
 interface CallLLMOptions { onStream?: (data: StreamToken) => void; forceRemote?: boolean; disableThinking?: boolean; conversationId?: string; ctx?: ToolLoopContext; }
@@ -527,6 +623,11 @@ async function callLLMWithRetry(
   // LiteRT (OpenApiTool), remote providers, and llama with a Jinja tool template all do
   // native tool calling — the text hint must be suppressed for them (see augmentSystemPromptForTools).
   const nativeToolCalling = (isLiteRTActive() && !!conversationId) || useRemote || llmService.supportsToolCalling();
+  logger.log(
+    `[ToolLoop] preLLM: tools=${tools.length} extCount=${extCount} ` +
+      `enabledToolIds=[${(ctx?.enabledToolIds ?? []).join(',')}] ` +
+      `willAugment=${tools.length > 0 || extCount > 0} liteRT=${isLiteRTActive()} useRemote=${useRemote} nativeToolCalling=${nativeToolCalling}`,
+  );
   const augmentedMessages = (tools.length > 0 || extCount > 0)
     ? augmentSystemPromptForTools(messages, ctx?.enabledToolIds, nativeToolCalling)
     : messages;

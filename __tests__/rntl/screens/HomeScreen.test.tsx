@@ -30,6 +30,8 @@ import {
   createVisionModel,
   createMessage,
 } from '../../utils/factories';
+import { Linking, Clipboard } from 'react-native';
+import { OFF_GRID_DESKTOP_URL } from '../../../src/constants';
 
 // Mock requestAnimationFrame
 (globalThis as any).requestAnimationFrame = (cb: () => void) => {
@@ -58,6 +60,13 @@ const mockLoadImageModel = jest.fn(() => Promise.resolve());
 const mockUnloadTextModel = jest.fn(() => Promise.resolve());
 const mockUnloadImageModel = jest.fn(() => Promise.resolve());
 const mockUnloadAllModels = jest.fn(() => Promise.resolve({ textUnloaded: true, imageUnloaded: true }));
+// The screen ejects via activeModelService.ejectAll(), which (in the real service)
+// delegates to unloadAllModels(true) and returns the number unloaded. Mirror that
+// here so the eject tests drive the current flow and surface unloadAllModels failures.
+const mockEjectAll = jest.fn(async () => {
+  const { textUnloaded, imageUnloaded } = await mockUnloadAllModels();
+  return { count: (textUnloaded ? 1 : 0) + (imageUnloaded ? 1 : 0) };
+});
 const mockCheckMemoryForModel = jest.fn(() => Promise.resolve({ canLoad: true, severity: 'safe', message: '' }));
 
 jest.mock('../../../src/services/activeModelService', () => ({
@@ -67,6 +76,7 @@ jest.mock('../../../src/services/activeModelService', () => ({
     unloadTextModel: mockUnloadTextModel,
     unloadImageModel: mockUnloadImageModel,
     unloadAllModels: mockUnloadAllModels,
+    ejectAll: mockEjectAll,
     getActiveModels: jest.fn(() => ({ text: null, image: null })),
     checkMemoryForModel: mockCheckMemoryForModel,
     checkMemoryForDualModel: jest.fn(() => Promise.resolve({ canLoad: true, severity: 'safe', message: '' })),
@@ -270,6 +280,12 @@ describe('HomeScreen', () => {
     mockUnloadTextModel.mockResolvedValue(undefined);
     mockUnloadImageModel.mockResolvedValue(undefined);
     mockUnloadAllModels.mockResolvedValue({ textUnloaded: true, imageUnloaded: true });
+    // ejectAll delegates to unloadAllModels and returns the unloaded count, mirroring
+    // the real service. clearAllMocks() wiped the implementation, so restore it here.
+    mockEjectAll.mockImplementation(async () => {
+      const { textUnloaded, imageUnloaded } = await mockUnloadAllModels();
+      return { count: (textUnloaded ? 1 : 0) + (imageUnloaded ? 1 : 0) };
+    });
     // Re-assign functions that may be undefined after mock hoisting/clearing
     if (!activeModelService.checkMemoryForModel) {
       (activeModelService as any).checkMemoryForModel = mockCheckMemoryForModel;
@@ -289,6 +305,54 @@ describe('HomeScreen', () => {
     if (!activeModelService.unloadAllModels) {
       (activeModelService as any).unloadAllModels = mockUnloadAllModels;
     }
+    if (!activeModelService.ejectAll) {
+      (activeModelService as any).ejectAll = mockEjectAll;
+    }
+  });
+
+  // ============================================================================
+  // Off Grid AI Desktop promo card
+  // ============================================================================
+  describe('Off Grid AI Desktop promo card', () => {
+    it('shows the card by default (not dismissed)', () => {
+      const { getByTestId, getByText } = renderHomeScreen();
+      expect(getByTestId('desktop-promo-card')).toBeTruthy();
+      expect(getByText('Off Grid AI Desktop')).toBeTruthy();
+    });
+
+    it('hides the card when previously dismissed', () => {
+      useAppStore.setState({ desktopPromoDismissed: true });
+      const { queryByTestId } = renderHomeScreen();
+      expect(queryByTestId('desktop-promo-card')).toBeNull();
+    });
+
+    it('tapping dismiss hides the card and persists the flag', () => {
+      useAppStore.setState({ desktopPromoDismissed: false });
+      const { getByTestId, queryByTestId } = renderHomeScreen();
+      fireEvent.press(getByTestId('desktop-promo-dismiss'));
+      expect(queryByTestId('desktop-promo-card')).toBeNull();
+      expect(useAppStore.getState().desktopPromoDismissed).toBe(true);
+    });
+
+    it('tapping the card opens the Off Grid AI Desktop download URL', () => {
+      useAppStore.setState({ desktopPromoDismissed: false });
+      const spy = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
+      const { getByTestId } = renderHomeScreen();
+      fireEvent.press(getByTestId('desktop-promo-card'));
+      expect(spy).toHaveBeenCalledWith(OFF_GRID_DESKTOP_URL);
+      spy.mockRestore();
+    });
+
+    it('tapping copy link copies the URL and shows confirmation (for sharing on mobile)', () => {
+      useAppStore.setState({ desktopPromoDismissed: false });
+      const spy = jest.spyOn(Clipboard, 'setString').mockImplementation(() => {});
+      const { getByTestId, getByText } = renderHomeScreen();
+      expect(getByText('Copy link')).toBeTruthy();
+      fireEvent.press(getByTestId('desktop-promo-copy'));
+      expect(spy).toHaveBeenCalledWith(OFF_GRID_DESKTOP_URL);
+      expect(getByText('Link copied')).toBeTruthy();
+      spy.mockRestore();
+    });
   });
 
   // ============================================================================
@@ -302,7 +366,7 @@ describe('HomeScreen', () => {
 
     it('shows app title', () => {
       const { getByText } = renderHomeScreen();
-      expect(getByText('Off Grid')).toBeTruthy();
+      expect(getByText('Off Grid AI')).toBeTruthy();
     });
 
     it('shows Text and Image model card labels', () => {
@@ -494,7 +558,8 @@ describe('HomeScreen', () => {
       });
 
       const { getByText } = renderHomeScreen();
-      expect(getByText('See all')).toBeTruthy();
+      // "See all" now carries the total chat count: "See all (1)".
+      expect(getByText(/See all \(1\)/)).toBeTruthy();
     });
 
     it('limits recent conversations to 4', () => {
@@ -729,7 +794,9 @@ describe('HomeScreen', () => {
   // Stats Display
   // ============================================================================
   describe('stats display', () => {
-    it('shows count of text models', () => {
+    // The old stats row was removed: per-type counts now live in the Models card,
+    // and the conversation count sits next to "See all".
+    it('shows the text-model count in the Models card', () => {
       useAppStore.setState({
         downloadedModels: [
           createDownloadedModel(),
@@ -739,11 +806,11 @@ describe('HomeScreen', () => {
       });
 
       const { getByText } = renderHomeScreen();
+      expect(getByText('Text')).toBeTruthy();
       expect(getByText('3')).toBeTruthy();
-      expect(getByText('Text models')).toBeTruthy();
     });
 
-    it('shows count of image models', () => {
+    it('shows the image-model count in the Models card', () => {
       useAppStore.setState({
         downloadedImageModels: [
           createONNXImageModel(),
@@ -752,21 +819,21 @@ describe('HomeScreen', () => {
       });
 
       const { getByText } = renderHomeScreen();
+      expect(getByText('Image')).toBeTruthy();
       expect(getByText('2')).toBeTruthy();
-      expect(getByText('Image models')).toBeTruthy();
     });
 
-    it('shows count of conversations', () => {
+    it('shows the conversation count next to See all', () => {
       createMultipleConversations(5);
 
       const { getByText } = renderHomeScreen();
-      expect(getByText('5')).toBeTruthy();
-      expect(getByText('Chats')).toBeTruthy();
+      expect(getByText(/See all \(5\)/)).toBeTruthy();
     });
 
-    it('shows zero counts by default', () => {
+    it('shows zero per-type counts by default in the Models card', () => {
+      // Four model types (text/image/voice/speech), each 0 by default.
       const { getAllByText } = renderHomeScreen();
-      expect(getAllByText('0').length).toBe(3);
+      expect(getAllByText('0').length).toBe(4);
     });
   });
 

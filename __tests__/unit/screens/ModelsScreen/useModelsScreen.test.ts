@@ -589,6 +589,31 @@ describe('useModelsScreen', () => {
 
       expect(mockHandleDownload).toHaveBeenCalledWith(mockModel, mockFile);
     });
+
+    it('starts a download even when 2+ are already active (no "Starting more can affect performance" gate)', () => {
+      // The concurrency cap + FIFO queue in backgroundDownloadService owns this now,
+      // so a 3rd+ start just queues. The old caller-side alert must be gone.
+      const { useTextModels } = require('../../../../src/screens/ModelsScreen/useTextModels');
+      const { showAlert } = require('../../../../src/components/CustomAlert');
+      const mockHandleDownload = jest.fn();
+      mockDownloads['a/x/a.gguf'] = { status: 'running' };
+      mockDownloads['b/y/b.gguf'] = { status: 'running' };
+      useTextModels.mockReturnValue({
+        downloadedModels: [], setIsRefreshing: jest.fn(),
+        loadDownloadedModels: jest.fn().mockResolvedValue(undefined),
+        hasSearched: false, searchQuery: '', handleSearch: jest.fn(),
+        handleDownload: mockHandleDownload, downloadProgress: {},
+        setFilterState: jest.fn(), setTextFiltersVisible: jest.fn(),
+      });
+
+      const { result } = renderHook(() => useModelsScreen());
+      const mockModel: any = { id: 'model-id', name: 'Test', author: 'Test', files: [] };
+      const mockFile: any = { name: 'url', size: 100, quantization: 'Q4', downloadUrl: 'http://test' };
+      act(() => { result.current.handleDownload(mockModel, mockFile); });
+
+      expect(mockHandleDownload).toHaveBeenCalledWith(mockModel, mockFile);
+      expect(showAlert).not.toHaveBeenCalledWith('Downloads Already Active', expect.anything(), expect.anything());
+    });
   });
 
   describe('handleDownloadImageModel callback', () => {

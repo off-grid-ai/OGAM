@@ -28,7 +28,7 @@ describe('SharePromptSheet', () => {
 
   it('renders message, buttons, and dismiss link', () => {
     const { getByText } = renderSheet();
-    expect(getByText(/Off Grid is completely free/)).toBeTruthy();
+    expect(getByText(/Off Grid AI is completely free/)).toBeTruthy();
     expect(getByText('Star on GitHub')).toBeTruthy();
     expect(getByText('Share on X')).toBeTruthy();
     expect(getByText('Maybe later')).toBeTruthy();

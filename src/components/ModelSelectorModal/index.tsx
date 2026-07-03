@@ -55,7 +55,12 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createAllStyles);
-  const { downloadedModels, downloadedImageModels, activeImageModelId } = useAppStore();
+  const { downloadedModels, downloadedImageModels, activeImageModelId, activeModelId } = useAppStore();
+  // Under deferred loading no model is loaded until first send, so `currentModelPath`
+  // (the loaded path) is null and the switcher would show "Available Models" with
+  // nothing marked active. Fall back to the SELECTED model so the user can see and
+  // switch their active model before it's loaded.
+  const selectedModelPath = downloadedModels.find(m => m.id === activeModelId)?.filePath ?? null;
   const {
     servers,
     discoveredModels,
@@ -216,6 +221,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
               downloadedModels={filteredDownloadedModels}
               remoteModels={remoteTextModels}
               currentModelPath={currentModelPath}
+              selectedModelPath={selectedModelPath}
               currentRemoteModelId={activeRemoteTextModelId}
               isAnyLoading={isAnyLoading}
               onSelectModel={handleSelectLocalModel}

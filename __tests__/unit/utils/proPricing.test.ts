@@ -1,26 +1,25 @@
-import { getPricingCopy, MONTHLY_CUTOVER_UTC } from '../../../src/utils/proPricing';
+import { getPricingCopy } from '../../../src/utils/proPricing';
 
 describe('getPricingCopy', () => {
-  const dayBefore = MONTHLY_CUTOVER_UTC - 1;
-  const cutover = MONTHLY_CUTOVER_UTC;
-  const dayAfter = MONTHLY_CUTOVER_UTC + 24 * 60 * 60 * 1000;
+  const copy = getPricingCopy();
 
-  it('offers the one-time lifetime deal before the July 1 cutover', () => {
-    const copy = getPricingCopy(dayBefore);
-    expect(copy.title).toMatch(/lifetime/i);
-    expect(copy.subtitle).toMatch(/\$39\/month/); // mentions what it becomes
+  it('offers the two current plans - $49/yr and $69 lifetime - and no monthly', () => {
+    expect(copy.title).toBe('$49/yr or $69 lifetime');
+    expect(copy.sheetSubheadline).toMatch(/\$49 a year/);
+    expect(copy.sheetSubheadline).toMatch(/\$69 once/);
+    // The retired monthly plan must not resurface anywhere in the copy.
+    const all = Object.values(copy).join(' ');
+    expect(all).not.toMatch(/month/i);
+    expect(all).not.toMatch(/\$39/);
+  });
+
+  it('keeps the Get Pro CTA (the web pay-page trigger the Pro surfaces assert)', () => {
     expect(copy.cta).toBe('Get Pro');
-  });
-
-  it('switches to the monthly plan at the cutover (inclusive)', () => {
-    const copy = getPricingCopy(cutover);
-    expect(copy.title).toBe('$39/month');
-    expect(copy.cta).toMatch(/\$39\/mo/);
-  });
-
-  it('stays on the monthly plan after the cutover', () => {
-    const copy = getPricingCopy(dayAfter);
-    expect(copy.title).toBe('$39/month');
     expect(copy.label).toBe('FOUNDER RATE');
+  });
+
+  it('states the founder-rate terms (locked in, only goes up) and the 5-device cap', () => {
+    expect(copy.subtitle).toMatch(/only goes up/i);
+    expect(copy.subtitle).toMatch(/5 devices/);
   });
 });

@@ -10,7 +10,7 @@ PODS:
   - hermes-engine (0.14.0):
     - hermes-engine/Pre-built (= 0.14.0)
   - hermes-engine/Pre-built (0.14.0)
-  - llama-rn (0.12.4):
+  - llama-rn (0.12.5):
     - boost
     - DoubleConversion
     - fast_float
@@ -3917,8 +3917,8 @@ SPEC CHECKSUMS:
   FBLazyVector: 309703e71d3f2f1ed7dc7889d58309c9d77a95a4
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
-  hermes-engine: 8a072b98dfc36920dbf6eb10468ab5520f2c4b37
-  llama-rn: 7c9b9610cc259118508bd1264bbd9be47e17ffd0
+  hermes-engine: 3de70ea2100f1780402cf146bb8110a0cdb2f34e
+  llama-rn: e6be4084699f0237fe0156c5f826cdaeb59e399e
   lottie-ios: a881093fab623c467d3bce374367755c272bdd59
   lottie-react-native: 691b8363e8c591fb78a78254ff2517258891456b
   MMKV: 86859fdfa2b0b21db1fd6e48788474a6416a2c77
@@ -3967,7 +3967,7 @@ SPEC CHECKSUMS:
   react-native-blur: 6af83e7e3c4c1446a188d9b2c493600fc4beb173
   react-native-document-picker: dc2d83366e47e89e7c51e8a41eab99c1d54e941c
   react-native-document-viewer: 8c6ed07e7e27352743fa98e8dd6d288ad925b884
-  react-native-executorch: 992a2b4ce98cbf47e4b7904d6680c0be379f7ec1
+  react-native-executorch: 9a44ee2b18773cbe5ad2e6d7376eb76f347e2935
   react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
   react-native-image-picker: 0314366753615115fa55c3cc937ac44cb7e75702
   react-native-keyboard-controller: 7534b5a39d1e8b2b79f86e8e998ed71c7154f69f

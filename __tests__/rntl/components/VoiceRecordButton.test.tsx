@@ -137,15 +137,15 @@ describe('VoiceRecordButton', () => {
     });
 
     it('shows model loading state when isModelLoading is true', () => {
-      const { getByText } = render(
+      const { getByTestId } = render(
         <VoiceRecordButton
           {...defaultProps}
           isModelLoading={true}
         />
       );
 
-      // Loading state shows "Loading..." text
-      expect(getByText('Loading...')).toBeTruthy();
+      // Audio-mode loading shows the 56px spinner ring (no "Loading..." text)
+      expect(getByTestId('voice-loading')).toBeTruthy();
     });
   });
 
@@ -454,7 +454,7 @@ describe('VoiceRecordButton', () => {
     });
 
     it('prioritizes model loading state over recording', () => {
-      const { getByText, toJSON } = render(
+      const { getByTestId, toJSON } = render(
         <VoiceRecordButton
           {...defaultProps}
           isModelLoading={true}
@@ -462,14 +462,14 @@ describe('VoiceRecordButton', () => {
         />
       );
 
-      expect(getByText('Loading...')).toBeTruthy();
+      expect(getByTestId('voice-loading')).toBeTruthy();
       // Recording UI should not render when loading
       const treeStr = JSON.stringify(toJSON());
       expect(treeStr).not.toContain('square');
     });
 
     it('prioritizes model loading state over transcribing', () => {
-      const { getByText, toJSON } = render(
+      const { getByTestId } = render(
         <VoiceRecordButton
           {...defaultProps}
           isModelLoading={true}
@@ -477,9 +477,8 @@ describe('VoiceRecordButton', () => {
         />
       );
 
-      expect(getByText('Loading...')).toBeTruthy();
-      // Transcribing state should not render when loading
-      expect(toJSON()).toBeTruthy();
+      // Loading wins over transcribing — the loading ring renders.
+      expect(getByTestId('voice-loading')).toBeTruthy();
     });
   });
 });

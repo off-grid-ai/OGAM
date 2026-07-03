@@ -78,3 +78,5 @@ yarn-error.log
 !.yarn/sdks
 !.yarn/versions
 docs/TRACTION_KNOWLEDGE_BASE.md
+# Local marketing drafts (not part of the app)
+marketing/

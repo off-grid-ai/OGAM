@@ -1,20 +1,18 @@
 /**
  * useDownloadManager.branches.test.ts
  *
- * Branch coverage for useDownloadManager handlers and helper functions:
- * - handleRetryDownload: android / ios-image / ios-text branches, image
- *   finalization (processing / hasAllBytes / native completed), mmproj retry
- *   success+failure, error catch path
- * - executeRemoveDownload (via handleRemoveDownload alert button): synthetic
- *   multi-file cancel, mmProj cancel, error catch
- * - handleDeleteItem: tts/stt, image (found / not found), text (found / not found)
- * - handleRepairVision: invalid modelId guard, no-mmProj-file path, repair success,
- *   repair failure (catch)
- * - entryToActiveItem mapping via activeItems (image vs text, metadata parse fail)
+ * The Download Manager hook is now a thin presentation layer: retry / cancel /
+ * delete DELEGATE to ModelDownloadService (the single owner; the actual per-type
+ * work is covered by the provider tests — sttDownloadProvider / textDownloadProvider
+ * / imageDownloadProvider). So this suite asserts:
+ * - handleRetryDownload → modelDownloadService.retry(`${type}:${modelId}`)
+ * - handleRemoveDownload (confirm) → modelDownloadService.cancel(id)
+ * - handleDeleteItem: tts/stt → voice alert; text/image (confirm) → service.remove(id)
+ * - the image cancel/retry ops are injected into the provider (setImageDownloadOps)
+ * - handleRepairVision + activeItems mapping (still owned by the hook) unchanged.
  */
 
 import { renderHook, act } from '@testing-library/react-native';
-import { Platform } from 'react-native';
 import { useDownloadManager } from '../../../../src/screens/DownloadManagerScreen/useDownloadManager';
 
 // ── mocks ─────────────────────────────────────────────────────────────
@@ -23,437 +21,147 @@ const mockUseDownloadStore = jest.fn();
 const mockDownloadStoreGetState = jest.fn();
 
 const mockModelManager = {
-  watchDownload: jest.fn(),
   getDownloadedModels: jest.fn(),
-  resetMmProjForRetry: jest.fn(),
-  cancelBackgroundDownload: jest.fn(),
-  downloadModelBackground: jest.fn(),
-  deleteModel: jest.fn(),
-  deleteImageModel: jest.fn(),
   repairMmProj: jest.fn(),
   getModelFiles: jest.fn(),
 };
-const mockActiveModelService = { unloadImageModel: jest.fn() };
 const mockHardwareService = { getModelTotalSize: jest.fn(() => 1000) };
-const mockHuggingFaceService = { getDownloadUrl: jest.fn(() => 'http://dl'), getModelFiles: jest.fn() };
-const mockBackgroundDownloadService = {
-  retryDownload: jest.fn(),
-  cancelDownload: jest.fn(),
-  getActiveDownloads: jest.fn(),
-  startProgressPolling: jest.fn(),
+const mockHuggingFaceService = { getModelFiles: jest.fn() };
+const mockBackgroundDownloadService = { cancelDownload: jest.fn(), getActiveDownloads: jest.fn(), getQueuedItems: jest.fn(() => []), reconcileActiveIds: jest.fn().mockResolvedValue(undefined) };
+const mockSubscribe = jest.fn((_fn?: any) => () => {});
+
+const mockMDS = {
+  retry: jest.fn(async (_id: string) => {}),
+  cancel: jest.fn(async (_id: string) => {}),
+  remove: jest.fn(async (_id: string) => {}),
 };
+const mockSetImageDownloadOps = jest.fn();
 
-const mockProceedWithDownload = jest.fn();
-const mockCancelSynthetic = jest.fn();
-const mockResumeImageDownload = jest.fn();
-
-const mockSetStatus = jest.fn();
-const mockRemove = jest.fn();
 const mockSetRepairingVision = jest.fn();
+const mockRemove = jest.fn();
+const mockSetStatus = jest.fn();
 
 jest.mock('../../../../src/stores', () => {
   const useAppStore = (selector?: any) => mockUseAppStore(selector);
   (useAppStore as any).getState = () => (mockUseAppStore as any).appState;
   return { useAppStore };
 });
-
 jest.mock('../../../../src/stores/downloadStore', () => {
   const useDownloadStore = (selector?: any) => mockUseDownloadStore(selector);
   (useDownloadStore as any).getState = () => mockDownloadStoreGetState();
   return { useDownloadStore };
 });
-
-// NB: jest hoists jest.mock above the const declarations, so the factory must
-// not capture the mock objects directly (they are still undefined at eval time).
-// Lazy getters read them when the property is actually accessed at call time.
 jest.mock('../../../../src/services', () => ({
   get modelManager() { return mockModelManager; },
-  get activeModelService() { return mockActiveModelService; },
   get hardwareService() { return mockHardwareService; },
   get huggingFaceService() { return mockHuggingFaceService; },
   get backgroundDownloadService() { return mockBackgroundDownloadService; },
 }));
-
-jest.mock('../../../../src/screens/ModelsScreen/imageDownloadActions', () => ({
-  cancelSyntheticImageDownload: (...a: any[]) => mockCancelSynthetic(...a),
-  proceedWithDownload: (...a: any[]) => mockProceedWithDownload(...a),
+jest.mock('../../../../src/services/modelDownloadService', () => ({
+  get modelDownloadService() { return { retry: (id: string) => mockMDS.retry(id), cancel: (id: string) => mockMDS.cancel(id), remove: (id: string) => mockMDS.remove(id), subscribe: (fn: any) => mockSubscribe(fn) }; },
 }));
-
-jest.mock('../../../../src/screens/ModelsScreen/imageDownloadResume', () => ({
-  resumeImageDownload: (...a: any[]) => mockResumeImageDownload(...a),
+jest.mock('../../../../src/services/modelDownloadService/providers/imageProvider', () => ({
+  setImageDownloadOps: (...a: any[]) => mockSetImageDownloadOps(...a),
+}));
+jest.mock('../../../../src/screens/ModelsScreen/imageDownloadActions', () => ({
+  cancelSyntheticImageDownload: jest.fn(),
+}));
+jest.mock('../../../../src/screens/DownloadManagerScreen/retryHandlers', () => ({
+  parseEntryMetadata: (entry: any) => { try { return entry.metadataJson ? JSON.parse(entry.metadataJson) : null; } catch { return null; } },
+  retryImageDownload: jest.fn(async () => {}),
 }));
 
 const mockBuildVoiceDeleteAlert = jest.fn((item: any) => ({ visible: true, title: 'voice', _item: item }));
+let mockVoiceItems: any[] = [];
 jest.mock('../../../../src/screens/DownloadManagerScreen/useVoiceDownloadItems', () => ({
-  useVoiceDownloadItems: () => ({
-    voiceItems: [],
-    refreshVoiceItems: jest.fn(),
-    buildDeleteAlert: mockBuildVoiceDeleteAlert,
-  }),
+  useVoiceDownloadItems: () => ({ voiceItems: mockVoiceItems, refreshVoiceItems: jest.fn(), buildDeleteAlert: mockBuildVoiceDeleteAlert }),
 }));
+jest.mock('../../../../src/utils/logger', () => ({ __esModule: true, default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 
-jest.mock('../../../../src/utils/logger', () => ({
-  __esModule: true,
-  default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
-
-// Wrap showAlert so we can assert on every alert raised (not just the final
-// one persisted in state). hideAlert/initialAlertState stay real.
 const shownAlertTitles: string[] = [];
 jest.mock('../../../../src/components/CustomAlert', () => {
   const actual = jest.requireActual('../../../../src/components/CustomAlert');
-  return {
-    ...actual,
-    showAlert: (title: string, message?: string, buttons?: any) => {
-      shownAlertTitles.push(title);
-      return actual.showAlert(title, message, buttons);
-    },
-  };
+  return { ...actual, showAlert: (title: string, message?: string, buttons?: any) => { shownAlertTitles.push(title); return actual.showAlert(title, message, buttons); } };
 });
 
 // ── shared state ──────────────────────────────────────────────────────
 let appState: any;
 let downloads: Record<string, any>;
 const setDownloadedModels = jest.fn();
-const removeDownloadedModel = jest.fn();
-const removeDownloadedImageModel = jest.fn();
 
 function configureStores() {
   appState = {
-    downloadedModels: [],
-    setDownloadedModels,
-    removeDownloadedModel,
-    downloadedImageModels: [],
-    removeDownloadedImageModel,
-    addDownloadedImageModel: jest.fn(),
-    activeImageModelId: null,
-    setActiveImageModelId: jest.fn(),
+    downloadedModels: [], setDownloadedModels, downloadedImageModels: [],
+    addDownloadedImageModel: jest.fn(), activeImageModelId: null, setActiveImageModelId: jest.fn(),
     onboardingChecklist: { triedImageGen: false },
   };
   (mockUseAppStore as any).appState = appState;
-  mockUseAppStore.mockImplementation((selector?: any) =>
-    selector ? selector(appState) : appState,
-  );
+  mockUseAppStore.mockImplementation((selector?: any) => (selector ? selector(appState) : appState));
 
   const downloadStoreState = {
-    downloads,
-    repairingVisionIds: {},
-    setRepairingVision: mockSetRepairingVision,
-    remove: mockRemove,
-    setStatus: mockSetStatus,
-    downloadIdIndex: {},
+    downloads, repairingVisionIds: {}, setRepairingVision: mockSetRepairingVision,
+    remove: mockRemove, setStatus: mockSetStatus, downloadIdIndex: {},
   };
   mockDownloadStoreGetState.mockReturnValue(downloadStoreState);
-  mockUseDownloadStore.mockImplementation((selector?: any) =>
-    selector ? selector(downloadStoreState) : downloadStoreState,
-  );
+  mockUseDownloadStore.mockImplementation((selector?: any) => (selector ? selector(downloadStoreState) : downloadStoreState));
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
   shownAlertTitles.length = 0;
-  (Platform as any).OS = 'android';
+  mockVoiceItems = [];
   downloads = {};
   mockModelManager.getDownloadedModels.mockResolvedValue([]);
-  mockModelManager.cancelBackgroundDownload.mockResolvedValue(undefined);
-  mockModelManager.downloadModelBackground.mockResolvedValue({ downloadId: 'new-id' });
-  mockModelManager.deleteModel.mockResolvedValue(undefined);
-  mockModelManager.deleteImageModel.mockResolvedValue(undefined);
   mockModelManager.repairMmProj.mockResolvedValue(undefined);
-  mockActiveModelService.unloadImageModel.mockResolvedValue(undefined);
-  mockBackgroundDownloadService.retryDownload.mockResolvedValue(undefined);
-  mockBackgroundDownloadService.cancelDownload.mockResolvedValue(undefined);
   mockBackgroundDownloadService.getActiveDownloads.mockResolvedValue([]);
-  mockResumeImageDownload.mockResolvedValue(undefined);
-  mockProceedWithDownload.mockResolvedValue(undefined);
-  mockCancelSynthetic.mockResolvedValue(undefined);
   configureStores();
 });
 
-// pull the alert button onPress out of the current alert state.
-// setAlertState is the real useState setter, so we read result.current.alertState.
 function pressButton(result: { current: { alertState: any } }, label: string) {
   const btn = result.current.alertState.buttons.find((b: any) => b.text === label);
   return btn.onPress();
 }
 
-// ── handleRetryDownload ───────────────────────────────────────────────
-
-describe('handleRetryDownload', () => {
-  it('returns early with no downloadId', async () => {
-    const { result } = renderHook(() => useDownloadManager());
-    await act(async () => { await result.current.handleRetryDownload({ modelType: 'text' } as any); });
-    expect(mockBackgroundDownloadService.retryDownload).not.toHaveBeenCalled();
-  });
-
-  it('android text retry: retries, reattaches finalizer, retries mmproj sidecar', async () => {
-    downloads['org/repo/model.gguf'] = {
-      modelKey: 'org/repo/model.gguf', downloadId: 'dl-1', mmProjDownloadId: 'mm-1',
-      mmProjStatus: 'failed', modelId: 'org/repo', modelType: 'text',
-    };
+// ── delegation to the single download service ─────────────────────────
+describe('control ops delegate to ModelDownloadService', () => {
+  it('handleRetryDownload → service.retry(`${type}:${modelId}`)', async () => {
     const { result } = renderHook(() => useDownloadManager());
     await act(async () => {
-      await result.current.handleRetryDownload({
-        modelType: 'text', downloadId: 'dl-1', modelKey: 'org/repo/model.gguf',
-        modelId: 'org/repo', fileName: 'model.gguf', fileSize: 100, bytesDownloaded: 0,
-      } as any);
+      await result.current.handleRetryDownload({ modelType: 'text', downloadId: 'dl-1', modelId: 'org/repo', fileName: 'm.gguf' } as any);
     });
-    expect(mockSetStatus).toHaveBeenCalledWith('dl-1', 'pending');
-    expect(mockBackgroundDownloadService.retryDownload).toHaveBeenCalledWith('dl-1');
-    // mmproj failed → retried → reset
-    expect(mockBackgroundDownloadService.retryDownload).toHaveBeenCalledWith('mm-1');
-    expect(mockModelManager.resetMmProjForRetry).toHaveBeenCalledWith('dl-1');
-    expect(mockModelManager.watchDownload).toHaveBeenCalled();
-    expect(mockBackgroundDownloadService.startProgressPolling).toHaveBeenCalled();
+    expect(mockMDS.retry).toHaveBeenCalledWith('text:org/repo');
   });
 
-  it('android text retry: skips mmproj reset when sidecar is not failed', async () => {
-    downloads.k = {
-      modelKey: 'k', downloadId: 'dl-1', mmProjDownloadId: 'mm-1', mmProjStatus: 'completed',
-      modelId: 'org/repo', modelType: 'text',
-    };
+  it('handleRetryDownload routes stt by id even without a downloadId', async () => {
     const { result } = renderHook(() => useDownloadManager());
     await act(async () => {
-      await result.current.handleRetryDownload({
-        modelType: 'text', downloadId: 'dl-1', modelKey: 'k', modelId: 'org/repo',
-        fileName: 'm.gguf', fileSize: 100, bytesDownloaded: 0,
-      } as any);
+      await result.current.handleRetryDownload({ modelType: 'stt', modelId: 'base.en', fileName: 'ggml-base.en.bin' } as any);
     });
-    expect(mockModelManager.resetMmProjForRetry).not.toHaveBeenCalled();
+    expect(mockMDS.retry).toHaveBeenCalledWith('stt:base.en');
   });
 
-  it('android text retry: mmproj retry failure sets status failed and returns false', async () => {
-    mockBackgroundDownloadService.retryDownload
-      .mockResolvedValueOnce(undefined) // main
-      .mockRejectedValueOnce(new Error('mmproj boom')); // sidecar
-    downloads.k = {
-      modelKey: 'k', downloadId: 'dl-1', mmProjDownloadId: 'mm-1', mmProjStatus: 'failed',
-      modelId: 'org/repo', modelType: 'text',
-    };
+  it('handleRetryDownload routes by id even without a downloadId (no leaked id-scheme guard)', async () => {
+    // The old STT-specific `if (!downloadId && type !== 'stt') return` guard is gone:
+    // the service refuses a not-found id uniformly, so the UI always routes by id.
     const { result } = renderHook(() => useDownloadManager());
-    await act(async () => {
-      await result.current.handleRetryDownload({
-        modelType: 'text', downloadId: 'dl-1', modelKey: 'k', modelId: 'org/repo',
-        fileName: 'm.gguf', fileSize: 100, bytesDownloaded: 0,
-      } as any);
-    });
-    expect(mockSetStatus).toHaveBeenCalledWith('mm-1', 'failed', { message: 'mmproj boom' });
-    expect(mockModelManager.resetMmProjForRetry).not.toHaveBeenCalled();
+    await act(async () => { await result.current.handleRetryDownload({ modelType: 'image', modelId: 'x' } as any); });
+    expect(mockMDS.retry).toHaveBeenCalledWith('image:x');
   });
 
-  it('image finalization runs when status is processing', async () => {
-    const entry = { modelKey: 'image:m1', downloadId: 'image-multi:m1', modelId: 'image:m1', modelType: 'image' };
-    downloads['image:m1'] = entry;
+  it('handleRemoveDownload (confirm Yes) → service.cancel(id)', async () => {
     const { result } = renderHook(() => useDownloadManager());
-    await act(async () => {
-      await result.current.handleRetryDownload({
-        modelType: 'image', downloadId: 'image-multi:m1', modelKey: 'image:m1',
-        modelId: 'm1', fileName: 'm1', fileSize: 0, bytesDownloaded: 0, status: 'processing',
-      } as any);
-    });
-    expect(mockResumeImageDownload).toHaveBeenCalledWith(entry, expect.objectContaining({ setAlertState: expect.any(Function) }));
-    expect(mockBackgroundDownloadService.retryDownload).not.toHaveBeenCalled();
-  });
-
-  it('image finalization runs when native row reports completed', async () => {
-    mockBackgroundDownloadService.getActiveDownloads.mockResolvedValue([{ downloadId: 'dl-img', status: 'completed' }]);
-    const entry = { modelKey: 'image:m1', downloadId: 'dl-img', modelId: 'image:m1', modelType: 'image' };
-    downloads['image:m1'] = entry;
-    const { result } = renderHook(() => useDownloadManager());
-    await act(async () => {
-      await result.current.handleRetryDownload({
-        modelType: 'image', downloadId: 'dl-img', modelKey: 'image:m1', modelId: 'm1',
-        fileName: 'm1', fileSize: 0, bytesDownloaded: 0, status: 'failed',
-      } as any);
-    });
-    expect(mockResumeImageDownload).toHaveBeenCalled();
-  });
-
-  it('image retry on iOS calls retryIosImageDownload → proceedWithDownload', async () => {
-    (Platform as any).OS = 'ios';
-    const entry = {
-      modelKey: 'image:m1', downloadId: 'dl-img', modelId: 'image:m1', modelType: 'image',
-      metadataJson: JSON.stringify({ imageModelName: 'M1', imageModelDownloadUrl: 'http://z', imageDownloadType: 'zip' }),
-    };
-    downloads['image:m1'] = entry;
-    const { result } = renderHook(() => useDownloadManager());
-    await act(async () => {
-      await result.current.handleRetryDownload({
-        modelType: 'image', downloadId: 'dl-img', modelKey: 'image:m1', modelId: 'm1',
-        fileName: 'm1', fileSize: 100, bytesDownloaded: 0, status: 'failed',
-      } as any);
-    });
-    expect(mockBackgroundDownloadService.cancelDownload).toHaveBeenCalledWith('dl-img');
-    expect(mockProceedWithDownload).toHaveBeenCalled();
-  });
-
-  it('iOS image retry aborts when zip metadata lacks a download url', async () => {
-    (Platform as any).OS = 'ios';
-    const entry = {
-      modelKey: 'image:m1', downloadId: 'dl-img', modelId: 'image:m1', modelType: 'image',
-      metadataJson: JSON.stringify({ imageModelName: 'M1', imageDownloadType: 'zip' }),
-    };
-    downloads['image:m1'] = entry;
-    const { result } = renderHook(() => useDownloadManager());
-    await act(async () => {
-      await result.current.handleRetryDownload({
-        modelType: 'image', downloadId: 'dl-img', modelKey: 'image:m1', modelId: 'm1',
-        fileName: 'm1', fileSize: 100, bytesDownloaded: 0, status: 'failed',
-      } as any);
-    });
-    expect(mockProceedWithDownload).not.toHaveBeenCalled();
-  });
-
-  it('iOS image retry returns when metadata fails to parse', async () => {
-    (Platform as any).OS = 'ios';
-    const entry = { modelKey: 'image:m1', downloadId: 'dl-img', modelId: 'image:m1', modelType: 'image', metadataJson: '{bad' };
-    downloads['image:m1'] = entry;
-    const { result } = renderHook(() => useDownloadManager());
-    await act(async () => {
-      await result.current.handleRetryDownload({
-        modelType: 'image', downloadId: 'dl-img', modelKey: 'image:m1', modelId: 'm1',
-        fileName: 'm1', fileSize: 100, bytesDownloaded: 0, status: 'failed',
-      } as any);
-    });
-    expect(mockProceedWithDownload).not.toHaveBeenCalled();
-  });
-
-  it('iOS text retry downloads in background and reattaches with new id', async () => {
-    (Platform as any).OS = 'ios';
-    const entry = {
-      modelKey: 'org/repo/m.gguf', downloadId: 'dl-1', modelId: 'org/repo', modelType: 'text',
-      fileName: 'm.gguf', totalBytes: 100, quantization: 'Q4',
-      mmProjFileName: 'mm.gguf', mmProjFileSize: 50,
-      metadataJson: JSON.stringify({ mmProjDownloadUrl: 'http://mm' }),
-    };
-    downloads['org/repo/m.gguf'] = entry;
-    const { result } = renderHook(() => useDownloadManager());
-    await act(async () => {
-      await result.current.handleRetryDownload({
-        modelType: 'text', downloadId: 'dl-1', modelKey: 'org/repo/m.gguf', modelId: 'org/repo',
-        fileName: 'm.gguf', fileSize: 100, bytesDownloaded: 0, status: 'failed',
-      } as any);
-    });
-    expect(mockModelManager.downloadModelBackground).toHaveBeenCalledWith(
-      'org/repo',
-      expect.objectContaining({ mmProjFile: { name: 'mm.gguf', size: 50, downloadUrl: 'http://mm' } }),
-    );
-    expect(mockModelManager.watchDownload).toHaveBeenCalledWith('new-id', expect.any(Function), expect.any(Function));
-  });
-
-  it('error in retry path sets the download status to failed with the error message', async () => {
-    mockBackgroundDownloadService.retryDownload.mockRejectedValueOnce(new Error('retry exploded'));
-    downloads.k = { modelKey: 'k', downloadId: 'dl-1', modelId: 'org/repo', modelType: 'text' };
-    const { result } = renderHook(() => useDownloadManager());
-    await act(async () => {
-      await result.current.handleRetryDownload({
-        modelType: 'text', downloadId: 'dl-1', modelKey: 'k', modelId: 'org/repo',
-        fileName: 'm.gguf', fileSize: 100, bytesDownloaded: 0,
-      } as any);
-    });
-    expect(mockSetStatus).toHaveBeenCalledWith('dl-1', 'failed', { message: 'retry exploded' });
-  });
-
-  it('error path falls back to default message when error has none', async () => {
-    mockBackgroundDownloadService.retryDownload.mockRejectedValueOnce({});
-    downloads.k = { modelKey: 'k', downloadId: 'dl-1', modelId: 'org/repo', modelType: 'text' };
-    const { result } = renderHook(() => useDownloadManager());
-    await act(async () => {
-      await result.current.handleRetryDownload({
-        modelType: 'text', downloadId: 'dl-1', modelKey: 'k', modelId: 'org/repo',
-        fileName: 'm.gguf', fileSize: 100, bytesDownloaded: 0,
-      } as any);
-    });
-    expect(mockSetStatus).toHaveBeenCalledWith('dl-1', 'failed', {
-      message: 'Retry failed. Please remove and re-download.',
-    });
-  });
-});
-
-// ── reattachRetriedTextDownload callbacks ─────────────────────────────
-
-describe('reattachRetriedTextDownload watch callbacks', () => {
-  it('finalize callback refreshes models and removes the store entry', async () => {
-    downloads.k = { modelKey: 'k', downloadId: 'dl-1', modelId: 'org/repo', modelType: 'text' };
-    mockDownloadStoreGetState.mockReturnValue({
-      downloads, remove: mockRemove, setStatus: mockSetStatus,
-      repairingVisionIds: {}, setRepairingVision: mockSetRepairingVision,
-      downloadIdIndex: { 'dl-1': 'k' },
-    });
-    mockModelManager.getDownloadedModels.mockResolvedValue([{ id: 'org/repo' }]);
-    const { result } = renderHook(() => useDownloadManager());
-    await act(async () => {
-      await result.current.handleRetryDownload({
-        modelType: 'text', downloadId: 'dl-1', modelKey: 'k', modelId: 'org/repo',
-        fileName: 'm.gguf', fileSize: 100, bytesDownloaded: 0,
-      } as any);
-    });
-    const onDone = mockModelManager.watchDownload.mock.calls[0][1];
-    const onErr = mockModelManager.watchDownload.mock.calls[0][2];
-    await act(async () => { await onDone(); });
-    expect(setDownloadedModels).toHaveBeenCalledWith([{ id: 'org/repo' }]);
-    expect(mockRemove).toHaveBeenCalledWith('k');
-    // error callback marks failed
-    onErr(new Error('finalize failed'));
-    expect(mockSetStatus).toHaveBeenCalledWith('dl-1', 'failed', { message: 'finalize failed' });
-  });
-});
-
-// ── handleRemoveDownload / executeRemoveDownload ──────────────────────
-
-describe('executeRemoveDownload', () => {
-  it('synthetic multi-file: cancels synthetic + native rows matching the image id', async () => {
-    mockBackgroundDownloadService.getActiveDownloads.mockResolvedValue([
-      { downloadId: 'r1', modelId: 'image:m1' },
-      { downloadId: 'r2', modelId: 'image:other' },
-    ]);
-    downloads['image:m1'] = { modelKey: 'image:m1', downloadId: 'image-multi:m1', status: 'completed', modelType: 'image', modelId: 'image:m1' };
-    const { result } = renderHook(() => useDownloadManager());
-    act(() => {
-      result.current.handleRemoveDownload({ modelType: 'image', modelId: 'm1', fileName: 'm1', modelKey: 'image:m1' } as any);
-    });
+    act(() => { result.current.handleRemoveDownload({ modelType: 'image', modelId: 'sdxl', fileName: 'SDXL' } as any); });
     await act(async () => { await pressButton(result, 'Yes'); });
-    expect(mockRemove).toHaveBeenCalledWith('image:m1');
-    expect(mockCancelSynthetic).toHaveBeenCalledWith('m1');
-    expect(mockBackgroundDownloadService.cancelDownload).toHaveBeenCalledWith('r1');
-    expect(mockBackgroundDownloadService.cancelDownload).not.toHaveBeenCalledWith('r2');
+    expect(mockMDS.cancel).toHaveBeenCalledWith('image:sdxl');
   });
 
-  it('text: cancels main + mmproj background downloads', async () => {
-    downloads.k = { modelKey: 'k', downloadId: 'dl-1', mmProjDownloadId: 'mm-1', status: 'completed', modelType: 'text', modelId: 'org/repo' };
-    const { result } = renderHook(() => useDownloadManager());
-    act(() => {
-      result.current.handleRemoveDownload({ modelType: 'text', modelId: 'org/repo', fileName: 'm.gguf', modelKey: 'k' } as any);
-    });
-    await act(async () => { await pressButton(result, 'Yes'); });
-    expect(mockModelManager.cancelBackgroundDownload).toHaveBeenCalledWith('dl-1');
-    expect(mockModelManager.cancelBackgroundDownload).toHaveBeenCalledWith('mm-1');
-  });
-
-  it('error during remove shows an error alert', async () => {
-    downloads.k = { modelKey: 'k', downloadId: 'dl-1', status: 'completed', modelType: 'text', modelId: 'org/repo' };
-    mockRemove.mockImplementationOnce(() => { throw new Error('remove boom'); });
-    const { result } = renderHook(() => useDownloadManager());
-    act(() => {
-      result.current.handleRemoveDownload({ modelType: 'text', modelId: 'org/repo', fileName: 'm.gguf', modelKey: 'k' } as any);
-    });
-    await act(async () => { await pressButton(result, 'Yes'); });
-    expect(shownAlertTitles).toContain('Error');
-  });
-
-  it('builds the modelKey from modelId/fileName when not provided', async () => {
-    downloads['org/repo/m.gguf'] = { modelKey: 'org/repo/m.gguf', downloadId: 'dl-1', status: 'completed', modelType: 'text', modelId: 'org/repo' };
-    const { result } = renderHook(() => useDownloadManager());
-    act(() => {
-      result.current.handleRemoveDownload({ modelType: 'text', modelId: 'org/repo', fileName: 'm.gguf' } as any);
-    });
-    await act(async () => { await pressButton(result, 'Yes'); });
-    expect(mockRemove).toHaveBeenCalledWith('org/repo/m.gguf');
+  it('registers the image cancel/retry ops with the provider', () => {
+    renderHook(() => useDownloadManager());
+    expect(mockSetImageDownloadOps).toHaveBeenCalledWith(expect.objectContaining({ cancel: expect.any(Function), retry: expect.any(Function) }));
   });
 });
 
 // ── handleDeleteItem ──────────────────────────────────────────────────
-
 describe('handleDeleteItem', () => {
   it('delegates to the voice delete alert for tts/stt', () => {
     const { result } = renderHook(() => useDownloadManager());
@@ -469,19 +177,17 @@ describe('handleDeleteItem', () => {
     expect(shownAlertTitles.length).toBe(before);
   });
 
-  it('image: shows delete alert and deletes + unloads on confirm', async () => {
+  it('image: confirm → service.remove(`image:id`)', async () => {
     configureStores();
     appState.downloadedImageModels = [{ id: 'm1', name: 'Image M1', size: 2000, modelPath: '/p' }];
     const { result } = renderHook(() => useDownloadManager());
     act(() => { result.current.handleDeleteItem({ modelType: 'image', modelId: 'm1' } as any); });
     await act(async () => { await pressButton(result, 'Delete'); });
-    expect(mockActiveModelService.unloadImageModel).toHaveBeenCalled();
-    expect(mockModelManager.deleteImageModel).toHaveBeenCalledWith('m1');
-    expect(removeDownloadedImageModel).toHaveBeenCalledWith('m1');
+    expect(mockMDS.remove).toHaveBeenCalledWith('image:m1');
   });
 
-  it('image: delete failure shows error alert', async () => {
-    mockModelManager.deleteImageModel.mockRejectedValueOnce(new Error('del boom'));
+  it('image: service.remove failure shows error alert', async () => {
+    mockMDS.remove.mockRejectedValueOnce(new Error('del boom'));
     configureStores();
     appState.downloadedImageModels = [{ id: 'm1', name: 'Image M1', size: 2000, modelPath: '/p' }];
     const { result } = renderHook(() => useDownloadManager());
@@ -497,18 +203,17 @@ describe('handleDeleteItem', () => {
     expect(shownAlertTitles.length).toBe(before);
   });
 
-  it('text: shows delete alert and deletes model on confirm', async () => {
+  it('text: confirm → service.remove(`text:id`)', async () => {
     configureStores();
     appState.downloadedModels = [{ id: 't1', fileName: 'm.gguf', author: 'a', quantization: 'Q4', engine: 'llama' }];
     const { result } = renderHook(() => useDownloadManager());
     act(() => { result.current.handleDeleteItem({ modelType: 'text', modelId: 't1' } as any); });
     await act(async () => { await pressButton(result, 'Delete'); });
-    expect(mockModelManager.deleteModel).toHaveBeenCalledWith('t1');
-    expect(removeDownloadedModel).toHaveBeenCalledWith('t1');
+    expect(mockMDS.remove).toHaveBeenCalledWith('text:t1');
   });
 
-  it('text: delete failure shows error alert', async () => {
-    mockModelManager.deleteModel.mockRejectedValueOnce(new Error('del boom'));
+  it('text: service.remove failure shows error alert', async () => {
+    mockMDS.remove.mockRejectedValueOnce(new Error('del boom'));
     configureStores();
     appState.downloadedModels = [{ id: 't1', fileName: 'm.gguf', author: 'a', quantization: 'Q4', engine: 'llama' }];
     const { result } = renderHook(() => useDownloadManager());
@@ -518,8 +223,7 @@ describe('handleDeleteItem', () => {
   });
 });
 
-// ── handleRepairVision ────────────────────────────────────────────────
-
+// ── handleRepairVision (still owned by the hook) ──────────────────────
 describe('handleRepairVision', () => {
   it('returns early when modelId has no slash', () => {
     const { result } = renderHook(() => useDownloadManager());
@@ -535,8 +239,7 @@ describe('handleRepairVision', () => {
       await Promise.resolve(); await Promise.resolve();
     });
     expect(mockSetRepairingVision).toHaveBeenCalledWith('org/repo/m.gguf', true);
-    const titles = shownAlertTitles;
-    expect(titles).toContain('No Vision File Available');
+    expect(shownAlertTitles).toContain('No Vision File Available');
     expect(mockSetRepairingVision).toHaveBeenCalledWith('org/repo/m.gguf', false);
   });
 
@@ -550,8 +253,7 @@ describe('handleRepairVision', () => {
     });
     expect(mockModelManager.repairMmProj).toHaveBeenCalledWith('org/repo', { name: 'm.gguf', mmProjFile: { name: 'mm.gguf' } }, {});
     expect(setDownloadedModels).toHaveBeenCalledWith([{ id: 'x' }]);
-    const titles = shownAlertTitles;
-    expect(titles).toContain('Vision Repaired');
+    expect(shownAlertTitles).toContain('Vision Repaired');
   });
 
   it('shows Repair Failed when getModelFiles rejects', async () => {
@@ -567,7 +269,6 @@ describe('handleRepairVision', () => {
 });
 
 // ── activeItems mapping (entryToActiveItem helpers) ───────────────────
-
 describe('activeItems mapping', () => {
   it('maps an image entry: strips image: prefix, reads metadata name/backend/quant', () => {
     downloads['image:m1'] = {
@@ -603,11 +304,63 @@ describe('activeItems mapping', () => {
     expect(result.current.activeItems).toHaveLength(0);
   });
 
+  it('routes a DOWNLOADING voice item to activeItems, NOT completedItems (Kokoro shows downloading, not "downloaded 82MB")', () => {
+    // Regression: useVoiceDownloadItems returns in-flight TTS rows as type:'active'.
+    // The hook used to dump ALL voiceItems into completedItems, so a downloading
+    // Kokoro rendered as a finished 82MB model under "Downloaded Models" regardless
+    // of its real progress. Split by type: active → activeItems, completed → completedItems.
+    mockVoiceItems = [
+      { type: 'active', modelType: 'tts', modelId: 'kokoro', fileName: 'Kokoro TTS', author: 'Voice',
+        quantization: '', fileSize: 85983232, bytesDownloaded: 2579469, progress: 0.03, status: 'downloading', name: 'Kokoro TTS' },
+    ];
+    const { result } = renderHook(() => useDownloadManager());
+    // FAILS before the fix (it was in completedItems, absent from activeItems).
+    expect(result.current.activeItems.some(i => i.modelType === 'tts' && i.modelId === 'kokoro')).toBe(true);
+    expect(result.current.completedItems.some(i => i.modelType === 'tts' && i.modelId === 'kokoro')).toBe(false);
+  });
+
+  it('routes a COMPLETED voice item to completedItems, NOT activeItems', () => {
+    mockVoiceItems = [
+      { type: 'completed', modelType: 'tts', modelId: 'kokoro', fileName: 'Kokoro TTS', author: 'Voice',
+        quantization: '', fileSize: 85983232, bytesDownloaded: 85983232, progress: 1, status: 'completed', name: 'Kokoro TTS' },
+    ];
+    const { result } = renderHook(() => useDownloadManager());
+    expect(result.current.completedItems.some(i => i.modelType === 'tts' && i.modelId === 'kokoro')).toBe(true);
+    expect(result.current.activeItems.some(i => i.modelType === 'tts' && i.modelId === 'kokoro')).toBe(false);
+  });
+
+  it('routes a FAILED voice item to activeItems (so ActiveDownloadCard shows Retry), NOT completedItems', () => {
+    // useVoiceDownloadItems marks a failed Kokoro fetch type:'active' status:'failed'
+    // (retryable). The type-split must send it to Active — a failed download in the
+    // "Downloaded Models" section would be a lie (it isn't downloaded) and would hide
+    // the Retry affordance.
+    mockVoiceItems = [
+      { type: 'active', modelType: 'tts', modelId: 'kokoro', fileName: 'Kokoro TTS', author: 'Voice',
+        quantization: '', fileSize: 85983232, bytesDownloaded: 24000000, progress: 0.28, status: 'failed',
+        name: 'Kokoro TTS', reason: 'Download interrupted' },
+    ];
+    const { result } = renderHook(() => useDownloadManager());
+    expect(result.current.activeItems.some(i => i.modelType === 'tts' && i.status === 'failed')).toBe(true);
+    expect(result.current.completedItems.some(i => i.modelType === 'tts')).toBe(false);
+  });
+
+  it('mixed real device state: STT downloaded + TTS downloading → STT in completed, TTS in active', () => {
+    // The exact screen we saw on-device: whisper models finished, Kokoro mid-download.
+    // The two must land in different sections, not be lumped together.
+    mockVoiceItems = [
+      { type: 'completed', modelType: 'stt', modelId: 'base.en', fileName: 'ggml-base.en.bin', author: 'Transcription',
+        quantization: '', fileSize: 142000000, bytesDownloaded: 142000000, progress: 1, status: 'completed', name: 'base.en' },
+      { type: 'active', modelType: 'tts', modelId: 'kokoro', fileName: 'Kokoro TTS', author: 'Voice',
+        quantization: '', fileSize: 85983232, bytesDownloaded: 25794690, progress: 0.3, status: 'downloading', name: 'Kokoro TTS' },
+    ];
+    const { result } = renderHook(() => useDownloadManager());
+    expect(result.current.completedItems.some(i => i.modelType === 'stt' && i.modelId === 'base.en')).toBe(true);
+    expect(result.current.completedItems.some(i => i.modelType === 'tts')).toBe(false);
+    expect(result.current.activeItems.some(i => i.modelType === 'tts' && i.status === 'downloading')).toBe(true);
+    expect(result.current.activeItems.some(i => i.modelType === 'stt')).toBe(false);
+  });
+
   it('isRepairingVision reflects the store flag', () => {
-    mockDownloadStoreGetState.mockReturnValue({
-      downloads, remove: mockRemove, setStatus: mockSetStatus,
-      repairingVisionIds: { 'org/repo/m.gguf': true }, setRepairingVision: mockSetRepairingVision, downloadIdIndex: {},
-    });
     mockUseDownloadStore.mockImplementation((selector?: any) => {
       const s = { downloads, repairingVisionIds: { 'org/repo/m.gguf': true }, setRepairingVision: mockSetRepairingVision, remove: mockRemove };
       return selector ? selector(s) : s;
@@ -615,5 +368,23 @@ describe('activeItems mapping', () => {
     const { result } = renderHook(() => useDownloadManager());
     expect(result.current.isRepairingVision('org/repo/m.gguf')).toBe(true);
     expect(result.current.isRepairingVision('other')).toBe(false);
+  });
+});
+
+describe('queued-items subscription (F14 churn)', () => {
+  it('subscribes to the download service once and does NOT re-subscribe when downloads change each tick', () => {
+    const { rerender } = renderHook(() => useDownloadManager());
+    expect(mockSubscribe).toHaveBeenCalledTimes(1);
+
+    // Simulate progress ticks handing the selector a brand-new downloads object each
+    // render. Under the old [downloads] dep this tore down + rebuilt the subscription
+    // (and the 1s interval) every tick; with [] it must stay a single subscription.
+    const entry = (progress: number) => ({ 'a/x/f.gguf': { modelId: 'a/x', modelKey: 'a/x/f.gguf', fileName: 'f.gguf', modelType: 'text', status: 'running', progress, bytesDownloaded: 1, totalBytes: 100, quantization: 'Q4' } });
+    act(() => { downloads = entry(0.1); configureStores(); });
+    rerender({});
+    act(() => { downloads = entry(0.2); configureStores(); });
+    rerender({});
+
+    expect(mockSubscribe).toHaveBeenCalledTimes(1);
   });
 });

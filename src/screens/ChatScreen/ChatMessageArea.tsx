@@ -6,7 +6,7 @@ import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
 import Icon from 'react-native-vector-icons/Feather';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { AttachStep } from 'react-native-spotlight-tour';
-import { ChatInput, ThinkingIndicator } from '../../components';
+import { ChatInput, ThinkingIndicator, ModelFailureCard } from '../../components';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { generationService } from '../../services';
 import { INFERENCE_BACKENDS } from '../../types';
@@ -36,13 +36,28 @@ export type ChatMessageAreaProps = {
   chatSpotlight: number | null;
 };
 
-// The ChatInput container already pads its bottom by this much; subtracting it
-// makes the footer's total bottom space equal the safe-area inset (not inset +
-// pad), so the bar clears the home indicator with no extra gap. Collapses to 0
-// while the keyboard is up, since the keyboard covers the safe area.
-const INPUT_FOOTER_BASE_PAD = 8;
-const computeFooterPaddingBottom = (keyboardVisible: boolean, insetBottom: number): number =>
-  keyboardVisible ? 0 : Math.max(insetBottom - INPUT_FOOTER_BASE_PAD, 0);
+// The bottom gap below the input controls should visually MATCH the top gap
+// (the ChatInput container's paddingTop = 12), not consume the full home-indicator
+// safe-area inset — that made the bottom feel like a large dead band vs the top.
+// The container already pads its bottom by 8, so cap the extra footer at 4 → 12
+// total, symmetric with the top. Collapses to 0 while the keyboard is up.
+//
+// BUT that cap only applies to a thin overlay inset (iOS home indicator / gesture
+// nav), which draws *over* content. A 3-button navigation bar is opaque and owns
+// real space at the bottom — capping there renders the input controls UNDER the
+// nav buttons. We distinguish by the inset size (not Platform.OS): anything above
+// the overlay threshold is a real nav bar, so honor the full inset and clear it.
+const FOOTER_SAFE_CAP = 4;
+// Home-indicator / gesture-nav overlays sit at ~24px or below on the devices we
+// target; a 3-button nav bar is taller. Above this, treat the inset as opaque.
+const OVERLAY_INSET_MAX = 24;
+export const computeFooterPaddingBottom = (keyboardVisible: boolean, insetBottom: number): number => {
+  if (keyboardVisible) return 0;
+  // Opaque nav bar (tall inset): pad the full inset so controls clear it.
+  if (insetBottom > OVERLAY_INSET_MAX) return insetBottom;
+  // Thin overlay inset: keep the symmetric-with-top cap.
+  return Math.min(insetBottom, FOOTER_SAFE_CAP);
+};
 
 // Small status bar above the input: classifying takes precedence over the
 // background model-load indicator.
@@ -138,7 +153,6 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           activeModelName={chat.activeModelName}
           activeProject={chat.activeProject}
           setShowProjectSelector={chat.setShowProjectSelector}
-          isRemote={chat.activeModelInfo?.isRemote}
         />
           );
         })()
@@ -233,6 +247,9 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           </Text>
         </View>
       )}
+      {/* Single dismissible surface for every model failure (text/image/tts/stt/
+          embedding). Reads modelFailureStore itself — no props. */}
+      <ModelFailureCard />
       {/* Steps 3/15 share the same AttachStep wrapping ChatInput (multi-index).
          Steps 12/16 are handled inside ChatInput via activeSpotlight prop. */}
       <View
@@ -266,6 +283,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             supportsToolCalling={chat.supportsToolCalling}
             supportsThinking={chat.supportsThinking}
             onRepairVision={handleRepairVision}
+            isRemote={chat.activeModelInfo.isRemote}
             activeSpotlight={chatSpotlight === 12 ? chatSpotlight : null}
           />
         </AttachStep>

@@ -10,6 +10,8 @@ jest.mock('../../../src/utils/logger', () => ({
 import {
   fetchRemoteModelInfo,
   fetchLmStudioModelInfo,
+  fetchLlamaCppProps,
+  fetchLlamaCppPropsCached,
   fetchModelCapabilities,
   isGenerativeModel,
 } from '../../../src/stores/remoteModelCapabilities';
@@ -180,6 +182,148 @@ describe('fetchLmStudioModelInfo', () => {
 });
 
 // ---------------------------------------------------------------------------
+// fetchLlamaCppProps
+// ---------------------------------------------------------------------------
+
+describe('fetchLlamaCppProps', () => {
+  it('returns null on network error', async () => {
+    mockFetchError(new Error('offline'));
+    expect(await fetchLlamaCppProps('http://localhost:7878')).toBeNull();
+  });
+
+  it('returns null on non-ok (not a llama.cpp server)', async () => {
+    mockFetch({ ok: false, json: async () => ({}) } as any);
+    expect(await fetchLlamaCppProps('http://localhost:11434')).toBeNull();
+  });
+
+  it('returns null when the payload lacks modalities and chat_template_caps', async () => {
+    mockFetch({ ok: true, json: async () => ({ some_other_server: true }) } as any);
+    expect(await fetchLlamaCppProps('http://localhost:1234')).toBeNull();
+  });
+
+  it('parses vision/tools/context from a real Gateway /props payload', async () => {
+    mockFetch({
+      ok: true,
+      json: async () => ({
+        modalities: { vision: true, video: true, audio: false },
+        chat_template_caps: { supports_tools: true, supports_preserve_reasoning: false },
+        default_generation_settings: { n_ctx: 37888, params: { reasoning_format: 'none' } },
+      }),
+    } as any);
+    const info = await fetchLlamaCppProps('http://192.168.1.58:7878');
+    expect(info).not.toBeNull();
+    expect(info!.supportsVision).toBe(true);
+    expect(info!.supportsToolCalling).toBe(true);
+    expect(info!.supportsThinking).toBe(false);
+    expect(info!.acceptsThinkingKwarg).toBe(false);
+    expect(info!.contextLength).toBe(37888);
+  });
+
+  it('sets acceptsThinkingKwarg when the template exposes enable_thinking', async () => {
+    mockFetch({
+      ok: true,
+      json: async () => ({
+        modalities: { vision: false },
+        chat_template_caps: { supports_tools: true },
+        chat_template: "{%- if enable_thinking is defined and enable_thinking is true %}{{- '<think>' }}",
+        default_generation_settings: { n_ctx: 4096, params: { reasoning_format: 'none' } },
+      }),
+    } as any);
+    const info = await fetchLlamaCppProps('http://192.168.1.58:7878');
+    expect(info!.acceptsThinkingKwarg).toBe(true);
+    expect(info!.supportsThinking).toBe(true);
+  });
+
+  it('detects thinking from the chat_template even when supports_preserve_reasoning is false', async () => {
+    // Real Gateway case: Qwen3.5 reports supports_preserve_reasoning=false and
+    // reasoning_format=none, yet the template exposes enable_thinking — and the
+    // model DOES think on demand. The template is the reliable capability signal.
+    mockFetch({
+      ok: true,
+      json: async () => ({
+        modalities: { vision: true },
+        chat_template_caps: { supports_tools: true, supports_preserve_reasoning: false },
+        chat_template: "{%- if enable_thinking is defined and enable_thinking is true %}\n{{- '<think>\\n' }}",
+        default_generation_settings: { n_ctx: 37888, params: { reasoning_format: 'none' } },
+      }),
+    } as any);
+    const info = await fetchLlamaCppProps('http://192.168.1.58:7878');
+    expect(info!.supportsThinking).toBe(true);
+  });
+
+  it('reports thinking when supports_preserve_reasoning is true', async () => {
+    mockFetch({
+      ok: true,
+      json: async () => ({
+        modalities: { vision: false },
+        chat_template_caps: { supports_tools: false, supports_preserve_reasoning: true },
+        default_generation_settings: { n_ctx: 4096, params: { reasoning_format: 'none' } },
+      }),
+    } as any);
+    const info = await fetchLlamaCppProps('http://192.168.1.58:7878');
+    expect(info!.supportsThinking).toBe(true);
+  });
+
+  it('logs a warning (not silent) when /props is unavailable', async () => {
+    const logger = require('../../../src/utils/logger').default;
+    logger.warn.mockClear();
+    mockFetchError(new Error('DNS failure'));
+    const info = await fetchLlamaCppProps('http://192.168.1.58:7878');
+    expect(info).toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[fetchLlamaCppProps] /props unavailable:',
+      'http://192.168.1.58:7878',
+      'DNS failure',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchLlamaCppPropsCached — de-duplication
+// ---------------------------------------------------------------------------
+
+describe('fetchLlamaCppPropsCached', () => {
+  it('shares a single in-flight /props request across concurrent calls to one endpoint', async () => {
+    let calls = 0;
+    globalThis.fetch = jest.fn().mockImplementation(() => {
+      calls += 1;
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ modalities: { vision: true }, chat_template_caps: { supports_tools: true } }),
+      } as any);
+    });
+
+    const ep = 'http://192.168.1.58:7878';
+    // Fire three concurrent calls (as N models on one server would).
+    const [a, b, c] = await Promise.all([
+      fetchLlamaCppPropsCached(ep),
+      fetchLlamaCppPropsCached(ep),
+      fetchLlamaCppPropsCached(ep),
+    ]);
+
+    expect(calls).toBe(1); // one /props request, not three
+    expect(a!.supportsVision).toBe(true);
+    expect(b).toEqual(a);
+    expect(c).toEqual(a);
+  });
+
+  it('re-probes after the in-flight request settles (no stale caching)', async () => {
+    let calls = 0;
+    globalThis.fetch = jest.fn().mockImplementation(() => {
+      calls += 1;
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ modalities: { vision: false }, chat_template_caps: {} }),
+      } as any);
+    });
+    const ep = 'http://192.168.1.60:7878';
+    await fetchLlamaCppPropsCached(ep);
+    await fetchLlamaCppPropsCached(ep); // after settle → new request
+    expect(calls).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // fetchModelCapabilities
 // ---------------------------------------------------------------------------
 
@@ -211,6 +355,8 @@ describe('fetchModelCapabilities', () => {
 
   it('returns LM Studio info when Ollama returns defaults but LM Studio has real data', async () => {
     globalThis.fetch = jest.fn()
+      // /props arm first — not a llama.cpp server, so 404
+      .mockResolvedValueOnce({ ok: false } as any)
       .mockRejectedValueOnce(new Error('ollama offline'))
       .mockResolvedValueOnce({
         ok: true,
@@ -223,6 +369,73 @@ describe('fetchModelCapabilities', () => {
     const result = await fetchModelCapabilities('http://localhost:1234', 'llava', nameDetect);
     expect(result.supportsVision).toBe(true);
     expect(result.contextLength).toBe(8192);
+  });
+
+  it('prefers llama.cpp /props (vision + tools) over name-based detection — the Gateway case', async () => {
+    // Off Grid AI Gateway: /v1/models has no capability data, but /props reports
+    // the real modalities. Name says "no vision" (id has no vl/vision), yet the
+    // model genuinely supports it — /props must win.
+    globalThis.fetch = jest.fn().mockImplementation((url: string) => {
+      if (url.endsWith('/props')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            modalities: { vision: true, video: true, audio: false },
+            chat_template_caps: { supports_tools: true, supports_preserve_reasoning: false },
+            default_generation_settings: { n_ctx: 37888, params: { reasoning_format: 'none' } },
+          }),
+        } as any);
+      }
+      // Ollama /api/show + LM Studio /api/v1/models don't exist on the Gateway
+      return Promise.resolve({ ok: false } as any);
+    });
+
+    const result = await fetchModelCapabilities('http://192.168.1.58:7878', '/Users/admin/.offgrid/models/Qwen3.5-9B-Q4_K_M.gguf', nameDetect);
+    expect(result.supportsVision).toBe(true);
+    expect(result.supportsToolCalling).toBe(true);
+    expect(result.supportsThinking).toBe(false);
+    expect(result.contextLength).toBe(37888);
+  });
+
+  it('trusts /props even when every capability is false (genuine text-only model)', async () => {
+    // A vision-name model on a llama.cpp server that did NOT load a projector:
+    // /props says vision=false and must override the name-based "llava → vision".
+    globalThis.fetch = jest.fn().mockImplementation((url: string) => {
+      if (url.endsWith('/props')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            modalities: { vision: false, video: false, audio: false },
+            chat_template_caps: { supports_tools: false },
+            default_generation_settings: { n_ctx: 8192, params: { reasoning_format: 'none' } },
+          }),
+        } as any);
+      }
+      return Promise.resolve({ ok: false } as any);
+    });
+
+    const result = await fetchModelCapabilities('http://192.168.1.58:7878', 'llava-vision', nameDetect);
+    expect(result.supportsVision).toBe(false);
+    expect(result.contextLength).toBe(8192);
+  });
+
+  it('detects thinking from /props reasoning_format when present', async () => {
+    globalThis.fetch = jest.fn().mockImplementation((url: string) => {
+      if (url.endsWith('/props')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            modalities: { vision: false },
+            chat_template_caps: { supports_tools: false, supports_preserve_reasoning: false },
+            default_generation_settings: { n_ctx: 4096, params: { reasoning_format: 'deepseek' } },
+          }),
+        } as any);
+      }
+      return Promise.resolve({ ok: false } as any);
+    });
+
+    const result = await fetchModelCapabilities('http://192.168.1.58:7878', 'some-model', nameDetect);
+    expect(result.supportsThinking).toBe(true);
   });
 });
 
@@ -315,6 +528,20 @@ describe('fetchLmStudioModelInfo — probeLmStudioThinking SSE branches', () => 
       } as any);
     const result = await fetchLmStudioModelInfo('http://localhost:1234', 'm5');
     expect(result.supportsThinking).toBe(false);
+  });
+
+  it('marks acceptsThinkingKwarg=true even for a non-thinking model (server capability, not probe)', async () => {
+    // LM Studio always honors enable_thinking; the probe only tells us whether THIS
+    // model reasons. A false probe (or a flaky one) must not strip the kwarg.
+    globalThis.fetch = jest.fn()
+      .mockResolvedValueOnce(modelResponse('m7'))
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () => 'data: {"choices":[{"delta":{"content":"plain"}}]}\ndata: [DONE]\n',
+      } as any);
+    const result = await fetchLmStudioModelInfo('http://localhost:1234', 'm7');
+    expect(result.supportsThinking).toBe(false);
+    expect(result.acceptsThinkingKwarg).toBe(true);
   });
 
   it('skips malformed JSON lines in SSE and returns false', async () => {

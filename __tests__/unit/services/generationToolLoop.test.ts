@@ -6,7 +6,7 @@
  * Priority: P0 (Critical) - Core tool-calling functionality.
  */
 
-import { runToolLoop, ToolLoopContext, parseToolCallsFromText } from '../../../src/services/generationToolLoop';
+import { runToolLoop, ToolLoopContext, parseToolCallsFromText, isToolGrammarError } from '../../../src/services/generationToolLoop';
 import { llmService } from '../../../src/services/llm';
 import { liteRTService } from '../../../src/services/litert';
 import { Message } from '../../../src/types';
@@ -452,9 +452,12 @@ describe('runToolLoop', () => {
       const ctx = createContext();
       await runToolLoop(ctx);
 
-      // Tool result message should contain the error
+      // Tool result message states the failure explicitly (never empty, never
+      // mistakable for success) and carries the underlying error + category.
       const toolMsg = mockAddMessage.mock.calls[1][1];
-      expect(toolMsg.content).toBe('Error: Network timeout');
+      expect(toolMsg.content).toContain('Network timeout');
+      expect(toolMsg.content).toContain('failed');
+      expect(toolMsg.content).toContain('do not assume it succeeded');
     });
 
     it('executes multiple tool calls in a single iteration', async () => {
@@ -666,7 +669,10 @@ describe('runToolLoop', () => {
       await runToolLoop(ctx);
 
       expect(onToolCallComplete).toHaveBeenCalledTimes(1);
-      expect(onToolCallComplete).toHaveBeenCalledWith('web_search', result);
+      // The loop normalizes the result (adds status), so match the original fields.
+      expect(onToolCallComplete).toHaveBeenCalledWith('web_search', expect.objectContaining({
+        name: result.name, content: result.content, status: 'ok',
+      }));
     });
 
     it('calls onToolCallStart and onToolCallComplete for multiple tool calls', async () => {
@@ -1540,6 +1546,68 @@ describe('callRemoteLLMWithTools via forceRemote', () => {
     const ctx = createContext({ forceRemote: true });
     await expect(runToolLoop(ctx)).rejects.toThrow('Remote provider not found');
   });
+
+  it('retries WITHOUT tools when the server rejects the tool grammar (llama.cpp)', async () => {
+    // 1st generate: server can't compile the tool schemas → grammar error. 2nd generate
+    // (retry, tools stripped) succeeds. The user gets an answer instead of a hard failure.
+    let call = 0;
+    const toolCounts: number[] = [];
+    mockProvider.generate.mockImplementation((_msgs: any, opts: any, callbacks: any) => {
+      call++;
+      toolCounts.push(opts.tools?.length ?? 0);
+      if (call === 1) {
+        callbacks.onError(new Error('HTTP 400: Failed to initialize samplers: failed to parse grammar'));
+      } else {
+        callbacks.onComplete({ content: 'answer without tools', toolCalls: [] });
+      }
+    });
+
+    const ctx = createContext({ forceRemote: true });
+    await runToolLoop(ctx);
+
+    expect(call).toBe(2);
+    expect(toolCounts[0]).toBeGreaterThan(0); // first attempt sent tools
+    expect(toolCounts[1]).toBe(0);            // retry sent NO tools
+    expect(ctx.onFinalResponse).toHaveBeenCalledWith('answer without tools');
+  });
+
+  it('does NOT retry on a non-grammar remote error (still rejects)', async () => {
+    let call = 0;
+    mockProvider.generate.mockImplementation((_msgs: any, _opts: any, callbacks: any) => {
+      call++;
+      callbacks.onError(new Error('HTTP 500: internal server error'));
+    });
+
+    const ctx = createContext({ forceRemote: true });
+    await expect(runToolLoop(ctx)).rejects.toThrow('internal server error');
+    expect(call).toBe(1); // no retry for unrelated errors
+  });
+
+  it('does NOT retry a grammar error if tokens already streamed (avoids duplicate output)', async () => {
+    let call = 0;
+    mockProvider.generate.mockImplementation((_msgs: any, _opts: any, callbacks: any) => {
+      call++;
+      callbacks.onToken('partial ');   // streamed before failing
+      callbacks.onError(new Error('HTTP 400: failed to parse grammar'));
+    });
+
+    const ctx = createContext({ forceRemote: true });
+    await expect(runToolLoop(ctx)).rejects.toThrow(/parse grammar/);
+    expect(call).toBe(1); // retry suppressed — a second stream would duplicate output
+  });
+});
+
+describe('isToolGrammarError', () => {
+  it('matches llama.cpp grammar / sampler-init failures', () => {
+    expect(isToolGrammarError('HTTP 400: failed to parse grammar')).toBe(true);
+    expect(isToolGrammarError('Failed to initialize samplers: failed to parse grammar')).toBe(true);
+    expect(isToolGrammarError('FAILED TO PARSE GRAMMAR')).toBe(true); // case-insensitive
+  });
+  it('does not match unrelated errors', () => {
+    expect(isToolGrammarError('HTTP 500: internal server error')).toBe(false);
+    expect(isToolGrammarError('Network request failed')).toBe(false);
+    expect(isToolGrammarError('context is full')).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1619,6 +1687,48 @@ describe('runToolLoop – LiteRT tool call cap', () => {
 
     expect(mockExecuteToolCall).not.toHaveBeenCalled();
     expect(result).toBe('Aborted');
+  });
+
+  // Contract parity with the JS loop: the LiteRT native handler must funnel every tool
+  // outcome through normalizeToolResult + toolResultModelContent. A throw becomes a typed
+  // error string (no crash); an empty result becomes the explicit "ran but returned no
+  // content" message — never an empty string the model mistakes for success.
+  it('surfaces a thrown LiteRT tool as a normalized error string (does not crash)', async () => {
+    mockExecuteToolCall.mockRejectedValueOnce(new Error('MCP server not connected'));
+    let capturedToolHandler: ((name: string, args: Record<string, unknown>) => Promise<string>) | undefined;
+    mockedLiteRTService.generateRaw.mockImplementation(async (_text, _images, handlers) => {
+      capturedToolHandler = handlers?.onToolCall;
+      return 'final answer';
+    });
+
+    const ctx = createContext();
+    await runToolLoop(ctx);
+
+    // The handler must resolve (not reject) with the explicit failure string.
+    const result = await capturedToolHandler?.('web_search', { query: 'q' });
+
+    expect(mockExecuteToolCall).toHaveBeenCalledTimes(1);
+    expect(result).toContain('failed');
+    expect(result).toContain('do not assume it succeeded');
+    // network is the classified category for "not connected"
+    expect(result).toContain('network');
+    expect(result).not.toBe('');
+  });
+
+  it('surfaces an empty LiteRT tool result as the explicit "no content" message', async () => {
+    mockExecuteToolCall.mockResolvedValueOnce({ toolCallId: 'tc-1', name: 'web_search', content: '', durationMs: 5 });
+    let capturedToolHandler: ((name: string, args: Record<string, unknown>) => Promise<string>) | undefined;
+    mockedLiteRTService.generateRaw.mockImplementation(async (_text, _images, handlers) => {
+      capturedToolHandler = handlers?.onToolCall;
+      return 'final answer';
+    });
+
+    const ctx = createContext();
+    await runToolLoop(ctx);
+
+    const result = await capturedToolHandler?.('web_search', { query: 'q' });
+
+    expect(result).toBe('Tool "web_search" ran but returned no content.');
   });
 
   it('cap counter resets per generation (new runToolLoop call resets count)', async () => {

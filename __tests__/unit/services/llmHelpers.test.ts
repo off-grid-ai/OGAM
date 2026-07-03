@@ -115,6 +115,27 @@ describe('getGpuLayersForDevice', () => {
       expect(getGpuLayersForDevice(8 * GB, 0)).toBe(0);
     });
   });
+
+  describe('iOS Metal offload cap (model size + free RAM)', () => {
+    // Platform.OS is mocked as 'ios' in the test env.
+    it('offloads all layers when the model fits free RAM minus the reserve', () => {
+      // 4GB free − 1.6GB reserve = 2.4GB budget; a 1GB model fits → full 99.
+      expect(getGpuLayersForDevice(6 * GB, 99, { modelBytes: 1 * GB, availableBytes: 4 * GB })).toBe(99);
+    });
+
+    it('scales layers down when the model exceeds the weight budget', () => {
+      // budget 2.4GB, model 3GB → floor(99 * 2.4/3) = 79.
+      expect(getGpuLayersForDevice(6 * GB, 99, { modelBytes: 3 * GB, availableBytes: 4 * GB })).toBe(79);
+    });
+
+    it('falls back to CPU (0) when there is no headroom over the reserve', () => {
+      expect(getGpuLayersForDevice(6 * GB, 99, { modelBytes: 2 * GB, availableBytes: 1.5 * GB })).toBe(0);
+    });
+
+    it('leaves layers unchanged on iOS when model/RAM info is absent (back-compat)', () => {
+      expect(getGpuLayersForDevice(6 * GB, 99)).toBe(99);
+    });
+  });
 });
 
 describe('supportsNativeThinking', () => {

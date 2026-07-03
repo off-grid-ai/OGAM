@@ -10,6 +10,7 @@ import ai.offgridmobile.download.DownloadManagerPackage
 import ai.offgridmobile.localdream.LocalDreamPackage
 import ai.offgridmobile.pdf.PDFExtractorPackage
 import ai.offgridmobile.litert.LiteRTPackage
+import ai.offgridmobile.devicememory.DeviceMemoryPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -23,6 +24,7 @@ class MainApplication : Application(), ReactApplication {
           add(LocalDreamPackage())
           add(PDFExtractorPackage())
           add(LiteRTPackage())
+          add(DeviceMemoryPackage())
         },
     )
   }

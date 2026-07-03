@@ -354,21 +354,30 @@ describe('runToolLoop — LiteRT loop branches', () => {
 describe('runToolLoop — precise date/time context for calendar tools', () => {
   beforeEach(resetMocks);
 
-  it('augments the system prompt with a precise timestamp when a calendar tool is enabled', async () => {
+  it('appends a precise time-of-day note to the latest user message when a calendar tool is enabled', async () => {
     mockedGenerateResponseWithTools.mockResolvedValue({ fullResponse: 'ok', toolCalls: [] });
 
     const ctx = createContext({
       enabledToolIds: ['create_calendar_event'],
-      messages: [makeMessage({ role: 'system', content: 'You are helpful.' })],
+      messages: [
+        makeMessage({ role: 'system', content: 'You are helpful.' }),
+        makeMessage({ role: 'user', content: 'Schedule a sync' }),
+      ],
     });
     await runToolLoop(ctx);
 
     const sentMessages = mockedGenerateResponseWithTools.mock.calls[0][0];
+    // The STABLE date stays in the system prefix (kept cacheable turn-to-turn)...
     const sysContent = sentMessages.find((m: Message) => m.role === 'system')!.content as string;
-    // precise=true produces the YYYY-MM-DDTHH:MM:SS phrasing (not the date-only variant)
-    expect(sysContent).toContain('current date and time is');
-    expect(sysContent).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
-    expect(sysContent).toContain('in half an hour');
+    expect(sysContent).toContain('The current date is');
+    // ...while the EXACT time-of-day is appended to the latest user message instead,
+    // so the large system+tools prefix is not invalidated each turn (the TTFT fix).
+    const userContent = [...sentMessages]
+      .reverse()
+      .find((m: Message) => m.role === 'user')!.content as string;
+    expect(userContent).toContain('Current local date and time');
+    expect(userContent).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    expect(userContent).toContain('in half an hour');
   });
 
   it('uses the date-only context when no time-sensitive tool is enabled', async () => {

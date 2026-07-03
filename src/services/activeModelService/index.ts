@@ -4,8 +4,10 @@ import { liteRTService } from '../litert';
 import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
 import { hardwareService } from '../hardware';
 import { modelResidencyManager } from '../modelResidency';
-import { useAppStore } from '../../stores';
+import { remoteServerManager } from '../remoteServerManager';
+import { useAppStore, useRemoteServerStore } from '../../stores';
 import { ONNXImageModel } from '../../types';
+import logger from '../../utils/logger';
 import type {
   ActiveModelInfo,
   ResourceUsage,
@@ -146,11 +148,27 @@ class ActiveModelService {
     // Use estimated runtime RAM (file size + overhead), not just file size,
     // so the residency budget reflects the model's real memory footprint.
     const textSizeMB = Math.round((hardwareService.estimateModelRam(model) || 0) / (1024 * 1024));
+    // LiteRT weights + KV live in dirty/accelerator memory (not clean mmap'd GGUF file
+    // pages), so their footprint counts against REAL free RAM — budgeting them like
+    // mmap'd GGUF can green-light a load the native engine then OOMs (SIGABRT). Derived
+    // once here from the engine so makeRoomFor and register can't disagree. llama/GGUF
+    // stays clean (dirtyMemory undefined -> physical-cap budgeting, unchanged).
+    const textIsDirty = model.engine === 'litert';
     // Residency manager is authoritative: evict other generation models (and
     // extras) to fit the RAM budget before loading this text model. The evicted
     // models' unload fns are the non-locking internal variants (we already hold
     // the lock here), so this never deadlocks.
-    await modelResidencyManager.makeRoomFor({ key: 'text', type: 'text', sizeMB: textSizeMB });
+    const room = await modelResidencyManager.makeRoomFor({ key: 'text', type: 'text', sizeMB: textSizeMB, dirtyMemory: textIsDirty });
+    // makeRoomFor evicts nothing when the model won't fit even after freeing
+    // others (it refuses to strand the device). Honor that signal here: loading
+    // anyway is a guaranteed OOM crash. Throwing a memory error lets the caller
+    // surface a clean 'insufficient-memory' outcome (reasonFromLoadError maps it)
+    // instead of jetsam killing the app. makeRoomFor uses REAL free RAM, so this
+    // is the physical limit — looser than the conservative pre-load check, so a
+    // "Load Anyway" still succeeds whenever the model can actually fit.
+    if (!room.fits) {
+      throw new Error('Not enough free memory to load this model, even after freeing other models. Close other apps or choose a smaller model.');
+    }
     this.loadingState.text = true;
     this.notifyListeners();
     this.textLoadPromise = doLoadTextModel({
@@ -162,7 +180,7 @@ class ActiveModelService {
       onLoaded: id => {
         this.loadedTextModelId = id;
         modelResidencyManager.register(
-          { key: 'text', type: 'text', sizeMB: textSizeMB },
+          { key: 'text', type: 'text', sizeMB: textSizeMB, dirtyMemory: textIsDirty },
           () => this.doUnloadTextModelLocked(true), // eviction keeps the selection
         );
       },
@@ -177,9 +195,9 @@ class ActiveModelService {
     });
     await this.textLoadPromise;
   }
-  async unloadTextModel(): Promise<void> {
+  async unloadTextModel(keepSelection = false): Promise<void> {
     await modelResidencyManager.runExclusive('unload:text', () =>
-      this.doUnloadTextModelLocked(),
+      this.doUnloadTextModelLocked(keepSelection),
     );
   }
   /**
@@ -236,6 +254,9 @@ class ActiveModelService {
       key: 'image',
       type: 'image',
       sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)),
+      // CoreML/ONNX image weights load into dirty (jetsam-counted) memory — gate on
+      // real free RAM too, unlike mmap'd GGUF text. (See ResidentSpec.dirtyMemory.)
+      dirtyMemory: true,
     });
     if (!fits) {
       return {
@@ -257,6 +278,12 @@ class ActiveModelService {
     modelId: string,
     timeoutMs: number,
   ): Promise<void> {
+    // Hydrate real device RAM BEFORE the compute-path decision. preferGpuForImageGen()
+    // and estimateImageModelRam() read getTotalMemoryGB(), which returns a 4GB fallback
+    // until the cache is populated — on a cold start that misclassifies an 8GB iOS 26
+    // device as ANE (the path that fails outright there). Awaiting hydration first makes
+    // the GPU/ANE choice + RAM estimate use the true total.
+    await hardwareService.getDeviceInfo();
     const store = useAppStore.getState();
     const imageThreads = store.settings?.imageThreads ?? 4;
     const needsThreadReload =
@@ -287,6 +314,7 @@ class ActiveModelService {
       imageThreads,
       needsThreadReload,
       cpuOnly: false,
+      preferGpu: hardwareService.preferGpuForImageGen(),
       store,
       timeoutMs,
       loadedImageModelId: this.loadedImageModelId,
@@ -294,7 +322,12 @@ class ActiveModelService {
         this.loadedImageModelId = id;
         this.loadedImageModelThreads = threads;
         modelResidencyManager.register(
-          { key: 'image', type: 'image', sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)) },
+          // dirtyMemory: a resident CoreML/ONNX image model's working set can't be paged
+          // out like clean mmap weights — its presence must gate other loads on live
+          // os_proc RAM (budgetForSpec dirty-pressure), or a sidecar stacks onto its
+          // generation spike and jetsams the app. Without this flag the resident-dirty
+          // arm of the gate is a no-op.
+          { key: 'image', type: 'image', dirtyMemory: true, sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)) },
           () => this.doUnloadImageModelLocked(true), // eviction keeps the selection
         );
       },
@@ -310,9 +343,9 @@ class ActiveModelService {
     });
     await this.imageLoadPromise;
   }
-  async unloadImageModel(): Promise<void> {
+  async unloadImageModel(keepSelection = false): Promise<void> {
     await modelResidencyManager.runExclusive('unload:image', () =>
-      this.doUnloadImageModelLocked(),
+      this.doUnloadImageModelLocked(keepSelection),
     );
   }
   /**
@@ -350,7 +383,7 @@ class ActiveModelService {
       this.notifyListeners();
     }
   }
-  async unloadAllModels(): Promise<{ textUnloaded: boolean; imageUnloaded: boolean }> {
+  async unloadAllModels(keepSelection = false): Promise<{ textUnloaded: boolean; imageUnloaded: boolean }> {
     const store = useAppStore.getState();
     const results = { textUnloaded: false, imageUnloaded: false };
     const hasTextModel =
@@ -361,7 +394,7 @@ class ActiveModelService {
       !!store.activeImageModelId || !!this.loadedImageModelId;
     if (hasTextModel) {
       try {
-        await this.unloadTextModel();
+        await this.unloadTextModel(keepSelection);
         results.textUnloaded = true;
       } catch {
         /* partial */
@@ -369,13 +402,37 @@ class ActiveModelService {
     }
     if (hasImageModel) {
       try {
-        await this.unloadImageModel();
+        await this.unloadImageModel(keepSelection);
         results.imageUnloaded = true;
       } catch {
         /* partial */
       }
     }
     return results;
+  }
+  /**
+   * Free ALL model memory: unload local text+image AND disconnect any remote model.
+   * THE single owning side-effect for "Eject All" — every screen dispatches this
+   * instead of re-implementing the unload sequence (which is how one screen wired it
+   * and another stubbed it). Returns how many models were unloaded. Logged for the
+   * [MODEL-SM] trace.
+   */
+  async ejectAll(): Promise<{ count: number }> {
+    const remote = useRemoteServerStore.getState();
+    const hasRemote = !!(remote.activeRemoteTextModelId || remote.activeRemoteImageModelId);
+    logger.log(`[MODEL-SM] ejectAll → start hasRemote=${hasRemote}`);
+    // Eject = EVICT from RAM, KEEP the selection. The user's chosen models stay
+    // selected (the rows still show them) and reload on demand — ejecting frees
+    // memory, it does not un-choose the model. (Clearing selection here is what
+    // turned the rows into "Unknown"/"—" after an eject.)
+    const results = await this.unloadAllModels(true);
+    let count = (results.textUnloaded ? 1 : 0) + (results.imageUnloaded ? 1 : 0);
+    if (hasRemote) {
+      remoteServerManager.clearActiveRemoteModel();
+      count += 1;
+    }
+    logger.log(`[MODEL-SM] ejectAll → done count=${count}`);
+    return { count };
   }
   async getResourceUsage(): Promise<ResourceUsage> {
     return _getResourceUsage();

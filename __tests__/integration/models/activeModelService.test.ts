@@ -104,6 +104,26 @@ describe('ActiveModelService Integration', () => {
       expect(getAppState().activeModelId).toBe('test-model-1');
     });
 
+    it('budgets a LiteRT text model as dirty memory and a GGUF as clean (F9)', async () => {
+      const spy = jest.spyOn(modelResidencyManager, 'makeRoomFor');
+      mockLlmService.isModelLoaded.mockReturnValue(true);
+
+      // LiteRT weights + KV are dirty/accelerator memory -> must budget against REAL
+      // free RAM (dirtyMemory:true), or the native engine can OOM on a "fits" verdict.
+      const litert = createDownloadedModel({ id: 'litert-1', engine: 'litert' as any, fileName: 'm.litertlm', filePath: '/m.litertlm' });
+      useAppStore.setState({ downloadedModels: [litert] });
+      await activeModelService.loadTextModel('litert-1').catch(() => {});
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ key: 'text', dirtyMemory: true }));
+
+      // GGUF/llama is clean mmap -> physical-cap budgeting unchanged (dirtyMemory:false).
+      spy.mockClear();
+      const gguf = createDownloadedModel({ id: 'gguf-1', engine: 'llama' as any });
+      useAppStore.setState({ downloadedModels: [gguf] });
+      await activeModelService.loadTextModel('gguf-1').catch(() => {});
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ key: 'text', dirtyMemory: false }));
+      spy.mockRestore();
+    });
+
     it('should save loadedSettings when model is loaded', async () => {
       const model = createDownloadedModel({ id: 'test-model-1' });
       useAppStore.setState({
@@ -297,6 +317,32 @@ describe('ActiveModelService Integration', () => {
       await activeModelService.unloadTextModel();
 
       expect(mockLlmService.unloadModel).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ejectAll (frees RAM but KEEPS the selection)', () => {
+    it('unloads the model from RAM yet keeps it selected — eject != deselect', async () => {
+      const model = createDownloadedModel({ id: 'test-model-1' });
+      useAppStore.setState({ downloadedModels: [model] });
+      mockLlmService.isModelLoaded.mockReturnValue(true);
+      await activeModelService.loadTextModel('test-model-1');
+      expect(getAppState().activeModelId).toBe('test-model-1');
+
+      const { count } = await activeModelService.ejectAll();
+
+      // RAM is freed...
+      expect(mockLlmService.unloadModel).toHaveBeenCalled();
+      expect(count).toBeGreaterThanOrEqual(1);
+      // ...but the selection is preserved (contrast: plain unloadTextModel() above
+      // clears activeModelId). The model reloads on demand from the kept selection.
+      expect(getAppState().activeModelId).toBe('test-model-1');
+    });
+
+    it('is a no-op count of 0 when nothing is loaded', async () => {
+      useAppStore.setState({ activeModelId: null, activeImageModelId: null });
+      mockLlmService.isModelLoaded.mockReturnValue(false);
+      const { count } = await activeModelService.ejectAll();
+      expect(count).toBe(0);
     });
   });
 
@@ -1620,40 +1666,41 @@ describe('ActiveModelService Integration', () => {
       mockHardwareService.getTotalMemoryGB.mockReturnValue(4);
     };
 
-    it('evicts the text model when loading an image (mutual exclusion)', async () => {
-      setupLowMemDevice(); // 4GB → ~2.4GB budget
+    it('evicts the text model to fit an image when they cannot co-reside (tight device)', async () => {
+      setupLowMemDevice(); // 4GB → ~2GB budget
 
-      const textModel = createDownloadedModel({ id: 'txt', fileSize: 1536 * 1024 * 1024 });
-      const imageModel = createONNXImageModel({ id: 'img', size: 512 * 1024 * 1024 });
+      // Each fits ALONE (~1.5GB text est, ~1.0GB image est) but not TOGETHER (~2.5GB),
+      // so loading the image must free the text model to fit.
+      const textModel = createDownloadedModel({ id: 'txt', fileSize: 1000 * 1024 * 1024 });
+      const imageModel = createONNXImageModel({ id: 'img', size: 400 * 1024 * 1024 });
       useAppStore.setState({
         downloadedModels: [textModel],
         downloadedImageModels: [imageModel],
         settings: { imageThreads: 4 } as any,
       });
 
-      // Load text model first
       mockLlmService.isModelLoaded.mockReturnValue(true);
       await activeModelService.loadTextModel('txt');
       expect(getAppState().activeModelId).toBe('txt');
 
-      // Now load image model — text and image never co-reside, so text is evicted.
       mockLocalDreamService.isModelLoaded.mockResolvedValue(true);
       mockLocalDreamService.loadModel.mockResolvedValue(true);
       await activeModelService.loadImageModel('img');
 
-      // Text model freed from RAM, but the SELECTION is kept so chat still shows
-      // it and it reloads on demand (eviction must not deselect).
+      // Text freed from RAM (they don't co-fit), but its SELECTION is kept so chat
+      // still shows it and it reloads on demand (eviction must not deselect).
       expect(mockLlmService.unloadModel).toHaveBeenCalled();
       expect(getAppState().activeModelId).toBe('txt');
-      // Image model should be loaded
       expect(getAppState().activeImageModelId).toBe('img');
     });
 
-    it('evicts the text model even when both are small (mutual exclusion is unconditional)', async () => {
+    it('keeps the text model resident when the image co-fits the budget (no forced mutual exclusion)', async () => {
       setupLowMemDevice();
 
+      // Both small (~0.6GB text + ~0.75GB image ≤ ~2GB budget) → they co-reside,
+      // exactly what image-gen-with-prompt-enhance needs.
       const textModel = createDownloadedModel({ id: 'txt-s', fileSize: 400 * 1024 * 1024 });
-      const imageModel = createONNXImageModel({ id: 'img-s', size: 400 * 1024 * 1024 });
+      const imageModel = createONNXImageModel({ id: 'img-s', size: 300 * 1024 * 1024 });
       useAppStore.setState({
         downloadedModels: [textModel],
         downloadedImageModels: [imageModel],
@@ -1668,9 +1715,8 @@ describe('ActiveModelService Integration', () => {
       mockLocalDreamService.loadModel.mockResolvedValue(true);
       await activeModelService.loadImageModel('img-s');
 
-      // Even though both are tiny, a generation model evicts the other from RAM
-      // (selection kept).
-      expect(mockLlmService.unloadModel).toHaveBeenCalled();
+      // Co-resident — the text model is NOT evicted.
+      expect(mockLlmService.unloadModel).not.toHaveBeenCalled();
       expect(getAppState().activeModelId).toBe('txt-s');
       expect(getAppState().activeImageModelId).toBe('img-s');
     });
@@ -1739,13 +1785,13 @@ describe('ActiveModelService Integration', () => {
       mockHardwareService.getTotalMemoryGB.mockReturnValue(8);
     };
 
-    it('unloads the text model even on a high-memory device (mutual exclusion)', async () => {
+    it('keeps text and image co-resident on a high-memory device (no forced mutual exclusion)', async () => {
       setupHighMemDevice();
       await loadBothModelsWithSizes('txt-hi', 'img-hi');
 
-      // Text and image are mutually exclusive regardless of available RAM, so
-      // loading the image frees the text model from RAM — but keeps it selected.
-      expect(mockLlmService.unloadModel).toHaveBeenCalled();
+      // 8GB budget easily holds both (~1.5GB text + ~1.3GB image), so neither is
+      // evicted — they stay co-resident.
+      expect(mockLlmService.unloadModel).not.toHaveBeenCalled();
       expect(getAppState().activeModelId).toBe('txt-hi');
       expect(getAppState().activeImageModelId).toBe('img-hi');
     });

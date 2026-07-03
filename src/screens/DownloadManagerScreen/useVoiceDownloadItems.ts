@@ -9,6 +9,8 @@ import { AlertState, showAlert } from '../../components/CustomAlert';
 import { whisperService } from '../../services';
 import { useWhisperStore } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
+import { modelDownloadService } from '../../services/modelDownloadService';
+import { isModelDownloadInProgress } from '../../services/modelDownloadService/storeStatus';
 import { DownloadItem, formatBytes } from './items';
 
 async function loadItems(): Promise<DownloadItem[]> {
@@ -29,14 +31,45 @@ async function loadItems(): Promise<DownloadItem[]> {
   }
 
   try {
-    const pending = callHook<Promise<Array<{ engineId: string; name: string; sizeBytes: number }>>>(HOOKS.downloadsListVoiceModels);
-    const voice = pending ? await pending : [];
-    for (const v of voice ?? []) {
-      items.push({
-        type: 'completed', modelType: 'tts', modelId: v.engineId, fileName: v.name,
-        author: 'Voice', quantization: '', fileSize: v.sizeBytes,
-        bytesDownloaded: v.sizeBytes, progress: 1, status: 'completed', name: v.name,
-      });
+    // SINGLE source of truth for TTS (Kokoro) state — the SAME ModelDownloadService
+    // (ttsProvider) the Voice Models panel reads via useModelDownloads. The Download
+    // Manager used to read a parallel `downloads.listVoiceModels` hook with `?? 1`
+    // defaulting, so a flaky/stale executorch disk probe made it show "completed 82MB"
+    // while the panel (service) correctly showed it downloading 0% — the mismatch.
+    // Reading the one projection makes divergence impossible.
+    const tts = (await modelDownloadService.list()).filter(d => d.modelType === 'tts');
+    for (const d of tts) {
+      const engineId = d.id.replace(/^tts:/, '');
+      if (d.status === 'completed') {
+        items.push({
+          type: 'completed', modelType: 'tts', modelId: engineId, fileName: d.name,
+          author: 'Voice', quantization: '', fileSize: d.sizeBytes,
+          bytesDownloaded: d.sizeBytes, progress: 1, status: 'completed', name: d.name,
+        });
+      } else if (isModelDownloadInProgress(d.status)) {
+        items.push({
+          type: 'active', modelType: 'tts', modelId: engineId, fileName: d.name,
+          author: 'Voice', quantization: '', fileSize: d.sizeBytes,
+          bytesDownloaded: d.bytesDownloaded, progress: d.progress, status: 'downloading', name: d.name,
+        });
+      } else if (d.status === 'error') {
+        // A failed Kokoro fetch. Surface it as a failed active item so the
+        // Download Manager shows it with a Retry button (executorch resumes from
+        // its cache); the Retry action routes back through
+        // modelDownloadService.retry() → ttsProvider.retry() → downloadAssets().
+        // Prefer the engine's own message: when d.error is present, leave
+        // reasonCode undefined so getDownloadStatusLabel shows that text rather
+        // than the canned message a known code maps to. Retry still renders
+        // because isRetryable(undefined) === true. Fall back to the retryable
+        // 'download_interrupted' code only when the engine gave no message.
+        items.push({
+          type: 'active', modelType: 'tts', modelId: engineId, fileName: d.name,
+          author: 'Voice', quantization: '', fileSize: d.sizeBytes,
+          bytesDownloaded: d.bytesDownloaded, progress: d.progress, status: 'failed', name: d.name,
+          reason: d.error,
+          ...(d.error ? {} : { reasonCode: 'download_interrupted' as const }),
+        });
+      }
     }
   } catch {
     // ignore — listing failures leave items empty
@@ -77,6 +110,22 @@ export function useVoiceDownloadItems(onAlertClose: () => void): VoiceDownloadIt
   }, []);
 
   useEffect(() => { refreshVoiceItems(); }, [refreshVoiceItems, presentModelIds]);
+
+  // Stay in lockstep with the Voice panel: both observe ModelDownloadService, so a
+  // TTS phase change (download start/finish/delete) refreshes this list the same way
+  // it updates the panel — no stale "completed" snapshot can linger.
+  useEffect(() => modelDownloadService.subscribe(() => { refreshVoiceItems(); }), [refreshVoiceItems]);
+
+  // Kokoro's download has no store to subscribe to (it's executorch's own fetcher),
+  // so while a voice model is actively downloading, poll to advance its progress
+  // bar in the Download Manager. Gate on the in-progress status specifically — a
+  // failed item is also type:'active' (so ActiveDownloadCard renders its Retry),
+  // but it's terminal and must NOT keep an 800ms interval alive.
+  useEffect(() => {
+    if (!voiceItems.some((i) => i.type === 'active' && i.status === 'downloading')) return;
+    const t = setInterval(() => { refreshVoiceItems(); }, 800);
+    return () => clearInterval(t);
+  }, [voiceItems, refreshVoiceItems]);
 
   const buildDeleteAlert = useCallback((item: DownloadItem): AlertState => {
     const kind = item.modelType === 'tts' ? 'Voice' : 'Transcription';

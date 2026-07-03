@@ -34,7 +34,7 @@ export const AboutScreen: React.FC = () => {
         {/* App identity */}
         <View style={styles.heroSection}>
           <Image source={require('../assets/logo.png')} style={staticStyles.appIcon} />
-          <Text style={styles.appName}>Off Grid</Text>
+          <Text style={styles.appName}>Off Grid AI</Text>
           <Text style={styles.version}>Version {packageJson.version}</Text>
           <Text style={styles.description}>
             Local AI that runs entirely on your phone. No cloud, no telemetry, nothing leaves the device.

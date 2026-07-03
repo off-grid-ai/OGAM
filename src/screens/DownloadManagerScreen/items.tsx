@@ -6,6 +6,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { BackgroundDownloadReasonCode } from '../../types';
 import { needsVisionRepair as checkNeedsVisionRepair } from '../../utils/visionRepair';
 import { getDownloadStatusLabel, isRetryable } from '../../utils/downloadErrors';
+import { downloadStatusIcon } from '../../utils/downloadStatusIcon';
 import { createStyles } from './styles';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -81,12 +82,9 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, on
         ? colors.warning
         : colors.primary;
 
-  const getStatusIcon = () => {
-    if (item.status === 'failed') return 'alert-circle';
-    if (item.status === 'retrying') return 'refresh-cw';
-    if (item.status === 'waiting_for_network') return 'wifi-off';
-    return null;
-  };
+  // Icon per status is owned by downloadStatusIcon() so this row and ModelCard match
+  // (queued -> clock, previously text-only here).
+  const getStatusIcon = () => downloadStatusIcon(item.status);
 
   const getStatusIconColor = () => {
     if (item.status === 'failed') return colors.error;
@@ -126,14 +124,18 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, on
             <Text style={styles.quantText}>{item.quantization}</Text>
           </View>
         )}
-        {!!getStatusLabel(item) && (
+        {(!!getStatusLabel(item) || !!getStatusIcon()) && (
           <View style={styles.statusIconRow}>
             {getStatusIcon() && (
-              <Icon name={getStatusIcon()!} size={14} color={getStatusIconColor()} />
+              <Icon name={getStatusIcon()!} size={14} color={getStatusIconColor()} accessibilityLabel={getStatusText(item.status)} />
             )}
-            <Text style={[styles.statusText, item.status === 'failed' && { color: colors.error }]}>
-              {getStatusLabel(item)}
-            </Text>
+            {/* Queued is icon-only (clock) — the word is redundant next to it. Other states
+                (failed/retrying/network) keep their explanatory text. */}
+            {item.status !== 'pending' && !!getStatusLabel(item) && (
+              <Text style={[styles.statusText, item.status === 'failed' && { color: colors.error }]}>
+                {getStatusLabel(item)}
+              </Text>
+            )}
           </View>
         )}
       </View>
