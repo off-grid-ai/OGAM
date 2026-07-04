@@ -82,6 +82,30 @@ describe('toolEmbeddingRouter (F6 — persistent embedding cache)', () => {
     expect(mockEmbed).toHaveBeenCalledTimes(2);
   });
 
+  it('re-embeds a cached entry whose dimension no longer matches the model (stale-dim after a model swap)', async () => {
+    await selectToolsByEmbedding('find my page', TOOLS, 4);
+    await new Promise(r => setTimeout(r, 1100)); // let the debounced persist fire
+
+    // Simulate an embedding-model swap: ONE persisted vector was produced by the OLD
+    // model and has a DIFFERENT dimension (4) than the current model (mock returns 3).
+    // The content hash keys on the tool text, not the model, so it still "matches" —
+    // without a dimension guard, embedTool returns the stale 4-dim vector and
+    // cosineSimilarity compares across dimensions, silently poisoning routing.
+    const stored = JSON.parse((await AsyncStorage.getItem('tool-embedding-cache-v1'))!);
+    const staleName = Object.keys(stored)[0];
+    stored[staleName] = { ...stored[staleName], v: [0.1, 0.2, 0.3, 0.4] }; // 4-dim; model is 3-dim
+    await AsyncStorage.setItem('tool-embedding-cache-v1', JSON.stringify(stored));
+
+    _resetToolEmbeddingCache();
+    mockEmbed.mockClear();
+    const selected = await selectToolsByEmbedding('find my page', TOOLS, 4);
+    // FAILS before the fix: the stale-dim vector is returned from cache (hash matches),
+    // so only the query is embedded (1). AFTER: the dim mismatch forces a re-embed, so
+    // query (1) + the one stale tool (1) = 2, and the other 11 valid cached entries are reused.
+    expect(mockEmbed).toHaveBeenCalledTimes(2);
+    expect(selected).toHaveLength(4); // routing still produces a sane top-K, no NaN wipeout
+  });
+
   it('returns all tools without embedding when count <= topK', async () => {
     const names = await selectToolsByEmbedding('x', TOOLS.slice(0, 3), 4);
     expect(names).toHaveLength(3);

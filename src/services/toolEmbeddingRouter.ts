@@ -82,6 +82,11 @@ function firstLine(desc: string | undefined, max = 200): string {
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
+  // Mismatched dimensions are not comparable — comparing across dims (e.g. a stale
+  // 384-dim cached vector vs a fresh query from a 256-dim model) reads garbage from the
+  // shorter vector and yields a meaningless score. Treat as no-match so a dimension
+  // change can never silently poison routing.
+  if (a.length !== b.length) return 0;
   let dot = 0;
   let normA = 0;
   let normB = 0;
@@ -140,11 +145,15 @@ function discoveryBoost(tool: RoutableTool): number {
   return DISCOVERY_VERBS.some(v => name.includes(v)) ? 0.15 : 0;
 }
 
-async function embedTool(tool: RoutableTool): Promise<number[]> {
+async function embedTool(tool: RoutableTool, expectedDim: number): Promise<number[]> {
   const text = `${tool.function.name}: ${firstLine(tool.function.description)}`;
   const hash = hashText(text);
   const cached = toolEmbeddingCache.get(tool.function.name);
-  if (cached && cached.h === hash) return cached.v;
+  // The content hash keys on the tool TEXT, not the embedding model — so a model whose
+  // output dimension changed (e.g. a different MiniLM variant) keeps the same hash and
+  // would return a stale-dimension vector. Require the cached vector to match the
+  // current model's dimension (that of the live query embedding); otherwise re-embed.
+  if (cached && cached.h === hash && cached.v.length === expectedDim) return cached.v;
   const vec = await embeddingService.embed(text);
   toolEmbeddingCache.set(tool.function.name, { h: hash, v: vec });
   schedulePersist();
@@ -170,7 +179,7 @@ export async function selectToolsByEmbedding(
   const tokens = queryTokens(query);
   const scored: Array<{ name: string; score: number }> = [];
   for (const tool of tools) {
-    const vec = await embedTool(tool);
+    const vec = await embedTool(tool, queryVec.length);
     // Hybrid: semantic similarity + lexical (provider/verb word) + discovery boost.
     const score = cosineSimilarity(queryVec, vec) + lexicalBoost(tokens, tool) + discoveryBoost(tool);
     scored.push({ name: tool.function.name, score });
