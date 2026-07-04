@@ -22,50 +22,6 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 // Persistent directory for attached documents
 const ATTACHMENTS_DIR = `${RNFS.DocumentDirectoryPath}/attachments`;
 
-/**
- * decodeURIComponent that never throws: a stray/malformed '%' (e.g. '100%.txt' or a
- * bad %-sequence) makes the native decodeURIComponent throw 'URI malformed'. Falling
- * back to the raw string keeps callers (path resolution AND display-name decode) from
- * crashing on odd-but-valid filenames. Defined once; both call sites use it.
- */
-function safeDecodeURIComponent(s: string): string {
-  try {
-    return decodeURIComponent(s);
-  } catch (e) {
-    // Surface the fallback so a malformed-encoding case is diagnosable rather than silent.
-    console.warn(`[DocumentService] decodeURIComponent failed for "${s}", using raw value:`, e instanceof Error ? e.message : e);
-    return s;
-  }
-}
-
-/**
- * Decode a percent-encoded display filename for the chip/preview (e.g. 'my%20notes.txt'
- * → 'my notes.txt'). Only touches names that actually contain a '%'. FOR DISPLAY ONLY —
- * never use the result as a filesystem path segment (see sanitizePathSegment).
- */
-export function decodeDisplayName(name: string): string {
-  return name.includes('%') ? safeDecodeURIComponent(name) : name;
-}
-
-/**
- * A filesystem-safe basename for path interpolation. The display name may decode to
- * contain real separators or traversal (a percent-encoded '%2F' / '%2E%2E%2F' becomes
- * '/' / '../'), which would let a copy escape the cache/attachments dir. Strip path
- * separators, collapse '..' segments, and remove control chars — the result is only ever
- * used to build a destination filename, never shown to the user.
- */
-export function sanitizePathSegment(name: string): string {
-  const decoded = decodeDisplayName(name);
-  const flattened = decoded
-    .replace(/[/\\]/g, '_') // path separators -> underscore
-    // eslint-disable-next-line no-control-regex -- deliberately stripping control chars
-    .replace(/[\u0000-\u001f]/g, '') // strip control chars
-    .replace(/\.{2,}/g, '_')             // collapse any '..'(..+) traversal
-    .replace(/^\.+/, '')                 // strip leading dots (hidden/relative)
-    .trim();
-  return flattened.length > 0 ? flattened : 'document';
-}
-
 class DocumentService {
   /**
    * Ensure the persistent attachments directory exists
@@ -101,11 +57,9 @@ class DocumentService {
     // RNFS.DocumentDirectoryPath is the app's Documents directory (without file://)
     const documentsPath = RNFS.DocumentDirectoryPath;
 
-    // Decode URL-encoded characters (like %20 for spaces) and strip file:// prefix.
-    // Critical because RNFS.exists() needs decoded paths, not URL-encoded. Guarded:
-    // a raw decodeURIComponent throws 'URI malformed' on a stray '%' (e.g. '100%.txt'),
-    // which would crash the whole attach — fall back to the raw uri in that case.
-    const decodedUri = safeDecodeURIComponent(uri);
+    // Decode URL-encoded characters (like %20 for spaces) and strip file:// prefix
+    // This is critical because RNFS.exists() needs decoded paths, not URL-encoded
+    const decodedUri = decodeURIComponent(uri);
     const cleanUri = decodedUri.replace(/^file:\/\//, '');
     console.log(`[DocumentService] Decoded and cleaned path: ${cleanUri}`);
     console.log(`[DocumentService] Documents path: ${documentsPath}`);
@@ -199,25 +153,13 @@ class DocumentService {
   async processDocumentFromPath(filePath: string, fileName?: string, maxCharsOverride?: number): Promise<MediaAttachment | null> {
     try {
       console.log(`[DocumentService] Processing document - filePath: ${filePath}, fileName: ${fileName}`);
-      // Decode a percent-encoded display name (e.g. 'my%20notes.txt' → 'my notes.txt').
-      // A content:// / file:// URI's last path segment (used when no fileName is given)
-      // is URL-encoded; without this the chip shows the raw encoded string. Guarded:
-      // decodeURIComponent throws on a malformed %-sequence, so fall back to the raw name.
-      const rawName = fileName || filePath.split('/').pop() || 'document';
-      // Two distinct derivations from the raw name:
-      //  - displayName: decoded, human-readable — shown in the chip/preview + errors.
-      //  - safeFsName:  sanitized — the ONLY value interpolated into a filesystem path
-      //    (temp copy + persistent copy). Keeping these separate stops a decoded
-      //    separator/traversal ('%2F'/'%2E%2E%2F' → '/'/'..') from escaping the cache/
-      //    attachments dir.
-      const displayName = decodeDisplayName(rawName);
-      const safeFsName = sanitizePathSegment(rawName);
-      const extension = `.${displayName.split('.').pop()?.toLowerCase()}`;
+      const name = fileName || filePath.split('/').pop() || 'document';
+      const extension = `.${name.split('.').pop()?.toLowerCase()}`;
       const isPdf = extension === PDF_EXTENSION;
       console.log(`[DocumentService] Detected extension: ${extension}, isPdf: ${isPdf}`);
       this.validateFileType(extension, isPdf);
 
-      const resolvedPath = await this.resolveContentUri(filePath, safeFsName);
+      const resolvedPath = await this.resolveContentUri(filePath, name);
       console.log(`[DocumentService] Resolved path: ${resolvedPath}`);
 
       // Verify the file exists and is accessible
@@ -232,7 +174,7 @@ class DocumentService {
       }
 
       if (!fileExists) {
-        throw new Error(`File not found: ${displayName}`);
+        throw new Error(`File not found: ${name}`);
       }
 
       const stat = await RNFS.stat(resolvedPath);
@@ -243,9 +185,9 @@ class DocumentService {
 
       const maxChars = maxCharsOverride ?? Math.floor((useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength) * 4 * 0.5);
       const textContent = await this.readContent(resolvedPath, isPdf, maxChars);
-      const { id, uri } = await this.savePersistentCopy(resolvedPath, filePath, safeFsName);
+      const { id, uri } = await this.savePersistentCopy(resolvedPath, filePath, name);
 
-      return { id, type: 'document', uri, fileName: displayName, textContent, fileSize: stat.size };
+      return { id, type: 'document', uri, fileName: name, textContent, fileSize: stat.size };
     } catch (error: any) {
       throw error;
     }
