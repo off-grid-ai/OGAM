@@ -398,6 +398,45 @@ describe('ModelResidencyManager', () => {
       expect(evicted).toEqual([]);
       expect(unloadImg).not.toHaveBeenCalled();
     });
+
+    it('refuses (fits:false) and KEEPS the resident when a planned eviction UNLOAD fails (no over-commit → OOM)', async () => {
+      // The plan wants to evict 'image' to fit 'text', but its native unload REJECTS —
+      // so RAM was not actually freed. Old behaviour swallowed the error, deleted the
+      // resident, and returned fits:true → the caller loaded 'text' on top of a still-
+      // resident 'image' → OOM/jetsam. Now: keep it resident and report room NOT made.
+      modelResidencyManager.setBudgetOverrideMB(1000);
+      jest.spyOn(hardwareService, 'refreshMemoryInfo').mockResolvedValue(undefined as never);
+      const failingUnload = jest.fn().mockRejectedValue(new Error('native unload failed'));
+      modelResidencyManager.register({ key: 'image', type: 'image', sizeMB: 800 }, failingUnload, 1);
+
+      const { evicted, fits } = await modelResidencyManager.makeRoomFor({ key: 'text', type: 'text', sizeMB: 800 });
+
+      expect(failingUnload).toHaveBeenCalled();
+      expect(fits).toBe(false);                                      // FAILS before (was true)
+      expect(evicted).toEqual([]);                                   // nothing was genuinely freed
+      expect(modelResidencyManager.isResident('image')).toBe(true);  // FAILS before (was deleted)
+    });
+
+    it('reports the victims it DID free before an unload failure, then refuses', async () => {
+      // Two victims; the first unloads fine, the second rejects. The first is genuinely
+      // gone (reported evicted); the run then refuses rather than over-committing.
+      // Budget 900 so the plan fits after evicting BOTH (used 1100 → 0, +800 ≤ 900),
+      // and both unloads are actually attempted (500 would bail as "won't fit empty").
+      modelResidencyManager.setBudgetOverrideMB(900);
+      jest.spyOn(hardwareService, 'refreshMemoryInfo').mockResolvedValue(undefined as never);
+      const okUnload = jest.fn().mockResolvedValue(undefined);
+      const failUnload = jest.fn().mockRejectedValue(new Error('boom'));
+      // Lowest priority (sidecar) evicted first and succeeds; image second and fails.
+      modelResidencyManager.register({ key: 'stt', type: 'whisper', sizeMB: 300 }, okUnload, 1);
+      modelResidencyManager.register({ key: 'image', type: 'image', sizeMB: 800 }, failUnload, 2);
+
+      const { evicted, fits } = await modelResidencyManager.makeRoomFor({ key: 'text', type: 'text', sizeMB: 800 });
+
+      expect(fits).toBe(false);
+      expect(evicted).toEqual(['stt']);                              // the one that truly freed
+      expect(modelResidencyManager.isResident('stt')).toBe(false);
+      expect(modelResidencyManager.isResident('image')).toBe(true); // failed unload → kept
+    });
   });
 
   describe('canEvict veto (residency ↔ audio seam)', () => {

@@ -243,13 +243,26 @@ class ModelResidencyManager {
       // strand the device with nothing). The caller blocks the load.
       return { evicted: [], fits: false };
     }
+    const evicted: string[] = [];
     for (const victim of plan.evict) {
       const reg = this.residents.get(victim.key);
       if (!reg) continue;
-      await reg.unload().catch(err => logger.log(`[ModelResidency] unload ${victim.key} failed:`, err));
-      this.residents.delete(victim.key);
+      try {
+        await reg.unload();
+        this.residents.delete(victim.key);
+        evicted.push(victim.key);
+      } catch (err) {
+        // Native unload FAILED — the model may still be holding its RAM. Deleting it
+        // here (the old behaviour) made the budget believe memory was freed when it
+        // wasn't, so the caller loaded the incoming model on top → OOM/jetsam. Keep it
+        // resident and report room as NOT made; the caller refuses/defers the load
+        // instead of over-committing and crashing. (Successfully-evicted victims stay
+        // evicted — they are genuinely gone.)
+        logger.log(`[ModelResidency] unload ${victim.key} failed — keeping it resident, refusing to over-commit:`, err);
+        return { evicted, fits: false };
+      }
     }
-    return { evicted: plan.evict.map(e => e.key), fits: plan.fits };
+    return { evicted, fits: plan.fits };
   }
 
   async ensureResident(
