@@ -194,6 +194,70 @@ describe('cancel mid-flight resets the machine to idle (case 20)', () => {
     expect(s.prompt).toBeNull();
     expect(mockDream.cancelGeneration).toHaveBeenCalled();
   });
+
+  // Regression (was BUG): a cancel tapped WHILE the 'enhancing' phase is running must
+  // abort — the native generator must never be called. The old code unconditionally
+  // cleared cancelRequested right after _enhancePrompt, silently discarding the cancel.
+  it('cancel during the ENHANCING phase aborts — native generator is never called', async () => {
+    setupModel();
+    useAppStore.setState({
+      activeModelId: 'text-1',
+      settings: { ...useAppStore.getState().settings, enhanceImagePrompts: true } as any,
+    });
+    mockLlm.isModelLoaded.mockReturnValue(true); // stay in enhancing, no on-demand load transition
+    // Enhancement hangs so we can cancel while phase === 'enhancing'.
+    let releaseEnhance!: () => void;
+    mockLlm.generateResponse.mockImplementation(
+      () => new Promise<string>((r) => { releaseEnhance = () => r('enhanced'); }),
+    );
+
+    imageGenerationService.generateImage({ prompt: 'cancel during enhance' });
+    await flushPromises();
+    expect(imageGenerationService.getState().phase).toBe('enhancing');
+
+    await imageGenerationService.cancelGeneration(); // user taps cancel mid-enhance
+    releaseEnhance();                                // enhancement resolves afterward
+    await flushPromises();
+
+    // Generation must NOT proceed. FAILS before the fix (generator called, phase 'done').
+    expect(mockDream.generateImage).not.toHaveBeenCalled();
+    expect(imageGenerationService.getState().phase).toBe('idle');
+  });
+
+  // Review #460: cross-run safety. Cancel run #1 while it's still awaiting enhancement,
+  // start run #2, then let run #1's enhancement resolve — run #1 must NOT resurrect and
+  // call the generator. With a shared cancel boolean, run #2 clearing it would revive #1.
+  it('a cancelled run does not proceed even after a new run starts (runId-scoped)', async () => {
+    setupModel();
+    useAppStore.setState({
+      activeModelId: 'text-1',
+      settings: { ...useAppStore.getState().settings, enhanceImagePrompts: true } as any,
+    });
+    mockLlm.isModelLoaded.mockReturnValue(true);
+    // Run #1 enhancement hangs until we release it.
+    let releaseEnhance1!: () => void;
+    mockLlm.generateResponse.mockImplementationOnce(
+      () => new Promise<string>((r) => { releaseEnhance1 = () => r('enhanced-1'); }),
+    );
+
+    imageGenerationService.generateImage({ prompt: 'run 1' });
+    await flushPromises();
+    expect(imageGenerationService.getState().phase).toBe('enhancing');
+
+    await imageGenerationService.cancelGeneration(); // cancel run #1 (state → idle)
+
+    // Run #2 starts and completes (enhancement resolves immediately now).
+    mockLlm.generateResponse.mockResolvedValue('enhanced-2');
+    await imageGenerationService.generateImage({ prompt: 'run 2' });
+    const dreamCallsAfterRun2 = mockDream.generateImage.mock.calls.length;
+
+    // Now release run #1's stalled enhancement — it must be inert (its runId is stale).
+    releaseEnhance1();
+    await flushPromises();
+
+    // Run #1 added NO extra generator call after run #2 finished.
+    expect(mockDream.generateImage.mock.calls.length).toBe(dreamCallsAfterRun2);
+  });
 });
 
 describe('no-model / load-failure surface an error phase, never a silent hang (cases 30, 38)', () => {

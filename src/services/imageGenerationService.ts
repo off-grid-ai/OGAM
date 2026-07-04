@@ -68,6 +68,7 @@ interface ActiveImageModel {
 }
 
 interface RunGenerationOptions {
+  runId: number;
   params: GenerateImageParams;
   enhancedPrompt: string;
   activeImageModel: ActiveImageModel;
@@ -99,7 +100,10 @@ class ImageGenerationService {
   };
 
   private readonly listeners: Set<ImageGenerationListener> = new Set();
-  private cancelRequested: boolean = false;
+  // Request-scoped cancellation. generateImage() claims a fresh runId; a cancel or a new
+  // run advances activeRunId, invalidating every in-flight checkpoint captured under the
+  // old id. (A shared boolean was cross-run unsafe — a new run could clear a prior run's cancel.)
+  private activeRunId = 0;
   /** Last generate request, so a failure card's Retry button can re-run it. */
   private _lastParams: GenerateImageParams | null = null;
 
@@ -341,7 +345,7 @@ class ImageGenerationService {
   }
 
   private async _runGenerationAndSave(opts: RunGenerationOptions): Promise<GeneratedImage | null> {
-    const { params, enhancedPrompt, activeImageModel, steps, guidanceScale, imageWidth, imageHeight, useOpenCL } = opts;
+    const { runId, params, enhancedPrompt, activeImageModel, steps, guidanceScale, imageWidth, imageHeight, useOpenCL } = opts;
 
     // The first generation for a model compiles/warms the backend and takes ~120s.
     // This is platform-agnostic: on iOS the CoreML model compiles on first use, on
@@ -371,7 +375,7 @@ class ImageGenerationService {
       const result = await onnxImageGeneratorService.generateImage(
         { prompt: enhancedPrompt, negativePrompt: params.negativePrompt || '', steps, guidanceScale, seed: params.seed, width: imageWidth, height: imageHeight, previewInterval: params.previewInterval ?? 2, useOpenCL },
         (progress) => {
-          if (this.cancelRequested) return;
+          if (this._isStale(runId)) return;
           const displayStep = Math.min(progress.step, steps);
           if (isFirstRun) {
             this.updateState({
@@ -385,12 +389,15 @@ class ImageGenerationService {
           }
         },
         (preview) => {
-          if (this.cancelRequested) return;
+          if (this._isStale(runId)) return;
           const displayStep = Math.min(preview.step, steps);
           this.updateState({ previewPath: `file://${preview.previewPath}?t=${Date.now()}`, status: `Refining image (${displayStep}/${steps})...` });
         },
       );
-      if (this.cancelRequested || !result?.imagePath) { this.resetState(); return null; }
+      // Cancelled mid-native (cancelGeneration already reset state) or no image → bail.
+      // A stale run must not resetState (a newer run may own it) nor save its result.
+      if (this._isStale(runId)) return null;
+      if (!result?.imagePath) { this.resetState(); return null; }
       return this._saveResult(result, { params, activeImageModel, meta: { steps, guidanceScale, useOpenCL, startTime } });
     } catch (error: any) {
       const errorMsg = error?.message || 'Image generation failed';
@@ -424,6 +431,10 @@ class ImageGenerationService {
       logger.log('[ImageGenerationService] Already generating, ignoring request');
       return null;
     }
+    // Claim a fresh run id BEFORE any await. Every checkpoint below compares against it,
+    // so a later run (or a cancel) that advances activeRunId invalidates THIS run's
+    // remaining work — and this run can't be aborted by a stale signal from a prior one.
+    const runId = ++this.activeRunId;
     this._lastParams = params; // so a failure card's Retry can re-run this exact request
     const { settings, activeImageModelId, downloadedImageModels } = useAppStore.getState();
     const activeImageModel = downloadedImageModels.find(m => m.id === activeImageModelId);
@@ -436,7 +447,11 @@ class ImageGenerationService {
 
     const enhancedPrompt = await this._enhancePrompt(params, steps);
     logger.log('[ImageGen] enhanceImagePrompts setting:', settings.enhanceImagePrompts);
-    this.cancelRequested = false;
+    // Honor a cancel that arrived WHILE enhancing (cancelGeneration advanced activeRunId
+    // and reset state to idle). _enhancePrompt awaits the LLM and can't observe the run
+    // id, so this is the checkpoint. If cancelled, THIS run stops here — don't resetState
+    // (a newer run may already own it); just bail.
+    if (this._isStale(runId)) return null;
 
     // Establish the generating state unconditionally — not only when enhancement
     // is off. When enhancement is ON but _enhancePrompt bailed early (e.g. no text
@@ -452,14 +467,22 @@ class ImageGenerationService {
 
     const loaded = await this._ensureImageModelLoaded(activeImageModelId, activeImageModel, settings.imageThreads ?? 4);
     if (!loaded) return null;
-    if (this.cancelRequested) { this.resetState(); return null; }
+    if (this._isStale(runId)) return null;
 
-    return this._runGenerationAndSave({ params, enhancedPrompt, activeImageModel, steps, guidanceScale, imageWidth, imageHeight, useOpenCL: settings.imageUseOpenCL ?? true });
+    return this._runGenerationAndSave({ runId, params, enhancedPrompt, activeImageModel, steps, guidanceScale, imageWidth, imageHeight, useOpenCL: settings.imageUseOpenCL ?? true });
+  }
+
+  /** True when `runId` is no longer the active run (cancelled, or superseded by a newer
+   *  generateImage). Every in-flight checkpoint bails on this instead of a shared flag. */
+  private _isStale(runId: number): boolean {
+    return runId !== this.activeRunId;
   }
 
   async cancelGeneration(): Promise<void> {
     if (!isInFlight(this.state.phase)) return;
-    this.cancelRequested = true;
+    // Advance the run id: the in-flight run's captured id no longer matches, so all its
+    // remaining checkpoints bail. (A shared boolean could be cleared by a subsequent run.)
+    this.activeRunId++;
     try { await onnxImageGeneratorService.cancelGeneration(); } catch { /* Ignore */ }
     this.resetState();
   }
