@@ -113,10 +113,37 @@ describe('RagService', () => {
         .rejects.toThrow('already in the knowledge base');
     });
 
-    it('continues without embeddings if embedding fails', async () => {
+    // HONESTY: a doc with no embeddings is not searchable, so it must NOT be left in
+    // the KB looking "added". On any embedding failure, indexDocument rolls back the
+    // inserted doc + chunks and throws, so the KB add flow surfaces the real error
+    // (instead of a silent dead entry). backfillEmbeddings has no auto-trigger, so the
+    // old "continue without embeddings" swallow stranded the doc permanently.
+    it('rolls back the inserted document and throws when embedding LOAD fails', async () => {
       mockEmbedding.load.mockRejectedValueOnce(new Error('model not found'));
-      const docId = await ragService.indexDocument({ projectId: 'proj1', filePath: '/p', fileName: 'test.txt', fileSize: 100 });
-      expect(docId).toBe(1); // Still returns docId
+      await expect(
+        ragService.indexDocument({ projectId: 'proj1', filePath: '/p', fileName: 'test.txt', fileSize: 100 }),
+      ).rejects.toThrow(/Could not index "test.txt".*embeddings failed/);
+      expect(mockDb.deleteDocument).toHaveBeenCalledWith(1); // the just-inserted docId
+      expect(mockDb.insertEmbeddingsBatch).not.toHaveBeenCalled();
+    });
+
+    it('rolls back the inserted document and throws when embedBatch fails (e.g. OOM)', async () => {
+      mockEmbedding.embedBatch.mockRejectedValueOnce(new Error('Embedding failed (native error). OOM'));
+      await expect(
+        ragService.indexDocument({ projectId: 'proj1', filePath: '/p', fileName: 'test.txt', fileSize: 100 }),
+      ).rejects.toThrow(/embeddings failed to generate/);
+      expect(mockDb.deleteDocument).toHaveBeenCalledWith(1);
+      expect(mockDb.insertEmbeddingsBatch).not.toHaveBeenCalled();
+    });
+
+    it('rolls back and throws when embedBatch returns fewer embeddings than chunks', async () => {
+      // insertChunks mock returns [1,2] (2 chunks); return only 1 embedding → mismatch.
+      mockEmbedding.embedBatch.mockResolvedValueOnce([[0.1, 0.2]]);
+      await expect(
+        ragService.indexDocument({ projectId: 'proj1', filePath: '/p', fileName: 'test.txt', fileSize: 100 }),
+      ).rejects.toThrow(/embeddings failed to generate/);
+      expect(mockDb.deleteDocument).toHaveBeenCalledWith(1);
+      expect(mockDb.insertEmbeddingsBatch).not.toHaveBeenCalled();
     });
   });
 

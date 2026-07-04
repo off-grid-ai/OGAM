@@ -63,6 +63,9 @@ class RagService {
       await embeddingService.load();
       const texts = chunks.map(c => c.content);
       const embeddings = await embeddingService.embedBatch(texts);
+      if (embeddings.length !== rowIds.length) {
+        throw new Error(`embedding count ${embeddings.length} does not match ${rowIds.length} chunks`);
+      }
       const entries = rowIds.map((rowId, i) => ({
         chunkRowid: rowId,
         docId,
@@ -71,7 +74,15 @@ class RagService {
       ragDatabase.insertEmbeddingsBatch(entries);
       logger.log(`[RAG] Generated ${embeddings.length} embeddings for ${fileName}`);
     } catch (err) {
-      logger.error('[RAG] Embedding generation failed (non-fatal):', err);
+      // A document with no embeddings is NOT searchable — semantic search skips it —
+      // yet the KB would show it as "added". That is the "looks indexed but doesn't
+      // work" lie. backfillEmbeddings has no auto-trigger, so a swallowed failure
+      // strands the doc permanently. Roll back the just-inserted doc + chunks and
+      // surface the failure so the user sees the real error (KnowledgeBaseScreen
+      // already alerts on an index throw) and can retry — never a silent dead entry.
+      ragDatabase.deleteDocument(docId);
+      logger.error('[RAG] Embedding generation failed — rolled back document:', err);
+      throw new Error(`Could not index "${fileName}": embeddings failed to generate. ${err instanceof Error ? err.message : String(err)}`);
     }
 
     onProgress?.({ stage: 'done', message: 'Done' });
