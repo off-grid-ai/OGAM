@@ -267,6 +267,45 @@ describe('remoteServerManager', () => {
       expect(mockLoadModel).toHaveBeenCalledWith('llama2');
     });
 
+    it('propagates the discovered supportsToolCalling capability into the provider', async () => {
+      // Guards the inert-fix bug: the request builders gate tools on
+      // provider.modelCapabilities.supportsToolCalling, so discovery MUST copy the
+      // discovered value in — otherwise it stays at the provider default (true) and the
+      // gate never suppresses tools for a non-tool-calling model.
+      // OpenAICompatibleProvider is mocked as jest.fn() at the top of this file; the
+      // code guards `provider instanceof OpenAICompatibleProvider`, so the mock provider
+      // must be an instance of that mock constructor for the capability-apply branch to run.
+      const { OpenAICompatibleProvider } = require('../../../src/services/providers/openAICompatibleProvider');
+      const updateSpy = jest.fn();
+      const realProvider = Object.assign(Object.create(OpenAICompatibleProvider.prototype), {
+        loadModel: jest.fn().mockResolvedValue(undefined),
+        unloadModel: jest.fn(),
+        isModelLoaded: jest.fn().mockReturnValue(true),
+        getLoadedModelId: jest.fn().mockReturnValue('m'),
+        isReady: jest.fn().mockResolvedValue(true),
+        updateCapabilities: updateSpy,
+        capabilities: { supportsToolCalling: true },
+      });
+      (providerRegistry.getProvider as jest.Mock).mockReturnValue(realProvider);
+      (providerRegistry.setActiveProvider as jest.Mock).mockReturnValue(true);
+      (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
+        setActiveServerId: jest.fn(),
+        setActiveRemoteTextModelId: jest.fn(),
+        setActiveRemoteImageModelId: jest.fn(),
+        getServerById: jest.fn().mockReturnValue(null),
+        getModelById: jest.fn().mockReturnValue({
+          id: 'm',
+          capabilities: { supportsVision: false, supportsThinking: false, acceptsThinkingKwarg: false, supportsToolCalling: false },
+        }),
+      });
+
+      await remoteServerManager.setActiveRemoteTextModel('server-123', 'm');
+
+      // The discovered supportsToolCalling:false must reach the provider — without this
+      // propagation the request-body gate is inert (stays at the default true).
+      expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ supportsToolCalling: false }));
+    });
+
     it('should handle missing provider gracefully', async () => {
       (providerRegistry.getProvider as jest.Mock).mockReturnValue(undefined);
       (useRemoteServerStore.getState as jest.Mock).mockReturnValue({

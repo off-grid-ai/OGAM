@@ -97,20 +97,40 @@ describe('Batch 8 — remote server tool-calling capability gate (request builde
     expect(body.tool_choice).toBeUndefined();
   });
 
-  /**
-   * BUG-FOUND — the request builder does not consult the discovered
-   * `supportsToolCalling` capability. src/services/providers/openAICompatibleProvider.ts
-   * line ~102 gates only on `options.tools.length > 0`:
-   *
-   *   ...(options.tools && options.tools.length > 0 && { tools, tool_choice: 'auto' })
-   *
-   * So a server that advertised supportsToolCalling === false at discovery STILL
-   * receives the tools array. The fix is to also require
-   * `this.modelCapabilities.supportsToolCalling` before adding tools. This test is
-   * the exact fails-before / passes-after case for that fix. Skipped until src is
-   * fixed (per assignment: real src bug → do not edit src, mark BUG-FOUND + .skip).
-   */
-  it.skip('BUG-FOUND: omits tools + tool_choice when the server advertised supportsToolCalling=false', async () => {
+  // The Ollama /api/chat path (port 11434) has its own request builder — gate mirrored there.
+  async function captureOllamaBody(supportsToolCalling: boolean): Promise<Record<string, unknown>> {
+    const provider = new OpenAICompatibleProvider('srv', {
+      endpoint: 'http://192.168.1.50:11434', // :11434 → Ollama NDJSON path
+      modelId: 'some-model',
+    });
+    await provider.loadModel('some-model');
+    provider.updateCapabilities({ supportsToolCalling });
+    const mock = httpClient.createNDJSONStreamingRequest as jest.Mock;
+    mock.mockImplementation((_url, _req, onLine) => {
+      onLine(JSON.stringify({ message: { content: 'ok' }, done: true }));
+      return Promise.resolve();
+    });
+    await provider.generate(
+      [{ id: '1', role: 'user', content: 'Hi', timestamp: 0 }],
+      { tools: TOOLS },
+      { onToken: jest.fn(), onComplete: jest.fn(), onError: jest.fn() },
+    );
+    return mock.mock.calls[0][1].body as Record<string, unknown>;
+  }
+
+  it('Ollama path: sends tools when capable', async () => {
+    expect((await captureOllamaBody(true)).tools).toEqual(TOOLS);
+  });
+
+  it('Ollama path: omits tools when supportsToolCalling=false', async () => {
+    expect((await captureOllamaBody(false)).tools).toBeUndefined();
+  });
+
+  // FIXED: the request builder now gates tools on the discovered supportsToolCalling
+  // capability (openAICompatibleProvider.ts buildRequestBody). A server that advertised
+  // supportsToolCalling===false no longer receives a tools payload it would 400/ignore.
+  // Fails-before (tools present) / passes-after.
+  it('omits tools + tool_choice when the server advertised supportsToolCalling=false', async () => {
     const body = await captureRequestBody({ supportsToolCalling: false, tools: TOOLS });
     expect(body.tools).toBeUndefined();
     expect(body.tool_choice).toBeUndefined();

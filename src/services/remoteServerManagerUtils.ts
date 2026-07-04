@@ -124,8 +124,12 @@ export async function setActiveRemoteTextModelImpl(
         supportsVision: discoveredModel.capabilities.supportsVision,
         supportsThinking: discoveredModel.capabilities.supportsThinking,
         acceptsThinkingKwarg: discoveredModel.capabilities.acceptsThinkingKwarg,
+        // Propagate the discovered tool-calling capability too — the request builders
+        // gate tools on it, so without this it stays at the provider default (true) and
+        // the gate never suppresses tools for a non-tool-calling model.
+        supportsToolCalling: discoveredModel.capabilities.supportsToolCalling,
       });
-      logger.log('[RemoteServerManager] Applied discovered capabilities for', modelId, '— supportsVision:', discoveredModel.capabilities.supportsVision, 'supportsThinking:', discoveredModel.capabilities.supportsThinking, 'acceptsThinkingKwarg:', discoveredModel.capabilities.acceptsThinkingKwarg);
+      logger.log('[RemoteServerManager] Applied discovered capabilities for', modelId, '— supportsVision:', discoveredModel.capabilities.supportsVision, 'supportsThinking:', discoveredModel.capabilities.supportsThinking, 'acceptsThinkingKwarg:', discoveredModel.capabilities.acceptsThinkingKwarg, 'supportsToolCalling:', discoveredModel.capabilities.supportsToolCalling);
     }
     providerRegistry.setActiveProvider(serverId);
     logger.log('[RemoteServerManager] Provider ready:', await provider.isReady());

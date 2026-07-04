@@ -22,6 +22,7 @@ import type {
   OpenAIConfig,
   OpenAIStreamState,
 } from './openAICompatibleTypes';
+import { shouldIncludeTools } from './openAICompatibleTypes';
 
 export type { OpenAIChatMessage, OpenAIToolCall, OpenAIConfig } from './openAICompatibleTypes';
 
@@ -99,7 +100,10 @@ export class OpenAICompatibleProvider implements LLMProvider {
       // A client-side cap (default 1024) silently truncates reasoning models that
       // need a larger budget for <think> blocks (Qwen3, DeepSeek-R1, etc).
       ...(options.topP !== undefined && { top_p: options.topP }),
-      ...(options.tools && options.tools.length > 0 && { tools: options.tools, tool_choice: 'auto' }),
+      // Only send tools to a server that advertised tool-calling at discovery (one shared
+      // gate, mirrored on the Ollama path). A supportsToolCalling=false model 400s or
+      // ignores a tools payload.
+      ...(shouldIncludeTools(this.modelCapabilities.supportsToolCalling, options.tools) && { tools: options.tools, tool_choice: 'auto' }),
       // Control Qwen3 thinking per-request via chat_template_kwargs, but only for
       // servers that advertised (at discovery) that they honor it. Gating on a
       // discovered capability — not the endpoint's port — keeps the "which server
@@ -136,6 +140,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
           endpoint: this.config.endpoint,
           modelId: this.config.modelId,
           abort: () => this.abortController?.abort(),
+          supportsToolCalling: this.modelCapabilities.supportsToolCalling,
         });
       }
 

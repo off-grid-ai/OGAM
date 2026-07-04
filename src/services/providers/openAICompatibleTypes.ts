@@ -3,6 +3,19 @@
  */
 import type { GenerationOptions, StreamCallbacks } from './types';
 
+/**
+ * Whether a request body should carry a `tools` payload: only when the model advertised
+ * tool-calling AND the caller actually passed tools. Defined once and used by BOTH the
+ * OpenAI (/v1/chat/completions) and Ollama (/api/chat) request builders so the gate can't
+ * drift between the two paths.
+ */
+export function shouldIncludeTools(
+  supportsToolCalling: boolean,
+  tools: GenerationOptions['tools'],
+): boolean {
+  return !!supportsToolCalling && !!tools && tools.length > 0;
+}
+
 /** OpenAI chat message */
 export interface OpenAIChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -57,4 +70,7 @@ export interface OllamaChatRequest {
   endpoint: string;
   modelId: string;
   abort: () => void;
+  /** Discovered tool-calling capability. When false, tools are omitted from the
+   *  request body (a non-tool-calling model 400s or ignores a tools payload). */
+  supportsToolCalling: boolean;
 }
