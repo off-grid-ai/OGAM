@@ -4,7 +4,8 @@ Issues identified but not yet applied to code. Address before or alongside the n
 
 ---
 
-## 1. SQLiteException not caught in `startProgressPolling`
+## ~~1. SQLiteException not caught in `startProgressPolling`~~ ✅ Fixed in `fix/android-download-zombie-polling`
+
 
 **File:** `android/app/src/main/java/ai/offgridmobile/download/DownloadManagerModule.kt`
 
@@ -36,7 +37,8 @@ fun startProgressPolling() {
 
 ---
 
-## 2. Zombie download entries after app update
+## ~~2. Zombie download entries after app update~~ ✅ Fixed in `fix/android-download-zombie-polling`
+
 
 **File:** `android/app/src/main/java/ai/offgridmobile/download/DownloadManagerModule.kt`
 

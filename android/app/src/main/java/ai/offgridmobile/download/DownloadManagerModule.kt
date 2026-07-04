@@ -312,12 +312,40 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun startProgressPolling() {
         scope.launch {
-            val active = withContext(Dispatchers.IO) {
-                downloadDao.getAllDownloads().first().filter {
-                    it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.RUNNING
+            try {
+                val active = withContext(Dispatchers.IO) {
+                    downloadDao.getAllDownloads().first().filter {
+                        it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.RUNNING
+                    }
                 }
+                for (download in active) {
+                    if (workObservers.containsKey(download.id)) continue
+                    val workInfos = withContext(Dispatchers.IO) {
+                        workManager.getWorkInfosForUniqueWork(WorkerDownload.workName(download.id)).get()
+                    }
+                    if (DownloadPolling.isZombieWorkStates(workInfos.map { it.state })) {
+                        withContext(Dispatchers.IO) {
+                            downloadDao.updateStatus(
+                                download.id,
+                                DownloadStatus.FAILED,
+                                DownloadReason.DOWNLOAD_INTERRUPTED,
+                            )
+                        }
+                        DownloadEventBridge.error(
+                            download.id,
+                            download.fileName,
+                            download.modelId,
+                            DownloadReason.messageFor(DownloadReason.DOWNLOAD_INTERRUPTED)
+                                ?: "Download was interrupted.",
+                            DownloadReason.DOWNLOAD_INTERRUPTED,
+                        )
+                    } else {
+                        registerObserver(download.id, download.fileName, download.modelId)
+                    }
+                }
+            } catch (_: Exception) {
+                // DB unavailable — polling skipped, no crash
             }
-            active.forEach { if (!workObservers.containsKey(it.id)) registerObserver(it.id, it.fileName, it.modelId) }
         }
     }
 

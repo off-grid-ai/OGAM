@@ -1,6 +1,7 @@
 package ai.offgridmobile.download
 
 import android.app.Application
+import androidx.work.WorkInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -302,6 +303,76 @@ class DownloadManagerModuleTest {
         val mgr = ctx.getSystemService(android.content.Context.NOTIFICATION_SERVICE)
             as android.app.NotificationManager
         assertNotNull(mgr.getNotificationChannel("model_downloads"))
+    }
+
+    // ── DownloadPolling.isZombieWorkStates ────────────────────────────────────
+
+    @Test
+    fun isZombieWorkStatesTreatsEmptyListAsZombie() {
+        assertTrue(DownloadPolling.isZombieWorkStates(emptyList()))
+    }
+
+    @Test
+    fun isZombieWorkStatesTreatsAllCancelledAsZombie() {
+        assertTrue(
+            DownloadPolling.isZombieWorkStates(
+                listOf(WorkInfo.State.CANCELLED, WorkInfo.State.CANCELLED),
+            ),
+        )
+    }
+
+    @Test
+    fun isZombieWorkStatesTreatsAllFailedAsZombie() {
+        assertTrue(
+            DownloadPolling.isZombieWorkStates(
+                listOf(WorkInfo.State.FAILED),
+            ),
+        )
+    }
+
+    @Test
+    fun isZombieWorkStatesTreatsMixedCancelledAndFailedAsZombie() {
+        assertTrue(
+            DownloadPolling.isZombieWorkStates(
+                listOf(WorkInfo.State.CANCELLED, WorkInfo.State.FAILED),
+            ),
+        )
+    }
+
+    @Test
+    fun isZombieWorkStatesRejectsRunningWork() {
+        assertFalse(
+            DownloadPolling.isZombieWorkStates(
+                listOf(WorkInfo.State.RUNNING),
+            ),
+        )
+    }
+
+    @Test
+    fun isZombieWorkStatesRejectsEnqueuedWork() {
+        assertFalse(
+            DownloadPolling.isZombieWorkStates(
+                listOf(WorkInfo.State.ENQUEUED),
+            ),
+        )
+    }
+
+    @Test
+    fun isZombieWorkStatesRejectsCancelledPlusRunning() {
+        assertFalse(
+            DownloadPolling.isZombieWorkStates(
+                listOf(WorkInfo.State.CANCELLED, WorkInfo.State.RUNNING),
+            ),
+        )
+    }
+
+    @Test
+    fun downloadInterruptedReasonIsRetryable() {
+        assertTrue(DownloadReason.isRetryable(DownloadReason.DOWNLOAD_INTERRUPTED))
+        assertEquals(
+            "The download was interrupted.",
+            DownloadReason.messageFor(DownloadReason.DOWNLOAD_INTERRUPTED),
+        )
     }
 }
 
