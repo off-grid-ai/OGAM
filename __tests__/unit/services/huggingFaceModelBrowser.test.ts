@@ -55,7 +55,7 @@ describe('huggingFaceModelBrowser', () => {
   // parseFileName (tested indirectly via fetchAvailableModels)
   // -----------------------------------------------------------------------
   describe('parseFileName (via fetchAvailableModels)', () => {
-    it('parses MNN backend zip as a GPU model', async () => {
+    it('parses MNN backend zip as an MNN model', async () => {
       mockFetchResponses(
         { ok: true, body: [treeEntry('AnythingV5.zip', 500, 'file', 2000)] },
         { ok: true, body: [] },
@@ -67,7 +67,7 @@ describe('huggingFaceModelBrowser', () => {
       expect(models[0]).toMatchObject({
         id: 'anythingv5_cpu',
         name: 'AnythingV5',
-        displayName: 'Anything V5 (GPU)',
+        displayName: 'Anything V5 (MNN)',
         backend: 'mnn',
         fileName: 'AnythingV5.zip',
         size: 2000,

@@ -28,7 +28,7 @@ type Props = Pick<ModelsScreenViewModel,
   | 'hasActiveImageFilters'
   | 'showRecommendedOnly' | 'setShowRecommendedOnly'
   | 'showRecHint' | 'setShowRecHint'
-  | 'imageRec' | 'ramGB' | 'imageRecommendation'
+  | 'imageRec' | 'ramGB' | 'imageRecommendation' | 'imageNpuAvailable'
   | 'handleDownloadImageModel' | 'handleCancelImageDownload' | 'loadHFModels'
   | 'clearImageFilters' | 'setUserChangedBackendFilter'
   | 'isRecommendedModel'
@@ -133,11 +133,12 @@ interface ScrollContentProps {
   handleDownloadImageModel: Props['handleDownloadImageModel'];
   handleCancelImageDownload: Props['handleCancelImageDownload'];
   imageSearchQuery: string;
+  imageNpuAvailable: boolean;
 }
 
 const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
   showRecHint, showRecommendedOnly, setShowRecHint,
-  imageRec, ramGB, imageRecommendation,
+  imageRec, ramGB, imageRecommendation, imageNpuAvailable,
   imageFiltersVisible, backendFilter, setBackendFilter,
   styleFilter, setStyleFilter, sdVersionFilter, setSdVersionFilter,
   imageFilterExpanded, setImageFilterExpanded,
@@ -202,6 +203,7 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
             hasActiveImageFilters={hasActiveImageFilters}
             clearImageFilters={clearImageFilters}
             setUserChangedBackendFilter={setUserChangedBackendFilter}
+            npuAvailable={imageNpuAvailable}
           />
         )}
 
@@ -262,7 +264,7 @@ export const ImageModelsTab: React.FC<Props> = ({
   hasActiveImageFilters,
   showRecommendedOnly, setShowRecommendedOnly,
   showRecHint, setShowRecHint,
-  imageRec, ramGB, imageRecommendation,
+  imageRec, ramGB, imageRecommendation, imageNpuAvailable,
   handleDownloadImageModel, handleCancelImageDownload, loadHFModels,
   clearImageFilters, setUserChangedBackendFilter,
   isRecommendedModel,
@@ -311,6 +313,7 @@ export const ImageModelsTab: React.FC<Props> = ({
         imageRec={imageRec}
         ramGB={ramGB}
         imageRecommendation={imageRecommendation}
+        imageNpuAvailable={imageNpuAvailable}
         imageFiltersVisible={imageFiltersVisible}
         backendFilter={backendFilter}
         setBackendFilter={setBackendFilter}

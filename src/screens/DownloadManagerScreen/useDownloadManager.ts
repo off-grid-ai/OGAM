@@ -58,7 +58,7 @@ function getActiveItemFileName(
 function getImageAuthor(backend?: string): string {
   if (backend === 'coreml') return 'Core ML';
   if (backend === 'qnn') return 'NPU';
-  if (backend === 'mnn') return 'GPU';
+  if (backend === 'mnn') return 'MNN';
   return 'Image Generation';
 }
 

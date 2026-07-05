@@ -59,11 +59,12 @@ function parseFileName(fileName: string, backend: 'mnn' | 'qnn'): Omit<HFImageMo
     };
   }
 
-  // GPU: e.g. "AnythingV5.zip"
+  // MNN: CPU/GPU via OpenCL — label as MNN so users on Pixel/Tensor are not told
+  // to pick a separate "CPU model" while the catalog only lists "GPU" and "NPU".
   return {
     id: `${baseName.toLowerCase()}_cpu`,
     name: baseName,
-    displayName: `${insertSpaces(baseName)} (GPU)`,
+    displayName: `${insertSpaces(baseName)} (MNN)`,
     backend: 'mnn',
     fileName,
   };

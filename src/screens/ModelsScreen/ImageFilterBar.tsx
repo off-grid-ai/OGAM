@@ -18,10 +18,12 @@ interface Props {
   hasActiveImageFilters: boolean;
   clearImageFilters: () => void;
   setUserChangedBackendFilter: (v: boolean) => void;
+  /** When false, hide the NPU filter chip (device has no QNN catalog entries). */
+  npuAvailable?: boolean;
 }
 
 function getBackendLabel(filter: BackendFilter): string {
-  if (filter === 'mnn') return 'GPU';
+  if (filter === 'mnn') return 'MNN';
   if (filter === 'qnn') return 'NPU';
   if (filter === 'coreml') return 'Core ML';
   return 'Backend';
@@ -45,12 +47,13 @@ interface ExpandedSectionProps {
   setStyleFilter: (f: string) => void;
   setImageFilterExpanded: (d: ImageFilterDimension | ((prev: ImageFilterDimension) => ImageFilterDimension)) => void;
   setUserChangedBackendFilter: (v: boolean) => void;
+  backendOptions: { key: BackendFilter; label: string }[];
 }
 
 const FilterExpandedSection: React.FC<ExpandedSectionProps> = ({
   imageFilterExpanded, backendFilter, sdVersionFilter, styleFilter,
   setBackendFilter, setSdVersionFilter, setStyleFilter,
-  setImageFilterExpanded, setUserChangedBackendFilter,
+  setImageFilterExpanded, setUserChangedBackendFilter, backendOptions,
 }) => {
   const styles = useThemedStyles(createStyles);
 
@@ -58,7 +61,7 @@ const FilterExpandedSection: React.FC<ExpandedSectionProps> = ({
     return (
       <View style={styles.filterExpandedContent}>
         <View style={styles.filterChipWrap}>
-          {BACKEND_OPTIONS.map(option => (
+          {backendOptions.map(option => (
             <TouchableOpacity
               key={option.key}
               style={[styles.filterChip, backendFilter === option.key && styles.filterChipActive]}
@@ -118,8 +121,12 @@ export const ImageFilterBar: React.FC<Props> = ({
   imageFilterExpanded, setImageFilterExpanded,
   hasActiveImageFilters, clearImageFilters,
   setUserChangedBackendFilter,
+  npuAvailable = true,
 }) => {
   const styles = useThemedStyles(createStyles);
+  const backendOptions = npuAvailable
+    ? BACKEND_OPTIONS
+    : BACKEND_OPTIONS.filter(o => o.key !== 'qnn');
 
   const backendLabel = getBackendLabel(backendFilter);
   const sdLabel = getSdLabel(sdVersionFilter);
@@ -175,6 +182,7 @@ export const ImageFilterBar: React.FC<Props> = ({
         setStyleFilter={setStyleFilter}
         setImageFilterExpanded={setImageFilterExpanded}
         setUserChangedBackendFilter={setUserChangedBackendFilter}
+        backendOptions={backendOptions}
       />
     </View>
   );

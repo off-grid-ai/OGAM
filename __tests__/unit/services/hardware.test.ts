@@ -18,6 +18,7 @@ describe('HardwareService', () => {
     (hardwareService as any).cachedDeviceInfo = null;
     (hardwareService as any).cachedSoCInfo = null;
     (hardwareService as any).cachedImageRecommendation = null;
+    (hardwareService as any).cachedOpenCLCapability = null;
   });
 
   // ========================================================================
@@ -1013,7 +1014,7 @@ describe('HardwareService', () => {
         });
         const rec = await hardwareService.getImageModelRecommendation();
         expect(rec.recommendedBackend).toBe('mnn');
-        expect(rec.bannerText).toContain('GPU');
+        expect(rec.bannerText).toContain('MNN');
         expect(rec.bannerText).toContain('888');
         expect(rec.compatibleBackends).toEqual(['mnn']);
       });
@@ -1027,6 +1028,26 @@ describe('HardwareService', () => {
         });
         const rec = await hardwareService.getImageModelRecommendation();
         expect(rec.recommendedBackend).toBe('mnn');
+        expect(rec.bannerText).toContain('MNN');
+        expect(rec.bannerText).toContain('Tensor');
+      });
+
+      it('recommends MNN with Pixel 10 CPU notice', async () => {
+        await setupDevice({
+          totalGB: 12,
+          platform: 'android',
+          hardware: 'tensor',
+          model: 'Pixel 10 Pro XL',
+        });
+        const rec = await hardwareService.getImageModelRecommendation();
+        expect(rec.recommendedBackend).toBe('mnn');
+        expect(rec.compatibleBackends).toEqual(['mnn']);
+        expect(rec.bannerText).toContain('Pixel 10');
+        expect(hardwareService.requiresCpuImageBackend()).toBe(true);
+        expect(await hardwareService.getOpenCLCapability()).toEqual({
+          supported: false,
+          reason: 'pixel_10_cpu_only',
+        });
       });
     });
 
@@ -1051,7 +1072,7 @@ describe('HardwareService', () => {
 
         const rec = await hardwareService.getImageModelRecommendation();
         expect(rec.recommendedBackend).toBe('mnn');
-        expect(rec.bannerText).toContain('GPU');
+        expect(rec.bannerText).toContain('MNN');
         expect(rec.compatibleBackends).toEqual(['mnn']);
       });
     });

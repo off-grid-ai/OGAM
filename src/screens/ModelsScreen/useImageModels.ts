@@ -28,6 +28,7 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
   const [imageSearchQuery, setImageSearchQuery] = useState('');
   const [imageFiltersVisible, setImageFiltersVisible] = useState(false);
   const [imageRec, setImageRec] = useState<ImageModelRecommendation | null>(null);
+  const [imageNpuAvailable, setImageNpuAvailable] = useState(false);
   const [userChangedBackendFilter, setUserChangedBackendFilter] = useState(false);
   const [showRecommendedOnly, setShowRecommendedOnly] = useState(true);
   const [showRecHint, setShowRecHint] = useState(true);
@@ -66,6 +67,7 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
         })));
       } else {
         const socInfo = await hardwareService.getSoCInfo();
+        setImageNpuAvailable(socInfo.hasNPU);
         setAvailableHFModels(await fetchAvailableModels(forceRefresh, { skipQnn: !socInfo.hasNPU }));
       }
     } catch (error: any) {
@@ -130,6 +132,11 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
     hardwareService.getImageModelRecommendation().then(rec => {
       if (cancelled) return;
       setImageRec(rec);
+      hardwareService.getSoCInfo().then(soc => {
+        if (cancelled) return;
+        setImageNpuAvailable(soc.hasNPU);
+        setBackendFilter(prev => (!soc.hasNPU && prev === 'qnn') ? 'mnn' : prev);
+      });
       if (!userChangedBackendFilter && Platform.OS !== 'ios') {
         let filter: 'qnn' | 'mnn' | 'all';
         if (rec.recommendedBackend === 'qnn') filter = 'qnn';
@@ -208,6 +215,7 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
     imageFiltersVisible, setImageFiltersVisible,
     imageRec, showRecommendedOnly, setShowRecommendedOnly,
     showRecHint, setShowRecHint,
+    imageNpuAvailable,
     downloadedImageModels,
     hasActiveImageFilters, filteredHFModels, imageRecommendation,
     loadHFModels, loadDownloadedImageModels,

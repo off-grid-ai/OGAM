@@ -242,7 +242,7 @@ class ActiveModelService {
         return {
           canLoad: false,
           error:
-            'NPU models require a Qualcomm Snapdragon processor. Your device does not have a compatible NPU. Please use a GPU model instead.',
+            'NPU models require a Qualcomm Snapdragon processor. Your device does not have a compatible NPU. Please download an MNN model instead.',
         };
       }
     }
@@ -308,12 +308,13 @@ class ActiveModelService {
     }
     this.loadingState.image = true;
     this.notifyListeners();
+    const forceCpuImage = hardwareService.requiresCpuImageBackend();
     this.imageLoadPromise = doLoadImageModel({
       model,
       modelId,
       imageThreads,
       needsThreadReload,
-      cpuOnly: false,
+      cpuOnly: forceCpuImage,
       preferGpu: hardwareService.preferGpuForImageGen(),
       store,
       timeoutMs,

@@ -8,6 +8,7 @@ import logger from '../utils/logger';
 import { shouldShowSharePrompt, emitSharePrompt } from '../utils/sharePrompt';
 import { checkProPromptForImage } from '../utils/proPrompt';
 import { buildEnhancementMessages, getConversationContext, cleanEnhancedPrompt, buildImageGenMeta } from './imageGenerationHelpers';
+import { hardwareService } from './hardware';
 import { reportModelFailure } from './modelFailureHandler';
 import { reasonFromLoadError } from './modelFailureReasons';
 
@@ -454,7 +455,10 @@ class ImageGenerationService {
     if (!loaded) return null;
     if (this.cancelRequested) { this.resetState(); return null; }
 
-    return this._runGenerationAndSave({ params, enhancedPrompt, activeImageModel, steps, guidanceScale, imageWidth, imageHeight, useOpenCL: settings.imageUseOpenCL ?? true });
+    const useOpenCL = hardwareService.requiresCpuImageBackend()
+      ? false
+      : (settings.imageUseOpenCL ?? true);
+    return this._runGenerationAndSave({ params, enhancedPrompt, activeImageModel, steps, guidanceScale, imageWidth, imageHeight, useOpenCL });
   }
 
   async cancelGeneration(): Promise<void> {

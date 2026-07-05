@@ -9,7 +9,7 @@ export function getQnnWarningMessage(
   if (!socInfo.hasNPU) {
     return 'NPU models require a Qualcomm Snapdragon processor. ' +
       'Your device does not have a compatible NPU and this model will not work. ' +
-      'Consider downloading a CPU model instead.';
+      'Consider downloading an MNN model instead.';
   }
   if (!modelInfo.variant || !socInfo.qnnVariant) return null;
 

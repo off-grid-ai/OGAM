@@ -285,6 +285,7 @@ export function useModelsScreen() {
     imageFiltersVisible: image.imageFiltersVisible,
     setImageFiltersVisible: image.setImageFiltersVisible,
     imageRec: image.imageRec,
+    imageNpuAvailable: image.imageNpuAvailable,
     showRecommendedOnly: image.showRecommendedOnly,
     setShowRecommendedOnly: image.setShowRecommendedOnly,
     showRecHint: image.showRecHint,

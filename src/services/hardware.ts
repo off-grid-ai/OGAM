@@ -397,14 +397,23 @@ class HardwareService {
       rec = {
         recommendedBackend: 'mnn',
         bannerText:
-          'GPU models recommended \u2014 your Snapdragon doesn\u2019t support NPU acceleration',
+          'MNN models recommended \u2014 your Snapdragon does not support NPU acceleration',
+        compatibleBackends: ['mnn'],
+      };
+    } else if (socInfo.vendor === 'tensor') {
+      rec = {
+        recommendedBackend: 'mnn',
+        bannerText:
+          this.requiresCpuImageBackend()
+            ? 'MNN models recommended for Pixel \u2014 image generation runs on CPU on Pixel 10 until GPU support lands'
+            : 'MNN models recommended for Pixel and Tensor devices',
         compatibleBackends: ['mnn'],
       };
     } else {
       rec = {
         recommendedBackend: 'mnn',
         bannerText:
-          'GPU models recommended \u2014 NPU requires Snapdragon 888+',
+          'MNN models recommended \u2014 NPU acceleration requires Snapdragon 888+',
         compatibleBackends: ['mnn'],
       };
     }
@@ -436,6 +445,9 @@ class HardwareService {
   async getOpenCLCapability(): Promise<{ supported: boolean; reason?: string }> {
     if (this.cachedOpenCLCapability) return this.cachedOpenCLCapability;
     if (Platform.OS !== 'android') return { supported: false, reason: 'not_android' };
+    if (this.requiresCpuImageBackend()) {
+      return (this.cachedOpenCLCapability = { supported: false, reason: 'pixel_10_cpu_only' });
+    }
     try {
       const hardware = (await DeviceInfo.getHardware()).toLowerCase();
       // Support Qualcomm Adreno (qcom) and ARM Mali GPUs.
@@ -444,6 +456,15 @@ class HardwareService {
       if (!hasCompatibleGpu) return (this.cachedOpenCLCapability = { supported: false, reason: 'no_compatible_gpu' });
       return (this.cachedOpenCLCapability = { supported: true });
     } catch { return (this.cachedOpenCLCapability = { supported: false, reason: 'detection_failed' }); }
+  }
+
+  /**
+   * Pixel 10 OpenCL/GPU image backends are broken on-device (same class of bug as
+   * LiteRT GPU on Pixel 10). Force the MNN CPU path for image load + generation.
+   */
+  requiresCpuImageBackend(): boolean {
+    if (Platform.OS !== 'android') return false;
+    return DeviceInfo.getModel().toLowerCase().includes('pixel 10');
   }
 }
 export const hardwareService = new HardwareService();
