@@ -7,8 +7,10 @@ import { MultimodalSupport, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
 import { ensureNativeLogCapture, resetNativeLogCapture, recentNativeLog } from './llmNativeLog';
 
-/** Feature flag: Set to true to enable HTP/Hexagon NPU support. Currently disabled. */
-const HTP_ENABLED = false;
+/** Feature flag for HTP/Hexagon NPU support. Enabled: llama.rn ships the prebuilt
+ *  hexagon DSP libs (librnllama_..._hexagon_opencl.so + libggml-htp-v*.so), so the
+ *  NPU path runs on Qualcomm devices. Was beta-gated in 82e898d9; re-enabled. */
+const HTP_ENABLED = true;
 
 export const RESPONSE_RESERVE = 512;
 const DEFAULT_THREADS = 4; // targets performance cores only; over-threading onto efficiency cores (A520) hurts

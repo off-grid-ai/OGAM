@@ -14,8 +14,9 @@ import {
 import { hardwareService } from '../../services/hardware';
 import { createStyles } from './styles';
 
-/** Feature flag: Set to true to enable HTP/Hexagon NPU in UI. Currently disabled. */
-const HTP_UI_ENABLED = false;
+/** Feature flag for HTP/Hexagon NPU in the UI. Enabled: the NPU backend ships
+ *  prebuilt in llama.rn and is shown on Qualcomm devices with hasNPU. */
+const HTP_UI_ENABLED = true;
 
 // ─── Inference Backend ────────────────────────────────────────────────────────
 
@@ -32,7 +33,7 @@ const ANDROID_BASE_BACKENDS: BackendOption[] = [
   { id: INFERENCE_BACKENDS.OPENCL, label: 'GPU' },
 ];
 
-const HTP_BACKEND: BackendOption = { id: INFERENCE_BACKENDS.HTP, label: 'HTP' };
+const HTP_BACKEND: BackendOption = { id: INFERENCE_BACKENDS.HTP, label: 'NPU' };
 
 const BackendSelectorSection: React.FC = () => {
   const styles = useThemedStyles(createStyles);

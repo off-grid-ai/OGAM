@@ -45,7 +45,16 @@ async function runOnce(): Promise<void> {
 
   const platform = Platform.OS === 'ios' ? 'ios' : 'android';
   const { supported: openCLSupported } = await hardwareService.getOpenCLCapability();
-  const caps = { platform, openCLSupported } as const;
+  // NPU (Hexagon) is Qualcomm-only: hardwareService.getSoCInfo().hasNPU is already
+  // gated to vendor==='qualcomm'. The resolver only auto-defaults flagship variants
+  // to the NPU; every other chip (incl. MediaTek/Exynos/Tensor Mali) falls to GPU.
+  const soc = await hardwareService.getSoCInfo();
+  const caps = {
+    platform,
+    openCLSupported,
+    npuSupported: !!soc.hasNPU,
+    npuVariant: soc.qnnVariant,
+  } as const;
 
   const inferenceBackend = resolveDefaultBackend(caps);
   const liteRTBackend = resolveDefaultLiteRTBackend(caps);

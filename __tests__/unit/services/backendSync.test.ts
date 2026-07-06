@@ -20,15 +20,22 @@ import { INFERENCE_BACKENDS } from '../../../src/types';
 describe('startBackendDefaultSync (integration)', () => {
   const originalOS = Platform.OS;
   let openCLSpy: jest.SpyInstance;
+  let socSpy: jest.SpyInstance;
 
   beforeEach(() => {
     resetStores();
     __resetBackendDefaultSyncForTests();
+    // Default: non-Qualcomm (no NPU) so the GPU/CPU branches are exercised; the NPU
+    // case overrides this. hasNPU being Qualcomm-only is enforced in hardware.ts.
+    socSpy = jest
+      .spyOn(hardwareService, 'getSoCInfo')
+      .mockResolvedValue({ vendor: 'mediatek', hasNPU: false } as never);
   });
 
   afterEach(() => {
     Platform.OS = originalOS;
     openCLSpy?.mockRestore();
+    socSpy?.mockRestore();
   });
 
   it('fresh Android + OpenCL-supported install auto-selects the GPU (OPENCL) backend and enables GPU', async () => {
@@ -46,6 +53,31 @@ describe('startBackendDefaultSync (integration)', () => {
     expect(settings.inferenceBackend).toBe(INFERENCE_BACKENDS.OPENCL);
     expect(settings.liteRTBackend).toBe('gpu');
     expect(settings.enableGpu).toBe(true);
+  });
+
+  it('flagship Qualcomm (8gen2) auto-selects the NPU (HTP) backend', async () => {
+    Platform.OS = 'android' as typeof Platform.OS;
+    openCLSpy = jest
+      .spyOn(hardwareService, 'getOpenCLCapability')
+      .mockResolvedValue({ supported: true });
+    socSpy.mockResolvedValue({ vendor: 'qualcomm', hasNPU: true, qnnVariant: '8gen2' } as never);
+
+    await startBackendDefaultSync();
+
+    expect(useAppStore.getState().settings.inferenceBackend).toBe(INFERENCE_BACKENDS.HTP);
+    expect(useAppStore.getState().settings.enableGpu).toBe(true);
+  });
+
+  it("non-flagship Qualcomm ('min', e.g. SM8635) auto-selects GPU, not the beta NPU", async () => {
+    Platform.OS = 'android' as typeof Platform.OS;
+    openCLSpy = jest
+      .spyOn(hardwareService, 'getOpenCLCapability')
+      .mockResolvedValue({ supported: true });
+    socSpy.mockResolvedValue({ vendor: 'qualcomm', hasNPU: true, qnnVariant: 'min' } as never);
+
+    await startBackendDefaultSync();
+
+    expect(useAppStore.getState().settings.inferenceBackend).toBe(INFERENCE_BACKENDS.OPENCL);
   });
 
   it('does NOT override when the user has already chosen a backend', async () => {
