@@ -193,6 +193,8 @@ interface StandardModelCardContentProps {
   credibilityInfo: CredibilityInfo | null;
   isActive?: boolean;
   recommended?: RecommendedConfig;
+  /** Model can run on the GPU/NPU (LiteRT or Q4_0/Q8_0 GGUF) → show the badge. */
+  supportsAcceleration?: boolean;
 }
 
 export const StandardModelCardContent: React.FC<StandardModelCardContentProps> = ({
@@ -201,6 +203,7 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
   credibilityInfo,
   isActive,
   recommended,
+  supportsAcceleration,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -240,6 +243,12 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
               <Text style={styles.recommendedPillText}>{recommended.pillLabel ?? 'Recommended'}</Text>
             </View>
           </>
+        )}
+        {/* GPU/NPU capability badge — a LiteRT or Q4_0/Q8_0 quant this device can accelerate. */}
+        {supportsAcceleration && (
+          <View style={styles.accelBadge} testID="npu-gpu-badge">
+            <Text style={styles.accelBadgeText}>NPU/GPU</Text>
+          </View>
         )}
       </View>
       {cardDescription(model.description, recommended?.highlightText) && (

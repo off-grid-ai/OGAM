@@ -300,6 +300,13 @@ describe('ModelCard', () => {
       expect(queryByTestId('npu-gpu-badge')).toBeNull();
     });
 
+    it('shows the NPU/GPU badge in standard (non-compact) mode too — the quant-file cards', () => {
+      const { getByText } = render(
+        <ModelCard model={baseModel} supportsAcceleration />
+      );
+      expect(getByText('NPU/GPU')).toBeTruthy();
+    });
+
     it('shows min RAM badge in compact mode', () => {
       const { getByText } = render(
         <ModelCard

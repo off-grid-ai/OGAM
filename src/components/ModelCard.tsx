@@ -236,6 +236,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
               credibilityInfo={credibilityInfo}
               isActive={isActive}
               recommended={recommended}
+              supportsAcceleration={supportsAcceleration}
             />
           )}
 
