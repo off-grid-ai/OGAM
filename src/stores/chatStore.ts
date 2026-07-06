@@ -73,6 +73,18 @@ function extractChannelThinking(rawContent: string): { reasoningContent: string 
     }
   }
 
+  // UNCLOSED thinking: the generation was cut off (e.g. maxTokens hit) mid-thought, so
+  // the opener is present but the close never arrived. Treat everything after the opener
+  // as reasoning rather than leaking the raw `<|channel>thought…` / `<think>…` as the
+  // message (the iOS Gemma-4 truncation bug). No answer yet → empty response.
+  for (const openTag of ['<|channel>thought\n', '<think>']) {
+    const openIdx = rawContent.toLowerCase().indexOf(openTag.toLowerCase());
+    if (openIdx !== -1) {
+      const reasoning = rawContent.slice(openIdx + openTag.length).trim();
+      return { reasoningContent: reasoning || undefined, responseContent: '' };
+    }
+  }
+
   return { reasoningContent: undefined, responseContent: rawContent };
 }
 
