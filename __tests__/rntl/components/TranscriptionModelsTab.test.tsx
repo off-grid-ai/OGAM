@@ -37,11 +37,14 @@ jest.mock('../../../src/stores', () => ({
 jest.mock('../../../src/components', () => {
   const { Text, TouchableOpacity } = require('react-native');
   return {
-    ModelCard: ({ model, isDownloaded, isActive, onPress, onDownload, onDelete, testID }: any) => (
+    ModelCard: ({ model, isDownloaded, isActive, isDownloading, isQueued, downloadBytes, onPress, onDownload, onDelete, testID }: any) => (
       <TouchableOpacity testID={testID} onPress={onPress} disabled={!onPress}>
         <Text testID={`${testID}-name`}>{model.name}</Text>
         {isDownloaded && <Text testID={`${testID}-downloaded`}>downloaded</Text>}
         {isActive && <Text testID={`${testID}-active`}>active</Text>}
+        {isDownloading && <Text testID={`${testID}-downloading`}>downloading</Text>}
+        {isQueued && <Text testID={`${testID}-queued`}>queued</Text>}
+        {downloadBytes && <Text testID={`${testID}-bytes`}>{`${downloadBytes.downloaded}/${downloadBytes.total}`}</Text>}
         {onDownload && <TouchableOpacity testID={`${testID}-download`} onPress={onDownload}><Text>Download</Text></TouchableOpacity>}
         {onDelete && <TouchableOpacity testID={`${testID}-delete`} onPress={onDelete}><Text>Delete</Text></TouchableOpacity>}
       </TouchableOpacity>
@@ -167,6 +170,32 @@ describe('TranscriptionModelsTab', () => {
     const { queryByTestId } = render(<TranscriptionModelsTab />);
     // Downloading → no download button and the card is not tappable to re-download.
     expect(queryByTestId('transcription-model-card-0-download')).toBeNull();
+  });
+
+  it('shows a QUEUED (pending) STT download as Queued, not as a 0% download', () => {
+    // The bug: a pending STT entry rendered "0%" instead of "Queued".
+    seedSttDownload('tiny.en', 'pending', 0);
+    const { getByTestId, queryByTestId } = render(<TranscriptionModelsTab />);
+    expect(getByTestId('transcription-model-card-0-queued')).toBeTruthy();
+    expect(queryByTestId('transcription-model-card-0-downloading')).toBeNull();
+    // Bytes are still surfaced ("0 B / size") so it matches the Text/Image cards.
+    expect(getByTestId('transcription-model-card-0-bytes')).toHaveTextContent(/^0\/\d+$/);
+  });
+
+  it('treats a whisper-store fallback still at 0% (no store entry yet) as Queued', () => {
+    // Pre-slot window: the whisper store seeds progress 0 before the canonical
+    // download-store entry exists. That 0% is WAITING for a slot → queued.
+    mockWhisperState.downloadProgressById = { 'tiny.en': 0 };
+    const { getByTestId, queryByTestId } = render(<TranscriptionModelsTab />);
+    expect(getByTestId('transcription-model-card-0-queued')).toBeTruthy();
+    expect(queryByTestId('transcription-model-card-0-downloading')).toBeNull();
+  });
+
+  it('treats a whisper-store fallback with progress > 0 as actively downloading', () => {
+    mockWhisperState.downloadProgressById = { 'tiny.en': 0.3 };
+    const { getByTestId, queryByTestId } = render(<TranscriptionModelsTab />);
+    expect(getByTestId('transcription-model-card-0-downloading')).toBeTruthy();
+    expect(queryByTestId('transcription-model-card-0-queued')).toBeNull();
   });
 
   it('re-derives present models from disk when the screen regains focus', () => {

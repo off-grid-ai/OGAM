@@ -28,9 +28,14 @@ jest.mock('../../../src/services/backgroundDownloadService', () => ({
 // Names prefixed with `mock` so jest.mock's hoisting allows referencing them.
 const mockDownloadStoreAdd = jest.fn();
 const mockDownloadStoreRemove = jest.fn();
+const mockDownloadStoreRetryEntry = jest.fn();
 jest.mock('../../../src/stores/downloadStore', () => ({
   useDownloadStore: {
-    getState: () => ({ add: mockDownloadStoreAdd, remove: mockDownloadStoreRemove }),
+    getState: () => ({
+      add: mockDownloadStoreAdd,
+      remove: mockDownloadStoreRemove,
+      retryEntry: mockDownloadStoreRetryEntry,
+    }),
   },
 }));
 
@@ -201,17 +206,21 @@ describe('WhisperService', () => {
 
       await whisperService.downloadModel('tiny.en');
 
-      // Registered as an STT entry keyed by whisper-<id>/<fileName> so the
-      // Download Manager renders it under Voice while in flight (issue: STT
-      // downloads were invisible until a screen switch re-scanned disk).
+      // A QUEUED placeholder row is published UP-FRONT (before the native start),
+      // keyed by whisper-<id>/<fileName> and filed under Voice via modelType 'stt',
+      // so a queued STT download shows as "Queued" in the same canonical store the
+      // Text/Image cards read (not "0%"). This is the single-source-of-truth path.
       expect(mockDownloadStoreAdd).toHaveBeenCalledWith(expect.objectContaining({
         modelKey: 'whisper-tiny.en/ggml-tiny.en.bin',
-        downloadId: 7,
+        downloadId: 'queued:whisper-tiny.en/ggml-tiny.en.bin',
         modelId: 'whisper-tiny.en',
         fileName: 'ggml-tiny.en.bin',
         modelType: 'stt',
         status: 'pending',
       }));
+      // Once a slot opens and the native download starts, the placeholder is
+      // reconciled to the real downloadId so progress events route to it.
+      expect(mockDownloadStoreRetryEntry).toHaveBeenCalledWith('whisper-tiny.en/ggml-tiny.en.bin', 7);
       // Cleared on success — completed STT models are listed from disk instead.
       expect(mockDownloadStoreRemove).toHaveBeenCalledWith('whisper-tiny.en/ggml-tiny.en.bin');
     });

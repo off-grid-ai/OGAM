@@ -63,6 +63,27 @@ class WhisperService {
     // Content-Length once the download starts.
     const totalBytes = model.size * 1024 * 1024;
     const modelKey = makeModelKey(`whisper-${modelId}`, fileName);
+    // Publish a QUEUED row to the CANONICAL store IMMEDIATELY, before the (possibly
+    // slot-limited) native start — the same pattern text/image use (startModelDownload).
+    // Previously the store entry was only added AFTER a concurrency slot opened, so a
+    // queued STT download had no canonical entry and the Transcription tab fell back to
+    // the whisper store's progress=0 and rendered "0%" instead of "Queued". Every card
+    // now reads this one store, so queued looks identical across Text/Image/STT.
+    const QUEUED_PLACEHOLDER_ID = `queued:${modelKey}`;
+    useDownloadStore.getState().add({
+      modelKey,
+      downloadId: QUEUED_PLACEHOLDER_ID,
+      modelId: `whisper-${modelId}`,
+      fileName,
+      quantization: '',
+      modelType: 'stt',
+      status: 'pending',
+      bytesDownloaded: 0,
+      totalBytes,
+      combinedTotalBytes: totalBytes,
+      progress: 0,
+      createdAt: Date.now(),
+    });
     const { downloadIdPromise, promise } = backgroundDownloadService.downloadFileTo({
       params: {
         url: model.url,
@@ -94,24 +115,11 @@ class WhisperService {
     try {
       try {
         this.activeDownloadId = await downloadIdPromise;
-        // Register the in-flight download so the Download Manager shows it live
-        // (filed under Voice via modelType 'stt'). Progress is then driven by the
-        // global onAnyProgress listener in useDownloadListeners. Without this the
-        // row only appeared after switching screens re-scanned disk.
-        useDownloadStore.getState().add({
-          modelKey,
-          downloadId: this.activeDownloadId,
-          modelId: `whisper-${modelId}`,
-          fileName,
-          quantization: '',
-          modelType: 'stt',
-          status: 'pending',
-          bytesDownloaded: 0,
-          totalBytes,
-          combinedTotalBytes: totalBytes,
-          progress: 0,
-          createdAt: Date.now(),
-        });
+        // A slot opened and the native download started: reconcile the queued
+        // placeholder row to the REAL downloadId so progress events (routed by id)
+        // land on it. Progress is then driven by the global onAnyProgress listener
+        // in useDownloadListeners.
+        useDownloadStore.getState().retryEntry(modelKey, this.activeDownloadId);
         await promise;
       } catch (error) {
         if ((error as { cancelled?: boolean })?.cancelled) {

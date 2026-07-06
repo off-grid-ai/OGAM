@@ -48,6 +48,12 @@ const WhisperCard: React.FC<WhisperCardProps> = ({
 }) => {
   const present = presentModelIds.includes(model.id);
   const active = downloadedModelId === model.id;
+  // WHISPER_MODELS sizes are in MB. Surface bytes so the STT card matches the
+  // Text/Image cards ("X MB / Y MB"); for a queued model this reads "0 B / 142 MB".
+  const totalBytes = model.size * 1024 * 1024;
+  const downloadBytes = (downloading || queued)
+    ? { downloaded: Math.round(downloadProgress * totalBytes), total: totalBytes }
+    : undefined;
   return (
     <ModelCard
       compact
@@ -57,6 +63,7 @@ const WhisperCard: React.FC<WhisperCardProps> = ({
       isDownloading={downloading}
       isQueued={queued}
       downloadProgress={downloadProgress}
+      downloadBytes={downloadBytes}
       testID={`transcription-model-card-${index}`}
       // Present but not active → tap to use; not present → tap to download.
       onPress={downloading ? undefined : (present ? (active ? undefined : () => onSelect(model.id)) : () => onDownload(model.id))}
@@ -106,9 +113,13 @@ export const TranscriptionModelsTab: React.FC = () => {
     const fromStore = sttDownloadState[id];
     if (fromStore) return fromStore;
     const p = downloadProgressById[id];
-    // The whisper-store URL-import path has no download-store entry and no queue — it's
-    // actively transferring, so downloading=true, queued=false.
-    return p !== undefined ? { progress: p, active: true, downloading: true, queued: false } : undefined;
+    if (p === undefined) return undefined;
+    // Fallback path: the whisper store seeds progress 0 at request time, but the
+    // canonical download-store entry is only created once a concurrency slot opens.
+    // So a fallback entry still at 0% is WAITING for a slot → queued (not a 0%
+    // active download); once the first byte lands (p > 0) it is transferring. Without
+    // this, queued STT models rendered "0%" instead of "Queued".
+    return { progress: p, active: true, downloading: p > 0, queued: p === 0 };
   }, [sttDownloadState, downloadProgressById]);
 
   // True while any transcription model is actively downloading. Disk probes are
