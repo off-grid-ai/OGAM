@@ -21,7 +21,6 @@ import { loadProFeatures } from './src/bootstrap/loadProFeatures';
 import { checkProStatus } from './src/services/proLicenseService';
 import { hydrateDownloadStore } from './src/services/downloadHydration';
 import { startLoadPolicySync } from './src/services/loadPolicySync';
-import { startBackendDefaultSync } from './src/services/backendSync';
 import { registerCoreDownloadProviders } from './src/services/modelDownloadService/registerProviders';
 import { useDownloadListeners } from './src/hooks/useDownloads';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -148,13 +147,6 @@ function App() {
       // manager (single owner of the runtime load policy) now that settings are
       // hydrated, and keep it in sync for the app's lifetime.
       startLoadPolicySync();
-
-      // Once settings are hydrated, upgrade the default inference backend to the
-      // device's GPU path (OpenCL / LiteRT gpu) when supported, unless the user
-      // has already chosen a backend. Runs once; safe to fire-and-forget.
-      startBackendDefaultSync().catch((error) => {
-        logger.error('[App] Failed to sync default inference backend:', error);
-      });
 
       // Hydrate download store from SQLite before any screen mounts.
       await hydrateDownloadStore().catch((error) => {

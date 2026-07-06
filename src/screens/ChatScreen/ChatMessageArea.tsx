@@ -9,8 +9,6 @@ import { AttachStep } from 'react-native-spotlight-tour';
 import { ChatInput, ThinkingIndicator, ModelFailureCard } from '../../components';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { generationService } from '../../services';
-import { INFERENCE_BACKENDS } from '../../types';
-import { TYPOGRAPHY, SPACING } from '../../constants';
 import { EmptyChat, ImageProgressIndicator } from './ChatScreenComponents';
 import { getPlaceholderText, useChatScreen } from './useChatScreen';
 import { createStyles } from './styles';
@@ -236,17 +234,6 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           </AnimatedPressable>
         </Animated.View>
       )}
-      {chat.settings.inferenceBackend === INFERENCE_BACKENDS.OPENCL
-        && chat.activeModel?.engine === 'llama'
-        && !chat.activeModelInfo?.isRemote
-        && (
-        <View style={[openCLBannerStyles.row, { backgroundColor: `${colors.warning}15` }]}>
-          <Icon name="info" size={13} color={colors.warning} />
-          <Text style={[openCLBannerStyles.text, { color: colors.warning }]}>
-            OpenCL is not recommended. Switch to CPU in Settings, or use a LiteRT model for GPU support.
-          </Text>
-        </View>
-      )}
       {/* Single dismissible surface for every model failure (text/image/tts/stt/
           embedding). Reads modelFailureStore itself — no props. */}
       <ModelFailureCard />
@@ -291,11 +278,6 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
     </>
   );
 };
-
-const openCLBannerStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
-  text: { ...TYPOGRAPHY.meta, flex: 1 },
-});
 
 const hiddenStyle = StyleSheet.create({
   hidden: { opacity: 0 },

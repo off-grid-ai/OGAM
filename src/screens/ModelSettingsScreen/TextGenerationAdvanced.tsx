@@ -77,7 +77,7 @@ const BackendSelectorSection: React.FC = () => {
             size="small"
             testID={`backend-${b.id}-button`}
             active={current === b.id}
-            onPress={() => updateSettings({ inferenceBackend: b.id, backendUserChosen: true })}
+            onPress={() => updateSettings({ inferenceBackend: b.id })}
             style={styles.flex1}
           />
         ))}
