@@ -89,6 +89,10 @@ class WhisperService {
         url: model.url,
         fileName,
         modelId: `whisper-${modelId}`,
+        // Pass modelKey so the background queue's double-tap coalesce keys by the SAME
+        // id as the canonical store entry (queued:<modelKey> → real), not the modelId
+        // fallback — keeps queued dedup/cancel consistent across both layers.
+        modelKey,
         // Tag as speech-to-text so the Download Manager files an in-progress
         // download under Voice. Without it the entry defaulted to 'text' and
         // STT models showed up under Text (and never under the Voice filter).

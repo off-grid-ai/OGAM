@@ -186,7 +186,7 @@ export const AggressiveLoadingSection: React.FC<{ trackColor: { false: string; t
       <View style={styles.toggleInfo}>
         <Text style={styles.toggleLabel}>Aggressive Loading</Text>
         <Text style={styles.toggleDesc}>
-          Raises the memory ceiling from ~70% of RAM to ~88% and cuts the OS reserve from
+          Commits a larger share of your RAM to the model and cuts the OS reserve from
           1.5GB to 0.8GB, so larger models load. If one still will not fit, you can override
           the safeguards and load it anyway. Leaves less RAM for other apps.
         </Text>
