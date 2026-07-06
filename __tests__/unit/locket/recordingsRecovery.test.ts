@@ -26,7 +26,11 @@ jest.mock('react-native-fs', () => ({
 
 // `mock`-prefixed so babel allows referencing them inside the hoisted factory.
 const mockAddRecoveredBatch = jest.fn((recs: unknown[]) => (recs as unknown[]).length);
-const mockStore: { currentFilePath: string | null; isRunning: boolean; recordings: { path: string }[] } = {
+const mockStore: {
+  currentFilePath: string | null;
+  isRunning: boolean;
+  recordings: { path: string; startedAt?: number; sizeBytes?: number }[];
+} = {
   currentFilePath: null,
   isRunning: false,
   recordings: [],
@@ -160,6 +164,20 @@ describe('recoverOrphans - safety guards preserved', () => {
   it('does not re-add a recording already in the store', async () => {
     mockStore.recordings = [{ path: '/ext/Music/Recordings/rec-known.wav' }];
     mockRNFS.readDir.mockResolvedValue([entry('rec-known.wav')]);
+    const report = await recoverOrphans({ force: true });
+    expect(report.added).toBe(0);
+    expect(report.alreadyInStore).toBe(1);
+  });
+
+  it('dedups by content (same size + close startedAt) despite a different path', async () => {
+    // Simulates iOS container rotation: the file on disk has a NEW path, but the
+    // store holds the same recording under an OLD path. Basename also differs.
+    // startedAt within 5s + identical size => same recording, must not duplicate.
+    mockStore.recordings = [
+      { path: '/OLD-UUID/Music/Recordings/rec-1720000000000.wav', startedAt: 1720000000000, sizeBytes: OK_SIZE },
+    ] as unknown as typeof mockStore.recordings;
+    // On-disk file: different basename/path, epoch 2s later, same size.
+    mockRNFS.readDir.mockResolvedValue([entry('rec-1720000002000.wav')]);
     const report = await recoverOrphans({ force: true });
     expect(report.added).toBe(0);
     expect(report.alreadyInStore).toBe(1);
