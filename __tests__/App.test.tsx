@@ -132,6 +132,9 @@ jest.mock('../src/bootstrap/loadProFeatures', () => ({
 jest.mock('../src/hooks/useDownloads', () => ({
   useDownloadListeners: jest.fn(),
 }));
+jest.mock('../src/services/loadPolicySync', () => ({
+  startLoadPolicySync: jest.fn(() => jest.fn()),
+}));
 jest.mock('../src/utils/debugLogFile', () => ({
   initDebugLogFile: jest.fn(),
   appendDebugLine: jest.fn(),
