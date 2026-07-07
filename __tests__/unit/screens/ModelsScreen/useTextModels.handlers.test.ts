@@ -18,6 +18,14 @@ jest.mock('@react-navigation/native', () => ({
   useFocusEffect: jest.fn((cb: () => () => void) => { cb(); }),
 }));
 
+// ── Acceleration predicate (deterministic per-id verdict for the resort test) ──
+// Keep the real module's other exports; only make modelSupportsNpuGpu controllable
+// so we can assert the "float accelerable models to the top" ordering deterministically.
+jest.mock('../../../../src/utils/acceleration', () => ({
+  ...jest.requireActual('../../../../src/utils/acceleration'),
+  modelSupportsNpuGpu: (m: { id?: string }) => ((m?.id?.charCodeAt(0) ?? 1) % 2 === 0),
+}));
+
 // ── App store ─────────────────────────────────────────────────────────
 const mockAddDownloadedModel = jest.fn();
 const mockRemoveDownloadedModel = jest.fn();
@@ -317,5 +325,44 @@ describe('isModelDownloaded / getDownloadedModel resolve by file, not composite 
     const resolved = result.current.getDownloadedModel(REPO, 'gemma-4-E2B-it-Q4_0.gguf');
     expect(resolved?.quantization).toBe('Q4_0');
     expect(resolved?.id).toBe('recovered_gemma-4-E2B-it-Q4_0.gguf_1783000000000');
+  });
+});
+
+// ── Recommended-list NPU/GPU prioritization (the resort at useTextModels.ts:329) ──
+// Guards the user-visible behavior CodeRabbit flagged: on the 'recommended' sort,
+// NPU/GPU-accelerable models float to the top; explicit sorts are honored (no resort).
+describe('recommendedAsModelInfo — NPU/GPU prioritization', () => {
+  const accel = (m: { id?: string }) => ((m?.id?.charCodeAt(0) ?? 1) % 2 === 0); // matches the mock
+
+  it("floats accelerable models ahead of non-accelerable ones on the 'recommended' sort", () => {
+    const { result } = renderHook(() => useTextModels(setAlertState));
+    const list = result.current.recommendedAsModelInfo;
+    expect(list.length).toBeGreaterThan(0);
+
+    // Partition invariant: once a non-accelerable model appears, no accelerable model
+    // may appear after it. Deleting the resort line lets a non-accelerable precede an
+    // accelerable one → this fails.
+    let sawNonAccel = false;
+    for (const m of list) {
+      if (!accel(m)) sawNonAccel = true;
+      else if (sawNonAccel) throw new Error(`accelerable model ${m.id} appears after a non-accelerable one`);
+    }
+    // And the resort must be meaningful for this dataset (both groups present),
+    // otherwise the invariant is vacuous.
+    expect(list.some(accel)).toBe(true);
+    expect(list.some(m => !accel(m))).toBe(true);
+  });
+
+  it("honors an explicit sort (size) — does NOT reprioritize by accelerability", () => {
+    const { result } = renderHook(() => useTextModels(setAlertState));
+    act(() => result.current.setSortOption('size'));
+
+    const list = result.current.recommendedAsModelInfo;
+    // 'size' sorts by paramCount ascending (applySort). The accel resort is skipped,
+    // so the list stays param-ordered rather than accelerable-first.
+    const params = list.map(m => m.paramCount ?? 0);
+    for (let i = 1; i < params.length; i++) {
+      expect(params[i]).toBeGreaterThanOrEqual(params[i - 1]);
+    }
   });
 });
