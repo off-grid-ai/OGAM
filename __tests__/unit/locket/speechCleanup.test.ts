@@ -8,6 +8,7 @@ import {
   computeKeptRanges,
   remapSegments,
   remapSegmentsToFull,
+  mergeWithinGap,
   type Range,
 } from '../../../pro/locket/services/speechCleanup';
 
@@ -109,5 +110,31 @@ describe('remapSegmentsToFull (inverse - restore)', () => {
   it('empty / no kept ranges -> empty out', () => {
     expect(remapSegmentsToFull(undefined, kept)).toEqual([]);
     expect(remapSegmentsToFull([seg(0, 1000)], [])).toEqual([]);
+  });
+});
+
+describe('mergeWithinGap (auto-prune: keep short pauses, drop long dead-air)', () => {
+  const GAP = 60_000; // 60s threshold
+
+  it('keeps a short (< 60s) gap inside one range', () => {
+    // speech 0-10s, 30s pause, speech 40-50s -> one range 0-50s (pause kept).
+    expect(mergeWithinGap([r(0, 10_000), r(40_000, 50_000)], GAP)).toEqual([r(0, 50_000)]);
+  });
+
+  it('splits on a long (> 60s) gap so it gets dropped', () => {
+    // speech 0-10s, 90s gap, speech 100-110s -> two ranges; the 90s gap is
+    // between them and will be removed by the compaction.
+    expect(mergeWithinGap([r(0, 10_000), r(100_000, 110_000)], GAP)).toEqual([
+      r(0, 10_000),
+      r(100_000, 110_000),
+    ]);
+  });
+
+  it('a gap exactly at the threshold is kept (<=)', () => {
+    expect(mergeWithinGap([r(0, 10_000), r(70_000, 80_000)], GAP)).toEqual([r(0, 80_000)]);
+  });
+
+  it('empty in -> empty out', () => {
+    expect(mergeWithinGap([], GAP)).toEqual([]);
   });
 });
