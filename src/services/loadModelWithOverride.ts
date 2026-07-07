@@ -13,6 +13,10 @@
 import { AlertState, showAlert, hideAlert } from '../components/CustomAlert';
 import { isOverridableMemoryError } from './modelLoadErrors';
 
+/** Safe message extraction — a thrown value isn't guaranteed to be an Error, and
+ *  `(error as Error).message` renders "undefined" for a string/other throw. */
+const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
 export interface LoadWithOverrideDeps {
   setAlertState: (a: AlertState) => void;
   /** Ran on a successful load (initial OR after Load Anyway). e.g. navigate/close sheet. */
@@ -44,7 +48,7 @@ export async function loadModelWithOverride(
         deps.setAlertState(
           showAlert(
             'Insufficient Memory',
-            `${(error as Error).message}\n\nWould you like to override these safeguards and load it anyway?`,
+            `${errorMessage(error)}\n\nWould you like to override these safeguards and load it anyway?`,
             [
               { text: 'Cancel', style: 'cancel' },
               {
@@ -60,8 +64,8 @@ export async function loadModelWithOverride(
         );
         return;
       }
-      deps.setAlertState(showAlert('Error', `Failed to load model: ${(error as Error).message}`));
-      deps.onError?.(error as Error);
+      deps.setAlertState(showAlert('Error', `Failed to load model: ${errorMessage(error)}`));
+      deps.onError?.(error instanceof Error ? error : new Error(errorMessage(error)));
     } finally {
       deps.onAttemptEnd?.();
     }

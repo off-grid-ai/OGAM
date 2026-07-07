@@ -7,6 +7,7 @@ import { audioRecorderService } from '../../services/audioRecorderService';
 import { whisperService } from '../../services/whisperService';
 import { recordingController } from '../../services/recordingController';
 import { resolveTranscription } from './transcriptionOutcome';
+import { ensureWhisperForTranscription } from './ensureWhisperForTranscription';
 import logger from '../../utils/logger';
 
 interface UseVoiceInputParams {
@@ -53,28 +54,17 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
   const shouldUseFilePath = (): boolean =>
     isInAudioInterfaceMode() && !!downloadedModelId && !supportsDirectAudio();
 
-  // Transcription is a PREREQUISITE of a voice turn — whisperService.transcribeFile
-  // throws "No Whisper model loaded" if the model isn't resident. The STT single-model
-  // rule keeps whisper OUT of RAM while a generation model is resident (a 142MB sidecar
-  // can't co-reside with an 8.5GB text model without OOM). So before transcribing we
-  // ensure whisper is loaded, and if a resident generation model is blocking it we free
-  // that model FIRST (keepSelection=true so routing reloads the right one after the
-  // transcript decides text-vs-image). Without this, a voice note recorded while a text
-  // model was resident transcribed to "" and misrouted ("draw a dog" → text model).
-  // One seam used by both the direct-audio and file transcription paths below.
-  const ensureWhisperForTranscription = async (): Promise<boolean> => {
-    if (whisperService.isModelLoaded()) return true;
-    if (!downloadedModelId) return false;
-    // Roomy device / nothing resident: a normal sidecar load fits.
-    await useWhisperStore.getState().loadModel();
-    if (whisperService.isModelLoaded()) return true;
-    // Blocked by a resident generation model (the sidecar rule correctly won't evict
-    // it, and there's no in-flight answer to protect during transcription). Free the
-    // generation model(s) via the owning service, then load whisper.
-    await activeModelService.unloadAllModels(true);
-    await useWhisperStore.getState().loadModel();
-    return whisperService.isModelLoaded();
-  };
+  // Ensure whisper is resident before transcribing (the decision lives in the pure
+  // ensureWhisperForTranscription — it frees a blocking generation model, but never
+  // evicts on a hard whisper-load failure). One seam for both paths below.
+  const ensureWhisper = (): Promise<boolean> => ensureWhisperForTranscription({
+    isLoaded: () => whisperService.isModelLoaded(),
+    hasDownloadedModel: () => !!downloadedModelId,
+    loadWhisper: () => useWhisperStore.getState().loadModel(),
+    // keepSelection=true so routing reloads the right generation model after the
+    // transcript decides text-vs-image.
+    freeGenerationModels: () => activeModelService.unloadAllModels(true).then(() => {}),
+  });
 
   const isTranscribing = isWhisperTranscribing || isTranscribingFile;
   const isRecording = isDirectRecording || isAudioModeRecording || isWhisperRecording;
@@ -142,7 +132,7 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
                 // transcribeFile after a successful load is a transcription miss,
                 // not a load failure — leave whisperReady true so the user gets
                 // "couldn't hear that", not "couldn't load the voice model".
-                whisperReady = await ensureWhisperForTranscription();
+                whisperReady = await ensureWhisper();
                 if (whisperReady) transcript = await whisperService.transcribeFile(path);
               }
               catch (err) { logger.error('[Voice] transcription error:', err); }
@@ -180,7 +170,7 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
         let whisperReady = false;
         let transcript = '';
         try {
-          whisperReady = await ensureWhisperForTranscription();
+          whisperReady = await ensureWhisper();
           if (whisperReady) transcript = await whisperService.transcribeFile(path);
         } catch (transcribeErr) {
           logger.error('[Voice] File transcription error:', transcribeErr);

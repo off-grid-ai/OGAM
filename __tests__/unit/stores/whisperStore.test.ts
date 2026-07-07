@@ -359,7 +359,7 @@ describe('whisperStore', () => {
         // A heavier model is resident: residency refuses without evicting it.
         mockResidency.makeRoomFor.mockResolvedValueOnce({ evicted: [], fits: false });
 
-        await getState().loadModel();
+        const result = await getState().loadModel();
 
         // The seam under test: the native load must be skipped when it won't fit.
         // Deleting the `if (!fits) return` guard in the store fails THIS line.
@@ -369,6 +369,9 @@ describe('whisperStore', () => {
         // Not an error state — STT just stays out and loads on the next record.
         expect(getState().error).toBeNull();
         expect(getState().isModelLoading).toBe(false);
+        // Reports 'blocked' (not 'error') so a caller can free the resident model and
+        // retry — vs 'error', where freeing wouldn't help.
+        expect(result).toBe('blocked');
       });
 
       it('loads and registers whisper when makeRoomFor reports it fits', async () => {
@@ -377,11 +380,26 @@ describe('whisperStore', () => {
         mockWhisperService.loadModel.mockResolvedValue(undefined);
         mockResidency.makeRoomFor.mockResolvedValueOnce({ evicted: [], fits: true });
 
-        await getState().loadModel();
+        const result = await getState().loadModel();
 
         expect(mockWhisperService.loadModel).toHaveBeenCalledWith('/models/ggml-tiny');
         expect(mockResidency.register).toHaveBeenCalled();
         expect(getState().isModelLoaded).toBe(true);
+        expect(result).toBe('loaded');
+      });
+
+      it("reports 'error' (not 'blocked') on a hard load failure — freeing models won't help", async () => {
+        useWhisperStore.setState({ downloadedModelId: 'ggml-tiny' });
+        mockWhisperService.getModelPath.mockReturnValue('/models/ggml-tiny');
+        mockResidency.makeRoomFor.mockResolvedValueOnce({ evicted: [], fits: true });
+        mockWhisperService.loadModel.mockRejectedValueOnce(new Error('model file corrupted'));
+
+        const result = await getState().loadModel();
+
+        // Distinguishing error from blocked is what stops the caller evicting the
+        // user's generation model for a whisper that can't load anyway.
+        expect(result).toBe('error');
+        expect(getState().isModelLoaded).toBe(false);
       });
     });
   });

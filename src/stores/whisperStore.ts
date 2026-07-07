@@ -5,6 +5,16 @@ import { whisperService, WHISPER_MODELS } from '../services';
 import { modelResidencyManager } from '../services/modelResidency';
 import logger from '../utils/logger';
 
+/**
+ * Outcome of a whisper load, so callers can tell WHY it didn't load:
+ *  - 'loaded'  — resident and ready.
+ *  - 'blocked' — skipped by the single-model rule (a heavier generation model owns
+ *                RAM; the sidecar can't co-reside). Retryable by freeing that model.
+ *  - 'error'   — a real load failure (missing/corrupt file, native error) or nothing
+ *                downloaded. Freeing other models will NOT help — do not evict.
+ */
+export type WhisperLoadResult = 'loaded' | 'blocked' | 'error';
+
 interface WhisperState {
   // Active (selected) model ID
   downloadedModelId: string | null;
@@ -27,7 +37,7 @@ interface WhisperState {
   downloadModel: (modelId: string) => Promise<void>;
   /** Activate an already-downloaded model without re-downloading. */
   selectModel: (modelId: string) => Promise<void>;
-  loadModel: () => Promise<void>;
+  loadModel: () => Promise<WhisperLoadResult>;
   unloadModel: () => Promise<void>;
   deleteModel: () => Promise<void>;
   /** Delete a specific on-disk model (active or not). */
@@ -94,16 +104,16 @@ export const useWhisperStore = create<WhisperState>()(
         }
       },
 
-      loadModel: async () => {
+      loadModel: async (): Promise<WhisperLoadResult> => {
         const { downloadedModelId, isModelLoading } = get();
         if (!downloadedModelId) {
           set({ error: 'No model downloaded' });
-          return;
+          return 'error';
         }
 
         // Prevent multiple simultaneous load attempts
         if (isModelLoading) {
-          return;
+          return get().isModelLoaded ? 'loaded' : 'error';
         }
 
         set({ isModelLoading: true, error: null });
@@ -137,6 +147,9 @@ export const useWhisperStore = create<WhisperState>()(
             return true;
           });
           set({ isModelLoaded: loaded, isModelLoading: false, error: null });
+          // loaded=false means the single-model rule blocked it (not a failure) —
+          // report 'blocked' so a caller can free the resident model and retry.
+          return loaded ? 'loaded' : 'blocked';
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : 'Failed to load model';
           // If the model file is missing or corrupted, clear the downloaded state
@@ -148,6 +161,7 @@ export const useWhisperStore = create<WhisperState>()(
             downloadedModelId: isFileError ? null : downloadedModelId,
             error: errorMsg,
           });
+          return 'error';
         }
       },
 
