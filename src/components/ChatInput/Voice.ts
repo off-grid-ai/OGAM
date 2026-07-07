@@ -6,6 +6,7 @@ import { activeModelService } from '../../services/activeModelService';
 import { audioRecorderService } from '../../services/audioRecorderService';
 import { whisperService } from '../../services/whisperService';
 import { recordingController } from '../../services/recordingController';
+import { resolveTranscription } from './transcriptionOutcome';
 import logger from '../../utils/logger';
 
 interface UseVoiceInputParams {
@@ -51,6 +52,29 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
   // Use file-based transcription path when: Audio Mode + Whisper available + not direct audio model
   const shouldUseFilePath = (): boolean =>
     isInAudioInterfaceMode() && !!downloadedModelId && !supportsDirectAudio();
+
+  // Transcription is a PREREQUISITE of a voice turn — whisperService.transcribeFile
+  // throws "No Whisper model loaded" if the model isn't resident. The STT single-model
+  // rule keeps whisper OUT of RAM while a generation model is resident (a 142MB sidecar
+  // can't co-reside with an 8.5GB text model without OOM). So before transcribing we
+  // ensure whisper is loaded, and if a resident generation model is blocking it we free
+  // that model FIRST (keepSelection=true so routing reloads the right one after the
+  // transcript decides text-vs-image). Without this, a voice note recorded while a text
+  // model was resident transcribed to "" and misrouted ("draw a dog" → text model).
+  // One seam used by both the direct-audio and file transcription paths below.
+  const ensureWhisperForTranscription = async (): Promise<boolean> => {
+    if (whisperService.isModelLoaded()) return true;
+    if (!downloadedModelId) return false;
+    // Roomy device / nothing resident: a normal sidecar load fits.
+    await useWhisperStore.getState().loadModel();
+    if (whisperService.isModelLoaded()) return true;
+    // Blocked by a resident generation model (the sidecar rule correctly won't evict
+    // it, and there's no in-flight answer to protect during transcription). Free the
+    // generation model(s) via the owning service, then load whisper.
+    await activeModelService.unloadAllModels(true);
+    await useWhisperStore.getState().loadModel();
+    return whisperService.isModelLoaded();
+  };
 
   const isTranscribing = isWhisperTranscribing || isTranscribingFile;
   const isRecording = isDirectRecording || isAudioModeRecording || isWhisperRecording;
@@ -109,14 +133,29 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
           // the audio so multimodal text models get the original speech; the text is what
           // lets routing pick image vs text.
           if (onAutoSendRef.current && isInAudioInterfaceMode()) {
-            let text = '';
+            let whisperReady = false;
+            let transcript = '';
             if (downloadedModelId) {
               setIsTranscribingFile(true);
-              try { text = await whisperService.transcribeFile(path); }
+              try {
+                // whisperReady tracks whether the MODEL loaded. A throw from
+                // transcribeFile after a successful load is a transcription miss,
+                // not a load failure — leave whisperReady true so the user gets
+                // "couldn't hear that", not "couldn't load the voice model".
+                whisperReady = await ensureWhisperForTranscription();
+                if (whisperReady) transcript = await whisperService.transcribeFile(path);
+              }
               catch (err) { logger.error('[Voice] transcription error:', err); }
               setIsTranscribingFile(false);
             }
-            onAutoSendRef.current(text.trim(), { uri: path, format, durationSeconds });
+            // NEVER dispatch an empty transcript — that misroutes to the text model.
+            const outcome = resolveTranscription(whisperReady, transcript);
+            if (outcome.dispatch) {
+              onAutoSendRef.current(outcome.text, { uri: path, format, durationSeconds });
+            } else {
+              setDirectError(outcome.message);
+              setTimeout(() => setDirectError(null), 3000);
+            }
           } else {
             onAudioAttachmentRef.current?.({ uri: path, format, durationSeconds });
           }
@@ -138,24 +177,27 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
           return;
         }
         setIsTranscribingFile(true);
-        let text = '';
+        let whisperReady = false;
+        let transcript = '';
         try {
-          text = await whisperService.transcribeFile(path);
+          whisperReady = await ensureWhisperForTranscription();
+          if (whisperReady) transcript = await whisperService.transcribeFile(path);
         } catch (transcribeErr) {
           logger.error('[Voice] File transcription error:', transcribeErr);
         }
         setIsTranscribingFile(false);
         recordingConversationIdRef.current = null;
-        if (text.trim()) {
+        // NEVER dispatch an empty transcript — that misroutes to the text model.
+        const outcome = resolveTranscription(whisperReady, transcript);
+        if (outcome.dispatch) {
           if (onAutoSendRef.current) {
-            onAutoSendRef.current(text.trim(), { uri: path, format: 'wav', durationSeconds });
+            onAutoSendRef.current(outcome.text, { uri: path, format: 'wav', durationSeconds });
           } else {
-            onAudioAttachmentRef.current?.({ uri: path, format: 'wav', durationSeconds, transcription: text.trim() });
-            onTranscriptRef.current(text.trim());
+            onAudioAttachmentRef.current?.({ uri: path, format: 'wav', durationSeconds, transcription: outcome.text });
+            onTranscriptRef.current(outcome.text);
           }
         } else {
-          // Transcription returned nothing — clip too short or too quiet
-          setDirectError("Couldn't hear that — try again");
+          setDirectError(outcome.message);
           setTimeout(() => setDirectError(null), 3000);
         }
       } catch (err) {

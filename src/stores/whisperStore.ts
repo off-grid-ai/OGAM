@@ -115,13 +115,14 @@ export const useWhisperStore = create<WhisperState>()(
           // alongside another model. Make room for it first (evict to budget),
           // then register so future loads can evict it.
           //
-          // CRITICAL: honor the `fits` verdict. STT is a sidecar — if a heavier
-          // generation model owns memory, makeRoomFor returns fits=false without
-          // evicting it (it won't kick out the big model for a 142MB sidecar). We
-          // MUST NOT load anyway: doing so put whisper + the text model co-resident
-          // and OOM'd the app / forced the user to resend. STT stays out and loads
-          // on the next record when there's room. Skipped-for-no-room is not an
-          // error state — leave isModelLoaded false, no error surfaced.
+          // CRITICAL: honor the `fits` verdict. STT is a SIDECAR — if a heavier
+          // generation model owns memory, makeRoomFor returns fits=false WITHOUT
+          // evicting it (the sidecar rule won't kick out an 8.5GB model for a 142MB
+          // sidecar). We MUST NOT load anyway: doing so put whisper + the text model
+          // co-resident and OOM'd the app. STT stays out. When a voice turn needs to
+          // transcribe RIGHT NOW, the caller frees the generation model first (see
+          // ensureWhisperForTranscription in ChatInput/Voice) — we do not override
+          // the sidecar rule here.
           const loaded = await modelResidencyManager.runExclusive('load:whisper', async () => {
             const { fits } = await modelResidencyManager.makeRoomFor({ key: 'whisper', type: 'whisper', sizeMB });
             if (!fits) {
