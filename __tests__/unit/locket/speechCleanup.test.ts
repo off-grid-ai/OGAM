@@ -7,10 +7,12 @@ import {
   subtractRanges,
   computeKeptRanges,
   remapSegments,
+  remapSegmentsToFull,
   type Range,
 } from '../../../pro/locket/services/speechCleanup';
 
 const r = (startMs: number, endMs: number): Range => ({ startMs, endMs });
+const seg = (startMs: number, endMs: number, text = 'x') => ({ text, startMs, endMs });
 
 describe('mergeRanges', () => {
   it('merges overlapping and adjacent, sorts', () => {
@@ -75,5 +77,37 @@ describe('remapSegments', () => {
   });
   it('empty in -> empty out', () => {
     expect(remapSegments(undefined, kept)).toEqual([]);
+  });
+});
+
+describe('remapSegmentsToFull (inverse - restore)', () => {
+  // Same scenario: kept = [0-40s] + [60-100s], 40-60s removed. Compacted
+  // timeline is 0-80s; the second range occupies compacted 40-80s.
+  const kept = [r(0, 40_000), r(60_000, 100_000)];
+
+  it('maps a compacted second-range segment back up by the removed length', () => {
+    // compacted 50-70s -> full 70-90s (add back the 20s gap).
+    expect(remapSegmentsToFull([seg(50_000, 70_000, 'a')], kept)).toEqual([seg(70_000, 90_000, 'a')]);
+  });
+
+  it('leaves a first-range segment unchanged', () => {
+    expect(remapSegmentsToFull([seg(10_000, 20_000, 'b')], kept)).toEqual([seg(10_000, 20_000, 'b')]);
+  });
+
+  it('round-trips: forward then inverse restores a segment that did not straddle a boundary', () => {
+    const original = [seg(10_000, 20_000, 'p'), seg(70_000, 90_000, 'q')];
+    const compacted = remapSegments(original, kept);
+    const restored = remapSegmentsToFull(compacted, kept);
+    expect(restored).toEqual(original);
+  });
+
+  it('clamps a time past the end of kept audio into the last range', () => {
+    // compacted 80s = end; maps to full 100s (end of the second kept range).
+    expect(remapSegmentsToFull([seg(79_000, 80_000, 'z')], kept)).toEqual([seg(99_000, 100_000, 'z')]);
+  });
+
+  it('empty / no kept ranges -> empty out', () => {
+    expect(remapSegmentsToFull(undefined, kept)).toEqual([]);
+    expect(remapSegmentsToFull([seg(0, 1000)], [])).toEqual([]);
   });
 });
