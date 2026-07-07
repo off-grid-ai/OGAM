@@ -25,7 +25,10 @@ import { remoteServerManager } from '../services/remoteServerManager';
 import { discoverLANServers } from '../services/networkDiscovery';
 import { CustomAlert, AlertState, initialAlertState, showAlert } from '../components/CustomAlert';
 import { OFF_GRID_DESKTOP_URL } from '../constants';
+import { withUtm } from '../utils/utm';
 import { createStyles } from './RemoteServersScreen.styles';
+
+const DESKTOP_URL = withUtm(OFF_GRID_DESKTOP_URL, 'remote-servers');
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'RemoteServers'>;
 
@@ -74,7 +77,7 @@ export const RemoteServersScreen: React.FC = () => {
           'No LLM servers were found on your local network. Run Off Grid AI Desktop on your Mac to serve its models here.',
           [
             { text: 'Dismiss', style: 'cancel' },
-            { text: 'Get Off Grid AI Desktop', onPress: () => Linking.openURL(OFF_GRID_DESKTOP_URL).catch(() => {}) },
+            { text: 'Get Off Grid AI Desktop', onPress: () => Linking.openURL(DESKTOP_URL).catch(() => {}) },
           ],
         ));
         return;
@@ -143,7 +146,7 @@ export const RemoteServersScreen: React.FC = () => {
             </Text>
             <TouchableOpacity
               style={styles.desktopLink}
-              onPress={() => Linking.openURL(OFF_GRID_DESKTOP_URL).catch(() => {})}
+              onPress={() => Linking.openURL(DESKTOP_URL).catch(() => {})}
               accessibilityRole="link"
               accessibilityLabel="Get Off Grid AI Desktop"
             >
@@ -250,7 +253,7 @@ export const RemoteServersScreen: React.FC = () => {
           </Text>
           <TouchableOpacity
             style={styles.desktopLink}
-            onPress={() => Linking.openURL(OFF_GRID_DESKTOP_URL).catch(() => {})}
+            onPress={() => Linking.openURL(DESKTOP_URL).catch(() => {})}
             accessibilityRole="link"
             accessibilityLabel="Get Off Grid AI Desktop"
           >

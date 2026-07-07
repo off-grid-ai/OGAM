@@ -6,6 +6,9 @@ import { useThemedStyles, useTheme } from '../../../theme';
 import { createStyles } from '../styles';
 import { useAppStore } from '../../../stores';
 import { OFF_GRID_DESKTOP_URL } from '../../../constants';
+import { withUtm } from '../../../utils/utm';
+
+const DESKTOP_URL = withUtm(OFF_GRID_DESKTOP_URL, 'home-promo');
 
 /**
  * Off Grid AI Desktop promo card on Home — announces the desktop app is live.
@@ -22,7 +25,7 @@ export const DesktopPromoCard: React.FC = () => {
   const [linkCopied, setLinkCopied] = React.useState(false);
 
   const copyLink = React.useCallback(() => {
-    Clipboard.setString(OFF_GRID_DESKTOP_URL);
+    Clipboard.setString(DESKTOP_URL);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
   }, []);
@@ -32,7 +35,7 @@ export const DesktopPromoCard: React.FC = () => {
   return (
     <AnimatedPressable
       style={styles.desktopCard}
-      onPress={() => Linking.openURL(OFF_GRID_DESKTOP_URL)}
+      onPress={() => Linking.openURL(DESKTOP_URL)}
       hapticType="selection"
       testID="desktop-promo-card"
     >

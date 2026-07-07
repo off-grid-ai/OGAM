@@ -7,6 +7,7 @@ import { useAppStore } from '../../stores';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { SPACING, TYPOGRAPHY, OFF_GRID_DESKTOP_URL } from '../../constants';
+import { withUtm } from '../../utils/utm';
 import { getPricingCopy } from '../../utils/proPricing';
 
 const FEATURE_ROWS = [
@@ -74,7 +75,7 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
 
         <TouchableOpacity
           style={styles.desktopLink}
-          onPress={() => Linking.openURL(OFF_GRID_DESKTOP_URL).catch(() => {})}
+          onPress={() => Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'pro-upsell')).catch(() => {})}
           accessibilityRole="link"
           accessibilityLabel="Get Off Grid AI Desktop"
         >

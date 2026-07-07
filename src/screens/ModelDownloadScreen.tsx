@@ -17,6 +17,7 @@ import { getUserFacingDownloadMessage } from '../utils/downloadErrors';
 import { isAccelerableQuant } from '../utils/acceleration';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { RECOMMENDED_MODELS, TYPOGRAPHY, SPACING, OFF_GRID_DESKTOP_URL } from '../constants';
+import { withUtm } from '../utils/utm';
 import { useAppStore } from '../stores';
 import { useDownloadStore, isActiveStatus } from '../stores/downloadStore';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
@@ -217,7 +218,7 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
           'Make sure you\'re on the same WiFi network as your server and that it\'s running. Off Grid AI Desktop serves its models to this phone over your network.',
           [
             { text: 'Dismiss', style: 'cancel' },
-            { text: 'Get Off Grid AI Desktop', onPress: () => Linking.openURL(OFF_GRID_DESKTOP_URL).catch(() => {}) },
+            { text: 'Get Off Grid AI Desktop', onPress: () => Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'model-download')).catch(() => {}) },
           ],
         ));
       }

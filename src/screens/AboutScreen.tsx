@@ -10,9 +10,10 @@ import { MadeWithLove } from '../components/MadeWithLove';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { GITHUB_URL } from '../utils/sharePrompt';
+import { withUtm } from '../utils/utm';
 import packageJson from '../../package.json';
 
-const WEDNESDAY_MOBILE_URL = 'https://wednesday.is';
+const WEDNESDAY_MOBILE_URL = withUtm('https://wednesday.is', 'about');
 
 export const AboutScreen: React.FC = () => {
   const navigation = useNavigation();

@@ -5,7 +5,7 @@ export const WEDNESDAY_URL = 'https://wednesday.is/hire-ai-native-mobile-squad?u
 
 // Off Grid AI Desktop: the free, open-source desktop app (not a Pro feature).
 // Linked from Pro screens and from remote-server discovery alike.
-export const OFF_GRID_DESKTOP_URL = 'http://getoffgridai.co/desktop';
+export const OFF_GRID_DESKTOP_URL = 'https://getoffgridai.co/desktop';
 
 export const PRO_AHA_FEATURES = [
   'Ambient across your devices',

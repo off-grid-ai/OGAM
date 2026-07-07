@@ -16,6 +16,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
 import { activateProByKey, PRO_PAY_PAGE_URL, type ActivateResult } from '../../services/proLicenseService';
+import { withUtm } from '../../utils/utm';
 
 type ErrorMsg = string | null;
 
@@ -101,7 +102,7 @@ export const ProUnlockModal: React.FC<Props> = ({ visible, onClose, onUnlocked }
   // Not a member yet — send them to the web pay page. The buyer's key is emailed
   // to them after checkout, then pasted here.
   const handleGetPro = () => {
-    Linking.openURL(PRO_PAY_PAGE_URL).catch(() => {
+    Linking.openURL(withUtm(PRO_PAY_PAGE_URL, 'pro-unlock')).catch(() => {
       setError('Could not open the Pro page. Please try again.');
     });
   };

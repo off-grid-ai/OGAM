@@ -5,6 +5,7 @@ import { Button } from '../../components';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { TYPOGRAPHY, SPACING, OFF_GRID_DESKTOP_URL } from '../../constants';
+import { withUtm } from '../../utils/utm';
 
 interface VoiceModelsUpsellProps {
   /** Navigates to the Pro detail screen. */
@@ -34,7 +35,7 @@ export const VoiceModelsUpsell: React.FC<VoiceModelsUpsellProps> = ({ onGetPro }
       <Button title="Get Pro" variant="primary" size="medium" onPress={onGetPro} style={styles.button} />
       <TouchableOpacity
         style={styles.desktopLink}
-        onPress={() => Linking.openURL(OFF_GRID_DESKTOP_URL).catch(() => {})}
+        onPress={() => Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'voice-upsell')).catch(() => {})}
         accessibilityRole="link"
         accessibilityLabel="Get Off Grid AI Desktop"
       >

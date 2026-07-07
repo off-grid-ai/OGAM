@@ -8,6 +8,7 @@ import type { ThemeColors, ThemeShadows } from '../../theme';
 import { SPACING, TYPOGRAPHY, OFF_GRID_DESKTOP_URL } from '../../constants';
 import { useAppStore } from '../../stores';
 import { PRO_PAY_PAGE_URL } from '../../services/proLicenseService';
+import { withUtm } from '../../utils/utm';
 import { loadProFeatures } from '../../bootstrap/loadProFeatures';
 import { getPricingCopy } from '../../utils/proPricing';
 import { ProManageSection } from './ProManageSection';
@@ -50,8 +51,8 @@ export const ProDetailScreen: React.FC = () => {
   const [verifyModalVisible, setVerifyModalVisible] = useState(false);
   const pricing = getPricingCopy();
 
-  const openPayPage = () => { Linking.openURL(PRO_PAY_PAGE_URL).catch(() => {}); };
-  const openDesktop = () => { Linking.openURL(OFF_GRID_DESKTOP_URL).catch(() => {}); };
+  const openPayPage = () => { Linking.openURL(withUtm(PRO_PAY_PAGE_URL, 'pro-detail')).catch(() => {}); };
+  const openDesktop = () => { Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'pro-detail')).catch(() => {}); };
   const openVerifyModal = () => setVerifyModalVisible(true);
 
   // Activation verified: load the pro bundle now so Pro lights up live (the

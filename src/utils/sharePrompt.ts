@@ -1,10 +1,13 @@
 import { Linking } from 'react-native';
+import { withUtm } from './utm';
 
 // Star button (Settings + share sheet) points at the mobile repo specifically.
 const GITHUB_URL = 'https://github.com/off-grid-ai/mobile';
 // The X share promotes the whole project, so it links to the org and early access.
+// GitHub ignores UTM, so only the early-access link (our property) is tagged; the
+// medium is the X share surface.
 const ORG_GITHUB_URL = 'https://github.com/off-grid-ai';
-const EARLY_ACCESS_URL = 'https://getoffgridai.co/early-access/';
+const EARLY_ACCESS_URL = withUtm('https://getoffgridai.co/early-access/', 'x-share');
 
 const SHARE_TEXT = `Off Grid AI is background intelligence for knowledge workers. It runs on your own hardware with no cloud round trips: it sees your day, remembers it, and gets ahead of you across phone and desktop. One mind across your devices, private by architecture, open source so you can check.
 
