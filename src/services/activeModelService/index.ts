@@ -166,8 +166,9 @@ class ActiveModelService {
     // First refusal is OVERRIDABLE (callers offer "Load Anyway"); a refusal UNDER override
     // hit the survival floor (hard limit) → plain non-overridable Error, so no caller loops.
     if (!room.fits) {
-      const msg = 'Not enough free memory to load this model, even after freeing other models. Close other apps or choose a smaller model.';
-      throw opts?.override ? new Error(msg) : new OverridableMemoryError(msg);
+      throw opts?.override
+        ? new Error('Not enough free memory to load this model, even after freeing other models. Close other apps or choose a smaller model.')
+        : new OverridableMemoryError('Not enough free memory to load this model. Close other apps or choose a smaller model.');
     }
     this.loadingState.text = true;
     this.notifyListeners();
