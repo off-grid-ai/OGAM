@@ -414,7 +414,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 1783519100;
+				CURRENT_PROJECT_VERSION = 1783404896;
 				DEVELOPMENT_TEAM = 84V6KCAC49;
 				ENABLE_BITCODE = NO;
 				CODE_SIGN_ENTITLEMENTS = OffgridMobile/OffgridMobile.entitlements;
@@ -426,7 +426,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.0.103;
+				MARKETING_VERSION = 0.0.102;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -447,7 +447,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 1783519100;
+				CURRENT_PROJECT_VERSION = 1783404896;
 				DEVELOPMENT_TEAM = 84V6KCAC49;
 				CODE_SIGN_ENTITLEMENTS = OffgridMobile/OffgridMobile.entitlements;
 				INFOPLIST_FILE = OffgridMobile/Info.plist;
@@ -458,7 +458,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.0.103;
+				MARKETING_VERSION = 0.0.102;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
