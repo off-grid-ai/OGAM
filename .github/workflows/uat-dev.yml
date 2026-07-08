@@ -19,8 +19,8 @@
 name: UAT build (dev → internal testers)
 
 on:
-  push:
-    branches: [dev]
+  # Manual only. Betas are cut by hand (scripts/uat.sh locally, or this dispatch) — pushing
+  # to dev must NOT auto-build/publish a beta.
   workflow_dispatch:
     inputs:
       platform:

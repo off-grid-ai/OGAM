@@ -3,9 +3,9 @@ name: Build and Release Android
 # If you rename this workflow, update the workflow_run trigger in release-ios.yml.
 
 on:
-  push:
-    branches: [main]     # every merge to main cuts a release
-  workflow_dispatch: {}   # manual fallback
+  # Manual only. Releases are cut by hand (scripts/release.sh locally, or this dispatch) —
+  # merging to main must NOT auto-publish to the stores.
+  workflow_dispatch: {}
 
 permissions:
   contents: write
