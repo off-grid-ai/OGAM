@@ -1626,6 +1626,36 @@ describe('Image Generation Flow Integration', () => {
       );
     });
 
+    it('stops offering Load Anyway once the override retry also fails (no repeated no-op)', async () => {
+      setupImageModelState();
+      mockLocalDreamService.isModelLoaded.mockResolvedValue(false);
+      // First load: an overridable gate. The override retry hits the survival floor, so
+      // the service reports it as a NON-overridable hard limit (a plain Error) — the exact
+      // behavior checkImageModelCanLoad now produces under { override: true }.
+      mockActiveModelService.loadImageModel
+        .mockRejectedValueOnce(
+          new OverridableMemoryError('Not enough memory to load Test Model. Free up space or choose a smaller model.'),
+        )
+        .mockRejectedValue(
+          new Error('Not enough memory to load Test Model, even after freeing other models. Close other apps or choose a smaller model.'),
+        );
+
+      await imageGenerationService.generateImage({ prompt: 'a fox' });
+      const first = useModelFailureStore.getState().failures.find(f => f.modelType === 'image');
+      expect(first!.overridable).toBe(true);
+      expect(typeof first!.onLoadAnyway).toBe('function');
+
+      // Press "Load Anyway" → the forced retry fails as a hard limit.
+      first!.onLoadAnyway!();
+      for (let i = 0; i < 6; i++) await flushPromises();
+
+      // The card must NOT keep offering "Load Anyway" — the action would be a no-op.
+      const after = useModelFailureStore.getState().failures.find(f => f.modelType === 'image');
+      expect(after).toBeDefined();
+      expect(after!.overridable).toBeFalsy();
+      expect(after!.onLoadAnyway).toBeUndefined();
+    });
+
     it('does NOT offer Load Anyway for a NON-overridable load failure (false branch)', async () => {
       setupImageModelState();
       mockLocalDreamService.isModelLoaded.mockResolvedValue(false);

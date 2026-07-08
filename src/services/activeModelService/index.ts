@@ -163,13 +163,11 @@ class ActiveModelService {
       { key: 'text', type: 'text', modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty },
       { override: opts?.override },
     );
-    // Won't fit even after eviction. OVERRIDABLE: the typed error lets every caller
-    // offer "Load Anyway" (retry with { override: true }), which forces the load after
-    // evicting everything — GGUF weights mmap clean, so it often succeeds past the gate.
+    // First refusal is OVERRIDABLE (callers offer "Load Anyway"); a refusal UNDER override
+    // hit the survival floor (hard limit) → plain non-overridable Error, so no caller loops.
     if (!room.fits) {
-      throw new OverridableMemoryError(
-        'Not enough free memory to load this model, even after freeing other models. Close other apps or choose a smaller model.',
-      );
+      const msg = 'Not enough free memory to load this model, even after freeing other models. Close other apps or choose a smaller model.';
+      throw opts?.override ? new Error(msg) : new OverridableMemoryError(msg);
     }
     this.loadingState.text = true;
     this.notifyListeners();
@@ -267,11 +265,12 @@ class ActiveModelService {
       { override: opts?.override },
     );
     if (!fits) {
-      return {
-        canLoad: false,
-        error: `Not enough memory to load ${model.name}. Free up space or choose a smaller model.`,
-        overridable: true,
-      };
+      // Refusal UNDER override = survival floor (hard limit) → non-overridable, so the
+      // UI stops re-offering "Load Anyway" as a no-op that re-runs the same failing load.
+      const overridable = !opts?.override;
+      return { canLoad: false, overridable, error: overridable
+        ? `Not enough memory to load ${model.name}. Free up space or choose a smaller model.`
+        : `Not enough memory to load ${model.name}, even after freeing other models. Close other apps or choose a smaller model.` };
     }
     return { canLoad: true };
   }
