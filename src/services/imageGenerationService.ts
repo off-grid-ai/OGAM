@@ -392,16 +392,13 @@ class ImageGenerationService {
         (progress) => {
           if (this.cancelRequested) return;
           const displayStep = Math.min(progress.step, steps);
-          if (isFirstRun) {
-            this.updateState({
-              progress: { step: displayStep, totalSteps: steps },
-              status: displayStep <= 1
-                ? 'Optimizing GPU for your device (~120s, one-time)...'
-                : `GPU optimization in progress... (${displayStep}/${steps})`,
-            });
-          } else {
-            this.updateState({ progress: { step: displayStep, totalSteps: steps }, status: `Generating image (${displayStep}/${steps})...` });
-          }
+          // Once steps are advancing it IS generating — don't mislabel it "GPU
+          // optimization" (which read as if generation hadn't started). On the first run
+          // the GPU is still warming, so note that as a one-time aside, not the headline.
+          const status = displayStep <= 1 && isFirstRun
+            ? 'Optimizing GPU for your device (~120s, one-time)...'
+            : `Generating image (${displayStep}/${steps})...${isFirstRun ? ' (optimizing GPU, one-time)' : ''}`;
+          this.updateState({ progress: { step: displayStep, totalSteps: steps }, status });
         },
         (preview) => {
           if (this.cancelRequested) return;
