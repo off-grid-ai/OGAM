@@ -5,14 +5,17 @@ set -euo pipefail
 # GitHub PRERELEASE tag. Same fundamental as scripts/release.sh (build locally, generate
 # grouped release notes, tag on GitHub) — but flavored as a beta:
 #
-#   * Beta version = <current package.json version>-beta.<N> (e.g. 0.0.102-beta.1). N
-#     auto-increments from the last matching prerelease tag. The MARKETING version is NOT
-#     bumped — a beta is a pre-release OF the current version. release.sh owns the real
-#     version bump once a beta is approved.
+#   * Beta version = <NEXT patch>-beta.<N> (e.g. current live 0.0.102 → 0.0.103-beta.1). A
+#     beta is a PRE-RELEASE OF THE NEXT version, never the current one: the current version
+#     is already LIVE on the stores, so its TestFlight train is CLOSED to new builds
+#     ("Invalid Pre-Release Train") and Play rejects a versionName <= the live one. N
+#     auto-increments from the last matching prerelease tag. release.sh bumps package.json
+#     to the real next version once a beta is approved.
 #   * Store build number (Android versionCode / iOS CURRENT_PROJECT_VERSION) = unix
 #     timestamp, so every TestFlight / Play upload is unique + increasing.
-#   * iOS MARKETING_VERSION stays plain numeric (App Store rejects "-beta"); the beta label
-#     lives in the git tag, the Android versionName, and the store release notes.
+#   * iOS MARKETING_VERSION is set to the NEXT plain numeric version (App Store rejects a
+#     "-beta" suffix, and this opens a fresh TestFlight train); the "-beta.N" label lives in
+#     the git tag, the Android versionName, and the store release notes.
 #   * Release notes are generated FROM THE COMMITS by `claude -p` (falls back to a grouped
 #     commit list), and pushed to TestFlight (What to Test) + Play internal + the GH release.
 #
@@ -46,14 +49,16 @@ command -v bundle >/dev/null || error "bundler not installed (bundle install)"
 [ "$DO_IOS" = 0 ]     || command -v xcodebuild >/dev/null || error "xcodebuild not installed"
 
 # ── compute the beta version ───────────────────────────────────────
-BASE_VERSION=$(node -p "require('./package.json').version")   # e.g. 0.0.102
+# A beta targets the NEXT version, not the live one (the live train is closed — see header).
+CURRENT_VERSION=$(node -p "require('./package.json').version")   # e.g. 0.0.102 (live)
+TARGET_VERSION=$(node -e "const [a,b,c]=require('./package.json').version.split('.').map(Number); console.log(a+'.'+b+'.'+(c+1))")   # 0.0.103
 git fetch --tags --quiet || true
-LAST_N=$(git tag -l "v${BASE_VERSION}-beta.*" | sed -E "s/.*-beta\.([0-9]+)$/\1/" | sort -n | tail -1)
+LAST_N=$(git tag -l "v${TARGET_VERSION}-beta.*" | sed -E "s/.*-beta\.([0-9]+)$/\1/" | sort -n | tail -1)
 N=$(( ${LAST_N:-0} + 1 ))
-BETA_VERSION="${BASE_VERSION}-beta.${N}"
+BETA_VERSION="${TARGET_VERSION}-beta.${N}"
 TAG="v${BETA_VERSION}"
 BUILD_NUMBER=$(date +%s)
-info "Beta build: ${BOLD}${BETA_VERSION}${NC} (build ${BUILD_NUMBER}) — pre-release of ${BASE_VERSION}"
+info "Beta build: ${BOLD}${BETA_VERSION}${NC} (build ${BUILD_NUMBER}) — pre-release of ${TARGET_VERSION} (current live: ${CURRENT_VERSION})"
 
 # ── apply the build-number / beta-versionName bump (working tree; committed only on success) ──
 if [ "$DO_ANDROID" = 1 ]; then
@@ -61,7 +66,9 @@ if [ "$DO_ANDROID" = 1 ]; then
   sed -i '' "s/versionName .*/versionName \"$BETA_VERSION\"/" android/app/build.gradle
 fi
 if [ "$DO_IOS" = 1 ]; then
-  # MARKETING_VERSION stays the plain numeric BASE (App Store rejects -beta); build number bumps.
+  # iOS marketing version = NEXT plain numeric version (App Store rejects "-beta", and this
+  # opens a fresh TestFlight train since the live version's train is closed); build no. bumps.
+  sed -i '' "s/MARKETING_VERSION = .*/MARKETING_VERSION = $TARGET_VERSION;/" ios/OffgridMobile.xcodeproj/project.pbxproj
   sed -i '' "s/CURRENT_PROJECT_VERSION = .*/CURRENT_PROJECT_VERSION = $BUILD_NUMBER;/" ios/OffgridMobile.xcodeproj/project.pbxproj
 fi
 cleanup() {

@@ -305,12 +305,25 @@ platform :ios do
     # require_env rejects empty strings. Default it to "" so an empty-password cert works.
     require_env("IOS_CERTIFICATE_P12", "KEYCHAIN_PASSWORD", "IOS_PROVISION_PROFILE")
 
+    # Create + UNLOCK a dedicated keychain first (this fastlane's import_certificate has no
+    # create_keychain option). Unlocking with a long timeout + adding it to the search list
+    # is what lets codesign use the private key non-interactively during EXPORT — without
+    # this the export fails with errSecInternalComponent. import_certificate then imports the
+    # p12 and sets the key partition list on this keychain.
+    keychain = "app-signing.keychain-db"
+    create_keychain(
+      name: keychain,
+      password: ENV["KEYCHAIN_PASSWORD"],
+      unlock: true,
+      timeout: 3600,
+      lock_when_sleeps: false,
+      add_to_search_list: true
+    )
     import_certificate(
       certificate_path: write_tmp_b64(ENV["IOS_CERTIFICATE_P12"], "certificate.p12"),
       certificate_password: ENV["IOS_CERTIFICATE_PASSWORD"] || "",
-      keychain_name: "app-signing.keychain-db",
-      keychain_password: ENV["KEYCHAIN_PASSWORD"],
-      create_keychain: true
+      keychain_name: keychain,
+      keychain_password: ENV["KEYCHAIN_PASSWORD"]
     )
 
     # Install the provisioning profile so xcodebuild can find it.
