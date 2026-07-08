@@ -229,6 +229,13 @@ export interface Message {
   toolName?: string;
   /** True when this assistant message was generated while interfaceMode === 'audio' */
   isAudioModeMessage?: boolean;
+  /** Audio-mode message payload (saved voice note / synthesized clip): the on-disk audio
+   *  file path and a precomputed waveform envelope. Read by the pro audio UI
+   *  (MessageAudioMode / AudioMessageBubble) and set by the TTS save path. Optional —
+   *  only audio-mode messages carry them. (audioDurationSeconds already declared above.) */
+  audioPath?: string;
+  waveformData?: number[];
+  audioDurationSeconds?: number;
 }
 
 export interface Conversation {
