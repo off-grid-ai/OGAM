@@ -51,6 +51,41 @@ end
 # Apple Developer Team ID (from ios/ExportOptions.plist). Override via APPLE_TEAM_ID.
 APPLE_TEAM_ID = ENV["APPLE_TEAM_ID"] || "84V6KCAC49"
 
+# Resolve App Store Connect auth for TestFlight/App Store uploads. Prefers the raw .p8 +
+# key id + issuer (the ASC_API_KEY_P8 / ASC_KEY_ID / ASC_ISSUER_ID that the repo already
+# stores as GitHub secrets and that the local .p8 in hand provides); falls back to a
+# pre-built key JSON at APP_STORE_CONNECT_API_KEY_PATH for local convenience. Returns a key
+# hash to pass as `api_key:`, or nil when only the JSON-path form is available.
+# The .p8 secret may be stored raw (PEM) or base64 — auto-detect so either works.
+def asc_api_key
+  if ENV["ASC_KEY_ID"] && ENV["ASC_ISSUER_ID"] && ENV["ASC_API_KEY_P8"] &&
+     !ENV["ASC_KEY_ID"].empty? && !ENV["ASC_ISSUER_ID"].empty? && !ENV["ASC_API_KEY_P8"].empty?
+    key_content = ENV["ASC_API_KEY_P8"]
+    is_b64 = !key_content.include?("BEGIN PRIVATE KEY")
+    return app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: key_content,
+      is_key_content_base64: is_b64,
+      in_house: false
+    )
+  end
+  nil
+end
+
+# Build the kwargs for an upload action: `api_key:` when the ASC_* secrets are present,
+# else `api_key_path:` (the pre-built JSON). One of the two must be set.
+def asc_auth_kwargs
+  key = asc_api_key
+  return { api_key: key } if key
+  path = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+  UI.user_error!(
+    "No App Store Connect auth. Set ASC_KEY_ID + ASC_ISSUER_ID + ASC_API_KEY_P8 (the repo's " \
+    "GitHub secrets / your local .p8), or APP_STORE_CONNECT_API_KEY_PATH (a key JSON)."
+  ) if path.nil? || path.empty?
+  { api_key_path: path }
+end
+
 # ── shared ─────────────────────────────────────────────────────────────────
 
 default_platform(:android)
@@ -165,11 +200,11 @@ platform :ios do
 
   desc "Build and upload to TestFlight"
   lane :beta do
-    require_env("APP_STORE_CONNECT_API_KEY_PATH")
+    auth = asc_auth_kwargs
     setup_signing
     build_ios_ipa
     upload_to_testflight(
-      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"],
+      **auth,
       ipa: "build/OffgridMobile.ipa",
       skip_waiting_for_build_processing: true
     )
@@ -178,11 +213,11 @@ platform :ios do
 
   desc "Build and upload to the App Store"
   lane :release do
-    require_env("APP_STORE_CONNECT_API_KEY_PATH")
+    auth = asc_auth_kwargs
     setup_signing
     build_ios_ipa
     upload_to_app_store(
-      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"],
+      **auth,
       ipa: "build/OffgridMobile.ipa",
       submit_for_review: false,   # human submits in App Store Connect
       precheck_include_in_app_purchases: false,
@@ -195,9 +230,9 @@ platform :ios do
 
   desc "Push App Store listing metadata (no build)"
   lane :metadata do
-    require_env("APP_STORE_CONNECT_API_KEY_PATH")
+    auth = asc_auth_kwargs
     upload_to_app_store(
-      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"],
+      **auth,
       skip_binary_upload: true,
       skip_screenshots: true,
       skip_metadata: false,

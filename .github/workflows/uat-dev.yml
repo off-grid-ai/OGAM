@@ -1,16 +1,17 @@
 # UAT / internal-tester builds on merge to `dev` (or manual dispatch).
 #
-# This is the OPTIONAL cloud path. The FAST path is local: `scripts/uat.sh` on your Mac
-# (minutes). GitHub's free macOS runners are small — an iOS build here can take 30-90 min,
-# so this workflow exists for convenience/hands-off runs, not speed. Android on ubuntu is
-# quick; iOS is the slow one. Both upload to the EXISTING app (prod bundle id) — TestFlight
-# and the Play "internal" track — via the same fastlane lanes scripts/uat.sh uses.
+# OPTIONAL cloud path. The FAST path is local: `scripts/uat.sh` on your Mac (minutes).
+# GitHub's free macOS runners are small — an iOS build here can take 30-90 min. Android on
+# ubuntu is quick. Both upload to the EXISTING app (prod bundle id) — Android → Play
+# "internal" track, iOS → TestFlight — via the same fastlane beta lanes scripts/uat.sh uses.
 #
-# Requires these repo secrets (the prod credentials, base64 where noted):
-#   APP_STORE_CONNECT_API_KEY (base64 .p8) + _KEY_ID + _ISSUER_ID   — TestFlight upload
-#   PLAY_STORE_JSON_KEY        (Play service-account JSON)           — Play internal upload
-#   IOS_CERTIFICATE_P12 (base64) + IOS_CERTIFICATE_PASSWORD + IOS_PROVISION_PROFILE (base64)
-#     + KEYCHAIN_PASSWORD                                            — iOS signing
+# Uses the credentials ALREADY stored as repo secrets (nothing new to add) — the same names
+# the working release workflows consume:
+#   Android: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS,
+#            ANDROID_KEY_PASSWORD, PLAY_STORE_JSON_KEY
+#   iOS:     ASC_API_KEY_P8, ASC_KEY_ID, ASC_ISSUER_ID (TestFlight upload)
+#            IOS_CERTIFICATE_P12, IOS_CERTIFICATE_PASSWORD, IOS_PROVISION_PROFILE,
+#            KEYCHAIN_PASSWORD (signing)
 name: UAT build (dev → internal testers)
 
 on:
@@ -30,31 +31,30 @@ concurrency:
 
 jobs:
   android:
-    # Skip iOS-only manual runs.
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.platform != 'ios' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+        with: { submodules: recursive }
       - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
+        with: { node-version: '20', cache: npm }
       - run: npm ci
       - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+        with: { distribution: temurin, java-version: '17' }
       - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3'
-          bundler-cache: true
-      - name: Write Play service-account key
-        run: printf '%s' '${{ secrets.PLAY_STORE_JSON_KEY }}' > "$RUNNER_TEMP/play.json"
-      - name: Build + upload to Play internal
+        with: { ruby-version: '3.3', bundler-cache: true }
+      - name: Decode signing secrets
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          echo "${{ secrets.PLAY_STORE_JSON_KEY }}" | base64 --decode > "$RUNNER_TEMP/play-key.json" \
+            || printf '%s' '${{ secrets.PLAY_STORE_JSON_KEY }}' > "$RUNNER_TEMP/play-key.json"
+      - name: Build signed AAB + upload to Play internal
         env:
-          PLAY_STORE_JSON_KEY_PATH: ${{ runner.temp }}/play.json
+          PLAY_STORE_JSON_KEY_PATH: ${{ runner.temp }}/play-key.json
+          OFFGRID_UPLOAD_STORE_FILE: ${{ runner.temp }}/release.keystore
+          OFFGRID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          OFFGRID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          OFFGRID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: bundle exec fastlane android beta
 
   ios:
@@ -63,25 +63,20 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+        with: { submodules: recursive }
       - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
+        with: { node-version: '20', cache: npm }
       - run: npm ci
       - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3'
-          bundler-cache: true
+        with: { ruby-version: '3.3', bundler-cache: true }
       - run: cd ios && pod install
-      - name: Write App Store Connect API key
-        run: printf '%s' '${{ secrets.APP_STORE_CONNECT_API_KEY }}' | base64 --decode > "$RUNNER_TEMP/asc.p8"
-      - name: Build + upload to TestFlight
+      - name: Build signed IPA + upload to TestFlight
         env:
-          APP_STORE_CONNECT_API_KEY_PATH: ${{ runner.temp }}/asc.p8
-          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          # ASC auth: raw .p8 + key id + issuer (asc_api_key in the Fastfile builds the key).
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          # Signing (imported into a temp keychain by the Fastfile's setup_signing).
           IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
           IOS_PROVISION_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE }}
