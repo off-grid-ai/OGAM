@@ -4,6 +4,7 @@
     "types": ["jest", "node"],
     "paths": {
       "@offgrid/core/*": ["./src/*"],
+      "@offgrid/pro/*": ["./pro/*"],
       "react-native-fs": ["./src/shims/react-native-fs.ts"]
     },
   },

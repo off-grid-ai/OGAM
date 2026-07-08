@@ -13,6 +13,7 @@ const proExists = fs.existsSync(path.resolve(__dirname, 'pro/package.json'));
 // Suites under THIS repo's __tests__ that import @offgrid/pro. Ignored ONLY when pro is
 // absent. (pro/'s OWN suite is always ignored here — it runs in the pro repo's CI.)
 const proDependentTestPaths = [
+  '/__tests__/pro/',
   '/__tests__/unit/audio/',
   '/__tests__/unit/engine/',
   '/__tests__/integration/audio/',
@@ -37,9 +38,11 @@ module.exports = {
   testPathIgnorePatterns: [
     '/node_modules/', '/android/', '/ios/', '/e2e/', 'App.test.tsx',
     // pro/ ships its own suite run in the pro repo's CI — never run those from here.
+    // Anchored to <rootDir>/pro/ so it ignores ONLY the submodule's own tests, NOT this
+    // repo's __tests__/pro/** pro-dependent suites (a bare '/pro/' matched both).
     // The pro-DEPENDENT suites under this repo's __tests__ DO run against the real pro
     // when it's checked out, and are ignored only when pro is genuinely absent.
-    '/pro/',
+    '<rootDir>/pro/',
     ...(proExists ? [] : proDependentTestPaths),
   ],
   moduleNameMapper: {
@@ -67,7 +70,7 @@ module.exports = {
     // Measure the pro submodule too when it's checked out (the pro-dependent suites here
     // exercise it). Skip barrels (index.ts) + type decls; index.tsx (real components) stays.
     ...(proExists
-      ? ['pro/**/*.{ts,tsx}', '!pro/**/index.ts', '!pro/**/*.d.ts', '!pro/**/__tests__/**']
+      ? ['pro/**/*.{ts,tsx}', '!pro/**/index.ts', '!pro/**/*.d.ts', '!pro/**/__tests__/**', '!pro/**/*.test.{ts,tsx}']
       : []),
   ],
   coverageReporters: ['text', 'text-summary', 'lcov', 'json-summary'],
@@ -80,15 +83,14 @@ module.exports = {
       functions: 80,
       lines: 80,
     },
-    // pro/ is MEASURED here (so it's visible in the core report + guarded against
-    // regression), but its AUTHORITATIVE coverage gate lives in the pro repo's own CI,
-    // which runs pro's full suite. From THIS repo only the pro-DEPENDENT suites run, so
-    // they exercise ~18% of pro — this floor ratchets that and stops it sliding, rather
-    // than pretending core can hit 80 on pro. New pro modules add their own per-file 100
-    // key (below), same as core. NOTE: this is a DIRECTORY key (not a glob) so jest
-    // aggregates all pro files into ONE group — a glob (`pro/**`) would apply per-file and
-    // fail on the many pro files no core suite imports.
-    './pro': { statements: 15, branches: 15, functions: 10, lines: 15 },
+    // pro/ is MEASURED here (visible in the core report + regression-guarded), carved out
+    // of the src `global` gate into its own group. The pro-dependent suites in this repo
+    // (incl. the __tests__/pro/** real-behavior tests) cover ~60% of pro; this floor
+    // ratchets that so it can't slide, and is raised as more pro tests land. New pro
+    // modules also add their own per-file 100 key. NOTE: this is a DIRECTORY key (not a
+    // glob) so jest aggregates all pro files into ONE group — a glob (`pro/**`) would apply
+    // per-file and fail on the many pro files no core suite imports.
+    './pro': { statements: 55, branches: 45, functions: 45, lines: 55 },
     // New standalone modules in this change set are held to 100% on every axis. Changed
     // legacy files have their NEW branches covered by the suites but aren't whole-file-100%.
     './src/utils/imageModelIntegrity.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
