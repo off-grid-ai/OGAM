@@ -23,6 +23,11 @@ target 'OffgridMobile' do
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
+  # onnxruntime-objc ships no module map; OffgridPro (a Swift pod) imports it for
+  # the auto-detect VAD, so it must be built with modular headers when pods are
+  # statically linked. Without this, pod install fails to integrate the Swift pod.
+  pod 'onnxruntime-objc', :modular_headers => true
+
   target 'OffgridMobileTests' do
     inherit! :search_paths
   end
