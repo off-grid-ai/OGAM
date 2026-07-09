@@ -7,9 +7,11 @@
 // non-ok response logs a warning and exits 0. The posting logic lives here once; each workflow
 // just sets env and runs it.
 //
-// Env:
-//   SLACK_BOT_TOKEN  (required — absent => no-op, exit 0)   bot needs chat:write + be in the channel
-//   SLACK_CHANNEL    (default C0AFARY80HJ)
+// Delivery (either works; webhook wins if both set):
+//   SLACK_WEBHOOK_URL  an Incoming Webhook (channel-bound — no token/scope/channel needed)
+//   SLACK_BOT_TOKEN    a Bot User OAuth token (xoxb-…, chat:write) + SLACK_CHANNEL
+//   With neither set => no-op, exit 0.
+// Content env:
 //   PRODUCT          e.g. "Off Grid AI Desktop"
 //   VERSION          e.g. "0.0.39-beta.63"
 //   CHANNEL_LABEL    "beta" | "stable" (optional, shown as a tag)
@@ -19,8 +21,9 @@ import { readFileSync } from 'node:fs';
 
 const warn = (m) => console.warn(`[slack-release] ${m}`);
 
+const webhook = process.env.SLACK_WEBHOOK_URL;
 const token = process.env.SLACK_BOT_TOKEN;
-if (!token) { warn('SLACK_BOT_TOKEN not set — skipping announcement (no-op).'); process.exit(0); }
+if (!webhook && !token) { warn('no SLACK_WEBHOOK_URL or SLACK_BOT_TOKEN set — skipping announcement (no-op).'); process.exit(0); }
 
 const channel = process.env.SLACK_CHANNEL || 'C0AFARY80HJ';
 const product = process.env.PRODUCT || 'Off Grid AI';
@@ -48,15 +51,28 @@ const blocks = [
 ];
 if (linkLine) { blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: linkLine }] }); }
 
+const fallbackText = `${product} ${version} released`;
 try {
-  const res = await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ channel, text: `${product} ${version} released`, blocks, unfurl_links: false }),
-  });
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok || !j.ok) { warn(`chat.postMessage not ok: HTTP ${res.status} ${j.error || ''}`); process.exit(0); }
-  console.log(`[slack-release] announced ${product} ${version} to ${channel} (ts=${j.ts})`);
+  if (webhook) {
+    // Incoming webhook: channel is fixed by the hook; POST the blocks, expect body "ok".
+    const res = await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ text: fallbackText, blocks, unfurl_links: false }),
+    });
+    const t = await res.text().catch(() => '');
+    if (!res.ok) { warn(`webhook not ok: HTTP ${res.status} ${t}`); process.exit(0); }
+    console.log(`[slack-release] announced ${product} ${version} via webhook`);
+  } else {
+    const res = await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ channel, text: fallbackText, blocks, unfurl_links: false }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.ok) { warn(`chat.postMessage not ok: HTTP ${res.status} ${j.error || ''}`); process.exit(0); }
+    console.log(`[slack-release] announced ${product} ${version} to ${channel} (ts=${j.ts})`);
+  }
 } catch (e) {
   warn(`post failed: ${e?.message || e}`);
 }
