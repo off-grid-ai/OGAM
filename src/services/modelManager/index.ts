@@ -25,6 +25,7 @@ import {
   getOrphanedTextFiles,
   getOrphanedImageDirs,
   mmProjLocalName,
+  performMmProjRepairDownload,
 } from './download';
 import { syncCompletedImageDownloads as syncCompletedImageDownloadsHelper } from './imageSync';
 import { restoreInProgressDownloads } from './restore';
@@ -315,46 +316,13 @@ class ModelManager {
   ): Promise<void> {
     if (!file.mmProjFile) throw new Error('Model file has no associated mmproj');
     await this.initialize();
-    const modelBase = extractBaseName(file.name);
-    const mmProjFileName = `${modelBase}-${file.mmProjFile.name}`;
-    const mmProjLocalPath = `${this.modelsDir}/${mmProjFileName}`;
-    const totalBytes = file.mmProjFile.size;
-    if (await RNFS.exists(mmProjLocalPath)) await RNFS.unlink(mmProjLocalPath).catch(() => {});
-
-    const info = await backgroundDownloadService.startDownload({
-      url: file.mmProjFile.downloadUrl,
-      fileName: file.mmProjFile.name,
-      modelId,
-      totalBytes,
+    // download.ts owns background-download orchestration: it starts the sidecar,
+    // drives the SAME download-store rows the normal download writes (so the existing
+    // determinate progress bar lights up during the ~900MB fetch — BUG OD2), moves the
+    // file, and tears the transient row down. We just persist the resolved path.
+    const resolvedPath = await performMmProjRepairDownload({
+      modelId, file, modelsDir: this.modelsDir, ...opts,
     });
-    opts?.onDownloadIdReady?.(info.downloadId);
-
-    let resolvedPath = mmProjLocalPath;
-    const mmProjFile = file.mmProjFile;
-    await new Promise<void>((resolve, reject) => {
-      const removeProgress = backgroundDownloadService.onProgress(info.downloadId, (event) => {
-        opts?.onProgress?.({
-          downloadId: info.downloadId,
-          modelId,
-          fileName: mmProjFile.name,
-          bytesDownloaded: event.bytesDownloaded,
-          totalBytes,
-          progress: totalBytes > 0 ? event.bytesDownloaded / totalBytes : 0,
-        });
-      });
-      const removeComplete = backgroundDownloadService.onComplete(info.downloadId, async (event) => {
-        removeProgress(); removeComplete(); removeError();
-        try {
-          resolvedPath = await backgroundDownloadService.moveCompletedDownload(info.downloadId, mmProjLocalPath);
-        } catch {
-          resolvedPath = event.localUri?.replace('file://', '') || mmProjLocalPath;
-        }
-        resolve();
-      });
-      const removeError = backgroundDownloadService.onError(info.downloadId, (err) => { removeProgress(); removeComplete(); removeError(); reject(new Error(err.reason || 'Download failed')); });
-      backgroundDownloadService.startProgressPolling();
-    });
-
     await this.saveModelWithMmproj(`${modelId}/${file.name}`, resolvedPath);
   }
 
