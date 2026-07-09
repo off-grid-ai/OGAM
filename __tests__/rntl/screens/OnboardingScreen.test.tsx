@@ -180,14 +180,32 @@ describe('OnboardingScreen', () => {
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it('updates currentIndex on scroll end', () => {
-    const { getByTestId } = render(
+  it('updates currentIndex on scroll end (onMomentumScrollEnd → setCurrentIndex)', async () => {
+    const { act: reactAct } = require('@testing-library/react-native');
+    const { Dimensions, FlatList } = require('react-native');
+    const width = Dimensions.get('window').width;
+
+    const { getByText, queryByText, UNSAFE_getAllByType } = render(
       <OnboardingScreen navigation={navigation} />,
     );
 
-    // Simulate scrolling to the last slide
-    const _flatList = getByTestId('onboarding-screen').children[0];
-    // The FlatList is inside the onboarding-screen container
+    // On the first slide the footer button reads "Next" (not the last slide).
+    expect(getByText('Next')).toBeTruthy();
+    expect(queryByText('Get Started')).toBeNull();
+
+    // Scroll to the last slide (index 1 of the 2-slide mock) via onMomentumScrollEnd.
+    const flatLists = UNSAFE_getAllByType(FlatList);
+    await reactAct(async () => {
+      flatLists[0].props.onMomentumScrollEnd({
+        nativeEvent: { contentOffset: { x: width } },
+      });
+    });
+
+    // currentIndex advanced → isLastSlide flips the button to "Get Started". This FAILS
+    // if onMomentumScrollEnd no longer updates currentIndex (the coverage the gutted
+    // test had dropped).
+    expect(getByText('Get Started')).toBeTruthy();
+    expect(queryByText('Next')).toBeNull();
   });
 
   it('shows onboarding-skip testID', () => {
