@@ -19,6 +19,26 @@ const CONTROL_TOKEN_PATTERNS: RegExp[] = [
 const CHANNEL_ANALYSIS_START = /<\|channel\|>analysis<\|message\|>/gi;
 const CHANNEL_FINAL_START = /<\|channel\|>final<\|message\|>/gi;
 
+/**
+ * THE single source of truth for the reasoning delimiter grammar (open/close per format).
+ * Both the complete-string parser (parseThinkingContent, below) and the incremental streaming
+ * parser (ThinkTagParser in providers/openAICompatibleStream) derive the reasoning-vs-answer
+ * split from THIS set — so they cannot disagree on which formats count as reasoning. The DR1
+ * bug was the streaming parser hardcoding only `<think>`, leaking Gemma/Qwen channel reasoning
+ * into the visible answer on remote providers. Ordered longest-open-first so a more specific
+ * opener wins when prefixes overlap (`<|channel|>analysis` before `<|channel>thought`).
+ * A contract test asserts parseThinkingContent splits every entry here correctly.
+ */
+export interface ReasoningDelimiter {
+  open: string;
+  close: string;
+}
+export const REASONING_DELIMITERS: ReasoningDelimiter[] = [
+  { open: '<|channel|>analysis<|message|>', close: '<|channel|>final<|message|>' },
+  { open: '<|channel>thought\n', close: '<channel|>' },
+  { open: '<think>', close: '</think>' },
+];
+
 // Gemma 4 thinking tags: <|channel>thought\n...<channel|>
 const GEMMA4_THINK_OPEN = /<\|channel>thought\n/gi;
 const GEMMA4_THINK_CLOSE = /<channel\|>/gi;

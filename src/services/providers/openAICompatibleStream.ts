@@ -4,6 +4,7 @@
  */
 import { createNDJSONStreamingRequest } from '../httpClient';
 import logger from '../../utils/logger';
+import { REASONING_DELIMITERS } from '../../utils/messageContent';
 import type { StreamCallbacks } from './types';
 import type {
   OpenAIChatMessage,
@@ -20,6 +21,9 @@ import type {
 export class ThinkTagParser {
   private inThinkBlock = false;
   private buffer = '';
+  // The close tag for the reasoning format currently open — set when an opener is matched,
+  // so a block opened as Gemma closes on `<channel|>` and one opened as <think> on </think>.
+  private activeClose = '';
 
   process(content: string, onToken: (t: string) => void, onReasoning: (t: string) => void): void {
     this.buffer += content;
@@ -27,13 +31,26 @@ export class ThinkTagParser {
   }
 
   /**
-   * Handle one iteration of the while loop when we are outside a think block.
+   * Handle one iteration of the while loop when we are outside a reasoning block.
+   * Scans for the EARLIEST opener across every reasoning format (the shared grammar), so
+   * remote-streamed Gemma/Qwen channel reasoning is recognised, not just <think> (DR1).
    * Returns true if the while loop should break (buffer needs more data).
    */
-  private handleOutsideThink(openTag: string, onToken: (t: string) => void): boolean {
-    const idx = this.buffer.indexOf(openTag);
-    if (idx === -1) {
-      const partial = this.partialSuffix(this.buffer, openTag);
+  private handleOutsideThink(onToken: (t: string) => void): boolean {
+    let bestIdx = -1;
+    let bestOpen = '';
+    let bestClose = '';
+    for (const d of REASONING_DELIMITERS) {
+      const idx = this.buffer.indexOf(d.open);
+      if (idx !== -1 && (bestIdx === -1 || idx < bestIdx)) {
+        bestIdx = idx;
+        bestOpen = d.open;
+        bestClose = d.close;
+      }
+    }
+    if (bestIdx === -1) {
+      // No complete opener. Hold back only a suffix that could still become one of the openers.
+      const partial = this.maxPartialSuffix(this.buffer, REASONING_DELIMITERS.map((d) => d.open));
       if (partial > 0) {
         onToken(this.buffer.slice(0, this.buffer.length - partial));
         this.buffer = this.buffer.slice(this.buffer.length - partial);
@@ -43,17 +60,20 @@ export class ThinkTagParser {
       this.buffer = '';
       return true;
     }
-    if (idx > 0) onToken(this.buffer.slice(0, idx));
-    this.buffer = this.buffer.slice(idx + openTag.length);
+    if (bestIdx > 0) onToken(this.buffer.slice(0, bestIdx));
+    this.buffer = this.buffer.slice(bestIdx + bestOpen.length);
     this.inThinkBlock = true;
+    this.activeClose = bestClose;
     return false;
   }
 
   /**
-   * Handle one iteration of the while loop when we are inside a think block.
+   * Handle one iteration of the while loop when we are inside a reasoning block, matching the
+   * close tag for the format that opened it (this.activeClose).
    * Returns true if the while loop should break (buffer needs more data).
    */
-  private handleInsideThink(closeTag: string, onReasoning: (t: string) => void): boolean {
+  private handleInsideThink(onReasoning: (t: string) => void): boolean {
+    const closeTag = this.activeClose;
     const idx = this.buffer.indexOf(closeTag);
     if (idx === -1) {
       const partial = this.partialSuffix(this.buffer, closeTag);
@@ -69,16 +89,15 @@ export class ThinkTagParser {
     if (idx > 0) onReasoning(this.buffer.slice(0, idx));
     this.buffer = this.buffer.slice(idx + closeTag.length);
     this.inThinkBlock = false;
+    this.activeClose = '';
     return false;
   }
 
   private flush(onToken: (t: string) => void, onReasoning: (t: string) => void): void {
-    const openTag = '<think>';
-    const closeTag = '</think>';
     while (this.buffer.length > 0) {
       const shouldBreak = this.inThinkBlock
-        ? this.handleInsideThink(closeTag, onReasoning)
-        : this.handleOutsideThink(openTag, onToken);
+        ? this.handleInsideThink(onReasoning)
+        : this.handleOutsideThink(onToken);
       if (shouldBreak) break;
     }
   }
@@ -89,6 +108,11 @@ export class ThinkTagParser {
       if (text.endsWith(tag.slice(0, len))) return len;
     }
     return 0;
+  }
+
+  /** Longest suffix of text that is a prefix of ANY tag — so a partial opener of any format is held back. */
+  private maxPartialSuffix(text: string, tags: string[]): number {
+    return tags.reduce((max, tag) => Math.max(max, this.partialSuffix(text, tag)), 0);
   }
 }
 
