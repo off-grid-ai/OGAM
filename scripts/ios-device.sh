@@ -57,12 +57,19 @@ BUNDLE_ID="ai.offgridmobile"
 
 cd "$(dirname "$0")/../ios"
 
+# Build against a GENERIC iOS destination, not `id=$DEVICE_ID`. Targeting the
+# live device makes xcodebuild block until the device is fully "available",
+# which fails ("developer disk image could not be mounted") whenever the phone
+# locks or the tunnel hiccups mid-build — even though nothing about compiling
+# needs the device. We compile for the arm64 device slice and let the install /
+# launch steps below reach the device via `devicectl`.
+#
 # Default: automatic signing (Xcode registers the connected device + mints a
 # profile with the required entitlements). Set IOS_PROFILE to force manual.
 if [ -n "${IOS_PROFILE:-}" ]; then
   echo "Building (manual signing, profile: $IOS_PROFILE) for device $DEVICE_ID ..."
   xcodebuild -workspace OffgridMobile.xcworkspace -scheme OffgridMobile -configuration Debug \
-    -destination "id=$DEVICE_ID" \
+    -destination "generic/platform=iOS" \
     -derivedDataPath build/device \
     CODE_SIGN_STYLE=Manual \
     DEVELOPMENT_TEAM="$TEAM" \
@@ -72,7 +79,7 @@ if [ -n "${IOS_PROFILE:-}" ]; then
 else
   echo "Building (automatic signing) for device $DEVICE_ID ..."
   xcodebuild -workspace OffgridMobile.xcworkspace -scheme OffgridMobile -configuration Debug \
-    -destination "id=$DEVICE_ID" \
+    -destination "generic/platform=iOS" \
     -derivedDataPath build/device \
     -allowProvisioningUpdates \
     CODE_SIGN_STYLE=Automatic \
