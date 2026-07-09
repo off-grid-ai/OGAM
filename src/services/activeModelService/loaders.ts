@@ -90,6 +90,27 @@ export interface TextLoadContext {
   onFinally: () => void;
 }
 
+/**
+ * Unload the previously-loaded text model from BOTH engines before loading a new one.
+ * Each engine loader used to unload only ITS OWN engine, so a CROSS-engine switch (LiteRT →
+ * llama GGUF or vice-versa) left the previous model resident — two heavy 'text' models
+ * co-resident → OOM (the residency planner treats same-key as a free replacement, assuming the
+ * old one actually got unloaded). Unloading an idle engine is a safe no-op, so calling both is
+ * correct and cheap. Errors are logged and swallowed — loadModel also releases the old context.
+ */
+async function unloadPreviousTextModel(): Promise<void> {
+  try {
+    await liteRTService.unloadModel();
+  } catch (e) {
+    logger.warn('[ActiveModel] LiteRT unload during model switch failed, continuing:', e);
+  }
+  try {
+    await llmService.unloadModel();
+  } catch (e) {
+    logger.warn('[ActiveModel] llama unload during model switch failed, continuing:', e);
+  }
+}
+
 async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
   if (ctx.model.engine !== 'litert') {
     throw new Error('doLoadLiteRTModel called with non-LiteRT model');
@@ -97,11 +118,7 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
   const liteRTModel = ctx.model;
   try {
     if (ctx.loadedTextModelId && ctx.loadedTextModelId !== ctx.modelId) {
-      try {
-        await liteRTService.unloadModel();
-      } catch (unloadErr) {
-        logger.warn('[LiteRT] Error unloading previous model, continuing:', unloadErr);
-      }
+      await unloadPreviousTextModel(); // unload BOTH engines (cross-engine switch → no co-residence)
       ctx.onError();
     }
 
@@ -183,12 +200,7 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
 
   try {
     if (ctx.loadedTextModelId && ctx.loadedTextModelId !== ctx.modelId) {
-      try {
-        await llmService.unloadModel();
-      } catch (unloadErr) {
-        // Log but continue — loadModel will also attempt to release the old context
-        logger.warn('[ActiveModel] Error unloading previous model, continuing:', unloadErr);
-      }
+      await unloadPreviousTextModel(); // unload BOTH engines (cross-engine switch → no co-residence)
       ctx.onError(); // resets loadedTextModelId to null before reassignment
     }
 

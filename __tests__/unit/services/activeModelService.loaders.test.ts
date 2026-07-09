@@ -172,6 +172,24 @@ describe('doLoadTextModel — llama.cpp path', () => {
     await doLoadTextModel(ctx);
     expect(mockedLlm.unloadModel).toHaveBeenCalled();
   });
+
+  it('CROSS-ENGINE: loading a llama GGUF unloads a previously-resident LiteRT model (co-residence OOM fix)', async () => {
+    // The OOM: a 5.2GB LiteRT model was resident, a llama GGUF loaded, but the llama loader only
+    // unloaded llmService — the LiteRT stayed resident → two heavy 'text' models → OOM. The
+    // switch must unload BOTH engines regardless of which held the previous model.
+    mockedLlm.loadModel.mockResolvedValue(undefined);
+    mockedLlm.unloadModel.mockResolvedValue(undefined);
+    mockedLiteRT.unloadModel.mockResolvedValue(undefined);
+    mockedRNFS.exists.mockResolvedValue(false);
+    mockedRNFS.readDir.mockResolvedValue([]);
+    const ctx = makeCtx({ loadedTextModelId: 'old-litert-model' }); // previous model was on the OTHER engine
+    mockedGetState.mockReturnValue(ctx.store);
+
+    await doLoadTextModel(ctx);
+
+    expect(mockedLiteRT.unloadModel).toHaveBeenCalled(); // the resident LiteRT is freed (was the bug)
+    expect(mockedLlm.unloadModel).toHaveBeenCalled();
+  });
 });
 
 describe('doLoadTextModel — LiteRT path', () => {
@@ -189,6 +207,24 @@ describe('doLoadTextModel — LiteRT path', () => {
     expect(mockedLiteRT.loadModel).toHaveBeenCalled();
     expect(mockedLlm.loadModel).not.toHaveBeenCalled();
     expect(ctx.onLoaded).toHaveBeenCalledWith('model-1');
+  });
+
+  it('CROSS-ENGINE: loading a LiteRT model unloads a previously-resident llama GGUF (co-residence OOM fix)', async () => {
+    mockedLiteRT.loadModel.mockResolvedValue(undefined);
+    mockedLiteRT.getActiveBackend.mockReturnValue('cpu');
+    mockedLiteRT.unloadModel.mockResolvedValue(undefined);
+    mockedLlm.unloadModel.mockResolvedValue(undefined);
+    const ctx = makeCtx({
+      model: { id: 'model-1', fileName: 'model.litertlm', filePath: '/models/model.litertlm', engine: 'litert' },
+      loadedTextModelId: 'old-llama-model', // previous model was on the OTHER engine
+    });
+    const { useDebugLogsStore } = require('../../../src/stores/debugLogsStore');
+    useDebugLogsStore.getState.mockReturnValue({ addLog: jest.fn() });
+
+    await doLoadTextModel(ctx);
+
+    expect(mockedLlm.unloadModel).toHaveBeenCalled(); // the resident llama GGUF is freed (was the bug)
+    expect(mockedLiteRT.unloadModel).toHaveBeenCalled();
   });
 
   it('calls onError and rethrows when liteRTService.loadModel fails', async () => {

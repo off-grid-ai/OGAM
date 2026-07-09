@@ -167,7 +167,7 @@ describe('doLoadTextModel — mmproj clear branch', () => {
 
     await doLoadTextModel(ctx);
 
-    expect(logger.warn).toHaveBeenCalledWith('[ActiveModel] Error unloading previous model, continuing:', expect.any(Error));
+    expect(logger.warn).toHaveBeenCalledWith('[ActiveModel] llama unload during model switch failed, continuing:', expect.any(Error));
     expect(ctx.onError).toHaveBeenCalled(); // reset before reassignment
     expect(ctx.onLoaded).toHaveBeenCalled();
   });
@@ -204,7 +204,7 @@ describe('doLoadLiteRTModel branches', () => {
 
     await doLoadTextModel(ctx);
 
-    expect(logger.warn).toHaveBeenCalledWith('[LiteRT] Error unloading previous model, continuing:', expect.any(Error));
+    expect(logger.warn).toHaveBeenCalledWith('[ActiveModel] LiteRT unload during model switch failed, continuing:', expect.any(Error));
     expect(ctx.onError).toHaveBeenCalled();
     expect(ToastAndroid.showWithGravity).toHaveBeenCalled();
   });

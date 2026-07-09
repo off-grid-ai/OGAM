@@ -190,10 +190,13 @@ const createThinkingStyles = (colors: ThemeColors) => ({
     overflow: 'hidden' as const,
     width: '100%' as const,
   },
-  /** Constrains the ThinkingBlock when rendered outside a message bubble (e.g. ToolCallWithThinking) */
+  /** Full-width ThinkingBlock when rendered outside a message bubble (e.g. ToolCallWithThinking).
+   *  Uses alignSelf:'stretch' (NOT a percentage width) because the parent systemInfoContainer
+   *  centers its children (alignItems:'center'); a percentage width + alignSelf there fails to
+   *  resolve on iOS and the COLLAPSED block falls back to content width — a tiny square with no
+   *  visible preview. Stretch fills the parent width in both collapsed and expanded states. */
   thinkingBlockWrapper: {
-    width: '88%' as const,
-    alignSelf: 'flex-start' as const,
+    alignSelf: 'stretch' as const,
   },
   thinkingHeader: {
     flexDirection: 'row' as const,
