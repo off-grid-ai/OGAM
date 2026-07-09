@@ -1553,11 +1553,16 @@ describe('ChatScreen', () => {
     });
 
     it('shows an alert when the measured loader refuses (overridable)', async () => {
-      setupTwoModelChat();
+      const { model2 } = setupTwoModelChat();
 
       // OD3: the MEASURED loader is the gate; it refuses with an overridable memory
       // error (the old predictive checkMemoryForModel pre-check is no longer consulted).
-      mockLoadModel.mockRejectedValueOnce(new OverridableMemoryError('Not enough memory to load this model'));
+      // Keyed on id + override so an on-mount auto-load can't consume a one-shot reject:
+      // only model-2's initial (non-override) load is refused.
+      mockLoadModel.mockImplementation((id: string, _t?: unknown, opts?: { override?: boolean }) =>
+        id === model2.id && !opts?.override
+          ? Promise.reject(new OverridableMemoryError('Not enough memory to load this model'))
+          : Promise.resolve());
 
       const { getByTestId, queryByTestId } = renderChatScreen();
       fireEvent.press(getByTestId('model-selector'));
@@ -1570,14 +1575,18 @@ describe('ChatScreen', () => {
       await waitFor(() => {
         expect(queryByTestId('custom-alert')).toBeTruthy();
       });
+      expect(getByTestId('alert-title').props.children).toBe('Insufficient Memory');
     });
 
     it('shows a Load Anyway option when the measured loader refuses', async () => {
-      setupTwoModelChat();
+      const { model2 } = setupTwoModelChat();
 
       // OD3 removed the separate "Low Memory Warning" (severity) path; the single
       // refusal affordance is the loader's OverridableMemoryError → "Load Anyway".
-      mockLoadModel.mockRejectedValueOnce(new OverridableMemoryError('Memory is low, loading may cause issues'));
+      mockLoadModel.mockImplementation((id: string, _t?: unknown, opts?: { override?: boolean }) =>
+        id === model2.id && !opts?.override
+          ? Promise.reject(new OverridableMemoryError('Memory is low, loading may cause issues'))
+          : Promise.resolve());
 
       const { getByTestId, queryByTestId } = renderChatScreen();
       fireEvent.press(getByTestId('model-selector'));
