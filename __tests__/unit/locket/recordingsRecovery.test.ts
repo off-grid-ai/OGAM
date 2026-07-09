@@ -26,7 +26,11 @@ jest.mock('react-native-fs', () => ({
 
 // `mock`-prefixed so babel allows referencing them inside the hoisted factory.
 const mockAddRecoveredBatch = jest.fn((recs: unknown[]) => (recs as unknown[]).length);
-const mockStore: { currentFilePath: string | null; isRunning: boolean; recordings: { path: string }[] } = {
+const mockStore: {
+  currentFilePath: string | null;
+  isRunning: boolean;
+  recordings: { path: string; startedAt?: number; sizeBytes?: number }[];
+} = {
   currentFilePath: null,
   isRunning: false,
   recordings: [],
@@ -103,11 +107,38 @@ describe('recoverOrphans - by-directory scoping (Gap 4 fix)', () => {
     expect(report.added).toBe(1);
   });
 
-  it('ignores non-.wav files in the directory', async () => {
+  it('ignores non-audio files in the directory', async () => {
     mockRNFS.readDir.mockResolvedValue([entry('notes.txt'), entry('cover.jpg')]);
     const report = await recoverOrphans({ force: true });
     expect(report.added).toBe(0);
     expect(report.skippedBadName).toBe(2);
+  });
+
+  it('never recovers a stray backup-*.m4a as a recording (backups live in Backups/)', async () => {
+    // Backups normally live in a sibling Backups/ dir, but a stray/old-layout
+    // one in Recordings/ must never be surfaced as a recording (it's a restore
+    // copy, not a recording).
+    mockRNFS.stat.mockResolvedValue({ size: 300_000, mtime: 1_000_000 });
+    mockRNFS.readDir.mockResolvedValue([entry('backup-rec-1720000000000.m4a')]);
+    const report = await recoverOrphans({ force: true });
+    expect(report.added).toBe(0);
+    expect(report.skippedBadName).toBe(1);
+  });
+
+  it('recovers a compressed .m4a recording (bug #3: was dropped after store wipe)', async () => {
+    // A recording the user compressed becomes rec-<epoch>.m4a with the .wav
+    // deleted. Recovery must find it or it vanishes from the archive on a wipe.
+    mockRNFS.stat.mockResolvedValue({ size: 300_000, mtime: 1_000_000 });
+    mockRNFS.readDir.mockResolvedValue([entry('rec-1720000000000.m4a')]);
+    const report = await recoverOrphans({ force: true });
+    expect(report.added).toBe(1);
+    // No WAV header on an .m4a, so it is never flagged "header damaged".
+    expect(report.staleHeaderDetected).toBe(0);
+    const queued = mockAddRecoveredBatch.mock.calls[0][0] as { name: string; durationMs: number }[];
+    expect(queued[0].name).toBe('Recovered');
+    // Duration is ESTIMATED from the AAC bitrate (24 kbps mono = 3000 B/s), not
+    // the WAV PCM-size math: 300000 / 3000 * 1000 = 100000 ms.
+    expect(queued[0].durationMs).toBe(100_000);
   });
 });
 
@@ -160,6 +191,36 @@ describe('recoverOrphans - safety guards preserved', () => {
   it('does not re-add a recording already in the store', async () => {
     mockStore.recordings = [{ path: '/ext/Music/Recordings/rec-known.wav' }];
     mockRNFS.readDir.mockResolvedValue([entry('rec-known.wav')]);
+    const report = await recoverOrphans({ force: true });
+    expect(report.added).toBe(0);
+    expect(report.alreadyInStore).toBe(1);
+  });
+
+  it('dedups by content (same size + close startedAt) despite a different path', async () => {
+    // Simulates iOS container rotation: the file on disk has a NEW path, but the
+    // store holds the same recording under an OLD path. Basename also differs.
+    // startedAt within 5s + identical size => same recording, must not duplicate.
+    mockStore.recordings = [
+      { path: '/OLD-UUID/Music/Recordings/rec-1720000000000.wav', startedAt: 1720000000000, sizeBytes: OK_SIZE },
+    ] as unknown as typeof mockStore.recordings;
+    // On-disk file: different basename/path, epoch 2s later, same size.
+    mockRNFS.readDir.mockResolvedValue([entry('rec-1720000002000.wav')]);
+    const report = await recoverOrphans({ force: true });
+    expect(report.added).toBe(0);
+    expect(report.alreadyInStore).toBe(1);
+  });
+
+  it('dedups a .wav orphan against a compressed .m4a store entry by epoch (killed mid-compression)', async () => {
+    // Compression converts rec-<epoch>.wav -> rec-<epoch>.m4a and deletes the wav.
+    // If the app is killed between the store swap and the wav delete, the store
+    // points at the .m4a (small) while the orphan .wav (big) is still on disk.
+    // Same epoch => same recording; recovery must skip it, not add a duplicate -
+    // even though extension AND size differ (so content dedup can't catch it).
+    mockStore.recordings = [
+      { path: '/ext/Music/Recordings/rec-1720000000000.m4a', startedAt: 1720000000000, sizeBytes: 20_000 },
+    ] as unknown as typeof mockStore.recordings;
+    mockRNFS.stat.mockResolvedValue({ size: OK_SIZE, mtime: 1_000_000 }); // big raw wav
+    mockRNFS.readDir.mockResolvedValue([entry('rec-1720000000000.wav')]);
     const report = await recoverOrphans({ force: true });
     expect(report.added).toBe(0);
     expect(report.alreadyInStore).toBe(1);

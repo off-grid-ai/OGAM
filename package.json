@@ -25,6 +25,7 @@
     "@gorhom/bottom-sheet": "^5.2.8",
     "@kesha-antonov/react-native-background-downloader": "^4.5.6",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@notifee/react-native": "^9.1.8",
     "@op-engineering/op-sqlite": "^15.2.5",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/blur": "^4.4.1",

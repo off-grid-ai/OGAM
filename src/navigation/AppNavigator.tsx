@@ -45,7 +45,6 @@ import {
   MainTabParamList,
 } from './types';
 import { useRegisteredScreens } from './screenRegistry';
-import { MemoryTabScreen } from '../screens/MemoryTabScreen';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -56,7 +55,7 @@ const TAB_ICON_MAP: Record<string, string> = {
   ChatsTab: 'message-circle',
   ProjectsTab: 'folder',
   ModelsTab: 'cpu',
-  MemoryTab: 'mic',
+  SettingsTab: 'settings',
 };
 
 const TabBarIcon: React.FC<{ name: string; focused: boolean }> = ({ name, focused }) => {
@@ -174,9 +173,9 @@ const MainTabs: React.FC = () => {
           })}
         />
         <Tab.Screen
-          name="MemoryTab"
-          component={MemoryTabScreen}
-          options={{ tabBarLabel: 'Recorder', tabBarButtonTestID: 'recorder-tab' }}
+          name="SettingsTab"
+          component={SettingsScreen}
+          options={{ tabBarLabel: 'Settings', tabBarButtonTestID: 'settings-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}

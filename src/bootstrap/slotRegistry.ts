@@ -78,4 +78,8 @@ export const SLOTS = {
    *  download/management). The tab itself only appears when this is
    *  registered, so free builds show just Text/Image. */
   modelsScreenVoiceTab: 'modelsScreen.voiceTab',
+  /** Compact recorder entry on the Home screen (Pro): a tap-to-record card that
+   *  starts/stops the recorder and links to the recordings list. Replaces the
+   *  old dedicated Recorder tab. Absent in free builds. */
+  homeRecorder: 'home.recorder',
 } as const;

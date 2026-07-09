@@ -23,7 +23,7 @@ export { documentService } from './documentService';
 export { AVAILABLE_TOOLS, getToolsAsOpenAISchema, buildToolSystemPromptHint, executeToolCall } from './tools';
 export type { ToolDefinition, ToolCall, ToolResult } from './tools';
 export { contextCompactionService } from './contextCompaction';
-export { transcriptSummarizer } from './transcriptSummarizer';
+export { transcriptSummarizer, NO_PREAMBLE_WITH_HEADINGS } from './transcriptSummarizer';
 export type { SummarizeProgress } from './transcriptSummarizer';
 export { setPendingChatAttachments, takePendingChatAttachments } from './chatAttachmentInbox';
 export { ragService, retrievalService } from './rag';
