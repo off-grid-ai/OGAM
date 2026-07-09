@@ -11,6 +11,7 @@ import { DownloadedModel, RemoteModel, ONNXImageModel } from '../../types';
 import logger from '../../utils/logger';
 import { ModelReadyOutcome, reasonFromLoadError } from './modelReadiness';
 import { isOverridableMemoryError } from '../../services/modelLoadErrors';
+import { loadModelWithOverride } from '../../services/loadModelWithOverride';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -93,39 +94,11 @@ export async function initiateModelLoad(
   if (!activeModel || !activeModelId) return { ok: false, reason: 'no-model-selected' };
 
   if (!alreadyLoading) {
-    const memoryCheck = await activeModelService.checkMemoryForModel(activeModelId, 'text');
-    if (!memoryCheck.canLoad) {
-      deps.setAlertState(showAlert(
-        'Insufficient Memory',
-        `Cannot load ${activeModel.name}. ${memoryCheck.message}\n\nTry unloading other models from the Home screen.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Load Anyway', style: 'destructive', onPress: () => {
-              deps.setAlertState(hideAlert());
-              deps.setIsModelLoading(true);
-              deps.setLoadingModel(activeModel);
-              deps.modelLoadStartTimeRef.current = Date.now();
-              // Resume the turn after the forced load so the user's message isn't
-              // silently dropped (they'd otherwise have to retype it). override:true
-              // makes the residency manager force the load (evict everything, skip the
-              // fit gate) — without it the load re-hit the hard budget gate and failed
-              // with "Failed to load model", defeating the whole "Load Anyway".
-              waitForRenderFrame()
-                .then(() => doLoadTextModel(deps, { override: true }))
-                // Resume the turn once the forced load resolves. Do NOT gate on
-                // llmService.isModelLoaded() here — after a big multimodal load it races
-                // false and silently drops the resume, so the user had to hit resend.
-                // doLoadTextModel throws on failure (→ .catch), so .then only runs on a
-                // successful load; the resumed turn re-verifies readiness itself.
-                .then(() => onLoadedResume?.())
-                .catch((e) => logger.error('[ModelLoad] Load Anyway resume failed:', e));
-            }
-          },
-        ],
-      ));
-      return { ok: false, reason: 'insufficient-memory', detail: memoryCheck.message, alerted: true };
-    }
+    // No predictive pre-check gate here: the MEASURED residency loader below
+    // (loadTextModel → makeRoomFor) is the single authoritative gate, and its
+    // OverridableMemoryError drives the identical "Load Anyway" affordance in the
+    // catch block. The old fileSize×1.5 pre-check blocked models the measured
+    // loader accepts, diverging from Home (bug OD3) — removed.
     deps.setIsModelLoading(true);
     deps.setLoadingModel(activeModel);
     deps.modelLoadStartTimeRef.current = Date.now();
@@ -249,57 +222,51 @@ export async function ensureModelLoadedFn(
 export async function proceedWithModelLoadFn(
   deps: ModelActionDeps,
   model: DownloadedModel,
-  opts?: { override?: boolean },
 ): Promise<void> {
   // Close the picker FIRST so the load runs behind the dismissed sheet and the
   // minimal in-chat loading card shows — not a load running with the sheet still open.
   deps.setShowModelSelector(false);
-  deps.setIsModelLoading(true);
-  deps.setLoadingModel(model);
-  deps.modelLoadStartTimeRef.current = Date.now();
-  await waitForRenderFrame();
-  try {
-    await activeModelService.loadTextModel(model.id, undefined, opts);
-    const multimodalSupport = llmService.getMultimodalSupport();
-    deps.setSupportsVision(model.engine === 'litert' ? !!model.liteRTVision : (multimodalSupport?.vision || false));
-    if (deps.modelLoadStartTimeRef.current && deps.settings.showGenerationDetails && deps.activeConversationId) {
-      const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
-      deps.addMessage(deps.activeConversationId, {
-        role: 'assistant',
-        content: `_Model loaded: ${model.name} (${loadTime}s)_`,
-        isSystemInfo: true,
-      });
-    }
-  } catch (error) {
-    // If the residency gate blocked it and the user hasn't already overridden,
-    // offer to force the load rather than dead-ending on "Failed to load model".
-    if (!opts?.override && isOverridableMemoryError(error)) {
-      deps.setIsModelLoading(false);
-      deps.setLoadingModel(null);
-      deps.modelLoadStartTimeRef.current = null;
-      deps.setAlertState(showAlert(
-        'Insufficient Memory',
-        `${(error as Error).message}\n\nWould you like to override these safeguards and load it anyway?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Load Anyway', style: 'destructive', onPress: () => {
-              deps.setAlertState(hideAlert());
-              proceedWithModelLoadFn(deps, model, { override: true });
-            },
-          },
-        ],
-      ));
-      return;
-    }
-    deps.setAlertState(showAlert('Error', `Failed to load model: ${(error as Error).message}`));
-  } finally {
-    deps.setIsModelLoading(false);
-    deps.setLoadingModel(null);
-    deps.modelLoadStartTimeRef.current = null;
-  }
+  // Route through the SINGLE shared override helper: the MEASURED residency loader
+  // is the authoritative gate, and its OverridableMemoryError drives the identical
+  // "Load Anyway" affordance every other surface (Home/ChatsList/ModelSelector) uses.
+  await loadModelWithOverride(
+    (opts) => activeModelService.loadTextModel(model.id, undefined, opts),
+    {
+      setAlertState: deps.setAlertState,
+      onAttemptStart: () => {
+        deps.setIsModelLoading(true);
+        deps.setLoadingModel(model);
+        deps.modelLoadStartTimeRef.current = Date.now();
+      },
+      onAttemptEnd: () => {
+        deps.setIsModelLoading(false);
+        deps.setLoadingModel(null);
+        deps.modelLoadStartTimeRef.current = null;
+      },
+      onSuccess: () => {
+        const multimodalSupport = llmService.getMultimodalSupport();
+        deps.setSupportsVision(model.engine === 'litert' ? !!model.liteRTVision : (multimodalSupport?.vision || false));
+        if (deps.modelLoadStartTimeRef.current && deps.settings.showGenerationDetails && deps.activeConversationId) {
+          const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
+          deps.addMessage(deps.activeConversationId, {
+            role: 'assistant',
+            content: `_Model loaded: ${model.name} (${loadTime}s)_`,
+            isSystemInfo: true,
+          });
+        }
+      },
+    },
+  );
 }
 
+/**
+ * Selecting a text model in chat is the SAME decision Home/ChatsList/ModelSelector
+ * make: load it through the MEASURED residency loader, offering the shared
+ * "Load Anyway" override if that loader refuses. There is NO separate predictive
+ * pre-check gate here — the residency loader (makeRoomFor, evict-then-measure) is
+ * authoritative, so a model the old fileSize×1.5 estimate would have blocked in
+ * chat now loads exactly as it does from Home (bug OD3).
+ */
 export async function handleModelSelectFn(
   deps: ModelActionDeps,
   model: DownloadedModel,
@@ -308,40 +275,7 @@ export async function handleModelSelectFn(
     deps.setShowModelSelector(false);
     return;
   }
-  const memoryCheck = await activeModelService.checkMemoryForModel(model.id, 'text');
-  if (!memoryCheck.canLoad) {
-    deps.setAlertState(showAlert('Insufficient Memory', memoryCheck.message, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Load Anyway', style: 'destructive', onPress: () => {
-          deps.setAlertState(hideAlert());
-          // override:true so the load also bypasses the residency hard gate, not just
-          // the conservative pre-check — otherwise "Load Anyway" fails at the budget.
-          proceedWithModelLoadFn(deps, model, { override: true });
-        }
-      },
-    ]));
-    return;
-  }
-  if (memoryCheck.severity === 'warning') {
-    deps.setAlertState(showAlert(
-      'Low Memory Warning',
-      memoryCheck.message,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Load Anyway',
-          style: 'default',
-          onPress: () => {
-            deps.setAlertState(hideAlert());
-            proceedWithModelLoadFn(deps, model);
-          },
-        },
-      ],
-    ));
-    return;
-  }
-  proceedWithModelLoadFn(deps, model);
+  await proceedWithModelLoadFn(deps, model);
 }
 
 export async function handleUnloadModelFn(deps: ModelActionDeps): Promise<void> {
