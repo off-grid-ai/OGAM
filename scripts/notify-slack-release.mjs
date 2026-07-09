@@ -35,15 +35,20 @@ const server = process.env.GITHUB_SERVER_URL || 'https://github.com';
 const repo = process.env.GITHUB_REPOSITORY || '';
 const releaseUrl = process.env.RELEASE_URL || (repo && version ? `${server}/${repo}/releases/tag/v${version}` : '');
 
+// Slack mrkdwn reserves & < > — a raw commit subject containing them (release notes are raw
+// commit subjects) would misrender or be read as a <link|mention>. Escape the note body only;
+// NOT the intentional <url|label> link line below.
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 let notes = '';
 try { notes = readFileSync(notesFile, 'utf8').trim(); } catch { /* notes optional */ }
 // Slack section text caps at 3000 chars; keep well under and never dump a wall.
 if (notes.length > 2600) { notes = `${notes.slice(0, 2600)}\n…`; }
 
 const tag = label ? `  \`${label}\`` : '';
-const header = `:package:  *${product}*  \`${version || 'release'}\`${tag}`;
+const header = `:package:  *${esc(product)}*  \`${version || 'release'}\`${tag}`;
 const linkLine = releaseUrl ? `<${releaseUrl}|Download / release page>` : '';
-const body = notes || '_No release notes generated for this build._';
+const body = notes ? esc(notes) : '_No release notes generated for this build._';
 
 const blocks = [
   { type: 'section', text: { type: 'mrkdwn', text: header } },
@@ -59,6 +64,7 @@ try {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify({ text: fallbackText, blocks, unfurl_links: false }),
+      signal: AbortSignal.timeout(10000),
     });
     const t = await res.text().catch(() => '');
     if (!res.ok) { warn(`webhook not ok: HTTP ${res.status} ${t}`); process.exit(0); }
@@ -68,6 +74,7 @@ try {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ channel, text: fallbackText, blocks, unfurl_links: false }),
+      signal: AbortSignal.timeout(10000),
     });
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.ok) { warn(`chat.postMessage not ok: HTTP ${res.status} ${j.error || ''}`); process.exit(0); }
