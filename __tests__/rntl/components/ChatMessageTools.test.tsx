@@ -17,6 +17,7 @@ import type { Message } from '../../../src/types';
 
 // Mock stripControlTokens utility
 jest.mock('../../../src/utils/messageContent', () => ({
+  ...jest.requireActual('../../../src/utils/messageContent'),
   stripControlTokens: (content: string) => content,
 }));
 

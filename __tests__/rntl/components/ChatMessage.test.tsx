@@ -28,6 +28,7 @@ import {
 
 // Mock the stripControlTokens utility
 jest.mock('../../../src/utils/messageContent', () => ({
+  ...jest.requireActual('../../../src/utils/messageContent'),
   stripControlTokens: (content: string) => content,
 }));
 

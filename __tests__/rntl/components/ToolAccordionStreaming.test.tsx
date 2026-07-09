@@ -27,6 +27,7 @@ import { createToolResultMessage } from '../../utils/factories';
 import { useAccordionStore, useAccordionExpanded } from '../../../src/stores/accordionStore';
 
 jest.mock('../../../src/utils/messageContent', () => ({
+  ...jest.requireActual('../../../src/utils/messageContent'),
   stripControlTokens: (content: string) => content,
 }));
 
