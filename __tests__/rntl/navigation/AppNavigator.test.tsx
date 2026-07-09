@@ -179,14 +179,14 @@ describe('AppNavigator', () => {
   });
 
   describe('Tab bar rendering', () => {
-    it('renders all five tab labels', () => {
+    it('renders all five tab labels (Recorder replaced by Settings)', () => {
       const { getAllByText } = renderAppNavigator();
 
       expect(getAllByText('Home').length).toBeGreaterThanOrEqual(1);
       expect(getAllByText('Chats').length).toBeGreaterThanOrEqual(1);
       expect(getAllByText('Projects').length).toBeGreaterThanOrEqual(1);
       expect(getAllByText('Models').length).toBeGreaterThanOrEqual(1);
-      expect(getAllByText('Recorder').length).toBeGreaterThanOrEqual(1);
+      expect(getAllByText('Settings').length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders all tab buttons with testIDs', () => {
@@ -196,7 +196,12 @@ describe('AppNavigator', () => {
       expect(getByTestId('chats-tab')).toBeTruthy();
       expect(getByTestId('projects-tab')).toBeTruthy();
       expect(getByTestId('models-tab')).toBeTruthy();
-      expect(getByTestId('recorder-tab')).toBeTruthy();
+      expect(getByTestId('settings-tab')).toBeTruthy();
+    });
+
+    it('no longer renders a Recorder tab (moved to a Home card)', () => {
+      const { queryByTestId } = renderAppNavigator();
+      expect(queryByTestId('recorder-tab')).toBeNull();
     });
   });
 
@@ -279,14 +284,12 @@ describe('AppNavigator', () => {
       expect(getAllByText('Chats').length).toBeGreaterThanOrEqual(1);
       expect(getAllByText('Projects').length).toBeGreaterThanOrEqual(1);
       expect(getAllByText('Models').length).toBeGreaterThanOrEqual(1);
-      expect(getAllByText('Recorder').length).toBeGreaterThanOrEqual(1);
 
       // All tab buttons should be pressable
       expect(getByTestId('home-tab')).toBeTruthy();
       expect(getByTestId('chats-tab')).toBeTruthy();
       expect(getByTestId('projects-tab')).toBeTruthy();
       expect(getByTestId('models-tab')).toBeTruthy();
-      expect(getByTestId('recorder-tab')).toBeTruthy();
     });
   });
 });
