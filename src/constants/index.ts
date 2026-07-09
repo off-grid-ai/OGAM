@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 export { MODEL_RECOMMENDATIONS, RECOMMENDED_MODELS, TRENDING_FAMILIES, TRENDING_MODEL_IDS, MODEL_ORGS, QUANTIZATION_INFO } from './models';
 
 // External URLs
@@ -138,7 +140,10 @@ export const ONBOARDING_SLIDES = [
 
 // Fonts
 export const FONTS = {
-  mono: 'Menlo',
+  // iOS ships Menlo; Android has no Menlo (it would silently fall back to the
+  // sans-serif default), so use Android's built-in monospace so both platforms
+  // render a similar fixed-width face.
+  mono: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }) as string,
 };
 
 // Typography Scale - Centralized font sizes and styles

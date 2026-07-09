@@ -80,6 +80,7 @@ PODS:
     - fmt
     - glog
     - hermes-engine
+    - onnxruntime-objc
     - RCT-Folly
     - RCT-Folly/Fabric
     - RCTRequired
@@ -101,6 +102,11 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
+  - onnxruntime-c (1.27.0)
+  - onnxruntime-objc (1.27.0):
+    - onnxruntime-objc/Core (= 1.27.0)
+  - onnxruntime-objc/Core (1.27.0):
+    - onnxruntime-c (= 1.27.0)
   - op-sqlite (15.2.5):
     - boost
     - DoubleConversion
@@ -3604,6 +3610,7 @@ DEPENDENCIES:
   - llama-rn (from `../node_modules/llama.rn`)
   - lottie-react-native (from `../node_modules/lottie-react-native`)
   - OffgridPro (from `../pro/ios`)
+  - onnxruntime-objc
   - "op-sqlite (from `../node_modules/@op-engineering/op-sqlite`)"
   - RCT-Folly (from `../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
@@ -3713,6 +3720,8 @@ SPEC REPOS:
     - lottie-ios
     - MMKV
     - MMKVCore
+    - onnxruntime-c
+    - onnxruntime-objc
     - opencv-rne
     - PurchasesHybridCommon
     - PurchasesHybridCommonUI
@@ -3962,7 +3971,9 @@ SPEC CHECKSUMS:
   lottie-react-native: 691b8363e8c591fb78a78254ff2517258891456b
   MMKV: 86859fdfa2b0b21db1fd6e48788474a6416a2c77
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
-  OffgridPro: bd17e59d526e0cd255c29d92dddbfa3a5796b142
+  OffgridPro: c60bd1f326de83302835ae75857777b92f949fe8
+  onnxruntime-c: 412ab51682e622e3d77ddc9176aa92517d171820
+  onnxruntime-objc: f88cca350e7603f81c31b5823f3ddfaa67da9f84
   op-sqlite: bafff369cecaee4fe65c89eec47deaba26f2db95
   opencv-rne: 2305807573b6e29c8c87e3416ab096d09047a7a0
   PurchasesHybridCommon: eed735a411c1aee8c05d62933fa7c4a40ede4009
@@ -4072,6 +4083,6 @@ SPEC CHECKSUMS:
   whisper-rn: 7566faf9b7d78e39ab9fc634cb90fdee81177793
   Yoga: 5456bb010373068fc92221140921b09d126b116e
 
-PODFILE CHECKSUM: f66f810a788ead15881075527443239e49b50db1
+PODFILE CHECKSUM: 7e3cc52eb1420b70214416b0f5e4aca31f6ba1c7
 
 COCOAPODS: 1.16.2
