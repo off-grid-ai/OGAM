@@ -16,6 +16,7 @@ jest.mock('../../../src/services/backgroundDownloadService', () => ({
     getActiveDownloads: jest.fn(() => Promise.resolve([])),
     onProgress: jest.fn(() => jest.fn()),
     excludeFromBackup: jest.fn(() => Promise.resolve(true)),
+    adoptActive: jest.fn(),
   },
 }));
 
@@ -106,6 +107,17 @@ describe('restoreInProgressDownloads', () => {
     mockService.getActiveDownloads.mockResolvedValue([makeActiveDownload({ status }) as any]);
     await callRestore();
     expect(bgContext.size).toBe(expectedSize);
+  });
+
+  it('adopts ONLY in-flight downloads against the cap — a completed one is not adopted (slot-leak fix)', async () => {
+    mockService.getActiveDownloads.mockResolvedValue([
+      makeActiveDownload({ status: 'running', downloadId: 'run-1', fileName: 'a.gguf', modelId: 'm/a' }) as any,
+      makeActiveDownload({ status: 'completed', downloadId: 'done-1', fileName: 'b.gguf', modelId: 'm/b' }) as any,
+    ]);
+    await callRestore();
+    // Both restore into context, but a completed download never fires another terminal
+    // event, so adopting it would leak a concurrency slot forever — only 'running' is adopted.
+    expect(mockService.adoptActive).toHaveBeenCalledWith(['run-1']);
   });
 
   // ========================================================================

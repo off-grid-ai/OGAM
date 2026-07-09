@@ -53,6 +53,9 @@ jest.mock('../../../src/components', () => ({
       </TouchableOpacity>
     );
   },
+  // Use the REAL shared row so the test exercises the actual card the app renders
+  // (theme + icons are already mocked below), not a stand-in that could mask drift.
+  ModelRow: jest.requireActual('../../../src/components/ModelRow').ModelRow,
 }));
 
 jest.mock('../../../src/theme', () => ({

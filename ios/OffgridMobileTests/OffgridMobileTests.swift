@@ -684,11 +684,12 @@ final class DownloadManagerModuleTests: XCTestCase {
       modelType: "text",
       combinedTotalBytes: 1_000_000,
       metadataJson: nil,
+      task: nil,
       taskIdentifier: nil,
       localUri: TestPaths.tmpTestModelGGUF,
+      fileTasks: [:],
       multiFileDestDir: nil,
-      isMultiFile: false,
-      fileTasks: []
+      isMultiFile: false
     )
     module.queue.sync(flags: .barrier) {
       self.module.downloads["100"] = info
@@ -735,11 +736,12 @@ final class DownloadManagerModuleTests: XCTestCase {
       modelType: "text",
       combinedTotalBytes: 256,
       metadataJson: nil,
+      task: nil,
       taskIdentifier: nil,
       localUri: sourceFile,
+      fileTasks: [:],
       multiFileDestDir: nil,
-      isMultiFile: false,
-      fileTasks: []
+      isMultiFile: false
     )
     module.queue.sync(flags: .barrier) {
       self.module.downloads["200"] = info
@@ -791,11 +793,12 @@ final class DownloadManagerModuleTests: XCTestCase {
       modelType: "text",
       combinedTotalBytes: 0,
       metadataJson: nil,
+      task: nil,
       taskIdentifier: nil,
       localUri: nil,
+      fileTasks: [:],
       multiFileDestDir: nil,
-      isMultiFile: false,
-      fileTasks: []
+      isMultiFile: false
     )
     module.queue.sync(flags: .barrier) {
       self.module.downloads["300"] = info

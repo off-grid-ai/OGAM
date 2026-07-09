@@ -38,6 +38,8 @@ jest.mock('../../../src/services/backgroundDownloadService', () => ({
     isAvailable: jest.fn(() => true),
     startDownload: jest.fn(),
     cancelDownload: jest.fn(() => Promise.resolve()),
+    purgeNativeRecord: jest.fn(() => Promise.resolve()),
+    adoptActive: jest.fn(),
     getActiveDownloads: jest.fn(() => Promise.resolve([])),
     moveCompletedDownload: jest.fn(),
     startProgressPolling: jest.fn(),
@@ -65,18 +67,28 @@ function visionFile(mainSize = 4_000_000_000, mmProjSize = 500_000_000) {
   });
 }
 
-// Helper: stub startDownload to return sequential download IDs
+// Helper: stub startDownload to return download IDs BY ROLE, not call order. The
+// sidecar (fileName contains 'mmproj') always gets ids[1]; the main file gets ids[0].
+// Keeping the id tied to the role — not the start sequence — makes these tests agnostic
+// to whether the main or the sidecar is started first (the sidecar-first ordering that
+// closes the finalize-hang window must not require rewriting every assertion).
 function stubStartDownload(ids: string[]) {
   let idx = 0;
-  mockService.startDownload.mockImplementation(async (params: any) => ({
-    downloadId: ids[idx++] ?? ids[ids.length - 1],
-    fileName: params.fileName,
-    modelId: params.modelId,
-    status: 'pending',
-    bytesDownloaded: 0,
-    totalBytes: params.totalBytes || 0,
-    startedAt: Date.now(),
-  }));
+  mockService.startDownload.mockImplementation(async (params: any) => {
+    const isMmProj = /mmproj/i.test(params.fileName ?? '');
+    const downloadId = ids.length > 1
+      ? (isMmProj ? ids[1] : ids[0])
+      : (ids[idx++] ?? ids[ids.length - 1]);
+    return {
+      downloadId,
+      fileName: params.fileName,
+      modelId: params.modelId,
+      status: 'pending',
+      bytesDownloaded: 0,
+      totalBytes: params.totalBytes || 0,
+      startedAt: Date.now(),
+    };
+  });
 }
 
 // Helper: capture onComplete callbacks keyed by downloadId
@@ -147,6 +159,23 @@ describe('Parallel mmproj download', () => {
       expect(mockService.startDownload).toHaveBeenCalledWith(
         expect.objectContaining({ fileName: 'vision-mmproj.gguf' }),
       );
+    });
+
+    it('starts the mmproj sidecar BEFORE the main (so the main is last-started → watcher attaches before it can complete)', async () => {
+      // Regression: the main used to be started first, then this function blocked
+      // awaiting the sidecar's queued start; during that wait the main could complete
+      // with no listener yet (lost event → finalize hang at 100%). Sidecar-first means
+      // nothing long is awaited after the main starts.
+      stubStartDownload(['42', '43']);
+      await performBackgroundDownload({
+        modelId: 'test/model',
+        file: visionFile(),
+        modelsDir: MODELS_DIR,
+        backgroundDownloadContext: bgContext,
+        backgroundDownloadMetadataCallback: metadataCallback,
+      });
+      const order = mockService.startDownload.mock.calls.map((c: any[]) => c[0].fileName);
+      expect(order).toEqual(['vision-mmproj.gguf', 'vision.gguf']);
     });
 
     it('persists mmProjDownloadId in metadata callback', async () => {
@@ -526,6 +555,79 @@ describe('Parallel mmproj download', () => {
 
       await completeCbs['42']?.({ downloadId: '42', fileName: 'model.gguf' });
       expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+
+    it('finalizes idempotently when the native move rejects but the file is already on disk (no re-finalize loop)', async () => {
+      // Device case: a record reports completed across relaunch but its localUri was
+      // cleared (moved in a prior session), so moveCompletedDownload rejects NOT_COMPLETED.
+      // The file is already at localPath — finalize from it, and purge the stale native
+      // record so restore can't re-adopt + re-fail it every foreground.
+      stubStartDownload(['42']);
+      const completeCbs = captureCompleteCallbacks();
+      await performBackgroundDownload({
+        modelId: 'test/model',
+        file: createModelFile({ name: 'model.gguf', size: 4_000_000_000 }),
+        modelsDir: MODELS_DIR,
+        backgroundDownloadContext: bgContext,
+        backgroundDownloadMetadataCallback: metadataCallback,
+      });
+
+      const onComplete = jest.fn();
+      const onError = jest.fn();
+      mockService.moveCompletedDownload.mockRejectedValue(new Error('Download 42 not completed yet'));
+      mockedRNFS.exists.mockResolvedValue(true); // the final file IS on disk
+      mockService.purgeNativeRecord.mockResolvedValue(undefined);
+
+      watchBackgroundDownload({
+        downloadId: '42',
+        modelsDir: MODELS_DIR,
+        backgroundDownloadContext: bgContext,
+        backgroundDownloadMetadataCallback: metadataCallback,
+        onComplete,
+        onError,
+      });
+
+      await completeCbs['42']?.({ downloadId: '42', fileName: 'model.gguf' });
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(onComplete).toHaveBeenCalledTimes(1); // finalized from disk, not an error
+      expect(onError).not.toHaveBeenCalled();
+      // Purged via the listener-free path (NOT the finalize-path cancelDownload, which
+      // would synthesize a spurious DownloadError and flash the just-finalized model as
+      // failed — see F2). cancelDownload may still be called by the re-adopt path above.
+      expect(mockService.purgeNativeRecord).toHaveBeenCalledWith('42');
+    });
+
+    it('fails (not loops) when the native move rejects AND the file is genuinely absent', async () => {
+      stubStartDownload(['42']);
+      const completeCbs = captureCompleteCallbacks();
+      await performBackgroundDownload({
+        modelId: 'test/model',
+        file: createModelFile({ name: 'model.gguf', size: 4_000_000_000 }),
+        modelsDir: MODELS_DIR,
+        backgroundDownloadContext: bgContext,
+        backgroundDownloadMetadataCallback: metadataCallback,
+      });
+
+      const onComplete = jest.fn();
+      const onError = jest.fn();
+      mockService.moveCompletedDownload.mockRejectedValue(new Error('Download 42 not completed yet'));
+      mockedRNFS.exists.mockResolvedValue(false); // file NOT on disk → genuine failure
+
+      watchBackgroundDownload({
+        downloadId: '42',
+        modelsDir: MODELS_DIR,
+        backgroundDownloadContext: bgContext,
+        backgroundDownloadMetadataCallback: metadataCallback,
+        onComplete,
+        onError,
+      });
+
+      await completeCbs['42']?.({ downloadId: '42', fileName: 'model.gguf' });
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(onError).toHaveBeenCalled();
     });
 
     it('moves mmproj file on mmproj completion', async () => {
@@ -1074,6 +1176,48 @@ describe('Parallel mmproj download', () => {
         mmProjPath: undefined,
         mmProjFileName: 'mmproj.gguf',
       }));
+    });
+
+    it('finalizes a non-vision main that completed before listener registration (main catch-up, no live event)', async () => {
+      // Under the 3-concurrent cap, the main GGUF can finish in native before
+      // watchBackgroundDownload subscribes (listener setup delayed behind an
+      // awaited-queued start). The DownloadComplete event fires once with no
+      // subscriber and is lost. The reconcile must query native and drive
+      // handleMainComplete itself — WITHOUT any manually-fired complete event.
+      stubStartDownload(['42']);
+      captureCompleteCallbacks();
+      const onComplete = jest.fn();
+
+      // exists=false during the start so it actually queues a download (ctx under '42'),
+      // not the already-on-disk path.
+      await performBackgroundDownload({
+        modelId: 'test/model',
+        file: createModelFile({ name: 'model.gguf', size: 4_000_000_000 }),
+        modelsDir: MODELS_DIR,
+        backgroundDownloadContext: bgContext,
+        backgroundDownloadMetadataCallback: metadataCallback,
+      });
+
+      // Native already reports the main as completed before we subscribe.
+      mockService.getActiveDownloads.mockResolvedValue([
+        { downloadId: '42', status: 'completed' } as any,
+      ]);
+      mockService.moveCompletedDownload.mockResolvedValue(`${MODELS_DIR}/model.gguf`);
+      mockedRNFS.exists.mockResolvedValue(true);
+
+      watchBackgroundDownload({
+        downloadId: '42',
+        modelsDir: MODELS_DIR,
+        backgroundDownloadContext: bgContext,
+        backgroundDownloadMetadataCallback: metadataCallback,
+        onComplete,
+      });
+
+      // No completeCbs['42'] call — the reconcile alone must finalize.
+      // The reconcile is fire-and-forget; drain the microtask/macrotask chain.
+      for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
+
+      expect(onComplete).toHaveBeenCalledTimes(1);
     });
   });
 });

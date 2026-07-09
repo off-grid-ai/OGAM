@@ -50,9 +50,11 @@ const mockAppState = {
 };
 
 jest.mock('../../../src/stores', () => ({
-  useAppStore: jest.fn((selector?: any) => {
-    return selector ? selector(mockAppState) : mockAppState;
-  }),
+  useAppStore: Object.assign(
+    jest.fn((selector?: any) => (selector ? selector(mockAppState) : mockAppState)),
+    // startModelDownload (the shared download action) reads useAppStore.getState().
+    { getState: () => mockAppState },
+  ),
 }));
 
 const mockRemoteServerState = {
@@ -97,6 +99,12 @@ jest.mock('../../../src/services', () => ({
     testConnection: jest.fn().mockResolvedValue({ success: false }),
     setActiveRemoteTextModel: jest.fn().mockResolvedValue(undefined),
   },
+}));
+
+// The shared startModelDownload action imports modelManager from the direct module,
+// not the barrel — point it at the same mock so the screen's delegation is exercised.
+jest.mock('../../../src/services/modelManager', () => ({
+  modelManager: jest.requireMock('../../../src/services').modelManager,
 }));
 
 jest.mock('../../../src/services/networkDiscovery', () => ({
@@ -216,6 +224,7 @@ jest.mock('../../../src/screens/ModelDownloadHelpers', () => {
 });
 
 import { Platform } from 'react-native';
+import { useDownloadStore } from '../../../src/stores/downloadStore';
 import { ModelDownloadScreen } from '../../../src/screens/ModelDownloadScreen';
 import { LITERT_PARENT_ID, CURATED_LITERT_ENTRIES } from '../../../src/services/curatedLiteRTRegistry';
 
@@ -243,6 +252,9 @@ async function flushPromises(count = 10) {
 describe('ModelDownloadScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // startModelDownload publishes a real queued row to the (real) downloadStore; reset it
+    // so a pending row from one test doesn't trip the next test's duplicate-start guard.
+    useDownloadStore.setState({ downloads: {}, downloadIdIndex: {} });
     mockAppState.downloadProgress = {};
     mockRemoteServerState.servers = [];
     mockRemoteServerState.discoveredModels = {};
@@ -558,7 +570,13 @@ describe('ModelDownloadScreen', () => {
       await flushPromises();
     });
 
-    expect(mockShowAlert).toHaveBeenCalledWith('No Servers Found', expect.stringContaining('WiFi'));
+    expect(mockShowAlert).toHaveBeenCalledWith(
+      'No Servers Found',
+      expect.stringContaining('WiFi'),
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'Get Off Grid AI Desktop' }),
+      ]),
+    );
   });
 
   // ===========================================================================

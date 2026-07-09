@@ -540,6 +540,25 @@ describe('chatStore', () => {
       expect(message.content).toBe('This is the response.');
     });
 
+    it('treats an UNCLOSED Gemma 4 thought (truncated mid-thinking) as reasoning, not the message', () => {
+      const store = useChatStore.getState();
+      const convId = store.createConversation('test-model');
+
+      store.startStreaming(convId);
+      // Generation cut off by maxTokens while still in the thought channel — no <channel|>,
+      // no answer. The raw tag must NOT leak in as the message (the iOS truncation bug).
+      useChatStore.setState({
+        streamingMessage: '<|channel>thought\nThe user said hi. I should respond politely',
+        streamingForConversationId: convId,
+      });
+      store.finalizeStreamingMessage(convId);
+
+      const message = getChatState().conversations[0].messages[0];
+      expect(message.reasoningContent).toBe('The user said hi. I should respond politely');
+      expect(message.content).not.toContain('<|channel>thought');
+      expect(message.content.trim()).toBe('');
+    });
+
     it('extracts Qwen channel thinking into reasoningContent', () => {
       const store = useChatStore.getState();
       const convId = store.createConversation('test-model');

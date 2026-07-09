@@ -24,16 +24,33 @@ const resetCaches = () => {
 
 describe('HardwareService — branch coverage', () => {
   const originalOS = Platform.OS;
+  const originalVersion = Platform.Version;
 
   beforeEach(() => {
     jest.clearAllMocks();
     resetCaches();
   });
 
+  /** Platform.Version is a non-writable getter under the RN jest mock, so set it
+   *  via defineProperty rather than plain assignment (which silently no-ops). */
+  const setIosVersion = (v: string) => {
+    Object.defineProperty(Platform, 'Version', { configurable: true, writable: true, value: v });
+  };
+
   afterEach(() => {
     Platform.OS = originalOS;
+    setIosVersion(originalVersion as string);
     delete (NativeModules as any).LocalDreamModule;
   });
+
+  /** Force hardwareService.getTotalMemoryGB() to a fixed value via the cache. */
+  const setTotalRamGB = (gb: number) => {
+    (hardwareService as any).cachedDeviceInfo = {
+      totalMemory: gb * 1024 * 1024 * 1024,
+      usedMemory: 0,
+      availableMemory: gb * 1024 * 1024 * 1024,
+    };
+  };
 
   // ── getAvailableMemoryGB background fetch .then (lines 133-139) ───────────
   describe('getAvailableMemoryGB background fetch', () => {
@@ -71,13 +88,58 @@ describe('HardwareService — branch coverage', () => {
     });
   });
 
-  // ── estimateImageModelRam (line 225) ──────────────────────────────────────
+  // ── preferGpuForImageGen + estimateImageModelRam (compute-path aware) ──────
+  describe('preferGpuForImageGen', () => {
+    it('is true on iOS 26 with enough RAM (8GB-class → GPU works, ANE fails)', () => {
+      Platform.OS = 'ios';
+      setIosVersion('26.0');
+      setTotalRamGB(8);
+      expect(hardwareService.preferGpuForImageGen()).toBe(true);
+    });
+
+    it('is false on iOS 26 with low RAM (6GB → GPU OOMs, fall back to ANE)', () => {
+      Platform.OS = 'ios';
+      setIosVersion('26.0');
+      setTotalRamGB(6);
+      expect(hardwareService.preferGpuForImageGen()).toBe(false);
+    });
+
+    it('is false on iOS < 26 (ANE works well there)', () => {
+      Platform.OS = 'ios';
+      setIosVersion('18.0');
+      setTotalRamGB(8);
+      expect(hardwareService.preferGpuForImageGen()).toBe(false);
+    });
+
+    it('is false on Android', () => {
+      Platform.OS = 'android';
+      setTotalRamGB(12);
+      expect(hardwareService.preferGpuForImageGen()).toBe(false);
+    });
+  });
+
   describe('estimateImageModelRam', () => {
-    it('budgets 2.5x the model total size', () => {
+    it('budgets 2.5x on Android (ONNX/QNN reserves accelerator memory)', () => {
+      Platform.OS = 'android';
       expect(hardwareService.estimateImageModelRam({ fileSize: 2_000_000_000 })).toBe(5_000_000_000);
     });
 
-    it('includes mmproj in the 2.5x budget', () => {
+    it('budgets 2.5x on the iOS GPU path (8GB / iOS 26)', () => {
+      Platform.OS = 'ios';
+      setIosVersion('26.0');
+      setTotalRamGB(8);
+      expect(hardwareService.estimateImageModelRam({ fileSize: 2_000_000_000 })).toBe(5_000_000_000);
+    });
+
+    it('budgets 1.8x on the iOS ANE path (6GB / iOS 26)', () => {
+      Platform.OS = 'ios';
+      setIosVersion('26.0');
+      setTotalRamGB(6);
+      expect(hardwareService.estimateImageModelRam({ fileSize: 2_000_000_000 })).toBe(3_600_000_000);
+    });
+
+    it('includes mmproj in the budget (Android 2.5x)', () => {
+      Platform.OS = 'android';
       expect(
         hardwareService.estimateImageModelRam({ fileSize: 1_000_000_000, mmProjFileSize: 1_000_000_000 }),
       ).toBe(5_000_000_000);

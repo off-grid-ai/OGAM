@@ -68,10 +68,45 @@ const IMAGE_PATTERNS = [
   // Scene composition terms with visual context
   /\b(full body|half body|portrait shot|wide shot)\b.*\b(of|image|picture|drawing)\b/i,
 
-  // Explicit drawing/painting requests
-  /\bdraw\s+(me\s+)?(a|an|the)\b/i,
+  // Explicit drawing/painting requests.
+  // Idiom guard: exclude the figurative "draw a conclusion / the line / a
+  // comparison|distinction|parallel|analogy" senses, which are text, not image
+  // requests. The negative lookahead sits after the article so "draw a cat"
+  // still matches while "draw a conclusion" falls through to the text patterns.
+  /\bdraw\s+(me\s+)?(a|an|the)\s+(?!conclusion|conclusions|line|lines|comparison|comparisons|distinction|distinctions|parallel|parallels|analogy|analogies|attention|blank|card|cards|straw)/i,
   /\bpaint\s+(me\s+)?(a|an|the)\b/i,
   /\bsketch\s+(me\s+)?(a|an|the)\b/i,
+
+  // Bare-verb visual requests (article-optional) — colloquial / voice phrasing.
+  // "draw dog", "make sunset", "sketch cat", "paint mountains" omit the article
+  // that the patterns above require, so without this they fell through to the
+  // LLM/text default. We allow an OPTIONAL article (a|an|the|some) followed by a
+  // word, so both "draw a dog" and "draw dog" match.
+  //
+  // Anchored to the START of the message (after an optional polite prefix like
+  // "can you"/"please") so the verb reads as a COMMAND. This is deliberate: image
+  // patterns are checked before text patterns, so an unanchored \bdraw\b would
+  // hijack explanatory text such as "explain how artists draw realistic
+  // portraits". A genuine image request leads with the verb; an explanation
+  // buries it mid-sentence.
+  //
+  // Guard: a few of these verbs head common FIGURATIVE idioms that are text, not
+  // image requests — "draw a conclusion", "draw the line", "draw a
+  // comparison/distinction/parallel/analogy". The negative lookahead after the
+  // optional article excludes those specific nouns so the idioms fall through to
+  // the text patterns / LLM rather than being forced to 'image'.
+  //
+  // We deliberately limit this broadening to the strongly-visual verbs
+  // draw/paint/sketch/illustrate/render. We do NOT broaden make/create/generate
+  // to a bare noun: those legitimately head TEXT requests ("create a function",
+  // "generate a list", "make a decision", "make sense", "make dinner"), so a
+  // bare-noun rule for them would misroute code/list/idiom requests to image.
+  // They remain gated behind the explicit image-keyword patterns above
+  // (e.g. "create an image of…", "make a logo with…"). A bare "make sunset" /
+  // "generate dog" therefore falls through to null → LLM, which is preferable
+  // to forcing 'image'. "paint a picture of <abstract>" used figuratively is
+  // likewise left ambiguous.
+  /^(?:(?:can|could|would|will)\s+you\s+|please\s+|pls\s+|hey\s+|ok\s+|okay\s+)*(draw|paint|sketch|illustrate|render)\s+(?:me\s+)?(?:(?:a|an|the|some)\s+)?(?!conclusion|conclusions|line|lines|comparison|comparisons|distinction|distinctions|parallel|parallels|analogy|analogies|attention|blank|breath|straw|card|cards|a\b|an\b|the\b|some\b)[a-z]+\b/i,
 ];
 
 // Patterns that suggest text/chat intent (not image generation)
@@ -159,17 +194,20 @@ class IntentClassifier {
       : options;
 
     const trimmedMessage = message.trim().toLowerCase();
+    const logMsg = trimmedMessage.slice(0, 60);
 
     // Check cache first
     const cacheKey = trimmedMessage.slice(0, 200); // Limit key size
     const cachedIntent = intentCache.get(cacheKey);
     if (cachedIntent) {
+      logger.log(`[ROUTE-SM] classify CACHE intent=${cachedIntent} msg="${logMsg}"`);
       return cachedIntent;
     }
 
     // Fast pattern matching
     const patternResult = this.classifyByPattern(trimmedMessage);
     if (patternResult !== null) {
+      logger.log(`[ROUTE-SM] classify PATTERN intent=${patternResult} msg="${logMsg}"`);
       this.cacheIntent(cacheKey, patternResult);
       return patternResult;
     }
@@ -178,6 +216,7 @@ class IntentClassifier {
     if (opts.useLLM) {
       try {
         const llmResult = await this.classifyWithLLM(message, opts);
+        logger.log(`[ROUTE-SM] classify LLM intent=${llmResult} msg="${logMsg}"`);
         this.cacheIntent(cacheKey, llmResult);
         return llmResult;
       } catch (error) {
@@ -186,6 +225,7 @@ class IntentClassifier {
     }
 
     // Default to text intent if uncertain
+    logger.log(`[ROUTE-SM] classify DEFAULT→text (uncertain, llm=${opts.useLLM}) msg="${logMsg}"`);
     return 'text';
   }
 
@@ -197,6 +237,7 @@ class IntentClassifier {
     // Check for strong image generation indicators
     for (const pattern of IMAGE_PATTERNS) {
       if (pattern.test(message)) {
+        logger.log(`[ROUTE-SM] classify pattern=IMAGE matched /${pattern.source}/`);
         return 'image';
       }
     }
@@ -204,18 +245,21 @@ class IntentClassifier {
     // Check for strong text/chat indicators
     for (const pattern of TEXT_PATTERNS) {
       if (pattern.test(message)) {
+        logger.log(`[ROUTE-SM] classify pattern=TEXT matched /${pattern.source}/`);
         return 'text';
       }
     }
 
     // Very short messages are likely text queries or simple prompts
     if (message.length < 10) {
+      logger.log('[ROUTE-SM] classify pattern=TEXT (message < 10 chars)');
       return 'text';
     }
 
     // Very long messages with multiple sentences are likely text
     const sentenceCount = (message.match(/[.!?]+/g) || []).length;
     if (sentenceCount >= 2 && message.length > 100) {
+      logger.log('[ROUTE-SM] classify pattern=TEXT (multi-sentence long message)');
       return 'text';
     }
 

@@ -5,6 +5,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,12 +14,17 @@ import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from
 import { RemoteServerModal } from '../components/RemoteServerModal';
 import { useTheme, useThemedStyles } from '../theme';
 import { getUserFacingDownloadMessage } from '../utils/downloadErrors';
+import { isAccelerableQuant } from '../utils/acceleration';
 import type { ThemeColors, ThemeShadows } from '../theme';
-import { RECOMMENDED_MODELS, TRENDING_FAMILIES, TYPOGRAPHY, SPACING } from '../constants';
+import { RECOMMENDED_MODELS, TYPOGRAPHY, SPACING, OFF_GRID_DESKTOP_URL } from '../constants';
+import { withUtm } from '../utils/utm';
 import { useAppStore } from '../stores';
 import { useDownloadStore, isActiveStatus } from '../stores/downloadStore';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { hardwareService, modelManager, remoteServerManager } from '../services';
+import { startModelDownload } from '../services/startModelDownload';
+import { recommendedModelsForDevice, trendingModelIdsForDevice } from '../utils/recommendedModels';
+import { modelBudgetFraction } from '../services/memoryBudget';
 import { discoverLANServers } from '../services/networkDiscovery';
 import { ModelFile, DownloadedModel, RemoteServer } from '../types';
 import { RootStackParamList } from '../navigation/types';
@@ -38,7 +44,7 @@ interface RecommendedCardProps {
   model: typeof RECOMMENDED_MODELS[number];
   recFile: ModelFile;
   index: number;
-  progress: { progress: number } | null | undefined;
+  progress: { progress: number; queued?: boolean; bytes?: { downloaded: number; total: number } } | null | undefined;
   downloaded: DownloadedModel | undefined;
   totalRamGB: number;
   isTrending: boolean;
@@ -55,10 +61,13 @@ const RecommendedModelCard: React.FC<RecommendedCardProps> = ({ model, recFile, 
     file={recFile}
     downloadedModel={downloaded}
     isDownloaded={!!downloaded}
-    isDownloading={!!progress}
+    isDownloading={!!progress && !progress.queued}
+    isQueued={!!progress?.queued}
     downloadProgress={progress?.progress}
+    downloadBytes={progress?.bytes}
     isCompatible={model.minRam <= totalRamGB && (!model.maxRam || totalRamGB <= model.maxRam)}
     isTrending={isTrending}
+    supportsAcceleration={isAccelerableQuant(recFile.quantization)}
     onPress={() => {}}
     onDownload={downloaded ? undefined : onDownload}
     onCancel={progress ? onCancel : undefined}
@@ -69,7 +78,7 @@ interface LiteRTCardProps {
   file: ModelFile;
   index: number;
   curatedEntry: CuratedLiteRTEntry | undefined;
-  progress: { progress: number } | null | undefined;
+  progress: { progress: number; queued?: boolean; bytes?: { downloaded: number; total: number } } | null | undefined;
   downloaded: DownloadedModel | undefined;
   totalRamGB: number;
   onDownload: () => void;
@@ -88,15 +97,35 @@ const LiteRTModelCard: React.FC<LiteRTCardProps> = ({ file, index, curatedEntry,
     file={file}
     downloadedModel={downloaded}
     isDownloaded={!!downloaded}
-    isDownloading={!!progress}
+    isDownloading={!!progress && !progress.queued}
+    isQueued={!!progress?.queued}
     downloadProgress={progress?.progress}
-    isCompatible={file.size / (1024 ** 3) < totalRamGB * 0.6}
-    recommended={{ pillLabel: 'Recommended', highlightText: curatedEntry?.highlight }}
+    downloadBytes={progress?.bytes}
+    isCompatible={file.size / (1024 ** 3) < totalRamGB * modelBudgetFraction(totalRamGB)}
+    recommended={{ pillLabel: 'Recommended' }}
+    supportsAcceleration
     onPress={() => {}}
     onDownload={downloaded ? undefined : onDownload}
     onCancel={progress ? onCancel : undefined}
   />
 );
+
+/** Active-download progress for a card, or null when the model isn't downloading.
+ *  `queued` (store status 'pending') drives the "Queued" label vs a live progress bar.
+ *  `bytes` feeds the shared card's "X MB / Y MB" line so onboarding matches the
+ *  Text/Image/STT tabs (same ModelCard, same props) instead of showing % only. */
+export function downloadProgressFor(
+  entry: { status: string; progress: number; bytesDownloaded?: number; totalBytes?: number; combinedTotalBytes?: number; mmProjBytesDownloaded?: number } | undefined,
+): { progress: number; queued: boolean; bytes?: { downloaded: number; total: number } } | null {
+  if (!entry || !isActiveStatus(entry.status as any)) return null;
+  const total = entry.combinedTotalBytes ?? entry.totalBytes ?? 0;
+  const downloaded = (entry.bytesDownloaded ?? 0) + (entry.mmProjBytesDownloaded ?? 0);
+  return {
+    progress: entry.progress,
+    queued: entry.status === 'pending',
+    bytes: total > 0 ? { downloaded, total } : undefined,
+  };
+}
 
 export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
@@ -114,7 +143,7 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
-  const { deviceInfo, setDeviceInfo, setModelRecommendation, addDownloadedModel, downloadedModels } = useAppStore();
+  const { deviceInfo, setDeviceInfo, setModelRecommendation, downloadedModels } = useAppStore();
   const storeDownloads = useDownloadStore(s => s.downloads);
   const servers = useRemoteServerStore((s) => s.servers);
   const discoveredModels = useRemoteServerStore((s) => s.discoveredModels);
@@ -131,7 +160,8 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
         if (cancelled) return;
         setModelRecommendation(rec);
         const ram = hardwareService.getTotalMemoryGB();
-        const compat = RECOMMENDED_MODELS.filter((m) => m.minRam <= ram && (!m.maxRam || ram <= m.maxRam));
+        // Same curated list as the Models screen, filtered to this device's RAM.
+        const compat = recommendedModelsForDevice(ram);
         if (cancelled) return;
         setRecommendedModels(compat);
         const files = await fetchModelFiles(compat);
@@ -183,7 +213,14 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
       const reachable = await refreshServerHealth();
       // Only alert if there are truly no reachable servers after the scan
       if (reachable.size === 0) {
-        setAlertState(showAlert('No Servers Found', 'Make sure you\'re on the same WiFi network as your server and that it\'s running.'));
+        setAlertState(showAlert(
+          'No Servers Found',
+          'Make sure you\'re on the same WiFi network as your server and that it\'s running. Off Grid AI Desktop serves its models to this phone over your network.',
+          [
+            { text: 'Dismiss', style: 'cancel' },
+            { text: 'Get Off Grid AI Desktop', onPress: () => Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'model-download')).catch(() => {}) },
+          ],
+        ));
       }
     } catch (e) {
       logger.warn('[ModelDownload] Scan failed:', (e as Error).message);
@@ -207,25 +244,11 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const handleDownload = async (modelId: string, file: ModelFile) => {
-    const modelKey = makeModelKey(modelId, file.name);
-    // Duplicate-start guard. The store's add() also enforces this, but
-    // checking up-front avoids the unnecessary native call.
-    const existing = useDownloadStore.getState().downloads[modelKey];
-    if (existing && isActiveStatus(existing.status)) return;
-    const onError = (error: Error) => {
-      // The store now holds the failed state — UI shows it, no need to
-      // clear progress here. Only surface the alert.
-      setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(error.message)));
-    };
-    try {
-      // modelManager.downloadModelBackground writes the row to SQLite and
-      // adds the entry to useDownloadStore synchronously after start.
-      const info = await modelManager.downloadModelBackground(modelId, file);
-      modelManager.watchDownload(info.downloadId, (model: DownloadedModel) => {
-        addDownloadedModel(model);
-        useDownloadStore.getState().remove(modelKey);
-      }, onError);
-    } catch (error) { onError(error as Error); }
+    // Same mechanism as the Models screen (startModelDownload) — guard, register, and
+    // clear are shared; onboarding just surfaces the failure alert.
+    await startModelDownload(modelId, file, {
+      onError: (error) => setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(error.message))),
+    });
   };
 
   const handleConnectServer = async (server: RemoteServer) => {
@@ -239,7 +262,7 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
       setConnectedServerId(server.id);
       const models = discoveredModels[server.id] || result.models || [];
       if (models.length === 0) {
-        setAlertState(showAlert('Connected — No Models Found', `${server.name} is reachable but has no models loaded. Start a model in Ollama/LM Studio, then reconnect.`));
+        setAlertState(showAlert('Connected — No Models Found', `${server.name} is reachable but has no models loaded. Start a model in Off Grid AI Desktop, Ollama, or LM Studio, then reconnect.`));
         return;
       }
       const textModel = models.find(m => !m.capabilities.supportsVision) || models[0];
@@ -262,7 +285,7 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
   // come straight from the curated registry with their download URLs baked in.
   const liteRTFiles = React.useMemo(
     () => (Platform.OS === 'android'
-      ? buildCuratedLiteRTFiles().filter((f) => f.size / (1024 ** 3) < totalRamGB * 0.6)
+      ? buildCuratedLiteRTFiles().filter((f) => f.size / (1024 ** 3) < totalRamGB * modelBudgetFraction(totalRamGB))
       : []),
     [totalRamGB],
   );
@@ -284,22 +307,8 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
     proceed();
   };
 
-  // One best-fit trending model per family (ideal ≈ 40% of RAM, penalise > 75%)
-  const trendingModelIds = React.useMemo(() => {
-    const score = (m: (typeof RECOMMENDED_MODELS)[number]) => {
-      const ratio = m.minRam / totalRamGB;
-      const penalty = ratio > 0.75 ? (ratio - 0.75) * 4 : 0;
-      return Math.abs(ratio - 0.4) + penalty;
-    };
-    const ids = new Set<string>();
-    for (const familyIds of Object.values(TRENDING_FAMILIES)) {
-      const best = RECOMMENDED_MODELS
-        .filter(m => familyIds.includes(m.id) && m.minRam <= totalRamGB && (!m.maxRam || totalRamGB <= m.maxRam))
-        .sort((a, b) => score(a) - score(b))[0];
-      if (best) ids.add(best.id);
-    }
-    return ids;
-  }, [totalRamGB]);
+  // One best-fit trending model per family — shared with the Models screen's scoring.
+  const trendingModelIds = React.useMemo(() => trendingModelIdsForDevice(totalRamGB), [totalRamGB]);
 
   const liveServers = servers.filter((s) => reachableServerIds.has(s.id));
 
@@ -351,10 +360,7 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
 
           {liteRTFiles.map((file, index) => {
             const modelKey = makeModelKey(LITERT_PARENT_ID, file.name);
-            const dlEntry = storeDownloads[modelKey];
-            const progress = dlEntry && isActiveStatus(dlEntry.status)
-              ? { progress: dlEntry.progress }
-              : null;
+            const progress = downloadProgressFor(storeDownloads[modelKey]);
             return (
               <LiteRTModelCard
                 key={file.name}
@@ -373,10 +379,7 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
           {recommendedModels.filter((model) => modelFiles[model.id]?.length).map((model, index) => {
             const recFile = modelFiles[model.id][0];
             const modelKey = makeModelKey(model.id, recFile.name);
-            const entry = storeDownloads[modelKey];
-            const progress = entry && isActiveStatus(entry.status)
-              ? { progress: entry.progress }
-              : null;
+            const progress = downloadProgressFor(storeDownloads[modelKey]);
             return (
               <RecommendedModelCard
                 key={model.id}
@@ -429,5 +432,8 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   warningCard: { backgroundColor: `${colors.warning}20`, borderWidth: 1, borderColor: colors.warning },
   warningTitle: { ...TYPOGRAPHY.h3, color: colors.warning, marginBottom: 8 },
   warningText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, lineHeight: 20 },
-  footer: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
+  // Vertical padding is intentionally small: the ghost Button carries its own
+  // paddingVertical and the SafeAreaView already insets the home-indicator area, so a
+  // full 16 here stacked into an oversized gap below "Skip for Now".
+  footer: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.xs, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
 });

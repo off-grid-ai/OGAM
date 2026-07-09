@@ -68,5 +68,5 @@ export const mcpOAuthNativeAdapters = {
   storage,
   crypto: cryptoAdapter,
   redirectUri: MCP_OAUTH_REDIRECT_URI,
-  clientName: 'Off Grid',
+  clientName: 'Off Grid AI',
 };

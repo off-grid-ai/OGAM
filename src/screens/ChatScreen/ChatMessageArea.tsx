@@ -6,11 +6,9 @@ import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
 import Icon from 'react-native-vector-icons/Feather';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { AttachStep } from 'react-native-spotlight-tour';
-import { ChatInput, ThinkingIndicator } from '../../components';
+import { ChatInput, ThinkingIndicator, ModelFailureCard, ImageGenAdviceCard } from '../../components';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { generationService } from '../../services';
-import { INFERENCE_BACKENDS } from '../../types';
-import { TYPOGRAPHY, SPACING } from '../../constants';
 import { EmptyChat, ImageProgressIndicator } from './ChatScreenComponents';
 import { getPlaceholderText, useChatScreen } from './useChatScreen';
 import { createStyles } from './styles';
@@ -36,13 +34,58 @@ export type ChatMessageAreaProps = {
   chatSpotlight: number | null;
 };
 
-// The ChatInput container already pads its bottom by this much; subtracting it
-// makes the footer's total bottom space equal the safe-area inset (not inset +
-// pad), so the bar clears the home indicator with no extra gap. Collapses to 0
-// while the keyboard is up, since the keyboard covers the safe area.
-const INPUT_FOOTER_BASE_PAD = 8;
-const computeFooterPaddingBottom = (keyboardVisible: boolean, insetBottom: number): number =>
-  keyboardVisible ? 0 : Math.max(insetBottom - INPUT_FOOTER_BASE_PAD, 0);
+// The bottom gap below the input controls should visually MATCH the top gap
+// (the ChatInput container's paddingTop = 12), not consume the full home-indicator
+// safe-area inset — that made the bottom feel like a large dead band vs the top.
+// The container already pads its bottom by 8, so cap the extra footer at 4 → 12
+// total, symmetric with the top. Collapses to 0 while the keyboard is up.
+//
+// BUT that cap only applies to a thin overlay inset (iOS home indicator / gesture
+// nav), which draws *over* content. A 3-button navigation bar is opaque and owns
+// real space at the bottom — capping there renders the input controls UNDER the
+// nav buttons. We distinguish by the inset size (not Platform.OS): anything above
+// the overlay threshold is a real nav bar, so honor the full inset and clear it.
+const FOOTER_SAFE_CAP = 4;
+// Home-indicator / gesture-nav overlays sit at ~24px or below on the devices we
+// target; a 3-button nav bar is taller. Above this, treat the inset as opaque.
+const OVERLAY_INSET_MAX = 24;
+export const computeFooterPaddingBottom = (keyboardVisible: boolean, insetBottom: number): number => {
+  if (keyboardVisible) return 0;
+  // Opaque nav bar (tall inset): pad the full inset so controls clear it.
+  if (insetBottom > OVERLAY_INSET_MAX) return insetBottom;
+  // Thin overlay inset: keep the symmetric-with-top cap.
+  return Math.min(insetBottom, FOOTER_SAFE_CAP);
+};
+
+// Show the "tap to continue" bar only when a text reply is genuinely PENDING — the
+// selected text model was evicted AND the last message is an unanswered user turn.
+// After a completed turn (text or image), the last message is an assistant reply, so
+// the bar hides — it read as misplaced when it lingered after a finished image turn.
+// Checking the tail role is modality-agnostic: any completed turn ends with 'assistant'.
+export const shouldShowEvictedBar = (chat: ReturnType<typeof useChatScreen>): boolean => {
+  if (!chat.textModelEvicted || chat.isModelLoading || chat.isCompacting) return false;
+  if (chat.isGeneratingImage) return false;
+  if (!chat.activeModelId || chat.activeModelInfo?.isRemote) return false;
+  const last = chat.displayMessages[chat.displayMessages.length - 1];
+  return last?.role === 'user';
+};
+
+// "Model unloaded to free memory — tap to continue": the active text model was evicted
+// (e.g. an image/TTS load in voice mode) but stays selected. Tapping reloads it.
+const ModelEvictedBar: React.FC<{ visible: boolean; onPress: () => void; styles: any; colors: any }> = ({
+  visible, onPress, styles, colors,
+}) => {
+  if (!visible) return null;
+  return (
+    <Animated.View entering={FadeIn.duration(200)}>
+      <AnimatedPressable style={styles.pendingSettingsBar} onPress={onPress}>
+        <Icon name="cpu" size={16} color={colors.warning} />
+        <Text style={styles.pendingSettingsText}>Model unloaded to free memory — tap to continue</Text>
+        <Icon name="refresh-cw" size={14} color={colors.warning} />
+      </AnimatedPressable>
+    </Animated.View>
+  );
+};
 
 // Small status bar above the input: classifying takes precedence over the
 // background model-load indicator.
@@ -138,7 +181,6 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           activeModelName={chat.activeModelName}
           activeProject={chat.activeProject}
           setShowProjectSelector={chat.setShowProjectSelector}
-          isRemote={chat.activeModelInfo?.isRemote}
         />
           );
         })()
@@ -222,17 +264,22 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           </AnimatedPressable>
         </Animated.View>
       )}
-      {chat.settings.inferenceBackend === INFERENCE_BACKENDS.OPENCL
-        && chat.activeModel?.engine === 'llama'
-        && !chat.activeModelInfo?.isRemote
-        && (
-        <View style={[openCLBannerStyles.row, { backgroundColor: `${colors.warning}15` }]}>
-          <Icon name="info" size={13} color={colors.warning} />
-          <Text style={[openCLBannerStyles.text, { color: colors.warning }]}>
-            OpenCL is not recommended. Switch to CPU in Settings, or use a LiteRT model for GPU support.
-          </Text>
-        </View>
-      )}
+      {/* Single dismissible surface for every model failure (text/image/tts/stt/
+          embedding). Reads modelFailureStore itself — no props. Rendered ABOVE the
+          evicted snackbar so the rounded failure card is never capped by a flat bar. */}
+      <ModelFailureCard />
+      {/* GPU-path (no-NPU) image tips — shown in chat (not buried in settings) so a user
+          hitting slow/garbled generations sees the fix. Self-hides at good settings. */}
+      <ImageGenAdviceCard />
+      {/* Text model evicted to free RAM (e.g. voice-mode image/TTS load) but still
+          selected — reload it on demand, even a large model. This flat "tap to continue"
+          snackbar sits directly above the composer, BELOW the rounded failure card. */}
+      <ModelEvictedBar
+        visible={shouldShowEvictedBar(chat)}
+        onPress={chat.handleReloadTextModel}
+        styles={styles}
+        colors={colors}
+      />
       {/* Steps 3/15 share the same AttachStep wrapping ChatInput (multi-index).
          Steps 12/16 are handled inside ChatInput via activeSpotlight prop. */}
       <View
@@ -266,6 +313,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             supportsToolCalling={chat.supportsToolCalling}
             supportsThinking={chat.supportsThinking}
             onRepairVision={handleRepairVision}
+            isRemote={chat.activeModelInfo.isRemote}
             activeSpotlight={chatSpotlight === 12 ? chatSpotlight : null}
           />
         </AttachStep>
@@ -273,11 +321,6 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
     </>
   );
 };
-
-const openCLBannerStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
-  text: { ...TYPOGRAPHY.meta, flex: 1 },
-});
 
 const hiddenStyle = StyleSheet.create({
   hidden: { opacity: 0 },

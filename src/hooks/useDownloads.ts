@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { backgroundDownloadService } from '../services/backgroundDownloadService';
-import { useDownloadStore } from '../stores/downloadStore';
+import { useDownloadStore, isActiveStatus } from '../stores/downloadStore';
 import { toUserMessage } from '../utils/downloadErrors';
 import { ModelKey } from '../utils/modelKey';
 
@@ -126,9 +126,9 @@ export function useDownloads() {
 
   return {
     downloads,
-    active: Object.values(downloads).filter(d =>
-      d.status === 'pending' || d.status === 'running' || d.status === 'processing'
-    ),
+    // Use the shared classifier so this never drifts from every other surface — the
+    // inline list omitted 'retrying'/'waiting_for_network', which isActiveStatus counts.
+    active: Object.values(downloads).filter(d => isActiveStatus(d.status)),
     failed: Object.values(downloads).filter(d => d.status === 'failed'),
     completed: Object.values(downloads).filter(d => d.status === 'completed'),
     cancel,

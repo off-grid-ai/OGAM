@@ -1,0 +1,16 @@
+# Fastlane Appfile — app identifiers
+# Docs: https://docs.fastlane.tools/advanced/#appfile
+
+# Android package name (from android/app/build.gradle applicationId).
+# A `.dev` suffix is applied to debug/dev builds via applicationIdSuffix.
+package_name("ai.offgridmobile")
+
+# iOS bundle identifier (from ios project PRODUCT_BUNDLE_IDENTIFIER).
+app_identifier("ai.offgridmobile")
+
+# Apple ID and team are read from environment so no personal data is committed.
+# Set these in CI secrets / a local .env (see fastlane/.env.example):
+#   APPLE_ID, ITC_TEAM_ID (App Store Connect), TEAM_ID (Developer Portal)
+apple_id(ENV["APPLE_ID"]) if ENV["APPLE_ID"]
+itc_team_id(ENV["ITC_TEAM_ID"]) if ENV["ITC_TEAM_ID"]
+team_id(ENV["TEAM_ID"]) if ENV["TEAM_ID"]

@@ -11,7 +11,7 @@ jest.mock('@offgrid/core/utils/logger', () => ({
   default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-const mockEngine = { speak: jest.fn().mockResolvedValue(undefined), getActiveVoice: jest.fn(() => null), displayName: 'Mock' };
+const mockEngine = { speak: jest.fn().mockResolvedValue(undefined), getActiveVoice: jest.fn(() => null), getPhase: jest.fn(() => 'ready'), release: jest.fn().mockResolvedValue(undefined), displayName: 'Mock' };
 jest.mock('../../../pro/audio/engine', () => ({
   ttsRegistry: { getActiveEngine: jest.fn(() => mockEngine) },
 }));
@@ -23,6 +23,7 @@ jest.mock('../../../pro/audio/ttsStore', () => ({
 import { useTTSStore } from '../../../pro/audio/ttsStore';
 import {
   feedStreamingText, finishStreamingText, resetStreamingSpeech, isStreamingSpeechActive,
+  stopStreamingSpeechForTurn, _setSpeakTimeoutForTest,
 } from '../../../pro/audio/streamingSpeech';
 
 const store = useTTSStore as unknown as { getState: jest.Mock; setState: jest.Mock };
@@ -110,5 +111,71 @@ describe('lifecycle', () => {
 
   it('finish returns false when nothing was streaming', () => {
     expect(finishStreamingText('anything', 'm')).toBe(false);
+  });
+});
+
+// The device bug: pausing a streaming auto-speak fed the paused engine more segments,
+// which timed out and tripped the 2-failure "engine wedged → release" path, unloading
+// the engine so all later playback died. "Stop" must instead abort cleanly: suppress the
+// rest of the turn, project isStreaming=false, and NEVER release the engine.
+describe('stopStreamingSpeechForTurn (user stop)', () => {
+  it('projects isStreaming true while streaming, false after stop', async () => {
+    expect(state.isStreaming).toBeFalsy();
+    feedStreamingText('Speak this now.');
+    await flush();
+    expect(isStreamingSpeechActive()).toBe(true);
+    expect(state.isStreaming).toBe(true);
+    stopStreamingSpeechForTurn();
+    expect(isStreamingSpeechActive()).toBe(false);
+    expect(state.isStreaming).toBe(false);
+  });
+
+  it('suppresses re-engagement for the rest of the turn (later tokens do not restart speech)', async () => {
+    feedStreamingText('Hello there.');
+    await flush();
+    expect(isStreamingSpeechActive()).toBe(true);
+    const callsAtStop = mockEngine.speak.mock.calls.length;
+
+    stopStreamingSpeechForTurn();
+    // More tokens arrive on the SAME turn — must be ignored.
+    feedStreamingText('Hello there. And even more text follows here.');
+    await flush();
+    await flush();
+    expect(isStreamingSpeechActive()).toBe(false);
+    expect(mockEngine.speak.mock.calls.length).toBe(callsAtStop); // no new speak
+  });
+
+  it('a new turn (resetStreamingSpeech) clears the suppression and speaks again', async () => {
+    feedStreamingText('First turn.');
+    await flush();
+    stopStreamingSpeechForTurn();
+    feedStreamingText('Same turn, ignored.');
+    await flush();
+    expect(isStreamingSpeechActive()).toBe(false);
+
+    resetStreamingSpeech(); // audio.stop fires this at the next turn
+    feedStreamingText('Second turn speaks.');
+    await flush();
+    expect(isStreamingSpeechActive()).toBe(true);
+  });
+
+  it('stopping mid-segment does NOT advance to another segment or release the engine (no wedge)', async () => {
+    _setSpeakTimeoutForTest(20); // fail fast instead of the real 15s
+    // Engine can't complete (as if paused) — speak hangs, then times out.
+    mockEngine.speak.mockImplementation(() => new Promise<void>(() => { /* never settles */ }));
+
+    feedStreamingText('One. Two. Three.'); // three segments queued
+    await flush();
+    expect(mockEngine.speak).toHaveBeenCalledTimes(1); // segment 1 in flight (hung)
+
+    stopStreamingSpeechForTurn(); // user stops mid-segment → queue cleared, session bumped
+
+    // Let the hung speak time out; the orphaned drain must exit without a 2nd segment.
+    await new Promise((r) => setTimeout(r, 40));
+    await flush();
+
+    expect(mockEngine.speak).toHaveBeenCalledTimes(1); // never advanced to segment 2
+    expect(mockEngine.release).not.toHaveBeenCalled();  // never tripped wedge → release
+    expect(isStreamingSpeechActive()).toBe(false);
   });
 });

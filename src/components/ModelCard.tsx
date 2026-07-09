@@ -14,6 +14,8 @@ import {
   ModelCardActions,
   RecommendedConfig,
 } from './ModelCardContent';
+import { QUEUED_ICON } from '../utils/downloadStatusIcon';
+import { formatBytes } from '../utils/formatBytes';
 
 interface ModelCardProps {
   model: {
@@ -33,8 +35,13 @@ interface ModelCardProps {
   downloadedModel?: DownloadedModel;
   isDownloaded?: boolean;
   isDownloading?: boolean;
+  /** Accepted but waiting for a concurrency slot — shows a "Queued" label instead of a
+   *  0% progress bar, so the user gets clear feedback the tap registered. */
+  isQueued?: boolean;
   downloadProgress?: number;
   downloadBytes?: { downloaded: number; total: number };
+  /** Concurrent downloads behind this card (main+mmproj / grouped) → "N downloads". */
+  downloadCount?: number;
   isActive?: boolean;
   isCompatible?: boolean;
   incompatibleReason?: string;
@@ -49,6 +56,8 @@ interface ModelCardProps {
   compact?: boolean;
   isTrending?: boolean;
   recommended?: RecommendedConfig;
+  /** Model can run on the GPU/NPU (LiteRT or Q4_0/Q8_0 GGUF) → show the badge. */
+  supportsAcceleration?: boolean;
   failedState?: {
     errorMessage: string;
     bytesDownloaded: number;
@@ -79,22 +88,36 @@ function resolveCredibility(
 const DownloadProgressSection: React.FC<{
   progress: number;
   bytes?: { downloaded: number; total: number };
-  tight?: boolean;
-}> = ({ progress, bytes, tight }) => {
+  queued?: boolean;
+  /** Number of concurrent downloads behind this card (>1 → show "N downloads"). */
+  count?: number;
+}> = ({ progress, bytes, queued, count }) => {
   const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
+  const bytesLabel = bytes && bytes.total > 0 ? `${formatBytes(bytes.downloaded)} / ${formatBytes(bytes.total)}` : '';
+  // Cumulative download → note how many files are running so the total reads clearly.
+  const countLabel = count && count > 1 ? `${count} downloads` : '';
+  const caption = [bytesLabel, countLabel].filter(Boolean).join(' · ');
   return (
   <View style={styles.progressSection}>
-    <View style={[styles.progressContainer, tight && styles.progressContainerTight]}>
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-      </View>
-      <Text style={[styles.progressText, tight && styles.progressTextTight]}>{Math.round(progress * 100)}%</Text>
+    {/* Full-width bar so it uses the whole card width. Queued shows an EMPTY bar
+        (0 progress) so it reads as "not started yet". */}
+    <View style={styles.progressBar}>
+      <View style={[styles.progressFill, { width: `${(queued ? 0 : progress) * 100}%` }]} />
     </View>
-    {bytes && bytes.total > 0 && (
-      <Text style={styles.progressBytesText}>
-        {formatBytes(bytes.downloaded)} / {formatBytes(bytes.total)}
-      </Text>
-    )}
+    {/* Caption row under the bar: bytes (+ "N downloads") on the LEFT, status on the
+        RIGHT. "Queued" while waiting for a slot, otherwise the percent. */}
+    <View style={styles.progressCaptionRow}>
+      <Text style={styles.progressBytesText}>{caption}</Text>
+      {queued ? (
+        <View style={styles.progressLabelRow}>
+          <Icon name={QUEUED_ICON} size={12} color={colors.textMuted} accessibilityLabel="Queued" />
+          <Text style={[styles.progressText, styles.queuedText]}>Queued</Text>
+        </View>
+      ) : (
+        <Text style={styles.progressText}>{`${Math.round(progress * 100)}%`}</Text>
+      )}
+    </View>
   </View>
   );
 };
@@ -144,8 +167,10 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   downloadedModel,
   isDownloaded,
   isDownloading,
+  isQueued,
   downloadProgress = 0,
   downloadBytes,
+  downloadCount,
   isActive,
   isCompatible = true,
   incompatibleReason,
@@ -160,6 +185,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   compact,
   isTrending,
   recommended,
+  supportsAcceleration,
   failedState,
 }) => {
   const styles = useThemedStyles(createStyles);
@@ -207,6 +233,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
               credibilityInfo={credibilityInfo}
               isTrending={isTrending}
               recommended={recommended}
+              supportsAcceleration={supportsAcceleration}
             />
           ) : (
             <StandardModelCardContent
@@ -215,6 +242,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
               credibilityInfo={credibilityInfo}
               isActive={isActive}
               recommended={recommended}
+              supportsAcceleration={supportsAcceleration}
             />
           )}
 
@@ -241,8 +269,8 @@ export const ModelCard: React.FC<ModelCardProps> = ({
             </View>
           )}
 
-          {isDownloading && (
-            <DownloadProgressSection progress={downloadProgress} bytes={downloadBytes} tight={!!recommended} />
+          {(isDownloading || isQueued) && (
+            <DownloadProgressSection progress={downloadProgress} bytes={downloadBytes} queued={isQueued} count={downloadCount} />
           )}
           {failedState && (
             <FailedSection
@@ -282,9 +310,3 @@ function formatNumber(num: number): string {
   return num.toString();
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${bytes} B`;
-}

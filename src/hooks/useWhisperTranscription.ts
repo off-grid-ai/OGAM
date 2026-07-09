@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Vibration } from 'react-native';
-import { whisperService } from '../services/whisperService';
+import { whisperService, cleanTranscription } from '../services/whisperService';
 import { useWhisperStore } from '../stores/whisperStore';
 import logger from '../utils/logger';
 
@@ -64,8 +64,18 @@ export const useWhisperTranscription = (): UseWhisperTranscriptionResult => {
   // NOTE: This does NOT clear isTranscribing - that's done by clearResult()
   // which is called from ChatInput after the text is added to the input box.
   // This keeps the loader visible until text actually appears.
-  const finalizeTranscription = useCallback((text: string) => {
+  const finalizeTranscription = useCallback((rawText: string) => {
     if (!mountedRef.current) return;
+    // Strip Whisper's no-speech markers ([BLANK_AUDIO] etc.) at the single source.
+    // An empty result means silence/too-short — clear the transcribing state and
+    // emit nothing (never surface "[BLANK_AUDIO]" as the transcript).
+    const text = cleanTranscription(rawText);
+    if (!text) {
+      setPartialResult('');
+      setIsTranscribing(false);
+      transcribingStartTime.current = null;
+      return;
+    }
     const startTime = transcribingStartTime.current;
     const elapsed = startTime ? Date.now() - startTime : MIN_TRANSCRIBING_TIME;
     const remaining = Math.max(0, MIN_TRANSCRIBING_TIME - elapsed);
@@ -198,9 +208,15 @@ export const useWhisperTranscription = (): UseWhisperTranscriptionResult => {
         setRecordingTime(result.recordingTime);
 
         if (result.isCapturing) {
-          // Still recording - update partial result
-          if (result.text) {
-            setPartialResult(result.text);
+          // Still recording - update partial result.
+          // Clean through cleanTranscription (the single owner of marker stripping)
+          // so a partial like "[BLANK_AUDIO] hello" shows "hello", never the raw
+          // marker. Guard: only overwrite when cleaning leaves real speech — an
+          // empty cleaned partial (pure silence/noise marker mid-capture) must NOT
+          // clobber an existing good partial or the "listening…" UI state.
+          const cleaned = cleanTranscription(result.text);
+          if (cleaned) {
+            setPartialResult(cleaned);
           }
         } else {
           // Recording finished - haptic feedback

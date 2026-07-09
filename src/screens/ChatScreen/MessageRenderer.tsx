@@ -22,7 +22,7 @@ type MessageRendererProps = {
   onImagePress: (uri: string) => void;
 };
 
-export const MessageRenderer: React.FC<MessageRendererProps> = (props) => {
+const MessageRendererInner: React.FC<MessageRendererProps> = (props) => {
   const {
     item,
     index,
@@ -89,3 +89,30 @@ export const MessageRenderer: React.FC<MessageRendererProps> = (props) => {
     />
   );
 };
+
+/**
+ * Memoized so a ChatScreen re-render (a streaming token, a focus after returning from
+ * the document picker, a keyboard event, any unrelated store tick) does NOT re-render
+ * and re-parse the markdown of every message — the cause of the chat-screen freeze
+ * (unresponsive until you leave + re-enter). getDisplayMessages returns
+ * [...allMessages, streamingItem], so the historical message objects keep stable refs
+ * across renders; only the 'streaming'/'thinking' item is a new object per token, so
+ * only IT re-renders while the rest skip.
+ *
+ * The on* callbacks are recreated every parent render (defined inline in useChatScreen)
+ * and are deliberately NOT compared: within a conversation they are behaviorally stable,
+ * and a conversation switch replaces every message object (item ref changes → re-render
+ * with fresh handlers). Comparing them would defeat the memo entirely.
+ */
+export function messageRendererPropsEqual(prev: MessageRendererProps, next: MessageRendererProps): boolean {
+  return prev.item === next.item
+    && prev.index === next.index
+    && prev.displayMessagesLength === next.displayMessagesLength
+    && prev.animateLastN === next.animateLastN
+    && prev.imageModelLoaded === next.imageModelLoaded
+    && prev.isStreaming === next.isStreaming
+    && prev.isGeneratingImage === next.isGeneratingImage
+    && prev.showGenerationDetails === next.showGenerationDetails;
+}
+
+export const MessageRenderer = React.memo(MessageRendererInner, messageRendererPropsEqual);

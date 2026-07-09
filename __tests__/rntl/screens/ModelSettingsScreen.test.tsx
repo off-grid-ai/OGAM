@@ -176,7 +176,7 @@ describe('ModelSettingsScreen', () => {
     it('renders the toggle with label and description', () => {
       const { getByText } = renderWithSections('text');
       expect(getByText('Show Generation Details')).toBeTruthy();
-      expect(getByText('Display tokens/sec, timing, and memory usage on responses')).toBeTruthy();
+      expect(getByText('Display GPU, model, tok/s, and image settings below each message')).toBeTruthy();
     });
 
     it('defaults to off', () => {
@@ -185,43 +185,22 @@ describe('ModelSettingsScreen', () => {
     });
 
     it('updates store to true when toggled on', () => {
-      const { getAllByRole } = renderWithSections('text');
-      const switches = getAllByRole('switch');
+      useAppStore.getState().updateSettings({ showGenerationDetails: false });
+      const { getByTestId } = renderWithSections('text');
 
-      // Find the Show Generation Details switch by toggling and checking
-      const initialValue = useAppStore.getState().settings.showGenerationDetails;
-      expect(initialValue).toBe(false);
+      fireEvent.press(getByTestId('show-gen-details-on-button'));
 
-      for (const sw of switches) {
-        const before = useAppStore.getState().settings.showGenerationDetails;
-        fireEvent(sw, 'valueChange', true);
-        const after = useAppStore.getState().settings.showGenerationDetails;
-        if (after !== before) {
-          expect(after).toBe(true);
-          return;
-        }
-      }
-      fail('No switch found that updates showGenerationDetails');
+      // Assert the OUTCOME — the store flag that feeds generation-detail rendering.
+      expect(useAppStore.getState().settings.showGenerationDetails).toBe(true);
     });
 
     it('updates store to false when toggled off', () => {
       useAppStore.getState().updateSettings({ showGenerationDetails: true });
+      const { getByTestId } = renderWithSections('text');
 
-      const { getAllByRole } = renderWithSections('text');
-      const switches = getAllByRole('switch');
+      fireEvent.press(getByTestId('show-gen-details-off-button'));
 
-      for (const sw of switches) {
-        const before = useAppStore.getState().settings.showGenerationDetails;
-        if (before === true) {
-          fireEvent(sw, 'valueChange', false);
-          const after = useAppStore.getState().settings.showGenerationDetails;
-          if (after === false) {
-            expect(after).toBe(false);
-            return;
-          }
-          useAppStore.getState().updateSettings({ showGenerationDetails: true });
-        }
-      }
+      expect(useAppStore.getState().settings.showGenerationDetails).toBe(false);
     });
 
     it('syncs with store when showGenerationDetails is already true', () => {
@@ -242,24 +221,46 @@ describe('ModelSettingsScreen', () => {
       expect(getByText('Flash Attention')).toBeTruthy();
     });
 
-    it('updates store to true when Flash Attention switch is turned on', () => {
+    it('updates store to true when Flash Attention is turned on', () => {
       useAppStore.getState().updateSettings({ flashAttn: false });
       const { getByTestId } = renderWithSections('text');
 
-      fireEvent(getByTestId('flash-attn-switch'), 'valueChange', true);
+      fireEvent.press(getByTestId('flash-attn-on-button'));
 
       expect(useAppStore.getState().settings.flashAttn).toBe(true);
     });
 
-    it('updates store to false when Flash Attention switch is turned off', () => {
+    it('updates store to false when Flash Attention is turned off', () => {
       useAppStore.getState().updateSettings({ flashAttn: true });
       const { getByTestId } = renderWithSections('text');
 
-      fireEvent(getByTestId('flash-attn-switch'), 'valueChange', false);
+      fireEvent.press(getByTestId('flash-attn-off-button'));
 
       expect(useAppStore.getState().settings.flashAttn).toBe(false);
     });
 
+  });
+
+  // ============================================================================
+  describe('aggressive loading toggle', () => {
+    it('renders the Aggressive Loading label', () => {
+      const { getByText } = renderWithSections('text');
+      expect(getByText('Aggressive Loading')).toBeTruthy();
+    });
+
+    it('turns the setting on', () => {
+      useAppStore.getState().updateSettings({ aggressiveModelLoading: false });
+      const { getByTestId } = renderWithSections('text');
+      fireEvent.press(getByTestId('aggressive-loading-on-button'));
+      expect(useAppStore.getState().settings.aggressiveModelLoading).toBe(true);
+    });
+
+    it('turns the setting off', () => {
+      useAppStore.getState().updateSettings({ aggressiveModelLoading: true });
+      const { getByTestId } = renderWithSections('text');
+      fireEvent.press(getByTestId('aggressive-loading-off-button'));
+      expect(useAppStore.getState().settings.aggressiveModelLoading).toBe(false);
+    });
   });
 
   // ============================================================================
@@ -587,15 +588,17 @@ describe('ModelSettingsScreen', () => {
 
       it('shows Inference Backend section and GPU Layers slider when backend is OpenCL', () => {
         useAppStore.getState().updateSettings({ inferenceBackend: 'opencl', gpuLayers: 6 });
-        const { getByText } = renderWithSections('text');
+        const { getByText, getByTestId } = renderWithSections('text');
         expect(getByText('Inference Backend')).toBeTruthy();
-        expect(getByText('GPU Layers')).toBeTruthy();
+        // Label now names the backend: "GPU Layers (OpenCL)". Assert the slider by its
+        // SliderSetting child testID (SliderSetting suffixes testID with -slider/-value).
+        expect(getByTestId('gpu-layers-stepper-slider')).toBeTruthy();
       });
 
       it('does not clamp gpuLayers when flashAttn turned on with layers > 1', () => {
         useAppStore.getState().updateSettings({ inferenceBackend: 'opencl', flashAttn: false, gpuLayers: 8 });
         const { getByTestId } = renderWithSections('text');
-        fireEvent(getByTestId('flash-attn-switch'), 'valueChange', true);
+        fireEvent.press(getByTestId('flash-attn-on-button'));
         expect(useAppStore.getState().settings.flashAttn).toBe(true);
         // GPU layers are no longer clamped when enabling flash attention
         expect(useAppStore.getState().settings.gpuLayers).toBe(8);
@@ -796,6 +799,7 @@ describe('ModelSettingsScreen', () => {
           inferenceBackend: undefined as any,
           gpuLayers: undefined as any,
           flashAttn: undefined as any,
+          aggressiveModelLoading: undefined as any,
           cacheType: undefined as any,
           showGenerationDetails: undefined as any,
           enhanceImagePrompts: undefined as any,
@@ -889,7 +893,7 @@ describe('ModelSettingsScreen', () => {
     });
 
     // HTP is currently disabled via HTP_UI_ENABLED feature flag
-    it.skip('locks KV cache display to f16 on HTP backend', () => {
+    it('locks KV cache display to f16 on HTP backend', () => {
       useAppStore.getState().updateSettings({ inferenceBackend: 'htp', cacheType: 'q4_0' });
       const { getByText } = renderWithSections('text');
       expect(getByText(/Full precision/)).toBeTruthy();

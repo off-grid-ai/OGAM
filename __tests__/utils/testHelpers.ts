@@ -66,6 +66,7 @@ export const resetStores = (): void => {
       inferenceBackend: 'cpu' as const,
       gpuLayers: 99,
       flashAttn: false,
+      aggressiveModelLoading: false,
       cacheType: 'q8_0',
       showGenerationDetails: false,
       enhanceImagePrompts: false,
@@ -144,6 +145,7 @@ export const resetStores = (): void => {
     activeRemoteTextModelId: null,
     activeRemoteImageModelId: null,
   });
+  require('../../src/stores/downloadStore').useDownloadStore.setState({ downloads: {}, downloadIdIndex: {} });
 };
 
 // ============================================================================

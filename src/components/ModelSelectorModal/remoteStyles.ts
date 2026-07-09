@@ -73,10 +73,11 @@ export const createRemoteStyles = (colors: ThemeColors, _shadows: ThemeShadows) 
     fontWeight: '500' as const,
   },
   sectionSubTitle: {
+    // Vertical spacing lives on the wrapping sectionHeaderRow (which also holds the icon).
+    // Duplicating margins here pushed the text down relative to the icon inside the row —
+    // the iOS "misplaced header" bug. The row owns the spacing now.
     ...TYPOGRAPHY.label,
     color: colors.textMuted,
-    marginTop: 16,
-    marginBottom: 8,
     textTransform: 'uppercase' as const,
   },
   sectionHeaderRow: {

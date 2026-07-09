@@ -236,6 +236,14 @@ export interface Message {
   toolName?: string;
   /** True when this assistant message was generated while interfaceMode === 'audio' */
   isAudioModeMessage?: boolean;
+  /** Audio-mode message payload (saved voice note / synthesized clip): the on-disk audio
+   *  file path, a precomputed waveform envelope, and the clip duration. Read by the pro
+   *  audio UI (MessageAudioMode / AudioMessageBubble) and set by the TTS save path.
+   *  Optional — only audio-mode messages carry them. (Distinct from the same-named field
+   *  on MediaAttachment above, which describes an inbound audio attachment.) */
+  audioPath?: string;
+  waveformData?: number[];
+  audioDurationSeconds?: number;
 }
 
 export interface Conversation {
@@ -317,14 +325,10 @@ export interface ONNXImageModel {
   attentionVariant?: 'split_einsum' | 'original';
 }
 
-// Image generation state for UI
-export interface ImageGenerationState {
-  isGenerating: boolean;
-  currentStep: number;
-  totalSteps: number;
-  progress: number;
-  prompt?: string;
-}
+// NOTE: the authoritative ImageGenerationState lives in
+// services/imageGenerationService.ts (phase-derived) and is re-exported from
+// services/index.ts. The duplicate that used to sit here was imported by nobody
+// (every consumer takes the service's version) — removed to kill the drift risk.
 
 export type ImageGenerationMode = 'auto' | 'manual';
 export type AutoDetectMethod = 'pattern' | 'llm';

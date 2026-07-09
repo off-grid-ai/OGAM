@@ -26,6 +26,8 @@ function formatDate(dateStr: string): string {
 
 type Props = {
   conversations: Conversation[];
+  /** Total chats across all conversations — shown next to "See all". */
+  totalCount?: number;
   focusTrigger: number;
   onContinueChat: (conversationId: string) => void;
   onDeleteConversation: (conversation: Conversation) => void;
@@ -34,6 +36,7 @@ type Props = {
 
 export const RecentConversations: React.FC<Props> = ({
   conversations,
+  totalCount,
   focusTrigger,
   onContinueChat,
   onDeleteConversation,
@@ -57,7 +60,9 @@ export const RecentConversations: React.FC<Props> = ({
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Recent</Text>
         <TouchableOpacity onPress={onSeeAll} testID="conversation-list-button">
-          <Text style={styles.seeAll}>See all</Text>
+          <Text style={styles.seeAll}>
+            See all{typeof totalCount === 'number' ? ` (${totalCount})` : ''}
+          </Text>
         </TouchableOpacity>
       </View>
       {conversations.map((conv, index) => (

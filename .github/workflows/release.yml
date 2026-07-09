@@ -3,7 +3,9 @@ name: Build and Release Android
 # If you rename this workflow, update the workflow_run trigger in release-ios.yml.
 
 on:
-  workflow_dispatch:  # Disabled - manual trigger only for now
+  # Manual only. Releases are cut by hand (scripts/release.sh locally, or this dispatch) —
+  # merging to main must NOT auto-publish to the stores.
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -11,6 +13,12 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Lift store secrets to job-level env so the `if:` guards on the Play steps can test
+    # for their presence (if: conditions can read env, not secrets directly). Absent
+    # secrets => empty => Play upload steps skip, GitHub Release path still runs.
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
 
     steps:
       - name: Checkout code
@@ -33,6 +41,12 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Setup Ruby (fastlane)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -85,7 +99,27 @@ jobs:
 
           cat release-notes.md
 
+      # Decode the keystore BEFORE building the APK so the GitHub-release APK is RELEASE-signed,
+      # not debug-signed. Gated on the KEYSTORE ALONE (not the Play key) — APK signing only needs
+      # the keystore; coupling it to PLAY_STORE_JSON_KEY would debug-sign the APK in keystore-only
+      # setups. Only the keystore FILE PATH goes into $GITHUB_ENV (a path, so newline-safe); the
+      # secret-derived props are passed as static step env below (no env-file parsing). build.gradle
+      # gates release signing on project.hasProperty('OFFGRID_UPLOAD_STORE_FILE'), so when the
+      # keystore is absent the prop is unset and the build falls back to debug signing.
+      - name: Decode keystore
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          echo "ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_STORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+
       - name: Build Android Release APK
+        env:
+          # Secret-derived signing props: static step env (never $GITHUB_ENV) so a newline in a
+          # secret can't corrupt the env file. build.gradle only reads these inside the
+          # hasProperty(STORE_FILE) block, so when the keystore is absent they're simply unused.
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           cd android
           ./gradlew assembleRelease
@@ -108,5 +142,29 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: OffgridMobile-v${{ env.NEW_VERSION }}
-          path: android/app/build/outputs/apk/standard/release/OffgridMobile-v${{ env.NEW_VERSION }}.apk
+          # No product flavors, so the APK lives under apk/release/ (not apk/standard/release/).
+          path: android/app/build/outputs/apk/release/OffgridMobile-v${{ env.NEW_VERSION }}.apk
           if-no-files-found: error
+
+      # ── Play Store upload (in addition to the GitHub Release above) ──────────
+      # Decodes the Play service-account key, then builds the signed AAB and uploads it to the
+      # Play production track as a DRAFT (a human confirms rollout in the Play Console). Needs
+      # BOTH the keystore (decoded above → STORE_FILE prop) and the Play key, so it's gated on
+      # both; skipped when either is absent, and the GitHub Release path above still works.
+      - name: Decode Play service-account key
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' && env.PLAY_STORE_JSON_KEY != '' }}
+        run: |
+          # PLAY_STORE_JSON_KEY may be stored raw-JSON or base64 — handle both (matches uat-dev.yml).
+          echo "$PLAY_STORE_JSON_KEY" | base64 --decode > "$RUNNER_TEMP/play-key.json" \
+            || printf '%s' "$PLAY_STORE_JSON_KEY" > "$RUNNER_TEMP/play-key.json"
+          echo "PLAY_UPLOAD=1" >> "$GITHUB_ENV"
+
+      - name: Build signed AAB + upload to Play (draft)
+        if: ${{ env.PLAY_UPLOAD == '1' }}
+        env:
+          PLAY_STORE_JSON_KEY_PATH: ${{ runner.temp }}/play-key.json
+          # Same static signing props as the APK build (STORE_FILE comes from $GITHUB_ENV).
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: bundle exec fastlane android release

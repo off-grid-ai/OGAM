@@ -4,9 +4,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import { showAlert, AlertState } from '../../components/CustomAlert';
 import { RECOMMENDED_MODELS, TRENDING_FAMILIES, MODEL_ORGS } from '../../constants';
 import { useAppStore } from '../../stores';
-import { useDownloadStore, isActiveStatus } from '../../stores/downloadStore';
-import { makeModelKey } from '../../utils/modelKey';
+import { modelBudgetFraction } from '../../services/memoryBudget';
+import { useDownloadStore } from '../../stores/downloadStore';
 import { huggingFaceService, modelManager, hardwareService, activeModelService } from '../../services';
+import { startModelDownload } from '../../services/startModelDownload';
+import { ramFitScore } from '../../utils/recommendedModels';
+import { modelSupportsNpuGpu } from '../../utils/acceleration';
 import { ModelInfo, ModelFile, DownloadedModel } from '../../types';
 import { FilterDimension, FilterState, ModelTypeFilter, CredibilityFilter, SizeFilter, SortOption } from './types';
 import { initialFilterState, SIZE_OPTIONS, VISION_PIPELINE_TAG, CODE_FALLBACK_QUERY } from './constants';
@@ -22,12 +25,10 @@ function parseParamCount(model: ModelInfo): number | null {
 }
 
 
-// Score how well a model fits a device: ideal is ~40% of RAM, penalty above 75% (too slow)
+// Resolve a model's min RAM (explicit, else ~0.75GB/B params), then score via the
+// shared ramFitScore so onboarding + this screen rank fit identically.
 function bestFitScore(model: ModelInfo, ramGB: number): number {
-  const minRam = model.minRamGB ?? (model.paramCount ?? 0) * 0.75;
-  const ratio = minRam / ramGB;
-  const penalty = ratio > 0.75 ? (ratio - 0.75) * 4 : 0;
-  return Math.abs(ratio - 0.4) + penalty;
+  return ramFitScore(model.minRamGB ?? (model.paramCount ?? 0) * 0.75, ramGB);
 }
 
 function applySort<T extends ModelInfo>(models: T[], sort: SortOption, ramGB = 0): T[] {
@@ -85,7 +86,7 @@ function computeFilteredResults(
       }
     }
     const filesWithSize = (model.files || []).filter(f => f.size > 0);
-    if (filesWithSize.length > 0 && !filesWithSize.some(f => f.size / (1024 ** 3) < ramGB * 0.6)) return false;
+    if (filesWithSize.length > 0 && !filesWithSize.some(f => f.size / (1024 ** 3) < ramGB * modelBudgetFraction(ramGB))) return false;
     return true;
   });
   return filtered.map(model => {
@@ -110,7 +111,7 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
   const repairingVisionIds = useDownloadStore(s => s.repairingVisionIds);
   const setRepairingVision = useDownloadStore(s => s.setRepairingVision);
 
-  const { downloadedModels, setDownloadedModels, addDownloadedModel, removeDownloadedModel, activeModelId } = useAppStore();
+  const { downloadedModels, setDownloadedModels, removeDownloadedModel, activeModelId } = useAppStore();
 
   const loadDownloadedModels = async () => {
     const models = await modelManager.getDownloadedModels();
@@ -220,40 +221,21 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
   const isRepairingVisionModel = (modelDownloadId: string) => !!repairingVisionIds[modelDownloadId];
 
   const handleDownload = async (model: ModelInfo, file: ModelFile) => {
-    const modelKey = makeModelKey(model.id, file.name);
-    // Duplicate-start guard. If a download is already active for this
-    // logical file (rapid double-tap, race after retry, etc.), do nothing.
-    const existing = useDownloadStore.getState().downloads[modelKey];
-    if (existing && isActiveStatus(existing.status)) return;
-    let currentDownloadId: string | undefined;
-
-    const onComplete = (dm: DownloadedModel) => {
-      addDownloadedModel(dm);
-      // Clear the entry once the model is registered — UI then reads "downloaded" state
-      // from downloadedModels rather than a lingering store entry stuck at 100%.
-      useDownloadStore.getState().remove(modelKey);
-      if (file.mmProjFile && !(dm.engine === 'llama' && dm.isVisionModel)) {
-        setAlertState(showAlert(
-          'Model Downloaded',
-          `${model.name} downloaded but the vision projection file could not be saved. Go to Download Manager and use "Repair Vision" to fix it.`,
-        ));
-      } else {
-        setAlertState(showAlert('Success', `${model.name} downloaded successfully!`));
-      }
-    };
-    const onError = (err: Error) => {
-      if (currentDownloadId) {
-        useDownloadStore.getState().setStatus(currentDownloadId, 'failed', { message: err.message });
-      }
-      setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(err.message)));
-    };
-    try {
-      // modelManager.downloadModelBackground handles store population
-      // (add for new entries, retryEntry for existing failed ones).
-      const info = await modelManager.downloadModelBackground(model.id, file);
-      currentDownloadId = info.downloadId;
-      modelManager.watchDownload(info.downloadId, onComplete, onError);
-    } catch (e) { onError(e as Error); }
+    // Shared with the onboarding ModelDownloadScreen via startModelDownload — one
+    // mechanism + one duplicate guard. This screen owns only its completion/error UI.
+    await startModelDownload(model.id, file, {
+      onRegistered: (dm) => {
+        if (file.mmProjFile && !(dm.engine === 'llama' && dm.isVisionModel)) {
+          setAlertState(showAlert(
+            'Model Downloaded',
+            `${model.name} downloaded but the vision projection file could not be saved. Go to Download Manager and use "Repair Vision" to fix it.`,
+          ));
+        } else {
+          setAlertState(showAlert('Success', `${model.name} downloaded successfully!`));
+        }
+      },
+      onError: (err) => setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(err.message))),
+    });
   };
 
   const handleCancelDownload = async (modelKey: string) => {
@@ -275,11 +257,21 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
     await modelManager.deleteModel(model.id);
     removeDownloadedModel(model.id);
   };
+  // Resolve a catalog file to its on-disk model by the FILE, not the composite id.
+  // The download path registers `${modelId}/${fileName}`, but the restart catch-up /
+  // recovery scans register the SAME file under a different id (`recovered_…` or a bare
+  // name). Matching only the composite id made a recovered quant (e.g. a Q4_0 finalized
+  // after an app kill) look "not downloaded", so its file row fell through to whichever
+  // sibling quant WAS registered under the expected id (the Q4_K_M) — loading the wrong
+  // quant. A file name is unique within the models dir, so it's the stable key.
+  const matchesFile = (m: DownloadedModel, modelId: string, fileName: string) =>
+    m.fileName === fileName || m.id === `${modelId}/${fileName}`;
+
   const isModelDownloaded = (modelId: string, fileName: string) =>
-    downloadedModels.some(m => m.id === `${modelId}/${fileName}`);
+    downloadedModels.some(m => matchesFile(m, modelId, fileName));
 
   const getDownloadedModel = (modelId: string, fileName: string): DownloadedModel | undefined =>
-    downloadedModels.find(m => m.id === `${modelId}/${fileName}`);
+    downloadedModels.find(m => matchesFile(m, modelId, fileName));
 
   // Filter actions
   const clearFilters = useCallback(() => setFilterState(initialFilterState), []);
@@ -329,7 +321,12 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
         return true;
       })
       .map(m => mapCuratedModel(m, recommendedModelDetails));
-    return applySort(models, filterState.sort, ramGB);
+    const sorted = applySort(models, filterState.sort, ramGB);
+    // Prioritize NPU/GPU-accelerable models (LiteRT or Q4_0/Q8_0) to the top of the
+    // recommended list, keeping the existing order stable within each group. Only for
+    // the editorial 'recommended' sort — explicit sorts (size/downloads/…) are honored.
+    if (filterState.sort !== 'recommended') return sorted;
+    return [...sorted].sort((a, b) => Number(modelSupportsNpuGpu(b)) - Number(modelSupportsNpuGpu(a)));
   }, [deviceRecommendation.maxParameters, filterState.type, filterState.orgs, filterState.size, filterState.sort, recommendedModelDetails, ramGB]);
 
   const trendingAsModelInfo = useMemo((): ModelInfo[] => {

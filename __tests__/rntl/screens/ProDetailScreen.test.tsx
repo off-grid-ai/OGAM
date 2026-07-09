@@ -9,6 +9,8 @@ import React from 'react';
 import { Alert, Linking } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { useAppStore } from '../../../src/stores/appStore';
+import { OFF_GRID_DESKTOP_URL } from '../../../src/constants';
+import { withUtm } from '../../../src/utils/utm';
 
 const PAY_URL = 'https://offgridmobileai.co/pay';
 const mockActivateProByKey = jest.fn();
@@ -21,6 +23,9 @@ jest.mock('../../../src/services/proLicenseService', () => ({
   getProLicenseInfo: (...args: unknown[]) => mockGetProLicenseInfo(...args),
   listProDevices: (...args: unknown[]) => mockListProDevices(...args),
   deactivateProDevice: (...args: unknown[]) => mockDeactivateProDevice(...args),
+  // ProManageSection renders the status line from this map — mirror the real export
+  // so the mock can't diverge (an omitted map made PRO_TIER_META[tier] throw).
+  PRO_TIER_META: { lifetime: { label: 'Lifetime', renews: false }, yearly: { label: 'Yearly', renews: true } },
   PRO_PAY_PAGE_URL: 'https://offgridmobileai.co/pay',
 }));
 
@@ -58,9 +63,27 @@ describe('ProDetailScreen', () => {
   it('Get Pro opens the web pay page directly without a modal', () => {
     const { getAllByText, queryByText } = render(<ProDetailScreen />);
     fireEvent.press(getAllByText('Get Pro')[0]);
-    expect(linkingSpy).toHaveBeenCalledWith(PAY_URL);
+    expect(linkingSpy).toHaveBeenCalledWith(withUtm(PAY_URL, 'pro-detail'));
     // No in-app activation step for paying.
     expect(queryByText('Enter your license key')).toBeNull();
+  });
+
+  it('links to Off Grid AI Desktop from the Pro pitch', () => {
+    const { getByText } = render(<ProDetailScreen />);
+    fireEvent.press(getByText('Get Off Grid AI Desktop'));
+    expect(linkingSpy).toHaveBeenCalledWith(
+      withUtm(OFF_GRID_DESKTOP_URL, 'pro-detail'),
+    );
+  });
+
+  it('shows the Off Grid AI Desktop link to Pro-active users too', async () => {
+    useAppStore.setState({ hasRegisteredPro: true });
+    const { getByText } = render(<ProDetailScreen />);
+    await waitFor(() => expect(getByText('Get Off Grid AI Desktop')).toBeTruthy());
+    fireEvent.press(getByText('Get Off Grid AI Desktop'));
+    expect(linkingSpy).toHaveBeenCalledWith(
+      withUtm(OFF_GRID_DESKTOP_URL, 'pro-detail'),
+    );
   });
 
   it('"I have a license key" opens the activation modal', () => {
@@ -143,7 +166,7 @@ describe('ProDetailScreen', () => {
     const { getByText } = render(<ProDetailScreen />);
     fireEvent.press(getByText('I have a license key'));
     fireEvent.press(getByText('Not a member yet? Get Pro'));
-    expect(linkingSpy).toHaveBeenCalledWith(PAY_URL);
+    expect(linkingSpy).toHaveBeenCalledWith(withUtm(PAY_URL, 'pro-unlock'));
   });
 
   it('renders the Pro Active state with the management section when Pro is owned', async () => {
@@ -154,16 +177,29 @@ describe('ProDetailScreen', () => {
     await waitFor(() => expect(getByText('Lifetime · never expires')).toBeTruthy());
   });
 
-  it('shows the monthly status line and a Manage subscription link for monthly Pro', async () => {
+  it('shows the yearly status line and a Manage subscription link for a recurring license', async () => {
     useAppStore.setState({ hasRegisteredPro: true });
     mockGetProLicenseInfo.mockResolvedValue({
       isPro: true,
-      tier: 'monthly',
+      tier: 'yearly',
       expiry: '2026-08-01T00:00:00.000Z',
       verifiedAt: 0,
     });
     const { getByText } = render(<ProDetailScreen />);
-    await waitFor(() => expect(getByText(/Monthly · active until/)).toBeTruthy());
+    await waitFor(() => expect(getByText(/Yearly · renews/)).toBeTruthy());
     expect(getByText('Manage subscription')).toBeTruthy();
+  });
+
+  it('shows a lifetime status line and NO Manage subscription link for a one-time license', async () => {
+    useAppStore.setState({ hasRegisteredPro: true });
+    mockGetProLicenseInfo.mockResolvedValue({
+      isPro: true,
+      tier: 'lifetime',
+      expiry: null,
+      verifiedAt: 0,
+    });
+    const { getByText, queryByText } = render(<ProDetailScreen />);
+    await waitFor(() => expect(getByText(/Lifetime · never expires/)).toBeTruthy());
+    expect(queryByText('Manage subscription')).toBeNull();
   });
 });

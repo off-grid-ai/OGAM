@@ -91,7 +91,7 @@ export const ModelsManagerSheet: React.FC<Props> = ({
 };
 
 const createStyles = (colors: ThemeColors) => ({
-  content: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm, paddingBottom: SPACING.xl, gap: SPACING.sm as number },
+  content: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm, paddingBottom: SPACING.md, gap: SPACING.sm as number },
   row: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,

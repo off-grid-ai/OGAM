@@ -3,6 +3,7 @@ package ai.offgridmobile.download
 import android.app.Application
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -280,5 +281,27 @@ class DownloadManagerModuleTest {
         assertEquals(seeded, total)
     }
 
+    // ── Foreground-service download notification (F8) ─────────────────────────
+
+    @Test
+    fun buildForegroundInfoUsesDataSyncServiceType() {
+        val ctx = org.robolectric.RuntimeEnvironment.getApplication()
+        val info = WorkerDownload.buildForegroundInfo(ctx, "gemma-4-Q8_0.gguf")
+        // On SDK 33 the FGS type MUST be dataSync, or startForeground throws on Android 14+.
+        assertEquals(
+            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            info.foregroundServiceType,
+        )
+        assertNotNull(info.notification)
+    }
+
+    @Test
+    fun ensureNotificationChannelCreatesTheDownloadChannel() {
+        val ctx = org.robolectric.RuntimeEnvironment.getApplication()
+        WorkerDownload.ensureNotificationChannel(ctx)
+        val mgr = ctx.getSystemService(android.content.Context.NOTIFICATION_SERVICE)
+            as android.app.NotificationManager
+        assertNotNull(mgr.getNotificationChannel("model_downloads"))
+    }
 }
 

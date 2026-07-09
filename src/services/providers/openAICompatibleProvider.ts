@@ -30,11 +30,6 @@ function isOllamaEndpoint(endpoint: string): boolean {
   return endpoint.includes(':11434');
 }
 
-/** Returns true if the endpoint looks like an LM Studio server (port 1234) */
-function isLMStudioEndpoint(endpoint: string): boolean {
-  return endpoint.includes(':1234');
-}
-
 /**
  * OpenAI-Compatible Provider Implementation
  */
@@ -54,6 +49,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
       supportsVision: false,
       supportsToolCalling: true, // Assume true for OpenAI-compatible
       supportsThinking: false,
+      acceptsThinkingKwarg: false, // set from discovery (/props or LM Studio probe)
     };
   }
 
@@ -104,9 +100,11 @@ export class OpenAICompatibleProvider implements LLMProvider {
       // need a larger budget for <think> blocks (Qwen3, DeepSeek-R1, etc).
       ...(options.topP !== undefined && { top_p: options.topP }),
       ...(options.tools && options.tools.length > 0 && { tools: options.tools, tool_choice: 'auto' }),
-      // LM Studio only: control Qwen3 thinking per-request via chat_template_kwargs.
-      // Sent only to LM Studio endpoints (port 1234) — other servers may reject unknown fields.
-      ...(isLMStudioEndpoint(this.config.endpoint) && { chat_template_kwargs: { enable_thinking: thinkingEnabled } }),
+      // Control Qwen3 thinking per-request via chat_template_kwargs, but only for
+      // servers that advertised (at discovery) that they honor it. Gating on a
+      // discovered capability — not the endpoint's port — keeps the "which server
+      // accepts this?" decision in one place and free of implementation coupling.
+      ...(this.modelCapabilities.acceptsThinkingKwarg && { chat_template_kwargs: { enable_thinking: thinkingEnabled } }),
     };
   }
 

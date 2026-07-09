@@ -11,7 +11,10 @@ import {
   contextCompactionService,
 } from '../../services';
 import { liteRTService } from '../../services/litert';
-import { Message, MediaAttachment, Project, DownloadedModel, DebugInfo, RemoteModel, INFERENCE_BACKENDS } from '../../types';
+import { effectiveCacheType } from '../../services/llmHelpers';
+import { generationSession } from '../../services/generationSession';
+import { useGeneratingConversationId } from '../../hooks/useGenerationSession';
+import { Message, MediaAttachment, Project, DownloadedModel, DebugInfo, RemoteModel } from '../../types';
 import { RootStackParamList } from '../../navigation/types';
 import { ensureModelLoadedFn, ensureTextModelForChatFn, handleModelSelectFn, handleUnloadModelFn, initiateModelLoad, useChatImageModelEffects, useChatModelStateSync } from './useChatModelActions';
 import { startGenerationFn, handleSendFn, handleStopFn, handleSelectProjectFn, dispatchGenerationFn } from './useChatGenerationActions';
@@ -34,6 +37,49 @@ type ActiveModelInfo = {
   modelId: string | null;
   modelName: string;
 };
+
+/**
+ * Whether live settings differ from what the loaded model was loaded with — drives the
+ * "settings changed, tap to reload" banner. A field only counts as changed when the
+ * snapshot actually CAPTURED it: comparing a live value against an `undefined` snapshot
+ * field is a false positive, not a change. This happens across engines — the llama loader
+ * snapshots only the llama fields (so liteRTBackend/liteRTMaxTokens are undefined), and
+ * loadedSettings is persisted, so a relaunch or a llama→LiteRT switch would otherwise pop
+ * the banner with nothing changed.
+ */
+export function computePendingSettings(
+  engine: string | undefined,
+  settings: Record<string, unknown>,
+  loadedSettings: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!loadedSettings) return false;
+  // Pending only if BOTH sides are defined AND differ.
+  const changed = (live: unknown, loaded: unknown) => loaded !== undefined && live !== loaded;
+  if (engine === 'litert') {
+    // Compare the EFFECTIVE token budget (unset = native default 4096) so an
+    // undefined→explicit change still flags a reload (mirror of the false-positive fix).
+    const liveTokens = (settings.liteRTMaxTokens as number | undefined) ?? 4096;
+    const loadedTokens = (loadedSettings.liteRTMaxTokens as number | undefined) ?? 4096;
+    return changed(settings.liteRTBackend, loadedSettings.liteRTBackend) ||
+           (loadedSettings.liteRTBackend !== undefined && liveTokens !== loadedTokens);
+  }
+  // Compare the EFFECTIVE cache on BOTH sides (OpenCL + HTP coerce to f16). Comparing the
+  // effective live value against the RAW stored value falsely flagged "settings changed"
+  // right after every accelerated load (live f16 vs stored q8_0). Symmetric via the single
+  // llmHelpers source — also robust to snapshots persisted before this fix.
+  const effCache = effectiveCacheType(settings.inferenceBackend as string | undefined, settings.cacheType as string | undefined);
+  const loadedEffCache = effectiveCacheType(loadedSettings.inferenceBackend as string | undefined, loadedSettings.cacheType as string | undefined);
+  return (
+    changed(settings.nThreads, loadedSettings.nThreads) ||
+    changed(settings.nBatch, loadedSettings.nBatch) ||
+    changed(settings.contextLength, loadedSettings.contextLength) ||
+    changed(settings.enableGpu, loadedSettings.enableGpu) ||
+    changed(settings.inferenceBackend, loadedSettings.inferenceBackend) ||
+    changed(settings.gpuLayers, loadedSettings.gpuLayers) ||
+    changed(settings.flashAttn, loadedSettings.flashAttn) ||
+    (loadedSettings.cacheType !== undefined && effCache !== loadedEffCache)
+  );
+}
 
 export const useChatScreen = () => {
   const navigation = useNavigation();
@@ -59,7 +105,8 @@ export const useChatScreen = () => {
   const [isCompacting, setIsCompacting] = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState<string | undefined>(route.params?.projectId);
   const lastMessageCountRef = useRef(0);
-  const generatingForConversationRef = useRef<string | null>(null);
+  // Owned by the generationSession service (single owner); observed reactively here.
+  const generatingConversationId = useGeneratingConversationId();
   // Stashed when the model selector opens with no text model; replayed on pick.
   const pendingMessageRef = useRef<{ text: string; attachments?: MediaAttachment[] } | null>(null);
 
@@ -98,7 +145,7 @@ export const useChatScreen = () => {
     downloadedImageModels, setDownloadedImageModels,
     setIsGeneratingImage: setAppIsGeneratingImage,
     setImageGenerationStatus: setAppImageGenerationStatus,
-    removeImagesByConversationId, loadedSettings,
+    removeImagesByConversationId, loadedSettings, textModelEvicted,
   } = useAppStore();
 
   // Remote model state - use proper selectors for reactivity
@@ -178,8 +225,8 @@ export const useChatScreen = () => {
     activeImageModel, imageModelLoaded, isStreaming, isGeneratingImage, imageGenState, settings,
     downloadedModels, setAlertState, setIsClassifying, setAppImageGenerationStatus,
     setAppIsGeneratingImage, addMessage, clearStreamingMessage, deleteConversation,
-    setActiveConversation, removeImagesByConversationId, generatingForConversationRef, navigation, setShowSettingsPanel,
-    ensureModelLoaded: async () => ensureModelLoadedFn(modelDeps),
+    setActiveConversation, removeImagesByConversationId, navigation, setShowSettingsPanel,
+    ensureModelLoaded: async (onLoadedResume?: () => void) => ensureModelLoadedFn(modelDeps, onLoadedResume),
     ensureTextModelForChat: () => ensureTextModelForChatFn({ setShowModelSelector, setLoadingModel, setIsModelLoading }),
     setPendingMessage: (text: string, attachments?: MediaAttachment[]) => { pendingMessageRef.current = { text, attachments }; },
     createConversation,
@@ -230,8 +277,9 @@ export const useChatScreen = () => {
   }, [route.params?.projectId]);
 
   useEffect(() => {
-    if (generatingForConversationRef.current && generatingForConversationRef.current !== activeConversationId) {
-      generatingForConversationRef.current = null;
+    // Switched away from the conversation that was generating → end its session.
+    if (generationSession.getConversationId() && !generationSession.isGeneratingFor(activeConversationId)) {
+      generationSession.end('conversation-switch');
     }
     let cancelled = false;
     const timer = setTimeout(() => {
@@ -243,7 +291,7 @@ export const useChatScreen = () => {
   useChatImageModelEffects({ setDownloadedImageModels, settings, activeImageModelId, downloadedModels });
   useChatModelStateSync({ activeModelInfo, activeModelId, activeModel, modelDeps, activeRemoteModel, activeRemoteTextModelId, isModelLoading, setSupportsVision, setSupportsToolCalling, setSupportsThinking });
 
-  const isGeneratingForThisConversation = !!generatingForConversationRef.current && generatingForConversationRef.current === activeConversationId;
+  const isGeneratingForThisConversation = generatingConversationId != null && generatingConversationId === activeConversationId;
   const displayMessages = getDisplayMessages(activeConversation?.messages || [], { isThinking, streamingMessage, streamingReasoningContent, isStreamingForThisConversation, isModelLoading, loadingModelName: loadingModel?.name, isGeneratingForThisConversation });
 
   useEffect(() => {
@@ -254,13 +302,12 @@ export const useChatScreen = () => {
   useEffect(() => { lastMessageCountRef.current = 0; setAnimateLastN(0); }, [activeConversationId]);
   const prevStreamingRef = useRef(false);
 
-  // Stop any in-flight TTS when a new streaming response begins.
-  // No-op without the pro audio feature.
-  useEffect(() => {
-    if (isStreamingForThisConversation) {
-      callHook(HOOKS.audioStop);
-    }
-  }, [isStreamingForThisConversation]);
+  // NOTE: stopping stale TTS on a new turn is done in handleSendFn (and retry/
+  // voice/navigation), NOT here. A previous effect fired audio.stop whenever
+  // `isStreamingForThisConversation` became true — but that flag bounces
+  // false→true on every tool-call round within a single turn, so it re-fired
+  // audio.stop mid-answer and aborted the current answer's streaming-TTS queue
+  // (the "streams, then stops speaking once the answer is prepared" bug).
 
   // When streaming ends, the pro audio feature speaks the final assistant
   // message (only if voice mode is active + TTS ready). No-op in free builds.
@@ -280,39 +327,24 @@ export const useChatScreen = () => {
     const cur = settings.enabledTools || [];
     useAppStore.getState().updateSettings({ enabledTools: cur.includes(toolId) ? cur.filter((id: string) => id !== toolId) : [...cur, toolId] });
   };
-  // Check if there are pending settings that require model reload
-  const hasPendingSettings = (() => {
-    if (!loadedSettings) return false;
-    // LiteRT reloads when backend or context length changes — both are baked into the engine at load time
-    if (activeModel?.engine === 'litert') {
-      return settings.liteRTBackend !== loadedSettings.liteRTBackend ||
-             settings.liteRTMaxTokens !== loadedSettings.liteRTMaxTokens;
-    }
-    return (
-      settings.nThreads !== loadedSettings.nThreads ||
-      settings.nBatch !== loadedSettings.nBatch ||
-      settings.contextLength !== loadedSettings.contextLength ||
-      settings.enableGpu !== loadedSettings.enableGpu ||
-      settings.inferenceBackend !== loadedSettings.inferenceBackend ||
-      settings.gpuLayers !== loadedSettings.gpuLayers ||
-      settings.flashAttn !== loadedSettings.flashAttn ||
-      // Compare effective cache type — OpenCL forces f16 regardless of user setting
-      (settings.inferenceBackend === INFERENCE_BACKENDS.OPENCL ? 'f16' : settings.cacheType) !== loadedSettings.cacheType
-    );
-  })();
+  // Whether settings changed since the model was loaded (drives the reload banner).
+  const hasPendingSettings = computePendingSettings(activeModel?.engine, settings, loadedSettings);
 
   const handleReloadTextModel = useCallback(async () => {
     if (!activeModelInfo.modelId || activeModelInfo.isRemote) return;
     setShowModelSelector(true);
+    // Unload with keepSelection=true so a failed reload never clears activeModelId
+    // (the default unload cleared it, so an OOM stranded the chat: stuck banner +
+    // wedged send). The unload still nulls loadedTextModelId, so loadTextModel
+    // won't fast-path-skip. The memory gate — including the "Load Anyway" override
+    // — is owned by initiateModelLoad, so reload matches normal load exactly (no
+    // duplicated/stricter check in the view).
     if (activeModel?.engine === 'litert') {
-      // Unload LiteRT engine before reloading with the new backend
       if (liteRTService.isModelLoaded()) {
         await liteRTService.unloadModel().catch(() => { });
       }
-    // Must unload first — loadTextModel skips if the same model ID is already loaded,
-    // which means setLoadedSettings would never run and the banner would persist.
     } else if (llmService.isModelLoaded()) {
-      await activeModelService.unloadTextModel();
+      await activeModelService.unloadTextModel(true);
     }
     await initiateModelLoad(modelDeps, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -330,6 +362,7 @@ export const useChatScreen = () => {
       handleSend(pending.text, pending.attachments);
     }
   };
+
 
   return {
     isModelLoading, loadingModel, supportsVision,
@@ -349,7 +382,7 @@ export const useChatScreen = () => {
     imageGenerationProgress: imageGenState.progress,
     imageGenerationStatus: imageGenState.status,
     imagePreviewPath: imageGenState.previewPath,
-    isStreaming, isThinking, isCompacting, isGeneratingForThisConversation, hasPendingSettings, handleReloadTextModel, displayMessages, downloadedModels, hasAvailableModels, projects, settings,
+    isStreaming, isThinking, isCompacting, isGeneratingForThisConversation, hasPendingSettings, handleReloadTextModel, textModelEvicted, displayMessages, downloadedModels, hasAvailableModels, projects, settings,
     navigation, hardwareService,
     handleSend,
     handleStop: () => handleStopFn(genDeps),

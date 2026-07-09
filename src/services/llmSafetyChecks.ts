@@ -73,19 +73,37 @@ export async function validateModelFile(modelPath: string): Promise<{ valid: boo
  * Uses a 1.2x multiplier on file size as a conservative estimate of runtime RAM.
  * Context window KV cache adds additional memory proportional to context length.
  */
+/**
+ * KV cache scales with both context length AND model size (layers × hidden dim).
+ * We don't know the architecture before load, so approximate the per-1024-token KV
+ * cost as a fraction of the model's resident weights — ~6% for an f16 cache, ~3%
+ * for a quantized (q8_0/q4) cache. For a ~4 GB 7-8B model at 4096 ctx this yields
+ * ~1 GB (f16) / ~0.5 GB (quant), the right order of magnitude. The previous estimate
+ * (~2 MB at any size) was ~1000x too low, so the guard never caught oversized loads.
+ */
+const KV_FRACTION_PER_1K_F16 = 0.06;
+const KV_FRACTION_PER_1K_QUANT = 0.03;
+
+export interface MemoryCheckArgs {
+  modelFileSize: number;
+  contextLength: number;
+  getAvailableMemory: () => Promise<{ available: number; total: number }>;
+  quantizedCache?: boolean;
+}
+
 export async function checkMemoryForModel(
-  modelFileSize: number,
-  contextLength: number,
-  getAvailableMemory: () => Promise<{ available: number; total: number }>,
+  args: MemoryCheckArgs,
 ): Promise<{ safe: boolean; reason?: string; estimatedMB: number; availableMB: number }> {
+  const { modelFileSize, contextLength, getAvailableMemory, quantizedCache } = args;
   try {
     const { available, total } = await getAvailableMemory();
     const availableMB = available / (1024 * 1024);
     const totalMB = total / (1024 * 1024);
     // Model weights in RAM (~1x file size for mmap, up to 1.2x without)
     const modelMB = (modelFileSize * 1.2) / (1024 * 1024);
-    // KV cache estimate: ~0.5 MB per 1024 context tokens (quantized cache)
-    const kvCacheMB = (contextLength / 1024) * 0.5;
+    // KV cache estimate: a fraction of the model weights per 1024 tokens (see above).
+    const kvFractionPer1k = quantizedCache ? KV_FRACTION_PER_1K_QUANT : KV_FRACTION_PER_1K_F16;
+    const kvCacheMB = (contextLength / 1024) * modelMB * kvFractionPer1k;
     const estimatedMB = modelMB + kvCacheMB;
     // Require at least 200MB headroom after model load for OS and app
     const MIN_HEADROOM_MB = 200;

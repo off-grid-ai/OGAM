@@ -16,15 +16,19 @@ import { hardwareService, modelManager, authService, ragService, remoteServerMan
 import logger from './src/utils/logger';
 import { useAppStore, useAuthStore, useRemoteServerStore, useWhisperStore } from './src/stores';
 import { useDebugLogsStore } from './src/stores/debugLogsStore';
+import { initDebugLogFile, appendDebugLine } from './src/utils/debugLogFile';
 import { loadProFeatures } from './src/bootstrap/loadProFeatures';
 import { checkProStatus } from './src/services/proLicenseService';
 import { hydrateDownloadStore } from './src/services/downloadHydration';
+import { startLoadPolicySync } from './src/services/loadPolicySync';
+import { registerCoreDownloadProviders } from './src/services/modelDownloadService/registerProviders';
 import { useDownloadListeners } from './src/hooks/useDownloads';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useSlot, SLOTS } from './src/bootstrap/slotRegistry';
 import { LockScreen } from './src/screens';
 import { useAppState } from './src/hooks/useAppState';
 import { useDownloadStore } from './src/stores/downloadStore';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 LogBox.ignoreAllLogs(); // Suppress all logs
 
@@ -39,13 +43,18 @@ if (__DEV__) {
   const base = { log: logger.log, warn: logger.warn, error: logger.error };
   const tap = (level: 'log' | 'warn' | 'error') => (...args: unknown[]) => {
     base[level](...args);
+    const message = args.map(fmt).join(' ');
     try {
-      useDebugLogsStore.getState().addLog({ timestamp: Date.now(), level, message: args.map(fmt).join(' ') });
+      useDebugLogsStore.getState().addLog({ timestamp: Date.now(), level, message });
     } catch { /* never break logging */ }
+    // Persist to the on-device file sink so traces can be pulled over the cable
+    // (RN 0.83 console logs don't reach Metro stdout or syslog). See debugLogFile.ts.
+    try { appendDebugLine(level, message); } catch { /* never break logging */ }
   };
   logger.log = tap('log');
   logger.warn = tap('warn');
   logger.error = tap('error');
+  initDebugLogFile();
 }
 
 const ensureRemoteServerStoreHydrated = async () => {
@@ -134,11 +143,26 @@ function App() {
       // Ensure persisted download metadata is loaded before restore logic reads it.
       await ensureAppStoreHydrated();
 
+      // Project the persisted "aggressive model loading" setting onto the residency
+      // manager (single owner of the runtime load policy) now that settings are
+      // hydrated, and keep it in sync for the app's lifetime.
+      startLoadPolicySync();
+
       // Hydrate download store from SQLite before any screen mounts.
       await hydrateDownloadStore().catch((error) => {
         logger.error('[App] Failed to hydrate download store during startup:', error);
       });
       await reattachTextDownloadRecovery();
+
+      // Register the core download providers so the unified service is reactive for
+      // any screen (registration only subscribes — no writes). NOTE: do NOT call
+      // modelDownloadService.reconcile() here yet — the existing reattachTextDownload
+      // Recovery (above) + the image-resume path are still the owners of post-launch
+      // recovery, and running provider reconcile() alongside them = two writers to
+      // downloadStore (a download one restores, the other strands). reconcile()
+      // becomes the SINGLE owner only once the Download Manager consumes the service
+      // and the old recovery paths are folded into the providers.
+      registerCoreDownloadProviders();
 
       // Phase 1: Quick initialization - get app ready to show UI
       // Initialize hardware detection
@@ -348,9 +372,11 @@ const styles = StyleSheet.create({
 // wrap the whole app once here rather than per return-branch in App().
 function AppWithProviders() {
   return (
-    <KeyboardProvider>
-      <App />
-    </KeyboardProvider>
+    <ErrorBoundary>
+      <KeyboardProvider>
+        <App />
+      </KeyboardProvider>
+    </ErrorBoundary>
   );
 }
 

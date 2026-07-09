@@ -64,7 +64,7 @@ jest.mock('@offgrid/core/utils/logger', () => ({
   default: { log: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
-import { useTTSStore } from '../../../pro/audio/ttsStore';
+import { useTTSStore, _setVoiceSwitchTimeoutForTest } from '../../../pro/audio/ttsStore';
 
 const getState = () => useTTSStore.getState();
 
@@ -159,6 +159,38 @@ describe('ttsStore', () => {
 
       getState().resume();
       expect(mockEngine.resume).toHaveBeenCalled();
+    });
+  });
+
+  describe('setVoice (logged, timeout-guarded switch)', () => {
+    it('clears isSwitchingVoice after a successful switch', async () => {
+      mockEngine.setVoice.mockResolvedValueOnce(undefined);
+      await getState().setVoice('default');
+      expect(mockEngine.setVoice).toHaveBeenCalledWith('default');
+      expect(getState().isSwitchingVoice).toBe(false);
+    });
+
+    it('does NOT hang when the engine voice fetch never settles — times out and recovers', async () => {
+      _setVoiceSwitchTimeoutForTest(20);
+      mockEngine.setVoice.mockReturnValueOnce(new Promise<void>(() => { /* never resolves (stuck native fetch) */ }));
+      await getState().setVoice('default');
+      // The spinner must clear and an error surfaces — never a permanent stuck state.
+      expect(getState().isSwitchingVoice).toBe(false);
+      expect(getState().error).toMatch(/timed out/i);
+      _setVoiceSwitchTimeoutForTest(45000);
+    });
+
+    it('recovers (clears the flag, surfaces error) when the switch rejects', async () => {
+      mockEngine.setVoice.mockRejectedValueOnce(new Error('fetch failed'));
+      await getState().setVoice('default');
+      expect(getState().isSwitchingVoice).toBe(false);
+      expect(getState().error).toBe('fetch failed');
+    });
+
+    it('deleteModels clears a stuck isSwitchingVoice (delete mid-switch must not lock the picker)', async () => {
+      useTTSStore.setState({ isSwitchingVoice: true });
+      await getState().deleteModels();
+      expect(getState().isSwitchingVoice).toBe(false);
     });
   });
 

@@ -11,26 +11,28 @@ import {
   ModelType,
   MemoryCheckResult,
   MemoryCheckSeverity,
-  getMemoryBudgetPercent,
-  getMemoryWarningPercent,
   TEXT_MODEL_OVERHEAD_MULTIPLIER,
   IMAGE_MODEL_OVERHEAD_MULTIPLIER,
 } from './types';
+import { modelMemoryBudgetMB, modelWarningThresholdMB, LoadPolicy } from '../memoryBudget';
 
 // ---------------------------------------------------------------------------
 // Budget helpers
 // ---------------------------------------------------------------------------
 
-export const getMemoryBudgetGB = async (): Promise<number> => {
+// The pre-load check reads the SAME budget owner as the residency manager, so it
+// must honour the SAME load policy — otherwise aggressive mode would relax the
+// residency gate while the pre-check kept blocking/warning at balanced limits.
+export const getMemoryBudgetGB = async (policy: LoadPolicy = 'balanced'): Promise<number> => {
   const deviceInfo = await hardwareService.getDeviceInfo();
-  const totalGB = deviceInfo.totalMemory / (1024 * 1024 * 1024);
-  return totalGB * getMemoryBudgetPercent(totalGB);
+  const totalMB = deviceInfo.totalMemory / (1024 * 1024);
+  return modelMemoryBudgetMB(totalMB, undefined, policy) / 1024;
 };
 
 export const getMemoryWarningThresholdGB = async (): Promise<number> => {
   const deviceInfo = await hardwareService.getDeviceInfo();
-  const totalGB = deviceInfo.totalMemory / (1024 * 1024 * 1024);
-  return totalGB * getMemoryWarningPercent(totalGB);
+  const totalMB = deviceInfo.totalMemory / (1024 * 1024);
+  return modelWarningThresholdMB(totalMB) / 1024;
 };
 
 // ---------------------------------------------------------------------------
@@ -119,13 +121,17 @@ export interface CheckMemoryParams {
   modelType: ModelType;
   ids: LoadedModelIds;
   lists: ModelLists;
+  /** Active load policy. Defaults to balanced so existing callers are unchanged. */
+  policy?: LoadPolicy;
+  /** User already approved a memory override for this model this session → don't re-prompt. */
+  sessionOverride?: boolean;
 }
 
 export async function checkMemoryForModel(
   params: CheckMemoryParams,
 ): Promise<MemoryCheckResult> {
-  const { modelId, modelType, ids, lists } = params;
-  const memoryBudgetGB = await getMemoryBudgetGB();
+  const { modelId, modelType, ids, lists, policy, sessionOverride } = params;
+  const memoryBudgetGB = await getMemoryBudgetGB(policy);
   const warningThresholdGB = await getMemoryWarningThresholdGB();
 
   const model =
@@ -152,6 +158,18 @@ export async function checkMemoryForModel(
   const remainingBudgetGB = memoryBudgetGB - totalRequiredMemoryGB;
 
   const modelName = 'name' in model ? model.name : modelId;
+
+  // Already approved for this model this session → skip the gate so the user isn't
+  // re-prompted every time it's evicted and reloaded (text↔image↔TTS swaps).
+  if (sessionOverride) {
+    return {
+      canLoad: true, severity: 'safe',
+      availableMemoryGB: memoryBudgetGB - currentlyLoadedMemoryGB,
+      requiredMemoryGB, currentlyLoadedMemoryGB, totalRequiredMemoryGB,
+      remainingAfterLoadGB: remainingBudgetGB,
+      message: `${modelName} — load override approved for this session.`,
+    };
+  }
   const requiredStr = requiredMemoryGB.toFixed(1);
   const totalStr = totalRequiredMemoryGB.toFixed(1);
   const budgetStr = memoryBudgetGB.toFixed(1);
@@ -166,16 +184,16 @@ export async function checkMemoryForModel(
     message =
       currentlyLoadedMemoryGB > 0
         ? `Cannot load ${modelName} (~${requiredStr} GB) while other models are loaded. ` +
-          `Total would be ~${totalStr} GB, exceeding your device's ~${budgetStr} GB safe limit (60% of RAM). ` +
+          `Total would be ~${totalStr} GB, exceeding your device's ~${budgetStr} GB safe limit. ` +
           `Unload the other model first, or choose a smaller model.`
-        : `${modelName} requires ~${requiredStr} GB which exceeds your device's ~${budgetStr} GB safe limit (60% of RAM). ` +
+        : `${modelName} requires ~${requiredStr} GB which exceeds your device's ~${budgetStr} GB safe limit. ` +
           `This model is too large for your device. Choose a smaller model.`;
   } else if (totalRequiredMemoryGB > warningThresholdGB) {
     severity = 'warning';
     canLoad = true;
     message =
       `Loading ${modelName} will use ~${requiredStr} GB. ` +
-      `Total model memory will be ~${totalStr} GB (over 50% of your RAM). ` +
+      `Total model memory will be ~${totalStr} GB, near your device's safe limit. ` +
       `The app may become slow. Continue anyway?`;
   } else {
     severity = 'safe';
@@ -245,12 +263,12 @@ export async function checkMemoryForDualModel(
     canLoad = false;
     message =
       `Cannot load both models. ` +
-      `${namesStr} would require ~${requiredStr} GB, exceeding your device's ~${budgetStr} GB safe limit (60% of RAM).`;
+      `${namesStr} would require ~${requiredStr} GB, exceeding your device's ~${budgetStr} GB safe limit.`;
   } else if (totalRequiredGB > warningThresholdGB) {
     severity = 'warning';
     canLoad = true;
     message =
-      `Loading ${namesStr} will use ~${requiredStr} GB (over 50% of RAM). ` +
+      `Loading ${namesStr} will use ~${requiredStr} GB, near your device's safe limit. ` +
       `Performance may be affected.`;
   } else {
     severity = 'safe';

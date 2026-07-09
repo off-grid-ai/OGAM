@@ -5,6 +5,7 @@ import { SPACING } from '../../constants';
 import { createStyles } from './styles';
 import { BackendFilter, ImageFilterDimension } from './types';
 import { BACKEND_OPTIONS, SD_VERSION_OPTIONS, STYLE_OPTIONS } from './constants';
+import { imageBackendLabel } from '../../utils/imageBackend';
 
 interface Props {
   backendFilter: BackendFilter;
@@ -21,10 +22,7 @@ interface Props {
 }
 
 function getBackendLabel(filter: BackendFilter): string {
-  if (filter === 'mnn') return 'GPU';
-  if (filter === 'qnn') return 'NPU';
-  if (filter === 'coreml') return 'Core ML';
-  return 'Backend';
+  return imageBackendLabel(filter, 'Backend');
 }
 
 function getSdLabel(filter: string): string {

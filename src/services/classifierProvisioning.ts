@@ -10,6 +10,7 @@
 import { useAppStore } from '../stores';
 import { modelManager } from './modelManager';
 import { huggingFaceService } from './huggingface';
+import { startModelDownload } from './startModelDownload';
 
 /** SmolLM2-135M-Instruct GGUF — ~100-145MB, runs on llama.rn. */
 const CLASSIFIER_REPO = 'bartowski/SmolLM2-135M-Instruct-GGUF';
@@ -51,17 +52,26 @@ export async function ensureDefaultClassifier(): Promise<void> {
       provisioning = false;
       return;
     }
-    const info = await modelManager.downloadModelBackground(CLASSIFIER_REPO, file);
-    modelManager.watchDownload(
-      info.downloadId,
-      () => {
-        useAppStore.getState().updateSettings({ classifierModelId: `${CLASSIFIER_REPO}/${file.name}` });
+    // Route through THE single download entry point instead of a parallel
+    // downloadModelBackground + watchDownload. startModelDownload registers the model
+    // AND clears the in-flight downloadStore row on completion; the old parallel path
+    // never cleared the row, so after the classifier finished it lingered forever as a
+    // phantom "downloading 100%" entry in the Download Manager (its uniform id —
+    // text:<repo> — never matched the finished model's text:<repo>/<file>, so the
+    // one-entry dedup couldn't collapse it).
+    let settled = false;
+    await startModelDownload(CLASSIFIER_REPO, file, {
+      onRegistered: (model) => {
+        settled = true;
+        useAppStore.getState().updateSettings({ classifierModelId: model.id });
         provisioning = false;
       },
-      () => {
-        provisioning = false;
-      },
-    );
+      onError: () => { settled = true; provisioning = false; },
+    });
+    // startModelDownload can return without firing either callback (already-active
+    // download, or a queued start that was cancelled). Don't leave provisioning stuck
+    // true forever — that would block every future classifier selection attempt.
+    if (!settled) provisioning = false;
   } catch {
     provisioning = false;
   }

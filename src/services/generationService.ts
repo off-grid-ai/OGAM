@@ -48,6 +48,9 @@ class GenerationService {
 
   private listeners: Set<GenerationListener> = new Set();
   private abortRequested: boolean = false;
+  /** Whether the last/active generation was stopped by the user — lets callers skip a
+   *  "no response" retry prompt when the empty result was an intentional abort. */
+  wasAborted(): boolean { return this.abortRequested; }
   private pendingStop: Promise<void> | null = null;
   private queueProcessor: QueueProcessor | null = null;
   private currentRemoteAbortController: AbortController | null = null;

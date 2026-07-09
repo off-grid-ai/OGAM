@@ -294,14 +294,17 @@ describe('StorageSettingsScreen', () => {
     expect(getByText('GPU')).toBeTruthy();
   });
 
-  it('renders image model with QNN backend as Qualcomm NPU', () => {
+  it('renders image model with QNN backend as NPU (single source of truth, no "Qualcomm NPU" drift)', () => {
     mockDownloadedImageModels = [
       { id: 'i1', name: 'QNN Model', description: '', modelPath: '/p', downloadedAt: '', size: 1024, style: 'artistic', backend: 'qnn' },
     ];
 
-    const { getByText } = render(<StorageSettingsScreen />);
+    const { getByText, queryByText } = render(<StorageSettingsScreen />);
     expect(getByText('QNN Model')).toBeTruthy();
-    expect(getByText(/Qualcomm NPU/)).toBeTruthy();
+    // Every surface now renders "NPU" via imageBackendLabel; Storage Settings used
+    // to drift to "Qualcomm NPU".
+    expect(getByText(/NPU/)).toBeTruthy();
+    expect(queryByText(/Qualcomm NPU/)).toBeNull();
   });
 
   // ---- Orphaned files section tests ----

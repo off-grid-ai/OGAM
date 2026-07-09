@@ -1345,9 +1345,10 @@ describe('ChatInput', () => {
       expect(mockStartRecording).toHaveBeenCalled();
     });
 
-    it('inserts transcribed text into message when finalResult arrives', () => {
+    it('auto-sends a standalone chat-mode dictation instead of inserting it into the composer', () => {
       const mockClearResult = jest.fn();
-      // First render: no finalResult
+      const onSend = jest.fn();
+      // First render: no finalResult, empty composer (standalone).
       mockUseWhisperTranscription.mockReturnValue({
         isRecording: false,
         isModelLoaded: true,
@@ -1365,10 +1366,10 @@ describe('ChatInput', () => {
       });
 
       const { getByTestId, rerender } = render(
-        <ChatInput {...defaultProps} conversationId="conv-123" />
+        <ChatInput {...defaultProps} onSend={onSend} conversationId="conv-123" />
       );
 
-      // Simulate finalResult arriving (covers lines 104-111)
+      // Simulate finalResult arriving for a standalone recording.
       mockUseWhisperTranscription.mockReturnValue({
         isRecording: false,
         isModelLoaded: true,
@@ -1382,11 +1383,16 @@ describe('ChatInput', () => {
         clearResult: mockClearResult,
       });
 
-      rerender(<ChatInput {...defaultProps} conversationId="conv-123" />);
+      rerender(<ChatInput {...defaultProps} onSend={onSend} conversationId="conv-123" />);
 
-      // The transcribed text should be inserted into the input
+      // Standalone dictation auto-sends as a plain text message (no audio file
+      // on the whisper path) and does NOT sit in the composer.
+      expect(onSend).toHaveBeenCalledTimes(1);
+      const [text, attachments] = onSend.mock.calls[0];
+      expect(text).toBe('Hello from voice');
+      expect(attachments ?? []).toHaveLength(0);
       const input = getByTestId('chat-input');
-      expect(input.props.value).toBe('Hello from voice');
+      expect(input.props.value).toBe('');
       expect(mockClearResult).toHaveBeenCalled();
     });
 

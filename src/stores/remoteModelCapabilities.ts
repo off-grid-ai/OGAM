@@ -13,6 +13,8 @@ export interface RemoteModelInfo {
   supportsVision: boolean;
   supportsToolCalling?: boolean;
   supportsThinking?: boolean;
+  /** Server honors chat_template_kwargs.enable_thinking to toggle reasoning per request. */
+  acceptsThinkingKwarg?: boolean;
 }
 
 function parseModelInfoKeys(modelInfo: Record<string, unknown>): { contextLength: number; supportsVision: boolean } {
@@ -161,7 +163,7 @@ export async function fetchLmStudioModelInfo(
         : 4096;
 
     // LM Studio doesn't expose thinking capability in /api/v1/models.
-    // Probe via a 1-token streaming request — thinking models emit <think> as the first chunk.
+    // Probe via a 1-token streaming request to learn whether THIS model thinks.
     const supportsThinking = await probeLmStudioThinking(endpoint, modelId);
 
     return {
@@ -169,6 +171,13 @@ export async function fetchLmStudioModelInfo(
       supportsVision: caps.vision === true,
       supportsToolCalling: caps.trained_for_tool_use === true,
       supportsThinking,
+      // Reaching here means the server answered /api/v1/models with this model —
+      // it IS LM Studio, which always honors chat_template_kwargs.enable_thinking.
+      // That's a property of the server (transport), independent of whether this
+      // particular model reasons — so it must not hinge on the probe. Tying it to
+      // the probe would strip the kwarg from a thinking model whenever the probe
+      // merely flaked (timeout/network) during discovery.
+      acceptsThinkingKwarg: true,
     };
   } catch {
     // Timeout, network error, parse error
@@ -241,29 +250,156 @@ async function probeLmStudioThinking(endpoint: string, modelId: string): Promise
   return false;
 }
 
+/**
+ * Fetches model capabilities from a llama.cpp server via GET /props.
+ *
+ * The Off Grid AI Gateway is a llama.cpp server: its /v1/models list carries no
+ * capability data, but /props reports the loaded model's real capabilities —
+ * authoritative because they come from the actually-loaded projector/template,
+ * not a name guess. A llama.cpp server serves ONE model, so /props maps to it.
+ *
+ *   modalities:        { vision, video, audio }        → vision / audio input
+ *   chat_template_caps.supports_tools                   → tool calling
+ *   chat_template_caps.supports_preserve_reasoning /    → thinking (reasoning)
+ *   default_generation_settings.params.reasoning_format
+ *
+ * Non-llama.cpp servers (Ollama, LM Studio) 404 here — the caller then falls
+ * through to their own arms. Returns null on any failure so the orchestrator
+ * can distinguish "no llama.cpp data" from a real all-false result.
+ */
+export async function fetchLlamaCppProps(
+  endpoint: string,
+): Promise<RemoteModelInfo | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  try {
+    const response = await fetch(`${endpoint}/props`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) return null;
+
+    return parsePropsCapabilities(await response.json());
+  } catch (error) {
+    // A non-llama.cpp server simply has no /props (network error / abort) — that's
+    // expected and silent. Only an unexpected shape after a 200 is worth flagging,
+    // but that path returns null from parsePropsCapabilities, not throw. Log at warn
+    // for parity with probeLmStudioThinking so a regressing server leaves a breadcrumb.
+    logger.warn('[fetchLlamaCppProps] /props unavailable:', endpoint, error instanceof Error ? error.message : error);
+  } finally {
+    // Always clear — an early fetch rejection (e.g. DNS failure) otherwise leaves
+    // the abort timer scheduled to fire after the function has returned.
+    clearTimeout(timeoutId);
+  }
+  return null;
+}
+
+/**
+ * In-flight /props requests keyed by endpoint. /props is server-wide (a llama.cpp
+ * server serves one model), but capability detection runs once per model — so a
+ * multi-entry /v1/models would fire N identical /props requests. Sharing the
+ * in-flight promise collapses them to one call per server per discovery pass.
+ * Cleared when the request settles so a later refresh re-probes the live server.
+ */
+const propsInFlight = new Map<string, Promise<RemoteModelInfo | null>>();
+
+/** De-duplicated wrapper around fetchLlamaCppProps — one /props call per endpoint. */
+export function fetchLlamaCppPropsCached(endpoint: string): Promise<RemoteModelInfo | null> {
+  const existing = propsInFlight.get(endpoint);
+  if (existing) return existing;
+  const p = fetchLlamaCppProps(endpoint).finally(() => propsInFlight.delete(endpoint));
+  propsInFlight.set(endpoint, p);
+  return p;
+}
+
+/** Narrow an unknown value to a plain object, or null. */
+function asObject(v: unknown): Record<string, unknown> | null {
+  return typeof v === 'object' && v !== null ? v as Record<string, unknown> : null;
+}
+
+/**
+ * Parse a llama.cpp /props payload into RemoteModelInfo. Returns null when the
+ * payload carries no capability data (not a llama.cpp server) so the caller can
+ * fall through to other detection arms. Pure — no I/O — so it is unit-testable.
+ */
+export function parsePropsCapabilities(data: unknown): RemoteModelInfo | null {
+  const root = asObject(data);
+  if (!root) return null;
+
+  const modalities = asObject(root.modalities);
+  const templateCaps = asObject(root.chat_template_caps);
+  // A server that answers /props without either isn't one we can trust here.
+  if (!modalities && !templateCaps) return null;
+
+  const genSettings = asObject(root.default_generation_settings);
+  const params = genSettings ? asObject(genSettings.params) : null;
+  const reasoningFormat = typeof params?.reasoning_format === 'string' ? params.reasoning_format : 'none';
+
+  // n_ctx lives on default_generation_settings (not on .params) for this build.
+  const nCtx = genSettings?.n_ctx;
+  const contextLength = typeof nCtx === 'number' && nCtx > 0 ? nCtx : 4096;
+
+  // Thinking is a CAPABILITY, not the current default. `supports_preserve_reasoning`
+  // and `reasoning_format` describe how the server formats reasoning by default —
+  // they're false/none for a model that can still think on demand (verified: Qwen3.5
+  // on the Gateway returns reasoning_content when enable_thinking:true is sent, yet
+  // reports supports_preserve_reasoning=false). The reliable capability signal is the
+  // chat template exposing an `enable_thinking` switch or `<think>` blocks.
+  const template = typeof root.chat_template === 'string' ? root.chat_template : '';
+  // A template that references `enable_thinking` honors the chat_template_kwargs
+  // switch — the request builder can toggle reasoning per request on this server.
+  const acceptsThinkingKwarg = /enable_thinking/.test(template);
+  const supportsThinking =
+    acceptsThinkingKwarg ||
+    /<think>/.test(template) ||
+    templateCaps?.supports_preserve_reasoning === true ||
+    (reasoningFormat !== 'none' && reasoningFormat !== '');
+
+  return {
+    contextLength,
+    supportsVision: modalities?.vision === true,
+    supportsToolCalling: templateCaps?.supports_tools === true,
+    supportsThinking,
+    acceptsThinkingKwarg,
+  };
+}
+
 function hasRealData(info: RemoteModelInfo): boolean {
   return info.supportsVision || info.contextLength !== 4096 || info.supportsToolCalling === true || info.supportsThinking === true;
 }
 
 /**
- * Fetch model capabilities by trying both Ollama and LM Studio APIs in parallel.
- * Falls back to name-based detection when neither API returns real data.
- * Works regardless of the port the server runs on.
+ * Fetch model capabilities by trying llama.cpp /props, Ollama, and LM Studio
+ * APIs in parallel. Falls back to name-based detection when none returns real
+ * data. Works regardless of the port the server runs on.
+ *
+ * Priority: llama.cpp /props first — it is authoritative (reads the loaded
+ * model's real modalities/template, not a name guess), which is why the Off
+ * Grid AI Gateway's vision/thinking/tools now resolve correctly instead of
+ * false-negativing through name-based detection.
  */
 export async function fetchModelCapabilities(
   endpoint: string,
   modelId: string,
   nameBasedDetect: { vision: (id: string) => boolean; toolCalling: (id: string) => boolean },
 ): Promise<RemoteModelInfo> {
-  const [ollamaInfo, lmInfo] = await Promise.all([
+  const [propsInfo, ollamaInfo, lmInfo] = await Promise.all([
+    // Deduped per endpoint — /props is server-wide, so all models on one server
+    // share a single request instead of firing one each.
+    fetchLlamaCppPropsCached(endpoint),
     fetchRemoteModelInfo(endpoint, modelId),
     fetchLmStudioModelInfo(endpoint, modelId),
   ]);
 
+  // /props wins whenever it answered at all: on a llama.cpp server it is the
+  // ground truth, even when every flag is false (a genuine text-only model).
+  if (propsInfo) return propsInfo;
   if (hasRealData(ollamaInfo)) return ollamaInfo;
   if (hasRealData(lmInfo)) return lmInfo;
 
-  // Neither API returned real data — fall back to name-based detection
+  // No API returned real data — fall back to name-based detection
   return {
     contextLength: 4096,
     supportsVision: nameBasedDetect.vision(modelId),

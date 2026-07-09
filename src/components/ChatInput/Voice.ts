@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { useWhisperTranscription } from '../../hooks/useWhisperTranscription';
-import { useWhisperStore, useChatStore, useUiModeStore } from '../../stores';
+import { useWhisperStore, useUiModeStore } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import { activeModelService } from '../../services/activeModelService';
 import { audioRecorderService } from '../../services/audioRecorderService';
 import { whisperService } from '../../services/whisperService';
+import { recordingController } from '../../services/recordingController';
+import { resolveTranscription } from './transcriptionOutcome';
+import { ensureWhisperForTranscription } from './ensureWhisperForTranscription';
 import logger from '../../utils/logger';
 
 interface UseVoiceInputParams {
   conversationId?: string | null;
   onTranscript: (text: string) => void;
-  onAudioAttachment?: (uri: string, format: 'wav' | 'mp3', durationSeconds?: number) => void;
+  onAudioAttachment?: (audio: { uri: string; format: 'wav' | 'mp3'; durationSeconds?: number; transcription?: string }) => void;
   /** Called in Audio Mode to auto-send. Includes audio info so caller can build attachment atomically. */
   onAutoSend?: (text: string, audio: { uri: string; format: 'wav' | 'mp3'; durationSeconds: number }) => void;
 }
@@ -50,6 +53,18 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
   // Use file-based transcription path when: Audio Mode + Whisper available + not direct audio model
   const shouldUseFilePath = (): boolean =>
     isInAudioInterfaceMode() && !!downloadedModelId && !supportsDirectAudio();
+
+  // Ensure whisper is resident before transcribing (the decision lives in the pure
+  // ensureWhisperForTranscription — it frees a blocking generation model, but never
+  // evicts on a hard whisper-load failure). One seam for both paths below.
+  const ensureWhisper = (): Promise<boolean> => ensureWhisperForTranscription({
+    isLoaded: () => whisperService.isModelLoaded(),
+    hasDownloadedModel: () => !!downloadedModelId,
+    loadWhisper: () => useWhisperStore.getState().loadModel(),
+    // keepSelection=true so routing reloads the right generation model after the
+    // transcript decides text-vs-image.
+    freeGenerationModels: () => activeModelService.unloadAllModels(true).then(() => {}),
+  });
 
   const isTranscribing = isWhisperTranscribing || isTranscribingFile;
   const isRecording = isDirectRecording || isAudioModeRecording || isWhisperRecording;
@@ -101,27 +116,38 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
         setIsDirectRecording(false);
         if (!recordingConversationIdRef.current || recordingConversationIdRef.current === conversationId) {
           const format = audioRecorderService.getFormat();
-          // In Audio Mode, auto-send directly — no transcription needed for multimodal models
+          // In Audio Mode, transcribe FIRST, then auto-send with the text.
+          // Sending audio with EMPTY text made the intent router classify on "" — so a
+          // voice request like "draw a dog" always routed to the text model (image gen
+          // needs the transcribed prompt, which never reached routing). We still attach
+          // the audio so multimodal text models get the original speech; the text is what
+          // lets routing pick image vs text.
           if (onAutoSendRef.current && isInAudioInterfaceMode()) {
-            onAutoSendRef.current('', { uri: path, format, durationSeconds });
-
-            // Parallel transcription: send audio to model immediately, transcribe in background
-            // so the voice bubble gets a transcript for display/playback review
+            let whisperReady = false;
+            let transcript = '';
             if (downloadedModelId) {
-              const convId = conversationId;
-              whisperService.transcribeFile(path).then(text => {
-                if (!text?.trim() || !convId) return;
-                const conv = useChatStore.getState().conversations.find(c => c.id === convId);
-                const msg = conv?.messages.find(m =>
-                  m.role === 'user' && m.attachments?.some(a => a.uri === path),
-                );
-                if (msg) {
-                  useChatStore.getState().updateMessageContent(convId, msg.id, text.trim());
-                }
-              }).catch(err => logger.error('[Voice] Background transcription error:', err));
+              setIsTranscribingFile(true);
+              try {
+                // whisperReady tracks whether the MODEL loaded. A throw from
+                // transcribeFile after a successful load is a transcription miss,
+                // not a load failure — leave whisperReady true so the user gets
+                // "couldn't hear that", not "couldn't load the voice model".
+                whisperReady = await ensureWhisper();
+                if (whisperReady) transcript = await whisperService.transcribeFile(path);
+              }
+              catch (err) { logger.error('[Voice] transcription error:', err); }
+              setIsTranscribingFile(false);
+            }
+            // NEVER dispatch an empty transcript — that misroutes to the text model.
+            const outcome = resolveTranscription(whisperReady, transcript);
+            if (outcome.dispatch) {
+              onAutoSendRef.current(outcome.text, { uri: path, format, durationSeconds });
+            } else {
+              setDirectError(outcome.message);
+              setTimeout(() => setDirectError(null), 3000);
             }
           } else {
-            onAudioAttachmentRef.current?.(path, format, durationSeconds);
+            onAudioAttachmentRef.current?.({ uri: path, format, durationSeconds });
           }
         }
         recordingConversationIdRef.current = null;
@@ -141,24 +167,27 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
           return;
         }
         setIsTranscribingFile(true);
-        let text = '';
+        let whisperReady = false;
+        let transcript = '';
         try {
-          text = await whisperService.transcribeFile(path);
+          whisperReady = await ensureWhisper();
+          if (whisperReady) transcript = await whisperService.transcribeFile(path);
         } catch (transcribeErr) {
           logger.error('[Voice] File transcription error:', transcribeErr);
         }
         setIsTranscribingFile(false);
         recordingConversationIdRef.current = null;
-        if (text.trim()) {
+        // NEVER dispatch an empty transcript — that misroutes to the text model.
+        const outcome = resolveTranscription(whisperReady, transcript);
+        if (outcome.dispatch) {
           if (onAutoSendRef.current) {
-            onAutoSendRef.current(text.trim(), { uri: path, format: 'wav', durationSeconds });
+            onAutoSendRef.current(outcome.text, { uri: path, format: 'wav', durationSeconds });
           } else {
-            onAudioAttachmentRef.current?.(path, 'wav', durationSeconds);
-            onTranscriptRef.current(text.trim());
+            onAudioAttachmentRef.current?.({ uri: path, format: 'wav', durationSeconds, transcription: outcome.text });
+            onTranscriptRef.current(outcome.text);
           }
         } else {
-          // Transcription returned nothing — clip too short or too quiet
-          setDirectError("Couldn't hear that — try again");
+          setDirectError(outcome.message);
           setTimeout(() => setDirectError(null), 3000);
         }
       } catch (err) {
@@ -189,6 +218,27 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
     clearResult();
     recordingConversationIdRef.current = null;
   };
+
+  // Register this recorder's concrete intents with the single recording-controller
+  // owner, and report phase transitions to it (the controller is the one source of
+  // truth every mic reads). Stable wrappers call the latest closures via refs so
+  // re-registration isn't needed each render.
+  const startRef = useRef(startRecording);
+  startRef.current = startRecording;
+  const stopRef = useRef(stopRecording);
+  stopRef.current = stopRecording;
+  const cancelRef = useRef(cancelRecording);
+  cancelRef.current = cancelRecording;
+  useEffect(() => {
+    return recordingController.registerHandlers({
+      start: () => startRef.current(),
+      stop: () => stopRef.current(),
+      cancel: () => cancelRef.current(),
+    });
+  }, []);
+  useEffect(() => {
+    recordingController.setPhase(isRecording ? 'recording' : isTranscribing ? 'transcribing' : 'idle');
+  }, [isRecording, isTranscribing]);
 
   useEffect(() => {
     if (recordingConversationIdRef.current && recordingConversationIdRef.current !== conversationId) {

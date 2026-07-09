@@ -1,5 +1,7 @@
- import { Dispatch, MutableRefObject, SetStateAction } from 'react';
+/* eslint-disable max-lines -- cohesive generation-action orchestrator (send/regenerate/dispatch/route share the same GenerationDeps + session state); splitting it would scatter tightly-coupled turn logic. */
+import { Dispatch, SetStateAction } from 'react';
 import { AlertState, showAlert, hideAlert } from '../../components';
+import { generationSession } from '../../services/generationSession';
 import { APP_CONFIG } from '../../constants';
 import {
   llmService, intentClassifier, generationService, imageGenerationService,
@@ -10,11 +12,14 @@ import { getToolExtensions } from '../../services/tools/extensions';
 import { liteRTService } from '../../services/litert';
 import { ensureDefaultClassifier } from '../../services/classifierProvisioning';
 import { abortPreload } from '../../services/modelPreloader';
+import { modelResidencyManager } from '../../services/modelResidency';
+import { reportModelFailure } from '../../services/modelFailureHandler';
 import { embeddingService } from '../../services/rag/embedding';
 import { useChatStore, useProjectStore, useRemoteServerStore } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import { Message, MediaAttachment, Project, DownloadedModel, RemoteModel, CacheType } from '../../types';
 import logger from '../../utils/logger';
+import { ModelReadyOutcome, ensureReadyOrAlert } from './modelReadiness';
 type SetState<T> = Dispatch<SetStateAction<T>>;
 const FALLBACK_RECENT_MESSAGE_COUNT = 2;
 
@@ -56,10 +61,9 @@ export type GenerationDeps = {
   deleteConversation: (convId: string) => void;
   setActiveConversation: (convId: string | null) => void;
   removeImagesByConversationId: (convId: string) => string[];
-  generatingForConversationRef: MutableRefObject<string | null>;
   navigation: any;
   setShowSettingsPanel?: SetState<boolean>;
-  ensureModelLoaded: () => Promise<void>;
+  ensureModelLoaded: () => Promise<ModelReadyOutcome>;
   /** Loads the last-selected text model for a chat request that has none; opens
    *  the model selector and returns false when no text model was ever chosen. */
   ensureTextModelForChat: () => Promise<boolean>;
@@ -92,14 +96,23 @@ function buildMessagesForContext(conversationId: string, messageText: string, sy
   return [...prefix, ...filtered.slice(0, -1), userMessageForContext];
 }
 export async function shouldRouteToImageGenerationFn(
-  deps: Pick<GenerationDeps, 'isGeneratingImage' | 'settings' | 'imageModelLoaded' | 'downloadedModels' | 'setIsClassifying' | 'setAppImageGenerationStatus' | 'setAppIsGeneratingImage' | 'hasTextModel'>,
+  deps: Pick<GenerationDeps, 'isGeneratingImage' | 'settings' | 'activeImageModel' | 'downloadedModels' | 'setIsClassifying' | 'setAppImageGenerationStatus' | 'setAppIsGeneratingImage' | 'hasTextModel'>,
   text: string,
   forceImageMode?: boolean,
 ): Promise<boolean> {
-  if (deps.isGeneratingImage) return false;
-  if (deps.settings.imageGenerationMode === 'manual') return forceImageMode === true;
-  if (forceImageMode) return true;
-  if (!deps.imageModelLoaded) return false;
+  // [ROUTE-SM] permanent trace: every branch of the image-vs-text decision is logged
+  // so "why didn't 'draw a dog' make an image?" is answerable from the logs (esp. the
+  // voice path), never a guess.
+  logger.log(`[ROUTE-SM] route? text="${text.slice(0, 60)}" force=${forceImageMode ?? false} mode=${deps.settings.imageGenerationMode} hasImageModel=${!!deps.activeImageModel} hasTextModel=${deps.hasTextModel} autoDetect=${deps.settings.autoDetectMethod}`);
+  if (deps.isGeneratingImage) { logger.log('[ROUTE-SM] → false: already generating an image'); return false; }
+  if (deps.settings.imageGenerationMode === 'manual') { logger.log(`[ROUTE-SM] → ${forceImageMode === true}: manual mode (only on force)`); return forceImageMode === true; }
+  if (forceImageMode) { logger.log('[ROUTE-SM] → true: forced'); return true; }
+  // Auto mode with no image model selected: there is nothing to route an image to
+  // (dispatch requires activeImageModel), so skip the classifier entirely. Running it
+  // here only adds latency on the send hot path and leaves a stale "Analyzing…" status.
+  if (!deps.activeImageModel) { logger.log('[ROUTE-SM] → false: no image model selected'); return false; }
+  // Route on whether an image model is SELECTED (downloaded), not whether it's
+  // currently resident — the pipeline loads it on demand. (Checked + logged above.)
   // No text model (image-only): SMOL classifier decides text vs image, else heuristics; chat returns false.
   if (deps.hasTextModel === false) {
     const classifierModel = deps.settings.classifierModelId
@@ -110,6 +123,7 @@ export async function shouldRouteToImageGenerationFn(
       // and use fast heuristics for this turn.
       ensureDefaultClassifier().catch(() => {});
       const intent = await intentClassifier.classifyIntent(text, { useLLM: false });
+      logger.log(`[ROUTE-SM] → ${intent === 'image'}: no-text-model heuristic intent=${intent}`);
       return intent === 'image';
     }
     deps.setIsClassifying(true);
@@ -119,6 +133,7 @@ export async function shouldRouteToImageGenerationFn(
         classifierModel,
         currentModelPath: llmService.getLoadedModelPath(),
       });
+      logger.log(`[ROUTE-SM] → ${intent === 'image'}: no-text-model SMOL classifier intent=${intent}`);
       return intent === 'image';
     } finally {
       deps.setIsClassifying(false);
@@ -137,6 +152,7 @@ export async function shouldRouteToImageGenerationFn(
       onStatusChange: useLLM ? deps.setAppImageGenerationStatus : undefined,
     });
     deps.setIsClassifying(false);
+    logger.log(`[ROUTE-SM] → ${intent === 'image'}: classifier intent=${intent} (useLLM=${useLLM})`);
     if (intent !== 'image' && useLLM) {
       deps.setAppImageGenerationStatus(null);
       deps.setAppIsGeneratingImage(false);
@@ -146,6 +162,7 @@ export async function shouldRouteToImageGenerationFn(
     deps.setIsClassifying(false);
     deps.setAppImageGenerationStatus(null);
     deps.setAppIsGeneratingImage(false);
+    logger.log('[ROUTE-SM] → false: classifier threw');
     return false;
   }
 }
@@ -176,18 +193,6 @@ export async function handleImageGenerationFn(
   generationService.drainQueue();
 }
 export type StartGenerationCall = { setDebugInfo: SetState<any>; targetConversationId: string; messageText: string };
-async function ensureModelReady(deps: GenerationDeps): Promise<boolean> {
-  if (deps.activeModelInfo?.isRemote) return true;
-  if (deps.activeModel?.engine === 'litert') {
-    if (liteRTService.isModelLoaded()) return true;
-    await deps.ensureModelLoaded();
-    return liteRTService.isModelLoaded();
-  }
-  const loadedPath = llmService.getLoadedModelPath();
-  if (loadedPath && loadedPath === deps.activeModel!.filePath) return true;
-  await deps.ensureModelLoaded();
-  return llmService.isModelLoaded() && llmService.getLoadedModelPath() === deps.activeModel!.filePath;
-}
 async function prepareContext(setDebugInfo: SetState<any>, systemPrompt: string, messages: Message[]): Promise<void> {
   try {
     const contextDebug = await llmService.getContextDebugInfo(messages);
@@ -270,16 +275,13 @@ function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, _message
 export async function startGenerationFn(deps: GenerationDeps, call: StartGenerationCall): Promise<void> {
   const { setDebugInfo, targetConversationId, messageText } = call;
   if (!deps.hasActiveModel) return;
-  // Pure text executor. Image-vs-text routing happens upstream in
-  // dispatchGenerationFn — this function only ever generates text.
-  deps.generatingForConversationRef.current = targetConversationId;
+  // Pure text executor — image-vs-text routing happens upstream in dispatchGenerationFn.
+  generationSession.begin(targetConversationId);
   // For remote models, skip local model loading
-  if (!deps.activeModelInfo?.isRemote && deps.activeModel) {
-    if (!(await ensureModelReady(deps))) {
-      deps.setAlertState(showAlert('Error', 'Failed to load model. Please try again.'));
-      deps.generatingForConversationRef.current = null;
-      return;
-    }
+  if (!deps.activeModelInfo?.isRemote && deps.activeModel &&
+      !(await ensureReadyOrAlert(deps, 'startGeneration', () => { startGenerationFn(deps, call); }))) {
+    generationSession.end('not-ready');
+    return;
   }
   const conversation = useChatStore.getState().conversations.find(c => c.id === targetConversationId);
   const { enabledTools, rawPrompt, isLiteRT } = resolveToolsAndPrompt(deps, conversation, messageText);
@@ -342,10 +344,23 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
     } else {
       deps.setAlertState(showAlert('Generation Error', msg));
     }
-    deps.generatingForConversationRef.current = null;
+    generationSession.end('error');
     return;
   }
-  deps.generatingForConversationRef.current = null;
+  // The model produced NO output (0 tokens) — finalizeStreamingMessage only appends an
+  // assistant message when there's content/reasoning, so an empty turn leaves the user
+  // message last. Don't strand the user staring at their message: surface a retry (this
+  // happens when a model runs on an incompatible backend, e.g. a K-quant on NPU/GPU).
+  const finalConv = useChatStore.getState().conversations.find(c => c.id === targetConversationId);
+  const lastMsg = finalConv?.messages[finalConv.messages.length - 1];
+  if (!generationService.wasAborted() && lastMsg?.role === 'user') {
+    reportModelFailure('text', 'The model produced no output', {
+      title: 'No response',
+      message: 'The model returned nothing. This can happen when it runs on an incompatible backend (a K-quant on NPU/GPU falls back to CPU and may emit nothing). Try again, or switch the backend/model.',
+      onRetry: () => { startGenerationFn(deps, call); },
+    });
+  }
+  generationSession.end();
 }
 let _msgIdSeq = 0; const nextMsgId = () => `${Date.now()}-${(++_msgIdSeq).toString(36)}`;
 export type DispatchCall = { text: string; attachments?: MediaAttachment[]; conversationId: string; imageMode?: 'auto' | 'force' | 'disabled' };
@@ -362,11 +377,16 @@ export async function dispatchGenerationFn(
 ): Promise<void> {
   const { text, attachments, conversationId, imageMode = 'auto' } = call;
   let messageText = appendAttachmentText(text, attachments);
+  // [ROUTE-SM]: confirms the turn reached the router (esp. the voice path) + the
+  // final routed destination — so a "pipeline never triggered" is visible in logs.
+  logger.log(`[ROUTE-SM] dispatch text="${text.slice(0, 60)}" imageMode=${imageMode} hasImageModel=${!!deps.activeImageModel}`);
   const shouldGenerateImage = imageMode !== 'disabled' && await shouldRouteToImageGenerationFn(deps, messageText, imageMode === 'force');
   if (shouldGenerateImage && deps.activeImageModel) {
+    logger.log('[ROUTE-SM] dispatch → IMAGE pipeline');
     await handleImageGenerationFn(deps, { prompt: text, conversationId, attachments }); // adds user msg (keeps voice note)
     return;
   }
+  logger.log(`[ROUTE-SM] dispatch → TEXT generation (shouldGenerateImage=${shouldGenerateImage})`);
   // Text route, no text model selected (image-only device): load one / open selector.
   if (!shouldGenerateImage && deps.hasTextModel === false && !deps.activeModelInfo?.isRemote) {
     const ready = await deps.ensureTextModelForChat();
@@ -383,10 +403,9 @@ export type SendCall = { text: string; attachments?: MediaAttachment[]; imageMod
 export async function handleSendFn(deps: GenerationDeps, call: SendCall): Promise<void> {
   const { text, attachments, imageMode, startGeneration } = call;
   abortPreload(); // user acted — stop background warming so it can't block them
-  if (!deps.hasActiveModel) {
-    deps.setAlertState(showAlert('No Model Selected', 'Please select a model first.'));
-    return;
-  }
+  if (!deps.hasActiveModel) { deps.setAlertState(showAlert('No Model Selected', 'Please select a model first.')); return; }
+  callHook(HOOKS.audioStop); // stop stale TTS on the new turn (not a streaming-flag effect — see useChatScreen)
+  await modelResidencyManager.reclaimSttForGeneration(); // free idle Whisper before LLM+TTS so they don't OOM on tight devices
   let targetConversationId = deps.activeConversationId;
   if (!targetConversationId) {
     const fallbackModelId = deps.activeModelInfo?.modelId || deps.activeImageModel?.id;
@@ -401,8 +420,9 @@ export async function handleSendFn(deps: GenerationDeps, call: SendCall): Promis
   }
   await dispatchGenerationFn(deps, { text, attachments, conversationId: targetConversationId, imageMode }, startGeneration);
 }
-export async function handleStopFn(deps: Pick<GenerationDeps, 'isGeneratingImage' | 'generatingForConversationRef'>): Promise<void> {
-  deps.generatingForConversationRef.current = null;
+export async function handleStopFn(deps: Pick<GenerationDeps, 'isGeneratingImage'>): Promise<void> {
+  generationSession.end('stopped');
+  callHook(HOOKS.audioStop); // abort must silence TTS too — buffered-ahead sentences keep playing otherwise
   try { await generationService.stopGeneration().catch(() => { }); }
   catch (e) { logger.error('Error stopping generation:', e); }
   if (deps.isGeneratingImage) imageGenerationService.cancelGeneration().catch(() => { });
@@ -422,7 +442,9 @@ export async function executeDeleteConversationFn(
 export type RegenerateCall = { setDebugInfo: SetState<any>; userMessage: Message };
 export async function regenerateResponseFn(deps: GenerationDeps, call: RegenerateCall): Promise<void> {
   const { userMessage } = call;
-  if (!deps.activeConversationId || !deps.hasActiveModel) return;
+  logger.log(`[RESEND-SM] regenerate start userMsg=${userMessage.id} conv=${deps.activeConversationId} hasActiveModel=${deps.hasActiveModel} isRemote=${deps.activeModelInfo?.isRemote} hasActiveModelObj=${!!deps.activeModel}`);
+  if (!deps.activeConversationId || !deps.hasActiveModel) { logger.log('[RESEND-SM] regenerate BAIL: no conv or no active model'); return; }
+  await modelResidencyManager.reclaimSttForGeneration(); // free idle Whisper before the LLM reload (memory-tight)
   const targetConversationId = deps.activeConversationId;
   const messageText = appendAttachmentText(userMessage.content, userMessage.attachments);
   const shouldGenerateImage = await shouldRouteToImageGenerationFn(deps, messageText);
@@ -430,13 +452,10 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
     await handleImageGenerationFn(deps, { prompt: userMessage.content, conversationId: targetConversationId, skipUserMessage: true });
     return;
   }
-  if (!deps.activeModelInfo?.isRemote && deps.activeModel) {
-    if (!(await ensureModelReady(deps))) {
-      deps.setAlertState(showAlert('Error', 'Failed to load model. Please try again.'));
-      return;
-    }
-  }
-  deps.generatingForConversationRef.current = targetConversationId;
+  if (!deps.activeModelInfo?.isRemote && deps.activeModel &&
+      !(await ensureReadyOrAlert(deps, 'regenerate', () => { regenerateResponseFn(deps, call); }))) return;
+  logger.log('[RESEND-SM] regenerate → reached LLM generate path');
+  generationSession.begin(targetConversationId);
   // LiteRT: native history must be rewound to match the JS messages we're about to replay.
   if (deps.activeModel?.engine === 'litert') liteRTService.invalidateConversation();
   const conversation = useChatStore.getState().conversations.find(c => c.id === targetConversationId);
@@ -492,7 +511,7 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
       deps.setAlertState(showAlert('Generation Error', msg));
     }
   }
-  deps.generatingForConversationRef.current = null;
+  generationSession.end();
 }
 export type SelectProjectDeps = { activeConversationId: string | null | undefined; setConversationProject: (convId: string, projectId: string | null) => void; setShowProjectSelector: SetState<boolean> };
 export function handleSelectProjectFn(deps: SelectProjectDeps, project: Project | null): void {

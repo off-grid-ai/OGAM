@@ -134,6 +134,26 @@ describe('proLicenseService (Keygen)', () => {
     it('reports invalid for an empty key', async () => {
       expect(await activateProByKey('   ')).toEqual({ ok: false, reason: 'invalid' });
     });
+
+    it('strips surrounding whitespace before validating AND persisting the key', async () => {
+      // A pasted/emailed key often carries leading/trailing whitespace or a newline.
+      // The TRIMMED key must reach validateKey (a padded key would 404) and be the value
+      // persisted to the keychain (so revalidation later uses the clean key). The empty
+      // test above only covers whitespace-ONLY input; this covers a real key with padding.
+      validateKey.mockResolvedValueOnce(ok());
+      const res = await activateProByKey('  key/abc\n');
+      expect(res).toEqual({ ok: true });
+      expect(validateKey).toHaveBeenCalledWith('key/abc', 'fp-123');
+      const written = JSON.parse(setGenericPassword.mock.calls[0][1]);
+      expect(written.key).toBe('key/abc');
+    });
+
+    it('passes the trimmed key to activateMachine on the new-device path', async () => {
+      validateKey.mockResolvedValueOnce(ok({ valid: false, code: 'NO_MACHINES' }));
+      activateMachine.mockResolvedValueOnce({ ok: true, limitReached: false });
+      await activateProByKey('\tkey/abc  ');
+      expect(activateMachine).toHaveBeenCalledWith('key/abc', 'lic-1', { fingerprint: 'fp-123', platform: 'ios' });
+    });
   });
 
   describe('revalidatePro() — revocation + offline', () => {

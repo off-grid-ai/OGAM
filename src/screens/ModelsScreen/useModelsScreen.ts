@@ -197,40 +197,23 @@ export function useModelsScreen() {
     image.downloadedImageModels.length +
     activeDownloadCount;
 
+  // No caller-side "too many downloads" gate: backgroundDownloadService caps real
+  // concurrency at MAX_CONCURRENT_DOWNLOADS and FIFO-queues the rest, so extra starts
+  // just queue (shown as "Queued") instead of hurting performance. The old
+  // "Starting more can affect performance / Start Anyway" alert was obsolete friction
+  // (and its threshold of 2 didn't even match the cap of 3).
   const handleDownload = useCallback(
     (...args: Parameters<typeof text.handleDownload>) => {
-      if (activeDownloadCount >= 2) {
-        setAlertState(showAlert(
-          'Downloads Already Active',
-          '2 downloads are already running. Starting more can affect performance.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Start Anyway', style: 'default', onPress: () => { text.handleDownload(...args); } },
-          ],
-        ));
-        return;
-      }
       text.handleDownload(...args);
     },
-    [text, activeDownloadCount, setAlertState],
+    [text],
   );
 
   const handleDownloadImageModel = useCallback(
     (...args: Parameters<typeof image.handleDownloadImageModel>) => {
-      if (activeDownloadCount >= 2) {
-        setAlertState(showAlert(
-          'Downloads Already Active',
-          '2 downloads are already running. Starting more can affect performance.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Start Anyway', style: 'default', onPress: () => { image.handleDownloadImageModel(...args); } },
-          ],
-        ));
-        return;
-      }
       image.handleDownloadImageModel(...args);
     },
-    [image, activeDownloadCount, setAlertState],
+    [image],
   );
 
   return {

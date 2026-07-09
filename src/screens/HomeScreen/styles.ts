@@ -149,6 +149,68 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textMuted,
     marginTop: 2,
   },
+  desktopCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    gap: 10,
+    ...shadows.small,
+  },
+  desktopCardHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+  },
+  desktopCardTitle: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '600' as const,
+    color: colors.text,
+    flex: 1,
+  },
+  desktopBadge: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  desktopBadgeText: {
+    ...TYPOGRAPHY.metaSmall,
+    color: colors.primary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  desktopCardBody: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+  },
+  desktopCardCtaRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+  },
+  desktopCardCta: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+  },
+  desktopCardCtaText: {
+    ...TYPOGRAPHY.bodySmall,
+    fontWeight: '600' as const,
+    color: colors.primary,
+  },
+  desktopCardCopy: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+  },
+  desktopCardCopyText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+  },
   setupCard: {
     alignItems: 'center' as const,
     padding: 20,

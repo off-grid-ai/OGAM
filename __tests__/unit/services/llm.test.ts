@@ -58,6 +58,8 @@ function setupScalingTest({
 describe('LLMService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.restoreAllMocks(); // undo any jest.spyOn (e.g. getAppMemoryUsage) so memory state doesn't leak between tests
+    mockedRNFS.stat.mockResolvedValue({ size: 1000000, isFile: () => true } as any); // reset file size so per-test overrides don't leak
     resetStores();
 
     // Reset singleton state
@@ -108,6 +110,48 @@ describe('LLMService', () => {
       mockedRNFS.exists.mockResolvedValue(false);
 
       await expect(llmService.loadModel('/missing/model.gguf')).rejects.toThrow('Model file not found');
+    });
+
+    it('downgrades context when memory is tight instead of loading and crashing (F4)', async () => {
+      const { hardwareService } = require('../../../src/services/hardware');
+      mockedRNFS.exists.mockResolvedValue(true);
+      mockedRNFS.stat.mockResolvedValue({ size: 2 * 1024 * 1024 * 1024 } as any); // 2 GB model
+      const ctx = createMockLlamaContext();
+      mockedInitLlama.mockResolvedValue(ctx as any);
+      // ~2.9 GB available: 8192/4096 ctx don't fit, a smaller ctx does.
+      jest.spyOn(hardwareService, 'getAppMemoryUsage').mockResolvedValue({
+        used: 5 * 1024 * 1024 * 1024,
+        available: 2900 * 1024 * 1024,
+        total: 8 * 1024 * 1024 * 1024,
+      });
+      useAppStore.setState({
+        settings: { ...useAppStore.getState().settings, contextLength: 8192, cacheType: 'q8_0' },
+      });
+
+      await llmService.loadModel('/models/big.gguf');
+
+      const ctxArg = (initLlama as jest.Mock).mock.calls[0][0].n_ctx;
+      expect(ctxArg).toBeLessThan(8192); // context was reduced to fit
+      expect(llmService.isModelLoaded()).toBe(true);
+    });
+
+    it('blocks the load when the model weights alone exceed available memory (F4)', async () => {
+      const { hardwareService } = require('../../../src/services/hardware');
+      mockedRNFS.exists.mockResolvedValue(true);
+      mockedRNFS.stat.mockResolvedValue({ size: 6 * 1024 * 1024 * 1024 } as any); // 6 GB model
+      const ctx = createMockLlamaContext();
+      mockedInitLlama.mockResolvedValue(ctx as any);
+      jest.spyOn(hardwareService, 'getAppMemoryUsage').mockResolvedValue({
+        used: 6 * 1024 * 1024 * 1024,
+        available: 2 * 1024 * 1024 * 1024, // 2 GB — can't even fit the weights
+        total: 8 * 1024 * 1024 * 1024,
+      });
+      useAppStore.setState({
+        settings: { ...useAppStore.getState().settings, contextLength: 4096, cacheType: 'q8_0' },
+      });
+
+      await expect(llmService.loadModel('/models/huge.gguf')).rejects.toThrow('Not enough memory');
+      expect(initLlama).not.toHaveBeenCalled();
     });
 
     it('skips loading if same model already loaded', async () => {
@@ -2517,6 +2561,61 @@ describe('LLMService', () => {
       expect(mockedInitLlama).not.toHaveBeenCalledWith(
         expect.objectContaining({ devices: expect.anything() }),
       );
+    });
+  });
+
+  describe('dropMissingImageAttachments (prevents the vision-mode file-open crash)', () => {
+    const withImage = (uri: string) => {
+      const m: any = createUserMessage('hi');
+      m.attachments = [{ id: 'img', type: 'image', uri }];
+      return m;
+    };
+
+    it('keeps image attachments whose files exist', async () => {
+      mockedRNFS.exists.mockResolvedValue(true);
+      const out = await (llmService as any).dropMissingImageAttachments([withImage('file:///x/a.png')]);
+      expect(out[0].attachments).toHaveLength(1);
+      expect(mockedRNFS.exists).toHaveBeenCalledWith('/x/a.png'); // file:// stripped
+    });
+
+    it('drops image attachments whose files are gone (keeps non-image attachments)', async () => {
+      mockedRNFS.exists.mockResolvedValue(false);
+      const m: any = createUserMessage('hi');
+      m.attachments = [
+        { id: 'img', type: 'image', uri: 'file:///x/gone.png' },
+        { id: 'aud', type: 'audio', uri: 'file:///x/a.wav' },
+      ];
+      const out = await (llmService as any).dropMissingImageAttachments([m]);
+      expect(out[0].attachments).toEqual([{ id: 'aud', type: 'audio', uri: 'file:///x/a.wav' }]);
+    });
+
+    it('leaves messages without image attachments untouched', async () => {
+      const plain = createUserMessage('no attachments');
+      const out = await (llmService as any).dropMissingImageAttachments([plain]);
+      expect(out[0]).toBe(plain);
+    });
+  });
+
+  describe('hasVisionInputs (named VISION vs TEXT-ONLY seam)', () => {
+    const withImage = () => {
+      const m: any = createUserMessage('hi');
+      m.attachments = [{ id: 'img', type: 'image', uri: 'file:///x/a.png' }];
+      return m;
+    };
+
+    it('is true when an image attachment is present AND multimodal is initialized', () => {
+      (llmService as any).multimodalInitialized = true;
+      expect((llmService as any).hasVisionInputs([withImage()])).toBe(true);
+    });
+
+    it('is false when no image attachments are present (multimodal initialized)', () => {
+      (llmService as any).multimodalInitialized = true;
+      expect((llmService as any).hasVisionInputs([createUserMessage('no images')])).toBe(false);
+    });
+
+    it('is false when images are present but multimodal is NOT initialized', () => {
+      (llmService as any).multimodalInitialized = false;
+      expect((llmService as any).hasVisionInputs([withImage()])).toBe(false);
     });
   });
 });

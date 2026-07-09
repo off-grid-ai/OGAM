@@ -49,6 +49,17 @@ describe('appStore', () => {
   // ============================================================================
   // Device Info
   // ============================================================================
+  describe('desktopPromoDismissed', () => {
+    it('starts not dismissed (the Home promo card shows by default)', () => {
+      expect(getAppState().desktopPromoDismissed).toBe(false);
+    });
+
+    it('setDesktopPromoDismissed marks it dismissed (persisted flag)', () => {
+      getAppState().setDesktopPromoDismissed(true);
+      expect(getAppState().desktopPromoDismissed).toBe(true);
+    });
+  });
+
   describe('deviceInfo', () => {
     it('starts with null deviceInfo', () => {
       expect(getAppState().deviceInfo).toBeNull();
@@ -1287,6 +1298,60 @@ describe('appStore', () => {
         useAppStore.getState(),
       );
       expect(result.checklistDismissed).toBe(false);
+    });
+
+    // Un-stick the removed MCP context auto-boost (pinned ctx to 32768, never restored).
+    it('resets llama context pinned at the boost ceiling back to the default', () => {
+      const merge = getMergeFn();
+      const result = merge(
+        { settings: { contextLength: 32768, maxTokens: 8192 } },
+        useAppStore.getState(),
+      );
+      expect(result.settings.contextLength).toBe(4096); // DEFAULT_SETTINGS.contextLength
+      expect(result.settings.maxTokens).toBe(1024); // DEFAULT_SETTINGS.maxTokens
+    });
+
+    it('resets liteRTMaxTokens pinned at the boost ceiling back to the default', () => {
+      const merge = getMergeFn();
+      const result = merge(
+        { settings: { liteRTMaxTokens: 32768 } },
+        useAppStore.getState(),
+      );
+      expect(result.settings.liteRTMaxTokens).toBe(4096); // DEFAULT_SETTINGS.liteRTMaxTokens
+    });
+
+    it('leaves a legitimate non-boost context untouched', () => {
+      const merge = getMergeFn();
+      const result = merge(
+        { settings: { contextLength: 8192, maxTokens: 2048, liteRTMaxTokens: 8192 } },
+        useAppStore.getState(),
+      );
+      expect(result.settings.contextLength).toBe(8192);
+      expect(result.settings.maxTokens).toBe(2048);
+      expect(result.settings.liteRTMaxTokens).toBe(8192);
+    });
+
+    it('does not clobber a high user maxTokens when context was not boosted', () => {
+      const merge = getMergeFn();
+      const result = merge(
+        { settings: { contextLength: 4096, maxTokens: 8192 } },
+        useAppStore.getState(),
+      );
+      // context not at the boost ceiling → maxTokens is the user's choice, keep it.
+      expect(result.settings.contextLength).toBe(4096);
+      expect(result.settings.maxTokens).toBe(8192);
+    });
+
+    it('keeps a user maxTokens above the boost value even when context was boosted', () => {
+      const merge = getMergeFn();
+      const result = merge(
+        // contextLength at the exact boost ceiling, but maxTokens raised by the
+        // user beyond the boost's value — only the exact boost value is reset.
+        { settings: { contextLength: 32768, maxTokens: 16384 } },
+        useAppStore.getState(),
+      );
+      expect(result.settings.contextLength).toBe(4096); // boosted → reset
+      expect(result.settings.maxTokens).toBe(16384); // user's choice, not the boost value → kept
     });
   });
 

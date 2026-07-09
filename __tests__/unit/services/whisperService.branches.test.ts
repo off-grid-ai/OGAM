@@ -2,16 +2,18 @@
  * WhisperService — additional branch coverage.
  *
  * Targets error/cleanup paths not exercised by whisperService.test.ts:
- * downloadModel validation failure, downloadFromUrl, listDownloadedModels,
+ * downloadModel validation failure, listDownloadedModels,
  * deleteModel active-download cancellation, loadModel release-wait,
  * unloadModel mid-transcription, requestPermissions non-mobile platform,
  * and startRealtimeTranscription guards / event finish / error paths.
  */
 
-import { initWhisper, AudioSessionIos } from 'whisper.rn';
+import { initWhisper } from 'whisper.rn';
 import { Platform, PermissionsAndroid } from 'react-native';
+import { AudioManager } from 'react-native-audio-api';
 import RNFS from 'react-native-fs';
 import { whisperService } from '../../../src/services/whisperService';
+import { audioSessionManager } from '../../../src/services/audioSessionManager';
 import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
 
 jest.mock('../../../src/services/backgroundDownloadService', () => ({
@@ -23,7 +25,9 @@ jest.mock('../../../src/services/backgroundDownloadService', () => ({
 }));
 
 const mockedBDS = backgroundDownloadService as jest.Mocked<typeof backgroundDownloadService>;
-const mockedAudioSessionIos = AudioSessionIos as jest.Mocked<typeof AudioSessionIos>;
+// The iOS realtime permission path drives audioSessionManager, which calls these.
+const mockSetAudioSessionOptions = AudioManager.setAudioSessionOptions as jest.Mock;
+const mockSetAudioSessionActivity = AudioManager.setAudioSessionActivity as jest.Mock;
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
 const mockedInitWhisper = initWhisper as jest.MockedFunction<typeof initWhisper>;
 
@@ -57,9 +61,10 @@ describe('WhisperService — branch coverage', () => {
       downloadIdPromise: Promise.resolve(0),
       promise: Promise.resolve(),
     } as any);
-    mockedAudioSessionIos.setCategory.mockResolvedValue(undefined as any);
-    mockedAudioSessionIos.setMode.mockResolvedValue(undefined as any);
-    mockedAudioSessionIos.setActive.mockResolvedValue(undefined as any);
+    // clearMocks wipes the activity mock's resolved value each test; re-establish
+    // the default (success) and reset the session owner's mode.
+    mockSetAudioSessionActivity.mockResolvedValue(true);
+    audioSessionManager._reset();
   });
 
   afterEach(() => {
@@ -90,68 +95,6 @@ describe('WhisperService — branch coverage', () => {
     });
   });
 
-  // ── downloadFromUrl (lines 92-112) ────────────────────────────────────────
-  describe('downloadFromUrl', () => {
-    it('returns existing path if already downloaded', async () => {
-      mockedRNFS.exists
-        .mockResolvedValueOnce(true)  // dir exists (ensureModelsDirExists)
-        .mockResolvedValueOnce(true); // dest already present
-      const result = await whisperService.downloadFromUrl('http://x/m.bin', 'tiny.en');
-      expect(result).toBe('/mock/documents/whisper-models/ggml-tiny.en.bin');
-      expect(mockedRNFS.downloadFile).not.toHaveBeenCalled();
-    });
-
-    it('downloads, validates and returns dest path on success', async () => {
-      mockedRNFS.exists
-        .mockResolvedValueOnce(true)   // dir exists
-        .mockResolvedValueOnce(false)  // not downloaded
-        .mockResolvedValueOnce(true);  // validateModelFile exists
-      mockedRNFS.stat.mockResolvedValueOnce({ size: 75 * 1024 * 1024, isFile: () => true } as any);
-      let progressCb: ((res: any) => void) | undefined;
-      mockedRNFS.downloadFile.mockImplementation((opts: any) => {
-        progressCb = opts.progress;
-        return { jobId: 1, promise: Promise.resolve({ statusCode: 200, bytesWritten: 1 }) } as any;
-      });
-
-      const onProgress = jest.fn();
-      const result = await whisperService.downloadFromUrl('http://x/m.bin', 'tiny.en', onProgress);
-      // exercise the progress callback branch
-      progressCb?.({ bytesWritten: 50, contentLength: 100 });
-      expect(onProgress).toHaveBeenCalledWith(0.5);
-      expect(result).toBe('/mock/documents/whisper-models/ggml-tiny.en.bin');
-    });
-
-    it('unlinks and throws when status code is not 200', async () => {
-      mockedRNFS.exists
-        .mockResolvedValueOnce(true)   // dir exists
-        .mockResolvedValueOnce(false); // not downloaded
-      mockedRNFS.unlink.mockResolvedValue(undefined as any);
-      mockedRNFS.downloadFile.mockReturnValue({
-        jobId: 1,
-        promise: Promise.resolve({ statusCode: 404, bytesWritten: 0 }),
-      } as any);
-
-      await expect(whisperService.downloadFromUrl('http://x/m.bin', 'tiny.en')).rejects.toThrow(
-        'Download failed with status 404',
-      );
-      expect(mockedRNFS.unlink).toHaveBeenCalledWith('/mock/documents/whisper-models/ggml-tiny.en.bin');
-    });
-
-    it('rethrows validation error and unlinks when downloaded file is invalid', async () => {
-      mockedRNFS.exists
-        .mockResolvedValueOnce(true)   // dir exists
-        .mockResolvedValueOnce(false)  // not downloaded
-        .mockResolvedValueOnce(true);  // validateModelFile exists
-      mockedRNFS.stat.mockResolvedValueOnce({ size: 500, isFile: () => true } as any); // too small
-      mockedRNFS.unlink.mockResolvedValue(undefined as any);
-      mockedRNFS.downloadFile.mockReturnValue({
-        jobId: 1,
-        promise: Promise.resolve({ statusCode: 200, bytesWritten: 1 }),
-      } as any);
-
-      await expect(whisperService.downloadFromUrl('http://x/m.bin', 'tiny.en')).rejects.toThrow(/too small/);
-    });
-  });
 
   // ── listDownloadedModels (lines 114-127) ──────────────────────────────────
   describe('listDownloadedModels', () => {
@@ -257,7 +200,8 @@ describe('WhisperService — branch coverage', () => {
     it('returns true when not android or ios', async () => {
       Object.defineProperty(Platform, 'OS', { get: () => 'web' as any });
       expect(await whisperService.requestPermissions()).toBe(true);
-      expect(mockedAudioSessionIos.setCategory).not.toHaveBeenCalled();
+      // Neither the iOS session owner nor Android permissions are touched.
+      expect(mockSetAudioSessionOptions).not.toHaveBeenCalled();
       const requestSpy = jest.spyOn(PermissionsAndroid, 'request');
       expect(requestSpy).not.toHaveBeenCalled();
     });
@@ -279,9 +223,11 @@ describe('WhisperService — branch coverage', () => {
         transcribeRealtime: jest.fn(() => Promise.resolve({ stop: jest.fn(), subscribe: jest.fn() })),
       };
       await loadCtx(ctx);
-      // requestPermissions runs, then we null the context to hit the post-permission guard
-      mockedAudioSessionIos.setActive.mockImplementationOnce(async () => {
+      // requestPermissions runs (now via audioSessionManager → setAudioSessionActivity),
+      // then we null the context to hit the post-permission guard.
+      mockSetAudioSessionActivity.mockImplementationOnce(async () => {
         (whisperService as any).context = null;
+        return true;
       });
 
       await expect(whisperService.startRealtimeTranscription(jest.fn())).rejects.toThrow(

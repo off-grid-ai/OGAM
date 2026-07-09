@@ -2,18 +2,16 @@ import RNFS from 'react-native-fs';
 import { guessStyle, HFImageModel } from '../../services/huggingFaceModelBrowser';
 import { ModelInfo, ImageModelRecommendation, SoCInfo } from '../../types';
 import { ImageModelDescriptor, ModelTypeFilter } from './types';
+import { imageBackendLabel } from '../../utils/imageBackend';
+
+// Re-export the canonical byte formatter so existing importers keep working while
+// there is only ONE implementation (see src/utils/formatBytes.ts).
+export { formatBytes } from '../../utils/formatBytes';
 
 export function formatNumber(num: number): string {
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
   return num.toString();
-}
-
-export function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${bytes} B`;
 }
 
 export async function getDirectorySize(dirPath: string): Promise<number> {
@@ -146,8 +144,7 @@ export function hfModelToDescriptor(
     name: hfModel.displayName,
     description: (() => {
       if (hfModel._coreml) return `Core ML model from ${hfModel.repo}`;
-      const backendLabel = hfModel.backend === 'qnn' ? 'NPU' : 'GPU';
-      return `${backendLabel} model from ${hfModel.repo}`;
+      return `${imageBackendLabel(hfModel.backend, 'GPU')} model from ${hfModel.repo}`;
     })(),
     downloadUrl: hfModel.downloadUrl,
     size: hfModel.size,

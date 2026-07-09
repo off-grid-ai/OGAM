@@ -2,7 +2,7 @@
  * LAN LLM Server Discovery
  *
  * Scans the device's local subnet for running LLM servers
- * (Ollama, LM Studio) using their default ports.
+ * (Ollama, LM Studio, Off Grid AI Gateway) using their default ports.
  */
 
 import { getIpAddress, isEmulator } from 'react-native-device-info';
@@ -11,13 +11,20 @@ import logger from '../utils/logger';
 
 export interface DiscoveredServer {
   endpoint: string;
-  type: 'ollama' | 'lmstudio';
+  type: 'ollama' | 'lmstudio' | 'gateway';
   name: string;
 }
 
+// Probe paths match exactly where the app later reads models from
+// (see fetchModelsFromServer): OpenAI-compatible servers expose /v1/models,
+// Ollama answers its native /api/tags. So a successful probe means the data the
+// app needs is actually there, not just that the port is open.
 const PROVIDERS = [
-  { port: 11434, type: 'ollama' as const,   name: 'Ollama',    probePath: '/api/tags'     },
-  { port: 1234,  type: 'lmstudio' as const, name: 'LM Studio', probePath: '/api/v1/models' },
+  { port: 11434, type: 'ollama' as const,   name: 'Ollama',                probePath: '/api/tags'  },
+  { port: 1234,  type: 'lmstudio' as const, name: 'LM Studio',             probePath: '/v1/models' },
+  // Off Grid AI Gateway runs on the user's laptop on the same LAN, so it is
+  // probed across the subnet on its fixed port just like the others.
+  { port: 7878,  type: 'gateway' as const,  name: 'Off Grid AI Gateway',   probePath: '/v1/models' },
 ];
 
 const TIMEOUT_MS = 500;

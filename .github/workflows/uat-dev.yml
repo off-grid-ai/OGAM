@@ -1,0 +1,117 @@
+# UAT / internal-tester builds on merge to `dev` (or manual dispatch).
+#
+# OPTIONAL cloud path. The FAST path is local: `scripts/uat.sh` on your Mac (minutes).
+# This runs the SAME script on a single macOS runner so CI and local are ONE pipeline
+# (one source of truth): it computes the next beta version, generates release notes,
+# builds every artifact BEFORE publishing any, uploads Android -> Play "internal" +
+# iOS -> TestFlight, then cuts the GitHub prerelease tag with the APK + AAB attached.
+#
+# Cost note: iOS on GitHub's free macOS runners is slow (~30-90 min) and macOS minutes
+# bill at 10x. That's the price of a fully-consistent CI path; the local script stays the
+# fast default. Use workflow_dispatch with platform=android for a quick Play-only run.
+#
+# Uses the credentials ALREADY stored as repo secrets (nothing new to add):
+#   Android: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS,
+#            ANDROID_KEY_PASSWORD, PLAY_STORE_JSON_KEY
+#   iOS:     ASC_API_KEY_P8, ASC_KEY_ID, ASC_ISSUER_ID (TestFlight upload)
+#            IOS_CERTIFICATE_P12, IOS_CERTIFICATE_PASSWORD, IOS_PROVISION_PROFILE,
+#            KEYCHAIN_PASSWORD (signing)
+name: UAT build (dev → internal testers)
+
+on:
+  # Manual only. Betas are cut by hand (scripts/uat.sh locally, or this dispatch) — pushing
+  # to dev must NOT auto-build/publish a beta.
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Which platform(s) to build
+        type: choice
+        default: both
+        options: [both, ios, android]
+
+concurrency:
+  group: uat-${{ github.ref }}
+  # Do NOT cancel a run in flight: once it starts publishing (Play + TestFlight), a mid-run
+  # cancel could half-publish. Let it finish; the next push queues behind it.
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # uat.sh pushes the beta bump commit + tag and creates the GH release
+
+jobs:
+  beta:
+    # Single macOS runner: it has Xcode AND the Android SDK, so one machine builds both and
+    # runs scripts/uat.sh end to end (bump -> build all -> publish all -> tag -> GH release).
+    # Skip runs triggered by the bot's back-merge of main -> dev (that push isn't a real
+    # change to ship a beta for); real human pushes to dev and manual dispatch still run.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.actor != 'github-actions[bot]' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false         # pro/ is a private repo — fetch it below with a PAT
+          fetch-depth: 0            # uat.sh needs full tag history to compute the next beta N
+      - name: Check out pro submodule (private)
+        # pro/ lives in a separate private repo; the default GITHUB_TOKEN can't read it, so
+        # authenticate with PRO_SUBMODULE_PAT (same mechanism as ci.yml). uat.sh's build needs
+        # the real @offgrid/pro package present.
+        env:
+          PRO_PAT: ${{ secrets.PRO_SUBMODULE_PAT }}
+        run: |
+          if [ -z "$PRO_PAT" ]; then echo "PRO_SUBMODULE_PAT not set — cannot fetch private pro/ submodule"; exit 1; fi
+          git config --global url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf "https://github.com/"
+          git submodule update --init --recursive pro
+          git config --global --unset url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf || true
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: npm }
+      - run: npm ci
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: ruby/setup-ruby@v1
+        with: { ruby-version: '3.3', bundler-cache: true }
+      - name: pod install
+        # Restore Podfile.lock afterward: a CI CocoaPods version can rewrite it, which would
+        # dirty the tree and trip uat.sh's clean-tree pre-check. The pods are already installed,
+        # so the lock's content doesn't affect the build.
+        run: |
+          cd ios && pod install
+          cd .. && git checkout -- ios/Podfile.lock 2>/dev/null || true
+      - name: Decode signing secrets
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          # PLAY_STORE_JSON_KEY may be stored raw-JSON or base64 — handle both.
+          echo "${{ secrets.PLAY_STORE_JSON_KEY }}" | base64 --decode > "$RUNNER_TEMP/play-key.json" \
+            || printf '%s' '${{ secrets.PLAY_STORE_JSON_KEY }}' > "$RUNNER_TEMP/play-key.json"
+      - name: Configure git for the beta bump commit + push
+        # actions/checkout leaves HEAD detached; uat.sh commits the bump and `git push`es it,
+        # which needs a real branch with an upstream. Re-attach to the triggering branch.
+        run: |
+          git config user.name  "offgrid-ci"
+          git config user.email "ci@offgridmobile.ai"
+          git checkout -B "$GITHUB_REF_NAME"
+          git branch --set-upstream-to="origin/$GITHUB_REF_NAME" "$GITHUB_REF_NAME" || true
+      - name: Ship beta (scripts/uat.sh)
+        env:
+          # Which platform(s): push events build both; manual dispatch honors the picker.
+          UAT_PLATFORM_ARG: ${{ github.event_name == 'workflow_dispatch' && inputs.platform != 'both' && format('--{0}', inputs.platform) || '' }}
+          # gh release create / git push
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Android signing — build.gradle reads these via project.hasProperty(...), so pass
+          # them as Gradle project properties (ORG_GRADLE_PROJECT_<name>), not plain env.
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_STORE_FILE: ${{ runner.temp }}/release.keystore
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # Play upload
+          PLAY_STORE_JSON_KEY_PATH: ${{ runner.temp }}/play-key.json
+          # iOS auth + signing (imported into a temp keychain by the Fastfile's setup_signing)
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISION_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_HIDE_CHANGELOG: '1'
+        run: bash scripts/uat.sh $UAT_PLATFORM_ARG

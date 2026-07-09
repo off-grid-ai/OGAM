@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   Modal,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -43,19 +44,33 @@ export const NoModelScreen: React.FC<{
       </View>
     </View>
     <View style={styles.noModelContainer}>
-      <View style={styles.noModelIconContainer}>
-        <Icon name="cpu" size={32} color={colors.textMuted} />
-      </View>
-      <Text style={styles.noModelTitle}>No Model Selected</Text>
-      <Text style={styles.noModelText}>
-        {hasAvailableModels
-          ? 'Select a text or image model to get started.'
-          : 'Download a text or image model from the Models tab to get started.'}
-      </Text>
-      {hasAvailableModels && (
-        <TouchableOpacity style={styles.selectModelButton} onPress={() => setShowModelSelector(true)}>
-          <Text style={styles.selectModelButtonText}>Select Model</Text>
-        </TouchableOpacity>
+      {isModelLoading ? (
+        // A model was selected and is loading in the background. activeModelId stays
+        // null until the native load finishes, so this empty state would otherwise
+        // remain with no feedback — the user thinks nothing happened. Show a loading
+        // indicator instead of the "Select Model" prompt.
+        <>
+          <ActivityIndicator size="large" color={colors.primary} testID="no-model-loading-indicator" />
+          <Text style={[styles.noModelTitle, styles.noModelLoadingTitle]}>Loading Model</Text>
+          <Text style={styles.noModelText}>Getting your model ready. This can take a moment.</Text>
+        </>
+      ) : (
+        <>
+          <View style={styles.noModelIconContainer}>
+            <Icon name="cpu" size={32} color={colors.textMuted} />
+          </View>
+          <Text style={styles.noModelTitle}>No Model Selected</Text>
+          <Text style={styles.noModelText}>
+            {hasAvailableModels
+              ? 'Select a text or image model to get started.'
+              : 'Download a text or image model from the Models tab to get started.'}
+          </Text>
+          {hasAvailableModels && (
+            <TouchableOpacity style={styles.selectModelButton} onPress={() => setShowModelSelector(true)}>
+              <Text style={styles.selectModelButtonText}>Select Model</Text>
+            </TouchableOpacity>
+          )}
+        </>
       )}
     </View>
     <ModelSelectorModal

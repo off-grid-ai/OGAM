@@ -1,4 +1,4 @@
-import { useDownloadStore, isActiveStatus, DownloadEntry } from '../../../src/stores/downloadStore';
+import { useDownloadStore, isActiveStatus, isQueuedStatus, isDownloadingStatus, DownloadEntry, DownloadStatus } from '../../../src/stores/downloadStore';
 
 const makeEntry = (overrides: Partial<DownloadEntry> = {}): DownloadEntry => ({
   modelKey: 'author/model/model.gguf',
@@ -33,6 +33,61 @@ describe('isActiveStatus', () => {
     expect(isActiveStatus('completed')).toBe(false);
     expect(isActiveStatus('failed')).toBe(false);
     expect(isActiveStatus('cancelled')).toBe(false);
+  });
+
+  // Cross-surface contract: every screen that decides "is this download in progress?"
+  // (Download Manager active list, Models→Image tab, Models→Text tab) MUST use this one
+  // predicate. The regressed image bug came from a hand-rolled `status !== 'completed'
+  // && status !== 'cancelled'`, which classified a FAILED row as downloading — so the
+  // Image tab showed a fake "downloading 0%" while the Download Manager showed it failed.
+  // Pinning failed/cancelled as NOT active guards both surfaces against drifting apart.
+  it('classifies a failed/interrupted download as NOT in progress (no fake "downloading")', () => {
+    const handRolled = (s: string) => s !== 'completed' && s !== 'cancelled';
+    expect(isActiveStatus('failed')).toBe(false);   // the correct, shared answer
+    expect(handRolled('failed')).toBe(true);         // the old per-screen bug it replaces
+  });
+});
+
+// The queued-vs-downloading split is the SINGLE source every surface (Text/Image/STT
+// tabs, the ModelCard, the Download Manager count) now uses. These pin the classification
+// so a queued item renders the clock everywhere and an "active" count can't call a queued
+// row "downloading" (the "Active Downloads: 5" bug when only 3 were transferring).
+describe('isQueuedStatus / isDownloadingStatus', () => {
+  const ALL: DownloadStatus[] = ['pending', 'running', 'retrying', 'waiting_for_network', 'processing', 'completed', 'failed', 'cancelled'];
+
+  it('queued is exactly the pending status', () => {
+    expect(isQueuedStatus('pending')).toBe(true);
+    for (const s of ALL.filter(x => x !== 'pending')) expect(isQueuedStatus(s)).toBe(false);
+  });
+
+  it('downloading is active-but-not-queued', () => {
+    expect(isDownloadingStatus('running')).toBe(true);
+    expect(isDownloadingStatus('retrying')).toBe(true);
+    expect(isDownloadingStatus('waiting_for_network')).toBe(true);
+    expect(isDownloadingStatus('processing')).toBe(true);
+    // pending is queued, not downloading — this is the whole point of the split
+    expect(isDownloadingStatus('pending')).toBe(false);
+    // terminal statuses are neither
+    expect(isDownloadingStatus('completed')).toBe(false);
+    expect(isDownloadingStatus('failed')).toBe(false);
+    expect(isDownloadingStatus('cancelled')).toBe(false);
+  });
+
+  it('partitions active exactly into queued + downloading (no overlap, no gap)', () => {
+    for (const s of ALL) {
+      // active === queued OR downloading, and queued/downloading never both true
+      expect(isActiveStatus(s)).toBe(isQueuedStatus(s) || isDownloadingStatus(s));
+      expect(isQueuedStatus(s) && isDownloadingStatus(s)).toBe(false);
+    }
+  });
+
+  it('a mixed active list splits into the correct downloading/queued counts (the "5 active" bug)', () => {
+    const statuses: DownloadStatus[] = ['running', 'running', 'processing', 'pending', 'pending'];
+    const queued = statuses.filter(isQueuedStatus).length;
+    const downloading = statuses.filter(isDownloadingStatus).length;
+    expect(queued).toBe(2);        // was mislabeled "active"
+    expect(downloading).toBe(3);   // the genuinely-transferring count
+    expect(queued + downloading).toBe(statuses.filter(isActiveStatus).length); // 5 total active
   });
 });
 
@@ -111,6 +166,12 @@ describe('updateProgress', () => {
     useDownloadStore.getState().updateProgress('unknown', 100, 1000);
     expect(useDownloadStore.getState().downloads).toBe(before);
   });
+
+  it('clamps combined progress to <= 1 (no combinedTotal → main-only denominator + mmproj bytes)', () => {
+    useDownloadStore.getState().add(makeEntry({ combinedTotalBytes: undefined, mmProjBytesDownloaded: 400 }));
+    useDownloadStore.getState().updateProgress('dl-1', 1000, 1000); // (1000+400)/1000 = 1.4 → clamp
+    expect(useDownloadStore.getState().downloads['author/model/model.gguf'].progress).toBe(1);
+  });
 });
 
 describe('updateMmProjProgress', () => {
@@ -127,6 +188,12 @@ describe('updateMmProjProgress', () => {
     const before = useDownloadStore.getState().downloads;
     useDownloadStore.getState().updateMmProjProgress('unknown', 100);
     expect(useDownloadStore.getState().downloads).toBe(before);
+  });
+
+  it('clamps mmproj combined progress to <= 1', () => {
+    useDownloadStore.getState().add(makeEntry({ combinedTotalBytes: undefined, bytesDownloaded: 900, mmProjDownloadId: 'dl-mm' }));
+    useDownloadStore.getState().updateMmProjProgress('dl-mm', 500); // (900+500)/1000 = 1.4 → clamp
+    expect(useDownloadStore.getState().downloads['author/model/model.gguf'].progress).toBe(1);
   });
 });
 

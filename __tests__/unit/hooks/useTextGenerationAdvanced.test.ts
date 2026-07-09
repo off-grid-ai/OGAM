@@ -9,7 +9,7 @@ describe('useTextGenerationAdvanced', () => {
   });
 
   // HTP is currently disabled via HTP_ENABLED feature flag
-  it.skip('locks KV cache to f16 when HTP backend is selected', () => {
+  it('locks KV cache to f16 when HTP backend is selected', () => {
     act(() => {
       useAppStore.getState().updateSettings({ inferenceBackend: 'htp', cacheType: 'q4_0' });
     });

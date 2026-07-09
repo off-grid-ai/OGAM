@@ -30,10 +30,12 @@ jest.mock('../../../src/services/modelResidency', () => ({
 
 import { useWhisperStore } from '../../../src/stores/whisperStore';
 import { whisperService } from '../../../src/services';
+import { modelResidencyManager } from '../../../src/services/modelResidency';
 import { resetWhisperStore } from '../../utils/testHelpers';
 
 // Cast to jest mocks for type-safe access
 const mockWhisperService = whisperService as jest.Mocked<typeof whisperService>;
+const mockResidency = modelResidencyManager as jest.Mocked<typeof modelResidencyManager>;
 
 const getState = () => useWhisperStore.getState();
 
@@ -340,6 +342,67 @@ describe('whisperStore', () => {
       await getState().loadModel();
 
       expect(getState().error).toBeNull();
+    });
+
+    // ------------------------------------------------------------------
+    // Single-model rule (regression: STT co-resident with the text model)
+    // ------------------------------------------------------------------
+    // These assert the OUTCOME the residency verdict dictates, not merely that
+    // makeRoomFor was called. The shipped bug: loadModel called makeRoomFor but
+    // ignored `fits`, so when a heavier generation model owned memory (fits=false,
+    // evict=[] because residency won't kick out a big model for a 142MB sidecar),
+    // whisper loaded ANYWAY → whisper + text co-resident → OOM / forced resend.
+    // The old suite hid this because its makeRoomFor mock always returned fits:true.
+    describe('respects the residency fit verdict (single-model rule)', () => {
+      it('does NOT load whisper when makeRoomFor reports it does not fit', async () => {
+        useWhisperStore.setState({ downloadedModelId: 'ggml-tiny' });
+        mockWhisperService.getModelPath.mockReturnValue('/models/ggml-tiny');
+        mockWhisperService.loadModel.mockResolvedValue(undefined);
+        // A heavier model is resident: residency refuses without evicting it.
+        mockResidency.makeRoomFor.mockResolvedValueOnce({ evicted: [], fits: false });
+
+        const result = await getState().loadModel();
+
+        // The seam under test: the native load must be skipped when it won't fit.
+        // Deleting the `if (!fits) return` guard in the store fails THIS line.
+        expect(mockWhisperService.loadModel).not.toHaveBeenCalled();
+        expect(mockResidency.register).not.toHaveBeenCalled();
+        expect(getState().isModelLoaded).toBe(false);
+        // Not an error state — STT just stays out and loads on the next record.
+        expect(getState().error).toBeNull();
+        expect(getState().isModelLoading).toBe(false);
+        // Reports 'blocked' (not 'error') so a caller can free the resident model and
+        // retry — vs 'error', where freeing wouldn't help.
+        expect(result).toBe('blocked');
+      });
+
+      it('loads and registers whisper when makeRoomFor reports it fits', async () => {
+        useWhisperStore.setState({ downloadedModelId: 'ggml-tiny' });
+        mockWhisperService.getModelPath.mockReturnValue('/models/ggml-tiny');
+        mockWhisperService.loadModel.mockResolvedValue(undefined);
+        mockResidency.makeRoomFor.mockResolvedValueOnce({ evicted: [], fits: true });
+
+        const result = await getState().loadModel();
+
+        expect(mockWhisperService.loadModel).toHaveBeenCalledWith('/models/ggml-tiny');
+        expect(mockResidency.register).toHaveBeenCalled();
+        expect(getState().isModelLoaded).toBe(true);
+        expect(result).toBe('loaded');
+      });
+
+      it("reports 'error' (not 'blocked') on a hard load failure — freeing models won't help", async () => {
+        useWhisperStore.setState({ downloadedModelId: 'ggml-tiny' });
+        mockWhisperService.getModelPath.mockReturnValue('/models/ggml-tiny');
+        mockResidency.makeRoomFor.mockResolvedValueOnce({ evicted: [], fits: true });
+        mockWhisperService.loadModel.mockRejectedValueOnce(new Error('model file corrupted'));
+
+        const result = await getState().loadModel();
+
+        // Distinguishing error from blocked is what stops the caller evicting the
+        // user's generation model for a whisper that can't load anyway.
+        expect(result).toBe('error');
+        expect(getState().isModelLoaded).toBe(false);
+      });
     });
   });
 

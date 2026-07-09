@@ -28,7 +28,8 @@ jest.mock('react-native-keychain', () => ({
 
 jest.mock('../../../src/stores/appStore', () => {
   const setHasRegisteredPro = jest.fn();
-  return { useAppStore: { getState: () => ({ setHasRegisteredPro }) } };
+  const setProActive = jest.fn();
+  return { useAppStore: { getState: () => ({ setHasRegisteredPro, setProActive }) } };
 });
 
 jest.mock('../../../src/services/tools/extensions', () => ({ registerToolExtension: jest.fn() }));

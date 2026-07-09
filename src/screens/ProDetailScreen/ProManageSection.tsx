@@ -2,13 +2,13 @@
  * ProManageSection
  *
  * Shown on the Pro screen when Pro is active. Surfaces subscription status from
- * the cached Keygen license (lifetime vs monthly + expiry) and the registered
+ * the cached Keygen license (lifetime vs yearly + expiry) and the registered
  * devices (N of 5). The device list is read-only on purpose: the 5-device cap is
  * a hard limit and there is no self-service removal — letting users free slots
  * would let a single key cycle through unlimited devices and defeat the cap.
- * For monthly licenses it explains how to cancel or update payment: via the
- * link RevenueCat emails with every purchase and renewal. There is no in-app
- * portal because RevenueCat authenticates Web Billing customers by email.
+ * For a recurring (yearly) license it explains how to cancel or update payment:
+ * via the link RevenueCat emails with every purchase and renewal. There is no
+ * in-app portal because RevenueCat authenticates Web Billing customers by email.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
@@ -20,6 +20,7 @@ import {
   getProLicenseInfo,
   listProDevices,
   clearProForTesting,
+  PRO_TIER_META,
   type ProLicenseInfo,
 } from '../../services/proLicenseService';
 import { getDeviceFingerprint } from '../../services/deviceFingerprint';
@@ -62,13 +63,14 @@ export const ProManageSection: React.FC = () => {
     refresh();
   }, [refresh]);
 
-  const statusLine = !info
+  // Render from the tier's own semantics (PRO_TIER_META), not a per-tier branch: a
+  // recurring tier shows its renewal date, a one-time tier says it never expires.
+  const tierMeta = info?.tier ? PRO_TIER_META[info.tier] : null;
+  const statusLine = !tierMeta
     ? ''
-    : info.tier === 'lifetime'
-      ? 'Lifetime · never expires'
-      : info.tier === 'monthly'
-        ? `Monthly · active until ${formatDate(info.expiry)}`
-        : '';
+    : tierMeta.renews
+      ? `${tierMeta.label} · renews ${formatDate(info!.expiry)}`
+      : `${tierMeta.label} · never expires`;
 
   if (loading) {
     return (
@@ -105,13 +107,13 @@ export const ProManageSection: React.FC = () => {
         );
       })}
 
-      {info?.tier === 'monthly' ? (
+      {tierMeta?.renews ? (
         <View style={styles.manageBlock}>
           <Text style={styles.sectionLabel}>Manage subscription</Text>
           <View style={styles.manageRow}>
             <Icon name="mail" size={14} color={colors.textMuted} />
             <Text style={styles.manageHint}>
-              To cancel or update your payment method, use the link in your Off Grid purchase or
+              To cancel or update your payment method, use the link in your Off Grid AI purchase or
               renewal email. RevenueCat sends one with every payment.
             </Text>
           </View>

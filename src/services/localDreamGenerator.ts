@@ -64,13 +64,13 @@ class LocalDreamGeneratorService {
     }
   }
 
-  async loadModel(modelPath: string, threads?: number, opts: { backend?: 'mnn' | 'qnn' | 'auto'; cpuOnly?: boolean; attentionVariant?: 'split_einsum' | 'original' } = {}): Promise<boolean> {
+  async loadModel(modelPath: string, threads?: number, opts: { backend?: 'mnn' | 'qnn' | 'auto'; cpuOnly?: boolean; attentionVariant?: 'split_einsum' | 'original'; preferGpu?: boolean } = {}): Promise<boolean> {
     if (!this.isAvailable()) {
       throw new Error('LocalDream image generation is not available on this platform');
     }
 
     const backend = opts.backend ?? 'auto';
-    const params: { modelPath: string; threads?: number; backend: string; cpuOnly?: boolean; attentionVariant?: string } = {
+    const params: { modelPath: string; threads?: number; backend: string; cpuOnly?: boolean; attentionVariant?: string; preferGpu?: boolean } = {
       modelPath,
       backend,
     };
@@ -82,6 +82,11 @@ class LocalDreamGeneratorService {
     }
     if (opts.attentionVariant) {
       params.attentionVariant = opts.attentionVariant;
+    }
+    // iOS Core ML only: select the compute path (GPU vs Neural Engine) the
+    // residency estimate was sized for, so the native load matches the budget.
+    if (typeof opts.preferGpu === 'boolean') {
+      params.preferGpu = opts.preferGpu;
     }
 
     const result = await DiffusionModule.loadModel(params);
