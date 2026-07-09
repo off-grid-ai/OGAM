@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { Card } from '../../components';
 import { useTheme, useThemedStyles } from '../../theme';
+import { useDownloadStore } from '../../stores/downloadStore';
 import { BackgroundDownloadReasonCode } from '../../types';
 import { needsVisionRepair as checkNeedsVisionRepair } from '../../utils/visionRepair';
 import { getDownloadStatusLabel, isRetryable } from '../../utils/downloadErrors';
@@ -173,6 +174,12 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const needsVisionRepair = checkNeedsVisionRepair(item);
+  // A vision repair drives a live download-store row keyed on the completed
+  // model's modelKey (`repo/file` = item.modelId). Read it so the SAME
+  // determinate progress bar the normal download shows lights up during the
+  // ~900MB mmproj re-download, instead of a bare indeterminate spinner (OD2).
+  const repairEntry = useDownloadStore(s => s.downloads[item.modelId]);
+  const showRepairProgress = isRepairingVision && !!repairEntry;
 
   return (
     <Card style={styles.downloadCard}>
@@ -205,6 +212,16 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
           <Icon name="trash-2" size={18} color={colors.error} />
         </TouchableOpacity>
       </View>
+      {showRepairProgress && (
+        <View style={styles.progressContainer} testID="repair-vision-progress">
+          <View style={styles.progressBarBackground}>
+            <View style={[styles.progressBarFill, { width: `${Math.round(repairEntry.progress * 100)}%` as const, backgroundColor: colors.warning }]} />
+          </View>
+          <Text style={styles.progressText}>
+            {formatBytes(repairEntry.bytesDownloaded)} / {formatBytes(repairEntry.totalBytes)}
+          </Text>
+        </View>
+      )}
       <View style={styles.downloadMeta}>
         {!!item.quantization && (
           <View style={[styles.quantBadge, item.modelType === 'image' && styles.imageBadge]}>
