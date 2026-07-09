@@ -6,7 +6,31 @@
  * Priority: P0 (Critical) - Prevents raw control tokens from appearing in chat.
  */
 
-import { stripControlTokens } from '../../../src/utils/messageContent';
+import { stripControlTokens, templateEmitsReasoning } from '../../../src/utils/messageContent';
+
+describe('templateEmitsReasoning', () => {
+  it('returns false for null/undefined/empty template', () => {
+    expect(templateEmitsReasoning(null)).toBe(false);
+    expect(templateEmitsReasoning(undefined)).toBe(false);
+    expect(templateEmitsReasoning('')).toBe(false);
+  });
+
+  it('detects a <think> reasoning template (DeepSeek/Qwen, the OD7 Qwythos case)', () => {
+    expect(templateEmitsReasoning('{{ bos }}<think>\n{{ reasoning }}\n</think>{{ content }}')).toBe(true);
+  });
+
+  it('detects a Gemma <|channel>thought template', () => {
+    expect(templateEmitsReasoning('x <|channel>thought\n y')).toBe(true);
+  });
+
+  it('detects a Qwen <|channel|>analysis template', () => {
+    expect(templateEmitsReasoning('a <|channel|>analysis<|message|> b')).toBe(true);
+  });
+
+  it('returns false for a plain (non-reasoning) chat template', () => {
+    expect(templateEmitsReasoning('{{ bos }}{{ system }}{{ user }}{{ assistant }}')).toBe(false);
+  });
+});
 
 describe('stripControlTokens', () => {
   // ==========================================================================

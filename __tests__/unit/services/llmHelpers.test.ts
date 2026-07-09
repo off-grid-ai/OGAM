@@ -167,6 +167,50 @@ describe('supportsNativeThinking', () => {
     } as any;
     expect(supportsNativeThinking(ctx)).toBe(false);
   });
+
+  // OD7: a community reasoning model whose chat template minja cannot flag as a
+  // jinja template (isJinjaSupported() === false) still emits <think> reasoning
+  // that the runtime parser renders. The toggle must surface for it. The reasoning
+  // signal is the delimiter in the model's own chat_template metadata, not a name.
+  it('detects reasoning from a <think> chat template even when isJinjaSupported() is false (OD7 Qwythos)', () => {
+    const ctx = {
+      isJinjaSupported: jest.fn(() => false),
+      model: { metadata: { 'tokenizer.chat_template': '{{ bos }}<think>\n{{ reasoning }}\n</think>{{ content }}' } },
+    } as any;
+    expect(supportsNativeThinking(ctx)).toBe(true);
+  });
+
+  it('detects reasoning from a Gemma <|channel>thought template even when jinja is false', () => {
+    const ctx = {
+      isJinjaSupported: jest.fn(() => false),
+      model: { metadata: { 'tokenizer.chat_template': 'x <|channel>thought\n y <channel|> z' } },
+    } as any;
+    expect(supportsNativeThinking(ctx)).toBe(true);
+  });
+
+  it('detects reasoning from a Qwen <|channel|>analysis template even when jinja is false', () => {
+    const ctx = {
+      isJinjaSupported: jest.fn(() => false),
+      model: { metadata: { 'tokenizer.chat_template': 'a <|channel|>analysis<|message|> b' } },
+    } as any;
+    expect(supportsNativeThinking(ctx)).toBe(true);
+  });
+
+  it('stays false for a plain (non-reasoning) template when jinja is false', () => {
+    const ctx = {
+      isJinjaSupported: jest.fn(() => false),
+      model: { metadata: { 'tokenizer.chat_template': '{{ bos }}{{ system }}{{ user }}{{ assistant }}' } },
+    } as any;
+    expect(supportsNativeThinking(ctx)).toBe(false);
+  });
+
+  it('reads the alternate chat_template metadata key', () => {
+    const ctx = {
+      isJinjaSupported: jest.fn(() => false),
+      model: { metadata: { chat_template: 'q <think> r </think> s' } },
+    } as any;
+    expect(supportsNativeThinking(ctx)).toBe(true);
+  });
 });
 
 describe('getModelMaxContext', () => {

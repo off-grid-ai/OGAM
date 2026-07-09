@@ -5,6 +5,7 @@ import { APP_CONFIG } from '../constants';
 import { Message, INFERENCE_BACKENDS } from '../types';
 import { MultimodalSupport, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
+import { templateEmitsReasoning } from '../utils/messageContent';
 import { ensureNativeLogCapture, resetNativeLogCapture, recentNativeLog } from './llmNativeLog';
 
 import { HTP_ENABLED } from '../config/featureFlags';
@@ -249,11 +250,20 @@ export function captureGpuInfo(
 export function supportsNativeThinking(context: LlamaContext | null): boolean {
   if (!context) return false;
   try {
-    if (typeof context.isJinjaSupported === 'function') {
-      return context.isJinjaSupported();
-    }
-    const jinja = (context as any)?.model?.chatTemplates?.jinja;
-    return !!(jinja?.default || jinja?.toolUse);
+    const jinjaSupported = typeof context.isJinjaSupported === 'function'
+      ? context.isJinjaSupported()
+      : (() => {
+          const jinja = (context as any)?.model?.chatTemplates?.jinja;
+          return !!(jinja?.default || jinja?.toolUse);
+        })();
+    if (jinjaSupported) return true;
+    // OD7: a community reasoning model (e.g. a merge whose chat template minja
+    // cannot flag) reports jinja unsupported yet still emits <think>/channel
+    // reasoning the runtime parser renders. Derive the capability from the same
+    // reasoning delimiters in the model's own chat_template — never from its name.
+    const metadata = (context as any)?.model?.metadata;
+    const template = metadata?.['tokenizer.chat_template'] ?? metadata?.chat_template;
+    return templateEmitsReasoning(typeof template === 'string' ? template : undefined);
   } catch {
     return false;
   }

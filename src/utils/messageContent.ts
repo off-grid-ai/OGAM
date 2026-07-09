@@ -21,6 +21,29 @@ const CHANNEL_FINAL_START = /<\|channel\|>final<\|message\|>/gi;
 const GEMMA4_THINK_OPEN = /<\|channel>thought\n/gi;
 const GEMMA4_THINK_CLOSE = /<channel\|>/gi;
 
+// The reasoning delimiters the runtime parser (parseThinkingContent) recognizes,
+// as the SINGLE SOURCE OF TRUTH for "this text carries model reasoning":
+//   1. <think> ...            DeepSeek/Qwen-style (the OD7 Qwythos case)
+//   2. <|channel>thought      Gemma 4
+//   3. <|channel|>analysis    Qwen channel format
+// A reasoning-capable model embeds one of these in its chat template, so the same
+// markers detect the capability from a model's chat_template metadata at load time.
+const REASONING_MARKER_PATTERNS: RegExp[] = [
+  /<think>/i,
+  /<\|channel>thought/i,
+  /<\|channel\|>analysis/i,
+];
+
+/**
+ * Whether a chat-template string emits reasoning the app can render — i.e. it
+ * contains one of the reasoning delimiters parseThinkingContent understands.
+ * Derives the capability from the model's own template, not from its name.
+ */
+export function templateEmitsReasoning(template: string | null | undefined): boolean {
+  if (!template) return false;
+  return REASONING_MARKER_PATTERNS.some((pattern) => pattern.test(template));
+}
+
 /**
  * Strip all control tokens including thinking delimiters.
  * Use this only on finalised/stored content where thinking has already been
