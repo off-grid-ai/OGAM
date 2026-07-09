@@ -242,3 +242,16 @@ by a service. Two findings (DR1, DR3) are root-cause siblings of today's shipped
 | TQ4 | useChatGenerationActions.test.ts (132 called vs 16) | HIGH | L932 tautology + mock-on-mock "message appeared"; assert store/rendered outcome. |
 | TQ5 | coreMLModelUtils "downloads sequentially" | MED | Asserts order that only holds by .map push order while impl uses Promise.all — false guarantee. Assert real ordering w/ dynamic out-of-order mock or drop the claim. |
 | TQ6 | render tests w/ no getByText: TTSButton, ModelFailureCard, ImageGenAdviceCard, ToolAccordionStreaming, ModelsManagerSheet, McpAddServerSheet, PlaybackControls, KokoroTTSBridge | MED | Assert visible content/state, not just container testID. |
+
+## Parse-once-at-boundary refactor - progress + remaining (2026-07-09)
+Pattern: parse raw model output ONCE into a typed model; render from it, never re-parse (parse-don't-validate / anti-corruption layer). Kills the tool-call-leak class + DR1 + DR7.
+
+DONE (committed on main):
+- Step 1 KEYSTONE: parseModelOutput(content, reasoningContent?) → {reasoning, answer} in ChatMessage/utils.ts; answer clean-by-construction; contract test (parseModelOutput.contract.test.ts) asserts answer has NO markup for every format; buildMessageData delegates to it. 179 render/audio tests green together.
+
+REMAINING (each a hub migration — grep callers, run ALL their tests in ONE invocation before commit; render tests assert BOTH what appears AND what must not):
+- Step 2: point remaining direct parseThinkingContent/stripControlTokens RENDER callers at parseModelOutput.
+- Step 3 (DR1, real remote bug + PREREQUISITE = MOVE parseModelOutput + parseThinkingContent DOWN to src/utils/messageContent.ts so store/service layers can import without backwards layering; re-export from ChatMessage/utils for back-compat). Then collapse chatStore.extractChannelThinking + providers/openAICompatibleStream.ThinkTagParser (only knows <think>, leaks channel formats remotely — OD16) onto the shared parser/grammar. Touches streaming + finalize — do as ONE careful wave in a fresh session.
+- Step 4 (DR7): unify tool-call delimiters between stripControlTokens and generationToolLoop parseToolCallsFromText/parseGemmaNativeToolCalls (one GRAMMAR; parser accepts <tool_call: opener the stream filter doesn't suppress → flashes). 
+- Step 5: delete dead duplicate parsers; full suite.
+Note: Step 4 (store-time parse of the persisted Message shape) is the deepest cut — evaluate after 2-4; changes persistence.
