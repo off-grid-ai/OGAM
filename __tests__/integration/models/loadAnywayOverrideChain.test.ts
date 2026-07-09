@@ -155,6 +155,12 @@ describe('Load Anyway override chain (UI helper → service → residency)', () 
     mockHardwareService.getAvailableMemoryGB.mockImplementation(() =>
       reclaimed ? 6 : 1,
     );
+    // The override survival-floor check now reads getOverrideAvailableMemoryGB (physical +
+    // free ZRAM swap on Android; == available on iOS). This scenario has no swap headroom, so
+    // it tracks getAvailableMemoryGB — delegate so it follows each test's dynamic value.
+    mockHardwareService.getOverrideAvailableMemoryGB.mockImplementation(async () =>
+      mockHardwareService.getAvailableMemoryGB(),
+    );
 
     // Force a small residency budget so the ~3 GB model can't fit without eviction —
     // deterministic, independent of the device-RAM heuristics under test elsewhere.
