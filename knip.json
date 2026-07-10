@@ -1,17 +1,19 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
+    "index.js",
     "App.tsx",
-    "__tests__/**/*.test.{ts,tsx}",
-    "__tests__/utils/**/*.{ts,tsx}",
-    "src/bootstrap/loadProFeatures.ts"
+    "jest.setup.ts",
+    "__tests__/**/*.{ts,tsx}",
+    "pro/**/*.{ts,tsx}"
   ],
   "project": ["src/**/*.{ts,tsx}"],
-  "ignore": ["src/types/**"],
-  "ignoreBinaries": ["swiftlint", "xcpretty", "maestro"],
-  "paths": {
-    "@offgrid/core/*": ["src/*"],
-    "@/*": ["src/*"]
-  },
-  "ignoreExportsUsedInFile": true
+  "ignoreBinaries": ["swiftlint", "maestro", "xcpretty"],
+  "ignoreDependencies": [
+    "@offgrid/pro",
+    "react-compiler-runtime",
+    "eslint-plugin-react-compiler",
+    "@babel/preset-env",
+    "@babel/runtime"
+  ]
 }

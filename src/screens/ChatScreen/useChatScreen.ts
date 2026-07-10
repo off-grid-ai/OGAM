@@ -26,7 +26,7 @@ import {
 } from '../../utils/modelSelectorFilters';
 
 export type { AlertState, ChatMessageItem, StreamingState };
-export { getDisplayMessages, getPlaceholderText };
+export {  getPlaceholderText };
 
 type ChatScreenRouteProp = RouteProp<RootStackParamList, 'Chat'>;
 

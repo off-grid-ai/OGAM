@@ -10,7 +10,7 @@ export type { RagDocument, RagSearchResult } from './database';
 export type { SearchResult } from './retrieval';
 export { chunkDocument } from './chunking';
 export { retrievalService } from './retrieval';
-export { embeddingService } from './embedding';
+;
 
 export interface IndexProgress {
   stage: 'extracting' | 'chunking' | 'indexing' | 'embedding' | 'done';

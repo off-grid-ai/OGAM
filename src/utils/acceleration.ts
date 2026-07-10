@@ -14,7 +14,7 @@
 import { ModelInfo, ModelFile, InferenceBackend, INFERENCE_BACKENDS } from '../types';
 
 /** GGUF quantizations the NPU (HTP) / GPU (OpenCL) backends actually accelerate. */
-export const ACCELERABLE_QUANTS = ['Q4_0', 'Q8_0'] as const;
+const ACCELERABLE_QUANTS = ['Q4_0', 'Q8_0'] as const;
 
 /** True when a GGUF quant is one the NPU/GPU backends accelerate (not a K-quant). */
 export function isAccelerableQuant(quant: string | undefined | null): boolean {
@@ -67,7 +67,7 @@ export function findAccelerableModel<T extends { id: string; name: string; engin
 }
 
 /** Llama-family model (name-based) — the only family we'll suggest the experimental NPU for. */
-export function isLlamaFamily(modelName: string | undefined): boolean {
+function isLlamaFamily(modelName: string | undefined): boolean {
   return /llama/i.test(modelName ?? '');
 }
 

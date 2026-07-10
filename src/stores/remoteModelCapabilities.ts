@@ -325,7 +325,7 @@ function asObject(v: unknown): Record<string, unknown> | null {
  * payload carries no capability data (not a llama.cpp server) so the caller can
  * fall through to other detection arms. Pure — no I/O — so it is unit-testable.
  */
-export function parsePropsCapabilities(data: unknown): RemoteModelInfo | null {
+function parsePropsCapabilities(data: unknown): RemoteModelInfo | null {
   const root = asObject(data);
   if (!root) return null;
 

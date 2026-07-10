@@ -291,12 +291,12 @@ const ModelDetailView: React.FC<DetailProps> = ({
   );
 };
 
-export { LITERT_PARENT_ID };
+;
 
 // LiteRT-specific per-file metadata (display name + highlight) used to render
 // individual file cards in the detail view. Derived from the curated registry —
 // the registry is the single source of truth; this map is just a UI-shaped view.
-export const LITERT_FILE_META: Record<string, { displayName: string; highlight: string }> =
+const LITERT_FILE_META: Record<string, { displayName: string; highlight: string }> =
   Object.fromEntries(
     CURATED_LITERT_ENTRIES.map(e => [e.fileName, { displayName: e.displayName, highlight: e.highlight }]),
   );
@@ -304,7 +304,7 @@ export const LITERT_FILE_META: Record<string, { displayName: string; highlight: 
 // Synthetic parent ModelInfo whose `files` are derived from the curated registry.
 // Adding a new curated LiteRT model only requires updating the registry — this
 // list, the display map above, and the download flow all pick it up automatically.
-export const LITERT_RECOMMENDED_MODEL: ModelInfo = {
+const LITERT_RECOMMENDED_MODEL: ModelInfo = {
   id: LITERT_PARENT_ID,
   name: 'Gemma 4 LiteRT',
   author: 'google',

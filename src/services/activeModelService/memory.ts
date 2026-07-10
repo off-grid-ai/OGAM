@@ -23,13 +23,13 @@ import { modelMemoryBudgetMB, modelWarningThresholdMB, LoadPolicy } from '../mem
 // The pre-load check reads the SAME budget owner as the residency manager, so it
 // must honour the SAME load policy — otherwise aggressive mode would relax the
 // residency gate while the pre-check kept blocking/warning at balanced limits.
-export const getMemoryBudgetGB = async (policy: LoadPolicy = 'balanced'): Promise<number> => {
+const getMemoryBudgetGB = async (policy: LoadPolicy = 'balanced'): Promise<number> => {
   const deviceInfo = await hardwareService.getDeviceInfo();
   const totalMB = deviceInfo.totalMemory / (1024 * 1024);
   return modelMemoryBudgetMB(totalMB, undefined, policy) / 1024;
 };
 
-export const getMemoryWarningThresholdGB = async (): Promise<number> => {
+const getMemoryWarningThresholdGB = async (): Promise<number> => {
   const deviceInfo = await hardwareService.getDeviceInfo();
   const totalMB = deviceInfo.totalMemory / (1024 * 1024);
   return modelWarningThresholdMB(totalMB) / 1024;
@@ -39,7 +39,7 @@ export const getMemoryWarningThresholdGB = async (): Promise<number> => {
 // Size estimators
 // ---------------------------------------------------------------------------
 
-export function estimateModelMemoryGB(
+function estimateModelMemoryGB(
   model: DownloadedModel | ONNXImageModel,
   type: ModelType,
 ): number {

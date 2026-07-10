@@ -65,7 +65,7 @@ export function getModelType(model: ModelInfo): ModelTypeFilter {
 
 // -- Text model compatibility helper --
 
-export function isPhiModel(modelName: string, modelId: string): boolean {
+function isPhiModel(modelName: string, modelId: string): boolean {
   const name = modelName.toLowerCase();
   const id = modelId.toLowerCase();
   return name.includes('phi') || id.includes('phi');

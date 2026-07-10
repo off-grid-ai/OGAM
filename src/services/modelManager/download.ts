@@ -10,7 +10,7 @@ import {
   BackgroundDownloadMetadataCallback,
   BackgroundDownloadContext,
 } from './types';
-import { buildDownloadedModel, persistDownloadedModel, loadDownloadedModels, saveModelsList } from './storage';
+import { buildDownloadedModel, persistDownloadedModel } from './storage';
 import logger from '../../utils/logger';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { makeModelKey } from '../../utils/modelKey';
@@ -737,4 +737,4 @@ export function watchBackgroundDownload(opts: WatchDownloadOpts): void {
   tryFinalize().catch(() => {});
 }
 
-export { loadDownloadedModels, saveModelsList };
+;

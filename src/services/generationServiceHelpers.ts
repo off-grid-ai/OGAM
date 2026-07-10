@@ -11,7 +11,7 @@ import type { ToolResult } from './tools/types';
 import type { GenerationOptions, CompletionResult } from './providers/types';
 import logger from '../utils/logger';
 
-export const FLUSH_INTERVAL_MS = 50; // ~20 updates/sec
+const FLUSH_INTERVAL_MS = 50; // ~20 updates/sec
 type StreamChunk = string | { content?: string; reasoningContent?: string };
 
 /** Returns true when the currently active model uses LiteRT engine. */

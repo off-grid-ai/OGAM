@@ -44,7 +44,7 @@ import {
 import { resolveStoredPath, determineCredibility } from './storage';
 
 export type { BackgroundDownloadMetadataCallback } from './types';
-export { MODELS_STORAGE_KEY, IMAGE_MODELS_STORAGE_KEY } from './storage';
+;
 
 class ModelManager {
   private readonly modelsDir: string;

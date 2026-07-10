@@ -19,10 +19,10 @@ export type {
 } from './types';
 
 // Local provider
-export { LocalProvider, localProvider } from './localProvider';
+export {  localProvider } from './localProvider';
 
 // OpenAI-compatible provider
-export { OpenAICompatibleProvider, createOpenAIProvider } from './openAICompatibleProvider';
+;
 
 // Registry
-export { providerRegistry, getProviderForServer } from './registry';
+export { providerRegistry,  } from './registry';

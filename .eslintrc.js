@@ -37,6 +37,10 @@ module.exports = {
     'no-empty': 'error',
     'no-else-return': 'error',
     'prefer-template': 'error',
+    // Dead-branch killers (the "AI leftover" class) — untyped, cheap, high signal, zero current hits.
+    'no-unreachable': 'error',
+    'no-constant-condition': ['error', { checkLoops: false }],
+    'no-constant-binary-expression': 'error',
     complexity: ['error', 20],
     'max-lines-per-function': ['error', 350],
     'max-lines': ['error', 500],

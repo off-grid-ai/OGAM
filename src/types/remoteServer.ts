@@ -101,14 +101,6 @@ export interface RemoteGenerationSettings {
   maxGenerationTime: number;
 }
 
-/** Default generation settings for remote servers */
-export const DEFAULT_REMOTE_GENERATION_SETTINGS: RemoteGenerationSettings = {
-  connectionTimeout: 5000, // 5 seconds
-  firstTokenTimeout: 30000, // 30 seconds
-  tokenTimeout: 60000, // 60 seconds between tokens
-  maxGenerationTime: 300000, // 5 minutes max
-};
-
 /** Unified model representation for UI - abstracts local vs remote */
 export interface SelectableModel {
   /** Unique identifier (filePath for local, modelId for remote) */

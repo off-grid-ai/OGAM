@@ -10,12 +10,12 @@ import { ensureNativeLogCapture, resetNativeLogCapture, recentNativeLog } from '
 
 import { HTP_ENABLED } from '../config/featureFlags';
 
-export const RESPONSE_RESERVE = 512;
+const RESPONSE_RESERVE = 512;
 const DEFAULT_THREADS = 4; // targets performance cores only; over-threading onto efficiency cores (A520) hurts
 const DEFAULT_BATCH = 512;
-export const DEFAULT_GPU_LAYERS = Platform.OS === 'ios' ? 99 : 0;
-export function getOptimalThreadCount(): number { return DEFAULT_THREADS; }
-export function getOptimalBatchSize(): number { return DEFAULT_BATCH; }
+const DEFAULT_GPU_LAYERS = Platform.OS === 'ios' ? 99 : 0;
+function getOptimalThreadCount(): number { return DEFAULT_THREADS; }
+function getOptimalBatchSize(): number { return DEFAULT_BATCH; }
 const REPACKABLE_QUANTS = ['q4_0', 'iq4_nl'];
 /** Detect repackable quant formats where disabling mmap improves inference speed. */
 export function shouldDisableMmap(modelPath: string): boolean {
@@ -431,7 +431,7 @@ export function getGpuLayersForDevice(
   return requestedLayers;
 }
 export { validateModelFile, checkMemoryForModel, safeCompletion } from './llmSafetyChecks';
-export const STOP_TOKENS = ['</s>', '<|end|>', '<|eot_id|>'];
+const STOP_TOKENS = ['</s>', '<|end|>', '<|eot_id|>'];
 export function buildCompletionParams(settings: {
   maxTokens?: number; temperature?: number; topP?: number; repeatPenalty?: number;
 }, options?: { disableCtxShift?: boolean }): Record<string, any> {

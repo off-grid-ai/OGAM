@@ -71,7 +71,7 @@ export const OVERRIDE_SURVIVAL_FLOOR_MB = 1200;
  *    the iOS-calibrated 1200 floor, WITHOUT the swap-credit mistake that let an oversized dirty
  *    model load and OOM. NEEDS on-device tuning/verification ([MEM-SM] logs the real numbers).
  */
-export const ANDROID_OVERRIDE_SURVIVAL_FLOOR_MB = 700;
+const ANDROID_OVERRIDE_SURVIVAL_FLOOR_MB = 700;
 /** The override survival floor for the current platform (data-driven, not a scattered branch).
  *  Param typed as the real RN platform union (not the file's `Plat`, which unions with `string`
  *  and would erase literal narrowing on the comparison below). */
@@ -108,7 +108,7 @@ export function modelBudgetFraction(
 }
 
 /** Fraction at which we WARN (load allowed, perf may suffer). Below the budget. */
-export function modelWarningFraction(totalRamGB: number, platform: Plat = Platform.OS): number {
+function modelWarningFraction(totalRamGB: number, platform: Plat = Platform.OS): number {
   if (totalRamGB <= 4) return 0.40;
   if (totalRamGB <= 8) return 0.50;
   return platform === 'ios' ? 0.66 : 0.60;

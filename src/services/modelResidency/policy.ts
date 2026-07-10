@@ -67,7 +67,7 @@ const PRIORITY: Record<ResidentType, number> = {
  * the two can never disagree on eviction order. Returns undefined when nothing is
  * evictable (caller stops and reports fits=false).
  */
-export function selectEvictionVictim(
+function selectEvictionVictim(
   current: Resident[],
   incoming: IncomingModel,
   isEvicted: (r: Resident) => boolean,

@@ -81,10 +81,6 @@ export interface LiteRTDownloadedModel extends DownloadedModelBase {
 
 export type DownloadedModel = LlamaDownloadedModel | LiteRTDownloadedModel;
 
-export function isLlamaModel(m: DownloadedModel): m is LlamaDownloadedModel {
-  return m.engine === 'llama';
-}
-
 export function isLiteRTModel(m: DownloadedModel): m is LiteRTDownloadedModel {
   return m.engine === 'litert';
 }
@@ -425,4 +421,4 @@ export interface DebugInfo {
 export type AppScreen = 'onboarding' | 'home' | 'models' | 'chat' | 'settings' | 'generate' | 'model-download';
 // Remote server types
 export type { RemoteProviderType, RemoteServer, RemoteModel, RemoteModelCapabilities, ServerTestResult, ServerInfo, RemoteGenerationSettings, SelectableModel } from './remoteServer';
-export { DEFAULT_REMOTE_GENERATION_SETTINGS } from './remoteServer';
+;

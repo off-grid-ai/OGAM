@@ -17,7 +17,7 @@ const { DownloadManagerModule } = NativeModules;
  * more than this, the native store never holds more than this either, so a relaunch
  * cannot resume a storm.
  */
-export const MAX_CONCURRENT_DOWNLOADS = 3;
+const MAX_CONCURRENT_DOWNLOADS = 3;
 
 interface QueuedStart {
   params: DownloadParams;

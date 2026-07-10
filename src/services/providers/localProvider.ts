@@ -32,7 +32,7 @@ function getLocalCapabilities(): ProviderCapabilities {
  *
  * Delegates to the existing llmService for local inference.
  */
-export class LocalProvider implements LLMProvider {
+class LocalProvider implements LLMProvider {
   readonly id = 'local';
   readonly type: ProviderType = 'local';
 

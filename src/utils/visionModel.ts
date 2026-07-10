@@ -17,7 +17,7 @@ export const VISION_NAME_PATTERNS: readonly string[] = [
 ];
 
 /** Tag values (HuggingFace / registry tags) that mark a model as vision. */
-export const VISION_TAG_PATTERNS: readonly string[] = ['vision', 'multimodal', 'image-text'];
+const VISION_TAG_PATTERNS: readonly string[] = ['vision', 'multimodal', 'image-text'];
 
 const includesAny = (haystack: string, needles: readonly string[]): boolean =>
   needles.some(n => haystack.includes(n));

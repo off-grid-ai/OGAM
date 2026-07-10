@@ -34,7 +34,7 @@ export interface RecommendedConfig {
  * highlight must not print twice) and joined. Rendered identically on every card
  * in the common muted description slot — no special-case colour or position.
  */
-export function cardDescription(description?: string, highlightText?: string): string | undefined {
+function cardDescription(description?: string, highlightText?: string): string | undefined {
   const parts = [description, highlightText].filter((v): v is string => !!v);
   const unique = parts.filter((v, i) => parts.indexOf(v) === i);
   return unique.length ? unique.join(' ') : undefined;
