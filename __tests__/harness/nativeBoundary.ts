@@ -204,12 +204,78 @@ export const GB = 1024 * 1024 * 1024;
 export const MB = 1024 * 1024;
 
 // ---------------------------------------------------------------------------
+// Fake: react-native-fs — a stateful in-memory filesystem (the REAL device leaf we can't run in node).
+// Replaces the dumb global jest.setup stub (exists→false / readDir→[]) so the real listing/scan/
+// integrity/finalize logic runs against a true disk the test seeds. Opt-in (installNativeBoundary({fs}))
+// so it never perturbs tests that don't touch the filesystem.
+// ---------------------------------------------------------------------------
+
+export interface FsFake {
+  module: Record<string, unknown>;
+  /** Seed a file on the virtual disk with an exact byte size (for truncated/partial-file cases). */
+  seedFile(path: string, sizeBytes: number): void;
+  /** Seed a directory so exists()/readDir() see it even when empty. */
+  seedDir(path: string): void;
+  DocumentDirectoryPath: string;
+}
+
+function makeFsFake(): FsFake {
+  const DocumentDirectoryPath = '/docs';
+  // path → { size, isDir }. Directories are entries with isDir=true.
+  const tree = new Map<string, { size: number; isDir: boolean }>();
+  tree.set(DocumentDirectoryPath, { size: 0, isDir: true });
+
+  const norm = (p: string) => p.replace(/\/+$/, '');
+  const parent = (p: string) => norm(p).slice(0, norm(p).lastIndexOf('/')) || '/';
+  const base = (p: string) => norm(p).slice(norm(p).lastIndexOf('/') + 1);
+  const ensureDir = (p: string) => { if (p && p !== '/' && !tree.has(norm(p))) { tree.set(norm(p), { size: 0, isDir: true }); ensureDir(parent(p)); } };
+
+  const seedFile = (path: string, sizeBytes: number) => { ensureDir(parent(path)); tree.set(norm(path), { size: sizeBytes, isDir: false }); };
+  const seedDir = (path: string) => ensureDir(path);
+
+  const statEntry = (p: string) => tree.get(norm(p));
+  const mkStat = (p: string, e: { size: number; isDir: boolean }) => ({
+    path: norm(p), name: base(p), size: e.size,
+    isFile: () => !e.isDir, isDirectory: () => e.isDir, mtime: new Date(0),
+  });
+
+  const module: Record<string, unknown> = {
+    DocumentDirectoryPath,
+    CachesDirectoryPath: '/caches',
+    exists: jest.fn(async (p: string) => tree.has(norm(p))),
+    mkdir: jest.fn(async (p: string) => { ensureDir(p); }),
+    readDir: jest.fn(async (p: string) => {
+      const dir = norm(p);
+      return [...tree.entries()]
+        .filter(([k]) => k !== dir && parent(k) === dir)
+        .map(([k, e]) => mkStat(k, e));
+    }),
+    stat: jest.fn(async (p: string) => { const e = statEntry(p); if (!e) throw new Error(`ENOENT: ${p}`); return mkStat(p, e); }),
+    writeFile: jest.fn(async (p: string, contents: string) => { seedFile(p, Buffer.byteLength(String(contents ?? ''))); }),
+    readFile: jest.fn(async (p: string) => { if (!tree.has(norm(p))) throw new Error(`ENOENT: ${p}`); return ''; }),
+    read: jest.fn(async () => 'GGUF'),
+    unlink: jest.fn(async (p: string) => {
+      const d = norm(p);
+      [...tree.keys()].filter(k => k === d || k.startsWith(d + '/')).forEach(k => tree.delete(k));
+    }),
+    moveFile: jest.fn(async (from: string, to: string) => { const e = statEntry(from); if (e) { seedFile(to, e.size); tree.delete(norm(from)); } }),
+    copyFile: jest.fn(async (from: string, to: string) => { const e = statEntry(from); if (e) seedFile(to, e.size); }),
+    hash: jest.fn(async () => 'deadbeef'),
+    downloadFile: jest.fn(() => ({ jobId: 1, promise: Promise.resolve({ statusCode: 200, bytesWritten: 0 }) })),
+    stopDownload: jest.fn(),
+  };
+  return { module, seedFile, seedDir, DocumentDirectoryPath };
+}
+
+// ---------------------------------------------------------------------------
 // installNativeBoundary — seed the set, then freshly require services/stores on top.
 // ---------------------------------------------------------------------------
 
 export interface InstallOpts {
   /** RAM profile seeded at the DeviceMemoryModule + device-info leaf. */
   ram?: RamProfile;
+  /** Replace the dumb global react-native-fs stub with a stateful in-memory filesystem. */
+  fs?: boolean;
 }
 
 export interface NativeBoundary {
@@ -218,6 +284,8 @@ export interface NativeBoundary {
   litertEvents: FakeEmitterHandle;
   /** Image diffusion native (LocalDream / CoreMLDiffusion). generateImage echoes the requested size. */
   diffusion: DiffusionFake;
+  /** Stateful in-memory filesystem — present only when installed with { fs: true }. */
+  fs?: FsFake;
   /** Re-read RAM at the leaf mid-test (e.g. simulate OS pressure between a pre-check and the load). */
   setRam(profile: RamProfile): void;
 }
@@ -237,6 +305,10 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
 
   const litert = makeLiteRTFake(handle);
   const diffusion = makeDiffusionFake();
+
+  // Stateful FS: override the dumb global react-native-fs stub BEFORE any service requires it.
+  const fsFake = opts.fs ? makeFsFake() : undefined;
+  if (fsFake) jest.doMock('react-native-fs', () => fsFake.module);
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const RN = require('react-native');
@@ -280,5 +352,5 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     Object.defineProperty(RN.Platform, 'OS', { value: profile.platform, configurable: true });
   };
 
-  return { litert, litertEvents: handle, diffusion, setRam };
+  return { litert, litertEvents: handle, diffusion, fs: fsFake, setRam };
 }

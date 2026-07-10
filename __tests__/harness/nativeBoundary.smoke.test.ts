@@ -42,6 +42,17 @@ describe('nativeBoundary harness — injection mechanism', () => {
     expect(result).toBe(''); // empty final turn — the exact Q5 precondition
   });
 
+  it('installs a stateful FS that the REAL whisperService.listDownloadedModels reads (overrides the dumb stub)', async () => {
+    const boundary = installNativeBoundary({ fs: true });
+    boundary.fs!.seedFile(`${boundary.fs!.DocumentDirectoryPath}/whisper-models/ggml-base.en.bin`, 5 * 1024 * 1024);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { whisperService } = require('../../src/services/whisperService');
+    const listed = await whisperService.listDownloadedModels();
+    // Proves the stateful FS reached the service (the dumb global stub returns []).
+    expect(listed.map((m: { modelId: string }) => m.modelId)).toEqual(['base.en']);
+    expect(listed[0].sizeBytes).toBe(5 * 1024 * 1024);
+  });
+
   it('seeds the RAM leaf so DeviceMemoryModule reports the seeded free bytes', async () => {
     installNativeBoundary({ ram: { platform: 'android', totalBytes: 12 * 1024 ** 3, availBytes: 640 * 1024 * 1024 } });
     // eslint-disable-next-line @typescript-eslint/no-var-requires
