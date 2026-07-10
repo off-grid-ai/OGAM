@@ -322,17 +322,18 @@ export function getMaxContextForDevice(totalMemoryBytes: number): number {
 const ANDROID_GPU_LAYER_CAPS: { maxGB: number; layers: number }[] = [{ maxGB: 4, layers: 0 }, { maxGB: 6, layers: 0 }, { maxGB: 8, layers: 12 }];
 const ANDROID_GPU_LAYERS_FALLBACK = 24;
 
-/** Safe GPU layer count based on device RAM. Skips GPU on ≤4 GB to prevent abort(). */
+/** Safe GPU layer count based on device RAM. Android/Adreno keeps RAM caps
+ * (≤6 GB → 0) to prevent GPU ANRs; iOS/Metal offloads on any device (no RAM cap). */
 export function getGpuLayersForDevice(totalMemoryBytes: number, requestedLayers: number): number {
   const totalGB = totalMemoryBytes / BYTES_PER_GB;
-  if (totalGB <= 4) return 0;
 
-  // Android / Adreno-specific caps to prevent GPU ANRs
+  // Android / Adreno-specific caps to prevent GPU ANRs (≤4 GB and ≤6 GB → 0).
   if (Platform.OS === 'android') {
     const tier = ANDROID_GPU_LAYER_CAPS.find(t => totalGB <= t.maxGB);
     const maxLayers = tier ? tier.layers : ANDROID_GPU_LAYERS_FALLBACK;
     return Math.min(requestedLayers, maxLayers);
   }
+  // iOS (Metal): no RAM-based cap - offload the requested layers regardless of RAM.
   return requestedLayers;
 }
 export { validateModelFile, checkMemoryForModel, safeCompletion } from './llmSafetyChecks';
