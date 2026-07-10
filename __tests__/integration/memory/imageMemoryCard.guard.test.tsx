@@ -11,7 +11,7 @@
  * can't silently drop the guard or admit an unfittable load. (The RED over-admit/over-refuse edge cases
  * M3/M4/M5 are text-model gate-verdict bugs, reproduced in budgetRedflow.test.ts.)
  */
-import { installNativeBoundary, GB, MB } from '../../harness/nativeBoundary';
+import { installNativeBoundary, GB, MB, requireRTL } from '../../harness/nativeBoundary';
 import { createONNXImageModel } from '../../utils/factories';
 
 async function setup(ram: { platform: 'ios' | 'android'; totalBytes: number; availBytes: number }, modelSizeBytes: number) {
@@ -19,7 +19,7 @@ async function setup(ram: { platform: 'ios' | 'android'; totalBytes: number; ava
   void boundary;
   /* eslint-disable @typescript-eslint/no-var-requires */
   const React = require('react');
-  const { render } = require('@testing-library/react-native');
+  const { render } = requireRTL();
   const { imageGenerationService } = require('../../../src/services/imageGenerationService');
   const { hardwareService } = require('../../../src/services/hardware');
   const { useAppStore } = require('../../../src/stores');

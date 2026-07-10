@@ -14,7 +14,7 @@
  * RED on HEAD: the assistant bubble renders "(No response)". Falsification: if the loop surfaced the
  * tool data instead, the "(No response)" text would be gone → green.
  */
-import { installNativeBoundary } from '../../harness/nativeBoundary';
+import { installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
 import { createDownloadedModel } from '../../utils/factories';
 import type { Message } from '../../../src/types';
 
@@ -32,7 +32,7 @@ describe('Q5 — successful tool + empty final turn (UI red-flow)', () => {
     // Everything required AFTER seeding (post jest.resetModules) so React + RNTL + product modules
     // share ONE module graph.
     const React = require('react');
-    const { render } = require('@testing-library/react-native');
+    const { render } = requireRTL();
     const { liteRTService } = require('../../../src/services/litert');
     const { generationService } = require('../../../src/services/generationService');
     const { useAppStore, useChatStore } = require('../../../src/stores');
@@ -77,7 +77,7 @@ describe('Q5 — successful tool + empty final turn (UI red-flow)', () => {
     const boundary = installNativeBoundary({ ram: { platform: 'android', totalBytes: 12 * 1024 ** 3, availBytes: 8 * 1024 ** 3 } });
     /* eslint-disable @typescript-eslint/no-var-requires */
     const React = require('react');
-    const { render } = require('@testing-library/react-native');
+    const { render } = requireRTL();
     const { liteRTService } = require('../../../src/services/litert');
     const { generationService } = require('../../../src/services/generationService');
     const { useAppStore, useChatStore } = require('../../../src/stores');

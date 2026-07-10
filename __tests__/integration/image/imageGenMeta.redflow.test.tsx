@@ -15,14 +15,14 @@
  * The model is pre-loaded on the fake so _ensureImageModelLoaded's already-loaded fast-path is taken
  * (no native model load, no filesystem integrity scan needed).
  */
-import { installNativeBoundary, GB } from '../../harness/nativeBoundary';
+import { installNativeBoundary, GB, requireRTL } from '../../harness/nativeBoundary';
 import { createONNXImageModel } from '../../utils/factories';
 
 async function generateWithSettings(settings: Record<string, unknown>) {
   const boundary = installNativeBoundary({ ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
   /* eslint-disable @typescript-eslint/no-var-requires */
   const React = require('react');
-  const { render } = require('@testing-library/react-native');
+  const { render } = requireRTL();
   const { imageGenerationService } = require('../../../src/services/imageGenerationService');
   const { localDreamGeneratorService } = require('../../../src/services/localDreamGenerator');
   const { useAppStore, useChatStore } = require('../../../src/stores');

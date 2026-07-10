@@ -31,13 +31,26 @@
 // error/tool_call. loadModel resolves { backend, maxNumTokens }.
 // ---------------------------------------------------------------------------
 
-// Tests require @testing-library/react-native AFTER installNativeBoundary()'s jest.resetModules()
-// (so React + RNTL + the component share one module graph). RNTL's index registers afterEach/afterAll
-// cleanup hooks on require; requiring it mid-run would throw "add a hook after tests started". Skipping
-// auto-cleanup avoids that — each red-flow file mounts once and jest tears down the env per file.
-process.env.RNTL_SKIP_AUTO_CLEANUP = 'true';
-
 type Listener = (payload: unknown) => void;
+
+/**
+ * Require @testing-library/react-native AFTER installNativeBoundary()'s jest.resetModules() (so React +
+ * RNTL + the component share one module graph). RNTL's index registers afterEach cleanup ON REQUIRE;
+ * requiring it mid-run would throw "add a hook after tests started". We set RNTL_SKIP_AUTO_CLEANUP ONLY
+ * for the duration of this synchronous require (restored immediately) so it never leaks to other suites
+ * sharing this worker's process.env. Render tests use this instead of require('@testing-library/...').
+ */
+export function requireRTL(): typeof import('@testing-library/react-native') {
+  const prev = process.env.RNTL_SKIP_AUTO_CLEANUP;
+  process.env.RNTL_SKIP_AUTO_CLEANUP = 'true';
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('@testing-library/react-native');
+  } finally {
+    if (prev === undefined) delete process.env.RNTL_SKIP_AUTO_CLEANUP;
+    else process.env.RNTL_SKIP_AUTO_CLEANUP = prev;
+  }
+}
 
 /** An in-JS stand-in for a native module's NativeEventEmitter surface. Drive events from the test. */
 export interface FakeEmitterHandle {
