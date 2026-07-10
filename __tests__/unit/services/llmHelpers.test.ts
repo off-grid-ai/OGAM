@@ -55,12 +55,12 @@ describe('getMaxContextForDevice', () => {
 });
 
 describe('getGpuLayersForDevice', () => {
-  it('disables GPU on 3GB RAM device', () => {
-    expect(getGpuLayersForDevice(3 * GB, 99)).toBe(0);
+  it('offloads to Metal on 3GB iOS device (no RAM cap)', () => {
+    expect(getGpuLayersForDevice(3 * GB, 99)).toBe(99);
   });
 
-  it('disables GPU on 4GB RAM device (iPhone XS)', () => {
-    expect(getGpuLayersForDevice(4 * GB, 99)).toBe(0);
+  it('offloads to Metal on 4GB iOS device / iPhone XS (no RAM cap)', () => {
+    expect(getGpuLayersForDevice(4 * GB, 99)).toBe(99);
   });
 
   it('keeps requested GPU layers on 6GB iOS device', () => {
