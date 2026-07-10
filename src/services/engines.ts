@@ -102,29 +102,47 @@ export function isModelReady(model: { engine?: string; filePath?: string } | nul
 }
 
 /**
- * Live capabilities of the ACTIVE LOCAL text engine, read from the running services and fed
- * through the one pure rule (deriveEngineCapabilities). This is the imperative counterpart to
- * deriveEngineCapabilities: generation/load paths call this instead of poking llmService /
- * liteRTService and branching on engine === 'litert' themselves. Remote is out of scope here
- * (pass isRemote:false) — callers layer the remote decision on top. Adding a backend = extend
+ * Live capabilities of the ACTIVE text model (remote OR local), read from the running services
+ * and fed through the one pure rule (deriveEngineCapabilities). The imperative counterpart to the
+ * pure fn: every caller (generation routing, UI capability flags) uses THIS instead of poking
+ * llmService / liteRTService directly or branching on engine === 'litert' — so a concrete engine
+ * service never has to be imported into a screen (DIP). Adding a backend = extend
  * deriveEngineCapabilities, not the callers (OCP).
+ * `thinking` here is CAPABILITY (does the model support it — drives the UI toggle), not "enabled
+ * this turn"; the per-turn enablement lives in wantsLeadingThinkToken.
  */
-export function activeLocalTextCapabilities(model: DownloadedModel | null | undefined): EngineCapabilities {
-  const litert = !!model && isLiteRTModel(model);
+export function activeTextCapabilities(i: {
+  isRemote: boolean;
+  remoteCaps?: CapabilityInputs['remoteCaps'];
+  model: DownloadedModel | null | undefined;
+}): EngineCapabilities {
+  const litert = i.model && isLiteRTModel(i.model) ? i.model : null;
   return deriveEngineCapabilities({
-    isRemote: false,
-    engine: model?.engine,
-    liteRTVision: litert ? model.liteRTVision : undefined,
-    liteRTAudio: litert ? model.liteRTAudio : undefined,
+    isRemote: i.isRemote,
+    remoteCaps: i.remoteCaps,
+    engine: i.model?.engine,
+    liteRTVision: litert ? litert.liteRTVision : undefined,
+    liteRTAudio: litert ? litert.liteRTAudio : undefined,
     liteRTLoaded: liteRTService.isModelLoaded(),
     llama: {
       loaded: llmService.isModelLoaded(),
       vision: llmService.getMultimodalSupport()?.vision ?? false,
       audio: false,
       tools: llmService.supportsToolCalling(),
-      thinking: llmService.isThinkingEnabled(),
+      thinking: llmService.supportsThinking(),
     },
   });
+}
+
+/** Local-only convenience for the generation routing path (no remote); reads .tools/.vision. */
+export function activeLocalTextCapabilities(model: DownloadedModel | null | undefined): EngineCapabilities {
+  return activeTextCapabilities({ isRemote: false, model });
+}
+
+/** Is the native LiteRT runtime available on this device? Exposed here so UI (e.g. import-file
+ *  validation) asks the engine registry instead of importing the concrete liteRTService (DIP). */
+export function isLiteRTAvailable(): boolean {
+  return liteRTService.isAvailable();
 }
 
 /**

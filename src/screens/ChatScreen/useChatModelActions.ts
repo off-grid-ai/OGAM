@@ -5,8 +5,7 @@ import {
   hideAlert,
 } from '../../components';
 import { llmService, activeModelService, modelManager } from '../../services';
-import { liteRTService } from '../../services/litert';
-import { deriveEngineCapabilities, isModelReady, activeLocalTextCapabilities } from '../../services/engines';
+import { isModelReady, activeLocalTextCapabilities, activeTextCapabilities } from '../../services/engines';
 import { useAppStore } from '../../stores';
 import { DownloadedModel, RemoteModel, ONNXImageModel, isLiteRTModel } from '../../types';
 import logger from '../../utils/logger';
@@ -362,24 +361,19 @@ export function useChatModelStateSync(deps: ModelStateSyncDeps): void {
   // (ensureModelReady → ensureModelLoaded). Loading eagerly here is what made opening a
   // chat — and switching models — spin up the model before the user sent anything.
   useEffect(() => {
-    // Single capability rule (engines.deriveEngineCapabilities); vision keys on activeModelInfo.isRemote.
-    setSupportsVision(deriveEngineCapabilities({
+    // Single capability rule (engines.activeTextCapabilities); vision keys on activeModelInfo.isRemote.
+    setSupportsVision(activeTextCapabilities({
       isRemote: activeModelInfo.isRemote,
       remoteCaps: activeRemoteModel?.capabilities,
-      engine: activeModel?.engine,
-      liteRTVision: activeModel?.engine === 'litert' ? activeModel.liteRTVision : undefined,
-      liteRTLoaded: liteRTService.isModelLoaded(),
-      llama: { loaded: llmService.isModelLoaded(), vision: llmService.getMultimodalSupport()?.vision ?? false, audio: false, tools: false, thinking: false },
+      model: activeModel,
     }).vision);
   }, [activeModelInfo.isRemote, activeRemoteModel?.capabilities?.supportsVision, activeModelMmProjPath, isModelLoading]);
   useEffect(() => {
     // Same rule; tools/thinking key on activeRemoteTextModelId (preserved from the prior branch).
-    const caps = deriveEngineCapabilities({
+    const caps = activeTextCapabilities({
       isRemote: !!activeRemoteTextModelId,
       remoteCaps: activeRemoteModel?.capabilities,
-      engine: activeModel?.engine,
-      liteRTLoaded: liteRTService.isModelLoaded(),
-      llama: { loaded: llmService.isModelLoaded(), vision: false, audio: false, tools: llmService.supportsToolCalling(), thinking: llmService.supportsThinking() },
+      model: activeModel,
     });
     setSupportsToolCalling(caps.tools);
     setSupportsThinking(caps.thinking);

@@ -9,7 +9,7 @@ import { useFocusTrigger } from '../../hooks/useFocusTrigger';
 import { useAppStore } from '../../stores';
 import { useDownloadStore, isActiveStatus } from '../../stores/downloadStore';
 import { modelManager } from '../../services';
-import { liteRTService } from '../../services/litert';
+import { isLiteRTAvailable } from '../../services/engines';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
 import { ONNXImageModel } from '../../types';
 import { ModelTab, NavigationProp } from './types';
@@ -116,7 +116,7 @@ export function useModelsScreen() {
 
   const validateImportFiles = (resolvedFiles: Array<{ name: string; uri: string }>): string | null => {
     const singleLitert = resolvedFiles.length === 1 && resolvedFiles[0].name.toLowerCase().endsWith('.litertlm');
-    if (singleLitert && !liteRTService.isAvailable()) {
+    if (singleLitert && !isLiteRTAvailable()) {
       return 'litert_unsupported';
     }
     const allGguf = resolvedFiles.every(f => f.name.toLowerCase().endsWith('.gguf'));

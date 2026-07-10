@@ -31,9 +31,9 @@ jest.mock('../../../src/services/llm', () => ({
     getLoadedModelPath: jest.fn(),
     stopGeneration: jest.fn(),
     isModelLoaded: jest.fn(),
-    // engines.activeLocalTextCapabilities (reached via loadedModelVision) reads these too.
+    // engines.activeTextCapabilities (reached via loadedModelVision / state-sync) reads these too.
     supportsToolCalling: jest.fn(() => false),
-    isThinkingEnabled: jest.fn(() => false),
+    supportsThinking: jest.fn(() => false),
   },
 }));
 
