@@ -208,6 +208,9 @@ jest.mock('react-native-audio-api', () => ({
   })),
   FileFormat: { Wav: 0, Caf: 1, M4A: 2, Flac: 3 },
   FileDirectory: { Document: 0, Cache: 1 },
+  BitDepth: { Bit8: 0, Bit16: 1, Bit24: 2, Bit32: 3 },
+  IOSAudioQuality: { Min: 0, Low: 1, Medium: 2, High: 3, Max: 4 },
+  FlacCompressionLevel: { L0: 0, L5: 5, L8: 8 },
 }), { virtual: true });
 
 // @react-native-community/slider mock
