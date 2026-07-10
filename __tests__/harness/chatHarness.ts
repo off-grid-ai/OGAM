@@ -94,7 +94,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
      * send button, and await the assistant reply rendering. `scripted` is what the (faked) native engine
      * returns — the real generation pipeline turns it into the rendered bubble.
      */
-    async send(text: string, scripted: { text?: string; content?: string; toolCalls?: unknown[] }) {
+    async send(text: string, scripted: { text?: string; content?: string; reasoning?: string; toolCalls?: unknown[] }) {
       if (opts.engine === 'llama') boundary.llama!.scriptCompletion(scripted as { text?: string });
       else boundary.litert.scriptTurn(scripted as { content?: string; toolCalls?: { name: string; arguments: Record<string, unknown> }[] });
 
@@ -108,7 +108,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
      * Drive the REAL regenerate gesture: script the next turn, long-press the assistant bubble to open the
      * REAL action menu, and press the REAL "Retry" item. The real regenerateResponseFn re-runs generation.
      */
-    async regenerateLast(scripted: { text?: string; content?: string; toolCalls?: unknown[] }) {
+    async regenerateLast(scripted: { text?: string; content?: string; reasoning?: string; toolCalls?: unknown[] }) {
       if (opts.engine === 'llama') boundary.llama!.scriptCompletion(scripted as { text?: string });
       else boundary.litert.scriptTurn(scripted as { content?: string });
 
