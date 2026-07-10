@@ -13,6 +13,7 @@
 import { NativeModules, NativeEventEmitter, EmitterSubscription } from 'react-native';
 import logger from '../utils/logger';
 import { summarizeSession, runCompaction } from './liteRTCompaction';
+import { useDevInferenceStore } from '../stores/devInferenceStore';
 
 const TAG = '[LiteRTService]';
 
@@ -138,6 +139,20 @@ class LiteRTService {
     const topP = samplerConfig?.topP ?? 0.95;
     const toolsJson = tools && tools.length > 0 ? JSON.stringify(tools) : '';
     const historyJson = history && history.length > 0 ? JSON.stringify(history) : '';
+    // DEV-only: arm/disarm an LLGuidance constraint before (re)creating the
+    // conversation, since it's a per-conversation flag natively. Guarded so a
+    // missing native method (older build) never blocks generation.
+    if (__DEV__ && typeof LiteRTModule?.setConstrainedDecoding === 'function') {
+      try {
+        const dev = useDevInferenceStore.getState();
+        const constraint = dev.litertConstraintString.trim();
+        const armed = dev.enabled && constraint.length > 0;
+        await LiteRTModule.setConstrainedDecoding(armed, dev.litertConstraintType, armed ? dev.litertConstraintString : '');
+        if (armed) logger.log(TAG, `[DevGrammar-LiteRT] armed constraint type=${dev.litertConstraintType} len=${constraint.length}`);
+      } catch (e) {
+        logger.warn(TAG, `[DevGrammar-LiteRT] setConstrainedDecoding failed: ${String(e)}`);
+      }
+    }
     await LiteRTModule.resetConversation(systemPrompt, temperature, topK, topP, toolsJson, historyJson);
     this.activeSystemPrompt = systemPrompt;
     this.activeToolsJson = toolsJson;

@@ -17,6 +17,7 @@ import { formatLlamaMessages, buildOAIMessages } from './llmMessages';
 import { generateWithToolsImpl } from './llmToolGeneration';
 import type { ToolCall } from './tools/types';
 import type { MultimodalSupport, LLMPerformanceSettings, LLMPerformanceStats } from './llmTypes';
+import { applyDevGrammarOverrides, noteDevGrammarError } from './devInference';
 import logger from '../utils/logger';
 export type { MultimodalSupport, LLMPerformanceSettings, LLMPerformanceStats } from './llmTypes';
 export type StreamToken = { content?: string; reasoningContent?: string };
@@ -234,8 +235,12 @@ class LLMService {
       let firstTokenMs = 0, tokenCount = 0, firstReceived = false;
       let fullContent = '', fullReasoningContent = '', streamedContentSoFar = '', streamedReasoningSoFar = '';
       const completionParams = { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift() }), ...buildThinkingCompletionParams(this.isThinkingEnabled(), this.isGemma4Model()) };
+      // DEV-only: a pasted GBNF grammar / temp / prefill can override this turn.
+      // No-op unless enabled from the __DEV__ grammar modal.
+      const devGrammarApplied = applyDevGrammarOverrides(completionParams);
+      if (devGrammarApplied) logger.log(`[DevGrammar] reached native completion (no-tools path); grammar in params=${!!(completionParams as any).grammar}`);
       logger.log(`[LLM][THINKING] thinkingSupported=${this.thinkingSupported}, thinkingEnabled=${useAppStore.getState().settings.thinkingEnabled}, isThinkingEnabled=${this.isThinkingEnabled()}, enable_thinking=${(completionParams as any).enable_thinking}, reasoning_format=${(completionParams as any).reasoning_format}`);
-      const completionResult = await safeCompletion(ctx, () => ctx.completion(completionParams, (data: any) => {
+      const onCompletionData = (data: any) => {
         if (!this.isGenerating || !data.token) return;
         if (!firstReceived) { firstReceived = true; firstTokenMs = Date.now() - startTime; logger.log(`[LLM][THINKING] First token raw data — token: ${JSON.stringify(data.token)}, content: ${JSON.stringify(data.content)}, reasoning_content: ${JSON.stringify(data.reasoning_content)}`); }
         tokenCount++;
@@ -247,7 +252,16 @@ class LLMService {
         if (content) fullContent += content;
         if (reasoningContent) fullReasoningContent += reasoningContent;
         onStream?.({ reasoningContent, content });
-      }), 'generateResponse');
+      };
+      let completionResult;
+      try {
+        completionResult = await safeCompletion(ctx, () => ctx.completion(completionParams, onCompletionData), 'generateResponse');
+      } catch (e) {
+        // A bad dev grammar must never brick chat: record it and retry ungrammared.
+        if (!devGrammarApplied) throw e;
+        noteDevGrammarError(completionParams, e);
+        completionResult = await safeCompletion(ctx, () => ctx.completion(completionParams, onCompletionData), 'generateResponse-fallback');
+      }
       const cr = completionResult as any;
       this.performanceStats = recordGenerationStats(startTime, firstTokenMs, tokenCount);
       if (completionResult?.context_full) { logger.log('[LLM] Context full detected — signalling for compaction'); throw new Error('Context is full'); }

@@ -8,6 +8,7 @@ import type { Message } from '../types';
 import type { ToolCall } from './tools/types';
 import { recordGenerationStats, buildCompletionParams, buildThinkingCompletionParams, safeCompletion } from './llmHelpers';
 import type { StreamToken } from './llm';
+import { applyDevGrammarOverrides, noteDevGrammarError } from './devInference';
 import logger from '../utils/logger';
 
 type ToolStreamCallback = (data: StreamToken) => void;
@@ -130,9 +131,13 @@ export async function generateWithToolsImpl(
       tool_choice: 'auto',
       ...buildThinkingCompletionParams(deps.isThinkingEnabled, deps.isGemma4Model),
     };
+    // DEV-only: a pasted GBNF grammar / temp / prefill can override this turn
+    // (and strips tools). No-op unless enabled from the __DEV__ grammar modal.
+    const devGrammarApplied = applyDevGrammarOverrides(completionParams);
+    if (devGrammarApplied) logger.log(`[DevGrammar] reached native completion (tools path); grammar in params=${!!(completionParams as any).grammar}`);
     logger.log('[LLM-Tools] === INPUT ===');
     logger.log(JSON.stringify(completionParams, null, 2));
-    const completionResult: any = await safeCompletion(deps.context, () => deps.context.completion(completionParams as any, (data: any) => {
+    const onCompletionData = (data: any) => {
       if (!generating) return;
       if (data.tool_calls) {
         for (const tc of data.tool_calls) {
@@ -145,7 +150,16 @@ export async function generateWithToolsImpl(
       const visibleToken = toolCallFilter ? toolCallFilter.process(data.token) : data.token;
       fullResponse += visibleToken;
       if (visibleToken) options.onStream?.({ content: visibleToken });
-    }), 'generateWithTools');
+    };
+    let completionResult: any;
+    try {
+      completionResult = await safeCompletion(deps.context, () => deps.context.completion(completionParams as any, onCompletionData), 'generateWithTools');
+    } catch (e) {
+      // A bad dev grammar must never brick chat: record it and retry ungrammared.
+      if (!devGrammarApplied) throw e;
+      noteDevGrammarError(completionParams, e);
+      completionResult = await safeCompletion(deps.context, () => deps.context.completion(completionParams as any, onCompletionData), 'generateWithTools-fallback');
+    }
     logger.log('[LLM-Tools] === OUTPUT ===');
     logger.log(JSON.stringify(completionResult, null, 2));
 

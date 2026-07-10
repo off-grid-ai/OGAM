@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,11 @@ import Icon from 'react-native-vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AttachStep } from 'react-native-spotlight-tour';
 import { ModelSelectorModal } from '../../components';
+import { DevGrammarModal } from '../../components/DevGrammarModal';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { llmService } from '../../services';
+import { useDevInferenceStore } from '../../stores/devInferenceStore';
+import logger from '../../utils/logger';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
@@ -79,7 +82,13 @@ export const ChatHeader: React.FC<{
   setShowSettingsPanel: (v: boolean) => void;
   setShowProjectSelector: (v: boolean) => void;
   isRemote?: boolean;
-}> = ({ styles, colors, activeConversation, activeProject, navigation, onOpenModels, setShowSettingsPanel, setShowProjectSelector, isRemote }) => (
+}> = ({ styles, colors, activeConversation, activeProject, navigation, onOpenModels, setShowSettingsPanel, setShowProjectSelector, isRemote }) => {
+  // DEV-only grammar test harness (see DevGrammarModal). devActive lights the
+  // header icon when a custom grammar is armed so it's obvious the next reply
+  // is constrained.
+  const [devOpen, setDevOpen] = useState(false);
+  const devActive = useDevInferenceStore((s) => s.enabled && s.grammar.trim().length > 0);
+  return (
   <View style={styles.header}>
     <View style={styles.headerRow}>
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -113,6 +122,15 @@ export const ChatHeader: React.FC<{
         </View>
       </View>
       <View style={styles.headerActions}>
+        {__DEV__ && (
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => { logger.log(`[DevGrammar] header button tapped - opening modal (currently armed=${devActive})`); setDevOpen(true); }}
+            testID="chat-dev-grammar"
+          >
+            <Icon name="terminal" size={16} color={devActive ? colors.primary : colors.textSecondary} />
+          </TouchableOpacity>
+        )}
         <AttachStep index={16}>
           <TouchableOpacity style={styles.iconButton} onPress={() => setShowSettingsPanel(true)} testID="chat-settings-icon">
             <Icon name="sliders" size={16} color={colors.textSecondary} />
@@ -120,8 +138,10 @@ export const ChatHeader: React.FC<{
         </AttachStep>
       </View>
     </View>
+    {__DEV__ && <DevGrammarModal visible={devOpen} onClose={() => setDevOpen(false)} />}
   </View>
-);
+  );
+};
 
 export const EmptyChat: React.FC<{
   styles: StylesType;

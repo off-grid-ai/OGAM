@@ -13,6 +13,7 @@ import com.google.ai.edge.litertlm.BenchmarkInfo
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.ExperimentalFlags
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.ExperimentalApi
@@ -79,7 +80,29 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
     private val pendingToolCalls = ConcurrentHashMap<String, CompletableDeferred<String>>()
     private var configuredMaxTokens: Int = 4096
 
+    // DEV-only constrained decoding (LLGuidance: json_schema / lark / regex).
+    // Set from JS via setConstrainedDecoding() before resetConversation. The map
+    // contract below is UNVERIFIED - every use is wrapped so a wrong shape logs
+    // and falls back to unconstrained generation, never crashing the chat path.
+    @Volatile private var constrainedEnabled = false
+    @Volatile private var constraintType = ""
+    @Volatile private var constraintString = ""
+
     override fun getName(): String = "LiteRTModule"
+
+    // -------------------------------------------------------------------------
+    // setConstrainedDecoding (DEV) — arm/disarm an LLGuidance constraint that
+    // resetConversation + sendMessage will apply. type = json_schema|lark|regex.
+    // -------------------------------------------------------------------------
+
+    @ReactMethod
+    fun setConstrainedDecoding(enabled: Boolean, type: String, constraint: String, promise: Promise) {
+        constrainedEnabled = enabled && constraint.isNotEmpty()
+        constraintType = type
+        constraintString = constraint
+        Log.i(TAG, "[DevGrammar-LiteRT] setConstrainedDecoding enabled=$constrainedEnabled type=$type len=${constraint.length}")
+        promise.resolve(null)
+    }
 
     // -------------------------------------------------------------------------
     // loadModel
@@ -190,6 +213,7 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
     // resetConversation — closes and recreates Conversation only, Engine stays
     // -------------------------------------------------------------------------
 
+    @OptIn(ExperimentalApi::class)
     @ReactMethod
     fun resetConversation(systemPrompt: String, temperature: Double, topK: Int, topP: Double, toolsJson: String, historyJson: String, promise: Promise) {
         val safe = SafePromise(promise, TAG)
@@ -218,6 +242,16 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                         topP = topP,
                         temperature = temperature,
                     )
+                }
+
+                // DEV: constrained decoding is a per-conversation experimental flag,
+                // so it must be set before createConversation. Guarded - a missing/renamed
+                // API in a future SDK must not break conversation setup.
+                try {
+                    ExperimentalFlags.enableConversationConstrainedDecoding = constrainedEnabled
+                    if (constrainedEnabled) debugLog("[DevGrammar-LiteRT] enableConversationConstrainedDecoding=true (type=$constraintType len=${constraintString.length})")
+                } catch (e: Throwable) {
+                    Log.w(TAG, "[DevGrammar-LiteRT] could not set constrained-decoding flag: ${e.message}")
                 }
 
                 val toolProviders = buildToolProviders(toolsJson)
@@ -366,11 +400,33 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 try {
                     val contents = buildSendContents(imageUris, audioUris, text, safe) ?: return@launch
 
+                    // DEV: attach an LLGuidance constraint via OptionalArgs. The exact
+                    // map shape is UNVERIFIED (C++ docs only), so if building/starting the
+                    // constrained flow throws we log and fall back to an unconstrained send
+                    // - a probe that can reveal the contract from logs without breaking chat.
+                    val flow = if (constrainedEnabled && constraintString.isNotEmpty()) {
+                        try {
+                            val optionalArgs = mapOf(
+                                "decoding_constraint" to mapOf(
+                                    "constraint_type" to constraintType,
+                                    "constraint_string" to constraintString,
+                                ),
+                            )
+                            Log.i(TAG, "[DevGrammar-LiteRT] sending WITH decoding_constraint type=$constraintType len=${constraintString.length}")
+                            conv.sendMessageAsync(contents, optionalArgs)
+                        } catch (e: Throwable) {
+                            Log.w(TAG, "[DevGrammar-LiteRT] constrained send failed to start (${e.message}); falling back unconstrained")
+                            conv.sendMessageAsync(contents)
+                        }
+                    } else {
+                        conv.sendMessageAsync(contents)
+                    }
+
                     var tokenCount = 0
-                    conv.sendMessageAsync(contents)
+                    flow
                         .collect { message ->
                             tokenCount++
-                            if (tokenCount == 1) Log.i(TAG, "sendMessage — first message from model (audio=${audioUris.size} image=${imageUris.size})")
+                            if (tokenCount == 1) Log.i(TAG, "sendMessage — first message from model (audio=${audioUris.size} image=${imageUris.size} constrained=${constrainedEnabled && constraintString.isNotEmpty()})")
                             dispatchStreamToken(message)
                         }
 
