@@ -18,8 +18,8 @@ jest.mock('@react-navigation/native', () => ({
 describe('happy — a tool runs and its result renders (heavy entry point)', () => {
   it('calculator: tool call executes and the answer renders', async () => {
     const h = await setupChatScreen({ engine: 'litert' });
-    // Enable the calculator tool the way the UI does (settings the send path reads).
-    h.useAppStore.getState().updateSettings({ enabledTools: ['calculator'] });
+    // Arrive-via-UI: enable the calculator on the real Tools screen (flip its switch), then chat.
+    h.enableToolViaUI('calculator');
     h.render();
 
     // The model emits a calculator tool call; after the tool runs it answers with the result.

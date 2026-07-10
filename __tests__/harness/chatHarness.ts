@@ -81,6 +81,23 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     boundary, React, rtl, useAppStore, useChatStore, conversationId,
     view: null as ReturnType<typeof rtl.render> | null,
 
+    /**
+     * Arrive-via-UI: enable a built-in tool the way the user does — navigate to the Tools tab (a real
+     * separate screen) and flip its switch. Shares the same store as ChatScreen, so the enablement is
+     * live when we return to chat. NOT settings.updateSettings seeding.
+     */
+    enableToolViaUI(toolId: string) {
+      /* eslint-disable @typescript-eslint/no-var-requires */
+      const { ToolsScreen } = require('../../src/screens/ToolsScreen');
+      const { Switch } = require('react-native');
+      /* eslint-enable @typescript-eslint/no-var-requires */
+      const tools = rtl.render(React.createElement(ToolsScreen, {}));
+      const row = tools.getByTestId(`tool-picker-row-${toolId}`);
+      // The RN Switch toggles via onValueChange (not press) — locate it in the row and flip it.
+      rtl.fireEvent(rtl.within(row).UNSAFE_getByType(Switch), 'valueChange', true);
+      tools.unmount();
+    },
+
     /** Mount the real ChatScreen. */
     render() {
       // eslint-disable-next-line @typescript-eslint/no-var-requires

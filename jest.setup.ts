@@ -509,15 +509,25 @@ jest.mock('react-native-spotlight-tour', () => ({
   }),
 }));
 
-// react-native-safe-area-context mock
-jest.mock('react-native-safe-area-context', () => {
-  const defaultInset = { top: 0, right: 0, bottom: 0, left: 0 };
-  return {
-    SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
-    SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
-    useSafeAreaInsets: jest.fn(() => defaultInset),
+// react-native-screens mock — the native Screen/ScreenStack components are undefined in jest, which
+// crashes @react-navigation/native-stack ($$typeof undefined). Map them to plain Views so a REAL
+// NavigationContainer + navigator mounts and real cross-screen navigation can be driven in tests.
+jest.mock('react-native-screens', () => {
+  const RN = require('react-native');
+  const noop = () => {};
+  const base: Record<string, unknown> = {
+    enableScreens: noop, enableFreeze: noop, screensEnabled: () => false,
+    Screen: RN.View, ScreenContainer: RN.View, ScreenStack: RN.View, ScreenStackHeaderConfig: RN.View,
+    NativeScreen: RN.View, NativeScreenContainer: RN.View, FullWindowOverlay: RN.View,
   };
+  return new Proxy(base, { get: (t, p) => (p in t ? t[p as string] : RN.View) });
 });
+
+// react-native-safe-area-context mock — use the library's SHIPPED jest mock, which exports the full
+// surface (SafeAreaInsetsContext / SafeAreaFrameContext / initialWindowMetrics) that @react-navigation's
+// SafeAreaProviderCompat reads. The old hand-rolled mock omitted the contexts, so a real
+// NavigationContainer could not mount (useContext(undefined)).
+jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 
 // ============================================================================
 // Global Test Utilities
@@ -580,6 +590,17 @@ if (!shouldPrintJestConsole) {
 beforeEach(() => {
   jest.clearAllMocks();
   clearMockStorage();
+});
+
+// Global test isolation for the native-boundary harness. Tests that call installNativeBoundary()
+// jest.resetModules() mid-test, which forks React Testing Library so its OWN auto-cleanup can't register
+// (requireRTL deliberately skips it to avoid the "hook after tests started" error). Without cleanup,
+// mounted screens persist and their store/residency writes BLEED into the next test (order-dependent
+// flakiness, far worse in-band). This afterEach requires RTL AFTER the test's resetModules, so it resolves
+// the SAME post-reset instance the test rendered on, and unmounts its tree. It also drops the global
+// `window` shim the harness installs for React 19's error reporter, so no true-global leaks across files.
+afterEach(() => {
+  try { require('@testing-library/react-native').cleanup(); } catch { /* RTL not loaded this test */ }
 });
 
 // Global timeout for async operations
