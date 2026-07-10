@@ -80,6 +80,7 @@ describe('JOURNEY: download → load → send → reply', () => {
         onToken({ content: 'Hello ' });
         onToken({ content: 'there.' });
         onDone?.();
+        return 'Hello there.';
       },
     );
 
