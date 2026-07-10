@@ -41,7 +41,7 @@ beforeEach(() => {
 });
 
 describe('engine parity — red-flow (correct behavior; currently RED)', () => {
-  it.failing('Q17: a voice note + a tool enabled on LiteRT sends the TRANSCRIPT and NO audio to generateRaw', async () => {
+  it('Q17: a voice note + a tool enabled on LiteRT sends the TRANSCRIPT and NO audio to generateRaw', async () => {
     const conversationId = setupWithConversation({ messages: [] });
     const userMsg: Message = createMessage({
       role: 'user',

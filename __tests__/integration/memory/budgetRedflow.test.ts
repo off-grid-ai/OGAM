@@ -18,7 +18,7 @@ afterEach(() => resetDeviceMemory());
 
 describe('memory budget — red-flow (correct behavior; currently RED due to the bug)', () => {
   // M1 — text + image must be MUTUALLY EXCLUSIVE (swap), not co-reside into near-OOM.
-  it.failing('M1: starting image-gen with a text model resident on a 640MB-free 12GB Android EVICTS the text model', async () => {
+  it('M1: starting image-gen with a text model resident on a 640MB-free 12GB Android EVICTS the text model', async () => {
     setDeviceMemory({ platform: 'android', totalGB: 12, availGB: gbOf(640) });
     makeResident({ key: 'text', type: 'text', modelId: 'gemma', sizeMB: 5235, dirtyMemory: false });
 
@@ -34,7 +34,7 @@ describe('memory budget — red-flow (correct behavior; currently RED due to the
 
   // M2 — a 2nd in-app dirty heavy must NOT co-load when real free RAM can't hold it; the reclaim
   // credit models BACKGROUND-app reclaim, not RAM already pinned by our own resident dirty model.
-  it.failing('M2: a 2nd dirty model is REFUSED when real free RAM is 640MB (Android reclaim credit must not cover an in-app dirty resident)', async () => {
+  it('M2: a 2nd dirty model is REFUSED when real free RAM is 640MB (Android reclaim credit must not cover an in-app dirty resident)', async () => {
     setDeviceMemory({ platform: 'android', totalGB: 12, availGB: gbOf(640) });
     makeResident({ key: 'image', type: 'image', modelId: 'sd', sizeMB: 2369, dirtyMemory: true, canEvict: () => false });
 
@@ -46,7 +46,7 @@ describe('memory budget — red-flow (correct behavior; currently RED due to the
   });
 
   // M3 — the override survival floor must measure against REAL free RAM, not the credited ceiling.
-  it.failing('M3: Load-Anyway a 7900MB dirty model with 665MB truly free on Android is REFUSED (floor vs real RAM, not credited ceiling)', async () => {
+  it('M3: Load-Anyway a 7900MB dirty model with 665MB truly free on Android is REFUSED (floor vs real RAM, not credited ceiling)', async () => {
     setDeviceMemory({ platform: 'android', totalGB: 12, availGB: gbOf(665) });
 
     const { fits } = await modelResidencyManager.makeRoomFor(
@@ -58,7 +58,7 @@ describe('memory budget — red-flow (correct behavior; currently RED due to the
   });
 
   // Q15 — ensureResident must HONOR the fits verdict, not load anyway (the STT/OOM bug class).
-  it.failing('Q15: ensureResident does NOT call load() when the model does not fit', async () => {
+  it('Q15: ensureResident does NOT call load() when the model does not fit', async () => {
     setDeviceMemory({ platform: 'ios', totalGB: 12, availGB: gbOf(500) });
     modelResidencyManager.setBudgetOverrideMB(1000); // force a tiny budget → nothing big fits
     const load = jest.fn().mockResolvedValue(undefined);

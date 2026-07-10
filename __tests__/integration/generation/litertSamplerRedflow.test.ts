@@ -41,7 +41,7 @@ function loadLiteRT() {
 }
 
 describe('LiteRT sampler in-flow — red-flow (correct behavior; currently RED)', () => {
-  it.failing('Q18: changing temperature mid-conversation re-applies it to native (resetConversation gets 1.5)', async () => {
+  it('Q18: changing temperature mid-conversation re-applies it to native (resetConversation gets 1.5)', async () => {
     const { liteRTService, nativeModule } = loadLiteRT();
     await liteRTService.loadModel('/m/model.litertlm', 'gpu', { maxNumTokens: 4096 });
 
