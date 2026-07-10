@@ -194,3 +194,43 @@ jobs:
 
       - name: Build Android Release
         run: cd android && ./gradlew assembleRelease
+
+  sonar:
+    # SonarCloud CI scan for CORE ONLY (org off-grid-ai, project off-grid-ai_off-grid-ai-mobile).
+    # It reads the code and posts findings back to the PR (a check status + a summary comment via
+    # the SonarCloud GitHub App) — it never pushes code.
+    #
+    # PRO IS DELIBERATELY NOT SCANNED HERE. This is a PUBLIC project, and pro/ is private paid
+    # source. Two guardrails keep it out: (1) we do NOT check out the pro submodule in this job
+    # (submodules: false), so pro/ is an empty gitlink with nothing to scan; (2) pro is not in
+    # sonar.sources. Pro gets its own PRIVATE Sonar project in the pro repo — never here.
+    # Requires Automatic Analysis to be OFF (it is) + the SONAR_TOKEN secret + the GitHub App.
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    steps:
+      - name: Checkout code (core only — NO pro submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: false # never pull private pro/ into this public project
+          fetch-depth: 0 # Sonar needs full history for new-code / blame attribution
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate JS coverage (core only — pro not checked out, so excluded)
+        run: npx jest --coverage --forceExit
+
+      - name: SonarCloud scan
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
