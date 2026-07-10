@@ -53,23 +53,69 @@ function makeEmitterRegistry() {
   return { add, handle };
 }
 
+/** One scripted native turn: optional tool calls the model "emits", then the final content/reasoning. */
+export interface LiteRTTurn {
+  /** Tool calls the native model emits (litert_tool_call). The REAL service runs them + respondToToolCall. */
+  toolCalls?: Array<{ id?: string; name: string; arguments: Record<string, unknown> }>;
+  /** Reasoning tokens emitted on the litert_thinking channel before completion. */
+  reasoning?: string;
+  /** Final content tokens emitted on litert_token before litert_complete. Empty ⇒ the model said nothing. */
+  content?: string;
+}
+
 export interface LiteRTFake {
   module: Record<string, jest.Mock>;
   events: FakeEmitterHandle;
   /** Records of every generateRaw / sendMessage* call for arg assertions. */
   calls: { generateRaw: unknown[][]; resetConversation: unknown[][]; sendMessageWithMedia: unknown[][] };
+  /**
+   * Script the native side of the NEXT turn: when our code calls sendMessage*, emit the tool calls
+   * (which the real service dispatches to the real tool loop, then calls respondToToolCall), then on the
+   * last respondToToolCall (or immediately if no tools) emit reasoning + content tokens + litert_complete.
+   * Honest: the fake only emits device-shaped events; OUR loop decides what the user sees.
+   */
+  scriptTurn(turn: LiteRTTurn): void;
 }
 
-function makeLiteRTFake(emitterAdd: (event: string, cb: Listener) => { remove: () => void }): LiteRTFake {
+/** Run fn on a macrotask so it lands after the current async chain (native call → awaited resolve). */
+const defer = (fn: () => void) => { setTimeout(fn, 0); };
+
+function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
   const calls: LiteRTFake['calls'] = { generateRaw: [], resetConversation: [], sendMessageWithMedia: [] };
+
+  // Scripted turn state — set by scriptTurn(), consumed by the send/respond methods below.
+  let pending: LiteRTTurn | null = null;
+  let toolCallsRemaining = 0;
+
+  const emitCompletion = (turn: LiteRTTurn) => {
+    if (turn.reasoning) handle.emit('litert_thinking', turn.reasoning);
+    if (turn.content) handle.emit('litert_token', turn.content);
+    handle.emit('litert_complete', '{}');
+  };
+
+  const onSend = () => {
+    const turn = pending;
+    if (!turn) { defer(() => handle.emit('litert_complete', '{}')); return; }
+    const tcs = turn.toolCalls ?? [];
+    toolCallsRemaining = tcs.length;
+    if (tcs.length === 0) { defer(() => emitCompletion(turn)); return; }
+    // Emit each tool call; the REAL service dispatches it and calls respondToToolCall.
+    defer(() => tcs.forEach((tc, i) =>
+      handle.emit('litert_tool_call', JSON.stringify({ id: tc.id ?? `tc-${i}`, name: tc.name, arguments: tc.arguments }))));
+  };
+
   const module: Record<string, jest.Mock> = {
     loadModel: jest.fn().mockResolvedValue({ backend: 'gpu', maxNumTokens: 4096 }),
     resetConversation: jest.fn((...args: unknown[]) => { calls.resetConversation.push(args); return Promise.resolve(); }),
-    sendMessage: jest.fn().mockResolvedValue(undefined),
-    sendMessageWithImages: jest.fn().mockResolvedValue(undefined),
-    sendMessageWithAudio: jest.fn().mockResolvedValue(undefined),
-    sendMessageWithMedia: jest.fn((...args: unknown[]) => { calls.sendMessageWithMedia.push(args); return Promise.resolve(); }),
-    respondToToolCall: jest.fn().mockResolvedValue(undefined),
+    sendMessage: jest.fn(() => { onSend(); return Promise.resolve(); }),
+    sendMessageWithImages: jest.fn(() => { onSend(); return Promise.resolve(); }),
+    sendMessageWithAudio: jest.fn(() => { onSend(); return Promise.resolve(); }),
+    sendMessageWithMedia: jest.fn((...args: unknown[]) => { calls.sendMessageWithMedia.push(args); onSend(); return Promise.resolve(); }),
+    respondToToolCall: jest.fn(() => {
+      // After the LAST tool result is delivered, the native model continues and completes.
+      if (pending && --toolCallsRemaining <= 0) { const turn = pending; defer(() => emitCompletion(turn)); }
+      return Promise.resolve();
+    }),
     generateRaw: jest.fn((...args: unknown[]) => { calls.generateRaw.push(args); return Promise.resolve(''); }),
     stopGeneration: jest.fn().mockResolvedValue(undefined),
     unloadModel: jest.fn().mockResolvedValue(undefined),
@@ -78,10 +124,13 @@ function makeLiteRTFake(emitterAdd: (event: string, cb: Listener) => { remove: (
     addListener: jest.fn(),
     removeListeners: jest.fn(),
   };
-  // The service builds `new NativeEventEmitter(LiteRTModule)`; we register our driveable emitter
-  // by intercepting through the shared registry keyed off this module (see installNativeBoundary).
-  void emitterAdd;
-  return { module, events: { emit: () => {}, listenerCount: () => 0 }, calls };
+
+  return {
+    module,
+    events: handle,
+    calls,
+    scriptTurn: (turn: LiteRTTurn) => { pending = turn; },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +179,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   // A single emitter registry shared by every NativeEventEmitter built over our fake modules.
   const { add, handle } = makeEmitterRegistry();
 
-  const litert = makeLiteRTFake(add);
+  const litert = makeLiteRTFake(handle);
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const RN = require('react-native');
@@ -144,14 +193,17 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   Object.defineProperty(RN.Platform, 'OS', { value: ram.platform, configurable: true });
 
   // NativeEventEmitter is constructed over the fake module; route its listeners through our registry
-  // so the test can drive native events. We replace the constructor for THIS test run.
-  const OriginalEmitter = RN.NativeEventEmitter;
-  RN.NativeEventEmitter = function FakeNativeEventEmitter() {
-    return {
-      addListener: (event: string, cb: Listener) => add(event, cb),
-      removeAllListeners: () => {},
-    };
-  } as unknown as typeof OriginalEmitter;
+  // so the test can drive native events. Use defineProperty (a plain assignment can silently no-op —
+  // the react-native namespace export is read-only), the same override trick used for Platform.OS.
+  Object.defineProperty(RN, 'NativeEventEmitter', {
+    configurable: true,
+    value: function FakeNativeEventEmitter() {
+      return {
+        addListener: (event: string, cb: Listener) => add(event, cb),
+        removeAllListeners: () => {},
+      };
+    },
+  });
 
   // react-native-device-info total-memory leaf (npm package, already jest.mock-ed in jest.setup).
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -167,8 +219,6 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     (DeviceInfo.getTotalMemory as jest.Mock).mockResolvedValue(profile.totalBytes);
     Object.defineProperty(RN.Platform, 'OS', { value: profile.platform, configurable: true });
   };
-
-  litert.events = handle;
 
   return { litert, litertEvents: handle, setRam };
 }

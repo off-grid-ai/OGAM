@@ -23,6 +23,25 @@ describe('nativeBoundary harness — injection mechanism', () => {
     );
   });
 
+  it('scripts a tool-call turn: the REAL service dispatches the tool call and respondToToolCall, then completes empty', async () => {
+    const boundary = installNativeBoundary();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { liteRTService } = require('../../src/services/litert');
+    await liteRTService.loadModel('/m', 'gpu', {});
+
+    // Native "model" emits one calculator tool call, then a completion with NO content.
+    boundary.litert.scriptTurn({ toolCalls: [{ name: 'calculator', arguments: { expression: '2+2' } }], content: '' });
+
+    const seen: Array<{ name: string; args: Record<string, unknown> }> = [];
+    const result = await liteRTService.generateRaw('what is 2+2', undefined, {
+      onToolCall: async (name: string, args: Record<string, unknown>) => { seen.push({ name, args }); return '4'; },
+    });
+
+    expect(seen).toEqual([{ name: 'calculator', args: { expression: '2+2' } }]);
+    expect(boundary.litert.module.respondToToolCall).toHaveBeenCalledWith('tc-0', '4');
+    expect(result).toBe(''); // empty final turn — the exact Q5 precondition
+  });
+
   it('seeds the RAM leaf so DeviceMemoryModule reports the seeded free bytes', async () => {
     installNativeBoundary({ ram: { platform: 'android', totalBytes: 12 * 1024 ** 3, availBytes: 640 * 1024 * 1024 } });
     // eslint-disable-next-line @typescript-eslint/no-var-requires
