@@ -108,7 +108,7 @@ function isRemoteActive(): boolean {
 async function generateSummaryText(
   systemPrompt: string,
   userText: string,
-  opts: { maxTokens: number; onToken?: (delta: string) => void },
+  opts: { maxTokens: number; onToken?: (delta: string) => void; grammar?: string; repeatPenalty?: number },
 ): Promise<string> {
   const { maxTokens, onToken } = opts;
   const messages: Message[] = [
@@ -153,8 +153,9 @@ async function generateSummaryText(
     }
   }
 
-  // Local llama.rn (default).
-  return llmService.generateWithMaxTokens(messages, maxTokens, onToken);
+  // Local llama.rn (default). Grammar (GBNF) is applied here when the caller
+  // passes one; LiteRT/remote ignore it for now (constrained decoding TBD).
+  return llmService.generateWithMaxTokens(messages, maxTokens, { onToken, grammar: opts.grammar, repeatPenalty: opts.repeatPenalty });
 }
 
 class TranscriptSummarizerService {
@@ -163,6 +164,26 @@ class TranscriptSummarizerService {
 
   get isSummarizing(): boolean {
     return this._isSummarizing;
+  }
+
+  /**
+   * Abort the in-flight generation NOW (not just between chunks). A cooperative
+   * loop cancel only skips the next unit; the current native completion keeps
+   * running and holds the single-context lock, so callers that "Stop" still see
+   * "busy" until it finishes. This interrupts the current completion via
+   * llmService.stopGeneration, which lets the awaited summarize() unwind and
+   * clear _isSummarizing. Safe to call when idle (no-op).
+   */
+  async abort(): Promise<void> {
+    logger.log(
+      `[TranscriptSummarizer] abort requested (isSummarizing=${this._isSummarizing}, ` +
+        `llmGenerating=${llmService.isCurrentlyGenerating()})`,
+    );
+    try {
+      await llmService.stopGeneration();
+    } finally {
+      this._isSummarizing = false;
+    }
   }
 
   /** True if any backend (local llama, LiteRT, or a remote provider) can summarize now. */
@@ -199,10 +220,18 @@ class TranscriptSummarizerService {
       // (e.g. a bulleted, section-headed summary) pass their own here.
       systemPrompt?: string;
       combinePrompt?: string;
+      // Stronger repetition penalty (insights) to stop small-model loops.
+      repeatPenalty?: number;
+      // Optional GBNF grammar to force the final output shape (llama.rn only).
+      // Applied only on the final single-pass / combine pass so intermediate
+      // map/reduce partials stay free-form. Ignored by LiteRT/remote for now.
+      grammar?: string;
     },
   ): Promise<string> {
     const onProgress = opts?.onProgress;
     const onToken = opts?.onToken;
+    const grammar = opts?.grammar;
+    const repeatPenalty = opts?.repeatPenalty;
     const mapPrompt = opts?.systemPrompt ?? SUMMARIZER_SYSTEM_PROMPT;
     const combinePrompt = opts?.combinePrompt ?? COMBINE_SYSTEM_PROMPT;
     this._isSummarizing = true;
@@ -225,7 +254,7 @@ class TranscriptSummarizerService {
       // Small enough to summarize in one pass.
       if (chunks.length <= 1) {
         this.emit({ phase: 'mapping', current: 1, total: 1 }, onProgress);
-        const summary = await this.summarizeOne(mapPrompt, chunks[0] ?? text, { maxTokens: FINAL_SUMMARY_TOKENS, onToken });
+        const summary = await this.summarizeOne(mapPrompt, chunks[0] ?? text, { maxTokens: FINAL_SUMMARY_TOKENS, onToken, grammar, repeatPenalty });
         this.emit({ phase: 'done' }, onProgress);
         return summary.trim();
       }
@@ -260,7 +289,7 @@ class TranscriptSummarizerService {
       // Final combine pass into one coherent summary. Streamed to the caller.
       this.emit({ phase: 'combining' }, onProgress);
       await llmService.clearKVCache(true);
-      const finalSummary = await this.summarizeOne(combinePrompt, combined, { maxTokens: FINAL_SUMMARY_TOKENS, onToken });
+      const finalSummary = await this.summarizeOne(combinePrompt, combined, { maxTokens: FINAL_SUMMARY_TOKENS, onToken, grammar, repeatPenalty });
 
       this.emit({ phase: 'done' }, onProgress);
       return finalSummary.trim();
@@ -276,10 +305,10 @@ class TranscriptSummarizerService {
   private async summarizeOne(
     systemPrompt: string,
     input: string,
-    opts: { maxTokens: number; onToken?: (delta: string) => void },
+    opts: { maxTokens: number; onToken?: (delta: string) => void; grammar?: string; repeatPenalty?: number },
   ): Promise<string> {
     // Dispatches to the active backend (local llama.rn / LiteRT / remote).
-    const out = await generateSummaryText(systemPrompt, input, { maxTokens: opts.maxTokens, onToken: opts.onToken });
+    const out = await generateSummaryText(systemPrompt, input, { maxTokens: opts.maxTokens, onToken: opts.onToken, grammar: opts.grammar, repeatPenalty: opts.repeatPenalty });
     // Backstop for tag-based reasoning that slipped through (<think>...</think>).
     return stripControlTokens(out);
   }
