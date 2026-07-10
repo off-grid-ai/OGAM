@@ -140,6 +140,54 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
 }
 
 // ---------------------------------------------------------------------------
+// Fake: diffusion native (NativeModules.LocalDreamModule / CoreMLDiffusionModule). Destructured at
+// import in src/services/localDreamGenerator.ts (DiffusionModule = Platform.select). generateImage
+// ECHOES the width/height/seed it was called with (native renders at the requested size), so the REAL
+// imageGenerationService's size/guidance flooring surfaces in the rendered generation-meta.
+// ---------------------------------------------------------------------------
+
+export interface DiffusionFake {
+  module: Record<string, jest.Mock>;
+  /** Every generateImage nativeParams, for arg-level cross-checks if needed. */
+  calls: { generateImage: Array<Record<string, unknown>> };
+}
+
+function makeDiffusionFake(): DiffusionFake {
+  const calls: DiffusionFake['calls'] = { generateImage: [] };
+  let seedCounter = 0;
+  const module: Record<string, jest.Mock> = {
+    isModelLoaded: jest.fn().mockResolvedValue(true),
+    getLoadedModelPath: jest.fn().mockResolvedValue(null),
+    loadModel: jest.fn().mockResolvedValue(true),
+    unloadModel: jest.fn().mockResolvedValue(true),
+    cancelGeneration: jest.fn().mockResolvedValue(true),
+    getGeneratedImages: jest.fn().mockResolvedValue([]),
+    deleteGeneratedImage: jest.fn().mockResolvedValue(true),
+    hasOpenCLCache: jest.fn().mockResolvedValue(true),
+    clearOpenCLCache: jest.fn().mockResolvedValue(0),
+    getConstants: jest.fn().mockReturnValue({
+      DEFAULT_STEPS: 8, DEFAULT_GUIDANCE_SCALE: 7.5, DEFAULT_WIDTH: 512, DEFAULT_HEIGHT: 512,
+      SUPPORTED_WIDTHS: [256, 512], SUPPORTED_HEIGHTS: [256, 512],
+    }),
+    generateImage: jest.fn((nativeParams: Record<string, unknown>) => {
+      calls.generateImage.push(nativeParams);
+      seedCounter += 1;
+      // Native renders at exactly the requested size — echo it back so the meta reflects reality.
+      return Promise.resolve({
+        id: `img-${seedCounter}`,
+        imagePath: `/generated/img-${seedCounter}.png`,
+        width: nativeParams.width,
+        height: nativeParams.height,
+        seed: nativeParams.seed ?? seedCounter,
+      });
+    }),
+    addListener: jest.fn(),
+    removeListeners: jest.fn(),
+  };
+  return { module, calls };
+}
+
+// ---------------------------------------------------------------------------
 // Fake: RAM sensor. DeviceMemoryModule.getMemoryInfo() (dynamic access in hardware.ts) +
 // react-native-device-info.getTotalMemory. Seed exact device numbers; the REAL memoryBudget runs.
 // ---------------------------------------------------------------------------
@@ -168,6 +216,8 @@ export interface NativeBoundary {
   litert: LiteRTFake;
   /** Drive LiteRT native events (litert_token, litert_tool_call, litert_complete, …). */
   litertEvents: FakeEmitterHandle;
+  /** Image diffusion native (LocalDream / CoreMLDiffusion). generateImage echoes the requested size. */
+  diffusion: DiffusionFake;
   /** Re-read RAM at the leaf mid-test (e.g. simulate OS pressure between a pre-check and the load). */
   setRam(profile: RamProfile): void;
 }
@@ -186,10 +236,14 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   const { add, handle } = makeEmitterRegistry();
 
   const litert = makeLiteRTFake(handle);
+  const diffusion = makeDiffusionFake();
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const RN = require('react-native');
   RN.NativeModules.LiteRTModule = litert.module;
+  // Both platform names point at the same fake; localDreamGenerator's Platform.select picks one.
+  RN.NativeModules.LocalDreamModule = diffusion.module;
+  RN.NativeModules.CoreMLDiffusionModule = diffusion.module;
   RN.NativeModules.DeviceMemoryModule = {
     getMemoryInfo: jest.fn().mockResolvedValue({
       processAvailableBytes: ram.availBytes,
@@ -226,5 +280,5 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     Object.defineProperty(RN.Platform, 'OS', { value: profile.platform, configurable: true });
   };
 
-  return { litert, litertEvents: handle, setRam };
+  return { litert, litertEvents: handle, diffusion, setRam };
 }
