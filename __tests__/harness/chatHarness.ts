@@ -103,6 +103,21 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       rtl.fireEvent.changeText(input, text);
       rtl.fireEvent.press(view.getByTestId('send-button'));
     },
+
+    /**
+     * Drive the REAL regenerate gesture: script the next turn, long-press the assistant bubble to open the
+     * REAL action menu, and press the REAL "Retry" item. The real regenerateResponseFn re-runs generation.
+     */
+    async regenerateLast(scripted: { text?: string; content?: string; toolCalls?: unknown[] }) {
+      if (opts.engine === 'llama') boundary.llama!.scriptCompletion(scripted as { text?: string });
+      else boundary.litert.scriptTurn(scripted as { content?: string });
+
+      const view = this.view!;
+      const bubbles = await rtl.waitFor(() => { const b = view.queryAllByTestId('assistant-message'); expect(b.length).toBeGreaterThan(0); return b; });
+      rtl.fireEvent(bubbles[bubbles.length - 1], 'longPress');
+      const retry = await rtl.waitFor(() => view.getByTestId('action-retry'));
+      rtl.fireEvent.press(retry);
+    },
   };
   return harness;
 }
