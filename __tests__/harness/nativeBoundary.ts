@@ -242,6 +242,62 @@ function makeDiffusionFake(): DiffusionFake {
 }
 
 // ---------------------------------------------------------------------------
+// Fake: background-download native (NativeModules.DownloadManagerModule). Destructured at import in
+// backgroundDownloadService. A stateful active-download set + a driveable event emitter
+// (DownloadProgress/Complete/Error). simulateRelaunch() drops the in-memory rows to model an app-kill
+// (Android WorkManager survives some; iOS URLSession loses them) so hydrate/reconcile runs against reality.
+// ---------------------------------------------------------------------------
+
+export interface DownloadRow {
+  downloadId: string; fileName?: string; modelId?: string; modelType?: string;
+  status?: string; bytesDownloaded?: number; totalBytes?: number;
+}
+
+export interface DownloadFake {
+  module: Record<string, jest.Mock>;
+  events: FakeEmitterHandle;
+  /** Put a row into the native active set (as if a download were in flight). */
+  seedActive(row: DownloadRow): void;
+  /** Currently-active native rows. */
+  active(): DownloadRow[];
+  /** Model an app-kill: iOS URLSession loses its rows; pass {survive} for Android WorkManager rows. */
+  simulateRelaunch(opts?: { survive?: string[] }): void;
+}
+
+function makeDownloadFake(handle: FakeEmitterHandle): DownloadFake {
+  const rows = new Map<string, DownloadRow>();
+  const module: Record<string, jest.Mock> = {
+    startDownload: jest.fn(async (params: DownloadRow) => {
+      const row: DownloadRow = { status: 'running', bytesDownloaded: 0, totalBytes: 0, ...params, downloadId: params.downloadId ?? `dl-${rows.size + 1}` };
+      rows.set(row.downloadId, row);
+      return row;
+    }),
+    cancelDownload: jest.fn(async (id: string) => { rows.delete(id); }),
+    retryDownload: jest.fn(async () => {}),
+    getActiveDownloads: jest.fn(async () => [...rows.values()]),
+    moveCompletedDownload: jest.fn(async (_id: string, target: string) => target),
+    startProgressPolling: jest.fn(),
+    stopProgressPolling: jest.fn(),
+    requestNotificationPermission: jest.fn(),
+    isBatteryOptimizationIgnored: jest.fn(async () => true),
+    requestBatteryOptimizationIgnore: jest.fn(),
+    excludePathFromBackup: jest.fn(async () => true),
+    addListener: jest.fn(),
+    removeListeners: jest.fn(),
+  };
+  return {
+    module,
+    events: handle,
+    seedActive: (row) => rows.set(row.downloadId, { status: 'running', ...row }),
+    active: () => [...rows.values()],
+    simulateRelaunch: (opts) => {
+      const survive = new Set(opts?.survive ?? []);
+      [...rows.keys()].forEach(k => { if (!survive.has(k)) rows.delete(k); });
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Fake: RAM sensor. DeviceMemoryModule.getMemoryInfo() (dynamic access in hardware.ts) +
 // react-native-device-info.getTotalMemory. Seed exact device numbers; the REAL memoryBudget runs.
 // ---------------------------------------------------------------------------
@@ -332,6 +388,8 @@ export interface InstallOpts {
   fs?: boolean;
   /** Replace the global llama.rn stub with a scriptable context (boundary.llama.scriptCompletion). */
   llama?: boolean;
+  /** Seed a stateful background-download native module (boundary.download). */
+  download?: boolean;
 }
 
 export interface NativeBoundary {
@@ -344,6 +402,8 @@ export interface NativeBoundary {
   fs?: FsFake;
   /** Scriptable llama.rn text engine — present only when installed with { llama: true }. */
   llama?: LlamaFake;
+  /** Stateful background-download native — present only when installed with { download: true }. */
+  download?: DownloadFake;
   /** Re-read RAM at the leaf mid-test (e.g. simulate OS pressure between a pre-check and the load). */
   setRam(profile: RamProfile): void;
 }
@@ -363,6 +423,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
 
   const litert = makeLiteRTFake(handle);
   const diffusion = makeDiffusionFake();
+  const downloadFake = opts.download ? makeDownloadFake(handle) : undefined;
 
   // Stateful FS: override the dumb global react-native-fs stub BEFORE any service requires it.
   const fsFake = opts.fs ? makeFsFake() : undefined;
@@ -378,6 +439,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   // Both platform names point at the same fake; localDreamGenerator's Platform.select picks one.
   RN.NativeModules.LocalDreamModule = diffusion.module;
   RN.NativeModules.CoreMLDiffusionModule = diffusion.module;
+  if (downloadFake) RN.NativeModules.DownloadManagerModule = downloadFake.module;
   RN.NativeModules.DeviceMemoryModule = {
     getMemoryInfo: jest.fn().mockResolvedValue({
       processAvailableBytes: ram.availBytes,
@@ -414,5 +476,5 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     Object.defineProperty(RN.Platform, 'OS', { value: profile.platform, configurable: true });
   };
 
-  return { litert, litertEvents: handle, diffusion, fs: fsFake, llama: llamaFake, setRam };
+  return { litert, litertEvents: handle, diffusion, fs: fsFake, llama: llamaFake, download: downloadFake, setRam };
 }
