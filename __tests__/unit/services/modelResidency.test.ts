@@ -5,6 +5,7 @@
  * mutually exclusive, pinned models are never evicted, and LRU eviction frees
  * room for an incoming model. See docs/design/MODEL_ROUTING.md.
  */
+import { Platform } from 'react-native';
 import {
   planEviction,
   computeBudgetMB,
@@ -679,6 +680,53 @@ describe('ModelResidencyManager', () => {
       expect(fits).toBe(true);
       expect(evicted).toEqual([]);
       expect(unloadImg).not.toHaveBeenCalled();
+    });
+
+    // The prompt-enhancement-skipped bug, reproduced from the exact device numbers
+    // (12GB Android, ~4.6GB raw availMem, empty residents, a 5.2GB DIRTY LiteRT E4B).
+    // Before the fix, budgetForSpec's dirty branch used raw availMem → budget 3566 →
+    // fits=FALSE without an override, so image-prompt enhancement (which never overrides)
+    // silently skipped and chat needed a pointless "Load Anyway". After the fix, the fit
+    // check reads the SAME reclaimable-aware availability the override floor already used,
+    // so the model fits with NO override on a phone that plainly has room.
+    describe('Android reclaimable-aware fit (no false refusal of a dirty model)', () => {
+      const originalOS = Platform.OS;
+      afterEach(() => { Platform.OS = originalOS; });
+
+      it('a 5.2GB dirty LiteRT text model FITS on an empty 12GB Android phone WITHOUT override', async () => {
+        Platform.OS = 'android';
+        modelResidencyManager._reset();
+        modelResidencyManager.setBudgetOverrideMB(null);
+        jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(11297 / 1024);
+        jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(4590 / 1024); // raw snapshot reads low
+        jest.spyOn(hardwareService, 'refreshMemoryInfo').mockResolvedValue(undefined as never);
+
+        const { fits, evicted } = await modelResidencyManager.makeRoomFor({
+          key: 'text',
+          type: 'text',
+          modelId: 'gemma-4-E4B',
+          sizeMB: 5235,
+          dirtyMemory: true, // LiteRT weights are dirty/accelerator memory
+        });
+
+        expect(fits).toBe(true); // fails-before: was false (budget 3566 < 5235)
+        expect(evicted).toEqual([]);
+      });
+
+      it('iOS is unchanged — the same dirty model on the same raw availMem is still refused (no background reclaim)', async () => {
+        Platform.OS = 'ios';
+        modelResidencyManager._reset();
+        modelResidencyManager.setBudgetOverrideMB(null);
+        jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(11297 / 1024);
+        jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(4590 / 1024);
+        jest.spyOn(hardwareService, 'refreshMemoryInfo').mockResolvedValue(undefined as never);
+
+        const { fits } = await modelResidencyManager.makeRoomFor({
+          key: 'text', type: 'text', modelId: 'gemma-4-E4B', sizeMB: 5235, dirtyMemory: true,
+        });
+        // iOS gets no LMK background reclaim: raw availMem 4590 − dirtyHeadroom 1024 = 3566 < 5235.
+        expect(fits).toBe(false);
+      });
     });
   });
 

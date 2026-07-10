@@ -8,11 +8,40 @@ import {
   modelMemoryBudgetMB,
   modelWarningThresholdMB,
   memoryReserveMB,
+  effectiveAvailableMB,
   MEMORY_RESERVE_MB,
   AGGRESSIVE_RESERVE_MB,
 } from '../../../src/services/memoryBudget';
 
 const GB = 1024;
+
+describe('effectiveAvailableMB — reclaimable-aware availability (single owner)', () => {
+  const TOTAL_12GB = 11297; // real device figure from a 12GB phone
+
+  it('Android: credits the physical budget when the raw availMem snapshot reads low', () => {
+    // The exact device case: a 12GB Android phone reports ~4.6GB raw available (background
+    // apps hold cached pages the LMK will reclaim for a foreground load). The effective
+    // ceiling must be the physical budget (~7908MB = 0.70*11297), not the raw 4590.
+    const eff = effectiveAvailableMB(4590, TOTAL_12GB, 'android');
+    expect(eff).toBe(modelMemoryBudgetMB(TOTAL_12GB, 'android'));
+    expect(eff).toBeGreaterThan(4590);
+  });
+
+  it('Android: keeps the raw availMem when it already exceeds the physical budget', () => {
+    // Never LOWER the ceiling — if the snapshot is already generous, use it.
+    expect(effectiveAvailableMB(9000, TOTAL_12GB, 'android')).toBe(9000);
+  });
+
+  it('iOS: returns the raw availMem unchanged (no background-reclaim — jetsam kills US)', () => {
+    expect(effectiveAvailableMB(4590, TOTAL_12GB, 'ios')).toBe(4590);
+  });
+
+  it('passes the load policy through (aggressive credits a larger ceiling than balanced)', () => {
+    const balanced = effectiveAvailableMB(1000, TOTAL_12GB, 'android', 'balanced');
+    const aggressive = effectiveAvailableMB(1000, TOTAL_12GB, 'android', 'aggressive');
+    expect(aggressive).toBeGreaterThan(balanced);
+  });
+});
 
 describe('modelBudgetFraction', () => {
   it('keeps low-RAM devices conservative (≈2GB on 4GB)', () => {

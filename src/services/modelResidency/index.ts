@@ -18,7 +18,7 @@ import {
   Resident,
   ResidentType,
 } from './policy';
-import { LoadPolicy, overrideSurvivalFloorMB, modelMemoryBudgetMB } from '../memoryBudget';
+import { LoadPolicy, overrideSurvivalFloorMB, effectiveAvailableMB } from '../memoryBudget';
 
 type UnloadFn = () => Promise<void>;
 
@@ -247,8 +247,16 @@ class ModelResidencyManager {
       return Math.round(Math.max(MIN_BUDGET_MB, physicalCapMB));
     }
     // Under dirty pressure: also gate on real free RAM (+ evictable residents − OS
-    // headroom). This is the single owner of the live os_proc budget.
-    const availableMB = hardwareService.getAvailableMemoryGB() * 1024;
+    // headroom). Use the reclaimable-aware availability (the SAME owner the override
+    // survival floor reads) — on Android a foreground load may commit up to the physical
+    // budget because the OS reclaims background apps, so a raw availMem snapshot here
+    // under-counted and refused a dirty model the override path then loaded fine.
+    const availableMB = effectiveAvailableMB(
+      hardwareService.getAvailableMemoryGB() * 1024,
+      hardwareService.getTotalMemoryGB() * 1024,
+      Platform.OS,
+      this.loadPolicy,
+    );
     const residentMB = [...this.residents.values()].reduce(
       (sum, r) => sum + r.sizeMB,
       0,
@@ -393,17 +401,10 @@ class ModelResidencyManager {
       const realAvailMB = Math.round(
         hardwareService.getAvailableMemoryGB() * 1024,
       );
-      // Reclaimable-aware ceiling. `availMem` is what's free WITHOUT reclaiming anything — but our
-      // app is FOREGROUND, so Android's low-memory killer evicts background/cached apps to give us
-      // physical RAM. That reclaimed RAM is REAL physical (a dirty/GPU model can occupy it) — unlike
-      // zram swap, which dirty pages CANNOT use (the reverted Fix-A mistake that OOM'd). So on
-      // Android the true ceiling for a foreground load is the physical budget (modelMemoryBudgetMB —
-      // the single source for "how much of total RAM a foreground app may commit"), not the raw
-      // availMem snapshot. This is what lets a 5.2GB E4B load on a 12GB phone whose availMem reads
-      // ~4.5GB. iOS gets NO such reclaim (jetsam kills US, not background apps) → keep raw availMem.
-      const effectiveAvailMB = Platform.OS === 'android'
-        ? Math.max(realAvailMB, modelMemoryBudgetMB(totalMB, 'android'))
-        : realAvailMB;
+      // Reclaimable-aware ceiling — the SAME owner budgetForSpec's fit check reads, so the
+      // two can never disagree (a foreground Android load may commit up to the physical
+      // budget because the OS reclaims background apps; iOS keeps the raw availMem snapshot).
+      const effectiveAvailMB = effectiveAvailableMB(realAvailMB, totalMB, Platform.OS, this.loadPolicy);
       const incomingDirtyMB = spec.dirtyMemory ? spec.sizeMB : 0;
       const postLoadFreeMB = effectiveAvailMB - incomingDirtyMB;
       // The dirty model's own footprint is subtracted from the effective physical ceiling, so a

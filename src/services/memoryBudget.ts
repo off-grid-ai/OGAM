@@ -83,6 +83,35 @@ export function overrideSurvivalFloorMB(platform: typeof Platform.OS = Platform.
 
 type Plat = 'ios' | 'android' | string;
 
+/**
+ * Effective physical RAM a FOREGROUND process may commit right now, in MB — the SINGLE
+ * owner of "reclaimable-aware availability".
+ *
+ * `realAvailMB` is the raw os_proc available snapshot. On Android it UNDER-counts what a
+ * foreground app can actually get: the low-memory killer evicts background/cached apps and
+ * hands their (real, physical) pages to the foreground app, so the true ceiling is the
+ * physical model budget (modelMemoryBudgetMB), not the instantaneous snapshot. That
+ * reclaimed RAM is REAL physical memory a dirty/GPU model can occupy — unlike zram swap,
+ * which dirty pages cannot use (the reverted Fix-A mistake that OOM'd). On iOS there is no
+ * such reclaim (jetsam kills US, not background apps), so the raw snapshot stands.
+ *
+ * Both the residency FIT check (budgetForSpec's dirty branch) and the override survival
+ * floor read this, so they can never disagree. The legacy split — a reclaimable-aware
+ * override path but a raw-availMem fit check — is exactly what refused a 5.2GB dirty model
+ * on a 12GB Android phone that the override then loaded fine (image-prompt enhancement, and
+ * chat, both hit it).
+ */
+export function effectiveAvailableMB(
+  realAvailMB: number,
+  totalRamMB: number,
+  platform: Plat = Platform.OS,
+  policy: LoadPolicy = 'balanced',
+): number {
+  return platform === 'android'
+    ? Math.max(realAvailMB, modelMemoryBudgetMB(totalRamMB, platform, policy))
+    : realAvailMB;
+}
+
 /** OS/app reserve (MB) that is never committed to models, by policy. */
 export function memoryReserveMB(policy: LoadPolicy = 'balanced'): number {
   return policy === 'aggressive' ? AGGRESSIVE_RESERVE_MB : MEMORY_RESERVE_MB;
