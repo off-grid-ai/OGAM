@@ -341,6 +341,59 @@ function makeDownloadFake(handle: FakeEmitterHandle): DownloadFake {
 }
 
 // ---------------------------------------------------------------------------
+// Fake: whisper.rn (STT). initWhisper returns a driveable CONTEXT (whisperService calls
+// this.context.transcribeRealtime / transcribeFile). Realtime is the chat-mode hold-to-talk path; the
+// fake lets the test emit device-shaped RealtimeTranscribeEvents ({ isCapturing, data:{result}, ... }) so
+// the REAL whisperService → useWhisperTranscription → onTranscript → input wiring runs on top. transcribeFile
+// is the voice-mode path. Opt-in ({ whisper: true }); overrides the dumb global jest.setup whisper.rn mock.
+// ---------------------------------------------------------------------------
+
+export interface WhisperFake {
+  module: Record<string, jest.Mock>;
+  /** Emit a device-shaped realtime event to the LIVE subscriber (isCapturing:true = partial; false = final).
+   *  Pass { noData: true } to model the B26 device symptom (spoke, but the mic captured no audio). */
+  emitRealtime(opts: { text?: string; isCapturing: boolean; recordingTime?: number; noData?: boolean }): void;
+  /** Set what the NEXT transcribeFile resolves with (voice-mode path). */
+  setFileTranscript(text: string): void;
+  /** True once whisperService has started a realtime session (subscribe wired). */
+  hasRealtimeSubscriber(): boolean;
+}
+
+function makeWhisperFake(): WhisperFake {
+  let realtimeCb: ((evt: unknown) => void) | null = null;
+  let fileTranscript = 'Transcribed text';
+  const context: Record<string, jest.Mock> = {
+    transcribeFile: jest.fn(async () => ({ result: fileTranscript, segments: [{ text: fileTranscript, t0: 0, t1: 100 }] })),
+    transcribeRealtime: jest.fn(async () => ({
+      stop: jest.fn(async () => { /* native stop; the test drives the final event explicitly */ }),
+      subscribe: (cb: (evt: unknown) => void) => { realtimeCb = cb; },
+    })),
+    release: jest.fn(async () => { realtimeCb = null; }),
+    bench: jest.fn(async () => ''),
+  };
+  const module: Record<string, jest.Mock> = {
+    initWhisper: jest.fn(async () => context),
+    releaseAllWhisper: jest.fn(async () => {}),
+    // Some call sites read module-level too; mirror the context.
+    transcribeFile: context.transcribeFile,
+  };
+  return {
+    module,
+    emitRealtime: ({ text, isCapturing, recordingTime, noData }) => {
+      if (!realtimeCb) return;
+      realtimeCb({
+        isCapturing,
+        data: noData ? undefined : { result: text ?? '', segments: text ? [{ text, t0: 0, t1: 100 }] : [] },
+        processTime: 10,
+        recordingTime: recordingTime ?? 500,
+      });
+    },
+    setFileTranscript: (t) => { fileTranscript = t; },
+    hasRealtimeSubscriber: () => realtimeCb != null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Fake: RAM sensor. DeviceMemoryModule.getMemoryInfo() (dynamic access in hardware.ts) +
 // react-native-device-info.getTotalMemory. Seed exact device numbers; the REAL memoryBudget runs.
 // ---------------------------------------------------------------------------
@@ -438,6 +491,8 @@ export interface InstallOpts {
   llama?: boolean;
   /** Seed a stateful background-download native module (boundary.download). */
   download?: boolean;
+  /** Replace the global whisper.rn stub with a driveable STT context (boundary.whisper). */
+  whisper?: boolean;
 }
 
 export interface NativeBoundary {
@@ -452,6 +507,8 @@ export interface NativeBoundary {
   llama?: LlamaFake;
   /** Stateful background-download native — present only when installed with { download: true }. */
   download?: DownloadFake;
+  /** Driveable whisper STT context — present only when installed with { whisper: true }. */
+  whisper?: WhisperFake;
   /** Re-read RAM at the leaf mid-test (e.g. simulate OS pressure between a pre-check and the load). */
   setRam(profile: RamProfile): void;
 }
@@ -482,6 +539,10 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   // Scriptable llama.rn: override the global stub so completion output is under test control.
   const llamaFake = opts.llama ? makeLlamaFake() : undefined;
   if (llamaFake) jest.doMock('llama.rn', () => llamaFake.module);
+
+  // Driveable whisper.rn: override the global stub so realtime/file transcription is under test control.
+  const whisperFake = opts.whisper ? makeWhisperFake() : undefined;
+  if (whisperFake) jest.doMock('whisper.rn', () => whisperFake.module);
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const RN = require('react-native');
@@ -526,5 +587,5 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     Object.defineProperty(RN.Platform, 'OS', { value: profile.platform, configurable: true });
   };
 
-  return { litert, litertEvents: handle, diffusion, fs: fsFake, llama: llamaFake, download: downloadFake, setRam };
+  return { litert, litertEvents: handle, diffusion, fs: fsFake, llama: llamaFake, download: downloadFake, whisper: whisperFake, setRam };
 }
