@@ -106,6 +106,7 @@ class LiteRTService {
       // older native build (backward-compatible).
       const res: string | { backend: string; maxNumTokens?: number } =
         await LiteRTModule.loadModel(modelPath, preferredBackend, supportsVision, supportsAudio, maxNumTokens);
+      logger.log(`[WIRE-LITERT-LOAD] ${JSON.stringify({ requested: preferredBackend, supportsVision, supportsAudio, maxNumTokens, res })}`); // [WIRE]
       const actualBackend = typeof res === 'string' ? res : res.backend;
       if (typeof res === 'object' && typeof res.maxNumTokens === 'number' && res.maxNumTokens > 0) {
         if (res.maxNumTokens !== this.configuredMaxTokens) {
@@ -288,6 +289,7 @@ class LiteRTService {
     const sendStart = Date.now();
     let firstTokenTime: number | undefined;
     let jsDecodeTokenCount = 0;
+    const __wire: Array<{ ch: string; t: string }> = []; // [WIRE] raw per-event capture from-device
 
     // Register event listeners for this generation
     this.clearSubscriptions();
@@ -295,16 +297,20 @@ class LiteRTService {
       this.emitter!.addListener(EVENT_TOKEN, (token: string) => {
         firstTokenTime ??= Date.now();
         jsDecodeTokenCount++;
+        if (__wire.length < 500) __wire.push({ ch: 'token', t: token }); // [WIRE]
         this.currentContent += token;
         callbacks.onToken(token);
       }),
       this.emitter!.addListener(EVENT_THINKING, (token: string) => {
         firstTokenTime ??= Date.now();
+        if (__wire.length < 500) __wire.push({ ch: 'thinking', t: token }); // [WIRE]
         this.currentReasoning += token;
         callbacks.onReasoning(token);
       }),
       this.emitter!.addListener(EVENT_COMPLETE, (benchmarkJson: string) => {
         logger.log(TAG, `sendMessage — complete, content=${this.currentContent.length} chars`);
+        // [WIRE] Full raw event stream + accumulated content/reasoning, for real-format fixtures.
+        logger.log(`[WIRE-LITERT] ${JSON.stringify({ stream: __wire, content: this.currentContent, reasoning: this.currentReasoning })}`);
         this.clearSubscriptions();
 
         this.currentToolCallHandler = null;
@@ -359,6 +365,7 @@ class LiteRTService {
       }),
       this.emitter!.addListener(EVENT_TOOL_CALL, async (json: string) => {
         logger.log(TAG, `sendMessage — tool call received: ${json.substring(0, 200)}`);
+        logger.log(`[WIRE-LITERT-TOOL] ${json}`); // [WIRE] full untruncated raw litert tool_call json from-device
         try {
           const { id, name, arguments: args } = JSON.parse(json) as {
             id: string;

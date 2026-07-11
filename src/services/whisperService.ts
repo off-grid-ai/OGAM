@@ -453,7 +453,9 @@ class WhisperService {
       onProgress: options?.onProgress,
     });
 
-    const { result } = await promise;
+    const __res = await promise;
+    logger.log(`[WIRE-STT] ${JSON.stringify(__res)}`); // [WIRE] raw whisper.rn transcribe result (segments/text) from-device
+    const { result } = __res;
     return cleanTranscription(result);
   }
 }

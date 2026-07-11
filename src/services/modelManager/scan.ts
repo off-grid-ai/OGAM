@@ -4,6 +4,7 @@ import { DownloadedModel, LlamaDownloadedModel, LiteRTDownloadedModel, ModelFile
 import { buildDownloadedModel, persistDownloadedModel, loadDownloadedModels, saveModelsList } from './storage';
 import { copyFileWithProgress } from './copyFile';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
+import logger from '../../utils/logger';
  
 export function isMMProjFile(fileName: string): boolean {
   const lower = fileName.toLowerCase();
@@ -237,6 +238,11 @@ export async function reconcileFinishedImageDownloads(opts: ReconcileImageModels
 
           if (zipOk) {
             await unzip(zipPath, item.path);
+            // [WIRE] real extracted dir listing after scan-time extraction.
+            try {
+              const __e = await RNFS.readDir(item.path);
+              logger.log(`[WIRE-UNZIP] ${JSON.stringify({ zipPath, modelDir: item.path, files: __e.map(f => ({ name: f.name, size: Number(f.size), isFile: f.isFile() })) })}`);
+            } catch (e) { logger.log(`[WIRE-UNZIP] readDir failed for ${item.path}: ${String(e)}`); }
             await RNFS.unlink(zipPath).catch(() => {});
             await RNFS.writeFile(readyPath, '', 'utf8').catch(() => {});
             const backend = detectBackend(item.name);

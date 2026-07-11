@@ -234,6 +234,7 @@ class LLMService {
     const devInfo = useAppStore.getState().deviceInfo;
     const useGpuForClip = Platform.OS === 'ios' && !devInfo?.isEmulator && (devInfo?.totalMemory ?? 0) > 4 * BYTES_PER_GB;
     const { initialized, support } = await initMultimodal(this.context, mmProjPath, useGpuForClip);
+    logger.log(`[WIRE-VISION] ${JSON.stringify({ model: this.currentModelPath, mmProjPath, useGpuForClip, initialized, support })}`); // [WIRE] real multimodal init result
     this.multimodalInitialized = initialized;
     this.multimodalSupport = support;
     return initialized;
@@ -258,6 +259,7 @@ class LLMService {
     try {
       const jinja = (this.context as any)?.model?.chatTemplates?.jinja;
       logger.log('[LLM][TOOLS] Full jinja caps:', JSON.stringify(jinja));
+      logger.log(`[WIRE-CAPS] ${JSON.stringify({ model: this.currentModelPath, jinja })}`); // [WIRE] real chat-template tool caps
       logger.log('[LLM][TOOLS] defaultCaps?.toolCalls:', jinja?.defaultCaps?.toolCalls);
       logger.log('[LLM][TOOLS] toolUse:', jinja?.toolUse);
       logger.log('[LLM][TOOLS] toolUseCaps?.toolCalls:', jinja?.toolUseCaps?.toolCalls);
@@ -301,9 +303,12 @@ class LLMService {
       const startTime = Date.now();
       let firstTokenMs = 0, tokenCount = 0, firstReceived = false;
       let fullContent = '', fullReasoningContent = '', streamedContentSoFar = '', streamedReasoningSoFar = '';
+      const __wire: Array<Record<string, unknown>> = []; // [WIRE] capture raw per-token shape from-device
       const completionParams = { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift() }), ...buildThinkingCompletionParams(this.isThinkingEnabled(), this.isGemma4Model()) };
       logger.log(`[LLM][THINKING] thinkingSupported=${this.thinkingSupported}, thinkingEnabled=${useAppStore.getState().settings.thinkingEnabled}, isThinkingEnabled=${this.isThinkingEnabled()}, enable_thinking=${(completionParams as any).enable_thinking}, reasoning_format=${(completionParams as any).reasoning_format}`);
+      logger.log(`[WIRE-LLAMA-PARAMS] ${JSON.stringify({ model: this.currentModelPath, params: { ...completionParams, messages: undefined } })}`); // [WIRE] settings→native params (temp/thinking/etc), messages elided
       const completionResult = await safeCompletion(ctx, () => ctx.completion(completionParams, (data: any) => {
+        if (__wire.length < 500) __wire.push({ token: data.token, content: data.content, reasoning_content: data.reasoning_content, tool_calls: data.tool_calls }); // [WIRE]
         if (!this.isGenerating || !data.token) return;
         if (!firstReceived) { firstReceived = true; firstTokenMs = Date.now() - startTime; logger.log(`[LLM][THINKING] First token raw data — token: ${JSON.stringify(data.token)}, content: ${JSON.stringify(data.content)}, reasoning_content: ${JSON.stringify(data.reasoning_content)}`); }
         tokenCount++;
@@ -317,6 +322,8 @@ class LLMService {
         onStream?.({ reasoningContent, content });
       }), 'generateResponse');
       const cr = completionResult as any;
+      // [WIRE] Full raw stream + final result, so we can build fixtures from real Gemma/Qwen wire format.
+      logger.log(`[WIRE-LLAMA] ${JSON.stringify({ model: this.currentModelPath, stream: __wire, final: { content: cr?.content, text: cr?.text, reasoning_content: cr?.reasoning_content, tool_calls: cr?.tool_calls } })}`);
       this.performanceStats = recordGenerationStats(startTime, firstTokenMs, tokenCount);
       if (completionResult?.context_full) { logger.log('[LLM] Context full detected — signalling for compaction'); throw new Error('Context is full'); }
       const result = { content: cr?.content || cr?.text || fullContent, reasoningContent: cr?.reasoning_content || fullReasoningContent };

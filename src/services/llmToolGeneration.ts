@@ -164,6 +164,9 @@ export async function generateWithToolsImpl(
     }), 'generateWithTools');
     logger.log('[LLM-Tools] === OUTPUT ===');
     logger.log(JSON.stringify(completionResult, null, 2));
+    // [WIRE] full tool-generation input+output on ONE tagged line so the lossless wire file captures the
+    // whole payload (the pretty-printed dumps above are separate untagged lines the tee can't match).
+    logger.log(`[WIRE-LLAMA-TOOL] ${JSON.stringify({ input: completionParams, output: completionResult })}`);
 
     const cr = completionResult;
     logger.log(`[LLM-Tools] Completion done: streamed=${tokenCount} tokens, response="${fullResponse.substring(0, 100)}"`);

@@ -146,6 +146,7 @@ export function processDelta(
   state: OpenAIStreamState,
   ctx: DeltaCtx,
 ): void {
+  logger.log(`[WIRE-REMOTE] ${JSON.stringify(delta)}`); // [WIRE] raw OpenAI-compatible/Ollama delta from-device
   if (delta.content) {
     ctx.thinkTagParser.process(
       delta.content,
@@ -209,6 +210,7 @@ function handleOllamaChatLine(
   req: { callbacks: StreamCallbacks; signal: AbortSignal; abort: () => void },
 ): void {
   if (req.signal.aborted) return;
+  logger.log(`[WIRE-OLLAMA] ${JSON.stringify(line)}`); // [WIRE] raw Ollama /api/chat NDJSON line from-device
 
   if (line.error) {
     streamState.streamErrorOccurred = true;

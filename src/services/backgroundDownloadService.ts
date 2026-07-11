@@ -325,6 +325,7 @@ class BackgroundDownloadService {
       return [];
     }
     const downloads = await DownloadManagerModule.getActiveDownloads();
+    logger.log(`[WIRE-DOWNLOAD] ${JSON.stringify({ ev: 'getActiveDownloads', downloads })}`); // [WIRE] raw active/queued/parallel download rows (relaunch reconcile)
     return downloads.map((d: any) => ({
       downloadId: d.downloadId ?? d.id,
       fileName: d.fileName,
@@ -505,14 +506,22 @@ class BackgroundDownloadService {
   private setupEventListeners(): void {
     if (!this.eventEmitter) return;
     const push = (s: { remove: () => void }) => this.subscriptions.push(s);
+    // [WIRE] raw native download events from-device (progress is throttled to one-per-downloadId to avoid
+    // flooding; complete/error always logged). Grounds the download/relaunch adversarial fixtures.
+    const __wireSeen = new Set<string>();
     push(this.eventEmitter.addListener('DownloadProgress', (e: DownloadProgressEvent) => {
+      const pct = e.totalBytes ? e.bytesDownloaded / e.totalBytes : 0;
+      const key = `${e.downloadId}:${Math.floor(pct * 10)}`; // ~10 samples per download
+      if (!__wireSeen.has(key)) { __wireSeen.add(key); logger.log(`[WIRE-DOWNLOAD] ${JSON.stringify({ ev: 'progress', ...e })}`); }
       this.dispatchToListeners(this.progressListeners, 'progress', e);
     }));
     push(this.eventEmitter.addListener('DownloadComplete', (e: DownloadCompleteEvent) => {
+      logger.log(`[WIRE-DOWNLOAD] ${JSON.stringify({ ev: 'complete', ...e })}`); // [WIRE]
       this.release(e.downloadId);
       this.dispatchToListeners(this.completeListeners, 'complete', e);
     }));
     push(this.eventEmitter.addListener('DownloadError', (e: DownloadErrorEvent) => {
+      logger.log(`[WIRE-DOWNLOAD] ${JSON.stringify({ ev: 'error', ...e })}`); // [WIRE]
       this.release(e.downloadId);
       this.dispatchToListeners(this.errorListeners, 'error', e);
     }));

@@ -1,5 +1,6 @@
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
+import logger from '../../utils/logger';
 import { ONNXImageModel, PersistedDownloadInfo } from '../../types';
 import { backgroundDownloadService } from '../backgroundDownloadService';
 import { downloadCoreMLTokenizerFiles, resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
@@ -50,6 +51,11 @@ async function recoverZipDownload(opts: {
 
   if (!(await RNFS.exists(modelDir))) await RNFS.mkdir(modelDir);
   await unzip(zipPath, modelDir);
+  // [WIRE] real extracted image-model dir listing (name + size) — grounds the integrity/truncation fixtures.
+  try {
+    const entries = await RNFS.readDir(modelDir);
+    logger.log(`[WIRE-UNZIP] ${JSON.stringify({ zipPath, modelDir, files: entries.map(e => ({ name: e.name, size: Number(e.size), isFile: e.isFile() })) })}`);
+  } catch (e) { logger.log(`[WIRE-UNZIP] readDir failed for ${modelDir}: ${String(e)}`); }
   await RNFS.unlink(zipPath).catch(() => {});
 
   if (metadata.imageModelBackend === 'coreml') {
