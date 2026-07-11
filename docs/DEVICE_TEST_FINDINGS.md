@@ -431,3 +431,10 @@ Every specific claim in the model's summary is verbatim in the real PDF (verifie
 Srishty Jain ✓, "vision, velocity, values" ✓, Tejesh G Reddy ✓ (×3), Ironman 70.3 Goa ✓, adaptive leadership ✓.
 Model accurately summarized retrieved chunks with specific verifiable facts. RAG end-to-end CORRECT + fully
 grounded. (litert gemma-4-E2B GPU; multi-round thinking+search_knowledge_base tool chain)
+
+### Image size — Q1 GUARDED at input (confirmed on device)
+The image-size setting now floors at 256 — the UI will NOT let you select 128 ("image cannot be lower than 256
+now", user). So the Q1 adversarial "set 128 → generates at 256" is UNREACHABLE via UI (guarded at the input
+layer, min 256). No bug to capture — the floor is enforced as intended. (This is the original "128 doesn't
+work, stop at 256" the user flagged at the start.) So the Q1 test = a GREEN guard (input can't go below 256),
+not a red flow.
