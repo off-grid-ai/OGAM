@@ -551,6 +551,13 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   RN.NativeModules.LocalDreamModule = diffusion.module;
   RN.NativeModules.CoreMLDiffusionModule = diffusion.module;
   if (downloadFake) RN.NativeModules.DownloadManagerModule = downloadFake.module;
+  // Mic permission is a device boundary: whisper STT refuses to start recording without RECORD_AUDIO
+  // granted (whisperService.requestPermissions → PermissionsAndroid.request). Grant it when whisper is
+  // installed so the real STT flow runs; the default jest PermissionsAndroid returns undefined (= denied).
+  if (whisperFake && RN.PermissionsAndroid) {
+    RN.PermissionsAndroid.request = jest.fn().mockResolvedValue(RN.PermissionsAndroid.RESULTS?.GRANTED ?? 'granted');
+    RN.PermissionsAndroid.check = jest.fn().mockResolvedValue(true);
+  }
   RN.NativeModules.DeviceMemoryModule = {
     getMemoryInfo: jest.fn().mockResolvedValue({
       processAvailableBytes: ram.availBytes,
