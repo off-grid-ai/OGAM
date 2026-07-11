@@ -1,0 +1,8 @@
+B23: litert CPU backend BROKEN (reproducible) — gemma-4-E2B .litertlm model.
+Error (on generateRaw AND sendMessage, repeated on resend):
+  Status Code: 13. Message: ERROR: [third_party/odml/litert_lm/runtime/executor/llm_...]
+  Failed to invoke the compiled model
+Likely cause: .litertlm is a compiled artifact (GPU/backend-specific); invoking on CPU fails.
+Bug either way: app OFFERS a CPU backend option for litert that errors out. Scope: confirmed for this
+model; can't say ALL litert models from one sample.
+Backend matrix final: llama {CPU ok, GPU ok, NPU loads-but-gibberish B22} | litert {GPU ok, CPU broken B23}
