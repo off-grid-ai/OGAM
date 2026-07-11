@@ -335,3 +335,12 @@ Result: the calculator turn crawled (Grammar still awaiting trigger, token-by-to
 of reasoning in context) and produced no timely response → UI showed "streaming voice response" with NO audio
 (nothing ready to speak — premature/misleading state, like B29). So B30 is worse than a bad prompt: the leaked
 reasoning enters conversation history and degrades subsequent turns. (part30)
+
+### B30 — CLARIFICATION (user: "that's normal")
+Context carrying forward across turns is NORMAL chat behavior — not a bug. Correcting the earlier framing:
+the CORE bug is narrow and clear = **the enhanced prompt is thinking-garbage when thinking is ON** (the
+enhancement's generateStandalone doesn't disable thinking / strip reasoning, so "Thinking Process:..." becomes
+the image prompt). The "degrades subsequent turns" is just the NORMAL consequence of that garbage being in
+history — NOT a separate context-management bug. Fix = enhancement call forces thinking OFF (or strips
+reasoning) so the enhanced prompt is a clean image description. (Whether the enhancement output should be a
+persistent chat message at all is a separate design choice, not asserted as a bug.)
