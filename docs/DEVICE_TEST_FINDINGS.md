@@ -43,12 +43,14 @@ Inline-thinking delimiter is **model-specific**: Qwen3.5 = `<think>...</think>`;
   NPU broken.
 
 ### STT — realtime (VoiceButton hold-to-talk) is BROKEN (session 3, Qwen0.8B GPU, medium whisper)
-- **B26 — realtime STT captures NO data → no transcript.** Spoke a clear "Hello, how are you?"; result: blank
-  screen, nothing in the input box, no message. Trace: `transcribeRealtime error: State: -100` (race, B12) on
-  first tries, then when it starts → `Event: {isCapturing:false, hasData:false}` (captured nothing) → no
-  `[WIRE-STT]`, no `[WIRE-RECORDER]`. Took 3 attempts to even start (leftover recording collisions:
-  "Already recording, stopping first"). **Needs a clean force-restart test to confirm fundamental vs
-  state-pollution.** (part22, part23)
+- **B26 — realtime STT (chat-mode hold-to-talk) captures NO data → no transcript. CONFIRMED FUNDAMENTAL.**
+  Spoke a clear "Hello, how are you?"; result: blank screen, nothing in the input box, no message. Trace:
+  `transcribeRealtime started successfully` → `Event: {isCapturing:false, hasData:false}` (captured nothing) →
+  `Transcription result: false` → no `[WIRE-STT]`, no `[WIRE-RECORDER]`. **Rebuilt via `npm run android`
+  (fresh process) → SAME failure** → so it's NOT state-pollution, it's fundamental. The **mic animates** (UI
+  says "recording") but zero audio is captured — a UX disconnect on top of the bug. Also `State: -100` race
+  (B12) and start/stop retry loops seen when state is polluted. Scope caveat: one Android device — can't fully
+  rule out a device-mic quirk, but the app-side capture consistently gets no data. (part22–24)
 - Ties to B11 (no-stop leak — a realtime transcription stayed active and collided with new presses) and
   B12 (State:-100 race on double-trigger).
 - **Two distinct broken STT flows now:** voice-note-attach = records .wav but sends AUDIO not transcript
