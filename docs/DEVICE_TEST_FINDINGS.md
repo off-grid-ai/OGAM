@@ -415,3 +415,13 @@ FULL RAG ROUND-TRIP works on-device: index (PDF extract 14873ch → 38 chunks �
 search_knowledge_base tool → retrieve → answer. NOTE: needed a ≥E2B model (litert); Qwen0.8B under-calls
 tools so it couldn't retrieve — RAG effectively needs a bigger model on-device (or direct-context injection).
 (part35 index, part36 retrieval)
+
+### RAG answer VALIDATED against the real document (pulled from phone)
+Pulled the actual PDF from the phone + extracted text (docs/wire-captures/RAG-source-doc-etfocus-text-*.txt).
+Real doc = ET Bengaluru advertorial (Mar 12 2026): "The New Face of Leadership" + "AI and the Future of
+Decision-Making in Business", quoting Rangarajan Iyengar (Positive Conversations) + Srishty Jain (CoLLearn
+Sports). Model's answer correctly said "a document about leadership in India" and the retrieved chunk (part 14:
+"Srishty Jain, Founder of CoLLearn Sports… leadership is no longer about authority—it is about vision") is
+VERBATIM from the PDF. NOT hallucinating — grounded in real retrieved content. Minor: it treated the print code
+"BTB140414/06/K/1" as an identifier, but that code is genuinely in the extracted text layer (noise from the
+PDF, faithfully reflected — not a model error). RAG end-to-end CORRECT + validated against ground truth.
