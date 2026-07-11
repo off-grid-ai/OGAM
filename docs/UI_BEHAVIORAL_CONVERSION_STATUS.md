@@ -40,7 +40,25 @@ firstMessage (llama/litert/metal), resend (both menu paths), editMessage (both m
 (new project via the real form — caught the required system-prompt field), tools/MCP/show-gen-details,
 reasoning, imageIntentRouting (+control), imageBackends (5 backends), smartBudgeting, promptEnhancement,
 multimodalVision, convoManagement, persistence, modelLifecycle, residencySwap, transcription, settingsApplied,
-imageModeToggle (auto/ON/OFF). Full happy suite: **33/33 deterministic**.
+imageModeToggle (auto/ON/OFF), **imageLightbox** (tap a generated image → fullscreen viewer opens with
+Save/Close; Close dismisses; Save runs the real RNFS save → "Image Saved" + the file lands on the memfs
+gallery dir). Full happy suite: **31/31 deterministic** (19 suites).
+
+**Harness fidelity add (imageLightbox):** the diffusion fake now WRITES its rendered PNG to the (memfs) disk
+on `generateImage`, mirroring the native module, so the app's downstream file reads (save-to-gallery) find a
+real file. Threaded `fsFake.seedFile` into `makeDiffusionFake`. Verified non-regressing (happy 31/31; image
+adversarial reds — Q7/Q12/Q13/imageEstimatorDivergence — still red for the right reason).
+
+**Next investigative step — rendered ModelFailureCard (the OOM surface users hit):** no rendered test yet
+proves the user SEES the "Not Enough Memory" / "Load Anyway" card. The memory reds (M11/failedUnload/
+sttReclaim/imageEstimator/overrideFloor) are pure residency INVARIANTS (documented gesture-less carve-out,
+real `makeRoomFor`/resident-set assertions) — defensible, but the card itself is unexercised. Driving it needs
+a NO-PRE-LOAD harness mode: `setupChatScreen` currently eagerly `loadTextModel`s, so `isModelReady` short-
+circuits the send-time gate (`modelReadiness.ensureModelReady:68`). To surface the card via a real send, the
+model must be SELECTED-but-not-loaded with RAM seeded too-small, so the send's lazy load hits
+`ensureModelLoaded` → the memory refusal → `modelFailureHandler.report` → `ModelFailureCard`. That's a new
+harness option (`skipLoad`) with real regression risk to the 31 green happy tests (all rely on the pre-load) —
+do it carefully with the user able to verify, not blind overnight.
 
 ## What's LEFT (adversarial, ~30) — and the honest per-cluster notes
 
