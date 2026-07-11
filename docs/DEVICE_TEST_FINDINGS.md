@@ -404,3 +404,14 @@ ET Focus - Bengaluru.pdf (text-based, <5MB): [WIRE-PDF] textLength:14873 (real t
 GROUND TRUTH: embedding dimensionality = **384** (grounds KB fixtures + the toolEmbeddingStaleDim adversarial
 case — stored vs query dim must match at 384). PDF extraction is fine for text PDFs (the Iliad 0-text was
 purely the scanned/image issue). Retrieval-at-query still to capture (ask a doc question next). (part35)
+
+### RAG RETRIEVAL WORKS (gemma-4-E2B litert GPU) — full round-trip captured
+Chat in project → "summarize the ET Focus document" → ToolLoop injected search_knowledge_base + KB context
+("You have a knowledge base with these documents: - ET Focus - Bengaluru.pdf. Use the search_knowledge_base
+...") → litert CALLED search_knowledge_base → retrieved real chunks:
+  [Tool Result: search_knowledge_base] [1] ET Focus - Bengaluru.pdf (part 14): "requires vision beyond
+  individual victo[ries]..." → summary generated from retrieved content.
+FULL RAG ROUND-TRIP works on-device: index (PDF extract 14873ch → 38 chunks → embed 384-dim) → query →
+search_knowledge_base tool → retrieve → answer. NOTE: needed a ≥E2B model (litert); Qwen0.8B under-calls
+tools so it couldn't retrieve — RAG effectively needs a bigger model on-device (or direct-context injection).
+(part35 index, part36 retrieval)
