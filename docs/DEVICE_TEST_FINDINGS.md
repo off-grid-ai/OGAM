@@ -482,3 +482,10 @@ User: "it also isn't streaming — so that's a problem" (re enhancement). A gene
 (enhancement, esp. with B30) shows NO streaming/progress → looks completely frozen ("looked like it wasn't
 doing anything but it was doing a million characters"). Independent of B30's thinking bug: ANY long generation
 with no stream is a UX failure. Enhancement must stream or show real progress. (part37)
+
+### B33 scope CONFIRMED + Lightbox WORKS (Android complete)
+- B33 confirmed scoped: FRESH "draw a dog" (new message) → routes to IMAGE, draws correctly. Only the RESEND
+  path is broken (→ text). So the bug is specifically resend/regenerate bypassing image-intent routing. (part39)
+- **Image lightbox WORKS**: tapping a generated image opens the fullscreen viewer (happy path confirmed). Last
+  Android item. ✅
+ANDROID CAPTURE COMPLETE — all subsystems covered.
