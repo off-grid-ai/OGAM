@@ -8,6 +8,42 @@ User's verbatim commentary in `DEVICE_SESSION_COMMENTARY.md` (gitignored).
 
 ---
 
+## SESSION 3 (evening) — compute-backend matrix (clean install, models preserved)
+
+### Backend matrix (gemma-4-E2B / Qwen0.8B on device SM8635)
+| Engine | CPU | GPU | NPU |
+|---|---|---|---|
+| **llama gguf** | ✅ works (default = 0/36 GPU layers = CPU) | ✅ works | ❌ **B22** loads but gibberish |
+| **litert (.litertlm)** | ❌ **B23** Status 13 fail | ✅ works | (not offered in UI) |
+
+### NEW BUGS (session 3)
+- **B22 — llama NPU (Beta)/HTP loads but generation is BROKEN.** On SM8635 (qnn `min`), HTP loads cleanly
+  (layers on `HTP0`, `rnllama_jni_..._hexagon_opencl` native lib, no fallback) BUT output is garbage:
+  attempt 1 = `" ca.\n"` (3 tokens), attempt 2 = 89 tokens of prompt-unrelated gibberish, tools turn = gibberish
+  (the tool RESULT was correct only because tool execution is deterministic). Reproducible, user-confirmed.
+  Verified genuinely on HTP (no fallback). NPU loadable but NOT functional for generation. (part17-19)
+- **B23 — litert CPU backend BROKEN.** Selecting litert CPU → `Status Code: 13 ... Failed to invoke the
+  compiled model` (on generateRaw AND sendMessage, reproducible on resend). Likely the `.litertlm` is a
+  GPU-compiled artifact that can't be invoked on CPU. Bug either way: the app OFFERS a CPU option that errors.
+  Scope: confirmed for gemma-4-E2B .litertlm (one model). (part21)
+- **B24 (candidate) — GPU init timeout + partial offload.** llama GPU/OpenCL: first init `timed out after
+  8000ms` → offloaded 0/36 → retry succeeded but only 24/36 layers on GPU (partial; 12 on CPU). Worth a
+  timeout→retry test. (part16)
+- **B25 (candidate) — litert context clamp drops tools.** litert GPU clamped context `4096 → 880` (native);
+  a thinking+tools prompt then did NOT fire tools (session 1 litert tools DID work). Candidate: 880 too small
+  for the tool-augmented system prompt. (part20)
+
+### Refinement to thinking ground truth
+Inline-thinking delimiter is **model-specific**: Qwen3.5 = `<think>...</think>`; **gemma-4-E2B = `<|channel>thought`
+/ `<|think|>`**. Parser must handle multiple delimiters (REASONING_DELIMITERS). (part16)
+
+### CONFIRMED WORKING (session 3)
+- llama CPU + GPU: coherent, multi-round thinking+tools ("very rich answer", user). GPU offloads real layers
+  (OpenCL KV cache on Adreno). litert GPU: coherent output. NPU IMAGE models present (`*_npu_min`) but text
+  NPU broken.
+
+---
+
 ## SESSION 2 (afternoon) — additional findings, corrections, and ground truth
 
 ### NEW BUGS (session 2)
