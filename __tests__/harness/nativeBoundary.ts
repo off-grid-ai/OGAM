@@ -235,7 +235,7 @@ export interface DiffusionFake {
   calls: { generateImage: Array<Record<string, unknown>> };
 }
 
-function makeDiffusionFake(): DiffusionFake {
+function makeDiffusionFake(seedFile?: (path: string, sizeBytes: number) => void): DiffusionFake {
   const calls: DiffusionFake['calls'] = { generateImage: [] };
   let seedCounter = 0;
   const module: Record<string, jest.Mock> = {
@@ -255,10 +255,14 @@ function makeDiffusionFake(): DiffusionFake {
     generateImage: jest.fn((nativeParams: Record<string, unknown>) => {
       calls.generateImage.push(nativeParams);
       seedCounter += 1;
+      const imagePath = `/generated/img-${seedCounter}.png`;
+      // The real native module writes the rendered PNG to disk — mirror that so the app's
+      // downstream file reads (save-to-gallery, thumbnails) find a real file.
+      seedFile?.(imagePath, 1024);
       // Native renders at exactly the requested size — echo it back so the meta reflects reality.
       return Promise.resolve({
         id: `img-${seedCounter}`,
-        imagePath: `/generated/img-${seedCounter}.png`,
+        imagePath,
         width: nativeParams.width,
         height: nativeParams.height,
         seed: nativeParams.seed ?? seedCounter,
@@ -456,12 +460,14 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   const { add, handle } = makeEmitterRegistry();
 
   const litert = makeLiteRTFake(handle);
-  const diffusion = makeDiffusionFake();
   const downloadFake = opts.download ? makeDownloadFake(handle) : undefined;
 
   // Stateful FS: override the dumb global react-native-fs stub BEFORE any service requires it.
   const fsFake = opts.fs ? makeFsFake() : undefined;
   if (fsFake) jest.doMock('react-native-fs', () => fsFake.module);
+
+  // Diffusion writes its rendered PNG to the (memfs) disk when fs is present, like the native module.
+  const diffusion = makeDiffusionFake(fsFake?.seedFile);
 
   // Scriptable llama.rn: override the global stub so completion output is under test control.
   const llamaFake = opts.llama ? makeLlamaFake() : undefined;
