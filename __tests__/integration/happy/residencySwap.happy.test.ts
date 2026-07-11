@@ -4,6 +4,11 @@
  *
  * Real activeModelService + modelResidencyManager + liteRTService + llmService over faked native + memfs.
  * No mock of the swap logic — asserts the actual engine residency after the switch.
+ *
+ * DOCUMENTED EXCEPTION to the UI-gesture rule (per the hygiene standard): model selection is a real gesture
+ * elsewhere (the Home picker tap), but the thing under test is the single-heavy-resident INVARIANT — an
+ * accounting rule with no single UI gesture. Tested at the owning service (activeModelService), asserting the
+ * resident set, per the "genuinely gesture-less invariant" carve-out.
  */
 import { installNativeBoundary, GB, requireRTL } from '../../harness/nativeBoundary';
 import { createDownloadedModel } from '../../utils/factories';

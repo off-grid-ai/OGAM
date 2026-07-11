@@ -1,7 +1,13 @@
 /**
- * HAPPY-PATH (integration) — model lifecycle: load → resident/ready, unload → not resident, delete →
+ * INTEGRATION (residency/lifecycle INVARIANT) — load → resident/ready, unload → not resident, delete →
  * removed from the library. Drives the REAL activeModelService + modelResidencyManager + llmService over
  * the faked native leaf + memfs. No mock of the lifecycle logic.
+ *
+ * DOCUMENTED EXCEPTION to the UI-gesture rule (per the hygiene standard): the LOAD is a real user gesture
+ * elsewhere (the Home model-picker tap — see setupChatScreen), but the thing under test here is the residency
+ * INVARIANT (isResident/getResidents accounting), which has no single UI gesture — it's an accounting rule
+ * that spans load/unload/delete across screens. So it's tested at the owning service (activeModelService),
+ * asserting the resident set, per the "genuinely gesture-less invariant" carve-out.
  */
 import { installNativeBoundary, GB, requireRTL } from '../../harness/nativeBoundary';
 import { createDownloadedModel } from '../../utils/factories';
