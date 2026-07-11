@@ -45,7 +45,12 @@ export function requireRTL(): typeof import('@testing-library/react-native') {
   process.env.RNTL_SKIP_AUTO_CLEANUP = 'true';
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require('@testing-library/react-native');
+    const rtl = require('@testing-library/react-native');
+    // Register THIS instance's cleanup on a global so jest.setup's afterEach can unmount the tree WITHOUT
+    // requiring RTL fresh (requiring it fresh after a test's resetModules corrupts the module graph and
+    // breaks the next test — a real regression). Only tests that render (call requireRTL) get cleaned up.
+    (globalThis as unknown as { __RTL_CLEANUP__?: () => void }).__RTL_CLEANUP__ = rtl.cleanup;
+    return rtl;
   } finally {
     if (prev === undefined) delete process.env.RNTL_SKIP_AUTO_CLEANUP;
     else process.env.RNTL_SKIP_AUTO_CLEANUP = prev;

@@ -600,7 +600,10 @@ beforeEach(() => {
 // the SAME post-reset instance the test rendered on, and unmounts its tree. It also drops the global
 // `window` shim the harness installs for React 19's error reporter, so no true-global leaks across files.
 afterEach(() => {
-  try { require('@testing-library/react-native').cleanup(); } catch { /* RTL not loaded this test */ }
+  // Only unmount when a test actually rendered via requireRTL (which stashed its own cleanup here). Do NOT
+  // require RTL fresh — after a test's resetModules that pulls a new module graph and breaks the next test.
+  const g = globalThis as unknown as { __RTL_CLEANUP__?: () => void };
+  if (g.__RTL_CLEANUP__) { try { g.__RTL_CLEANUP__(); } catch { /* already torn down */ } g.__RTL_CLEANUP__ = undefined; }
 });
 
 // Global timeout for async operations
