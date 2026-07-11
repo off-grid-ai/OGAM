@@ -438,3 +438,11 @@ now", user). So the Q1 adversarial "set 128 → generates at 256" is UNREACHABLE
 layer, min 256). No bug to capture — the floor is enforced as intended. (This is the original "128 doesn't
 work, stop at 256" the user flagged at the start.) So the Q1 test = a GREEN guard (input can't go below 256),
 not a red flow.
+
+### B30 — FIX SPEC (user): the enhancement turn must NOT think
+User: "enhancing prompt should not think — that turn shouldn't think." The prompt-enhancement generateStandalone
+is a UTILITY call (rewrite an image prompt), not a reasoning task. FIX: the enhancement call must force
+`enable_thinking: false` regardless of the global thinking setting — so the enhanced prompt is a clean image
+description, never "Thinking Process:...". (Root fix; better than stripping reasoning after the fact.) This is
+the definitive spec for B30. Test: with thinking ON globally, an image-gen enhancement turn's request has
+enable_thinking=false and the enhanced prompt contains no reasoning markers.
