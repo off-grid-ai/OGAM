@@ -291,6 +291,16 @@ jest.mock('react-native-fs', () => ({
   hash: jest.fn(() => Promise.resolve('mockhash')),
 }));
 
+// react-native-share mock
+jest.mock('react-native-share', () => ({
+  __esModule: true,
+  default: {
+    open: jest.fn(() => Promise.resolve({ success: true, message: '' })),
+    shareSingle: jest.fn(() => Promise.resolve({ success: true, message: '' })),
+    isPackageInstalled: jest.fn(() => Promise.resolve({ isInstalled: false })),
+  },
+}));
+
 // react-native-device-info mock
 jest.mock('react-native-device-info', () => ({
   getTotalMemory: jest.fn(() => Promise.resolve(8 * 1024 * 1024 * 1024)), // 8GB
