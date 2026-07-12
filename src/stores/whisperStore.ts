@@ -188,11 +188,15 @@ export const useWhisperStore = create<WhisperState>()(
           await whisperService.unloadModel();
           // Then delete
           await whisperService.deleteModel(downloadedModelId);
-          // Fall back to another downloaded model on disk if there is one.
+          // Fall back to another downloaded model on disk if there is one, and
+          // drop the just-deleted model from presentModelIds (recompute from disk
+          // so the models list doesn't keep showing a model whose file is gone).
           const onDisk = await whisperService.listDownloadedModels();
-          const fallback = onDisk.map((m) => m.modelId).filter((id) => id !== downloadedModelId)[0] ?? null;
-          logger.log(`[WhisperStore] deleted active ${downloadedModelId}; active -> ${fallback ?? 'none'}`);
+          const remaining = onDisk.map((m) => m.modelId).filter((id) => id !== downloadedModelId);
+          const fallback = remaining[0] ?? null;
+          logger.log(`[WhisperStore] deleted active ${downloadedModelId}; present [${remaining.join(', ') || 'none'}]; active -> ${fallback ?? 'none'}`);
           set({
+            presentModelIds: remaining,
             downloadedModelId: fallback,
             isModelLoaded: false,
           });
