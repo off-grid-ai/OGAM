@@ -504,6 +504,11 @@ class LiteRTService {
     return this.loaded;
   }
 
+  /** Configured context window (tokens) for the loaded LiteRT model. */
+  getContextTokens(): number {
+    return this.configuredMaxTokens;
+  }
+
   isNPU(): boolean {
     return this.activeBackend === 'npu';
   }
