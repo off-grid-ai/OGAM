@@ -46,14 +46,14 @@ export const ImageTab: React.FC<ImageTabProps> = ({
             <Icon name="check-circle" size={14} color={colors.success} />
             <Text style={styles.loadedLabel}>Currently Loaded</Text>
           </View>
-          <View style={styles.loadedModelItem}>
+          <View style={styles.loadedModelItem} testID="currently-loaded-image-model">
             <View style={styles.loadedModelInfo}>
-              <Text style={styles.loadedModelName} numberOfLines={1}>
+              <Text style={styles.loadedModelName} numberOfLines={1} testID="currently-loaded-image-model-name">
                 {activeModel?.name || activeRemoteModelInfo?.model?.name || 'Unknown'}
               </Text>
-              <Text style={styles.loadedModelMeta}>
+              <Text style={styles.loadedModelMeta} testID="currently-loaded-image-model-ram">
                 {activeModel
-                  ? `${activeModel.style || 'Image'} • ${hardwareService.formatBytes(activeModel.size ?? 0)}`
+                  ? `${activeModel.style || 'Image'} • ${hardwareService.formatBytes(activeModel.size ?? 0)} • ${hardwareService.formatBytes(hardwareService.estimateImageModelRam(activeModel))} RAM`
                   : `Remote • ${activeRemoteModelInfo?.serverName ?? 'Model'}`}
               </Text>
             </View>
