@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Project } from '../types';
 import { generateId } from '../utils/generateId';
 import { ragService } from '../services/rag';
+import { useChatStore } from './chatStore';
 import logger from '../utils/logger';
 
 interface ProjectState {
@@ -114,6 +115,11 @@ export const useProjectStore = create<ProjectState>()(
 
       deleteProject: (id) => {
         ragService.deleteProjectDocuments(id).catch((err) => logger.error(`Failed to delete RAG documents for project ${id}`, err));
+        // Cascade: unfile the project's chats so none is left pointing at a project that
+        // no longer exists (a dangling projectId isn't re-filable and still tripped the
+        // KB-tool injection). The project store owns "what happens on delete" (like RAG
+        // cleanup above); chatStore owns the conversation mutation.
+        useChatStore.getState().unfileConversationsForProject(id);
         set((state) => ({
           projects: state.projects.filter((project) => project.id !== id),
         }));

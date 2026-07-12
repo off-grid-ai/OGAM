@@ -311,8 +311,11 @@ function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, _message
 
   let enabledTools = canUseTools ? (deps.settings.enabledTools || []) : [];
 
-  // Auto-add search_knowledge_base for project chats even if not in user's enabled list
-  if (conversation?.projectId && !enabledTools.includes('search_knowledge_base')) {
+  // Auto-add search_knowledge_base for project chats even if not in user's enabled list.
+  // Key on the RESOLVED project existing, not a truthy projectId — a chat orphaned by
+  // project deletion has a dangling projectId but no docs, so injecting the KB tool made
+  // the model call a tool over a project whose RAG is gone (Q9b).
+  if (project && !enabledTools.includes('search_knowledge_base')) {
     enabledTools = [...enabledTools, 'search_knowledge_base'];
   }
 
@@ -380,7 +383,9 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
                 deps.setAlertState({ visible: false, title: '', message: '', buttons: [] });
                 const modelId = deps.activeModelInfo?.modelId;
                 if (modelId) {
-                  const newId = deps.createConversation(modelId);
+                  // Inherit the current chat's project so the context-full continuation
+                  // stays filed under the same project (Q11: it was created unfiled).
+                  const newId = deps.createConversation(modelId, undefined, conversation?.projectId);
                   deps.setActiveConversation(newId);
                 }
               },
@@ -552,7 +557,9 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
                 deps.setAlertState({ visible: false, title: '', message: '', buttons: [] });
                 const modelId = deps.activeModelInfo?.modelId;
                 if (modelId) {
-                  const newId = deps.createConversation(modelId);
+                  // Inherit the current chat's project so the context-full continuation
+                  // stays filed under the same project (Q11: it was created unfiled).
+                  const newId = deps.createConversation(modelId, undefined, conversation?.projectId);
                   deps.setActiveConversation(newId);
                 }
               },

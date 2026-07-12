@@ -76,6 +76,9 @@ interface ChatState {
   setActiveConversation: (conversationId: string | null) => void;
   getActiveConversation: () => Conversation | null;
   setConversationProject: (conversationId: string, projectId: string | null) => void;
+  /** Unfile every conversation filed under a project (used when the project is deleted,
+   *  so no chat is left pointing at a project that no longer exists). */
+  unfileConversationsForProject: (projectId: string) => void;
   addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>) => Message;
   updateMessageContent: (conversationId: string, messageId: string, content: string) => void;
   updateMessageThinking: (conversationId: string, messageId: string, isThinking: boolean) => void;
@@ -149,6 +152,16 @@ export const useChatStore = create<ChatState>()(
             conv.id !== conversationId
               ? conv
               : { ...conv, projectId: projectId || undefined, updatedAt: nextUpdatedAt(conv.updatedAt) }
+          ),
+        }));
+      },
+
+      unfileConversationsForProject: (projectId) => {
+        set((state) => ({
+          conversations: state.conversations.map((conv) =>
+            conv.projectId !== projectId
+              ? conv
+              : { ...conv, projectId: undefined, updatedAt: nextUpdatedAt(conv.updatedAt) }
           ),
         }));
       },
