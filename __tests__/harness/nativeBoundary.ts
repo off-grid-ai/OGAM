@@ -110,6 +110,12 @@ export interface LiteRTFake {
    * (litertService.onError → generation error surface). One-shot: cleared after it fires.
    */
   scriptError(message: string): void;
+  /**
+   * Make the NEXT send HANG (native accepted the prompt but never emits complete/error) so generation
+   * stays in-flight — for asserting in-generation UI state (e.g. the mic must become a STOP button).
+   * One-shot: cleared after it fires.
+   */
+  scriptHang(): void;
 }
 
 /** Run fn on a macrotask so it lands after the current async chain (native call → awaited resolve). */
@@ -124,6 +130,7 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
   let currentTurn: LiteRTTurn | null = null; // the turn onSend picked (for respondToToolCall completion)
   let toolCallsRemaining = 0;
   let pendingError: string | null = null; // one-shot: next send emits litert_error instead of completing
+  let pendingHang = false; // one-shot: next send never completes (generation stays in-flight)
 
   const emitCompletion = (turn: LiteRTTurn) => {
     if (turn.reasoning) handle.emit('litert_thinking', turn.reasoning);
@@ -132,6 +139,7 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
   };
 
   const onSend = () => {
+    if (pendingHang) { pendingHang = false; return; } // accepted, never completes → generation in-flight
     if (pendingError) { const m = pendingError; pendingError = null; defer(() => handle.emit('litert_error', m)); return; }
     const turn = queue.length ? queue.shift()! : pending;
     currentTurn = turn;
@@ -172,6 +180,7 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
     scriptTurn: (turn: LiteRTTurn) => { pending = turn; },
     scriptTurns: (turns: LiteRTTurn[]) => { queue.length = 0; queue.push(...turns); },
     scriptError: (message: string) => { pendingError = message; },
+    scriptHang: () => { pendingHang = true; },
   };
 }
 
