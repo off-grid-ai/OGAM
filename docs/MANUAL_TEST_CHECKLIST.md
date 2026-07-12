@@ -139,8 +139,8 @@ manual tester and the automated test). **UI validation** = what to assert on the
 | T047 | 🔴 P2 | ❌ | Scan with no server (fake HTTP: none) | "No servers found" AND the server list stays empty (RED: shows "none found" yet adds a server) | DEV-B8 · desync | |
 | T048 | ✅ P1 | ~ `remoteProviderRouting`/`reasoningPipeline` | Connect remote (OpenAI-compat fake replays real `[WIRE-REMOTE]` deltas) → send the 5 prompts | correct replies; thinking + parallel tool_calls render (accumulate by index) | DEV · WORKS | |
 | T049 | 🔴 P1 | ✅ `remoteReasoningDropped.rendered.redflow` (PROVEN RED — falsified via processDelta gate) | LM Studio remote + reasoning model + thinking; fake emits `reasoning_content` deltas | thinking block renders (RED: no thinking toggle → thinkingEnabled=false → processDelta drops `reasoning_content` → reasoning=0). Tools DO work | DEV-B16 · BROKEN | |
-| T050 | 🔴 P1 | ❌ | Mount chat settings with a remote model active | a thinking on/off toggle is present (RED: absent for remote) | DEV-B17 · MISSING | |
-| T051 | ✅ P1 | ~ `remoteProviderRouting` | Ollama remote (native NDJSON fake, `message.thinking` field) + tools → send | thinking renders + tool-result bubbles render | DEV · WORKS | |
+| T050 | 🔴 P1 | ~ folded into T049 (real bug = reasoning dropped, not the toggle; toggle is a minor UX gap) | Mount chat settings with a remote model active | a thinking on/off toggle is present (RED: absent for remote) | DEV-B17 · MISSING | |
+| T051 | ✅ P1 | ✅ `remoteOllamaReasoningRenders.rendered.redflow` (GREEN guard, falsified — contrast to T049) | Ollama remote (native NDJSON fake, `message.thinking` field) + tools → send | thinking renders + tool-result bubbles render | DEV · WORKS | |
 | T052 | 🔴 P1 | ✅ `remoteEnhanceSkipped` | Active text model = remote + image-gen + enhancement on → generate | enhancement runs via the remote model (RED: `generateStandalone` has only llama/litert branches → skipped on remote) | Q8 · BROKEN | |
 | T053 | 🔴 P2 | ❌ | Open the model modality selector with a remote model selected | remote model is visually marked (cloud icon) (RED: identical to local, no indicator) | DEV · no indicator | |
 
