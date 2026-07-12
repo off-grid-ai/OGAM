@@ -54,14 +54,14 @@ export const TextTab: React.FC<TextTabProps> = ({
             <Icon name="check-circle" size={14} color={colors.success} />
             <Text style={styles.loadedLabel}>Currently Loaded</Text>
           </View>
-          <View style={styles.loadedModelItem}>
+          <View style={styles.loadedModelItem} testID="currently-loaded-model">
             <View style={styles.loadedModelInfo}>
-              <Text style={styles.loadedModelName} numberOfLines={1}>
+              <Text style={styles.loadedModelName} numberOfLines={1} testID="currently-loaded-model-name">
                 {activeLocalModel?.name || activeRemoteModelInfo?.model?.name || 'Unknown'}
               </Text>
-              <Text style={styles.loadedModelMeta}>
+              <Text style={styles.loadedModelMeta} testID="currently-loaded-model-ram">
                 {activeLocalModel
-                  ? `${activeLocalModel.quantization} • ${hardwareService.formatModelSize(activeLocalModel)}`
+                  ? `${activeLocalModel.quantization} • ${hardwareService.formatModelSize(activeLocalModel)} • ${hardwareService.formatModelRam(activeLocalModel)} RAM`
                   : `Remote • ${activeRemoteModelInfo?.serverName ?? 'Model'}`}
               </Text>
             </View>
