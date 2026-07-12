@@ -22,9 +22,9 @@ export function installRemoteStream(sseBody: string): void {
     setRequestHeader(): void { /* headers irrelevant to the fake */ }
     abort(): void { /* no-op */ }
     send(): void {
-      // Emit the captured body in SSE-event chunks (split on the blank-line delimiter), one per macrotask,
-      // so the REAL incremental parser (onprogress → sseProcessor.process) runs like it does on device.
-      const chunks = sseBody.match(/[^]*?\n\n/g) ?? [sseBody];
+      // Emit the captured body line-by-line, one per macrotask, so the REAL incremental parser runs like it
+      // does on device — works for both OpenAI SSE (`data: {…}\n\n`) and Ollama NDJSON (`{…}\n`).
+      const chunks = sseBody.match(/[^\n]*\n/g) ?? [sseBody];
       let i = 0;
       const pump = (): void => {
         if (i < chunks.length) {
