@@ -301,7 +301,9 @@ describe('WhisperService', () => {
         filePath: '/path/to/model.bin',
         useGpu: false,
         useFlashAttn: false,
-        useCoreMLIos: false,
+        // The test's RNFS.exists mock reports the CoreML encoder present, so
+        // loadModel auto-enables ANE CoreML on iOS.
+        useCoreMLIos: true,
       });
       expect(whisperService.isModelLoaded()).toBe(true);
       expect(whisperService.getLoadedModelPath()).toBe('/path/to/model.bin');
