@@ -192,7 +192,11 @@ export async function generateWithToolsImpl(
       logger.log(`[LLM-Tools] Using ${collectedToolCalls.length} tool call(s) from completionResult`);
     }
 
-    deps.setPerformanceStats(recordGenerationStats(startTime, firstTokenMs, tokenCount));
+    deps.setPerformanceStats({
+      ...recordGenerationStats(startTime, firstTokenMs, tokenCount),
+      // Flag a reply cut off at the n_predict cap (no EOS) so the UI can show it (B15).
+      lastTruncated: cr?.stopped_eos === false || cr?.stopped_limit === 1 || cr?.truncated === true,
+    });
     generating = false;
     deps.setIsGenerating(false);
     if (cr?.context_full) {

@@ -196,6 +196,8 @@ export interface GenerationMeta {
   cacheType?: string; // KV cache quantization type
   /** Tool names sent to the model for this turn (built-in + routed MCP/ext tools). */
   routedToolNames?: string[];
+  /** True when the reply was cut off at the n_predict cap without an EOS token (B15). */
+  truncated?: boolean;
 }
 
 // Chat-related types

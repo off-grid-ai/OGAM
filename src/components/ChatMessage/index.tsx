@@ -352,6 +352,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
       <RoutedToolsRow message={message} isUser={isUser} isStreaming={isStreaming} styles={styles} colors={colors} />
 
+      {!isUser && !isStreaming && message.generationMeta?.truncated && (
+        <View testID="message-cutoff-indicator" style={styles.toolStatusRow}>
+          <Icon name="alert-triangle" size={12} color={colors.textMuted} />
+          <Text style={styles.toolStatusText}>Reply cut off at the token limit. Retry to continue.</Text>
+        </View>
+      )}
+
       <MessageMetaRow
         message={message}
         styles={styles}

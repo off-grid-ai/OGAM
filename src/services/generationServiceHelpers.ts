@@ -106,6 +106,7 @@ function buildBaseGenerationMeta(svc: any): GenerationMeta {
     timeToFirstToken: perf.lastTimeToFirstToken,
     tokenCount: perf.lastTokenCount,
     cacheType: effectiveCacheType(settings.inferenceBackend, settings.cacheType),
+    truncated: perf.lastTruncated,
   };
 }
 
