@@ -388,7 +388,7 @@ function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelet
   onSelect?: () => void; onDelete?: () => void; onRepairVision?: () => void; isRepairingVision?: boolean;
 }>) {
   const tid = (s: string) => testID ? `${testID}-${s}` : undefined;
-  if (!onSelect && !onDelete && !onRepairVision) return <Icon name="check-circle" size={16} color={colors.primary} />;
+  if (!onSelect && !onDelete && !onRepairVision) return <Icon name="check-circle" size={16} color={colors.primary} testID={tid('downloaded')} />;
   return (
     <>
       {isRepairingVision ? (
