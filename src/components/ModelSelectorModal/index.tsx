@@ -17,6 +17,7 @@ import { CustomAlert, AlertState, initialAlertState, showAlert } from '../Custom
 import { createAllStyles } from './styles';
 import { TextTab } from './TextTab';
 import { ImageTab } from './ImageTab';
+import { ResidentModelsSection } from './ResidentModelsSection';
 import {
   isSuspiciousRecoveredImageModel,
   isSuspiciousRecoveredTextModel,
@@ -220,6 +221,8 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
         )}
 
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+          {/* Everything currently in RAM (text/image/sidecars), each individually ejectable. */}
+          <ResidentModelsSection />
           {activeTab === 'text' ? (
             <TextTab
               downloadedModels={filteredDownloadedModels}

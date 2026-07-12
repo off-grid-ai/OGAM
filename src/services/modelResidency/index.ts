@@ -450,6 +450,20 @@ class ModelResidencyManager {
     this.residents.delete(key);
   }
 
+  /** Eject a single resident and ACTUALLY unload it from RAM (unlike release(), which only forgets the
+   *  accounting). Used by the model selector's per-model Eject. Runs under the FIFO lock like every other
+   *  load/unload. Returns true if a resident was found and ejected. */
+  async evictByKey(key: string): Promise<boolean> {
+    return this.runExclusive(`evict:${key}`, async () => {
+      const r = this.residents.get(key);
+      if (!r) return false;
+      await r.unload().catch(err => logger.log(`[ModelResidency] evict ${key} unload failed:`, err));
+      this.residents.delete(key);
+      logger.log(`[ModelResidency] evicted ${r.type} (${key}) by user request`);
+      return true;
+    });
+  }
+
   /**
    * A generation turn is starting: the mic (STT/Whisper) model is idle while the
    * LLM runs, and its RAM is better spent on the LLM's inference working set (which
