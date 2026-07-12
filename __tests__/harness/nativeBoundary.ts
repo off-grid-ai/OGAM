@@ -551,6 +551,8 @@ export interface NativeBoundary {
   whisper?: WhisperFake;
   /** Re-read RAM at the leaf mid-test (e.g. simulate OS pressure between a pre-check and the load). */
   setRam(profile: RamProfile): void;
+  /** Fire the OS 'memoryWarning' AppState event the app's residency manager listens to (auto-eviction). */
+  emitMemoryWarning(): void;
 }
 
 /**
@@ -623,6 +625,20 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     },
   });
 
+  // AppState capture: modelResidencyManager's constructor registers a REAL
+  // AppState.addEventListener('memoryWarning', …) to reclaim idle sidecars on OS memory pressure. The RN jest
+  // mock swallows the callback, so replace AppState with a capturing emitter and expose emitMemoryWarning()
+  // to fire the OS memory-warning faithfully (OS event → the app's real listener → real handleMemoryWarning).
+  const appState = makeEmitterRegistry();
+  Object.defineProperty(RN, 'AppState', {
+    configurable: true,
+    value: {
+      addEventListener: (event: string, cb: Listener) => appState.add(event, cb),
+      removeEventListener: () => {},
+      currentState: 'active',
+    },
+  });
+
   // react-native-device-info total-memory leaf (npm package, already jest.mock-ed in jest.setup).
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const DeviceInfo = require('react-native-device-info');
@@ -639,5 +655,5 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     Object.defineProperty(RN.Platform, 'Version', { value: profile.platform === 'android' ? 34 : '17.0', configurable: true });
   };
 
-  return { litert, litertEvents: handle, diffusion, fs: fsFake, llama: llamaFake, download: downloadFake, whisper: whisperFake, setRam };
+  return { litert, litertEvents: handle, diffusion, fs: fsFake, llama: llamaFake, download: downloadFake, whisper: whisperFake, setRam, emitMemoryWarning: () => appState.handle.emit('memoryWarning') };
 }
