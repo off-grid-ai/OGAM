@@ -41,6 +41,10 @@ class WhisperService {
   private contextReleasePromise: Promise<void> = Promise.resolve();
   private transcriptionFullyStopped: Promise<void> = Promise.resolve();
   private activeDownloadId: string | null = null;
+  // The model id the in-flight download belongs to. Paired with activeDownloadId so
+  // deleteModel only cancels the download when it is THIS model's — deleting an
+  // unrelated (already-downloaded) model must never abort a different in-flight one.
+  private activeDownloadModelId: string | null = null;
 
   getModelsDir(): string { return `${RNFS.DocumentDirectoryPath}/whisper-models`; }
   async ensureModelsDirExists(): Promise<void> {
@@ -119,6 +123,7 @@ class WhisperService {
     try {
       try {
         this.activeDownloadId = await downloadIdPromise;
+        this.activeDownloadModelId = modelId;
         // A slot opened and the native download started: reconcile the queued
         // placeholder row to the REAL downloadId so progress events (routed by id)
         // land on it. Progress is then driven by the global onAnyProgress listener
@@ -137,6 +142,7 @@ class WhisperService {
         throw error;
       } finally {
         this.activeDownloadId = null;
+        this.activeDownloadModelId = null;
       }
       try {
         await this.validateModelFile(destPath);
@@ -170,9 +176,13 @@ class WhisperService {
   }
 
   async deleteModel(modelId: string): Promise<void> {
-    if (this.activeDownloadId !== null) {
+    // Only cancel the in-flight download if it belongs to THIS model. Deleting an
+    // already-downloaded model must not abort an unrelated download that happens to
+    // be running (previously it cancelled the single activeDownloadId regardless).
+    if (this.activeDownloadId !== null && this.activeDownloadModelId === modelId) {
       await backgroundDownloadService.cancelDownload(this.activeDownloadId).catch(() => {});
       this.activeDownloadId = null;
+      this.activeDownloadModelId = null;
     }
     const path = this.getModelPath(modelId);
     if (await RNFS.exists(path)) await RNFS.unlink(path);
