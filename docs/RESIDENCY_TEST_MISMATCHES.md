@@ -68,7 +68,16 @@ Format:
   narrow variant of the estimator family already covered by T024/T027/T028 (over-commit / estimator
   divergence). · Status: OPEN — needs the harness mmproj-seed capability + a product decision on the correct
   mmproj multiplier; deferred rather than ship a budget-fragile, surface-mismatched test.
-- **[T118] embedding sidecar lazy-load on first RAG query — DEFERRED (harness gap)** —
+- **[T118] embedding sidecar lazy-load — RESOLVED (2026-07-12)** — Now automated as
+  `embeddingSidecarResident.rendered.happy`: the mounted KnowledgeBaseScreen indexes a real doc (real
+  ragService/documentService/embeddingService over memfs + picker + a llama `embedding()` fake + REAL
+  node:sqlite via `installNativeBoundary` composed with the new `doMockRealSqlite`), the embedding model
+  lazy-loads + registers residency, and the model selector In Memory section lists `resident-item-embedding`.
+  Falsified by removing the residency register. The 3 harness pieces that blocked it were built: (1)
+  `doMockRealSqlite` (compose real sqlite without a 2nd resetModules) + a realm-safe BLOB bind; (2) the llama
+  fake's `embedding()` method; (3) the mounted-KB attach harness (shared with T010/T011). Original blocker
+  below, kept for history.
+- **[T118-original] embedding sidecar lazy-load on first RAG query — (was DEFERRED, now resolved above)** —
   Expected (from `embedding.ts:85` + `searchKnowledgeBaseRoundtrip`): the embedding model loads on the first
   real `embed()` (indexing a KB doc, or a doc-question → `search_knowledge_base` → embed), registers as
   `type:'embedding'`, co-resides as a sidecar → In Memory should list `resident-item-embedding` with its RAM. ·

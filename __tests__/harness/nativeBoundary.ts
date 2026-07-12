@@ -268,6 +268,11 @@ function makeLlamaFake(): LlamaFake {
     tokenize: jest.fn().mockResolvedValue({ tokens: [1, 2, 3] }),
     initMultimodal: jest.fn().mockResolvedValue(false),
     getMultimodalSupport: jest.fn().mockResolvedValue({ vision: false, audio: false }),
+    // Embedding boundary (embedding-model contexts, initLlama({embedding:true})): return a device-shaped
+    // 384-dim vector derived from the text so RAG cosine ranking is real. Matches all-MiniLM-L6-v2 (384).
+    embedding: jest.fn(async (text: string) => ({
+      embedding: Array.from({ length: 384 }, (_v, i) => Math.sin(i + String(text).length * 0.1)),
+    })),
   };
   // The service reads context.model.chatTemplates.jinja to decide tool-calling support.
   (context as Record<string, unknown>).model = {

@@ -9,6 +9,15 @@
  */
 export function installRealSqlite(): void {
   jest.resetModules();
+  doMockRealSqlite();
+}
+
+/**
+ * The op-sqlite doMock WITHOUT jest.resetModules — so it can COMPOSE with another boundary installer that
+ * already reset modules (e.g. installNativeBoundary for a mounted-screen RAG test). Call AFTER that installer,
+ * before requiring the rag modules. installRealSqlite = resetModules + this.
+ */
+export function doMockRealSqlite(): void {
   jest.doMock('@op-engineering/op-sqlite', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { DatabaseSync } = require('node:sqlite');
@@ -16,8 +25,11 @@ export function installRealSqlite(): void {
     const wrap = (db: any) => ({
       executeSync: (sql: string, params: unknown[] = []) => {
         const bind = (params ?? []).map((p) =>
-          // op-sqlite accepts ArrayBuffer for BLOBs; node:sqlite wants a Uint8Array/Buffer.
-          p instanceof ArrayBuffer ? new Uint8Array(p) : p,
+          // op-sqlite accepts ArrayBuffer for BLOBs; node:sqlite wants a Uint8Array/Buffer. Use a
+          // realm-safe check (Object.prototype.toString) because a composed harness (installNativeBoundary
+          // + doMockRealSqlite) can hand us an ArrayBuffer from a different realm where `instanceof` fails.
+          (p instanceof ArrayBuffer || Object.prototype.toString.call(p) === '[object ArrayBuffer]')
+            ? new Uint8Array(p as ArrayBuffer) : p,
         );
         // Transaction / DDL control statements: no params, run via exec.
         if (/^\s*(BEGIN|COMMIT|ROLLBACK|CREATE|PRAGMA|DROP)/i.test(sql) && bind.length === 0) {
