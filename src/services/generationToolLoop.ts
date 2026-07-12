@@ -454,7 +454,11 @@ export function buildLiteRTHistory(messages: Message[]): Array<{ role: 'user' | 
     .filter(h => h.content.trim() !== '');
 }
 
-function buildLiteRTToolCallHandler(ctx: ToolLoopContext, conversationId: string) {
+/** Records the tool results a LiteRT native turn produced, so an empty final answer can
+ *  still surface the fetched data instead of discarding it (Q5). */
+interface LiteRTToolOutcome { results: string[] }
+
+function buildLiteRTToolCallHandler(ctx: ToolLoopContext, conversationId: string, outcome?: LiteRTToolOutcome) {
   // Per-turn counter: this closure is rebuilt once per generation, so it resets each new
   // message and the native loop reuses it for every tool call within the turn.
   let toolCallCount = 0;
@@ -481,6 +485,7 @@ function buildLiteRTToolCallHandler(ctx: ToolLoopContext, conversationId: string
       toolCallId: toolCall.id, toolName: name, timestamp: Date.now() };
     useChatStore.getState().addMessage(conversationId, toolCallMsg);
     useChatStore.getState().addMessage(conversationId, toolResultMsg);
+    if (result.status === 'ok') outcome?.results.push(resultContent);
     return resultContent;
   };
 }
@@ -513,14 +518,22 @@ async function callLiteRTForLoop(
     return { fullResponse: '', toolCalls: [] };
   }
   await liteRTService.prepareConversation(conversationId, systemPrompt, { samplerConfig, tools, history });
-  const onToolCall = ctx ? buildLiteRTToolCallHandler(ctx, conversationId) : undefined;
+  const outcome: LiteRTToolOutcome = { results: [] };
+  const onToolCall = ctx ? buildLiteRTToolCallHandler(ctx, conversationId, outcome) : undefined;
   const handlers = {
     onToken: (token: string) => onStream?.({ content: token }),
     onReasoning: (token: string) => onStream?.({ reasoningContent: token }),
   };
   try {
     const fullResponse = await liteRTService.generateRaw(text, { imageUris, audioUris }, { ...handlers, onToolCall });
-    // Native SDK handles all tool→model cycles internally; toolCalls always empty here
+    // Native SDK handles all tool→model cycles internally; toolCalls always empty here.
+    // If the model ran a tool but then produced NO final answer, surface the fetched
+    // data instead of discarding it (the user would otherwise see a blank / "(No
+    // response)" turn — Q5). The tool result is the honest answer the model failed to
+    // phrase; better a visible result than a dead end.
+    if (!fullResponse.trim() && outcome.results.length > 0) {
+      return { fullResponse: outcome.results.join('\n\n'), toolCalls: [] };
+    }
     return { fullResponse, toolCalls: [] };
   } catch (e: any) {
     const msg = String(e?.message ?? e);
