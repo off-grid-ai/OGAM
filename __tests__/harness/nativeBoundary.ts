@@ -211,6 +211,10 @@ export interface LlamaFake {
   scriptCompletion(result: { text?: string; toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>; throwMessage?: string; pauseAfter?: string; thinkingText?: string; completionMeta?: CompletionMeta }): void;
   /** Release a stream held via scriptCompletion({ pauseAfter }). No-op if not paused. */
   releaseStream(): void;
+  /** Make every GPU/HTP context init (initLlama with n_gpu_layers > 0) REJECT, as a real hung/timed-out
+   *  accelerator init does — so initContextWithFallback falls back to the CPU attempt (n_gpu_layers:0).
+   *  Models B24 (GPU init timeout → CPU/partial fallback). Persistent until cleared. */
+  scriptGpuInitFailure(fail?: boolean): void;
   /** react-native module object to inject for 'llama.rn'. */
   module: Record<string, jest.Mock>;
   calls: { completion: unknown[][] };
@@ -220,6 +224,7 @@ function makeLlamaFake(): LlamaFake {
   const calls: LlamaFake['calls'] = { completion: [] };
   let pending: { text: string; toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>; throwMessage?: string; pauseAfter?: string; thinkingText?: string; completionMeta?: CompletionMeta } = { text: '' };
   let releaseFn: (() => void) | null = null; // resolves a mid-stream pause
+  let gpuInitFails = false; // when true, initLlama with n_gpu_layers>0 rejects (GPU/HTP init timeout → CPU fallback)
 
   const context: Record<string, jest.Mock> = {
     // Faithful to llama.rn: completion(params, onToken) STREAMS token-by-token through the callback
@@ -287,6 +292,9 @@ function makeLlamaFake(): LlamaFake {
     // path surfaces the true backend — EMERGENT from the settings→load flow, never programmed.
     initLlama: jest.fn(async (params?: Record<string, unknown>) => {
       const n = Number((params?.n_gpu_layers as number) ?? 0);
+      // Device-faithful GPU/HTP init failure: a hung/timed-out accelerator init rejects, so the real
+      // initContextWithFallback falls back to the CPU attempt (which requests n_gpu_layers:0 and succeeds).
+      if (gpuInitFails && n > 0) throw new Error('GPU context init timed out after 8000ms');
       const devices = Array.isArray(params?.devices) ? (params!.devices as string[]) : [];
       (context as Record<string, unknown>).gpu = n > 0;
       (context as Record<string, unknown>).devices = n > 0 ? devices : [];
@@ -304,6 +312,7 @@ function makeLlamaFake(): LlamaFake {
     module, calls,
     scriptCompletion: (r) => { pending = { text: r.text ?? '', toolCalls: r.toolCalls, throwMessage: r.throwMessage, pauseAfter: r.pauseAfter, thinkingText: r.thinkingText, completionMeta: r.completionMeta }; },
     releaseStream: () => { const f = releaseFn; releaseFn = null; f?.(); },
+    scriptGpuInitFailure: (fail = true) => { gpuInitFails = fail; },
   };
 }
 
