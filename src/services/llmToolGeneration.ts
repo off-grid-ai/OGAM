@@ -29,6 +29,12 @@ class ToolCallTokenFilter {
     return this.flush();
   }
 
+  /** Clear buffered state (used when a generation is retried from scratch). */
+  reset(): void {
+    this.inBlock = false;
+    this.buffer = '';
+  }
+
   private flush(): string {
     const openTag = '<|tool_call>';
     const closeTag = '<tool_call|>';
@@ -158,6 +164,11 @@ export async function generateWithToolsImpl(
       // A bad dev grammar must never brick chat: record it and retry ungrammared.
       if (!devGrammarApplied) throw e;
       noteDevGrammarError(completionParams, e);
+      // Reset streaming state so the ungrammared retry doesn't append to / re-emit
+      // the failed attempt's partial output or double-count its tool calls.
+      fullResponse = '';
+      collectedToolCalls.length = 0;
+      toolCallFilter?.reset();
       completionResult = await safeCompletion(deps.context, () => deps.context.completion(completionParams as any, onCompletionData), 'generateWithTools-fallback');
     }
     logger.log('[LLM-Tools] === OUTPUT ===');

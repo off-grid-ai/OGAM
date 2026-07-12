@@ -260,6 +260,10 @@ class LLMService {
         // A bad dev grammar must never brick chat: record it and retry ungrammared.
         if (!devGrammarApplied) throw e;
         noteDevGrammarError(completionParams, e);
+        // Reset streaming state so the ungrammared retry doesn't append to / re-emit
+        // the failed attempt's partial output (would duplicate/garble the result).
+        fullContent = ''; fullReasoningContent = '';
+        streamedContentSoFar = ''; streamedReasoningSoFar = '';
         completionResult = await safeCompletion(ctx, () => ctx.completion(completionParams, onCompletionData), 'generateResponse-fallback');
       }
       const cr = completionResult as any;
