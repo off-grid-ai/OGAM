@@ -91,7 +91,7 @@ export interface LiteRTFake {
   module: Record<string, jest.Mock>;
   events: FakeEmitterHandle;
   /** Records of every generateRaw / sendMessage* call for arg assertions. */
-  calls: { generateRaw: unknown[][]; resetConversation: unknown[][]; sendMessageWithMedia: unknown[][]; sendMessageWithImages: unknown[][] };
+  calls: { generateRaw: unknown[][]; resetConversation: unknown[][]; sendMessage: unknown[][]; sendMessageWithMedia: unknown[][]; sendMessageWithImages: unknown[][] };
   /**
    * Script the native side of the NEXT turn: when our code calls sendMessage*, emit the tool calls
    * (which the real service dispatches to the real tool loop, then calls respondToToolCall), then on the
@@ -122,7 +122,7 @@ export interface LiteRTFake {
 const defer = (fn: () => void) => { setTimeout(fn, 0); };
 
 function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
-  const calls: LiteRTFake['calls'] = { generateRaw: [], resetConversation: [], sendMessageWithMedia: [], sendMessageWithImages: [] };
+  const calls: LiteRTFake['calls'] = { generateRaw: [], resetConversation: [], sendMessage: [], sendMessageWithMedia: [], sendMessageWithImages: [] };
 
   // Scripted turn state — set by scriptTurn()/scriptTurns(), consumed by the send/respond methods below.
   let pending: LiteRTTurn | null = null;
@@ -155,7 +155,7 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
   const module: Record<string, jest.Mock> = {
     loadModel: jest.fn().mockResolvedValue({ backend: 'gpu', maxNumTokens: 4096 }),
     resetConversation: jest.fn((...args: unknown[]) => { calls.resetConversation.push(args); return Promise.resolve(); }),
-    sendMessage: jest.fn(() => { onSend(); return Promise.resolve(); }),
+    sendMessage: jest.fn((...args: unknown[]) => { calls.sendMessage.push(args); onSend(); return Promise.resolve(); }),
     sendMessageWithImages: jest.fn((...args: unknown[]) => { calls.sendMessageWithImages.push(args); onSend(); return Promise.resolve(); }),
     sendMessageWithAudio: jest.fn(() => { onSend(); return Promise.resolve(); }),
     sendMessageWithMedia: jest.fn((...args: unknown[]) => { calls.sendMessageWithMedia.push(args); onSend(); return Promise.resolve(); }),

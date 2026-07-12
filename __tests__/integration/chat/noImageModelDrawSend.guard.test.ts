@@ -1,17 +1,19 @@
 /**
- * GUARD (UI, BEHAVIORAL) — N3 revisited: a draw request with NO image model is handled safely; the internal
- * "[User wanted an image…]" marker is NEVER leaked into the text model's prompt.
+ * GUARD (N3) — a "draw …" send with NO image model routes cleanly to the text model: the user gets a normal
+ * text answer, and the internal "[User wanted an image but no image model is loaded]" marker (added at
+ * useChatGenerationActions.ts:448 when shouldGenerateImage && !activeImageModel) is NEVER leaked into the
+ * text the model actually receives.
  *
- * What UI-driven testing revealed: the original N3 red drove dispatchGenerationFn directly with
- * imageMode:'force' + no image model — but that state is UNREACHABLE through the real UI on two fronts:
- *   1. shouldRouteToImageGenerationFn (useChatGenerationActions.ts:159) returns FALSE in auto mode when no
- *      image model is selected — it skips the classifier entirely, so shouldGenerateImage is never true and
- *      the marker branch (:447) never runs.
- *   2. the ChatInput image-mode toggle alerts "No Image Model" and REFUSES to enter 'force' when none is
- *      downloaded (ChatInput/index.tsx:197-202).
- * So the marker-leak "bug" cannot happen to a user. This is the GREEN guard that locks that safety: on the
- * real ChatScreen, a "draw …" send with no image model routes cleanly to text and no marker reaches the
- * engine. Only the native LiteRT leaf is faked.
+ * In auto mode with no image model, shouldRouteToImageGenerationFn returns false (skips the classifier), so
+ * shouldGenerateImage is false and line 448 never fires — the marker is unreachable. This guard LOCKS that:
+ * if a regression let an image route survive with no image model, the marker would leak into the model's
+ * prompt. So the assertion rides the boundary that CARRIES that prompt — the litert engine's sendMessage
+ * (the "what reached the engine seam" — the marker is a hidden prompt leak, not a rendered artifact) — not
+ * generateRaw (which the main litert turn never uses; asserting there was vacuous — it can't carry the
+ * marker in either world).
+ *
+ * Falsified: forcing shouldRouteToImageGenerationFn to return true (image route with no image model) makes
+ * line 448 fire and the marker appears in the sendMessage text → this goes red.
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
@@ -23,15 +25,22 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 describe('N3 (guard) — draw request with no image model routes safely', () => {
-  it('does not leak the internal image marker into the text model prompt', async () => {
+  it('renders a text answer and leaks NO image marker into the text the model receives', async () => {
     const h = await setupChatScreen({ engine: 'litert' });
     h.render();
 
+    // No image model is downloaded/active → "draw …" must route to the text model.
     await h.send('draw a dragon', { content: 'A dragon is a large mythical reptile.' });
+
+    // The user sees a normal text answer (the reachable, correct outcome).
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/A dragon is a large mythical reptile\./)).not.toBeNull(); });
 
-    // Clean routing: no "[User wanted an image…]" marker reached the engine.
-    const sentTexts = h.boundary.litert.calls.generateRaw.map((c: unknown[]) => String(c[0]));
-    expect(sentTexts.some((t: string) => /User wanted an image/i.test(t))).toBe(false);
+    // The text that actually REACHED the engine carries no internal image marker (clean prompt). If line 448
+    // ever fired (image route + no image model), the marker would be in this sendMessage text.
+    const sentToEngine = h.boundary.litert.calls.sendMessage.map((c: unknown[]) => String(c[0]));
+    expect(sentToEngine.length).toBeGreaterThan(0); // the send actually reached the engine (non-vacuous)
+    expect(sentToEngine.some((t: string) => /User wanted an image/i.test(t))).toBe(false);
+    // And the exact prompt the user typed reached the model unmodified.
+    expect(sentToEngine.some((t: string) => t === 'draw a dragon')).toBe(true);
   });
 });
