@@ -193,8 +193,12 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
 
 export interface LlamaFake {
   /** Set the result the NEXT context.completion() resolves with (text drives the text tool-call parser).
-   *  Pass { throwMessage } to make completion REJECT (e.g. a native context-overflow error). */
-  scriptCompletion(result: { text?: string; toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>; throwMessage?: string; pauseAfter?: string }): void;
+   *  Pass { throwMessage } to make completion REJECT (e.g. a native context-overflow error).
+   *  Pass { thinkingText } to model a reasoning-capable model: when the request carries
+   *  enable_thinking===true the completion emits `thinkingText` (the model's reasoning-style output, as
+   *  device B30 showed) instead of `text` — so a caller that fails to disable thinking gets the reasoning
+   *  dump, EMERGENT from its own enable_thinking decision. With enable_thinking!==true it emits `text`. */
+  scriptCompletion(result: { text?: string; toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>; throwMessage?: string; pauseAfter?: string; thinkingText?: string }): void;
   /** Release a stream held via scriptCompletion({ pauseAfter }). No-op if not paused. */
   releaseStream(): void;
   /** react-native module object to inject for 'llama.rn'. */
@@ -204,7 +208,7 @@ export interface LlamaFake {
 
 function makeLlamaFake(): LlamaFake {
   const calls: LlamaFake['calls'] = { completion: [] };
-  let pending: { text: string; toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>; throwMessage?: string; pauseAfter?: string } = { text: '' };
+  let pending: { text: string; toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>; throwMessage?: string; pauseAfter?: string; thinkingText?: string } = { text: '' };
   let releaseFn: (() => void) | null = null; // resolves a mid-stream pause
 
   const context: Record<string, jest.Mock> = {
@@ -216,9 +220,14 @@ function makeLlamaFake(): LlamaFake {
     completion: jest.fn(async (params: unknown, onToken?: (data: { token: string; content: string }) => void) => {
       calls.completion.push([params]);
       if (pending.throwMessage) throw new Error(pending.throwMessage);
-      if (pending.text && typeof onToken === 'function') {
+      // Device-faithful: a reasoning model emits its reasoning-style output when thinking is on. If the
+      // caller left enable_thinking on for a request that shouldn't reason (B30 enhancement), it gets the
+      // reasoning dump; disabling thinking yields the clean text. Emergent from the caller's own decision.
+      const wantsThinking = !!(params as { enable_thinking?: boolean })?.enable_thinking;
+      const outText = wantsThinking && pending.thinkingText != null ? pending.thinkingText : pending.text;
+      if (outText && typeof onToken === 'function') {
         // Char-by-char streaming so a pauseAfter lands EXACTLY (never spanning a delimiter like </think>).
-        const chars = [...pending.text];
+        const chars = [...outText];
         let acc = '';
         let paused = false;
         for (const c of chars) {
@@ -231,8 +240,8 @@ function makeLlamaFake(): LlamaFake {
         }
       }
       return {
-        text: pending.text,
-        content: pending.text,
+        text: outText,
+        content: outText,
         tool_calls: pending.toolCalls,
         tokens_predicted: 8, tokens_evaluated: 4,
         timings: { predicted_per_token_ms: 50, predicted_per_second: 20 },
@@ -272,7 +281,7 @@ function makeLlamaFake(): LlamaFake {
 
   return {
     module, calls,
-    scriptCompletion: (r) => { pending = { text: r.text ?? '', toolCalls: r.toolCalls, throwMessage: r.throwMessage, pauseAfter: r.pauseAfter }; },
+    scriptCompletion: (r) => { pending = { text: r.text ?? '', toolCalls: r.toolCalls, throwMessage: r.throwMessage, pauseAfter: r.pauseAfter, thinkingText: r.thinkingText }; },
     releaseStream: () => { const f = releaseFn; releaseFn = null; f?.(); },
   };
 }
