@@ -52,6 +52,22 @@ Format:
   because no OGAM JS code produces or prevents it. The honest fix is an app-side guard ("tools don't fit the
   clamped context → warn / disable tools"), which would then be UI-testable. · Status: OPEN — native-only;
   needs the app-side guard to become JS-testable, or a device check. Not a false red.
+- **[T021] vision-gguf mmproj-inflated estimate — DEFERRED (harness gap + surface mismatch)** —
+  Expected (from `DEVICE_TEST_FINDINGS.md` B3): gemma-4-E2B (main ~2GB + mmproj ~1.85GB) estimates 5854MB
+  (`(2048+1855)*1.5`), tripping the "may be too big" warning + forcing CPU fallback. · Observed (analysis):
+  (1) the checklist's proposed GenerationMeta GPU/CPU surface is WRONG for B3 — on Android `nGpuLayers` is a
+  pure function of the selected backend + total-RAM tier (`getGpuLayersForDevice` ignores modelBytes), so an
+  inflated estimate can NEVER flip GenerationMeta to CPU; such a test would be green-on-HEAD regardless of B3
+  and would just duplicate T014. (2) B3's real observable is a residency REFUSAL: the inflated `textSizeMB`
+  trips `makeRoomFor` → `OverridableMemoryError` → the "Not enough memory" `ModelFailureCard`, even when the
+  true footprint fits. (3) The harness can't express it: `setupChatScreen` builds the gguf via
+  `createDownloadedModel({...})` and never sets `mmProjFileSize`/`fileSize`, so the mmproj can't inflate the
+  estimate. · Trace: n/a. · Hypothesis: needs (a) a `setupChatScreen` option to seed `fileSize` +
+  `mmProjFileSize` (+ seed the mmproj file on memfs so `resolveMmProjPath` finds it), then (b) a budget where
+  main-alone fits but main+mmproj-inflated does not, asserting the failure card is a FALSE refusal. This is a
+  narrow variant of the estimator family already covered by T024/T027/T028 (over-commit / estimator
+  divergence). · Status: OPEN — needs the harness mmproj-seed capability + a product decision on the correct
+  mmproj multiplier; deferred rather than ship a budget-fragile, surface-mismatched test.
 - **[T118] embedding sidecar lazy-load on first RAG query — DEFERRED (harness gap)** —
   Expected (from `embedding.ts:85` + `searchKnowledgeBaseRoundtrip`): the embedding model loads on the first
   real `embed()` (indexing a KB doc, or a doc-question → `search_knowledge_base` → embed), registers as
