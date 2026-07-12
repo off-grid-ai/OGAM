@@ -44,24 +44,20 @@ const CHUNK_SUMMARY_TOKENS = 256;
 /** Tokens reserved for the final combined summary output. */
 const FINAL_SUMMARY_TOKENS = 512;
 
-/** Estimated overhead for the summarizer instruction + chat template. */
-const INSTRUCTION_OVERHEAD_TOKENS = 160;
-
-/** Safety margin so we never sit exactly at the context edge. */
-const SAFETY_MARGIN_TOKENS = 128;
-
 /** Hard cap on reduce rounds, so a pathological input can't loop forever. */
 const MAX_REDUCE_ROUNDS = 4;
 
-// Cap each MAP chunk well below the full context window. On CPU-only low-RAM
-// devices, prefill (reading the chunk in) dominates wall-clock and there is no
-// token callback during it, so a chunk that fills the whole 4096 context takes
-// ~2 min before the first token streams. ~1500 input tokens (~6000 chars, a
-// coherent few-minutes-of-speech slice) prefills in well under a minute, so each
-// part starts streaming quickly. Smaller = sooner first token but more chunks;
-// this is a deliberate balance, not the minimum. The reduce/combine passes still
-// use the full context budget.
-const MAP_INPUT_TOKEN_TARGET = 1500;
+// Fraction of the ACTIVE backend's context window we spend on input per chunk.
+// The rest is headroom for the summary output + the instruction/template +
+// safety, and keeps small models off the context edge (where they degrade).
+// Sized off the real context (see resolveContextTokens) so a big remote/flagship
+// window one-shots a long transcript while a 2k on-device model stays small.
+const INPUT_CONTEXT_FRACTION = 0.6;
+
+// Assumed context when a remote provider doesn't report its own (remote servers
+// are typically large; better to under-chunk a big window than over-chunk it).
+const REMOTE_DEFAULT_CONTEXT_TOKENS = 8192;
+const LITERT_DEFAULT_CONTEXT_TOKENS = 4096;
 
 // The prompts forbid any reasoning/preamble up front: some on-device models
 // (e.g. Gemma-style instruct models) otherwise spend the whole token budget
@@ -96,6 +92,26 @@ function isLiteRTActive(): boolean {
 function isRemoteActive(): boolean {
   const activeServerId = useRemoteServerStore.getState().activeServerId;
   return !!activeServerId && providerRegistry.hasProvider(activeServerId) && !llmService.isModelLoaded();
+}
+
+/**
+ * The ACTIVE backend's real context window (tokens) + a label for logs. Chunk
+ * sizing is derived from this, so it adapts per backend instead of assuming a
+ * fixed on-device 2k. Remote uses the provider's reported context when known,
+ * else a large default; LiteRT uses its configured max; local uses the loaded
+ * model's setting.
+ */
+function resolveContextTokens(): { tokens: number; source: string } {
+  if (isLiteRTActive()) {
+    return { tokens: liteRTService.getContextTokens() || LITERT_DEFAULT_CONTEXT_TOKENS, source: 'litert' };
+  }
+  if (isRemoteActive()) {
+    const id = useRemoteServerStore.getState().activeServerId;
+    const provider = id ? providerRegistry.getProvider(id) : undefined;
+    const reported = provider?.capabilities?.maxContextLength;
+    return { tokens: reported && reported > 0 ? reported : REMOTE_DEFAULT_CONTEXT_TOKENS, source: 'remote' };
+  }
+  return { tokens: llmService.getPerformanceSettings().contextLength || 2048, source: 'local' };
 }
 
 /**
@@ -238,18 +254,17 @@ class TranscriptSummarizerService {
     try {
       await llmService.clearKVCache(true);
 
-      const ctxLength = llmService.getPerformanceSettings().contextLength || 2048;
-      const inputBudgetTokens = Math.max(
-        256,
-        ctxLength - CHUNK_SUMMARY_TOKENS - INSTRUCTION_OVERHEAD_TOKENS - SAFETY_MARGIN_TOKENS,
-      );
+      // Size chunks dynamically off the ACTIVE backend's real context (local
+      // model setting / LiteRT / remote server), not a fixed number - so a big
+      // remote/flagship context one-shots a long transcript while a 2k on-device
+      // model stays conservative. Use a fraction of the window so there's always
+      // headroom for the output + instructions + safety (no fixed cap).
+      const ctx = resolveContextTokens();
+      const inputBudgetTokens = Math.max(512, Math.round(ctx.tokens * INPUT_CONTEXT_FRACTION));
       const chunkCharBudget = inputBudgetTokens * CHARS_PER_TOKEN;
-      // Map split is capped smaller than the full budget so each part prefills
-      // fast and streams sooner; reduce/combine still use the full chunkCharBudget.
-      const mapCharBudget = Math.min(chunkCharBudget, MAP_INPUT_TOKEN_TARGET * CHARS_PER_TOKEN);
 
-      const chunks = splitIntoChunks(text.trim(), mapCharBudget);
-      logger.log(`[TranscriptSummarizer] ${text.length} chars, ctx=${ctxLength}, mapBudget=${mapCharBudget} chars, chunks=${chunks.length}`);
+      const chunks = splitIntoChunks(text.trim(), chunkCharBudget);
+      logger.log(`[TranscriptSummarizer] ${text.length} chars, backend=${ctx.source} ctx=${ctx.tokens}, budget=${inputBudgetTokens}tok (${Math.round(INPUT_CONTEXT_FRACTION * 100)}%), chunks=${chunks.length}`);
 
       // Small enough to summarize in one pass.
       if (chunks.length <= 1) {
