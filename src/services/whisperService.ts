@@ -635,6 +635,11 @@ class WhisperService {
       },
     };
     if (language !== 'auto') transcribeOpts.language = language;
+    // Do NOT condition on previously-decoded text (whisper.cpp -mc 0). On noisy /
+    // ambient clips whisper otherwise falls into a repetition death-spiral,
+    // looping the same token or phrase; clearing the text context is the standard
+    // fix and the biggest lever against hallucinated repeats.
+    transcribeOpts.maxContext = 0;
     if (maxThreads > 0) transcribeOpts.maxThreads = maxThreads;
     if (nProcessors > 1) transcribeOpts.nProcessors = nProcessors;
     if (options?.offset && options.offset > 0) transcribeOpts.offset = Math.floor(options.offset);
