@@ -88,10 +88,16 @@ function isLiteRTActive(): boolean {
   );
 }
 
-/** Is a remote provider serving generation (no on-device native context)? */
+/**
+ * Is a remote provider available to serve summaries? Summaries PREFER remote
+ * whenever one is active, even if a local model is also loaded - offloading the
+ * generation off-device saves the phone's battery/RAM (chat generation keeps its
+ * own local-first policy; this only affects the summarizer). Deliberately does
+ * NOT check `llmService.isModelLoaded()`.
+ */
 function isRemoteActive(): boolean {
   const activeServerId = useRemoteServerStore.getState().activeServerId;
-  return !!activeServerId && providerRegistry.hasProvider(activeServerId) && !llmService.isModelLoaded();
+  return !!activeServerId && providerRegistry.hasProvider(activeServerId);
 }
 
 /**
@@ -102,14 +108,15 @@ function isRemoteActive(): boolean {
  * model's setting.
  */
 function resolveContextTokens(): { tokens: number; source: string } {
-  if (isLiteRTActive()) {
-    return { tokens: liteRTService.getContextTokens() || LITERT_DEFAULT_CONTEXT_TOKENS, source: 'litert' };
-  }
+  // Remote is preferred for summaries, so size chunks off its window first.
   if (isRemoteActive()) {
     const id = useRemoteServerStore.getState().activeServerId;
     const provider = id ? providerRegistry.getProvider(id) : undefined;
     const reported = provider?.capabilities?.maxContextLength;
     return { tokens: reported && reported > 0 ? reported : REMOTE_DEFAULT_CONTEXT_TOKENS, source: 'remote' };
+  }
+  if (isLiteRTActive()) {
+    return { tokens: liteRTService.getContextTokens() || LITERT_DEFAULT_CONTEXT_TOKENS, source: 'litert' };
   }
   return { tokens: llmService.getPerformanceSettings().contextLength || 2048, source: 'local' };
 }
@@ -132,19 +139,13 @@ async function generateSummaryText(
     { id: 'summarize-input', role: 'user', content: userText, timestamp: 0 },
   ];
 
-  // LiteRT: run on a throwaway, tools-free conversation so it never pollutes a
-  // real chat's KV/history (mirrors the LiteRT tool-selection pass).
-  if (isLiteRTActive()) {
-    await liteRTService.prepareConversation('__summarize__', systemPrompt, {
-      tools: [],
-      samplerConfig: { temperature: 0.3 },
-    });
-    return liteRTService.generateRaw(userText, undefined, { onToken });
-  }
-
-  // Remote provider: OpenAI-compatible streaming completion, tools off.
-  const activeServerId = useRemoteServerStore.getState().activeServerId;
-  if (activeServerId && providerRegistry.hasProvider(activeServerId) && !llmService.isModelLoaded()) {
+  // Remote provider (PREFERRED for summaries: offload off-device even when a
+  // local model is loaded). OpenAI-compatible streaming completion, tools off.
+  // If it fails BEFORE any token streams (e.g. the server left the LAN mid-use),
+  // fall through to on-device so a vanished server never turns into a hard error.
+  // A failure AFTER tokens have streamed is surfaced (we don't double-write).
+  if (isRemoteActive()) {
+    const activeServerId = useRemoteServerStore.getState().activeServerId as string;
     const provider = providerRegistry.getProvider(activeServerId);
     if (provider) {
       const { settings } = useAppStore.getState();
@@ -155,18 +156,37 @@ async function generateSummaryText(
         tools: [],
         enableThinking: false,
       };
-      return new Promise<string>((resolve, reject) => {
-        let content = '';
-        provider
-          .generate(messages, options, {
-            onToken: (t: string) => { content += t; onToken?.(t); },
-            onReasoning: () => { /* summaries ignore reasoning output */ },
-            onComplete: (result) => resolve(result.content || content),
-            onError: (e: Error) => reject(e),
-          })
-          .catch(reject);
-      });
+      let emittedAny = false;
+      try {
+        return await new Promise<string>((resolve, reject) => {
+          let content = '';
+          provider
+            .generate(messages, options, {
+              onToken: (t: string) => { content += t; emittedAny = true; onToken?.(t); },
+              onReasoning: () => { /* summaries ignore reasoning output */ },
+              onComplete: (result) => resolve(result.content || content),
+              onError: (e: Error) => reject(e),
+            })
+            .catch(reject);
+        });
+      } catch (e) {
+        if (emittedAny) throw e;
+        logger.warn(
+          `[TranscriptSummarizer] remote summary failed before streaming, falling back to on-device: ${String(e)}`,
+        );
+        // fall through to LiteRT / local
+      }
     }
+  }
+
+  // LiteRT: run on a throwaway, tools-free conversation so it never pollutes a
+  // real chat's KV/history (mirrors the LiteRT tool-selection pass).
+  if (isLiteRTActive()) {
+    await liteRTService.prepareConversation('__summarize__', systemPrompt, {
+      tools: [],
+      samplerConfig: { temperature: 0.3 },
+    });
+    return liteRTService.generateRaw(userText, undefined, { onToken });
   }
 
   // Local llama.rn (default). Grammar (GBNF) is applied here when the caller
