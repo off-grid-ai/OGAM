@@ -292,6 +292,7 @@ export const ChatScreen: React.FC = () => {
             if (pendingEjectRef.current) { pendingEjectRef.current = false; confirmEjectAll(); }
           }}
           labels={modelLabels}
+          remote={{ text: !!chat.activeModelInfo?.isRemote }}
           loadingState={{ isLoading: !!chat.isModelLoading, type: 'text' }}
           isEjecting={isEjecting}
           hasActiveModel={hasEjectableModel}

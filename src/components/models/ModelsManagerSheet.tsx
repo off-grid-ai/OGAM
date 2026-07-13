@@ -27,6 +27,9 @@ type Props = {
   /** Fired once the sheet has fully closed — used to open a picker safely after. */
   onClosed?: () => void;
   labels: Record<ModelRowType, string>;
+  /** Rows whose active selection lives on a REMOTE server (gateway) — shown with a cloud marker,
+   *  matching the chat header's remote indicator, so a remote model is never mistaken for local. */
+  remote?: Partial<Record<ModelRowType, boolean>>;
   loadingState: LoadingState;
   isEjecting: boolean;
   hasActiveModel: boolean;
@@ -40,7 +43,7 @@ type Props = {
  * type's picker.
  */
 export const ModelsManagerSheet: React.FC<Props> = ({
-  visible, onClose, onClosed, labels, loadingState, isEjecting, hasActiveModel, onOpenRow, onEject,
+  visible, onClose, onClosed, labels, remote, loadingState, isEjecting, hasActiveModel, onOpenRow, onEject,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -62,9 +65,14 @@ export const ModelsManagerSheet: React.FC<Props> = ({
             >
               <Icon name={row.icon} size={16} color={colors.textMuted} />
               <Text style={styles.label}>{row.label}</Text>
-              <Text style={[styles.value, isSet && styles.valueSet]} numberOfLines={1}>
-                {isLoading ? 'Loading…' : value}
-              </Text>
+              <View style={styles.valueGroup}>
+                <Text style={[styles.value, isSet && styles.valueSet]} numberOfLines={1}>
+                  {isLoading ? 'Loading…' : value}
+                </Text>
+                {!!remote?.[row.type] && isSet && (
+                  <Icon name="cloud" size={12} color={colors.primary} testID={`models-row-${row.type}-remote`} />
+                )}
+              </View>
               {isLoading
                 ? <ActivityIndicator size="small" color={colors.primary} />
                 : <Icon name="chevron-right" size={16} color={colors.textMuted} />}
@@ -104,7 +112,10 @@ const createStyles = (colors: ThemeColors) => ({
     backgroundColor: colors.surface,
   },
   label: { ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted, width: 64 },
-  value: { ...TYPOGRAPHY.body, color: colors.textMuted, flex: 1, textAlign: 'right' as const },
+  // Right-aligned value cluster: the name (shrinks/ellipsizes) with the remote cloud hugging its
+  // right edge at the minimum token gap (xs) — the marker reads as part of the name, not the row.
+  valueGroup: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'flex-end' as const, gap: SPACING.xs },
+  value: { ...TYPOGRAPHY.body, color: colors.textMuted, flexShrink: 1, textAlign: 'right' as const },
   valueSet: { color: colors.text },
   ejectButton: {
     flexDirection: 'row' as const,
