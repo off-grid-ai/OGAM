@@ -35,3 +35,5 @@ export type { LLMProvider, ProviderType, ProviderCapabilities, GenerationOptions
 export { fetchWithTimeout, createStreamingRequest, imageToBase64DataUrl, testEndpoint, isPrivateNetworkEndpoint } from './httpClient';
 // Remote Server Manager
 export { remoteServerManager } from './remoteServerManager';
+// Text-model auto-load selection (memory-aware pick when none is resident)
+export { selectTextModelToLoad, fitsBudget } from './selectTextModel';
