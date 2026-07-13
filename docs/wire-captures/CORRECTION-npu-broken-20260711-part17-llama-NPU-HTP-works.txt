@@ -1,6 +1,0 @@
-CORRECTION to part17: NPU/HTP LOADS but GENERATION IS BROKEN on SM8635.
-- Load trace real: layers on HTP0 (Hexagon), hexagon_opencl native lib, clean load.
-- BUT actual output = " ca.\n" (3 stream tokens) — garbage/near-empty, not a real answer.
-- User caught it ("it just responded with ca. nothing else"). I over-concluded "NPU works" from load trace alone.
-- VERDICT: NPU (Beta) loadable but NOT functional for generation on this device. Real bug (B22).
-Backend matrix: CPU works | GPU works (8s-timeout→retry→24/36) | NPU loads-but-broken-output.

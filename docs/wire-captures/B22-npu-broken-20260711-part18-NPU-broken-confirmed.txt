@@ -1,8 +1,0 @@
-B22 CONFIRMED (reproducible): NPU (Beta)/HTP loads but generation is BROKEN on SM8635 (qnn min).
-- Verified ON HTP: layers dev=HTP0, native lib rnllama_jni_..._hexagon_opencl, NO reload/fallback on resend.
-- Attempt 1 output: " ca.\n" (3 tokens, near-empty).
-- Attempt 2 (resend) output: 89 tokens of coherent-looking but PROMPT-UNRELATED gibberish
-  ("Here's the summary... What is the correct way to write 'A is B'?...") — nothing to do with the
-  actual prompt (capital of France / 47*89 / 30% of 400).
-- VERDICT: NPU loadable but NOT functional for generation. User confirmed on screen ("completely gibberish").
-- Contrast: CPU works, GPU works (8s-timeout→retry→24/36 layers).
