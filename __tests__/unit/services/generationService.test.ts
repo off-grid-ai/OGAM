@@ -513,6 +513,40 @@ describe('generationService', () => {
       // Should not throw
       await expect(generationService.stopGeneration()).resolves.toBe('');
     });
+
+    it('IGNORES a token the provider emits AFTER stopGeneration (abort guard is load-bearing)', async () => {
+      // Regression guard for the mid-stream-cancel race: a slow/native provider can
+      // fire one more onStream callback AFTER the user hit Stop. The abort guard must
+      // drop it — otherwise a post-cancel token corrupts the finalized partial. This
+      // drives the REAL service (only the LLM boundary is faked) and captures the real
+      // onStream so we can invoke it post-stop, rather than asserting a mock's return.
+      const convId = setupWithConversation();
+      setupWithActiveModel();
+
+      let capturedOnStream: ((t: string) => void) | undefined;
+      mockedLlmService.generateResponse.mockImplementation((async (
+        _messages: any,
+        onStream: any,
+      ) => {
+        capturedOnStream = onStream;
+        onStream?.('Partial');
+        await new Promise(() => {}); // never resolves — will be stopped
+      }) as any);
+
+      generationService.generateResponse(convId, [createMessage({ role: 'user', content: 'Hi' })]);
+      await new Promise<void>(resolve => setTimeout(resolve, 50));
+
+      const partial = await generationService.stopGeneration();
+      expect(partial).toBe('Partial');
+
+      // The provider emits one more token AFTER stop (the exact race).
+      capturedOnStream?.(' LEAKED');
+
+      // It must NOT be appended anywhere: streaming content stays cleared and the
+      // finalized partial is unchanged. Deleting the abort guard fails this.
+      expect(generationService.getState().streamingContent).toBe('');
+      expect(generationService.getState().isGenerating).toBe(false);
+    });
   });
 
   // ============================================================================

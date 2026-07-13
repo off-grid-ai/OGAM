@@ -40,14 +40,11 @@ export interface ResourceUsage {
 
 export type ModelChangeListener = (info: ActiveModelInfo) => void;
 
-// Memory safety thresholds — dynamic budget based on device total RAM.
-// iOS enforces per-process jetsam limits that are stricter than total RAM would suggest:
-//   ≤4 GB devices (iPhone XS/XR/11/SE2/SE3): ~2 GB limit → use 40% of RAM
-//   >4 GB devices: ~60% of RAM is safe
-export const getMemoryBudgetPercent = (totalMemoryGB: number): number =>
-  totalMemoryGB <= 4 ? 0.40 : 0.60;
-export const getMemoryWarningPercent = (totalMemoryGB: number): number =>
-  totalMemoryGB <= 4 ? 0.30 : 0.50;
+// The safe RAM fraction per device tier now lives in the single memory-budget
+// owner (src/services/memoryBudget.ts): modelBudgetFraction / modelMemoryBudgetMB,
+// so residency, the pre-load check, and the model lists all agree. The old flat
+// getMemoryBudgetPercent/getMemoryWarningPercent (60% for every device >4GB) were
+// removed — they wrongly treated a 12GB iPhone like a 6GB one.
 export const TEXT_MODEL_OVERHEAD_MULTIPLIER = 1.5; // KV cache, activations, etc.
 // Core ML is more efficient than ONNX runtime
 export const IMAGE_MODEL_OVERHEAD_MULTIPLIER = Platform.OS === 'ios' ? 1.5 : 1.8;

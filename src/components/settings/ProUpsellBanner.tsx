@@ -1,12 +1,13 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Linking } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedEntry } from '../AnimatedEntry';
 import { Button } from '../Button';
 import { useAppStore } from '../../stores';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
-import { SPACING, TYPOGRAPHY } from '../../constants';
+import { SPACING, TYPOGRAPHY, OFF_GRID_DESKTOP_URL } from '../../constants';
+import { withUtm } from '../../utils/utm';
 import { getPricingCopy } from '../../utils/proPricing';
 
 const FEATURE_ROWS = [
@@ -28,7 +29,9 @@ interface Props {
 export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const show = useAppStore((s) => !s.proBannerDismissed && !s.hasRegisteredPro);
+  // Never upsell a Pro user — isProActive covers keychain/dev-unlocked Pro too, which
+  // hasRegisteredPro alone misses.
+  const show = useAppStore((s) => !s.proBannerDismissed && !s.hasRegisteredPro && !s.isProActive);
   const dismiss = useAppStore((s) => s.setProBannerDismissed);
   const pricing = getPricingCopy();
 
@@ -69,6 +72,16 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
         </View>
 
         <Button title={pricing.cta} variant="primary" onPress={onGetPro} style={styles.cta} />
+
+        <TouchableOpacity
+          style={styles.desktopLink}
+          onPress={() => Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'pro-upsell')).catch(() => {})}
+          accessibilityRole="link"
+          accessibilityLabel="Get Off Grid AI Desktop"
+        >
+          <Icon name="monitor" size={14} color={colors.textMuted} />
+          <Text style={styles.desktopLinkText}>Off Grid AI Desktop is free for Mac. Get it.</Text>
+        </TouchableOpacity>
       </View>
     </AnimatedEntry>
   );
@@ -107,4 +120,19 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   label: { ...TYPOGRAPHY.label, color: colors.text, letterSpacing: 0.5 },
   cta: { margin: SPACING.lg, marginTop: SPACING.sm },
+  desktopLink: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.lg,
+    marginTop: -SPACING.xs,
+  },
+  desktopLinkText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textMuted,
+    flexShrink: 1,
+    textAlign: 'center' as const,
+  },
 });

@@ -94,6 +94,59 @@ describe('LiteRTService', () => {
       await liteRTService.sendMessage('test', { onToken: jest.fn(), onReasoning: jest.fn(), onComplete: jest.fn(), onError });
       expect(onError).toHaveBeenCalled();
     });
+
+    it('adopts the native-clamped maxNumTokens from the load result (F20)', async () => {
+      const isolatedLiteRTModule = {
+        // Requested 4096, but native clamped the context to 1024 to fit free RAM.
+        loadModel: jest.fn().mockResolvedValue({ backend: 'cpu', maxNumTokens: 1024 }),
+        resetConversation: jest.fn(), sendMessage: jest.fn(), stopGeneration: jest.fn(),
+        unloadModel: jest.fn(), getMemoryInfo: jest.fn(),
+      };
+      const isolatedEmitter = { addListener: jest.fn(() => ({ remove: jest.fn() })) };
+      jest.resetModules();
+      jest.doMock('react-native', () => ({
+        NativeModules: { LiteRTModule: isolatedLiteRTModule },
+        NativeEventEmitter: jest.fn(() => isolatedEmitter),
+        Platform: { OS: 'android', select: (s: Record<string, any>) => s.android ?? s.default ?? null },
+      }));
+      jest.doMock('../../../src/utils/logger', () => {
+        const log = jest.fn();
+        return { __esModule: true, default: { log, error: log, warn: log } };
+      });
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { liteRTService: svc } = require('../../../src/services/litert');
+
+      await svc.loadModel('/m.litertlm', 'cpu', { maxNumTokens: 4096 });
+
+      // The context-usage budget reflects the CLAMPED value, not the requested 4096 —
+      // so compaction + the usage bar are accurate.
+      expect(svc.getContextUsage().max).toBe(1024);
+    });
+
+    it('tolerates a bare-string load result from an older native build (backward-compatible)', async () => {
+      const isolatedLiteRTModule = {
+        loadModel: jest.fn().mockResolvedValue('gpu'), // old contract: backend string only
+        resetConversation: jest.fn(), sendMessage: jest.fn(), stopGeneration: jest.fn(),
+        unloadModel: jest.fn(), getMemoryInfo: jest.fn(),
+      };
+      const isolatedEmitter = { addListener: jest.fn(() => ({ remove: jest.fn() })) };
+      jest.resetModules();
+      jest.doMock('react-native', () => ({
+        NativeModules: { LiteRTModule: isolatedLiteRTModule },
+        NativeEventEmitter: jest.fn(() => isolatedEmitter),
+        Platform: { OS: 'android', select: (s: Record<string, any>) => s.android ?? s.default ?? null },
+      }));
+      jest.doMock('../../../src/utils/logger', () => {
+        const log = jest.fn();
+        return { __esModule: true, default: { log, error: log, warn: log } };
+      });
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { liteRTService: svc } = require('../../../src/services/litert');
+
+      await svc.loadModel('/m.litertlm', 'gpu', { maxNumTokens: 2048 });
+      expect(svc.getActiveBackend()).toBe('gpu');
+      expect(svc.getContextUsage().max).toBe(2048); // keeps the requested value
+    });
   });
 
   describe('sendMessage', () => {

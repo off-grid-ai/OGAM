@@ -34,8 +34,15 @@ export const ModelsScreen: React.FC = () => {
   const didAutoSelect = useRef(false);
   useFocusEffect(
     useCallback(() => {
-      const { initialTab, repairModelId } = route.params ?? {};
+      const { initialTab, repairModelId, initialSearchQuery } = route.params ?? {};
       if (initialTab) vm.setActiveTab(initialTab);
+      // Deep-link from the chat "get an accelerated model" banner: land on the Text
+      // tab with the HF search prefilled (the debounced search in useTextModels fires
+      // on the query change). Guarded so it seeds once per navigation.
+      if (initialSearchQuery && !didAutoSelect.current) {
+        vm.setActiveTab('text');
+        vm.setSearchQuery(initialSearchQuery);
+      }
       if (repairModelId && !didAutoSelect.current) {
         didAutoSelect.current = true;
         const match = RECOMMENDED_MODELS.find(m => m.id === repairModelId);

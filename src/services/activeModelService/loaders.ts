@@ -82,6 +82,9 @@ export interface TextLoadContext {
   store: ReturnType<typeof useAppStore.getState>;
   timeoutMs: number;
   loadedTextModelId: string | null;
+  /** User forced this load ("Load Anyway"/continue) — skip the conservative native
+   *  memory gate so the loader's own fallbacks try instead of a hard block. */
+  override?: boolean;
   onLoaded: (modelId: string) => void;
   onError: () => void;
   onFinally: () => void;
@@ -144,9 +147,14 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
 
     // Snapshot the settings that require a full engine reload so the pending-settings
     // banner appears if the user changes them while the model is loaded.
+    // Snapshot the RAW setting the banner compares against, NOT the normalized `maxTokens`
+    // (`settings.liteRTMaxTokens ?? 4096`): the banner checks `settings.liteRTMaxTokens
+    // !== loadedSettings.liteRTMaxTokens`, so if the setting is undefined here we'd store
+    // 4096 and it would never equal undefined — a false mismatch that pops the banner the
+    // instant a LiteRT model loads, with nothing actually changed.
     ctx.store.setLoadedSettings({
       liteRTBackend: ctx.store.settings.liteRTBackend,
-      liteRTMaxTokens: maxTokens,
+      liteRTMaxTokens: ctx.store.settings.liteRTMaxTokens,
       // Fields not used by LiteRT — set to current values so llama checks don't misfire
       contextLength: ctx.store.settings.contextLength,
       enableGpu: ctx.store.settings.enableGpu,
@@ -202,7 +210,7 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
 
     try {
       await Promise.race([
-        llmService.loadModel(ctx.model.filePath, mmProjPath),
+        llmService.loadModel(ctx.model.filePath, mmProjPath, { override: ctx.override }),
         timeoutPromise,
       ]);
     } finally {
@@ -254,6 +262,8 @@ export interface ImageLoadContext {
   imageThreads: number;
   needsThreadReload: boolean;
   cpuOnly: boolean;
+  /** iOS Core ML: prefer the GPU over the Neural Engine (chosen by RAM tier). */
+  preferGpu: boolean;
   store: ReturnType<typeof useAppStore.getState>;
   timeoutMs: number;
   loadedImageModelId: string | null;
@@ -289,6 +299,7 @@ export async function doLoadImageModel(ctx: ImageLoadContext): Promise<void> {
             backend: 'auto',
             cpuOnly: ctx.cpuOnly,
             attentionVariant: ctx.model.attentionVariant,
+            preferGpu: ctx.preferGpu,
           },
         ),
         timeoutPromise,

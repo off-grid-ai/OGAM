@@ -1,11 +1,11 @@
 /**
  * Off Grid AI Pro pricing copy, shared by every Pro surface so they stay in sync.
  *
- * It flips at the July 1 cutover with no app update needed: a one-time lifetime
- * deal before July 1, then the monthly plan after. `now` is injectable for tests.
+ * Two plans only: a yearly subscription and a one-time lifetime purchase. The price is
+ * a founder rate that only ever goes up as we grow, so the numbers are hardcoded to
+ * today's tier and bumped in a new release when a tier fills. The web pay page
+ * (getoffgridai.co/pay) is where checkout happens and holds the authoritative price.
  */
-export const MONTHLY_CUTOVER_UTC = Date.parse('2026-07-01T00:00:00Z');
-
 export interface ProPricingCopy {
   /** Small uppercase eyebrow label. */
   label: string;
@@ -21,23 +21,13 @@ export interface ProPricingCopy {
   sheetFooter: string;
 }
 
-export function getPricingCopy(now: number = Date.now()): ProPricingCopy {
-  if (now >= MONTHLY_CUTOVER_UTC) {
-    return {
-      label: 'FOUNDER RATE',
-      title: '$39/month',
-      subtitle: 'The pre-launch founder rate, locked in for early members. Cancel anytime.',
-      cta: 'Get Pro - $39/mo',
-      sheetSubheadline: 'Off Grid AI Pro, billed monthly at the founder rate.',
-      sheetFooter: 'Billed monthly. Cancel anytime.',
-    };
-  }
+export function getPricingCopy(): ProPricingCopy {
   return {
-    label: 'BEFORE JULY 1',
-    title: 'Lifetime, one payment',
-    subtitle: 'Pay once, keep Pro for life - and Off Grid AI Pro free, forever. On July 1 this switches to $39/month.',
+    label: 'FOUNDER RATE',
+    title: '$49/yr or $69 lifetime',
+    subtitle: "Lock in today's rate - it only goes up, never down. One license covers up to 5 devices, laptop and phone.",
     cta: 'Get Pro',
-    sheetSubheadline: 'Pay once and keep Pro for life - Off Grid AI Pro free, forever.',
-    sheetFooter: 'Closes July 1, then it is $39/month.',
+    sheetSubheadline: 'Off Grid AI Pro - $49 a year, or $69 once for life.',
+    sheetFooter: 'Founder rate, locked in when you join. Yearly renews; lifetime is a one-time payment.',
   };
 }

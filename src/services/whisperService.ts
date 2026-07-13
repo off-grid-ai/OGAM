@@ -3,13 +3,14 @@
    getting under 500 needs moving download/model-management into its own module,
    which touches ~11 call sites across core + pro. Deferred as a dedicated task -
    see docs/plans/ci-lint-test-progress.md section 4. */
-import { initWhisper, WhisperContext, RealtimeTranscribeEvent, AudioSessionIos } from 'whisper.rn';
+import { initWhisper, WhisperContext, RealtimeTranscribeEvent } from 'whisper.rn';
 import * as WhisperRn from 'whisper.rn';
 import { Platform, PermissionsAndroid } from 'react-native';
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
 import logger from '../utils/logger';
 import { WHISPER_MODELS } from './whisperModels';
+import { audioSessionManager } from './audioSessionManager';
 
 // Re-exported so existing consumers keep importing it from whisperService.
 export { WHISPER_MODELS };
@@ -181,11 +182,36 @@ class WhisperService {
     // Content-Length once the download starts.
     const totalBytes = model.size * 1024 * 1024;
     const modelKey = makeModelKey(`whisper-${modelId}`, fileName);
+    // Publish a QUEUED row to the CANONICAL store IMMEDIATELY, before the (possibly
+    // slot-limited) native start — the same pattern text/image use (startModelDownload).
+    // Previously the store entry was only added AFTER a concurrency slot opened, so a
+    // queued STT download had no canonical entry and the Transcription tab fell back to
+    // the whisper store's progress=0 and rendered "0%" instead of "Queued". Every card
+    // now reads this one store, so queued looks identical across Text/Image/STT.
+    const QUEUED_PLACEHOLDER_ID = `queued:${modelKey}`;
+    useDownloadStore.getState().add({
+      modelKey,
+      downloadId: QUEUED_PLACEHOLDER_ID,
+      modelId: `whisper-${modelId}`,
+      fileName,
+      quantization: '',
+      modelType: 'stt',
+      status: 'pending',
+      bytesDownloaded: 0,
+      totalBytes,
+      combinedTotalBytes: totalBytes,
+      progress: 0,
+      createdAt: Date.now(),
+    });
     const { downloadIdPromise, promise } = backgroundDownloadService.downloadFileTo({
       params: {
         url: model.url,
         fileName,
         modelId: `whisper-${modelId}`,
+        // Pass modelKey so the background queue's double-tap coalesce keys by the SAME
+        // id as the canonical store entry (queued:<modelKey> → real), not the modelId
+        // fallback — keeps queued dedup/cancel consistent across both layers.
+        modelKey,
         // Tag as speech-to-text so the Download Manager files an in-progress
         // download under Voice. Without it the entry defaulted to 'text' and
         // STT models showed up under Text (and never under the Voice filter).
@@ -212,24 +238,11 @@ class WhisperService {
     try {
       try {
         this.activeDownloadId = await downloadIdPromise;
-        // Register the in-flight download so the Download Manager shows it live
-        // (filed under Voice via modelType 'stt'). Progress is then driven by the
-        // global onAnyProgress listener in useDownloadListeners. Without this the
-        // row only appeared after switching screens re-scanned disk.
-        useDownloadStore.getState().add({
-          modelKey,
-          downloadId: this.activeDownloadId,
-          modelId: `whisper-${modelId}`,
-          fileName,
-          quantization: '',
-          modelType: 'stt',
-          status: 'pending',
-          bytesDownloaded: 0,
-          totalBytes,
-          combinedTotalBytes: totalBytes,
-          progress: 0,
-          createdAt: Date.now(),
-        });
+        // A slot opened and the native download started: reconcile the queued
+        // placeholder row to the REAL downloadId so progress events (routed by id)
+        // land on it. Progress is then driven by the global onAnyProgress listener
+        // in useDownloadListeners.
+        useDownloadStore.getState().retryEntry(modelKey, this.activeDownloadId);
         await promise;
       } catch (error) {
         if ((error as { cancelled?: boolean })?.cancelled) {
@@ -265,28 +278,6 @@ class WhisperService {
     logger.log(`[Whisper] Downloaded to ${destPath}`);
     return destPath;
   }
-  async downloadFromUrl(url: string, modelId: string, onProgress?: (progress: number) => void): Promise<string> {
-    await this.ensureModelsDirExists();
-    const destPath = this.getModelPath(modelId);
-    if (await RNFS.exists(destPath)) return destPath;
-    const download = RNFS.downloadFile({
-      fromUrl: url, toFile: destPath, progressDivider: 1,
-      progress: (res) => { onProgress?.(res.bytesWritten / res.contentLength); },
-    });
-    const result = await download.promise;
-    if (result.statusCode !== 200) {
-      await RNFS.unlink(destPath).catch(() => {});
-      throw new Error(`Download failed with status ${result.statusCode}`);
-    }
-    try {
-      await this.validateModelFile(destPath);
-    } catch (validationError) {
-      await RNFS.unlink(destPath).catch(() => {});
-      throw validationError;
-    }
-    return destPath;
-  }
-
   /** List every downloaded ggml whisper model on disk (for the Download Manager). */
   async listDownloadedModels(): Promise<Array<{ modelId: string; fileName: string; sizeBytes: number; filePath: string }>> {
     const dir = this.getModelsDir();
@@ -346,6 +337,29 @@ class WhisperService {
     }
 
     logger.log(`[Whisper] Model file validated: ${modelPath} (${Math.round(fileSize / (1024 * 1024))} MB)`);
+  }
+
+  /** Download a whisper model from an arbitrary URL (custom / non-catalogue models). */
+  async downloadFromUrl(url: string, modelId: string, onProgress?: (progress: number) => void): Promise<string> {
+    await this.ensureModelsDirExists();
+    const destPath = this.getModelPath(modelId);
+    if (await RNFS.exists(destPath)) return destPath;
+    const download = RNFS.downloadFile({
+      fromUrl: url, toFile: destPath, progressDivider: 1,
+      progress: (res) => { onProgress?.(res.bytesWritten / res.contentLength); },
+    });
+    const result = await download.promise;
+    if (result.statusCode !== 200) {
+      await RNFS.unlink(destPath).catch(() => {});
+      throw new Error(`Download failed with status ${result.statusCode}`);
+    }
+    try {
+      await this.validateModelFile(destPath);
+    } catch (validationError) {
+      await RNFS.unlink(destPath).catch(() => {});
+      throw validationError;
+    }
+    return destPath;
   }
 
   async loadModel(
@@ -458,16 +472,14 @@ class WhisperService {
       }
     }
     if (Platform.OS === 'ios') {
-      try {
-        // Configure audio session for recording - this also triggers the permission prompt
-        await AudioSessionIos.setCategory('PlayAndRecord', ['AllowBluetooth', 'MixWithOthers']);
-        await AudioSessionIos.setMode('Default');
-        await AudioSessionIos.setActive(true);
-        return true;
-      } catch (error) {
-        logger.error('[Whisper] iOS audio session/permission error:', error);
-        return false;
-      }
+      // Route iOS session setup through audioSessionManager — the SINGLE owner of
+      // the AVAudioSession — instead of calling AudioSessionIos directly. The old
+      // direct path set the category/active flag without updating the manager's
+      // `mode`, so a later TTS ensurePlayback() saw a stale mode and could pick the
+      // wrong session (silent TTS after realtime STT). ensureRecordingPermission
+      // applies the playAndRecord session (which also triggers the mic prompt) AND
+      // updates `mode`, returning false if activation threw (permission denied).
+      return audioSessionManager.ensureRecordingPermission();
     }
     return true;
   }
@@ -593,6 +605,13 @@ class WhisperService {
       logger.error('[WhisperService] Error stopping transcription:', error);
     } finally {
       this.isTranscribing = false;
+      // Hand the audio session back to the single owner. Realtime STT set mode='record'
+      // via ensureRecordingPermission on start; whisper.rn's audioSessionOnStopIos
+      // restores the NATIVE session but leaves this owner's `mode` stuck at 'record', so
+      // the next TTS ensurePlayback() early-returns and playback is silent after
+      // dictation. restorePlaybackAfterRecording resets mode + re-asserts playback
+      // (iOS only; Android is a no-op). Best-effort — never throw into the stop path.
+      audioSessionManager.restorePlaybackAfterRecording().catch(() => {});
     }
   }
 
@@ -736,7 +755,7 @@ class WhisperService {
         `[Whisper] transcribeFile DONE elapsed=${(totalMs / 1000).toFixed(1)}s ` +
           `outputLen=${result.length} preview="${result.slice(0, 100)}"`,
       );
-      return result;
+      return cleanTranscription(result);
     } catch (e) {
       const totalMs = Date.now() - tStart;
       logger.error(`[Whisper] transcribeFile FAILED after ${(totalMs / 1000).toFixed(1)}s`, e);
@@ -762,6 +781,27 @@ class WhisperService {
     try { await fn(); }
     catch (e) { logger.warn(`[Whisper] stopFileTranscription threw: ${String(e)}`); }
   }
+}
+
+/**
+ * Normalize a raw Whisper transcription: strip the non-speech markers Whisper
+ * emits for silence/noise — [BLANK_AUDIO], [ Silence ], [MUSIC], (inaudible),
+ * (speaking foreign language), etc. — and return '' when nothing but markers
+ * (or punctuation) remains. Without this, a silent/too-short clip returned the
+ * literal "[BLANK_AUDIO]" token, which then got SENT as the message text instead
+ * of being treated as "couldn't hear that". The single place this rule lives, so
+ * every path (file + realtime) treats no-speech identically.
+ */
+export function cleanTranscription(raw: string): string {
+  if (!raw) return '';
+  const stripped = raw
+    .replace(/\[[^\]]*\]/g, ' ') // [BLANK_AUDIO], [ Silence ], [MUSIC]
+    .replace(/\([^)]*\)/g, ' ')  // (silence), (speaking foreign language)
+    .replace(/\s+/g, ' ')
+    .trim();
+  // Only markers / punctuation left → no real speech.
+  if (!/[a-z0-9]/i.test(stripped)) return '';
+  return stripped;
 }
 
 export const whisperService = new WhisperService();

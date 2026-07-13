@@ -531,4 +531,57 @@ describe('remoteServerDiscovery integration', () => {
       expect(stored[0].capabilities.maxContextLength).toBe(8192);
     });
   });
+
+  // =========================================================================
+  // Off Grid AI Desktop gateway — modality `kind` filtering
+  // =========================================================================
+
+  describe('gateway kind filtering', () => {
+    it('keeps only chat/vision models and drops image, speech, and transcription', async () => {
+      addServer({ id: 'srv-gw', endpoint: 'http://192.168.1.44:7878' }); // NOSONAR
+
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/v1/models')) {
+          return Promise.resolve(
+            jsonResponse({
+              object: 'list',
+              data: [
+                { id: 'gemma-3', kind: 'chat' },
+                { id: 'qwen3-vl', kind: 'vision' },
+                { id: 'sdxl', kind: 'image' },
+                { id: 'kokoro', kind: 'speech' },
+                { id: 'whisper-base', kind: 'transcription' },
+              ],
+            }),
+          );
+        }
+        // Capability probes (e.g. /api/show) are not available here.
+        return Promise.resolve(jsonResponse({}, false, 404));
+      });
+
+      const models = await useRemoteServerStore.getState().discoverModels('srv-gw');
+
+      const ids = models.map((m) => m.id).sort((a, b) => a.localeCompare(b));
+      expect(ids).toEqual(['gemma-3', 'qwen3-vl']);
+      expect(models.some((m) => m.id === 'sdxl')).toBe(false);
+      expect(models.some((m) => m.id === 'kokoro')).toBe(false);
+      expect(models.some((m) => m.id === 'whisper-base')).toBe(false);
+    });
+
+    it('still lists models from servers that do not send kind (Ollama/LM Studio)', async () => {
+      addServer({ id: 'srv-plain', endpoint: 'http://192.168.1.20:1234' }); // NOSONAR
+
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/v1/models')) {
+          return Promise.resolve(
+            jsonResponse({ object: 'list', data: [{ id: 'llama-3.2' }] }),
+          );
+        }
+        return Promise.resolve(jsonResponse({}, false, 404));
+      });
+
+      const models = await useRemoteServerStore.getState().discoverModels('srv-plain');
+      expect(models.map((m) => m.id)).toEqual(['llama-3.2']);
+    });
+  });
 });

@@ -221,6 +221,9 @@ export async function createStreamingRequest(
             reject(err);
           }
         } else {
+          // Log the full server error body — a bare "HTTP 400" is undiagnosable; the body
+          // (e.g. llama.cpp's "failed to parse grammar") is what tells you what to fix.
+          logger.error(`[HttpClient] HTTP ${xhr.status} error body: ${xhr.responseText || '(empty)'}`);
           reject(new Error(`HTTP ${xhr.status}: ${xhr.responseText || 'Unknown error'}`));
         }
       }
@@ -329,6 +332,9 @@ export async function createNDJSONStreamingRequest(
           }
           resolve();
         } else {
+          // Log the full server error body — a bare "HTTP 400" is undiagnosable; the body
+          // (e.g. llama.cpp's "failed to parse grammar") is what tells you what to fix.
+          logger.error(`[HttpClient] HTTP ${xhr.status} error body: ${xhr.responseText || '(empty)'}`);
           reject(new Error(`HTTP ${xhr.status}: ${xhr.responseText || 'Unknown error'}`));
         }
       }

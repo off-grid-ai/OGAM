@@ -1,26 +1,106 @@
-# Fastlane metadata
+fastlane documentation
+----
 
-This folder follows the [Fastlane Supply](https://docs.fastlane.tools/actions/supply/) structure used by F-Droid and IzzyOnDroid for app metadata. Edit these files to update store listings without going through manual review.
+# Installation
 
-```
-fastlane/metadata/android/en-US/
-├── title.txt                    Short app name (max 50 chars)
-├── short_description.txt        One-liner (max 80 chars)
-├── full_description.txt         Long description (~4000 chars)
-├── changelogs/
-│   └── <versionCode>.txt        Release notes per version (max 500 chars)
-└── images/
-    ├── icon.png                 512×512 app icon (TODO: add)
-    ├── featureGraphic.png       1024×500 (TODO: add)
-    └── phoneScreenshots/
-        ├── 1.png                (TODO: add)
-        ├── 2.png
-        └── ...                  Up to 8 screenshots, 320–3840 px
+Make sure you have the latest version of the Xcode command line tools installed:
+
+```sh
+xcode-select --install
 ```
 
-## TODO
+For _fastlane_ installation instructions, see [Installing _fastlane_](https://docs.fastlane.tools/#installing-fastlane)
 
-- [ ] Add `images/icon.png` (512×512)
-- [ ] Add `images/featureGraphic.png` (1024×500)
-- [ ] Add 4-8 phone screenshots in `images/phoneScreenshots/`
-- [ ] Add localized variants (e.g. `metadata/android/de-DE/`) if/when translations land
+# Available Actions
+
+### bump
+
+```sh
+[bundle exec] fastlane bump
+```
+
+Bump version across package.json, Android build.gradle, and iOS project
+
+Usage: fastlane bump [type:patch|minor|major]
+
+----
+
+
+## Android
+
+### android build
+
+```sh
+[bundle exec] fastlane android build
+```
+
+Build a signed release AAB locally - NO upload. Artifact for testing the pipeline.
+
+### android beta
+
+```sh
+[bundle exec] fastlane android beta
+```
+
+Build a dev/beta AAB and upload to the Play Store internal track
+
+### android release
+
+```sh
+[bundle exec] fastlane android release
+```
+
+Build a production AAB and upload to the Play Store production track
+
+### android metadata
+
+```sh
+[bundle exec] fastlane android metadata
+```
+
+Push Android store listing text + images (no build)
+
+----
+
+
+## iOS
+
+### ios build
+
+```sh
+[bundle exec] fastlane ios build
+```
+
+Build a signed release IPA locally - NO upload. Artifact for testing the pipeline.
+
+### ios beta
+
+```sh
+[bundle exec] fastlane ios beta
+```
+
+Build and upload to TestFlight
+
+### ios release
+
+```sh
+[bundle exec] fastlane ios release
+```
+
+Build and upload to the App Store
+
+### ios metadata
+
+```sh
+[bundle exec] fastlane ios metadata
+```
+
+Push App Store listing metadata (no build)
+
+----
+
+This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.
+
+More information about _fastlane_ can be found on [fastlane.tools](https://fastlane.tools).
+
+The documentation of _fastlane_ can be found on [docs.fastlane.tools](https://docs.fastlane.tools).

@@ -1,7 +1,13 @@
 name: Build and Release iOS
 
 on:
-  workflow_dispatch:  # Disabled - manual trigger only for now
+  # Chain off the Android release: when "Build and Release Android" finishes on main,
+  # run the iOS release too, keeping version + cadence in lockstep across platforms.
+  workflow_run:
+    workflows: ['Build and Release Android']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch: {}   # manual fallback
 
 permissions:
   contents: write
@@ -9,6 +15,8 @@ permissions:
 jobs:
   release-ios:
     runs-on: macos-latest
+    # Only run if the Android release actually succeeded (skip on its failure/cancel).
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout code

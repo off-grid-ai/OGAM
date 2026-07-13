@@ -367,12 +367,11 @@ describe('runToolLoop — precise date/time context for calendar tools', () => {
     await runToolLoop(ctx);
 
     const sentMessages = mockedGenerateResponseWithTools.mock.calls[0][0];
-    // The STABLE date stays in the system prefix so the system+tools prefix
-    // remains cacheable turn-to-turn.
+    // The STABLE date stays in the system prefix (kept cacheable turn-to-turn)...
     const sysContent = sentMessages.find((m: Message) => m.role === 'system')!.content as string;
     expect(sysContent).toContain('The current date is');
-    // The EXACT time-of-day (needed to resolve "in half an hour") is appended to
-    // the latest user message instead, keeping the big prefix cacheable.
+    // ...while the EXACT time-of-day is appended to the latest user message instead,
+    // so the large system+tools prefix is not invalidated each turn (the TTFT fix).
     const userContent = [...sentMessages]
       .reverse()
       .find((m: Message) => m.role === 'user')!.content as string;

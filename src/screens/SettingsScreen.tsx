@@ -19,7 +19,7 @@ import { AnimatedEntry } from '../components/AnimatedEntry';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { MadeWithLove } from '../components/MadeWithLove';
 import { DebugLogsScreen } from '../components/DebugLogsScreen';
-import { getSettingsSections } from '../components/settings/sectionRegistry';
+import { useSettingsSections } from '../components/settings/sectionRegistry';
 import { ProUpsellBanner } from '../components/settings/ProUpsellBanner';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
@@ -47,6 +47,9 @@ export const SettingsScreen: React.FC = () => {
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  // Reactive: Pro sections registered at runtime (license-key activation re-runs
+  // loadProFeatures) show up live without an app restart.
+  const settingsSections = useSettingsSections();
   const setOnboardingComplete = useAppStore((s) => s.setOnboardingComplete);
   const themeMode = useAppStore((s) => s.themeMode);
   const setThemeMode = useAppStore((s) => s.setThemeMode);
@@ -85,7 +88,7 @@ export const SettingsScreen: React.FC = () => {
       ? `Device: ${deviceInfo.deviceModel} (${deviceInfo.systemName} ${deviceInfo.systemVersion})`
       : 'Device: Unknown';
 
-    const subject = encodeURIComponent(`[Feedback] Off Grid v${packageJson.version}`);
+    const subject = encodeURIComponent(`[Feedback] Off Grid AI v${packageJson.version}`);
     const body = encodeURIComponent(
       `Hi,\n\n[Describe your feedback or issue here]\n\n` +
       `---\n` +
@@ -185,7 +188,7 @@ export const SettingsScreen: React.FC = () => {
           <View style={styles.navSection}>
             {[
               { icon: 'sliders', title: 'Model Settings', desc: 'System prompt, generation, and performance', screen: 'ModelSettings' as const },
-              { icon: 'wifi', title: 'Remote Servers', desc: 'Connect to Ollama, LM Studio, and more', screen: 'RemoteServers' as const },
+              { icon: 'wifi', title: 'Remote Servers', desc: 'Connect to Off Grid AI Desktop, Ollama, LM Studio, and more', screen: 'RemoteServers' as const },
             //  { icon: 'search', title: 'Web Search', desc: 'Configure search API key for reliable results', screen: 'WebSearchSettings' as const },
               { icon: 'lock', title: 'Security', desc: 'Passphrase and app lock', screen: 'SecuritySettings' as const },
               { icon: 'smartphone', title: 'Device Information', desc: 'Hardware and compatibility', screen: 'DeviceInfo' as const },
@@ -224,7 +227,7 @@ export const SettingsScreen: React.FC = () => {
             </View>
             <View style={styles.proCardText}>
               <View style={styles.proTitleRow}>
-                <Text style={styles.proNavTitle}>Off Grid PRO</Text>
+                <Text style={styles.proNavTitle}>Off Grid AI PRO</Text>
                 <View style={styles.proBadge}>
                   <Text style={styles.proBadgeText}>PRO</Text>
                 </View>
@@ -264,7 +267,7 @@ export const SettingsScreen: React.FC = () => {
               </View>
               <View style={styles.navItemContent}>
                 <Text style={styles.navItemTitle}>Share on X</Text>
-                <Text style={styles.navItemDesc}>Tell others about Off Grid</Text>
+                <Text style={styles.navItemDesc}>Tell others about Off Grid AI</Text>
               </View>
               <Icon name="external-link" size={14} color={colors.textMuted} />
             </TouchableOpacity>
@@ -302,7 +305,7 @@ export const SettingsScreen: React.FC = () => {
         </AnimatedEntry>
 
         {/* Pro feature sections registered at runtime by @offgrid/pro */}
-        {getSettingsSections().map((Section, i) => <Section key={Section.displayName ?? String(i)} />)}
+        {settingsSections.map((Section, i) => <Section key={Section.displayName ?? String(i)} />)}
 
         {/* Dev-only tooling — stripped from release builds */}
         {__DEV__ && (

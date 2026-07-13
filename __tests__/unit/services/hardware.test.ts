@@ -1178,4 +1178,31 @@ describe('HardwareService', () => {
       warnSpy.mockRestore();
     });
   });
+
+  // ========================================================================
+  // getAccelerationCapability — composes NPU (HTP) + GPU (OpenCL) into one source
+  // ========================================================================
+  describe('getAccelerationCapability', () => {
+    const origOS = Platform.OS;
+    afterEach(() => { Object.defineProperty(Platform, 'OS', { value: origOS, configurable: true }); });
+
+    it('reports NPU + GPU from the SoC and OpenCL probes on Android', async () => {
+      Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+      jest.spyOn(hardwareService, 'getSoCInfo').mockResolvedValue({ vendor: 'qualcomm', hasNPU: true } as any);
+      jest.spyOn(hardwareService, 'getOpenCLCapability').mockResolvedValue({ supported: true });
+      expect(await hardwareService.getAccelerationCapability()).toEqual({ hasNpu: true, hasGpu: true });
+    });
+
+    it('has no acceleration on a device with neither', async () => {
+      Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+      jest.spyOn(hardwareService, 'getSoCInfo').mockResolvedValue({ vendor: 'other', hasNPU: false } as any);
+      jest.spyOn(hardwareService, 'getOpenCLCapability').mockResolvedValue({ supported: false, reason: 'no_compatible_gpu' });
+      expect(await hardwareService.getAccelerationCapability()).toEqual({ hasNpu: false, hasGpu: false });
+    });
+
+    it('reports nothing on iOS (llama.rn HTP/OpenCL are Android-only)', async () => {
+      Object.defineProperty(Platform, 'OS', { value: 'ios', configurable: true });
+      expect(await hardwareService.getAccelerationCapability()).toEqual({ hasNpu: false, hasGpu: false });
+    });
+  });
 });

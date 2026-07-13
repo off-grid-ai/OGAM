@@ -49,6 +49,7 @@ jest.mock('../../../src/services', () => ({
   hardwareService: {
     getTotalMemoryGB: jest.fn(() => 8.0),
     getDeviceTier: jest.fn(() => 'high'),
+    getProcessMemory: jest.fn(() => Promise.resolve({ availableMB: 5530, footprintMB: 660, limitMB: 6190 })),
   },
 }));
 

@@ -28,7 +28,7 @@ export const SharePromptSheet: React.FC<SharePromptSheetProps> = ({ visible, onC
     <AppSheet visible={visible} onClose={onClose} enableDynamicSizing title="Support Open-Source AI">
       <View style={styles.content}>
         <Text style={styles.message}>
-          Off Grid is completely free, open-source, and private — your data never leaves your device. Help grow the movement for accessible, private AI by spreading the word.
+          Off Grid AI is completely free, open-source, and private - your data never leaves your device. Help grow the movement for accessible, private AI by spreading the word.
         </Text>
 
         <TouchableOpacity style={styles.button} onPress={() => handleEngage(GITHUB_URL)}>

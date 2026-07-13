@@ -4,7 +4,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../../../components/AppSheet';
 import { consumePendingSpotlight } from '../../../components/onboarding/spotlightState';
 import { MODEL_PICKER_STEP_INDEX } from '../../../components/onboarding/spotlightConfig';
-import { Button } from '../../../components';
+import { Button, ModelRow } from '../../../components';
 import { useTheme, useThemedStyles } from '../../../theme';
 import { createStyles } from '../styles';
 import { hardwareService, ResourceUsage } from '../../../services';
@@ -63,22 +63,19 @@ const ImageTabContent: React.FC<ImageTabProps> = ({ downloadedImageModels, activ
         const estimatedMemoryGB = (model.size * 1.8) / (1024 * 1024 * 1024);
         const memoryFits = memoryInfo ? estimatedMemoryGB < memoryInfo.memoryAvailable / (1024 * 1024 * 1024) - 1.5 : true;
         return (
-          <TouchableOpacity
+          <ModelRow
             key={model.id}
             testID="model-item"
-            style={[styles.pickerItem, activeImageModelId === model.id && styles.pickerItemActive, !memoryFits && styles.pickerItemWarning]}
+            name={model.name}
+            size={hardwareService.formatBytes(model.size)}
+            quant={model.style || 'Image'}
+            ramHint={`~${estimatedMemoryGB.toFixed(1)} GB RAM${memoryFits ? '' : ' (may not fit)'}`}
+            isActive={activeImageModelId === model.id}
+            isLoaded={activeImageModelId === model.id}
+            variant="image"
             onPress={() => onSelectImageModel(model)}
             disabled={loadingState.isLoading}
-          >
-            <View style={styles.pickerItemInfo}>
-              <Text style={styles.pickerItemName}>{model.name}</Text>
-              <Text style={styles.pickerItemMeta}>{model.style || 'Image'} · {hardwareService.formatBytes(model.size)}</Text>
-              <Text style={[styles.pickerItemMemory, !memoryFits && styles.pickerItemMemoryWarning]}>
-                ~{estimatedMemoryGB.toFixed(1)} GB RAM {!memoryFits && '(may not fit)'}
-              </Text>
-            </View>
-            {activeImageModelId === model.id && <Icon name="check" size={18} color={colors.text} />}
-          </TouchableOpacity>
+          />
         );
       })}
     </>
@@ -207,27 +204,18 @@ export const ModelPickerSheet: React.FC<Props> = ({
                         : true;
                       const isHighlighted = idx === 0 && highlightFirst;
                       const modelItem = (
-                        <TouchableOpacity
+                        <ModelRow
                           testID="model-item"
-                          style={[styles.pickerItem, activeModelId === model.id && styles.pickerItemActive, !memoryFits && styles.pickerItemWarning]}
+                          name={model.name}
+                          size={hardwareService.formatModelSize(model)}
+                          quant={model.quantization}
+                          isVision={model.engine === 'llama' && model.isVisionModel}
+                          ramHint={`~${estimatedMemoryGB.toFixed(1)} GB RAM${memoryFits ? '' : ' (may not fit)'}`}
+                          isActive={activeModelId === model.id}
+                          isLoaded={activeModelId === model.id}
                           onPress={() => onSelectTextModel(model)}
                           disabled={loadingState.isLoading}
-                        >
-                          <View style={styles.pickerItemInfo}>
-                            <Text style={styles.pickerItemName}>
-                              {model.name}{' '}
-                              {model.engine === 'llama' && model.isVisionModel && <Icon name="eye" size={14} color={colors.info} />}
-                            </Text>
-                            <Text style={styles.pickerItemMeta}>
-                              {model.quantization} · {hardwareService.formatModelSize(model)}
-                              {model.engine === 'llama' && model.isVisionModel && ' (Vision)'}
-                            </Text>
-                            <Text style={[styles.pickerItemMemory, !memoryFits && styles.pickerItemMemoryWarning]}>
-                              ~{estimatedMemoryGB.toFixed(1)} GB RAM {!memoryFits && '(may not fit)'}
-                            </Text>
-                          </View>
-                          {activeModelId === model.id && <Icon name="check" size={18} color={colors.text} />}
-                        </TouchableOpacity>
+                        />
                       );
                       if (isHighlighted) {
                         return (

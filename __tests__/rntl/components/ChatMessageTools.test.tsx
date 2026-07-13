@@ -11,6 +11,7 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { ChatMessage } from '../../../src/components/ChatMessage';
+import { useAccordionStore } from '../../../src/stores';
 import { createMessage } from '../../utils/factories';
 import type { Message } from '../../../src/types';
 
@@ -31,6 +32,10 @@ function renderToolResult(toolName: string | undefined, content: string, extra: 
 describe('ChatMessage — Tool message rendering', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Accordion expand-state now lives in a shared store keyed by stable identity
+    // (so it survives the streaming→finalized remount). Reset it between tests so
+    // one test's expansion doesn't leak into the next.
+    useAccordionStore.setState({ expanded: {} });
   });
 
   // ==========================================================================

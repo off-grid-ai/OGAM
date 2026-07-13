@@ -91,10 +91,22 @@ export async function readProFromKeychain(): Promise<boolean> {
   return isProActive(await readLicense());
 }
 
-export type ProTier = 'lifetime' | 'monthly';
+export type ProTier = 'lifetime' | 'yearly';
+
+/**
+ * Single source of truth for what each tier MEANS, as data. `label` is the display
+ * noun; `renews` says whether it recurs (drives both the status line wording and
+ * whether a "Manage subscription" affordance applies). Consumers render from these
+ * flags instead of branching on the concrete tier — add a tier here, touch no caller.
+ */
+export const PRO_TIER_META: Record<ProTier, { label: string; renews: boolean }> = {
+  lifetime: { label: 'Lifetime', renews: false },
+  yearly: { label: 'Yearly', renews: true },
+};
+
 export interface ProLicenseInfo {
   isPro: boolean;
-  tier: ProTier | null; // lifetime (no expiry) vs monthly (has expiry); null when not Pro
+  tier: ProTier | null; // lifetime (no expiry) vs yearly (has expiry); null when not Pro
   expiry: string | null;
   verifiedAt: number;
 }
@@ -105,7 +117,7 @@ export async function getProLicenseInfo(): Promise<ProLicenseInfo> {
   const isPro = isProActive(lic);
   return {
     isPro,
-    tier: !isPro ? null : lic.expiry ? 'monthly' : 'lifetime',
+    tier: !isPro ? null : lic.expiry ? 'yearly' : 'lifetime',
     expiry: lic.expiry,
     verifiedAt: lic.verifiedAt,
   };

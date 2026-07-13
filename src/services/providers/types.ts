@@ -18,6 +18,14 @@ export interface ProviderCapabilities {
   supportsToolCalling: boolean;
   /** Supports extended thinking/reasoning */
   supportsThinking: boolean;
+  /**
+   * Whether the server honors `chat_template_kwargs.enable_thinking` to toggle
+   * reasoning per request. This is a TRANSPORT capability discovered from the
+   * server (llama.cpp /props template exposes the switch; LM Studio confirmed it
+   * via probe), not something to infer from the endpoint — so the request builder
+   * gates on this flag instead of sniffing the port.
+   */
+  acceptsThinkingKwarg?: boolean;
   /** Maximum context window length (if known) */
   maxContextLength?: number;
   /** Provider name for display */

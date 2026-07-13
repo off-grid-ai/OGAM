@@ -3,9 +3,7 @@ import { Platform } from 'react-native';
 import { useAppStore } from '../stores';
 import { CacheType, INFERENCE_BACKENDS } from '../types';
 import { hardwareService } from '../services/hardware';
-
-/** Feature flag: Set to true to enable HTP/Hexagon NPU support. Currently disabled. */
-const HTP_ENABLED = false;
+import { backendForcesF16Cache } from '../services/llmHelpers';
 
 export const CACHE_TYPE_DESCRIPTIONS: Record<CacheType, string> = {
   f16: 'Full precision — best quality, highest memory usage',
@@ -27,10 +25,9 @@ export function useTextGenerationAdvanced() {
   const isGpuEnabled = (settings?.inferenceBackend ?? defaultBackend) !== INFERENCE_BACKENDS.CPU;
   const isAndroid = Platform.OS === 'android';
   const selectedBackend = settings?.inferenceBackend ?? INFERENCE_BACKENDS.CPU;
-  const gpuForcesF16 =
-    selectedBackend === INFERENCE_BACKENDS.OPENCL ||
-    (HTP_ENABLED && selectedBackend === INFERENCE_BACKENDS.HTP);
-  // OpenCL and HTP force f16 in the native loader, so lock the UI to match.
+  // OpenCL and HTP force f16 in the native loader, so lock the UI to match — single
+  // source in llmHelpers shared with the loader and the generation-details recorder.
+  const gpuForcesF16 = backendForcesF16Cache(selectedBackend);
   const cacheDisabled = gpuForcesF16;
   const displayCacheType = cacheDisabled ? 'f16' : currentCacheType;
   const [resolvedThreadCount, setResolvedThreadCount] = useState<number | null>(null);

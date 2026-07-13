@@ -2,6 +2,9 @@ import { Dispatch, SetStateAction } from 'react';
 import { showAlert, AlertState } from '../../components';
 import { Message } from '../../types';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
+import logger from '../../utils/logger';
+import { modelResidencyManager } from '../../services/modelResidency';
+import { hardwareService } from '../../services/hardware';
 import {
   regenerateResponseFn, executeDeleteConversationFn, handleImageGenerationFn,
 } from './useChatGenerationActions';
@@ -20,17 +23,30 @@ type RetryParams = {
 export async function handleRetryMessageFn(
   message: Message, genDeps: GenerationDeps, p: RetryParams,
 ): Promise<void> {
-  if (!p.activeConversationId || !p.hasActiveModel) return;
+  const msgs = p.activeConversation?.messages || [];
+  // Memory breakdown at the crash-prone moment: the JetsamEvent shows the app
+  // hitting the ~2GB per-process limit, but not WHAT's resident. Dump it so we see
+  // whether an un-evicted model (image?) or a leak is eating the budget.
+  try {
+    const residents = modelResidencyManager.getResidents().map(r => `${r.type}:${r.sizeMB}MB`).join(',');
+    logger.log(`[MEM-SM] resend: residents=[${residents}] availMB=${Math.round(hardwareService.getAvailableMemoryGB() * 1024)} totalMB=${Math.round(hardwareService.getTotalMemoryGB() * 1024)}`);
+  } catch { /* diagnostics only */ }
+  logger.log(`[RESEND-SM] retry msg role=${message.role} id=${message.id} hasActiveModel=${p.hasActiveModel} conv=${p.activeConversationId} totalMsgs=${msgs.length}`);
+  // No model loaded (e.g. user ejected all models): tell them, don't silently
+  // no-op. Mirrors the send path's "No Model Selected" alert (handleSendFn).
+  if (!p.hasActiveModel) { logger.log('[RESEND-SM] retry BAIL: no active model'); genDeps.setAlertState(showAlert('No Model Selected', 'Please select a model first.')); return; }
+  if (!p.activeConversationId) { logger.log('[RESEND-SM] retry BAIL: no conv'); return; }
   // Stop any in-flight TTS before deleting messages (no-op without pro audio)
   callHook(HOOKS.audioStop);
-  const msgs = p.activeConversation?.messages || [];
   if (message.role === 'user') {
     const idx = msgs.findIndex((m: Message) => m.id === message.id);
+    logger.log(`[RESEND-SM] retry user msg idx=${idx} willDelete=${idx !== -1 && idx < msgs.length - 1}`);
     if (idx !== -1 && idx < msgs.length - 1) p.deleteMessagesAfter(p.activeConversationId, message.id);
     await regenerateResponseFn(genDeps, { setDebugInfo: p.setDebugInfo, userMessage: message });
   } else {
     const idx = msgs.findIndex((m: Message) => m.id === message.id);
     const prev = idx > 0 ? msgs.slice(0, idx).reverse().find((m: Message) => m.role === 'user') : null;
+    logger.log(`[RESEND-SM] retry assistant msg idx=${idx} prevUser=${prev?.id ?? 'none'}`);
     if (prev) {
       p.deleteMessagesAfter(p.activeConversationId, prev.id);
       await regenerateResponseFn(genDeps, { setDebugInfo: p.setDebugInfo, userMessage: prev });
@@ -49,7 +65,9 @@ type EditParams = {
 };
 
 export async function handleEditMessageFn(genDeps: GenerationDeps, p: EditParams): Promise<void> {
-  if (!p.activeConversationId || !p.hasActiveModel) return;
+  // Same as retry: no model loaded → alert instead of a silent no-op.
+  if (!p.hasActiveModel) { genDeps.setAlertState(showAlert('No Model Selected', 'Please select a model first.')); return; }
+  if (!p.activeConversationId) return;
   p.updateMessageContent(p.activeConversationId, p.message.id, p.newContent);
   p.deleteMessagesAfter(p.activeConversationId, p.message.id);
   await regenerateResponseFn(genDeps, { setDebugInfo: p.setDebugInfo, userMessage: { ...p.message, content: p.newContent } });

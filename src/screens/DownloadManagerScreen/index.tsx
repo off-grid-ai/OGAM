@@ -9,6 +9,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
 import { ActiveDownloadCard, CompletedDownloadCard, formatBytes, type DownloadItem } from './items';
 import { useDownloadManager } from './useDownloadManager';
+import { isQueuedStatus, type DownloadStatus } from '../../stores/downloadStore';
 
 type FilterType = 'all' | 'text' | 'vision' | 'image' | 'voice';
 
@@ -50,6 +51,10 @@ export const DownloadManagerScreen: React.FC = () => {
 
   const filteredActive = activeItems.filter(item => matchesFilter(item, activeFilter));
   const filteredCompleted = completedItems.filter(item => matchesFilter(item, activeFilter));
+  // Split "active" into truly-downloading vs queued via the SAME classifier the per-row
+  // clock uses, so the header count can't claim a queued item is actively downloading.
+  const activeQueuedCount = filteredActive.filter(i => isQueuedStatus(i.status as DownloadStatus)).length;
+  const activeDownloadingCount = filteredActive.length - activeQueuedCount;
 
   const renderHeader = useCallback(() => (
     <ScrollView
@@ -93,8 +98,13 @@ export const DownloadManagerScreen: React.FC = () => {
                   <Icon name="download" size={16} color={colors.primary} />
                   <Text style={styles.sectionTitle}>Active Downloads</Text>
                   <View style={styles.countBadge}>
-                    <Text style={styles.countText}>{filteredActive.length}</Text>
+                    <Text style={styles.countText}>{activeDownloadingCount}</Text>
                   </View>
+                  {activeQueuedCount > 0 && (
+                    <Text style={[styles.countText, { color: colors.textSecondary }]}>
+                      {activeQueuedCount} queued
+                    </Text>
+                  )}
                 </View>
                 {filteredActive.map(item => (
                   <View key={`active-${item.modelId}-${item.fileName}`}>

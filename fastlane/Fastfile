@@ -1,0 +1,380 @@
+# Fastlane Fastfile — Off Grid mobile release automation
+# Docs: https://docs.fastlane.tools
+#
+# Lanes:
+#   fastlane bump                 bump version (package.json + android + ios), no commit
+#   fastlane android beta         build dev AAB, upload to Play internal track
+#   fastlane android release      build production AAB, upload to Play production
+#   fastlane android metadata     push store listing text/images (Supply)
+#   fastlane ios beta             build, upload to TestFlight
+#   fastlane ios release          build, upload to App Store
+#   fastlane ios metadata         push App Store listing (Deliver)
+#
+# Credentials are read from ENV so nothing secret is committed. See fastlane/.env.example.
+# Lanes that need credentials check for them and fail with a clear message rather than
+# half-running.
+
+require "json"
+require "fileutils"
+
+# Off Grid ships no telemetry. Disable fastlane's anonymous usage analytics too.
+opt_out_usage
+
+REPO_ROOT = File.expand_path("..", __dir__)
+
+# ── helpers ────────────────────────────────────────────────────────────────
+
+def app_version
+  pkg = JSON.parse(File.read(File.join(REPO_ROOT, "package.json")))
+  pkg["version"]
+end
+
+# versionCode strategy mirrors scripts/release.sh: a unix timestamp, always increasing.
+def generate_version_code
+  Time.now.to_i.to_s
+end
+
+def require_env(*keys)
+  missing = keys.reject { |k| ENV[k] && !ENV[k].empty? }
+  return if missing.empty?
+  UI.user_error!("Missing required env var(s): #{missing.join(', ')}. See fastlane/.env.example")
+end
+
+# Temp files that hold decoded secrets (P12 / profile / ASC .p8). Registered here and
+# shredded on process exit so credentials don't linger in the tmpdir after the lane runs
+# (matters most on shared/CI runners).
+TMP_SECRETS = []
+at_exit do
+  TMP_SECRETS.each { |p| File.delete(p) if p && File.exist?(p) }
+rescue StandardError
+  nil
+end
+
+# Register a secret temp file for exit-time cleanup, with owner-only permissions.
+def track_tmp_secret(path)
+  File.chmod(0o600, path) if File.exist?(path)
+  TMP_SECRETS << path
+  path
+end
+
+# Decode a base64 secret to a temp file and return its path (for P12 / profile / keys).
+def write_tmp_b64(b64, filename)
+  require "base64"
+  require "tmpdir"
+  path = File.join(Dir.tmpdir, filename)
+  File.binwrite(path, Base64.decode64(b64))
+  track_tmp_secret(path)
+end
+
+# Apple Developer Team ID (from ios/ExportOptions.plist). Override via APPLE_TEAM_ID.
+APPLE_TEAM_ID = ENV["APPLE_TEAM_ID"] || "84V6KCAC49"
+
+# Resolve App Store Connect auth for TestFlight/App Store uploads. Prefers the raw .p8 +
+# key id + issuer (the ASC_API_KEY_P8 / ASC_KEY_ID / ASC_ISSUER_ID that the repo already
+# stores as GitHub secrets and that the local .p8 in hand provides); falls back to a
+# pre-built key JSON at APP_STORE_CONNECT_API_KEY_PATH for local convenience. Returns a key
+# hash to pass as `api_key:`, or nil when only the JSON-path form is available.
+# The .p8 secret may be stored raw (PEM) or base64 — auto-detect so either works.
+def asc_api_key
+  if ENV["ASC_KEY_ID"] && ENV["ASC_ISSUER_ID"] && ENV["ASC_API_KEY_P8"] &&
+     !ENV["ASC_KEY_ID"].empty? && !ENV["ASC_ISSUER_ID"].empty? && !ENV["ASC_API_KEY_P8"].empty?
+    key_content = ENV["ASC_API_KEY_P8"]
+    is_b64 = !key_content.include?("BEGIN PRIVATE KEY")
+    return app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: key_content,
+      is_key_content_base64: is_b64,
+      in_house: false
+    )
+  end
+  nil
+end
+
+# Build the kwargs for an upload action: `api_key:` when the ASC_* secrets are present,
+# else `api_key_path:` (the pre-built JSON). One of the two must be set.
+def asc_auth_kwargs
+  key = asc_api_key
+  return { api_key: key } if key
+  path = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+  UI.user_error!(
+    "No App Store Connect auth. Set ASC_KEY_ID + ASC_ISSUER_ID + ASC_API_KEY_P8 (the repo's " \
+    "GitHub secrets / your local .p8), or APP_STORE_CONNECT_API_KEY_PATH (a key JSON)."
+  ) if path.nil? || path.empty?
+  { api_key_path: path }
+end
+
+# ── shared ─────────────────────────────────────────────────────────────────
+
+default_platform(:android)
+
+desc "Bump version across package.json, Android build.gradle, and iOS project"
+desc "Usage: fastlane bump [type:patch|minor|major]"
+lane :bump do |options|
+  type = options[:type] || "patch"
+  Dir.chdir(REPO_ROOT) do
+    sh("npm version #{type} --no-git-tag-version")
+  end
+  version = app_version
+  code = generate_version_code
+
+  # Android
+  gradle = File.join(REPO_ROOT, "android/app/build.gradle")
+  text = File.read(gradle)
+  text = text.sub(/versionCode .*/, "versionCode #{code}")
+  text = text.sub(/versionName .*/, "versionName \"#{version}\"")
+  File.write(gradle, text)
+
+  # iOS
+  pbxproj = File.join(REPO_ROOT, "ios/OffgridMobile.xcodeproj/project.pbxproj")
+  ios = File.read(pbxproj)
+  ios = ios.gsub(/MARKETING_VERSION = .*/, "MARKETING_VERSION = #{version};")
+  ios = ios.gsub(/CURRENT_PROJECT_VERSION = .*/, "CURRENT_PROJECT_VERSION = #{code};")
+  File.write(pbxproj, ios)
+
+  UI.success("Bumped to #{version} (versionCode #{code})")
+  version
+end
+
+# ── Android ────────────────────────────────────────────────────────────────
+
+platform :android do
+  desc "Build a signed release AAB locally — NO upload. Artifact for testing the pipeline."
+  lane :build do
+    gradle(task: "bundle", build_type: "Release", project_dir: "android/")
+    aab = File.join(REPO_ROOT, "android/app/build/outputs/bundle/release/app-release.aab")
+    UI.user_error!("AAB not found at #{aab}") unless File.exist?(aab)
+    UI.success("Built signed release AAB (no upload): #{aab}")
+  end
+
+  # Upload an ALREADY-BUILT AAB to the Play internal track. Single source of truth for the
+  # Play upload — both `beta` (build+upload) and `upload_beta` (publish a pre-built artifact,
+  # used by scripts/uat.sh's atomic build-all-then-publish flow) call this. No build here.
+  private_lane :upload_android_internal do
+    require_env("PLAY_STORE_JSON_KEY_PATH")
+    aab = File.join(REPO_ROOT, "android/app/build/outputs/bundle/release/app-release.aab")
+    UI.user_error!("AAB not found at #{aab} — build it first (fastlane android build).") unless File.exist?(aab)
+    # Release notes: scripts/uat.sh writes the changelog to UAT_CHANGELOG_PATH (one file per
+    # build). Supply picks up a per-versionCode changelog from the metadata dir, so drop it
+    # there keyed by the versionCode we just built.
+    has_notes = ENV["UAT_CHANGELOG_PATH"] && !ENV["UAT_CHANGELOG_PATH"].empty? && File.exist?(ENV["UAT_CHANGELOG_PATH"])
+    if has_notes
+      code = File.read(File.join(REPO_ROOT, "android/app/build.gradle"))[/versionCode\s+(\d+)/, 1]
+      dir = File.join(REPO_ROOT, "fastlane/metadata/android/en-US/changelogs")
+      FileUtils.mkdir_p(dir)
+      # Play caps a track changelog at 500 chars (TestFlight + the GH release get the full
+      # notes). Truncate on a line boundary so we don't cut mid-word/mid-bullet.
+      notes = File.read(ENV["UAT_CHANGELOG_PATH"])
+      if notes.length > 500
+        kept = +""
+        notes.each_line { |ln| break if (kept.length + ln.length) > 497; kept << ln }
+        notes = "#{kept.rstrip}\n…"
+      end
+      File.write(File.join(dir, "#{code}.txt"), notes)
+    end
+    upload_to_play_store(
+      track: "internal",
+      aab: aab,
+      json_key: ENV["PLAY_STORE_JSON_KEY_PATH"],
+      skip_upload_apk: true,   # AAB only — a stale APK in the output dir must not fight the AAB
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: !has_notes,
+      # "completed" = roll out to internal testers immediately. A "draft" only uploads the
+      # bundle and waits for a human to publish it in the console (that's the right gate for
+      # PRODUCTION, but for an internal beta we want testers to get it now).
+      release_status: "completed"
+    )
+    UI.success("Uploaded dev build to Play internal track (rolled out to testers)")
+  end
+
+  desc "Build a dev/beta AAB and upload to the Play Store internal track"
+  lane :beta do
+    gradle(task: "bundle", build_type: "Release", project_dir: "android/")
+    upload_android_internal
+  end
+
+  desc "Upload an ALREADY-BUILT AAB to Play internal (no build — for the atomic uat.sh flow)"
+  lane :upload_beta do
+    upload_android_internal
+  end
+
+  desc "Build a production AAB and upload to the Play Store production track"
+  lane :release do
+    require_env("PLAY_STORE_JSON_KEY_PATH")
+    gradle(task: "bundle", build_type: "Release", project_dir: "android/")
+    upload_to_play_store(
+      track: "production",
+      aab: "android/app/build/outputs/bundle/release/app-release.aab",
+      json_key: ENV["PLAY_STORE_JSON_KEY_PATH"],
+      skip_upload_changelogs: false,
+      release_status: "draft" # human confirms rollout in Play Console
+    )
+    UI.success("Uploaded production build to Play (draft — confirm rollout in console)")
+  end
+
+  desc "Push Android store listing text + images (no build)"
+  lane :metadata do
+    require_env("PLAY_STORE_JSON_KEY_PATH")
+    upload_to_play_store(
+      json_key: ENV["PLAY_STORE_JSON_KEY_PATH"],
+      skip_upload_aab: true,
+      skip_upload_apk: true
+    )
+    UI.success("Pushed Android store metadata")
+  end
+end
+
+# ── iOS ──────────────────────────────────────────────────────────────────
+
+platform :ios do
+  # Shared build helper: archives + exports an App Store IPA. Uses AUTOMATIC signing with
+  # -allowProvisioningUpdates (the SAME mechanism scripts/release.sh's iOS archive uses and
+  # that works on this machine) — authenticated headlessly via the App Store Connect API key
+  # so xcodebuild can create/refresh the App Store provisioning profile during archive
+  # without a logged-in Xcode account. Falls back cleanly if the key isn't set.
+  private_lane :build_ios_ipa do
+    require "shellwords"
+    require "tmpdir"
+    require "base64"
+    xcargs = "-allowProvisioningUpdates"
+    if ENV["ASC_KEY_ID"] && ENV["ASC_ISSUER_ID"] && ENV["ASC_API_KEY_P8"] &&
+       !ENV["ASC_KEY_ID"].empty? && !ENV["ASC_ISSUER_ID"].empty? && !ENV["ASC_API_KEY_P8"].empty?
+      # xcodebuild wants the key as a file on disk; write the .p8 (raw PEM or base64) there.
+      raw = ENV["ASC_API_KEY_P8"]
+      key_body = raw.include?("BEGIN PRIVATE KEY") ? raw : Base64.decode64(raw)
+      key_path = File.join(Dir.tmpdir, "AuthKey_#{ENV['ASC_KEY_ID']}.p8")
+      File.write(key_path, key_body)
+      xcargs += " -authenticationKeyPath #{key_path.shellescape}" \
+                " -authenticationKeyID #{ENV['ASC_KEY_ID']}" \
+                " -authenticationKeyIssuerID #{ENV['ASC_ISSUER_ID']}"
+    end
+    build_app(
+      workspace: "ios/OffgridMobile.xcworkspace",
+      scheme: "OffgridMobile",
+      configuration: "Release",
+      export_method: "app-store",
+      export_team_id: APPLE_TEAM_ID,
+      export_options: "ios/ExportOptions.plist",
+      xcargs: xcargs,
+      output_directory: "build",
+      output_name: "OffgridMobile.ipa"
+    )
+  end
+
+  desc "Build a signed release IPA locally — NO upload. Artifact for testing the pipeline."
+  lane :build do
+    setup_signing
+    build_ios_ipa
+    ipa = File.join(REPO_ROOT, "build/OffgridMobile.ipa")
+    UI.user_error!("IPA not found at #{ipa}") unless File.exist?(ipa)
+    UI.success("Built signed release IPA (no upload): #{ipa}")
+  end
+
+  # Upload an ALREADY-BUILT IPA to TestFlight. Single source of truth for the TestFlight
+  # upload — both `beta` (build+upload) and `upload_beta` (publish a pre-built artifact, used
+  # by scripts/uat.sh's atomic build-all-then-publish flow) call this. No build here.
+  private_lane :upload_ios_testflight do
+    ipa = File.join(REPO_ROOT, "build/OffgridMobile.ipa")
+    UI.user_error!("IPA not found at #{ipa} — build it first (fastlane ios build).") unless File.exist?(ipa)
+    tf = {
+      **asc_auth_kwargs,
+      ipa: "build/OffgridMobile.ipa",
+      skip_waiting_for_build_processing: true
+    }
+    # Release notes: scripts/uat.sh writes the changelog to UAT_CHANGELOG_PATH. Attach it as
+    # the TestFlight "What to Test". (Requires processing to finish, so only set the
+    # changelog when we have notes — otherwise keep skip_waiting for a fast upload.)
+    if ENV["UAT_CHANGELOG_PATH"] && !ENV["UAT_CHANGELOG_PATH"].empty? && File.exist?(ENV["UAT_CHANGELOG_PATH"])
+      tf[:changelog] = File.read(ENV["UAT_CHANGELOG_PATH"])
+      tf[:skip_waiting_for_build_processing] = false
+    end
+    upload_to_testflight(**tf)
+    UI.success("Uploaded to TestFlight")
+  end
+
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    setup_signing
+    build_ios_ipa
+    upload_ios_testflight
+  end
+
+  desc "Upload an ALREADY-BUILT IPA to TestFlight (no build — for the atomic uat.sh flow)"
+  lane :upload_beta do
+    upload_ios_testflight
+  end
+
+  desc "Build and upload to the App Store"
+  lane :release do
+    auth = asc_auth_kwargs
+    setup_signing
+    build_ios_ipa
+    upload_to_app_store(
+      **auth,
+      ipa: "build/OffgridMobile.ipa",
+      submit_for_review: false,   # human submits in App Store Connect
+      precheck_include_in_app_purchases: false,
+      skip_screenshots: true,
+      skip_metadata: false,
+      force: true
+    )
+    UI.success("Uploaded to App Store (not submitted — submit in App Store Connect)")
+  end
+
+  desc "Push App Store listing metadata (no build)"
+  lane :metadata do
+    auth = asc_auth_kwargs
+    upload_to_app_store(
+      **auth,
+      skip_binary_upload: true,
+      skip_screenshots: true,
+      skip_metadata: false,
+      force: true
+    )
+    UI.success("Pushed App Store metadata")
+  end
+
+  # Reuses the existing signing secrets the repo already uses for AltStore/GitHub
+  # releases (IOS_CERTIFICATE_P12, IOS_CERTIFICATE_PASSWORD, IOS_PROVISION_PROFILE,
+  # KEYCHAIN_PASSWORD). No fastlane match — same mechanism as release-ios.yml, so there
+  # is one signing scheme, not two. On a local Mac with the cert already in the login
+  # keychain, set SKIP_KEYCHAIN_IMPORT=1 to skip the temp-keychain import.
+  desc "Import the existing P12 cert + provisioning profile into a temp keychain"
+  private_lane :setup_signing do
+    if ENV["SKIP_KEYCHAIN_IMPORT"]
+      UI.message("SKIP_KEYCHAIN_IMPORT set — using the cert already in the local keychain")
+      next
+    end
+    # NOTE: IOS_CERTIFICATE_PASSWORD is intentionally NOT required — a distribution p12 can
+    # legitimately have an EMPTY password (fastlane's `cert` action mints them that way), and
+    # require_env rejects empty strings. Default it to "" so an empty-password cert works.
+    require_env("IOS_CERTIFICATE_P12", "KEYCHAIN_PASSWORD", "IOS_PROVISION_PROFILE")
+
+    # Create + UNLOCK a dedicated keychain first (this fastlane's import_certificate has no
+    # create_keychain option). Unlocking with a long timeout + adding it to the search list
+    # is what lets codesign use the private key non-interactively during EXPORT — without
+    # this the export fails with errSecInternalComponent. import_certificate then imports the
+    # p12 and sets the key partition list on this keychain.
+    keychain = "app-signing.keychain-db"
+    create_keychain(
+      name: keychain,
+      password: ENV["KEYCHAIN_PASSWORD"],
+      unlock: true,
+      timeout: 3600,
+      lock_when_sleeps: false,
+      add_to_search_list: true
+    )
+    import_certificate(
+      certificate_path: write_tmp_b64(ENV["IOS_CERTIFICATE_P12"], "certificate.p12"),
+      certificate_password: ENV["IOS_CERTIFICATE_PASSWORD"] || "",
+      keychain_name: keychain,
+      keychain_password: ENV["KEYCHAIN_PASSWORD"]
+    )
+
+    # Install the provisioning profile so xcodebuild can find it.
+    profile_path = write_tmp_b64(ENV["IOS_PROVISION_PROFILE"], "profile.mobileprovision")
+    install_provisioning_profile(path: profile_path) if respond_to?(:install_provisioning_profile)
+  end
+end

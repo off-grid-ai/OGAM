@@ -109,6 +109,64 @@ describe('TTS integration', () => {
     jest.clearAllMocks();
   });
 
+  // ── Voice sequencing ──────────────────────────────────────────────────
+  // TTS eviction is requested ONLY for a real speak turn (the finished text model is
+  // evicted for the voice model) — NOT for warm/preload/mode-switch, which co-reside if
+  // there's room (those callers gate on canLoadWithoutEviction; evicting there would kill
+  // the user's text model mid-session). This asserts the CONTRACT (which override flag is
+  // requested); the real eviction behavior is proven in modelResidency.test.ts.
+  describe('voice sequencing: TTS load requests eviction only for a real turn', () => {
+    afterEach(() => { mockEngine.getPhase.mockReturnValue('ready'); });
+
+    it('a warm/preload initializeEngine() does NOT override (co-reside, honor fit)', async () => {
+      const { modelResidencyManager } = require('@offgrid/core/services/modelResidency');
+      const spy = jest.spyOn(modelResidencyManager, 'makeRoomFor')
+        .mockResolvedValue({ fits: true, evicted: [] });
+      mockEngine.getPhase.mockReturnValue('idle');
+      mockEngine.isFullyDownloaded.mockReturnValue(true);
+
+      await getState().initializeEngine();
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'tts', type: 'tts' }),
+        { override: false },
+      );
+      spy.mockRestore();
+    });
+
+    it('a speak turn forces override:true (evict the finished text model for the voice model)', async () => {
+      const { modelResidencyManager } = require('@offgrid/core/services/modelResidency');
+      const spy = jest.spyOn(modelResidencyManager, 'makeRoomFor')
+        .mockResolvedValue({ fits: true, evicted: ['text'] });
+      mockEngine.getPhase.mockReturnValue('idle');
+      mockEngine.isFullyDownloaded.mockReturnValue(true);
+
+      await getState().initializeEngine({ override: true });
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'tts', type: 'tts' }),
+        { override: true },
+      );
+      spy.mockRestore();
+    });
+
+    it('a warm load that does not fit skips quietly — no error, no eviction', async () => {
+      const { modelResidencyManager } = require('@offgrid/core/services/modelResidency');
+      const spy = jest.spyOn(modelResidencyManager, 'makeRoomFor')
+        .mockResolvedValue({ fits: false, evicted: [] });
+      mockEngine.getPhase.mockReturnValue('idle');
+      mockEngine.isFullyDownloaded.mockReturnValue(true);
+
+      await getState().initializeEngine(); // warm
+
+      // Not an error state (the speak turn will force-load later), and the engine
+      // was NOT initialized (no co-resident load forced).
+      expect(getState().error).toBeNull();
+      expect(mockEngine.initialize).not.toHaveBeenCalled();
+      spy.mockRestore();
+    });
+  });
+
   // ── Chat Mode full flow ───────────────────────────────────────────────
 
   describe('Chat Mode: speak → stop', () => {

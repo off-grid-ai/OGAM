@@ -57,6 +57,14 @@ yarn-error.log
 **/fastlane/screenshots
 **/fastlane/test_output
 
+# fastlane credentials — never commit store keys or local env
+fastlane/.env
+fastlane/play-store-key.json
+fastlane/asc-api-key.json
+fastlane/*.p8
+# but DO commit the template (overrides the global .env.* rule above)
+!fastlane/.env.example
+
 # Bundle artifact
 *.jsbundle
 
@@ -83,3 +91,5 @@ docs/TRACTION_KNOWLEDGE_BASE.md
 # Debug screenshots (scratch)
 /image.png
 /image-*.png
+# Local marketing drafts (not part of the app)
+marketing/

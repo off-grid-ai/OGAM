@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
-import { useUiModeStore } from '../../stores';
+import { useUiModeStore, useAccordionExpanded } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import Icon from 'react-native-vector-icons/Feather';
 import { stripControlTokens } from '../../utils/messageContent';
@@ -46,6 +46,9 @@ function getToolLabel(toolName?: string, content?: string): string {
 
 
 type ToolResultBubbleProps = {
+  /** Stable identity for persisting expanded state across the streaming→finalized
+   *  remount (not the message id, which changes on finalize). */
+  stableKey: string;
   toolIcon: string;
   toolLabel: string;
   toolName: string;
@@ -56,15 +59,15 @@ type ToolResultBubbleProps = {
   colors: any;
 };
 
-const ToolResultBubble: React.FC<ToolResultBubbleProps> = ({
-  toolIcon, toolLabel, toolName, durationLabel, content, hasDetails, styles, colors,
+const ToolResultBubbleInner: React.FC<ToolResultBubbleProps> = ({
+  stableKey, toolIcon, toolLabel, toolName, durationLabel, content, hasDetails, styles, colors,
 }) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, toggle] = useAccordionExpanded(`tool-result:${stableKey}`);
   return (
     <View testID="tool-message" style={styles.systemInfoContainer}>
       <TouchableOpacity
         style={styles.toolStatusRow}
-        onPress={hasDetails ? () => setExpanded(!expanded) : undefined}
+        onPress={hasDetails ? toggle : undefined}
         activeOpacity={hasDetails ? 0.6 : 1}
         disabled={!hasDetails}
       >
@@ -89,11 +92,22 @@ const ToolResultBubble: React.FC<ToolResultBubbleProps> = ({
   );
 };
 
+/**
+ * Memoized so token churn on a streaming sibling (which re-renders the chat subtree
+ * every token) does not re-render this row and reset its TouchableOpacity press target
+ * mid-gesture — the tap-during-streaming drop in bug #37. Props are stable for a
+ * finalized tool-result message; the expanded flag lives in accordionStore so a real
+ * toggle still re-renders it.
+ */
+const ToolResultBubble = React.memo(ToolResultBubbleInner);
+
 /** Renders the routed-tools collapsible for a finished assistant message, or nothing. */
 const RoutedToolsRow: React.FC<{ message: Message; isUser: boolean; isStreaming?: boolean; styles: any; colors: any }> = ({ message, isUser, isStreaming, styles, colors }) => {
   const names = message.generationMeta?.routedToolNames;
   if (isUser || isStreaming || !names?.length) return null;
-  return <ToolsSentCollapsible names={names} styles={styles} colors={colors} />;
+  // This row only renders on a finalized assistant message (isStreaming is false),
+  // so message.id is already the real, stable id here.
+  return <ToolsSentCollapsible names={names} stableKey={message.id} styles={styles} colors={colors} />;
 };
 
 const ToolResultMessage: React.FC<{ message: Message; styles: any; colors: any }> = ({ message, styles, colors }) => {
@@ -101,7 +115,10 @@ const ToolResultMessage: React.FC<{ message: Message; styles: any; colors: any }
   const toolLabel = getToolLabel(message.toolName, message.content);
   const durationLabel = message.generationTimeMs == null ? '' : ` (${message.generationTimeMs}ms)`;
   const hasDetails = !!(message.content && message.content.length > 0 && !message.content.startsWith('No results'));
-  return <ToolResultBubble toolIcon={toolIcon} toolLabel={toolLabel} toolName={message.toolName || 'unknown'} durationLabel={durationLabel} content={message.content} hasDetails={hasDetails} styles={styles} colors={colors} />;
+  // Prefer toolCallId (carried on every tool-result message and stable across the
+  // streaming→finalized remount); fall back to the message id.
+  const stableKey = message.toolCallId || message.id;
+  return <ToolResultBubble stableKey={stableKey} toolIcon={toolIcon} toolLabel={toolLabel} toolName={message.toolName || 'unknown'} durationLabel={durationLabel} content={message.content} hasDetails={hasDetails} styles={styles} colors={colors} />;
 };
 
 const ToolCallMessage: React.FC<{ message: Message; styles: any; colors: any }> = ({ message, styles, colors }) => (

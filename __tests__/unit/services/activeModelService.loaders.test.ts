@@ -202,4 +202,49 @@ describe('doLoadTextModel — LiteRT path', () => {
     expect(ctx.onError).toHaveBeenCalled();
     expect(ctx.onFinally).toHaveBeenCalled();
   });
+
+  // Regression: the pending-settings banner compares `settings.liteRTMaxTokens` against
+  // `loadedSettings.liteRTMaxTokens`. The loader must snapshot the RAW setting, not the
+  // `?? 4096`-normalized value it passes to native — otherwise an undefined setting is
+  // stored as 4096, `undefined !== 4096` is true, and the banner pops the instant a
+  // LiteRT model loads with nothing actually changed.
+  it('snapshots the RAW liteRTMaxTokens setting (undefined stays undefined, no false banner)', async () => {
+    mockedLiteRT.loadModel.mockResolvedValue(undefined);
+    mockedLiteRT.getActiveBackend.mockReturnValue('cpu');
+    const { useDebugLogsStore } = require('../../../src/stores/debugLogsStore');
+    useDebugLogsStore.getState.mockReturnValue({ addLog: jest.fn() });
+    const ctx = makeCtx({
+      model: { id: 'model-1', fileName: 'model.litertlm', filePath: '/models/model.litertlm', engine: 'litert' },
+      store: { settings: { liteRTBackend: 'gpu', liteRTMaxTokens: undefined } },
+    });
+    // makeCtx spreads overrides last, so pass the pre-built store to preserve the jest.fn()s.
+    ctx.store = makeStore({ settings: { liteRTBackend: 'gpu', liteRTMaxTokens: undefined } });
+
+    await doLoadTextModel(ctx);
+
+    expect(ctx.store.setLoadedSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ liteRTMaxTokens: undefined, liteRTBackend: 'gpu' }),
+    );
+    // Native still gets the normalized default so it never loads a bad token count.
+    expect(mockedLiteRT.loadModel).toHaveBeenCalledWith(
+      '/models/model.litertlm', 'gpu', expect.objectContaining({ maxNumTokens: 4096 }),
+    );
+  });
+
+  it('snapshots an explicit liteRTMaxTokens verbatim', async () => {
+    mockedLiteRT.loadModel.mockResolvedValue(undefined);
+    mockedLiteRT.getActiveBackend.mockReturnValue('cpu'); // cpu → skips warmup (not in mock)
+    const { useDebugLogsStore } = require('../../../src/stores/debugLogsStore');
+    useDebugLogsStore.getState.mockReturnValue({ addLog: jest.fn() });
+    const ctx = makeCtx({
+      model: { id: 'model-1', fileName: 'model.litertlm', filePath: '/models/model.litertlm', engine: 'litert' },
+    });
+    ctx.store = makeStore({ settings: { liteRTBackend: 'gpu', liteRTMaxTokens: 8192 } });
+
+    await doLoadTextModel(ctx);
+
+    expect(ctx.store.setLoadedSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ liteRTMaxTokens: 8192 }),
+    );
+  });
 });

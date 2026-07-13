@@ -134,6 +134,7 @@ const createStateScreenStyles = (colors: ThemeColors) => ({
     marginBottom: SPACING.lg,
   },
   noModelTitle: { ...TYPOGRAPHY.h2, color: colors.text, marginBottom: SPACING.sm },
+  noModelLoadingTitle: { marginTop: SPACING.lg },
   noModelText: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'center' as const },
   selectModelButton: {
     marginTop: SPACING.xl,

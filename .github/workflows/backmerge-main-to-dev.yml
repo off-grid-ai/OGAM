@@ -1,0 +1,77 @@
+name: Back-merge main into dev
+
+# Keeps dev in sync with main. Anything that lands on main — hotfixes merged straight
+# to main, and the release version-bump commit from release.yml — must flow back to dev,
+# or the next dev -> main PR shows phantom conflicts and dev slowly drifts behind prod.
+#
+# On every push to main this tries a clean merge of main into dev and pushes it. If the
+# merge conflicts, it opens a back-merge PR for a human to resolve instead of failing
+# silently or forcing anything.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  # Never run two back-merges at once (they'd race on dev).
+  group: backmerge-main-to-dev
+  cancel-in-progress: false
+
+jobs:
+  backmerge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Default GITHUB_TOKEN can push to dev (unless dev is protected against it —
+          # see note in the PR/branch-protection setup).
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Attempt clean back-merge main -> dev
+        id: merge
+        run: |
+          git fetch origin main dev
+          git checkout dev
+
+          # Already up to date? nothing to do.
+          if git merge-base --is-ancestor origin/main origin/dev; then
+            echo "dev already contains main — nothing to back-merge."
+            echo "status=noop" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git merge --no-edit origin/main; then
+            git push origin dev
+            echo "Back-merged main into dev cleanly."
+            echo "status=merged" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort
+            echo "Merge conflicts — a PR is needed."
+            echo "status=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open back-merge PR on conflict
+        if: steps.merge.outputs.status == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="backmerge/main-to-dev-${{ github.run_id }}"
+          git checkout -b "$BRANCH" origin/main
+          git push origin "$BRANCH"
+          gh pr create \
+            --base dev \
+            --head "$BRANCH" \
+            --title "Back-merge main into dev (conflicts need resolution)" \
+            --body "Automated back-merge could not fast-merge \`main\` into \`dev\` (conflicts). Resolve here so dev stays in sync with production. Triggered by push to main: ${{ github.sha }}."

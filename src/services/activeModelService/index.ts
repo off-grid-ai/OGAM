@@ -4,8 +4,12 @@ import { liteRTService } from '../litert';
 import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
 import { hardwareService } from '../hardware';
 import { modelResidencyManager } from '../modelResidency';
-import { useAppStore } from '../../stores';
+import { OverridableMemoryError, ImageModelIncompleteError } from '../modelLoadErrors';
+import { validateImageModelDir } from '../../utils/imageModelIntegrity';
+import { remoteServerManager } from '../remoteServerManager';
+import { useAppStore, useRemoteServerStore } from '../../stores';
 import { ONNXImageModel } from '../../types';
+import logger from '../../utils/logger';
 import type {
   ActiveModelInfo,
   ResourceUsage,
@@ -111,6 +115,7 @@ class ActiveModelService {
   async loadTextModel(
     modelId: string,
     timeoutMs: number = 120000,
+    opts?: { override?: boolean },
   ): Promise<void> {
     // Fast path — model already loaded (no lock; just sync the store).
     if (this.isTextModelCurrent(modelId)) {
@@ -123,12 +128,13 @@ class ActiveModelService {
     // Everything else goes through the residency manager's global lock so no two
     // model operations ever touch memory at once (the single load gateway).
     await modelResidencyManager.runExclusive(`load:text:${modelId}`, () =>
-      this.doLoadTextModelLocked(modelId, timeoutMs),
+      this.doLoadTextModelLocked(modelId, timeoutMs, opts),
     );
   }
   private async doLoadTextModelLocked(
     modelId: string,
     timeoutMs: number,
+    opts?: { override?: boolean },
   ): Promise<void> {
     // Re-check after acquiring — a queued call may have loaded it already.
     if (this.isTextModelCurrent(modelId)) {
@@ -146,11 +152,21 @@ class ActiveModelService {
     // Use estimated runtime RAM (file size + overhead), not just file size,
     // so the residency budget reflects the model's real memory footprint.
     const textSizeMB = Math.round((hardwareService.estimateModelRam(model) || 0) / (1024 * 1024));
-    // Residency manager is authoritative: evict other generation models (and
-    // extras) to fit the RAM budget before loading this text model. The evicted
-    // models' unload fns are the non-locking internal variants (we already hold
-    // the lock here), so this never deadlocks.
-    await modelResidencyManager.makeRoomFor({ key: 'text', type: 'text', sizeMB: textSizeMB });
+    // LiteRT weights + KV are dirty/accelerator memory → gated on REAL free RAM (mmap GGUF
+    // stays clean/physical-cap). Derived once so makeRoomFor and register agree.
+    const textIsDirty = model.engine === 'litert';
+    // Residency manager is authoritative: evict other generation models to fit the budget.
+    // Evicted unloads are the non-locking internal variants (we hold the lock), so no deadlock.
+    const room = await modelResidencyManager.makeRoomFor(
+      { key: 'text', type: 'text', modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty },
+      { override: opts?.override },
+    );
+    // First refusal is OVERRIDABLE ("Load Anyway"); a refusal UNDER override is a hard limit → plain Error.
+    if (!room.fits) {
+      throw opts?.override
+        ? new Error('Not enough free memory to load this model, even after freeing other models. Close other apps or choose a smaller model.')
+        : new OverridableMemoryError('Not enough free memory to load this model. Close other apps or choose a smaller model.');
+    }
     this.loadingState.text = true;
     this.notifyListeners();
     this.textLoadPromise = doLoadTextModel({
@@ -158,11 +174,13 @@ class ActiveModelService {
       modelId,
       store,
       timeoutMs,
+      override: !!opts?.override || modelResidencyManager.hasSessionOverride(modelId),
       loadedTextModelId: this.loadedTextModelId,
       onLoaded: id => {
         this.loadedTextModelId = id;
+        useAppStore.getState().setTextModelEvicted(false); // loaded → clear any prior eviction
         modelResidencyManager.register(
-          { key: 'text', type: 'text', sizeMB: textSizeMB },
+          { key: 'text', type: 'text', modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty },
           () => this.doUnloadTextModelLocked(true), // eviction keeps the selection
         );
       },
@@ -177,9 +195,9 @@ class ActiveModelService {
     });
     await this.textLoadPromise;
   }
-  async unloadTextModel(): Promise<void> {
+  async unloadTextModel(keepSelection = false): Promise<void> {
     await modelResidencyManager.runExclusive('unload:text', () =>
-      this.doUnloadTextModelLocked(),
+      this.doUnloadTextModelLocked(keepSelection),
     );
   }
   /**
@@ -205,9 +223,9 @@ class ActiveModelService {
         await llmService.unloadModel();
       }
       this.loadedTextModelId = null;
-      if (!keepSelection) {
-        useAppStore.getState().setActiveModelId(null);
-      }
+      // Eviction (keepSelection) keeps the selection & flags "tap to continue"; user unload clears both.
+      if (keepSelection) { if (isNativeLoaded) useAppStore.getState().setTextModelEvicted(true); }
+      else { useAppStore.getState().setActiveModelId(null); useAppStore.getState().setTextModelEvicted(false); }
       modelResidencyManager.release('text');
     } finally {
       this.loadingState.text = false;
@@ -217,46 +235,62 @@ class ActiveModelService {
   private async checkImageModelCanLoad(
     modelId: string,
     model: ONNXImageModel,
-  ): Promise<{ canLoad: boolean; error?: string }> {
+    opts?: { override?: boolean },
+  ): Promise<{ canLoad: boolean; error?: string; overridable?: boolean }> {
     if (model.backend === 'qnn') {
       const socInfo = await hardwareService.getSoCInfo();
       if (!socInfo.hasNPU) {
         return {
           canLoad: false,
+          // A missing NPU is a hardware capability gap, not a memory budget — not overridable.
           error:
             'NPU models require a Qualcomm Snapdragon processor. Your device does not have a compatible NPU. Please use a GPU model instead.',
         };
       }
     }
-    // Residency manager is authoritative for memory: evict other generation
-    // models (and extras) to fit the RAM budget before loading this image
-    // model. (Replaces the old per-load critical-memory gate.) If it can't fit
-    // even after eviction, block the load.
-    const { fits } = await modelResidencyManager.makeRoomFor({
-      key: 'image',
-      type: 'image',
-      sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)),
-    });
+    // Residency manager is authoritative for memory: evict others to fit the budget
+    // before loading. If it can't fit even after eviction, block — unless "Load Anyway".
+    const { fits } = await modelResidencyManager.makeRoomFor(
+      {
+        key: 'image',
+        type: 'image',
+        modelId: model.id,
+        sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)),
+        // CoreML/ONNX image weights are dirty (jetsam-counted) memory → gate on real free RAM.
+        dirtyMemory: true,
+      },
+      { override: opts?.override },
+    );
     if (!fits) {
-      return {
-        canLoad: false,
-        error: `Not enough memory to load ${model.name}. Free up space or choose a smaller model.`,
-      };
+      // Refusal UNDER override = survival floor (hard limit) → non-overridable, so the
+      // UI stops re-offering "Load Anyway" as a no-op that re-runs the same failing load.
+      const overridable = !opts?.override;
+      return { canLoad: false, overridable, error: overridable
+        ? `Not enough memory to load ${model.name}. Free up space or choose a smaller model.`
+        : `Not enough memory to load ${model.name}, even after freeing other models. Close other apps or choose a smaller model.` };
     }
     return { canLoad: true };
   }
   async loadImageModel(
     modelId: string,
     timeoutMs: number = 180000,
+    opts?: { override?: boolean },
   ): Promise<void> {
     await modelResidencyManager.runExclusive(`load:image:${modelId}`, () =>
-      this.doLoadImageModelLocked(modelId, timeoutMs),
+      this.doLoadImageModelLocked(modelId, timeoutMs, opts),
     );
   }
   private async doLoadImageModelLocked(
     modelId: string,
     timeoutMs: number,
+    opts?: { override?: boolean },
   ): Promise<void> {
+    // Hydrate real device RAM BEFORE the compute-path decision. preferGpuForImageGen()
+    // and estimateImageModelRam() read getTotalMemoryGB(), which returns a 4GB fallback
+    // until the cache is populated — on a cold start that misclassifies an 8GB iOS 26
+    // device as ANE (the path that fails outright there). Awaiting hydration first makes
+    // the GPU/ANE choice + RAM estimate use the true total.
+    await hardwareService.getDeviceInfo();
     const store = useAppStore.getState();
     const imageThreads = store.settings?.imageThreads ?? 4;
     const needsThreadReload =
@@ -275,9 +309,16 @@ class ActiveModelService {
     if (!model) {
       throw new Error('Model not found');
     }
-    const check = await this.checkImageModelCanLoad(modelId, model);
+    // Integrity gate (B): a partial extraction crashes the native server as a misleading "backend unsupported" — throw typed error so the UI says "re-download".
+    if (model.backend === 'mnn' || model.backend === 'qnn') {
+      const integ = await validateImageModelDir(model.modelPath, model.backend);
+      if (!integ.complete) throw new ImageModelIncompleteError(integ.missing);
+    }
+    const check = await this.checkImageModelCanLoad(modelId, model, opts);
     if (!check.canLoad) {
-      throw new Error(check.error);
+      throw check.overridable
+        ? new OverridableMemoryError(check.error ?? 'Not enough memory to load this model.')
+        : new Error(check.error);
     }
     this.loadingState.image = true;
     this.notifyListeners();
@@ -287,6 +328,7 @@ class ActiveModelService {
       imageThreads,
       needsThreadReload,
       cpuOnly: false,
+      preferGpu: hardwareService.preferGpuForImageGen(),
       store,
       timeoutMs,
       loadedImageModelId: this.loadedImageModelId,
@@ -294,7 +336,12 @@ class ActiveModelService {
         this.loadedImageModelId = id;
         this.loadedImageModelThreads = threads;
         modelResidencyManager.register(
-          { key: 'image', type: 'image', sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)) },
+          // dirtyMemory: a resident CoreML/ONNX image model's working set can't be paged
+          // out like clean mmap weights — its presence must gate other loads on live
+          // os_proc RAM (budgetForSpec dirty-pressure), or a sidecar stacks onto its
+          // generation spike and jetsams the app. Without this flag the resident-dirty
+          // arm of the gate is a no-op.
+          { key: 'image', type: 'image', dirtyMemory: true, sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)) },
           () => this.doUnloadImageModelLocked(true), // eviction keeps the selection
         );
       },
@@ -310,9 +357,9 @@ class ActiveModelService {
     });
     await this.imageLoadPromise;
   }
-  async unloadImageModel(): Promise<void> {
+  async unloadImageModel(keepSelection = false): Promise<void> {
     await modelResidencyManager.runExclusive('unload:image', () =>
-      this.doUnloadImageModelLocked(),
+      this.doUnloadImageModelLocked(keepSelection),
     );
   }
   /**
@@ -350,7 +397,7 @@ class ActiveModelService {
       this.notifyListeners();
     }
   }
-  async unloadAllModels(): Promise<{ textUnloaded: boolean; imageUnloaded: boolean }> {
+  async unloadAllModels(keepSelection = false): Promise<{ textUnloaded: boolean; imageUnloaded: boolean }> {
     const store = useAppStore.getState();
     const results = { textUnloaded: false, imageUnloaded: false };
     const hasTextModel =
@@ -361,7 +408,7 @@ class ActiveModelService {
       !!store.activeImageModelId || !!this.loadedImageModelId;
     if (hasTextModel) {
       try {
-        await this.unloadTextModel();
+        await this.unloadTextModel(keepSelection);
         results.textUnloaded = true;
       } catch {
         /* partial */
@@ -369,13 +416,37 @@ class ActiveModelService {
     }
     if (hasImageModel) {
       try {
-        await this.unloadImageModel();
+        await this.unloadImageModel(keepSelection);
         results.imageUnloaded = true;
       } catch {
         /* partial */
       }
     }
     return results;
+  }
+  /**
+   * Free ALL model memory: unload local text+image AND disconnect any remote model.
+   * THE single owning side-effect for "Eject All" — every screen dispatches this
+   * instead of re-implementing the unload sequence (which is how one screen wired it
+   * and another stubbed it). Returns how many models were unloaded. Logged for the
+   * [MODEL-SM] trace.
+   */
+  async ejectAll(): Promise<{ count: number }> {
+    const remote = useRemoteServerStore.getState();
+    const hasRemote = !!(remote.activeRemoteTextModelId || remote.activeRemoteImageModelId);
+    logger.log(`[MODEL-SM] ejectAll → start hasRemote=${hasRemote}`);
+    // Eject = EVICT from RAM, KEEP the selection. The user's chosen models stay
+    // selected (the rows still show them) and reload on demand — ejecting frees
+    // memory, it does not un-choose the model. (Clearing selection here is what
+    // turned the rows into "Unknown"/"—" after an eject.)
+    const results = await this.unloadAllModels(true);
+    let count = (results.textUnloaded ? 1 : 0) + (results.imageUnloaded ? 1 : 0);
+    if (hasRemote) {
+      remoteServerManager.clearActiveRemoteModel();
+      count += 1;
+    }
+    logger.log(`[MODEL-SM] ejectAll → done count=${count}`);
+    return { count };
   }
   async getResourceUsage(): Promise<ResourceUsage> {
     return _getResourceUsage();
@@ -391,7 +462,8 @@ class ActiveModelService {
     return _getCurrentlyLoadedMemoryGB(this.getIds(), this.getLists());
   }
   async checkMemoryForModel(modelId: string, modelType: ModelType): Promise<MemoryCheckResult> {
-    return _checkMemoryForModel({ modelId, modelType, ids: this.getIds(), lists: this.getLists() });
+    // Same policy + session-override source as the residency gate so pre-check and gate agree.
+    return _checkMemoryForModel({ modelId, modelType, ids: this.getIds(), lists: this.getLists(), policy: modelResidencyManager.getLoadPolicy(), sessionOverride: modelResidencyManager.hasSessionOverride(modelId) });
   }
   async checkMemoryForDualModel(textModelId: string | null, imageModelId: string | null): Promise<MemoryCheckResult> {
     return _checkMemoryForDualModel({ textModelId, imageModelId, lists: this.getLists() });

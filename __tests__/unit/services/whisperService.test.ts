@@ -5,11 +5,17 @@
  * Priority: P1 - Voice input support.
  */
 
-import { initWhisper, AudioSessionIos } from 'whisper.rn';
+import { initWhisper } from 'whisper.rn';
 import { Platform, PermissionsAndroid } from 'react-native';
 import RNFS from 'react-native-fs';
 import { whisperService, WHISPER_MODELS } from '../../../src/services/whisperService';
 import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
+import { audioSessionManager } from '../../../src/services/audioSessionManager';
+import { AudioManager } from 'react-native-audio-api';
+
+// The realtime permission path drives audioSessionManager, which calls these.
+const mockSetAudioSessionOptions = AudioManager.setAudioSessionOptions as jest.Mock;
+const mockSetAudioSessionActivity = AudioManager.setAudioSessionActivity as jest.Mock;
 
 jest.mock('../../../src/services/backgroundDownloadService', () => ({
   backgroundDownloadService: {
@@ -22,14 +28,18 @@ jest.mock('../../../src/services/backgroundDownloadService', () => ({
 // Names prefixed with `mock` so jest.mock's hoisting allows referencing them.
 const mockDownloadStoreAdd = jest.fn();
 const mockDownloadStoreRemove = jest.fn();
+const mockDownloadStoreRetryEntry = jest.fn();
 jest.mock('../../../src/stores/downloadStore', () => ({
   useDownloadStore: {
-    getState: () => ({ add: mockDownloadStoreAdd, remove: mockDownloadStoreRemove }),
+    getState: () => ({
+      add: mockDownloadStoreAdd,
+      remove: mockDownloadStoreRemove,
+      retryEntry: mockDownloadStoreRetryEntry,
+    }),
   },
 }));
 
 const mockedBDS = backgroundDownloadService as jest.Mocked<typeof backgroundDownloadService>;
-const mockedAudioSessionIos = AudioSessionIos as jest.Mocked<typeof AudioSessionIos>;
 
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
 const mockedInitWhisper = initWhisper as jest.MockedFunction<typeof initWhisper>;
@@ -60,11 +70,11 @@ describe('WhisperService', () => {
       promise: Promise.resolve(),
     } as any);
     mockedBDS.cancelDownload.mockResolvedValue(undefined as any);
-    // Re-establish default AudioSessionIos mock implementations
-    // (previous tests may have set mockRejectedValue which clearAllMocks doesn't reset)
-    mockedAudioSessionIos.setCategory.mockResolvedValue(undefined as any);
-    mockedAudioSessionIos.setMode.mockResolvedValue(undefined as any);
-    mockedAudioSessionIos.setActive.mockResolvedValue(undefined as any);
+    // Reset the audio-session owner's mode between tests (the realtime permission
+    // path now drives it instead of AudioSessionIos directly). clearMocks wipes
+    // the activity mock's resolved value, so re-establish the default (success).
+    audioSessionManager._reset();
+    mockSetAudioSessionActivity.mockResolvedValue(true);
   });
 
   // ========================================================================
@@ -196,17 +206,21 @@ describe('WhisperService', () => {
 
       await whisperService.downloadModel('tiny.en');
 
-      // Registered as an STT entry keyed by whisper-<id>/<fileName> so the
-      // Download Manager renders it under Voice while in flight (issue: STT
-      // downloads were invisible until a screen switch re-scanned disk).
+      // A QUEUED placeholder row is published UP-FRONT (before the native start),
+      // keyed by whisper-<id>/<fileName> and filed under Voice via modelType 'stt',
+      // so a queued STT download shows as "Queued" in the same canonical store the
+      // Text/Image cards read (not "0%"). This is the single-source-of-truth path.
       expect(mockDownloadStoreAdd).toHaveBeenCalledWith(expect.objectContaining({
         modelKey: 'whisper-tiny.en/ggml-tiny.en.bin',
-        downloadId: 7,
+        downloadId: 'queued:whisper-tiny.en/ggml-tiny.en.bin',
         modelId: 'whisper-tiny.en',
         fileName: 'ggml-tiny.en.bin',
         modelType: 'stt',
         status: 'pending',
       }));
+      // Once a slot opens and the native download starts, the placeholder is
+      // reconciled to the real downloadId so progress events route to it.
+      expect(mockDownloadStoreRetryEntry).toHaveBeenCalledWith('whisper-tiny.en/ggml-tiny.en.bin', 7);
       // Cleared on success — completed STT models are listed from disk instead.
       expect(mockDownloadStoreRemove).toHaveBeenCalledWith('whisper-tiny.en/ggml-tiny.en.bin');
     });
@@ -472,16 +486,17 @@ describe('WhisperService', () => {
         expect(await whisperService.requestPermissions()).toBe(false);
       });
 
-      it('does not call AudioSessionIos', async () => {
+      it('does not touch the iOS audio session (manager mode stays null)', async () => {
         jest.spyOn(PermissionsAndroid, 'request').mockResolvedValue(
           PermissionsAndroid.RESULTS.GRANTED
         );
 
         await whisperService.requestPermissions();
 
-        expect(mockedAudioSessionIos.setCategory).not.toHaveBeenCalled();
-        expect(mockedAudioSessionIos.setMode).not.toHaveBeenCalled();
-        expect(mockedAudioSessionIos.setActive).not.toHaveBeenCalled();
+        // Android handles mic permission via PermissionsAndroid; the iOS session
+        // owner must not be driven, so its mode stays null.
+        expect(mockSetAudioSessionOptions).not.toHaveBeenCalled();
+        expect(audioSessionManager.getMode()).toBeNull();
       });
 
       it('requests RECORD_AUDIO permission with correct message', async () => {
@@ -504,40 +519,30 @@ describe('WhisperService', () => {
     describe('iOS', () => {
       beforeEach(() => {
         Object.defineProperty(Platform, 'OS', { get: () => 'ios' });
+        mockSetAudioSessionActivity.mockResolvedValue(true);
       });
 
-      it('configures audio session and returns true', async () => {
+      it('drives audioSessionManager into recording mode (not AudioSessionIos directly) and returns true', async () => {
         expect(await whisperService.requestPermissions()).toBe(true);
 
-        expect(mockedAudioSessionIos.setCategory).toHaveBeenCalledWith(
-          'PlayAndRecord',
-          ['AllowBluetooth', 'MixWithOthers']
+        // The realtime path now routes the iOS session setup through the SINGLE
+        // owner, so its mode is accurate for a later TTS ensurePlayback() (the
+        // old direct AudioSessionIos path left mode stale → silent TTS after STT).
+        expect(audioSessionManager.getMode()).toBe('record');
+        expect(mockSetAudioSessionOptions).toHaveBeenCalledWith(
+          expect.objectContaining({ iosCategory: 'playAndRecord' })
         );
-        expect(mockedAudioSessionIos.setMode).toHaveBeenCalledWith('Default');
-        expect(mockedAudioSessionIos.setActive).toHaveBeenCalledWith(true);
+        // Behaviour-neutral: the session is re-activated (not skipped) on the call.
+        expect(mockSetAudioSessionActivity).toHaveBeenCalledWith(true);
       });
 
-      it('calls setCategory before setMode before setActive', async () => {
-        const callOrder: string[] = [];
-        mockedAudioSessionIos.setCategory.mockImplementation(async () => { callOrder.push('setCategory'); });
-        mockedAudioSessionIos.setMode.mockImplementation(async () => { callOrder.push('setMode'); });
-        mockedAudioSessionIos.setActive.mockImplementation(async () => { callOrder.push('setActive'); });
-
-        await whisperService.requestPermissions();
-
-        expect(callOrder).toEqual(['setCategory', 'setMode', 'setActive']);
-      });
-
-      it('returns false when audio session setup fails', async () => {
-        mockedAudioSessionIos.setCategory.mockRejectedValue(new Error('Audio session error'));
+      it('returns false when audio session activation fails (permission denied)', async () => {
+        // A throw on activation is how iOS surfaces a denied mic permission.
+        mockSetAudioSessionActivity.mockRejectedValueOnce(new Error('Microphone permission denied'));
 
         expect(await whisperService.requestPermissions()).toBe(false);
-      });
-
-      it('returns false when setActive fails (permission denied)', async () => {
-        mockedAudioSessionIos.setActive.mockRejectedValue(new Error('Microphone permission denied'));
-
-        expect(await whisperService.requestPermissions()).toBe(false);
+        // Activation failed → mode must not advance to record.
+        expect(audioSessionManager.getMode()).toBeNull();
       });
 
       it('does not call PermissionsAndroid', async () => {
@@ -546,6 +551,28 @@ describe('WhisperService', () => {
         await whisperService.requestPermissions();
 
         expect(requestSpy).not.toHaveBeenCalled();
+      });
+
+      it('restores playback after stopTranscription so TTS is not silenced (F4)', async () => {
+        // Dictation sets the owner to record mode.
+        await whisperService.requestPermissions();
+        expect(audioSessionManager.getMode()).toBe('record');
+
+        // Stopping dictation must hand the session back to the owner. Previously nothing
+        // did, so mode stayed 'record' and the next TTS ensurePlayback() early-returned
+        // → silent speech after dictation.
+        await whisperService.stopTranscription();
+        // restore is fire-and-forget in stopTranscription's finally and now runs through
+        // the session owner's serialized queue, so let that microtask settle.
+        await new Promise(resolve => setImmediate(resolve));
+        expect(audioSessionManager.getMode()).toBe('playback');
+
+        // And a subsequent TTS playback request is actually applied (not skipped).
+        mockSetAudioSessionOptions.mockClear();
+        await audioSessionManager.ensurePlayback();
+        expect(mockSetAudioSessionOptions).toHaveBeenCalledWith(
+          expect.objectContaining({ iosCategory: 'playback' }),
+        );
       });
     });
   });

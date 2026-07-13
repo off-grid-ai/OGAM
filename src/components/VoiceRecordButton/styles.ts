@@ -36,9 +36,9 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   // Audio (voice) mode: a larger, clearly-circular bordered mic so it reads as
   // the primary "press to speak" action.
   buttonAudio: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: colors.surface,
     borderWidth: 2,
     borderColor: colors.primary,
@@ -59,6 +59,27 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     backgroundColor: colors.surface,
     borderWidth: 2,
     borderColor: colors.primary,
+    borderTopColor: 'transparent',
+  },
+  // Audio (voice) mode loading/transcribing: a 56px spinner ring that matches the
+  // buttonAudio mic footprint EXACTLY, so the center slot keeps one size across
+  // mic / loading / transcribing / stop — the bottom bar never grows or shrinks.
+  buttonAudioLoading: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderTopColor: 'transparent',
+  },
+  buttonAudioTranscribing: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.info,
     borderTopColor: 'transparent',
   },
   buttonRecording: {

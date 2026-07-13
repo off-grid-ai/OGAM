@@ -143,43 +143,79 @@ class CoreMLDiffusionModule: RCTEventEmitter {
         }
 
         let cpuOnly = params["cpuOnly"] as? Bool ?? false
-        let config = MLModelConfiguration()
         let attentionVariant = params["attentionVariant"] as? String ?? "split_einsum"
-        // ANE is required — palettized weights produce gray images on pure CPU.
-        // cpuAndGPU fallback lets low-memory devices avoid ANE compilation overhead.
-        config.computeUnits = cpuOnly ? .cpuAndGPU : .cpuAndNeuralEngine
 
-        let pipe: StableDiffusionPipelineProtocol
-
-        if isXL {
-          // SDXL models need the XL pipeline which uses TextEncoderXL
-          // (expects "hidden_embeds" output instead of "last_hidden_state")
-          pipe = try StableDiffusionXLPipeline(
-            resourcesAt: url,
-            configuration: config,
-            reduceMemory: true
-          )
-        } else {
-          pipe = try StableDiffusionPipeline(
-            resourcesAt: url,
-            controlNet: [],
-            configuration: config,
-            reduceMemory: true
-          )
+        // Build the pipeline for a given set of compute units. ANE is preferred —
+        // palettized weights produce gray images on pure CPU — but on some iOS 26
+        // builds loading split_einsum/palettized .mlmodelc onto the Neural Engine
+        // fails instantly (rejects within ~1s). cpuAndGPU is still GPU-accelerated
+        // (not pure CPU), so it decodes palettized weights correctly; we fall back
+        // to it before giving up so image generation still works on those builds.
+        func buildPipeline(_ units: MLComputeUnits) throws -> StableDiffusionPipelineProtocol {
+          let config = MLModelConfiguration()
+          config.computeUnits = units
+          let built: StableDiffusionPipelineProtocol
+          if isXL {
+            // SDXL models need the XL pipeline which uses TextEncoderXL
+            // (expects "hidden_embeds" output instead of "last_hidden_state")
+            built = try StableDiffusionXLPipeline(
+              resourcesAt: url,
+              configuration: config,
+              reduceMemory: true
+            )
+          } else {
+            built = try StableDiffusionPipeline(
+              resourcesAt: url,
+              controlNet: [],
+              configuration: config,
+              reduceMemory: true
+            )
+          }
+          // Skip prewarm for 'original' variant (low-memory devices): prewarm
+          // loads the full Unet into memory just to unload it, causing an OOM
+          // spike. With reduceMemory=true the pipeline lazily loads each submodel
+          // during generateImages(), so prewarming is unnecessary.
+          if attentionVariant != "original" {
+            try built.loadResources()
+          }
+          return built
         }
 
-        // Skip prewarm for 'original' variant (low-memory devices): prewarm
-        // loads the full Unet into memory just to unload it, causing an OOM spike.
-        // With reduceMemory=true the pipeline lazily loads each submodel during
-        // generateImages(), so prewarming is unnecessary.
-        if attentionVariant != "original" {
-          try pipe.loadResources()
+        // The JS layer chooses the compute path by device RAM tier (see
+        // hardwareService.preferGpuForImageGen) and sizes the residency budget to
+        // match, so honor that choice here rather than guessing natively:
+        //  - GPU (preferGpu): the path for devices with enough RAM. On iOS 26 the
+        //    Neural Engine is degraded for these palettized .mlmodelc (the 8GB
+        //    iPhone 15 Pro's ANE load fails outright), so GPU is the working path.
+        //    GPU-accelerated, not pure CPU, so palettized weights decode fine.
+        //  - Neural Engine (otherwise): far smaller system-RAM footprint, the only
+        //    path that fits on low-RAM devices (6GB iPhone 15) where the GPU OOMs.
+        let preferGpu = params["preferGpu"] as? Bool ?? false
+        // Honor the parameter contract in three distinct cases: a CPU-only request must
+        // NOT quietly enable the GPU (that was the bug), a preferGpu load uses CPU+GPU,
+        // and everything else uses the Neural Engine.
+        let primaryUnits: MLComputeUnits = cpuOnly ? .cpuOnly : (preferGpu ? .cpuAndGPU : .cpuAndNeuralEngine)
+        let pipe: StableDiffusionPipelineProtocol
+        do {
+          pipe = try buildPipeline(primaryUnits)
+        } catch {
+          // Fall back ONLY from GPU → Neural Engine (the ANE uses less system RAM,
+          // so it's a safe retry). Never the reverse: when JS picked the ANE for a
+          // low-RAM device, retrying on the GPU would OOM the device the ANE was
+          // chosen to protect.
+          guard preferGpu else { throw error }
+          NSLog("[CoreMLDiffusion] GPU load failed (%@) — retrying on Neural Engine", error.localizedDescription)
+          pipe = try buildPipeline(.cpuAndNeuralEngine)
         }
 
         self.pipeline = pipe
         self.loadedModelPath = modelPath
         resolve(true)
       } catch {
+        // Log the real reason — the JS layer collapses this to a generic
+        // "Failed to load model" message, which hides whether it was an ANE/GPU
+        // load failure or a missing/incompatible .mlmodelc component.
+        NSLog("[CoreMLDiffusion] loadModel failed: %@", error.localizedDescription)
         reject("ERR_LOAD_FAILED", "Failed to load Core ML model: \(error.localizedDescription)", error)
       }
     }

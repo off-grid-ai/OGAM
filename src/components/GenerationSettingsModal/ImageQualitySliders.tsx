@@ -4,6 +4,7 @@ import { SliderSetting } from '../SliderSetting';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { useClearGpuCache } from '../../hooks/useImageGenerationSettings';
+import { SWEET_SPOT_SIZE } from '../../utils/imageGenAdvice';
 import { createStyles } from './styles';
 
 const ClearGPUCacheButton: React.FC = () => {
@@ -42,9 +43,9 @@ export const ImageQualityBasicSliders: React.FC = () => {
       <SliderSetting
         testID="image-size"
         label="Image Size"
-        description="Output resolution (smaller = faster, larger = more detail)"
-        value={settings.imageWidth ?? 256}
-        min={128} max={512} step={64}
+        description="Output resolution. 256 is fastest with coherent results; 512 is most detailed but slow on GPU-only devices."
+        value={Math.max(SWEET_SPOT_SIZE, settings.imageWidth ?? SWEET_SPOT_SIZE)}
+        min={SWEET_SPOT_SIZE} max={512} step={64}
         formatValue={(v) => `${v}x${v}`}
         onChange={(value) => updateSettings({ imageWidth: value, imageHeight: value })}
       />

@@ -7,14 +7,19 @@ jest.mock('../../../src/stores', () => ({
   useAppStore: { getState: () => mockState },
 }));
 
-const mockDownloadModelBackground = jest.fn();
-const mockWatchDownload = jest.fn();
 jest.mock('../../../src/services/modelManager', () => ({
   modelManager: {
     isBackgroundDownloadSupported: () => true,
-    downloadModelBackground: (...a: any[]) => mockDownloadModelBackground(...a),
-    watchDownload: (...a: any[]) => mockWatchDownload(...a),
   },
+}));
+
+// The classifier now downloads through THE single entry point (startModelDownload),
+// which registers the model AND clears the in-flight row on completion — the old
+// parallel downloadModelBackground + watchDownload left a phantom "downloading 100%"
+// row behind. The test drives startModelDownload's onRegistered hook.
+const mockStartModelDownload = jest.fn();
+jest.mock('../../../src/services/startModelDownload', () => ({
+  startModelDownload: (...a: any[]) => mockStartModelDownload(...a),
 }));
 
 const mockGetModelFiles = jest.fn();
@@ -43,32 +48,34 @@ describe('ensureDefaultClassifier', () => {
     mockState.settings.classifierModelId = 'x/y.gguf';
     mockState.downloadedModels = [{ id: 'x/y.gguf' }];
     await load()();
-    expect(mockDownloadModelBackground).not.toHaveBeenCalled();
+    expect(mockStartModelDownload).not.toHaveBeenCalled();
   });
 
   it('selects an already-downloaded default instead of re-downloading', async () => {
     mockState.downloadedModels = [{ id: `${REPO}/SmolLM2-135M-Instruct-Q8_0.gguf` }];
     await load()();
-    expect(mockDownloadModelBackground).not.toHaveBeenCalled();
+    expect(mockStartModelDownload).not.toHaveBeenCalled();
     expect(mockUpdateSettings).toHaveBeenCalledWith({ classifierModelId: `${REPO}/SmolLM2-135M-Instruct-Q8_0.gguf` });
   });
 
-  it('downloads the Q8_0 GGUF and selects it on completion', async () => {
+  it('downloads the Q8_0 GGUF through the single entry point and selects it on registration', async () => {
     mockGetModelFiles.mockResolvedValue([
       { name: 'SmolLM2-135M-Instruct-Q4_K_M.gguf', size: 90, downloadUrl: 'u1' },
       { name: 'SmolLM2-135M-Instruct-Q8_0.gguf', size: 145, downloadUrl: 'u2' },
     ]);
-    mockDownloadModelBackground.mockResolvedValue({ downloadId: 'dl-1' });
 
     await load()();
 
-    expect(mockDownloadModelBackground).toHaveBeenCalledWith(
+    // Routes through startModelDownload (which clears the in-flight row), NOT a parallel
+    // downloadModelBackground/watchDownload that would leave a phantom row behind.
+    expect(mockStartModelDownload).toHaveBeenCalledWith(
       REPO,
       expect.objectContaining({ name: 'SmolLM2-135M-Instruct-Q8_0.gguf' }),
+      expect.objectContaining({ onRegistered: expect.any(Function), onError: expect.any(Function) }),
     );
-    // Simulate the download completing.
-    const onComplete = mockWatchDownload.mock.calls[0][1];
-    onComplete();
+    // The registered model's id selects the classifier (uses the model, not a re-derived string).
+    const opts = mockStartModelDownload.mock.calls[0][2];
+    opts.onRegistered({ id: `${REPO}/SmolLM2-135M-Instruct-Q8_0.gguf` });
     expect(mockUpdateSettings).toHaveBeenCalledWith({ classifierModelId: `${REPO}/SmolLM2-135M-Instruct-Q8_0.gguf` });
   });
 });

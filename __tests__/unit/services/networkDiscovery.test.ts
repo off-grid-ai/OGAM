@@ -64,7 +64,8 @@ describe('discoverLANServers', () => {
 
   it.each([
     ['ollama',   '192.168.1.10', 11434, 'Ollama (192.168.1.10)',    '/api/tags'     ],   // NOSONAR
-    ['lmstudio', '192.168.1.20', 1234,  'LM Studio (192.168.1.20)', '/api/v1/models'],   // NOSONAR
+    ['lmstudio', '192.168.1.20', 1234,  'LM Studio (192.168.1.20)', '/v1/models'],   // NOSONAR
+    ['gateway',  '192.168.1.30', 7878,  'Off Grid AI Gateway (192.168.1.30)', '/v1/models'], // NOSONAR
   ])('discovers a %s server', async (type, ip, port, name, probePath) => {
     mockGetIpAddress.mockResolvedValue('192.168.1.42'); // NOSONAR
     const probeUrl = `http://${ip}:${port}${probePath}`; // NOSONAR
@@ -85,7 +86,7 @@ describe('discoverLANServers', () => {
     mockFetch.mockImplementation((url: string) => {
       if (
         url === 'http://192.168.1.10:11434/api/tags' || // NOSONAR
-        url === 'http://192.168.1.20:1234/api/v1/models' // NOSONAR
+        url === 'http://192.168.1.20:1234/v1/models' // NOSONAR
       ) {
         return Promise.resolve({ status: 200 });
       }
@@ -170,5 +171,20 @@ describe('discoverLANServers', () => {
     expect(ollamaProbes.some(u => u.includes('192.168.1.254:'))).toBe(true);
     expect(ollamaProbes.some(u => u.includes('192.168.1.0:'))).toBe(false);
     expect(ollamaProbes.some(u => u.includes('192.168.1.255:'))).toBe(false);
+  });
+
+  it('probes port 7878 across the subnet for the Off Grid AI Gateway', async () => {
+    mockGetIpAddress.mockResolvedValue('192.168.1.42'); // NOSONAR
+
+    const gatewayProbes: string[] = [];
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes(':7878')) gatewayProbes.push(url);
+      return Promise.resolve({ status: 503 });
+    });
+
+    await discoverLANServers();
+
+    expect(gatewayProbes).toHaveLength(254);
+    expect(gatewayProbes.every(u => u.endsWith('/v1/models'))).toBe(true);
   });
 });

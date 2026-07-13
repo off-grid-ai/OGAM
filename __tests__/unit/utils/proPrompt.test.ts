@@ -20,6 +20,7 @@ const mockedGetState = useAppStore.getState as jest.Mock;
 function makeStore(overrides: any = {}) {
   return {
     hasRegisteredPro: false,
+    isProActive: false,
     proAhaTriggeredBy: null,
     textGenerationCount: 3,
     imageGenerationCount: 3,
@@ -82,6 +83,13 @@ describe('checkProPromptForText', () => {
 
   it('skips when hasRegisteredPro=true', () => {
     const store = makeStore({ hasRegisteredPro: true });
+    mockedGetState.mockReturnValue(store);
+    checkProPromptForText(0);
+    expect(store.setProAhaTriggeredBy).not.toHaveBeenCalled();
+  });
+
+  it('skips when isProActive=true (keychain/dev-unlocked Pro user, never registered)', () => {
+    const store = makeStore({ hasRegisteredPro: false, isProActive: true });
     mockedGetState.mockReturnValue(store);
     checkProPromptForText(0);
     expect(store.setProAhaTriggeredBy).not.toHaveBeenCalled();

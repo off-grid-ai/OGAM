@@ -17,7 +17,6 @@
 */
 
 import React from 'react';
-import { Platform } from 'react-native';
 import { render, fireEvent, act } from '@testing-library/react-native';
 
 // Navigation is globally mocked in jest.setup.ts
@@ -84,7 +83,13 @@ jest.mock('../../../src/stores/downloadStore', () => {
     remove: mockRemoveDownloadEntry,
     setStatus: mockSetStatus,
   });
+  // Only the store hook is mocked; the pure status classifiers (isActiveStatus /
+  // isQueuedStatus / isDownloadingStatus) come from the REAL module so the test
+  // exercises the same classification the screen ships with — never a stubbed copy
+  // that could drift (that drift is exactly what let the queued/active bugs hide).
+  const actual = jest.requireActual('../../../src/stores/downloadStore');
   return {
+    ...actual,
     useDownloadStore: store,
     STUCK_THRESHOLD_MS: 30000,
   };
@@ -113,6 +118,7 @@ jest.mock('../../../src/services', () => ({
     cancelDownload: jest.fn(() => Promise.resolve()),
     retryDownload: jest.fn(() => Promise.resolve()),
     startProgressPolling: jest.fn(),
+    getQueuedItems: jest.fn(() => []),
   },
   activeModelService: {
     unloadTextModel: jest.fn(),
@@ -124,7 +130,28 @@ jest.mock('../../../src/services', () => ({
 }));
 
 // Get references to the mocked services after jest.mock is applied
-const { modelManager: mockModelManager, backgroundDownloadService: mockBackgroundDownloadService, hardwareService: mockHardwareService, activeModelService: mockActiveModelService } = jest.requireMock('../../../src/services');
+const { modelManager: mockModelManager, backgroundDownloadService: mockBackgroundDownloadService, hardwareService: mockHardwareService } = jest.requireMock('../../../src/services');
+
+// The Download Manager is a thin View: it dispatches cancel/retry/remove INTENTS to
+// ModelDownloadService (the single owner) and never performs the mechanism itself.
+// So these tests assert the View routes the correct uniform id; the actual
+// cancel/delete/retry mechanism is covered by the per-provider unit tests
+// (textDownloadProvider/imageDownloadProvider/sttProvider). This is also why the old
+// assertions against modelManager.deleteModel etc. were stale — that work moved into
+// the providers behind the service.
+const mockServiceRemove = jest.fn(async (..._a: any[]) => {});
+const mockServiceCancel = jest.fn(async (..._a: any[]) => {});
+const mockServiceRetry = jest.fn(async (..._a: any[]) => {});
+jest.mock('../../../src/services/modelDownloadService', () => ({
+  modelDownloadService: {
+    remove: (...a: any[]) => mockServiceRemove(...a),
+    cancel: (...a: any[]) => mockServiceCancel(...a),
+    retry: (...a: any[]) => mockServiceRetry(...a),
+    // useVoiceDownloadItems reads TTS state from here (single source w/ the Voice panel).
+    list: jest.fn(async () => []),
+    subscribe: jest.fn(() => () => {}),
+  },
+}));
 
 jest.mock('../../../src/components', () => ({
   Card: ({ children, style }: any) => {
@@ -240,6 +267,9 @@ describe('DownloadManagerScreen', () => {
     mockResetMmProjForRetry.mockReset();
     mockWatchDownload.mockReset();
     mockRemoveDownloadEntry.mockClear();
+    mockServiceRemove.mockReset(); mockServiceRemove.mockResolvedValue(undefined);
+    mockServiceCancel.mockReset(); mockServiceCancel.mockResolvedValue(undefined);
+    mockServiceRetry.mockReset(); mockServiceRetry.mockResolvedValue(undefined);
 
     // Restore mock implementations cleared by clearAllMocks
     mockBackgroundDownloadService.isAvailable.mockReturnValue(false);
@@ -302,6 +332,17 @@ describe('DownloadManagerScreen', () => {
     expect(getByText('model.gguf')).toBeTruthy();
     expect(getByText('The server could not resume this download. Please retry it.')).toBeTruthy();
     expect(queryByText('No active downloads')).toBeNull();
+  });
+
+  it('surfaces a queued (capped) download with the clock icon (icon-only, no "Queued" word)', () => {
+    mockBackgroundDownloadService.getQueuedItems.mockReturnValueOnce([
+      { modelKey: 'q/waiting.gguf', modelId: 'q/waiting', fileName: 'waiting.gguf', modelType: 'text', totalBytes: 5000 },
+    ]);
+    const { getByText, queryByText, getByLabelText } = render(<DownloadManagerScreen />);
+    expect(getByText('waiting.gguf')).toBeTruthy();
+    // The word "Queued" was dropped in favor of the clock icon (a11y label "Queued").
+    expect(queryByText('Queued')).toBeNull();
+    expect(getByLabelText('Queued')).toBeTruthy();
   });
 
   it('shows section headers for active and completed', () => {
@@ -542,9 +583,8 @@ describe('DownloadManagerScreen', () => {
 
   // ===== COVERAGE TESTS =====
 
-  it('confirming delete model calls deleteModel and removeDownloadedModel', async () => {
-    const removeDownloadedModel = jest.fn();
-    setupSingleModelState({ removeDownloadedModel });
+  it('confirming delete model dispatches remove to the service with the canonical text id', async () => {
+    setupSingleModelState();
 
     const { getAllByTestId, getByTestId } = render(<DownloadManagerScreen />);
 
@@ -558,14 +598,13 @@ describe('DownloadManagerScreen', () => {
       fireEvent.press(deleteConfirm);
     });
 
-    expect(mockModelManager.deleteModel).toHaveBeenCalledWith('model-1');
-    expect(removeDownloadedModel).toHaveBeenCalledWith('model-1');
+    // View dispatches the intent; the provider owns the deleteModel/unload mechanism.
+    expect(mockServiceRemove).toHaveBeenCalledWith('text:model-1');
   });
 
   it('delete model error shows error alert', async () => {
-    const removeDownloadedModel = jest.fn();
-    setupSingleModelState({ removeDownloadedModel });
-    mockModelManager.deleteModel.mockRejectedValueOnce(new Error('fail'));
+    setupSingleModelState();
+    mockServiceRemove.mockRejectedValueOnce(new Error('fail'));
 
     const { getAllByTestId, getByTestId } = render(<DownloadManagerScreen />);
 
@@ -607,9 +646,8 @@ describe('DownloadManagerScreen', () => {
       fireEvent.press(getByTestId('alert-button-Delete'));
     });
 
-    expect(mockActiveModelService.unloadImageModel).toHaveBeenCalled();
-    expect(mockModelManager.deleteImageModel).toHaveBeenCalledWith('img-1');
-    expect(removeDownloadedImageModel).toHaveBeenCalledWith('img-1');
+    // View dispatches the intent; imageProvider.remove owns unload + deleteImageModel.
+    expect(mockServiceRemove).toHaveBeenCalledWith('image:img-1');
   });
 
   it('delete image model error shows error alert', async () => {
@@ -628,7 +666,7 @@ describe('DownloadManagerScreen', () => {
       ],
     });
     mockStoreState(state);
-    mockActiveModelService.unloadImageModel.mockRejectedValueOnce(new Error('fail'));
+    mockServiceRemove.mockRejectedValueOnce(new Error('fail'));
 
     const { getAllByTestId, getByTestId } = render(<DownloadManagerScreen />);
 
@@ -668,7 +706,9 @@ describe('DownloadManagerScreen', () => {
       fireEvent.press(getByTestId('alert-button-Yes'));
     });
 
-    expect(mockModelManager.cancelBackgroundDownload).toHaveBeenCalledWith('dl-remove-1');
+    // View dispatches cancel by the canonical id (text = the modelKey, matching the
+    // finished model's id); the provider performs the native cancel.
+    expect(mockServiceCancel).toHaveBeenCalledWith('text:author/model-id/model-file.gguf');
   });
 
   it('confirming remove download for image model cancels it', async () => {
@@ -697,7 +737,8 @@ describe('DownloadManagerScreen', () => {
       fireEvent.press(getByTestId('alert-button-Yes'));
     });
 
-    expect(mockModelManager.cancelBackgroundDownload).toHaveBeenCalledWith('dl-img-1');
+    // image:sd-turbo store modelId → canonical image:sd-turbo (prefix-idempotent).
+    expect(mockServiceCancel).toHaveBeenCalledWith('image:sd-turbo');
   });
 
   it('renders background download items from active downloads with metadata', () => {
@@ -796,13 +837,10 @@ describe('DownloadManagerScreen', () => {
     expect(result.getByText('valid.gguf')).toBeTruthy();
   });
 
-  it('retries failed text downloads on Android, including mmproj reset and reattach', async () => {
-    const originalOs = Platform.OS;
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-    const setDownloadedModels = jest.fn();
-    mockStoreState(createDefaultState({ setDownloadedModels }));
-    mockModelManager.getDownloadedModels.mockResolvedValueOnce([standardModel]);
-
+  it('dispatches retry to the service with the canonical id for a failed text download', async () => {
+    // The retry MECHANISM (Android setStatus/retryDownload/resetMmProjForRetry/reattach,
+    // iOS re-download) lives in textProvider.retry — covered by textDownloadProvider's
+    // unit tests. The View's only job is to route the intent with the right id.
     mockDownloadStoreDownloads = {
       'author/vision/vision.gguf': {
         modelKey: 'author/vision/vision.gguf',
@@ -825,27 +863,13 @@ describe('DownloadManagerScreen', () => {
       },
     };
 
-    try {
-      const { getByTestId } = render(<DownloadManagerScreen />);
+    const { getByTestId } = render(<DownloadManagerScreen />);
 
-      await act(async () => {
-        fireEvent.press(getByTestId('failed-retry-button'));
-      });
+    await act(async () => {
+      fireEvent.press(getByTestId('failed-retry-button'));
+    });
 
-      expect(mockSetStatus).toHaveBeenCalledWith('dl-main', 'pending');
-      expect(mockBackgroundDownloadService.retryDownload).toHaveBeenNthCalledWith(1, 'dl-main');
-      expect(mockSetStatus).toHaveBeenCalledWith('dl-mmproj', 'pending');
-      expect(mockBackgroundDownloadService.retryDownload).toHaveBeenNthCalledWith(2, 'dl-mmproj');
-      expect(mockModelManager.resetMmProjForRetry).toHaveBeenCalledWith('dl-main');
-      expect(mockModelManager.watchDownload).toHaveBeenCalledWith(
-        'dl-main',
-        expect.any(Function),
-        expect.any(Function),
-      );
-      expect(mockBackgroundDownloadService.startProgressPolling).toHaveBeenCalled();
-    } finally {
-      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOs });
-    }
+    expect(mockServiceRetry).toHaveBeenCalledWith('text:author/vision/vision.gguf');
   });
 
   // ===== BRANCH COVERAGE TESTS =====

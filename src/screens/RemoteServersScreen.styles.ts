@@ -1,4 +1,5 @@
 import type { ThemeColors, ThemeShadows } from '../theme/palettes';
+import { SPACING, TYPOGRAPHY } from '../constants';
 
 export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
   return {
@@ -53,6 +54,17 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
       color: colors.textSecondary,
       textAlign: 'center' as const,
       paddingHorizontal: 32,
+    },
+    desktopLink: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: SPACING.sm,
+      marginTop: SPACING.md,
+      paddingVertical: SPACING.xs,
+    },
+    desktopLinkText: {
+      ...TYPOGRAPHY.body,
+      color: colors.primary,
     },
     serverItem: {
       backgroundColor: colors.surface,

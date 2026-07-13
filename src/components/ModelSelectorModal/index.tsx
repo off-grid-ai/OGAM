@@ -12,6 +12,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore, useRemoteServerStore } from '../../stores';
 import { DownloadedModel, ONNXImageModel, RemoteModel } from '../../types';
 import { activeModelService, llmService, remoteServerManager } from '../../services';
+import { loadModelWithOverride } from '../../services/loadModelWithOverride';
 import { CustomAlert, AlertState, initialAlertState, showAlert } from '../CustomAlert';
 import { createAllStyles } from './styles';
 import { TextTab } from './TextTab';
@@ -55,7 +56,12 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createAllStyles);
-  const { downloadedModels, downloadedImageModels, activeImageModelId } = useAppStore();
+  const { downloadedModels, downloadedImageModels, activeImageModelId, activeModelId } = useAppStore();
+  // Under deferred loading no model is loaded until first send, so `currentModelPath`
+  // (the loaded path) is null and the switcher would show "Available Models" with
+  // nothing marked active. Fall back to the SELECTED model so the user can see and
+  // switch their active model before it's loaded.
+  const selectedModelPath = downloadedModels.find(m => m.id === activeModelId)?.filePath ?? null;
   const {
     servers,
     discoveredModels,
@@ -99,19 +105,22 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
 
   const handleSelectImageModel = async (model: ONNXImageModel) => {
     if (activeImageModelId === model.id) return;
-    setIsLoadingImage(true);
-    try {
-      await activeModelService.loadImageModel(model.id);
-      // Clear remote selection when selecting local
-      setActiveRemoteImageModelId(null);
-      onSelectImageModel?.(model);
-      onSelectionComplete?.();
-    } catch (error) {
-      logger.error('Failed to load image model:', error);
-      setAlertState(showAlert('Failed to Load', (error as Error).message));
-    } finally {
-      setIsLoadingImage(false);
-    }
+    // Shared inline Load-Anyway flow so a memory-blocked image load offers the
+    // override here too, instead of a dead-end "Failed to Load".
+    await loadModelWithOverride(
+      (opts) => activeModelService.loadImageModel(model.id, undefined, opts),
+      {
+        setAlertState,
+        onAttemptStart: () => setIsLoadingImage(true),
+        onAttemptEnd: () => setIsLoadingImage(false),
+        onSuccess: () => {
+          setActiveRemoteImageModelId(null); // clear remote selection when selecting local
+          onSelectImageModel?.(model);
+          onSelectionComplete?.();
+        },
+        onError: (error) => logger.error('Failed to load image model:', error),
+      },
+    );
   };
 
   const handleUnloadImageModel = async () => {
@@ -216,6 +225,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
               downloadedModels={filteredDownloadedModels}
               remoteModels={remoteTextModels}
               currentModelPath={currentModelPath}
+              selectedModelPath={selectedModelPath}
               currentRemoteModelId={activeRemoteTextModelId}
               isAnyLoading={isAnyLoading}
               onSelectModel={handleSelectLocalModel}

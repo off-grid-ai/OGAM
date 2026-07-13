@@ -47,6 +47,55 @@ describe('ModelCard', () => {
   };
 
   // ============================================================================
+  // Queued vs downloading — the shared card contract every tab now relies on.
+  // Text/Image/STT tabs all feed ModelCard isQueued/isDownloading from the ONE
+  // classifier; this pins the render so a queued download shows the clock (not
+  // "downloading 0%") uniformly — the image/STT queued-icon bug this refactor fixed.
+  // ============================================================================
+  describe('queued vs downloading state', () => {
+    it('renders the Queued clock (accessibilityLabel "Queued") when isQueued', () => {
+      const { getByLabelText } = render(
+        <ModelCard model={baseModel} isQueued downloadProgress={0} />
+      );
+      expect(getByLabelText('Queued')).toBeTruthy();
+    });
+
+    it('does NOT render the Queued clock when actively downloading', () => {
+      const { queryByLabelText } = render(
+        <ModelCard model={baseModel} isDownloading downloadProgress={0.4} />
+      );
+      expect(queryByLabelText('Queued')).toBeNull();
+    });
+
+    it('shows bytes AND percent together (caption row) while downloading', () => {
+      const { getByText } = render(
+        <ModelCard
+          model={baseModel}
+          isDownloading
+          downloadProgress={0.5}
+          downloadBytes={{ downloaded: 2 * 1024 * 1024 * 1024, total: 4 * 1024 * 1024 * 1024 }}
+        />
+      );
+      // Both the size caption and the percent render (full-width bar + left/right row).
+      expect(getByText('2.0 GB / 4.0 GB')).toBeTruthy();
+      expect(getByText('50%')).toBeTruthy();
+    });
+
+    it('shows bytes alongside the Queued label (queued reads "0 B / size")', () => {
+      const { getByText, getByLabelText } = render(
+        <ModelCard
+          model={baseModel}
+          isQueued
+          downloadProgress={0}
+          downloadBytes={{ downloaded: 0, total: 4 * 1024 * 1024 * 1024 }}
+        />
+      );
+      expect(getByLabelText('Queued')).toBeTruthy();
+      expect(getByText('0 B / 4.0 GB')).toBeTruthy();
+    });
+  });
+
+  // ============================================================================
   // Basic Rendering
   // ============================================================================
   describe('basic rendering', () => {
@@ -233,6 +282,58 @@ describe('ModelCard', () => {
         />
       );
       expect(getByText('7B params')).toBeTruthy();
+    });
+
+    it('shows the NPU/GPU badge when supportsAcceleration is set', () => {
+      const { getByText, queryByTestId } = render(
+        <ModelCard model={{ ...baseModel, paramCount: 7 }} compact={true} supportsAcceleration />
+      );
+      expect(getByText('NPU/GPU')).toBeTruthy();
+      expect(queryByTestId('npu-gpu-badge')).toBeTruthy();
+    });
+
+    it('hides the NPU/GPU badge when the model is not accelerable', () => {
+      const { queryByText, queryByTestId } = render(
+        <ModelCard model={{ ...baseModel, paramCount: 7 }} compact={true} supportsAcceleration={false} />
+      );
+      expect(queryByText('NPU/GPU')).toBeNull();
+      expect(queryByTestId('npu-gpu-badge')).toBeNull();
+    });
+
+    it('shows the NPU/GPU badge in standard (non-compact) mode too — the quant-file cards', () => {
+      const { getByText } = render(
+        <ModelCard model={baseModel} supportsAcceleration />
+      );
+      expect(getByText('NPU/GPU')).toBeTruthy();
+    });
+
+    it('shows cumulative bytes and "N downloads" when multiple downloads run', () => {
+      const { getByText } = render(
+        <ModelCard
+          model={baseModel}
+          compact
+          isDownloading
+          downloadProgress={0.5}
+          downloadBytes={{ downloaded: 1.5 * 1024 * 1024 * 1024, total: 10 * 1024 * 1024 * 1024 }}
+          downloadCount={2}
+        />
+      );
+      expect(getByText('1.5 GB / 10.0 GB · 2 downloads')).toBeTruthy();
+    });
+
+    it('omits the "N downloads" note for a single download', () => {
+      const { getByText, queryByText } = render(
+        <ModelCard
+          model={baseModel}
+          compact
+          isDownloading
+          downloadProgress={0.5}
+          downloadBytes={{ downloaded: 2 * 1024 * 1024 * 1024, total: 4 * 1024 * 1024 * 1024 }}
+          downloadCount={1}
+        />
+      );
+      expect(getByText('2.0 GB / 4.0 GB')).toBeTruthy();
+      expect(queryByText(/downloads/)).toBeNull();
     });
 
     it('shows min RAM badge in compact mode', () => {
@@ -823,7 +924,7 @@ describe('ModelCard', () => {
       expect(queryByText('Vision')).toBeTruthy();
     });
 
-    it('renders the highlight line below chips in compact mode', () => {
+    it('renders the highlight as part of the common description (compact)', () => {
       const { getByText } = render(
         <ModelCard
           model={baseModel}
@@ -834,16 +935,27 @@ describe('ModelCard', () => {
       expect(getByText('Hardware-accelerated inference with vision support')).toBeTruthy();
     });
 
-    it('suppresses the compact description when highlightText is provided', () => {
-      const { queryByText } = render(
+    it('shows description AND highlight together in the common slot (no suppression)', () => {
+      const { getByText } = render(
         <ModelCard
-          model={{ ...baseModel, description: 'Should not appear in compact' }}
+          model={{ ...baseModel, description: 'Gemma model' }}
           compact={true}
-          recommended={{ highlightText: 'Replaces description in compact' }}
+          recommended={{ highlightText: 'Up to 2x faster via GPU' }}
         />,
       );
-      expect(queryByText('Should not appear in compact')).toBeNull();
-      expect(queryByText('Replaces description in compact')).toBeTruthy();
+      // Both render, combined into one common muted description line.
+      expect(getByText('Gemma model Up to 2x faster via GPU')).toBeTruthy();
+    });
+
+    it('does not duplicate when description equals the highlight (deduped)', () => {
+      const { getAllByText } = render(
+        <ModelCard
+          model={{ ...baseModel, description: 'Up to 2x faster via GPU' }}
+          compact={true}
+          recommended={{ highlightText: 'Up to 2x faster via GPU' }}
+        />,
+      );
+      expect(getAllByText('Up to 2x faster via GPU')).toHaveLength(1);
     });
 
     it('still renders the description when no highlightText is provided', () => {
@@ -857,7 +969,7 @@ describe('ModelCard', () => {
       expect(getByText('Visible description')).toBeTruthy();
     });
 
-    it('renders pill + highlight in standard (non-compact) mode below description', () => {
+    it('renders pill + combined description/highlight in standard (non-compact) mode', () => {
       const { getByText } = render(
         <ModelCard
           model={{ ...baseModel, description: 'Detail description' }}
@@ -865,8 +977,8 @@ describe('ModelCard', () => {
         />,
       );
       expect(getByText('Recommended')).toBeTruthy();
-      expect(getByText('Detail description')).toBeTruthy();
-      expect(getByText('Up to 2x faster via GPU')).toBeTruthy();
+      // Description + highlight render as one common line (not a separate colour/slot).
+      expect(getByText('Detail description Up to 2x faster via GPU')).toBeTruthy();
     });
 
     it('does not render pill or highlight when recommended prop is absent', () => {

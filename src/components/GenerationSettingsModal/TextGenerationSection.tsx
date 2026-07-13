@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View } from 'react-native';
 import { SliderSetting } from '../SliderSetting';
 import { AdvancedToggle } from '../AdvancedToggle';
 import { useThemedStyles } from '../../theme';
@@ -13,6 +13,8 @@ import {
   LiteRTBackendSelector,
   FlashAttentionToggle,
   KvCacheTypeToggle,
+  AggressiveLoadingToggle,
+  ShowGenerationDetailsToggle,
 } from './TextGenerationAdvanced';
 
 interface SettingConfig {
@@ -139,39 +141,6 @@ const SettingSlider: React.FC<{ config: SettingConfig }> = ({ config }) => {
   );
 };
 
-// ─── Show Generation Details ──────────────────────────────────────────────────
-
-const ShowGenerationDetailsToggle: React.FC = () => {
-  const styles = useThemedStyles(createStyles);
-  const { settings, updateSettings } = useAppStore();
-  const isOn = settings.showGenerationDetails;
-
-  return (
-    <View style={styles.modeToggleContainer}>
-      <View style={styles.modeToggleInfo}>
-        <Text style={styles.modeToggleLabel}>Show Generation Details</Text>
-        <Text style={styles.modeToggleDesc}>
-          Display GPU, model, tok/s, and image settings below each message
-        </Text>
-      </View>
-      <View style={styles.modeToggleButtons}>
-        <TouchableOpacity
-          style={[styles.modeButton, !isOn && styles.modeButtonActive]}
-          onPress={() => updateSettings({ showGenerationDetails: false })}
-        >
-          <Text style={[styles.modeButtonText, !isOn && styles.modeButtonTextActive]}>Off</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.modeButton, isOn && styles.modeButtonActive]}
-          onPress={() => updateSettings({ showGenerationDetails: true })}
-        >
-          <Text style={[styles.modeButtonText, isOn && styles.modeButtonTextActive]}>On</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
-
 // ─── LiteRT Section ───────────────────────────────────────────────────────────
 
 const LiteRTTextGenerationSection: React.FC = () => {
@@ -201,6 +170,7 @@ const LiteRTTextGenerationSection: React.FC = () => {
             <SettingSlider key={c.key} config={c} />
           ))}
           <LiteRTBackendSelector />
+          <AggressiveLoadingToggle />
         </>
       )}
     </View>
@@ -240,6 +210,7 @@ const LlamaTextGenerationSection: React.FC = () => {
           <BackendSelector />
           <FlashAttentionToggle />
           <KvCacheTypeToggle />
+          <AggressiveLoadingToggle />
         </>
       )}
     </View>

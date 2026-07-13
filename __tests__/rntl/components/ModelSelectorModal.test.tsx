@@ -238,12 +238,32 @@ describe('ModelSelectorModal', () => {
       expect(getByText('Download models from the Models tab')).toBeTruthy();
     });
 
-    it('shows "Available Models" title when no model is loaded', () => {
+    it('shows "Available Models" title when no model is loaded or selected', () => {
       const { getByText } = render(
         <ModelSelectorModal {...defaultProps} />
       );
 
       expect(getByText('Available Models')).toBeTruthy();
+    });
+
+    it('shows "Switch Model" when a model is SELECTED but not yet loaded (deferred loading)', () => {
+      // currentModelPath null (nothing loaded), but activeModelId picks the selected model.
+      mockUseAppStore.mockReturnValue({
+        downloadedModels: [
+          { id: 'model1', name: 'Test Model', filePath: '/path/model1.gguf', fileSize: 4000000000, quantization: 'Q4_K_M' },
+        ],
+        downloadedImageModels: [],
+        activeImageModelId: null,
+        activeModelId: 'model1',
+      });
+      const { getByText, queryByText } = render(
+        <ModelSelectorModal {...defaultProps} currentModelPath={null} />
+      );
+
+      // Switcher reflects the selection even though nothing is loaded yet...
+      expect(getByText('Switch Model')).toBeTruthy();
+      // ...but the "Currently Loaded" / Unload affordance stays hidden (nothing in memory).
+      expect(queryByText('Currently Loaded')).toBeNull();
     });
 
     it('shows quantization info for models', () => {
@@ -514,6 +534,23 @@ describe('ModelSelectorModal', () => {
   // Image Tab
   // ============================================================================
   describe('image tab', () => {
+    it('opens directly on the image tab when initialTab="image" (F-SHEET)', () => {
+      // Tapping the "Image" row in the models manager must open the selector focused on
+      // Image, not default to Text. The modal honors initialTab; the manager now passes it.
+      mockUseAppStore.mockReturnValue({
+        downloadedModels: [],
+        downloadedImageModels: [],
+        activeImageModelId: null,
+      });
+
+      const { getByText } = render(
+        <ModelSelectorModal {...defaultProps} initialTab="image" />
+      );
+
+      // No tab press needed — image content is shown immediately.
+      expect(getByText('No Image Models')).toBeTruthy();
+    });
+
     it('switches to image tab when Image is pressed', () => {
       mockUseAppStore.mockReturnValue({
         downloadedModels: [],
@@ -649,7 +686,8 @@ describe('ModelSelectorModal', () => {
         fireEvent.press(getByText('SD Model'));
       });
 
-      expect(activeModelService.loadImageModel).toHaveBeenCalledWith('img1');
+      // Loaded via the shared loadModelWithOverride helper (id, timeout, override opts).
+      expect(activeModelService.loadImageModel).toHaveBeenCalledWith('img1', undefined, undefined);
     });
 
     it('does not call loadImageModel when pressing the currently active image model', async () => {

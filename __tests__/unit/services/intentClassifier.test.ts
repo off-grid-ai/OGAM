@@ -272,6 +272,64 @@ describe('IntentClassifier', () => {
         expect(result).toBe('image');
       });
     });
+
+    describe('Bare-verb / article-optional colloquial requests', () => {
+      // Colloquial and voice phrasing drops the article ("draw dog" not
+      // "draw a dog"). These must still route to image.
+      const bareVerbPhrases = [
+        'draw dog',
+        'sketch cat',
+        'paint mountains',
+        'generate dog illustration',
+        'illustrate dragon',
+        'render robot',
+        'sketch a cat at sunset',
+        'can you draw mountains',
+        'please paint sunset',
+        'draw the dragon',
+      ];
+
+      test.each(bareVerbPhrases)('"%s" should classify as image', async (message) => {
+        const result = await intentClassifier.classifyIntent(message, { useLLM: false });
+        expect(result).toBe('image');
+      });
+    });
+
+    describe('make/create/generate + bare noun - acceptable as text (not forced to image)', () => {
+      // We deliberately do not broaden make/create/generate to a bare noun: they
+      // head too many text requests (code, lists, idioms). These may classify as
+      // text (or null → LLM), which is acceptable and preferable to forcing image.
+      const ambiguousBareVerbPhrases = [
+        'make sunset',
+        'generate dog',
+      ];
+
+      test.each(ambiguousBareVerbPhrases)('"%s" should NOT be forced to image', async (message) => {
+        const result = await intentClassifier.classifyIntent(message, { useLLM: false });
+        expect(result).not.toBe('image');
+      });
+    });
+
+    describe('Figurative idioms - must NOT be forced to image', () => {
+      // These verbs head common figurative idioms that are text requests, not
+      // image generation. They must classify as text or stay uncertain (null →
+      // 'image' is the failure we are guarding against).
+      const idiomPhrases = [
+        'draw a conclusion',
+        'draw the line',
+        'draw a comparison',
+        'draw a distinction',
+        'draw a parallel',
+        'make dinner',
+        'make sense',
+        'make a decision',
+      ];
+
+      test.each(idiomPhrases)('"%s" should NOT classify as image', async (message) => {
+        const result = await intentClassifier.classifyIntent(message, { useLLM: false });
+        expect(result).not.toBe('image');
+      });
+    });
   });
 
   // ============================================================================

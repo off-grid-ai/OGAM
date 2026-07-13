@@ -1,0 +1,35 @@
+diff --git a/node_modules/@kesha-antonov/react-native-background-downloader/ios/RNBackgroundDownloader.mm b/node_modules/@kesha-antonov/react-native-background-downloader/ios/RNBackgroundDownloader.mm
+index cd26a05..bc75c1d 100644
+--- a/node_modules/@kesha-antonov/react-native-background-downloader/ios/RNBackgroundDownloader.mm
++++ b/node_modules/@kesha-antonov/react-native-background-downloader/ios/RNBackgroundDownloader.mm
+@@ -1260,12 +1260,25 @@ - (void)deleteResumeDataForTaskId:(NSString *)taskId {
+ // when NSURLSession delegate callbacks fire before JS has registered listeners
+ // (e.g., background session delivering completions from a prior app session).
+ - (void)safeEmitEvent:(NSString *)eventName value:(id)value {
+-    @synchronized (pendingEmitEvents) {
+-        if (_eventEmitterCallback) {
+-            _eventEmitterCallback(std::string([eventName UTF8String]), value);
+-        } else {
+-            [pendingEmitEvents addObject:@{@"name": eventName, @"value": value}];
++    // The TurboModule JSI event emitter must be invoked on a single, consistent thread.
++    // NSURLSession delegate callbacks (didWriteData -> flushProgressReportsIfNeeded, etc.)
++    // fire on a background queue, and calling _eventEmitterCallback from there races the
++    // JS runtime's emitter map — an EXC_BAD_ACCESS (pointer-authentication failure) under
++    // load. Marshal every emission onto the main queue so they're serialized off the
++    // volatile delegate threads.
++    dispatch_block_t emit = ^{
++        @synchronized (self->pendingEmitEvents) {
++            if (self->_eventEmitterCallback) {
++                self->_eventEmitterCallback(std::string([eventName UTF8String]), value);
++            } else {
++                [self->pendingEmitEvents addObject:@{@"name": eventName, @"value": value}];
++            }
+         }
++    };
++    if ([NSThread isMainThread]) {
++        emit();
++    } else {
++        dispatch_async(dispatch_get_main_queue(), emit);
+     }
+ }
+ 

@@ -13,6 +13,18 @@ try {
   // Built-in matchers in v12.4+, or no matchers needed for basic tests
 }
 
+// Raise RNTL's async-util timeout (waitFor/findBy) from the 1s default to 5s. Under heavy
+// parallelism (the pre-push --findRelatedTests run fans hundreds of Message-importing
+// suites across all workers), the 1s default starves — a genuinely-passing waitFor poll
+// doesn't get scheduled in time and flakes. 5s is load-tolerant yet well under the 10s
+// jest testTimeout, so passing tests stay fast and only starved ones get grace. Removes a
+// whole class of load-dependent flakiness without changing any assertion.
+try {
+  require('@testing-library/react-native').configure({ asyncUtilTimeout: 5000 });
+} catch {
+  // RNTL not present in a given suite's module graph — nothing to configure.
+}
+
 const shouldPrintJestConsole = process.env.DEBUG_JEST_CONSOLE === '1';
 
 // react-native-keyboard-controller ships a jest mock; without it, any test that
@@ -205,7 +217,17 @@ jest.mock('@react-native-community/slider', () => {
 });
 
 // react-native-executorch mock
-const mockVoiceConfig = { id: 'mock_voice' };
+// A voice carries its own assets (embedding + tagger + lexicon) in addition to
+// the two shared core .pte models — mirror that so completeness checks
+// (_activeVoiceSources) have a realistic full asset set to validate against.
+const mockVoiceConfig = {
+  id: 'mock_voice',
+  voiceSource: 'https://example.test/kokoro/voices/af_heart.bin',
+  extra: {
+    taggerSource: 'https://example.test/kokoro/tagger.pt',
+    lexiconSource: 'https://example.test/kokoro/lexicon.json',
+  },
+};
 jest.mock('react-native-executorch', () => ({
   useTextToSpeech: jest.fn(() => ({
     isReady: true,
@@ -238,6 +260,7 @@ jest.mock(
       listDownloadedModels: jest.fn(async () => [] as string[]),
       listDownloadedFiles: jest.fn(async () => [] as string[]),
       deleteResources: jest.fn(async () => {}),
+      fetch: jest.fn(async () => {}),
     },
   }),
   { virtual: true },

@@ -1,13 +1,12 @@
-/**
- * GenerationService helper implementations — extracted to keep generationService.ts under 350 lines.
- * All functions receive the GenerationService instance as `svc: any` and mutate its internal state.
- */
+// GenerationService helpers (extracted to keep generationService.ts small). Each receives
+// the GenerationService instance as `svc: any` and mutates its internal state.
 import { llmService } from './llm';
 import { liteRTService } from './litert';
 import { getActiveEngineService } from './engines';
 import { useAppStore, useChatStore, useRemoteServerStore } from '../stores';
 import type { Message, GenerationMeta } from '../types';
 import { runToolLoop, buildLiteRTHistory } from './generationToolLoop';
+import { effectiveCacheType } from './llmHelpers';
 import type { ToolResult } from './tools/types';
 import type { GenerationOptions, CompletionResult } from './providers/types';
 import logger from '../utils/logger';
@@ -105,7 +104,7 @@ function buildBaseGenerationMeta(svc: any): GenerationMeta {
     decodeTokensPerSecond: perf.lastDecodeTokensPerSecond,
     timeToFirstToken: perf.lastTimeToFirstToken,
     tokenCount: perf.lastTokenCount,
-    cacheType: settings.cacheType,
+    cacheType: effectiveCacheType(settings.inferenceBackend, settings.cacheType),
   };
 }
 
