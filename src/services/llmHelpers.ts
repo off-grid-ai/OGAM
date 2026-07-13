@@ -234,6 +234,7 @@ export interface GpuInfo {
   gpuReason: string;
   gpuDevices: string[];
   activeGpuLayers: number;
+  gpuAttemptFailed: boolean;
 }
 
 export function captureGpuInfo(
@@ -246,7 +247,21 @@ export function captureGpuInfo(
   const gpuDevices = (context as any).devices ?? [];
   const activeGpuLayers = gpuAttemptFailed ? 0 : nGpuLayers;
   const gpuEnabled = nativeGpuAvailable && activeGpuLayers > 0;
-  return { gpuEnabled, gpuReason, gpuDevices, activeGpuLayers };
+  return { gpuEnabled, gpuReason, gpuDevices, activeGpuLayers, gpuAttemptFailed };
+}
+
+/**
+ * UI copy for a GPU-selected load that landed on CPU (0 layers offloaded). SINGLE source for the
+ * fallback verdict: the user asked for GPU layers and got none — an init failure/timeout
+ * (gpuAttemptFailed) or a pre-init refusal (device capability / RAM cap zeroed the attempt).
+ * Null = nothing to report (CPU was selected, or the GPU offload succeeded). Never silent:
+ * the device-reported "Backend=GPU but the turn ran on CPU at 3.4 tok/s" class (2026-07-13 18:57).
+ */
+export function describeGpuFallback(info: { requestedGpuLayers: number; activeGpuLayers: number; gpuAttemptFailed: boolean }): string | null {
+  if (info.requestedGpuLayers <= 0 || info.activeGpuLayers > 0) return null;
+  return info.gpuAttemptFailed
+    ? 'GPU unavailable - its initialization failed or timed out. Running on CPU.'
+    : 'GPU unavailable on this device - running on CPU.';
 }
 export function supportsNativeThinking(context: LlamaContext | null): boolean {
   if (!context) return false;

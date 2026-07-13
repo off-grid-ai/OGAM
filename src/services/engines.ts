@@ -113,6 +113,17 @@ export function isModelReady(model: { engine?: string; filePath?: string } | nul
 }
 
 /**
+ * A user-facing notice when a just-loaded LOCAL text model silently downgraded its backend
+ * (GPU selected, 0 layers offloaded — the device-reported "Backend=GPU but meta says CPU" class).
+ * Engine-dispatched here so callers never branch: LiteRT reports its backend through its own
+ * load result, so only the llama engine carries this verdict. Null = nothing to report.
+ */
+export function backendFallbackNotice(model: { engine?: string } | null | undefined): string | null {
+  if (!model || model.engine === 'litert') return null;
+  return llmService.getBackendFallbackNotice();
+}
+
+/**
  * Live capabilities of the ACTIVE text model (remote OR local), read from the running services
  * and fed through the one pure rule (deriveEngineCapabilities). The imperative counterpart to the
  * pure fn: every caller (generation routing, UI capability flags) uses THIS instead of poking

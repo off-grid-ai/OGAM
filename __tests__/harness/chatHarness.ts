@@ -357,7 +357,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
      * send button, and await the assistant reply rendering. `scripted` is what the (faked) native engine
      * returns — the real generation pipeline turns it into the rendered bubble.
      */
-    async send(text: string, scripted: { text?: string; content?: string; reasoning?: string; toolCalls?: unknown[]; completionMeta?: CompletionMeta }) {
+    async send(text: string, scripted: { text?: string; content?: string; reasoning?: string; thinkingText?: string; toolCalls?: unknown[]; completionMeta?: CompletionMeta }) {
       if (opts.engine === 'llama') boundary.llama!.scriptCompletion(scripted as { text?: string });
       else boundary.litert.scriptTurn(scripted as { content?: string; toolCalls?: { name: string; arguments: Record<string, unknown> }[] });
 

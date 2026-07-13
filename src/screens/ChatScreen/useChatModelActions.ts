@@ -5,7 +5,7 @@ import {
   hideAlert,
 } from '../../components';
 import { llmService, activeModelService, modelManager } from '../../services';
-import { isModelReady, activeLocalTextCapabilities, activeTextCapabilities } from '../../services/engines';
+import { isModelReady, activeLocalTextCapabilities, activeTextCapabilities, backendFallbackNotice } from '../../services/engines';
 import { useAppStore } from '../../stores';
 import { DownloadedModel, RemoteModel, ONNXImageModel, isLiteRTModel } from '../../types';
 import logger from '../../utils/logger';
@@ -68,6 +68,22 @@ function addSystemMsg(
   });
 }
 
+/**
+ * Surface a silent backend downgrade after a successful load — NOT gated on showGenerationDetails:
+ * a user who explicitly selected GPU and got CPU must see it without any debug setting (the
+ * device-reported "Backend=GPU but the turn ran on CPU" class). The verdict is owned by the
+ * engine layer (engines.backendFallbackNotice); this only renders it.
+ */
+function addBackendFallbackMsg(deps: Pick<ModelActionDeps, 'activeModel' | 'activeConversationId' | 'addMessage'>) {
+  const notice = backendFallbackNotice(deps.activeModel);
+  if (!notice || !deps.activeConversationId) return;
+  deps.addMessage(deps.activeConversationId, {
+    role: 'assistant',
+    content: `_${notice}_`,
+    isSystemInfo: true,
+  });
+}
+
 async function doLoadTextModel(deps: ModelActionDeps, opts?: { override?: boolean }): Promise<void> {
   const { activeModel, activeModelId } = deps;
   if (!activeModel || !activeModelId) return;
@@ -78,6 +94,7 @@ async function doLoadTextModel(deps: ModelActionDeps, opts?: { override?: boolea
       const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
       addSystemMsg(deps, `Model loaded: ${activeModel.name} (${loadTime}s)`);
     }
+    addBackendFallbackMsg(deps);
   } catch (error: any) {
     deps.setAlertState(showAlert('Error', `Failed to load model: ${error?.message || 'Unknown error'}`));
   } finally {
@@ -117,6 +134,7 @@ export async function initiateModelLoad(
       const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
       addSystemMsg(deps, `Model loaded: ${activeModel.name} (${loadTime}s)`);
     }
+    if (!alreadyLoading) addBackendFallbackMsg(deps);
     return { ok: true };
   } catch (error: any) {
     const detail = error?.message || 'Unknown error';

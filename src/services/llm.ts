@@ -11,6 +11,7 @@ import {
   buildCompletionParams, buildThinkingCompletionParams, supportsNativeThinking,
   getMaxContextForDevice, getGpuLayersForDevice, BYTES_PER_GB,
   validateModelFile, checkMemoryForModel, safeCompletion, resolveSafeContext,
+  describeGpuFallback,
 } from './llmHelpers';
 import { hardwareService } from './hardware';
 import { formatLlamaMessages, buildOAIMessages } from './llmMessages';
@@ -40,8 +41,12 @@ class LLMService {
   private gpuReason: string = '';
   private gpuDevices: string[] = [];
   private activeGpuLayers: number = 0;
+  private gpuAttemptFailed: boolean = false;
   private toolCallingSupported: boolean = false;
   private thinkingSupported: boolean = false;
+  /** GPU layers the user's settings asked for at load time (pre device-cap/backend resolution).
+   *  >0 with activeGpuLayers 0 means the load silently downgraded to CPU — the fallback-notice verdict. */
+  private requestedGpuLayers: number = 0;
   private sessionCacheDir: string = `${RNFS.CachesDirectoryPath}/llm-sessions`;
   /** Serializes loadModel / unloadModel / reloadWithSettings to prevent concurrent native context init. */
   private contextMutexPromise: Promise<void> = Promise.resolve();
@@ -86,19 +91,30 @@ class LLMService {
     logger.log(`[LLM] Memory check: estimatedMB=${memCheck.estimatedMB.toFixed(0)}, availableMB=${memCheck.availableMB.toFixed(0)}, safe=${memCheck.safe}, ctx=${params.ctxLen}`);
     return { fileSize, memCheck, params };
   }
-  private async applyLoadedContext(opts: { context: LlamaContext; actualLength: number; gpuAttemptFailed: boolean; nGpuLayers: number; modelPath: string; mmProjPath?: string }): Promise<void> {
-    const { context, actualLength, gpuAttemptFailed, nGpuLayers, modelPath, mmProjPath } = opts;
-    this.context = context;
-    if (actualLength !== this.currentSettings.contextLength) this.currentSettings.contextLength = actualLength;
+  private async applyLoadedContext(opts: { context: LlamaContext; actualLength: number; gpuAttemptFailed: boolean; nGpuLayers: number; requestedGpuLayers: number; modelPath: string; mmProjPath?: string }): Promise<void> {
+    const { context, actualLength, gpuAttemptFailed, nGpuLayers, requestedGpuLayers, modelPath, mmProjPath } = opts;
     logContextMetadata(context, actualLength);
-    useAppStore.getState().setModelMaxContext(getModelMaxContext(context));
-    Object.assign(this, captureGpuInfo(context, gpuAttemptFailed, nGpuLayers));
     logger.log(`[LLM] Native lib: ${(context as any).androidLib || 'N/A'}`);
+    // Derive EVERYTHING on the local context first; publish in one synchronous block at the end.
+    // isModelLoaded() (context !== null) is the readiness signal ensureModelReady trusts — publishing
+    // it before the (seconds-long on device) multimodal probe + capability detection let a racing send
+    // generate with stale thinkingSupported/toolCallingSupported (device log 2026-07-13 18:50: send at
+    // :27.7 saw thinkingSupported=false; detection logged thinking:true at :30.4).
+    const multimodal = mmProjPath
+      ? await this.deriveMultimodalFromProjector(context, modelPath, mmProjPath)
+      : { initialized: false, support: await checkContextMultimodal(context) };
+    const toolCallingSupported = this.deriveToolCallingSupport(context);
+    const thinkingSupported = supportsNativeThinking(context);
+    this.context = context;
     this.currentModelPath = modelPath;
-    this.multimodalSupport = null; this.multimodalInitialized = false;
-    if (mmProjPath) await this.initializeMultimodal(mmProjPath);
-    else await this.checkMultimodalSupport();
-    this.detectToolCallingSupport(); this.detectThinkingSupport();
+    if (actualLength !== this.currentSettings.contextLength) this.currentSettings.contextLength = actualLength;
+    this.multimodalInitialized = multimodal.initialized;
+    this.multimodalSupport = multimodal.support;
+    this.toolCallingSupported = toolCallingSupported;
+    this.thinkingSupported = thinkingSupported;
+    this.requestedGpuLayers = requestedGpuLayers;
+    Object.assign(this, captureGpuInfo(context, gpuAttemptFailed, nGpuLayers));
+    useAppStore.getState().setModelMaxContext(getModelMaxContext(context));
     logger.log(`[LLM] Model loaded, vision: ${this.supportsVision()}, tools: ${this.toolCallingSupported}, thinking: ${this.thinkingSupported}`);
   }
   async loadModel(modelPath: string, mmProjPath?: string, opts?: { override?: boolean }): Promise<void> {
@@ -117,19 +133,21 @@ class LLMService {
       this.currentSettings = { nThreads, nBatch, contextLength: ctxLen };
       logger.log(`[LLM] Loading model: ctx=${ctxLen}, threads=${nThreads}, batch=${nBatch}, fileSize=${(fileSize / (1024 * 1024)).toFixed(0)}MB, availRAM=${memCheck.availableMB.toFixed(0)}MB`);
       try {
-        const { context, gpuAttemptFailed, actualLength } = await this.initWithAutoContext({ baseParams, ctxLen, nGpuLayers, fileSize });
-        await this.applyLoadedContext({ context, actualLength, gpuAttemptFailed, nGpuLayers, modelPath, mmProjPath });
+        const { context, gpuAttemptFailed, actualLength, attemptedGpuLayers } = await this.initWithAutoContext({ baseParams, ctxLen, nGpuLayers, fileSize });
+        // attemptedGpuLayers (post device-cap/backend resolution) is what the init actually offered the
+        // GPU — the truthful layer count for the meta; nGpuLayers is the raw settings request.
+        await this.applyLoadedContext({ context, actualLength, gpuAttemptFailed, nGpuLayers: attemptedGpuLayers, requestedGpuLayers: nGpuLayers, modelPath, mmProjPath });
       } catch (error: any) {
         this.context = null; this.currentModelPath = null; this.multimodalSupport = null;
         this.toolCallingSupported = false; this.thinkingSupported = false;
-        Object.assign(this, { gpuEnabled: false, gpuReason: '', activeGpuLayers: 0, gpuDevices: [] });
+        Object.assign(this, { gpuEnabled: false, gpuReason: '', activeGpuLayers: 0, gpuDevices: [], requestedGpuLayers: 0, gpuAttemptFailed: false });
         throw new Error(error?.message || 'Unknown error loading model');
       }
     } finally {
       mutex.release();
     }
   }
-  private async initWithAutoContext(params: { baseParams: object; ctxLen: number; nGpuLayers: number; fileSize: number }): Promise<{ context: LlamaContext; gpuAttemptFailed: boolean; actualLength: number }> {
+  private async initWithAutoContext(params: { baseParams: object; ctxLen: number; nGpuLayers: number; fileSize: number }): Promise<{ context: LlamaContext; gpuAttemptFailed: boolean; actualLength: number; attemptedGpuLayers: number }> {
     const deviceInfo = await hardwareService.getDeviceInfo();
     // Pass model size + free RAM so iOS Metal offload is capped to what fits (the
     // uncapped 99-layer offload was overflowing Metal → SIGSEGV on memory-tight devices).
@@ -171,7 +189,7 @@ class LLMService {
     const deviceCtxCap = getMaxContextForDevice(deviceInfo.totalMemory);
     const safeCtx = Math.min(params.ctxLen, deviceCtxCap);
     if (safeCtx !== params.ctxLen) logger.log(`[LLM] context capped for ${(deviceInfo.totalMemory / BYTES_PER_GB).toFixed(1)}GB RAM: ${params.ctxLen} → ${safeCtx}`);
-    const initial = await initContextWithFallback(resolvedBaseParams, safeCtx, safeGpuLayers);
+    const initial = { ...await initContextWithFallback(resolvedBaseParams, safeCtx, safeGpuLayers), attemptedGpuLayers: safeGpuLayers };
     const modelMax = getModelMaxContext(initial.context);
     const userIsOnDefault = this.currentSettings.contextLength === APP_CONFIG.maxContextLength;
     if (!modelMax || !userIsOnDefault || modelMax <= initial.actualLength) return initial;
@@ -180,10 +198,10 @@ class LLMService {
     if (targetCtx <= initial.actualLength) return initial;
     logger.log(`[LLM] Model supports ${modelMax} ctx, RAM cap ${deviceMaxCtx}, scaling ${initial.actualLength} → ${targetCtx}`);
     try { await initial.context.release(); } catch (e) { logger.warn('[LLM] Error releasing initial context:', e); }
-    return initContextWithFallback(resolvedBaseParams, targetCtx, safeGpuLayers);
+    return { ...await initContextWithFallback(resolvedBaseParams, targetCtx, safeGpuLayers), attemptedGpuLayers: safeGpuLayers };
   }
-  async initializeMultimodal(mmProjPath: string): Promise<boolean> {
-    if (!this.context) { logger.warn('[LLM] initializeMultimodal: no context'); return false; }
+  /** Multimodal init on a NOT-YET-PUBLISHED context (the load pipeline) — no instance-state writes. */
+  private async deriveMultimodalFromProjector(context: LlamaContext, modelPath: string, mmProjPath: string): Promise<{ initialized: boolean; support: MultimodalSupport }> {
     try {
       const sizeMB = Number((await RNFS.stat(mmProjPath)).size) / (1024 * 1024);
       logger.log(`[LLM] mmproj file size: ${sizeMB.toFixed(1)} MB`);
@@ -191,8 +209,13 @@ class LLMService {
     } catch (statErr) { console.error('[LLM] Failed to stat mmproj file:', statErr); }
     const devInfo = useAppStore.getState().deviceInfo;
     const useGpuForClip = Platform.OS === 'ios' && !devInfo?.isEmulator && (devInfo?.totalMemory ?? 0) > 4 * BYTES_PER_GB;
-    const { initialized, support } = await initMultimodal(this.context, mmProjPath, useGpuForClip);
-    logger.log(`[WIRE-VISION] ${JSON.stringify({ model: this.currentModelPath, mmProjPath, useGpuForClip, initialized, support })}`); // [WIRE] real multimodal init result
+    const { initialized, support } = await initMultimodal(context, mmProjPath, useGpuForClip);
+    logger.log(`[WIRE-VISION] ${JSON.stringify({ model: modelPath, mmProjPath, useGpuForClip, initialized, support })}`); // [WIRE] real multimodal init result
+    return { initialized, support };
+  }
+  async initializeMultimodal(mmProjPath: string): Promise<boolean> {
+    if (!this.context) { logger.warn('[LLM] initializeMultimodal: no context'); return false; }
+    const { initialized, support } = await this.deriveMultimodalFromProjector(this.context, this.currentModelPath ?? '', mmProjPath);
     this.multimodalInitialized = initialized;
     this.multimodalSupport = support;
     return initialized;
@@ -212,21 +235,15 @@ class LLMService {
   }
   /** Disable ctx_shift on Android when GPU layers are active — the OpenCL backend SIGSEGVs on the ggml set op used by KV cache shifting. */
   private shouldDisableCtxShift(): boolean { return Platform.OS === 'android' && this.activeGpuLayers > 0; }
-  private detectToolCallingSupport(): void {
-    if (!this.context) { this.toolCallingSupported = false; return; }
+  private deriveToolCallingSupport(context: LlamaContext): boolean {
     try {
-      const jinja = (this.context as any)?.model?.chatTemplates?.jinja;
+      const jinja = (context as any)?.model?.chatTemplates?.jinja;
       logger.log('[LLM][TOOLS] Full jinja caps:', JSON.stringify(jinja));
-      logger.log(`[WIRE-CAPS] ${JSON.stringify({ model: this.currentModelPath, jinja })}`); // [WIRE] real chat-template tool caps
-      logger.log('[LLM][TOOLS] defaultCaps?.toolCalls:', jinja?.defaultCaps?.toolCalls);
-      logger.log('[LLM][TOOLS] toolUse:', jinja?.toolUse);
-      logger.log('[LLM][TOOLS] toolUseCaps?.toolCalls:', jinja?.toolUseCaps?.toolCalls);
-      this.toolCallingSupported = !!(jinja?.defaultCaps?.toolCalls || jinja?.toolUse || jinja?.toolUseCaps?.toolCalls);
-      logger.log('[LLM][TOOLS] toolCallingSupported =', this.toolCallingSupported);
-    } catch (e) { logger.warn('[LLM] Error detecting tool calling support:', e); this.toolCallingSupported = false; }
-  }
-  private detectThinkingSupport(): void {
-    this.thinkingSupported = supportsNativeThinking(this.context);
+      logger.log(`[WIRE-CAPS] ${JSON.stringify({ jinja })}`); // [WIRE] real chat-template tool caps
+      const supported = !!(jinja?.defaultCaps?.toolCalls || jinja?.toolUse || jinja?.toolUseCaps?.toolCalls);
+      logger.log('[LLM][TOOLS] toolCallingSupported =', supported);
+      return supported;
+    } catch (e) { logger.warn('[LLM] Error detecting tool calling support:', e); return false; }
   }
   /** Internal unload without acquiring the mutex (used by loadModel which already holds it). */
   private async doUnloadModel(): Promise<void> {
@@ -238,7 +255,7 @@ class LLMService {
     if (this.activeCompletionPromise !== null) { await this.activeCompletionPromise; this.activeCompletionPromise = null; }
     try { await this.context.release(); } catch (e) { logger.warn('[LLM] Error releasing context (bridge may be torn down):', e); }
     useAppStore.getState().setModelMaxContext(null);
-    Object.assign(this, { context: null, currentModelPath: null, multimodalSupport: null, multimodalInitialized: false, toolCallingSupported: false, thinkingSupported: false, gpuEnabled: false, gpuReason: '', gpuDevices: [], activeGpuLayers: 0 });
+    Object.assign(this, { context: null, currentModelPath: null, multimodalSupport: null, multimodalInitialized: false, toolCallingSupported: false, thinkingSupported: false, gpuEnabled: false, gpuReason: '', gpuDevices: [], activeGpuLayers: 0, requestedGpuLayers: 0, gpuAttemptFailed: false });
   }
   async unloadModel(): Promise<void> {
     const mutex = this.acquireContextMutex();
@@ -416,6 +433,12 @@ class LLMService {
   getGpuInfo() {
     return { gpu: this.gpuEnabled, gpuBackend: resolveGpuBackend(this.gpuEnabled, this.gpuDevices), gpuLayers: this.activeGpuLayers, reasonNoGPU: this.gpuReason };
   }
+  /** The user-facing notice for a load that silently downgraded to CPU (GPU requested, 0 layers
+   *  offloaded — init failure/timeout, capability refusal, or a RAM cap). Null when nothing to report. */
+  getBackendFallbackNotice(): string | null {
+    if (!this.context) return null;
+    return describeGpuFallback({ requestedGpuLayers: this.requestedGpuLayers, activeGpuLayers: this.activeGpuLayers, gpuAttemptFailed: this.gpuAttemptFailed });
+  }
   isCurrentlyGenerating(): boolean { return this.isGenerating; }
   private formatMessages(messages: Message[]): string { return formatLlamaMessages(messages, this.supportsVision(), this.multimodalSupport?.audio ?? false); }
   private convertToOAIMessages(messages: Message[]): RNLlamaOAICompatibleMessage[] { return buildOAIMessages(messages, this.multimodalSupport?.audio ?? false); }
@@ -454,21 +477,5 @@ class LLMService {
   }
   getPerformanceSettings(): LLMPerformanceSettings { return { ...this.currentSettings }; }
   getPerformanceStats(): LLMPerformanceStats { return { ...this.performanceStats }; }
-  async reloadWithSettings(modelPath: string, settings: LLMPerformanceSettings): Promise<void> {
-    const mutex = this.acquireContextMutex();
-    try {
-      await mutex.ready;
-      this.updatePerformanceSettings(settings);
-      if (this.context) await this.doUnloadModel();
-      const { baseParams, nGpuLayers } = buildModelParams(modelPath, { ...useAppStore.getState().settings, ...settings });
-      logger.log(`[LLM] Reloading with threads=${settings.nThreads}, batch=${settings.nBatch}, ctx=${settings.contextLength}`);
-      try {
-        const { context, gpuAttemptFailed } = await initContextWithFallback(baseParams, settings.contextLength, nGpuLayers);
-        this.context = context; Object.assign(this, captureGpuInfo(context, gpuAttemptFailed, nGpuLayers));
-        this.currentModelPath = modelPath; this.multimodalSupport = null; this.multimodalInitialized = false;
-        await this.checkMultimodalSupport(); this.detectToolCallingSupport(); this.detectThinkingSupport();
-      } catch (error) { logger.error('[LLM] Error reloading model:', error); Object.assign(this, { context: null, currentModelPath: null, toolCallingSupported: false, thinkingSupported: false }); throw error; }
-    } finally { mutex.release(); }
-  }
 }
 export const llmService = new LLMService();
