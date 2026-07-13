@@ -169,7 +169,7 @@ class GenerationService {
       onToolCallComplete?: (name: string, result: ToolResult) => void;
       onFirstToken?: () => void;
     },
-  ): Promise<void> {
+  ): Promise<import('./generationToolLoop').ToolLoopOutcome | void> {
     // Route to remote provider if active
     if (this.isUsingRemoteProvider()) {
       return this.generateRemoteWithTools(conversationId, messages, options);
@@ -180,7 +180,7 @@ class GenerationService {
     const chatStore = useChatStore.getState();
 
     try {
-      await runToolLoop({
+      const outcome = await runToolLoop({
         conversationId,
         messages,
         enabledToolIds,
@@ -201,6 +201,7 @@ class GenerationService {
         this.checkSharePrompt();
         this.resetState();
       }
+      return outcome;
     } catch (error) {
       if (this.abortRequested) return;
       logger.error('[GenerationService] Tool generation error:', error);

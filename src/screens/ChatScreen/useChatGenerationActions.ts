@@ -254,13 +254,14 @@ async function generateWithCompactionRetry(
   opts: { id: string; prompt: string; messages: Message[] },
   enabledTools: string[],
   projectId?: string,
-): Promise<void> {
+): Promise<boolean> {
   const extCount = getToolExtensions().reduce((n, e) => n + e.enabledToolCount(), 0);
   logger.log(`[GEN-SM] generateWithCompactionRetry conv=${opts.id} msgs=${opts.messages.length} tools=${enabledTools.length} ext=${extCount}`);
   const gen = (msgs: Message[]) => (enabledTools.length > 0 || extCount > 0)
     ? generationService.generateWithTools(opts.id, msgs, { enabledToolIds: enabledTools, projectId })
     : generationService.generateResponse(opts.id, msgs);
-  try { await gen(opts.messages); } catch (error: any) {
+  let turnInterrupted = false; // PER-TURN stop truth from the loop outcome (returned to the caller)
+  try { const outcome = await gen(opts.messages); turnInterrupted = !!(outcome as { interrupted?: boolean } | void)?.interrupted; } catch (error: any) {
     if (!contextCompactionService.isContextFullError(error)) throw error;
     await llmService.stopGeneration().catch(() => { });
     const conversation = useChatStore.getState().conversations.find(c => c.id === opts.id);
@@ -272,6 +273,7 @@ async function generateWithCompactionRetry(
     });
     await gen(compacted);
   }
+  return turnInterrupted;
 }
 async function injectRagContext(projectId: string | undefined, query: string, prompt: string): Promise<string> {
   if (!projectId) return prompt;
@@ -324,6 +326,9 @@ function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, _message
   return { enabledTools, rawPrompt, localToolSupport };
 }
 export async function startGenerationFn(deps: GenerationDeps, call: StartGenerationCall): Promise<void> {
+  // PER-TURN stop truth (from the tool loop's outcome) — never the service's shared abort flag,
+  // which the NEXT turn's prepare resets (the race that mislabeled a stopped turn 'No response').
+  let turnStopped = false;
   const { setDebugInfo, targetConversationId, messageText } = call;
   if (!deps.hasActiveModel) return;
   // Pure text executor — image-vs-text routing happens upstream in dispatchGenerationFn.
@@ -363,7 +368,7 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
   const messagesForContext = buildMessagesForContext(targetConversationId, messageText, systemPrompt);
   await prepareContext(setDebugInfo, systemPrompt, messagesForContext);
   try {
-    await generateWithCompactionRetry({ id: targetConversationId, prompt: systemPrompt, messages: messagesForContext }, activeTools, conversation?.projectId);
+    turnStopped = await generateWithCompactionRetry({ id: targetConversationId, prompt: systemPrompt, messages: messagesForContext }, activeTools, conversation?.projectId);
   } catch (error: any) {
     const msg = error?.message || error?.toString?.() || 'Failed to generate response';
     logger.error('[ChatGen] Generation failed:', msg, error);
@@ -413,7 +418,10 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
   // happens when a model runs on an incompatible backend, e.g. a K-quant on NPU/GPU).
   const finalConv = useChatStore.getState().conversations.find(c => c.id === targetConversationId);
   const lastMsg = finalConv?.messages[finalConv.messages.length - 1];
-  if (!generationService.wasAborted() && lastMsg?.role === 'user') {
+  // `turnInterrupted` is THIS turn's own outcome. The shared wasAborted() flag is reset by the
+  // NEXT turn's prepare — a concurrent retry raced it and this stopped turn read "not aborted",
+  // painting the wrong 'No response / incompatible backend' card (device 2026-07-14 00:23).
+  if (!turnStopped && !generationService.wasAborted() && lastMsg?.role === 'user') {
     reportModelFailure('text', 'The model produced no output', {
       title: 'No response',
       message: 'The model returned nothing. This can happen when it runs on an incompatible backend (a K-quant on NPU/GPU falls back to CPU and may emit nothing). Try again, or switch the backend/model.',

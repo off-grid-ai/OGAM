@@ -843,7 +843,12 @@ async function selectEffectiveSchemas(ctx: ToolLoopContext, builtInSchemas: any[
  * Run the tool-calling loop: call LLM → execute tools → re-inject results → repeat.
  * Returns when the model produces a final response with no tool calls.
  */
-export async function runToolLoop(ctx: ToolLoopContext): Promise<void> {
+/** Outcome of a tool-loop turn. `interrupted` is PER-TURN truth (a user stop landed on this
+ *  turn's completion) — callers must use it instead of the service's shared abort flag, which a
+ *  CONCURRENT next turn resets (the race that painted 'No response' on a user-stopped turn). */
+export interface ToolLoopOutcome { interrupted: boolean }
+
+export async function runToolLoop(ctx: ToolLoopContext): Promise<ToolLoopOutcome> {
   const chatStore = useChatStore.getState();
   const builtInSchemas = getToolsAsOpenAISchema(ctx.enabledToolIds);
   const extSchemas = getToolExtensions().flatMap(e => e.getOpenAISchemas?.() ?? []);
@@ -862,7 +867,7 @@ export async function runToolLoop(ctx: ToolLoopContext): Promise<void> {
     // Hit iteration or total-call cap — force one final text-only generation (no tools)
     if (iteration === MAX_TOOL_ITERATIONS - 1 || totalToolCalls >= MAX_TOTAL_TOOL_CALLS) {
       await forceFinalTextResponse(ctx, state, loopMessages);
-      return;
+      return { interrupted: false };
     }
 
     state.streamedContent = '';
@@ -882,7 +887,7 @@ export async function runToolLoop(ctx: ToolLoopContext): Promise<void> {
       // Streamed partial content is already in the store's streaming message: the aborted path is
       // finalized by stopGeneration(), the non-aborted path by generate()'s post-loop finalize.
       logger.log(`[ToolLoop] completion interrupted (aborted=${ctx.isAborted()}) — ending turn, no follow-up generation`);
-      return;
+      return { interrupted: true };
     }
 
     const { effectiveToolCalls, displayResponse } = resolveToolCalls(fullResponse, toolCalls);
@@ -902,10 +907,10 @@ export async function runToolLoop(ctx: ToolLoopContext): Promise<void> {
           loopMessages, [], { onStream: fallbackOnStream, forceRemote: ctx.forceRemote, disableThinking: true, conversationId: ctx.conversationId, ctx },
         );
         emitFinalResponse(ctx, state, fallbackResp);
-        return;
+        return { interrupted: false };
       }
       emitFinalResponse(ctx, state, displayResponse);
-      return;
+      return { interrupted: false };
     }
 
     // Execute the tool calls
@@ -935,4 +940,6 @@ export async function runToolLoop(ctx: ToolLoopContext): Promise<void> {
       await new Promise<void>(resolve => setTimeout(resolve, CONTEXT_RELEASE_PAUSE_MS));
     }
   }
+  // Reached only via the top-of-iteration abort break or iteration exhaustion.
+  return { interrupted: ctx.isAborted() };
 }
