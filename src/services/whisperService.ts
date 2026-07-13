@@ -71,6 +71,10 @@ interface TranscribeFileOptions {
   // [SPEAKER_TURN] token. Requires a tdrz model (ggml-small.en-tdrz.bin);
   // other models silently ignore it. English only.
   diarize?: boolean;
+  // Optional vocabulary hint (whisper.cpp initial prompt): a short list of
+  // proper nouns / jargon (e.g. "Off Grid, Locket, Kokoro") that biases whisper
+  // toward spelling them correctly. Kept short - it competes with audio context.
+  prompt?: string;
 }
 
 class WhisperService {
@@ -659,6 +663,10 @@ class WhisperService {
     // looping the same token or phrase; clearing the text context is the standard
     // fix and the biggest lever against hallucinated repeats.
     transcribeOpts.maxContext = 0;
+    // Vocabulary hint: whisper.cpp seeds decoding with this text so proper nouns
+    // and jargon are spelled the user's way. Trimmed; empty is omitted entirely.
+    const promptHint = options?.prompt?.trim();
+    if (promptHint) transcribeOpts.prompt = promptHint;
     if (maxThreads > 0) transcribeOpts.maxThreads = maxThreads;
     if (nProcessors > 1) transcribeOpts.nProcessors = nProcessors;
     if (options?.offset && options.offset > 0) transcribeOpts.offset = Math.floor(options.offset);
