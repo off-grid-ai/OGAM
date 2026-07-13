@@ -44,13 +44,15 @@ describe('nativeBoundary harness — injection mechanism', () => {
 
   it('installs a stateful FS that the REAL whisperService.listDownloadedModels reads (overrides the dumb stub)', async () => {
     const boundary = installNativeBoundary({ fs: true });
-    boundary.fs!.seedFile(`${boundary.fs!.DocumentDirectoryPath}/whisper-models/ggml-base.en.bin`, 5 * 1024 * 1024);
+    // Seed ABOVE the MIN_MODEL_FILE_SIZE (10MB) floor — listDownloadedModels drops sub-floor
+    // (truncated) files (V2), so a listable model must exceed it.
+    boundary.fs!.seedFile(`${boundary.fs!.DocumentDirectoryPath}/whisper-models/ggml-base.en.bin`, 20 * 1024 * 1024);
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { whisperService } = require('../../src/services/whisperService');
     const listed = await whisperService.listDownloadedModels();
     // Proves the stateful FS reached the service (the dumb global stub returns []).
     expect(listed.map((m: { modelId: string }) => m.modelId)).toEqual(['base.en']);
-    expect(listed[0].sizeBytes).toBe(5 * 1024 * 1024);
+    expect(listed[0].sizeBytes).toBe(20 * 1024 * 1024);
   });
 
   it('seeds the RAM leaf so DeviceMemoryModule reports the seeded free bytes', async () => {
