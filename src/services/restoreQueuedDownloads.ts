@@ -53,10 +53,16 @@ export async function restoreQueuedDownloads(): Promise<void> {
       logger.log(`[DL-SM] restoreQueuedDownloads skip ${key}: already present`);
       continue;
     }
-    try {
-      await modelDownloadService.reissue(params);
-    } catch (e) {
+    // Dispatch WITHOUT awaiting: a reissue's promise resolves only when the download actually
+    // STARTS (gets one of the 3 concurrency slots). On a relaunch where surviving WorkManager
+    // transfers already hold every slot, that is minutes away — awaiting it serially hung the
+    // app bootstrap ("loading forever") and, worse, items 2..N were never dispatched, so with
+    // the persisted queue already cleared they were LOST (device log: found=11 → one dispatch →
+    // found=1). The reissue path publishes the `pending` store row synchronously and re-enqueues
+    // through the queue owner (which re-persists the waiting tail durably), so fire-and-forget
+    // is both visible in the Download Manager immediately and kill-safe again.
+    modelDownloadService.reissue(params).catch((e) => {
       logger.log(`[DL-SM] restoreQueuedDownloads reissue failed key=${key} err=${e instanceof Error ? e.message : String(e)}`);
-    }
+    });
   }
 }

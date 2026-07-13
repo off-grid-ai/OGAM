@@ -68,11 +68,11 @@ describe('queued downloads survive an app kill (red-flow)', () => {
 
   it('re-surfaces a queued (never-started) download as a pending row after relaunch', async () => {
     // ---- Session 1: enqueue > 3 text downloads so at least one is queued past the 3-slot cap. ----
-    /* eslint-disable @typescript-eslint/no-var-requires */
+     
     let startModelDownload = require('../../../src/services/startModelDownload').startModelDownload;
     let useDownloadStore = require('../../../src/stores/downloadStore').useDownloadStore;
     let makeModelKey = require('../../../src/utils/modelKey').makeModelKey;
-    /* eslint-enable @typescript-eslint/no-var-requires */
+     
 
     const models = [
       { id: 'org/a', file: 'a.gguf' },
@@ -99,13 +99,13 @@ describe('queued downloads survive an app kill (red-flow)', () => {
     NativeModules.DownloadManagerModule = mockDownloadManagerModule;
     mockDownloadManagerModule.getActiveDownloads.mockResolvedValue([]); // relaunch: nothing active natively
 
-    /* eslint-disable @typescript-eslint/no-var-requires */
+     
     useDownloadStore = require('../../../src/stores/downloadStore').useDownloadStore;
     makeModelKey = require('../../../src/utils/modelKey').makeModelKey;
     const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
     const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
     const { restoreQueuedDownloads } = require('../../../src/services/restoreQueuedDownloads');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+     
 
     // Fresh store starts empty (a cold relaunch).
     expect(Object.keys(useDownloadStore.getState().downloads)).toHaveLength(0);
@@ -126,6 +126,87 @@ describe('queued downloads survive an app kill (red-flow)', () => {
     expect(eEntry.status).not.toBe('failed');
   });
 
+  it('DEVICE B-2026-07-13: restores ALL queued items even when survivors hold every slot, and resolves promptly', async () => {
+    // The exact device failure: 3 WorkManager transfers SURVIVE the kill and are adopted into the
+    // concurrency slots BEFORE restore runs. restore's reissues therefore CANNOT start — they can only
+    // re-enqueue. The broken impl awaited each reissue's start; the first await never resolved →
+    // bootstrap hung ("loading forever"), items 2..N were never dispatched, and (persistence having
+    // been cleared) they were LOST — the log showed found=11, ONE dispatch, then found=1.
+    //
+    // Session 1 begins on a FRESH module registry (a fresh app session): the prior test leaves
+    // pending rows for the same model ids in the registry-scoped store, which would trip
+    // startModelDownload's duplicate-start guard and keep d/e out of the queue (a test-pollution
+    // false red, not the product behavior under test).
+    jest.resetModules();
+    NativeModules.DownloadManagerModule = mockDownloadManagerModule;
+     
+    const startModelDownload = require('../../../src/services/startModelDownload').startModelDownload;
+    let makeModelKey = require('../../../src/utils/modelKey').makeModelKey;
+     
+
+    const models = [
+      { id: 'org/a', file: 'a.gguf' },
+      { id: 'org/b', file: 'b.gguf' },
+      { id: 'org/c', file: 'c.gguf' },
+      { id: 'org/d', file: 'd.gguf' }, // queued
+      { id: 'org/e', file: 'e.gguf' }, // queued
+      { id: 'org/f', file: 'f.gguf' }, // queued
+    ];
+    for (const m of models) startModelDownload(m.id, fileFor(m.id, m.file)).catch(() => {});
+    await flush();
+
+    // ---- Kill → relaunch. The 3 STARTED transfers survive natively (Android WorkManager). ----
+    jest.resetModules();
+    NativeModules.DownloadManagerModule = mockDownloadManagerModule;
+    const survivors = [1, 2, 3].map((n, i) => ({
+      downloadId: `native-${n}`,
+      modelId: models[i].id,
+      modelKey: makeModelKey(models[i].id, models[i].file),
+      fileName: models[i].file,
+      status: 'running',
+      bytesDownloaded: 1000,
+      totalBytes: 4_000_000_000,
+      createdAt: n,
+    }));
+    mockDownloadManagerModule.getActiveDownloads.mockResolvedValue(survivors);
+
+     
+    const useDownloadStore = require('../../../src/stores/downloadStore').useDownloadStore;
+    makeModelKey = require('../../../src/utils/modelKey').makeModelKey;
+    const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
+    const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
+    const { restoreQueuedDownloads } = require('../../../src/services/restoreQueuedDownloads');
+    const { backgroundDownloadService } = require('../../../src/services/backgroundDownloadService');
+    const { loadQueuedDownloads } = require('../../../src/services/queuedDownloadPersistence');
+     
+
+    await hydrateDownloadStore();
+    registerCoreDownloadProviders();
+    // The relaunch recovery (restoreInProgressDownloads) adopts the surviving transfers into the
+    // concurrency slots — ALL 3 are now occupied, so a reissued start can only queue, never begin.
+    backgroundDownloadService.adoptActive(survivors.map((s) => s.downloadId));
+
+    // restore must RESOLVE promptly (bootstrap awaits it — a hang here is the "loading forever").
+    let resolved = false;
+    const restorePromise = restoreQueuedDownloads().then(() => { resolved = true; });
+    await flush(); await flush(); await flush();
+    expect(resolved).toBe(true);
+    await restorePromise;
+
+    // TERMINAL artifact: EVERY queued model is back as a pending row — not just the first.
+    for (const m of [models[3], models[4], models[5]]) {
+      const key = makeModelKey(m.id, m.file);
+      const entry = useDownloadStore.getState().downloads[key];
+      expect(entry).toBeDefined();
+      expect(entry.status).toBe('pending');
+    }
+    // And the still-waiting tail is DURABLE again (the queue owner re-persisted it on enqueue),
+    // so a second kill right now would not lose them (the found=11 → found=1 loss).
+    await flush();
+    const persisted = await loadQueuedDownloads();
+    expect(persisted.length).toBe(3);
+  });
+
   it('no regression: an in-flight (started) download still hydrates via the native path', async () => {
     // The 3 that actually started have native rows that survive; hydrate recovers them exactly as
     // before. restore must run alongside without disturbing them (they are not queued items).
@@ -135,12 +216,12 @@ describe('queued downloads survive an app kill (red-flow)', () => {
     mockDownloadManagerModule.getActiveDownloads.mockResolvedValue([
       { downloadId: 'native-a', modelKey: aKey, modelId: 'org/a', fileName: 'a.gguf', modelType: 'text', status: 'running', bytesDownloaded: 100, totalBytes: 4_000_000_000 },
     ]);
-    /* eslint-disable @typescript-eslint/no-var-requires */
+     
     const useDownloadStore = require('../../../src/stores/downloadStore').useDownloadStore;
     const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
     const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
     const { restoreQueuedDownloads } = require('../../../src/services/restoreQueuedDownloads');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+     
 
     await hydrateDownloadStore();
     registerCoreDownloadProviders();
@@ -155,12 +236,12 @@ describe('queued downloads survive an app kill (red-flow)', () => {
   });
 
   it('does not resurrect a queued download that was CANCELLED before the kill', async () => {
-    /* eslint-disable @typescript-eslint/no-var-requires */
+     
     const startModelDownload = require('../../../src/services/startModelDownload').startModelDownload;
     const { backgroundDownloadService } = require('../../../src/services/backgroundDownloadService');
     let useDownloadStore = require('../../../src/stores/downloadStore').useDownloadStore;
     let makeModelKey = require('../../../src/utils/modelKey').makeModelKey;
-    /* eslint-enable @typescript-eslint/no-var-requires */
+     
 
     const models = [
       { id: 'org/a', file: 'a.gguf' },
@@ -183,13 +264,13 @@ describe('queued downloads survive an app kill (red-flow)', () => {
     jest.resetModules();
     NativeModules.DownloadManagerModule = mockDownloadManagerModule;
     mockDownloadManagerModule.getActiveDownloads.mockResolvedValue([]);
-    /* eslint-disable @typescript-eslint/no-var-requires */
+     
     useDownloadStore = require('../../../src/stores/downloadStore').useDownloadStore;
     makeModelKey = require('../../../src/utils/modelKey').makeModelKey;
     const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
     const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
     const { restoreQueuedDownloads } = require('../../../src/services/restoreQueuedDownloads');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+     
 
     await hydrateDownloadStore();
     registerCoreDownloadProviders();
@@ -210,13 +291,13 @@ describe('queued downloads survive an app kill (red-flow)', () => {
     mockDownloadManagerModule.getActiveDownloads.mockResolvedValue([
       { downloadId: 'native-x', modelKey: key, modelId: 'org/dupe', fileName: 'x.gguf', modelType: 'text', status: 'running', bytesDownloaded: 5, totalBytes: 1000 },
     ]);
-    /* eslint-disable @typescript-eslint/no-var-requires */
+     
     const useDownloadStore = require('../../../src/stores/downloadStore').useDownloadStore;
     const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
     const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
     const { restoreQueuedDownloads } = require('../../../src/services/restoreQueuedDownloads');
     const { saveQueuedDownloads } = require('../../../src/services/queuedDownloadPersistence');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+     
 
     // Persist the SAME model as a queued item (as if it were queued when persisted, then started).
     await saveQueuedDownloads([{ url: 'https://x/x.gguf', fileName: 'x.gguf', modelId: 'org/dupe', modelKey: key, modelType: 'text', totalBytes: 1000 }]);
@@ -243,13 +324,13 @@ describe('queued downloads survive an app kill (red-flow)', () => {
       if (calls === 1) throw new Error('native start boom');
       return { downloadId: `native-ok-${calls}`, fileName: 'f', modelId: 'm' };
     });
-    /* eslint-disable @typescript-eslint/no-var-requires */
+     
     const useDownloadStore = require('../../../src/stores/downloadStore').useDownloadStore;
     const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
     const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
     const { restoreQueuedDownloads } = require('../../../src/services/restoreQueuedDownloads');
     const { saveQueuedDownloads } = require('../../../src/services/queuedDownloadPersistence');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+     
 
     await saveQueuedDownloads([
       { url: 'https://x/boom.gguf', fileName: 'boom.gguf', modelId: 'org/boom', modelKey: 'org/boom/boom.gguf', modelType: 'text', totalBytes: 1000 },
@@ -271,12 +352,12 @@ describe('queued downloads survive an app kill (red-flow)', () => {
     jest.resetModules();
     NativeModules.DownloadManagerModule = mockDownloadManagerModule;
     mockDownloadManagerModule.getActiveDownloads.mockResolvedValue([]);
-    /* eslint-disable @typescript-eslint/no-var-requires */
+     
     const useDownloadStore = require('../../../src/stores/downloadStore').useDownloadStore;
     const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
     const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
     const { restoreQueuedDownloads } = require('../../../src/services/restoreQueuedDownloads');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+     
 
     await hydrateDownloadStore();
     registerCoreDownloadProviders();
@@ -287,11 +368,11 @@ describe('queued downloads survive an app kill (red-flow)', () => {
   });
 
   it('does not double-issue a queued download on a SECOND relaunch (queue cleared as re-issued)', async () => {
-    /* eslint-disable @typescript-eslint/no-var-requires */
+     
     const startModelDownload = require('../../../src/services/startModelDownload').startModelDownload;
     let useDownloadStore = require('../../../src/stores/downloadStore').useDownloadStore;
     let makeModelKey = require('../../../src/utils/modelKey').makeModelKey;
-    /* eslint-enable @typescript-eslint/no-var-requires */
+     
 
     for (const m of [
       { id: 'org/a', file: 'a.gguf' },
@@ -307,13 +388,13 @@ describe('queued downloads survive an app kill (red-flow)', () => {
       jest.resetModules();
       NativeModules.DownloadManagerModule = mockDownloadManagerModule;
       mockDownloadManagerModule.getActiveDownloads.mockResolvedValue(activeRows);
-      /* eslint-disable @typescript-eslint/no-var-requires */
+       
       useDownloadStore = require('../../../src/stores/downloadStore').useDownloadStore;
       makeModelKey = require('../../../src/utils/modelKey').makeModelKey;
       const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
       const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
       const { restoreQueuedDownloads } = require('../../../src/services/restoreQueuedDownloads');
-      /* eslint-enable @typescript-eslint/no-var-requires */
+       
       return (async () => {
         await hydrateDownloadStore();
         registerCoreDownloadProviders();
