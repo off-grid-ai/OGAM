@@ -29,6 +29,7 @@ import { LockScreen } from './src/screens';
 import { useAppState } from './src/hooks/useAppState';
 import { useDownloadStore } from './src/stores/downloadStore';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { Toast } from './src/components';
 
 LogBox.ignoreAllLogs(); // Suppress all logs
 
@@ -351,6 +352,7 @@ function App() {
         >
           <AppNavigator />
         </NavigationContainer>
+        <Toast />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
