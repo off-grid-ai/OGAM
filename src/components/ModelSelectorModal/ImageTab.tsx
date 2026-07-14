@@ -117,11 +117,13 @@ export const ImageTab: React.FC<ImageTabProps> = ({
                     )}
                   </View>
                 </View>
-                {isCurrent && (
+                {isLoadingImage && isCurrent ? (
+                  <ActivityIndicator testID="model-row-loading" size="small" color={colors.info} />
+                ) : isCurrent ? (
                   <View style={[styles.checkmark, styles.checkmarkImage]}>
                     <Icon name="check" size={16} color={colors.background} />
                   </View>
-                )}
+                ) : null}
               </TouchableOpacity>
             );
           })}

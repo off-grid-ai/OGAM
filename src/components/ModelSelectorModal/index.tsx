@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../AppSheet';
@@ -212,12 +211,8 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
           </TouchableOpacity>
         </View>
 
-        {isAnyLoading && (
-          <View style={styles.loadingBanner}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.loadingText}>Loading model...</Text>
-          </View>
-        )}
+        {/* Text-model loading now shows an inline spinner ON the selected row (TextTab → ModelRow),
+            not a banner over the list. The image tab keeps its own indicator, so no banner for text. */}
 
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
           {activeTab === 'text' ? (

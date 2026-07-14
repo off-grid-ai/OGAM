@@ -120,6 +120,7 @@ export const TextTab: React.FC<TextTabProps> = ({
                 isVision={model.engine === 'llama' && model.isVisionModel}
                 isActive={isActive}
                 isLoaded={isLoaded}
+                loading={isAnyLoading && isActive}
                 disabled={isAnyLoading || isLoaded}
                 onPress={() => onSelectModel(model)}
               />

@@ -45,18 +45,6 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderRadius: 4,
     backgroundColor: colors.primary,
   },
-  loadingBanner: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    backgroundColor: `${colors.primary}20`,
-    paddingVertical: 10,
-    gap: 10,
-  },
-  loadingText: {
-    ...TYPOGRAPHY.body,
-    color: colors.primary,
-  },
   content: {
     padding: 16,
   },
