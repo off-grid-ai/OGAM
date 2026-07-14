@@ -116,6 +116,12 @@ export interface LiteRTFake {
    * One-shot: cleared after it fires.
    */
   scriptHang(): void;
+  /**
+   * Emit a PARTIAL content token then HANG (never emit litert_complete) — the mid-stream state where a
+   * partial answer is ALREADY on screen but generation is still in-flight, so a STOP lands on shown output.
+   * Used to prove Stop keeps the partial (doesn't discard it). One-shot.
+   */
+  scriptPartialThenHang(content: string): void;
 }
 
 /** Run fn on a macrotask so it lands after the current async chain (native call → awaited resolve). */
@@ -131,6 +137,7 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
   let toolCallsRemaining = 0;
   let pendingError: string | null = null; // one-shot: next send emits litert_error instead of completing
   let pendingHang = false; // one-shot: next send never completes (generation stays in-flight)
+  let pendingPartialHang: string | null = null; // one-shot: next send emits a partial token then never completes
 
   const emitCompletion = (turn: LiteRTTurn) => {
     if (turn.reasoning) handle.emit('litert_thinking', turn.reasoning);
@@ -139,6 +146,7 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
   };
 
   const onSend = () => {
+    if (pendingPartialHang !== null) { const c = pendingPartialHang; pendingPartialHang = null; defer(() => handle.emit('litert_token', c)); return; } // partial shown, then in-flight
     if (pendingHang) { pendingHang = false; return; } // accepted, never completes → generation in-flight
     if (pendingError) { const m = pendingError; pendingError = null; defer(() => handle.emit('litert_error', m)); return; }
     const turn = queue.length ? queue.shift()! : pending;
@@ -181,6 +189,7 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
     scriptTurns: (turns: LiteRTTurn[]) => { queue.length = 0; queue.push(...turns); },
     scriptError: (message: string) => { pendingError = message; },
     scriptHang: () => { pendingHang = true; },
+    scriptPartialThenHang: (content: string) => { pendingPartialHang = content; },
   };
 }
 

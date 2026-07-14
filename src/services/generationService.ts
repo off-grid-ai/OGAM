@@ -1,7 +1,7 @@
 /** GenerationService - Handles LLM generation independently of UI lifecycle */
 import { llmService } from './llm';
 import { liteRTService } from './litert';
-import { getActiveEngineService } from './engines';
+import { getActiveEngineService, stopAllTextEngines } from './engines';
 import { useAppStore, useChatStore, useRemoteServerStore } from '../stores';
 import { Message, GenerationMeta, MediaAttachment } from '../types';
 import { runToolLoop } from './generationToolLoop';
@@ -210,27 +210,44 @@ class GenerationService {
         this.flushTimer = null;
       }
       this.tokenBuffer = '';
-      chatStore.clearStreamingMessage();
+      // Even on error, keep any partial the user already saw — don't wipe shown output.
+      this.keepShownPartialOrClear();
       this.resetState();
       throw error;
+    }
+  }
+
+  /**
+   * Keep whatever is ALREADY on screen. The source of truth is the store's streamingMessage (what the user
+   * sees) — NOT generationService.state.streamingContent, which can be empty for LiteRT or after a state
+   * reset while a partial is still rendered. If there's shown content, finalize it (an interrupted partial
+   * is still the model's output); only clear when the stream is genuinely empty. Once tokens are shown, they
+   * are never discarded (device 2026-07-14: Stop dropped the partial because the decision read the wrong source).
+   */
+  private keepShownPartialOrClear(generationTimeMs?: number): void {
+    const store = useChatStore.getState();
+    const convId = store.streamingForConversationId;
+    if (convId && store.streamingMessage.trim()) {
+      store.finalizeStreamingMessage(convId, generationTimeMs, this.buildGenerationMeta());
+    } else {
+      store.clearStreamingMessage();
     }
   }
 
   /** Stop the current generation. Returns partial content if any was generated. */
   async stopGeneration(): Promise<string> {
     if (!this.state.isGenerating) {
-      // Stop all engines and remote
-      await llmService.stopGeneration().catch(() => { });
-      await liteRTService.stopGeneration().catch(() => { });
+      // Stop generation on every engine through the registry — no engine enumeration leaked into the caller.
+      await stopAllTextEngines();
       const provider = this.getCurrentProvider();
       if (provider) provider.stopGeneration().catch(() => { });
       if (this.currentRemoteAbortController) {
         this.currentRemoteAbortController.abort();
         this.currentRemoteAbortController = null;
       }
-      // Ensure chat store streaming state is cleared even if generation
-      // service already reset — prevents stuck stop button.
-      useChatStore.getState().clearStreamingMessage();
+      // Generation already reset — but a partial may still be on screen (e.g. generationSession.end ran
+      // first, or LiteRT's state diverged). Keep the shown output instead of blindly clearing it.
+      this.keepShownPartialOrClear();
       return '';
     }
 
@@ -239,16 +256,15 @@ class GenerationService {
     this.abortRequested = true;
     this.forceFlushTokens();
 
-    const { conversationId, streamingContent, startTime } = this.state;
+    const { startTime } = this.state;
     const generationTime = startTime ? Date.now() - startTime : undefined;
+    // Capture the return value BEFORE resetState clears it (prefer the shown text; fall back to state).
+    const partialContent = useChatStore.getState().streamingMessage || this.state.streamingContent;
 
-    const chatStore = useChatStore.getState();
-    if (conversationId && streamingContent.trim()) {
-      chatStore.finalizeStreamingMessage(conversationId, generationTime, this.buildGenerationMeta());
-      this.checkSharePrompt();
-    } else {
-      chatStore.clearStreamingMessage();
-    }
+    // Keep whatever is shown (based on the store, not this.state.streamingContent which LiteRT may not fill).
+    const hadShownPartial = !!useChatStore.getState().streamingMessage.trim();
+    this.keepShownPartialOrClear(generationTime);
+    if (hadShownPartial) this.checkSharePrompt();
 
     this.resetState();
 
@@ -261,7 +277,7 @@ class GenerationService {
         this.currentRemoteAbortController.abort();
         this.currentRemoteAbortController = null;
       }
-      return streamingContent;
+      return partialContent;
     }
 
     // Stop the native completion after we've already updated UI state,
@@ -272,7 +288,7 @@ class GenerationService {
       .catch(() => { })
       .finally(() => { this.pendingStop = null; });
 
-    return streamingContent;
+    return partialContent;
   }
 
   /** Generate a response using a remote provider */

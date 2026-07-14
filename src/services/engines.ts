@@ -90,6 +90,22 @@ export async function unloadAllTextEngines(): Promise<void> {
 }
 
 /**
+ * Stop generation on every text engine. The engine SET is owned here (TEXT_ENGINES), so callers never
+ * enumerate llmService/liteRTService themselves — adding an engine changes only this file (OCP). Used by the
+ * defensive stop path; llama's stopCompletion and litert's stopGeneration differ at the native layer but are
+ * uniform through this one call.
+ */
+export async function stopAllTextEngines(): Promise<void> {
+  for (const engine of TEXT_ENGINES) {
+    try {
+      await engine.stopGeneration();
+    } catch {
+      /* best-effort: a stale/idle engine may reject; keep going */
+    }
+  }
+}
+
+/**
  * Invalidate the active engine's cached conversation state before a history rewind (regenerate/
  * edit). LiteRT keeps a native per-conversation KV cache that must be reset; llama has none.
  * Dispatched via the registry so callers don't branch on engine === 'litert'.
