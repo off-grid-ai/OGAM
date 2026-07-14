@@ -77,6 +77,18 @@ interface TranscribeFileOptions {
   prompt?: string;
 }
 
+/**
+ * Thrown when a file transcription is requested while one is already running on
+ * the single shared context. Lets callers distinguish "busy" from a real failure
+ * (and avoids the old behaviour of silently orphaning the first job's cancel handle).
+ */
+export class WhisperBusyError extends Error {
+  constructor(message = 'A transcription is already in progress') {
+    super(message);
+    this.name = 'WhisperBusyError';
+  }
+}
+
 class WhisperService {
   private context: WhisperContext | null = null;
   private currentModelPath: string | null = null;
@@ -440,11 +452,19 @@ class WhisperService {
 
   async unloadModel(): Promise<void> {
     if (!this.context) return;
-    // Stop active transcription to prevent SIGSEGV on freed context
+    // Stop active transcription to prevent SIGSEGV on a freed context.
+    // Realtime path (isTranscribing/stopFn):
     if (this.isTranscribing || this.stopFn) {
-      logger.log('[WhisperService] Stopping active transcription before unloading model');
+      logger.log('[WhisperService] Stopping active realtime transcription before unloading model');
       await this.stopTranscription();
       await this.transcriptionFullyStopped;
+    }
+    // File path (fileTranscribeStop): a resumable/whole-file transcribe can be
+    // in flight on this same context (it survives navigation by design). Releasing
+    // underneath it is a use-after-free, so cancel and await it first.
+    if (this.fileTranscribeStop) {
+      logger.log('[WhisperService] Stopping in-flight file transcription before unloading model');
+      await this.stopFileTranscription();
     }
     if (this.isReleasingContext) { logger.log('[WhisperService] Context release already in progress, skipping'); return; }
     this.isReleasingContext = true;
@@ -701,6 +721,12 @@ class WhisperService {
     if (!this.context) {
       throw new Error('No Whisper model loaded');
     }
+    // Single shared context: refuse a second overlapping file transcription
+    // instead of overwriting the in-flight job's cancel handle (which would leave
+    // the first job un-cancellable and both racing the one native context).
+    if (this.fileTranscribeStop) {
+      throw new WhisperBusyError();
+    }
 
     const requestedLanguage = options?.language || 'auto';
     // English-only models (ggml-*.en) have ONLY English tokens. Asking them for
@@ -807,8 +833,10 @@ export function cleanTranscription(raw: string): string {
     .replace(/\([^)]*\)/g, ' ')  // (silence), (speaking foreign language)
     .replace(/\s+/g, ' ')
     .trim();
-  // Only markers / punctuation left → no real speech.
-  if (!/[a-z0-9]/i.test(stripped)) return '';
+  // Only markers / punctuation left → no real speech. Match letters/digits in ANY
+  // script (\p{L}\p{N}), not just ASCII - else a Hindi / Arabic / CJK transcript
+  // has no a-z and gets wiped to '' (silent data loss for non-English users).
+  if (!/[\p{L}\p{N}]/u.test(stripped)) return '';
   return stripped;
 }
 
