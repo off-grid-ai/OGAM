@@ -52,7 +52,7 @@ async function reloadOnOpenCL(h: Awaited<ReturnType<typeof setupChatScreen>>) {
   selectBackendViaUI(h, 'opencl');
   await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('reload-model-banner')).not.toBeNull(); });
   await h.rtl.act(async () => { pressByWalkingUp(h.view!.getByTestId('reload-model-banner')); });
-  await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('reload-model-banner')).toBeNull(); }, { timeout: 4000 });
+  await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('reload-model-banner')).toBeNull(); }, { timeout: 20000 });
 }
 
 describe('GPU fallback notice — a GPU-selected load that lands on CPU is visibly reported (device 18:57)', () => {
@@ -72,7 +72,7 @@ describe('GPU fallback notice — a GPU-selected load that lands on CPU is visib
     await reloadOnOpenCL(h);
 
     // RED on HEAD: the downgrade is silent — no notice renders anywhere.
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/running on CPU/i)).not.toBeNull(); }, { timeout: 4000 });
+    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/running on CPU/i)).not.toBeNull(); }, { timeout: 20000 });
   }, 30000);
 
   it('falsify: a healthy GPU reload shows NO fallback notice', async () => {

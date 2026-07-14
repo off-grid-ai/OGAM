@@ -67,7 +67,7 @@ describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloa
     // the composite ABOVE the testID host node, which RTL's press traversal doesn't reach — so walk up the
     // parent chain to the bound onPress and invoke it (the same thing a tap does — see the harness send helper).
     await h.rtl.act(async () => { pressByWalkingUp(h.view!.getByTestId('reload-model-banner')); });
-    await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('reload-model-banner')).toBeNull(); }, { timeout: 4000 });
+    await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('reload-model-banner')).toBeNull(); }, { timeout: 20000 });
 
     await h.send('hello', { text: 'Hi there.' });
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Hi there\./)).not.toBeNull(); });
@@ -78,7 +78,7 @@ describe('T014 — GPU/OpenCL backend → GenerationMeta shows GPU layers offloa
     expect(h.rtl.within(meta).queryByText(/OpenCL \(\d+L\)/)).not.toBeNull();
     // And it is NOT running on CPU.
     expect(h.rtl.within(meta).queryByText('CPU')).toBeNull();
-  });
+  }, 30000); // reload now includes the device-critical memory-reclaim wait — allow for it under load
 
   it('falsify: CPU backend renders "CPU" with no offloaded layers', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });

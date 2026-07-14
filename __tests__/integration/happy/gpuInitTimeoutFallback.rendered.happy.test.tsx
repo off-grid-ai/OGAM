@@ -47,7 +47,7 @@ async function reloadOnOpenCL(h: Awaited<ReturnType<typeof setupChatScreen>>) {
   selectBackendViaUI(h, 'opencl');
   await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('reload-model-banner')).not.toBeNull(); });
   await h.rtl.act(async () => { pressByWalkingUp(h.view!.getByTestId('reload-model-banner')); });
-  await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('reload-model-banner')).toBeNull(); }, { timeout: 4000 });
+  await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('reload-model-banner')).toBeNull(); }, { timeout: 20000 });
 }
 
 describe('T016 (rendered) — GPU init timeout falls back to CPU gracefully (DEV-B24)', () => {
@@ -68,7 +68,7 @@ describe('T016 (rendered) — GPU init timeout falls back to CPU gracefully (DEV
     const meta = await h.rtl.waitFor(() => h.view!.getByTestId('generation-meta'));
     expect(h.rtl.within(meta).queryByText('CPU')).not.toBeNull();
     expect(h.rtl.within(meta).queryByText(/OpenCL/)).toBeNull();
-  });
+  }, 30000); // reload now includes the device-critical memory-reclaim wait — allow for it under load
 
   it('falsify: without the GPU init failure, OpenCL keeps the GPU offload', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
@@ -82,5 +82,5 @@ describe('T016 (rendered) — GPU init timeout falls back to CPU gracefully (DEV
 
     const meta = await h.rtl.waitFor(() => h.view!.getByTestId('generation-meta'));
     expect(h.rtl.within(meta).queryByText(/OpenCL \(\d+L\)/)).not.toBeNull(); // GPU offload kept
-  });
+  }, 30000); // reload now includes the device-critical memory-reclaim wait — allow for it under load
 });
