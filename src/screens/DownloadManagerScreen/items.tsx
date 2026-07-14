@@ -186,9 +186,11 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
       <View style={styles.downloadHeader}>
         <View style={styles.modelTypeIcon}>
           <Icon
-            name={item.modelType === 'image' ? 'image' : item.modelType === 'tts' ? 'volume-2' : item.modelType === 'stt' ? 'mic' : item.isVisionModel ? 'eye' : 'message-square'}
+            // A vision model missing its projector is not "has vision" — it's "needs repair": show a wrench,
+            // not an eye, so the state reads as actionable-broken rather than a working capability (device 2026-07-14).
+            name={item.modelType === 'image' ? 'image' : item.modelType === 'tts' ? 'volume-2' : item.modelType === 'stt' ? 'mic' : needsVisionRepair ? 'tool' : item.isVisionModel ? 'eye' : 'message-square'}
             size={16}
-            color={item.modelType === 'image' ? colors.info : item.modelType === 'tts' || item.modelType === 'stt' ? colors.success : item.isVisionModel ? colors.warning : colors.primary}
+            color={item.modelType === 'image' ? colors.info : item.modelType === 'tts' || item.modelType === 'stt' ? colors.success : needsVisionRepair || item.isVisionModel ? colors.warning : colors.primary}
           />
         </View>
         <View style={styles.downloadInfo}>
@@ -201,7 +203,7 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
             testID="repair-vision-button"
             onPress={() => onRepairVision(item)}
           >
-            <Icon name="eye" size={18} color={colors.warning} />
+            <Icon name="tool" size={18} color={colors.warning} />
           </TouchableOpacity>
         )}
         <TouchableOpacity
