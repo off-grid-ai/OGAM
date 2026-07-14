@@ -149,7 +149,7 @@ jobs:
         run: npm ci
 
       - name: Run Jest tests
-        run: npx jest --coverage --forceExit
+        run: npx jest --coverage --forceExit --runInBand
 
       - name: Install Android NDK
         # Configuring the native modules (op-sqlite etc.) needs the pinned NDK; the macOS
