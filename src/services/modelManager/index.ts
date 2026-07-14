@@ -232,7 +232,7 @@ class ModelManager {
     ctx.mmProjCompleted = false;
     ctx.mmProjCompleteHandled = false;
     if (!ctx.mmProjLocalPath && ctx.file.mmProjFile) {
-      ctx.mmProjLocalPath = `${this.modelsDir}/${mmProjLocalName(ctx.file.name)}`;
+      ctx.mmProjLocalPath = `${this.modelsDir}/${mmProjLocalName(ctx.file.name, ctx.file.mmProjFile?.name)}`;
     }
   }
 

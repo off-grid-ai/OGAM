@@ -16,8 +16,20 @@ import { useDownloadStore } from '../../stores/downloadStore';
 import { makeModelKey } from '../../utils/modelKey';
 import { extractBaseName } from './scan';
 
-export function mmProjLocalName(ggufFileName: string): string {
-  return `${ggufFileName.replace(/\.gguf$/i, '')}-mmproj.gguf`;
+/**
+ * The on-disk projector name for a model — QUANT-INDEPENDENT (built from extractBaseName = name+variant,
+ * quant stripped). One projector serves every quant of a model, so all quants map to the SAME file: the
+ * existence check then skips re-downloading the projector when a second quant is fetched, and the repair
+ * path resolves to the identical name (no more `…-Q4_K_M-mmproj.gguf` vs `…-mmproj-F16.gguf` divergence).
+ */
+export function mmProjLocalName(ggufFileName: string, mmProjSourceName?: string): string {
+  const base = extractBaseName(ggufFileName);
+  // Keep the projector's OWN precision (mmproj-F16 / mmproj-BF16) from its source filename, but strip any
+  // model prefix the repo added — so the on-disk name is `<model-base>-mmproj-<precision>.gguf`:
+  //  - model-prefixed  → two repos that both ship `mmproj-F16.gguf` can't collide on disk (the original loss),
+  //  - MODEL-quant-independent (extractBaseName drops the model quant) → every quant shares ONE projector file.
+  const proj = mmProjSourceName?.match(/mmproj.*$/i)?.[0] ?? 'mmproj.gguf';
+  return `${base}-${proj}`;
 }
 
 export interface MmProjRepairDownloadOpts {
@@ -42,8 +54,8 @@ export async function performMmProjRepairDownload(opts: MmProjRepairDownloadOpts
   if (!mmProjFile) throw new Error('Model file has no associated mmproj');
 
   const modelKey = makeModelKey(modelId, file.name);
-  const mmProjFileName = `${extractBaseName(file.name)}-${mmProjFile.name}`;
-  const mmProjLocalPath = `${modelsDir}/${mmProjFileName}`;
+  // Same quant-independent name the normal download uses — repair and download must agree on the file.
+  const mmProjLocalPath = `${modelsDir}/${mmProjLocalName(file.name, file.mmProjFile?.name)}`;
   const totalBytes = mmProjFile.size;
   if (await RNFS.exists(mmProjLocalPath)) await RNFS.unlink(mmProjLocalPath).catch(() => {});
 
@@ -133,7 +145,7 @@ export async function performBackgroundDownload(opts: PerformBackgroundDownloadO
   const { modelId, file, modelsDir, backgroundDownloadContext, backgroundDownloadMetadataCallback, onProgress } = opts;
   const localPath = `${modelsDir}/${file.name}`;
   const mmProjLocalPath = file.mmProjFile
-    ? `${modelsDir}/${mmProjLocalName(file.name)}`
+    ? `${modelsDir}/${mmProjLocalName(file.name, file.mmProjFile?.name)}`
     : null;
 
   const mainExists = await RNFS.exists(localPath);
@@ -214,7 +226,7 @@ async function startBgDownload(opts: StartBgDownloadOpts): Promise<BackgroundDow
   const skipSizeValidation = modelId.startsWith('offgrid/');
   const metadataObj: Record<string, unknown> = {};
   if (needsMmProj) {
-    metadataObj.mmProjFileName = mmProjLocalName(file.name);
+    metadataObj.mmProjFileName = mmProjLocalName(file.name, file.mmProjFile?.name);
     metadataObj.mmProjDownloadUrl = file.mmProjFile?.downloadUrl;
   }
   if (skipSizeValidation) metadataObj.skipSizeValidation = true;
@@ -232,11 +244,11 @@ async function startBgDownload(opts: StartBgDownloadOpts): Promise<BackgroundDow
     const mmProjFile = file.mmProjFile!;
     logger.log('[DownloadDebug] Starting mmproj sidecar download', {
       modelKey, modelId, fileName: file.name,
-      mmProjFileName: mmProjLocalName(file.name), mmProjBytes: mmProjFile.size,
+      mmProjFileName: mmProjLocalName(file.name, file.mmProjFile?.name), mmProjBytes: mmProjFile.size,
     });
     const mmProjInfo = await backgroundDownloadService.startDownload({
       url: mmProjFile.downloadUrl,
-      fileName: mmProjLocalName(file.name),
+      fileName: mmProjLocalName(file.name, file.mmProjFile?.name),
       modelId,
       modelType: 'text',
       totalBytes: mmProjFile.size,
@@ -305,7 +317,7 @@ async function startBgDownload(opts: StartBgDownloadOpts): Promise<BackgroundDow
       progress: 0,
       createdAt: Date.now(),
       ...(needsMmProj && {
-        mmProjFileName: mmProjLocalName(file.name),
+        mmProjFileName: mmProjLocalName(file.name, file.mmProjFile?.name),
         mmProjFileSize: file.mmProjFile?.size,
       }),
       // Persist metadataJson on the store row too, not just in the native download — it

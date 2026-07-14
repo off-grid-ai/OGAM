@@ -15,7 +15,9 @@ import {
   performBackgroundDownload,
   watchBackgroundDownload,
   syncCompletedBackgroundDownloads,
+  mmProjLocalName,
 } from '../../../src/services/modelManager/download';
+import { mmProjBelongsToModel } from '../../../src/services/mmproj';
 import { restoreInProgressDownloads } from '../../../src/services/modelManager/restore';
 import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
 import { BackgroundDownloadContext } from '../../../src/services/modelManager/types';
@@ -1245,5 +1247,33 @@ describe('Parallel mmproj download', () => {
 
       expect(onComplete).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// DEVICE 2026-07-14 — the projector is quant-independent (one F16/BF16 file serves every quant), so
+// downloading a 2nd quant of a model must NOT re-fetch it. The on-disk name is model-base + the projector's
+// own precision, so all quants of one model share ONE file, while different models stay separate.
+describe('mmProjLocalName — one shared projector per model (dedup across quants), separate per model', () => {
+  it('every quant of a model maps to the SAME projector file (2 quants → 1 mmproj)', () => {
+    const q4 = mmProjLocalName('gemma-4-E2B-it-Q4_K_M.gguf', 'mmproj-F16.gguf');
+    const q8 = mmProjLocalName('gemma-4-E2B-it-Q8_0.gguf', 'mmproj-F16.gguf');
+    expect(q4).toBe(q8);
+    expect(q4).toBe('gemma-4-e2b-it-mmproj-F16.gguf');
+  });
+
+  it('E2B and E4B get DIFFERENT projector files (different architectures — never shared)', () => {
+    expect(mmProjLocalName('gemma-4-E2B-it-Q4_K_M.gguf', 'mmproj-F16.gguf'))
+      .not.toBe(mmProjLocalName('gemma-4-E4B-it-Q4_K_M.gguf', 'mmproj-F16.gguf'));
+  });
+
+  it('keeps the projector precision and strips a repo model-prefix from the source name', () => {
+    expect(mmProjLocalName('gemma-4-E2B-it-Q4_K_M.gguf', 'gemma-4-E2B-it-mmproj-BF16.gguf'))
+      .toBe('gemma-4-e2b-it-mmproj-BF16.gguf');
+  });
+
+  it('the generated name matches its model under the strict rule (so it is recognized after download)', () => {
+    const name = mmProjLocalName('gemma-4-E2B-it-Q4_K_M.gguf', 'mmproj-F16.gguf');
+    expect(mmProjBelongsToModel('gemma-4-E2B-it-Q8_0.gguf', name)).toBe(true);
+    expect(mmProjBelongsToModel('gemma-4-E4B-it-Q8_0.gguf', name)).toBe(false);
   });
 });
