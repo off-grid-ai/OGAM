@@ -23,14 +23,16 @@ const mk = (id: string, hour: number, min: number, opts: Partial<Recording> = {}
 describe('timeBucket (fixed clock boundaries)', () => {
   const at = (h: number) => timeBucket(new Date(2026, 6, 8, h, 0).getTime());
   it('maps hours to fixed buckets', () => {
-    expect(at(6)).toBe('Morning'); // 5-12
+    expect(at(0)).toBe('Morning'); // 0-12: early-hours clips group first, not as Night
+    expect(at(3)).toBe('Morning');
+    expect(at(6)).toBe('Morning');
     expect(at(11)).toBe('Morning');
     expect(at(12)).toBe('Afternoon'); // 12-17
     expect(at(16)).toBe('Afternoon');
     expect(at(17)).toBe('Evening'); // 17-21
     expect(at(20)).toBe('Evening');
-    expect(at(21)).toBe('Night'); // 21-5
-    expect(at(3)).toBe('Night');
+    expect(at(21)).toBe('Night'); // 21-24
+    expect(at(23)).toBe('Night');
   });
 });
 
