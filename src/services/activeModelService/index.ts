@@ -191,6 +191,18 @@ class ActiveModelService {
     });
     await this.textLoadPromise;
   }
+  /**
+   * The ONE owner of the "active text model" write. Selecting a model MARKS it active (the load is
+   * deferred to the first message); this is the single place a selection is recorded, so the View
+   * dispatches this intent instead of poking the store — presentation holds no authoritative state.
+   * activeModelId is then set from exactly three places, all here in the service: select (this),
+   * load-success (loaders), and cleared on load-failure/unload — so it can never drift from reality.
+   */
+  selectTextModel(modelId: string): void {
+    const store = useAppStore.getState();
+    store.setActiveModelId(modelId);
+    store.setLastTextModelId(modelId); // remembered choice → routing reloads it on demand after eviction
+  }
   async unloadTextModel(keepSelection = false): Promise<void> {
     await modelResidencyManager.runExclusive('unload:text', () =>
       this.doUnloadTextModelLocked(keepSelection),

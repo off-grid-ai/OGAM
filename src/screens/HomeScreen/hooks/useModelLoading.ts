@@ -32,11 +32,10 @@ export const useModelLoading = ({
   const handleSelectTextModel = useCallback(
     (model: DownloadedModel) => {
       setPickerType(null);
-      const store = useAppStore.getState();
-      store.setActiveModelId(model.id);
-      // Remember the explicit choice so routing can reload it on demand even
-      // after the residency manager evicts it.
-      store.setLastTextModelId(model.id);
+      // Dispatch the SELECT intent to the owning service — the View no longer writes activeModelId
+      // directly (presentation holds no authoritative state). The service is the one writer, so the
+      // selection, load-success, and load-failure states can never drift apart.
+      activeModelService.selectTextModel(model.id);
     },
     [setPickerType],
   );

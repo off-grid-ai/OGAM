@@ -215,6 +215,8 @@ export interface LlamaFake {
    *  accelerator init does — so initContextWithFallback falls back to the CPU attempt (n_gpu_layers:0).
    *  Models B24 (GPU init timeout → CPU/partial fallback). Persistent until cleared. */
   scriptGpuInitFailure(fail?: boolean): void;
+  /** Make EVERY init attempt fail (a model that can't load on any backend) — the real load path throws. */
+  scriptInitFailure(fail?: boolean): void;
   /** HOLD the next post-init multimodal-support check (context.getMultimodalSupport) open until
    *  releaseMultimodalHold() — the device-shaped load window between context init and capability
    *  detection (the 2026-07-13 18:50 device log shows ~3.4s there for gemma-4-E2B: init succeeded
@@ -239,6 +241,7 @@ function makeLlamaFake(onRelease?: () => void): LlamaFake {
   // is per-completion (a fresh completion starts un-stopped), matching the native abort behavior.
   let stopRequested = false;
   let gpuInitFails = false; // when true, initLlama with n_gpu_layers>0 rejects (GPU/HTP init timeout → CPU fallback)
+  let initFails = false; // when true, EVERY initLlama attempt rejects (a model that fails to load on any backend)
   // Multimodal-check hold: opens the post-init capability window a real slow device has.
   let mmHoldPending = false;
   let mmHoldEngaged = false;
@@ -371,6 +374,8 @@ function makeLlamaFake(onRelease?: () => void): LlamaFake {
     // path surfaces the true backend — EMERGENT from the settings→load flow, never programmed.
     initLlama: jest.fn(async (params?: Record<string, unknown>) => {
       const n = Number((params?.n_gpu_layers as number) ?? 0);
+      // A model that fails to load on EVERY backend (corrupt file / unsupported arch) — all 3 attempts reject.
+      if (initFails) throw new Error('Failed to load model: unsupported architecture');
       // Device-faithful GPU/HTP init failure: a hung/timed-out accelerator init rejects, so the real
       // initContextWithFallback falls back to the CPU attempt (which requests n_gpu_layers:0 and succeeds).
       if (gpuInitFails && n > 0) throw new Error('GPU context init timed out after 8000ms');
@@ -392,6 +397,7 @@ function makeLlamaFake(onRelease?: () => void): LlamaFake {
     scriptCompletion: (r) => { pending = { text: r.text ?? '', toolCalls: r.toolCalls, throwMessage: r.throwMessage, throwAfter: r.throwAfter, pauseAfter: r.pauseAfter, holdBeforeStream: r.holdBeforeStream, thinkingText: r.thinkingText, reasoning: r.reasoning, completionMeta: r.completionMeta }; },
     releaseStream: () => { const f = releaseFn; releaseFn = null; f?.(); },
     scriptGpuInitFailure: (fail = true) => { gpuInitFails = fail; },
+    scriptInitFailure: (fail = true) => { initFails = fail; },
     scriptMultimodalHold: () => { mmHoldPending = true; },
     releaseMultimodalHold: () => { const f = mmHoldRelease; mmHoldRelease = null; f?.(); },
     multimodalHoldActive: () => mmHoldEngaged,

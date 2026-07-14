@@ -167,6 +167,7 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
     ctx.store.setActiveModelId(ctx.modelId);
   } catch (error) {
     ctx.onError();
+    ctx.store.setActiveModelId(null); // load FAILED → no active model, consistently (never a stale selection)
     throw error;
   } finally {
     ctx.onFinally();
@@ -239,6 +240,7 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
     ctx.store.setActiveModelId(ctx.modelId);
   } catch (error) {
     ctx.onError();
+    ctx.store.setActiveModelId(null); // load FAILED → no active model, consistently (never a stale selection)
     throw error;
   } finally {
     ctx.onFinally();
