@@ -37,15 +37,16 @@ describe('STT reclaim on send (memory-tight) — rendered characterization', () 
     // removes the residency black box) — NOT by reading getResidents(). The section polls the real manager.
     /* eslint-disable @typescript-eslint/no-var-requires */
     const React = require('react');
-    const { ModelSelectorModal } = require('../../../src/components/ModelSelectorModal');
+    const { ModelsManagerSheet } = require('../../../src/components/models/ModelsManagerSheet');
     /* eslint-enable @typescript-eslint/no-var-requires */
-    const sel = h.rtl.render(React.createElement(ModelSelectorModal, {
-      visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {}, isLoading: false,
-      currentModelPath: null,
+    const sel = h.rtl.render(React.createElement(ModelsManagerSheet, {
+      visible: true, onClose: () => {}, labels: { text: '—', image: '—', voice: '—', speech: '—' },
+      loadingState: { isLoading: false }, isEjecting: false, hasActiveModel: false,
+      onOpenRow: () => {}, onEject: () => {},
     }));
-    await h.rtl.waitFor(() => { expect(sel.queryByTestId('in-memory-section')).not.toBeNull(); }, { timeout: 4000 });
+    await h.rtl.waitFor(() => { expect(sel.queryByTestId('models-row-text-ram')).not.toBeNull(); }, { timeout: 4000 });
     // Reclaimed: whisper no longer listed as in-memory; the text model still is.
-    await h.rtl.waitFor(() => { expect(sel.queryByTestId('resident-item-whisper')).toBeNull(); }, { timeout: 4000 });
-    expect(sel.queryByTestId('resident-item-text')).not.toBeNull();
+    await h.rtl.waitFor(() => { expect(sel.queryByTestId('models-row-speech-ram')).toBeNull(); }, { timeout: 4000 });
+    expect(sel.queryByTestId('models-row-text-ram')).not.toBeNull();
   });
 });

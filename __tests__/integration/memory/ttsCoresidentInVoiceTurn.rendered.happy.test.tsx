@@ -6,9 +6,9 @@
  *
  * Real user behavior: enter voice mode (real gesture) → record a voice note and release to send (real
  * transcribe → onTranscript → send) → the reply is spoken. Validated through the model selector's real
- * "In Memory" section: it lists resident-item-tts with its RAM, alongside the text model.
+ * "In Memory" section: it lists models-row-voice-ram with its RAM, alongside the text model.
  *
- * Falsify: without voice mode (no TTS engine loaded), resident-item-tts is absent → red.
+ * Falsify: without voice mode (no TTS engine loaded), models-row-voice-ram is absent → red.
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
@@ -25,7 +25,7 @@ describe('T120 (rendered) — TTS co-resides during a voice turn (In Memory UI)'
     h.render();
     /* eslint-disable @typescript-eslint/no-var-requires */
     const React = require('react');
-    const { ModelSelectorModal } = require('../../../src/components/ModelSelectorModal');
+    const { ModelsManagerSheet } = require('../../../src/components/models/ModelsManagerSheet');
     /* eslint-enable @typescript-eslint/no-var-requires */
 
     // Enter voice mode (real gesture) — the TTS engine loads as a sidecar — then speak a voice turn.
@@ -38,12 +38,13 @@ describe('T120 (rendered) — TTS co-resides during a voice turn (In Memory UI)'
 
     // Result via the In Memory UI (rendered AFTER the voice turn): the TTS sidecar is listed with its RAM,
     // co-resident with the active text model.
-    const sel = h.rtl.render(React.createElement(ModelSelectorModal, {
-      visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {}, isLoading: false,
-      currentModelPath: null,
+    const sel = h.rtl.render(React.createElement(ModelsManagerSheet, {
+      visible: true, onClose: () => {}, labels: { text: '—', image: '—', voice: '—', speech: '—' },
+      loadingState: { isLoading: false }, isEjecting: false, hasActiveModel: false,
+      onOpenRow: () => {}, onEject: () => {},
     }));
-    await h.rtl.waitFor(() => { expect(sel.queryByTestId('resident-item-tts')).not.toBeNull(); }, { timeout: 4000 });
-    expect(sel.queryByTestId('resident-item-text')).not.toBeNull();
-    expect(String(sel.getByTestId('resident-tts-ram').props.children)).toMatch(/GB RAM/);
+    await h.rtl.waitFor(() => { expect(sel.queryByTestId('models-row-voice-ram')).not.toBeNull(); }, { timeout: 4000 });
+    expect(sel.queryByTestId('models-row-text-ram')).not.toBeNull();
+    expect(h.rtl.within(sel.getByTestId('models-row-voice-ram')).queryByText(/GB/)).not.toBeNull();
   });
 });

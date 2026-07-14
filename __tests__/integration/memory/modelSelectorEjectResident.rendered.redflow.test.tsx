@@ -30,7 +30,7 @@ describe('per-model eject (TDD) — model selector In Memory section', () => {
     const { activeModelService } = require('../../../src/services/activeModelService');
     const { modelResidencyManager } = require('../../../src/services/modelResidency');
     const React = require('react');
-    const { ModelSelectorModal } = require('../../../src/components/ModelSelectorModal');
+    const { ModelsManagerSheet } = require('../../../src/components/models/ModelsManagerSheet');
     /* eslint-enable @typescript-eslint/no-var-requires */
     await activeModelService.loadImageModel('sd');
     await h.setupWhisperModel();
@@ -39,22 +39,25 @@ describe('per-model eject (TDD) — model selector In Memory section', () => {
     const types = () => (modelResidencyManager.getResidents() as Array<{ type: string }>).map(r => r.type).sort();
     expect(types()).toEqual(['image', 'whisper']);
 
-    const v = h.rtl.render(React.createElement(ModelSelectorModal, {
-      visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {}, isLoading: false,
-      currentModelPath: null,
+    const v = h.rtl.render(React.createElement(ModelsManagerSheet, {
+      visible: true, onClose: () => {}, labels: { text: '—', image: '—', voice: '—', speech: '—' },
+      loadingState: { isLoading: false }, isEjecting: false, hasActiveModel: false,
+      onOpenRow: () => {}, onEject: () => {},
     }));
 
-    // SPEC (fails today): the In Memory section lists each resident with its RAM and an eject control.
-    await h.rtl.waitFor(() => { expect(v.queryByTestId('in-memory-section')).not.toBeNull(); }, { timeout: 4000 });
-    expect(v.queryByTestId('resident-item-whisper')).not.toBeNull();
-    expect(v.queryByTestId('resident-item-image')).not.toBeNull();
+    // The manager sheet marks each RESIDENT row with a RAM chip: image + whisper(→speech) are resident,
+    // text is not (it was evicted by the image load — one heavy at a time).
+    await h.rtl.waitFor(() => { expect(v.queryByTestId('models-row-image-ram')).not.toBeNull(); }, { timeout: 4000 });
+    expect(v.queryByTestId('models-row-speech-ram')).not.toBeNull();
+    expect(v.queryByTestId('models-row-text-ram')).toBeNull(); // text not resident → no chip
     // Each resident shows its RAM footprint.
-    expect(String(v.getByTestId('resident-whisper-ram').props.children)).toMatch(/GB RAM/);
+    expect(h.rtl.within(v.getByTestId('models-row-speech-ram')).queryByText(/GB/)).not.toBeNull();
 
     // SPEC: ejecting whisper frees ONLY whisper (its real unload runs); image stays resident.
-    h.rtl.fireEvent.press(v.getByTestId('eject-resident-whisper'));
+    h.rtl.fireEvent.press(v.getByTestId('models-row-speech-eject'));
     await h.rtl.waitFor(() => { expect(types()).toEqual(['image']); }, { timeout: 4000 });
-    expect(v.queryByTestId('resident-item-whisper')).toBeNull();
-    expect(v.queryByTestId('resident-item-image')).not.toBeNull();
+    // The sheet re-projects residency on its poll — wait for the speech chip to clear; image stays.
+    await h.rtl.waitFor(() => { expect(v.queryByTestId('models-row-speech-ram')).toBeNull(); }, { timeout: 4000 });
+    expect(v.queryByTestId('models-row-image-ram')).not.toBeNull();
   });
 });

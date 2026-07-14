@@ -10,7 +10,7 @@
  * eager warm (which re-introduces the co-residency race).
  *
  * Residency is validated through the model selector's real "In Memory" section (same as T111–T117), not
- * getResidents(). Falsify: if select eager-loaded, resident-item-text would be present BEFORE any send.
+ * getResidents(). Falsify: if select eager-loaded, models-row-text-ram would be present BEFORE any send.
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
@@ -27,18 +27,19 @@ describe('T020 (rendered) — LiteRT select is lazy (no eager warm), loads on fi
     h.render();
     /* eslint-disable @typescript-eslint/no-var-requires */
     const React = require('react');
-    const { ModelSelectorModal } = require('../../../src/components/ModelSelectorModal');
+    const { ModelsManagerSheet } = require('../../../src/components/models/ModelsManagerSheet');
     /* eslint-enable @typescript-eslint/no-var-requires */
-    const openSelector = () => h.rtl.render(React.createElement(ModelSelectorModal, {
-      visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {}, isLoading: false,
-      currentModelPath: null,
+    const openSelector = () => h.rtl.render(React.createElement(ModelsManagerSheet, {
+      visible: true, onClose: () => {}, labels: { text: '—', image: '—', voice: '—', speech: '—' },
+      loadingState: { isLoading: false }, isEjecting: false, hasActiveModel: false,
+      onOpenRow: () => {}, onEject: () => {},
     }));
 
     // The LiteRT model was SELECTED via the real Home picker (setupChatScreen) but never sent to — so it is
     // NOT eager-warmed. The In Memory section shows no text model. (Poll a beat: the section polls residents.)
     const before = openSelector();
     await h.settle(400);
-    expect(before.queryByTestId('resident-item-text')).toBeNull();
+    expect(before.queryByTestId('models-row-text-ram')).toBeNull();
     before.unmount();
 
     // First send → the REAL lazy load fires (dispatchGenerationFn → ensureModelLoaded) → reply renders.
@@ -47,6 +48,6 @@ describe('T020 (rendered) — LiteRT select is lazy (no eager warm), loads on fi
 
     // Now — and only now — the model is In Memory.
     const after = openSelector();
-    await h.rtl.waitFor(() => { expect(after.queryByTestId('resident-item-text')).not.toBeNull(); }, { timeout: 4000 });
+    await h.rtl.waitFor(() => { expect(after.queryByTestId('models-row-text-ram')).not.toBeNull(); }, { timeout: 4000 });
   });
 });

@@ -23,10 +23,10 @@
  * RAM: 12GB total / 3GB free. Policy: aggressive (via the real toggle). These recreate the exact M6 cell.
  *
  * RED (HEAD): the aggressive gate ADMITS the 9GB dirty image model → after send, the In Memory section lists
- * resident-item-image (~9.0 GB) and NO "Not Enough Memory" card renders. On HEAD the load is not even
+ * models-row-image-ram (~9.0 GB) and NO "Not Enough Memory" card renders. On HEAD the load is not even
  * refused first, so no "Load Anyway" prompt appears — aggressive silently over-commits (see the split note).
  * GREEN (after the fix): aggressive must refuse a dirty model that can't be physically backed → the image
- * model is NOT resident (resident-item-image absent) and the graceful memory card renders instead.
+ * model is NOT resident (models-row-image-ram absent) and the graceful memory card renders instead.
  *
  * THE SPLIT — what the fake proves vs what the human confirms:
  *  - The FAKE (this test) proves the JS ADMISSION decision: aggressive lets the 9GB dirty image model become
@@ -59,7 +59,7 @@ describe('T103 / M6 (rendered) — aggressive policy over-commits a 9GB dirty im
     const React = require('react');
     const { ModelLoadingModeSelector } = require('../../../src/components/settings/textGenAdvancedSections');
     const { startLoadPolicySync } = require('../../../src/services/loadPolicySync');
-    const { ModelSelectorModal } = require('../../../src/components/ModelSelectorModal');
+    const { ModelsManagerSheet } = require('../../../src/components/models/ModelsManagerSheet');
     const { hardwareService } = require('../../../src/services/hardware');
     /* eslint-enable @typescript-eslint/no-var-requires */
 
@@ -86,13 +86,14 @@ describe('T103 / M6 (rendered) — aggressive policy over-commits a 9GB dirty im
 
     // PRECONDITION via the SAME real In Memory UI: no image model resident yet (so a later "present" is a
     // real transition, not a pre-existing artifact). The text model is resident from setup.
-    const openSelector = () => h.rtl.render(React.createElement(ModelSelectorModal, {
-      visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {}, isLoading: false,
-      currentModelPath: null,
+    const openSelector = () => h.rtl.render(React.createElement(ModelsManagerSheet, {
+      visible: true, onClose: () => {}, labels: { text: '—', image: '—', voice: '—', speech: '—' },
+      loadingState: { isLoading: false }, isEjecting: false, hasActiveModel: false,
+      onOpenRow: () => {}, onEject: () => {},
     }));
     const before = openSelector();
-    await h.rtl.waitFor(() => { expect(before.queryByTestId('resident-item-text')).not.toBeNull(); }, { timeout: 4000 });
-    expect(before.queryByTestId('resident-item-image')).toBeNull();
+    await h.rtl.waitFor(() => { expect(before.queryByTestId('models-row-text-ram')).not.toBeNull(); }, { timeout: 4000 });
+    expect(before.queryByTestId('models-row-image-ram')).toBeNull();
     before.unmount();
 
     // Now the device is genuinely tight: 12GB total, only ~3GB truly free (other apps hold the rest). This is
@@ -107,10 +108,10 @@ describe('T103 / M6 (rendered) — aggressive policy over-commits a 9GB dirty im
 
     // ASSERT on the terminal UI artifact. CORRECT (green after fix): the load is refused → nothing resident
     // for image, and the graceful "Not Enough Memory" card renders. BUG (red on HEAD): the 9GB dirty model is
-    // admitted → the In Memory section lists resident-item-image (~9.0 GB) and no card appears.
+    // admitted → the In Memory section lists models-row-image-ram (~9.0 GB) and no card appears.
     const after = openSelector();
     await h.settle(400); // let the section's poll pick up residency
-    expect(after.queryByTestId('resident-item-image')).toBeNull();       // admitted on HEAD → RED here
+    expect(after.queryByTestId('models-row-image-ram')).toBeNull();       // admitted on HEAD → RED here
     expect(h.view!.queryByText(/Not Enough Memory/)).not.toBeNull();      // no card on HEAD → RED here too
     after.unmount();
 

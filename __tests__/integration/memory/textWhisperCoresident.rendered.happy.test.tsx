@@ -6,11 +6,11 @@
  *
  * Validated through the model selector's real "In Memory" section (the residency indicator), not
  * getResidents(): after a text model is loaded and a whisper model is downloaded+selected, the section lists
- * BOTH resident-item-text AND resident-item-whisper. The transition (text-only → text+whisper) proves whisper
+ * BOTH models-row-text-ram AND models-row-speech-ram. The transition (text-only → text+whisper) proves whisper
  * co-resides without evicting the heavy.
  *
  * Falsify: if whisper were treated as a heavy (mis-applying the single-model rule to the sidecar), loading it
- * would evict text and only resident-item-whisper would show. Contrast to T026 (two heavies must NOT co-reside).
+ * would evict text and only models-row-speech-ram would show. Contrast to T026 (two heavies must NOT co-reside).
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 
@@ -27,17 +27,18 @@ describe('T116 (rendered) — text + whisper allowed co-residence (In Memory UI)
     h.render();
     /* eslint-disable @typescript-eslint/no-var-requires */
     const React = require('react');
-    const { ModelSelectorModal } = require('../../../src/components/ModelSelectorModal');
+    const { ModelsManagerSheet } = require('../../../src/components/models/ModelsManagerSheet');
     /* eslint-enable @typescript-eslint/no-var-requires */
-    const openSelector = () => h.rtl.render(React.createElement(ModelSelectorModal, {
-      visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {}, isLoading: false,
-      currentModelPath: null,
+    const openSelector = () => h.rtl.render(React.createElement(ModelsManagerSheet, {
+      visible: true, onClose: () => {}, labels: { text: '—', image: '—', voice: '—', speech: '—' },
+      loadingState: { isLoading: false }, isEjecting: false, hasActiveModel: false,
+      onOpenRow: () => {}, onEject: () => {},
     }));
 
     // Precondition via the SAME real UI: only the text model is in memory (no whisper yet).
     const before = openSelector();
-    await h.rtl.waitFor(() => { expect(before.queryByTestId('resident-item-text')).not.toBeNull(); }, { timeout: 4000 });
-    expect(before.queryByTestId('resident-item-whisper')).toBeNull();
+    await h.rtl.waitFor(() => { expect(before.queryByTestId('models-row-text-ram')).not.toBeNull(); }, { timeout: 4000 });
+    expect(before.queryByTestId('models-row-speech-ram')).toBeNull();
     before.unmount();
 
     // Real gesture: download + select a whisper STT model (co-resides as a sidecar, must NOT evict text).
@@ -45,7 +46,7 @@ describe('T116 (rendered) — text + whisper allowed co-residence (In Memory UI)
 
     // Result via the In Memory UI: BOTH are listed — the heavy text model kept its RAM, whisper co-resides.
     const after = openSelector();
-    await h.rtl.waitFor(() => { expect(after.queryByTestId('resident-item-whisper')).not.toBeNull(); }, { timeout: 4000 });
-    expect(after.queryByTestId('resident-item-text')).not.toBeNull();
+    await h.rtl.waitFor(() => { expect(after.queryByTestId('models-row-speech-ram')).not.toBeNull(); }, { timeout: 4000 });
+    expect(after.queryByTestId('models-row-text-ram')).not.toBeNull();
   });
 });

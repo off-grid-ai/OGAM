@@ -129,15 +129,15 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
      * separate screen) and flip its switch. Shares the same store as ChatScreen, so the enablement is
      * live when we return to chat. NOT settings.updateSettings seeding.
      */
-    enableToolViaUI(toolId: string) {
-       
+    enableToolViaUI(toolId: string, value: boolean = true) {
+
       const { ToolsScreen } = require('../../src/screens/ToolsScreen');
       const { Switch } = require('react-native');
-       
+
       const tools = rtl.render(React.createElement(ToolsScreen, {}));
       const row = tools.getByTestId(`tool-picker-row-${toolId}`);
       // The RN Switch toggles via onValueChange (not press) — locate it in the row and flip it.
-      rtl.fireEvent(rtl.within(row).UNSAFE_getByType(Switch), 'valueChange', true);
+      rtl.fireEvent(rtl.within(row).UNSAFE_getByType(Switch), 'valueChange', value);
       tools.unmount();
     },
 

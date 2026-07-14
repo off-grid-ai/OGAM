@@ -37,7 +37,7 @@ describe('T118 (rendered) — embedding model co-resides as a sidecar after a KB
     const picker = require('@react-native-documents/picker');
     const { useProjectStore } = require('../../../src/stores/projectStore');
     const { KnowledgeBaseScreen } = require('../../../src/screens/KnowledgeBaseScreen');
-    const { ModelSelectorModal } = require('../../../src/components/ModelSelectorModal');
+    const { ResidentsProbe } = require('../../harness/ResidentsProbe');
     /* eslint-enable @typescript-eslint/no-var-requires */
 
     const docs = boundary.fs!.DocumentDirectoryPath;
@@ -48,14 +48,12 @@ describe('T118 (rendered) — embedding model co-resides as a sidecar after a KB
     picker.pick.mockResolvedValue([{ uri: 'file:///docs/notes.txt', name: 'notes.txt', size: 90 }]);
     useProjectStore.setState({ projects: [{ id: 'p1', name: 'Research', description: '', systemPrompt: '', createdAt: 1, updatedAt: 1 }] });
 
-    const openSelector = () => rtl.render(React.createElement(ModelSelectorModal, {
-      visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {}, isLoading: false, currentModelPath: null,
-    }));
+    const openSelector = () => rtl.render(React.createElement(ResidentsProbe, {}));
 
     // Precondition (via the SAME real UI): the embedding model is NOT in memory before any embed.
     const before = openSelector();
     await rtl.act(async () => { await new Promise(r => setTimeout(r, 350)); });
-    expect(before.queryByTestId('resident-item-embedding')).toBeNull();
+    expect(String(before.getByTestId('probe-residents').props.children)).not.toContain('embedding');
     before.unmount();
 
     // Real gesture: attach the document → the whole real index+embed pipeline runs (lazy-loads the embedding
@@ -67,6 +65,6 @@ describe('T118 (rendered) — embedding model co-resides as a sidecar after a KB
 
     // Result via the In Memory UI: the embedding model co-resides as a sidecar.
     const after = openSelector();
-    await rtl.waitFor(() => { expect(after.queryByTestId('resident-item-embedding')).not.toBeNull(); }, { timeout: 4000 });
+    await rtl.waitFor(() => { expect(String(after.getByTestId('probe-residents').props.children)).toContain('embedding'); }, { timeout: 4000 });
   });
 });
