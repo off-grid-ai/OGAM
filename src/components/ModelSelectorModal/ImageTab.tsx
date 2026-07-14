@@ -98,16 +98,21 @@ export const ImageTab: React.FC<ImageTabProps> = ({
           </View>
           {downloadedImageModels.map((model) => {
             const isCurrent = activeImageModelId === model.id;
+            // While a load is in flight, the highlight + spinner follow the row being loaded, not the
+            // model still resident — so tapping B moves the selection to B at once (device 2026-07-14).
+            const isLoadingThis = loadingModelId === model.id;
+            const loadInProgress = loadingModelId != null;
+            const highlight = loadInProgress ? isLoadingThis : isCurrent;
             return (
               <TouchableOpacity
                 key={model.id}
                 testID={`image-model-row-${model.id}`}
-                style={[styles.modelItem, isCurrent && styles.modelItemSelectedImage]}
+                style={[styles.modelItem, highlight && styles.modelItemSelectedImage]}
                 onPress={() => onSelectImageModel(model)}
                 disabled={isAnyLoading || isCurrent}
               >
                 <View style={styles.modelInfo}>
-                  <Text style={[styles.modelName, isCurrent && styles.modelNameSelectedImage]} numberOfLines={1}>
+                  <Text style={[styles.modelName, highlight && styles.modelNameSelectedImage]} numberOfLines={1}>
                     {model.name}
                   </Text>
                   <View style={styles.modelMeta}>
@@ -120,9 +125,9 @@ export const ImageTab: React.FC<ImageTabProps> = ({
                     )}
                   </View>
                 </View>
-                {loadingModelId === model.id ? (
+                {isLoadingThis ? (
                   <ActivityIndicator testID="model-row-loading" size="small" color={colors.info} />
-                ) : isCurrent ? (
+                ) : (isCurrent && !loadInProgress) ? (
                   <View style={[styles.checkmark, styles.checkmarkImage]}>
                     <Icon name="check" size={16} color={colors.background} />
                   </View>

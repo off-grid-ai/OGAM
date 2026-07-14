@@ -112,7 +112,12 @@ export const TextTab: React.FC<TextTabProps> = ({
             // Don't highlight a deferred-local selection while a remote model is
             // current — otherwise both rows render active after a local→remote switch.
             const isSelected = currentRemoteModelId === null && !currentModelPath && selectedModelPath === model.filePath;
-            const isActive = isLoaded || isSelected;
+            // While a load is in flight, the highlight + spinner + (suppressed) checkmark all follow the
+            // row being loaded — not the model that's still resident. So tapping B moves the selection to
+            // B immediately, instead of leaving A highlighted until the load finishes (device 2026-07-14).
+            const isLoadingThis = loadingModelId === model.id;
+            const loadInProgress = loadingModelId != null;
+            const isActive = loadInProgress ? isLoadingThis : (isLoaded || isSelected);
             return (
               <ModelRow
                 key={model.id}
@@ -122,8 +127,8 @@ export const TextTab: React.FC<TextTabProps> = ({
                 quant={model.quantization}
                 isVision={model.engine === 'llama' && model.isVisionModel}
                 isActive={isActive}
-                isLoaded={isLoaded}
-                loading={loadingModelId === model.id}
+                isLoaded={isLoaded && !loadInProgress}
+                loading={isLoadingThis}
                 disabled={isAnyLoading || isLoaded}
                 onPress={() => onSelectModel(model)}
               />
