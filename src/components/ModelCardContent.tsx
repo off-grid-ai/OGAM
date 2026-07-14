@@ -398,7 +398,7 @@ function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelet
           <ActivityIndicator size="small" color={colors.warning} />
         </View>
       ) : (
-        onRepairVision && <ActionButton icon="eye" color={colors.warning} haptic="impactLight" onPress={onRepairVision} testID={tid('repair-vision')} styles={styles} />
+        onRepairVision && <ActionButton icon="tool" color={colors.warning} haptic="impactLight" onPress={onRepairVision} testID={tid('repair-vision')} styles={styles} />
       )}
       {!isActive && onSelect && <ActionButton icon="check-circle" color={colors.primary} haptic="selection" onPress={onSelect} styles={styles} />}
       {onDelete && <ActionButton icon="trash-2" color={colors.error} haptic="notificationWarning" onPress={onDelete} styles={styles} />}
