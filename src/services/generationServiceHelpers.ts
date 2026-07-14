@@ -497,12 +497,9 @@ export async function generateRemoteWithToolsImpl(
   } catch (error) {
     if (svc.abortRequested) return;
     logger.error('[GenerationService] Remote tool generation error:', error);
-    // The remote turn threw (provider context/HTTP error, e.g. n_ctx too small). WITHOUT this catch the
-    // exception propagated past the reset below, leaving isGenerating=true — the red stop button stayed
-    // and EVERY next send aborted at `prepareGeneration returned false` before ever hitting the server
-    // (device 2026-07-14: error dialog shown but the turn never stopped; LM Studio never re-called).
-    // keepShownPartialOnError flushes any shown partial, finalizes, and resets the generating state; the
-    // rethrow still surfaces the error dialog. Now the dialog AND the stop happen together.
+    // Without this catch the throw propagated past the reset above, leaving isGenerating=true (red stop
+    // stuck, every next send blocked at prepareGeneration before hitting the server — device 2026-07-14).
+    // Keep any shown partial + reset the generating state; rethrow still surfaces the error dialog.
     keepShownPartialOnError(svc, conversationId);
     throw error;
   }
