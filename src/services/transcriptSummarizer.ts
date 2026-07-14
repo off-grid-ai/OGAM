@@ -217,6 +217,13 @@ class TranscriptSummarizerService {
     );
     try {
       await llmService.stopGeneration();
+      // Summaries PREFER a remote provider (and may run on one even with a local
+      // model loaded), so a local-only stop wouldn't interrupt a remote in-flight
+      // completion. Stop the active remote provider too (it aborts its stream).
+      if (isRemoteActive()) {
+        const activeServerId = useRemoteServerStore.getState().activeServerId as string;
+        await providerRegistry.getProvider(activeServerId)?.stopGeneration?.();
+      }
     } finally {
       this._isSummarizing = false;
     }
