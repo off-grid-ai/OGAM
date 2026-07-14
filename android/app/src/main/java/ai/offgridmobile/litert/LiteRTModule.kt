@@ -99,11 +99,6 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
 
     private var engine: Engine? = null
     @Volatile private var conversation: com.google.ai.edge.litertlm.Conversation? = null
-    // DIAG (litert-uaf): trace conversation lifetime to pin the GC-time HybridData
-    // use-after-free seen during insight generation. seq = monotonic id per created
-    // conversation; identityHashCode ties a create → use → close → (later) GC together.
-    private val convSeq = java.util.concurrent.atomic.AtomicInteger(0)
-    @Volatile private var currentConvSeq: Int = 0
     private var activeBackend: String = "cpu"
     private var supportsVision: Boolean = false
     private var supportsAudio: Boolean = false
@@ -328,8 +323,6 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                         conversation = eng.createConversation(convConfig)
                     } else throw e
                 }
-                currentConvSeq = convSeq.incrementAndGet()
-                Log.i(TAG, "DIAG-UAF conv CREATE seq=$currentConvSeq id=${System.identityHashCode(conversation)} thread=${Thread.currentThread().name}")
                 debugLog("conversation ready — historyTurns=${initialMessages.size} tools=${toolProviders.size} maxTokenBudget=$configuredMaxTokens")
                 safe.resolve(null)
             } catch (e: Exception) {
@@ -450,8 +443,6 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 safe.reject("LITERT_NO_CONV", "No conversation. Call resetConversation first.", null)
                 return@launch
             }
-            Log.i(TAG, "DIAG-UAF conv SEND seq=$currentConvSeq id=${System.identityHashCode(conv)} alive=${conv.isAlive} thread=${Thread.currentThread().name}")
-
             currentJob = launch {
                 try {
                     val contents = buildSendContents(imageUris, audioUris, text, safe) ?: return@launch
@@ -599,7 +590,6 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
         val conv = conversation ?: return
         conversation = null
 
-        Log.i(TAG, "DIAG-UAF conv CLOSE seq=$currentConvSeq id=${System.identityHashCode(conv)} thread=${Thread.currentThread().name}")
         // Safety net: signal stop in case stopGeneration was not called before close
         try {
             conv.cancelProcess()
@@ -608,7 +598,7 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
         }
         try {
             conv.close()
-            Log.d(TAG, "closeConversationSafely — closed seq=$currentConvSeq id=${System.identityHashCode(conv)}")
+            Log.d(TAG, "closeConversationSafely — closed id=${System.identityHashCode(conv)}")
         } catch (e: Exception) {
             Log.w(TAG, "closeConversationSafely — error: ${e.message}")
         }
@@ -624,8 +614,7 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
         // and joined (above) and the next one has not started, so drain the
         // reference queue NOW, off the decode path, so those reclaims do not
         // overlap live native work. This is a mitigation aimed at the observed
-        // timing, not a proven root-cause fix - verify on-device before relying
-        // on it, and revert the DIAG-UAF logging once confirmed.
+        // timing, not a proven root-cause fix - verify on-device before relying on it.
         try {
             System.gc()
             System.runFinalization()
