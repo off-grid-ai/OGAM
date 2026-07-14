@@ -26,7 +26,7 @@ export function isMMProjFile(fileName: string): boolean {
  * gemma-4-E2B-it-Q4_K_M.gguf and gemma-4-E2B-it-Q8_0-mmproj.gguf reduce to `gemma4e2bit`; E4B reduces to
  * `gemma4e4bit` (distinct). Packaging/variant suffixes (UD, instruct, …) are kept, so they must match too.
  */
-export function modelIdentityStem(fileName: string): string {
+function modelIdentityStem(fileName: string): string {
   return fileName
     .toLowerCase()
     .replace(/\.gguf$/, '')

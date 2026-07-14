@@ -13,7 +13,7 @@ import logger from '../utils/logger';
  * The smallest whisper model (tiny) is ~75 MB, so anything under 10 MB
  * is almost certainly a corrupted or incomplete download.
  */
-export const MIN_MODEL_FILE_SIZE = 10 * 1024 * 1024;
+const MIN_MODEL_FILE_SIZE = 10 * 1024 * 1024;
 
 export function getModelsDir(): string {
   return `${RNFS.DocumentDirectoryPath}/whisper-models`;

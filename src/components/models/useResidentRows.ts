@@ -17,7 +17,7 @@ import type { Resident, ResidentType } from '../../services/modelResidency/polic
 export type ModelRowType = 'text' | 'image' | 'voice' | 'speech';
 
 /** Sheet row → residency type. Voice is the TTS output engine; Speech is the Whisper STT input. */
-export const ROW_RESIDENT_TYPE: Record<ModelRowType, ResidentType> = {
+const ROW_RESIDENT_TYPE: Record<ModelRowType, ResidentType> = {
   text: 'text',
   image: 'image',
   voice: 'tts',
@@ -25,7 +25,7 @@ export const ROW_RESIDENT_TYPE: Record<ModelRowType, ResidentType> = {
 };
 
 /** Pure: pick the resident (if any) backing each sheet row. */
-export function residentsByRow(residents: Resident[]): Partial<Record<ModelRowType, Resident>> {
+function residentsByRow(residents: Resident[]): Partial<Record<ModelRowType, Resident>> {
   const out: Partial<Record<ModelRowType, Resident>> = {};
   (Object.keys(ROW_RESIDENT_TYPE) as ModelRowType[]).forEach((row) => {
     const match = residents.find((r) => r.type === ROW_RESIDENT_TYPE[row]);

@@ -326,7 +326,7 @@ function isNonRetryableError(msg: string): boolean {
  *  grammar (llama.cpp: "failed to parse grammar" / "failed to initialize samplers").
  *  We can't know a server's grammar-compiler limits up front, so we detect it from the
  *  error and retry without tools rather than hard-failing the turn. Exported for tests. */
-export function isToolGrammarError(msg: string): boolean {
+function isToolGrammarError(msg: string): boolean {
   return /parse grammar|initialize samplers/i.test(msg);
 }
 

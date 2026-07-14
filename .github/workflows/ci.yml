@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Setup Java
@@ -39,15 +39,29 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
+    env:
+      PRO_SUBMODULE_PAT: ${{ secrets.PRO_SUBMODULE_PAT }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check out pro submodule (private; skipped on open-core forks)
+        # tsc sees __tests__/pro/* which import @offgrid/pro/*; without the submodule those resolve
+        # to nothing (TS2307) and typecheck fails. Pull it when the PAT is present (this org's CI);
+        # forks without the secret skip it and tsconfig excludes the pro paths.
+        if: ${{ env.PRO_SUBMODULE_PAT != '' }}
+        env:
+          PRO_PAT: ${{ env.PRO_SUBMODULE_PAT }}
+        run: |
+          git config --global url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf "https://github.com/"
+          git submodule update --init --recursive pro
+          git config --global --unset url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf || true
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -60,15 +74,28 @@ jobs:
     # Standing gates: dependency-cruiser (layering, engine DIP, import cycles, orphans — 0 violations,
     # no baseline) + knip (dead files/exports/types/deps — 0 issues). Both fail on anything NEW.
     runs-on: ubuntu-latest
+    env:
+      PRO_SUBMODULE_PAT: ${{ secrets.PRO_SUBMODULE_PAT }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check out pro submodule (private; skipped on open-core forks)
+        # knip/depcruise scan pro-importing code; without the submodule their reachability graph is
+        # incomplete (false unused/orphan reports). Pull it when the PAT is present; forks skip it.
+        if: ${{ env.PRO_SUBMODULE_PAT != '' }}
+        env:
+          PRO_PAT: ${{ env.PRO_SUBMODULE_PAT }}
+        run: |
+          git config --global url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf "https://github.com/"
+          git submodule update --init --recursive pro
+          git config --global --unset url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf || true
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -109,7 +136,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Setup Java
@@ -177,7 +204,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Setup Java
