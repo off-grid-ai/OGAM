@@ -331,6 +331,22 @@ class ModelManager {
     await this.saveModelWithMmproj(`${modelId}/${file.name}`, resolvedPath);
   }
 
+  /**
+   * Heal the DURABLE vision flag on a record from the authoritative catalog (the repo ships an mmproj).
+   * The old link cleanup wiped isVisionModel on some records, so the Download Manager — which has no catalog —
+   * showed them as plain text. Persisting the truth here makes the record the SINGLE source both surfaces
+   * read. No-op if already set (so it's safe to call on render/focus). Returns true if it changed anything.
+   */
+  async markVisionModel(modelId: string): Promise<boolean> {
+    const models = await this.getDownloadedModels();
+    const target = models.find(m => m.id === modelId);
+    if (!target || target.engine !== 'llama' || target.isVisionModel) return false;
+    const updated = models.map(m => (m.id === modelId ? { ...m, isVisionModel: true } : m));
+    await saveModelsList(updated);
+    useAppStore.getState().setDownloadedModels(updated);
+    return true;
+  }
+
   async saveModelWithMmproj(modelId: string, mmProjPath: string): Promise<void> {
     const mmProjFileName = mmProjPath.split('/').pop() || mmProjPath;
     const stat = await RNFS.stat(mmProjPath);

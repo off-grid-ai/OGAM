@@ -115,6 +115,19 @@ const ModelDetailView: React.FC<DetailProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Heal the durable vision flag from the authoritative catalog: this screen KNOWS a model is vision (its
+  // repo ships an mmproj → modelFiles carry mmProjFile), so persist isVisionModel:true onto any downloaded
+  // record that lost it (old link-cleanup bug). The Download Manager has no catalog, so this makes the
+  // RECORD the single source both surfaces read — the wrench then shows consistently (device 2026-07-14).
+  useEffect(() => {
+    for (const f of modelFiles) {
+      if (!f.mmProjFile) continue;
+      const rec = getDownloadedModel(selectedModel.id, f.name);
+      if (rec?.engine === 'llama' && !rec.isVisionModel) void modelManager.markVisionModel(rec.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModel.id, modelFiles]);
+
   const storeDownloads = useDownloadStore(state => state.downloads);
 
   const getFileCardState = (item: ModelFile) => {
