@@ -14,6 +14,21 @@ import type { GenerationOptions, CompletionResult } from './providers/types';
 import logger from '../utils/logger';
 
 const FLUSH_INTERVAL_MS = 50; // ~20 updates/sec
+
+/**
+ * Keep whatever the user has ALREADY seen when a generation errors mid-stream — never discard shown output
+ * (device 2026-07-14, the Stop-drops-partial principle extended to the error path, for llama/litert/remote
+ * alike). Flush any buffered tokens to the store, then finalizeStreamingMessage: it persists content OR
+ * reasoning and resets the streaming state either way (a strict superset of clearStreamingMessage; an empty
+ * stream just resets, adding no message). Mirrors GenerationService.keepShownPartialOrClear on the stop path.
+ */
+function keepShownPartialOnError(svc: any, conversationId: string): void {
+  if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
+  svc.forceFlushTokens();
+  const generationTime = svc.state.startTime ? Date.now() - svc.state.startTime : undefined;
+  useChatStore.getState().finalizeStreamingMessage(conversationId, generationTime, buildGenerationMetaImpl(svc));
+  svc.resetState();
+}
 type StreamChunk = string | { content?: string; reasoningContent?: string };
 
 /** Returns true when the currently active model uses LiteRT engine. */
@@ -297,20 +312,14 @@ async function runLiteRTResponseImpl(svc: any, req: GenerationRequest): Promise<
         onError: (err: Error) => {
           if (svc.abortRequested) return;
           logger.error('[LiteRT] sendMessage error:', err.message);
-          if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
-          svc.tokenBuffer = '';
-          chatStore.clearStreamingMessage();
-          svc.resetState();
+          keepShownPartialOnError(svc, conversationId); // keep the partial the user already saw
         },
       },
       { imageUris, audioUris },
     );
   } catch (error: any) {
     if (svc.abortRequested) return;
-    if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
-    svc.tokenBuffer = '';
-    chatStore.clearStreamingMessage();
-    svc.resetState();
+    keepShownPartialOnError(svc, conversationId);
     throw error;
   }
 }
@@ -364,10 +373,7 @@ export async function generateResponseImpl(
   } catch (error) {
     if (svc.abortRequested) return;
     logger.error('[GenerationService] Generation error:', error);
-    if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
-    svc.tokenBuffer = '';
-    chatStore.clearStreamingMessage();
-    svc.resetState();
+    keepShownPartialOnError(svc, conversationId);
     throw error;
   }
 }
@@ -434,10 +440,7 @@ export async function generateRemoteResponseImpl(
       onError: (error: Error) => {
         if (generationSignal.aborted) return;
         logger.error('[GenerationService] Remote generation error:', error);
-        if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
-        svc.tokenBuffer = '';
-        chatStore.clearStreamingMessage();
-        svc.resetState();
+        keepShownPartialOnError(svc, conversationId);
         throw error;
       },
     });
@@ -447,10 +450,7 @@ export async function generateRemoteResponseImpl(
     // Mark server as offline so the Remote Servers screen reflects the failure
     const failedServerId = useRemoteServerStore.getState().activeServerId;
     if (failedServerId) useRemoteServerStore.getState().updateServerHealth(failedServerId, false);
-    if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
-    svc.tokenBuffer = '';
-    chatStore.clearStreamingMessage();
-    svc.resetState();
+    keepShownPartialOnError(svc, conversationId);
     throw error;
   } finally {
     svc.currentRemoteAbortController = null;

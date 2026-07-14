@@ -205,12 +205,8 @@ class GenerationService {
     } catch (error) {
       if (this.abortRequested) return;
       logger.error('[GenerationService] Tool generation error:', error);
-      if (this.flushTimer) {
-        clearTimeout(this.flushTimer);
-        this.flushTimer = null;
-      }
-      this.tokenBuffer = '';
-      // Even on error, keep any partial the user already saw — don't wipe shown output.
+      // Even on error, keep any partial the user already saw — keepShownPartialOrClear flushes the token
+      // buffer to the store first (do NOT discard it here), then finalizes.
       this.keepShownPartialOrClear();
       this.resetState();
       throw error;
@@ -225,6 +221,7 @@ class GenerationService {
    * are never discarded (device 2026-07-14: Stop dropped the partial because the decision read the wrong source).
    */
   private keepShownPartialOrClear(generationTimeMs?: number): void {
+    this.forceFlushTokens(); // flush any batched tokens to the store so a partial isn't lost to a pending timer
     const store = useChatStore.getState();
     const convId = store.streamingForConversationId;
     // There is NO case to discard shown output. finalizeStreamingMessage persists whatever streamed —
