@@ -474,23 +474,36 @@ export async function generateRemoteWithToolsImpl(
 
   const { enabledToolIds, projectId, ...callbacks } = options;
 
-  // Use the same tool loop but with remote provider
-  await runToolLoop({
-    conversationId, messages, enabledToolIds, projectId, callbacks,
-    ...buildToolLoopHandlersImpl(svc),
-    forceRemote: true,
-  });
+  try {
+    // Use the same tool loop but with remote provider
+    await runToolLoop({
+      conversationId, messages, enabledToolIds, projectId, callbacks,
+      ...buildToolLoopHandlersImpl(svc),
+      forceRemote: true,
+    });
 
-  if (svc.abortRequested) {
-    logger.log(`[GenService][DEBUG] Generation was aborted, skipping finalize`);
-  } else {
-    svc.forceFlushTokens();
-    const generationTime = svc.state.startTime ? Date.now() - svc.state.startTime : undefined;
-    logger.log(`[GenService][DEBUG] Finalizing — streamingContent length=${svc.state.streamingContent?.length || 0}, generationTime=${generationTime}ms`);
-    useChatStore.getState().finalizeStreamingMessage(
-      conversationId, generationTime, buildGenerationMetaImpl(svc),
-    );
-    svc.checkSharePrompt();
-    svc.resetState();
+    if (svc.abortRequested) {
+      logger.log(`[GenService][DEBUG] Generation was aborted, skipping finalize`);
+    } else {
+      svc.forceFlushTokens();
+      const generationTime = svc.state.startTime ? Date.now() - svc.state.startTime : undefined;
+      logger.log(`[GenService][DEBUG] Finalizing — streamingContent length=${svc.state.streamingContent?.length || 0}, generationTime=${generationTime}ms`);
+      useChatStore.getState().finalizeStreamingMessage(
+        conversationId, generationTime, buildGenerationMetaImpl(svc),
+      );
+      svc.checkSharePrompt();
+      svc.resetState();
+    }
+  } catch (error) {
+    if (svc.abortRequested) return;
+    logger.error('[GenerationService] Remote tool generation error:', error);
+    // The remote turn threw (provider context/HTTP error, e.g. n_ctx too small). WITHOUT this catch the
+    // exception propagated past the reset below, leaving isGenerating=true — the red stop button stayed
+    // and EVERY next send aborted at `prepareGeneration returned false` before ever hitting the server
+    // (device 2026-07-14: error dialog shown but the turn never stopped; LM Studio never re-called).
+    // keepShownPartialOnError flushes any shown partial, finalizes, and resets the generating state; the
+    // rethrow still surfaces the error dialog. Now the dialog AND the stop happen together.
+    keepShownPartialOnError(svc, conversationId);
+    throw error;
   }
 }
