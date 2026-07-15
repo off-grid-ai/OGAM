@@ -405,6 +405,15 @@ export const useChatScreen = () => {
     handleGenerateImageFromMessage: (prompt: string) =>
       handleGenerateImageFromMsgFn(prompt, genDeps, { activeConversationId, activeImageModel, setAlertState }),
     handleImagePress: (uri: string) => setViewerImageUri(uri),
-    handleSaveImage: () => saveImageToGallery(viewerImageUri, setAlertState),
+    handleSaveImage: () => {
+      // Close the fullscreen viewer FIRST. The "Image Saved" confirmation is an AppSheet
+      // (a modal); iOS cannot present it on top of the still-open viewer <Modal> — two
+      // simultaneous modals wedge the UI and the chat input stops responding while nav
+      // still works (device 2026-07-15). Dismiss the viewer, then save + alert on the next
+      // tick once it has faded out. Harmless on Android (no nested-modal conflict there).
+      const uri = viewerImageUri;
+      setViewerImageUri(null);
+      setTimeout(() => { void saveImageToGallery(uri, setAlertState); }, 350);
+    },
   };
 };
