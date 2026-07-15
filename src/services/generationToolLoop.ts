@@ -15,6 +15,7 @@ import { selectRelevantTools } from './litertToolSelector';
 import { isMcpEnabled } from './mcpContextBoost';
 import { selectToolsByEmbedding } from './toolEmbeddingRouter';
 import { providerRegistry } from './providers';
+import { getActiveEngineService, isRemoteTextModelActive } from './engines';
 import type { GenerationOptions, CompletionResult } from './providers/types';
 import logger from '../utils/logger';
 import { XML_TOOL_CALL_FUNCTION_MARKER, XML_TOOL_CALL_PARAMETER_MARKER } from '../utils/messageContent';
@@ -423,16 +424,18 @@ async function callLocalWithRetry(
   throw new Error(lastError?.message || String(lastError) || 'Unknown LLM error after tool execution');
 }
 
+/** Is the active text engine LiteRT? Delegates to the engines.ts owner (getActiveEngineService) so
+ *  "which engine is active" is defined ONCE — never re-derived from the store here. Loaded-readiness is a
+ *  separate concern the caller (checkProviderReadiness) already gates before the loop runs. */
 function isLiteRTActive(): boolean {
-  const { downloadedModels, activeModelId } = useAppStore.getState();
-  return downloadedModels.find((m: any) => m.id === activeModelId)?.engine === 'litert' && liteRTService.isModelLoaded();
+  return getActiveEngineService() === liteRTService;
 }
 
-/** True when generation is served by a remote provider (no on-device native context). */
+/** True when generation is served by a remote provider (no on-device native context). Delegates to the
+ *  engines.ts owner (isRemoteTextModelActive) — the single source for the activeServer+hasProvider+!localLoaded
+ *  rule — plus the explicit caller override. */
 function isUsingRemote(forceRemote?: boolean): boolean {
-  if (forceRemote) return true;
-  const activeServerId = useRemoteServerStore.getState().activeServerId;
-  return !!activeServerId && providerRegistry.hasProvider(activeServerId) && !llmService.isModelLoaded();
+  return forceRemote || isRemoteTextModelActive();
 }
 
 /** On first iteration: last user message. On tool-result iterations: formatted tool results. */
@@ -673,8 +676,7 @@ async function callLLMWithRetry(
   // We shallow-copy messages to avoid mutating the caller's array.
   const exts = getToolExtensions();
   const extCount = exts.reduce((n, e) => n + e.enabledToolCount(), 0);
-  const activeServerId = useRemoteServerStore.getState().activeServerId;
-  const useRemote = forceRemote || (!!activeServerId && providerRegistry.hasProvider(activeServerId) && !llmService.isModelLoaded());
+  const useRemote = isUsingRemote(forceRemote);
   // LiteRT (OpenApiTool), remote providers, and llama with a Jinja tool template all do
   // native tool calling — the text hint must be suppressed for them (see augmentSystemPromptForTools).
   const nativeToolCalling = (isLiteRTActive() && !!conversationId) || useRemote || llmService.supportsToolCalling();
@@ -804,8 +806,7 @@ async function selectEffectiveSchemas(ctx: ToolLoopContext, builtInSchemas: any[
   const all = [...builtInSchemas, ...extSchemas];
   const litertActive = isLiteRTActive();
   const llamaIosNative = !litertActive && Platform.OS === 'ios' && llmService.supportsToolCalling();
-  const activeServerId = useRemoteServerStore.getState().activeServerId;
-  const usingRemote = !!activeServerId && providerRegistry.hasProvider(activeServerId) && !llmService.isModelLoaded();
+  const usingRemote = isUsingRemote();
 
   // MCP enabled on-device: route the many MCP/ext tools down with the embedding model
   // BEFORE generating, so the big model only prefills the relevant handful instead of

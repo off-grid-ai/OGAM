@@ -2,6 +2,7 @@ import { backgroundDownloadService } from './backgroundDownloadService';
 import { useDownloadStore, DownloadEntry, DownloadStatus, ModelType, isActiveStatus } from '../stores/downloadStore';
 import { makeModelKey, ModelKey } from '../utils/modelKey';
 import { BackgroundDownloadStatus } from '../types';
+import { isMMProjFile } from './mmproj';
 import logger from '../utils/logger';
 
 type NativeDownloadRow = {
@@ -22,9 +23,14 @@ type NativeDownloadRow = {
   metadataJson?: string;
 };
 
+/**
+ * Is this download-row filename a multimodal projector (mmproj) rather than a model weights file?
+ * Delegates to the single source of truth (src/services/mmproj.ts) so "is this a projector" is defined
+ * once — the previous local copy matched only 'mmproj' and missed 'projector'/'clip' names. Re-exported so
+ * modelManager/restore.ts's orphaned-sidecar filter shares the exact same rule (DRY).
+ */
 export function isMmProjFileName(fileName: string): boolean {
-  const lower = fileName.toLowerCase();
-  return lower.includes('mmproj');
+  return isMMProjFile(fileName);
 }
 
 function mapNativeStatus(status: BackgroundDownloadStatus): DownloadStatus {
