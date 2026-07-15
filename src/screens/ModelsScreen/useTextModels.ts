@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { showAlert, AlertState } from '../../components/CustomAlert';
 import { RECOMMENDED_MODELS, TRENDING_FAMILIES, MODEL_ORGS } from '../../constants';
 import { useAppStore } from '../../stores';
-import { fileExceedsBudget } from '../../services/memoryBudget';
+import { fitTier, type FitTier } from '../../services/memoryBudget';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { huggingFaceService, modelManager, hardwareService, activeModelService } from '../../services';
 import { startModelDownload } from '../../services/startModelDownload';
@@ -69,6 +69,26 @@ async function fetchRecommendedModelDetails(): Promise<Record<string, ModelInfo>
   return details;
 }
 
+const TIER_RANK: Record<FitTier, number> = { easy: 0, fits: 1, tight: 2, wontFit: 3 };
+
+/** True when EVERY sized quant is past the aggressive ceiling ('wontFit') — the only case browse still
+ *  hides. A model with any easy/fits/tight quant stays visible (shown with a fit chip). */
+function noLoadableQuant(model: ModelInfo, ramGB: number): boolean {
+  const sized = (model.files || []).filter(f => f.size > 0);
+  return sized.length > 0 && !sized.some(f => fitTier(f.size, ramGB) !== 'wontFit');
+}
+
+/** The fit tier of a model's BEST (most-fitting) quant — what the browse chip shows. undefined when
+ *  no file sizes are known yet (chip hidden until they load). */
+function bestFitTier(model: ModelInfo, ramGB: number): FitTier | undefined {
+  const sized = (model.files || []).filter(f => f.size > 0);
+  if (sized.length === 0) return undefined;
+  return sized.reduce<FitTier>((best, f) => {
+    const t = fitTier(f.size, ramGB);
+    return TIER_RANK[t] < TIER_RANK[best] ? t : best;
+  }, 'wontFit');
+}
+
 function computeFilteredResults(
   searchResults: ModelInfo[],
   filterState: FilterState,
@@ -85,14 +105,14 @@ function computeFilteredResults(
         if (sizeOpt && (params < sizeOpt.min || params >= sizeOpt.max)) return false;
       }
     }
-    const filesWithSize = (model.files || []).filter(f => f.size > 0);
-    if (filesWithSize.length > 0 && !filesWithSize.some(f => !fileExceedsBudget(f.size, ramGB))) return false;
-    return true;
+    // Browse no longer hides loadable models behind the balanced budget; keep a model unless EVERY
+    // quant is past the aggressive ceiling ('wontFit') — not loadable even with reclaim + Load Anyway.
+    return !noLoadableQuant(model, ramGB);
   });
   return filtered.map(model => {
     const type = getModelType(model);
     const params = parseParamCount(model);
-    return { ...model, modelType: type === 'image-gen' ? undefined : type as 'text' | 'vision' | 'code', paramCount: params ?? undefined };
+    return { ...model, modelType: type === 'image-gen' ? undefined : type as 'text' | 'vision' | 'code', paramCount: params ?? undefined, fitTier: bestFitTier(model, ramGB) };
   });
 }
 
