@@ -22,11 +22,16 @@ set -euo pipefail
 # Override with IOS_DEVICE_ID to target a specific device. We ask `devicectl`
 # (not `xctrace`) because a wired device that is paired-but-not-tethered-for-
 # Instruments shows up under xctrace's "Devices Offline" section even though
-# `devicectl`/`xcodebuild -destination id=` can still reach it. We select the
-# hardware UDID of the first device whose transport is not "None" (i.e. actually
-# connected, wired or over the local network). This never exits non-zero when no
-# device is found, so the friendly guard below can report it instead of `set -e`
-# aborting the script mid-detection.
+# `devicectl`/`xcodebuild -destination id=` can still reach it.
+#
+# We select on `connectionProperties.tunnelState == "connected"` — the field
+# `devicectl` actually uses to decide reachability (its own `list devices` prints
+# State=connected for exactly these). We do NOT filter on `transportType`: on
+# modern setups the phone is reached over the CoreDevice network tunnel, so
+# `transportType` reads "None" even for a fully-connected device, and the old
+# `transportType != "None"` filter matched nothing. This never exits non-zero
+# when no device is found, so the friendly guard below can report it instead of
+# `set -e` aborting the script mid-detection.
 detect_device_id() {
   local json
   json="$(mktemp)"
@@ -38,7 +43,7 @@ try:
 except Exception:
     sys.exit(0)
 for dev in devices:
-    if dev.get("connectionProperties", {}).get("transportType", "None") != "None":
+    if dev.get("connectionProperties", {}).get("tunnelState") == "connected":
         udid = dev.get("hardwareProperties", {}).get("udid")
         if udid:
             print(udid)
