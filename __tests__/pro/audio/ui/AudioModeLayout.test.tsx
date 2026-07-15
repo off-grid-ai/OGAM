@@ -85,9 +85,7 @@ function renderLayout(overrides: Partial<React.ComponentProps<typeof AudioModeLa
     onThinkingToggle: jest.fn(),
     onVisionPress: jest.fn(),
     onPickDocument: jest.fn(),
-    // onAttachPress: pending the pro-submodule catch-up (this core merge keeps the
-    // locket-pro pin, whose AudioModeLayout has no onAttachPress yet). Re-add when
-    // the pro pin is bumped to the caught-up pro (which adds the voice-mode "+" reroute).
+    onAttachPress: jest.fn(),
     attachPicker: popover(),
     voicePicker: popover(),
     quickSettings: popover(),

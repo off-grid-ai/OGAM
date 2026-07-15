@@ -341,6 +341,10 @@ jest.mock('react-native-device-info', () => ({
   isEmulator: jest.fn(() => Promise.resolve(false)),
   getDeviceId: jest.fn(() => 'test-device-id'),
   getHardware: jest.fn(() => Promise.resolve('unknown')),
+  // Power/battery — the pro recorder gates capture on power state. usePowerState is a
+  // hook (must return synchronously); getPowerState is the imperative form.
+  getPowerState: jest.fn(() => Promise.resolve({ batteryLevel: 0.8, batteryState: 'unplugged', lowPowerMode: false })),
+  usePowerState: jest.fn(() => ({ batteryLevel: 0.8, batteryState: 'unplugged', lowPowerMode: false })),
 }));
 
 // react-native-image-picker mock
@@ -403,6 +407,33 @@ jest.mock('@react-native-documents/picker', () => ({
   errorCodes: {
     OPERATION_CANCELED: 'OPERATION_CANCELED',
   },
+}));
+
+// @notifee/react-native mock — the pro locket meeting-reminder code (permissions.ts +
+// meetingReminders.ts) imports notifee at module load, so WITHOUT this mock
+// require('@offgrid/pro') throws "Notifee native module not found" in jsdom/node, pro
+// activation aborts, and NO pro slots register (breaking every voice-mode/TTS test that
+// mounts the app.root EngineBridge). Enum values mirror notifee's real ones so any value
+// comparison in the code holds.
+jest.mock('@notifee/react-native', () => ({
+  __esModule: true,
+  default: {
+    getNotificationSettings: jest.fn(async () => ({ authorizationStatus: 1 })),
+    requestPermission: jest.fn(async () => ({ authorizationStatus: 1 })),
+    createChannel: jest.fn(async () => 'channel-id'),
+    createTriggerNotification: jest.fn(async () => 'notif-id'),
+    displayNotification: jest.fn(async () => 'notif-id'),
+    cancelTriggerNotification: jest.fn(async () => {}),
+    getTriggerNotificationIds: jest.fn(async () => []),
+    getTriggerNotifications: jest.fn(async () => []),
+    getInitialNotification: jest.fn(async () => null),
+    onForegroundEvent: jest.fn(() => () => {}),
+    onBackgroundEvent: jest.fn(() => {}),
+  },
+  AndroidImportance: { DEFAULT: 3, HIGH: 4 },
+  AuthorizationStatus: { NOT_DETERMINED: -1, DENIED: 0, AUTHORIZED: 1, PROVISIONAL: 2 },
+  TriggerType: { TIMESTAMP: 0, INTERVAL: 1 },
+  EventType: { DISMISSED: 0, PRESS: 1, ACTION_PRESS: 2, DELIVERED: 3 },
 }));
 
 // @react-native-documents/viewer mock
