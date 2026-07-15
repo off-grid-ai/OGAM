@@ -64,7 +64,7 @@ export function initActiveDownloadPersistence(): void {
   subscribed = true;
   useDownloadStore.subscribe((state) => {
     const active = serializeActiveDownloads(state.downloads);
-    const signature = active.map((e) => `${e.modelKey}:${e.status}`).sort().join('|');
+    const signature = active.map((e) => `${e.modelKey}:${e.status}`).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).join('|');
     if (signature === lastSignature) return;
     lastSignature = signature;
     saveActiveDownloads(active).catch(() => { /* saveActiveDownloads already logs; never throws */ });

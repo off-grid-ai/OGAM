@@ -85,8 +85,9 @@ async function deleteItem(item: DownloadItem): Promise<void> {
     // Models screen keep showing the deleted model as present/active.
     await useWhisperStore.getState().deleteModelById(item.modelId);
   } else {
-    const pending = callHook<Promise<void>>(HOOKS.downloadsDeleteVoiceModel, item.modelId);
-    if (pending) await pending.catch(() => {});
+    // callHook returns undefined when the hook isn't registered (free build); await the promise
+    // only when it exists. `?.` keeps a Promise out of a boolean condition (SonarJS).
+    await callHook<Promise<void>>(HOOKS.downloadsDeleteVoiceModel, item.modelId)?.catch(() => {});
   }
 }
 

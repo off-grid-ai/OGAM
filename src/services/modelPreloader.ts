@@ -56,8 +56,9 @@ async function preloadText(): Promise<void> {
 async function preloadTts(): Promise<void> {
   // Pro implements the audio.preload hook (fits-gated + registers the engine);
   // no-op in free builds.
-  const pending = callHook<Promise<void>>(HOOKS.audioPreload);
-  if (pending) await pending;
+  // callHook returns undefined in free builds (no audio.preload hook); awaiting undefined is a
+  // no-op, so this needs no Promise-in-condition check (SonarJS).
+  await callHook<Promise<void>>(HOOKS.audioPreload);
 }
 
 async function preloadStt(): Promise<void> {
