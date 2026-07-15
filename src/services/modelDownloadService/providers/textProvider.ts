@@ -113,8 +113,11 @@ export const textProvider: DownloadProvider = {
 
   async retry(id: string): Promise<void> {
     const entry = findEntry(keyOf(id));
-    if (!entry?.downloadId) return;
+    if (!entry) return;
     if (Platform.OS === 'android') {
+      // Android resumes the existing WorkManager job in place, so it genuinely needs the live
+      // downloadId to reattach to.
+      if (!entry.downloadId) return;
       useDownloadStore.getState().setStatus(entry.downloadId, 'pending');
       await backgroundDownloadService.retryDownload(entry.downloadId);
       if (entry.mmProjDownloadId && entry.mmProjStatus === 'failed') {
@@ -124,7 +127,12 @@ export const textProvider: DownloadProvider = {
       }
       reattach(entry.downloadId);
     } else {
-      await restartIosTextDownload(entry); // foreground URLSession can't resume → re-issue
+      // iOS re-issues from scratch (foreground URLSession can't resume) — it rebuilds the download
+      // from the entry's metadata and does NOT need a downloadId. A failed/rehydrated entry can lose
+      // its downloadId (device 2026-07-15: an app-kill mid-download cleared the store's downloadId
+      // while the native row kept it), so gating iOS retry on downloadId made every retry a silent
+      // no-op. Require only that the entry exists.
+      await restartIosTextDownload(entry);
     }
     backgroundDownloadService.startProgressPolling();
   },
