@@ -86,10 +86,17 @@ describe('TTS speak-path memory refusal is overridable (Load Anyway) — red-flo
     // The user taps the speaker on an assistant message (the real store speak action).
     await useTTSStore.getState().speak('hello there', 'msg-1');
 
-    // USER-FACING outcome: a tts failure card exists, overridable, with a Load Anyway action.
-    const failure = useModelFailureStore.getState().failures.find((f) => f.modelType === 'tts');
-    expect(failure).toBeDefined();               // RED on HEAD: undefined (silent bail, only state.error set)
-    expect(failure!.overridable).toBe(true);     // RED on HEAD: plain Error → not overridable
-    expect(typeof failure!.onLoadAnyway).toBe('function'); // the "Load Anyway" affordance
+    // USER-FACING artifact: mount the REAL ModelFailureCard (no props, no mocks — it reads the real
+    // failure store the speak refusal just populated) and assert the user SEES the "Load Anyway" button
+    // on the tts failure card, not a silent bail. RED on HEAD: plain Error → no tts failure in the store
+    // → the card renders nothing → the button is absent.
+    /* eslint-disable @typescript-eslint/no-var-requires */
+    const React = require('react');
+    const { render } = require('@testing-library/react-native');
+    const { ModelFailureCard } = require('../../../src/components/ModelFailureCard');
+    /* eslint-enable @typescript-eslint/no-var-requires */
+    const view = render(React.createElement(ModelFailureCard));
+    expect(view.queryByTestId('model-failure-load-anyway-tts')).not.toBeNull();
+    expect(view.queryByTestId('model-failure-tts')).not.toBeNull(); // the tts failure card itself is on screen
   });
 });
