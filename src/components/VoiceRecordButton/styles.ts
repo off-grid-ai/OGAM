@@ -168,18 +168,26 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     backgroundColor: colors.textMuted,
     transform: [{ rotate: '-45deg' }],
   },
+  // A pill hint that sits to the LEFT of the mic while holding to record. It MUST
+  // carry an explicit width: as an absolute child of the ~44px button container, an
+  // unsized box shrink-fits to that container width, squeezing "Slide to cancel" into
+  // a wrapped/clipped smear (the reported "cut off" bug). Anchored by `right` (just
+  // past the mic) so it always lays out fully into the input row, never off-screen.
   cancelHint: {
     position: 'absolute' as const,
-    left: -100,
+    right: 52,
+    width: 132,
     paddingHorizontal: 12,
     paddingVertical: 6,
     backgroundColor: `${colors.primary}40`,
     borderRadius: 12,
+    alignItems: 'center' as const,
   },
   cancelHintText: {
     color: colors.primary,
     fontSize: 12,
-    fontWeight: '500' as const,
+    fontWeight: '400' as const,
+    textAlign: 'center' as const,
   },
   partialResultContainer: {
     position: 'absolute' as const,

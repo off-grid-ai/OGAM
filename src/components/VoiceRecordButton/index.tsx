@@ -106,6 +106,34 @@ const buildChatButtonStyle = (
   opts.disabled && styles.buttonDisabled,
 ];
 
+/** Audio-mode (tap-to-toggle) busy face: the load vs transcribe spinner. Audio mode has no
+ *  hold gesture, so it can safely replace the whole button while busy. Module scope keeps the
+ *  pick out of the component's complexity budget. */
+const AudioBusyFace: React.FC<{ kind: 'loading' | 'transcribing'; loadingAnim: Animated.Value }> = ({ kind, loadingAnim }) =>
+  kind === 'loading'
+    ? <LoadingState asSendButton={false} loadingAnim={loadingAnim} />
+    : <TranscribingState asSendButton={false} loadingAnim={loadingAnim} />;
+
+/** The inner face of the chat-mode hold button — a spinner while a cold model load /
+ *  transcription is in flight, the mic otherwise. Extracted to module scope so the
+ *  branch stays out of the component's cyclomatic-complexity budget, and so the ONE
+ *  gesturable wrapper can swap its face without ever unmounting (the slide-to-cancel /
+ *  ghost-recording fix). */
+const ChatButtonFace: React.FC<{
+  kind: 'loading' | 'transcribing' | 'ready' | 'downloading' | 'unavailable';
+  loadingAnim: Animated.Value;
+  buttonStyle: ReturnType<typeof buildChatButtonStyle>;
+  isRecording: boolean;
+}> = ({ kind, loadingAnim, buttonStyle, isRecording }) => {
+  if (kind === 'loading') return <LoadingState asSendButton loadingAnim={loadingAnim} />;
+  if (kind === 'transcribing') return <TranscribingState asSendButton loadingAnim={loadingAnim} />;
+  return (
+    <View style={buttonStyle}>
+      <ButtonIcon asSendButton isRecording={isRecording} />
+    </View>
+  );
+};
+
 export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
   isRecording,
   isAvailable,
@@ -132,6 +160,11 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
     isRecording,
     downloadProgressById,
   });
+  // State-machine trace: which face the mic renders. This is the crux of the
+  // slide-to-cancel / release-during-load behaviour — when kind flips to 'loading'
+  // the hold-to-record view (and its PanResponder) is replaced by a gesture-less
+  // spinner, so the finger that is still down loses its cancel affordance.
+  logger.log('[VoiceButton-SM] render kind=', buttonState.kind, 'asSend=', asSendButton, 'recording=', isRecording);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const loadingAnim = useRef(new Animated.Value(0)).current;
@@ -218,19 +251,17 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
     />
   );
 
-  if (buttonState.kind === 'loading') {
+  // Audio mode (tap-to-toggle) has no hold gesture, so a load/transcribe spinner can
+  // safely REPLACE the button. Chat mode (asSendButton, hold-to-record + slide-to-cancel)
+  // must NOT early-return here: replacing the button with a bare spinner unmounts the
+  // PanResponder mid-hold, severing the finger's gesture the instant a cold model load
+  // begins — that is what broke slide-to-cancel and left a ghost recording on release
+  // (no responderRelease reached a handler). Chat mode keeps ONE gesturable wrapper
+  // mounted across ready/loading/transcribing and swaps only the inner face (below).
+  if (!asSendButton && (buttonState.kind === 'loading' || buttonState.kind === 'transcribing')) {
     return (
       <View style={styles.container}>
-        <LoadingState asSendButton={asSendButton} loadingAnim={loadingAnim} />
-        {alert}
-      </View>
-    );
-  }
-
-  if (buttonState.kind === 'transcribing') {
-    return (
-      <View style={styles.container}>
-        <TranscribingState asSendButton={asSendButton} loadingAnim={loadingAnim} />
+        <AudioBusyFace kind={buttonState.kind} loadingAnim={loadingAnim} />
         {alert}
       </View>
     );
@@ -293,13 +324,19 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
   }
 
   // ── Chat mode: hold-to-record with slide-to-cancel ─────────────────────────
+  // The finger is down for the whole hold — a cold model load happens DURING the hold.
+  // So the cancel hint shows while loading too (you can slide to bail before it's ready),
+  // and the button face swaps between the spinner and the mic WITHOUT the gesturable
+  // wrapper ever unmounting, so the PanResponder (hold + slide-to-cancel + release) is
+  // continuous across the load.
+  const holding = isRecording || buttonState.kind === 'loading';
   return (
     <View style={styles.container}>
-      {isRecording && (
+      {holding && (
         <Animated.View
           style={[styles.cancelHint, { opacity: cancelOffsetX.interpolate({ inputRange: [-CANCEL_DISTANCE, 0], outputRange: [1, 0], extrapolate: 'clamp' }) }]}
         >
-          <Text style={styles.cancelHintText}>Slide to cancel</Text>
+          <Text style={styles.cancelHintText} numberOfLines={1}>Slide to cancel</Text>
         </Animated.View>
       )}
       {isRecording && partialResult && (
@@ -313,9 +350,7 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
         style={[styles.buttonWrapper, { transform: [{ scale: isRecording ? pulseAnim : 1 }, { translateX: cancelOffsetX }] }]}
         {...(disabled ? {} : panResponder.panHandlers)}
       >
-        <View style={buttonStyle}>
-          <ButtonIcon asSendButton={asSendButton} isRecording={isRecording} />
-        </View>
+        <ChatButtonFace kind={buttonState.kind} loadingAnim={loadingAnim} buttonStyle={buttonStyle} isRecording={isRecording} />
       </Animated.View>
       {alert}
     </View>
