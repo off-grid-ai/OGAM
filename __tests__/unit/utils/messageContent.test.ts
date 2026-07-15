@@ -208,6 +208,27 @@ describe('stripControlTokens', () => {
       const input = 'Before <tool_call>\n{\n  "name": "search",\n  "query": "test"\n}\n</tool_call> after';
       expect(stripControlTokens(input)).toBe('Before after');
     });
+
+    // DR7 follow-on: the tool-loop extractor (parseXmlStyleToolCall in generationToolLoop)
+    // accepts `<function=NAME>…<parameter=NAME>…</function>` markup, but the shared stripper
+    // did NOT strip it — so a model emitting this form leaked the raw markup into the visible
+    // answer. Stripper and extractor must recognise the SAME grammar.
+    it('strips <function=…>/<parameter=…> XML-style tool-call markup (extractor grammar)', () => {
+      const input =
+        'Sure, let me check.\n<function=get_weather>{"city":"Paris"}<parameter=unit>celsius</parameter></function>\nDone.';
+      const stripped = stripControlTokens(input);
+      expect(stripped).not.toContain('<function=');
+      expect(stripped).not.toContain('<parameter=');
+      expect(stripped).not.toContain('</function>');
+      expect(stripped).toContain('Sure, let me check.');
+      expect(stripped).toContain('Done.');
+    });
+
+    it('strips an unclosed <function=…> tool-call opener at end (EOS mid-call)', () => {
+      expect(
+        stripControlTokens('Working on it.<function=get_weather>{"city":"NY'),
+      ).toBe('Working on it.');
+    });
   });
 
 
