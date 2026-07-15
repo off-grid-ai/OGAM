@@ -39,10 +39,8 @@ jest.mock('@react-navigation/native', () => ({
 describe('realtime hold-to-talk dictation recovers when whisper load is blocked (free→retry) — device', () => {
   it('frees the generation model, loads whisper, and the transcript lands in the composer', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true });
-    /* eslint-disable @typescript-eslint/no-var-requires */
     const { useWhisperStore } = require('../../../src/stores/whisperStore');
     const { modelResidencyManager } = require('../../../src/services/modelResidency');
-    /* eslint-enable @typescript-eslint/no-var-requires */
 
     // DOWNLOAD-ONLY whisper: the completed-download boundary artifact (file on disk + downloadedModelId) with
     // NO resident load — so the realtime turn's first load attempt runs for real (and blocks on the tight budget).

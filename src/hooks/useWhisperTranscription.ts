@@ -11,6 +11,18 @@ const useMountedRef = () => {
   return mounted;
 };
 
+export interface UseWhisperTranscriptionParams {
+  /**
+   * Get whisper resident before the realtime session starts, recovering from a memory refusal — the
+   * SAME owner the file path uses (ensureWhisperForTranscription: try load; on a 'blocked' single-model
+   * refusal, free the generation model and retry). Resolves true when whisper is loaded, false when it
+   * can't be (no model / hard failure). Injected so both dictation modes share ONE recovery path — the
+   * realtime path must NOT call whisperStore.loadModel() directly (a 'blocked' return there is not a
+   * throw, so it dead-ends into startRealtimeTranscription → 'No Whisper model loaded', no recovery).
+   */
+  ensureModelReady: () => Promise<boolean>;
+}
+
 export interface UseWhisperTranscriptionResult {
   isRecording: boolean;
   isModelLoaded: boolean;
@@ -25,7 +37,7 @@ export interface UseWhisperTranscriptionResult {
   clearResult: () => void;
 }
 
-export const useWhisperTranscription = (): UseWhisperTranscriptionResult => {
+export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscriptionParams): UseWhisperTranscriptionResult => {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [partialResult, setPartialResult] = useState('');
@@ -37,7 +49,7 @@ export const useWhisperTranscription = (): UseWhisperTranscriptionResult => {
   const transcribingStartTime = useRef<number | null>(null);
   const pendingResult = useRef<string | null>(null);
 
-  const { downloadedModelId, isModelLoaded, isModelLoading, loadModel } = useWhisperStore();
+  const { isModelLoaded, isModelLoading } = useWhisperStore();
 
   // On unmount, stop any in-flight realtime session. Without this the mic kept
   // capturing after the user navigated away without releasing the button — the
@@ -172,17 +184,18 @@ export const useWhisperTranscription = (): UseWhisperTranscriptionResult => {
     }
 
     if (!whisperService.isModelLoaded()) {
-      logger.log('[Whisper] Model not loaded, trying to load...');
-      // Try to load if we have a downloaded model
-      if (downloadedModelId) {
-        try {
-          await loadModel();
-        } catch {
-          setError('Failed to load Whisper model. Please try again.');
-          return;
-        }
-      } else {
-        setError('No transcription model downloaded. Go to Settings to download one.');
+      logger.log('[Whisper] Model not loaded, ensuring readiness (blocked → free generation model → retry)...');
+      // Route through the SAME recovery the file path uses: a 'blocked' single-model refusal frees the
+      // resident generation model and retries. Never call loadModel() directly here — a 'blocked' return
+      // is not a throw, so it would dead-end into startRealtimeTranscription → 'No Whisper model loaded'.
+      let ready = false;
+      try {
+        ready = await ensureModelReady();
+      } catch {
+        ready = false;
+      }
+      if (!ready) {
+        setError("Couldn't load the voice model — free some memory and try again");
         return;
       }
     }
@@ -245,7 +258,7 @@ export const useWhisperTranscription = (): UseWhisperTranscriptionResult => {
         Vibration.vibrate([0, 50, 50, 50]);
       }
     }
-  }, [downloadedModelId, loadModel, isRecording, stopRecording, finalizeTranscription]);
+  }, [ensureModelReady, isRecording, stopRecording, finalizeTranscription]);
 
   return {
     isRecording,
