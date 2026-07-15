@@ -3,6 +3,7 @@ import { useDownloadStore, DownloadEntry, DownloadStatus, ModelType, isActiveSta
 import { makeModelKey, ModelKey } from '../utils/modelKey';
 import { BackgroundDownloadStatus } from '../types';
 import { isMMProjFile } from './mmproj';
+import { loadActiveDownloads } from './activeDownloadPersistence';
 import logger from '../utils/logger';
 
 type NativeDownloadRow = {
@@ -154,10 +155,18 @@ function toDownloadEntry(
  */
 function strandInterruptedEntries(
   hydratedKeys: Set<ModelKey>,
+  persistedPrior: DownloadEntry[],
 ): DownloadEntry[] {
+  // Prior in-flight entries come from TWO sources, so an interrupted download is caught after a
+  // FOREGROUND resume (in-memory store still populated) AND a cold app-kill (in-memory gone, only the
+  // durably-persisted snapshot survives). In-memory wins on conflict (it's the more recent truth).
+  const priors = new Map<ModelKey, DownloadEntry>();
+  for (const e of persistedPrior) priors.set(e.modelKey, e);
+  for (const e of Object.values(useDownloadStore.getState().downloads)) priors.set(e.modelKey, e);
+
   const stranded: DownloadEntry[] = [];
-  for (const prior of Object.values(useDownloadStore.getState().downloads)) {
-    if (hydratedKeys.has(prior.modelKey)) continue; // still has a live native row
+  for (const prior of priors.values()) {
+    if (hydratedKeys.has(prior.modelKey)) continue; // still has a live native row (Android WorkManager survives → never stranded)
     if (!isActiveStatus(prior.status)) continue;     // already completed/failed/cancelled
     logger.log(
       `[DL-SM] ${prior.modelType}:${prior.modelId} hydrate: native row gone (app-kill) → failed/retriable`,
@@ -197,9 +206,11 @@ export async function hydrateDownloadStore(): Promise<void> {
   // Native rows are the source of truth for what is genuinely in flight; but a row that
   // VANISHED (vs one that reports a new status) means an interrupted transfer whose task
   // the OS discarded. Preserve the prior in-flight entry as failed/retriable so it never
-  // silently disappears from the Download Manager.
+  // silently disappears from the Download Manager — including across a cold app-kill, where
+  // the prior entry survives only in the durably-persisted snapshot (loadActiveDownloads).
   const hydratedKeys = new Set(entries.map(e => e.modelKey));
-  entries.push(...strandInterruptedEntries(hydratedKeys));
+  const persistedPrior = await loadActiveDownloads();
+  entries.push(...strandInterruptedEntries(hydratedKeys, persistedPrior));
 
   useDownloadStore.getState().hydrate(entries);
 }

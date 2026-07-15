@@ -20,6 +20,7 @@ import { initDebugLogFile, appendDebugLine } from './src/utils/debugLogFile';
 import { loadProFeatures } from './src/bootstrap/loadProFeatures';
 import { checkProStatus } from './src/services/proLicenseService';
 import { hydrateDownloadStore } from './src/services/downloadHydration';
+import { initActiveDownloadPersistence } from './src/services/activeDownloadPersistence';
 import { restoreQueuedDownloads } from './src/services/restoreQueuedDownloads';
 import { startLoadPolicySync } from './src/services/loadPolicySync';
 import { registerCoreDownloadProviders } from './src/services/modelDownloadService/registerProviders';
@@ -153,6 +154,10 @@ function App() {
    */
   const recoverDownloadState = useCallback(() => {
     (async () => {
+      // Persist the in-flight download set for the rest of the session (idempotent) BEFORE the first
+      // hydrate, so a download started this run is durably recorded and can be stranded as a
+      // failed/retriable card — not vanish — if the app is hard-killed mid-transfer (iOS URLSession).
+      initActiveDownloadPersistence();
       await hydrateDownloadStore().catch((error) => {
         logger.error('[App] Failed to hydrate download store during startup:', error);
       });
