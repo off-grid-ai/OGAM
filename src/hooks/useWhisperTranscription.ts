@@ -45,6 +45,11 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
   const [error, setError] = useState<string | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const isCancelled = useRef(false);
+  // Session-intent nonce: bumped whenever a start is superseded (stop/cancel). startRecording captures
+  // it before the async ensureModelReady() gap (which now frees+reloads the model, so it can be seconds)
+  // and aborts the continuation if it changed — otherwise releasing/cancelling the mic DURING the load
+  // would still activate a recording that no stop event can reach (a ghost session). (#558 CodeRabbit)
+  const startNonce = useRef(0);
   const mountedRef = useMountedRef();
   const transcribingStartTime = useRef<number | null>(null);
   const pendingResult = useRef<string | null>(null);
@@ -121,6 +126,8 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
   const stopRecording = useCallback(async () => {
     logger.log('[Whisper] stopRecording called');
 
+    // Supersede any in-flight start still awaiting model load — it must not resurrect a recording.
+    startNonce.current++;
     // Immediately update UI to show "Transcribing..." state
     // But keep recording in background for better accuracy
     if (mountedRef.current) setIsRecording(false);
@@ -161,6 +168,7 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
     setPartialResult('');
     setIsTranscribing(false);
     isCancelled.current = true;
+    startNonce.current++; // supersede an in-flight start awaiting model load (no ghost recording)
     pendingResult.current = null;
     transcribingStartTime.current = null;
     // Also ensure recording is stopped
@@ -183,6 +191,10 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
       return;
     }
 
+    // Capture this start's intent BEFORE the async model-load gap. If stop/cancel bumps the nonce while
+    // we await, this start has been superseded → abort, or we'd activate a ghost recording no stop reaches.
+    const currentNonce = ++startNonce.current;
+
     if (!whisperService.isModelLoaded()) {
       logger.log('[Whisper] Model not loaded, ensuring readiness (blocked → free generation model → retry)...');
       // Route through the SAME recovery the file path uses: a 'blocked' single-model refusal frees the
@@ -193,6 +205,10 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
         ready = await ensureModelReady();
       } catch {
         ready = false;
+      }
+      if (startNonce.current !== currentNonce || !mountedRef.current) {
+        logger.log('[Whisper] Start superseded during model load (stopped/cancelled) — aborting, no ghost recording');
+        return;
       }
       if (!ready) {
         setError("Couldn't load the voice model — free some memory and try again");
