@@ -61,9 +61,7 @@ const ImageTabContent: React.FC<ImageTabProps> = ({ downloadedImageModels, activ
         </TouchableOpacity>
       )}
       {downloadedImageModels.map((model) => {
-        // RAM hint via the SINGLE owner (hardwareService.estimateImageModelRam) instead of a local
-        // 1.8x — so this picker's number agrees with every other image-RAM surface (was a divergent copy).
-        const estimatedMemoryGB = hardwareService.estimateImageModelRam(model) / (1024 * 1024 * 1024);
+        const estimatedMemoryGB = (model.size * 1.8) / (1024 * 1024 * 1024);
         // Owned verdict (DR3 fix): file vs the device-tier budget of TOTAL RAM — never instantaneous free RAM.
         const memoryFits = memoryInfo ? !fileExceedsBudget(model.size, memoryInfo.memoryTotal / (1024 * 1024 * 1024)) : true;
         return (
