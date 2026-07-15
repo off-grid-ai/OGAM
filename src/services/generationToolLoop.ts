@@ -17,6 +17,7 @@ import { selectToolsByEmbedding } from './toolEmbeddingRouter';
 import { providerRegistry } from './providers';
 import type { GenerationOptions, CompletionResult } from './providers/types';
 import logger from '../utils/logger';
+import { XML_TOOL_CALL_FUNCTION_MARKER, XML_TOOL_CALL_PARAMETER_MARKER } from '../utils/messageContent';
 const MAX_TOOL_ITERATIONS = 3;
 const MAX_TOTAL_TOOL_CALLS = 5;
 // On-device: above this many tools, run a fast routing pass to pick the relevant ones
@@ -32,11 +33,13 @@ const MCP_TOOL_ROUTE_TOPK = 12;
 const MAX_LITERT_TOOL_CALLS = 3;
 type StreamChunk = string | StreamToken;
 function parseXmlStyleToolCall(body: string, idSuffix: number): ToolCall | null {
-  const funcMatch = body.match(/<function=(\w+)>/);
+  // Marker sources are shared with stripControlTokens (messageContent) so the extractor and the
+  // display stripper key on the SAME `<function=…>`/`<parameter=…>` grammar and cannot drift.
+  const funcMatch = body.match(new RegExp(XML_TOOL_CALL_FUNCTION_MARKER));
   if (!funcMatch) return null;
   const name = funcMatch[1];
   const args: Record<string, any> = {};
-  const paramPattern = /<parameter=(\w+)>([\s\S]*?)(?=<parameter=|<\/|$)/g;
+  const paramPattern = new RegExp(String.raw`${XML_TOOL_CALL_PARAMETER_MARKER}([\s\S]*?)(?=<parameter=|<\/|$)`, 'g');
   let pm;
   while ((pm = paramPattern.exec(body)) !== null) { args[pm[1]] = pm[2].trim(); }
   return { id: `text-tc-${Date.now()}-${idSuffix}`, name, arguments: args };
