@@ -9,7 +9,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
 import { ActiveDownloadCard, CompletedDownloadCard, formatBytes, type DownloadItem } from './items';
 import { useDownloadManager } from './useDownloadManager';
-import { isQueuedStatus, isDownloadingStatus, type DownloadStatus } from '../../stores/downloadStore';
+import { isQueuedStatus, isDownloadingStatus, isFailedStatus, type DownloadStatus } from '../../stores/downloadStore';
 
 type FilterType = 'all' | 'text' | 'vision' | 'image' | 'voice';
 
@@ -59,6 +59,9 @@ export const DownloadManagerScreen: React.FC = () => {
   // (isActiveStatus, which excludes failed). Using the shared isDownloadingStatus makes
   // downloading + queued equal the badge's isActiveStatus set exactly (B7/T001).
   const activeDownloadingCount = filteredActive.filter(i => isDownloadingStatus(i.status as DownloadStatus)).length;
+  // Failed/retriable rows are shown here as cards; surface their count too so this screen and the
+  // ModelsScreen badge agree on "outstanding download work" (badge = downloading + queued + failed).
+  const activeFailedCount = filteredActive.filter(i => isFailedStatus(i.status as DownloadStatus)).length;
 
   const renderHeader = useCallback(() => (
     <ScrollView
@@ -107,6 +110,11 @@ export const DownloadManagerScreen: React.FC = () => {
                   {activeQueuedCount > 0 && (
                     <Text testID="dm-active-queued-count" style={[styles.countText, { color: colors.textSecondary }]}>
                       {activeQueuedCount} queued
+                    </Text>
+                  )}
+                  {activeFailedCount > 0 && (
+                    <Text testID="dm-active-failed-count" style={[styles.countText, { color: colors.error ?? colors.textSecondary }]}>
+                      {activeFailedCount} failed
                     </Text>
                   )}
                 </View>

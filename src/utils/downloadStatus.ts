@@ -56,6 +56,16 @@ export function isActiveStatus(status: DownloadStatus): boolean {
 }
 
 /**
+ * A failed/retriable download. It is NOT active, but it still NEEDS the user (retry or
+ * remove) — so surfaces that answer "is there download work outstanding?" (the Download
+ * Manager badge + count) must include it. Device 2026-07-15: failed downloads never showed
+ * on the icon badge, so a stuck download had no signal to open the manager.
+ */
+export function isFailedStatus(status: DownloadStatus): boolean {
+  return status === 'failed';
+}
+
+/**
  * The ONE download-state classification every view must use. `isActiveStatus`
  * lumps queued (`pending`) in with actively-transferring rows; these split that
  * so a queued item renders the clock (not "downloading 0%") and an "active"

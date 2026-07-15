@@ -56,8 +56,12 @@ describe('T001 (rendered) — download badge vs Download Manager active count', 
     const downloading = Number(dm.getByTestId('dm-active-downloading-count').props.children);
     const queuedEl = dm.queryByTestId('dm-active-queued-count');
     const queued = queuedEl ? Number(String(queuedEl.props.children).match(/\d+/)?.[0] ?? '0') : 0;
+    const failedEl = dm.queryByTestId('dm-active-failed-count');
+    const failed = failedEl ? Number(String(failedEl.props.children).match(/\d+/)?.[0] ?? '0') : 0;
 
-    // SPEC: the two surfaces must agree on how many downloads are active. HEAD: 3 vs 4 → RED.
-    expect(badge).toBe(downloading + queued);
+    // SPEC (device 2026-07-15): the badge counts OUTSTANDING download work — downloading + queued +
+    // failed/retriable — and the Download Manager surfaces the same three, so the two agree. A failed
+    // download must be visible on the badge (it needs a retry/remove), not silently dropped.
+    expect(badge).toBe(downloading + queued + failed);
   });
 });
