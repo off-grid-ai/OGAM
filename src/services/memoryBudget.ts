@@ -42,23 +42,57 @@
  */
 import { Platform } from 'react-native';
 
-/** How hard we push RAM utilisation when loading a model. */
-export type LoadPolicy = 'balanced' | 'aggressive';
+/**
+ * How the residency manager handles multiple models:
+ *  - 'conservative': ONE model at a time — loading any model evicts every other
+ *    (no co-residency), the safest on tight devices.
+ *  - 'balanced' (default): co-reside models while the RAM budget holds; evict
+ *    lowest-priority/LRU when a new model doesn't fit.
+ *  - 'aggressive': balanced co-residency but commits a larger share of RAM (smaller
+ *    OS reserve) so bigger models load before the gate refuses.
+ * (A per-load "Load Anyway" override is separate and works in every mode.)
+ */
+export type LoadPolicy = 'conservative' | 'balanced' | 'aggressive';
 
 /** Never commit the last ~1.5GB — OS + app baseline must always have headroom. */
 export const MEMORY_RESERVE_MB = 1500;
 /** Aggressive mode still keeps a floor alive (lenient, not absent). */
 export const AGGRESSIVE_RESERVE_MB = 800;
-/**
- * Absolute survival floor that even "Load Anyway" (override) will NOT cross: if forcing a
- * load would leave live free RAM below this, refuse it — the OS would jetsam-kill the app
- * mid-load anyway (an uncatchable SIGKILL), so a graceful "close some apps" beats a crash.
- * Override still bypasses the conservative budget; this only stops the guaranteed-OOM case
- * (e.g. many background apps have eaten the baseline).
- */
-export const OVERRIDE_SURVIVAL_FLOOR_MB = 1200;
+// (Removed the override survival-floor cluster — OVERRIDE_SURVIVAL_FLOOR_MB /
+// ANDROID_OVERRIDE_SURVIVAL_FLOOR_MB / overrideSurvivalFloorMB.) It was defined but never wired to
+// any caller, so it enforced nothing, and the product decision is that "Load Anyway" gives the user
+// FULL control — they accept the OOM risk, the app does not impose a hard floor they can't cross.
 
 type Plat = 'ios' | 'android' | string;
+
+/**
+ * Effective physical RAM a FOREGROUND process may commit right now, in MB — the SINGLE
+ * owner of "reclaimable-aware availability".
+ *
+ * `realAvailMB` is the raw os_proc available snapshot. On Android it UNDER-counts what a
+ * foreground app can actually get: the low-memory killer evicts background/cached apps and
+ * hands their (real, physical) pages to the foreground app, so the true ceiling is the
+ * physical model budget (modelMemoryBudgetMB), not the instantaneous snapshot. That
+ * reclaimed RAM is REAL physical memory a dirty/GPU model can occupy — unlike zram swap,
+ * which dirty pages cannot use (the reverted Fix-A mistake that OOM'd). On iOS there is no
+ * such reclaim (jetsam kills US, not background apps), so the raw snapshot stands.
+ *
+ * Both the residency FIT check (budgetForSpec's dirty branch) and the override survival
+ * floor read this, so they can never disagree. The legacy split — a reclaimable-aware
+ * override path but a raw-availMem fit check — is exactly what refused a 5.2GB dirty model
+ * on a 12GB Android phone that the override then loaded fine (image-prompt enhancement, and
+ * chat, both hit it).
+ */
+export function effectiveAvailableMB(
+  realAvailMB: number,
+  totalRamMB: number,
+  opts: { platform?: Plat; policy?: LoadPolicy } = {},
+): number {
+  const { platform = Platform.OS, policy = 'balanced' } = opts;
+  return platform === 'android'
+    ? Math.max(realAvailMB, modelMemoryBudgetMB(totalRamMB, platform, policy))
+    : realAvailMB;
+}
 
 /** OS/app reserve (MB) that is never committed to models, by policy. */
 export function memoryReserveMB(policy: LoadPolicy = 'balanced'): number {
@@ -85,7 +119,7 @@ export function modelBudgetFraction(
 }
 
 /** Fraction at which we WARN (load allowed, perf may suffer). Below the budget. */
-export function modelWarningFraction(totalRamGB: number, platform: Plat = Platform.OS): number {
+function modelWarningFraction(totalRamGB: number, platform: Plat = Platform.OS): number {
   if (totalRamGB <= 4) return 0.40;
   if (totalRamGB <= 8) return 0.50;
   return platform === 'ios' ? 0.66 : 0.60;
@@ -108,4 +142,45 @@ export function modelWarningThresholdMB(totalRamMB: number, platform: Plat = Pla
   const totalRamGB = totalRamMB / 1024;
   const byFraction = totalRamMB * modelWarningFraction(totalRamGB, platform);
   return Math.min(byFraction, modelMemoryBudgetMB(totalRamMB, platform));
+}
+
+const BYTES_PER_GB = 1024 ** 3;
+
+/**
+ * Does a model file's on-disk size exceed this device's safe RAM budget
+ * (`totalRamGB * modelBudgetFraction`)? The SINGLE device-aware fit primitive that
+ * every download-warning decision and the detail-list compatibility filter compute
+ * from — a static per-model flag was device-blind and fired on every device. Zero-IO
+ * so it is unit-testable; callers pass the RAM read from the device boundary
+ * (hardwareService.getTotalMemoryGB).
+ */
+export function fileExceedsBudget(sizeBytes: number, ramGB: number): boolean {
+  return sizeBytes / BYTES_PER_GB >= ramGB * modelBudgetFraction(ramGB);
+}
+
+/**
+ * Block until a just-released native model's memory is reclaimed (process footprint drops by
+ * ~minDropMB) or a bounded timeout — so the NEXT model load never allocates on top of the outgoing
+ * model. The native context.release() returns before the OS frees the weights + GPU/HTP buffers;
+ * without this barrier a reload stacked BOTH models' memory at once and OOM'd under pressure
+ * (device 2026-07-14: a reload with ~2GB free ground to 0 tok/s then the process was killed).
+ * Zero-IO over an injected memory reader so it is unit-testable; best-effort — if the RAM sensor is
+ * unavailable or the footprint never settles, wait a short fixed beat and proceed.
+ */
+export async function awaitMemoryReclaim(
+  getProcessMemory: () => Promise<{ footprintMB: number } | null>,
+  opts: { timeoutMs?: number; minDropMB?: number; intervalMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<void> {
+  const { timeoutMs = 2500, minDropMB = 200, intervalMs = 120 } = opts;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const before = await getProcessMemory();
+  if (!before) { await sleep(250); return; }
+  let waited = 0;
+  while (waited < timeoutMs) {
+    await sleep(intervalMs);
+    waited += intervalMs;
+    const now = await getProcessMemory();
+    if (!now) return;
+    if (before.footprintMB - now.footprintMB >= minDropMB) return;
+  }
 }

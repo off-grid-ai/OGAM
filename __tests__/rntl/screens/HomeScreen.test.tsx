@@ -73,6 +73,14 @@ const mockCheckMemoryForModel = jest.fn(() => Promise.resolve({ canLoad: true, s
 jest.mock('../../../src/services/activeModelService', () => ({
   activeModelService: {
     loadTextModel: mockLoadTextModel,
+    // Boundary mock mirrors the real selectTextModel (the single owner of the selection write).
+    selectTextModel: jest.fn((id: string) => {
+      // Inner require (the jest.mock factory is hoisted, so it can't close over the top-level
+      // import); alias to avoid shadowing the module-scope useAppStore.
+      const { useAppStore: appStore } = require('../../../src/stores');
+      appStore.getState().setActiveModelId(id);
+      appStore.getState().setLastTextModelId(id);
+    }),
     loadImageModel: mockLoadImageModel,
     unloadTextModel: mockUnloadTextModel,
     unloadImageModel: mockUnloadImageModel,

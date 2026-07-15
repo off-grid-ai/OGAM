@@ -12,11 +12,33 @@ import type { ModelDownload } from '../../../../src/services/modelDownloadServic
 
 const mockListDownloadedModels = jest.fn((..._a: any[]) => Promise.resolve([] as any[]));
 const mockDeleteModel = jest.fn((..._a: any[]) => Promise.resolve());
+const mockUnloadModel = jest.fn(async (..._a: any[]) => {});
+// The hook reads whisperService.listDownloadedModels from the barrel, but the STT delete routes
+// through the REAL whisperStore, which reads the CONCRETE services/whisperService. Mock BOTH paths,
+// wired to the SAME mock closures, so the delete assertion sees the call regardless of which import
+// reaches it. NB: each factory INLINES the object with lazy-arrow methods that read the mock-prefixed
+// closures only when CALLED — an eager object/const captured in the factory is undefined at hoist
+// time (ES imports run the factory before the const initializes).
 jest.mock('../../../../src/services', () => ({
   whisperService: {
     listDownloadedModels: (...a: any[]) => mockListDownloadedModels(...a),
     deleteModel: (...a: any[]) => mockDeleteModel(...a),
+    isModelLoaded: () => false,
+    unloadModel: (...a: any[]) => mockUnloadModel(...a),
+    getModelPath: (id: string) => `/models/ggml-${id}.bin`,
+    isModelDownloaded: () => Promise.resolve(true),
   },
+}));
+jest.mock('../../../../src/services/whisperService', () => ({
+  whisperService: {
+    listDownloadedModels: (...a: any[]) => mockListDownloadedModels(...a),
+    deleteModel: (...a: any[]) => mockDeleteModel(...a),
+    isModelLoaded: () => false,
+    unloadModel: (...a: any[]) => mockUnloadModel(...a),
+    getModelPath: (id: string) => `/models/ggml-${id}.bin`,
+    isModelDownloaded: () => Promise.resolve(true),
+  },
+  WHISPER_MODELS: [],
 }));
 
 let mockServiceList: ModelDownload[] = [];

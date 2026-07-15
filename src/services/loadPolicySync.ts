@@ -15,10 +15,16 @@
  */
 import { useAppStore } from '../stores';
 import { modelResidencyManager } from './modelResidency';
+import { activeModelService } from './activeModelService';
 import { LoadPolicy } from './memoryBudget';
 
-/** The one boolean→policy mapping. */
-export function loadPolicyFromSettings(settings: { aggressiveModelLoading?: boolean }): LoadPolicy {
+/** The one setting→policy mapping. Prefer the explicit 3-mode setting; fall back to
+ *  the legacy aggressiveModelLoading boolean so pre-migration installs still work. */
+export function loadPolicyFromSettings(settings: {
+  modelLoadingMode?: LoadPolicy;
+  aggressiveModelLoading?: boolean;
+}): LoadPolicy {
+  if (settings.modelLoadingMode) return settings.modelLoadingMode;
   return settings.aggressiveModelLoading ? 'aggressive' : 'balanced';
 }
 
@@ -35,17 +41,33 @@ let activeUnsubscribe: (() => void) | null = null;
 export function startLoadPolicySync(): () => void {
   if (activeUnsubscribe) return activeUnsubscribe; // already syncing — don't stack
 
-  let last: boolean | undefined;
-  const apply = (aggressive: boolean | undefined) => {
-    if (aggressive === last) return; // no-op unless the flag actually flipped
-    last = aggressive;
-    modelResidencyManager.setLoadPolicy(loadPolicyFromSettings({ aggressiveModelLoading: aggressive }));
+  let last: LoadPolicy | undefined;
+  const apply = (
+    settings: { modelLoadingMode?: LoadPolicy; aggressiveModelLoading?: boolean } | undefined,
+  ) => {
+    // Resolve through the ONE mapping (prefers the explicit 3-mode setting, falls back to
+    // the legacy boolean) and diff on the RESULTING policy — so BOTH the new mode selector
+    // (modelLoadingMode) and the legacy toggle drive the manager, and setLoadPolicy runs
+    // only when the effective policy actually changes.
+    const policy = loadPolicyFromSettings(settings ?? {});
+    if (policy === last) return;
+    const isInitialSeed = last === undefined;
+    last = policy;
+    modelResidencyManager.setLoadPolicy(policy);
+    // On a USER change of the loading mode (not the boot seed), eject EVERY resident so the new
+    // policy takes effect immediately — each selected model lazily reloads on next use under the
+    // new mode. setLoadPolicy only governs FUTURE loads, so without this, switching to Lean with
+    // several models already resident left them all in memory until the next load (device 2026-07-14).
+    // ejectAll keeps the selections (rows still show the chosen models); it only frees RAM.
+    if (!isInitialSeed) {
+      void activeModelService.ejectAll().catch(() => { /* eviction is best-effort; next load re-enforces */ });
+    }
   };
   // Seed from the (already hydrated) current value.
-  apply(useAppStore.getState().settings?.aggressiveModelLoading);
+  apply(useAppStore.getState().settings);
   // Project future changes. The base store's subscribe fires on every set(); we
-  // diff the one flag so setLoadPolicy runs only when it changes.
-  const unsub = useAppStore.subscribe(state => apply(state.settings?.aggressiveModelLoading));
+  // diff the resolved policy so setLoadPolicy runs only when it changes.
+  const unsub = useAppStore.subscribe(state => apply(state.settings));
   activeUnsubscribe = () => {
     unsub();
     activeUnsubscribe = null;

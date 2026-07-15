@@ -15,7 +15,7 @@ import {
   LiteRTBackendSelector,
   FlashAttentionToggle,
   KvCacheTypeToggle,
-  AggressiveLoadingToggle,
+  ModelLoadingModeSelector,
   CpuThreadsSlider,
   BatchSizeSlider,
 } from '../../components/settings/textGenAdvancedSections';
@@ -48,7 +48,7 @@ export const TextGenerationAdvanced: React.FC = () => {
       <BackendSelector />
       <FlashAttentionToggle />
       <KvCacheTypeToggle />
-      <AggressiveLoadingToggle />
+      <ModelLoadingModeSelector />
     </>
   );
 };
@@ -68,7 +68,7 @@ export const LiteRTTextGenerationAdvanced: React.FC = () => {
       />
 
       <LiteRTBackendSelector />
-      <AggressiveLoadingToggle />
+      <ModelLoadingModeSelector />
     </>
   );
 };

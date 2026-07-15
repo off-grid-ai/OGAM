@@ -281,7 +281,6 @@ export const ChatsListScreen: React.FC = () => {
         onUnloadModel={handleUnloadTextModel}
         onUnloadImageModel={handleUnloadImageModel}
         isLoading={isModelLoading}
-        currentModelPath={llmService.getLoadedModelPath()}
         onAddServer={() => {
           setShowModelSelector(false);
           navigation.navigate('RemoteServers');

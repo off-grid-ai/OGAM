@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Dimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { AppSheet } from '../../components/AppSheet';
-import { VoiceModelsUpsell } from '../../screens/ModelsScreen/VoiceModelsUpsell';
+import { VoiceModelsUpsell } from './VoiceModelsUpsell';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';

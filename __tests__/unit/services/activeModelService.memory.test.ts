@@ -21,9 +21,16 @@ jest.mock('../../../src/services/hardware', () => ({
 
 import { llmService } from '../../../src/services/llm';
 import { liteRTService } from '../../../src/services/litert';
+import { useAppStore } from '../../../src/stores';
 
 const mockedLlm = llmService as jest.Mocked<typeof llmService>;
 const mockedLiteRT = liteRTService as jest.Mocked<typeof liteRTService>;
+
+// These tests exercise the CPU-baseline overhead (×1.5). The text estimate is now backend-aware
+// (GPU/NPU → ×2.2), and the store defaults to Metal on the iOS test env — so pin CPU for determinism.
+beforeEach(() => {
+  useAppStore.setState({ settings: { ...useAppStore.getState().settings, inferenceBackend: 'cpu' } });
+});
 
 const TEXT_MODEL = { id: 'model-1', name: 'Test Model', fileSize: 4 * 1024 * 1024 * 1024 } as any;
 const IMAGE_MODEL = { id: 'img-1', name: 'Image Model', size: 2 * 1024 * 1024 * 1024 } as any;

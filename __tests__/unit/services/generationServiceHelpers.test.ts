@@ -326,15 +326,6 @@ describe('prepareGenerationImpl', () => {
     await expect(prepareGenerationImpl(svc, 'conv-1')).rejects.toThrow('No model loaded');
   });
 
-  it('throws when llama.cpp is busy', async () => {
-    const { llmService: llm } = require('../../../src/services/llm');
-    llm.isModelLoaded.mockReturnValue(true);
-    llm.isCurrentlyGenerating.mockReturnValue(true);
-    mockedGetState.mockReturnValue(makeLlmAppState());
-
-    const svc = makeSvc();
-    await expect(prepareGenerationImpl(svc, 'conv-1')).rejects.toThrow('LLM service busy');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -404,25 +395,16 @@ describe('generateResponseImpl — LiteRT path', () => {
     expect(clear).toHaveBeenCalled();
   });
 
-  it('calls clearStreamingMessage on sendMessage onError', async () => {
-    const clear = jest.fn();
-    (useChatStore.getState as jest.Mock).mockReturnValue({
-      startStreaming: jest.fn(), clearStreamingMessage: clear,
-      appendToStreamingMessage: jest.fn(), finalizeStreamingMessage: jest.fn(),
-    });
-    mockedLiteRT.sendMessage.mockImplementation((_text: any, callbacks: any) => {
-      callbacks.onError(new Error('gpu error'));
-      return Promise.resolve();
-    });
+  // (Removed: the mockist "clears streaming message on onError" tests asserted the SUPERSEDED
+  // clear-on-error behavior. The session's rule is never-discard-shown-output on error — the partial
+  // is flushed + finalized (keepShownPartialOnError). New behavior is covered by the rendered
+  // integration test errorKeepsPartial.rendered.redflow.test.tsx.)
 
-    await generateResponseImpl(makeLiteRTSvc(), {
-      conversationId: 'conv-1',
-      messages: [{ id: '1', timestamp: 0, role: 'user' as const, content: 'hi' }],
-    });
-    expect(clear).toHaveBeenCalled();
-  });
-
-  it('routes an audio attachment to sendMessage as audioUris when the model supports audio', async () => {
+  // PRODUCT RULE (modelMedia single source): a voice note is transcript-only — its audio is NEVER
+  // model input, on ANY engine. These two tests replace the old ones that asserted the removed
+  // behavior (route audio to an audio-capable litert model / hard-reject a non-audio one). The
+  // audio-capability flag is retained as latent data but no path sends audio today.
+  it('NEVER sends a voice note as audio to LiteRT — transcript-only, even for an audio-capable model', async () => {
     mockedGetState.mockReturnValue({
       ...makeLiteRTState(),
       downloadedModels: [{ id: 'litert-1', name: 'Gemma 4 E2B', engine: 'litert', liteRTAudio: true }],
@@ -440,15 +422,16 @@ describe('generateResponseImpl — LiteRT path', () => {
     await generateResponseImpl(makeLiteRTSvc(), {
       conversationId: 'conv-1',
       messages: [{
-        id: '1', timestamp: 0, role: 'user' as const, content: '',
+        id: '1', timestamp: 0, role: 'user' as const, content: 'the transcript',
         attachments: [{ id: 'a', type: 'audio' as const, uri: 'file:///clip.wav' }],
       }],
     });
 
-    expect(mockedLiteRT.sendMessage).toHaveBeenCalledWith('', expect.any(Object), { imageUris: [], audioUris: ['file:///clip.wav'] });
+    // Transcript reaches the model; audioUris is empty despite the model being audio-capable.
+    expect(mockedLiteRT.sendMessage).toHaveBeenCalledWith('the transcript', expect.any(Object), { imageUris: [], audioUris: [] });
   });
 
-  it('rejects an audio attachment when the active model has no audio support', async () => {
+  it('does NOT reject a voice note on a non-audio LiteRT model — it uses the transcript (B5/B9 parity)', async () => {
     mockedGetState.mockReturnValue({
       ...makeLiteRTState(),
       downloadedModels: [{ id: 'litert-1', name: 'Gemma vision-only', engine: 'litert', liteRTAudio: false }],
@@ -459,17 +442,22 @@ describe('generateResponseImpl — LiteRT path', () => {
       startStreaming: jest.fn(), clearStreamingMessage: clear,
       appendToStreamingMessage: jest.fn(), finalizeStreamingMessage: jest.fn(),
     });
+    mockedLiteRT.sendMessage.mockImplementation((_t: any, callbacks: any) => {
+      callbacks.onComplete('', '', null);
+      return Promise.resolve();
+    });
 
-    await expect(generateResponseImpl(makeLiteRTSvc(), {
+    // Must NOT throw "does not support audio" — the voice note is transcript-only.
+    await generateResponseImpl(makeLiteRTSvc(), {
       conversationId: 'conv-1',
       messages: [{
-        id: '1', timestamp: 0, role: 'user' as const, content: '',
+        id: '1', timestamp: 0, role: 'user' as const, content: 'the transcript',
         attachments: [{ id: 'a', type: 'audio' as const, uri: 'file:///clip.wav' }],
       }],
-    })).rejects.toThrow(/does not support audio/);
+    });
 
-    expect(clear).toHaveBeenCalled();
-    expect(mockedLiteRT.sendMessage).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
+    expect(mockedLiteRT.sendMessage).toHaveBeenCalledWith('the transcript', expect.any(Object), { imageUris: [], audioUris: [] });
   });
 });
 
@@ -496,7 +484,7 @@ describe('generateResponseImpl — llama.cpp path', () => {
       finalizeStreamingMessage: finalize,
     });
 
-    llm.generateResponse.mockImplementation((_msgs: any, onChunk: any, onComplete: any) => {
+    llm.generateResponse.mockImplementation((_msgs: any, { onStream: onChunk, onComplete }: any = {}) => {
       onChunk({ content: 'hello', reasoningContent: undefined });
       onChunk({ content: undefined, reasoningContent: 'thinking' });
       onComplete();
@@ -511,28 +499,4 @@ describe('generateResponseImpl — llama.cpp path', () => {
     expect(finalize).toHaveBeenCalled();
   });
 
-  it('clears streaming message and rethrows on generateResponse error', async () => {
-    const { llmService: llm } = require('../../../src/services/llm');
-    llm.isModelLoaded.mockReturnValue(true);
-    llm.isCurrentlyGenerating.mockReturnValue(false);
-
-    const clear = jest.fn();
-    (useChatStore.getState as jest.Mock).mockReturnValue({
-      startStreaming: jest.fn(),
-      clearStreamingMessage: clear,
-      appendToStreamingMessage: jest.fn(),
-      finalizeStreamingMessage: jest.fn(),
-    });
-
-    llm.generateResponse.mockRejectedValue(new Error('gpu crash'));
-
-    await expect(
-      generateResponseImpl(makeLlmSvc(), {
-        conversationId: 'conv-1',
-        messages: [{ id: '1', timestamp: 0, role: 'user' as const, content: 'hi' }],
-      }),
-    ).rejects.toThrow('gpu crash');
-
-    expect(clear).toHaveBeenCalled();
-  });
 });

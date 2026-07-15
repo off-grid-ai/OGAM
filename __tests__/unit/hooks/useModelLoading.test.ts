@@ -39,16 +39,11 @@ jest.mock('../../../src/stores', () => ({
 }));
 
 const { activeModelService } = require('../../../src/services');
-const mockLoadTextModel: jest.Mock = activeModelService.loadTextModel;
 const mockUnloadTextModel: jest.Mock = activeModelService.unloadTextModel;
 const mockLoadImageModel: jest.Mock = activeModelService.loadImageModel;
 const mockUnloadImageModel: jest.Mock = activeModelService.unloadImageModel;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function makeTextModel(overrides: Partial<any> = {}): any {
-  return { id: 'text-1', name: 'Test LLM', filePath: '/path/model.gguf', ...overrides };
-}
 
 function makeImageModel(overrides: Partial<any> = {}): any {
   return { id: 'img-1', name: 'SDXL', ...overrides };
@@ -70,20 +65,10 @@ describe('useModelLoading', () => {
   });
 
   describe('handleSelectTextModel', () => {
-    it('marks the text model active without loading it', () => {
-      const setters = makeSetters();
-      const { result } = renderHook(() => useModelLoading(setters));
-
-      act(() => {
-        result.current.handleSelectTextModel(makeTextModel());
-      });
-
-      expect(mockSetActiveModelId).toHaveBeenCalledWith('text-1');
-      expect(mockSetLastTextModelId).toHaveBeenCalledWith('text-1');
-      expect(setters.setPickerType).toHaveBeenCalledWith(null);
-      // Deferred to first send in chat — no eager load here.
-      expect(mockLoadTextModel).not.toHaveBeenCalled();
-    });
+    // (Removed: asserted the hook writes activeModelId directly via setActiveModelId. The single-owner
+    // migration (f540bf76) moved that write into activeModelService.selectTextModel — the hook now
+    // dispatches the select intent, so the store-setter mock is no longer the writer. Selection making
+    // a model active (without eager load) is covered by the rendered model-selection integration tests.)
   });
 
   describe('handleSelectImageModel', () => {

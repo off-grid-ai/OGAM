@@ -20,7 +20,6 @@ jest.mock('@offgrid/core/utils/logger', () => ({
 type SpeakMode = 'resolve' | 'hang' | 'throw';
 let speakMode: SpeakMode = 'resolve';
 let enginePhase = 'ready';
-const releasers: Array<() => void> = [];
 const mockEngine = {
   speak: jest.fn(() => {
     if (speakMode === 'throw') return Promise.reject(new Error('std::exception'));
@@ -68,7 +67,6 @@ beforeEach(async () => {
   speakMode = 'resolve';
   enginePhase = 'ready';
   mockCanLoad.mockReturnValue(false);
-  releasers.length = 0;
   // clearAllMocks resets call history but NOT implementations — restore the
   // speakMode-driven impl so a prior test's mockImplementation can't leak in.
   mockEngine.speak.mockImplementation(() => {

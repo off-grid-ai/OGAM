@@ -16,7 +16,7 @@ import {
 import {
   detectVisionCapability,
   detectToolCallingCapability,
-} from '../services/remoteServerManagerUtils';
+} from '../utils/remoteCapabilityDetect';
 
 /** Timeout for model discovery fetches (non-critical, background operation) */
 const DISCOVERY_FETCH_TIMEOUT_MS = 5000;

@@ -142,9 +142,13 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
 interface AttachmentPreviewProps {
   attachments: MediaAttachment[];
   onRemove: (id: string) => void;
+  /** Tapping an image thumbnail opens the shared fullscreen image viewer (same
+   * handler the in-message generated/attached images use). Optional so the
+   * component still renders without a viewer wired up. */
+  onImagePress?: (uri: string) => void;
 }
 
-export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({ attachments, onRemove }) => {
+export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({ attachments, onRemove, onImagePress }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
@@ -161,11 +165,17 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({ attachment
       {attachments.map(attachment => (
         <View key={attachment.id} testID={`attachment-preview-${attachment.id}`} style={styles.attachmentPreview}>
           {attachment.type === 'image' ? (
-            <Image
+            <TouchableOpacity
               testID={`attachment-image-${attachment.id}`}
-              source={{ uri: attachment.uri }}
-              style={styles.attachmentImage}
-            />
+              activeOpacity={0.8}
+              disabled={!onImagePress}
+              onPress={() => onImagePress?.(attachment.uri)}
+            >
+              <Image
+                source={{ uri: attachment.uri }}
+                style={styles.attachmentImage}
+              />
+            </TouchableOpacity>
           ) : attachment.type === 'audio' ? (
             <View testID={`audio-preview-${attachment.id}`} style={styles.documentPreview}>
               <Icon name="mic" size={24} color={colors.primary} />

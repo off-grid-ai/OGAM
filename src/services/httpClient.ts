@@ -10,16 +10,11 @@ import { createSSELineProcessor } from './httpClientSSE';
 
 export { parseOpenAIMessage, parseAnthropicMessage, parseSSEStream } from './httpClientSSE';
 export { imageToBase64DataUrl, isPrivateNetworkEndpoint, testEndpoint, detectServerType } from './httpClientUtils';
-
-/** SSE event from streaming response */
-export interface SSEEvent {
-  /** Event type (e.g., "message", "content_block_delta") */
-  event?: string;
-  /** Event data (parsed JSON or raw string) */
-  data: string | Record<string, unknown>;
-  /** Raw event ID if present */
-  id?: string;
-}
+// The stream-message types live in httpClientTypes so httpClientSSE can import them without
+// importing this file (which imports SSE) — that would be a cycle. Imported for internal use here
+// and re-exported for back-compat.
+import type { SSEEvent } from './httpClientTypes';
+export type { SSEEvent };
 
 /** Options for fetch with timeout */
 export interface FetchOptions extends RequestInit {
@@ -32,7 +27,7 @@ export interface FetchOptions extends RequestInit {
 }
 
 /** Optional config for streaming requests */
-export interface StreamRequestOptions {
+interface StreamRequestOptions {
   headers?: Record<string, string>;
   timeout?: number;
   signal?: AbortSignal;
@@ -43,61 +38,6 @@ export interface StreamRequestConfig extends StreamRequestOptions {
   body: unknown;
 }
 
-/** Parsed SSE message from OpenAI-compatible API */
-export interface OpenAIStreamMessage {
-  id?: string;
-  object?: string;
-  choices?: Array<{
-    index?: number;
-    delta?: {
-      content?: string;
-      reasoning_content?: string;
-      reasoning?: string;
-      thinking?: string;
-      tool_calls?: Array<{
-        index?: number;
-        id?: string;
-        type?: string;
-        function?: {
-          name?: string;
-          arguments?: string;
-        };
-      }>;
-    };
-    finish_reason?: string | null;
-  }>;
-  error?: {
-    message?: string;
-    type?: string;
-    code?: string;
-  };
-}
-
-/** Parsed SSE message from Anthropic API */
-export interface AnthropicStreamMessage {
-  type: string;
-  index?: number;
-  delta?: {
-    type?: string;
-    text?: string;
-    thinking?: string;
-  };
-  content_block?: {
-    type?: string;
-    text?: string;
-    name?: string;
-    input?: Record<string, unknown>;
-  };
-  message?: {
-    id?: string;
-    model?: string;
-    stop_reason?: string;
-  };
-  error?: {
-    type?: string;
-    message?: string;
-  };
-}
 
 /** Default timeouts */
 const DEFAULT_TIMEOUT = 30000; // 30 seconds

@@ -11,6 +11,6 @@ export {
   KvCacheTypeToggle,
   CpuThreadsSlider,
   BatchSizeSlider,
-  AggressiveLoadingToggle,
+  ModelLoadingModeSelector,
   ShowGenerationDetailsToggle,
 } from '../settings/textGenAdvancedSections';

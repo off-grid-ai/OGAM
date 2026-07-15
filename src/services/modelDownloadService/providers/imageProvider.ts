@@ -99,18 +99,25 @@ export const imageProvider: DownloadProvider = {
     const modelId = modelIdOf(id);
     const entry = findEntry(modelId);
     if (!entry) return;
-    // Platform split owned by the provider (the UI never decides this). Android can
-    // resume the native row in place — UI-free, so do it here directly. iOS must
-    // re-run the alert-coupled finalization/re-download, which is the injected op.
-    if (Platform.OS === 'android') {
-      if (!entry.downloadId) return;
-      useDownloadStore.getState().setStatus(entry.downloadId, 'pending');
-      await backgroundDownloadService.retryDownload(entry.downloadId);
-      backgroundDownloadService.startProgressPolling();
-      return;
+    // A zip interrupted MID-TRANSFER resumes natively (UI-free, do it here). But an image whose bytes
+    // FINISHED and then failed EXTRACTION (ImageModelIncompleteError — missing unet.bin/clip.weight),
+    // or a multi-file download (synthetic `image-multi:` row), has NO live native row to resume:
+    // retryDownload throws "Download not found" on EVERY tap (device-confirmed, B6). In those cases
+    // fall back to the injected full re-download path (cancels the stale row, fetches fresh).
+    const nativeResumable = Platform.OS === 'android' && !isMultifile(entry) && !!entry.downloadId;
+    if (nativeResumable) {
+      try {
+        useDownloadStore.getState().setStatus(entry.downloadId, 'pending');
+        await backgroundDownloadService.retryDownload(entry.downloadId);
+        backgroundDownloadService.startProgressPolling();
+        return;
+      } catch (e) {
+        // Native row gone (bytes completed, extraction failed) → re-download from scratch below.
+        logger.log(`[DL-SM] image:${modelId} native resume failed (${msg(e)}) — re-downloading from scratch`);
+      }
     }
-    if (imageOps.retry) { await imageOps.retry(modelId, entry); return; } // iOS (alerts, resume)
-    logger.log(`[DL-SM] image:${modelId} retry: no image ops registered — refused`);
+    if (imageOps.retry) { await imageOps.retry(modelId, entry); return; } // full re-download (all platforms) / iOS
+    logger.log(`[DL-SM] image:${modelId} retry: no live native row and no image ops — refused`);
   },
 
   async remove(id: string): Promise<void> {

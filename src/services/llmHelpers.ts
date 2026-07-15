@@ -10,12 +10,12 @@ import { ensureNativeLogCapture, resetNativeLogCapture, recentNativeLog } from '
 
 import { HTP_ENABLED } from '../config/featureFlags';
 
-export const RESPONSE_RESERVE = 512;
+const RESPONSE_RESERVE = 512;
 const DEFAULT_THREADS = 4; // targets performance cores only; over-threading onto efficiency cores (A520) hurts
 const DEFAULT_BATCH = 512;
-export const DEFAULT_GPU_LAYERS = Platform.OS === 'ios' ? 99 : 0;
-export function getOptimalThreadCount(): number { return DEFAULT_THREADS; }
-export function getOptimalBatchSize(): number { return DEFAULT_BATCH; }
+const DEFAULT_GPU_LAYERS = Platform.OS === 'ios' ? 99 : 0;
+function getOptimalThreadCount(): number { return DEFAULT_THREADS; }
+function getOptimalBatchSize(): number { return DEFAULT_BATCH; }
 const REPACKABLE_QUANTS = ['q4_0', 'iq4_nl'];
 /** Detect repackable quant formats where disabling mmap improves inference speed. */
 export function shouldDisableMmap(modelPath: string): boolean {
@@ -115,8 +115,12 @@ export interface ContextInitResult {
   gpuAttemptFailed: boolean;
   actualLength: number;
 }
-/** Timeout for Adreno GPU context init on Android -- bail before OS triggers ANR. */
-const GPU_INIT_TIMEOUT_MS = 8000;
+/** Timeout for Adreno GPU context init on Android. 8s proved too tight on-device: Adreno 735
+ *  first-load OpenCL kernel compilation exceeded it (2026-07-13 20:11 log: "timed out after
+ *  8000ms" on a load that succeeded with 24 offloaded layers in an earlier session), silently
+ *  downgrading every reload to CPU. The init runs on a native thread (no ANR exposure); 25s
+ *  bounds a genuinely hung driver while letting a slow first compile finish. */
+const GPU_INIT_TIMEOUT_MS = 25000;
 /** Timeout for HTP/NPU context init -- DSP firmware load takes longer than Adreno. */
 const HTP_INIT_TIMEOUT_MS = 30000;
 /** iOS Metal init timeout. Larger than Android's because a legit large-model
@@ -175,6 +179,7 @@ export async function initContextWithFallback(
   ensureNativeLogCapture();
   resetNativeLogCapture();
   logger.log(`[LLM] initContextWithFallback: model=${modelPath}, ctx=${contextLength}, gpuLayers=${nGpuLayers}${isHtp ? ', backend=HTP' : ''}`);
+  logger.log(`[WIRE-LLAMA-LOAD] ${JSON.stringify({ modelPath, contextLength, nGpuLayers, isHtp, params: { ...(params as Record<string, unknown>), model: undefined } })}`); // [WIRE] settings→native model-load config
   let gpuAttemptFailed = false;
   try {
     logger.log(`[LLM] Attempt 1/3: ${isHtp ? 'HTP' : 'GPU'} init (ctx=${contextLength}, gpu_layers=${nGpuLayers})`);
@@ -233,6 +238,7 @@ export interface GpuInfo {
   gpuReason: string;
   gpuDevices: string[];
   activeGpuLayers: number;
+  gpuAttemptFailed: boolean;
 }
 
 export function captureGpuInfo(
@@ -245,22 +251,30 @@ export function captureGpuInfo(
   const gpuDevices = (context as any).devices ?? [];
   const activeGpuLayers = gpuAttemptFailed ? 0 : nGpuLayers;
   const gpuEnabled = nativeGpuAvailable && activeGpuLayers > 0;
-  return { gpuEnabled, gpuReason, gpuDevices, activeGpuLayers };
+  return { gpuEnabled, gpuReason, gpuDevices, activeGpuLayers, gpuAttemptFailed };
+}
+
+/**
+ * UI notice for a GPU-selected load that landed on CPU (requested GPU layers, got 0 — init
+ * failure/timeout, or a device/RAM refusal). Null when nothing to report. Never a silent CPU
+ * downgrade (device 2026-07-13 18:57: "Backend=GPU but ran on CPU at 3.4 tok/s").
+ */
+export function describeGpuFallback(info: { requestedGpuLayers: number; activeGpuLayers: number; gpuAttemptFailed: boolean }): string | null {
+  if (info.requestedGpuLayers <= 0 || info.activeGpuLayers > 0) return null;
+  return info.gpuAttemptFailed
+    ? 'GPU unavailable - its initialization failed or timed out. Running on CPU.'
+    : 'GPU unavailable on this device - running on CPU.';
 }
 export function supportsNativeThinking(context: LlamaContext | null): boolean {
   if (!context) return false;
   try {
-    const jinjaSupported = typeof context.isJinjaSupported === 'function'
-      ? context.isJinjaSupported()
-      : (() => {
-          const jinja = (context as any)?.model?.chatTemplates?.jinja;
-          return !!(jinja?.default || jinja?.toolUse);
-        })();
-    if (jinjaSupported) return true;
-    // OD7: a community reasoning model (e.g. a merge whose chat template minja
-    // cannot flag) reports jinja unsupported yet still emits <think>/channel
-    // reasoning the runtime parser renders. Derive the capability from the same
-    // reasoning delimiters in the model's own chat_template — never from its name.
+    // Thinking capability comes SOLELY from the model's own chat_template emitting reasoning
+    // delimiters (<think>, Gemma/Qwen channels) or exposing the enable_thinking kwarg — the same
+    // single-source predicate remote capability probing uses (templateEmitsReasoning). It is NEVER
+    // derived from whether Jinja renders: a model with a perfectly valid Jinja template but no
+    // reasoning markers (e.g. Mistral 7B, which has a tool-use template) does NOT think, yet the old
+    // `isJinjaSupported() → true` short-circuit falsely surfaced the Thinking toggle for it. Covers
+    // both jinja-supported and OD7 jinja-unsupported reasoning models: both carry the template here.
     const metadata = (context as any)?.model?.metadata;
     const template = metadata?.['tokenizer.chat_template'] ?? metadata?.chat_template;
     return templateEmitsReasoning(typeof template === 'string' ? template : undefined);
@@ -268,10 +282,17 @@ export function supportsNativeThinking(context: LlamaContext | null): boolean {
     return false;
   }
 }
-export function buildThinkingCompletionParams(enableThinking: boolean, isGemma4: boolean = false): { enable_thinking: boolean; reasoning_format: 'none' | 'deepseek' } {
-  // Gemma 4 uses its own <|channel>thought\n...<channel|> format — not DeepSeek's <think> tags.
-  // Set reasoning_format:'none' so llama.rn doesn't try to strip DeepSeek tags; we parse it ourselves.
-  return { enable_thinking: enableThinking, reasoning_format: (enableThinking && !isGemma4) ? 'deepseek' : 'none' };
+export function buildThinkingCompletionParams(enableThinking: boolean, isGemma4: boolean = false): { enable_thinking: boolean; reasoning_format: 'none' | 'auto' | 'deepseek' } {
+  if (!enableThinking) return { enable_thinking: false, reasoning_format: 'none' };
+  // Native-first (parse-once at the runtime boundary): Gemma 4 uses its own
+  // <|channel>thought\n...<channel|> format, not DeepSeek's <think> tags. reasoning_format:'auto'
+  // lets llama.cpp detect the model's chat_format and parse reasoning + tool calls NATIVELY —
+  // populating reasoning_content/tool_calls and returning already-filtered content — instead of
+  // forcing 'none' and hand-parsing the raw channel tags ourselves. Safe by construction: finalize
+  // and resolveToolCalls only fall back to our hand-parser when the native fields are empty, so
+  // native wins when it works and the hand-parser is a pure fallback. (Non-Gemma reasoning models
+  // keep the known-good 'deepseek' path.)
+  return { enable_thinking: true, reasoning_format: isGemma4 ? 'auto' : 'deepseek' };
 }
 export function getStreamingDelta(nextValue: string | undefined, previousValue: string): string | undefined {
   if (!nextValue) return undefined;
@@ -284,7 +305,12 @@ export function getModelMaxContext(context: LlamaContext): number | null {
   try {
     const metadata = (context as any).model?.metadata;
     if (!metadata) return null;
-    const trainCtx = metadata['llama.context_length'] || metadata['general.context_length'] || metadata.context_length;
+    // GGUF stores the trained context under an ARCHITECTURE-prefixed key (gemma4.context_length,
+    // qwen3.context_length, …). Reading only the llama key returned null for gemma/qwen → 32K slider cap.
+    const arch = metadata['general.architecture'];
+    const trainCtx =
+      (arch && metadata[`${arch}.context_length`]) ||
+      metadata['llama.context_length'] || metadata['general.context_length'] || metadata.context_length;
     if (!trainCtx) return null;
     const maxModelCtx = Number.parseInt(trainCtx, 10);
     return Number.isNaN(maxModelCtx) || maxModelCtx <= 0 ? null : maxModelCtx;
@@ -423,8 +449,8 @@ export function getGpuLayersForDevice(
   }
   return requestedLayers;
 }
-export { validateModelFile, checkMemoryForModel, safeCompletion } from './llmSafetyChecks';
-export const STOP_TOKENS = ['</s>', '<|end|>', '<|eot_id|>'];
+export { validateModelFile, checkMemoryForModel, safeCompletion, resolveSafeContext } from './llmSafetyChecks';
+const STOP_TOKENS = ['</s>', '<|end|>', '<|eot_id|>'];
 export function buildCompletionParams(settings: {
   maxTokens?: number; temperature?: number; topP?: number; repeatPenalty?: number;
 }, options?: { disableCtxShift?: boolean }): Record<string, any> {
@@ -437,6 +463,17 @@ export function buildCompletionParams(settings: {
     stop: STOP_TOKENS,
     ctx_shift: options?.disableCtxShift ? false : true,
   };
+}
+/**
+ * Was a completion cut off at the n_predict cap (B15), vs finishing on EOS or being STOPPED? SINGLE
+ * truncation verdict for both the plain and tool-loop paths. A user stop is `interrupted:true`
+ * (stopped_eos:false) — NOT truncation; only a stopped_limit/truncated hit is (device 2026-07-14).
+ */
+export function isTruncatedResult(
+  cr: { interrupted?: boolean; stopped_limit?: number | boolean; truncated?: boolean } | null | undefined,
+): boolean {
+  if (!cr || cr.interrupted === true) return false;
+  return cr.stopped_limit === 1 || cr.stopped_limit === true || cr.truncated === true;
 }
 export function recordGenerationStats(
   startTime: number,

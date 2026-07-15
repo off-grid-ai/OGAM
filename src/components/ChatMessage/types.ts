@@ -18,9 +18,6 @@ export interface ChatMessageProps {
   metaExtra?: React.ReactNode;
 }
 
-export interface ParsedContent {
-  thinking: string | null;
-  response: string;
-  isThinkingComplete: boolean;
-  thinkingLabel?: string;
-}
+// ParsedContent is owned by the util that produces it (utils/messageContent). Re-exported here
+// so existing component imports (`./types`) keep working without utils depending on this module.
+export type { ParsedContent } from '../../utils/messageContent';

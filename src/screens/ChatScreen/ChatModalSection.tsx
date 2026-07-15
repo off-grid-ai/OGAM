@@ -3,7 +3,6 @@ import {
   ModelSelectorModal, GenerationSettingsModal,
   ProjectSelectorSheet, DebugSheet,
 } from '../../components';
-import { llmService } from '../../services';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
 import { ImageViewerModal } from './ChatScreenComponents';
@@ -77,7 +76,6 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
       onSelectModel={handleModelSelect}
       onUnloadModel={handleUnloadModel}
       isLoading={isModelLoading}
-      currentModelPath={llmService.getLoadedModelPath()}
       onAddServer={() => navigation.navigate('RemoteServers')}
     />
     <GenerationSettingsModal

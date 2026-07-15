@@ -14,7 +14,7 @@ import { CustomAlert, hideAlert, showAlert, SharePromptSheet, ProAhaSheet } from
 import { useEjectAllModels } from '../../hooks/useEjectAllModels';
 import { consumePendingSpotlight } from '../../components/onboarding/spotlightState';
 import { subscribeSharePrompt } from '../../utils/sharePrompt';
-import { subscribeProPrompt } from '../../utils/proPrompt';
+import { subscribeProPrompt } from '../../services/proPrompt';
 import { VOICE_HINT_STEP_INDEX, IMAGE_SETTINGS_STEP_INDEX } from '../../components/onboarding/spotlightConfig';
 import { useAppStore } from '../../stores/appStore';
 import type { Conversation, Message } from '../../types';
@@ -292,6 +292,7 @@ export const ChatScreen: React.FC = () => {
             if (pendingEjectRef.current) { pendingEjectRef.current = false; confirmEjectAll(); }
           }}
           labels={modelLabels}
+          remote={{ text: !!chat.activeModelInfo?.isRemote }}
           loadingState={{ isLoading: !!chat.isModelLoading, type: 'text' }}
           isEjecting={isEjecting}
           hasActiveModel={hasEjectableModel}

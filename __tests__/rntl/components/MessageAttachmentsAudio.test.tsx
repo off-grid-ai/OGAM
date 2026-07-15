@@ -13,6 +13,7 @@ import { ChatMessage } from '../../../src/components/ChatMessage';
 import { createUserMessage, createAudioAttachment } from '../../utils/factories';
 
 jest.mock('../../../src/utils/messageContent', () => ({
+  ...jest.requireActual('../../../src/utils/messageContent'),
   stripControlTokens: (content: string) => content,
 }));
 

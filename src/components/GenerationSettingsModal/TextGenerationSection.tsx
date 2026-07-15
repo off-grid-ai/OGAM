@@ -13,7 +13,7 @@ import {
   LiteRTBackendSelector,
   FlashAttentionToggle,
   KvCacheTypeToggle,
-  AggressiveLoadingToggle,
+  ModelLoadingModeSelector,
   ShowGenerationDetailsToggle,
 } from './TextGenerationAdvanced';
 
@@ -170,7 +170,7 @@ const LiteRTTextGenerationSection: React.FC = () => {
             <SettingSlider key={c.key} config={c} />
           ))}
           <LiteRTBackendSelector />
-          <AggressiveLoadingToggle />
+          <ModelLoadingModeSelector />
         </>
       )}
     </View>
@@ -210,7 +210,7 @@ const LlamaTextGenerationSection: React.FC = () => {
           <BackendSelector />
           <FlashAttentionToggle />
           <KvCacheTypeToggle />
-          <AggressiveLoadingToggle />
+          <ModelLoadingModeSelector />
         </>
       )}
     </View>

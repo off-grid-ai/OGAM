@@ -443,8 +443,11 @@ describe('OpenAICompatibleProvider', () => {
       // Stop generation (should abort)
       await provider.stopGeneration();
 
-      // Generation should have completed without error
-      expect(wasAborted || onComplete.mock.calls.length >= 0).toBe(true);
+      // Generation completed (fast) before the stop → onComplete fired and the abort never had to
+      // trigger. (The prior assertion `onComplete.mock.calls.length >= 0` was a tautology — always
+      // true — so it proved nothing; assert the real terminal outcome instead.)
+      expect(onComplete).toHaveBeenCalled();
+      expect(wasAborted).toBe(false);
     });
   });
 

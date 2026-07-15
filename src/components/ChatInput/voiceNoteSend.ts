@@ -91,18 +91,15 @@ export function buildVoiceNoteHandlers(deps: VoiceNoteHandlerDeps) {
       pendingAttachments: deps.getPendingAttachments(),
     });
 
-  // Whisper dictation path (Chat mode, non-audio model): emits a transcription
-  // with NO audio file. A STANDALONE dictation (empty composer, no other pending
-  // attachment) auto-sends as a plain text message — the transcription must not
-  // sit in the composer. When the composer already has content the user is
-  // building a message, so the transcription is appended for a manual send.
-  // A blank transcription produces nothing to send and is dropped.
+  // Whisper dictation path (Chat mode hold-to-talk, non-audio model): emits a
+  // transcription with NO audio file. The transcript is placed INTO the composer
+  // for the user to review and send — the device-correct behavior for hold-to-talk
+  // (B26: the user spoke and expected the words in the input box; a blank input was
+  // the bug). Appending (never auto-sending) means dictating over existing text
+  // extends it, and a first dictation fills an empty composer. A blank transcript
+  // produces nothing to append and is dropped.
   const onTranscript = (text: string) => {
-    const trimmed = text.trim();
-    if (isStandalone()) {
-      if (trimmed) sendVoiceNote(trimmed);
-      return;
-    }
+    if (!text.trim()) return;
     deps.appendTranscript(text);
   };
 

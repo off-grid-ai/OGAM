@@ -14,7 +14,7 @@ import logger from '../utils/logger';
 
 const JSON_API = 'application/vnd.api+json';
 
-export type ValidationCode =
+type ValidationCode =
   | 'VALID'
   | 'NO_MACHINE'
   | 'NO_MACHINES'
@@ -27,7 +27,7 @@ export type ValidationCode =
   | 'NOT_FOUND'
   | 'UNKNOWN';
 
-export interface KeygenLicense {
+interface KeygenLicense {
   id: string;
   expiry: string | null; // ISO timestamp, or null for a perpetual (lifetime) key
   metadata: Record<string, unknown>;

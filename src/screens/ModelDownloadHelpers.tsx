@@ -4,13 +4,15 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { Card } from '../components';
 import type { ThemeColors } from '../theme';
-import { TYPOGRAPHY, SPACING, FONTS } from '../constants';
+import { TYPOGRAPHY, SPACING, FONTS, OFF_GRID_DESKTOP_URL } from '../constants';
 import { huggingFaceService } from '../services';
 import { ModelFile, RemoteModel, RemoteServer } from '../types';
 import logger from '../utils/logger';
+import { withUtm } from '../utils/utm';
 
 // ---------------------------------------------------------------------------
 // Model file fetching
@@ -122,9 +124,17 @@ export const NetworkSection: React.FC<{
       ))}
 
       {!isCheckingNetwork && !hasServers && (
-        <Text style={styles.emptyText}>
-          No servers found. Make sure you're on the same WiFi network as your Ollama or LM Studio server, then scan or add it manually.
-        </Text>
+        <>
+          <Text style={styles.emptyText}>
+            No servers found. Make sure you're on the same WiFi network as your Off Grid AI Desktop, Ollama, or LM Studio server, then scan or add it manually.
+          </Text>
+          <TouchableOpacity
+            onPress={() => Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'model-download')).catch(() => {})}
+            testID="onboarding-get-desktop"
+          >
+            <Text style={[styles.getDesktopLink, { color: colors.primary }]}>Get Off Grid AI Desktop</Text>
+          </TouchableOpacity>
+        </>
       )}
 
       <View style={styles.actionRow}>
@@ -218,6 +228,11 @@ const networkSectionStyles = (colors: ThemeColors) => ({
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
     lineHeight: 20,
+    marginBottom: SPACING.sm,
+  },
+  getDesktopLink: {
+    ...TYPOGRAPHY.bodySmall,
+    fontFamily: FONTS.mono,
     marginBottom: SPACING.md,
   },
   actionRow: {

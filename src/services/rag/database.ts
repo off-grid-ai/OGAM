@@ -21,7 +21,7 @@ export interface RagSearchResult {
   score: number;
 }
 
-export interface StoredEmbedding {
+interface StoredEmbedding {
   chunk_rowid: number;
   doc_id: number;
   name: string;

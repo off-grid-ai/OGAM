@@ -11,9 +11,10 @@ import {
   ModelType,
   MemoryCheckResult,
   MemoryCheckSeverity,
-  TEXT_MODEL_OVERHEAD_MULTIPLIER,
+  textOverheadMultiplier,
   IMAGE_MODEL_OVERHEAD_MULTIPLIER,
 } from './types';
+import { useAppStore } from '../../stores';
 import { modelMemoryBudgetMB, modelWarningThresholdMB, LoadPolicy } from '../memoryBudget';
 
 // ---------------------------------------------------------------------------
@@ -23,13 +24,13 @@ import { modelMemoryBudgetMB, modelWarningThresholdMB, LoadPolicy } from '../mem
 // The pre-load check reads the SAME budget owner as the residency manager, so it
 // must honour the SAME load policy — otherwise aggressive mode would relax the
 // residency gate while the pre-check kept blocking/warning at balanced limits.
-export const getMemoryBudgetGB = async (policy: LoadPolicy = 'balanced'): Promise<number> => {
+const getMemoryBudgetGB = async (policy: LoadPolicy = 'balanced'): Promise<number> => {
   const deviceInfo = await hardwareService.getDeviceInfo();
   const totalMB = deviceInfo.totalMemory / (1024 * 1024);
   return modelMemoryBudgetMB(totalMB, undefined, policy) / 1024;
 };
 
-export const getMemoryWarningThresholdGB = async (): Promise<number> => {
+const getMemoryWarningThresholdGB = async (): Promise<number> => {
   const deviceInfo = await hardwareService.getDeviceInfo();
   const totalMB = deviceInfo.totalMemory / (1024 * 1024);
   return modelWarningThresholdMB(totalMB) / 1024;
@@ -39,16 +40,21 @@ export const getMemoryWarningThresholdGB = async (): Promise<number> => {
 // Size estimators
 // ---------------------------------------------------------------------------
 
-export function estimateModelMemoryGB(
+function estimateModelMemoryGB(
   model: DownloadedModel | ONNXImageModel,
   type: ModelType,
 ): number {
   if (type === 'text') {
     const textModel = model as DownloadedModel;
     const sizeGB = (textModel.fileSize || 0) / (1024 * 1024 * 1024);
-    return sizeGB * TEXT_MODEL_OVERHEAD_MULTIPLIER;
+    // GPU-aware overhead — same single source the residency gate uses, so pre-check and gate agree.
+    return sizeGB * textOverheadMultiplier(useAppStore.getState().settings.inferenceBackend);
   }
   const imageModel = model as ONNXImageModel;
+  // ONE image-RAM estimator: delegate to the authoritative load-gate estimator so the
+  // advisory pre-check and the gate can't diverge ('Safe to load' then a hard refusal).
+  const estimate = hardwareService.estimateImageModelRam?.(imageModel);
+  if (estimate != null) return estimate / (1024 * 1024 * 1024);
   const sizeGB = (imageModel.size || 0) / (1024 * 1024 * 1024);
   return sizeGB * IMAGE_MODEL_OVERHEAD_MULTIPLIER;
 }

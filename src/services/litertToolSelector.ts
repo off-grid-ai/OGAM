@@ -51,15 +51,21 @@ export async function selectRelevantTools(
   const prompt = `User request:\n${userText}\n\nTools:\n${catalog}`;
 
   const raw = (await generate(ROUTER_SYSTEM, prompt)).toLowerCase();
+
+  // An explicit decline wins over a tool name that merely appears in the router's
+  // explanatory prose. The contract is "reply 'none' if no tool is needed", so a
+  // reply like "none of these apply, the calculator isn't needed" must select NO
+  // tool — previously the substring match on "calculator" short-circuited before
+  // this branch and force-selected it (Q4).
+  if (/\bnone\b/.test(raw)) {
+    return [];
+  }
   const selected = tools
     .map(t => t.function.name)
     .filter(name => raw.includes(name.toLowerCase()));
 
   if (selected.length > 0) {
     return selected;
-  }
-  if (raw.includes('none')) {
-    return [];
   }
   return null;
 }

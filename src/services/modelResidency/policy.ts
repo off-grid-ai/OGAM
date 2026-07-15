@@ -41,6 +41,9 @@ export interface IncomingModel {
   key: string;
   type: ResidentType;
   sizeMB: number;
+  /** True for real committed RAM that cannot page (CoreML/ONNX image, LiteRT); a clean
+   *  (mmap GGUF) incoming pages in and only competes for the physical-RAM ceiling. */
+  dirtyMemory?: boolean;
 }
 
 export interface EvictionPlan {
@@ -67,7 +70,7 @@ const PRIORITY: Record<ResidentType, number> = {
  * the two can never disagree on eviction order. Returns undefined when nothing is
  * evictable (caller stops and reports fits=false).
  */
-export function selectEvictionVictim(
+function selectEvictionVictim(
   current: Resident[],
   incoming: IncomingModel,
   isEvicted: (r: Resident) => boolean,

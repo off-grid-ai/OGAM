@@ -4,28 +4,16 @@ import { AlertState, initialAlertState, showAlert, hideAlert } from '../../../co
 import { useAppStore, useChatStore, useRemoteServerStore } from '../../../stores';
 import { modelManager, hardwareService, activeModelService, ResourceUsage, remoteServerManager } from '../../../services';
 import { Conversation, RemoteModel } from '../../../types';
-import { CompositeNavigationProp } from '@react-navigation/native';
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { MainTabParamList, RootStackParamList } from '../../../navigation/types';
 import { useModelLoading } from './useModelLoading';
 import { useLANDiscovery } from './useLANDiscovery';
 import { useRemoteModelHandlers } from './useRemoteModelHandlers';
 import { useActiveTextModel } from '../../../hooks/useActiveTextModel';
 import logger from '../../../utils/logger';
+// Shared hook types live in ./types so the sub-hooks can import them without importing this file
+// (which imports them back — a cycle). Re-exported here for existing external importers.
+import type { HomeScreenNavigationProp, ModelPickerType, LoadingState } from './types';
 
-export type HomeScreenNavigationProp = CompositeNavigationProp<
-  BottomTabNavigationProp<MainTabParamList, 'HomeTab'>,
-  NativeStackNavigationProp<RootStackParamList>
->;
-
-export type ModelPickerType = 'text' | 'image' | null;
-
-export type LoadingState = {
-  isLoading: boolean;
-  type: 'text' | 'image' | null;
-  modelName: string | null;
-};
+export type { HomeScreenNavigationProp, ModelPickerType, LoadingState };
 
 // Track if we've synced native state to avoid repeated calls
 let hasInitializedNativeSync = false;

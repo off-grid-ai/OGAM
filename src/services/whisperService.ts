@@ -3,34 +3,25 @@ import { Platform, PermissionsAndroid } from 'react-native';
 import RNFS from 'react-native-fs';
 import logger from '../utils/logger';
 import { audioSessionManager } from './audioSessionManager';
+import { audioRecorderService } from './audioRecorderService';
 import { backgroundDownloadService } from './backgroundDownloadService';
 import { useDownloadStore } from '../stores/downloadStore';
 import { makeModelKey } from '../utils/modelKey';
+import { WHISPER_MODELS, cleanTranscription } from './whisperModels';
+import * as whisperModelFiles from './whisperModelFiles';
 
-export interface TranscriptionResult {
+// Re-export the model catalog + transcription normalizer (moved to whisperModels.ts
+// to keep this file within the max-lines budget). Behavior-neutral: every existing
+// `import { WHISPER_MODELS, cleanTranscription } from './whisperService'` keeps working.
+export { WHISPER_MODELS, cleanTranscription } from './whisperModels';
+
+interface TranscriptionResult {
   text: string;
   isCapturing: boolean;
   processTime: number;
   recordingTime: number;
 }
-export type TranscriptionCallback = (result: TranscriptionResult) => void;
-
-const GGML_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main';
-
-export const WHISPER_MODELS = [
-  // ── English-only ──────────────────────────────────────────────────────────
-  { id: 'tiny.en',   name: 'Tiny',   size: 75,   lang: 'en',    url: `${GGML_BASE}/ggml-tiny.en.bin`,   description: 'Fastest, English only' },
-  { id: 'base.en',   name: 'Base',   size: 142,  lang: 'en',    url: `${GGML_BASE}/ggml-base.en.bin`,   description: 'Better accuracy, English only' },
-  { id: 'small.en',  name: 'Small',  size: 466,  lang: 'en',    url: `${GGML_BASE}/ggml-small.en.bin`,  description: 'High accuracy, English only' },
-  { id: 'medium.en', name: 'Medium', size: 1500, lang: 'en',    url: `${GGML_BASE}/ggml-medium.en.bin`, description: 'Near human-level, English only, ~2 GB RAM' },
-  // ── Multilingual ──────────────────────────────────────────────────────────
-  { id: 'tiny',           name: 'Tiny',             size: 75,   lang: 'multi', url: `${GGML_BASE}/ggml-tiny.bin`,           description: 'Fastest, 99 languages' },
-  { id: 'base',           name: 'Base',             size: 142,  lang: 'multi', url: `${GGML_BASE}/ggml-base.bin`,           description: 'Better accuracy, 99 languages' },
-  { id: 'small',          name: 'Small',            size: 466,  lang: 'multi', url: `${GGML_BASE}/ggml-small.bin`,          description: 'High accuracy, 99 languages' },
-  { id: 'medium',         name: 'Medium',           size: 1500, lang: 'multi', url: `${GGML_BASE}/ggml-medium.bin`,         description: 'Near human-level, 99 languages, ~2 GB RAM' },
-  { id: 'large-v3-turbo', name: 'Large v3 Turbo',  size: 809,  lang: 'multi', url: `${GGML_BASE}/ggml-large-v3-turbo.bin`, description: 'Fast + accurate, distilled large, 99 languages' },
-  { id: 'large-v3',       name: 'Large v3',         size: 1550, lang: 'multi', url: `${GGML_BASE}/ggml-large-v3.bin`,       description: 'Best quality, 99 languages, ~3 GB RAM' },
-];
+type TranscriptionCallback = (result: TranscriptionResult) => void;
 
 class WhisperService {
   private context: WhisperContext | null = null;
@@ -41,14 +32,15 @@ class WhisperService {
   private contextReleasePromise: Promise<void> = Promise.resolve();
   private transcriptionFullyStopped: Promise<void> = Promise.resolve();
   private activeDownloadId: string | null = null;
+  // The model id the in-flight download belongs to. Paired with activeDownloadId so
+  // deleteModel only cancels the download when it is THIS model's — deleting an
+  // unrelated (already-downloaded) model must never abort a different in-flight one.
+  private activeDownloadModelId: string | null = null;
 
-  getModelsDir(): string { return `${RNFS.DocumentDirectoryPath}/whisper-models`; }
-  async ensureModelsDirExists(): Promise<void> {
-    const dir = this.getModelsDir();
-    if (!await RNFS.exists(dir)) await RNFS.mkdir(dir);
-  }
-  getModelPath(modelId: string): string { return `${this.getModelsDir()}/ggml-${modelId}.bin`; }
-  async isModelDownloaded(modelId: string): Promise<boolean> { return RNFS.exists(this.getModelPath(modelId)); }
+  getModelsDir(): string { return whisperModelFiles.getModelsDir(); }
+  async ensureModelsDirExists(): Promise<void> { return whisperModelFiles.ensureModelsDirExists(); }
+  getModelPath(modelId: string): string { return whisperModelFiles.getModelPath(modelId); }
+  async isModelDownloaded(modelId: string): Promise<boolean> { return whisperModelFiles.isModelDownloaded(modelId); }
 
   async downloadModel(modelId: string, onProgress?: (progress: number) => void): Promise<string> {
     const model = WHISPER_MODELS.find(m => m.id === modelId);
@@ -119,6 +111,7 @@ class WhisperService {
     try {
       try {
         this.activeDownloadId = await downloadIdPromise;
+        this.activeDownloadModelId = modelId;
         // A slot opened and the native download started: reconcile the queued
         // placeholder row to the REAL downloadId so progress events (routed by id)
         // land on it. Progress is then driven by the global onAnyProgress listener
@@ -137,6 +130,7 @@ class WhisperService {
         throw error;
       } finally {
         this.activeDownloadId = null;
+        this.activeDownloadModelId = null;
       }
       try {
         await this.validateModelFile(destPath);
@@ -156,34 +150,21 @@ class WhisperService {
   }
   /** List every downloaded ggml whisper model on disk (for the Download Manager). */
   async listDownloadedModels(): Promise<Array<{ modelId: string; fileName: string; sizeBytes: number; filePath: string }>> {
-    const dir = this.getModelsDir();
-    if (!(await RNFS.exists(dir))) return [];
-    const entries = await RNFS.readDir(dir);
-    return entries
-      .filter(f => f.isFile() && f.name.startsWith('ggml-') && f.name.endsWith('.bin'))
-      .map(f => ({
-        modelId: f.name.replace(/^ggml-/, '').replace(/\.bin$/, ''),
-        fileName: f.name,
-        sizeBytes: Number(f.size) || 0,
-        filePath: f.path,
-      }));
+    return whisperModelFiles.listDownloadedModels();
   }
 
   async deleteModel(modelId: string): Promise<void> {
-    if (this.activeDownloadId !== null) {
+    // Only cancel the in-flight download if it belongs to THIS model. Deleting an
+    // already-downloaded model must not abort an unrelated download that happens to
+    // be running (previously it cancelled the single activeDownloadId regardless).
+    if (this.activeDownloadId !== null && this.activeDownloadModelId === modelId) {
       await backgroundDownloadService.cancelDownload(this.activeDownloadId).catch(() => {});
       this.activeDownloadId = null;
+      this.activeDownloadModelId = null;
     }
     const path = this.getModelPath(modelId);
     if (await RNFS.exists(path)) await RNFS.unlink(path);
   }
-
-  /**
-   * Minimum valid model file size in bytes (10 MB).
-   * The smallest whisper model (tiny) is ~75 MB, so anything under 10 MB
-   * is almost certainly a corrupted or incomplete download.
-   */
-  private static readonly MIN_MODEL_FILE_SIZE = 10 * 1024 * 1024;
 
   /**
    * Validate that a whisper model file exists and has a reasonable size
@@ -192,27 +173,7 @@ class WhisperService {
    * giving JS a chance to handle the error.
    */
   async validateModelFile(modelPath: string): Promise<void> {
-    if (!modelPath) {
-      throw new Error('Whisper model path is empty or undefined');
-    }
-
-    const exists = await RNFS.exists(modelPath);
-    if (!exists) {
-      throw new Error(`Whisper model file not found at: ${modelPath}`);
-    }
-
-    const stat = await RNFS.stat(modelPath);
-    const fileSize = Number(stat.size);
-    if (Number.isNaN(fileSize) || fileSize < WhisperService.MIN_MODEL_FILE_SIZE) {
-      // Remove the corrupted file so the user can re-download
-      await RNFS.unlink(modelPath).catch(() => {});
-      throw new Error(
-        `Whisper model file is too small (${Math.round(fileSize / 1024)} KB) and likely corrupted. ` +
-        'The file has been removed. Please re-download the model.'
-      );
-    }
-
-    logger.log(`[Whisper] Model file validated: ${modelPath} (${Math.round(fileSize / (1024 * 1024))} MB)`);
+    return whisperModelFiles.validateModelFile(modelPath);
   }
 
   async loadModel(modelPath: string): Promise<void> {
@@ -329,10 +290,41 @@ class WhisperService {
       resolveTranscriptionStopped = resolve;
     });
 
+    // B26/B28 ROOT: realtime capture yields NO audio on device (spoke, blank input). The reliable
+    // pipeline is record→file→transcribeFile (the voice-mode path, T079). So we record the SAME
+    // utterance to a file alongside the realtime stream, and on the stream's FINAL event, when it
+    // produced no usable transcript, we transcribe the recorded FILE and deliver THAT as the
+    // authoritative result — one uniform "voice in → transcribed text out" pipeline for every mode.
+    // Best-effort: if the recorder can't start (permission/hardware), realtime alone still runs.
+    let recordedFile = false;
+    try {
+      await audioRecorderService.startRecording();
+      recordedFile = true;
+    } catch (recErr) {
+      logger.error('[WhisperService] Fallback recorder failed to start (realtime only):', recErr);
+    }
+
+    // Resolve the authoritative transcript for the finished utterance: prefer the realtime result;
+    // when it's empty (B26), transcribe the recorded file. Pure decision, one place.
+    const resolveFinalText = async (realtimeText: string): Promise<string> => {
+      if (cleanTranscription(realtimeText)) return realtimeText;
+      if (!recordedFile) return realtimeText;
+      try {
+        const { path } = await audioRecorderService.stopRecording();
+        const fileText = await this.transcribeFile(path);
+        logger.log(`[WhisperService] Realtime captured nothing — file transcript: "${fileText.slice(0, 50)}"`);
+        return fileText;
+      } catch (fileErr) {
+        logger.error('[WhisperService] File-transcribe fallback failed:', fileErr);
+        return realtimeText;
+      }
+    };
+
     try {
       // Guard: context could have been released during the async permission check
       if (!this.context) {
         this.isTranscribing = false;
+        if (recordedFile) audioRecorderService.cancelRecording();
         resolveTranscriptionStopped();
         throw new Error('Whisper context was released before transcription could start');
       }
@@ -363,24 +355,41 @@ class WhisperService {
           hasData: !!evt.data,
           text: evt.data?.result?.slice(0, 50),
         });
+        // [WIRE] raw realtime transcription event shape from-device (voice-mode STT path) — full result +
+        // segments + timing, so we can ground the realtime-transcript fixtures (distinct from file transcribe).
+        logger.log(`[WIRE-STT-REALTIME] ${JSON.stringify(evt)}`);
 
         const { isCapturing, data, processTime, recordingTime } = evt;
-        onResult({
-          text: data?.result || '',
-          isCapturing,
-          processTime: processTime || 0,
-          recordingTime: recordingTime || 0,
-        });
 
-        if (!isCapturing) {
-          logger.log('[WhisperService] Recording finished');
+        if (isCapturing) {
+          // Live partial — surface immediately for the "listening…" preview.
+          onResult({
+            text: data?.result || '',
+            isCapturing: true,
+            processTime: processTime || 0,
+            recordingTime: recordingTime || 0,
+          });
+          return;
+        }
+
+        // FINAL: the utterance ended. Deliver the authoritative transcript — the realtime result if
+        // it captured anything, else the file transcript (B26 fix). Emit it as the single final event.
+        logger.log('[WhisperService] Recording finished');
+        void resolveFinalText(data?.result || '').then((finalText) => {
+          onResult({
+            text: finalText,
+            isCapturing: false,
+            processTime: processTime || 0,
+            recordingTime: recordingTime || 0,
+          });
           this.isTranscribing = false;
           this.stopFn = null;
           // Signal that native processing is complete - safe to release context
           resolveTranscriptionStopped();
-        }
+        });
       });
     } catch (error) {
+      if (recordedFile) audioRecorderService.cancelRecording();
       logger.error('[WhisperService] transcribeRealtime error:', error);
       this.isTranscribing = false;
       this.stopFn = null;
@@ -430,6 +439,9 @@ class WhisperService {
     if (fn && this.context) {
       try { fn(); } catch (e) { logger.error('[WhisperService] Error calling stopFn during forceReset:', e); }
     }
+    // Discard the parallel fallback recording (B26/B28) if one is mid-flight — a cancelled/aborted
+    // realtime session must not leave the file recorder capturing (B11-class leak).
+    if (audioRecorderService.isCurrentlyRecording()) audioRecorderService.cancelRecording();
     this.isTranscribing = false;
     this.transcriptionFullyStopped = Promise.resolve();
   }
@@ -453,30 +465,11 @@ class WhisperService {
       onProgress: options?.onProgress,
     });
 
-    const { result } = await promise;
+    const __res = await promise;
+    logger.log(`[WIRE-STT] ${JSON.stringify(__res)}`); // [WIRE] raw whisper.rn transcribe result (segments/text) from-device
+    const { result } = __res;
     return cleanTranscription(result);
   }
-}
-
-/**
- * Normalize a raw Whisper transcription: strip the non-speech markers Whisper
- * emits for silence/noise — [BLANK_AUDIO], [ Silence ], [MUSIC], (inaudible),
- * (speaking foreign language), etc. — and return '' when nothing but markers
- * (or punctuation) remains. Without this, a silent/too-short clip returned the
- * literal "[BLANK_AUDIO]" token, which then got SENT as the message text instead
- * of being treated as "couldn't hear that". The single place this rule lives, so
- * every path (file + realtime) treats no-speech identically.
- */
-export function cleanTranscription(raw: string): string {
-  if (!raw) return '';
-  const stripped = raw
-    .replace(/\[[^\]]*\]/g, ' ') // [BLANK_AUDIO], [ Silence ], [MUSIC]
-    .replace(/\([^)]*\)/g, ' ')  // (silence), (speaking foreign language)
-    .replace(/\s+/g, ' ')
-    .trim();
-  // Only markers / punctuation left → no real speech.
-  if (!/[a-z0-9]/i.test(stripped)) return '';
-  return stripped;
 }
 
 export const whisperService = new WhisperService();

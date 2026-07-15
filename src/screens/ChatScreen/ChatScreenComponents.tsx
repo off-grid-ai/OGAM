@@ -12,7 +12,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AttachStep } from 'react-native-spotlight-tour';
 import { ModelSelectorModal } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
-import { llmService } from '../../services';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
@@ -79,7 +78,6 @@ export const NoModelScreen: React.FC<{
       onSelectModel={onSelectModel}
       onUnloadModel={onUnloadModel}
       isLoading={isModelLoading}
-      currentModelPath={llmService.getLoadedModelPath()}
     />
   </SafeAreaView>
 );

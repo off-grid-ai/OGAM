@@ -4,12 +4,12 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../AppSheet';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore, useRemoteServerStore } from '../../stores';
+import { useLoadedTextModelPath } from '../../hooks/useLoadedTextModelPath';
 import { DownloadedModel, ONNXImageModel, RemoteModel } from '../../types';
 import { activeModelService, llmService, remoteServerManager } from '../../services';
 import { loadModelWithOverride } from '../../services/loadModelWithOverride';
@@ -33,7 +33,6 @@ interface ModelSelectorModalProps {
   onUnloadModel: () => void;
   onUnloadImageModel?: () => void;
   isLoading: boolean;
-  currentModelPath: string | null;
   initialTab?: TabType;
   onAddServer?: () => void;
   onSelectionComplete?: () => void;
@@ -48,7 +47,6 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   onUnloadModel,
   onUnloadImageModel,
   isLoading,
-  currentModelPath,
   initialTab = 'text',
   onAddServer,
   onSelectionComplete,
@@ -57,6 +55,10 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createAllStyles);
   const { downloadedModels, downloadedImageModels, activeImageModelId, activeModelId } = useAppStore();
+  // "Currently loaded" comes from the ONE reactive source (ActiveModelService's loaded state, projected to
+  // the store) — engine-agnostic and never stale. Callers no longer pass it, so the sheet can't disagree
+  // with the overview (which reads activeModelId, the SELECTION). See useLoadedTextModelPath.
+  const currentModelPath = useLoadedTextModelPath();
   // Under deferred loading no model is loaded until first send, so `currentModelPath`
   // (the loaded path) is null and the switcher would show "Available Models" with
   // nothing marked active. Fall back to the SELECTED model so the user can see and
@@ -73,6 +75,19 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
 
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
+  // The image model currently being LOADED (the row the user just tapped) — distinct from
+  // activeImageModelId, which only flips to the new model on success. The row spinner keys off THIS,
+  // else it shows on the previously-active model instead of the one that's loading (device 2026-07-14).
+  const [loadingImageModelId, setLoadingImageModelId] = useState<string | null>(null);
+  // Same for text: the row the user tapped, so a switch (e.g. gemma llama → gemma litert) spins the NEW
+  // row, not the still-loaded old one. isLoading is the parent's signal; clear when it goes false.
+  const [loadingTextModelId, setLoadingTextModelId] = useState<string | null>(null);
+  useEffect(() => { if (!isLoading) setLoadingTextModelId(null); }, [isLoading]);
+  // Which text row shows the spinner: the row the user tapped, OR — when a load is in flight with no
+  // explicit tap — the active model being (re)loaded. The "model settings changed, reload" card opens
+  // this sheet and reloads the SAME active model (id unchanged), so without this fallback the sheet opens
+  // with a highlighted-but-idle row and no spinner, which reads as broken (device 2026-07-14).
+  const effectiveLoadingTextModelId = loadingTextModelId ?? (isLoading ? activeModelId : null);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
   const filteredDownloadedModels = useMemo(
@@ -111,8 +126,8 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
       (opts) => activeModelService.loadImageModel(model.id, undefined, opts),
       {
         setAlertState,
-        onAttemptStart: () => setIsLoadingImage(true),
-        onAttemptEnd: () => setIsLoadingImage(false),
+        onAttemptStart: () => { setIsLoadingImage(true); setLoadingImageModelId(model.id); },
+        onAttemptEnd: () => { setIsLoadingImage(false); setLoadingImageModelId(null); },
         onSuccess: () => {
           setActiveRemoteImageModelId(null); // clear remote selection when selecting local
           onSelectImageModel?.(model);
@@ -165,6 +180,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   // Handle selecting a local model - clear remote selection
   const handleSelectLocalModel = (model: DownloadedModel) => {
     remoteServerManager.clearActiveRemoteModel();
+    setLoadingTextModelId(model.id); // spinner goes on THE ROW JUST TAPPED, not the old active one
     onSelectModel(model);
   };
 
@@ -212,12 +228,8 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
           </TouchableOpacity>
         </View>
 
-        {isAnyLoading && (
-          <View style={styles.loadingBanner}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.loadingText}>Loading model...</Text>
-          </View>
-        )}
+        {/* Text-model loading now shows an inline spinner ON the selected row (TextTab → ModelRow),
+            not a banner over the list. The image tab keeps its own indicator, so no banner for text. */}
 
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
           {activeTab === 'text' ? (
@@ -228,6 +240,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
               selectedModelPath={selectedModelPath}
               currentRemoteModelId={activeRemoteTextModelId}
               isAnyLoading={isAnyLoading}
+              loadingModelId={effectiveLoadingTextModelId}
               onSelectModel={handleSelectLocalModel}
               onSelectRemoteModel={handleSelectRemoteTextModel}
               onUnloadModel={handleUnloadModel}
@@ -242,6 +255,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
               activeRemoteImageModelId={activeRemoteImageModelId}
               isAnyLoading={isAnyLoading}
               isLoadingImage={isLoadingImage}
+              loadingModelId={loadingImageModelId}
               onSelectImageModel={handleSelectImageModel}
               onSelectRemoteVisionModel={handleSelectRemoteVisionModel}
               onUnloadImageModel={handleUnloadImageModel}

@@ -3,7 +3,7 @@ import { activeModelService } from './activeModelService';
 import { DownloadedModel } from '../types';
 import logger from '../utils/logger';
 
-export type Intent = 'image' | 'text';
+type Intent = 'image' | 'text';
 
 interface ClassifyOptions {
   useLLM: boolean;
@@ -316,8 +316,10 @@ Answer:`;
             timestamp: Date.now(),
           },
         ],
-        (data) => {
-          if (data.content) response += data.content;
+        {
+          onStream: (data) => {
+            if (data.content) response += data.content;
+          },
         },
       );
     } finally {

@@ -9,70 +9,31 @@
  *
  * See docs/design/MODEL_ROUTING.md §5.1–5.2.
  */
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { hardwareService } from '../hardware';
 import logger from '../../utils/logger';
 import {
   planEviction,
   computeBudgetMB,
   Resident,
-  ResidentType,
 } from './policy';
-import { LoadPolicy, OVERRIDE_SURVIVAL_FLOOR_MB } from '../memoryBudget';
-
-type UnloadFn = () => Promise<void>;
-
-/** Hard floor so a small model can always load, even under memory pressure. */
-const MIN_BUDGET_MB = 1024;
-/** For DIRTY-memory models (CoreML/ONNX image): keep this much real RAM free for the
- *  OS + other apps so a dirty load never spills into swap. (Not applied to mmap'd
- *  GGUF - their clean weights don't pressure this limit.) */
-const DIRTY_AVAILABILITY_HEADROOM_MB = 1024;
-/** Aggressive-mode dirty headroom - leaner, still non-zero (lenient safeguard). */
-const AGGRESSIVE_DIRTY_HEADROOM_MB = 512;
-/** Small, cheaply-reloadable models reclaimed first under memory pressure. */
-const SIDECAR_TYPES = new Set<ResidentType>(['whisper', 'tts', 'embedding']);
-
-interface RegisteredResident extends Resident {
-  unload: UnloadFn;
-  /** Owner's veto: returns false when the model is in use right now (e.g. TTS is
-   *  playing) so residency never evicts it mid-use. Absent → always evictable. */
-  canEvict?: () => boolean;
-}
-
-export interface ResidentSpec {
-  key: string;
-  type: ResidentType;
-  /** The specific downloaded-model id - keys the per-model session override memory.
-   *  (`key` is only the slot/type, e.g. 'text', so it can't distinguish models.) */
-  modelId?: string;
-  sizeMB: number;
-  pinned?: boolean;
-  /** Owner's veto: returns false while the model is in use (e.g. TTS playing) so
-   *  residency never evicts it mid-use. Absent → always evictable. */
-  canEvict?: () => boolean;
-  /**
-   * Whether the model's weights occupy DIRTY (anonymous, jetsam-counted) memory -
-   * the gap modeled as DATA, not a Platform/type branch in the budget.
-   *  - false (default): mmap-backed GGUF (llama text / whisper). Weights are CLEAN,
-   *    file-backed pages the OS pages freely; they do NOT pressure os_proc_available.
-   *    Bounded by PHYSICAL RAM only - so an 8GB GGUF loads on a 12GB phone.
-   *  - true: CoreML/ONNX image weights load into dirty/GPU memory that DOES count
-   *    against the jetsam limit → also bounded by real free RAM (os_proc_available)
-   *    so it never loads into swap.
-   */
-  dirtyMemory?: boolean;
-}
-
-export interface EnsureResult {
-  loaded: boolean;
-  evicted: string[];
-}
-
-const stripUnload = ({
-  unload: _unload,
-  ...rest
-}: RegisteredResident): Resident => rest;
+import { LoadPolicy, effectiveAvailableMB } from '../memoryBudget';
+import {
+  formatMakeRoomForLine,
+  formatOverrideForcingLine,
+  formatOverrideForcedLine,
+} from './logging';
+import {
+  UnloadFn,
+  MIN_BUDGET_MB,
+  DIRTY_AVAILABILITY_HEADROOM_MB,
+  AGGRESSIVE_DIRTY_HEADROOM_MB,
+  SIDECAR_TYPES,
+  RegisteredResident,
+  ResidentSpec,
+  EnsureResult,
+  stripUnload,
+} from './residents';
 
 class ModelResidencyManager {
   private readonly residents = new Map<string, RegisteredResident>();
@@ -247,8 +208,17 @@ class ModelResidencyManager {
       return Math.round(Math.max(MIN_BUDGET_MB, physicalCapMB));
     }
     // Under dirty pressure: also gate on real free RAM (+ evictable residents − OS
-    // headroom). This is the single owner of the live os_proc budget.
-    const availableMB = hardwareService.getAvailableMemoryGB() * 1024;
+    // headroom). Use the reclaimable-aware availability (the SAME owner the override
+    // survival floor reads) — on Android a foreground load may commit up to the physical
+    // budget because the OS reclaims background apps, so a raw availMem snapshot here
+    // under-counted and refused a dirty model the override path then loaded fine (B1).
+    // iOS gets NO reclaim credit (jetsam kills US, not background apps) so this stays the
+    // raw snapshot there — which is what refuses a clean sidecar piled onto a dirty spike.
+    const availableMB = effectiveAvailableMB(
+      hardwareService.getAvailableMemoryGB() * 1024,
+      hardwareService.getTotalMemoryGB() * 1024,
+      { platform: Platform.OS, policy: this.loadPolicy },
+    );
     const residentMB = [...this.residents.values()].reduce(
       (sum, r) => sum + r.sizeMB,
       0,
@@ -332,7 +302,10 @@ class ModelResidencyManager {
     // Aggressive policy (or an override) keeps ONE model at a time: evict every evictable
     // resident instead of co-residing whatever fits, so the incoming model gets the
     // maximum RAM. Balanced mode keeps smart co-residency.
-    const singleModel = this.loadPolicy === 'aggressive' || override;
+    // Conservative = ONE model at a time (evict everything else). Override ("Load Anyway")
+    // also evicts everything to free maximum RAM. Aggressive is NOT single-model — it
+    // co-resides like balanced, just with a larger RAM budget.
+    const singleModel = this.loadPolicy === 'conservative' || override;
     const plan = planEviction(residents, spec, budgetMB, { singleModel });
     // [MEM-SM] trace (kept forever): the exact numbers behind every fit decision.
     // budgetForSpec already folds in the live os_proc budget under dirty pressure, so
@@ -342,17 +315,27 @@ class ModelResidencyManager {
     const availMB = Math.round(hardwareService.getAvailableMemoryGB() * 1024);
     const totalMB = Math.round(hardwareService.getTotalMemoryGB() * 1024);
     logger.log(
-      `[MEM-SM] makeRoomFor ${spec.key} sizeMB=${
-        spec.sizeMB
-      } dirty=${!!spec.dirtyMemory} budgetMB=${budgetMB} os_procAvailMB=${availMB} totalMB=${totalMB} residents=[${residents
-        .map(r => `${r.key}:${r.sizeMB}${r.pinned ? '(pinned)' : ''}`)
-        .join(',')}] fits=${plan.fits} evict=[${plan.evict
-        .map(e => e.key)
-        .join(',')}]`,
+      formatMakeRoomForLine({ spec, budgetMB, availMB, totalMB, residents, plan }),
     );
-    if (!plan.fits && !override) {
-      // Won't fit even after the planned evictions - DON'T evict (otherwise we'd
-      // strand the device with nothing). The caller blocks the load (overridable).
+    // SECOND GATE — the dirty physical ceiling. Aggressive mode's larger RAM fraction is safe for
+    // CLEAN (mmap, pageable) weights, but NOT for a DIRTY model whose un-pageable GPU/anonymous
+    // pages can't be zram-backed: committing 88% of RAM to dirty pages jetsams. So a dirty model's
+    // footprint (the incoming + any dirty residents that STAY) is bounded by the BALANCED physical
+    // ceiling regardless of policy — a genuinely-oversized dirty model (9GB on a 12GB phone) is
+    // refused even in aggressive (overridable via Load Anyway), while a reasonable dirty model that
+    // fits the balanced ceiling still co-resides on aggressive's larger total budget. This is
+    // INDEPENDENT of the total-budget check above, so it never changes the clean+dirty swap cases
+    // (a large image still evicts a resident text via the total budget).
+    const dirtyCeilingMB = computeBudgetMB(totalMB, { policy: 'balanced' });
+    const keptDirtyMB = residents
+      .filter(r => r.dirtyMemory && !plan.evict.some(e => e.key === r.key))
+      .reduce((sum, r) => sum + r.sizeMB, 0);
+    const dirtyFootprintMB = (spec.dirtyMemory ? spec.sizeMB : 0) + keptDirtyMB;
+    const dirtyCeilingExceeded = !!spec.dirtyMemory && dirtyFootprintMB > dirtyCeilingMB;
+
+    if ((!plan.fits || dirtyCeilingExceeded) && !override) {
+      // Won't fit even after the planned evictions (total budget OR the dirty ceiling) - DON'T
+      // evict (otherwise we'd strand the device with nothing). The caller blocks the load (overridable).
       return { evicted: [], fits: false };
     }
     // Override ("Load Anyway"): the user explicitly accepted the risk (this call or
@@ -364,23 +347,28 @@ class ModelResidencyManager {
     // estimate is what users defeated with "load a small model, wait, then load the big
     // one" - and why tapping "Load Anyway" still failed.
     if (!plan.fits && override) {
-      logger.log(
-        `[MEM-SM] makeRoomFor ${
-          spec.key
-        } OVERRIDE - forcing load after evicting [${plan.evict
-          .map(e => e.key)
-          .join(',')}]`,
-      );
+      logger.log(formatOverrideForcingLine(spec.key, plan.evict));
     }
+    const actuallyEvicted: string[] = [];
+    let unloadFailed = false;
     for (const victim of plan.evict) {
       const reg = this.residents.get(victim.key);
       if (!reg) continue;
-      await reg
-        .unload()
-        .catch(err =>
-          logger.log(`[ModelResidency] unload ${victim.key} failed:`, err),
-        );
-      this.residents.delete(victim.key);
+      try {
+        await reg.unload();
+        this.residents.delete(victim.key);
+        actuallyEvicted.push(victim.key);
+      } catch (err) {
+        // The native unload REJECTED — the victim still holds its RAM. Do NOT delete it
+        // from the budget map (counting phantom-freed memory over-commits the incoming
+        // load → OOM). Keep it resident and abort the fit.
+        logger.log(`[ModelResidency] unload ${victim.key} failed:`, err);
+        unloadFailed = true;
+        break;
+      }
+    }
+    if (unloadFailed) {
+      return { evicted: actuallyEvicted, fits: false };
     }
     // Survival floor: even an override can't cross physics. Now that the evictions have
     // ACTUALLY happened (iOS has reclaimed the unloaded pages), re-read real free RAM and
@@ -389,20 +377,12 @@ class ModelResidencyManager {
     // SIGKILL (uncatchable) mid-load. This is the real physics guard; measuring after the
     // real unload (not predicting) is what stops the false refusals.
     if (override) {
-      await hardwareService.refreshMemoryInfo().catch(() => {});
-      const realAvailMB = Math.round(
-        hardwareService.getAvailableMemoryGB() * 1024,
-      );
-      const incomingDirtyMB = spec.dirtyMemory ? spec.sizeMB : 0;
-      const postLoadFreeMB = realAvailMB - incomingDirtyMB;
-      if (postLoadFreeMB < OVERRIDE_SURVIVAL_FLOOR_MB) {
-        logger.log(
-          `[MEM-SM] makeRoomFor ${spec.key} REFUSED even under override - real post-evict free ~${postLoadFreeMB}MB < survival floor ${OVERRIDE_SURVIVAL_FLOOR_MB}MB`,
-        );
-        return { evicted: plan.evict.map(e => e.key), fits: false };
-      }
+      // Load Anyway is unconditional: the user explicitly accepted the risk, so we evict
+      // everything else (via singleModel above) to free maximum RAM and load — NO survival
+      // floor, NO refusal. The UI frames it as "not recommended, but you can try".
+      logger.log(formatOverrideForcedLine(spec.key, plan.evict));
     }
-    return { evicted: plan.evict.map(e => e.key), fits: true };
+    return { evicted: actuallyEvicted, fits: true };
   }
 
   async ensureResident(
@@ -410,10 +390,16 @@ class ModelResidencyManager {
     handlers: { load: () => Promise<void>; unload: UnloadFn },
     now: number = Date.now(),
   ): Promise<EnsureResult> {
-    const { evicted } = await this.makeRoomFor(spec);
+    const { evicted, fits } = await this.makeRoomFor(spec);
 
     if (this.residents.has(spec.key)) {
       this.markUsed(spec.key, now);
+      return { loaded: false, evicted };
+    }
+
+    // Honor the fit verdict: a model that does not fit must NOT be loaded (the caller
+    // used to invoke the gate then load regardless — the STT/OOM bug class).
+    if (!fits) {
       return { loaded: false, evicted };
     }
 
@@ -429,6 +415,20 @@ class ModelResidencyManager {
   /** Forget a resident the owner has already unloaded (no unload call). */
   release(key: string): void {
     this.residents.delete(key);
+  }
+
+  /** Eject a single resident and ACTUALLY unload it from RAM (unlike release(), which only forgets the
+   *  accounting). Used by the model selector's per-model Eject. Runs under the FIFO lock like every other
+   *  load/unload. Returns true if a resident was found and ejected. */
+  async evictByKey(key: string): Promise<boolean> {
+    return this.runExclusive(`evict:${key}`, async () => {
+      const r = this.residents.get(key);
+      if (!r) return false;
+      await r.unload().catch(err => logger.log(`[ModelResidency] evict ${key} unload failed:`, err));
+      this.residents.delete(key);
+      logger.log(`[ModelResidency] evicted ${r.type} (${key}) by user request`);
+      return true;
+    });
   }
 
   /**
@@ -460,10 +460,14 @@ class ModelResidencyManager {
       logger.log(
         '[ModelResidency] reclaiming idle STT for generation turn (memory-tight)',
       );
-      await w
-        .unload()
-        .catch(err => logger.log('[ModelResidency] STT reclaim failed:', err));
-      this.residents.delete('whisper');
+      try {
+        await w.unload();
+        this.residents.delete('whisper');
+      } catch (err) {
+        // Native unload REJECTED — whisper still holds its RAM. Keep it counted resident so
+        // the next load sizes against real (not phantom-freed) memory rather than OOMing.
+        logger.log('[ModelResidency] STT reclaim failed:', err);
+      }
     });
   }
 
@@ -477,4 +481,4 @@ class ModelResidencyManager {
 }
 
 export const modelResidencyManager = new ModelResidencyManager();
-export type { Resident, ResidentType } from './policy';
+;

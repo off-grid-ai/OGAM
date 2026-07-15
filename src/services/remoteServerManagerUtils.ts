@@ -57,27 +57,9 @@ export async function removeApiKeyImpl(serverId: string): Promise<void> {
 // Capability detectors (pure)
 // ---------------------------------------------------------------------------
 
-export function detectVisionCapability(modelId: string): boolean {
-  const patterns = [
-    '-vl', 'vl-', ':vl',   // common VL naming (qwen3-vl, llava, etc.)
-    'vision', 'llava', 'bakllava', 'moondream', 'cogvlm',
-    'cogagent', 'fuyu', 'idefics', 'qwen-vl', 'gpt-4-vision',
-    'gpt-4o', 'claude-3', 'gemini', 'pixtral', 'phi-3.5-vision',
-    'minicpm-v', 'internvl', 'yi-vl',
-  ];
-  return patterns.some(p => modelId.toLowerCase().includes(p));
-}
-
-export function detectToolCallingCapability(modelId: string): boolean {
-  const patterns = [
-    'gpt-4', 'gpt-3.5-turbo', 'claude', 'gemini', 'mistral',
-    'qwen', 'llama-3', 'command-r', 'dbrx', 'firefunction',
-  ];
-  const lower = modelId.toLowerCase();
-  if (patterns.some(p => lower.includes(p))) return true;
-  if (lower.includes('tool') || lower.includes('function')) return true;
-  return false;
-}
+// The pure capability detectors live in utils/remoteCapabilityDetect so the store layer can import
+// them without depending on this (store-touching) service — that was a cycle. Re-exported here.
+export { detectVisionCapability, detectToolCallingCapability } from '../utils/remoteCapabilityDetect';
 
 // ---------------------------------------------------------------------------
 // Provider creation

@@ -171,7 +171,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     textAlign: 'center' as const,
   },
   repairingBadge: {
-    backgroundColor: `${colors.warning}20`,
+    backgroundColor: `${colors.primary}20`,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     borderRadius: 6,
@@ -181,7 +181,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   repairingBadgeText: {
     ...TYPOGRAPHY.meta,
-    color: colors.warning,
+    color: colors.primary,
   },
   filterBarContent: {
     flexDirection: 'row' as const,

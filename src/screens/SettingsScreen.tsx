@@ -30,7 +30,7 @@ import RNFS from 'react-native-fs';
 import { useAppStore, useRemoteServerStore } from '../stores';
 import { hardwareService } from '../services';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
-import { GITHUB_URL, shareOnX } from '../utils/sharePrompt';
+import { GITHUB_URL, FOLLOW_X_URL, SLACK_INVITE_URL, shareOnX } from '../utils/sharePrompt';
 import { clearProForTesting } from '../services/proLicenseService';
 import { useProStatusLabel } from '../hooks/useProStatusLabel';
 import packageJson from '../../package.json';
@@ -238,8 +238,48 @@ export const SettingsScreen: React.FC = () => {
           </TouchableOpacity>
         </AnimatedEntry>
 
-        {/* Community */}
+        {/* Stay in the loop */}
         <AnimatedEntry index={7} staggerMs={40} trigger={focusTrigger}>
+          <View style={styles.followSection}>
+            <View style={styles.followHeader}>
+              <Text style={styles.followHeaderTitle}>Stay in the loop</Text>
+              <Text style={styles.followHeaderDesc}>
+                New features land here first, subscribers get promo discounts, and your feedback shapes what gets built next.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.navItem}
+              testID="follow-on-x"
+              onPress={() => Linking.openURL(FOLLOW_X_URL)}
+            >
+              <View style={styles.followItemIcon}>
+                <Icon name="twitter" size={16} color={colors.primary} />
+              </View>
+              <View style={styles.navItemContent}>
+                <Text style={styles.navItemTitle}>Follow @alichherawalla on X</Text>
+                <Text style={styles.navItemDesc}>Feature drops, promo discounts, roadmap</Text>
+              </View>
+              <Icon name="external-link" size={14} color={colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.navItem, styles.navItemLast]}
+              testID="join-slack"
+              onPress={() => Linking.openURL(SLACK_INVITE_URL)}
+            >
+              <View style={styles.followItemIcon}>
+                <IconMC name="slack" size={16} color={colors.primary} />
+              </View>
+              <View style={styles.navItemContent}>
+                <Text style={styles.navItemTitle}>Join the Slack community</Text>
+                <Text style={styles.navItemDesc}>Issues fixed fast, debug together, early access</Text>
+              </View>
+              <Icon name="external-link" size={14} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </AnimatedEntry>
+
+        {/* Community */}
+        <AnimatedEntry index={8} staggerMs={40} trigger={focusTrigger}>
           <View style={styles.navSection}>
             <TouchableOpacity style={styles.navItem} onPress={() => Linking.openURL(GITHUB_URL)}>
               <View style={styles.navItemIcon}>
@@ -275,7 +315,7 @@ export const SettingsScreen: React.FC = () => {
         </AnimatedEntry>
 
         {/* About */}
-        <AnimatedEntry index={8} staggerMs={40} trigger={focusTrigger}>
+        <AnimatedEntry index={9} staggerMs={40} trigger={focusTrigger}>
           <View style={styles.navSection}>
             <TouchableOpacity style={[styles.navItem, styles.navItemLast]} onPress={() => navigation.navigate('About')}>
               <View style={styles.navItemIcon}>
@@ -291,7 +331,7 @@ export const SettingsScreen: React.FC = () => {
         </AnimatedEntry>
 
         {/* Privacy */}
-        <AnimatedEntry index={9} staggerMs={40} trigger={focusTrigger}>
+        <AnimatedEntry index={10} staggerMs={40} trigger={focusTrigger}>
           <Card style={styles.privacyCard}>
             <View style={styles.privacyIconContainer}>
               <Icon name="shield" size={18} color={colors.textSecondary} />
@@ -309,7 +349,7 @@ export const SettingsScreen: React.FC = () => {
 
         {/* Dev-only tooling — stripped from release builds */}
         {__DEV__ && (
-          <AnimatedEntry index={10} staggerMs={40} trigger={focusTrigger}>
+          <AnimatedEntry index={11} staggerMs={40} trigger={focusTrigger}>
             <View style={styles.devButtonGroup}>
               <TouchableOpacity style={styles.devButton} onPress={handleResetOnboarding}>
                 <Icon name="rotate-ccw" size={14} color={colors.textMuted} />
@@ -378,6 +418,22 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   navItemContent: { flex: 1 },
   navItemTitle: { ...TYPOGRAPHY.body, fontWeight: '400' as const, color: colors.text },
   navItemDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, marginTop: 2 },
+  followSection: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    marginBottom: SPACING.lg,
+    overflow: 'hidden' as const,
+    borderWidth: 1,
+    borderColor: `${colors.primary}40`, // emerald accent so it stands out above About
+    ...shadows.small,
+  },
+  followHeader: { padding: SPACING.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  followHeaderTitle: { ...TYPOGRAPHY.body, fontWeight: '400' as const, color: colors.primary },
+  followHeaderDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, marginTop: 4, lineHeight: 18 },
+  followItemIcon: {
+    width: 28, height: 28, borderRadius: 6, backgroundColor: `${colors.primary}1A`,
+    alignItems: 'center' as const, justifyContent: 'center' as const, marginRight: SPACING.md,
+  },
   section: { marginBottom: SPACING.lg },
   aboutRow: {
     flexDirection: 'row' as const, justifyContent: 'space-between' as const,

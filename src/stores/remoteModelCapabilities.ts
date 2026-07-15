@@ -308,8 +308,11 @@ const propsInFlight = new Map<string, Promise<RemoteModelInfo | null>>();
 
 /** De-duplicated wrapper around fetchLlamaCppProps — one /props call per endpoint. */
 export function fetchLlamaCppPropsCached(endpoint: string): Promise<RemoteModelInfo | null> {
+  // Deliberate in-flight-promise cache: return the pending promise un-awaited so concurrent
+  // callers share one fetch. Explicit presence check (not a truthiness/await smell) so the
+  // Promise-in-conditional rule (S6544) doesn't misread it as a forgotten await.
   const existing = propsInFlight.get(endpoint);
-  if (existing) return existing;
+  if (existing !== undefined) return existing;
   const p = fetchLlamaCppProps(endpoint).finally(() => propsInFlight.delete(endpoint));
   propsInFlight.set(endpoint, p);
   return p;
@@ -325,7 +328,7 @@ function asObject(v: unknown): Record<string, unknown> | null {
  * payload carries no capability data (not a llama.cpp server) so the caller can
  * fall through to other detection arms. Pure — no I/O — so it is unit-testable.
  */
-export function parsePropsCapabilities(data: unknown): RemoteModelInfo | null {
+function parsePropsCapabilities(data: unknown): RemoteModelInfo | null {
   const root = asObject(data);
   if (!root) return null;
 

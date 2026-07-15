@@ -37,14 +37,13 @@ import {
   importLocalModel as scanImportLocalModel,
   reconcileFinishedImageDownloads as reconcileImageDownloads,
   isMMProjFile,
-  extractBaseName,
-  findMatchingMmProj,
   ImportLocalModelOpts,
 } from './scan';
+import { mmProjBelongsToModel, pickMmProjForModel } from '../mmproj';
 import { resolveStoredPath, determineCredibility } from './storage';
 
-export type { BackgroundDownloadMetadataCallback } from './types';
-export { MODELS_STORAGE_KEY, IMAGE_MODELS_STORAGE_KEY } from './storage';
+;
+;
 
 class ModelManager {
   private readonly modelsDir: string;
@@ -83,16 +82,22 @@ class ModelManager {
     const toSave: typeof models = [];
     for (const m of models) {
       if (m.engine !== 'llama') continue;
-      const baseName = extractBaseName(m.fileName);
-      const match = findMatchingMmProj(baseName, mmProjFiles);
+      // Strict match (shared rule): the projector must belong to THIS model by name+variant. This is the
+      // SAME rule the loader uses, so link-time and load-time can no longer disagree (the E2B↔E4B split).
+      const chosenName = pickMmProjForModel(m.fileName, mmProjFiles.map(f => f.name));
+      const match = chosenName ? mmProjFiles.find(f => f.name === chosenName) : undefined;
 
       if (m.mmProjPath) {
-        // Clear link if the stored file no longer exists OR doesn't name-match this model
-        const nameMatch = findMatchingMmProj(baseName, [{ name: m.mmProjPath.split('/').pop() ?? '', path: m.mmProjPath, isFile: () => true } as RNFS.ReadDirResItemT]);
+        // Clear the link if the stored file no longer exists OR doesn't belong to this model (strict).
+        const belongs = mmProjBelongsToModel(m.fileName, m.mmProjPath.split('/').pop() ?? '');
         const fileExists = await RNFS.exists(m.mmProjPath).catch(() => false);
-        if (!fileExists || !nameMatch) {
+        if (!fileExists || !belongs) {
           logger.log(`[linkOrphanMmProj] ${m.id} — clearing bad link: ${m.mmProjPath}`);
-          toSave.push({ ...m, mmProjPath: undefined, mmProjFileName: undefined, mmProjFileSize: undefined, isVisionModel: false });
+          // Clear only the dead/wrong on-disk pointer — KEEP isVisionModel + mmProjFileName so the model is
+          // still recognized as a vision model that NEEDS REPAIR (needsVisionRepair → true → the wrench and
+          // the "download the vision file" prompt appear). Wiping the vision flag made it look like a plain
+          // text model, hiding the repair path entirely (device 2026-07-14).
+          toSave.push({ ...m, mmProjPath: undefined, mmProjFileSize: undefined, isVisionModel: true });
         }
         // If link is valid, leave it alone
       } else if (match) {
@@ -227,7 +232,7 @@ class ModelManager {
     ctx.mmProjCompleted = false;
     ctx.mmProjCompleteHandled = false;
     if (!ctx.mmProjLocalPath && ctx.file.mmProjFile) {
-      ctx.mmProjLocalPath = `${this.modelsDir}/${mmProjLocalName(ctx.file.name)}`;
+      ctx.mmProjLocalPath = `${this.modelsDir}/${mmProjLocalName(ctx.file.name, ctx.file.mmProjFile?.name)}`;
     }
   }
 
@@ -324,6 +329,22 @@ class ModelManager {
       modelId, file, modelsDir: this.modelsDir, ...opts,
     });
     await this.saveModelWithMmproj(`${modelId}/${file.name}`, resolvedPath);
+  }
+
+  /**
+   * Heal the DURABLE vision flag on a record from the authoritative catalog (the repo ships an mmproj).
+   * The old link cleanup wiped isVisionModel on some records, so the Download Manager — which has no catalog —
+   * showed them as plain text. Persisting the truth here makes the record the SINGLE source both surfaces
+   * read. No-op if already set (so it's safe to call on render/focus). Returns true if it changed anything.
+   */
+  async markVisionModel(modelId: string): Promise<boolean> {
+    const models = await this.getDownloadedModels();
+    const target = models.find(m => m.id === modelId);
+    if (!target || target.engine !== 'llama' || target.isVisionModel) return false;
+    const updated = models.map(m => (m.id === modelId ? { ...m, isVisionModel: true } : m));
+    await saveModelsList(updated);
+    useAppStore.getState().setDownloadedModels(updated);
+    return true;
   }
 
   async saveModelWithMmproj(modelId: string, mmProjPath: string): Promise<void> {
@@ -435,4 +456,4 @@ class ModelManager {
 }
 
 export const modelManager = new ModelManager();
-export type { ModelManager };
+;

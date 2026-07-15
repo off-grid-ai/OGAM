@@ -170,6 +170,24 @@ interface CompletedDownloadCardProps {
   isRepairingVision?: boolean;
 }
 
+/** Feather icon for a completed model row. A vision model missing its projector reads as
+ *  "needs repair" (wrench), not "has vision" (eye) — actionable-broken, not a working capability. */
+function modelTypeIconName(item: DownloadItem, needsVisionRepair: boolean): string {
+  if (item.modelType === 'image') return 'image';
+  if (item.modelType === 'tts') return 'volume-2';
+  if (item.modelType === 'stt') return 'mic';
+  if (needsVisionRepair) return 'tool';
+  if (item.isVisionModel) return 'eye';
+  return 'message-square';
+}
+
+function modelTypeIconColor(item: DownloadItem, needsVisionRepair: boolean, colors: ReturnType<typeof useTheme>['colors']): string {
+  if (item.modelType === 'image') return colors.info;
+  if (item.modelType === 'tts' || item.modelType === 'stt') return colors.success;
+  if (needsVisionRepair || item.isVisionModel) return colors.warning;
+  return colors.primary;
+}
+
 export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ item, onDelete, onRepairVision, isRepairingVision = false }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -186,9 +204,9 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
       <View style={styles.downloadHeader}>
         <View style={styles.modelTypeIcon}>
           <Icon
-            name={item.modelType === 'image' ? 'image' : item.modelType === 'tts' ? 'volume-2' : item.modelType === 'stt' ? 'mic' : item.isVisionModel ? 'eye' : 'message-square'}
+            name={modelTypeIconName(item, needsVisionRepair)}
             size={16}
-            color={item.modelType === 'image' ? colors.info : item.modelType === 'tts' || item.modelType === 'stt' ? colors.success : item.isVisionModel ? colors.warning : colors.primary}
+            color={modelTypeIconColor(item, needsVisionRepair, colors)}
           />
         </View>
         <View style={styles.downloadInfo}>
@@ -201,7 +219,7 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
             testID="repair-vision-button"
             onPress={() => onRepairVision(item)}
           >
-            <Icon name="eye" size={18} color={colors.warning} />
+            <Icon name="tool" size={18} color={colors.warning} />
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -215,7 +233,7 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
       {showRepairProgress && (
         <View style={styles.progressContainer} testID="repair-vision-progress">
           <View style={styles.progressBarBackground}>
-            <View style={[styles.progressBarFill, { width: `${Math.round(repairEntry.progress * 100)}%` as const, backgroundColor: colors.warning }]} />
+            <View style={[styles.progressBarFill, { width: `${Math.round(repairEntry.progress * 100)}%` as const, backgroundColor: colors.primary }]} />
           </View>
           <Text style={styles.progressText}>
             {formatBytes(repairEntry.bytesDownloaded)} / {formatBytes(repairEntry.totalBytes)}
@@ -236,7 +254,7 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
         )}
         {isRepairingVision && (
           <View style={styles.repairingBadge} testID="repairing-vision-badge">
-            <ActivityIndicator size="small" color={colors.warning} />
+            <ActivityIndicator size="small" color={colors.primary} />
             <Text style={styles.repairingBadgeText}>Repairing</Text>
           </View>
         )}

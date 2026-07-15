@@ -1,205 +1,276 @@
 # Gaps backlog
 
-Honest register of gaps, regressions, dead code, and "not fully done" items. Each
-entry has a verdict and evidence. The standing gap agent picks these up, closes
-them, and marks them resolved with evidence. Gaps are surfaced, never hidden.
+Honest register of OPEN gaps, regressions, dead code, and "not fully done" items. Each
+entry has a verdict and evidence. The standing gap agent picks these up, closes them, and
+REMOVES them from this file once resolved (the record lives in git history + commit messages).
+This file only ever contains work that is still open.
 
 Verdict legend:
 - **delete-safe** - unreferenced / unreachable and provably unused; remove it.
-- **fix-the-guard** - the branch is SUPPOSED to fire but a condition prevents it; fix the condition (this is a latent bug, not litter).
+- **fix-the-guard** - the branch is SUPPOSED to fire but a condition prevents it; fix the condition (a latent bug, not litter).
 - **instrument-and-revisit** - uncertain trigger; add a `[*-SM]` trace + a Provit journey to observe it live before deciding.
 
 ---
 
-## Dead-code recon - 2026-07-06
+## Tooling gates — remaining follow-ups
 
-Recon sweep (4 parallel agents over disjoint subsystems) for unreferenced exports,
-unreachable branches, duplicated logic, and threaded-but-unread params. All findings
-grep-verified. Nothing deleted yet - this is the register; deletions land as their own
-small PRs after each is confirmed.
+The tooling spine is installed + enforced (depcruise 0 violations, knip 0 issues, sonarjs wired,
+untyped dead-branch rules — all hard CI gates). These three are the open follow-ups:
+
+1. **DIP value-branch ESLint rule.** depcruise catches the IMPORT-edge half of the engine-DIP rule;
+   the VALUE-branch half (`model.engine === 'litert'` comparing a store value) is not an import edge.
+   Guard it with an ESLint `no-restricted-syntax` rule so a new concrete-engine branch in a caller fails.
+
+2. **SonarJS warn→error ratchet.** These rules are at `warn` (tripped on legacy core); ratchet each to
+   `error` as its count hits zero. (`no-duplicate-string` stays OFF — it fights RN style literals.)
+
+   | Rule | Count |
+   |---|---|
+   | sonarjs/prefer-single-boolean-return | 9 |
+   | sonarjs/no-nested-template-literals | 6 |
+   | sonarjs/no-collapsible-if | 2 |
+   | sonarjs/prefer-immediate-return | 1 |
+   | sonarjs/no-duplicated-branches | 1 |
+
+3. **Typed `@typescript-eslint/no-unnecessary-condition` (AI dead-branch killer).** Needs typed linting
+   (`parserOptions.project: ['./tsconfig.json']` — SLOWS eslint) + the typed config. Floods on AI code.
+   CAUTION: many "unnecessary" conditions are DEFENSIVE against untyped runtime data (native bridge,
+   JSON) — blindly deleting them can crash at runtime. So: enable, MEASURE, fix each by hand verifying
+   it's not a real runtime guard (keep + `// eslint-disable` with a reason where the type lies about
+   runtime). Fix-in-waves toward `error`. Companion tsconfig flags to measure: `allowUnreachableCode:false`,
+   `noUnusedLocals/Parameters:true`.
+
+---
+
+## Dead-code recon — open (deferred) items - 2026-07-06
+
+Recon sweep findings that are real but deferred (changing them risks behaviour). The false-positives
+(AU1, AU2, DL4, ML1, ML2 — verified USED by tests/prod) have been dropped from the register.
 
 ### Model-load / generation
-
 | # | Location | Symbol | Verdict | Note |
 |---|----------|--------|---------|------|
-| ML1 | activeModelService/index.ts:~469 | `getCurrentlyLoadedMemoryGB()` (private wrapper) | instrument-and-revisit | CORRECTION: recon said "zero call sites" but tests DO exercise it (integration + memory unit). Test-only API - deleting needs the tests reworked, not a blind delete. |
-| ML2 | activeModelService/index.ts:~475 | `checkMemoryForDualModel()` (public wrapper) | instrument-and-revisit | CORRECTION: exercised by integration tests + mocked in HomeScreen test. Prod never calls it - decide keep-vs-remove in the dead-code PR, with tests. |
 | ML3 | activeModelService/utils.ts:16-17 vs types.ts:48-50 | overhead multipliers (1.2/1.3 hardcoded vs 1.5/1.8 constants) | fix-the-guard | HomeScreen memory display disagrees with the load-path math; import the shared constants |
-| ML4 | useChatModelActions.ts (needsReload double-check) | redundant `&& loadedPath === activeModel.filePath` | instrument-and-revisit | logically impossible to be false; simplify |
-| ML5 | activeModelService/index.ts:~338 + loaders.ts | `cpuOnly: false` (always false) | delete-safe | native CPU-only branch unreachable from TS |
-
-> Note: the recon confirmed the "Load Anyway" flow is NOT dead once the residency gate
-> throws a typed `OverridableMemoryError` (shipped in this PR). Before that, the raised
-> pre-check budget made `canLoad` almost always true, so the pre-check's Load-Anyway was
-> effectively unreachable - the root cause of "Load Anyway stopped happening".
+| ML5 | activeModelService/index.ts:~338 + loaders.ts | `cpuOnly: false` (always false) | delete-safe (deferred) | native CPU-only branch unreachable from TS; removing the arg changes the native call — do as a typed refactor with tests |
 
 ### Download / model-manager
-
 | # | Location | Symbol | Verdict | Note |
 |---|----------|--------|---------|------|
-| DL1 | downloadHydration.ts:33 | `case 'retrying'` in mapNativeStatus | delete-safe | native (iOS+Android) never emits 'retrying' |
-| DL2 | DownloadManagerScreen/items.tsx:51,60,81,91 (+ downloadStatusIcon.ts, downloadErrors.ts, useDownloads.ts) | branches on `status === 'retrying'` | fix-the-guard | unreachable given DL1; remove or document the contract |
-| DL3 | modelManager/types.ts:13 | `BackgroundDownloadMetadataCallback` (@deprecated, no-op) | delete-safe | author-confirmed no-op, still threaded through 3 sites |
-| DL4 | downloadHydration.ts:25 | `export isMmProjFileName` | delete-safe | only used internally; drop the export |
-| DL5 | modelManager/download.ts:454-462 | `isFinalizing` reset only on error | instrument-and-revisit | verify re-entrancy window on success path |
+| DL1 | downloadHydration.ts:33 | `case 'retrying'` in mapNativeStatus | delete-safe (deferred) | native never emits 'retrying'; removing a union value risks exhaustiveness breakage — typed refactor with tests |
+| DL2 | DownloadManagerScreen/items.tsx (+ downloadStatusIcon.ts, downloadErrors.ts, useDownloads.ts) | branches on `status === 'retrying'` | fix-the-guard | unreachable given DL1; remove or document the contract |
+| DL3 | modelManager/types.ts:13 | `BackgroundDownloadMetadataCallback` (@deprecated no-op) | delete-safe (deferred) | author-confirmed no-op, still threaded through 3 sites; needs on-device observation |
+| DL5 | modelManager/download.ts:454-462 | `isFinalizing` reset only on error | instrument-and-revisit | verify re-entrancy window on the success path |
 
 ### Audio / TTS / STT
-
 | # | Location | Symbol | Verdict | Note |
 |---|----------|--------|---------|------|
-| AU1 | whisperStore.ts:172-189 | `deleteModel()` (vs used `deleteModelById`) | delete-safe | zero call sites |
-| AU2 | audioSessionManager.ts:51-57 | `ensurePlayback()` | delete-safe | only referenced in comments |
-| AU3 | whisperService.ts:145-164 (+ store 97-116) | `downloadFromUrl()` | delete-safe | only reached from an unused store action |
 | AU4 | ChatInput/Voice.ts:136-143 | stopRecording early-return guard | fix-the-guard | inverted condition; can't be true when recording |
 | AU5 | whisperService.ts:338-400 | `transcriptionFullyStopped` promise overwrite | fix-the-guard | new start replaces a promise unloadModel may await |
 | AU6 | audioRecorderService.ts:12-14 | `supportsDirectAudioInput()` stub `return true` | instrument-and-revisit | placeholder; add real capability detection |
 
 ### Image-gen / tools / remote
-
 | # | Location | Symbol | Verdict | Note |
 |---|----------|--------|---------|------|
-| IM1 | types/index.ts:314-320 | duplicate `ImageGenerationState` | delete-safe | authoritative def is in imageGenerationService.ts |
-| IM2 | localDreamGenerator.ts:67 (+ loaders.ts:296) | `backend` param always `'auto'` | delete-safe | 'mnn'/'qnn' branches never reached from TS |
+| IM2 | localDreamGenerator.ts:67 (+ loaders.ts:296) | `backend` param always `'auto'` | delete-safe (deferred) | 'mnn'/'qnn' branches never reached from TS; removing the arg changes the native call |
 | IM3 | imageGenerationHelpers.ts:42-44 | iOS short-circuit ignores `backend` | fix-the-guard | 'coreml'/default 'mnn' unreachable on iOS; make explicit |
 | IM4 | localDreamGenerator.ts:236-238 | `hasKernelCache()` wraps `hasOpenCLCache` (name mismatch) | fix-the-guard | rename to match native call |
 | IM5 | localDreamGenerator.ts:231-239 | `clearOpenCLCache`/`hasKernelCache` silent iOS no-op | instrument-and-revisit | throw or gate at call site on iOS |
-
-### Verification pass - 2026-07-06 (before acting)
-
-Every "delete-safe" candidate was re-grepped across `src`, `__tests__`, and `pro/`
-before touching anything. The recon **over-reported**: most flagged symbols are
-actually referenced (largely by tests, some by prod). Blind deletion would have
-broken the suite. Verified outcomes:
-
-- **RESOLVED (removed):**
-  - IM1 - duplicate `ImageGenerationState` in `types/index.ts`: zero importers (every
-    consumer takes the service's version). Deleted.
-  - AU3 - `whisperService.downloadFromUrl` + the `whisperStore.downloadFromUrl` action:
-    no UI/hook/screen/pro caller (custom-URL whisper download was never wired). Removed
-    across service + store + its orphaned tests.
-- **FALSE POSITIVE - verified USED, kept:**
-  - AU1 `whisperStore.deleteModel` - called at whisperStore.ts:180/201 + store test.
-  - AU2 `audioSessionManager.ensurePlayback` - full test suite + whisperService.test call.
-  - DL4 `isMmProjFileName` export - imported by `modelManager/restore.ts` + tested directly.
-  - ML1/ML2 - exercised by integration + memory unit tests (see corrected rows above).
-- **DEFERRED (not "dead", changing risks behaviour - kept out of this PR):**
-  - Unreachable-branch removals (DL1/DL2 `retrying`, IM3/IM7 iOS backend short-circuits):
-    they never execute, but removing a value from a status/type union risks exhaustiveness
-    breakage; do it as a typed refactor with its own tests.
-  - Threaded-constant params (ML5 `cpuOnly`, IM2 `backend:'auto'`): passed to the native
-    bridge; removing the arg changes the native call. Not dead in a way that's safe to cut here.
-  - Race/stub items (AU4/AU5/AU6, DL5, DL3 deprecated-callback threading): need on-device
-    observation before change - `instrument-and-revisit`, not a blind edit.
-
-Net: the genuinely-dead, safe-to-remove set was small (IM1 + AU3). Removed here; the
-rest stay in the register with an honest verdict rather than a risky change.
-
-### Handling policy (how we close these)
-1. **delete-safe** → each removed in a small, single-concern PR with a grep proof of zero references in the description.
-2. **fix-the-guard** → fix the condition, add a fails-before/passes-after test that exercises the now-reachable branch.
-3. **instrument-and-revisit** → add a `[*-SM]` trace + a Provit journey; only decide delete-vs-keep after observing it live.
-4. **Standing gate** → add `knip` (or `ts-prune`) to CI to catch category-1 (unreferenced) dead code continuously, so this register only ever needs the reasoning-heavy categories.
 
 ---
 
 ## Image-gen QNN over-recommendation on non-flagship Snapdragons - 2026-07-08
 
-**Verdict: fix-the-guard (DEFERRED - needs a curated SoC allowlist + on-device rounds, intentionally out of the current release).**
+**Verdict: fix-the-guard (DEFERRED — needs a curated SoC allowlist + on-device rounds).**
 
-**Symptom (observed live on an AC2001 / OnePlus Nord, SoC SM7250):** the app recommends
-a QNN/NPU image model, the user downloads + loads it, and the native local-dream process
-crashes: `Failed to load image model: Server process exited with code 1. Your device
-(SM7250) may not support this model's backend. Try a CPU model instead.` So it recommends
-NPU and then reports NPU unsupported - a self-contradiction.
+Observed live (AC2001 / OnePlus Nord, SoC SM7250): the app recommends a QNN/NPU image model, the
+user downloads + loads it, and the native local-dream process crashes: `Failed to load image model:
+Server process exited with code 1. Your device (SM7250) may not support this model's backend.` So it
+recommends NPU then reports NPU unsupported — a self-contradiction.
 
-**Root cause (`src/services/hardware.ts`):**
-- `classifySmNumber` buckets every non-flagship Snapdragon into `'min'` (the catch-all,
-  the `return 'min'` after the 8gen1/8gen2 sets).
-- `hasNPU = vendor === 'qualcomm' && !!qnnVariant` → `'min'` counts as NPU-capable → `true`.
-- `getQualcommImageRec` returns `recommendedBackend: 'qnn'` for ALL variants (incl. `'min'`),
-  with `compatibleBackends: ['qnn','mnn']`.
-- So a SoC like SM7250 (Hexagon that can't actually run the QNN image binaries) is told QNN
-  works, passes the pre-load gate (`checkImageModelCanLoad` only blocks qnn when `!hasNPU`),
-  and crashes at runtime.
+Root cause (`src/services/hardware.ts`): `classifySmNumber` buckets every non-flagship Snapdragon into
+`'min'`; `hasNPU = vendor === 'qualcomm' && !!qnnVariant` → `'min'` counts as NPU-capable; `getQualcommImageRec`
+returns `recommendedBackend:'qnn'` for ALL variants incl. `'min'`. So SM7250 (Hexagon that can't run
+the QNN binaries) is told QNN works, passes the pre-load gate, and crashes at runtime.
 
-**Fix direction (do properly, not rushed):** QNN capability must be a narrow, verified set
-(8gen1/8gen2, or an explicit allowlist), not "any Snapdragon". Then `hasNPU`/recommendation
-key off ACTUAL QNN-capability; the catch-all recommends `mnn` (reliable GPU/CPU). That fixes
-both the bad recommendation and the runtime crash (the pre-load gate would also block a
-manually-selected qnn model with a clear message instead of a hard crash). Needs device
-verification on affected SoCs (SM7250 and at least one true 8gen1/8gen2) before shipping -
-hence deferred, not patched blind.
-
----
+Fix: QNN capability must be a narrow verified set (8gen1/8gen2 or an explicit allowlist), not "any
+Snapdragon"; `hasNPU`/recommendation key off ACTUAL QNN-capability; the catch-all recommends `mnn`.
+Needs device verification on affected SoCs (SM7250 + a true 8gen1/8gen2) before shipping.
 
 ## Image-gen inline preview not shown on first run - 2026-07-08
 
 **Verdict: instrument-and-revisit (native-emission behaviour, not a JS/UI bug).**
 
-Observed on-device (OnePlus Nord, mnn/OpenCL, first run): the "Generating Image" card
-showed no inline preview thumbnail. The UI IS wired correctly — `ChatScreenComponents`
-renders `imagePreviewPath` when set, fed by imageGenerationService's onPreview →
-appStore. The preview only appears when the NATIVE localdream module includes
-`previewPath` in its progress events (`localDreamGenerator.ts:123`, optional field). No
-preview events were emitted for this run — consistent with first-run OpenCL kernel
-compilation skipping the (expensive) intermediate-latent decode while warming.
-
-Next: confirm whether previews appear on a SECOND (warmed) generation. If they do, this
-is expected first-run behaviour (optionally: show a "preview available after first run"
-hint). If they never appear on mnn, it's a native gap in the localdream preview path to
-fix on the native side — the JS/UI layer is already correct, so no JS change is warranted.
+First run (OnePlus Nord, mnn/OpenCL): the "Generating Image" card showed no inline preview. The UI IS
+wired correctly (`ChatScreenComponents` renders `imagePreviewPath` fed by imageGenerationService's
+onPreview → appStore). The preview only appears when the NATIVE localdream module includes `previewPath`
+in its progress events — none were emitted, consistent with first-run OpenCL kernel compilation skipping
+the intermediate-latent decode. Next: confirm whether previews appear on a SECOND (warmed) generation.
+If yes → expected first-run behaviour (maybe show a hint). If never on mnn → native gap; JS/UI is correct.
 
 ---
 
 ## On-device test session - 2026-07-09 (Qwythos-9B vision + memory, 12GB iPhone/Android)
 
-Surfaced live on real hardware during 0.0.103 vision/memory testing. None caught by the
-green suite — the reason the on-device gate is mandatory. Verdicts + evidence below.
+Surfaced live on real hardware during 0.0.103 vision/memory testing. None caught by the green suite —
+the reason the on-device gate is mandatory.
 
 | # | Finding | Verdict | Evidence |
 |---|---------|---------|----------|
-| OD1 | **Vision (mmproj) dropped on download retry** | fix-the-guard | `[DL-SM]` iPhone: main GGUF failed at 9% ("network connection lost") → auto-retry re-issued `needsMmProj:false, mmProjLocalPath:null` → finalized text-only (`savedEngine:llama`, `mmProjFileExists:false`). release/0.0.103 fix (persist metadataJson) targets this; UNVERIFIED on-device. |
-| OD2 | **Repair Vision has no progress feedback** | fix-the-guard | ~900MB mmproj re-download behind an indeterminate "Repairing…" spinner; `[linkOrphanMmProj] recovered` eventually fired ("Vision Repaired"). Needs determinate progress. USER-SELECTED to fix. |
-| OD3 | **Chat vs Home model-selector inconsistency** | fix-the-guard | `checkMemoryForModel` is called ONLY in `useChatModelActions.ts` (:96, :311). Chat pre-checks (predictive fileSize×1.5 ≈ 8.4GB for the 9B → critical on 12GB → gates behind "Load Anyway"); Home skips the pre-check → loads via `makeRoomFor` (measured) → succeeds. Two surfaces, one decision, divergent logic. USER-SELECTED to fix. |
-| OD4 | **UI freeze on forced heavy load (Load Anyway on 9B multimodal)** | instrument-and-revisit | Only iOS native edge-swipe worked; all RN touchables dead; debug log stopped emitting = JS thread blocked by the synchronous native load of ~6GB + vision projector. The failure the override survival-floor is meant to prevent; installed build predates the release/0.0.103 fix. |
-| OD5 | **Android download retry doesn't resume after network drop** | instrument-and-revisit | `[DL-SM]` android: Qwythos errored at 75% ("Network connection lost"), retry dispatched (WorkManager resume in place) → NO further progress milestones. Partly a real WiFi drop; retry-not-resuming is the reliability gap. |
-| OD6 | **Kokoro TTS asset stuck loop** | instrument-and-revisit | android log: `[KOKORO-DL] checkAssetStatus → downloading (phase=ready progress=1.00 genuineCompletion=false)` spamming — stuck "downloading" while phase=ready/progress=1.0. |
-| OD7 | **Thinking toggle missing for Qwythos-9B in settings** | instrument-and-revisit | Model has reasoning (HF tags: reasoning) + emits `<think>`, but settings shows no thinking toggle. Capability detection gap for community GGUF. |
-| OD8 | **Voice-mode thinking not streamed (appears suddenly)** | instrument-and-revisit | Thinking renders live in text chat but batches in voice mode. Suspected in the audio-layout display path (`pro/audio/ui/AudioModeLayout.tsx`), not just the TTS sentence-queue (`pro/audio/streamingSpeech.ts`). Needs the display seam confirmed before fix. USER-SELECTED to fix. |
+| OD1 | **Vision (mmproj) dropped on download retry** | fix-the-guard | `[DL-SM]` iPhone: main GGUF failed at 9% → auto-retry re-issued `needsMmProj:false, mmProjLocalPath:null` → finalized text-only. release/0.0.103 fix (persist metadataJson) targets this; UNVERIFIED on-device. |
+| OD2 | **Repair Vision has no progress feedback** | fix-the-guard | ~900MB mmproj re-download behind an indeterminate "Repairing…" spinner. Needs determinate progress. USER-SELECTED. |
+| OD3 | **Chat vs Home model-selector inconsistency** | fix-the-guard | `checkMemoryForModel` called ONLY in useChatModelActions.ts. Chat pre-checks (predictive fileSize×1.5 → gates behind "Load Anyway"); Home skips the pre-check → loads via measured makeRoomFor → succeeds. Two surfaces, one decision, divergent logic. USER-SELECTED. |
+| OD4 | **UI freeze on forced heavy load (Load Anyway on 9B multimodal)** | instrument-and-revisit | RN touchables dead; debug log stopped = JS thread blocked by the synchronous native load. Root cause turned out to be threads=1 (see nThreads follow-up below). |
+| OD5 | **Android download retry doesn't resume after network drop** | instrument-and-revisit | `[DL-SM]` android: errored at 75%, retry dispatched → NO further progress. Partly a real WiFi drop; retry-not-resuming is the reliability gap. |
+| OD6 | **Kokoro TTS asset stuck loop** | instrument-and-revisit | `[KOKORO-DL] checkAssetStatus → downloading (phase=ready progress=1.00 genuineCompletion=false)` spamming — stuck "downloading" while phase=ready/progress=1.0. |
+| OD7 | **Thinking toggle missing for Qwythos-9B in settings** | instrument-and-revisit | Model has reasoning + emits `<think>` but settings shows no toggle. Capability detection gap for community GGUF. |
+| OD8 | **Voice-mode thinking not streamed (appears suddenly)** | instrument-and-revisit | Thinking renders live in text chat but batches in voice mode. Suspected in the audio-layout display path (pro/audio/ui/AudioModeLayout.tsx). USER-SELECTED. |
+| OD9 | **TTS speaks tool-call content aloud (voice mode)** | fix-the-guard | DELEGATED (fix/tts-strip-tool-calls). `enqueueReadySentences` runs stripControlTokens per-SENTENCE-fragment, so a `<tool_call>…</tool_call>` spanning sentence boundaries leaks. Fix: withhold+strip whole control-token blocks before segmentation. |
+| OD10 | **TTS stops mid-speak** | instrument-and-revisit | `KOKORO_SPEAK The model is currently generating` + `stream segment FAILED` — a double-speak concurrency collision. Needs speak/stream serialization checked. |
+| OD11 | **Voice mode can't stream TTS alongside a large LLM** | fix-the-guard | With a big model resident, the single-model residency rule blocks the ~82MB Kokoro sidecar even with 4.4GB free; streamingSpeech loops `stream feed SKIP: engine not warm` then falls back to end-of-turn speech. Fix: allow SIDECAR types (tts/whisper/embedding) to co-reside when real free RAM fits them. |
+| OD12 | **9B loads slowly on CPU + feels frozen** | instrument-and-revisit | GPU (Adreno 4.6GB) can't hold the 9.3GB model → CPU fallback; with threads=1 the load took ~1m43s (janky UI). Root cause = nThreads (below). Also: keep UI responsive during a long native load. |
+| OD13 | **Qwythos output goes entirely to reasoning_content, answer undefined** | instrument-and-revisit | `content:undefined, reasoning_content:"The"`, `token:"<|channel>"` while `reasoning_format=deepseek`. Model's actual reasoning delimiters don't match the configured format. Needs per-model reasoning_format detection, or accept it's a bad-fit model. 'auto' native-first (parse-once) may fix it. |
+| OD15 | **"Unable to generate parser for this template / Jinja: Conversation roles must alternate" on model switch after a tool call** | fix-the-guard | llama.rn minja compiling a chat_template that asserts strict user/assistant alternation when tools enabled / history has assistant+tool+assistant. Pre-existing. Fix: catch the LOCAL tool-parser-gen failure and retry WITHOUT tools (app already does this for REMOTE via isToolGrammarError). Separate PR. |
+| OD16 | **Remote model capabilities feel flaky across Ollama / LM Studio / OGA Desktop** | instrument-and-revisit | remoteModelCapabilities has 39 unit + 4 integration tests but all FIXTURE-based. Real flakiness is response-shape variance across provider versions. Fix: capture real /props, /api/show, /v1/models from LIVE instances as fixtures; harden derivation; add a provider-abstraction contract test. Separate workstream. |
 
-## More on-device TTS findings - 2026-07-09 (later)
+**nThreads sane-default follow-up (own PR):** OD4/OD11/OD12 shared a root cause — the 9B ran with
+`threads=1` (device default nThreads:0/auto not resolving to a sane core count on an 8-core device).
+Single-threaded native inference starved the iOS JS thread and crawled on Android; raising the thread
+count fixed both (confirmed on device). Investigate why nThreads resolved to 1 for large models
+(`[LLM] Resolved params: threads=1`) and ship a sane default. GPU/NPU are NOT viable for this model
+(Adreno OpenCL 1GB max-alloc; Hexagon needs QNN-converted models; Qwythos is SSM-hybrid) — CPU-with-
+proper-threads is the path.
 
-| # | Finding | Verdict | Status |
-|---|---------|---------|--------|
-| OD-TTS1 | **Play does nothing / "not downloaded" though model is on disk** | fix-the-guard | FIXED (pro fix/tts-download-flag-reconcile). checkAssetStatus reported off the engine's volatile `_genuineCompletion`, which desyncs false on mid-session re-init/bridge-unmount (hydrate only runs on engine switch). `[TTS-SM] play() … downloaded=false` bailing in ~1ms (no icon change). Fix: reconcile to the durable persisted `modelDownloaded` flag; extracted download actions to ttsDownloadActions.ts (no eslint-disable). Red-first test. UNVERIFIED on-device. |
-| OD9 | **TTS speaks tool-call content aloud (voice mode)** | fix-the-guard | DELEGATED (fix/tts-strip-tool-calls). streamingSpeech `answerOf` strips thinking only; `enqueueReadySentences` runs stripControlTokens per-SENTENCE-fragment, so a `<tool_call>…</tool_call>` block spanning sentence boundaries leaks in fragments. Fix: withhold+strip whole control-token blocks before segmentation (mirror the thinking withhold). Red-first. |
-| OD10 | **TTS stops mid-speak** | instrument-and-revisit | `[TTS Store] Engine error: KOKORO_SPEAK The model is currently generating` + `stream segment FAILED session=1 fails=2` — a double-speak concurrency collision aborts the stream mid-sentence. Needs the speak/stream serialization checked (a second speak fired while the first was still generating). |
+---
 
-| OD11 | **Voice mode can't stream TTS alongside a large LLM (falls back to end-of-turn speech)** | fix-the-guard | With a big model resident (Qwythos 9B, ~6GB), the single-model residency rule blocks the ~82MB Kokoro TTS sidecar from co-loading (`[Whisper] Skipping load — no room alongside the active model (single-model rule)`), even with 4.4GB free (os_procAvailMB=4405). streamingSpeech loops `stream feed SKIP: engine not warm` (442× in one turn) then falls back to onStreamingEnd speaking the whole message at generation end. Works, but no live streaming + long silence + log spam. Fix: allow SIDECAR types (tts/whisper/embedding) to co-reside with a generation model when real free RAM fits them (they're tiny), rather than subjecting them to single-model eviction. |
+## Repo-wide /hygiene audit — open items - 2026-07-09 (SOLID §A/§B + DRY §C)
 
-| OD12 | **9B loads slowly on CPU + feels frozen (GPU too small → CPU fallback, threads=1)** | instrument-and-revisit | CORRECTED (earlier entry wrongly said 'freeze / survival-floor hole'): the Qwythos 9B DID load and generate (log: `Model loaded, vision/tools/thinking: true` at 11:54:28, first token 11:55:20). GPU (Adreno 4.6GB) can't hold the 9.3GB model → `cannot be used with preferred buffer` → CPU fallback (all 32 layers). On CPU with **threads=1** (app default is nThreads:0/auto — investigate the 0→1 resolution) the load took ~1m43s with a janky/unresponsive 'Loading Qwythos…' UI = the 'frozen' feeling. Not a hard freeze, not a survival-floor hole (it genuinely fit). Fixes worth doing: (a) ensure threads resolves to a sane core count for large models, (b) keep the UI responsive during a long native load (load off the JS/UI-blocking path / progress), (c) OD13 below on the reasoning-format mismatch. |
-| OD13 | **Qwythos output goes entirely to reasoning_content (thinking), answer content undefined** | instrument-and-revisit | Generation logs show `content: undefined, reasoning_content: "The"` and `token: "<|channel>"` (harmony/Gemma-style channel tokens) while `reasoning_format=deepseek`. The model's actual reasoning delimiters don't match the configured format, so the whole turn is classified as thinking with no final answer surfaced — the 'weird thinking/no proper answer' behavior. Model-format vs parser mismatch (Qwythos is a creative merge). Needs reasoning_format detection per model, or accept it's a bad-fit model.
-## RESOLUTION note - 2026-07-09: OD4 / OD11 / OD12 root cause = threads=1
+Through-line: decision/capability logic derived ad-hoc at many call sites instead of owned once by a
+service.
 
-On-device follow-up: the iOS "touch-dead freeze" (OD4) and Android "slow/feels frozen" (OD12)
-were the SAME root cause — the 9B ran with `threads=1` (device default nThreads:0/auto was not
-resolving to a sane core count; device has 8 cores). Single-threaded native inference blocked
-long enough to starve the iOS main/JS thread (touches dead; native swipe survived) and crawl on
-Android. Raising the CPU thread count made BOTH fast and responsive — confirmed on device.
-Not a regression from release/0.0.103; a config/default issue.
+### SOLID (§A/§B)
+| # | Location | Verdict | Fix |
+|---|----------|---------|-----|
+| SO1 | src/screens/ModelsScreen/TextModelsTab.tsx:143 handleRetryDownload | BLOCKING | Renderer re-implements download retry (Platform.OS branch, store mutation, mmproj, polling) — CLAUDE.md says this moved to ModelDownloadService. Delete; delegate to modelDownloadService.retry() like useDownloadManager. |
+| SO5 | src/screens/ModelsScreen/ImageFilterBar.tsx | DEBT | Platform.OS chooses which filter DIMENSIONS exist. Data-driven filter descriptor from service. |
+| SO6 | src/services/remoteServerManagerUtils.ts:122 | DEBT | `provider instanceof OpenAICompatibleProvider` to call updateCapabilities. Put on the provider interface (ISP). |
+| SO7 | pro/audio/ttsStore.ts:377,385 | DEBT | `instanceof OuteTTSEngine` for cache ops. Optional getAudioCacheSizeMB?/clearAudioCache? on the TTS engine interface. |
+| SO8 | src/stores/remoteServerHelpers.ts:32,188 | DEBT-low | `kind==='vision'` capability branch; fold into shared deriveRemoteCapabilities. |
 
-Follow-up (own PR, not this branch): investigate why nThreads resolved to 1 instead of auto/
-core-count for large models (see `[LLM] Resolved params: threads=1`); ship a sane default.
-GPU/NPU are NOT viable for this model (Adreno OpenCL max-alloc 1GB can't hold 9.3GB weights →
-CPU fallback; Hexagon NPU experimental + needs QNN-converted models; Qwythos is SSM-hybrid).
-CPU-with-proper-threads is the path. The devicectl "developer disk image could not be mounted"
-is a Mac-side tooling wedge (iOS 26.5.1), independent of the app — reconnect to clear.
+### DRY (§C)
+| # | Location | Verdict | Fix |
+|---|----------|---------|-----|
+| DR3 | src/screens/HomeScreen/components/ModelPickerSheet.tsx:63,201 (*1.8/*1.5, -1.5) | DRIFTED (live) | Third memory-fit verdict bypassing memoryBudget.ts. Can say "fits" when residency refuses — the Load-Anyway/selector bug family. Call modelMemoryBudgetMB. |
+| DR4 | CHARS_PER_TOKEN=4 bare literal in llmHelpers,liteRTCompaction,litert,llm,generationServiceHelpers,providers/*,documentService | DEBT | Export CHARS_PER_TOKEN_ESTIMATE + estimateTokens(); all import. |
+| DR5 | STOP_TOKENS (llmHelpers:427) + CONTROL_TOKEN_PATTERNS (messageContent:1) + tests re-hardcode | DEBT | One token registry; derive stop-list + strip-patterns; tests import. |
+| DR6 | pro/audio outetts:363 + ttsService:207 '<\|im_end\|>' | DEBT-low | Shared IM_END_TOKEN. |
+| DR8 | remoteModelCapabilities:202 deltaHasThinking vs openAICompatibleStream:155 | DEBT | Shared REASONING_DELTA_FIELDS + deltaHasReasoning(delta). |
 
-| OD14 | **Pre-tool-call reasoning not persisted (thinking "disappears" when a tool call starts)** | RESOLVED | In a tool-using turn the model reasons, then emits a tool call; that FIRST round's live thinking is cleared (clearStreamingMessage between rounds) and the intermediate tool-call assistant message is built with `content:'', ` NO reasoningContent (generationToolLoop.ts:447-448). The post-tool-result round's thinking IS shown on the final answer (confirmed on device: "Thought process: The knowledge base search returned no results…"). So thinking visibly vanishes at tool-call start then reappears on the final message — the pre-tool-call reasoning is lost from the transcript. Minor fidelity gap, feature works end-to-end. Fix: attach the accumulated reasoningBuffer to the intermediate tool-call assistant message. NOTE (good): iOS ran this 9B on Metal (99 layers GPU offloaded), 2.0 tok/s, TTFT 10.79s — iOS Metal works well; Android Adreno OpenCL (1GB max-alloc) falls back to CPU. |
+### Test quality (§D)
+| # | File | Verdict | Fix |
+|---|------|---------|-----|
+| TQ1 | __tests__/**/useDownloads.test.ts | WORST | Fakes the reducer under test (hand-sets entry.status then asserts the spy) — 37 call-asserts, 0 real-state. Drive real useDownloadStore; assert getState().downloads[key].status. |
+| TQ2 | ChatScreenSpotlight (step 3→12 block) | WORST | Block ends after advanceTimersByTime with ZERO expect() — can never fail. Assert the coachmark text. |
+| TQ3 | Spotlight trio (Chat/Home/ModelSettings, ~40 tests) | HIGH | Assert goTo(<int>) not the coachmark; unmock react-native-spotlight-tour, assert getByText(coachmark). |
+| TQ4 | useChatGenerationActions.test.ts | HIGH | L932 tautology + mock-on-mock "message appeared"; assert store/rendered outcome. |
+| TQ5 | coreMLModelUtils "downloads sequentially" | MED | Asserts order that only holds by .map push order while impl uses Promise.all. Assert real ordering w/ dynamic out-of-order mock or drop the claim. |
+| TQ6 | render tests w/ no getByText: TTSButton, ModelFailureCard, ImageGenAdviceCard, ToolAccordionStreaming, ModelsManagerSheet, McpAddServerSheet, PlaybackControls, KokoroTTSBridge | MED | Assert visible content/state, not just container testID. |
 
-## New bug reports - 2026-07-09 (Slack #bugs, during 0.0.103 review)
+---
 
-| # | Finding | Verdict | Note |
-|---|---------|---------|------|
-| OD15 | **"Generation Error: Unable to generate parser for this template / Jinja: Conversation roles must alternate" on model switch after a tool call** | fix-the-guard | From llama.rn native minja compiling a chat_template whose Jinja asserts strict user/assistant alternation, when tools are enabled (tool-call parser generation) and/or history has assistant+tool+assistant sequences. NOT caused by 0.0.103 (OD14 added a field to an existing message, no new message; OD3 didn't touch templates). Pre-existing. Fix: graceful fallback — catch the local tool-parser-generation failure and retry WITHOUT tools (the app already does this for REMOTE via isToolGrammarError; add the LOCAL equivalent), instead of a hard "Generation Error". Also consider sanitizing/merging roles before formatting for strict-alternation templates. Separate PR. |
-| OD16 | **Remote model capabilities feel flaky across Ollama / LM Studio / OGA Desktop** | instrument-and-revisit | remoteModelCapabilities has 39 unit + 4 integration tests, per-provider — but all FIXTURE-based. Real-world flakiness is likely response-shape variance across provider versions the fixtures don't capture. Fix: capture real /props (OGA Desktop gateway), /api/show (Ollama), /v1/models (LM Studio) from LIVE instances as integration fixtures; harden derivation against missing/variant fields; add a provider-abstraction contract test so each provider's shape → derived caps is guarded. All three must work well (stated priority). Separate workstream. NOTE: 0.0.103's OD7 fix already made reasoning-detection single-source local+remote (small consistency win). |
+## Pre-existing: mid-chat model switch doesn't refresh chat state until remount - 2026-07-10
+**instrument-and-revisit** | Reported on-device (iOS, gemma-4 local + remote), confirmed present on the
+OLD build (NOT introduced by this PR's work). Loading a new model from within the Chat screen mid-
+conversation does not update the screen's derived active-model state — not a freeze; navigating Home →
+back re-syncs. Suspect useChatModelStateSync / the chat's derived activeModel not re-running after an
+in-chat load (the model loads fine; only the screen's projection is stale). Fix separately with its own
+on-device repro — do NOT bundle into the current release PR (scope + risk).
+
+---
+
+## Device-verification gate before release (PR #510) — MUST pass before shipping
+
+Unverified-on-device changes that MUST be checked on the Android dev build (ai.offgridmobile.dev) + iOS
+before shipping (§H — device-gate unverified fixes). Pull `Documents/offgrid-debug.log` and grep the
+state-machine traces:
+
+- **Platform-aware override memory floor** (700MB Android / 1200MB iOS, physical-based, no swap credit) —
+  confirm a tight-memory LiteRT load refuses cleanly (no OOM) via `[MEM-SM]`.
+- **doUnloadTextModelLocked now unloads the ACTIVE engine** (LiteRT eviction frees native memory) —
+  confirm `[MEM-SM]` on a LiteRT→llama switch under pressure.
+- **Readiness change:** ensureModelReady/ensureModelLoadedFn now require isModelLoaded() (desync guard).
+- **Deterministic resend** (image turn re-runs the image pipeline via recorded modality, not a
+  re-classify — the Android 1★ "Resend → model cannot be loaded" fix): confirm an image resend on-device
+  re-generates the image (does not try to load a text model).
+- **Native-first Gemma flip** (buildThinkingCompletionParams reasoning_format 'none'→'auto') — a RUNTIME
+  behavior change. Run a Gemma4 thinking + tool-call flow; grep `[GEMMA-FALLBACK]`. If it NEVER fires →
+  native 'auto' works → DELETE parseGemmaNativeToolCalls + Gemma `<|channel>` hand-parser branches (dead)
+  + narrow the hand-parsers to the remote-only fallback. If it fires → keep the hand-parser as fallback.
+  ('auto' may also fix OD13.) Must not ship in a beta until this device check passes (TestFlight is
+  distribution-signed → no container logs; verify on the dev build first).
+- **iOS collapsed thinking-box width fix** — screenshot check.
+- **STOP-PATH CLUSTER (device-diagnosed 2026-07-13, offgrid-debug.log 18:12–18:16 + IMG_0143/44/45): one root, four symptoms.**
+  Root: a stop during PREFILL cannot interrupt llama until prefill completes (~9s on a 2.6k-token KB
+  context; 74s cold on CPU), and the app's stop path lies about idleness while the native context
+  unwinds. Chain + fixes (each at its owning seam):
+  1. `llm.ts stopGeneration()` sets `isGenerating=false` BEFORE awaiting `activeCompletionPromise`
+     → readiness says free while native is busy. FIX: declare idle only AFTER the unwind await.
+  2. `generationToolLoop` is stop/interrupt-BLIND: no abortRequested check between iterations, and a
+     completion result with `interrupted:true, predicted=0` flows onward as a normal empty result →
+     zombie follow-up completions after a stop (these held the engine → the 'LLM service busy' error
+     on the next send, log 18:12:34), and the empty result renders the WRONG "No response /
+     incompatible backend (K-quant on NPU/GPU)" card (IMG_0145) — model/backend were fine. FIX:
+     surface `interrupted` from `llmToolGeneration`/`generateResponseWithTools` returns; loop treats
+     interrupted as STOPPED (finalize partial, no further completions, no error card).
+  3. Resend/busy-error path left the send button latched as a fake STOP with phantom "..." while no
+     session was live (IMG_0144; `prepareGenerationImpl` clears on readiness-throw, so the latch is in
+     the RESEND caller's state) — find the resend action's generating flag + clear on error.
+  4. A stale "No response" error card is not cleared when a subsequent retry succeeds (IMG_0145→next).
+  Tests owed: rendered chat — send tool turn → stop mid-prefill (fake native with delayed unwind
+  honoring stopCompletion) → assert stopped-partial finalization, NO busy sheet, NO "_(No response)_"
+  bubble, button back to send; immediate resend then succeeds.
+- **RESOLVED 2026-07-14 (reload capability drift + silent GPU→CPU): root cause was NOT a second load
+  path.** Device log 18:50 proved the reload ran the ONE loadModel pipeline and detected thinking
+  correctly (`Model loaded ... thinking: true` at 18:50:30.409) — but `applyLoadedContext` published
+  `this.context` (the isModelLoaded readiness signal) BEFORE the multimodal probe + capability
+  detection, so the 18:50:27.733 send raced into a ~3.5s window and generated with stale
+  `thinkingSupported=false`. Fixed: capabilities derived on the local context, published atomically
+  (396bea25; journey reloadRaceKeepsThinking.rendered.redflow). The GPU symptom was a REAL init
+  timeout (18:57:19 `GPU context init timed out after 8000ms`) falling back silently — now surfaced
+  as an always-on system notice (gpuFallbackNoticeVisible.rendered.redflow); the meta also stops
+  claiming the uncapped layer count. `reloadWithSettings` (the drifted copy, zero callers) deleted.
+  Residual gaps, still open:
+  1. **Fallback notice needs a conversation.** The notice renders as a system-info chat message; a
+     GPU→CPU fallback on a load with NO active conversation (fresh chat, Home-screen load) has no
+     surface. Decide a surface (chat placeholder card / header chip) and add a rendered test.
+  2. **CPU fallback inherits OpenCL-shaped params.** When the OpenCL attempt times out, attempts
+     2/3 reuse the OpenCL-coerced params (no cache_type → f16, flash_attn off) instead of
+     rebuilding CPU params (user's q8_0 + flash attn). Fix at initContextWithFallback/loadModel:
+     rebuild params for the CPU attempt; assert via WIRE-LLAMA-LOAD in a journey.
+  3. **8s GPU-init timeout may be too tight for this device/model** (earlier runs DID get 24/36
+     layers on the same phone). Device-verify whether a longer Adreno timeout restores GPU.
+- **Manager sheet = the residency surface (agreed design, 2026-07-14).** Move "In Memory" out of the
+  Select Model picker into the MODELS manager sheet: each modality row shows its model + a RAM chip
+  when RESIDENT + a per-row eject (power glyph, muted red, right of the fixed-width type label so all
+  four align as a control column; generous hitSlop; row tap still opens the picker). "Eject All"
+  stays. Needs: per-row residency projection (text/image/voice/speech), per-type eject actions via
+  the owning services (no engine branching in the view), rendered journey tests per row + falsifiers.
+- **Concurrent-retry race journey test (owed).** The 'No response'-card race fix (per-turn
+  ToolLoopOutcome) is covered by construction + the stop journey's no-card assertions; still owed a
+  rendered journey that starts a retry BEFORE the stopped turn's classifier runs and asserts no card.
+- **Kokoro TTS download bypasses the 3-slot concurrency cap** (device-reported, 2026-07-13). The TTS
+  (Kokoro) model download does NOT respect `backgroundDownloadService`'s `MAX_CONCURRENT_DOWNLOADS = 3`
+  admission cap — it starts immediately regardless of how many downloads are already running. Likely
+  cause: the TTS start path passes `isSidecar: true` (or otherwise goes through the uncounted
+  `beginDownload(counted=false)` branch), which is meant only for dependent sub-downloads (a vision
+  model's mmproj) that ride alongside their main. Kokoro is a standalone model, so it should be counted
+  and queued like any other. Fix: route the Kokoro/TTS download through the counted path (not sidecar)
+  so it occupies a slot and queues when the cap is hit; add a test that enqueues > 3 including the TTS
+  model and asserts it queues rather than starting immediately.
+- **Onboarding litert download-warning: rendered test for the ModelDownloadScreen caller** (2026-07-13).
+  The device-aware curated-litert warning decision (`curatedLiteRTDownloadWarning`) is now a single owned
+  function called by BOTH the Models tab (`TextModelsTab`) and the onboarding screen (`ModelDownloadScreen`).
+  It is covered by an all-branch pure unit test + a rendered test through the Models-tab caller. The
+  onboarding caller is identical thin wiring but has no dedicated rendered test yet (mounting the full
+  onboarding screen with device-init + Android litert rendering is heavier). Follow-up: add a
+  `ModelDownloadScreen`-mounted rendered test (Android, 12GB) that taps the E4B litert download and asserts
+  no "may exceed your device's memory" sheet — the exact device-reported surface (IMG_0142).

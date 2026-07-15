@@ -1,5 +1,5 @@
 import { backgroundDownloadService } from './backgroundDownloadService';
-import { useDownloadStore, DownloadEntry, DownloadStatus, ModelType } from '../stores/downloadStore';
+import { useDownloadStore, DownloadEntry, DownloadStatus, ModelType, isActiveStatus } from '../stores/downloadStore';
 import { makeModelKey, ModelKey } from '../utils/modelKey';
 import { BackgroundDownloadStatus } from '../types';
 import logger from '../utils/logger';
@@ -131,6 +131,40 @@ function toDownloadEntry(
   };
 }
 
+/**
+ * An in-flight entry we already knew about whose native download row is GONE from the
+ * fresh snapshot was interrupted by an app-kill (iOS URLSession drops its task on
+ * force-quit; a foreground STT/multi-file transfer dies with the process; Android
+ * WorkManager instead SURVIVES and reappears in the snapshot, so it is never here).
+ *
+ * The relaxed product rule: we do not need to resume the actual bytes across a kill —
+ * we must NEVER let the download silently vanish. Carry the prior entry forward as a
+ * `failed`/retriable entry so the Download Manager keeps a card (with Retry/Remove),
+ * rather than a phantom "downloading" or nothing at all. This is the single native-row
+ * reconcile path for every model type (text/image/stt) — no per-type fork.
+ *
+ * A prior entry that had already `completed`/`cancelled` is intentionally dropped (a
+ * clean finish moved it to its domain store; nothing to strand).
+ */
+function strandInterruptedEntries(
+  hydratedKeys: Set<ModelKey>,
+): DownloadEntry[] {
+  const stranded: DownloadEntry[] = [];
+  for (const prior of Object.values(useDownloadStore.getState().downloads)) {
+    if (hydratedKeys.has(prior.modelKey)) continue; // still has a live native row
+    if (!isActiveStatus(prior.status)) continue;     // already completed/failed/cancelled
+    logger.log(
+      `[DL-SM] ${prior.modelType}:${prior.modelId} hydrate: native row gone (app-kill) → failed/retriable`,
+    );
+    stranded.push({
+      ...prior,
+      status: 'failed',
+      errorMessage: prior.errorMessage ?? 'Interrupted — app closed. Tap retry.',
+    });
+  }
+  return stranded;
+}
+
 export async function hydrateDownloadStore(): Promise<void> {
   if (!backgroundDownloadService.isAvailable()) return;
 
@@ -153,6 +187,13 @@ export async function hydrateDownloadStore(): Promise<void> {
       });
     }
   }
+
+  // Native rows are the source of truth for what is genuinely in flight; but a row that
+  // VANISHED (vs one that reports a new status) means an interrupted transfer whose task
+  // the OS discarded. Preserve the prior in-flight entry as failed/retriable so it never
+  // silently disappears from the Download Manager.
+  const hydratedKeys = new Set(entries.map(e => e.modelKey));
+  entries.push(...strandInterruptedEntries(hydratedKeys));
 
   useDownloadStore.getState().hydrate(entries);
 }

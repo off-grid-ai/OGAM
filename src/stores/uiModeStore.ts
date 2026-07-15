@@ -9,7 +9,7 @@ import { create } from 'zustand';
  *
  * Free builds (no pro) leave this at the default 'chat' forever.
  */
-export type InterfaceMode = 'chat' | 'audio';
+type InterfaceMode = 'chat' | 'audio';
 
 interface UiModeState {
   interfaceMode: InterfaceMode;

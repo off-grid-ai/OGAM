@@ -45,7 +45,7 @@ export interface CompletionResult {
 }
 
 /** Tool call result from generation */
-export interface ToolCallResult {
+interface ToolCallResult {
   /** Tool call ID */
   id?: string;
   /** Tool name */
@@ -79,7 +79,7 @@ export interface GenerationOptions {
 }
 
 /** Tool definition for function calling */
-export interface ToolDefinition {
+interface ToolDefinition {
   /** Tool type (always "function" for now) */
   type: 'function';
   /** Function definition */
@@ -105,17 +105,6 @@ export interface StreamCallbacks {
   onError: (error: Error) => void;
 }
 
-/** Model loading state */
-export interface ModelLoadState {
-  /** Whether a model is currently loading */
-  isLoading: boolean;
-  /** Loading progress (0-100) */
-  progress?: number;
-  /** Loading status message */
-  message?: string;
-  /** Error if loading failed */
-  error?: string;
-}
 
 /**
  * LLM Provider Interface
@@ -175,21 +164,3 @@ export interface LLMProvider {
   dispose?(): Promise<void>;
 }
 
-/**
- * Provider Factory Function Type
- *
- * Creates a provider instance with the given configuration.
- */
-export type ProviderFactory = (config: ProviderConfig) => LLMProvider;
-
-/** Configuration for creating a provider */
-export interface ProviderConfig {
-  /** Provider type */
-  type: ProviderType;
-  /** Server endpoint (for remote providers) */
-  endpoint?: string;
-  /** API key (for authenticated providers) */
-  apiKey?: string;
-  /** Model to load */
-  modelId?: string;
-}

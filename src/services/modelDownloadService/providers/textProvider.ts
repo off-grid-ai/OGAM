@@ -20,6 +20,8 @@ import { useDownloadStore, isActiveStatus, DownloadEntry } from '../../../stores
 import logger from '../../../utils/logger';
 import { mapStoreStatus } from '../storeStatus';
 import { uniformDownloadId } from '../uniformId';
+import { startModelDownload } from '../../startModelDownload';
+import type { DownloadParams } from '../../backgroundDownloadTypes';
 import type { DownloadProvider, ModelDownload } from '../types';
 
 const TEXT_CAPABILITIES = {
@@ -149,6 +151,25 @@ export const textProvider: DownloadProvider = {
 
   subscribe(onChange: () => void): () => void {
     return useDownloadStore.subscribe(onChange);
+  },
+
+  async reissue(params: DownloadParams): Promise<void> {
+    // Reconstruct the text ModelFile from the persisted params and replay the SAME start the UI
+    // uses (startModelDownload → pending store row + completion watch). The queued item never had a
+    // native row, so this is the only way it re-enters the store and auto-starts as a slot frees.
+    const meta = params.metadataJson ? safeJson(params.metadataJson) : null;
+    const mmProjFile = meta?.mmProjFileName && meta?.mmProjDownloadUrl
+      ? { name: meta.mmProjFileName, size: params.combinedTotalBytes && params.totalBytes ? params.combinedTotalBytes - params.totalBytes : 0, downloadUrl: meta.mmProjDownloadUrl }
+      : undefined;
+    const file = {
+      name: params.fileName,
+      size: params.totalBytes ?? 0,
+      quantization: params.quantization ?? 'Unknown',
+      downloadUrl: params.url,
+      sha256: params.sha256,
+      ...(mmProjFile ? { mmProjFile } : {}),
+    };
+    await startModelDownload(params.modelId, file);
   },
 
   async reconcile(): Promise<void> {

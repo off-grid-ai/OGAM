@@ -5,15 +5,21 @@ import {
   hideAlert,
 } from '../../components';
 import { llmService, activeModelService, modelManager } from '../../services';
-import { liteRTService } from '../../services/litert';
+import { isModelReady, activeLocalTextCapabilities, activeTextCapabilities, backendFallbackNotice } from '../../services/engines';
 import { useAppStore } from '../../stores';
-import { DownloadedModel, RemoteModel, ONNXImageModel } from '../../types';
+import { DownloadedModel, RemoteModel, ONNXImageModel, isLiteRTModel } from '../../types';
 import logger from '../../utils/logger';
 import { ModelReadyOutcome, reasonFromLoadError } from './modelReadiness';
 import { isOverridableMemoryError } from '../../services/modelLoadErrors';
 import { loadModelWithOverride } from '../../services/loadModelWithOverride';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
+
+/** Vision support for a just-loaded local model, via the single engine-registry reader
+ *  (engines.activeLocalTextCapabilities) — so these post-load sites don't branch on the engine. */
+function loadedModelVision(model: DownloadedModel): boolean {
+  return activeLocalTextCapabilities(model).vision;
+}
 
 type ActiveModelInfo = {
   isRemote: boolean;
@@ -62,17 +68,33 @@ function addSystemMsg(
   });
 }
 
+/**
+ * Surface a silent backend downgrade after a successful load — NOT gated on showGenerationDetails:
+ * a user who explicitly selected GPU and got CPU must see it without any debug setting (the
+ * device-reported "Backend=GPU but the turn ran on CPU" class). The verdict is owned by the
+ * engine layer (engines.backendFallbackNotice); this only renders it.
+ */
+function addBackendFallbackMsg(deps: Pick<ModelActionDeps, 'activeModel' | 'activeConversationId' | 'addMessage'>) {
+  const notice = backendFallbackNotice(deps.activeModel);
+  if (!notice || !deps.activeConversationId) return;
+  deps.addMessage(deps.activeConversationId, {
+    role: 'assistant',
+    content: `_${notice}_`,
+    isSystemInfo: true,
+  });
+}
+
 async function doLoadTextModel(deps: ModelActionDeps, opts?: { override?: boolean }): Promise<void> {
   const { activeModel, activeModelId } = deps;
   if (!activeModel || !activeModelId) return;
   try {
     await activeModelService.loadTextModel(activeModelId, undefined, opts);
-    const multimodalSupport = llmService.getMultimodalSupport();
-    deps.setSupportsVision(activeModel.engine === 'litert' ? !!activeModel.liteRTVision : (multimodalSupport?.vision || false));
+    deps.setSupportsVision(loadedModelVision(activeModel));
     if (deps.modelLoadStartTimeRef.current && deps.settings.showGenerationDetails) {
       const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
       addSystemMsg(deps, `Model loaded: ${activeModel.name} (${loadTime}s)`);
     }
+    addBackendFallbackMsg(deps);
   } catch (error: any) {
     deps.setAlertState(showAlert('Error', `Failed to load model: ${error?.message || 'Unknown error'}`));
   } finally {
@@ -107,12 +129,12 @@ export async function initiateModelLoad(
 
   try {
     await activeModelService.loadTextModel(activeModelId);
-    const multimodalSupport = llmService.getMultimodalSupport();
-    deps.setSupportsVision(activeModel.engine === 'litert' ? !!activeModel.liteRTVision : (multimodalSupport?.vision || false));
+    deps.setSupportsVision(loadedModelVision(activeModel));
     if (!alreadyLoading && deps.modelLoadStartTimeRef.current && deps.settings.showGenerationDetails) {
       const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
       addSystemMsg(deps, `Model loaded: ${activeModel.name} (${loadTime}s)`);
     }
+    if (!alreadyLoading) addBackendFallbackMsg(deps);
     return { ok: true };
   } catch (error: any) {
     const detail = error?.message || 'Unknown error';
@@ -195,28 +217,23 @@ export async function ensureModelLoadedFn(
 ): Promise<ModelReadyOutcome> {
   const { activeModel, activeModelId } = deps;
   if (!activeModel || !activeModelId) return { ok: false, reason: 'no-model-selected' };
-  if (activeModel.engine === 'litert') {
-    if (liteRTService.isModelLoaded()) {
-      deps.setSupportsVision(!!activeModel.liteRTVision);
-      return { ok: true };
-    }
-    deps.setSupportsVision(!!activeModel.liteRTVision);
-    const outcome = await initiateModelLoad(deps, activeModelService.getActiveModels().text.isLoading, onLoadedResume);
-    if (!outcome.ok) return outcome;
-    return liteRTService.isModelLoaded()
-      ? { ok: true }
-      : { ok: false, reason: 'load-threw', detail: 'LiteRT model not loaded after load' };
-  }
-  const loadedPath = llmService.getLoadedModelPath();
-  const currentVisionSupport = llmService.getMultimodalSupport()?.vision || false;
-  const needsReload = loadedPath !== activeModel.filePath ||
-    (activeModel.mmProjPath && !currentVisionSupport);
-  if (!needsReload && loadedPath === activeModel.filePath) {
-    deps.setSupportsVision(currentVisionSupport);
+  // Vision-repair (llama only): a vision model whose mmproj didn't load reports no vision — force a
+  // reload so it comes back with vision. LiteRT has no separate mmproj, so this never applies.
+  const needsVisionRepair = !isLiteRTModel(activeModel)
+    && !!activeModel.mmProjPath
+    && !(llmService.getMultimodalSupport()?.vision);
+  // ONE readiness predicate for both engines (engines.isModelReady); vision from the single rule.
+  if (isModelReady(activeModel) && !needsVisionRepair) {
+    deps.setSupportsVision(loadedModelVision(activeModel));
     return { ok: true };
   }
-  const alreadyLoading = activeModelService.getActiveModels().text.isLoading;
-  return initiateModelLoad(deps, alreadyLoading, onLoadedResume);
+  deps.setSupportsVision(loadedModelVision(activeModel)); // LiteRT: known from the flag pre-load
+  const outcome = await initiateModelLoad(deps, activeModelService.getActiveModels().text.isLoading, onLoadedResume);
+  if (!outcome.ok) return outcome;
+  // Post-verify against native truth — catches a load that reported ok but left no resident model.
+  return isModelReady(activeModel)
+    ? { ok: true }
+    : { ok: false, reason: 'load-threw', detail: 'the model is not resident after load' };
 }
 
 export async function proceedWithModelLoadFn(
@@ -244,8 +261,7 @@ export async function proceedWithModelLoadFn(
         deps.modelLoadStartTimeRef.current = null;
       },
       onSuccess: () => {
-        const multimodalSupport = llmService.getMultimodalSupport();
-        deps.setSupportsVision(model.engine === 'litert' ? !!model.liteRTVision : (multimodalSupport?.vision || false));
+        deps.setSupportsVision(loadedModelVision(model));
         if (deps.modelLoadStartTimeRef.current && deps.settings.showGenerationDetails && deps.activeConversationId) {
           const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
           deps.addMessage(deps.activeConversationId, {
@@ -315,7 +331,17 @@ export function useChatImageModelEffects(deps: ImageModelEffectsDeps): void {
     const timer = setTimeout(async () => {
       if (!cancelled) {
         const models = await modelManager.getDownloadedImageModels();
-        if (!cancelled) setDownloadedImageModels(models);
+        if (cancelled) return;
+        // Never orphan the currently-active image model: activeImageModelId is persisted
+        // but downloadedImageModels is not, so on a cold mount the disk scan is the sole
+        // hydrator. If it hasn't surfaced the active model yet (slow FS, or one already
+        // placed in the store), keep that entry rather than blanking the selection —
+        // otherwise activeImageModel resolves to undefined and image routing dies.
+        const { downloadedImageModels: current, activeImageModelId: activeId } = useAppStore.getState();
+        const merged = activeId && !models.some(m => m.id === activeId)
+          ? [...models, ...current.filter(m => m.id === activeId)]
+          : models;
+        setDownloadedImageModels(merged);
       }
     }, 0);
     return () => { cancelled = true; clearTimeout(timer); };
@@ -363,31 +389,21 @@ export function useChatModelStateSync(deps: ModelStateSyncDeps): void {
   // (ensureModelReady → ensureModelLoaded). Loading eagerly here is what made opening a
   // chat — and switching models — spin up the model before the user sent anything.
   useEffect(() => {
-    if (activeModelInfo.isRemote) {
-      setSupportsVision(activeRemoteModel?.capabilities?.supportsVision ?? false);
-    } else if (activeModel?.engine === 'litert') {
-      setSupportsVision(!!activeModel.liteRTVision);
-    } else if (activeModelMmProjPath && llmService.isModelLoaded()) {
-      setSupportsVision(llmService.getMultimodalSupport()?.vision ?? false);
-    } else {
-      setSupportsVision(false);
-    }
-
+    // Single capability rule (engines.activeTextCapabilities); vision keys on activeModelInfo.isRemote.
+    setSupportsVision(activeTextCapabilities({
+      isRemote: activeModelInfo.isRemote,
+      remoteCaps: activeRemoteModel?.capabilities,
+      model: activeModel,
+    }).vision);
   }, [activeModelInfo.isRemote, activeRemoteModel?.capabilities?.supportsVision, activeModelMmProjPath, isModelLoading]);
   useEffect(() => {
-    if (activeRemoteTextModelId) {
-      setSupportsToolCalling(activeRemoteModel?.capabilities?.supportsToolCalling ?? false);
-      setSupportsThinking(activeRemoteModel?.capabilities?.supportsThinking ?? false);
-    } else if (activeModel?.engine === 'litert' && liteRTService.isModelLoaded()) {
-      setSupportsToolCalling(true);
-      setSupportsThinking(true);
-    } else if (llmService.isModelLoaded()) {
-      setSupportsToolCalling(llmService.supportsToolCalling());
-      setSupportsThinking(llmService.supportsThinking());
-    } else {
-      setSupportsToolCalling(false);
-      setSupportsThinking(false);
-    }
-
+    // Same rule; tools/thinking key on activeRemoteTextModelId (preserved from the prior branch).
+    const caps = activeTextCapabilities({
+      isRemote: !!activeRemoteTextModelId,
+      remoteCaps: activeRemoteModel?.capabilities,
+      model: activeModel,
+    });
+    setSupportsToolCalling(caps.tools);
+    setSupportsThinking(caps.thinking);
   }, [activeModelId, activeModel?.engine, isModelLoading, activeRemoteTextModelId, activeRemoteModel?.capabilities?.supportsToolCalling, activeRemoteModel?.capabilities?.supportsThinking]);
 }

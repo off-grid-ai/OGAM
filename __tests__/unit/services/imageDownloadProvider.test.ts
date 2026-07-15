@@ -81,6 +81,32 @@ describe('imageProvider', () => {
     expect(useDownloadStore.getState().downloads['image:sdxl/m'].status).toBe('pending');
   });
 
+  // B6: bytes finished then EXTRACTION failed (missing model files) → the native row is gone, so
+  // retryDownload throws "Download not found". Retry must FALL BACK to the full re-download op, not
+  // die every tap.
+  it('Android retry: falls back to the full re-download op when the native row is gone', async () => {
+    setPlatform('android');
+    mockBg.retryDownload.mockRejectedValueOnce(new Error('Download not found'));
+    const retry = jest.fn(async () => {});
+    setImageDownloadOps({ retry });
+    await imageProvider.retry('image:sdxl');
+    expect(mockBg.retryDownload).toHaveBeenCalledWith('dl-img'); // tried native resume first
+    expect(retry).toHaveBeenCalledWith('sdxl', expect.objectContaining({ downloadId: 'dl-img' })); // then re-download
+  });
+
+  // A multi-file (synthetic `image-multi:` row) download has no resumable native row — go straight
+  // to the full re-download op instead of a doomed retryDownload.
+  it('Android retry: a multi-file download skips native resume and re-downloads', async () => {
+    setPlatform('android');
+    useDownloadStore.setState({ downloads: {}, downloadIdIndex: {} } as any);
+    useDownloadStore.getState().add(entry({ downloadId: 'image-multi:sdxl' }));
+    const retry = jest.fn(async () => {});
+    setImageDownloadOps({ retry });
+    await imageProvider.retry('image:sdxl');
+    expect(mockBg.retryDownload).not.toHaveBeenCalled();
+    expect(retry).toHaveBeenCalled();
+  });
+
   it('capability.retry is a STABLE constant (does not depend on injected ops)', async () => {
     // No ops injected at all — capability must still advertise retry: true on both
     // platforms (the flag must not flap when the UI injects ops in a later effect).

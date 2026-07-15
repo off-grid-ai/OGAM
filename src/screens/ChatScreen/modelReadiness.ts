@@ -16,8 +16,7 @@
  */
 
 import { AlertState, showAlert } from '../../components';
-import { llmService } from '../../services';
-import { liteRTService } from '../../services/litert';
+import { isModelReady } from '../../services/engines';
 import logger from '../../utils/logger';
 // The error→reason heuristic and reason→copy live in a UI-free module (so the
 // service layer can reuse them without dragging the components barrel in). Re-export
@@ -29,7 +28,7 @@ import {
 } from '../../services/modelFailureReasons';
 
 export { reasonFromLoadError, modelNotReadyAlert };
-export type { ModelNotReadyReason };
+;
 
 export type ModelReadyOutcome =
   | { ok: true }
@@ -62,28 +61,18 @@ export interface ReadinessDeps {
  */
 export async function ensureModelReady(deps: ReadinessDeps, onLoadedResume?: () => void): Promise<ModelReadyOutcome> {
   if (deps.activeModelInfo?.isRemote) { logger.log('[GEN-SM] ensureModelReady → remote ok'); return { ok: true }; }
-  if (deps.activeModel?.engine === 'litert') {
-    if (liteRTService.isModelLoaded()) { logger.log('[GEN-SM] ensureModelReady → litert already loaded'); return { ok: true }; }
-    const outcome = await deps.ensureModelLoaded(onLoadedResume);
-    if (!outcome.ok) { logger.log(`[GEN-SM] ensureModelReady litert NOT ready reason=${outcome.reason} detail=${outcome.detail ?? ''}`); return outcome; }
-    return liteRTService.isModelLoaded()
-      ? { ok: true }
-      : { ok: false, reason: 'load-threw', detail: 'LiteRT not loaded after load' };
-  }
   if (!deps.activeModel || !deps.activeModelId) { logger.log('[GEN-SM] ensureModelReady → no-model-selected'); return { ok: false, reason: 'no-model-selected' }; }
-  const loadedPath = llmService.getLoadedModelPath();
-  if (loadedPath && loadedPath === deps.activeModel.filePath) { logger.log('[GEN-SM] ensureModelReady → already loaded'); return { ok: true }; }
-  // Thread onLoadedResume on the llama (GGUF) path too — NOT just the litert branch
-  // above. Without it, a "Load Anyway" on a regular text model force-loaded the model
-  // but never resumed the turn (onLoadedResume was undefined), so the user's message
-  // sat there and they had to hit resend. This is the exact device symptom.
+  // ONE readiness predicate for BOTH engines (engines.isModelReady): LiteRT = engine loaded;
+  // llama = the SELECTED model's path resident. The old llama fast-path skipped the isModelLoaded
+  // check, so a path-set-but-not-resident desync generated against nothing — this closes that.
+  if (isModelReady(deps.activeModel)) { logger.log('[GEN-SM] ensureModelReady → already loaded'); return { ok: true }; }
+  // Thread onLoadedResume for BOTH engines. Without it, a "Load Anyway" force-loaded the model
+  // but never resumed the turn (the user's message sat there and they had to hit resend).
   const outcome = await deps.ensureModelLoaded(onLoadedResume);
   if (!outcome.ok) { logger.log(`[GEN-SM] ensureModelReady NOT ready reason=${outcome.reason} detail=${outcome.detail ?? ''} alerted=${!!outcome.alerted}`); return outcome; }
-  // Post-verify against the native truth. Catches the desync where the service
-  // thinks a model is current (fast-path skip) but llama has a different/no model
-  // loaded — previously this returned a bare false with no reason.
-  const ready = llmService.isModelLoaded() && llmService.getLoadedModelPath() === deps.activeModel.filePath;
-  if (!ready) { logger.log('[GEN-SM] ensureModelReady → load reported ok but native model mismatch'); return { ok: false, reason: 'load-threw', detail: 'the loaded model does not match the active selection' }; }
+  // Post-verify against native truth — the load reported ok but the active model must actually
+  // be resident (catches a desync where a different/no model is loaded).
+  if (!isModelReady(deps.activeModel)) { logger.log('[GEN-SM] ensureModelReady → load reported ok but native model mismatch'); return { ok: false, reason: 'load-threw', detail: 'the loaded model does not match the active selection' }; }
   logger.log('[GEN-SM] ensureModelReady → ready');
   return { ok: true };
 }

@@ -22,6 +22,12 @@ const createBubbleStyles = (colors: ThemeColors) => ({
     color: colors.textMuted,
     textAlign: 'center' as const,
   },
+  // A tool-call reply's content column — matches the assistant bubble width (85%) + left alignment
+  // so the thinking box, pre-text, and tool cards line up with every other AI message.
+  toolCallReplyContent: {
+    width: '85%' as const,
+    alignSelf: 'flex-start' as const,
+  },
   toolCallPreText: {
     alignSelf: 'flex-start' as const,
     paddingBottom: 6,
@@ -76,8 +82,9 @@ const createBubbleStyles = (colors: ThemeColors) => ({
     minWidth: '85%' as const,
   },
   attachmentsContainer: {
-    flexDirection: 'row' as const,
-    flexWrap: 'wrap' as const,
+    // Stack attachments vertically (voice note on top, image below) instead of side-by-side —
+    // a voice-note + image message rendered in a row looked broken (device 2026-07-14).
+    flexDirection: 'column' as const,
     gap: 4,
     marginBottom: 8,
   },
@@ -190,10 +197,13 @@ const createThinkingStyles = (colors: ThemeColors) => ({
     overflow: 'hidden' as const,
     width: '100%' as const,
   },
-  /** Constrains the ThinkingBlock when rendered outside a message bubble (e.g. ToolCallWithThinking) */
+  /** Full-width ThinkingBlock when rendered outside a message bubble (e.g. ToolCallWithThinking).
+   *  Uses alignSelf:'stretch' (NOT a percentage width) because the parent systemInfoContainer
+   *  centers its children (alignItems:'center'); a percentage width + alignSelf there fails to
+   *  resolve on iOS and the COLLAPSED block falls back to content width — a tiny square with no
+   *  visible preview. Stretch fills the parent width in both collapsed and expanded states. */
   thinkingBlockWrapper: {
-    width: '88%' as const,
-    alignSelf: 'flex-start' as const,
+    alignSelf: 'stretch' as const,
   },
   thinkingHeader: {
     flexDirection: 'row' as const,

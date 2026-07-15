@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 const MAX_IN_MEMORY = 500;
 
-export interface DebugLogEntry {
+interface DebugLogEntry {
   timestamp: number;
   level: 'log' | 'warn' | 'error';
   message: string;

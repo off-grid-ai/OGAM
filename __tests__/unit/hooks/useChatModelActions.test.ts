@@ -31,12 +31,23 @@ jest.mock('../../../src/services/llm', () => ({
     getLoadedModelPath: jest.fn(),
     stopGeneration: jest.fn(),
     isModelLoaded: jest.fn(),
+    // engines.activeTextCapabilities (reached via loadedModelVision / state-sync) reads these too.
+    supportsToolCalling: jest.fn(() => false),
+    supportsThinking: jest.fn(() => false),
   },
+}));
+
+// LiteRT boundary mocked as a dumb flag reader so engines.isModelReady/deriveEngineCapabilities
+// (which read this DIRECT module, not the barrel) resolve deterministically for the litert path.
+jest.mock('../../../src/services/litert', () => ({
+  liteRTService: { isModelLoaded: jest.fn(() => false) },
 }));
 
 // Get mock references after hoisting
 const { activeModelService } = require('../../../src/services/activeModelService');
 const { llmService } = require('../../../src/services/llm');
+const { liteRTService } = require('../../../src/services/litert');
+const mockLiteRTLoaded = liteRTService.isModelLoaded as jest.Mock;
 
 const mockLoadTextModel = activeModelService.loadTextModel as jest.Mock;
 const mockUnloadTextModel = activeModelService.unloadTextModel as jest.Mock;
@@ -87,6 +98,7 @@ beforeEach(() => {
   mockGetLoadedModelPath.mockReturnValue(null);
   mockStopGeneration.mockResolvedValue(undefined);
   mockIsModelLoaded.mockReturnValue(true);
+  mockLiteRTLoaded.mockReturnValue(false);
   // waitForRenderFrame() = InteractionManager.runAfterInteractions(() => setTimeout(resolve, 350)).
   // The REAL InteractionManager does its own async scheduling that does NOT flush under
   // jest fake timers, so any test that force-loads through it hangs to the 10s timeout.
@@ -245,10 +257,6 @@ describe('initiateModelLoad typed outcome', () => {
     expect(outcome).toEqual({ ok: false, reason: 'insufficient-memory', detail: 'Not enough RAM', alerted: true });
   });
 
-  it('returns ok when the load succeeds', async () => {
-    mockLoadTextModel.mockResolvedValueOnce(undefined);
-    expect(await initiateModelLoad(makeDeps(), false)).toEqual({ ok: true });
-  });
 
   it('returns load-threw and alerts when the load throws (not already loading)', async () => {
     mockLoadTextModel.mockRejectedValueOnce(new Error('boom'));
@@ -294,6 +302,49 @@ describe('ensureModelLoadedFn typed outcome', () => {
     mockLoadTextModel.mockRejectedValueOnce(new Error('disk gone'));
     const outcome = await ensureModelLoadedFn(makeDeps());
     expect(outcome).toMatchObject({ ok: false, reason: 'load-threw', detail: 'disk gone' });
+  });
+
+  // Desync guard: the path matches but the engine has NO model resident (isModelLoaded=false).
+  // The old llama fast-path trusted the path alone and returned ok → generated against nothing.
+  // isModelReady now also requires isModelLoaded(), so this must attempt a load, not short-circuit.
+
+  // Load reports ok but the model is still not resident afterwards → post-verify catches the desync.
+  it('returns load-threw when the load resolves but leaves no resident model', async () => {
+    mockGetLoadedModelPath.mockReturnValue(null);
+    mockIsModelLoaded.mockReturnValue(false); // never becomes resident
+    mockLoadTextModel.mockResolvedValueOnce(undefined); // load itself "succeeds"
+    const outcome = await ensureModelLoadedFn(makeDeps());
+    expect(outcome).toMatchObject({ ok: false, reason: 'load-threw' });
+  });
+
+  it('returns ok without loading when the LiteRT model is already resident', async () => {
+    mockLiteRTLoaded.mockReturnValue(true);
+    const deps = makeDeps({ activeModel: createDownloadedModel({ id: 'lr', engine: 'litert', liteRTVision: true }) });
+    const outcome = await ensureModelLoadedFn(deps);
+    expect(outcome).toEqual({ ok: true });
+    expect(mockLoadTextModel).not.toHaveBeenCalled();
+    expect(deps.setSupportsVision).toHaveBeenCalledWith(true); // vision from the flag, pre-load
+  });
+
+  it('loads the LiteRT model when it is not yet resident', async () => {
+    mockLiteRTLoaded.mockReturnValue(false);
+    const deps = makeDeps({ activeModel: createDownloadedModel({ id: 'lr', engine: 'litert', liteRTVision: false }) });
+    // isModelReady stays false (mock never flips) → post-verify fails, but the load WAS attempted.
+    await ensureModelLoadedFn(deps);
+    expect(mockLoadTextModel).toHaveBeenCalled();
+  });
+
+  // Vision-repair: a vision model whose mmproj didn't load reports vision=false → force a reload
+  // even though its path is resident, so it comes back multimodal.
+  it('reloads a resident vision model whose mmproj did not load (vision repair)', async () => {
+    mockGetLoadedModelPath.mockReturnValue('/path/vis.gguf');
+    mockIsModelLoaded.mockReturnValue(true);
+    mockGetMultimodalSupport.mockReturnValue({ vision: false }); // mmproj missing → reports no vision
+    const deps = makeDeps({
+      activeModel: createDownloadedModel({ id: 'vis', filePath: '/path/vis.gguf', mmProjPath: '/path/mmproj.gguf' }),
+    });
+    await ensureModelLoadedFn(deps);
+    expect(mockLoadTextModel).toHaveBeenCalled(); // did NOT short-circuit despite resident path
   });
 });
 

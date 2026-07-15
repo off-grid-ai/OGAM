@@ -6,6 +6,7 @@ import { Button } from '../../components/Button';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { useClearGpuCache } from '../../hooks/useImageGenerationSettings';
+import { SWEET_SPOT_SIZE } from '../../utils/imageGenAdvice';
 import { createStyles } from './styles';
 
 // ─── Advanced Sub-Components ─────────────────────────────────────────────────
@@ -209,8 +210,11 @@ export const ImageGenerationSection: React.FC = () => {
         testID="image-size"
         label="Image Size"
         description="Output resolution (smaller = faster, larger = more detail)"
-        value={settings?.imageWidth ?? 256}
-        min={128} max={512} step={64}
+        // Single source of truth for the floor: SD-class models render garbage below the
+        // sweet spot (256), so both this screen and the chat modal (ImageQualitySliders) share
+        // the SAME min/fallback — the surfaces can't diverge and a sub-256 value is unreachable.
+        value={Math.max(SWEET_SPOT_SIZE, settings?.imageWidth ?? SWEET_SPOT_SIZE)}
+        min={SWEET_SPOT_SIZE} max={512} step={64}
         formatValue={(v) => `${v}x${v}`}
         onChange={(value) => updateSettings({ imageWidth: value, imageHeight: value })}
       />

@@ -125,6 +125,52 @@ export async function checkMemoryForModel(
 }
 
 /**
+ * Find the largest context that fits available memory, stepping down from the
+ * requested size. Throws only when the model weights alone exceed available RAM
+ * (a load that would certainly crash the allocator); otherwise proceeds at the
+ * smallest context, since the estimate is intentionally conservative.
+ *
+ * Extracted from LLMService to keep llm.ts under the max-lines limit; behavior is
+ * unchanged. `getAvailableMemory` is passed in so this stays free of the hardware dep.
+ */
+export async function resolveSafeContext(args: {
+  fileSize: number;
+  requestedCtx: number;
+  quantizedCache: boolean;
+  override?: boolean;
+  getAvailableMemory: () => Promise<{ available: number; total: number }>;
+}): Promise<{ ctxLen: number; memCheck: Awaited<ReturnType<typeof checkMemoryForModel>> }> {
+  const { fileSize, requestedCtx, quantizedCache, override = false, getAvailableMemory: getMem } = args;
+  // Step down from the requested size so the LARGEST fitting context wins — a request
+  // of 16384 tries 14336, 12288, ... rather than jumping straight to a hardcoded 8192
+  // ceiling and needlessly shrinking context on devices that could hold more.
+  const STEP = 2048;
+  const fallbacks: number[] = [];
+  for (let ctx = requestedCtx - STEP; ctx >= 1024; ctx -= STEP) fallbacks.push(ctx);
+  for (const ctx of fallbacks) {
+    const mc = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: ctx, getAvailableMemory: getMem, quantizedCache });
+    if (mc.safe) {
+      logger.warn(`[LLM] Memory tight — reducing context ${requestedCtx} → ${ctx} (~${mc.estimatedMB.toFixed(0)}MB of ${mc.availableMB.toFixed(0)}MB available)`);
+      return { ctxLen: ctx, memCheck: mc };
+    }
+  }
+  const minCtx = fallbacks.length ? fallbacks[fallbacks.length - 1] : requestedCtx;
+  const finalCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: minCtx, getAvailableMemory: getMem, quantizedCache });
+  const modelMB = (fileSize * 1.2) / (1024 * 1024);
+  if (finalCheck.availableMB > 0 && modelMB > finalCheck.availableMB && !override) {
+    throw new Error(`Not enough memory to load this model: it needs ~${Math.round(modelMB)}MB but only ${Math.round(finalCheck.availableMB)}MB is available. Close other apps or choose a smaller model.`);
+  }
+  if (override && finalCheck.availableMB > 0 && modelMB > finalCheck.availableMB) {
+    // User forced the load ("Load Anyway" / continue). Skip the hard block and let the
+    // native loader's GPU→CPU→smaller-ctx fallback + OOM recovery try — they accepted
+    // the risk, and eviction already freed everything it could. NORMAL loads still throw.
+    logger.warn(`[LLM] OVERRIDE — proceeding despite tight memory (~${Math.round(modelMB)}MB needed, ${Math.round(finalCheck.availableMB)}MB free)`);
+  }
+  logger.warn(`[LLM] Memory very tight — proceeding at minimum context ${minCtx} (estimate may be conservative)`);
+  return { ctxLen: minCtx, memCheck: finalCheck };
+}
+
+/**
  * Wraps a llama.rn completion call with error handling for native crashes.
  * Catches ggml_abort and OOM-style errors and returns a structured error
  * instead of letting the app crash unrecoverably.

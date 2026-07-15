@@ -39,23 +39,21 @@ export const useWhisperTranscription = (): UseWhisperTranscriptionResult => {
 
   const { downloadedModelId, isModelLoaded, isModelLoading, loadModel } = useWhisperStore();
 
-  // Auto-load model if downloaded but not loaded
-  useEffect(() => {
-    let cancelled = false;
-    const autoLoadModel = async () => {
-      if (downloadedModelId && !isModelLoaded && !whisperService.isModelLoaded()) {
-        logger.log('[Whisper] Auto-loading model...');
-        try {
-          await loadModel();
-          if (!cancelled) logger.log('[Whisper] Model auto-loaded successfully');
-        } catch (err) {
-          if (!cancelled) logger.error('[Whisper] Failed to auto-load model:', err);
-        }
-      }
-    };
-    autoLoadModel();
-    return () => { cancelled = true; };
-  }, [downloadedModelId, isModelLoaded, loadModel]);
+  // On unmount, stop any in-flight realtime session. Without this the mic kept
+  // capturing after the user navigated away without releasing the button — the
+  // session stayed live for minutes with whisper pinned resident (B11). The
+  // mountedRef only flips a flag; it never told the native session to stop.
+  useEffect(() => () => {
+    if (whisperService.isCurrentlyTranscribing()) {
+      whisperService.forceReset();
+    }
+  }, []);
+
+  // NOTE: whisper is NOT eager-loaded here. It is warmed once at launch by
+  // modelPreloader.preloadStt (fits-gated) and loaded on demand by startRecording. An eager
+  // effect keyed on isModelLoaded re-fired the instant the residency manager EVICTED whisper to
+  // make room for a text model — reloading it into the just-freed RAM and undoing the eviction
+  // (the [MEM-SM] override measured corrupted free RAM). Loading on demand lets eviction stick.
 
   // Minimum time to show transcribing state (ms)
   const MIN_TRANSCRIBING_TIME = 600;
@@ -164,11 +162,13 @@ export const useWhisperTranscription = (): UseWhisperTranscriptionResult => {
     logger.log('[Whisper] Model loaded:', whisperService.isModelLoaded());
     logger.log('[Whisper] Current isRecording state:', isRecording);
 
-    // If already recording, stop first
+    // Already recording → absorb the redundant press. Previously this stopped and
+    // then re-started, entering the native transcribeRealtime a SECOND time while the
+    // first session was still tearing down → the "State: -100" collision (B12). A
+    // double-tap must be ONE clean recording, so ignore the extra start.
     if (isRecording || whisperService.isCurrentlyTranscribing()) {
-      logger.log('[Whisper] Already recording, stopping first...');
-      await stopRecording();
-      await new Promise<void>(resolve => setTimeout(resolve, 150));
+      logger.log('[Whisper] Already recording — ignoring redundant start (no second session)');
+      return;
     }
 
     if (!whisperService.isModelLoaded()) {

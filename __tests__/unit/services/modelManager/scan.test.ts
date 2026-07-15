@@ -18,13 +18,8 @@ jest.mock('../../../../src/stores', () => ({
   useAppStore: { getState: jest.fn(() => ({ downloadedModels: [], setDownloadedModels: jest.fn() })) },
 }));
 
-import { extractBaseName, findMatchingMmProj } from '../../../../src/services/modelManager/scan';
+import { extractBaseName } from '../../../../src/services/modelManager/scan';
 import { getCuratedLiteRTEntry, buildCuratedLiteRTUrl, CURATED_LITERT_ENTRIES } from '../../../../src/services/curatedLiteRTRegistry';
-import type RNFS from 'react-native-fs';
-
-function makeFile(name: string): RNFS.ReadDirResItemT {
-  return { name, path: `/models/${name}`, isFile: () => true, size: 1000, isDirectory: () => false, ctime: new Date(), mtime: new Date() };
-}
 
 // ---------------------------------------------------------------------------
 // curatedLiteRTRegistry
@@ -88,41 +83,5 @@ describe('extractBaseName', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// findMatchingMmProj
-// ---------------------------------------------------------------------------
-
-describe('findMatchingMmProj', () => {
-  it('returns undefined for empty file list', () => {
-    expect(findMatchingMmProj('gemma-4-e2b-it', [])).toBeUndefined();
-  });
-
-  it('matches by baseName substring in mmproj filename', () => {
-    const files = [makeFile('gemma-4-e2b-it-Q4_K_M-mmproj.gguf')];
-    expect(findMatchingMmProj('gemma-4-e2b-it', files)?.name).toBe('gemma-4-e2b-it-Q4_K_M-mmproj.gguf');
-  });
-
-  it('matches by noSeparators form (hyphens and underscores stripped)', () => {
-    // baseName = "smolvlm2-256m" → noSeparators = "smolvlm2256m"
-    const files = [makeFile('mmproj-SmolVLM2-256M-Instruct-bf16.gguf')];
-    expect(findMatchingMmProj('smolvlm2-256m', files)?.name).toBe('mmproj-SmolVLM2-256M-Instruct-bf16.gguf');
-  });
-
-  it('does NOT match an unrelated mmproj (gemma vs SmolLM2)', () => {
-    const files = [makeFile('gemma-4-E2B-it-Q4_K_M-mmproj.gguf')];
-    expect(findMatchingMmProj('smollm2-360m-instruct', files)).toBeUndefined();
-  });
-
-  it('returns first match when multiple mmproj files are present', () => {
-    const files = [
-      makeFile('gemma-4-e2b-it-mmproj.gguf'),
-      makeFile('gemma-4-e2b-it-v2-mmproj.gguf'),
-    ];
-    expect(findMatchingMmProj('gemma-4-e2b-it', files)?.name).toBe('gemma-4-e2b-it-mmproj.gguf');
-  });
-
-  it('match is case-insensitive', () => {
-    const files = [makeFile('Gemma-4-E2B-IT-mmproj.GGUF')];
-    expect(findMatchingMmProj('gemma-4-e2b-it', files)?.name).toBe('Gemma-4-E2B-IT-mmproj.GGUF');
-  });
-});
+// findMatchingMmProj (the loose substring matcher) was removed — model↔projector matching is now the
+// single strict rule in src/services/mmproj.ts, covered by __tests__/integration/models/mmProjMatchesModel.test.ts.

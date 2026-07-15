@@ -55,6 +55,7 @@ export interface MessageFactoryOptions {
   toolCallId?: string;
   toolCalls?: Array<{ id?: string; name: string; arguments: string }>;
   toolName?: string;
+  reasoningContent?: string;
 }
 
 export const createMessage = (options: MessageFactoryOptions = {}): Message => ({
@@ -71,6 +72,7 @@ export const createMessage = (options: MessageFactoryOptions = {}): Message => (
   toolCallId: options.toolCallId,
   toolCalls: options.toolCalls,
   toolName: options.toolName,
+  reasoningContent: options.reasoningContent,
 });
 
 export const createUserMessage = (content: string, options: Omit<MessageFactoryOptions, 'role' | 'content'> = {}): Message =>
@@ -144,6 +146,7 @@ export interface DownloadedModelFactoryOptions {
   mmProjFileSize?: number;
   engine?: 'llama' | 'litert';
   liteRTVision?: boolean;
+  liteRTAudio?: boolean;
 }
 
 export const createDownloadedModel = (options: DownloadedModelFactoryOptions = {}): DownloadedModel => ({
@@ -157,6 +160,8 @@ export const createDownloadedModel = (options: DownloadedModelFactoryOptions = {
   downloadedAt: options.downloadedAt ?? new Date().toISOString(),
   credibility: options.credibility,
   engine: options.engine ?? 'llama',
+  liteRTVision: options.liteRTVision,
+  liteRTAudio: options.liteRTAudio,
   isVisionModel: options.isVisionModel,
   mmProjPath: options.mmProjPath,
   mmProjFileName: options.mmProjFileName,

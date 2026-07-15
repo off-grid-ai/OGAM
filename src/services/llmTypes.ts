@@ -15,4 +15,6 @@ export interface LLMPerformanceStats {
   lastTimeToFirstToken: number;
   lastGenerationTime: number;
   lastTokenCount: number;
+  /** True when the completion hit the n_predict cap without an EOS token (cut off mid-output, B15). */
+  lastTruncated?: boolean;
 }

@@ -10,7 +10,7 @@ import { ragService } from '../services/rag';
 import type { RagDocument } from '../services/rag';
 import { isPickerStuck } from '../utils/pickerErrorUtils';
 
-export const formatFileSize = (bytes: number): string => {
+const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
   return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };

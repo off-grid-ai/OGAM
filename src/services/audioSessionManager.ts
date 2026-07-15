@@ -17,7 +17,7 @@ import { Platform } from 'react-native';
 import { AudioManager } from 'react-native-audio-api';
 import logger from '../utils/logger';
 
-export type AudioSessionMode = 'playback' | 'record';
+type AudioSessionMode = 'playback' | 'record';
 
 class AudioSessionManager {
   /** The category currently applied to the AVAudioSession (null = never set). */

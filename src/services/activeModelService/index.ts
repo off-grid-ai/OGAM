@@ -1,6 +1,7 @@
 // ActiveModelService — THE ONLY PLACE models should be loaded/unloaded from.
 import { llmService } from '../llm';
 import { liteRTService } from '../litert';
+import { getActiveEngineService } from '../engines';
 import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
 import { hardwareService } from '../hardware';
 import { modelResidencyManager } from '../modelResidency';
@@ -8,8 +9,8 @@ import { OverridableMemoryError, ImageModelIncompleteError } from '../modelLoadE
 import { validateImageModelDir } from '../../utils/imageModelIntegrity';
 import { remoteServerManager } from '../remoteServerManager';
 import { useAppStore, useRemoteServerStore } from '../../stores';
-import { ONNXImageModel } from '../../types';
 import logger from '../../utils/logger';
+import { textOverheadMultiplier } from './types';
 import type {
   ActiveModelInfo,
   ResourceUsage,
@@ -22,18 +23,12 @@ import {
   checkMemoryForDualModel as _checkMemoryForDualModel,
   getCurrentlyLoadedMemoryGB as _getCurrentlyLoadedMemoryGB,
 } from './memory';
-import { doLoadTextModel, doLoadImageModel } from './loaders';
+import { doLoadTextModel, doLoadImageModel, checkImageModelCanLoad } from './loaders';
 import {
   getResourceUsage as _getResourceUsage,
   syncWithNativeState as _syncWithNativeState,
 } from './utils';
-export type {
-  ModelType,
-  MemoryCheckSeverity,
-  MemoryCheckResult,
-  ActiveModelInfo,
-  ResourceUsage,
-} from './types';
+;
 class ActiveModelService {
   private readonly listeners: Set<ModelChangeListener> = new Set();
   private readonly loadingState = { text: false, image: false };
@@ -42,6 +37,12 @@ class ActiveModelService {
   private loadedImageModelThreads: number | null = null;
   private textLoadPromise: Promise<void> | null = null;
   private imageLoadPromise: Promise<void> | null = null;
+  /** The SINGLE writer for the loaded-text-model id: keeps the private field and the reactive store
+   *  projection (loadedTextModelId) in lockstep, so every surface reads one truth for "currently loaded". */
+  private setLoadedText(id: string | null): void {
+    this.loadedTextModelId = id;
+    useAppStore.getState().setLoadedTextModelId(id);
+  }
   getActiveModels(): ActiveModelInfo {
     const store = useAppStore.getState();
     const textModel =
@@ -151,7 +152,8 @@ class ActiveModelService {
     }
     // Use estimated runtime RAM (file size + overhead), not just file size,
     // so the residency budget reflects the model's real memory footprint.
-    const textSizeMB = Math.round((hardwareService.estimateModelRam(model) || 0) / (1024 * 1024));
+    // GPU-aware overhead: a GPU/NPU backend adds working buffers in system RAM the flat CPU 1.5× misses.
+    const textSizeMB = Math.round((hardwareService.estimateModelRam(model, textOverheadMultiplier(store.settings.inferenceBackend)) || 0) / (1024 * 1024));
     // LiteRT weights + KV are dirty/accelerator memory → gated on REAL free RAM (mmap GGUF
     // stays clean/physical-cap). Derived once so makeRoomFor and register agree.
     const textIsDirty = model.engine === 'litert';
@@ -177,7 +179,7 @@ class ActiveModelService {
       override: !!opts?.override || modelResidencyManager.hasSessionOverride(modelId),
       loadedTextModelId: this.loadedTextModelId,
       onLoaded: id => {
-        this.loadedTextModelId = id;
+        this.setLoadedText(id);
         useAppStore.getState().setTextModelEvicted(false); // loaded → clear any prior eviction
         modelResidencyManager.register(
           { key: 'text', type: 'text', modelId, sizeMB: textSizeMB, dirtyMemory: textIsDirty },
@@ -185,7 +187,7 @@ class ActiveModelService {
         );
       },
       onError: () => {
-        this.loadedTextModelId = null;
+        this.setLoadedText(null);
       },
       onFinally: () => {
         this.loadingState.text = false;
@@ -194,6 +196,18 @@ class ActiveModelService {
       },
     });
     await this.textLoadPromise;
+  }
+  /**
+   * The ONE owner of the "active text model" write. Selecting a model MARKS it active (the load is
+   * deferred to the first message); this is the single place a selection is recorded, so the View
+   * dispatches this intent instead of poking the store — presentation holds no authoritative state.
+   * activeModelId is then set from exactly three places, all here in the service: select (this),
+   * load-success (loaders), and cleared on load-failure/unload — so it can never drift from reality.
+   */
+  selectTextModel(modelId: string): void {
+    const store = useAppStore.getState();
+    store.setActiveModelId(modelId);
+    store.setLastTextModelId(modelId); // remembered choice → routing reloads it on demand after eviction
   }
   async unloadTextModel(keepSelection = false): Promise<void> {
     await modelResidencyManager.runExclusive('unload:text', () =>
@@ -212,17 +226,16 @@ class ActiveModelService {
       await this.textLoadPromise;
     }
     const storeActiveModelId = useAppStore.getState().activeModelId;
-    const isNativeLoaded = llmService.isModelLoaded();
+    // Unload the ACTIVE engine (was llama-only → a LiteRT eviction never freed native memory).
+    const isNativeLoaded = getActiveEngineService()?.isModelLoaded() ?? false;
     if (!storeActiveModelId && !this.loadedTextModelId && !isNativeLoaded) {
       return;
     }
     this.loadingState.text = true;
     this.notifyListeners();
     try {
-      if (isNativeLoaded) {
-        await llmService.unloadModel();
-      }
-      this.loadedTextModelId = null;
+      if (isNativeLoaded) await getActiveEngineService()?.unloadModel();
+      this.setLoadedText(null);
       // Eviction (keepSelection) keeps the selection & flags "tap to continue"; user unload clears both.
       if (keepSelection) { if (isNativeLoaded) useAppStore.getState().setTextModelEvicted(true); }
       else { useAppStore.getState().setActiveModelId(null); useAppStore.getState().setTextModelEvicted(false); }
@@ -231,45 +244,6 @@ class ActiveModelService {
       this.loadingState.text = false;
       this.notifyListeners();
     }
-  }
-  private async checkImageModelCanLoad(
-    modelId: string,
-    model: ONNXImageModel,
-    opts?: { override?: boolean },
-  ): Promise<{ canLoad: boolean; error?: string; overridable?: boolean }> {
-    if (model.backend === 'qnn') {
-      const socInfo = await hardwareService.getSoCInfo();
-      if (!socInfo.hasNPU) {
-        return {
-          canLoad: false,
-          // A missing NPU is a hardware capability gap, not a memory budget — not overridable.
-          error:
-            'NPU models require a Qualcomm Snapdragon processor. Your device does not have a compatible NPU. Please use a GPU model instead.',
-        };
-      }
-    }
-    // Residency manager is authoritative for memory: evict others to fit the budget
-    // before loading. If it can't fit even after eviction, block — unless "Load Anyway".
-    const { fits } = await modelResidencyManager.makeRoomFor(
-      {
-        key: 'image',
-        type: 'image',
-        modelId: model.id,
-        sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)),
-        // CoreML/ONNX image weights are dirty (jetsam-counted) memory → gate on real free RAM.
-        dirtyMemory: true,
-      },
-      { override: opts?.override },
-    );
-    if (!fits) {
-      // Refusal UNDER override = survival floor (hard limit) → non-overridable, so the
-      // UI stops re-offering "Load Anyway" as a no-op that re-runs the same failing load.
-      const overridable = !opts?.override;
-      return { canLoad: false, overridable, error: overridable
-        ? `Not enough memory to load ${model.name}. Free up space or choose a smaller model.`
-        : `Not enough memory to load ${model.name}, even after freeing other models. Close other apps or choose a smaller model.` };
-    }
-    return { canLoad: true };
   }
   async loadImageModel(
     modelId: string,
@@ -314,7 +288,7 @@ class ActiveModelService {
       const integ = await validateImageModelDir(model.modelPath, model.backend);
       if (!integ.complete) throw new ImageModelIncompleteError(integ.missing);
     }
-    const check = await this.checkImageModelCanLoad(modelId, model, opts);
+    const check = await checkImageModelCanLoad(modelId, model, opts);
     if (!check.canLoad) {
       throw check.overridable
         ? new OverridableMemoryError(check.error ?? 'Not enough memory to load this model.')
@@ -441,6 +415,14 @@ class ActiveModelService {
     // turned the rows into "Unknown"/"—" after an eject.)
     const results = await this.unloadAllModels(true);
     let count = (results.textUnloaded ? 1 : 0) + (results.imageUnloaded ? 1 : 0);
+    // Eject means ALL, not just text+image: free every remaining resident (sidecars — whisper/tts/embedding),
+    // which unloadAllModels does not touch. Their real unload runs; they lazy-reload on next use. Previously
+    // these leaked and kept charging the memory budget after the user ejected everything (DEV-B1).
+    for (const r of modelResidencyManager.getResidents()) {
+      const ejected = await modelResidencyManager.evictByKey(r.key);
+      logger.log(`[MODEL-SM] ejectAll → sidecar ${r.type} (${r.key}) evicted=${ejected}`);
+      if (ejected) count += 1;
+    }
     if (hasRemote) {
       remoteServerManager.clearActiveRemoteModel();
       count += 1;
@@ -478,7 +460,7 @@ class ActiveModelService {
       loadedTextModelId: this.loadedTextModelId,
       loadedImageModelId: this.loadedImageModelId,
       setLoadedTextModelId: id => {
-        this.loadedTextModelId = id;
+        this.setLoadedText(id);
       },
       setLoadedImageModelId: id => {
         this.loadedImageModelId = id;

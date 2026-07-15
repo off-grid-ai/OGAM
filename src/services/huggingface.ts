@@ -1,5 +1,7 @@
 import { HFModelSearchResult, ModelInfo, ModelFile, ModelCredibility } from '../types';
 import { HF_API, QUANTIZATION_INFO, LMSTUDIO_AUTHORS, OFFICIAL_MODEL_AUTHORS, VERIFIED_QUANTIZERS } from '../constants';
+import { looksLikeVisionModel } from '../utils/visionModel';
+import { isMMProjFile } from './mmproj';
 
 class HuggingFaceService {
   private baseUrl = HF_API.baseUrl;
@@ -134,11 +136,9 @@ class HuggingFaceService {
     return 'Unknown';
   }
 
+  // Delegates to the single source of truth (src/services/mmproj.ts) so "is this a projector" is defined once.
   private isMMProjFile(fileName: string): boolean {
-    const lower = fileName.toLowerCase();
-    return lower.includes('mmproj') ||
-           lower.includes('projector') ||
-           (lower.includes('clip') && lower.endsWith('.gguf'));
+    return isMMProjFile(fileName);
   }
 
   private findMatchingMMProj(
@@ -175,8 +175,9 @@ class HuggingFaceService {
   private detectModelType(name: string, tags: string[]): string {
     if (tags.some(t => t.includes('code')) || name.includes('code') || name.includes('coder'))
       return 'Code generation';
-    if (tags.some(t => t.includes('vision') || t.includes('multimodal') || t.includes('image-text'))
-      || name.includes('vision') || name.includes('vlm') || name.includes('llava'))
+    // Single source of truth (utils/visionModel) — was a 3-keyword subset that missed Pixtral/
+    // Moondream/InternVL etc. (DR2).
+    if (looksLikeVisionModel({ name, tags }))
       return 'Vision';
     return 'Text generation';
   }

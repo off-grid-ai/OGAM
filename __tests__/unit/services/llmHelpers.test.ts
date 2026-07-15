@@ -145,19 +145,13 @@ describe('supportsNativeThinking', () => {
     expect(supportsNativeThinking(null)).toBe(false);
   });
 
-  it('returns result of isJinjaSupported() when available', () => {
-    const ctx = { isJinjaSupported: jest.fn(() => true) } as any;
-    expect(supportsNativeThinking(ctx)).toBe(true);
-    expect(ctx.isJinjaSupported).toHaveBeenCalled();
-  });
-
-  it('reads chatTemplates.jinja when isJinjaSupported is not a function', () => {
-    const ctx = { model: { chatTemplates: { jinja: { default: 'template' } } } } as any;
-    expect(supportsNativeThinking(ctx)).toBe(true);
-  });
-
-  it('returns false when jinja has no default or toolUse', () => {
-    const ctx = { model: { chatTemplates: { jinja: {} } } } as any;
+  // A valid Jinja template with NO reasoning markers (Mistral 7B has a tool-use template) does
+  // NOT support thinking — capability is the reasoning delimiters, not Jinja support.
+  it('returns false for a jinja-supported model whose template has no reasoning markers (Mistral 7B)', () => {
+    const ctx = {
+      isJinjaSupported: jest.fn(() => true),
+      model: { metadata: { 'tokenizer.chat_template': "{{ bos }}[INST] {{ messages }} [/INST]" } },
+    } as any;
     expect(supportsNativeThinking(ctx)).toBe(false);
   });
 
@@ -322,14 +316,19 @@ describe('getStreamingDelta', () => {
   });
 });
 
-describe('supportsNativeThinking — toolUse branch', () => {
-  it('returns true when jinja has toolUse but no default', () => {
-    const ctx = { model: { chatTemplates: { jinja: { toolUse: 'some-template' } } } } as any;
-    expect(supportsNativeThinking(ctx)).toBe(true);
-  });
-});
-
 describe('getModelMaxContext — alternative metadata keys', () => {
+  it('reads the ARCHITECTURE-prefixed key (gemma4.context_length = 131072) — device gemma-4-E2B', () => {
+    // GGUF ground truth from the device log: general.architecture=gemma4, gemma4.context_length=131072.
+    // Reading only the llama-prefixed key returned null → the slider was wrongly capped at 32K.
+    const ctx = { model: { metadata: { 'general.architecture': 'gemma4', 'gemma4.context_length': '131072' } } } as any;
+    expect(getModelMaxContext(ctx)).toBe(131072);
+  });
+
+  it('reads the arch key for other architectures too (qwen3)', () => {
+    const ctx = { model: { metadata: { 'general.architecture': 'qwen3', 'qwen3.context_length': '32768' } } } as any;
+    expect(getModelMaxContext(ctx)).toBe(32768);
+  });
+
   it('falls back to general.context_length when llama key absent', () => {
     const ctx = { model: { metadata: { 'general.context_length': '8192' } } } as any;
     expect(getModelMaxContext(ctx)).toBe(8192);
@@ -416,6 +415,36 @@ describe('captureGpuInfo', () => {
     const ctx = { gpu: false, reasonNoGPU: 'No GPU', devices: [] } as any;
     const info = captureGpuInfo(ctx, false, 32);
     expect(info.gpuEnabled).toBe(false);
+  });
+
+  it('carries gpuAttemptFailed through for the fallback verdict', () => {
+    const ctx = { gpu: true, reasonNoGPU: '', devices: [] } as any;
+    expect(captureGpuInfo(ctx, true, 32).gpuAttemptFailed).toBe(true);
+    expect(captureGpuInfo(ctx, false, 32).gpuAttemptFailed).toBe(false);
+  });
+});
+
+describe('describeGpuFallback — the silent GPU→CPU downgrade verdict (device 2026-07-13 18:57)', () => {
+  const { describeGpuFallback } = require('../../../src/services/llmHelpers');
+
+  it('null when the user selected CPU (nothing was downgraded)', () => {
+    expect(describeGpuFallback({ requestedGpuLayers: 0, activeGpuLayers: 0, gpuAttemptFailed: false })).toBeNull();
+  });
+
+  it('null when the GPU offload succeeded', () => {
+    expect(describeGpuFallback({ requestedGpuLayers: 99, activeGpuLayers: 24, gpuAttemptFailed: false })).toBeNull();
+  });
+
+  it('names the init failure when the GPU attempt failed (the 8000ms timeout class)', () => {
+    const notice = describeGpuFallback({ requestedGpuLayers: 99, activeGpuLayers: 0, gpuAttemptFailed: true });
+    expect(notice).toMatch(/running on CPU/i);
+    expect(notice).toMatch(/failed or timed out/i);
+  });
+
+  it('names the device refusal when GPU was requested but never attempted (capability/RAM cap zeroed it)', () => {
+    const notice = describeGpuFallback({ requestedGpuLayers: 99, activeGpuLayers: 0, gpuAttemptFailed: false });
+    expect(notice).toMatch(/running on CPU/i);
+    expect(notice).toMatch(/on this device/i);
   });
 });
 
@@ -561,7 +590,7 @@ describe('initContextWithFallback — GPU timeout on Android', () => {
       .mockResolvedValueOnce(cpuCtx);
 
     const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, 4);
-    jest.advanceTimersByTime(8001);
+    jest.advanceTimersByTime(25001);
     const result = await resultPromise;
 
     expect(result.gpuAttemptFailed).toBe(true);
@@ -585,7 +614,7 @@ describe('initContextWithFallback — GPU timeout on Android', () => {
       .mockResolvedValueOnce(cpuCtx);
 
     const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, 4);
-    jest.advanceTimersByTime(8001);
+    jest.advanceTimersByTime(25001);
     await resultPromise;
 
     // Late ctx whose release() throws — safeRelease must swallow the error

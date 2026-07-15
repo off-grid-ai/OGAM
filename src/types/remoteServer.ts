@@ -6,7 +6,7 @@
  */
 
 /** Provider types supported by the system */
-export type RemoteProviderType = 'openai-compatible' | 'anthropic';
+type RemoteProviderType = 'openai-compatible' | 'anthropic';
 
 /** Remote server configuration */
 export interface RemoteServer {
@@ -47,7 +47,7 @@ export interface RemoteModel {
 }
 
 /** Capabilities advertised by a remote model */
-export interface RemoteModelCapabilities {
+interface RemoteModelCapabilities {
   /** Supports vision/image input */
   supportsVision: boolean;
   /** Supports function/tool calling */
@@ -80,7 +80,7 @@ export interface ServerTestResult {
 }
 
 /** Server information returned from health check */
-export interface ServerInfo {
+interface ServerInfo {
   /** Server software name (e.g., "ollama", "lmstudio") */
   name?: string;
   /** Server version */
@@ -89,46 +89,3 @@ export interface ServerInfo {
   type?: string;
 }
 
-/** Settings for remote generation */
-export interface RemoteGenerationSettings {
-  /** Connection timeout in milliseconds */
-  connectionTimeout: number;
-  /** Time to wait for first token */
-  firstTokenTimeout: number;
-  /** Time to wait between tokens */
-  tokenTimeout: number;
-  /** Maximum generation time */
-  maxGenerationTime: number;
-}
-
-/** Default generation settings for remote servers */
-export const DEFAULT_REMOTE_GENERATION_SETTINGS: RemoteGenerationSettings = {
-  connectionTimeout: 5000, // 5 seconds
-  firstTokenTimeout: 30000, // 30 seconds
-  tokenTimeout: 60000, // 60 seconds between tokens
-  maxGenerationTime: 300000, // 5 minutes max
-};
-
-/** Unified model representation for UI - abstracts local vs remote */
-export interface SelectableModel {
-  /** Unique identifier (filePath for local, modelId for remote) */
-  id: string;
-  /** Display name */
-  name: string;
-  /** Whether this is a local or remote model */
-  source: 'local' | 'remote';
-  /** Server ID for remote models */
-  serverId?: string;
-  /** Server name for remote models */
-  serverName?: string;
-  /** Model capabilities */
-  capabilities: RemoteModelCapabilities;
-  /** For local models: file path */
-  filePath?: string;
-  /** For local models: file size */
-  fileSize?: number;
-  /** For local models: quantization type */
-  quantization?: string;
-  /** For remote models: the original RemoteModel reference */
-  remoteModel?: RemoteModel;
-}

@@ -2,7 +2,7 @@ import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY } from '../../constants';
 import { createRemoteStyles } from './remoteStyles';
 
-export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   tabBar: {
     flexDirection: 'row' as const,
     paddingHorizontal: 16,
@@ -44,18 +44,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.primary,
-  },
-  loadingBanner: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    backgroundColor: `${colors.primary}20`,
-    paddingVertical: 10,
-    gap: 10,
-  },
-  loadingText: {
-    ...TYPOGRAPHY.body,
-    color: colors.primary,
   },
   content: {
     padding: 16,

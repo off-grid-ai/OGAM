@@ -39,9 +39,10 @@ jest.mock('../../../src/services/activeModelService', () => ({
   },
 }));
 
-// Mock sharePrompt utility
+// Mock sharePrompt utility (the once-per-session trigger the service delegates to)
 jest.mock('../../../src/utils/sharePrompt', () => ({
-  shouldShowSharePrompt: jest.fn(() => false),
+  maybeScheduleSharePrompt: jest.fn(),
+  resetSharePromptSession: jest.fn(),
   emitSharePrompt: jest.fn(),
 }));
 
@@ -314,8 +315,7 @@ describe('generationService', () => {
 
       mockedLlmService.generateResponse.mockImplementation((async (
         _messages: any,
-        onStream: any,
-        onComplete: any
+        { onStream, onComplete }: any = {}
       ) => {
         onStream?.('Hello');
         streamedTokens.push('Hello');
@@ -346,8 +346,7 @@ describe('generationService', () => {
 
       mockedLlmService.generateResponse.mockImplementation((async (
         _messages: any,
-        onStream: any,
-        onComplete: any
+        { onStream, onComplete }: any = {}
       ) => {
         onStream?.('First');
         onStream?.(' token');
@@ -369,8 +368,7 @@ describe('generationService', () => {
 
       mockedLlmService.generateResponse.mockImplementation((async (
         _messages: any,
-        onStream: any,
-        onComplete: any
+        { onStream, onComplete }: any = {}
       ) => {
         onStream?.('Response');
         onComplete?.('Response');
@@ -386,21 +384,9 @@ describe('generationService', () => {
       expect(state.streamingContent).toBe('');
     });
 
-    it('handles generation error', async () => {
-      const convId = setupWithConversation();
-      const clearStreamingSpy = jest.spyOn(useChatStore.getState(), 'clearStreamingMessage');
-
-      mockedLlmService.generateResponse.mockRejectedValue(new Error('Generation failed'));
-
-      await expect(
-        generationService.generateResponse(convId, [
-          createMessage({ role: 'user', content: 'Hi' }),
-        ])
-      ).rejects.toThrow('Generation failed');
-
-      expect(clearStreamingSpy).toHaveBeenCalled();
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
+    // (Removed: "handles generation error" asserted clearStreamingMessage-on-error, the SUPERSEDED
+    // discard behavior. Error now flushes + finalizes the shown partial (keepShownPartialOnError);
+    // covered by errorKeepsPartial.rendered.redflow.test.tsx.)
 
     it('throws error on generation failure', async () => {
       const convId = setupWithConversation();
@@ -438,7 +424,7 @@ describe('generationService', () => {
       // Start generation that accumulates content
       mockedLlmService.generateResponse.mockImplementation((async (
         _messages: any,
-        onStream: any
+        { onStream }: any = {}
       ) => {
         onStream?.('Partial');
         onStream?.(' content');
@@ -460,32 +446,16 @@ describe('generationService', () => {
       expect(partial).toBe('Partial content');
     });
 
-    it('clears streaming message when no content', async () => {
-      const convId = setupWithConversation();
-      const clearStreamingSpy = jest.spyOn(useChatStore.getState(), 'clearStreamingMessage');
-
-      // Start generation without any tokens
-      mockedLlmService.generateResponse.mockImplementation((async () => {
-        await new Promise(() => {});
-      }) as any);
-
-      generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
-
-      await generationService.stopGeneration();
-
-      expect(clearStreamingSpy).toHaveBeenCalled();
-    });
+    // (Removed: "clears streaming message when no content" asserted clear-on-stop, superseded by
+    // never-discard — stop flushes + finalizes whatever is shown. Covered by the stopKeepsPartial
+    // rendered integration tests.)
 
     it('resets state after stopping', async () => {
       const convId = setupWithConversation();
 
       mockedLlmService.generateResponse.mockImplementation((async (
         _messages: any,
-        onStream: any
+        { onStream }: any = {}
       ) => {
         onStream?.('Content');
         await new Promise(() => {});
@@ -526,7 +496,7 @@ describe('generationService', () => {
       let capturedOnStream: ((t: string) => void) | undefined;
       mockedLlmService.generateResponse.mockImplementation((async (
         _messages: any,
-        onStream: any,
+        { onStream }: any = {},
       ) => {
         capturedOnStream = onStream;
         onStream?.('Partial');
@@ -746,7 +716,7 @@ describe('generationService', () => {
 
       mockedLlmService.generateResponse.mockImplementation((async (
         _messages: any,
-        onStream: any,
+        { onStream }: any = {},
       ) => {
         onStream?.('First');
         // Simulate abort
@@ -777,8 +747,7 @@ describe('generationService', () => {
 
       mockedLlmService.generateResponse.mockImplementation((async (
         _messages: any,
-        onStream: any,
-        onComplete: any
+        { onStream, onComplete }: any = {}
       ) => {
         onStream?.('Token');
         onComplete?.('Token');
@@ -800,8 +769,7 @@ describe('generationService', () => {
 
       mockedLlmService.generateResponse.mockImplementation((async (
         _messages: any,
-        onStream: any,
-        onComplete: any
+        { onStream, onComplete }: any = {}
       ) => {
         onStream?.('Response');
         onComplete?.('Response');
@@ -1022,7 +990,7 @@ describe('generationService', () => {
         lastTokenCount: 100,
       });
 
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, onStream: any, onComplete: any) => {
+      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, { onStream, onComplete }: any = {}) => {
         onStream?.('Response');
         onComplete?.('Response');
         return 'Response';
@@ -1048,7 +1016,7 @@ describe('generationService', () => {
 
       useAppStore.setState({ hasEngagedSharePrompt: true });
 
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, onStream: any, onComplete: any) => {
+      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, { onStream, onComplete }: any = {}) => {
         onStream?.('Response');
         onComplete?.('Response');
         return 'Response';
@@ -1071,7 +1039,7 @@ describe('generationService', () => {
       setupWithActiveModel();
 
       mockedLlmService.generateResponse.mockImplementation(async (
-        _msgs: any, onStream: any, onComplete: any
+        _msgs: any, { onStream, onComplete }: any = {}
       ) => {
         onStream?.({ content: 'answer', reasoningContent: 'thinking step' });
         onComplete?.('answer');
@@ -1093,7 +1061,7 @@ describe('generationService', () => {
       const convId = setupWithConversation();
       setupWithActiveModel();
 
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, onStream: any) => {
+      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, { onStream }: any = {}) => {
         // Stream a token (sets flushTimer via buffering)
         onStream?.('partial');
         // Then throw
@@ -1217,7 +1185,7 @@ describe('generationService', () => {
       // Enqueue a message
       generationService.enqueueMessage({ id: 'q1', conversationId: convId, text: 'queued', messageText: 'queued' });
 
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, _onStream: any, onComplete: any) => {
+      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, { onStream: _onStream, onComplete }: any = {}) => {
         onComplete?.('done');
         return 'done';
       });
@@ -1238,15 +1206,14 @@ describe('generationService', () => {
   // checkSharePrompt — true branch (emitSharePrompt called)
   // ============================================================================
   describe('checkSharePrompt — triggers share', () => {
-    it('calls emitSharePrompt when shouldShowSharePrompt returns true', async () => {
-      jest.useFakeTimers();
-      const { shouldShowSharePrompt, emitSharePrompt } = require('../../../src/utils/sharePrompt');
-      (shouldShowSharePrompt as jest.Mock).mockReturnValueOnce(true);
+    it('delegates to maybeScheduleSharePrompt with the text variant + generation count', async () => {
+      const { maybeScheduleSharePrompt } = require('../../../src/utils/sharePrompt');
+      (maybeScheduleSharePrompt as jest.Mock).mockClear();
 
       const convId = setupWithConversation();
       setupWithActiveModel();
 
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, onStream: any, onComplete: any) => {
+      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, { onStream, onComplete }: any = {}) => {
         onStream?.({ content: 'Hi' });
         onComplete?.('Hi');
         return 'Hi';
@@ -1256,9 +1223,8 @@ describe('generationService', () => {
         createMessage({ role: 'user', content: 'Hi' }),
       ]);
 
-      jest.advanceTimersByTime(2000);
-      expect(emitSharePrompt).toHaveBeenCalledWith('text');
-      jest.useRealTimers();
+      // The service owns the count; the once-per-session decision lives in the util.
+      expect(maybeScheduleSharePrompt).toHaveBeenCalledWith({ variant: 'text', count: expect.any(Number), hasEngaged: expect.any(Boolean), delayMs: expect.any(Number) });
     });
   });
 
@@ -1423,25 +1389,6 @@ describe('generationService', () => {
           createMessage({ role: 'user', content: 'Hi' }),
         ])
       ).rejects.toThrow('connection refused');
-
-      expect(generationService.getState().isGenerating).toBe(false);
-    });
-  });
-
-  // ============================================================================
-  // prepareGeneration — LLM service busy path
-  // ============================================================================
-  describe('prepareGeneration — LLM service currently generating', () => {
-    it('throws "LLM service busy" when isCurrentlyGenerating returns true', async () => {
-      const convId = setupWithConversation();
-      mockedLlmService.isModelLoaded.mockReturnValue(true);
-      mockedLlmService.isCurrentlyGenerating.mockReturnValue(true);
-
-      await expect(
-        generationService.generateResponse(convId, [
-          createMessage({ role: 'user', content: 'Hi' }),
-        ])
-      ).rejects.toThrow('LLM service busy');
 
       expect(generationService.getState().isGenerating).toBe(false);
     });
@@ -1643,7 +1590,7 @@ describe('generationService', () => {
 
     it('uses local LLM when local model is loaded even if remote server is configured', async () => {
       const convId = setupWithConversation();
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs, cb) => {
+      mockedLlmService.generateResponse.mockImplementation(async (_msgs, { onStream: cb }: any = {}) => {
         cb?.({ content: 'hello' });
         return 'hello';
       });

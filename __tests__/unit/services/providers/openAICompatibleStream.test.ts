@@ -100,6 +100,39 @@ describe('ThinkTagParser', () => {
     parser.process('prefix<think>x</think>', onToken, jest.fn());
     expect(onToken).toHaveBeenCalledWith('prefix');
   });
+
+  // DR1: remote providers can stream Gemma/Qwen channel reasoning as delta.content.
+  // The streaming parser must recognise ALL reasoning formats (the shared grammar),
+  // not just <think>, or the reasoning leaks into the visible answer.
+  it('routes Gemma 4 channel thought to onReasoning (not the visible answer)', () => {
+    const parser = new ThinkTagParser();
+    const tokens: string[] = [];
+    const reasoning: string[] = [];
+    parser.process('<|channel>thought\nweighing options<channel|>Here is the answer.', t => tokens.push(t), r => reasoning.push(r));
+    expect(reasoning.join('')).toBe('weighing options');
+    expect(tokens.join('')).toBe('Here is the answer.');
+  });
+
+  it('routes Qwen analysis/final channel to onReasoning (not the visible answer)', () => {
+    const parser = new ThinkTagParser();
+    const tokens: string[] = [];
+    const reasoning: string[] = [];
+    parser.process('<|channel|>analysis<|message|>step by step<|channel|>final<|message|>Final answer.', t => tokens.push(t), r => reasoning.push(r));
+    expect(reasoning.join('')).toBe('step by step');
+    expect(tokens.join('')).toBe('Final answer.');
+  });
+
+  it('handles a Gemma channel open split across two chunks', () => {
+    const parser = new ThinkTagParser();
+    const tokens: string[] = [];
+    const reasoning: string[] = [];
+    const cb = (t: string) => tokens.push(t);
+    const rc = (r: string) => reasoning.push(r);
+    parser.process('hi<|chan', cb, rc);
+    parser.process('nel>thought\ndeep<channel|>done', cb, rc);
+    expect(tokens.join('')).toBe('hidone');
+    expect(reasoning.join('')).toBe('deep');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -115,12 +148,16 @@ describe('processDelta', () => {
     expect(state.fullContent).toBe('hello');
   });
 
-  it('does not call onReasoning when thinkingEnabled=false and reasoning_content present', () => {
+  it('STILL surfaces the DEDICATED reasoning_content field when thinkingEnabled=false (B16/B17)', () => {
+    // A provider's structured `reasoning_content` field is real reasoning output and is always
+    // surfaced — remote models have no local thinking toggle (B17), so suppressing it hid
+    // legitimate reasoning. Only INLINE <think> tags respect the local toggle (see the
+    // "suppresses think-tag reasoning when thinkingEnabled=false" case below).
     const state = makeState();
     const { thinkTagParser, callbacks, onReasoning } = makeCtx(false);
     processDelta({ reasoning_content: 'private thought' }, state, { thinkingEnabled: false, callbacks, thinkTagParser });
-    expect(onReasoning).not.toHaveBeenCalled();
-    expect(state.fullReasoningContent).toBe('');
+    expect(onReasoning).toHaveBeenCalledWith('private thought');
+    expect(state.fullReasoningContent).toBe('private thought');
   });
 
   it('calls onReasoning for reasoning_content when thinkingEnabled=true', () => {

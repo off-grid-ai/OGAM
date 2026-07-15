@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import { createModelRowStyles } from './styles';
@@ -19,6 +19,8 @@ export interface ModelRowProps {
   isActive?: boolean;
   /** Show the trailing checkmark (currently loaded). */
   isLoaded?: boolean;
+  /** This model is being loaded right now — show a trailing spinner on the row itself. */
+  loading?: boolean;
   /** Accent: text models use the primary (emerald) accent, image models the info accent. */
   variant?: 'text' | 'image';
   disabled?: boolean;
@@ -32,7 +34,7 @@ export interface ModelRowProps {
  * render an identical card and can't drift into differential designs.
  */
 export const ModelRow: React.FC<ModelRowProps> = ({
-  name, size, quant, isVision, ramHint, isActive, isLoaded, variant = 'text', disabled, onPress, testID,
+  name, size, quant, isVision, ramHint, isActive, isLoaded, loading, variant = 'text', disabled, onPress, testID,
 }) => {
   const styles = useThemedStyles(createModelRowStyles);
   const { colors } = useTheme();
@@ -71,11 +73,13 @@ export const ModelRow: React.FC<ModelRowProps> = ({
         </View>
         {!!ramHint && <Text style={styles.ramHint}>{ramHint}</Text>}
       </View>
-      {isLoaded && (
+      {loading ? (
+        <ActivityIndicator testID="model-row-loading" size="small" color={isImage ? colors.info : colors.primary} />
+      ) : isLoaded ? (
         <View style={[styles.checkmark, isImage ? styles.checkmarkImage : styles.checkmarkText]}>
           <Icon name="check" size={16} color={colors.background} />
         </View>
-      )}
+      ) : null}
     </TouchableOpacity>
   );
 };

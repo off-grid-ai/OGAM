@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Setup Java
@@ -39,15 +39,29 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
+    env:
+      PRO_SUBMODULE_PAT: ${{ secrets.PRO_SUBMODULE_PAT }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check out pro submodule (private; skipped on open-core forks)
+        # tsc sees __tests__/pro/* which import @offgrid/pro/*; without the submodule those resolve
+        # to nothing (TS2307) and typecheck fails. Pull it when the PAT is present (this org's CI);
+        # forks without the secret skip it and tsconfig excludes the pro paths.
+        if: ${{ env.PRO_SUBMODULE_PAT != '' }}
+        env:
+          PRO_PAT: ${{ env.PRO_SUBMODULE_PAT }}
+        run: |
+          git config --global url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf "https://github.com/"
+          git submodule update --init --recursive pro
+          git config --global --unset url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf || true
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -56,8 +70,51 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+  architecture:
+    # Standing gates: dependency-cruiser (layering, engine DIP, import cycles, orphans — 0 violations,
+    # no baseline) + knip (dead files/exports/types/deps — 0 issues). Both fail on anything NEW.
+    runs-on: ubuntu-latest
+    env:
+      PRO_SUBMODULE_PAT: ${{ secrets.PRO_SUBMODULE_PAT }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check out pro submodule (private; skipped on open-core forks)
+        # knip/depcruise scan pro-importing code; without the submodule their reachability graph is
+        # incomplete (false unused/orphan reports). Pull it when the PAT is present; forks skip it.
+        if: ${{ env.PRO_SUBMODULE_PAT != '' }}
+        env:
+          PRO_PAT: ${{ env.PRO_SUBMODULE_PAT }}
+        run: |
+          git config --global url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf "https://github.com/"
+          git submodule update --init --recursive pro
+          git config --global --unset url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf || true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Dependency-cruiser (architecture gate)
+        run: npm run depcruise
+
+      - name: knip (dead-code gate)
+        run: npm run knip
+
   test:
     runs-on: macos-latest
+    env:
+      # Exposed at the job level so the step `if:` below can read it: the `secrets` context
+      # is NOT allowed inside an `if:` condition (GitHub rejects the whole workflow at
+      # startup — a 0-second failure), but the `env` context IS. This one line being an
+      # `if: ${{ secrets.* }}` is what took the entire CI pipeline down.
+      PRO_SUBMODULE_PAT: ${{ secrets.PRO_SUBMODULE_PAT }}
 
     steps:
       - name: Checkout code
@@ -68,9 +125,9 @@ jobs:
         # pro/ submodule so the pro-dependent suites (TTS/MCP/audio) run against the REAL
         # package — a green run then actually exercises pro, not a stub. Forks without the
         # secret skip this: proExists=false and jest runs the open-core suite instead.
-        if: ${{ secrets.PRO_SUBMODULE_PAT != '' }}
+        if: ${{ env.PRO_SUBMODULE_PAT != '' }}
         env:
-          PRO_PAT: ${{ secrets.PRO_SUBMODULE_PAT }}
+          PRO_PAT: ${{ env.PRO_SUBMODULE_PAT }}
         run: |
           git config --global url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf "https://github.com/"
           git submodule update --init --recursive pro
@@ -79,7 +136,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Node 26. The RAG/knowledge-base suites run a REAL in-memory database via node's
+          # built-in `node:sqlite` (__tests__/harness/sqliteFake.ts). That module is absent on
+          # Node 20 and flag-gated on Node 22. On Node 24 it loads but its native teardown
+          # SEGFAULTs the process under jest's --forceExit (exit 139) — reproduced locally: the
+          # full suite exits 139 on Node 24 and exits 0 on Node 26. Node 26's node:sqlite fixes
+          # that teardown crash, so the test runtime is pinned to 26.
+          node-version: '26'
           cache: 'npm'
 
       - name: Setup Java
@@ -92,7 +155,7 @@ jobs:
         run: npm ci
 
       - name: Run Jest tests
-        run: npx jest --coverage --forceExit
+        run: npx jest --coverage --forceExit --runInBand
 
       - name: Install Android NDK
         # Configuring the native modules (op-sqlite etc.) needs the pinned NDK; the macOS
@@ -147,7 +210,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Setup Java
@@ -173,3 +236,8 @@ jobs:
 
       - name: Build Android Release
         run: cd android && ./gradlew assembleRelease
+
+  # NOTE: SonarCloud runs via Automatic Analysis (SonarCloud-side, on the public core project) —
+  # no CI job. A CI scan would only add coverage import, which Codecov (in the `test` job) already
+  # does, so it'd be redundant complexity. Pro is scanned locally by eslint-plugin-sonarjs (free,
+  # private, no leak). See docs/GAPS_BACKLOG.md.

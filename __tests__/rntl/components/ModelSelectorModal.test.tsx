@@ -39,7 +39,7 @@ jest.mock('../../../src/components/AppSheet', () => ({
 const mockUseAppStore = jest.fn();
 const mockUseRemoteServerStore = jest.fn();
 jest.mock('../../../src/stores', () => ({
-  useAppStore: () => mockUseAppStore(),
+  useAppStore: (sel?: any) => { const st = mockUseAppStore(); return typeof sel === 'function' ? sel(st) : st; },
   useRemoteServerStore: () => mockUseRemoteServerStore(),
 }));
 
@@ -55,6 +55,8 @@ jest.mock('../../../src/services', () => ({
   hardwareService: {
     formatModelSize: jest.fn(() => '4.0 GB'),
     formatBytes: jest.fn(() => '2.0 GB'),
+    formatModelRam: jest.fn(() => '~3.0 GB'),
+    estimateImageModelRam: jest.fn(() => 2_000_000_000),
   },
   remoteServerManager: {
     clearActiveRemoteModel: jest.fn(),
@@ -73,7 +75,6 @@ describe('ModelSelectorModal', () => {
     onSelectModel: jest.fn(),
     onUnloadModel: jest.fn(),
     isLoading: false,
-    currentModelPath: null as string | null,
   };
 
   beforeEach(() => {
@@ -257,7 +258,7 @@ describe('ModelSelectorModal', () => {
         activeModelId: 'model1',
       });
       const { getByText, queryByText } = render(
-        <ModelSelectorModal {...defaultProps} currentModelPath={null} />
+        <ModelSelectorModal {...defaultProps} />
       );
 
       // Switcher reflects the selection even though nothing is loaded yet...
@@ -316,12 +317,12 @@ describe('ModelSelectorModal', () => {
         ],
         downloadedImageModels: [],
         activeImageModelId: null,
+        loadedTextModelId: 'model1',
       });
 
       const { getByText } = render(
         <ModelSelectorModal
           {...defaultProps}
-          currentModelPath="/path/model1.gguf"
         />
       );
 
@@ -343,12 +344,12 @@ describe('ModelSelectorModal', () => {
         ],
         downloadedImageModels: [],
         activeImageModelId: null,
+        loadedTextModelId: 'model1',
       });
 
       const { getByText } = render(
         <ModelSelectorModal
           {...defaultProps}
-          currentModelPath="/path/model1.gguf"
           onUnloadModel={onUnloadModel}
         />
       );
@@ -371,12 +372,12 @@ describe('ModelSelectorModal', () => {
         ],
         downloadedImageModels: [],
         activeImageModelId: null,
+        loadedTextModelId: 'model1',
       });
 
       const { getByText } = render(
         <ModelSelectorModal
           {...defaultProps}
-          currentModelPath="/path/model1.gguf"
         />
       );
 
@@ -396,12 +397,12 @@ describe('ModelSelectorModal', () => {
         ],
         downloadedImageModels: [],
         activeImageModelId: null,
+        loadedTextModelId: 'model1',
       });
 
       const { getAllByText } = render(
         <ModelSelectorModal
           {...defaultProps}
-          currentModelPath="/path/model1.gguf"
         />
       );
 
@@ -458,12 +459,12 @@ describe('ModelSelectorModal', () => {
         ],
         downloadedImageModels: [],
         activeImageModelId: null,
+        loadedTextModelId: 'model1',
       });
 
       const { getByText } = render(
         <ModelSelectorModal
           {...defaultProps}
-          currentModelPath="/path/model1.gguf"
           isLoading={true}
         />
       );
@@ -512,13 +513,13 @@ describe('ModelSelectorModal', () => {
         ],
         downloadedImageModels: [],
         activeImageModelId: null,
+        loadedTextModelId: 'model1',
       });
 
       const { getAllByText } = render(
         <ModelSelectorModal
           {...defaultProps}
           onSelectModel={onSelectModel}
-          currentModelPath="/path/model1.gguf"
         />
       );
 
@@ -650,7 +651,6 @@ describe('ModelSelectorModal', () => {
       const { getByText } = render(
         <ModelSelectorModal
           {...defaultProps}
-          currentModelPath="/path/model1.gguf"
         />
       );
 
@@ -842,21 +842,9 @@ describe('ModelSelectorModal', () => {
   // Loading State
   // ============================================================================
   describe('loading state', () => {
-    it('shows loading banner when isLoading is true', () => {
-      const { getByText } = render(
-        <ModelSelectorModal {...defaultProps} isLoading={true} />
-      );
-
-      expect(getByText('Loading model...')).toBeTruthy();
-    });
-
-    it('does not show loading banner when not loading', () => {
-      const { queryByText } = render(
-        <ModelSelectorModal {...defaultProps} isLoading={false} />
-      );
-
-      expect(queryByText('Loading model...')).toBeNull();
-    });
+    // Deleted: the "Loading model..." banner was replaced by a per-row spinner (device 2026-07-14). The
+    // loading state is now covered by selectorLoaderOnRow.rendered.test.tsx (spinner on the tapped row) and
+    // reloadCardShowsLoaderOnActiveRow.test.tsx (spinner on the active row during a no-tap reload).
   });
 
   // ============================================================================

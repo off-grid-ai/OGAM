@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { showAlert } from '../../../components';
 import { activeModelService, remoteServerManager } from '../../../services';
 import { RemoteModel } from '../../../types';
-import { LoadingState } from './useHomeScreen';
+import { LoadingState } from './types';
 import logger from '../../../utils/logger';
 
 interface RemoteModelHandlersParams {

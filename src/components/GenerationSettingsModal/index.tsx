@@ -10,6 +10,7 @@ import { ConversationActionsSection } from './ConversationActionsSection';
 import { ImageGenerationSection } from './ImageGenerationSection';
 import { TextGenerationSection } from './TextGenerationSection';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { SWEET_SPOT_SIZE, DEFAULT_IMAGE_GUIDANCE, DEFAULT_IMAGE_STEPS } from '../../utils/imageGenAdvice';
 
 const DEFAULT_SETTINGS = {
   temperature: 0.7,
@@ -19,6 +20,12 @@ const DEFAULT_SETTINGS = {
   contextLength: 4096,
   nThreads: 0,
   nBatch: 512,
+  // Reset the image params too, from the same single source the pipeline honors — a
+  // reset previously left a custom image size/guidance untouched (Q12).
+  imageWidth: SWEET_SPOT_SIZE,
+  imageHeight: SWEET_SPOT_SIZE,
+  imageGuidanceScale: DEFAULT_IMAGE_GUIDANCE,
+  imageSteps: DEFAULT_IMAGE_STEPS,
 };
 
 interface GenerationSettingsModalProps {

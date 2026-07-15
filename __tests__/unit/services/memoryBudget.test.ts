@@ -8,11 +8,41 @@ import {
   modelMemoryBudgetMB,
   modelWarningThresholdMB,
   memoryReserveMB,
+  effectiveAvailableMB,
   MEMORY_RESERVE_MB,
   AGGRESSIVE_RESERVE_MB,
+  awaitMemoryReclaim,
 } from '../../../src/services/memoryBudget';
 
 const GB = 1024;
+
+describe('effectiveAvailableMB — reclaimable-aware availability (single owner)', () => {
+  const TOTAL_12GB = 11297; // real device figure from a 12GB phone
+
+  it('Android: credits the physical budget when the raw availMem snapshot reads low', () => {
+    // The exact device case: a 12GB Android phone reports ~4.6GB raw available (background
+    // apps hold cached pages the LMK will reclaim for a foreground load). The effective
+    // ceiling must be the physical budget (~7908MB = 0.70*11297), not the raw 4590.
+    const eff = effectiveAvailableMB(4590, TOTAL_12GB, { platform: 'android' });
+    expect(eff).toBe(modelMemoryBudgetMB(TOTAL_12GB, 'android'));
+    expect(eff).toBeGreaterThan(4590);
+  });
+
+  it('Android: keeps the raw availMem when it already exceeds the physical budget', () => {
+    // Never LOWER the ceiling — if the snapshot is already generous, use it.
+    expect(effectiveAvailableMB(9000, TOTAL_12GB, { platform: 'android' })).toBe(9000);
+  });
+
+  it('iOS: returns the raw availMem unchanged (no background-reclaim — jetsam kills US)', () => {
+    expect(effectiveAvailableMB(4590, TOTAL_12GB, { platform: 'ios' })).toBe(4590);
+  });
+
+  it('passes the load policy through (aggressive credits a larger ceiling than balanced)', () => {
+    const balanced = effectiveAvailableMB(1000, TOTAL_12GB, { platform: 'android', policy: 'balanced' });
+    const aggressive = effectiveAvailableMB(1000, TOTAL_12GB, { platform: 'android', policy: 'aggressive' });
+    expect(aggressive).toBeGreaterThan(balanced);
+  });
+});
 
 describe('modelBudgetFraction', () => {
   it('keeps low-RAM devices conservative (≈2GB on 4GB)', () => {
@@ -90,5 +120,35 @@ describe('load policy — aggressive vs balanced', () => {
   it('aggressive still never commits past its own reserve floor', () => {
     const total = 24 * GB;
     expect(modelMemoryBudgetMB(total, 'android', 'aggressive')).toBeLessThanOrEqual(total - AGGRESSIVE_RESERVE_MB);
+  });
+});
+
+describe('awaitMemoryReclaim — unload does not return until native memory is freed (device 2026-07-14)', () => {
+  const noSleep = () => Promise.resolve(); // no real timers; drives the loop instantly
+
+  it('returns as soon as the process footprint drops by the threshold', async () => {
+    // footprint: 5000 (before) → 4900 → 4700 (dropped 300 ≥ 200) — the reclaim landed on the 2nd poll.
+    const readings = [{ footprintMB: 5000 }, { footprintMB: 4900 }, { footprintMB: 4700 }, { footprintMB: 4700 }];
+    let i = 0;
+    const getProcessMemory = jest.fn(async () => readings[Math.min(i++, readings.length - 1)]);
+    await awaitMemoryReclaim(getProcessMemory, { sleep: noSleep });
+    // It polled the before + at least two more reads, and did NOT run to the full timeout.
+    expect(getProcessMemory.mock.calls.length).toBeLessThanOrEqual(4);
+    expect(getProcessMemory.mock.calls.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('waits the full bounded window when the footprint never settles (then proceeds)', async () => {
+    const getProcessMemory = jest.fn(async () => ({ footprintMB: 5000 })); // never drops
+    await awaitMemoryReclaim(getProcessMemory, { sleep: noSleep, timeoutMs: 600, intervalMs: 120 });
+    // Polled before + one per interval across the window, then returned (never hangs).
+    expect(getProcessMemory.mock.calls.length).toBe(1 + 600 / 120);
+  });
+
+  it('falls back to a fixed beat when the RAM sensor is unavailable', async () => {
+    const sleep = jest.fn(async () => {});
+    const getProcessMemory = jest.fn(async () => null); // no sensor
+    await awaitMemoryReclaim(getProcessMemory, { sleep });
+    expect(getProcessMemory).toHaveBeenCalledTimes(1); // read once, saw null, bailed to the fixed wait
+    expect(sleep).toHaveBeenCalledWith(250);
   });
 });

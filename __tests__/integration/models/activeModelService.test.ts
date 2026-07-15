@@ -14,6 +14,7 @@ import { useAppStore } from '../../../src/stores/appStore';
 import { activeModelService } from '../../../src/services/activeModelService';
 import { modelResidencyManager } from '../../../src/services/modelResidency';
 import { llmService } from '../../../src/services/llm';
+import { liteRTService } from '../../../src/services/litert';
 import { localDreamGeneratorService } from '../../../src/services/localDreamGenerator';
 import { hardwareService } from '../../../src/services/hardware';
 import {
@@ -196,6 +197,22 @@ describe('ActiveModelService Integration', () => {
       await activeModelService.loadTextModel('gguf-1').catch(() => {});
       expect(spy).toHaveBeenCalledWith(expect.objectContaining({ key: 'text', dirtyMemory: false }), expect.anything());
       spy.mockRestore();
+    });
+
+    it('unloads a resident LiteRT model (latent bug: unload was llama-only, so LiteRT never freed)', async () => {
+      const litert = createDownloadedModel({ id: 'litert-1', engine: 'litert' as any, fileName: 'm.litertlm', filePath: '/m.litertlm' });
+      useAppStore.setState({ downloadedModels: [litert], activeModelId: 'litert-1' });
+      // The active engine (LiteRT) reports a resident model; llama has nothing.
+      jest.spyOn(liteRTService, 'isModelLoaded').mockReturnValue(true);
+      const liteUnload = jest.spyOn(liteRTService, 'unloadModel').mockResolvedValue(undefined);
+      mockLlmService.isModelLoaded.mockReturnValue(false);
+
+      await activeModelService.unloadTextModel();
+
+      // The active engine's model is actually freed — not left resident (the OOM-relevant bug).
+      expect(liteUnload).toHaveBeenCalled();
+      liteUnload.mockRestore();
+      (liteRTService.isModelLoaded as jest.Mock).mockRestore?.();
     });
 
     it('should save loadedSettings when model is loaded', async () => {
@@ -480,8 +497,11 @@ describe('ActiveModelService Integration', () => {
     });
   });
 
-  describe('extreme mode (aggressive) — single-model switching text/image/STT', () => {
-    beforeEach(() => modelResidencyManager.setLoadPolicy('aggressive'));
+  describe('conservative mode — single-model switching text/image/STT', () => {
+    // Conservative = ONE model at a time (evict everything else on each load). Aggressive is NOT
+    // single-model — it co-resides like balanced (covered in loadingModes.redflow); conservative is
+    // where the mutual-exclusion swap is the contract.
+    beforeEach(() => modelResidencyManager.setLoadPolicy('conservative'));
     afterEach(() => modelResidencyManager.setLoadPolicy('balanced'));
 
     it('switching text -> image evicts the text model (single model, not co-resident)', async () => {
@@ -494,7 +514,7 @@ describe('ActiveModelService Integration', () => {
       await activeModelService.loadTextModel('txt-1');
       expect(modelResidencyManager.isResident('text')).toBe(true);
 
-      // Under aggressive single-model, loading the image evicts the resident text model.
+      // Under conservative single-model, loading the image evicts the resident text model.
       await activeModelService.loadImageModel('img-1');
       expect(mockLlmService.unloadModel).toHaveBeenCalled();
       expect(modelResidencyManager.isResident('text')).toBe(false);
@@ -1055,7 +1075,9 @@ describe('ActiveModelService Integration', () => {
 
       // Mock RNFS.readDir to return a mmproj file
       RNFS.readDir = jest.fn().mockResolvedValue([
-        { name: 'qwen3-vl-mmproj-f16.gguf', path: '/models/qwen3-vl-mmproj-f16.gguf', size: 500000000, isFile: () => true },
+        // Realistic on-disk name: downloads rename the projector to include the model base (name+variant),
+        // so the strict matcher pairs it. A generic 'qwen3-vl-mmproj-f16.gguf' (no size) never reaches disk.
+        { name: 'qwen3-vl-2b-mmproj-f16.gguf', path: '/models/qwen3-vl-2b-mmproj-f16.gguf', size: 500000000, isFile: () => true },
       ]);
 
       mockLlmService.isModelLoaded.mockReturnValue(true);
@@ -1836,8 +1858,8 @@ describe('ActiveModelService Integration', () => {
     it('evicts the text model to fit an image when they cannot co-reside (tight device)', async () => {
       setupLowMemDevice(); // 4GB → ~2GB budget
 
-      // Each fits ALONE (~1.5GB text est, ~1.0GB image est) but not TOGETHER (~2.5GB),
-      // so loading the image must free the text model to fit.
+      // Each fits ALONE (~1.5GB text est, ~1.0GB image est) but not TOGETHER (~2.5GB) against the
+      // ~2GB budget, so loading the image must free the text model to fit (a swap).
       const textModel = createDownloadedModel({ id: 'txt', fileSize: 1000 * 1024 * 1024 });
       const imageModel = createONNXImageModel({ id: 'img', size: 400 * 1024 * 1024 });
       useAppStore.setState({
@@ -1854,8 +1876,8 @@ describe('ActiveModelService Integration', () => {
       mockLocalDreamService.loadModel.mockResolvedValue(true);
       await activeModelService.loadImageModel('img');
 
-      // Text freed from RAM (they don't co-fit), but its SELECTION is kept so chat
-      // still shows it and it reloads on demand (eviction must not deselect).
+      // Text freed from RAM (they don't co-fit), but its SELECTION is kept so chat still shows it
+      // and it reloads on demand (eviction must not deselect).
       expect(mockLlmService.unloadModel).toHaveBeenCalled();
       expect(getAppState().activeModelId).toBe('txt');
       expect(getAppState().activeImageModelId).toBe('img');
@@ -2033,8 +2055,8 @@ describe('ActiveModelService Integration', () => {
         createDeviceInfo({ totalMemory: 6 * 1024 * 1024 * 1024 }),
       );
 
-      // 1.5GB * 1.8x = 2.7GB, budget = 6 * 0.6 = 3.6GB → safe
-      const model = createONNXImageModel({ id: 'mid-6gb', size: 1.5 * 1024 * 1024 * 1024 });
+      // 1.2GB * 2.5x = 3.0GB, budget = 6 * 0.6 = 3.6GB → safe (would fail a 40% budget: 2.4GB)
+      const model = createONNXImageModel({ id: 'mid-6gb', size: 1.2 * 1024 * 1024 * 1024 });
       useAppStore.setState({ downloadedImageModels: [model] });
 
       const result = await activeModelService.checkMemoryForModel('mid-6gb', 'image');
@@ -2046,8 +2068,8 @@ describe('ActiveModelService Integration', () => {
         createDeviceInfo({ totalMemory: 8 * 1024 * 1024 * 1024 }),
       );
 
-      // 2GB * 1.8x = 3.6GB, budget = 8 * 0.6 = 4.8GB → safe
-      const model = createONNXImageModel({ id: 'mid-8gb', size: 2 * 1024 * 1024 * 1024 });
+      // 1.6GB * 2.5x = 4.0GB, budget = 8 * 0.6 = 4.8GB → safe (would fail a 40% budget: 3.2GB)
+      const model = createONNXImageModel({ id: 'mid-8gb', size: 1.6 * 1024 * 1024 * 1024 });
       useAppStore.setState({ downloadedImageModels: [model] });
 
       const result = await activeModelService.checkMemoryForModel('mid-8gb', 'image');

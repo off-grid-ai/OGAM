@@ -83,19 +83,31 @@ describe('checkImageModelFiles — mnn', () => {
   });
 });
 
-describe('checkImageModelFiles — qnn', () => {
+describe('checkImageModelFiles — qnn (NPU)', () => {
+  // The REAL, COMPLETE qnn file set — the exact bytes of the verified xororz/sd-qnn zip
+  // (AnythingV5_qnn2.28_min.zip) AND of the working absolutereality_npu_min model on-device.
+  // Note there is NO `clip_v2.mnn.weight`: qnn ships clip_v2.mnn as a MONOLITHIC graph.
   const COMPLETE_QNN: ImageDirEntry[] = [
-    { name: 'unet.bin', size: 800000000, isFile: true },
-    { name: 'vae_decoder.bin', size: 90000000, isFile: true },
-    { name: 'clip_v2.mnn', size: 147192, isFile: true },
-    { name: 'clip_v2.mnn.weight', size: 156158976, isFile: true },
+    { name: 'clip_v2.mnn', size: 156316304, isFile: true },
     { name: 'pos_emb.bin', size: 236544, isFile: true },
     { name: 'token_emb.bin', size: 75890688, isFile: true },
     { name: 'tokenizer.json', size: 3642034, isFile: true },
+    { name: 'unet.bin', size: 892820832, isFile: true },
+    { name: 'vae_decoder.bin', size: 96453504, isFile: true },
+    { name: 'vae_encoder.bin', size: 58862576, isFile: true },
   ];
 
-  it('passes a complete qnn extraction', () => {
-    expect(checkImageModelFiles(COMPLETE_QNN, 'qnn').complete).toBe(true);
+  // B8 regression (fails-before / passes-after): before the fix, the shared split-weight
+  // pairing loop ran for qnn and demanded a clip_v2.mnn.weight that the qnn zip NEVER ships,
+  // so this exact (correct, fully-extracted) model was reported incomplete=[clip_v2.mnn.weight]
+  // and every fresh Android NPU image download failed with a bogus "download corrupted /
+  // connection dropped" alert. The download and extraction were always perfect.
+  it('passes the exact on-device NPU model that has clip_v2.mnn but NO clip_v2.mnn.weight', () => {
+    expect(checkImageModelFiles(COMPLETE_QNN, 'qnn')).toEqual({ complete: true, missing: [] });
+  });
+
+  it('does NOT demand any *.mnn.weight for qnn (monolithic graph, weights baked in)', () => {
+    expect(checkImageModelFiles(COMPLETE_QNN, 'qnn').missing).not.toContain('clip_v2.mnn.weight');
   });
 
   it('requires unet.bin (not unet.mnn) for qnn', () => {
@@ -103,9 +115,31 @@ describe('checkImageModelFiles — qnn', () => {
     expect(checkImageModelFiles(partial, 'qnn').missing).toContain('unet.bin');
   });
 
-  it('still enforces *.mnn split-weight pairing on a qnn cpu-clip', () => {
-    const partial = COMPLETE_QNN.filter(f => f.name !== 'clip_v2.mnn.weight');
-    expect(checkImageModelFiles(partial, 'qnn').missing).toContain('clip_v2.mnn.weight');
+  it('requires vae_decoder.bin (always loaded by the native qnn server)', () => {
+    const partial = COMPLETE_QNN.filter(f => f.name !== 'vae_decoder.bin');
+    expect(checkImageModelFiles(partial, 'qnn').missing).toContain('vae_decoder.bin');
+  });
+
+  it('requires the clip graph (a dropped clip_v2.mnn is a real incomplete extraction)', () => {
+    const partial = COMPLETE_QNN.filter(f => f.name !== 'clip_v2.mnn');
+    expect(checkImageModelFiles(partial, 'qnn').missing).toContain('clip_v2.mnn');
+  });
+
+  it('accepts a self-contained clip.bin as the clip graph (native qnn fallback)', () => {
+    const withBinClip = COMPLETE_QNN
+      .filter(f => f.name !== 'clip_v2.mnn')
+      .concat([{ name: 'clip.bin', size: 160000000, isFile: true }]);
+    expect(checkImageModelFiles(withBinClip, 'qnn').complete).toBe(true);
+  });
+
+  it('does NOT require vae_encoder.bin (optional — native adds --vae_encoder only if present)', () => {
+    const noEncoder = COMPLETE_QNN.filter(f => f.name !== 'vae_encoder.bin');
+    expect(checkImageModelFiles(noEncoder, 'qnn').complete).toBe(true);
+  });
+
+  it('treats a zero-byte unet.bin as missing (truncated write)', () => {
+    const truncated = COMPLETE_QNN.map(f => (f.name === 'unet.bin' ? { ...f, size: 0 } : f));
+    expect(checkImageModelFiles(truncated, 'qnn').missing).toContain('unet.bin');
   });
 });
 

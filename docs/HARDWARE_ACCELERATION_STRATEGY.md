@@ -2,7 +2,7 @@
 
 **Status:** proposal / architecture reference (evidence-verified)
 **Owner:** mobile + desktop
-**Scope:** how the two Off Grid AI consumer apps - **Off Grid Mobile (React Native)** and **Off Grid Desktop (Electron/Node)** - run every modality (embedding, text, vision, image-gen, STT, TTS) on every class of on-device accelerator (CPU / GPU / NPU / TPU), by routing across on-device runtimes behind one shared seam. The seam is common; the engine bindings differ per platform (RN bindings on mobile, sibling Node bindings on desktop) and are chosen as capability-data, not forked code.
+**Scope:** how the two Off Grid AI consumer apps - **Off Grid Mobile (React Native)** and **Off Grid Desktop (Electron/Node)** - run every modality (embedding, text, vision, image-gen, STT, TTS, and the heavier music/video) on every class of on-device accelerator (CPU / GPU / NPU / TPU; note Metal = Apple's GPU, not a separate class), by routing each modality to the best available execution - **on-device where a real seam exists, remote where it doesn't, flipping remote->local as models mature** - behind one shared seam. We are the switch; the router is the durable asset that rides the improvement curve. The seam is common; the engine bindings differ per platform (RN bindings on mobile, sibling Node bindings on desktop) and are chosen as capability-data, not forked code.
 
 Related: `ARCHITECTURE.md`, `GPU-ACCELERATION-INVESTIGATION.md`, `LITERT_TODO.md`, `CODEX_HTP_LLAMA_FIX.md`, `TTS_ENGINE_INTERFACE.md`.
 
@@ -27,7 +27,7 @@ Related: `ARCHITECTURE.md`, `GPU-ACCELERATION-INVESTIGATION.md`, `LITERT_TODO.md
 
 These are load-bearing and evidence-verified. The architecture follows from them.
 
-1. **GGUF is a CPU/GPU format. It cannot run on the NPU/TPU.** GGUF (llama.cpp) has no shipping mobile NPU backend; the HTP/QNN path is experimental and is disabled in our codebase. Since we support GGUF widely today (via llama.rn) and want to "horizontally support the most models," this defines two separate axes that **cannot be satisfied by the same model file**:
+1. **GGUF is primarily a CPU/GPU format; a real but narrow Qualcomm-NPU path now exists (updated 2026-07-10).** Correction to the earlier claim that GGUF "cannot run on NPU": `llama.rn` now exposes a **genuine, upstream-merged Qualcomm Hexagon HTP path** (`devices:['HTP0']`, `libggml-htp-v73/75/79/81.so`, Snapdragon SM8450+ / 8 Gen 1+) - experimental, Qualcomm-only, text-only, and arch-sensitive (works on Qwen; garbles Gemma per our own device testing - see the HTP-Gemma note). So GGUF-on-NPU is real but narrow, not universal. The two-axis model still holds for breadth: GGUF's *wide* coverage is CPU/GPU; NPU is the narrow, per-vendor, per-model path. This defines two axes that **cannot be satisfied by the same model file at scale**:
    - **Axis A - model breadth (horizontal):** GGUF via llama.rn. Enormous zoo, any quant, any text/VLM model on Hugging Face. Runs **CPU + GPU only.** We already max this out.
    - **Axis B - hardware depth (NPU/TPU):** requires a *different, pre-converted format per vendor* (`.tflite` + QNN context-binary on Android, CoreML `.mlpackage`/`.pte` on iOS). Narrow: only models someone already converted for that silicon.
    You cannot get both for one model without a conversion pipeline (ruled out). This lines up perfectly: the modality that needs the widest breadth (text) is exactly the one where GGUF-on-GPU is already correct and the NPU is irrelevant.
@@ -38,7 +38,9 @@ These are load-bearing and evidence-verified. The architecture follows from them
 
 4. **Accelerator selection happens at model-export time and NPU landing is best-effort at runtime - so we must measure, never assume.** The backend is baked into the artifact (a CoreML `.pte`, a QNN `.tflite`). At runtime, dispatch is opportunistic: CoreML decides ANE-vs-GPU-vs-CPU itself (no API to force ANE; FP16-only), and QNN delegates only the ops it supports (64 of 72 canonical models fully delegate; the rest partially fall back to CPU; operator support even differs across Snapdragon generations). **The router must record whether execution actually landed on the NPU (telemetry), not assume it did.**
 
-5. **The decision belongs behind an abstraction, never in a caller.** No screen, store, or hook may branch on `Platform.OS`, `engine === 'litert'`, or a capability flag to decide *how* to run something. A single capability + routing service decides once; callers dispatch an intent. Genuine gaps (a modality that reaches the NPU on iOS but only CPU on Android) are modelled as capability-as-data (like the existing `DownloadCapabilities` pattern), not scattered `if (ios)` branches. We already prove this pattern in TTS (`EngineRegistry<TTSEngine>`), image-gen (`localDreamGeneratorService`), and remote LLMs (`LLMProvider` registry). The one modality that skipped it is local text (callers branch on `model.engine`); closing that is Phase 1.
+6. **The router routes local-OR-remote per modality, and rides the improvement curve.** The switch is the durable asset; models + silicon are the commodity that improves underneath it. Each modality's execution target - a local accelerator or a remote tier - is capability-**data**, not hardcoded. When a modality matures on-device, we flip its target remote->local with a data update + one adapter: **no app rewrite, no UX change**, the consumer just gets the private/local upgrade for free. This is why "adoption improves as models improve" is mechanical, not hopeful - and why being the switch beats hardcoding one backend (competitors re-architect; we change a row of data). Applies to the newer heavy modalities: **music** is already a real on-device seam (Stable Audio 3.0 *small*, TinyMusician distilled-MusicGen shipped to iOS **via ONNX** - drops into our ONNX engine); **video** is research-only on-device (MOVD) and cloud-dominated in 2026, so route remote now and flip local as it matures. Hardware axis precision: **Metal is Apple's GPU, not a separate class** - the four classes are CPU / GPU (Metal·OpenCL·Vulkan·Adreno·CUDA·DirectML) / NPU (ANE·Hexagon·MediaTek) / "TPU" (Pixel Tensor).
+
+7. **The decision belongs behind an abstraction, never in a caller.** No screen, store, or hook may branch on `Platform.OS`, `engine === 'litert'`, or a capability flag to decide *how* to run something. A single capability + routing service decides once; callers dispatch an intent. Genuine gaps (a modality that reaches the NPU on iOS but only CPU on Android) are modelled as capability-as-data (like the existing `DownloadCapabilities` pattern), not scattered `if (ios)` branches. We already prove this pattern in TTS (`EngineRegistry<TTSEngine>`), image-gen (`localDreamGeneratorService`), and remote LLMs (`LLMProvider` registry). The one modality that skipped it is local text (callers branch on `model.engine`); closing that is Phase 1.
 
 ---
 
@@ -46,7 +48,7 @@ These are load-bearing and evidence-verified. The architecture follows from them
 
 | Runtime | RN binding | Role | Accelerators actually reached (verified) |
 |---|---|---|---|
-| **llama.rn** (llama.cpp) | yes (in app) | **text/VLM breadth engine (GGUF)** | CPU, GPU (Metal iOS / OpenCL Android). No NPU (GGUF is CPU/GPU-only by nature). |
+| **llama.rn** (llama.cpp) | yes (in app) | **text/VLM breadth engine (GGUF)** | CPU, GPU (Metal iOS / OpenCL Android), **+ Qualcomm Hexagon NPU (`HTP0`, experimental, SM8450+, text-only, arch-sensitive - real & upstream-merged)** |
 | **onnxruntime-react-native** (ONNX Runtime) | yes (MS, MIT, JSI/New-Arch, iOS 15.1+, v1.24.3) | **fixed-shape breadth engine (ONNX) + cross-platform NPU** | CPU; **iOS ANE via CoreML EP (drop-in)**; **Android Hexagon via QNN EP (config-flag rebuild + per-SoC binaries)**. Widest fixed-shape zoo. |
 | **LiteRT** (TFLite) | yes (in app, `cpu/gpu/npu` backend) | **fixed-shape NPU (alt/wired), image-gen-adjacent** | CPU; GPU (Adreno/Metal); **ANE via CoreML delegate (iOS); Hexagon via QNN delegate (Android)** |
 | **whisper.rn** (GGML) | yes (in app) | STT (CPU/GPU fallback) | CPU, GPU |
@@ -165,6 +167,18 @@ We surveyed the field (consumer apps, engines, mobile SDKs) before committing. F
 2. **Nobody routes across engines on-device.** The market ships single-runtime multi-backend engines; the meta-router (one contract, adapters over multiple runtimes, dispatch per modality+hardware) is genuinely unoccupied. Nexa's is the nearest analog and it's closed + no-RN.
 
 **The canonical engineering pattern to copy (from ONNX Runtime EPs, LiteRT delegates, ggml-backend, MNN, OpenVINO, Windows ML):** a **registry of capability-declaring backends**, **priority/policy-ordered partitioning**, and a **guaranteed-complete CPU fallback**. Two rules everyone learned the hard way, adopted into Section 7: *make the fallback loud* and *bind hardware behind one interface the caller never sees the concretes of*. The mature APIs converge on **policy-based selection** (ORT `SetEpSelectionPolicy(PREFER_NPU / MAX_EFFICIENCY)`, LiteRT `CompiledModel(Accelerator.NPU, GPU)`, OpenVINO `AUTO`) - a declared *intent* the engine resolves against live device inventory. MNN has the broadest mobile-NPU-across-vendors + multimodal story but needs a hand-written native module (no RN binding) - a fallback option if the ONNX/LiteRT paths stall.
+
+### 6b. Verified RN-reachable NPU landscape (source-checked, 2026-07-10)
+
+A deep, adversarially-verified OSS sweep (checked against source, not READMEs) settles the "does an off-the-shelf all-hardware RN SDK exist?" question. Answer: **real NPU-from-RN seams exist, but every one is single-vendor + experimental + model-gated; no OSS library unifies them across SoCs - that routing is ours to own.**
+
+- **Real NPU today:** `llama.rn` (Qualcomm Hexagon HTP, text-only, SM8450+, upstream-merged - verified real); `react-native-executorch` (CoreML->ANE + QNN->Qualcomm NPU, multi-modal, but QNN needs a bring-your-own `.pte` export).
+- **Immature / partial:** `react-native-litert-lm` (Android really wires Google LiteRT-LM NPU, but **iOS silently remaps npu->gpu**; MediaTek-only + fixed model allowlist; ~44 stars).
+- **GPU-only or NPU-by-proxy:** `react-native-fast-tflite` (CoreML/NNAPI/GPU, no QNN/Tensor), MLC (GPU only), `onnxruntime-react-native` (**QNN EP not in the published RN package** - needs custom build), AICore/Gemini Nano (uses NPU but app can't target placement).
+- **Debunked:** **Cactus's NPU/ANE is marketing** - the open repo has only `metal_backend.mm`, zero ANE/NPU/QNN code; NPU sits behind a commercial flag. Do not credit it with an open NPU path.
+- **Google AI Edge Gallery** uses the Pixel Tensor TPU + Qualcomm/MediaTek NPU *properly* via LiteRT/LiteRT-LM - but it is a **native Kotlin app, not an embeddable RN SDK**. LiteRT is the reference "unified all-accelerator" runtime; the gap is a first-party RN binding to it.
+
+Net: the pieces are real and richer than a first pass suggested (esp. llama.rn's Hexagon seam and executorch's QNN+CoreML) - but "one SDK, best perf across all SoCs" is not an off-the-shelf OSS product. Assembling these behind our router is the work.
 
 ## 7. Routing and capability detection (the layer we own)
 

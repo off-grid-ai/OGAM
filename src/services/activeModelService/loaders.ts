@@ -8,38 +8,39 @@ import { useAppStore } from '../../stores';
 import { DownloadedModel, LlamaDownloadedModel, ONNXImageModel, INFERENCE_BACKENDS } from '../../types';
 import { llmService } from '../llm';
 import { liteRTService } from '../litert';
+import { unloadAllTextEngines } from '../engines';
 import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
 import { modelManager } from '../modelManager';
+import { hardwareService } from '../hardware';
+import { modelResidencyManager } from '../modelResidency';
 import logger from '../../utils/logger';
 import RNFS from 'react-native-fs';
-
-function isMMProjFile(fileName: string): boolean {
-  const lower = fileName.toLowerCase();
-  if (!lower.endsWith('.gguf')) return false;
-  return (
-    lower.includes('mmproj') ||
-    lower.includes('projector') ||
-    (lower.includes('clip') && lower.includes('vit'))
-  );
-}
+import { isMMProjFile, mmProjBelongsToModel, pickMmProjForModel } from '../mmproj';
 
 async function scanDirForMmProj(modelFilePath: string): Promise<RNFS.ReadDirResItemT | undefined> {
   const modelDir = modelFilePath.substring(0, modelFilePath.lastIndexOf('/'));
+  const modelName = modelFilePath.substring(modelFilePath.lastIndexOf('/') + 1);
   const files = await RNFS.readDir(modelDir);
-  return files.find((f: { name: string; isFile: () => boolean }) =>
-    f.isFile() && isMMProjFile(f.name),
-  );
+  const mmProjFiles = files.filter((f: { name: string; isFile: () => boolean }) => f.isFile() && isMMProjFile(f.name));
+  const chosen = pickMmProjForModel(modelName, mmProjFiles.map(f => f.name));
+  return mmProjFiles.find(f => f.name === chosen);
 }
 
 export async function resolveMmProjPath(
   model: LlamaDownloadedModel,
   modelId: string,
 ): Promise<string | undefined> {
-  // Fast path: persisted mmProjPath still exists on disk
-  if (model.mmProjPath) {
-    if (await RNFS.exists(model.mmProjPath)) {
+  // Fast path: a persisted mmProjPath that still exists AND actually belongs to this model. The old
+  // first-match scan could persist a MISMATCHED projector (E2B model → E4B mmproj); without the belongs-to
+  // check the fast path would keep returning that stale wrong path forever, so the vision fix never lands on
+  // an already-broken install. Validate the stem and re-scan (self-heal) when it doesn't match.
+  if (model.mmProjPath && (await RNFS.exists(model.mmProjPath))) {
+    const persistedName = model.mmProjPath.substring(model.mmProjPath.lastIndexOf('/') + 1);
+    const modelName = model.filePath.substring(model.filePath.lastIndexOf('/') + 1);
+    if (mmProjBelongsToModel(modelName, persistedName)) {
       return model.mmProjPath;
     }
+    logger.warn(`[LLM] persisted mmproj "${persistedName}" does not belong to model "${modelName}" — rescanning`);
   }
 
   try {
@@ -97,11 +98,7 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
   const liteRTModel = ctx.model;
   try {
     if (ctx.loadedTextModelId && ctx.loadedTextModelId !== ctx.modelId) {
-      try {
-        await liteRTService.unloadModel();
-      } catch (unloadErr) {
-        logger.warn('[LiteRT] Error unloading previous model, continuing:', unloadErr);
-      }
+      await unloadAllTextEngines(); // cross-engine switch → no co-residence (engine set owned by engines.ts)
       ctx.onError();
     }
 
@@ -169,6 +166,7 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
     ctx.store.setActiveModelId(ctx.modelId);
   } catch (error) {
     ctx.onError();
+    ctx.store.setActiveModelId(null); // load FAILED → no active model, consistently (never a stale selection)
     throw error;
   } finally {
     ctx.onFinally();
@@ -183,12 +181,7 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
 
   try {
     if (ctx.loadedTextModelId && ctx.loadedTextModelId !== ctx.modelId) {
-      try {
-        await llmService.unloadModel();
-      } catch (unloadErr) {
-        // Log but continue — loadModel will also attempt to release the old context
-        logger.warn('[ActiveModel] Error unloading previous model, continuing:', unloadErr);
-      }
+      await unloadAllTextEngines(); // cross-engine switch → no co-residence (engine set owned by engines.ts)
       ctx.onError(); // resets loadedTextModelId to null before reassignment
     }
 
@@ -246,6 +239,7 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
     ctx.store.setActiveModelId(ctx.modelId);
   } catch (error) {
     ctx.onError();
+    ctx.store.setActiveModelId(null); // load FAILED → no active model, consistently (never a stale selection)
     throw error;
   } finally {
     ctx.onFinally();
@@ -316,4 +310,50 @@ export async function doLoadImageModel(ctx: ImageLoadContext): Promise<void> {
   } finally {
     ctx.onFinally();
   }
+}
+
+/**
+ * Gate an image-model load: hardware-capability check (NPU) + residency memory fit
+ * (evicting others to make room). Returns whether the load may proceed, and — on a
+ * refusal — whether it is overridable ("Load Anyway"). Extracted from ActiveModelService
+ * to keep index.ts under the max-lines limit; behavior is unchanged.
+ */
+export async function checkImageModelCanLoad(
+  modelId: string,
+  model: ONNXImageModel,
+  opts?: { override?: boolean },
+): Promise<{ canLoad: boolean; error?: string; overridable?: boolean }> {
+  if (model.backend === 'qnn') {
+    const socInfo = await hardwareService.getSoCInfo();
+    if (!socInfo.hasNPU) {
+      return {
+        canLoad: false,
+        // A missing NPU is a hardware capability gap, not a memory budget — not overridable.
+        error:
+          'NPU models require a Qualcomm Snapdragon processor. Your device does not have a compatible NPU. Please use a GPU model instead.',
+      };
+    }
+  }
+  // Residency manager is authoritative for memory: evict others to fit the budget
+  // before loading. If it can't fit even after eviction, block — unless "Load Anyway".
+  const { fits } = await modelResidencyManager.makeRoomFor(
+    {
+      key: 'image',
+      type: 'image',
+      modelId: model.id,
+      sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)),
+      // CoreML/ONNX image weights are dirty (jetsam-counted) memory → gate on real free RAM.
+      dirtyMemory: true,
+    },
+    { override: opts?.override },
+  );
+  if (!fits) {
+    // Refusal UNDER override = survival floor (hard limit) → non-overridable, so the
+    // UI stops re-offering "Load Anyway" as a no-op that re-runs the same failing load.
+    const overridable = !opts?.override;
+    return { canLoad: false, overridable, error: overridable
+      ? `Not enough memory to load ${model.name}. Free up space or choose a smaller model.`
+      : `Not enough memory to load ${model.name}, even after freeing other models. Close other apps or choose a smaller model.` };
+  }
+  return { canLoad: true };
 }

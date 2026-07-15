@@ -936,7 +936,7 @@ describe('IntentClassifier', () => {
     test('should use LLM classification when pattern is uncertain and LLM enabled', async () => {
       mockLlmService.isModelLoaded.mockReturnValue(true);
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream, onComplete) => {
+        async (_messages, { onStream, onComplete } = {}) => {
           onStream?.({ content: 'YES' });
           onComplete?.({ content: 'YES', reasoningContent: '' });
           return 'YES';
@@ -955,7 +955,7 @@ describe('IntentClassifier', () => {
     test('should return text when LLM responds NO', async () => {
       mockLlmService.isModelLoaded.mockReturnValue(true);
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream, onComplete) => {
+        async (_messages, { onStream, onComplete } = {}) => {
           onStream?.({ content: 'NO' });
           onComplete?.({ content: 'NO', reasoningContent: '' });
           return 'NO';
@@ -1020,7 +1020,7 @@ describe('IntentClassifier', () => {
       mockLlmService.getLoadedModelPath.mockReturnValue('/path/to/different.gguf');
       mockLlmService.isModelLoaded.mockReturnValue(true);
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream) => {
+        async (_messages, { onStream } = {}) => {
           onStream?.({ content: 'YES' });
           return 'YES';
         }
@@ -1068,7 +1068,7 @@ describe('IntentClassifier', () => {
       mockLlmService.getLoadedModelPath.mockReturnValue('/path/to/same.gguf');
       mockLlmService.isModelLoaded.mockReturnValue(true);
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream) => {
+        async (_messages, { onStream } = {}) => {
           onStream?.({ content: 'NO' });
           return 'NO';
         }

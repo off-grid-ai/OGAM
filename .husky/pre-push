@@ -49,6 +49,9 @@ if [ -n "$PUSHED_JS" ]; then
 
   echo "▶ JS/TS tests (related to changed files)..."
   echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 npx jest --findRelatedTests --passWithNoTests
+
+  echo "▶ Architecture gate (dependency-cruiser)..."
+  npm run depcruise
 fi
 
 if [ -n "$PUSHED_SWIFT" ]; then

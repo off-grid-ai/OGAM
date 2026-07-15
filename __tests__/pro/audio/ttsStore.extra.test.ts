@@ -201,19 +201,20 @@ describe('ttsStore — extra branch coverage', () => {
       expect(getState().error).toBeNull();
     });
 
-    it('override load: NO room → throws → surfaces error, still not resident', async () => {
-      // Even override can't cross the survival floor (1200MB). With ~500MB real free
-      // RAM, makeRoomFor REFUSES under override (fits=false), so the store hits the
-      // `throw new Error('Not enough free memory...')` branch (line 267).
+    it('override load: bypasses the budget → evicts everything else and initializes (Load Anyway always loads)', async () => {
+      // Load Anyway is UNCONDITIONAL: makeRoomFor under override always returns fits=true (no
+      // survival floor — the user accepted the risk), so even at ~500MB real free RAM the override
+      // load proceeds — evict, initialize, tts becomes resident. (The old "override still refuses
+      // below the floor" behavior was removed.)
       modelResidencyManager.setBudgetOverrideMB(4000);
-      availSpy.mockReturnValue(0.5); // ~500MB free < 1200MB survival floor
+      availSpy.mockReturnValue(0.5); // ~500MB free — tight, but override ignores the budget
       mockCurrentEngine.capabilities.peakRamMB = 100;
 
       await getState().initializeEngine({ override: true });
 
-      expect(mockCurrentEngine.initialize).not.toHaveBeenCalled();
-      expect(modelResidencyManager.isResident('tts')).toBe(false);
-      expect(getState().error).toMatch(/not enough free memory/i);
+      expect(mockCurrentEngine.initialize).toHaveBeenCalled();
+      expect(modelResidencyManager.isResident('tts')).toBe(true);
+      expect(getState().error).toBeNull();
     });
 
     it('derives sizeMB from required-asset bytes when peakRamMB is 0', async () => {

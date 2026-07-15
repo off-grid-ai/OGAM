@@ -9,6 +9,7 @@ import {
   toolErrorResult,
   normalizeToolResult,
   toolResultModelContent,
+  MAX_TOOL_RESULT_CHARS,
 } from '../../../../src/services/tools/toolResult';
 import type { ToolCall } from '../../../../src/services/tools/types';
 
@@ -73,5 +74,22 @@ describe('toolResultModelContent', () => {
     const text = toolResultModelContent({ name: 'web_search', content: '', status: 'empty', durationMs: 1 });
     expect(text).toContain('no content');
     expect(text.length).toBeGreaterThan(0);
+  });
+
+  it('caps an oversized result so a bad tool cannot overflow the model context (device 2026-07-14: read_wiki_contents returned 1.27M chars)', () => {
+    const huge = 'A'.repeat(MAX_TOOL_RESULT_CHARS + 5000);
+    const text = toolResultModelContent({ name: 'read_wiki_contents', content: huge, status: 'ok', durationMs: 1 });
+    // Bounded well under the raw payload (kept head + a short note), so it can never blow the context.
+    expect(text.length).toBeLessThan(huge.length);
+    expect(text.length).toBeLessThan(MAX_TOOL_RESULT_CHARS + 500);
+    // Keeps the HEAD (overviews lead) and tells the model it was truncated so it won't assume it saw all.
+    expect(text.startsWith('A'.repeat(100))).toBe(true);
+    expect(text).toContain('truncated');
+    expect(text).toContain(String(huge.length));
+  });
+
+  it('leaves a result at or under the cap untouched', () => {
+    const ok = 'B'.repeat(MAX_TOOL_RESULT_CHARS);
+    expect(toolResultModelContent({ name: 't', content: ok, status: 'ok', durationMs: 1 })).toBe(ok);
   });
 });

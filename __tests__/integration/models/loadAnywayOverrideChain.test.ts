@@ -14,19 +14,21 @@
  * the user feels (model loaded / refused, which dialog they see), never
  * `expect(gate).toHaveBeenCalled()`.
  *
- * The headline scenario is the shipped bug (fixed in 0.0.103): tapping "Load Anyway"
- * on a model that genuinely fits still failed. Root cause was in makeRoomFor's
- * override survival floor — it was computed on a PRE-eviction RAM snapshot that
- * credited 0 MB for evicting a CLEAN (mmap GGUF / whisper) resident, so it
- * under-counted the RAM iOS actually reclaims on unload and refused a load the
- * device could do. The fix evicts FIRST, then re-measures real free RAM.
+ * The ratified contract: "Load Anyway" (override) is UNCONDITIONAL. When the user
+ * taps it, makeRoomFor evicts every evictable resident to free the maximum RAM and
+ * ALWAYS loads (fits: true) — there is NO survival floor, and it NEVER refuses. The
+ * old "override still refuses below a survival floor / when the model is too big"
+ * behaviour is gone: the UI frames it as "not recommended, but you can try", and the
+ * device — not a predictive guard — decides whether the load survives.
  *
- * This is a fails-before/passes-after test: the RAM mock is DYNAMIC — free RAM is
- * low BEFORE the eviction unload fires and high AFTER (modelling iOS reclaiming the
- * unloaded clean pages). Against origin/main it goes RED (predictive floor refuses,
- * user sees "Error"); against the fix it goes GREEN (measure-after-evict → loads).
- * A static RAM mock could not distinguish the two orderings — that is exactly the
- * bug class a static mock hides.
+ * The contrast this suite pins: the SAME big model WITHOUT override is refused by the
+ * normal memory gate (an overridable "Insufficient Memory" prompt, no eviction); WITH
+ * override it evicts and loads. An approved override is then remembered for the
+ * session so repeated evict→reload swaps don't re-prompt.
+ *
+ * The RAM mock is DYNAMIC — free RAM is low BEFORE the eviction unload fires and high
+ * AFTER (modelling iOS reclaiming the unloaded clean pages) — so the eviction is a real
+ * unload the residency manager observes, not a static number.
  */
 
 import { useAppStore } from '../../../src/stores/appStore';
@@ -35,7 +37,6 @@ import { modelResidencyManager } from '../../../src/services/modelResidency';
 import { llmService } from '../../../src/services/llm';
 import { hardwareService } from '../../../src/services/hardware';
 import { loadModelWithOverride } from '../../../src/services/loadModelWithOverride';
-import { OVERRIDE_SURVIVAL_FLOOR_MB } from '../../../src/services/memoryBudget';
 import type { AlertState } from '../../../src/components/CustomAlert';
 import {
   resetStores,
@@ -187,15 +188,9 @@ describe('Load Anyway override chain (UI helper → service → residency)', () 
     expect(getAppState().activeModelId).not.toBe('big-gguf');
   });
 
-  it('THE BUG: tapping Load Anyway evicts the clean resident, re-measures the reclaimed RAM, and loads the model (fails on origin/main, passes on the fix)', async () => {
+  it('tapping Load Anyway evicts the clean resident and unconditionally loads the model, even with pre-eviction free RAM very low', async () => {
     const victimUnload = registerCleanVictim();
     useAppStore.setState({ downloadedModels: [bigGguf()] });
-    // Sanity: pre-eviction free RAM is genuinely below the survival floor, so a
-    // PRE-eviction snapshot (main) is forced to refuse; only measuring AFTER the
-    // clean eviction reclaims RAM can pass. This is the fails-before/passes-after pin.
-    expect(mockHardwareService.getAvailableMemoryGB() * 1024).toBeLessThan(
-      OVERRIDE_SURVIVAL_FLOOR_MB,
-    );
 
     const ui = driveLoad('big-gguf');
     await ui.start(); // → "Insufficient Memory"
@@ -212,27 +207,36 @@ describe('Load Anyway override chain (UI helper → service → residency)', () 
     expect(ui.alerts.map(a => a.title)).not.toContain('Error');
   });
 
-  it('hard limit: if real free RAM stays below the survival floor even AFTER eviction, Load Anyway refuses once with an Error (no infinite Load-Anyway loop)', async () => {
-    // Eviction happens, but the device still cannot survive the load — physics, not a
-    // false refusal. Model dirty footprint alone would jetsam mid-load.
+  it('unconditional override: even when real free RAM stays extremely low AFTER eviction, Load Anyway still loads (no survival floor, no refusal) — while WITHOUT override the same model is refused', async () => {
+    // Free RAM stays very low even after the eviction unload fires. Under the OLD
+    // survival-floor behaviour this was a hard Error; the ratified behaviour is that
+    // "Load Anyway" is UNCONDITIONAL — it evicts everything and loads regardless.
     mockHardwareService.getAvailableMemoryGB.mockImplementation(() =>
       reclaimed ? 1.1 : 1,
-    ); // 1.1 GB ≈ 1126 MB, still < 1200 MB floor
-    registerCleanVictim();
+    );
+    const victimUnload = registerCleanVictim();
     useAppStore.setState({ downloadedModels: [bigGguf()] });
 
-    const ui = driveLoad('big-gguf');
-    await ui.start();
-    await ui.tapLoadAnyway();
-
-    // Refused under override ⇒ hard Error, never loaded.
+    // CONTRAST — WITHOUT override the normal memory gate refuses: an overridable
+    // "Insufficient Memory" prompt, native never touched, the victim survives.
+    const gated = driveLoad('big-gguf');
+    await gated.start();
+    expect(gated.lastVisible()?.title).toBe('Insufficient Memory');
     expect(mockLlmService.loadModel).not.toHaveBeenCalled();
+    expect(modelResidencyManager.isResident('whisper')).toBe(true);
     expect(getAppState().activeModelId).not.toBe('big-gguf');
-    const finalAlert = ui.lastVisible();
-    expect(finalAlert?.title).toBe('Error');
-    // Exactly one Load-Anyway offer — a refusal UNDER override must not re-offer the
-    // same failing action (that was the dead-end loop the typed-error split prevents).
-    const overridePrompts = ui.alerts.filter(
+
+    // WITH override (tapping Load Anyway) it evicts the victim and loads unconditionally.
+    mockLlmService.isModelLoaded.mockReturnValue(true); // native reports loaded after the forced load
+    await gated.tapLoadAnyway();
+
+    expect(victimUnload).toHaveBeenCalledTimes(1);
+    expect(modelResidencyManager.isResident('whisper')).toBe(false);
+    expect(mockLlmService.loadModel).toHaveBeenCalledTimes(1);
+    expect(getAppState().activeModelId).toBe('big-gguf');
+    // The override never dead-ends in an Error, and it only offered Load Anyway once.
+    expect(gated.alerts.map(a => a.title)).not.toContain('Error');
+    const overridePrompts = gated.alerts.filter(
       a => a.title === 'Insufficient Memory',
     );
     expect(overridePrompts).toHaveLength(1);

@@ -59,6 +59,11 @@ type AppSettings = {
    *  default (behaviour-neutral). Single source of truth read by both the Settings
    *  screen and the in-chat settings; projected onto the residency manager. */
   aggressiveModelLoading: boolean;
+  /** How the residency manager handles multiple models (single source of truth read
+   *  by both settings surfaces, projected onto the manager via loadPolicySync):
+   *  'conservative' = one model at a time; 'balanced' = co-reside within budget;
+   *  'aggressive' = co-reside with a larger RAM commitment. */
+  modelLoadingMode?: 'conservative' | 'balanced' | 'aggressive';
   cacheType: CacheType; showGenerationDetails: boolean; enabledTools: string[];
   thinkingEnabled: boolean;
   inferenceBackend: InferenceBackend;
@@ -95,6 +100,14 @@ interface AppState {
   removeDownloadedModel: (modelId: string) => void;
   activeModelId: string | null;
   setActiveModelId: (modelId: string | null) => void;
+  /** The text model that is ACTUALLY loaded in native memory right now (engine-agnostic — llama OR litert),
+   *  as opposed to activeModelId (the SELECTED model, which may be selected-but-not-yet-loaded or evicted).
+   *  A reactive projection of ActiveModelService's authoritative loaded state — the SINGLE source every
+   *  surface reads for "currently loaded", so the model sheet and the overview can't disagree (device
+   *  2026-07-14: sheet read llmService.getLoadedModelPath() — llama-only + stale — while the overview read
+   *  activeModelId). Not persisted (a relaunch has nothing loaded). */
+  loadedTextModelId: string | null;
+  setLoadedTextModelId: (modelId: string | null) => void;
   /** The active text model was EVICTED to free RAM (e.g. an image/TTS load in voice mode)
    *  while still selected. Drives the chat "tap to continue" reload affordance so a big
    *  model that got unloaded can be brought back on demand. Set by the service, cleared
@@ -204,6 +217,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   gpuLayers: 99,
   flashAttn: true,
   aggressiveModelLoading: false,
+  modelLoadingMode: 'balanced',
   cacheType: 'q8_0' as CacheType,
   showGenerationDetails: false,
   enabledTools: ['web_search', 'read_url', 'search_knowledge_base'],
@@ -315,6 +329,8 @@ export const useAppStore = create<AppState>()(
         })),
       activeModelId: null,
       setActiveModelId: (modelId) => set({ activeModelId: modelId }),
+      loadedTextModelId: null,
+      setLoadedTextModelId: (modelId) => set({ loadedTextModelId: modelId }),
       textModelEvicted: false,
       setTextModelEvicted: (evicted) => set({ textModelEvicted: evicted }),
       lastTextModelId: null,

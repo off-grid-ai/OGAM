@@ -22,7 +22,7 @@
 /** Explicit record lifecycle. `transcribing` is the post-stop window (whisper running). */
 export type RecordPhase = 'idle' | 'recording' | 'transcribing';
 
-export interface RecordingHandlers {
+interface RecordingHandlers {
   start: () => void | Promise<void>;
   stop: () => void | Promise<void>;
   cancel: () => void;
