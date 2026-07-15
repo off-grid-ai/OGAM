@@ -109,6 +109,9 @@ export async function checkMemoryForModel(
     // Require at least 200MB headroom after model load for OS and app
     const MIN_HEADROOM_MB = 200;
     const safe = availableMB > estimatedMB + MIN_HEADROOM_MB;
+    // [MEM-SM] the pre-load fit decision — kept (surfaces the exact "it needs ~X but only Y" call
+    // on-device AND in tests via DEBUG_LOGS=1). This is the gate the qwythos refusal came from.
+    logger.log(`[MEM-SM] checkMemoryForModel modelMB=${Math.round(modelMB)} kvMB=${Math.round(kvCacheMB)} estMB=${Math.round(estimatedMB)} availMB=${Math.round(availableMB)} ctx=${contextLength} safe=${safe}`);
     if (!safe) {
       return {
         safe: false,
@@ -158,6 +161,9 @@ export async function resolveSafeContext(args: {
   const minCtx = fallbacks.length ? fallbacks[fallbacks.length - 1] : requestedCtx;
   const finalCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: minCtx, getAvailableMemory: getMem, quantizedCache });
   const modelMB = (fileSize * 1.2) / (1024 * 1024);
+  // [MEM-SM] the weights-alone refusal decision — kept. weightsExceedAvail && !override is the
+  // dead-end that used to throw a plain Error; it now throws OverridableMemoryError (Load Anyway).
+  logger.log(`[MEM-SM] resolveSafeContext gate modelMB=${Math.round(modelMB)} availMB=${Math.round(finalCheck.availableMB)} override=${override} weightsExceedAvail=${finalCheck.availableMB > 0 && modelMB > finalCheck.availableMB}`);
   if (finalCheck.availableMB > 0 && modelMB > finalCheck.availableMB && !override) {
     // OVERRIDABLE, always: a budget refusal in ANY mode must offer "Load Anyway" — never a
     // dead-end. This is the single behavior the image path already had (makeRoomFor →
