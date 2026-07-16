@@ -70,7 +70,12 @@ class HuggingFaceService {
           mmProjFile: this.findMatchingMMProj(file.path, mmProjFiles, modelId),
         }))
         .sort((a, b) => a.size - b.size);
-    } catch {
+    } catch (e) {
+      // A timed-out/aborted request means the network is down — don't pay a second 5s on the
+      // siblings fallback; fail fast so the UI can show retry. The fallback stays for its intended
+      // case: the tree endpoint returned a non-ok status (handled above) on a repo whose file list
+      // the model page can still provide.
+      if (e instanceof Error && e.name === 'AbortError') throw e;
       return this.getModelFilesFromSiblings(modelId);
     }
   }

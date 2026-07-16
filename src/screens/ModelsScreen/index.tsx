@@ -183,6 +183,7 @@ export const ModelsScreen: React.FC = () => {
           modelFiles={vm.modelFiles}
           setModelFiles={vm.setModelFiles}
           isLoadingFiles={vm.isLoadingFiles}
+          filesLoadError={vm.filesLoadError}
           filterState={vm.filterState}
           textFiltersVisible={vm.textFiltersVisible}
           setTextFiltersVisible={vm.setTextFiltersVisible}

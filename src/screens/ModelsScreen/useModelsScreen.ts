@@ -248,6 +248,7 @@ export function useModelsScreen() {
     modelFiles: text.modelFiles,
     setModelFiles: text.setModelFiles,
     isLoadingFiles: text.isLoadingFiles,
+    filesLoadError: text.filesLoadError,
     filterState: text.filterState,
     setFilterState: text.setFilterState,
     textFiltersVisible: text.textFiltersVisible,

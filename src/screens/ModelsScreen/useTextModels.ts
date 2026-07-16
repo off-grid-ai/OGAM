@@ -105,6 +105,10 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
   const [selectedModel, setSelectedModel] = useState<ModelInfo | null>(null);
   const [modelFiles, setModelFiles] = useState<ModelFile[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  // True when the last file-list fetch FAILED (network/timeout) — distinct from "loaded, but no
+  // compatible files". Lets the detail view show a retry state instead of the misleading
+  // "No compatible files found" when the fetch simply couldn't reach HuggingFace.
+  const [filesLoadError, setFilesLoadError] = useState(false);
   const [filterState, setFilterState] = useState<FilterState>(initialFilterState);
   const [textFiltersVisible, setTextFiltersVisible] = useState(false);
   const [recommendedModelDetails, setRecommendedModelDetails] = useState<Record<string, ModelInfo>>({});
@@ -183,7 +187,7 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
   }, [filterState.type, filterState.size, filterState.orgs.length]);
 
   const handleSelectModel = async (model: ModelInfo) => {
-    setSelectedModel(model); setIsLoadingFiles(true);
+    setSelectedModel(model); setIsLoadingFiles(true); setFilesLoadError(false);
     // Curated entries under the offgrid/ namespace (e.g. the synthetic LiteRT
     // parent) ship with their files baked into the ModelInfo — skip the
     // HuggingFace fetch and use them as-is. Real HF models always go through
@@ -197,8 +201,10 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
       const files = await huggingFaceService.getModelFiles(model.id);
       setModelFiles(files);
     } catch {
-      setAlertState(showAlert('Error', 'Failed to load model files.'));
+      // Fetch failed (offline / HF unreachable / timeout). Surface an inline retry state rather
+      // than a transient modal — the detail view reads filesLoadError and offers Retry.
       setModelFiles([]);
+      setFilesLoadError(true);
     } finally {
       setIsLoadingFiles(false);
     }
@@ -347,6 +353,7 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
     selectedModel, setSelectedModel,
     modelFiles, setModelFiles,
     isLoadingFiles,
+    filesLoadError,
     filterState, setFilterState,
     textFiltersVisible, setTextFiltersVisible,
     downloadedModels,

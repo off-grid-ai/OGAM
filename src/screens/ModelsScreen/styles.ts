@@ -125,8 +125,10 @@ const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   deviceBannerText: { ...TYPOGRAPHY.meta, color: colors.trending, flex: 1 },
   deviceBannerWarning: { color: colors.error, marginTop: 2 },
-  emptyCard: { alignItems: 'center' as const, padding: 32 },
+  emptyCard: { alignItems: 'center' as const, padding: 32, gap: 12 },
   emptyText: { color: colors.textSecondary, textAlign: 'center' as const },
+  retryButton: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, borderWidth: 1, borderColor: colors.primary, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 16 },
+  retryButtonText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
 });
 
 const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({

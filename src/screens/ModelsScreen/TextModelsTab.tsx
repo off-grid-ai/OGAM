@@ -45,7 +45,7 @@ type Props = Pick<ModelsScreenViewModel,
   | 'hasSearched'
   | 'selectedModel' | 'setSelectedModel'
   | 'modelFiles' | 'setModelFiles'
-  | 'isLoadingFiles'
+  | 'isLoadingFiles' | 'filesLoadError'
   | 'filterState'
   | 'textFiltersVisible' | 'setTextFiltersVisible'
   | 'filteredResults' | 'recommendedAsModelInfo' | 'trendingAsModelInfo'
@@ -63,10 +63,10 @@ type Props = Pick<ModelsScreenViewModel,
 >;
 
 type DetailProps = Pick<Props,
-  | 'modelFiles' | 'isLoadingFiles' | 'filterState' | 'ramGB'
+  | 'modelFiles' | 'isLoadingFiles' | 'filesLoadError' | 'filterState' | 'ramGB'
   | 'alertState' | 'setAlertState'
   | 'getDownloadedModel' | 'isModelDownloaded' | 'isRepairingVisionModel'
-  | 'handleDownload' | 'handleRepairMmProj' | 'handleCancelDownload' | 'handleDeleteModel'
+  | 'handleDownload' | 'handleRepairMmProj' | 'handleCancelDownload' | 'handleDeleteModel' | 'handleSelectModel'
 > & { selectedModel: ModelInfo; onBack: () => void; };
 
 // Build the file card's onDownload handler. Whether to show the curated confirm-download
@@ -94,10 +94,10 @@ function buildFileDownloadHandler({ s, fileName, sizeBytes, ramGB, proceedDownlo
 }
 
 const ModelDetailView: React.FC<DetailProps> = ({
-  selectedModel, modelFiles, isLoadingFiles, filterState, ramGB,
+  selectedModel, modelFiles, isLoadingFiles, filesLoadError, filterState, ramGB,
   alertState, setAlertState, onBack,
   getDownloadedModel, isModelDownloaded, isRepairingVisionModel,
-  handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel,
+  handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel, handleSelectModel,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -252,6 +252,15 @@ const ModelDetailView: React.FC<DetailProps> = ({
       )}
       {isLoadingFiles ? (
         <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>
+      ) : filesLoadError ? (
+        <Card style={styles.emptyCard} testID="model-files-load-error">
+          <Icon name="wifi-off" size={24} color={colors.textSecondary} />
+          <Text style={styles.emptyText}>Couldn't load files. Check your connection and try again.</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => handleSelectModel(selectedModel)} testID="model-files-retry">
+            <Icon name="refresh-cw" size={14} color={colors.primary} />
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </Card>
       ) : (
         <FlatList
           data={modelFiles
@@ -330,7 +339,7 @@ const SortPanel: React.FC<SortPanelProps> = ({ filterState, setSortOption, style
 export const TextModelsTab: React.FC<Props> = (props) => {
   const {
     searchQuery, setSearchQuery, isLoading, isRefreshing, hasSearched,
-    selectedModel, setSelectedModel, modelFiles, setModelFiles, isLoadingFiles,
+    selectedModel, setSelectedModel, modelFiles, setModelFiles, isLoadingFiles, filesLoadError,
     filterState, textFiltersVisible, setTextFiltersVisible,
     filteredResults, recommendedAsModelInfo, trendingAsModelInfo, ramGB, deviceRecommendation,
     hasActiveFilters, downloadedModels,
@@ -362,6 +371,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
         selectedModel={selectedModel}
         modelFiles={modelFiles}
         isLoadingFiles={isLoadingFiles}
+        filesLoadError={filesLoadError}
         filterState={filterState}
         ramGB={ramGB}
         alertState={alertState}
@@ -374,6 +384,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
         handleRepairMmProj={handleRepairMmProj}
         handleCancelDownload={handleCancelDownload}
         handleDeleteModel={handleDeleteModel}
+        handleSelectModel={handleSelectModel}
       />
     );
   }
