@@ -1,0 +1,204 @@
+name: Sync GitHub Issues to Jira
+
+on:
+  schedule:
+    # 9 AM IST = 3:30 AM UTC
+    - cron: '30 3 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  sync-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync new GitHub issues to Jira
+        uses: actions/github-script@v7
+        env:
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          script: |
+            const jiraEmail = process.env.JIRA_EMAIL;
+            const jiraToken = process.env.JIRA_API_TOKEN;
+            const jiraBase = process.env.JIRA_BASE_URL;
+            const jiraAuth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+            const jiraProject = 'SCRUM';
+
+            // Fetch open GitHub issues (not PRs)
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            const ghIssues = issues.filter(i => !i.pull_request);
+            console.log(`Found ${ghIssues.length} open GitHub issues`);
+
+            // Fetch existing Jira tickets to check for duplicates
+            // Search for tickets with "GH #" in summary
+            const searchRes = await fetch(`${jiraBase}/rest/api/3/search/jql`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Basic ${jiraAuth}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                jql: `project = ${jiraProject} AND summary ~ "GH #"`,
+                maxResults: 500,
+                fields: ['summary'],
+              }),
+            });
+            const searchData = await searchRes.json();
+            const existingTickets = (searchData.issues || []).map(i => i.fields.summary);
+
+            // Extract GH numbers from existing tickets
+            const existingGhNumbers = new Set();
+            for (const summary of existingTickets) {
+              const match = summary.match(/GH #(\d+)/);
+              if (match) existingGhNumbers.add(parseInt(match[1]));
+            }
+            console.log(`Found ${existingGhNumbers.size} existing Jira tickets with GH references`);
+
+            // Also check old-style tickets that have GH number in description
+            // by checking individual issue numbers
+            let created = 0;
+            let skipped = 0;
+            const createdTickets = []; // { key, ghNumber, title, type }
+            const failures = [];       // { ghNumber, error }
+
+            for (const issue of ghIssues) {
+              // Skip if already in Jira
+              if (existingGhNumbers.has(issue.number)) {
+                skipped++;
+                continue;
+              }
+
+              // Skip issues with empty titles
+              const title = issue.title.trim();
+              if (!title || title === '[Feature]' || title === '[Bug]') {
+                console.log(`Skipping #${issue.number} - empty/vague title`);
+                skipped++;
+                continue;
+              }
+
+              // Determine type from GitHub labels: bug -> Bug, feature/enhancement -> Story,
+              // anything else -> Task. (Unstructured sources like Slack will use the shared
+              // triage service for LLM classification; GitHub issues are reliably labelled.)
+              const labels = issue.labels.map(l => l.name.toLowerCase());
+              const issuetype =
+                labels.includes('bug') ? 'Bug' :
+                (labels.includes('feature') || labels.includes('enhancement')) ? 'Story' :
+                'Task';
+
+              // Build description from issue body
+              const body = (issue.body || '').substring(0, 500).replace(/["\\\n\r\t]/g, ' ').trim();
+              const problem = body || `${title} - reported by GitHub user @${issue.user.login}`;
+
+              // Default scoring - Value: 2, Effort: 2, Priority: 1.0
+              const scoring = 'Value: 2/3 | Effort: 2/3 | Priority: 1.0 (auto-scored, adjust manually)';
+
+              // Create Jira ticket
+              const createRes = await fetch(`${jiraBase}/rest/api/3/issue`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Basic ${jiraAuth}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  fields: {
+                    project: { key: jiraProject },
+                    summary: `${title} (GH #${issue.number})`,
+                    issuetype: { name: issuetype },
+                    description: {
+                      version: 1,
+                      type: 'doc',
+                      content: [
+                        {
+                          type: 'heading',
+                          attrs: { level: 3 },
+                          content: [{ type: 'text', text: 'Problem' }],
+                        },
+                        {
+                          type: 'paragraph',
+                          content: [{ type: 'text', text: problem }],
+                        },
+                        {
+                          type: 'heading',
+                          attrs: { level: 3 },
+                          content: [{ type: 'text', text: 'Scoring' }],
+                        },
+                        {
+                          type: 'paragraph',
+                          content: [{ type: 'text', text: scoring }],
+                        },
+                        {
+                          type: 'heading',
+                          attrs: { level: 3 },
+                          content: [{ type: 'text', text: 'Reference' }],
+                        },
+                        {
+                          type: 'paragraph',
+                          content: [
+                            {
+                              type: 'text',
+                              text: `GitHub: https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issue.number}`,
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                }),
+              });
+
+              if (createRes.ok) {
+                const data = await createRes.json();
+                console.log(`Created ${data.key} for GH #${issue.number}: ${title}`);
+                created++;
+                createdTickets.push({ key: data.key, ghNumber: issue.number, title, type: issuetype });
+              } else {
+                const err = await createRes.text();
+                console.error(`Failed to create ticket for GH #${issue.number}: ${err}`);
+                failures.push({ ghNumber: issue.number, error: err.substring(0, 200) });
+              }
+            }
+
+            console.log(`\nDone. Created: ${created}, Skipped: ${skipped}`);
+
+            // Post a Slack summary — only when something was created or failed
+            // (no-news-is-good-news: stay silent on quiet days). Reuses the same
+            // SLACK_WEBHOOK_URL the app-play-store-tracker posts with.
+            const slackUrl = process.env.SLACK_WEBHOOK_URL;
+            if (slackUrl && (createdTickets.length > 0 || failures.length > 0)) {
+              const repo = `${context.repo.owner}/${context.repo.repo}`;
+              const date = new Date().toISOString().slice(0, 10);
+              const lines = createdTickets.map(t =>
+                `• \`${t.key}\` ← GH #${t.ghNumber} — ${t.title} _(${t.type})_`
+              ).join('\\n');
+
+              const blocks = [
+                { type: 'header', text: { type: 'plain_text', text: `🔄 GitHub → Jira Sync — ${date}` } },
+                { type: 'section', text: { type: 'mrkdwn',
+                  text: `*${repo}*\\nCreated *${created}* ticket(s) · Skipped ${skipped}` } },
+              ];
+              if (createdTickets.length > 0) {
+                blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*New tickets*\\n${lines}` } });
+              }
+              if (failures.length > 0) {
+                const fl = failures.map(f => `• GH #${f.ghNumber}: ${f.error}`).join('\\n');
+                blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*⚠️ Failed (${failures.length})*\\n${fl}` } });
+              }
+
+              const slackRes = await fetch(slackUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ blocks }),
+              });
+              console.log(slackRes.ok ? 'Posted summary to Slack' : `Slack post failed: ${await slackRes.text()}`);
+            } else if (!slackUrl) {
+              console.log('SLACK_WEBHOOK_URL not set — skipping Slack summary');
+            } else {
+              console.log('Nothing created/failed — no Slack post (quiet day)');
+            }
