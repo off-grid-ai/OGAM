@@ -251,6 +251,25 @@ class DownloadManagerModule: RCTEventEmitter {
     return resolved.hasPrefix(documentsDir) || resolved.hasPrefix(cachesDir) || resolved.hasPrefix(tmpDir)
   }
 
+  // MARK: - Durable staging
+
+  /// A DURABLE directory to stage a completed download until JS finalizes it (moves it to the model
+  /// dir / unzips it). This MUST NOT be NSTemporaryDirectory(): iOS reaps the temp dir across app
+  /// relaunches and under memory pressure, so a completed-but-not-yet-finalized file staged there is
+  /// gone by the time finalization runs — especially after the queued-survival rework, which now
+  /// restores and finalizes downloads AFTER a relaunch. A large image zip (multi-GB) is the worst case:
+  /// it commonly spans a backgrounding/relaunch before its unzip completes, and the vanished staged
+  /// zip surfaced as "…couldn't be opened because there is no such file" on iOS. Documents is durable
+  /// (never auto-purged), inside the sandbox allowlist, and we exclude it from iCloud backup.
+  static func completedStagingDirectory() -> String {
+    let documentsDir = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first
+      ?? NSTemporaryDirectory()
+    let dir = (documentsDir as NSString).appendingPathComponent(".download-staging")
+    try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+    excludeFromBackup(at: URL(fileURLWithPath: dir))
+    return dir
+  }
+
   // MARK: - RCTEventEmitter
 
   override init() {
@@ -1178,8 +1197,10 @@ extension DownloadManagerModule {
                                           downloadId: String,
                                           info: inout DownloadInfo,
                                           fileManager: FileManager) {
-    let tmpDir = NSTemporaryDirectory()
-    let destPath = "\(tmpDir)/download_\(downloadId)_\(info.fileName)"
+    // Stage the completed file in a DURABLE dir (not NSTemporaryDirectory, which iOS purges across
+    // relaunch / under memory pressure) so a finalize that runs after a relaunch can still find it.
+    let stagingDir = DownloadManagerModule.completedStagingDirectory()
+    let destPath = "\(stagingDir)/download_\(downloadId)_\(info.fileName)"
     let destURL = URL(fileURLWithPath: destPath)
     try? fileManager.removeItem(at: destURL)
 
@@ -1188,6 +1209,9 @@ extension DownloadManagerModule {
     do {
       try fileManager.moveItem(at: location, to: destURL)
       NSLog("[DownloadManager] Single file saved to: %@", destPath)
+      // Exclude the staged file itself from backup (per-file flag; the dir flag is not inherited by
+      // files created later). These are large model artifacts we never want in an iCloud backup.
+      DownloadManagerModule.excludeFromBackup(at: destURL)
       info.localUri = destPath
       info.status = "completed"
       info.bytesDownloaded = info.totalBytes
@@ -1305,9 +1329,12 @@ class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate {
           downloadTask.taskIdentifier, location.path)
 
     // CRITICAL: The file at `location` is deleted by URLSession as soon as this method returns.
-    // We must copy it to a safe location SYNCHRONOUSLY before returning.
+    // We must copy it to a safe location SYNCHRONOUSLY before returning. That location must be
+    // DURABLE (not NSTemporaryDirectory) — if the app is killed between here and handleCompletion,
+    // a temp copy would be reaped and the completed bytes lost. See completedStagingDirectory().
     let fileManager = FileManager.default
-    let safeTmp = NSTemporaryDirectory() + "dl_task_\(downloadTask.taskIdentifier)_\(UUID().uuidString).tmp"
+    let stagingDir = DownloadManagerModule.completedStagingDirectory()
+    let safeTmp = "\(stagingDir)/dl_task_\(downloadTask.taskIdentifier)_\(UUID().uuidString).tmp"
     let safeURL = URL(fileURLWithPath: safeTmp)
 
     do {

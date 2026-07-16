@@ -1,4 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { hydrateDownloadStore, isMmProjFileName } from '../../../src/services/downloadHydration';
+import { saveActiveDownloads } from '../../../src/services/activeDownloadPersistence';
 import { useDownloadStore } from '../../../src/stores/downloadStore';
 
 jest.mock('../../../src/services/backgroundDownloadService', () => ({
@@ -10,9 +12,10 @@ jest.mock('../../../src/services/backgroundDownloadService', () => ({
 
 const { backgroundDownloadService } = jest.requireMock('../../../src/services/backgroundDownloadService');
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
   useDownloadStore.setState({ downloads: {}, downloadIdIndex: {} });
+  await AsyncStorage.clear(); // reset the persisted in-flight snapshot between tests
 });
 
 describe('isMmProjFileName', () => {
@@ -151,5 +154,51 @@ describe('hydrateDownloadStore', () => {
     await hydrateDownloadStore();
     const entry = useDownloadStore.getState().downloads['author/model/model.gguf'];
     expect(entry.downloadId).toBe('dl-new');
+  });
+
+  // Cold app-kill recovery: an in-flight download persisted to the durable snapshot must be carried
+  // forward as a failed/retriable card — NOT vanish — when its native row is gone on relaunch (iOS
+  // URLSession drops the task on force-quit). device 2026-07-15.
+  const inflight = {
+    downloadId: 'dl-inflight',
+    modelId: 'author/big-model',
+    modelKey: 'author/big-model/model.gguf',
+    fileName: 'model.gguf',
+    quantization: 'Q4_K_M',
+    modelType: 'text' as const,
+    status: 'running' as const,
+    bytesDownloaded: 1_100_000_000,
+    totalBytes: 5_500_000_000,
+    combinedTotalBytes: 5_500_000_000,
+    progress: 0.2,
+    createdAt: 1000,
+  };
+
+  it('strands a persisted in-flight download as failed when the native row is gone (cold app-kill)', async () => {
+    // Cold kill: in-memory store empty (beforeEach), native snapshot empty (task dropped), but the
+    // in-flight download survives in the durable snapshot loadActiveDownloads() reads.
+    await saveActiveDownloads([inflight]);
+    backgroundDownloadService.isAvailable.mockReturnValue(true);
+    backgroundDownloadService.getActiveDownloads.mockResolvedValue([]);
+
+    await hydrateDownloadStore();
+
+    const entry = useDownloadStore.getState().downloads['author/big-model/model.gguf'];
+    expect(entry).toBeDefined();               // did NOT vanish
+    expect(entry.status).toBe('failed');       // stranded as retriable
+    expect(entry.errorMessage).toMatch(/Interrupted/);
+  });
+
+  it('does NOT strand when the native snapshot still reports the row (Android survives a kill)', async () => {
+    // Android WorkManager survives a kill → the row reappears in the native snapshot → the persisted
+    // snapshot must be ignored for that key, never flip a live download to a false "failed".
+    await saveActiveDownloads([inflight]);
+    backgroundDownloadService.isAvailable.mockReturnValue(true);
+    backgroundDownloadService.getActiveDownloads.mockResolvedValue([{ ...inflight, bytesDownloaded: 2_000_000_000 }]);
+
+    await hydrateDownloadStore();
+
+    const entry = useDownloadStore.getState().downloads['author/big-model/model.gguf'];
+    expect(entry.status).toBe('running');      // live native row wins — no false strand (no Android regression)
   });
 });

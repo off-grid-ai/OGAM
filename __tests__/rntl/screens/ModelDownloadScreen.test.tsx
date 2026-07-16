@@ -604,15 +604,13 @@ describe('ModelDownloadScreen', () => {
       expect(result.queryByTestId('litert-model-0')).toBeNull();
     });
 
-    it('filters out LiteRT models that exceed RAM headroom', async () => {
-      Platform.OS = 'android';
-      // 4GB device: 60% headroom = 2.4GB; both curated models are larger.
-      mockHardwareService.getTotalMemoryGB.mockReturnValue(4);
-      const result = render(<ModelDownloadScreen navigation={mockNavigation} />);
-      await flushPromises();
-
-      expect(result.queryByTestId('litert-model-0')).toBeNull();
-    });
+    // DELETED (mockist, #510): 'filters out LiteRT models that exceed RAM headroom' jest.mocked our own
+    // stores/services/hardware and asserted the PRE-FIX BUGGY behavior — that an over-budget curated
+    // LiteRT card is hidden at 4GB. That is exactly the defect: an over-budget-but-WARNABLE model (Gemma
+    // 4 E4B) must be OFFERED behind the "Download anyway" sheet, not silently hidden. Per doctrine, a
+    // test that mocks our own code proves nothing and here it encoded the bug, so it is deleted rather
+    // than repaired. The correct behavior is asserted at the RENDERED layer (over a real device-boundary
+    // fake, no mocks of our code) in __tests__/integration/memory/curatedLiteRTOverBudgetWarning.rendered.redflow.test.tsx.
 
     it('downloading a LiteRT model uses the curated parent id', async () => {
       Platform.OS = 'android';

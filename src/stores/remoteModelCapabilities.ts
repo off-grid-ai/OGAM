@@ -7,7 +7,7 @@
  */
 
 import logger from '../utils/logger';
-import { templateEmitsReasoning } from '../utils/messageContent';
+import { templateEmitsReasoning, REASONING_DELIMITERS } from '../utils/messageContent';
 
 export interface RemoteModelInfo {
   contextLength: number;
@@ -200,7 +200,15 @@ export async function fetchLmStudioModelInfo(
  * - Separate message.reasoning_content field
  */
 function deltaHasThinking(delta: Record<string, unknown>): boolean {
-  if (typeof delta.content === 'string' && delta.content.includes('<think>')) return true;
+  // Inline reasoning emitted in `content` (no reasoning_content field) is detected through the
+  // SHARED reasoning grammar (REASONING_DELIMITERS) — not a hardcoded `<think>` — so this agrees
+  // with the rest of the reasoning parsers and catches Gemma/Qwen channel reasoning too.
+  if (
+    typeof delta.content === 'string' &&
+    REASONING_DELIMITERS.some((d) => (delta.content as string).includes(d.open))
+  ) {
+    return true;
+  }
   if (typeof delta.reasoning_content === 'string' && delta.reasoning_content.length > 0) return true;
   if (typeof delta.reasoning === 'string' && delta.reasoning.length > 0) return true;
   if (typeof delta.thinking === 'string' && delta.thinking.length > 0) return true;

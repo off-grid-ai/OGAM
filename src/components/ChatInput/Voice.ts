@@ -32,18 +32,6 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
   const [isTranscribingFile, setIsTranscribingFile] = useState(false);
   const [directError, setDirectError] = useState<string | null>(null);
 
-  const {
-    isRecording: isWhisperRecording,
-    isModelLoading,
-    isTranscribing: isWhisperTranscribing,
-    partialResult,
-    finalResult,
-    error: whisperError,
-    startRecording: startWhisperRecording,
-    stopRecording: stopWhisperRecording,
-    clearResult,
-  } = useWhisperTranscription();
-
   const supportsDirectAudio = (): boolean =>
     activeModelService.supportsAudioInput() && audioRecorderService.supportsDirectAudioInput();
 
@@ -56,7 +44,9 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
 
   // Ensure whisper is resident before transcribing (the decision lives in the pure
   // ensureWhisperForTranscription — it frees a blocking generation model, but never
-  // evicts on a hard whisper-load failure). One seam for both paths below.
+  // evicts on a hard whisper-load failure). ONE seam for EVERY path: the file paths below
+  // AND the realtime hold-to-talk dictation (injected into useWhisperTranscription), so a
+  // memory-blocked dictation recovers instead of dead-ending.
   const ensureWhisper = (): Promise<boolean> => ensureWhisperForTranscription({
     isLoaded: () => whisperService.isModelLoaded(),
     hasDownloadedModel: () => !!downloadedModelId,
@@ -65,6 +55,18 @@ export function useVoiceInput({ conversationId, onTranscript, onAudioAttachment,
     // transcript decides text-vs-image.
     freeGenerationModels: () => activeModelService.unloadAllModels(true).then(() => {}),
   });
+
+  const {
+    isRecording: isWhisperRecording,
+    isModelLoading,
+    isTranscribing: isWhisperTranscribing,
+    partialResult,
+    finalResult,
+    error: whisperError,
+    startRecording: startWhisperRecording,
+    stopRecording: stopWhisperRecording,
+    clearResult,
+  } = useWhisperTranscription({ ensureModelReady: ensureWhisper });
 
   const isTranscribing = isWhisperTranscribing || isTranscribingFile;
   const isRecording = isDirectRecording || isAudioModeRecording || isWhisperRecording;

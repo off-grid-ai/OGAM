@@ -481,4 +481,23 @@ describe('VoiceRecordButton', () => {
       expect(getByTestId('voice-loading')).toBeTruthy();
     });
   });
+
+  // ============================================================================
+  // Gesture continuity through a cold model load
+  //
+  // The "Slide to cancel" hint now lives inline in the composer (ChatInput.RecordingHint),
+  // not on this button. What MUST hold here is that a cold model load does not swap the mic
+  // for a bare, gesture-less spinner: the hold-to-record wrapper (voice-record-button, which
+  // carries the PanResponder) stays mounted while loading, so hold + slide + release survive
+  // the load (and the release-during-load ghost recording can't happen). If the load render
+  // reverted to the old early-return spinner, voice-record-button would be absent here.
+  // ============================================================================
+  describe('gesture continuity', () => {
+    it('keeps the gesturable mic wrapper mounted during a cold model load (chat mode)', () => {
+      const { getByTestId } = render(
+        <VoiceRecordButton {...defaultProps} asSendButton={true} isModelLoading={true} />
+      );
+      expect(getByTestId('voice-record-button')).toBeTruthy();
+    });
+  });
 });

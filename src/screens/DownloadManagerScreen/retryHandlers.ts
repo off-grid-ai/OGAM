@@ -15,6 +15,7 @@ import { backgroundDownloadService } from '../../services';
 import { DownloadItem } from './items';
 import logger from '../../utils/logger';
 import { proceedWithDownload } from '../ModelsScreen/imageDownloadActions';
+import { imageDescriptorFromMetadata } from '../ModelsScreen/imageDescriptor';
 import { resumeImageDownload } from '../ModelsScreen/imageDownloadResume';
 
 export function parseEntryMetadata(entry: DownloadEntry): Record<string, any> | null {
@@ -60,20 +61,7 @@ async function retryIosImageDownload(entry: DownloadEntry, setAlertState: (s: Al
     setAlertState,
     triedImageGen: appState.onboardingChecklist.triedImageGen,
   };
-  await proceedWithDownload({
-    id: modelId,
-    name: meta.imageModelName,
-    description: meta.imageModelDescription,
-    downloadUrl: meta.imageModelDownloadUrl ?? '',
-    size: meta.imageModelSize,
-    style: meta.imageModelStyle,
-    backend: meta.imageModelBackend,
-    attentionVariant: meta.imageModelAttentionVariant,
-    huggingFaceRepo: meta.imageModelRepo,
-    huggingFaceFiles: meta.imageModelHuggingFaceFiles,
-    coremlFiles: meta.imageModelCoremlFiles,
-    repo: meta.imageModelRepo,
-  }, deps);
+  await proceedWithDownload(imageDescriptorFromMetadata(modelId, meta), deps);
 }
 
 /**

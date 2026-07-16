@@ -22,6 +22,18 @@ export interface ParsedContent {
 export const TOOL_CALL_OPENERS: string[] = ['<|tool_call>', '<tool_call:', '<tool_call>'];
 export const TOOL_CALL_CLOSERS: string[] = ['<tool_call|>', '</tool_call>'];
 
+/**
+ * THE single source of truth for the XML-style tool-call markup grammar
+ * (`<function=NAME>…<parameter=NAME>…</function>`) some models emit. Both the tool-loop
+ * EXTRACTOR (parseXmlStyleToolCall in generationToolLoop) and the display stripper (below)
+ * derive their patterns from THESE sources so a form the extractor accepts cannot be one the
+ * stripper misses — the DR7 promise applied to this second grammar. `\w+` after the `=` is the
+ * tool/param name; the block closes with `</function>`.
+ */
+export const XML_TOOL_CALL_FUNCTION_MARKER = String.raw`<function=(\w+)>`;
+export const XML_TOOL_CALL_PARAMETER_MARKER = String.raw`<parameter=(\w+)>`;
+const XML_TOOL_CALL_FUNCTION_CLOSER = '</function>';
+
 const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 const CLOSERS_ALT = TOOL_CALL_CLOSERS.map(escapeRegExp).join('|');
 // One closed-block pattern per opener, built from the grammar so parser and stripper cannot drift.
@@ -32,6 +44,14 @@ const TOOL_CALL_BLOCK_PATTERNS: RegExp[] = TOOL_CALL_OPENERS.map(
 const TOOL_CALL_UNCLOSED_PATTERNS: RegExp[] = TOOL_CALL_OPENERS.map(
   (open) => new RegExp(String.raw`${escapeRegExp(open)}[\s\S]*$`),
 );
+
+// XML-style tool-call block (`<function=…>…</function>`) and its unclosed-at-EOS tail, built from
+// the shared XML_TOOL_CALL_* markers so the stripper and the extractor cannot drift on this form.
+const XML_TOOL_CALL_BLOCK_PATTERN = new RegExp(
+  String.raw`${XML_TOOL_CALL_FUNCTION_MARKER}[\s\S]*?${escapeRegExp(XML_TOOL_CALL_FUNCTION_CLOSER)}\s*`,
+  'gi',
+);
+const XML_TOOL_CALL_UNCLOSED_PATTERN = new RegExp(String.raw`${XML_TOOL_CALL_FUNCTION_MARKER}[\s\S]*$`, 'i');
 
 /**
  * Length of the longest suffix of `text` that is a PREFIX of `tag` — i.e. how much of a possibly-
@@ -59,6 +79,8 @@ const CONTROL_TOKEN_PATTERNS: RegExp[] = [
   // Gemma-native tool-call blocks (all openers × all closers), from the shared grammar above.
   // The streaming filter suppresses these live; this catches any that reach stored content.
   ...TOOL_CALL_BLOCK_PATTERNS,
+  // XML-style `<function=…>…</function>` tool-call blocks (the extractor's second grammar).
+  XML_TOOL_CALL_BLOCK_PATTERN,
   // Gemma 4 string-delimiter token that may appear outside a tool block
   /<\|">/g,
 ];
@@ -162,6 +184,8 @@ export function stripControlTokens(content: string): string {
   // Unclosed Gemma-native tool-call opener at end (EOS mid-call) — the closed forms above are
   // handled by CONTROL_TOKEN_PATTERNS; this catches the truncated tail in stored content.
   result = TOOL_CALL_UNCLOSED_PATTERNS.reduce((acc, pattern) => acc.replace(pattern, ''), result);
+  // Unclosed XML-style `<function=…>` opener at end (EOS mid-call).
+  result = result.replace(XML_TOOL_CALL_UNCLOSED_PATTERN, '');
 
   // ── Thinking blocks ─────────────────────────────────────────────────────
   // Complete <think>...</think> blocks (Qwen 3.5, DeepSeek, etc.)
@@ -187,7 +211,7 @@ export function stripStreamingControlTokens(content: string): string {
  * Strip markdown formatting for TTS speech. Preserves the readable text
  * but removes syntax that Kokoro would read aloud as literal characters.
  */
-export function stripMarkdownForSpeech(content: string): string {
+function stripMarkdownForSpeech(content: string): string {
   let result = content;
   // Headers: ### Title → Title
   result = result.replace(/^#{1,6}\s+/gm, '');

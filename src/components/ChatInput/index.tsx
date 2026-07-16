@@ -7,6 +7,8 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import { ImageModeState, MediaAttachment } from '../../types';
 import { VoiceRecordButton } from '../VoiceRecordButton';
+import { RecordingHint } from './RecordingHint';
+import { ComposerIconsRow } from './ComposerIconsRow';
 import { AttachStep } from 'react-native-spotlight-tour';
 import { triggerHaptic } from '../../utils/haptics';
 import logger from '../../utils/logger';
@@ -427,52 +429,38 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       />
       <View style={styles.mainRow}>
         <View style={styles.pill}>
-          <TextInput
-            ref={inputRef}
-            testID="chat-input"
-            style={styles.pillInput}
-            value={message}
-            onChangeText={setMessage}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
-            multiline
-            scrollEnabled
-            editable={!disabled}
-            blurOnSubmit={false}
-            returnKeyType="default"
-          />
-          <Animated.View
-            pointerEvents={hasText ? 'none' : 'auto'}
-            style={[styles.pillIcons, {
-              width: iconsAnim.interpolate({ inputRange: [0, 1], outputRange: [pillIconsExpandedWidth, 0] }),
-              opacity: iconsAnim.interpolate({ inputRange: [0, 0.4], outputRange: [1, 0], extrapolate: 'clamp' }),
-              overflow: 'hidden' as const,
-            }]}
-          >
-            <TouchableOpacity
-              ref={attachPicker.triggerRef}
-              testID="attach-button"
-              style={styles.pillIconButton}
-              onPress={handleAttachPress}
-              disabled={disabled}
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-            >
-              <Icon name="plus" size={20} color={disabled ? colors.textMuted : colors.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              ref={quickSettings.triggerRef}
-              testID="quick-settings-button"
-              style={styles.pillIconButton}
-              onPress={handleQuickSettingsPress}
-              disabled={disabled}
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-            >
-              <View style={styles.iconWrapper}>
-                <Icon name="settings" size={18} color={disabled ? colors.textMuted : colors.textSecondary} />
-                {showSettingsDot && <View style={styles.toolWarningDot} />}
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
+          {isRecording ? (
+            // Push-to-talk hint inline in the composer (WhatsApp pattern) — see RecordingHint.
+            <RecordingHint />
+          ) : (
+            <>
+              <TextInput
+                ref={inputRef}
+                testID="chat-input"
+                style={styles.pillInput}
+                value={message}
+                onChangeText={setMessage}
+                placeholder={placeholder}
+                placeholderTextColor={colors.textMuted}
+                multiline
+                scrollEnabled
+                editable={!disabled}
+                blurOnSubmit={false}
+                returnKeyType="default"
+              />
+              <ComposerIconsRow
+                hasText={hasText}
+                iconsAnim={iconsAnim}
+                pillIconsExpandedWidth={pillIconsExpandedWidth}
+                attachTriggerRef={attachPicker.triggerRef}
+                onAttachPress={handleAttachPress}
+                quickSettingsTriggerRef={quickSettings.triggerRef}
+                onQuickSettingsPress={handleQuickSettingsPress}
+                showSettingsDot={showSettingsDot}
+                disabled={disabled}
+              />
+            </>
+          )}
         </View>
 
         {activeSpotlight === 12 ? (

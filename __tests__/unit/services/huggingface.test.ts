@@ -102,14 +102,17 @@ describe('HuggingFaceService', () => {
       expect(result).toBeUndefined();
     });
 
-    it('matches by quantization level', () => {
+    // Quant is NOT a matching signal (#510): one projector serves every quant of its model. Among several
+    // generic projectors (no model-name token) for the repo's single model, F16 is preferred over other
+    // precisions — never the model's own quant.
+    it('prefers F16 among generic projectors, ignoring the model quant', () => {
       const mmProjFiles = [
         { path: 'mmproj-Q4_K_M.gguf', size: 100 },
         { path: 'mmproj-f16.gguf', size: 800 },
       ];
 
       const result = service.findMatchingMMProj('model-Q4_K_M.gguf', mmProjFiles, modelId);
-      expect(result.name).toBe('mmproj-Q4_K_M.gguf');
+      expect(result.name).toBe('mmproj-f16.gguf');
     });
 
     it('falls back to f16 mmproj when no quant match', () => {

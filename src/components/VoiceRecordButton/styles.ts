@@ -168,19 +168,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     backgroundColor: colors.textMuted,
     transform: [{ rotate: '-45deg' }],
   },
-  cancelHint: {
-    position: 'absolute' as const,
-    left: -100,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: `${colors.primary}40`,
-    borderRadius: 12,
-  },
-  cancelHintText: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: '500' as const,
-  },
   partialResultContainer: {
     position: 'absolute' as const,
     right: 50,

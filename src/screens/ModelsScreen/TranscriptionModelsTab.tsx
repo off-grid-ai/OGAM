@@ -10,7 +10,7 @@
  * The whisper store tracks a single active model; downloading another switches
  * the active one.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -20,7 +20,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { useWhisperStore } from '../../stores';
-import { useDownloadStore, isActiveStatus, isQueuedStatus, isDownloadingStatus } from '../../stores/downloadStore';
+import { useSttDownloadState } from '../../hooks/useSttDownloadState';
 import { WHISPER_MODELS } from '../../services';
 import { createStyles as createModelsScreenStyles } from './styles';
 import logger from '../../utils/logger';
@@ -81,52 +81,16 @@ export const TranscriptionModelsTab: React.FC = () => {
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
   const {
-    downloadedModelId, presentModelIds, downloadProgressById, downloadModel,
+    downloadedModelId, presentModelIds, downloadModel,
     selectModel, deleteModelById, refreshPresentModels, error: whisperError, clearError,
   } = useWhisperStore();
 
-  // In-flight STT state from the canonical download tracker (same store the Download
-  // Manager reads), so the two screens can never disagree. A failed entry reports
-  // active=false here, so a stuck "downloading" bar on this tab can't linger while the
-  // Download Manager shows "failed" — the model just becomes downloadable again.
-  const downloads = useDownloadStore((s) => s.downloads);
-  const sttDownloadState = useMemo(() => {
-    const byModel: Record<string, { progress: number; active: boolean; downloading: boolean; queued: boolean }> = {};
-    for (const e of Object.values(downloads)) {
-      if (e.modelType !== 'stt') continue;
-      const id = e.modelId.startsWith('whisper-') ? e.modelId.slice('whisper-'.length) : e.modelId;
-      // Split queued vs transferring via the shared classifier so a queued STT model
-      // shows the clock — the same rule the Text/Image tabs use.
-      byModel[id] = {
-        progress: e.progress ?? 0,
-        active: isActiveStatus(e.status),
-        downloading: isDownloadingStatus(e.status),
-        queued: isQueuedStatus(e.status),
-      };
-    }
-    return byModel;
-  }, [downloads]);
-
-  // Per-model in-flight state: prefer the canonical download tracker; fall back to the
-  // whisper store for the RNFS URL-import path, which has no download-store entry.
-  const downloadStateFor = useCallback((id: string): { progress: number; active: boolean; downloading: boolean; queued: boolean } | undefined => {
-    const fromStore = sttDownloadState[id];
-    if (fromStore) return fromStore;
-    const p = downloadProgressById[id];
-    if (p === undefined) return undefined;
-    // Fallback path: the whisper store seeds progress 0 at request time, but the
-    // canonical download-store entry is only created once a concurrency slot opens.
-    // So a fallback entry still at 0% is WAITING for a slot → queued (not a 0%
-    // active download); once the first byte lands (p > 0) it is transferring. Without
-    // this, queued STT models rendered "0%" instead of "Queued".
-    return { progress: p, active: true, downloading: p > 0, queued: p === 0 };
-  }, [sttDownloadState, downloadProgressById]);
-
-  // True while any transcription model is actively downloading. Disk probes are
-  // deferred until everything settles so an in-flight file isn't mistaken for absent.
-  const anyDownloading =
-    Object.values(sttDownloadState).some((s) => s.active) ||
-    Object.keys(downloadProgressById).some((id) => !(id in sttDownloadState));
+  // In-flight STT state from the SINGLE owner (canonical download tracker + whisper-store
+  // fallback), shared with the Home "Speech" picker so the two surfaces can never disagree.
+  // A failed entry reports active=false, so a stuck "downloading" bar can't linger while the
+  // Download Manager shows "failed" — the model just becomes downloadable again. Disk probes
+  // are deferred until nothing is downloading so an in-flight file isn't mistaken for absent.
+  const { stateFor: downloadStateFor, anyDownloading } = useSttDownloadState();
 
   // Probe disk on mount and whenever downloads finish, so every on-disk model
   // (not just the active one) shows as downloaded.

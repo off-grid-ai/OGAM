@@ -25,6 +25,10 @@ type StreamChunk = string | { content?: string; reasoningContent?: string };
 export interface QueuedMessage {
   id: string; conversationId: string; text: string;
   attachments?: MediaAttachment[]; messageText: string;
+  /** The modality the user forced for THIS send (force/disabled/auto). Carried through the queue so a
+   *  message the user explicitly forced to image mode is dispatched as image on drain — never re-decided
+   *  at 'auto' by resolveTurnKind (#510: a queued force-image send generated as text). */
+  imageMode?: 'auto' | 'force' | 'disabled';
 }
 
 export interface GenerationState {
@@ -346,6 +350,9 @@ class GenerationService {
       text: all.map(m => m.text).join('\n\n'),
       attachments: all.flatMap(m => m.attachments || []),
       messageText: all.map(m => m.messageText).join('\n\n'),
+      // If ANY coalesced send forced image mode, the combined dispatch must force image too — the
+      // user's explicit force must never be dropped by the merge (mirror of the single-message carry).
+      imageMode: all.some(m => m.imageMode === 'force') ? 'force' : all[0].imageMode,
     };
     this.queueProcessor(combined).catch(e => { logger.error('[GenerationService] Queue processor error:', e); });
   }

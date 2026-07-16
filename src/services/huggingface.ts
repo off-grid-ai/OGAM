@@ -1,7 +1,7 @@
 import { HFModelSearchResult, ModelInfo, ModelFile, ModelCredibility } from '../types';
 import { HF_API, QUANTIZATION_INFO, LMSTUDIO_AUTHORS, OFFICIAL_MODEL_AUTHORS, VERIFIED_QUANTIZERS } from '../constants';
 import { looksLikeVisionModel } from '../utils/visionModel';
-import { isMMProjFile } from './mmproj';
+import { isMMProjFile, pickMmProjForDownload } from './mmproj';
 
 class HuggingFaceService {
   private baseUrl = HF_API.baseUrl;
@@ -141,35 +141,28 @@ class HuggingFaceService {
     return isMMProjFile(fileName);
   }
 
+  // Routes through the single projector-rule owner (src/services/mmproj.ts). Quant is NOT a matching
+  // signal (one projector serves every quant of its model); a projector whose filename names a DIFFERENT
+  // model+variant is the wrong architecture and is REFUSED, so the model downloads with its correct
+  // projector or text-only rather than being mispaired (#510). See pickMmProjForDownload for the rule.
   private findMatchingMMProj(
     modelFileName: string,
     mmProjFiles: Array<{ path: string; size?: number; lfs?: { size: number } }>,
     modelId: string
   ): { name: string; size: number; downloadUrl: string } | undefined {
-    if (mmProjFiles.length === 0) {
-      return undefined;
-    }
+    const chosen = pickMmProjForDownload(
+      modelFileName,
+      mmProjFiles.map(f => f.path)
+    );
+    if (!chosen) return undefined;
 
-    const toResult = (f: { path: string; size?: number; lfs?: { size: number } }) => ({
-      name: f.path,
-      size: f.lfs?.size || f.size || 0,
-      downloadUrl: this.getDownloadUrl(modelId, f.path),
-    });
-
-    // Exact symmetric match: model quant === mmproj quant
-    const modelQuant = this.extractQuantization(modelFileName);
-    if (modelQuant !== 'Unknown') {
-      const exactMatch = mmProjFiles.find(f => this.extractQuantization(f.path) === modelQuant);
-      if (exactMatch) return toResult(exactMatch);
-    }
-
-    // Fallback: prefer F16/FP16, exclude BF16 (can be incompatible with some runtimes)
-    const f16 = mmProjFiles.find(f => {
-      const lower = f.path.toLowerCase();
-      return (lower.includes('f16') || lower.includes('fp16')) && !lower.includes('bf16');
-    });
-
-    return toResult(f16 ?? mmProjFiles[0]);
+    const file = mmProjFiles.find(f => f.path === chosen);
+    if (!file) return undefined;
+    return {
+      name: file.path,
+      size: file.lfs?.size || file.size || 0,
+      downloadUrl: this.getDownloadUrl(modelId, file.path),
+    };
   }
 
   private detectModelType(name: string, tags: string[]): string {

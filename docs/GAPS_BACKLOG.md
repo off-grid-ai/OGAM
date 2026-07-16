@@ -274,3 +274,102 @@ state-machine traces:
   onboarding screen with device-init + Android litert rendering is heavier). Follow-up: add a
   `ModelDownloadScreen`-mounted rendered test (Android, 12GB) that taps the E4B litert download and asserts
   no "may exceed your device's memory" sheet — the exact device-reported surface (IMG_0142).
+
+---
+
+## Cosmetic voice-mode label (deferred from the 0.0.103 device session)
+
+**Verdict: instrument-and-revisit.** During the 0.0.103-beta device session, two fixes landed (Lean
+per-model eject + thinking-block width). A third item — a **cosmetic label/chip in voice mode**
+rendering the wrong text — was deferred: it is purely cosmetic (no functional impact) and pinning the
+exact wrong value needs a device-log pull, not code reading. Next device session: pull the live tail of
+`offgrid-debug.log` from the `.dev` container, grep the `[*-SM]` traces while entering voice mode, read
+the actual rendered label value, then fix in `pro/audio/` UI. NOT a release hazard.
+
+---
+
+## #510 audit follow-ups (deferred from the load-anyway/dedup fix batch, 2026-07-15)
+
+- **Onboarding litert download-warning unreachable** (`ModelDownloadScreen.tsx:299`): fix is code-ready
+  (route the over-budget-but-warnable card through the owned `curatedLiteRTDownloadWarning`) but blocked
+  by a mockist test `__tests__/rntl/screens/ModelDownloadScreen.test.tsx:607` that asserts the buggy
+  pre-filter. Per doctrine: update/delete that mockist test, then land the fix.
+- **`ModelSelectorModal.test.tsx` is mockist** (jest.mocks our stores/services/hardware) — 44 tests over a
+  fake store. The RAM-parity fix is really proven by `pickerRamMatchesResidencyChip.rendered.redflow.test.tsx`;
+  replace this file with rendered coverage post-release. Source carries a harmless `s.settings?.` to keep it green.
+- **Queued-message imageMode carry** (`useChatGenerationActions`/`generationService`/`useChatScreen`): a
+  force-image send that gets queued loses its force flag (re-decided at 'auto' on drain). Needs the
+  QueuedMessage interface + drain handler edited together — own PR.
+- **huggingface.findMatchingMMProj strict migration**: keep the generic-single-projector case, refuse a
+  projector naming a DIFFERENT model (E4B for E2B). Own download-listing matcher in mmproj.ts. See the
+  it.failing at `huggingfaceProjectorStrictness.test.ts`.
+- **Reclaim-aware pre-load gate**: in progress on its own branch (device-verify on 12GB Android before merge).
+
+---
+
+## DEVICE FINDING (2026-07-15, iPhone) — false "something else is generating an image" (stale IMG-SM lock)
+
+Symptom: image generation refused with a message that something else is generating an image ("I can't
+help you right now, you can reload the model") when NOTHING else was generating. Reloading the model
+cleared it and generation started.
+
+Mechanism: `imageGenerationService.generateImage` rejects when `isInFlight(state.phase)` is true
+(imageGenerationService.ts:402). The known failure paths reset the phase (`_ensureImageModelLoaded`→`_fail`;
+`_runGenerationAndSave` catch→`resetState`/`_fail`), so a DIFFERENT path leaves `state.phase` stuck
+in-flight ('loading'/'enhancing'/'generating') — plausibly tied to a refused/slow SDXL load or an
+interrupted 120s ANE compile. Reload resets the service state → clears the false lock.
+
+NOT fixed yet (would be a speculative guard without a red-verifiable repro). TO PIN IT: reproduce on
+device, `xcrun devicectl device copy` the `.dev` container's `offgrid-debug.log`, grep `[IMG-SM]` — the
+stuck transition (a `phase X → <in-flight>` with no following reset) names the exact path. Then fix at
+that seam + a rendered red-flow (image mode → trigger the stuck path → next generate must NOT report
+"already generating"). Candidate hardening once pinned: a top-level try/finally in generateImage so no
+throw can leave the phase in-flight, and/or a self-healing staleness check on the isInFlight rejection.
+
+---
+
+## #510 audit — remaining PARTIAL fixes (found during the finding→code verification, 2026-07-15)
+
+These are honestly NOT fully closed by the load-anyway batch — logged so they are not lost:
+
+- **STT terminal-failure has no override card.** The realtime dictation now RECOVERS via
+  ensureWhisperForTranscription (free the generation model → retry) — the common case. But if that retry
+  ALSO fails, transcriptionOutcome.ts returns a static "Couldn't load the voice model — free some memory
+  and try again" string, NOT a reportModelFailure('stt', {onLoadAnyway}) card. There is no generation
+  model left to free at that point, so there is genuinely nothing more to do — but the product rule
+  ("any memory refusal offers Load Anyway on any type") is only PARTIALLY met for STT: recovery yes,
+  terminal override no. reportModelFailure is now called for text/image/tts but NOT stt/embedding.
+- **Embedding-model load failure never surfaces a card.** modelFailureHandler reserves an 'embedding'
+  type but nothing calls reportModelFailure('embedding', …). A RAG/embedding load failure is still
+  silent. Low user impact (embedding is background) but it violates the "nothing is silent" promise.
+- **ModelPickerSheet:216 RAM display**: the fit VERDICT uses the owned fileExceedsBudget, but the
+  displayed "~X GB RAM" number is a separate 1.5x estimate — the "(may not fit)" tag and the number can
+  disagree at the margin. Assessed as by-design (verdict is authoritative; number is a hint) but noted.
+
+---
+
+## #510 audit — STT-terminal + embedding: VERIFIED WORKING-AS-DESIGNED (not bugs, do NOT "fix")
+
+Re-examined the two items I earlier logged as "partial fixes needed". Code inspection shows both are
+correct terminal states, NOT dead-ends — surfacing failure cards would be theater or a regression:
+- **Embedding load failure**: `src/services/rag/retrieval.ts:43,53` catch a failed embedding load/embed
+  and RETURN `ragDatabase.getChunksByProject` (keyword/FTS chunks) — search still works (graceful
+  degradation). `toolEmbeddingRouter`/`generationToolLoop:821` likewise fall back to "use all tools".
+  A reportModelFailure('embedding') card would interrupt a working degraded flow → NOT added.
+- **STT terminal**: `ensureWhisperForTranscription` frees the generation model and retries; if whisper
+  STILL won't load, whisper-alone exceeds the device → a genuine HARD limit. The "free some memory"
+  string is the honest message; a Load-Anyway there is a guaranteed-fail no-op. The recovery IS the fix.
+CONCLUSION: these two need no code change. Removed from the "to fix" list.
+
+## #26 text-half (deferred, cosmetic-low)
+ModelPickerSheet text RAM hint still uses formatModelRam's 1.5 default, not the backend-aware
+textOverheadMultiplier the residency chip / TextTab use — so on a GPU backend the picker number can
+read lower than the chip. Verdict (fileExceedsBudget) is correct; this is a display-number nicety.
+Fix = pass settings.inferenceBackend into ModelPickerSheet + formatModelRam(model, textOverheadMultiplier(backend)).
+Deferred to avoid a new HomeScreen-picker dependency right before release. Image half fixed.
+
+## M5a (marginal, logged) — exact budget boundary untested
+fileExceedsBudget's boundary (size == budget: `>` vs `>=`) has no test straddling the exact equality —
+the verifier's `>`↔`>=` mutant survived. Off-by-one-byte at the budget edge; no user-visible impact
+(a model exactly at the budget is a measure-zero case). Add a boundary test if fileExceedsBudget is
+touched again. Not fixed now (marginal, near release).

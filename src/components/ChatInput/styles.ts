@@ -177,6 +177,33 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingBottom: Platform.OS === 'ios' ? 10 : 6,
     paddingRight: 4,
   },
+  // Push-to-talk hint that replaces the text field while holding to record: a recording dot on the
+  // left, "‹ Slide to cancel" centred (the mic sits to the right, outside the pill).
+  recordingRow: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    minHeight: 36,
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    marginRight: SPACING.sm,
+  },
+  slideToCancel: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 2,
+  },
+  slideToCancelText: {
+    ...TYPOGRAPHY.body,
+    color: colors.textMuted,
+    fontFamily: FONTS.mono,
+  },
   // Icons row inside pill (right side)
   pillIcons: {
     flexDirection: 'row' as const,

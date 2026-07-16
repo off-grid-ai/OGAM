@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { View, Text, FlatList, TextInput, ActivityIndicator, RefreshControl, TouchableOpacity, InteractionManager, Platform } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import Icon from 'react-native-vector-icons/Feather';
-import { modelBudgetFraction } from '../../services/memoryBudget';
+import { fileExceedsBudget } from '../../services/memoryBudget';
 import { AttachStep, useSpotlightTour } from 'react-native-spotlight-tour';
 import { Card, ModelCard } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
@@ -25,8 +25,9 @@ import { SORT_OPTIONS } from './constants';
 import { formatNumber, getTextModelCompatibility } from './utils';
 import { curatedLiteRTDownloadWarning, LITERT_PARENT_ID } from '../../services/curatedLiteRTRegistry';
 import { LITERT_FILE_META, LITERT_RECOMMENDED_MODEL, LITERT_PARENT_RECOMMENDED } from './litertRecommended';
-import { backgroundDownloadService, modelManager } from '../../services';
-import { useAppStore } from '../../stores';
+import { modelManager } from '../../services';
+import { modelDownloadService } from '../../services/modelDownloadService';
+import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
 
 function hasNonSortFilters(fs: FilterState): boolean {
   return fs.orgs.length > 0 || fs.type !== 'all' || fs.source !== 'all' || fs.size !== 'all' || fs.quant !== 'all';
@@ -100,7 +101,6 @@ const ModelDetailView: React.FC<DetailProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const { setDownloadedModels } = useAppStore();
   const { goTo } = useSpotlightTour();
 
   // If user arrived here via onboarding spotlight flow, show file card spotlight
@@ -157,42 +157,6 @@ const ModelDetailView: React.FC<DetailProps> = ({
     return { downloadKey: modelKey, progress, downloaded, downloadedModel, needsVisionRepair, repairingVision, canCancel, hasFailed, errorMessage };
   };
 
-  const handleRetryDownload = async (modelKey: string, downloadId: string) => {
-    if (Platform.OS !== 'android') return; // iOS uses fresh download via proceedDownload
-    const store = useDownloadStore.getState();
-    const entry = store.downloads[modelKey];
-    store.setStatus(downloadId, 'pending');
-    try {
-      await backgroundDownloadService.retryDownload(downloadId);
-      if (entry?.mmProjDownloadId && entry.mmProjStatus === 'failed') {
-        useDownloadStore.getState().setStatus(entry.mmProjDownloadId, 'pending');
-        let mmProjRetried = false;
-        try {
-          await backgroundDownloadService.retryDownload(entry.mmProjDownloadId);
-          mmProjRetried = true;
-        } catch {
-          useDownloadStore.getState().setStatus(entry.mmProjDownloadId, 'failed', { message: 'Retry failed' });
-        }
-        if (mmProjRetried) modelManager.resetMmProjForRetry(downloadId);
-      }
-      modelManager.watchDownload(
-        downloadId,
-        async () => {
-          const models = await modelManager.getDownloadedModels();
-          setDownloadedModels(models);
-          const key = useDownloadStore.getState().downloadIdIndex[downloadId] ?? modelKey;
-          if (key) store.remove(key);
-        },
-        (error: Error) => {
-          store.setStatus(downloadId, 'failed', { message: error.message });
-        },
-      );
-      backgroundDownloadService.startProgressPolling();
-    } catch (error: any) {
-      store.setStatus(downloadId, 'failed', { message: error?.message ?? 'Retry failed' });
-    }
-  };
-
   const renderFileItem = ({ item, index }: { item: ModelFile; index: number }) => {
     const s = getFileCardState(item);
     const proceedDownload = () => {
@@ -204,12 +168,16 @@ const ModelDetailView: React.FC<DetailProps> = ({
     const displayName = liteRTMeta?.displayName ?? item.name.replace('.gguf', '');
     const recommended = liteRTMeta ? { pillLabel: 'Recommended', highlightText: liteRTMeta.highlight } : undefined;
     const storeEntry = storeDownloads[s.downloadKey];
-    const failedState = s.hasFailed && s.errorMessage && storeEntry?.downloadId
+    // Retry routes through the single owner (modelDownloadService → textProvider): Android resumes the
+    // native row, iOS re-issues from the entry's metadata. The provider owns the platform decision AND
+    // the lost-downloadId case (a rehydrated app-killed entry can have no downloadId), so the failed
+    // card must render its Retry regardless of downloadId — gating on it here made iOS retry unreachable.
+    const failedState = s.hasFailed && s.errorMessage && storeEntry
       ? {
         errorMessage: s.errorMessage,
         bytesDownloaded: storeEntry.bytesDownloaded,
         totalBytes: storeEntry.combinedTotalBytes || storeEntry.totalBytes,
-        onRetry: () => Platform.OS === 'android' ? handleRetryDownload(s.downloadKey, storeEntry.downloadId) : proceedDownload(),
+        onRetry: () => { modelDownloadService.retry(uniformDownloadId('text', s.downloadKey)).catch(() => {}); },
         onRemove: () => handleCancelDownload(s.downloadKey),
       }
       : undefined;
@@ -222,7 +190,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
         downloadProgress={s.progress?.progress}
         downloadBytes={s.progress && !s.hasFailed ? { downloaded: s.progress.bytesDownloaded, total: s.progress.totalBytes } : undefined}
         isRepairingVision={s.repairingVision}
-        isCompatible={item.size / (1024 ** 3) < ramGB * modelBudgetFraction(ramGB)} testID={`file-card-${index}`}
+        isCompatible={!fileExceedsBudget(item.size, ramGB)} testID={`file-card-${index}`}
         onDownload={onDownload}
         onDelete={s.downloaded ? () => handleDeleteModel(`${selectedModel.id}/${item.name}`) : undefined}
         onRepairVision={s.needsVisionRepair && !s.progress && !s.repairingVision ? () => handleRepairMmProj(selectedModel, item) : undefined}
@@ -287,7 +255,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
       ) : (
         <FlatList
           data={modelFiles
-            .filter(f => f.size > 0 && f.size / (1024 ** 3) < ramGB * modelBudgetFraction(ramGB) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
+            .filter(f => f.size > 0 && !fileExceedsBudget(f.size, ramGB) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
             .sort((a, b) => {
               if (selectedModel.id === LITERT_PARENT_ID) return a.size - b.size; // curated: small-first
               // Tier: Q4_K_M (CPU default, lowest size) → GPU/NPU Q4_0/Q8_0 → rest (CPU

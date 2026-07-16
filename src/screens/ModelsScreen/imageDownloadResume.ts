@@ -4,7 +4,8 @@ import { modelManager, backgroundDownloadService } from '../../services';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
 import { ONNXImageModel } from '../../types';
 import { useDownloadStore, DownloadEntry } from '../../stores/downloadStore';
-import { ImageDownloadDeps, registerAndNotify } from './imageDownloadActions';
+import { ImageDownloadDeps, registerAndNotify, proceedWithDownload } from './imageDownloadActions';
+import { imageDescriptorFromMetadata } from './imageDescriptor';
 import { validateImageModelDir, ensureImageExtractionComplete } from '../../utils/imageModelIntegrity';
 import { makeImageModelKey } from '../../utils/modelKey';
 import logger from '../../utils/logger';
@@ -78,6 +79,24 @@ async function cleanupInvalidArtifact(path: string): Promise<void> {
   }
 }
 
+/** The completed bytes are unrecoverable — the native staging was purged (iOS temp reaping on builds
+ *  before durable staging, or the user cleared storage) and neither a valid zip nor an extracted dir
+ *  survives on disk. There is nothing to finalize, so re-download from scratch through the normal
+ *  flow (which reuses the existing failed store row via retryEntry) instead of dead-ending on the same
+ *  "no such file" on every retry. Reconstructs the zip descriptor from the entry's persisted metadata. */
+async function reDownloadFromMetadata(ctx: ResumeCtx): Promise<void> {
+  const { modelId, metadata, deps } = ctx;
+  if (!metadata.imageModelDownloadUrl) {
+    // No URL to re-fetch from. Surface a clear, honest failure rather than a stale native error.
+    useDownloadStore.getState().setStatus(ctx.entry.downloadId, 'failed', {
+      message: 'Download could not be re-downloaded. Remove it and download again.',
+    });
+    return;
+  }
+  logger.log(`[ImageDownload] resumeImageDownload zip - staged bytes gone, re-downloading ${modelId}`);
+  await proceedWithDownload(imageDescriptorFromMetadata(modelId, metadata), deps);
+}
+
 async function resumeZipDownload(ctx: ResumeCtx): Promise<void> {
   const { entry, modelId, metadata, deps } = ctx;
   const imageModelsDir = modelManager.getImageModelsDirectory();
@@ -142,14 +161,20 @@ async function resumeZipDownload(ctx: ResumeCtx): Promise<void> {
   if (!(await RNFS.exists(imageModelsDir))) await RNFS.mkdir(imageModelsDir);
   try {
     await backgroundDownloadService.moveCompletedDownload(entry.downloadId, zipPath);
-  } catch (error) {
+  } catch (error: any) {
     const recoveredModelDirValid = await validateModelDir(modelDir, metadata.imageModelBackend);
     const recoveredZipValid = await validateZipArtifact(zipPath, expectedZipBytes);
     if (recoveredModelDirValid) {
       await registerAndNotify(deps, { imageModel: await buildModel(modelDir), modelName: metadata.imageModelName });
       return;
     }
-    if (!recoveredZipValid) throw error;
+    // Completed bytes are gone and nothing valid survives — re-download instead of dead-ending
+    // on the same "no such file" every retry (the iOS temp-purge symptom). Does not rethrow.
+    if (!recoveredZipValid) {
+      logger.warn(`[ImageDownload] resumeImageDownload zip - completed bytes unrecoverable (${error?.message || error}) — re-downloading ${modelId}`);
+      await reDownloadFromMetadata(ctx);
+      return;
+    }
   }
   if (!(await RNFS.exists(modelDir))) await RNFS.mkdir(modelDir);
   await RNFS.writeFile(`${modelDir}/_zip_name`, entry.fileName, 'utf8').catch(() => {});
