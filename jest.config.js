@@ -100,6 +100,7 @@ module.exports = {
     // legacy files have their NEW branches covered by the suites but aren't whole-file-100%.
     './src/utils/imageModelIntegrity.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
     './src/utils/imageGenAdvice.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/utils/exportConversation.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
     './src/services/modelLoadErrors.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
     './src/components/ImageGenAdviceCard.tsx': { statements: 100, branches: 100, functions: 100, lines: 100 },
     './src/components/VoiceRecordButton/derive.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },

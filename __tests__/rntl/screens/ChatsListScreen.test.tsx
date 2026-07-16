@@ -143,7 +143,12 @@ jest.mock('react-native-gesture-handler/Swipeable', () => {
   };
 });
 
+jest.mock('../../../src/utils/exportConversation', () => ({
+  shareConversationAsText: jest.fn(() => Promise.resolve()),
+}));
+
 import { ChatsListScreen } from '../../../src/screens/ChatsListScreen';
+import { shareConversationAsText } from '../../../src/utils/exportConversation';
 
 describe('ChatsListScreen', () => {
   beforeEach(() => {
@@ -572,6 +577,39 @@ describe('ChatsListScreen', () => {
         // Conversation should be deleted
         expect(useChatStore.getState().conversations.length).toBe(0);
       }
+    });
+  });
+
+  // ==========================================================================
+  // Export Chat Flow
+  // ==========================================================================
+  describe('export chat flow', () => {
+    it('shares the conversation as text when the export swipe action is pressed', () => {
+      const conv = createConversation({ title: 'Export Me' });
+      useChatStore.setState({ conversations: [conv] });
+      useAppStore.setState({
+        generatedImages: [],
+      });
+
+      const { getByTestId } = render(<ChatsListScreen />);
+      fireEvent.press(getByTestId('export-conversation-button'));
+
+      expect(shareConversationAsText).toHaveBeenCalledWith(conv);
+      expect(shareConversationAsText).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not show the delete confirmation when export is pressed', () => {
+      const conv = createConversation({ title: 'Export Only' });
+      useChatStore.setState({ conversations: [conv] });
+      useAppStore.setState({
+        generatedImages: [],
+      });
+
+      const { getByTestId } = render(<ChatsListScreen />);
+      mockShowAlert.mockClear();
+      fireEvent.press(getByTestId('export-conversation-button'));
+
+      expect(mockShowAlert).not.toHaveBeenCalled();
     });
   });
 });

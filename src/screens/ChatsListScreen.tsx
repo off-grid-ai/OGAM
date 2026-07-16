@@ -22,6 +22,7 @@ import { useChatStore, useProjectStore, useAppStore } from '../stores';
 import { useActiveTextModel } from '../hooks/useActiveTextModel';
 import { onnxImageGeneratorService, activeModelService, llmService, remoteServerManager } from '../services';
 import { loadModelWithOverride } from '../services/loadModelWithOverride';
+import { shareConversationAsText } from '../utils/exportConversation';
 import { Conversation } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 type NavigationProp = CompositeNavigationProp<
@@ -162,12 +163,22 @@ export const ChatsListScreen: React.FC = () => {
   };
 
   const renderRightActions = (conversation: Conversation) => (
-    <TouchableOpacity
-      style={styles.deleteAction}
-      onPress={() => handleDeleteChat(conversation)}
-    >
-      <Icon name="trash-2" size={16} color={colors.error} />
-    </TouchableOpacity>
+    <View style={styles.rightActions}>
+      <TouchableOpacity
+        style={styles.exportAction}
+        onPress={() => shareConversationAsText(conversation)}
+        testID="export-conversation-button"
+      >
+        <Icon name="share-2" size={16} color={colors.primary} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.deleteAction}
+        onPress={() => handleDeleteChat(conversation)}
+        testID="delete-conversation-button"
+      >
+        <Icon name="trash-2" size={16} color={colors.error} />
+      </TouchableOpacity>
+    </View>
   );
 
   const renderChat = ({ item, index }: { item: Conversation; index: number }) => {
@@ -413,13 +424,24 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.body,
     color: colors.primary,
   },
+  rightActions: {
+    flexDirection: 'row' as const,
+    marginBottom: SPACING.md,
+  },
+  exportAction: {
+    backgroundColor: colors.surfaceLight,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    width: 44,
+    borderRadius: 10,
+    marginLeft: SPACING.sm,
+  },
   deleteAction: {
     backgroundColor: colors.errorBackground,
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
     width: 44,
     borderRadius: 10,
-    marginBottom: SPACING.md,
     marginLeft: SPACING.sm,
   },
 });
