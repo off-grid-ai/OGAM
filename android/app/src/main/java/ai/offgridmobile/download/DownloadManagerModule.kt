@@ -163,7 +163,7 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
                     if (download != null) {
                         downloadDao.updateStatus(downloadId, DownloadStatus.CANCELLED, DownloadReason.USER_CANCELLED)
                         val file = File(download.destination)
-                        if (file.exists() && !file.delete()) Log.w("DownloadManagerModule", "Failed to delete cancelled download file: ${file.path}")
+                        if (file.exists() && !file.delete()) Log.w(NAME, "Failed to delete cancelled download file: ${file.path}")
                     }
                 }
                 WorkerDownload.cancel(reactApplicationContext, downloadId)
