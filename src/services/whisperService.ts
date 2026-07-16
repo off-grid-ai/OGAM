@@ -676,6 +676,20 @@ class WhisperService {
     if (fn && this.context) {
       try { fn(); } catch (e) { logger.error('[WhisperService] Error calling stopFn during forceReset:', e); }
     }
+    // Also clear the whole-file transcription stop handle. forceReset previously reset only the realtime
+    // stopFn; if it ran while a file transcription was in flight, fileTranscribeStop stayed non-null and
+    // every subsequent transcribeFile threw WhisperBusyError ("already transcribing") until app restart.
+    // Same atomic grab-and-clear + best-effort native stop (the handle may be async — fire and forget).
+    const fileFn = this.fileTranscribeStop;
+    this.fileTranscribeStop = null;
+    if (fileFn) {
+      try {
+        const r = fileFn();
+        if (r && typeof (r as Promise<void>).catch === 'function') {
+          (r as Promise<void>).catch((e) => logger.warn(`[WhisperService] fileTranscribeStop threw during forceReset: ${String(e)}`));
+        }
+      } catch (e) { logger.error('[WhisperService] Error calling fileTranscribeStop during forceReset:', e); }
+    }
     // Discard the parallel fallback recording (B26/B28) ONLY when THIS realtime session started it —
     // a cancelled/aborted realtime session must not leave the file recorder capturing (B11-class
     // leak), but we must never cancel a recording Voice.ts started (its direct/file-path modes share
