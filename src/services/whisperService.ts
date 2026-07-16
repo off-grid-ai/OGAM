@@ -669,6 +669,9 @@ class WhisperService {
     if (fn && this.context) {
       try { fn(); } catch (e) { logger.error('[WhisperService] Error calling stopFn during forceReset:', e); }
     }
+    // Discard the parallel fallback recording (B26/B28) if one is mid-flight — a cancelled/aborted
+    // realtime session must not leave the file recorder capturing (B11-class leak).
+    if (audioRecorderService.isCurrentlyRecording()) audioRecorderService.cancelRecording();
     this.isTranscribing = false;
     this.transcriptionFullyStopped = Promise.resolve();
   }
