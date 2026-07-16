@@ -40,7 +40,7 @@ export async function deleteOrphanedFile(filePath: string): Promise<void> {
 // The model base name (name + variant, quant stripped) used to NAME a downloaded projector. Matching a
 // projector TO a model is done by the shared strict rule (pickMmProjForModel), NOT this.
 export function extractBaseName(fileName: string): string {
-  const match = fileName.match(/^(.+?)[-_](?:Q\d|q\d|F\d|f\d)/i);
+  const match = /^(.+?)[-_](?:Q\d|q\d|F\d|f\d)/i.exec(fileName);
   return match ? match[1].toLowerCase() : fileName.toLowerCase().replace('.gguf', '');
 }
 
@@ -407,7 +407,7 @@ export async function importLocalModel(opts: ImportLocalModelOpts): Promise<Down
     onProgress: onProgress ? (fraction: number) => onProgress({ fraction: fraction * mainProgressScale, fileName }) : undefined,
   });
 
-  const quantMatch = fileName.match(/[_-](Q\d+[_\w]*|f16|f32)/i);
+  const quantMatch = /[_-](Q\d+[_\w]*|f16|f32)/i.exec(fileName);
   const quantization = quantMatch ? quantMatch[1].toUpperCase() : 'Unknown';
   const modelName = fileName.replace(/\.gguf$/i, '').replace(/\.litertlm$/i, '').replace(/[_-]Q\d+.*/i, '');
   const destStat = await RNFS.stat(destPath);
