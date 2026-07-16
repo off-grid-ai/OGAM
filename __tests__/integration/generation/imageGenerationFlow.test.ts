@@ -687,7 +687,7 @@ describe('Image Generation Flow Integration', () => {
 
       // Should have: system + context messages + user enhance prompt
       // system (1) + conversation messages (3) + user enhance (1) = 5
-      expect(enhancementMessages.length).toBe(5);
+      expect(enhancementMessages).toHaveLength(5);
       expect(enhancementMessages[0].role).toBe('system');
       expect(enhancementMessages[0].content).toContain('conversation history');
       expect(enhancementMessages[1].content).toBe('Draw me a cat');
@@ -709,7 +709,7 @@ describe('Image Generation Flow Integration', () => {
       const enhancementMessages = callArgs[0] as Message[];
 
       // Should have: system + user enhance prompt only (no context)
-      expect(enhancementMessages.length).toBe(2);
+      expect(enhancementMessages).toHaveLength(2);
       expect(enhancementMessages[0].role).toBe('system');
       expect(enhancementMessages[0].content).not.toContain('conversation history');
       expect(enhancementMessages[1].role).toBe('user');
@@ -736,7 +736,7 @@ describe('Image Generation Flow Integration', () => {
       // The context message should be truncated to 500 chars
       const contextMsg = enhancementMessages.find(m => m.id.startsWith('ctx-'));
       expect(contextMsg).toBeDefined();
-      expect(contextMsg!.content.length).toBe(500);
+      expect(contextMsg!.content).toHaveLength(500);
     });
 
     it('should limit conversation context to last 10 messages', async () => {
@@ -761,7 +761,7 @@ describe('Image Generation Flow Integration', () => {
       const enhancementMessages = callArgs[0] as Message[];
 
       // system (1) + last 10 context messages + user enhance (1) = 12
-      expect(enhancementMessages.length).toBe(12);
+      expect(enhancementMessages).toHaveLength(12);
       // First context message should be message 6 (index 5), not message 1
       const firstContextMsg = enhancementMessages[1];
       expect(firstContextMsg.content).toBe('Message 6');
@@ -786,7 +786,7 @@ describe('Image Generation Flow Integration', () => {
       const enhancementMessages = callArgs[0] as Message[];
 
       // system (1) + 2 context (user + assistant, system skipped) + user enhance (1) = 4
-      expect(enhancementMessages.length).toBe(4);
+      expect(enhancementMessages).toHaveLength(4);
       const contextMessages = enhancementMessages.filter(m => m.id.startsWith('ctx-'));
       expect(contextMessages).toHaveLength(2);
       expect(contextMessages.every(m => m.role !== 'system')).toBe(true);
@@ -835,7 +835,7 @@ describe('Image Generation Flow Integration', () => {
       const enhancementMessages = callArgs[0] as Message[];
 
       // system + user enhance only (no context from empty conversation)
-      expect(enhancementMessages.length).toBe(2);
+      expect(enhancementMessages).toHaveLength(2);
       expect(enhancementMessages[0].role).toBe('system');
       expect(enhancementMessages[0].content).not.toContain('conversation history');
     });
@@ -1180,62 +1180,42 @@ describe('Image Generation Flow Integration', () => {
       mockLlmService.isCurrentlyGenerating.mockReturnValue(false);
     };
 
-    it('should strip <think> tags from thinking model responses', async () => {
+    it.each([
+      {
+        name: 'should strip <think> tags from thinking model responses',
+        // Simulate a thinking model that wraps reasoning in <think> tags
+        inputPrompt: 'sunset over mountains',
+        enhancedResponse:
+          '<think>Let me enhance this prompt by adding artistic details...</think>A majestic sunset over mountains, golden hour lighting, oil painting style',
+        // The prompt passed to image generation should NOT contain <think> tags
+        expectedPrompt: 'A majestic sunset over mountains, golden hour lighting, oil painting style',
+      },
+      {
+        name: 'should handle thinking model response that is only a think block',
+        // Simulate a model that only outputs thinking with no actual response
+        inputPrompt: 'a cat',
+        enhancedResponse: '<think>I need to think about how to enhance this prompt...</think>',
+        // When stripping produces empty string, should fall back to original prompt
+        expectedPrompt: 'a cat',
+      },
+      {
+        name: 'should handle response without think tags normally',
+        // Non-thinking model returns plain enhanced prompt
+        inputPrompt: 'simple prompt',
+        enhancedResponse: 'A beautiful enhanced prompt with details',
+        expectedPrompt: 'A beautiful enhanced prompt with details',
+      },
+    ])('$name', async ({ inputPrompt, enhancedResponse, expectedPrompt }) => {
       setupThinkingModelEnhancement();
-      // Simulate a thinking model that wraps reasoning in <think> tags
-      mockLlmService.generateResponse.mockResolvedValue(
-        '<think>Let me enhance this prompt by adding artistic details...</think>A majestic sunset over mountains, golden hour lighting, oil painting style'
-      );
+      mockLlmService.generateResponse.mockResolvedValue(enhancedResponse);
 
       await imageGenerationService.generateImage({
-        prompt: 'sunset over mountains',
-      });
-
-      // The prompt passed to image generation should NOT contain <think> tags
-      expect(mockLocalDreamService.generateImage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          prompt: 'A majestic sunset over mountains, golden hour lighting, oil painting style',
-        }),
-        expect.any(Function),
-        expect.any(Function),
-      );
-    });
-
-    it('should handle thinking model response that is only a think block', async () => {
-      setupThinkingModelEnhancement();
-      // Simulate a model that only outputs thinking with no actual response
-      mockLlmService.generateResponse.mockResolvedValue(
-        '<think>I need to think about how to enhance this prompt...</think>'
-      );
-
-      await imageGenerationService.generateImage({
-        prompt: 'a cat',
-      });
-
-      // When stripping produces empty string, should fall back to original prompt
-      expect(mockLocalDreamService.generateImage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          prompt: 'a cat',
-        }),
-        expect.any(Function),
-        expect.any(Function),
-      );
-    });
-
-    it('should handle response without think tags normally', async () => {
-      setupThinkingModelEnhancement();
-      // Non-thinking model returns plain enhanced prompt
-      mockLlmService.generateResponse.mockResolvedValue(
-        'A beautiful enhanced prompt with details'
-      );
-
-      await imageGenerationService.generateImage({
-        prompt: 'simple prompt',
+        prompt: inputPrompt,
       });
 
       expect(mockLocalDreamService.generateImage).toHaveBeenCalledWith(
         expect.objectContaining({
-          prompt: 'A beautiful enhanced prompt with details',
+          prompt: expectedPrompt,
         }),
         expect.any(Function),
         expect.any(Function),

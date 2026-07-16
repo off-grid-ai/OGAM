@@ -69,7 +69,7 @@ describe('T012 (rendered) — ModelsScreen reflects N downloaded models', () => 
 
     // The count of downloaded marks the user sees on ModelsScreen must equal N.
     await waitFor(() => {
-      expect(view.queryAllByTestId(/^model-card-\d+-downloaded$/).length).toBe(N);
+      expect(view.queryAllByTestId(/^model-card-\d+-downloaded$/)).toHaveLength(N);
     }, { timeout: 4000 });
   });
 });

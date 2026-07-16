@@ -43,7 +43,7 @@ describe('T062 (voice-mode) — resend of an image request re-draws, not text (D
     // Switch to Voice mode via the chat-input quick-settings, then VOICE-send "draw a dog" → IMAGE.
     await h.enterVoiceMode();
     await h.voiceSend('draw a dog');
-    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); }, { timeout: 6000 });
+    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1); }, { timeout: 6000 });
 
     // RESEND via the real action menu (3-dots) on the image-result message → Retry. In audio mode the image
     // result renders as the same core ChatMessage, so the action menu is identical to text mode.
@@ -52,7 +52,7 @@ describe('T062 (voice-mode) — resend of an image request re-draws, not text (D
 
     // SPEC: resend re-runs the IMAGE pipeline → a SECOND generateImage; NO text answer leaked.
     // RED (B33 in voice mode): resend goes to the text model → generateImage stays 1 + the scripted text renders.
-    expect(h.boundary.diffusion.calls.generateImage.length).toBe(2);
+    expect(h.boundary.diffusion.calls.generateImage).toHaveLength(2);
     expect(h.view!.queryByText(/domestic animal/)).toBeNull();
   });
 });

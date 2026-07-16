@@ -39,6 +39,6 @@ describe('happy — image-gen OOM surfaces the graceful "Not Enough Memory" card
     // Graceful outcome: the user sees the memory card + the override, and NO image was generated.
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Not Enough Memory/)).not.toBeNull(); });
     expect(h.view!.queryByText('Load Anyway')).not.toBeNull();
-    expect(h.boundary.diffusion.calls.generateImage.length).toBe(0);
+    expect(h.boundary.diffusion.calls.generateImage).toHaveLength(0);
   });
 });

@@ -93,7 +93,7 @@ describe('RAG Flow Integration', () => {
       const docInserts = mockExecuteSync.mock.calls.filter(
         (c: any[]) => typeof c[0] === 'string' && c[0].includes('INSERT INTO rag_documents')
       );
-      expect(docInserts.length).toBe(1);
+      expect(docInserts).toHaveLength(1);
       expect(docInserts[0][1]).toEqual(expect.arrayContaining(['proj-1', 'guide.pdf']));
 
       // Verify chunks were inserted
@@ -188,7 +188,7 @@ describe('RAG Flow Integration', () => {
       });
 
       expect(result.truncated).toBe(true);
-      expect(result.chunks.length).toBe(0); // First chunk exceeds budget
+      expect(result.chunks).toHaveLength(0); // First chunk exceeds budget
     });
 
     it('includes all results when within budget', async () => {
@@ -213,7 +213,7 @@ describe('RAG Flow Integration', () => {
       });
 
       expect(result.truncated).toBe(false);
-      expect(result.chunks.length).toBe(2);
+      expect(result.chunks).toHaveLength(2);
     });
   });
 
@@ -249,7 +249,7 @@ describe('RAG Flow Integration', () => {
       const updateCalls = mockExecuteSync.mock.calls.filter(
         (c: any[]) => typeof c[0] === 'string' && c[0].includes('UPDATE')
       );
-      expect(updateCalls.length).toBe(1);
+      expect(updateCalls).toHaveLength(1);
       expect(updateCalls[0][1]).toEqual([0, 1]); // enabled=0, docId=1
     });
 
@@ -259,7 +259,7 @@ describe('RAG Flow Integration', () => {
       const deleteCalls = mockExecuteSync.mock.calls.filter(
         (c: any[]) => typeof c[0] === 'string' && c[0].includes('DELETE')
       );
-      expect(deleteCalls.length).toBe(3);
+      expect(deleteCalls).toHaveLength(3);
       expect(deleteCalls[0][0]).toContain('rag_embeddings');
       expect(deleteCalls[1][0]).toContain('rag_chunks');
       expect(deleteCalls[2][0]).toContain('rag_documents');
@@ -272,7 +272,7 @@ describe('RAG Flow Integration', () => {
         (c: any[]) => typeof c[0] === 'string' && c[0].includes('DELETE')
       );
       // 1 embeddings delete + 1 chunks delete + 1 docs delete
-      expect(deleteCalls.length).toBe(3);
+      expect(deleteCalls).toHaveLength(3);
       expect(deleteCalls[0][0]).toContain('rag_embeddings');
       expect(deleteCalls[1][0]).toContain('rag_chunks');
       expect(deleteCalls[2][0]).toContain('rag_documents');
@@ -376,7 +376,7 @@ describe('RAG Flow Integration', () => {
     it('chunking handles empty paragraphs gracefully', () => {
       const text = 'First paragraph is here.\n\n\n\n\n\nSecond paragraph is here.';
       const chunks = chunkDocument(text, { chunkSize: 500 });
-      expect(chunks.length).toBe(1);
+      expect(chunks).toHaveLength(1);
       expect(chunks[0].content).toContain('First');
       expect(chunks[0].content).toContain('Second');
     });

@@ -44,7 +44,7 @@ describe.each(['longpress', 'dots'] as const)('happy — speak an assistant repl
     h.rtl.fireEvent.press(await h.rtl.waitFor(() => h.view!.getByTestId('action-speak')));
 
     // The engine was asked to speak THIS reply's text (with its message id).
-    await h.rtl.waitFor(() => { expect(seam.spoken.length).toBe(1); });
+    await h.rtl.waitFor(() => { expect(seam.spoken).toHaveLength(1); });
     expect(seam.spoken[0].text).toContain('The capital of France is Paris.');
     expect(seam.spoken[0].id).toBeTruthy();
   });

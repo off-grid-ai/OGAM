@@ -88,13 +88,13 @@ describe('Onboarding Spotlight Flow Integration', () => {
     });
 
     it('checklist step completes when model finishes downloading', () => {
-      expect(getAppState().downloadedModels.length).toBe(0);
+      expect(getAppState().downloadedModels).toHaveLength(0);
 
       // Simulate download completion
       useAppStore.getState().addDownloadedModel(createDownloadedModel());
 
       const state = getAppState();
-      expect(state.downloadedModels.length).toBe(1);
+      expect(state.downloadedModels).toHaveLength(1);
       // useOnboardingSteps checks: downloadedModels.length > 0
     });
   });
@@ -361,14 +361,14 @@ describe('Onboarding Spotlight Flow Integration', () => {
       // 4 is NOT enough
       const fourProjects = Array.from({ length: 4 }, (_, i) => createProject({ id: `proj-${i}` }));
       useProjectStore.setState({ projects: fourProjects });
-      expect(useProjectStore.getState().projects.length).toBe(4);
-      expect(useProjectStore.getState().projects.length > 4).toBe(false);
+      expect(useProjectStore.getState().projects).toHaveLength(4);
+      expect(useProjectStore.getState().projects.length).toBeLessThanOrEqual(4);
 
       // 5 completes it
       const fiveProjects = [...fourProjects, createProject({ id: 'proj-4' })];
       useProjectStore.setState({ projects: fiveProjects });
-      expect(useProjectStore.getState().projects.length).toBe(5);
-      expect(useProjectStore.getState().projects.length > 4).toBe(true);
+      expect(useProjectStore.getState().projects).toHaveLength(5);
+      expect(useProjectStore.getState().projects.length).toBeGreaterThan(4);
     });
   });
 
@@ -442,7 +442,7 @@ describe('Onboarding Spotlight Flow Integration', () => {
       expect(state.shownSpotlights).toEqual({});
 
       // App data preserved
-      expect(state.downloadedModels.length).toBe(1);
+      expect(state.downloadedModels).toHaveLength(1);
       expect(state.activeModelId).toBe('model-1');
     });
 
@@ -462,9 +462,9 @@ describe('Onboarding Spotlight Flow Integration', () => {
 
       // Initial state: no reactive conditions met
       let state = getAppState();
-      expect(state.downloadedImageModels.length).toBe(0);
+      expect(state.downloadedImageModels).toHaveLength(0);
       expect(state.activeImageModelId).toBeNull();
-      expect(state.generatedImages.length).toBe(0);
+      expect(state.generatedImages).toHaveLength(0);
 
       // Part 2 condition not yet met (no image model downloaded)
       expect(
@@ -516,7 +516,7 @@ describe('Onboarding Spotlight Flow Integration', () => {
 
       // Part 5 condition not yet met (no image generated)
       state = getAppState();
-      expect(state.generatedImages.length).toBe(0);
+      expect(state.generatedImages).toHaveLength(0);
 
       // Generate image → Part 5 triggers
       store.addGeneratedImage(createGeneratedImage());

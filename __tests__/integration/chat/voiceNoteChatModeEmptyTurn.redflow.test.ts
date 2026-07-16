@@ -64,7 +64,7 @@ describe('chat-mode STT is dictation-to-the-input-box on every engine (LiteRT to
     expect(transcriptArgs.some(t => t.trim() === 'draw a dog')).toBe(true);
     // And it is NOT dispatched as a voice-note attachment, nor auto-sent — the user reviews/edits then sends.
     // RED before the fix: the transcript went to onAudioAttachment (a dispatched note), composer stayed empty.
-    expect(attachmentArgs.length).toBe(0);
-    expect(autoSendArgs.length).toBe(0);
+    expect(attachmentArgs).toHaveLength(0);
+    expect(autoSendArgs).toHaveLength(0);
   });
 });

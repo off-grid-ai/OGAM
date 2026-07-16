@@ -66,7 +66,7 @@ describe('rendered — iOS image staging purged: Retry recovers the failed card'
       return btn;
     });
     expect(view.queryByText(/SDXL|coreml_apple/)).not.toBeNull();
-    expect(boundary.download!.active().length).toBe(0);
+    expect(boundary.download!.active()).toHaveLength(0);
 
     // GESTURE: tap Retry, the way the user did on the device.
     fireEvent.press(retry!);

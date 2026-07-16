@@ -104,7 +104,7 @@ describe.each(['ios', 'android'] as const)(
       };
 
       // Precondition: no native download in flight, and the row is a dead 'failed' (the screenshot state).
-      expect(boundary.download!.active().length).toBe(0);
+      expect(boundary.download!.active()).toHaveLength(0);
       expect(useDownloadStore.getState().downloads[modelKey].status).toBe('failed');
 
       // ACT: the retry/resume-finalize path for an all-bytes-present image download.

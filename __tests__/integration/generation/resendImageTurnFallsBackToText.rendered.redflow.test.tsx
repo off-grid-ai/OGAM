@@ -39,7 +39,7 @@ describe('send/resend parity — resending an image turn with no image model fal
     await h.cycleImageMode(); // auto → ON (force)
     await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('image-mode-force-badge')).not.toBeNull(); });
     await h.tapSend('a castle on a hill');
-    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); }, { timeout: 8000 });
+    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1); }, { timeout: 8000 });
     await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('generated-image')).not.toBeNull(); }, { timeout: 8000 });
 
     // The user unloads the image model (store transition — the picker is behind a fragile nested sheet;
@@ -55,6 +55,6 @@ describe('send/resend parity — resending an image turn with no image model fal
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/A castle is a fortified stone structure\./)).not.toBeNull(); }, { timeout: 8000 });
     expect(h.view!.queryByText('No image model loaded.')).toBeNull();
     // The failed image path must NOT have fired a second diffusion call.
-    expect(h.boundary.diffusion.calls.generateImage.length).toBe(1);
+    expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1);
   }, 60000);
 });

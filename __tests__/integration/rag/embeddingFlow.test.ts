@@ -194,7 +194,7 @@ describe('Embedding Flow Integration', () => {
       const embInserts = mockExecuteSync.mock.calls.filter(
         (c: any[]) => typeof c[0] === 'string' && c[0].includes('INSERT INTO rag_embeddings')
       );
-      expect(embInserts.length).toBe(2);
+      expect(embInserts).toHaveLength(2);
     });
   });
 
@@ -208,7 +208,7 @@ describe('Embedding Flow Integration', () => {
       const deleteCalls = mockExecuteSync.mock.calls.filter(
         (c: any[]) => typeof c[0] === 'string' && c[0].includes('DELETE')
       );
-      expect(deleteCalls.length).toBe(3);
+      expect(deleteCalls).toHaveLength(3);
       // Order: embeddings, chunks, document
       expect(deleteCalls[0][0]).toContain('rag_embeddings');
       expect(deleteCalls[0][1]).toEqual([42]);

@@ -57,7 +57,7 @@ describe('iOS text retry (rendered, red-flow)', () => {
     await waitFor(() => { expect(view.queryByText(/model\.gguf/)).not.toBeNull(); });
 
     // Pre-condition: nothing is downloading at the native boundary yet (so a false green can't hide).
-    expect(boundary.download!.active().length).toBe(0);
+    expect(boundary.download!.active()).toHaveLength(0);
 
     fireEvent.press(view.getByTestId('failed-retry-button'));
 

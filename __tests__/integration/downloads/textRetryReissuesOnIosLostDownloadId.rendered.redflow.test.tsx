@@ -100,7 +100,7 @@ describe('iOS text retry re-issues a rehydrated failed download that lost its do
     await waitFor(() => expect(getByText('Retry')).toBeTruthy(), { timeout: 4000 });
 
     // No native download exists yet (the row was lost on the kill).
-    expect(boundary.download!.active().length).toBe(0);
+    expect(boundary.download!.active()).toHaveLength(0);
 
     // Tap Retry.
     await act(async () => { fireEvent.press(getByText('Retry')); });

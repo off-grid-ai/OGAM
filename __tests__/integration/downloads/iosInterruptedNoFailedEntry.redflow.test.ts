@@ -18,7 +18,7 @@ describe('D4 — iOS interrupted download leaves no failed entry (red-flow)', ()
 
     boundary.download!.seedActive({ downloadId: 'dl-txt', fileName: 'gemma-4b.gguf', modelId: 'gemma-4b', modelType: 'text', status: 'running', bytesDownloaded: 2 * 1024 ** 3, totalBytes: 6 * 1024 ** 3 });
     await hydrateDownloadStore();
-    expect(Object.keys(useDownloadStore.getState().downloads).length).toBe(1); // precondition: shown while running
+    expect(Object.keys(useDownloadStore.getState().downloads)).toHaveLength(1); // precondition: shown while running
 
     // iOS force-quit: URLSession drops the row entirely.
     boundary.download!.simulateRelaunch();

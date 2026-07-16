@@ -70,7 +70,7 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
       content: 'Results: 160500 and 25.',
     });
     // Two tool-result bubbles render (both calculator runs are visible).
-    await h.rtl.waitFor(() => { expect(h.view!.queryAllByTestId('tool-result-label-calculator').length).toBe(2); });
+    await h.rtl.waitFor(() => { expect(h.view!.queryAllByTestId('tool-result-label-calculator')).toHaveLength(2); });
     // ...and the answer with both results renders.
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/160500 and 25/)).not.toBeNull(); });
   });

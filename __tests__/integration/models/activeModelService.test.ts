@@ -399,7 +399,7 @@ describe('ActiveModelService Integration', () => {
       await activeModelService.unloadTextModel();
 
       expect(mockLlmService.unloadModel).toHaveBeenCalled();
-      expect(getAppState().activeModelId).toBe(null);
+      expect(getAppState().activeModelId).toBeNull();
     });
 
     it('should skip unload if no model loaded', async () => {
@@ -573,7 +573,7 @@ describe('ActiveModelService Integration', () => {
       await activeModelService.unloadImageModel();
 
       expect(mockLocalDreamService.unloadModel).toHaveBeenCalled();
-      expect(getAppState().activeImageModelId).toBe(null);
+      expect(getAppState().activeImageModelId).toBeNull();
     });
   });
 
@@ -774,8 +774,8 @@ describe('ActiveModelService Integration', () => {
       await activeModelService.syncWithNativeState();
 
       const loadedIds = activeModelService.getLoadedModelIds();
-      expect(loadedIds.textModelId).toBe(null);
-      expect(loadedIds.imageModelId).toBe(null);
+      expect(loadedIds.textModelId).toBeNull();
+      expect(loadedIds.imageModelId).toBeNull();
     });
   });
 
@@ -821,9 +821,9 @@ describe('ActiveModelService Integration', () => {
 
       const info = activeModelService.getActiveModels();
 
-      expect(info.text.model).toBe(null);
+      expect(info.text.model).toBeNull();
       expect(info.text.isLoaded).toBe(false);
-      expect(info.image.model).toBe(null);
+      expect(info.image.model).toBeNull();
       expect(info.image.isLoaded).toBe(false);
     });
   });

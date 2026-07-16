@@ -56,7 +56,7 @@ describe('image tunables read FRESH from the store, not a stale caller snapshot 
     // The REAL native generateImage ran once, and the params it received are the FRESH store values.
     await Promise.resolve();
     const calls = boundary.diffusion.calls.generateImage;
-    expect(calls.length).toBe(1);
+    expect(calls).toHaveLength(1);
     expect(calls[0].steps).toBe(11);          // RED before: 8 (stale deps snapshot)
     expect(calls[0].guidanceScale).toBe(3.5); // RED before: 7.5 (stale deps snapshot)
   });

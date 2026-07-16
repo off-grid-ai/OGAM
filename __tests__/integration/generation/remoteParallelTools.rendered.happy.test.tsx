@@ -50,7 +50,7 @@ describe('T048 (rendered) — remote parallel tool_calls render as bubbles + fin
     await h.tapSend('compute 47*83, 128*256, and 0.3*400');
 
     // The three parallel calculator calls each render a tool-result bubble (accumulate-by-index worked).
-    await h.rtl.waitFor(() => { expect(h.view!.queryAllByTestId('tool-result-label-calculator').length).toBe(3); }, { timeout: 6000 });
+    await h.rtl.waitFor(() => { expect(h.view!.queryAllByTestId('tool-result-label-calculator')).toHaveLength(3); }, { timeout: 6000 });
     // ...and the remote model's final reply renders.
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Results: 3901, 32768, and 120/)).not.toBeNull(); }, { timeout: 6000 });
   });

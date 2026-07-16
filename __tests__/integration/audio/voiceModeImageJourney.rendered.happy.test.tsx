@@ -34,7 +34,7 @@ describe('T084 (rendered) — voice-mode image journey (STT → route → image 
     await h.voiceSend('draw a dog');
 
     // The image generation ran...
-    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); }, { timeout: 6000 });
+    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1); }, { timeout: 6000 });
     // ...and the generated image renders on screen (the terminal artifact the user sees).
     await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('generated-image')).not.toBeNull(); }, { timeout: 6000 });
   });

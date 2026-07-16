@@ -36,7 +36,7 @@ describe('happy — prompt routing picks the right model (heavy entry point)', (
     await h.send('draw a cat wearing a hat', { content: 'unused-text-turn' });
 
     // Routed to the image model: the native image generator ran exactly once.
-    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); });
+    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1); });
   });
 
   it('control: a normal prompt routes to the text model (no image generated)', async () => {
@@ -48,6 +48,6 @@ describe('happy — prompt routing picks the right model (heavy entry point)', (
 
     // Routed to the text model: the answer renders and the image generator never ran.
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/The capital of France is Paris\./)).not.toBeNull(); });
-    expect(h.boundary.diffusion.calls.generateImage.length).toBe(0);
+    expect(h.boundary.diffusion.calls.generateImage).toHaveLength(0);
   });
 });

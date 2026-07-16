@@ -118,7 +118,7 @@ describe('BUG #29(b) — second send while generating surfaces a queued indicato
     await handleSendFn(deps, { text: 'second message', startGeneration, setDebugInfo: jest.fn() });
     await flushPromises();
 
-    expect(generationService.getState().queuedMessages.length).toBe(1);
+    expect(generationService.getState().queuedMessages).toHaveLength(1);
     // The subscription the screen reads now reflects the queued message → QueueRow renders.
     expect(queueCount).toBe(1);
     expect(queuedTexts).toEqual(['second message']);

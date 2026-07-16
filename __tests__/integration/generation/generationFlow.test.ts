@@ -283,7 +283,7 @@ describe('Generation Flow Integration', () => {
       // Verify message was finalized
       const chatState = getChatState();
       expect(chatState.streamingMessage).toBe('');
-      expect(chatState.streamingForConversationId).toBe(null);
+      expect(chatState.streamingForConversationId).toBeNull();
       expect(chatState.isStreaming).toBe(false);
 
       // Verify assistant message was added
@@ -368,7 +368,7 @@ describe('Generation Flow Integration', () => {
       // Verify streaming state was cleared
       const chatState = getChatState();
       expect(chatState.streamingMessage).toBe('');
-      expect(chatState.streamingForConversationId).toBe(null);
+      expect(chatState.streamingForConversationId).toBeNull();
       expect(chatState.isStreaming).toBe(false);
     });
   });

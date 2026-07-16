@@ -108,7 +108,7 @@ describe('reload race — a send during the load window keeps thinking (device 2
     expect(h.view!.queryByText(/seventeen has no divisors below its root/)).not.toBeNull();
     // BOTH turns carry the thinking affordance (the block collapses to its preview after completion).
     const blocks = h.view!.queryAllByTestId('thinking-block');
-    expect(blocks.length).toBe(2);
+    expect(blocks).toHaveLength(2);
     // Expand the racing turn's block: the full reasoning renders in the block content.
     // (walking-up press: the toggle's onPress lives on the composite above the testID host)
     const toggles = h.view!.queryAllByTestId('thinking-block-toggle');
