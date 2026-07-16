@@ -33,9 +33,9 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
 
   it('MCP: a registered MCP tool executes and its result reaches the answer', async () => {
     const h = await setupChatScreen({ engine: 'litert' });
-    /* eslint-disable @typescript-eslint/no-var-requires */
+
     const { registerToolExtension, _clearExtensionsForTesting } = require('../../../src/services/tools/extensions');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+
     _clearExtensionsForTesting();
     let executed = false;
     registerToolExtension({

@@ -34,7 +34,7 @@ describe('T071 (rendered) — prompt enhancement must not think (DEV-B30)', () =
     h.render();
 
     await h.placeImageModel({ backend: 'coreml' });
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { activeModelService } = require('../../../src/services/activeModelService');
     await activeModelService.loadImageModel('sd');
     await h.cycleImageMode(); // auto → ON(force): "draw a cat" routes to IMAGE

@@ -39,13 +39,13 @@ const failedTextEntry = (over: Record<string, unknown> = {}) => ({
 describe('iOS text retry (rendered, red-flow)', () => {
   it('re-issues the download on retry even when the store entry lost its downloadId (app-kill)', async () => {
     const boundary = installNativeBoundary({ download: true, fs: true, ram: { platform: 'ios', totalBytes: 8 * 1024 ** 3, availBytes: 6 * 1024 ** 3 } });
-    /* eslint-disable @typescript-eslint/no-var-requires */
+
     const React = require('react');
     const { render, waitFor, fireEvent } = requireRTL();
     const { useDownloadStore } = require('../../../src/stores/downloadStore');
     const { DownloadManagerScreen } = require('../../../src/screens/DownloadManagerScreen');
     const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+
     // The service routes retry() to the owning provider — register it (app boot does this; a bare
     // screen render does not, which is why retry was silently REFUSED: not found).
     registerCoreDownloadProviders();
@@ -69,13 +69,13 @@ describe('iOS text retry (rendered, red-flow)', () => {
 
   it('marks a retried download as no-longer-failed immediately (queued feedback)', async () => {
     installNativeBoundary({ download: true, fs: true, ram: { platform: 'ios', totalBytes: 8 * 1024 ** 3, availBytes: 6 * 1024 ** 3 } });
-    /* eslint-disable @typescript-eslint/no-var-requires */
+
     const React = require('react');
     const { render, waitFor, fireEvent } = requireRTL();
     const { useDownloadStore } = require('../../../src/stores/downloadStore');
     const { DownloadManagerScreen } = require('../../../src/screens/DownloadManagerScreen');
     const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+
     // The service routes retry() to the owning provider — register it (app boot does this; a bare
     // screen render does not, which is why retry was silently REFUSED: not found).
     registerCoreDownloadProviders();

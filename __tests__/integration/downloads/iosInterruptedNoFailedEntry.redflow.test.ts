@@ -11,10 +11,9 @@ import { installNativeBoundary } from '../../harness/nativeBoundary';
 describe('D4 — iOS interrupted download leaves no failed entry (red-flow)', () => {
   it('surfaces an interrupted iOS download as a failed/retriable entry after app-kill', async () => {
     const boundary = installNativeBoundary({ download: true, ram: { platform: 'ios', totalBytes: 8 * 1024 ** 3, availBytes: 4 * 1024 ** 3 } });
-    /* eslint-disable @typescript-eslint/no-var-requires */
+
     const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
     const { useDownloadStore } = require('../../../src/stores/downloadStore');
-    /* eslint-enable @typescript-eslint/no-var-requires */
 
     boundary.download!.seedActive({ downloadId: 'dl-txt', fileName: 'gemma-4b.gguf', modelId: 'gemma-4b', modelType: 'text', status: 'running', bytesDownloaded: 2 * 1024 ** 3, totalBytes: 6 * 1024 ** 3 });
     await hydrateDownloadStore();

@@ -38,13 +38,11 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
       },
     }));
 
-    /* eslint-disable @typescript-eslint/no-var-requires */
     const React = require('react');
     const { render, fireEvent, waitFor, act } = requireRTL();
     const { hardwareService } = require('../../../src/services/hardware');
     const { fitTier } = require('../../../src/services/memoryBudget');
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
-    /* eslint-enable @typescript-eslint/no-var-requires */
 
     await hardwareService.refreshMemoryInfo();
     const ramGB = hardwareService.getTotalMemoryGB();
@@ -83,9 +81,8 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
     // → SHOWN. Flipping fitTier's `<` to `<=` would make the exact-ceiling file 'tight'/shown → red.
     installNativeBoundary({ download: true, fs: true, ram: { platform: 'android', totalBytes: 8 * GB, availBytes: 5 * GB } });
 
-    /* eslint-disable @typescript-eslint/no-var-requires */
     const { modelBudgetFraction } = require('../../../src/services/memoryBudget');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+
     const ceilBytes = 8 * modelBudgetFraction(8, 'android', 'aggressive') * GB; // 8 × 0.75 × GB = exactly 6.0 GB (integer bytes)
     const atCeiling = { name: 'model-atceiling.gguf', size: ceilBytes, quantization: 'Q6', downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-atceiling.gguf` };
     const underCeiling = { name: 'model-under.gguf', size: ceilBytes - 1, quantization: 'Q5', downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-under.gguf` };
@@ -101,13 +98,11 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
       },
     }));
 
-    /* eslint-disable @typescript-eslint/no-var-requires */
     const React = require('react');
     const { render, fireEvent, waitFor, act } = requireRTL();
     const { hardwareService } = require('../../../src/services/hardware');
     const { fitTier } = require('../../../src/services/memoryBudget');
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
-    /* eslint-enable @typescript-eslint/no-var-requires */
 
     await hardwareService.refreshMemoryInfo();
     const ramGB = hardwareService.getTotalMemoryGB();

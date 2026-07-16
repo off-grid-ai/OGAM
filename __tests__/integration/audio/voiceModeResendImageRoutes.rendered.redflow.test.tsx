@@ -36,7 +36,7 @@ describe('T062 (voice-mode) — resend of an image request re-draws, not text (D
     // Place + load (activate) an image model via the REAL load path — hasImageModel=true, imageMode stays
     // 'auto'. Matches the device (auto + pattern classifier routes "draw a dog" → image; log part28/38).
     await h.placeImageModel({ backend: 'mnn' });
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { activeModelService } = require('../../../src/services/activeModelService');
     await activeModelService.loadImageModel('sd');
 

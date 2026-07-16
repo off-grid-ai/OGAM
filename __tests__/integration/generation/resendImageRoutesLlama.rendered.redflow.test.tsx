@@ -26,7 +26,7 @@ describe('T062 (llama) — resend of an image request re-draws on the llama engi
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
     h.render();
     await h.placeImageModel({ backend: 'coreml' });
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { activeModelService } = require('../../../src/services/activeModelService');
     await activeModelService.loadImageModel('sd');
     await h.cycleImageMode(); // auto → ON(force)

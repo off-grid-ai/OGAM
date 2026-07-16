@@ -35,13 +35,12 @@ const RECOMMENDED_IDS = [
 
 async function mountWithNDownloaded(n: number) {
   const boundary = installNativeBoundary({ fs: true });
-  /* eslint-disable @typescript-eslint/no-var-requires */
+
   const React = require('react');
   const { render, waitFor } = requireRTL();
   const AsyncStorage = require('@react-native-async-storage/async-storage').default
     ?? require('@react-native-async-storage/async-storage');
   const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
-  /* eslint-enable @typescript-eslint/no-var-requires */
 
   const docs = boundary.fs!.DocumentDirectoryPath;
   // Seed N downloaded models: a file on the in-memory disk + a persisted record whose id is prefixed by

@@ -34,13 +34,11 @@ describe('browse shows a loadable-but-over-balanced-budget model with a fit chip
       },
     }));
 
-    /* eslint-disable @typescript-eslint/no-var-requires */
     const React = require('react');
     const { render, fireEvent, waitFor, act } = requireRTL();
     const { hardwareService } = require('../../../src/services/hardware');
     const { fitTier } = require('../../../src/services/memoryBudget');
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
-    /* eslint-enable @typescript-eslint/no-var-requires */
 
     await hardwareService.refreshMemoryInfo();
     const ramGB = hardwareService.getTotalMemoryGB();

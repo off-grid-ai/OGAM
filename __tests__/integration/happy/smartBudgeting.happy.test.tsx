@@ -28,7 +28,7 @@ describe('happy — a fittable image gen succeeds with no failure card (heavy en
 
     // The fittable load succeeded through the REAL gate: the native image generator ran...
     await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1); });
-    /* eslint-disable-next-line @typescript-eslint/no-var-requires */
+
     const { modelResidencyManager } = require('../../../src/services/modelResidency');
     expect(modelResidencyManager.isResident('image')).toBe(true);
 

@@ -124,7 +124,9 @@ const ModelDetailView: React.FC<DetailProps> = ({
     for (const f of modelFiles) {
       if (!f.mmProjFile) continue;
       const rec = getDownloadedModel(selectedModel.id, f.name);
-      if (rec?.engine === 'llama' && !rec.isVisionModel) void modelManager.markVisionModel(rec.id);
+      if (rec?.engine === 'llama' && !rec.isVisionModel) {
+        modelManager.markVisionModel(rec.id).catch(() => {});
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedModel.id, modelFiles]);

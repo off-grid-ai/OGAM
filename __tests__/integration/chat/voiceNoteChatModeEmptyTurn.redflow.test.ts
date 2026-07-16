@@ -22,7 +22,7 @@ describe('chat-mode STT is dictation-to-the-input-box on every engine (LiteRT to
     // downloadedModelId alone (with no file) makes whisperService.loadModel throw "not found" → whisper never
     // becomes resident → nothing to transcribe: a fabricated precondition that never exercises the real path.
     const boundary = installNativeBoundary({ fs: true, whisper: true, ram: { platform: 'ios', totalBytes: 12 * 1024 ** 3, availBytes: 8 * 1024 ** 3 } });
-    /* eslint-disable @typescript-eslint/no-var-requires */
+
     const { renderHook, act } = require('../../harness/nativeBoundary').requireRTL();
     const RNFS = require('react-native-fs');
     const { liteRTService } = require('../../../src/services/litert');
@@ -30,7 +30,6 @@ describe('chat-mode STT is dictation-to-the-input-box on every engine (LiteRT to
     const { useAppStore } = require('../../../src/stores');
     const { useUiModeStore } = require('../../../src/stores/uiModeStore');
     const { useWhisperStore } = require('../../../src/stores');
-    /* eslint-enable @typescript-eslint/no-var-requires */
 
     // A direct-audio-capable LiteRT model is active and loaded WITH audio support.
     await liteRTService.loadModel('/models/gemma.litertlm', 'gpu', { supportsAudio: true, maxNumTokens: 4096 });
@@ -58,7 +57,6 @@ describe('chat-mode STT is dictation-to-the-input-box on every engine (LiteRT to
     expect(result.current.isRecording).toBe(true);
     await act(async () => { await result.current.stopRecording(); });
 
-    void boundary;
     // NEW unified behavior: the transcript lands in the COMPOSER (onTranscript) — dictation-to-the-input-box,
     // exactly like a non-audio (llama) model.
     expect(transcriptArgs.some(t => t.trim() === 'draw a dog')).toBe(true);

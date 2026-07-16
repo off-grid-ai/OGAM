@@ -191,7 +191,7 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [setDeviceInfo, setModelRecommendation]);
 
   // Health-check persisted servers — only show reachable ones.
   // Returns { ran, reachable }: `ran` is false when the in-flight guard short-circuited this call

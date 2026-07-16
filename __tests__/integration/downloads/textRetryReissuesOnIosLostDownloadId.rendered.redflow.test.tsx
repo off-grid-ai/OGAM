@@ -47,13 +47,11 @@ describe('iOS text retry re-issues a rehydrated failed download that lost its do
       },
     }));
 
-    /* eslint-disable @typescript-eslint/no-var-requires */
     const React = require('react');
     const { render, fireEvent, waitFor, act } = requireRTL();
     const { useDownloadStore } = require('../../../src/stores/downloadStore');
     const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
-    /* eslint-enable @typescript-eslint/no-var-requires */
 
     // Providers must be registered so modelDownloadService can route text retries to textProvider.
     registerCoreDownloadProviders();

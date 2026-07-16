@@ -23,9 +23,9 @@ jest.mock('@react-navigation/native', () => ({
 // app and the test share the same hook registry instance. canSpeak=true enables the affordance; speak captures.
 function installTtsSeam(): { spoken: Array<{ text: string; id: string }> } {
   const spoken: Array<{ text: string; id: string }> = [];
-  /* eslint-disable @typescript-eslint/no-var-requires */
+
   const { registerHook, HOOKS } = require('../../../src/bootstrap/hookRegistry');
-  /* eslint-enable @typescript-eslint/no-var-requires */
+
   registerHook(HOOKS.audioCanSpeak, () => true);
   registerHook(HOOKS.audioSpeak, (text: string, id: string) => { spoken.push({ text, id }); });
   return { spoken };

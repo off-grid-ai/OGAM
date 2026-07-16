@@ -30,7 +30,7 @@ describe('T062 (voice + enhancement) — resend of an enhanced image request re-
     h.render();
 
     await h.placeImageModel({ backend: 'mnn' });
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { activeModelService } = require('../../../src/services/activeModelService');
     await activeModelService.loadImageModel('sd');
     // Enable prompt enhancement — the setting that ran on the device before the failing resend.

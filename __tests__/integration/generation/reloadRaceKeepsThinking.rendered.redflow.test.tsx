@@ -47,7 +47,7 @@ function pressByWalkingUp(node: unknown): void {
 
 /** Arrive-via-UI: change the text inference backend on the real BackendSelector (Model Settings control). */
 function selectBackendViaUI(h: Awaited<ReturnType<typeof setupChatScreen>>, backendId: string) {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { BackendSelector } = require('../../../src/components/settings/textGenAdvancedSections');
   const s = h.rtl.render(h.React.createElement(BackendSelector, {}));
   h.rtl.fireEvent.press(s.getByTestId(`backend-${backendId}-button`));
@@ -61,7 +61,7 @@ describe('reload race — a send during the load window keeps thinking (device 2
   it('renders the thinking block for a turn sent while the reload is still detecting capabilities', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
     // Device boundary: an Adreno (Qualcomm) SoC so the OpenCL backend choice is allowed (as on device).
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const DeviceInfo = require('react-native-device-info');
     (DeviceInfo.getHardware as jest.Mock).mockResolvedValue('qcom');
     h.render();
