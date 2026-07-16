@@ -170,13 +170,24 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
         const compat = recommendedModelsForDevice(ram);
         if (cancelled) return;
         setRecommendedModels(compat);
-        const files = await fetchModelFiles(compat);
-        if (!cancelled) setModelFiles(files);
+        // Device analysis is done here — show the screen NOW. The recommended cards
+        // (curated LiteRT + GGUF) render from local data; their download file lists come
+        // over the network and MUST NOT gate the screen. Awaiting fetchModelFiles here left
+        // fresh installs stuck on "Analyzing your device…" for ~75s (the OS fetch timeout)
+        // whenever HuggingFace was slow or unreachable. Load files in the background instead.
+        if (!cancelled) setIsLoading(false);
+        try {
+          const files = await fetchModelFiles(compat);
+          if (!cancelled) setModelFiles(files);
+        } catch (fileError) {
+          logger.error('Error fetching model files:', fileError);
+        }
       } catch (error) {
         logger.error('Error initializing:', error);
-        if (!cancelled) setAlertState(showAlert('Error', 'Failed to initialize. Please try again.'));
-      } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setAlertState(showAlert('Error', 'Failed to initialize. Please try again.'));
+          setIsLoading(false);
+        }
       }
     })();
     return () => { cancelled = true; };

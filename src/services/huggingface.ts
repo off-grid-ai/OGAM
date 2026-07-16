@@ -3,12 +3,35 @@ import { HF_API, QUANTIZATION_INFO, LMSTUDIO_AUTHORS, OFFICIAL_MODEL_AUTHORS, VE
 import { looksLikeVisionModel } from '../utils/visionModel';
 import { isMMProjFile, pickMmProjForDownload } from './mmproj';
 
+// These are small metadata calls (model search, file listing) — NOT the multi-GB model
+// downloads, which run on a separate native path with their own retry. A simple JSON API
+// that hasn't answered in 5s is not slow, it's broken (or the network is): bound it here so
+// the UI falls to a retry state fast instead of staring at a spinner.
+const HF_REQUEST_TIMEOUT_MS = 5000;
+
 class HuggingFaceService {
   private baseUrl = HF_API.baseUrl;
   private apiUrl = HF_API.apiUrl;
 
+  /**
+   * Every HuggingFace request goes through here so a slow or unreachable host can NEVER hang
+   * indefinitely. A bare fetch() has no timeout: on a fresh install with poor connectivity this
+   * left the onboarding screen stuck on "Analyzing your device…" until the OS-level socket timeout
+   * (~75s). AbortController bounds every request; on timeout the fetch rejects (AbortError) and the
+   * caller's existing catch handles it (falls back or returns empty).
+   */
+  private async fetchWithTimeout(url: string, timeoutMs = HF_REQUEST_TIMEOUT_MS): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   private async fetchJson<T>(url: string): Promise<T> {
-    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    const response = await this.fetchWithTimeout(url);
     if (!response.ok) throw new Error(`API error: ${response.status}`);
     return response.json() as Promise<T>;
   }
@@ -32,7 +55,7 @@ class HuggingFaceService {
 
   async getModelFiles(modelId: string): Promise<ModelFile[]> {
     try {
-      const response = await fetch(`${this.apiUrl}/models/${modelId}/tree/main`, { headers: { Accept: 'application/json' } });
+      const response = await this.fetchWithTimeout(`${this.apiUrl}/models/${modelId}/tree/main`);
       if (!response.ok) return this.getModelFilesFromSiblings(modelId);
       const files: Array<{ type: string; path: string; size?: number; lfs?: { size: number } }> = await response.json();
       const allGguf = files.filter(f => f.type === 'file' && f.path.endsWith('.gguf'));
