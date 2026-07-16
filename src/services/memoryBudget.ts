@@ -181,6 +181,13 @@ export function fitTier(sizeBytes: number, ramGB: number, platform: Plat = Platf
   return 'wontFit';
 }
 
+/** Loadable on THIS device: the tier is not 'wontFit' — i.e. within the aggressive ceiling, reachable
+ *  via reclaim credit + Load Anyway. The ONE predicate the browse filter and the detail file list share,
+ *  so "what counts as loadable" is defined once here, not copied inline per caller. */
+export function isLoadableOnDevice(sizeBytes: number, ramGB: number, platform: Plat = Platform.OS): boolean {
+  return fitTier(sizeBytes, ramGB, platform) !== 'wontFit';
+}
+
 /** The chip label for a fit tier. One source for the copy so every surface reads the same words. */
 export function fitTierLabel(tier: FitTier): string {
   switch (tier) {

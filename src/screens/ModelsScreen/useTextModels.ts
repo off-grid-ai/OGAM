@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { showAlert, AlertState } from '../../components/CustomAlert';
 import { RECOMMENDED_MODELS, TRENDING_FAMILIES, MODEL_ORGS } from '../../constants';
 import { useAppStore } from '../../stores';
-import { fitTier, type FitTier } from '../../services/memoryBudget';
+import { fitTier, isLoadableOnDevice, type FitTier } from '../../services/memoryBudget';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { huggingFaceService, modelManager, hardwareService, activeModelService } from '../../services';
 import { startModelDownload } from '../../services/startModelDownload';
@@ -75,7 +75,7 @@ const TIER_RANK: Record<FitTier, number> = { easy: 0, fits: 1, tight: 2, wontFit
  *  hides. A model with any easy/fits/tight quant stays visible (shown with a fit chip). */
 function noLoadableQuant(model: ModelInfo, ramGB: number): boolean {
   const sized = (model.files || []).filter(f => f.size > 0);
-  return sized.length > 0 && !sized.some(f => fitTier(f.size, ramGB) !== 'wontFit');
+  return sized.length > 0 && !sized.some(f => isLoadableOnDevice(f.size, ramGB));
 }
 
 /** The fit tier of a model's BEST (most-fitting) quant — what the browse chip shows. undefined when
