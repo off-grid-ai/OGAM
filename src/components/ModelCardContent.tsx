@@ -126,10 +126,12 @@ const InfoBadgesRow: React.FC<{
           <Text style={[styles.infoText, modelTypeTextStyle(styles, model.modelType)]}>{modelTypeLabel(model.modelType)}</Text>
         </View>
       )}
-      {model.paramCount && (
+      {/* `!!` coerces a falsy 0/undefined to false — `{0 && …}` would render a bare "0" text node
+          outside <Text> and crash RN (CodeRabbit). A 0-param / 0-RAM badge is meaningless anyway. */}
+      {!!model.paramCount && (
         <View style={styles.infoBadge}><Text style={styles.infoText}>{model.paramCount}B params</Text></View>
       )}
-      {model.minRamGB && (
+      {!!model.minRamGB && (
         <View style={styles.infoBadge}><Text style={styles.infoText}>{model.minRamGB}GB+ RAM</Text></View>
       )}
     </View>
