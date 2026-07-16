@@ -303,14 +303,11 @@ describe('ModelDownloadScreen', () => {
     expect(result.getByText(/Connect to a model server/)).toBeTruthy();
   });
 
-  it('renders device info card after loading', async () => {
-    const result = render(<ModelDownloadScreen navigation={mockNavigation} />);
-    await flushPromises();
-
-    expect(result.getByText('Your Device')).toBeTruthy();
-    expect(result.getByText('Test Device')).toBeTruthy();
-    expect(result.getByText('Available Memory')).toBeTruthy();
-  });
+  // NOTE: the "device info card" case that lived here mocked hardwareService (our own code) and
+  // asserted the old "Available Memory" label. It is superseded by the real rendered integration
+  // test __tests__/integration/onboarding/deviceCardShowsTotalRam.rendered.test.tsx, which drives
+  // the REAL hardwareService over the RAM boundary and guards the total-RAM-vs-process-ceiling
+  // regression. Per the testing doctrine, a failing mockist test is deleted, not repaired.
 
   it('renders the NetworkSection', async () => {
     const result = render(<ModelDownloadScreen navigation={mockNavigation} />);
