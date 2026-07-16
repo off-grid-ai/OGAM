@@ -105,6 +105,11 @@ class WhisperService {
   // unrelated (already-downloaded) model must never abort a different in-flight one.
   private activeDownloadModelId: string | null = null;
   private fileTranscribeStop: (() => void | Promise<void>) | null = null;
+  // True only while the REALTIME fallback recorder (started by startRealtimeTranscription for the
+  // B26/B28 safety net) is running. forceReset uses this to cancel OUR recorder without ever
+  // touching a recording started elsewhere — Voice.ts's direct/file-path modes share the same
+  // audioRecorderService singleton, so a blunt isCurrentlyRecording() check could kill theirs.
+  private fallbackRecorderActive = false;
   // Models whose CoreML encoder we've already tried to backfill this session,
   // so a missing/404 encoder isn't re-fetched on every load.
   private coreMLBackfillTried = new Set<string>();
@@ -529,6 +534,7 @@ class WhisperService {
     try {
       await audioRecorderService.startRecording();
       recordedFile = true;
+      this.fallbackRecorderActive = true;
     } catch (recErr) {
       logger.error('[WhisperService] Fallback recorder failed to start (realtime only):', recErr);
     }
@@ -540,6 +546,7 @@ class WhisperService {
       if (!recordedFile) return realtimeText;
       try {
         const { path } = await audioRecorderService.stopRecording();
+        this.fallbackRecorderActive = false;
         const fileText = await this.transcribeFile(path);
         logger.log(`[WhisperService] Realtime captured nothing — file transcript: "${fileText.slice(0, 50)}"`);
         return fileText;
@@ -553,7 +560,7 @@ class WhisperService {
       // Guard: context could have been released during the async permission check
       if (!this.context) {
         this.isTranscribing = false;
-        if (recordedFile) audioRecorderService.cancelRecording();
+        if (recordedFile) { audioRecorderService.cancelRecording(); this.fallbackRecorderActive = false; }
         resolveTranscriptionStopped();
         throw new Error('Whisper context was released before transcription could start');
       }
@@ -619,7 +626,7 @@ class WhisperService {
         });
       });
     } catch (error) {
-      if (recordedFile) audioRecorderService.cancelRecording();
+      if (recordedFile) { audioRecorderService.cancelRecording(); this.fallbackRecorderActive = false; }
       logger.error('[WhisperService] transcribeRealtime error:', error);
       this.isTranscribing = false;
       this.stopFn = null;
@@ -669,9 +676,11 @@ class WhisperService {
     if (fn && this.context) {
       try { fn(); } catch (e) { logger.error('[WhisperService] Error calling stopFn during forceReset:', e); }
     }
-    // Discard the parallel fallback recording (B26/B28) if one is mid-flight — a cancelled/aborted
-    // realtime session must not leave the file recorder capturing (B11-class leak).
-    if (audioRecorderService.isCurrentlyRecording()) audioRecorderService.cancelRecording();
+    // Discard the parallel fallback recording (B26/B28) ONLY when THIS realtime session started it —
+    // a cancelled/aborted realtime session must not leave the file recorder capturing (B11-class
+    // leak), but we must never cancel a recording Voice.ts started (its direct/file-path modes share
+    // the same audioRecorderService singleton). Owned recorder → cancel; anything else → left as-is.
+    if (this.fallbackRecorderActive) { audioRecorderService.cancelRecording(); this.fallbackRecorderActive = false; }
     this.isTranscribing = false;
     this.transcriptionFullyStopped = Promise.resolve();
   }
