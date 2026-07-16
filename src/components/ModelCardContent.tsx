@@ -7,7 +7,14 @@ import type { ThemeColors } from '../theme';
 import { createStyles } from './ModelCard.styles';
 import { huggingFaceService } from '../services/huggingface';
 import { ModelCredibility } from '../types';
+import { fitTierLabel, type FitTier } from '../services/memoryBudget';
+import type { ThemeColors as TC } from '../theme';
 import { triggerHaptic } from '../utils/haptics';
+
+/** Chip accent per fit tier: emerald for a comfortable easy/fits, muted for a tight (snug, still
+ *  loadable) fit. Browse never shows 'wontFit' (those models are filtered out), so it isn't styled. */
+const fitTierColor = (colors: TC, tier: FitTier): string =>
+  tier === 'tight' ? colors.textMuted : colors.primary;
 
 interface CredibilityInfo {
   color: string;
@@ -49,6 +56,7 @@ interface CompactModelCardContentProps {
     modelType?: 'text' | 'vision' | 'code';
     paramCount?: number;
     minRamGB?: number;
+    fitTier?: FitTier;
   };
   credibility?: ModelCredibility;
   credibilityInfo: CredibilityInfo | null;
@@ -89,6 +97,46 @@ function modelTypeTextStyle(
   if (modelType === 'code') return styles.codeText;
   return null;
 }
+
+/** The compact card's badge row (fit chip + NPU/GPU + type + params + RAM). Extracted to module
+ *  scope so CompactModelCardContent stays under the complexity gate; renders null when empty. */
+const InfoBadgesRow: React.FC<{
+  model: { modelType?: 'text' | 'vision' | 'code'; paramCount?: number; minRamGB?: number; fitTier?: FitTier };
+  supportsAcceleration?: boolean;
+  styles: ReturnType<typeof createStyles>;
+  colors: TC;
+}> = ({ model, supportsAcceleration, styles, colors }) => {
+  if (!model.modelType && !model.paramCount && !supportsAcceleration && !model.fitTier) return null;
+  return (
+    <View style={[styles.infoRow, styles.infoRowCompact]}>
+      {/* Device-fit chip: how snugly the best quant fits THIS phone (Easy/Fits/Tight). Browse shows
+          loadable models with this instead of hiding over-budget ones. */}
+      {model.fitTier && (
+        <View style={[styles.infoBadge, { borderColor: fitTierColor(colors, model.fitTier) }]} testID={`fit-chip-${model.fitTier}`}>
+          <Text style={[styles.infoText, { color: fitTierColor(colors, model.fitTier) }]}>{fitTierLabel(model.fitTier)}</Text>
+        </View>
+      )}
+      {supportsAcceleration && (
+        <View style={styles.accelBadge} testID="npu-gpu-badge">
+          <Text style={styles.accelBadgeText}>NPU/GPU</Text>
+        </View>
+      )}
+      {model.modelType && (
+        <View style={[styles.infoBadge, modelTypeBadgeStyle(styles, model.modelType)]}>
+          <Text style={[styles.infoText, modelTypeTextStyle(styles, model.modelType)]}>{modelTypeLabel(model.modelType)}</Text>
+        </View>
+      )}
+      {/* `!!` coerces a falsy 0/undefined to false — `{0 && …}` would render a bare "0" text node
+          outside <Text> and crash RN (CodeRabbit). A 0-param / 0-RAM badge is meaningless anyway. */}
+      {!!model.paramCount && (
+        <View style={styles.infoBadge}><Text style={styles.infoText}>{model.paramCount}B params</Text></View>
+      )}
+      {!!model.minRamGB && (
+        <View style={styles.infoBadge}><Text style={styles.infoText}>{model.minRamGB}GB+ RAM</Text></View>
+      )}
+    </View>
+  );
+};
 
 export const CompactModelCardContent: React.FC<CompactModelCardContentProps> = ({
   model,
@@ -150,33 +198,8 @@ export const CompactModelCardContent: React.FC<CompactModelCardContentProps> = (
             </View>
           ))}
         </View>
-      ) : (model.modelType || model.paramCount || supportsAcceleration) && (
-        <View style={[styles.infoRow, styles.infoRowCompact]}>
-          {/* Capability badge: this model can run on the GPU/NPU (a LiteRT model or a
-              Q4_0/Q8_0 GGUF). K-quants silently fall back to CPU, so they get no badge. */}
-          {supportsAcceleration && (
-            <View style={styles.accelBadge} testID="npu-gpu-badge">
-              <Text style={styles.accelBadgeText}>NPU/GPU</Text>
-            </View>
-          )}
-          {model.modelType && (
-            <View style={[styles.infoBadge, modelTypeBadgeStyle(styles, model.modelType)]}>
-              <Text style={[styles.infoText, modelTypeTextStyle(styles, model.modelType)]}>
-                {modelTypeLabel(model.modelType)}
-              </Text>
-            </View>
-          )}
-          {model.paramCount && (
-            <View style={styles.infoBadge}>
-              <Text style={styles.infoText}>{model.paramCount}B params</Text>
-            </View>
-          )}
-          {model.minRamGB && (
-            <View style={styles.infoBadge}>
-              <Text style={styles.infoText}>{model.minRamGB}GB+ RAM</Text>
-            </View>
-          )}
-        </View>
+      ) : (
+        <InfoBadgesRow model={model} supportsAcceleration={supportsAcceleration} styles={styles} colors={colors} />
       )}
     </>
   );

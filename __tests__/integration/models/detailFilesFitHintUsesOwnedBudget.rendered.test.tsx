@@ -1,26 +1,25 @@
 /**
- * Detail "Available Files" device-fit hint — the single owned budget (memoryBudget.fileExceedsBudget).
+ * Detail "Available Files" device-fit list — the single owned budget (memoryBudget.fitTier).
  *
- * SPEC (the OGAM user's view): in a model's detail view, the "Available Files" list offers exactly the
- * quant files that FIT this device's RAM budget and hides the ones that don't — and that fit decision is
- * the ONE owned primitive `fileExceedsBudget` (device-tier fraction of TOTAL RAM), never a hand-rolled
- * copy of the budget arithmetic that could drift from the download-warning / picker / browse-list copies.
+ * SPEC (the OGAM user's view): in a model's detail view, the "Available Files" list offers every LOADABLE
+ * quant (fitTier !== 'wontFit' — down to the aggressive ceiling, since the load path can reach it via
+ * reclaim credit + Load Anyway) and hides only the genuinely-too-big ones. That decision is the ONE owned
+ * primitive `fitTier`, never a hand-rolled copy that could drift from the browse-list / picker copies.
  *
  * This mounts the REAL ModelsScreen, arrives at a model's detail via a real search+tap, and asserts the
- * rendered file list against `fileExceedsBudget`'s verdict for each file: the under-budget quant renders,
- * the over-budget quant is absent. Boundary fakes only: native download + fs + RAM (installNativeBoundary)
- * and the HuggingFace network transport. The budget math, screen, hooks, ModelCard all run REAL.
+ * rendered file list against `fitTier`'s verdict per file: a loadable quant renders, a 'wontFit' quant is
+ * absent. Boundary fakes only: native download + fs + RAM (installNativeBoundary) and the HuggingFace
+ * network transport. The budget math, screen, hooks, ModelCard all run REAL.
  *
- * Falsification (DRY): the expected present/absent set is computed from `fileExceedsBudget` itself, so if
- * a caller's inline copy of the formula drifts from the owner (different fraction, wrong comparison, a
- * unit slip), the rendered list stops matching the owner's verdict and this test goes red.
+ * Falsification (DRY): the expected present/absent set is computed from `fitTier` itself, so if a caller's
+ * inline copy of the formula drifts from the owner, the rendered list stops matching and this test reds.
  */
 import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
 
 const MODEL_ID = 'org/fit-hint';
 
 describe('detail Available Files fit hint matches the owned fileExceedsBudget verdict (rendered)', () => {
-  it('offers exactly the files fileExceedsBudget says fit — hides the over-budget quant', async () => {
+  it('offers every loadable quant (fitTier !== wontFit) — hides only the genuinely-too-big one', async () => {
     // Device: a 6GB Android phone → budget = 6 * modelBudgetFraction(6)=0.60 = 3.6GB.
     installNativeBoundary({ download: true, fs: true, ram: { platform: 'android', totalBytes: 6 * GB, availBytes: 4 * GB } });
 
@@ -43,16 +42,18 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
     const React = require('react');
     const { render, fireEvent, waitFor, act } = requireRTL();
     const { hardwareService } = require('../../../src/services/hardware');
-    const { fileExceedsBudget } = require('../../../src/services/memoryBudget');
+    const { fitTier } = require('../../../src/services/memoryBudget');
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
     /* eslint-enable @typescript-eslint/no-var-requires */
 
     await hardwareService.refreshMemoryInfo();
     const ramGB = hardwareService.getTotalMemoryGB();
 
-    // The owner's verdict is the source of truth for what the list must show.
-    expect(fileExceedsBudget(fitFile.size, ramGB)).toBe(false); // fits → must render
-    expect(fileExceedsBudget(bigFile.size, ramGB)).toBe(true);  // exceeds → must be hidden
+    // The list now offers every LOADABLE quant (fitTier !== 'wontFit', up to the aggressive ceiling)
+    // and hides only the genuinely-too-big ones. On 6GB the aggressive ceiling is 4.5GB: 2GB is loadable,
+    // 5GB is past it → 'wontFit'.
+    expect(fitTier(fitFile.size, ramGB)).not.toBe('wontFit'); // loadable → must render
+    expect(fitTier(bigFile.size, ramGB)).toBe('wontFit');     // past aggressive ceiling → hidden
 
     const utils = render(React.createElement(ModelsScreen, {}));
     const { getByTestId, getByText, queryByText } = utils;
@@ -75,29 +76,27 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
     expect(queryByText('model-Q8_0')).toBeNull();
   }, 30000);
 
-  it('BOUNDARY (M5a): a file EXACTLY at the budget is treated as over-budget (>=), one just under fits', async () => {
-    // Pins the exact budget comparison (the `>=` in fileExceedsBudget). The verifier's `>=`→`>` mutant
-    // survived because no test straddled equality. Device chosen so the budget is a WHOLE number of
-    // bytes: 4GB × balanced 0.50 = EXACTLY 2.0 GB (2147483648 B) — the only tier where integer bytes can
-    // hit exact equality (0.60×6GB is 3.6GB, not an integer, so >= and > can't differ there). A file of
-    // EXACTLY 2.0GB must be HIDDEN (>= = exceeds); 2.0GB−1byte must SHOW. Reverting to `>` flips the
-    // exact-budget file to "fits" → this test goes red (mutant killed).
-    installNativeBoundary({ download: true, fs: true, ram: { platform: 'android', totalBytes: 4 * GB, availBytes: 3 * GB } });
+  it('BOUNDARY: a file EXACTLY at the aggressive ceiling is Won\'t-fit (hidden), one just under is loadable (shown)', async () => {
+    // The list hides only 'wontFit' — files past the AGGRESSIVE ceiling (fitTier's `size < ceil`). Pin
+    // that boundary on a device where the ceiling is a WHOLE number of bytes: 8GB × aggressive 0.75 =
+    // EXACTLY 6.0 GB. A file of EXACTLY 6.0GB is 'wontFit' (not `< ceil`) → HIDDEN; 6.0GB−1byte is 'tight'
+    // → SHOWN. Flipping fitTier's `<` to `<=` would make the exact-ceiling file 'tight'/shown → red.
+    installNativeBoundary({ download: true, fs: true, ram: { platform: 'android', totalBytes: 8 * GB, availBytes: 5 * GB } });
 
     /* eslint-disable @typescript-eslint/no-var-requires */
     const { modelBudgetFraction } = require('../../../src/services/memoryBudget');
     /* eslint-enable @typescript-eslint/no-var-requires */
-    const budgetBytes = 4 * modelBudgetFraction(4, 'android', 'balanced') * GB; // 4 × 0.50 × GB = exactly 2.0 GB (integer bytes)
-    const atBudget = { name: 'model-atbudget.gguf', size: budgetBytes, quantization: 'Q5', downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-atbudget.gguf` };
-    const underBudget = { name: 'model-under.gguf', size: budgetBytes - 1, quantization: 'Q4', downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-under.gguf` };
-    const modelInfo = { id: MODEL_ID, name: 'Boundary Model', author: 'org', description: 'test', downloads: 50, likes: 1, tags: [], lastModified: '', files: [underBudget, atBudget] };
+    const ceilBytes = 8 * modelBudgetFraction(8, 'android', 'aggressive') * GB; // 8 × 0.75 × GB = exactly 6.0 GB (integer bytes)
+    const atCeiling = { name: 'model-atceiling.gguf', size: ceilBytes, quantization: 'Q6', downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-atceiling.gguf` };
+    const underCeiling = { name: 'model-under.gguf', size: ceilBytes - 1, quantization: 'Q5', downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-under.gguf` };
+    const modelInfo = { id: MODEL_ID, name: 'Boundary Model', author: 'org', description: 'test', downloads: 50, likes: 1, tags: [], lastModified: '', files: [underCeiling, atCeiling] };
     jest.doMock('../../../src/services/huggingface', () => ({
       huggingFaceService: {
         searchModels: jest.fn(async () => [modelInfo]),
-        getModelFiles: jest.fn(async () => [underBudget, atBudget]),
+        getModelFiles: jest.fn(async () => [underCeiling, atCeiling]),
         getModelDetails: jest.fn(async () => modelInfo),
         getDownloadUrl: (m: string, f: string, r = 'main') => `https://hf.co/${m}/resolve/${r}/${f}`,
-        formatModelSize: jest.fn(() => '2.0 GB'),
+        formatModelSize: jest.fn(() => '6.0 GB'),
         formatFileSize: jest.fn((b: number) => `${(b / GB).toFixed(2)} GB`),
       },
     }));
@@ -106,15 +105,15 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
     const React = require('react');
     const { render, fireEvent, waitFor, act } = requireRTL();
     const { hardwareService } = require('../../../src/services/hardware');
-    const { fileExceedsBudget } = require('../../../src/services/memoryBudget');
+    const { fitTier } = require('../../../src/services/memoryBudget');
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
     /* eslint-enable @typescript-eslint/no-var-requires */
 
     await hardwareService.refreshMemoryInfo();
     const ramGB = hardwareService.getTotalMemoryGB();
-    // Owner verdict is the source of truth: exact-budget EXCEEDS (>=), just-under FITS.
-    expect(fileExceedsBudget(atBudget.size, ramGB)).toBe(true);
-    expect(fileExceedsBudget(underBudget.size, ramGB)).toBe(false);
+    // Owner verdict: EXACTLY at the aggressive ceiling is 'wontFit'; just-under is loadable ('tight').
+    expect(fitTier(atCeiling.size, ramGB)).toBe('wontFit');
+    expect(fitTier(underCeiling.size, ramGB)).not.toBe('wontFit');
 
     const { getByTestId, getByText, queryByText } = render(React.createElement(ModelsScreen, {}));
     await act(async () => { fireEvent.changeText(getByTestId('search-input'), 'boundary'); });
@@ -124,8 +123,8 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
     await waitFor(() => expect(getByTestId('model-detail-screen')).toBeTruthy(), { timeout: 4000 });
     await waitFor(() => expect(getByText('model-under')).toBeTruthy(), { timeout: 4000 });
 
-    // TERMINAL artifact: just-under renders; EXACTLY-at-budget is hidden (the `>=` boundary).
+    // TERMINAL artifact: just-under (loadable) renders; EXACTLY-at-ceiling (Won't fit) is hidden.
     expect(queryByText('model-under')).not.toBeNull();
-    expect(queryByText('model-atbudget')).toBeNull();
+    expect(queryByText('model-atceiling')).toBeNull();
   }, 30000);
 });

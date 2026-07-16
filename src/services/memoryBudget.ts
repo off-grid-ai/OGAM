@@ -158,6 +158,46 @@ export function fileExceedsBudget(sizeBytes: number, ramGB: number): boolean {
   return sizeBytes / BYTES_PER_GB >= ramGB * modelBudgetFraction(ramGB);
 }
 
+export type FitTier = 'easy' | 'fits' | 'tight' | 'wontFit';
+
+/**
+ * A device-fit TIER for a model file — a short chip label, NOT the load gate. The load path can
+ * attempt anything up to the aggressive ceiling (Android reclaim credit + Load Anyway), so browse
+ * no longer HIDES loadable models or says "Too large"; it shows how snug the fit is, and reserves an
+ * honest "Won't fit" only for models past even the aggressive ceiling (e.g. a 30B on a phone).
+ * Two thresholds, both from the SAME owned budgets — no new magic numbers:
+ *   soft = ramGB * modelBudgetFraction(balanced)   (recommended stays within this — see fileExceedsBudget)
+ *   ceil = ramGB * modelBudgetFraction(aggressive) (the most Load-Anyway/aggressive can hold)
+ *   size < 0.6*soft → 'easy' · < soft → 'fits' · < ceil → 'tight' · else → 'wontFit'
+ * Zero-IO; callers pass ramGB + platform from the device boundary (hardwareService).
+ */
+export function fitTier(sizeBytes: number, ramGB: number, platform: Plat = Platform.OS): FitTier {
+  const sizeGB = sizeBytes / BYTES_PER_GB;
+  const soft = ramGB * modelBudgetFraction(ramGB, platform, 'balanced');
+  const ceil = ramGB * modelBudgetFraction(ramGB, platform, 'aggressive');
+  if (sizeGB < 0.6 * soft) return 'easy';
+  if (sizeGB < soft) return 'fits';
+  if (sizeGB < ceil) return 'tight';
+  return 'wontFit';
+}
+
+/** Loadable on THIS device: the tier is not 'wontFit' — i.e. within the aggressive ceiling, reachable
+ *  via reclaim credit + Load Anyway. The ONE predicate the browse filter and the detail file list share,
+ *  so "what counts as loadable" is defined once here, not copied inline per caller. */
+export function isLoadableOnDevice(sizeBytes: number, ramGB: number, platform: Plat = Platform.OS): boolean {
+  return fitTier(sizeBytes, ramGB, platform) !== 'wontFit';
+}
+
+/** The chip label for a fit tier. One source for the copy so every surface reads the same words. */
+export function fitTierLabel(tier: FitTier): string {
+  switch (tier) {
+    case 'easy': return 'Easy';
+    case 'fits': return 'Fits';
+    case 'tight': return 'Tight';
+    case 'wontFit': return "Won't fit";
+  }
+}
+
 /**
  * Block until a just-released native model's memory is reclaimed (process footprint drops by
  * ~minDropMB) or a bounded timeout — so the NEXT model load never allocates on top of the outgoing

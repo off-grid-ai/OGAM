@@ -22,6 +22,9 @@ export interface ModelInfo {
   modelType?: 'text' | 'vision' | 'code';
   paramCount?: number;
   minRamGB?: number;
+  /** Device-fit tier of this model's BEST (most-fitting) quant, for the browse fit chip. Set by the
+   *  models VM from memoryBudget.fitTier; undefined until the file sizes are known. */
+  fitTier?: import('../services/memoryBudget').FitTier;
 }
 
 export interface ModelFile {
