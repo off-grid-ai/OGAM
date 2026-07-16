@@ -181,21 +181,11 @@ describe('TranscriptionModelsTab', () => {
     expect(getByTestId('transcription-model-card-0-bytes')).toHaveTextContent(/^0\/\d+$/);
   });
 
-  it('treats a whisper-store fallback still at 0% (no store entry yet) as Queued', () => {
-    // Pre-slot window: the whisper store seeds progress 0 before the canonical
-    // download-store entry exists. That 0% is WAITING for a slot → queued.
-    mockWhisperState.downloadProgressById = { 'tiny.en': 0 };
-    const { getByTestId, queryByTestId } = render(<TranscriptionModelsTab />);
-    expect(getByTestId('transcription-model-card-0-queued')).toBeTruthy();
-    expect(queryByTestId('transcription-model-card-0-downloading')).toBeNull();
-  });
-
-  it('treats a whisper-store fallback with progress > 0 as actively downloading', () => {
-    mockWhisperState.downloadProgressById = { 'tiny.en': 0.3 };
-    const { getByTestId, queryByTestId } = render(<TranscriptionModelsTab />);
-    expect(getByTestId('transcription-model-card-0-downloading')).toBeTruthy();
-    expect(queryByTestId('transcription-model-card-0-queued')).toBeNull();
-  });
+  // NOTE: the whisper-store FALLBACK cases moved to a real rendered test
+  // (__tests__/integration/models/whisperPickerCanonicalDownloadProgress.rendered.test.tsx). They
+  // used to seed the MOCKED store (mockWhisperState.downloadProgressById) and assert, but the
+  // derivation now lives in the useSttDownloadState owner which reads the REAL stores — a mock of
+  // our own store proves nothing there, so they're deleted rather than repaired (test doctrine).
 
   it('re-derives present models from disk when the screen regains focus', () => {
     // Disk is the source of truth: returning from the Download Manager (where a

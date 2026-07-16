@@ -257,8 +257,10 @@ export const useChatScreen = () => {
 
   // Drain queued messages through the same routing layer as a fresh send.
   const handleQueuedSend = useCallback(async (item: QueuedMessage) => {
+    // Pass the queued send's forced modality (imageMode) so a message the user forced to image mode
+    // is dispatched as image, not re-decided at 'auto' by resolveTurnKind (#510).
     await dispatchGenerationFn(genDepsRef.current,
-      { text: item.text, attachments: item.attachments, conversationId: item.conversationId }, startGenerationRef.current);
+      { text: item.text, attachments: item.attachments, conversationId: item.conversationId, imageMode: item.imageMode }, startGenerationRef.current);
   }, []);
 
   useEffect(() => {

@@ -486,6 +486,31 @@ describe('fetchLmStudioModelInfo — probeLmStudioThinking SSE branches', () => 
     expect(result.supportsThinking).toBe(true);
   });
 
+  it('detects thinking via inline Gemma <|channel>thought reasoning in content delta', async () => {
+    // A remote model emitting Gemma-channel reasoning INLINE (no reasoning_content field)
+    // must still be detected as thinking. The probe hardcoded a `<think>` check and missed
+    // the Gemma/Qwen channel delimiters that the rest of the reasoning grammar knows.
+    globalThis.fetch = jest.fn()
+      .mockResolvedValueOnce(modelResponse('gemma'))
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () => 'data: {"choices":[{"delta":{"content":"<|channel>thought\\nreasoning"}}]}\ndata: [DONE]\n',
+      } as any);
+    const result = await fetchLmStudioModelInfo('http://localhost:1234', 'gemma');
+    expect(result.supportsThinking).toBe(true);
+  });
+
+  it('detects thinking via inline Qwen <|channel|>analysis reasoning in content delta', async () => {
+    globalThis.fetch = jest.fn()
+      .mockResolvedValueOnce(modelResponse('qwen'))
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () => 'data: {"choices":[{"delta":{"content":"<|channel|>analysis<|message|>reasoning"}}]}\ndata: [DONE]\n',
+      } as any);
+    const result = await fetchLmStudioModelInfo('http://localhost:1234', 'qwen');
+    expect(result.supportsThinking).toBe(true);
+  });
+
   it('detects thinking via reasoning_content delta', async () => {
     globalThis.fetch = jest.fn()
       .mockResolvedValueOnce(modelResponse('m2'))

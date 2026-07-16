@@ -454,6 +454,58 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
   generationSession.end();
 }
 let _msgIdSeq = 0; const nextMsgId = () => `${Date.now()}-${(++_msgIdSeq).toString(36)}`;
+
+/** The outcome of the shared post-decision dispatch: either the turn is fully HANDLED here (an image was
+ *  generated, or the text route bailed because no text model could be provisioned), or the caller must run
+ *  its own text executor with the (possibly image-fallback-augmented) messageText. */
+type ResolvedDispatch = { handled: true } | { handled: false; messageText: string };
+
+/**
+ * THE single post-decision dispatch seam — shared by send (dispatchGenerationFn) AND resend
+ * (regenerateResponseFn) so the two can never diverge once resolveTurnKind has chosen the modality.
+ * Given the resolved `kind`, it applies the SAME image-model guard, text-model provisioning, and
+ * image-fallback note to both paths; the only per-path variance (whether the user message already
+ * exists in history, and what to do when no text model can be provisioned) is injected via `opts`.
+ * The prior bug was two post-decision sites: resend fired the image pipeline UNCONDITIONALLY (no
+ * activeImageModel guard) and had no text-provision path, so the same prompt behaved differently on
+ * resend vs send when no image model / no text model was loaded. This is now decided in ONE place.
+ */
+async function dispatchResolvedTurn(
+  deps: GenerationDeps,
+  kind: TurnKind,
+  opts: {
+    /** The user text for the turn (image prompt + text-route base before the image-fallback note). */
+    text: string;
+    /** Attachments carried on the user message (kept on the image user message, e.g. a voice note). */
+    attachments?: MediaAttachment[];
+    conversationId: string;
+    /** True on resend: the user message already exists in history, so the image path must not re-add it. */
+    imageSkipsUserMessage: boolean;
+    /** Called when the text route needs a text model (image-only device) but none could be provisioned —
+     *  send stashes a pending message here; resend just bails. Return value is ignored (the turn is handled). */
+    onTextModelUnavailable: () => void;
+  },
+): Promise<ResolvedDispatch> {
+  const shouldGenerateImage = kind === 'image';
+  if (shouldGenerateImage && deps.activeImageModel) {
+    logger.log('[ROUTE-SM] dispatch → IMAGE pipeline');
+    await handleImageGenerationFn(deps, { prompt: opts.text, conversationId: opts.conversationId, attachments: opts.attachments, skipUserMessage: opts.imageSkipsUserMessage });
+    return { handled: true };
+  }
+  logger.log(`[ROUTE-SM] dispatch → TEXT generation (shouldGenerateImage=${shouldGenerateImage})`);
+  // Text route, no text model selected (image-only device): load one / open selector.
+  if (!shouldGenerateImage && deps.hasTextModel === false && !deps.activeModelInfo?.isRemote) {
+    const ready = await deps.ensureTextModelForChat();
+    if (!ready) {
+      opts.onTextModelUnavailable();
+      return { handled: true };
+    }
+  }
+  let messageText = appendAttachmentText(opts.text, opts.attachments);
+  if (shouldGenerateImage && !deps.activeImageModel) messageText = `[User wanted an image but no image model is loaded] ${messageText}`;
+  return { handled: false, messageText };
+}
+
 export type DispatchCall = { text: string; attachments?: MediaAttachment[]; conversationId: string; imageMode?: 'auto' | 'force' | 'disabled' };
 /**
  * THE routing layer: the single place a message is classified and dispatched to
@@ -467,34 +519,24 @@ export async function dispatchGenerationFn(
   startTextGeneration: (convId: string, messageText: string) => Promise<void>,
 ): Promise<void> {
   const { text, attachments, conversationId, imageMode = 'auto' } = call;
-  let messageText = appendAttachmentText(text, attachments);
+  const messageTextForRoute = appendAttachmentText(text, attachments);
   // [ROUTE-SM]: confirms the turn reached the router (esp. the voice path) + the
   // final routed destination — so a "pipeline never triggered" is visible in logs.
   logger.log(`[ROUTE-SM] dispatch text="${text.slice(0, 60)}" imageMode=${imageMode} hasImageModel=${!!deps.activeImageModel}`);
   // ONE decision seam (resolveTurnKind); a NEW turn has no recorded kind so the route rule decides.
-  const kind = await resolveTurnKind(deps, { text: messageText, forceImageMode: imageMode === 'force', imageEnabled: imageMode !== 'disabled' });
-  const shouldGenerateImage = kind === 'image';
-  if (shouldGenerateImage && deps.activeImageModel) {
-    logger.log('[ROUTE-SM] dispatch → IMAGE pipeline');
-    await handleImageGenerationFn(deps, { prompt: text, conversationId, attachments }); // adds user msg (keeps voice note)
-    return;
-  }
-  logger.log(`[ROUTE-SM] dispatch → TEXT generation (shouldGenerateImage=${shouldGenerateImage})`);
-  // Text route, no text model selected (image-only device): load one / open selector.
-  if (!shouldGenerateImage && deps.hasTextModel === false && !deps.activeModelInfo?.isRemote) {
-    const ready = await deps.ensureTextModelForChat();
-    if (!ready) {
-      deps.setPendingMessage?.(text, attachments);
-      return;
-    }
-  }
-  if (shouldGenerateImage && !deps.activeImageModel) messageText = `[User wanted an image but no image model is loaded] ${messageText}`;
+  const kind = await resolveTurnKind(deps, { text: messageTextForRoute, forceImageMode: imageMode === 'force', imageEnabled: imageMode !== 'disabled' });
+  // ONE post-decision dispatch seam, shared with resend (image-model guard + text-provision path).
+  const result = await dispatchResolvedTurn(deps, kind, {
+    text, attachments, conversationId, imageSkipsUserMessage: false,
+    onTextModelUnavailable: () => { deps.setPendingMessage?.(text, attachments); },
+  });
+  if (result.handled) return;
   deps.addMessage(conversationId, { role: 'user', content: text, attachments });
-  await startTextGeneration(conversationId, messageText);
+  await startTextGeneration(conversationId, result.messageText);
 }
 export type SendCall = { text: string; attachments?: MediaAttachment[]; imageMode?: 'auto' | 'force' | 'disabled'; startGeneration: (convId: string, text: string) => Promise<void>; setDebugInfo: SetState<any> };
 export async function handleSendFn(deps: GenerationDeps, call: SendCall): Promise<void> {
-  const { text, attachments, imageMode, startGeneration } = call;
+  const { text, attachments, imageMode = 'auto', startGeneration } = call;
   abortPreload(); // user acted — stop background warming so it can't block them
   if (!deps.hasActiveModel) { deps.setAlertState(showAlert('No Model Selected', 'Please select a model first.')); return; }
   // Vision gate (shared with resend): never send an image to a model that can't do vision.
@@ -510,7 +552,9 @@ export async function handleSendFn(deps: GenerationDeps, call: SendCall): Promis
   // Cross-modality serialization: queue if any generation is running (routed later).
   if (generationService.getState().isGenerating || imageGenerationService.getState().isGenerating) {
     const messageText = appendAttachmentText(text, attachments);
-    generationService.enqueueMessage({ id: nextMsgId(), conversationId: targetConversationId, text, attachments, messageText });
+    // Carry the user's forced modality through the queue so a queued force-image send is dispatched as
+    // image on drain — not re-decided at 'auto' by resolveTurnKind (#510).
+    generationService.enqueueMessage({ id: nextMsgId(), conversationId: targetConversationId, text, attachments, messageText, imageMode });
     return;
   }
   await dispatchGenerationFn(deps, { text, attachments, conversationId: targetConversationId, imageMode }, startGeneration);
@@ -541,15 +585,22 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
   if (!deps.activeConversationId || !deps.hasActiveModel) { logger.log('[RESEND-SM] regenerate BAIL: no conv or no active model'); return; }
   await modelResidencyManager.reclaimSttForGeneration(); // free idle Whisper before the LLM reload (memory-tight)
   const targetConversationId = deps.activeConversationId;
-  const messageText = appendAttachmentText(userMessage.content, userMessage.attachments);
+  const messageTextForRoute = appendAttachmentText(userMessage.content, userMessage.attachments);
   // Same decision seam as dispatch (resolveTurnKind): a replay passes the RECORDED kind, which wins
   // verbatim — an image turn re-runs the image pipeline, NEVER re-classifies to text and fails to
   // load a text model (the 1★ resend bug). Only a legacy turn with no recorded kind classifies.
-  const kind = await resolveTurnKind(deps, { text: messageText, recordedKind });
-  if (kind === 'image') {
-    await handleImageGenerationFn(deps, { prompt: userMessage.content, conversationId: targetConversationId, skipUserMessage: true });
-    return;
-  }
+  const kind = await resolveTurnKind(deps, { text: messageTextForRoute, recordedKind });
+  // SAME post-decision dispatch seam as send: the image path is guarded on activeImageModel (so an
+  // image turn resent with no image model FALLS BACK to text like send, instead of erroring), and the
+  // text route provisions a text model on an image-only device (like send). skipUserMessage: the user
+  // message already exists in history on resend.
+  const result = await dispatchResolvedTurn(deps, kind, {
+    text: userMessage.content, attachments: userMessage.attachments, conversationId: targetConversationId,
+    imageSkipsUserMessage: true,
+    onTextModelUnavailable: () => { deps.setPendingMessage?.(userMessage.content, userMessage.attachments); },
+  });
+  if (result.handled) return;
+  const messageText = result.messageText;
   // Same vision gate as the send path: resending a turn whose message carries an image must not push it to a
   // model that can't do vision (would crash with "Multimodal support not enabled"). Shared gate → identical UX.
   if (blockedImageForNonVisionModel(deps, userMessage.attachments)) return;

@@ -184,6 +184,14 @@ fi
 printf '\n\n%s\n' "$BUILD_LINE" >> "$NOTES_FILE"
 gh release create "$TAG" "${GH_ARGS[@]}" --prerelease --title "Off Grid ${BETA_VERSION} (beta)" --notes-file "$NOTES_FILE"
 
+# Announce the beta in Slack — fail-soft, a chat message must never fail a shipped build. Webhook comes
+# from .env.keygen locally (mirrors the SLACK_WEBHOOK_URL repo secret the release workflows use);
+# notify-slack-release.mjs no-ops if it is unset.
+SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-$(sed -n 's/^SLACK_WEBHOOK_URL=//p' "$ROOT_DIR/.env.keygen" 2>/dev/null)}" \
+  PRODUCT="Off Grid AI Mobile" VERSION="$BETA_VERSION" CHANNEL_LABEL="beta" \
+  RELEASE_URL="$(gh release view "$TAG" --json url -q .url 2>/dev/null)" NOTES_FILE="$NOTES_FILE" \
+  node "$ROOT_DIR/scripts/notify-slack-release.mjs" || true
+
 rm -f "$NOTES_FILE" "${ANDROID_CHANGELOG:-}" "$APK_DST" "$AAB_DST"
 echo ""
 info "${BOLD}Beta ${BETA_VERSION} shipped.${NC}"

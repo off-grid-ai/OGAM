@@ -24,7 +24,7 @@ import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { hardwareService, modelManager, remoteServerManager } from '../services';
 import { startModelDownload } from '../services/startModelDownload';
 import { recommendedModelsForDevice, trendingModelIdsForDevice } from '../utils/recommendedModels';
-import { modelBudgetFraction } from '../services/memoryBudget';
+import { fileExceedsBudget } from '../services/memoryBudget';
 import { discoverLANServers } from '../services/networkDiscovery';
 import { ModelFile, DownloadedModel, RemoteServer } from '../types';
 import { RootStackParamList } from '../navigation/types';
@@ -102,7 +102,12 @@ const LiteRTModelCard: React.FC<LiteRTCardProps> = ({ file, index, curatedEntry,
     isQueued={!!progress?.queued}
     downloadProgress={progress?.progress}
     downloadBytes={progress?.bytes}
-    isCompatible={file.size / (1024 ** 3) < totalRamGB * modelBudgetFraction(totalRamGB)}
+    // Offer the card (enable its download button) when the file fits the budget OR carries a
+    // device-aware warning — the "Download anyway" sheet in handleLiteRTDownload is the guard for
+    // the over-budget case. Both branches route through the single owners (fileExceedsBudget +
+    // curatedLiteRTDownloadWarning), never a re-inlined budget calc. A card disabled here would make
+    // its warning branch unreachable (button disabled), which was the #510 defect.
+    isCompatible={!fileExceedsBudget(file.size, totalRamGB) || curatedLiteRTDownloadWarning(file.name, file.size, totalRamGB) !== null}
     recommended={{ pillLabel: 'Recommended' }}
     supportsAcceleration
     onPress={() => {}}
@@ -291,12 +296,18 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
 
   const totalRamGB = hardwareService.getTotalMemoryGB();
 
-  // Curated LiteRT models — Android-only, filtered to what fits in RAM (same
-  // 60%-of-RAM headroom the model browser uses). No HF fetch needed; the files
-  // come straight from the curated registry with their download URLs baked in.
+  // Curated LiteRT models — Android-only. Offer a file when it FITS the RAM budget, OR when it is
+  // over budget but carries a device-aware warning (e.g. Gemma 4 E4B): those download behind the
+  // "Download anyway" confirm sheet (handleLiteRTDownload) rather than being silently hidden. An
+  // over-budget file with NO warning stays hidden — there is no safe way to offer it. The decision
+  // is the single owners (fileExceedsBudget + curatedLiteRTDownloadWarning), not a re-inlined budget
+  // calc; hiding warnable files here made the warning branch dead code (#510). No HF fetch needed;
+  // the files come straight from the curated registry with their download URLs baked in.
   const liteRTFiles = React.useMemo(
     () => (Platform.OS === 'android'
-      ? buildCuratedLiteRTFiles().filter((f) => f.size / (1024 ** 3) < totalRamGB * modelBudgetFraction(totalRamGB))
+      ? buildCuratedLiteRTFiles().filter((f) =>
+        !fileExceedsBudget(f.size, totalRamGB)
+        || curatedLiteRTDownloadWarning(f.name, f.size, totalRamGB) !== null)
       : []),
     [totalRamGB],
   );

@@ -8,6 +8,7 @@ import type { ThemeColors } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { WHISPER_MODELS } from '../../services';
 import { useWhisperStore } from '../../stores/whisperStore';
+import { useSttDownloadState } from '../../hooks/useSttDownloadState';
 
 type Props = {
   visible: boolean;
@@ -24,13 +25,15 @@ export const WhisperPickerSheet: React.FC<Props> = ({ visible, onClose }) => {
   const downloadedModelId = useWhisperStore((s) => s.downloadedModelId);
   const isModelLoading = useWhisperStore((s) => s.isModelLoading);
   const presentModelIds = useWhisperStore((s) => s.presentModelIds);
-  const downloadProgressById = useWhisperStore((s) => s.downloadProgressById);
   const downloadModel = useWhisperStore((s) => s.downloadModel);
   const selectModel = useWhisperStore((s) => s.selectModel);
   const deleteModelById = useWhisperStore((s) => s.deleteModelById);
   const refreshPresentModels = useWhisperStore((s) => s.refreshPresentModels);
 
-  const anyDownloading = Object.keys(downloadProgressById).length > 0;
+  // In-flight download state from the SINGLE owner the Transcription tab also reads, so the picker
+  // and the tab can never disagree (the picker used to read only whisperStore.downloadProgressById
+  // and missed downloads tracked in the canonical store — device 2026-07-15).
+  const { stateFor, anyDownloading } = useSttDownloadState();
 
   useEffect(() => {
     if (visible && !anyDownloading) refreshPresentModels();
@@ -43,11 +46,10 @@ export const WhisperPickerSheet: React.FC<Props> = ({ visible, onClose }) => {
         {WHISPER_MODELS.map((m) => {
           const active = downloadedModelId === m.id;
           const present = presentModelIds.includes(m.id);
-          // Per-model: show this row's own progress, and disable only this row
-          // while it downloads — several models can download at once, each with
-          // its own percentage (the old single-slot value jumped between them).
-          const progress = downloadProgressById[m.id];
-          const busy = progress !== undefined;
+          // Per-model in-flight state from the shared owner: this row's own progress, disabled only
+          // while it is busy — several models can download at once, each with its own percentage.
+          const dl = stateFor(m.id);
+          const busy = dl?.active ?? false;
           return (
             <AnimatedPressable
               key={m.id}
@@ -64,7 +66,8 @@ export const WhisperPickerSheet: React.FC<Props> = ({ visible, onClose }) => {
                 <Text style={styles.meta}>{m.size} MB</Text>
               </View>
               {(() => {
-                if (busy) return <Text style={styles.percent}>{Math.round(progress * 100)}%</Text>;
+                if (dl?.queued) return <Icon name="clock" size={16} color={colors.textMuted} testID="whisper-row-queued" />;
+                if (dl?.downloading) return <Text style={styles.percent} testID="whisper-row-progress">{Math.round(dl.progress * 100)}%</Text>;
                 // selectModel sets downloadedModelId optimistically, so the active row IS the one loading —
                 // show a spinner on it while it loads (not a premature checkmark), matching text/image.
                 if (active && isModelLoading) return <ActivityIndicator testID="model-row-loading" size="small" color={colors.primary} />;

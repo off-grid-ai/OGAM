@@ -4,6 +4,8 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import { DownloadedModel, RemoteModel } from '../../types';
 import { hardwareService } from '../../services';
+import { textOverheadMultiplier } from '../../services/activeModelService/types';
+import { useAppStore } from '../../stores';
 import { ModelRow } from '../ModelRow';
 import { createAllStyles } from './styles';
 
@@ -29,6 +31,11 @@ export const TextTab: React.FC<TextTabProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createAllStyles);
+  // RAM label uses the SAME backend-aware overhead owner (textOverheadMultiplier) that
+  // activeModelService uses to register the resident's sizeMB, so this label and the residency
+  // chip on the manager sheet agree for the identical loaded model (they diverged: fixed 1.5×
+  // here vs 2.2× on a GPU/NPU backend there — device 2026-07-14).
+  const ramMultiplier = textOverheadMultiplier(useAppStore(s => s.settings?.inferenceBackend));
   // "Loaded" drives the Currently-Loaded + Unload section (only meaningful once a model
   // is actually in memory). "Active" also counts the selected-but-not-yet-loaded model
   // so the switcher reads "Switch Model" and highlights the active choice under deferred
@@ -63,7 +70,7 @@ export const TextTab: React.FC<TextTabProps> = ({
               </Text>
               <Text style={styles.loadedModelMeta} testID="currently-loaded-model-ram">
                 {activeLocalModel
-                  ? `${activeLocalModel.quantization} • ${hardwareService.formatModelSize(activeLocalModel)} • ${hardwareService.formatModelRam(activeLocalModel)} RAM`
+                  ? `${activeLocalModel.quantization} • ${hardwareService.formatModelSize(activeLocalModel)} • ${hardwareService.formatModelRam(activeLocalModel, ramMultiplier)} RAM`
                   : `Remote • ${activeRemoteModelInfo?.serverName ?? 'Model'}`}
               </Text>
             </View>

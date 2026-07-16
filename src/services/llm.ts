@@ -16,7 +16,8 @@ import {
   validateModelFile, checkMemoryForModel, safeCompletion, resolveSafeContext,
   describeGpuFallback, isTruncatedResult,
 } from './llmHelpers';
-import { awaitMemoryReclaim } from './memoryBudget';
+import { awaitMemoryReclaim, effectiveAvailableMB } from './memoryBudget';
+import { modelResidencyManager } from './modelResidency';
 import { hardwareService } from './hardware';
 import { formatLlamaMessages, buildOAIMessages } from './llmMessages';
 import { generateWithToolsImpl } from './llmToolGeneration';
@@ -82,7 +83,19 @@ class LLMService {
     // to f16 (see buildModelParams), so keying off settings.cacheType alone would let the
     // guard use the cheaper quantized estimate and approve a context that then OOMs.
     const quantizedCache = !params.usesF16Cache;
-    const getMem = () => hardwareService.getAppMemoryUsage();
+    // Feed the pre-load gate the SAME reclaim-aware available RAM the residency gate uses (the single owner,
+    // effectiveAvailableMB) so the two can never disagree. On Android the raw os_proc snapshot under-counts a
+    // foreground load (the LMK hands background apps' physical pages to us), so a raw gate REFUSED a model
+    // residency ADMITTED — 12GB Android Aggressive, device qwythos. iOS returns raw unchanged (no reclaim —
+    // jetsam kills us), so iOS is untouched. Policy comes from the residency manager (the authoritative owner).
+    const getMem = async (): Promise<{ available: number; total: number; used: number }> => {
+      const raw = await hardwareService.getAppMemoryUsage();
+      const availableMB = effectiveAvailableMB(raw.available / (1024 * 1024), raw.total / (1024 * 1024), {
+        platform: Platform.OS,
+        policy: modelResidencyManager.getLoadPolicy(),
+      });
+      return { ...raw, available: availableMB * 1024 * 1024 };
+    };
     let memCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: params.ctxLen, getAvailableMemory: getMem, quantizedCache });
     if (!memCheck.safe) {
       // Don't just warn and load into a near-certain native allocator crash (the iOS

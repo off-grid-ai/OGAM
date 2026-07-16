@@ -406,6 +406,29 @@ describe('generateWithToolsImpl', () => {
       expect(result.toolCalls[0].arguments).toEqual({ expression: '3*3' });
     });
 
+    it('parses arguments that use smart/curly quotes as delimiters (no empty-args retry loop)', async () => {
+      // Device 2026-07-15: a local model emitted `{“expression”:“7 * 7”}` with CURLY double quotes.
+      // Strict JSON.parse throws → args became {} → the calculator got an empty call → schema
+      // validation failed → the model retried the same call in a loop. The parser now normalizes the
+      // curly delimiters, so the real expression reaches the tool on the first try.
+      const completion = jest.fn(async (_params: any, cb: any) => {
+        cb({
+          tool_calls: [
+            { id: 'call_curly', function: { name: 'calculator', arguments: '{“expression”:“7 * 7”}' } },
+          ],
+        });
+        return {};
+      });
+      const deps = createMockDeps({ context: { completion } });
+
+      const result = await generateWithToolsImpl(deps, [createUserMessage('multiply 7 by 7')], {
+        tools: SAMPLE_TOOLS,
+      });
+
+      expect(result.toolCalls[0].name).toBe('calculator');
+      expect(result.toolCalls[0].arguments).toEqual({ expression: '7 * 7' }); // NOT {} — curly quotes normalized
+    });
+
     it('handles tool call with missing function fields gracefully', async () => {
       const completion = jest.fn(async (_params: any, cb: any) => {
         cb({

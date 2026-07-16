@@ -91,11 +91,32 @@ export class ToolCallTokenFilter {
   }
 }
 
+/**
+ * Parse a tool call's `arguments` JSON string into an object, tolerating the smart/curly quotes some
+ * local models emit as string delimiters. Plain JSON.parse rejects `{"expression":"7 * 7"}` (curly
+ * double quotes) → args became `{}` → the tool got an EMPTY call → schema validation failed → the
+ * model retried the same call in a loop until it happened to emit straight quotes (device 2026-07-15).
+ * We try strict JSON first (unchanged for the common case), then retry once with curly double quotes
+ * normalized to straight. Zero-IO; exercised through generateWithToolsImpl in tests.
+ */
+function parseToolArguments(raw: string): Record<string, unknown> {
+  const tryParse = (s: string): Record<string, unknown> | undefined => {
+    try {
+      const v = JSON.parse(s || '{}');
+      return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  // Normalize only the JSON string DELIMITERS (curly → straight double quotes); leave content alone.
+  return tryParse(raw) ?? tryParse(raw.replace(/[“”]/g, '"')) ?? {};
+}
+
 function parseToolCall(tc: any): ToolCall {
   const fn = tc.function || {};
   let args = fn.arguments || {};
   if (typeof args === 'string') {
-    try { args = JSON.parse(args || '{}'); } catch { args = {}; }
+    args = parseToolArguments(args);
   }
   return { id: tc.id, name: fn.name || '', arguments: args };
 }

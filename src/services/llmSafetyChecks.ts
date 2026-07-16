@@ -1,6 +1,7 @@
 import { LlamaContext } from 'llama.rn';
 import RNFS from 'react-native-fs';
 import logger from '../utils/logger';
+import { OverridableMemoryError } from '../utils/modelLoadErrors';
 
 /**
  * GGUF magic number — first 4 bytes of every valid GGUF file.
@@ -108,6 +109,9 @@ export async function checkMemoryForModel(
     // Require at least 200MB headroom after model load for OS and app
     const MIN_HEADROOM_MB = 200;
     const safe = availableMB > estimatedMB + MIN_HEADROOM_MB;
+    // [MEM-SM] the pre-load fit decision — kept (surfaces the exact "it needs ~X but only Y" call
+    // on-device AND in tests via DEBUG_LOGS=1). This is the gate the qwythos refusal came from.
+    logger.log(`[MEM-SM] checkMemoryForModel modelMB=${Math.round(modelMB)} kvMB=${Math.round(kvCacheMB)} estMB=${Math.round(estimatedMB)} availMB=${Math.round(availableMB)} ctx=${contextLength} safe=${safe}`);
     if (!safe) {
       return {
         safe: false,
@@ -157,8 +161,16 @@ export async function resolveSafeContext(args: {
   const minCtx = fallbacks.length ? fallbacks[fallbacks.length - 1] : requestedCtx;
   const finalCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: minCtx, getAvailableMemory: getMem, quantizedCache });
   const modelMB = (fileSize * 1.2) / (1024 * 1024);
+  // [MEM-SM] the weights-alone refusal decision — kept. weightsExceedAvail && !override is the
+  // dead-end that used to throw a plain Error; it now throws OverridableMemoryError (Load Anyway).
+  logger.log(`[MEM-SM] resolveSafeContext gate modelMB=${Math.round(modelMB)} availMB=${Math.round(finalCheck.availableMB)} override=${override} weightsExceedAvail=${finalCheck.availableMB > 0 && modelMB > finalCheck.availableMB}`);
   if (finalCheck.availableMB > 0 && modelMB > finalCheck.availableMB && !override) {
-    throw new Error(`Not enough memory to load this model: it needs ~${Math.round(modelMB)}MB but only ${Math.round(finalCheck.availableMB)}MB is available. Close other apps or choose a smaller model.`);
+    // OVERRIDABLE, always: a budget refusal in ANY mode must offer "Load Anyway" — never a
+    // dead-end. This is the single behavior the image path already had (makeRoomFor →
+    // OverridableMemoryError); the text pre-load gate used to throw a plain Error here, which
+    // surfaced as an OK-only alert with no override (the 12GB-Aggressive-refused-with-no-Load-
+    // Anyway bug). OverridableMemoryError is pure, so this stays layering-clean.
+    throw new OverridableMemoryError(`Not enough memory to load this model: it needs ~${Math.round(modelMB)}MB but only ${Math.round(finalCheck.availableMB)}MB is available. Close other apps or choose a smaller model.`);
   }
   if (override && finalCheck.availableMB > 0 && modelMB > finalCheck.availableMB) {
     // User forced the load ("Load Anyway" / continue). Skip the hard block and let the
