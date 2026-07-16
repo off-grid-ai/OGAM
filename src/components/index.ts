@@ -11,7 +11,7 @@ export { GenerationSettingsModal } from './GenerationSettingsModal';
 export { Toast, showToast, hideToast } from './Toast';
 export type { ToastOptions } from './Toast';
 export { CustomAlert, showAlert, hideAlert, initialAlertState } from './CustomAlert';
-export type { AlertState } from './CustomAlert';
+export type { AlertState, AlertButton } from './CustomAlert';
 export { CenteredAlert } from './CenteredAlert';
 ;
 export { ModelFailureCard } from './ModelFailureCard';

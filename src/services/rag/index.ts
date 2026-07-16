@@ -9,6 +9,7 @@ import logger from '../../utils/logger';
 export type { RagDocument, RagSearchResult } from './database';
 ;
 export { chunkDocument } from './chunking';
+export type { Chunk } from './chunking';
 export { retrievalService } from './retrieval';
 ;
 
