@@ -3,6 +3,7 @@ import { guessStyle, HFImageModel } from '../../services/huggingFaceModelBrowser
 import { ModelInfo, ImageModelRecommendation, SoCInfo } from '../../types';
 import { ImageModelDescriptor, ModelTypeFilter } from './types';
 import { imageBackendLabel } from '../../utils/imageBackend';
+import { looksLikeVisionModel } from '../../utils/visionModel';
 
 // Re-export the canonical byte formatter so existing importers keep working while
 // there is only ONE implementation (see src/utils/formatBytes.ts).
@@ -39,11 +40,9 @@ function isImageGenModel(tags: string[], name: string, id: string): boolean {
 }
 
 function isVisionModel(tags: string[], name: string, id: string): boolean {
-  return (
-    tags.some(t => t.includes('vision') || t.includes('multimodal') || t.includes('image-text')) ||
-    name.includes('vision') || name.includes('vlm') || name.includes('llava') ||
-    id.includes('vision') || id.includes('vlm') || id.includes('llava')
-  );
+  // Single source of truth (utils/visionModel) — was a 3-keyword subset that missed Pixtral/
+  // Moondream/InternVL etc., so they showed as text locally but vision remotely (DR2).
+  return looksLikeVisionModel({ name, id, tags });
 }
 
 function isCodeModel(tags: string[], name: string, id: string): boolean {
@@ -66,7 +65,7 @@ export function getModelType(model: ModelInfo): ModelTypeFilter {
 
 // -- Text model compatibility helper --
 
-export function isPhiModel(modelName: string, modelId: string): boolean {
+function isPhiModel(modelName: string, modelId: string): boolean {
   const name = modelName.toLowerCase();
   const id = modelId.toLowerCase();
   return name.includes('phi') || id.includes('phi');

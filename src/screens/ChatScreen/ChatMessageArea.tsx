@@ -255,7 +255,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
       )}
       {chat.hasPendingSettings && !chat.isCompacting && !chat.activeModelInfo?.isRemote && (
         <Animated.View entering={FadeIn.duration(200)}>
-          <AnimatedPressable style={styles.pendingSettingsBar} onPress={chat.handleReloadTextModel}>
+          <AnimatedPressable testID="reload-model-banner" style={styles.pendingSettingsBar} onPress={chat.handleReloadTextModel}>
             <Icon name="alert-circle" size={16} color={colors.warning} />
             <Text style={styles.pendingSettingsText}>
               Settings changed — tap to reload model
@@ -293,6 +293,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             disabled={!chat.hasActiveModel}
             isGenerating={chat.isStreaming || chat.isThinking}
             supportsVision={chat.supportsVision}
+            visionNeedsRepair={chat.visionNeedsRepair}
             conversationId={chat.activeConversationId}
             imageModelLoaded={chat.imageModelLoaded}
             onOpenSettings={() => chat.setShowSettingsPanel(true)}
@@ -315,6 +316,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             onRepairVision={handleRepairVision}
             isRemote={chat.activeModelInfo.isRemote}
             activeSpotlight={chatSpotlight === 12 ? chatSpotlight : null}
+            onImagePress={chat.handleImagePress}
           />
         </AttachStep>
       </View>

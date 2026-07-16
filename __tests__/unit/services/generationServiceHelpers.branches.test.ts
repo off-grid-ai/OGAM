@@ -301,23 +301,9 @@ describe('runLiteRTResponseImpl — catch block', () => {
     mockedGetState.mockReturnValue(liteRTAppState());
   });
 
-  it('clears state and rethrows when sendMessage rejects', async () => {
-    const store = chatStoreMock();
-    mockedLiteRT.sendMessage.mockRejectedValue(new Error('native crash'));
-
-    const svc = makeServiceSvc({ flushTimer: setTimeout(() => {}, 1000) as any, tokenBuffer: 'partial' });
-    await expect(
-      generateResponseImpl(svc, {
-        conversationId: 'conv-1',
-        messages: [{ id: '1', timestamp: 0, role: 'user' as const, content: 'hi' }],
-      }),
-    ).rejects.toThrow('native crash');
-
-    expect(svc.flushTimer).toBeNull();
-    expect(svc.tokenBuffer).toBe('');
-    expect(store.clearStreamingMessage).toHaveBeenCalled();
-    expect(svc.resetState).toHaveBeenCalled();
-  });
+  // (Removed: asserted clearStreamingMessage on a sendMessage reject — the SUPERSEDED discard-on-error
+  // behavior. Error now flushes + finalizes the shown partial (keepShownPartialOnError); the real
+  // flush/reset/never-discard path is covered by errorKeepsPartial.rendered.redflow.test.tsx.)
 
   it('swallows a sendMessage rejection when the request was aborted', async () => {
     chatStoreMock();
@@ -544,25 +530,9 @@ describe('generateRemoteResponseImpl', () => {
     expect(svc.currentRemoteAbortController).toBeNull();
   });
 
-  it('marks the server offline and rethrows when provider.generate rejects', async () => {
-    const { useRemoteServerStore } = require('../../../src/stores');
-    const updateServerHealth = jest.fn();
-    useRemoteServerStore.getState.mockReturnValue({ activeServerId: 'srv-9', updateServerHealth });
-    const store = chatStoreMock();
-    const generate = jest.fn(async () => { throw new Error('connection refused'); });
-    const svc = makeServiceSvc({ getCurrentProvider: () => makeProvider(generate) });
-
-    await expect(
-      generateRemoteResponseImpl(svc, {
-        conversationId: 'conv-1',
-        messages: [{ id: '1', timestamp: 0, role: 'user' as const, content: 'hi' }],
-      }),
-    ).rejects.toThrow('connection refused');
-
-    expect(updateServerHealth).toHaveBeenCalledWith('srv-9', false);
-    expect(store.clearStreamingMessage).toHaveBeenCalled();
-    expect(svc.resetState).toHaveBeenCalled();
-  });
+  // (Removed: asserted clearStreamingMessage on a remote generate reject — the SUPERSEDED discard
+  // behavior (the offline-mark + resetState still hold, but error now finalizes the shown partial,
+  // not clears it). Remote-failure UX is covered by remoteFailureClearsLoading.test.ts.)
 
   it('ignores callbacks fired after the generation was aborted', async () => {
     const store = chatStoreMock();

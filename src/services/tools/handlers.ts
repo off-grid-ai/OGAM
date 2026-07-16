@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import { ToolCall, ToolResult } from './types';
+import type { RagSearchResult } from '../rag';
 import logger from '../../utils/logger';
 
 function makeResult(call: ToolCall, start: number, opts: { content: string; error?: string }): ToolResult {
@@ -381,7 +382,7 @@ async function handleSearchKnowledgeBase(query: string, projectId?: string): Pro
   const result = await ragService.searchProject(projectId, query);
   if (result.chunks.length === 0) return `No results found for "${query}" in the knowledge base.`;
   return result.chunks
-    .map((c: import('../rag').RagSearchResult, i: number) => `[${i + 1}] ${c.name} (part ${c.position + 1}):\n${c.content}`)
+    .map((c: RagSearchResult, i: number) => `[${i + 1}] ${c.name} (part ${c.position + 1}):\n${c.content}`)
     .join('\n\n---\n\n');
 }
 

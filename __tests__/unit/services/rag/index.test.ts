@@ -113,10 +113,19 @@ describe('RagService', () => {
         .rejects.toThrow('already in the knowledge base');
     });
 
-    it('continues without embeddings if embedding fails', async () => {
-      mockEmbedding.load.mockRejectedValueOnce(new Error('model not found'));
-      const docId = await ragService.indexDocument({ projectId: 'proj1', filePath: '/p', fileName: 'test.txt', fileSize: 100 });
-      expect(docId).toBe(1); // Still returns docId
+    it('ABORTS and rolls back the just-inserted doc when embedding fails (no half-indexed entry)', async () => {
+      // Product decision (user-ratified): an embedding failure mid-index must ABORT — roll back the
+      // doc + chunks and propagate the error — never silently "continue without embeddings" (that left
+      // a permanent, non-searchable dead entry). Assert the rejection AND the rollback consequence.
+      mockEmbedding.embedBatch.mockRejectedValueOnce(new Error('OOM: embedding model ran out of memory'));
+
+      await expect(
+        ragService.indexDocument({ projectId: 'proj1', filePath: '/p', fileName: 'test.txt', fileSize: 100 }),
+      ).rejects.toThrow('OOM: embedding model ran out of memory');
+
+      // Rollback: the doc inserted before the failed embed is deleted, and no embeddings were persisted.
+      expect(mockDb.deleteDocument).toHaveBeenCalledWith(1);
+      expect(mockDb.insertEmbeddingsBatch).not.toHaveBeenCalled();
     });
   });
 

@@ -62,7 +62,7 @@ export async function startModelDownload(
     progress: 0,
     createdAt: Date.now(),
     ...(file.mmProjFile && {
-      mmProjFileName: mmProjLocalName(file.name),
+      mmProjFileName: mmProjLocalName(file.name, file.mmProjFile.name),
       mmProjFileSize: file.mmProjFile.size,
     }),
   });

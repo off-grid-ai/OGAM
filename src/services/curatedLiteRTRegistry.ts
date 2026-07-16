@@ -1,4 +1,5 @@
 import { ModelFile } from '../types';
+import { fileExceedsBudget } from './memoryBudget';
 
 // Synthetic parent id for the curated LiteRT models. Used both as the model id
 // in the ModelsScreen browser and as the download id in onboarding so a model
@@ -14,6 +15,13 @@ export interface CuratedLiteRTEntry {
   highlight: string;
   liteRTVision: boolean;
   liteRTAudio: boolean;
+  /**
+   * Warning COPY to surface before downloading this file — DATA only, not a
+   * device-blind "always warn" flag. Whether the warning actually shows is a
+   * device-aware decision made by the caller (fileExceedsBudget: the file's size
+   * vs this device's RAM budget). A device that comfortably fits the model shows
+   * no warning; one that doesn't warns with this copy.
+   */
   confirmDownload?: { title: string; message: string };
 }
 
@@ -52,6 +60,26 @@ const CURATED_LITERT_INDEX: Map<string, CuratedLiteRTEntry> = new Map(
 export function getCuratedLiteRTEntry(fileName: string | undefined): CuratedLiteRTEntry | undefined {
   if (!fileName) return undefined;
   return CURATED_LITERT_INDEX.get(fileName);
+}
+
+/**
+ * The SINGLE owner of "should downloading this curated LiteRT model warn on THIS
+ * device, and with what copy?" — returns the entry's `confirmDownload` copy ONLY
+ * when the file genuinely exceeds the device RAM budget, else null. Both the Models
+ * tab and the onboarding screen call this so the decision can never diverge (the
+ * `confirmDownload` field is warning DATA/copy, never a device-blind "always warn"
+ * flag). `ramGB` is read at the caller from the device boundary
+ * (hardwareService.getTotalMemoryGB).
+ */
+export function curatedLiteRTDownloadWarning(
+  fileName: string | undefined,
+  sizeBytes: number,
+  ramGB: number,
+): { title: string; message: string } | null {
+  const entry = getCuratedLiteRTEntry(fileName);
+  if (!entry?.confirmDownload) return null;
+  if (!fileExceedsBudget(sizeBytes, ramGB)) return null;
+  return entry.confirmDownload;
 }
 
 export function buildCuratedLiteRTUrl(entry: CuratedLiteRTEntry): string {

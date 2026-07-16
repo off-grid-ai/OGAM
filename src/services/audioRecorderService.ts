@@ -1,9 +1,10 @@
 import { AudioRecorder, FileFormat, FileDirectory, BitDepth, IOSAudioQuality, FlacCompressionLevel } from 'react-native-audio-api';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { audioSessionManager } from './audioSessionManager';
+import logger from '../utils/logger';
 
 /** Supported formats for llama.rn audio input */
-export type AudioInputFormat = 'wav' | 'mp3';
+type AudioInputFormat = 'wav' | 'mp3';
 
 class AudioRecorderService {
   private recorder: AudioRecorder | null = null;
@@ -94,6 +95,7 @@ class AudioRecorderService {
     }
     const path = result.path;
     const durationSeconds = (result as any).duration ?? 0;
+    logger.log(`[WIRE-RECORDER] ${JSON.stringify({ platform: Platform.OS, path, durationSeconds, status: result.status })}`); // [WIRE] real recorder output (voice-note file/duration)
     return { path, durationSeconds };
   }
 

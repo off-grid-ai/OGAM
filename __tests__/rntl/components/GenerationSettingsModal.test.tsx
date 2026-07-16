@@ -243,6 +243,11 @@ describe('GenerationSettingsModal', () => {
       contextLength: 4096,
       nThreads: 0,
       nBatch: 512,
+      // Reset now also restores the image params (Q12).
+      imageWidth: 256,
+      imageHeight: 256,
+      imageGuidanceScale: 7.5,
+      imageSteps: 8,
     });
   });
 

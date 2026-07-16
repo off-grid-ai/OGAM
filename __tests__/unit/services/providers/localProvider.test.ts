@@ -94,7 +94,7 @@ describe('LocalProvider', () => {
 
       (llmService.isModelLoaded as jest.Mock).mockReturnValue(true);
       (llmService.generateResponse as jest.Mock).mockImplementation(
-        async (_msgs, onStream, onComplete) => {
+        async (_msgs, { onStream, onComplete } = {}) => {
           onStream?.({ content: 'Hi' });
           onComplete?.({ content: 'Hi', reasoningContent: '' });
           return 'Hi';
@@ -191,7 +191,7 @@ describe('LocalProvider', () => {
     it('calls onReasoning during simple generation when callback provided', async () => {
       (llmService.isModelLoaded as jest.Mock).mockReturnValue(true);
       (llmService.generateResponse as jest.Mock).mockImplementation(
-        async (_msgs, onStream, onComplete) => {
+        async (_msgs, { onStream, onComplete } = {}) => {
           onStream?.({ content: 'token', reasoningContent: 'thinking...' });
           onComplete?.({ content: 'token', reasoningContent: 'thinking...' });
         }

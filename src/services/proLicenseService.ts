@@ -42,7 +42,6 @@ const EMPTY: ProLicense = { isPro: false, key: null, licenseId: null, expiry: nu
 const REVOKED_CODES = ['EXPIRED', 'SUSPENDED', 'BANNED', 'OVERDUE', 'NOT_FOUND'];
 const NEEDS_ACTIVATION = ['NO_MACHINE', 'NO_MACHINES', 'FINGERPRINT_SCOPE_MISMATCH'];
 
-export type KeygenLicenseKind = ProLicense;
 
 function setProInStore(isPro: boolean): void {
   const { useAppStore } = require('../stores/appStore');

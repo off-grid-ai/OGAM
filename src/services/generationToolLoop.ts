@@ -8,6 +8,7 @@ import { Message } from '../types';
 import { getToolsAsOpenAISchema, executeToolCall } from './tools';
 import type { ToolCall, ToolResult } from './tools/types';
 import { normalizeToolResult, toolErrorResult, toolResultModelContent } from './tools/toolResult';
+import { modelInputImageUris, modelInputAudioUris } from './modelMedia';
 import { getToolExtensions } from './tools/extensions';
 import { Platform } from 'react-native';
 import { selectRelevantTools } from './litertToolSelector';
@@ -42,25 +43,25 @@ function parseXmlStyleToolCall(body: string, idSuffix: number): ToolCall | null 
 }
 
 function parseToolCallBody(body: string, idSuffix: number): ToolCall | null {
-  const makeCall = (name: string, args: Record<string, any>): ToolCall =>
-    ({ id: `text-tc-${Date.now()}-${idSuffix}`, name, arguments: args });
+  const makeCall = (name: string, args: any): ToolCall =>
+    ({ id: `text-tc-${Date.now()}-${idSuffix}`, name, arguments: normalizeToolArgs(args) });
 
   // Standard JSON: {"name": "tool", "arguments": {...}}
   try {
-    const parsed = JSON.parse(body);
-    if (parsed.name) return makeCall(parsed.name, parsed.arguments || parsed.parameters || {});
+    const parsed = parseJsonLenient(body);
+    if (parsed.name) return makeCall(parsed.name, parsed.arguments ?? parsed.parameters ?? {});
   } catch { /* fall through */ }
 
   // Function-call style: tool_name({"key": "value"})
   const funcMatch = (/^(\w+)\s*\((\{[\s\S]*\})\)$/).exec(body);
   if (funcMatch) {
-    try { return makeCall(funcMatch[1], JSON.parse(funcMatch[2])); } catch { /* fall through */ }
+    try { return makeCall(funcMatch[1], parseJsonLenient(funcMatch[2])); } catch { /* fall through */ }
   }
 
   // Bare style: tool_name{"key": "value"}
   const bareMatch = (/^(\w+)\s*(\{[\s\S]*\})$/).exec(body);
   if (bareMatch) {
-    try { return makeCall(bareMatch[1], JSON.parse(bareMatch[2])); } catch { /* fall through */ }
+    try { return makeCall(bareMatch[1], parseJsonLenient(bareMatch[2])); } catch { /* fall through */ }
   }
 
   // No-args style: just a tool name with no arguments
@@ -73,11 +74,41 @@ function fixUnquotedKeys(json: string): string {
   return json.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*):/g, '$1"$2"$3:');
 }
 
+/**
+ * Parse JSON, recovering from the unquoted object keys small models routinely
+ * emit ({expression: "2+2"}). The single lenient-parse used by EVERY tool-call
+ * body path so the standard and Gemma parsers can't drift (they did: the Gemma
+ * path recovered via fixUnquotedKeys while the standard path used a raw
+ * JSON.parse and silently dropped the call — Q2). Throws if both attempts fail,
+ * so callers keep their existing try/catch fall-through.
+ */
+function parseJsonLenient(s: string): any {
+  try { return JSON.parse(s); }
+  catch { return JSON.parse(fixUnquotedKeys(s)); }
+}
+
+/**
+ * Normalize a tool call's `arguments` to an object. Small models sometimes emit
+ * arguments as a STRINGIFIED JSON object ("{...}") rather than an object (Q3);
+ * forwarding that string verbatim gives the tool undefined params. Parse a
+ * JSON-object string to an object; pass a real object through; anything else → {}.
+ */
+function normalizeToolArgs(args: any): Record<string, any> {
+  if (typeof args === 'string') {
+    const s = args.trim();
+    if (s.startsWith('{')) {
+      try { return parseJsonLenient(s); } catch { /* not JSON → no usable params */ }
+    }
+    return {};
+  }
+  return args && typeof args === 'object' ? args : {};
+}
+
 function parseGemmaColonArgs(name: string, colonArgs: string): Record<string, any> {
   if (colonArgs.startsWith(name)) {
     const jsonBody = colonArgs.slice(name.length).trim();
     if (jsonBody.startsWith('{')) {
-      try { return JSON.parse(fixUnquotedKeys(jsonBody)) as Record<string, any>; }
+      try { return parseJsonLenient(jsonBody) as Record<string, any>; }
       catch { /* fall through */ }
     }
   }
@@ -103,11 +134,12 @@ function parseGemmaToolCallBody(raw: string, toolCalls: ToolCall[]): void {
   const argsStr = (/^\((\{[\s\S]*\})\)$/).exec(rest)?.[1] ?? (/^(\{[\s\S]*\})$/).exec(rest)?.[1] ?? null;
   if (argsStr) {
     try {
-      args = JSON.parse(fixUnquotedKeys(argsStr));
+      args = parseJsonLenient(argsStr);
     } catch { /* fall through */ }
   } else if (rest.startsWith(':')) {
     args = parseGemmaColonArgs(name, rest.slice(1));
   }
+  args = normalizeToolArgs(args);
 
   if (name === 'web_search' && !args.query && args.queries) {
     args = { ...args, query: Array.isArray(args.queries) ? args.queries[0] : args.queries };
@@ -204,7 +236,7 @@ export function parseToolCallsFromText(text: string): { cleanText: string; toolC
   for (const [start, end] of matchedRanges) { cleanText = cleanText.slice(0, start) + cleanText.slice(end); }
   return { cleanText: cleanText.trim(), toolCalls };
 }
-export interface ToolLoopCallbacks {
+interface ToolLoopCallbacks {
   onToolCallStart?: (name: string, args: Record<string, any>) => void;
   onToolCallComplete?: (name: string, result: ToolResult) => void;
   onFirstToken?: () => void;
@@ -281,13 +313,20 @@ const MAX_LLM_RETRIES = 4;
 const RETRY_BACKOFF_MS = 1000;
 const CONTEXT_RELEASE_PAUSE_MS = 500;
 function isNonRetryableError(msg: string): boolean {
-  return msg.includes('No model loaded') || msg.includes('aborted') || msg.includes('Remote provider');
+  return msg.includes('No model loaded') || msg.includes('aborted') || msg.includes('Remote provider')
+    // A native decode/evaluation failure (llama_decode: failed to decode, ret=-1 →
+    // "Failed to evaluate chunks", or an invalid-token abort) is FATAL and DETERMINISTIC: the
+    // context/inputs that failed the decode will fail identically on every retry. Retrying it only
+    // burns ~26s per attempt × 4 attempts of silent spinner (B13: "the vision thing failed and I
+    // didn't get an error") before finally surfacing. Break immediately so the error reaches the
+    // user and the loading state clears at once.
+    || /failed to decode|evaluate chunks|invalid token/i.test(msg);
 }
 /** A server rejected the request because it couldn't compile the tool schemas into a
  *  grammar (llama.cpp: "failed to parse grammar" / "failed to initialize samplers").
  *  We can't know a server's grammar-compiler limits up front, so we detect it from the
  *  error and retry without tools rather than hard-failing the turn. Exported for tests. */
-export function isToolGrammarError(msg: string): boolean {
+function isToolGrammarError(msg: string): boolean {
   return /parse grammar|initialize samplers/i.test(msg);
 }
 
@@ -365,7 +404,7 @@ async function callLocalWithRetry(
   messages: Message[],
   tools: any[],
   onStream?: (data: StreamToken) => void,
-): Promise<{ fullResponse: string; toolCalls: ToolCall[] }> {
+): Promise<{ fullResponse: string; toolCalls: ToolCall[]; interrupted?: boolean }> {
   let lastError: any;
   for (let attempt = 0; attempt < MAX_LLM_RETRIES; attempt++) {
     try {
@@ -423,7 +462,11 @@ export function buildLiteRTHistory(messages: Message[]): Array<{ role: 'user' | 
     .filter(h => h.content.trim() !== '');
 }
 
-function buildLiteRTToolCallHandler(ctx: ToolLoopContext, conversationId: string) {
+/** Records the tool results a LiteRT native turn produced, so an empty final answer can
+ *  still surface the fetched data instead of discarding it (Q5). */
+interface LiteRTToolOutcome { results: string[] }
+
+function buildLiteRTToolCallHandler(ctx: ToolLoopContext, conversationId: string, outcome?: LiteRTToolOutcome) {
   // Per-turn counter: this closure is rebuilt once per generation, so it resets each new
   // message and the native loop reuses it for every tool call within the turn.
   let toolCallCount = 0;
@@ -450,6 +493,7 @@ function buildLiteRTToolCallHandler(ctx: ToolLoopContext, conversationId: string
       toolCallId: toolCall.id, toolName: name, timestamp: Date.now() };
     useChatStore.getState().addMessage(conversationId, toolCallMsg);
     useChatStore.getState().addMessage(conversationId, toolResultMsg);
+    if (result.status === 'ok') outcome?.results.push(resultContent);
     return resultContent;
   };
 }
@@ -465,12 +509,12 @@ async function callLiteRTForLoop(
   const text = buildLiteRTSendText(messages);
   const history = buildLiteRTHistory(messages);
   const lastUser = [...messages].reverse().find(m => m.role === 'user');
-  const imageUris = lastUser?.attachments
-    ?.filter((a: any) => a.type === 'image' && typeof a.uri === 'string' && a.uri.trim().length > 0)
-    .map((a: any) => a.uri);
-  const audioUris = lastUser?.attachments
-    ?.filter((a: any) => a.type === 'audio' && typeof a.uri === 'string' && a.uri.trim().length > 0)
-    .map((a: any) => a.uri);
+  // Route media through the SAME seam the non-tool path uses (generationServiceHelpers),
+  // not an inline re-derivation. modelInputAudioUris is transcript-only ([]), so a voice
+  // note's stale audio path never reaches native (Q17: the tool-loop's own filter sent
+  // the .wav → "File does not exist" crash). One media rule, both paths.
+  const imageUris = modelInputImageUris(lastUser?.attachments);
+  const audioUris = modelInputAudioUris(lastUser?.attachments);
   const liteRTSettings = useAppStore.getState().settings;
   const samplerConfig = {
     temperature: liteRTSettings.liteRTTemperature,
@@ -482,14 +526,22 @@ async function callLiteRTForLoop(
     return { fullResponse: '', toolCalls: [] };
   }
   await liteRTService.prepareConversation(conversationId, systemPrompt, { samplerConfig, tools, history });
-  const onToolCall = ctx ? buildLiteRTToolCallHandler(ctx, conversationId) : undefined;
+  const outcome: LiteRTToolOutcome = { results: [] };
+  const onToolCall = ctx ? buildLiteRTToolCallHandler(ctx, conversationId, outcome) : undefined;
   const handlers = {
     onToken: (token: string) => onStream?.({ content: token }),
     onReasoning: (token: string) => onStream?.({ reasoningContent: token }),
   };
   try {
     const fullResponse = await liteRTService.generateRaw(text, { imageUris, audioUris }, { ...handlers, onToolCall });
-    // Native SDK handles all tool→model cycles internally; toolCalls always empty here
+    // Native SDK handles all tool→model cycles internally; toolCalls always empty here.
+    // If the model ran a tool but then produced NO final answer, surface the fetched
+    // data instead of discarding it (the user would otherwise see a blank / "(No
+    // response)" turn — Q5). The tool result is the honest answer the model failed to
+    // phrase; better a visible result than a dead end.
+    if (!fullResponse.trim() && outcome.results.length > 0) {
+      return { fullResponse: outcome.results.join('\n\n'), toolCalls: [] };
+    }
     return { fullResponse, toolCalls: [] };
   } catch (e: any) {
     const msg = String(e?.message ?? e);
@@ -611,7 +663,7 @@ async function callLLMWithRetry(
   messages: Message[],
   tools: any[],
   { onStream, forceRemote, disableThinking, conversationId, ctx }: CallLLMOptions = {},
-): Promise<{ fullResponse: string; toolCalls: ToolCall[] }> {
+): Promise<{ fullResponse: string; toolCalls: ToolCall[]; interrupted?: boolean }> {
   // Append tool-use behavioral guidance to the system prompt when tools are present.
   // Only covers the "when and how" — schemas are injected separately by each engine.
   // Also append extension system-prompt hints so the model knows about MCP/pro tools.
@@ -661,6 +713,10 @@ function resolveToolCalls(fullResponse: string, toolCalls: ToolCall[]) {
     if (fullResponse.includes('<|tool_call>') || fullResponse.includes('<tool_call:')) {
       const parsed = parseGemmaNativeToolCalls(fullResponse);
       if (parsed.toolCalls.length > 0) {
+        // FALLBACK FIRED: native tool_calls were empty but raw Gemma markup was present, so we
+        // hand-parsed. With reasoning_format:'auto' this should stop happening once llama.cpp parses
+        // Gemma natively — if this never logs on-device, the hand-parser is safe to delete (Step 5).
+        logger.log(`[ToolLoop][GEMMA-FALLBACK] hand-parsed ${parsed.toolCalls.length} tool call(s) from raw markup — native tool_calls were empty`);
         effectiveToolCalls = parsed.toolCalls;
         displayResponse = parsed.cleanText;
       }
@@ -787,7 +843,12 @@ async function selectEffectiveSchemas(ctx: ToolLoopContext, builtInSchemas: any[
  * Run the tool-calling loop: call LLM → execute tools → re-inject results → repeat.
  * Returns when the model produces a final response with no tool calls.
  */
-export async function runToolLoop(ctx: ToolLoopContext): Promise<void> {
+/** Outcome of a tool-loop turn. `interrupted` is PER-TURN truth (a user stop landed on this
+ *  turn's completion) — callers must use it instead of the service's shared abort flag, which a
+ *  CONCURRENT next turn resets (the race that painted 'No response' on a user-stopped turn). */
+export interface ToolLoopOutcome { interrupted: boolean }
+
+export async function runToolLoop(ctx: ToolLoopContext): Promise<ToolLoopOutcome> {
   const chatStore = useChatStore.getState();
   const builtInSchemas = getToolsAsOpenAISchema(ctx.enabledToolIds);
   const extSchemas = getToolExtensions().flatMap(e => e.getOpenAISchemas?.() ?? []);
@@ -806,14 +867,28 @@ export async function runToolLoop(ctx: ToolLoopContext): Promise<void> {
     // Hit iteration or total-call cap — force one final text-only generation (no tools)
     if (iteration === MAX_TOOL_ITERATIONS - 1 || totalToolCalls >= MAX_TOTAL_TOOL_CALLS) {
       await forceFinalTextResponse(ctx, state, loopMessages);
-      return;
+      return { interrupted: false };
     }
 
     state.streamedContent = '';
     state.reasoningContent = '';
 
     const onStream = buildStreamHandler(ctx, state);
-    const { fullResponse, toolCalls } = await callLLMWithRetry(loopMessages, effectiveSchemas, { onStream, forceRemote: ctx.forceRemote, conversationId: ctx.conversationId, ctx });
+    const { fullResponse, toolCalls, interrupted } = await callLLMWithRetry(loopMessages, effectiveSchemas, { onStream, forceRemote: ctx.forceRemote, conversationId: ctx.conversationId, ctx });
+
+    // A user STOP landing mid-completion returns `interrupted` — the turn is OVER. Before this
+    // guard, the interrupted (usually empty) result fell into the no-tools fallback below and
+    // re-ran a FULL generation the user never asked for: a zombie that held the engine for
+    // minutes (74s CPU prefill on-device) so every next send failed 'LLM service busy', and
+    // whose empty output painted the wrong "No response / incompatible backend" card. Finalize
+    // whatever streamed; issue NO further completions. When aborted, stopGeneration() owns the
+    // partial-content cleanup — emit nothing here.
+    if (interrupted || ctx.isAborted()) {
+      // Streamed partial content is already in the store's streaming message: the aborted path is
+      // finalized by stopGeneration(), the non-aborted path by generate()'s post-loop finalize.
+      logger.log(`[ToolLoop] completion interrupted (aborted=${ctx.isAborted()}) — ending turn, no follow-up generation`);
+      return { interrupted: true };
+    }
 
     const { effectiveToolCalls, displayResponse } = resolveToolCalls(fullResponse, toolCalls);
     const cappedToolCalls = effectiveToolCalls.slice(0, MAX_TOTAL_TOOL_CALLS - totalToolCalls);
@@ -821,8 +896,9 @@ export async function runToolLoop(ctx: ToolLoopContext): Promise<void> {
 
     // No tool calls → model gave a final text response
     if (cappedToolCalls.length === 0) {
-      // Empty response with tools — retry once without tools (some models choke on tool schemas)
-      if (!state.streamedContent && !displayResponse) {
+      // Empty response with tools — retry once without tools (some models choke on tool schemas).
+      // Never after an abort: this retry is a FULL generation, the exact zombie a stop must kill.
+      if (!state.streamedContent && !displayResponse && !ctx.isAborted()) {
         state.streamedContent = '';
         state.reasoningContent = '';
         state.firstTokenFired = false;
@@ -831,10 +907,10 @@ export async function runToolLoop(ctx: ToolLoopContext): Promise<void> {
           loopMessages, [], { onStream: fallbackOnStream, forceRemote: ctx.forceRemote, disableThinking: true, conversationId: ctx.conversationId, ctx },
         );
         emitFinalResponse(ctx, state, fallbackResp);
-        return;
+        return { interrupted: false };
       }
       emitFinalResponse(ctx, state, displayResponse);
-      return;
+      return { interrupted: false };
     }
 
     // Execute the tool calls
@@ -843,6 +919,12 @@ export async function runToolLoop(ctx: ToolLoopContext): Promise<void> {
     const assistantMsg: Message = {
       id: `tool-assist-${Date.now()}-${iteration}`, role: 'assistant',
       content: displayResponse || state.streamedContent || '', timestamp: Date.now(),
+      // Persist this round's reasoning on the tool-call message so the chain-of-thought
+      // that LED to the tool call survives in the transcript (OD14) — without it the
+      // thinking visibly vanishes when the tool fires and only reappears on the final
+      // answer, losing the pre-tool-call reasoning (a killer-demo feature). Each round's
+      // thinking stays attached to its own message, so both rounds are kept.
+      ...(state.reasoningContent.trim() ? { reasoningContent: state.reasoningContent.trim() } : {}),
       toolCalls: cappedToolCalls.map(tc => ({ id: tc.id, name: tc.name, arguments: JSON.stringify(tc.arguments) })),
     };
     loopMessages.push(assistantMsg);
@@ -858,4 +940,6 @@ export async function runToolLoop(ctx: ToolLoopContext): Promise<void> {
       await new Promise<void>(resolve => setTimeout(resolve, CONTEXT_RELEASE_PAUSE_MS));
     }
   }
+  // Reached only via the top-of-iteration abort break or iteration exhaustion.
+  return { interrupted: ctx.isAborted() };
 }

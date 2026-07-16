@@ -17,7 +17,7 @@ import { imageGenerationService } from '../../../src/services/imageGenerationSer
 import { llmService } from '../../../src/services/llm';
 import { localDreamGeneratorService } from '../../../src/services/localDreamGenerator';
 import { activeModelService } from '../../../src/services/activeModelService';
-import { subscribeSharePrompt } from '../../../src/utils/sharePrompt';
+import { subscribeSharePrompt, resetSharePromptSession } from '../../../src/utils/sharePrompt';
 import {
   resetStores,
   setupWithActiveModel,
@@ -43,6 +43,7 @@ describe('Share Prompt Flow Integration', () => {
   beforeEach(async () => {
     resetStores();
     jest.clearAllMocks();
+    resetSharePromptSession(); // fresh app session per test (the sheet is once-per-session)
 
     shareListener = jest.fn();
     unsubscribe = subscribeSharePrompt(shareListener);
@@ -83,7 +84,7 @@ describe('Share Prompt Flow Integration', () => {
       let completeCallback: any;
 
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream, onComplete) => {
+        async (_messages, { onStream, onComplete } = {}) => {
           streamCallback = onStream!;
           completeCallback = onComplete!;
           return 'Response';
@@ -105,42 +106,36 @@ describe('Share Prompt Flow Integration', () => {
       expect(getAppState().textGenerationCount).toBe(1);
     });
 
-    it('does not emit share prompt on first text generation (delayed to 2nd)', async () => {
+    it('does not emit share prompt on the first text generation (avoids first-run stacking)', async () => {
       await runTextGeneration();
 
-      // First generation is skipped to avoid stacking with other sheets
       expect(shareListener).not.toHaveBeenCalled();
       await wait(1600);
       expect(shareListener).not.toHaveBeenCalled();
     });
 
-    it('emits share prompt on 2nd text generation (after delay)', async () => {
+    it('emits the share prompt on the 2nd text generation (after delay)', async () => {
       useAppStore.setState({ textGenerationCount: 1 });
 
       await runTextGeneration();
-      // Share prompt is scheduled via setTimeout(1500ms)
       expect(shareListener).not.toHaveBeenCalled();
       await wait(1600);
       expect(shareListener).toHaveBeenCalledWith('text');
       expect(getAppState().textGenerationCount).toBe(2);
     });
 
-    it('does not emit share prompt on 3rd through 9th generation', async () => {
-      useAppStore.setState({ textGenerationCount: 2 });
-
-      await runTextGeneration();
+    it('emits AT MOST ONCE per session across many generations (no 2/10/20 re-show)', async () => {
+      // Second generation triggers it once; later generations in the SAME session must
+      // NOT re-show it (the old cadence re-showed at 10, 20, …).
+      useAppStore.setState({ textGenerationCount: 1 });
+      await runTextGeneration(); // count → 2, fires
       await wait(1600);
-      expect(shareListener).not.toHaveBeenCalled();
-      expect(getAppState().textGenerationCount).toBe(3);
-    });
+      expect(shareListener).toHaveBeenCalledTimes(1);
 
-    it('emits share prompt on 10th generation', async () => {
-      useAppStore.setState({ textGenerationCount: 9 });
-
-      await runTextGeneration();
+      await runTextGeneration(); // → 3, same session
+      await runTextGeneration(); // → 4, same session
       await wait(1600);
-      expect(shareListener).toHaveBeenCalledWith('text');
-      expect(getAppState().textGenerationCount).toBe(10);
+      expect(shareListener).toHaveBeenCalledTimes(1); // still exactly once
     });
   });
 
@@ -176,7 +171,7 @@ describe('Share Prompt Flow Integration', () => {
       let streamCallback: any;
 
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream, _onComplete) => {
+        async (_messages, { onStream } = {}) => {
           streamCallback = onStream!;
           // Never call onComplete — simulates long-running gen
           await new Promise(() => {}); // hang forever
@@ -257,24 +252,18 @@ describe('Share Prompt Flow Integration', () => {
       expect(getAppState().imageGenerationCount).toBe(2);
     });
 
-    it('does not emit share prompt on 3rd through 9th image generation', async () => {
+    it('emits AT MOST ONCE per session across image generations (no 20th re-show)', async () => {
       setupImageModel();
-      useAppStore.setState({ imageGenerationCount: 2 });
+      useAppStore.setState({ imageGenerationCount: 1 });
 
-      await imageGenerationService.generateImage({ prompt: 'sunset' });
+      await imageGenerationService.generateImage({ prompt: 'sunset' }); // → 2, fires
       await wait(2100);
-      expect(shareListener).not.toHaveBeenCalled();
-      expect(getAppState().imageGenerationCount).toBe(3);
-    });
+      expect(shareListener).toHaveBeenCalledTimes(1);
 
-    it('emits share prompt on 20th image generation', async () => {
-      setupImageModel();
-      useAppStore.setState({ imageGenerationCount: 19 });
-
-      await imageGenerationService.generateImage({ prompt: 'sunset' });
+      await imageGenerationService.generateImage({ prompt: 'sunset' }); // → 3, same session
+      await imageGenerationService.generateImage({ prompt: 'sunset' }); // → 4, same session
       await wait(2100);
-      expect(shareListener).toHaveBeenCalledWith('image');
-      expect(getAppState().imageGenerationCount).toBe(20);
+      expect(shareListener).toHaveBeenCalledTimes(1); // still exactly once
     });
 
     it('does not increment count when image generation fails', async () => {

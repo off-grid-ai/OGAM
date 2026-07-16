@@ -32,6 +32,12 @@ export const QUALITY_STEP_FLOOR = 20;
  */
 export const SWEET_SPOT_SIZE = 256;
 
+/** Default guidance scale and step count — the SAME values every slider shows, so a
+ *  stale/0 setting can't fall back to a different literal, and "Reset to Defaults"
+ *  restores the image params too (Q12). */
+export const DEFAULT_IMAGE_GUIDANCE = 7.5;
+export const DEFAULT_IMAGE_STEPS = 8;
+
 export function getImageGenAdvice(opts: {
   backend?: string | null;
   steps: number;

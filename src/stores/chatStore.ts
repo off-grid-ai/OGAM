@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Message, Conversation, GenerationMeta } from '../types';
-import { stripControlTokens, stripStreamingControlTokens } from '../utils/messageContent';
+import { stripStreamingControlTokens, parseModelOutput } from '../utils/messageContent';
 import { generateId } from '../utils/generateId';
 import { callHook, HOOKS } from '../bootstrap/hookRegistry';
 
@@ -25,67 +25,6 @@ function updateMessageInConv(
     messages: conv.messages.map((msg) => (msg.id === messageId ? updater(msg) : msg)),
     updatedAt: nextUpdatedAt(conv.updatedAt),
   };
-}
-
-/** Locate a fixed-string thinking block and split content into reasoning + response. */
-function sliceThinkingBlock(
-  content: string,
-  openTag: string,
-  closeTag: string,
-): { reasoningContent: string | undefined; responseContent: string } | null {
-  const openIdx = content.toLowerCase().indexOf(openTag.toLowerCase());
-  if (openIdx === -1) return null;
-  const closeIdx = content.toLowerCase().indexOf(closeTag.toLowerCase(), openIdx + openTag.length);
-  if (closeIdx === -1) return null;
-  const thinkStart = openIdx + openTag.length;
-  return {
-    reasoningContent: content.slice(thinkStart, closeIdx).trim() || undefined,
-    responseContent: content.slice(closeIdx + closeTag.length),
-  };
-}
-
-/** Extract channel-based thinking from raw streaming content before control tokens are stripped. */
-function extractChannelThinking(rawContent: string): { reasoningContent: string | undefined; responseContent: string } {
-  // Gemma 4 format: <|channel>thought\n[thinking]<channel|>[response]
-  const gemma4 = sliceThinkingBlock(rawContent, '<|channel>thought\n', '<channel|>');
-  if (gemma4) return gemma4;
-  // Qwen channel format: <|channel|>analysis<|message|>[thinking]<|channel|>final<|message|>[response]
-  const qwen = sliceThinkingBlock(rawContent, '<|channel|>analysis<|message|>', '<|channel|>final<|message|>');
-  if (qwen) return qwen;
-  // <think>...</think> format (Qwen 3.5, DeepSeek, etc.)
-  const thinkTags = sliceThinkingBlock(rawContent, '<think>', '</think>');
-  if (thinkTags) return thinkTags;
-
-  // Qwen3-style: the chat template injects the opening <think> into the prompt,
-  // so the model emits only the closing </think> (reasoning, then </think>, then
-  // answer, with no opener). The live renderer (parseThinkingContent) already
-  // treats this as a thinking block; finalize must use the same rule, or the
-  // block the user just watched appear gets dropped on completion.
-  const closeTag = '</think>';
-  const closeIdx = rawContent.toLowerCase().indexOf(closeTag);
-  if (closeIdx !== -1) {
-    const reasoning = rawContent.slice(0, closeIdx).trim();
-    if (reasoning) {
-      return {
-        reasoningContent: reasoning,
-        responseContent: rawContent.slice(closeIdx + closeTag.length),
-      };
-    }
-  }
-
-  // UNCLOSED thinking: the generation was cut off (e.g. maxTokens hit) mid-thought, so
-  // the opener is present but the close never arrived. Treat everything after the opener
-  // as reasoning rather than leaking the raw `<|channel>thought…` / `<think>…` as the
-  // message (the iOS Gemma-4 truncation bug). No answer yet → empty response.
-  for (const openTag of ['<|channel>thought\n', '<think>']) {
-    const openIdx = rawContent.toLowerCase().indexOf(openTag.toLowerCase());
-    if (openIdx !== -1) {
-      const reasoning = rawContent.slice(openIdx + openTag.length).trim();
-      return { reasoningContent: reasoning || undefined, responseContent: '' };
-    }
-  }
-
-  return { reasoningContent: undefined, responseContent: rawContent };
 }
 
 /**
@@ -137,6 +76,9 @@ interface ChatState {
   setActiveConversation: (conversationId: string | null) => void;
   getActiveConversation: () => Conversation | null;
   setConversationProject: (conversationId: string, projectId: string | null) => void;
+  /** Unfile every conversation filed under a project (used when the project is deleted,
+   *  so no chat is left pointing at a project that no longer exists). */
+  unfileConversationsForProject: (projectId: string) => void;
   addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>) => Message;
   updateMessageContent: (conversationId: string, messageId: string, content: string) => void;
   updateMessageThinking: (conversationId: string, messageId: string, isThinking: boolean) => void;
@@ -210,6 +152,16 @@ export const useChatStore = create<ChatState>()(
             conv.id !== conversationId
               ? conv
               : { ...conv, projectId: projectId || undefined, updatedAt: nextUpdatedAt(conv.updatedAt) }
+          ),
+        }));
+      },
+
+      unfileConversationsForProject: (projectId) => {
+        set((state) => ({
+          conversations: state.conversations.map((conv) =>
+            conv.projectId !== projectId
+              ? conv
+              : { ...conv, projectId: undefined, updatedAt: nextUpdatedAt(conv.updatedAt) }
           ),
         }));
       },
@@ -326,15 +278,14 @@ export const useChatStore = create<ChatState>()(
       finalizeStreamingMessage: (conversationId, generationTimeMs, generationMeta) => {
         const { streamingMessage, streamingReasoningContent, streamingForConversationId, addMessage } = get();
 
-        let reasoningContent = streamingReasoningContent.trim() || undefined;
-        let rawContent = streamingMessage;
-        if (!reasoningContent) {
-          const extracted = extractChannelThinking(rawContent);
-          reasoningContent = extracted.reasoningContent;
-          rawContent = extracted.responseContent;
-        }
-
-        const sanitizedMessage = stripControlTokens(rawContent).trim();
+        // Parse ONCE at this boundary through the single shared parser (SoC §A / DR1):
+        // split the raw stream into reasoning + a clean answer. The answer is stripped of
+        // control and tool-call markup BY CONSTRUCTION, so no raw markup can reach the
+        // stored message — and no renderer downstream re-parses message.content.
+        const streamReasoning = streamingReasoningContent.trim() || undefined;
+        const parsed = parseModelOutput(streamingMessage, streamReasoning);
+        const reasoningContent = parsed.reasoning ?? undefined;
+        const sanitizedMessage = parsed.answer;
         if (streamingForConversationId === conversationId && (sanitizedMessage || reasoningContent)) {
           addMessage(conversationId, {
             role: 'assistant',

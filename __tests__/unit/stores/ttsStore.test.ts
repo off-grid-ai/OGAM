@@ -30,6 +30,7 @@ const mockEngine = {
   deleteAssets: jest.fn().mockResolvedValue(undefined),
   getOverallDownloadProgress: jest.fn(() => 1),
   isFullyDownloaded: jest.fn(() => true),
+  hydrateDownloaded: jest.fn(),
   getBridgeComponent: jest.fn(() => null),
   getVoices: jest.fn(() => [{ id: 'default', label: 'Default', metadata: {} }]),
   getActiveVoice: jest.fn(() => ({ id: 'default', label: 'Default', metadata: {} })),
@@ -261,6 +262,72 @@ describe('ttsStore', () => {
     it('applies a live speed change to the active engine', () => {
       getState().updateSettings({ speed: 1.5 });
       expect(mockEngine.setSpeed).toHaveBeenCalledWith(1.5);
+    });
+  });
+
+  // The persisted modelDownloaded flag is the durable cross-restart truth (set only
+  // after a genuine fetch, cleared only by an explicit delete). The engine's in-memory
+  // completeness signal is volatile and can desync to false on a mid-session re-init /
+  // bridge unmount that never re-ran the hydrate path. checkDownloadStatus must
+  // reconcile the engine TOWARD the persisted truth, or a present-on-disk model reports
+  // not-downloaded and every play() bails (the on-device TTS dead-play bug).
+  describe('checkDownloadStatus reconciles the engine to the persisted truth', () => {
+    // A dynamic engine whose reported completeness follows its volatile flag, which
+    // hydrateDownloaded flips — proving the fix drives real state, not a call count.
+    function desyncedEngine(persistedFlagWins: { genuine: boolean }, opts: { progress?: number; phase?: string } = {}) {
+      const asset = { id: 'kokoro-medium', label: 'Kokoro', url: '', sizeBytes: 1, filename: 'k' };
+      return {
+        ...mockEngine,
+        id: 'mock-tts',
+        getPhase: jest.fn(() => (opts.phase ?? 'idle') as any),
+        getOverallDownloadProgress: jest.fn(() => opts.progress ?? 0),
+        hydrateDownloaded: jest.fn((v: boolean) => { persistedFlagWins.genuine = v; }),
+        isFullyDownloaded: jest.fn(() => persistedFlagWins.genuine),
+        checkAssetStatus: jest.fn(async () => [{
+          asset,
+          status: persistedFlagWins.genuine ? 'downloaded' : 'not-downloaded',
+          progress: persistedFlagWins.genuine ? 1 : (opts.progress ?? 0),
+        }]),
+      };
+    }
+
+    it('re-hydrates a desynced engine (persisted=true, engine volatile-false, idle) and then reports downloaded', async () => {
+      const { ttsRegistry } = jest.requireMock('../../../pro/audio/engine');
+      const state = { genuine: false }; // engine desynced to NOT-complete
+      const engine = desyncedEngine(state);
+      ttsRegistry.getActiveEngine.mockReturnValue(engine);
+      useTTSStore.setState({ settings: { ...getState().settings, modelDownloaded: { 'mock-tts': true } } });
+
+      await getState().checkDownloadStatus();
+
+      // Reconciled to the durable truth: engine re-seeded, status now downloaded.
+      expect(engine.hydrateDownloaded).toHaveBeenCalledWith(true);
+      expect(getState().assets[0].status).toBe('downloaded');
+    });
+
+    it('does NOT fabricate downloaded when the persisted flag is false', async () => {
+      const { ttsRegistry } = jest.requireMock('../../../pro/audio/engine');
+      const engine = desyncedEngine({ genuine: false });
+      ttsRegistry.getActiveEngine.mockReturnValue(engine);
+      useTTSStore.setState({ settings: { ...getState().settings, modelDownloaded: { 'mock-tts': false } } });
+
+      await getState().checkDownloadStatus();
+
+      expect(engine.hydrateDownloaded).not.toHaveBeenCalledWith(true);
+      expect(getState().assets[0].status).toBe('not-downloaded');
+    });
+
+    it('does NOT re-hydrate while a download is in flight (respects the live fetch)', async () => {
+      const { ttsRegistry } = jest.requireMock('../../../pro/audio/engine');
+      const engine = desyncedEngine({ genuine: false }, { progress: 0.4, phase: 'downloading' });
+      ttsRegistry.getActiveEngine.mockReturnValue(engine);
+      useTTSStore.setState({ settings: { ...getState().settings, modelDownloaded: { 'mock-tts': true } } });
+
+      await getState().checkDownloadStatus();
+
+      // A live download is authoritative not-complete — the stale persisted flag must
+      // not force it back to downloaded mid-fetch.
+      expect(engine.hydrateDownloaded).not.toHaveBeenCalledWith(true);
     });
   });
 });

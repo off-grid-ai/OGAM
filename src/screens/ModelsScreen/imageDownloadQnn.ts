@@ -1,6 +1,5 @@
 import { hideAlert, showAlert } from '../../components/CustomAlert';
-import { ImageModelDescriptor } from './types';
-import { ImageDownloadDeps } from './imageDownloadActions';
+import { ImageModelDescriptor, ImageDownloadDeps } from './types';
 
 export function getQnnWarningMessage(
   modelInfo: ImageModelDescriptor,

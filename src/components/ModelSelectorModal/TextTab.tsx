@@ -15,6 +15,8 @@ export interface TextTabProps {
   selectedModelPath?: string | null;
   currentRemoteModelId: string | null;
   isAnyLoading: boolean;
+  /** Id of the model being loaded right now (the row just tapped) — drives the per-row spinner. */
+  loadingModelId?: string | null;
   onSelectModel: (model: DownloadedModel) => void;
   onSelectRemoteModel: (model: RemoteModel, serverId: string) => void;
   onUnloadModel: () => void;
@@ -23,7 +25,7 @@ export interface TextTabProps {
 }
 
 export const TextTab: React.FC<TextTabProps> = ({
-  downloadedModels, remoteModels, currentModelPath, selectedModelPath = null, currentRemoteModelId, isAnyLoading, onSelectModel, onUnloadModel, onSelectRemoteModel, onAddServer, onBrowseModels,
+  downloadedModels, remoteModels, currentModelPath, selectedModelPath = null, currentRemoteModelId, isAnyLoading, loadingModelId = null, onSelectModel, onUnloadModel, onSelectRemoteModel, onAddServer, onBrowseModels,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createAllStyles);
@@ -54,14 +56,14 @@ export const TextTab: React.FC<TextTabProps> = ({
             <Icon name="check-circle" size={14} color={colors.success} />
             <Text style={styles.loadedLabel}>Currently Loaded</Text>
           </View>
-          <View style={styles.loadedModelItem}>
+          <View style={styles.loadedModelItem} testID="currently-loaded-model">
             <View style={styles.loadedModelInfo}>
-              <Text style={styles.loadedModelName} numberOfLines={1}>
+              <Text style={styles.loadedModelName} numberOfLines={1} testID="currently-loaded-model-name">
                 {activeLocalModel?.name || activeRemoteModelInfo?.model?.name || 'Unknown'}
               </Text>
-              <Text style={styles.loadedModelMeta}>
+              <Text style={styles.loadedModelMeta} testID="currently-loaded-model-ram">
                 {activeLocalModel
-                  ? `${activeLocalModel.quantization} • ${hardwareService.formatModelSize(activeLocalModel)}`
+                  ? `${activeLocalModel.quantization} • ${hardwareService.formatModelSize(activeLocalModel)} • ${hardwareService.formatModelRam(activeLocalModel)} RAM`
                   : `Remote • ${activeRemoteModelInfo?.serverName ?? 'Model'}`}
               </Text>
             </View>
@@ -110,16 +112,23 @@ export const TextTab: React.FC<TextTabProps> = ({
             // Don't highlight a deferred-local selection while a remote model is
             // current — otherwise both rows render active after a local→remote switch.
             const isSelected = currentRemoteModelId === null && !currentModelPath && selectedModelPath === model.filePath;
-            const isActive = isLoaded || isSelected;
+            // While a load is in flight, the highlight + spinner + (suppressed) checkmark all follow the
+            // row being loaded — not the model that's still resident. So tapping B moves the selection to
+            // B immediately, instead of leaving A highlighted until the load finishes (device 2026-07-14).
+            const isLoadingThis = loadingModelId === model.id;
+            const loadInProgress = loadingModelId != null;
+            const isActive = loadInProgress ? isLoadingThis : (isLoaded || isSelected);
             return (
               <ModelRow
                 key={model.id}
+                testID={`text-model-row-${model.id}`}
                 name={model.name}
                 size={hardwareService.formatModelSize(model)}
                 quant={model.quantization}
                 isVision={model.engine === 'llama' && model.isVisionModel}
                 isActive={isActive}
-                isLoaded={isLoaded}
+                isLoaded={isLoaded && !loadInProgress}
+                loading={isLoadingThis}
                 disabled={isAnyLoading || isLoaded}
                 onPress={() => onSelectModel(model)}
               />

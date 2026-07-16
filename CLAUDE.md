@@ -10,12 +10,24 @@
 
 Instead, a **dev-only persistent file sink** (`src/utils/debugLogFile.ts`, wired in `App.tsx` behind `__DEV__`) mirrors every `logger.*` line - which is where ALL the state-machine traces go (`[TTS-SM]`, `[GEN-SM]`, `[MODEL-SM]`, `[DL-SM]`, `[ROUTE-SM]`, `[IMG-SM]`, `[MEM-SM]`, `[FAIL-SM]`) - into a file in the app container. Pull it over the cable to read the real trace:
 
+The debug (Debug-config) build's bundle id is **`ai.offgridmobile.dev`** — Debug carries a
+`.dev` suffix so it installs alongside the App Store / TestFlight build (`ai.offgridmobile`,
+the Release config). The log sink is `__DEV__`-only, so you are almost always pulling from the
+`.dev` container. Get the device UDID from `xcrun devicectl list devices` (it is per-device — do
+not hardcode one):
+
 ```sh
+# Read the connected device's UDID from devicectl's JSON (parsing the human-readable table with
+# awk is brittle — the last column is the device model, not the UDID). Or just paste the UDID.
+xcrun devicectl list devices --json-output /tmp/devs.json >/dev/null 2>&1
+DEVICE=$(python3 -c "import json;ds=json.load(open('/tmp/devs.json'))['result']['devices'];print(next(d['hardwareProperties']['udid'] for d in ds if d.get('connectionProperties',{}).get('tunnelState')=='connected'))")
 xcrun devicectl device copy from \
-  --device 00008150-000225103CD8C01C \
-  --domain-type appDataContainer --domain-identifier ai.offgridmobile \
+  --device "$DEVICE" \
+  --domain-type appDataContainer --domain-identifier ai.offgridmobile.dev \
   --source Documents/offgrid-debug.log --destination /tmp/offgrid-debug.log
 ```
+
+(A Release/TestFlight build uses `--domain-identifier ai.offgridmobile` and has no dev log sink.)
 
 Then `grep`/read `/tmp/offgrid-debug.log`. The file appends a `===== session start … =====` marker on each launch and is size-capped (rotates, keeping the tail). The in-app **Debug Logs** screen (Settings → Debug Logs) shows the same lines live for quick visual checks. **When diagnosing a device issue, pull this file rather than guessing.**
 
@@ -28,6 +40,16 @@ Then `grep`/read `/tmp/offgrid-debug.log`. The file appends a `===== session sta
 2. If you find yourself on `main`, create a branch first: `git checkout -b <branch-name>`.
 
 **Merge strategy: ALWAYS a merge commit. NEVER squash (and never rebase-merge).** When merging a PR, use `gh pr merge --merge` (or the "Create a merge commit" button) so the full commit history is preserved on `main`. Do not squash under any circumstances - the small, meaningful per-concern commits are the record and must survive the merge. This applies to both the core repo and the `pro` submodule.
+
+### Commit early, commit often - never lose progress (agents especially)
+
+**A long task is a chain of small, GREEN, committed steps - not one giant uncommitted diff.** Agents run against context/session limits; anything uncommitted is lost when the session ends. So:
+
+- **Commit each cohesive step as soon as it is green** (typecheck + the relevant tests pass), with a real per-concern message. A refactor done in slices commits after each slice, not at the end.
+- **Never leave a large uncommitted working tree across a risky/long operation.** If you are about to start something big, commit what already works first so there is a clean restore point.
+- **Every commit is a safe restore point:** it must be behavior-neutral-or-better and pass the gates for the files it touches. Do not commit a knowingly-broken tree; if mid-refactor is unavoidably broken, finish to green before committing (or stash), never push broken.
+- **Prefer many small commits over few large ones.** They survive a merge (we never squash), make review tractable, and mean a lost session costs one step, not the whole task.
+- This is not optional polish - it is how work is not lost. Treat "a lot of uncommitted changes" as a bug to fix immediately by landing them as small commits.
 
 ## Copy & Content Standards
 
@@ -109,58 +131,36 @@ If the answer to 1 is "no", say so and write the simple version. If "yes", build
 - **Contract tests run against the abstraction, so they catch both platforms.** Test the common interface + the capability flags; a single test then guards iOS and Android together. If a test can only be written per-platform, the abstraction is wrong.
 - **Native module contract parity is mandatory.** The Swift and Kotlin implementations of a module must expose the SAME method names, the SAME events (names + payloads), and the SAME semantics (persistence, cleanup, error cascading). Contract drift between Swift and Kotlin is the root cause of platform-only bugs - when you touch a native module on one platform, verify/mirror the other side against the shared TS contract.
 
-## Pre-Commit Quality Gates
+## Quality Gates run on PRE-PUSH (not pre-commit)
 
-All quality gates run automatically via Husky on every `git commit`, scoped to the file types you staged:
+**Commits are intentionally ungated so red-first / work-in-progress tests can land as small commits.**
+The full quality gate runs via Husky on `git push` (`.husky/pre-push`), scoped to the files pushed
+since upstream:
 
-| Staged file type | Checks that run automatically |
+| Pushed file type | Checks that run automatically (pre-push) |
 |---|---|
-| `.ts` / `.tsx` / `.js` / `.jsx` | eslint (staged only), `tsc --noEmit`, `npm test` |
-| `.swift` | swiftlint (staged only), `npm run test:ios` |
-| `.kt` / `.kts` | `compileDebugKotlin` (type check), `lintDebug`, `npm run test:android` |
+| `.ts` / `.tsx` / `.js` / `.jsx` | eslint, `tsc --noEmit`, `jest --findRelatedTests`, `npm run depcruise` |
+| `.swift` | `npm run test:ios` |
+| `.kt` / `.kts` | `npm run test:android` |
 
 **Requirements:**
 - SwiftLint: `brew install swiftlint` (skipped with a warning if not installed)
 - Android checks require the Gradle wrapper in `android/`
 
-Before writing new code, ensure tests exist for your changes. If the hook fails, fix the issue and recommit - never skip with `--no-verify`.
+**Workflow implication (TDD / adversarial red-first):** write a failing test, commit it red (commit is
+free), then drive it green; the branch must be green before `git push` (the gate blocks a red push).
+Never bypass the push gate with `--no-verify`. `core.hooksPath` is `.husky/_` (husky v9); there is no
+pre-commit hook by design.
 
-## Testing Requirements
+## Testing (lean — this is the whole doctrine)
 
-Always write **both** unit tests and integration tests for new features and significant changes:
+**One rendered integration test per fix. Nothing more.**
 
-- **Unit tests** (`__tests__/unit/`): Test individual functions, hooks, and store actions in isolation with mocked dependencies.
-- **Integration tests** (`__tests__/integration/`): Test how multiple modules work together end-to-end (e.g., service A calls service B which writes to database C). Use mocked native modules but real logic across layers.
-
-Do not consider a feature complete with only unit tests. Integration tests catch wiring bugs, incorrect data flow between layers, and lifecycle issues that unit tests miss.
-
-### Coverage (core AND pro, 100% on new code)
-
-**Coverage must include the `pro/` submodule, not just `src/`.** `jest.config.js` `collectCoverageFrom` collects from `pro/**` whenever the submodule is checked out (gated on `proExists`, so open-core CI without pro still runs). Pro features (TTS/audio, MCP, and other paid surfaces) are exercised by the pro-dependent suites in this repo's `__tests__/` — they must be *measured*, never invisible to coverage. Do not add code to `pro/` without its coverage counting.
-
-**All NEW code ships at 100% - statements, branches, functions, AND lines.** Every new branch/condition (each side of every `if`/ternary/`??`/`||`, each catch, each early return) needs a test that exercises it. Enforce it with a per-file `coverageThreshold` entry at 100 for each new standalone module (core or pro); for a *changed* legacy file, cover every new/changed branch even though the whole file isn't held to 100. New code with an uncovered branch is not done.
-
-**Use mocks very sparingly - a green suite must mean the real thing works, not that a mock returned what it was told.** Mock only what you genuinely cannot run in the test environment (native modules, the network, the device clock). Everything else - the service under test, the stores it writes, the logic across layers - runs for real. A test that mocks the very thing it is asserting (so it would pass even if the implementation were deleted) is worse than no test: it hides the broken behaviour behind a false green. Prefer driving the real class/store/reducer and asserting the observable outcome. When you must stub a boundary, keep the stub dumb (return plain data) and let the real logic on top of it do the work. If a behaviour can only be proven by mocking out the behaviour, that is the signal to test it at a higher layer (integration) or on-device (Provit) instead.
-
-**Design to SOLID with real abstraction layers (not incidental ones).** These are the same rules as the Architecture section above, restated as a standing expectation for every change: one responsibility per module (SRP); callers depend on an interface/service, never on a concrete implementation or a `kind===`/`instanceof`/`Platform.OS`-mechanism branch (DIP); a new implementation (engine, provider, backend) drops in behind the existing seam with zero caller changes (OCP); any implementation is substitutable through the interface (LSP); interfaces are segregated so an implementation never stubs methods it can't support. The abstraction layer must be a genuine owning seam - a service that owns the state machine, resources, and side-effects - not a thin pass-through that leaks the concretes upward. If a fix would add a second concrete branch in a caller, build/extend the seam instead.
-
-**Test every approved behavior change in the same pass.** When iterating (a request, a fix, a tweak you just confirmed), add a test that captures that specific behavior as part of the same change - a regression test that would fail before the change and pass after. This applies to bug fixes (test the exact broken case), new branches/conditions (cover each one), and copy/contract changes that other code or tests depend on. Do not defer tests to "later" or to a separate commit. Then run `npx tsc --noEmit && npm test` and fix any failures before reporting the change done.
-
-### Assert the OUTCOME/INVARIANT, never "the gate was called" (learned the hard way)
-
-We shipped a bug where the voice pipeline held the STT (Whisper) model AND the text model in RAM at once → OOM / forced resend. The unit test that should have caught it did the opposite - it hid the bug behind a false green. The root cause of the *test miss* generalizes; internalize these rules:
-
-1. **A test that mocks a decision function to a fixed verdict CANNOT catch a caller that ignores the verdict.** The old test mocked `makeRoomFor` to always return `{ fits: true }` and only asserted `makeRoomFor` / `loadModel` *were called*. The bug was that the store called `makeRoomFor` but ignored its `fits` result and loaded anyway. Asserting "was called" passes over that exact defect. **Never assert `expect(gate).toHaveBeenCalled()` as the proof a rule holds.** Assert the *consequence* of the verdict: given `fits: false`, the load must NOT happen (`expect(nativeLoad).not.toHaveBeenCalled()`, resident count unchanged).
-
-2. **Test the verdict's FALSE branch, not just the happy path.** A gate/capability/permission check has (at least) two outcomes. A mock pinned to the allow value only ever exercises the allow path. For every `fits`/`canX`/`isAllowed`/`shouldY` gate, write the case where it returns the blocking value and assert the caller actually blocks. Most "we called the gate but didn't respect it" bugs live in the untested false branch.
-
-3. **For resource/residency/lifecycle invariants, drive the REAL owning service and assert the state, not the calls.** The single-model rule ("only one heavy model resident") is an invariant of `modelResidencyManager`. The catching test mocks ONLY the native boundaries (`whisperService.loadModel`/`unloadModel` as flag-flippers, `hardwareService` memory numbers) and runs the REAL residency manager + REAL store, then asserts `getResidents()` / `isResident(key)` - the outcome a user feels (how much is in RAM). Mocking the residency manager itself makes the wiring bug (store vs manager) structurally invisible: the bug lives in the seam between layers, so no single mocked-boundary unit test can see it.
-
-4. **Reproduce the device numbers deterministically.** The bug only manifests when the text model nearly fills the budget so the sidecar can't co-reside. The test pins the budget (`setBudgetOverrideMB(7908)`) and uses the real model sizes from the device log, so it reproduces the exact `fits=false, evict=[]` state - not a platform-dependent approximation (test-env `Platform.OS` picks a different RAM fraction than the Android device, which is why a naive 12GB mock let both models fit and passed).
-
-5. **When a device bug appears, ask "why did the suite stay green?" and fix the test class, not just the code.** If the answer is "a mock returned the value that hid it" or "only the happy path was asserted," that pattern exists elsewhere - grep for the same shape. The fix for the bug and the fix for the blind test ship together.
-
-The smell test before committing any test: **if I delete the implementation under test (or invert the branch), does this test fail?** If a mock would keep it green, the test is asserting the mock, not the behavior - rewrite it to drive the real thing and assert the observable outcome.
+- Mount the real screen, arrive via real gestures, assert what the user SEES. Fakes ONLY at the device boundary (`__tests__/harness/`); never mock our own code.
+- **While iterating, run ONLY that test's file.** Do NOT run `--findRelatedTests` or the whole suite per fix — the full suite runs once at pre-push (the gate is the safety net).
+- **No unit tests required. No coverage thresholds.** If a mockist test (mocks our own code, or asserts `toHaveBeenCalled`) fails, DELETE it — never repair it.
+- "Show the red" (stash the fix, watch it fail) is optional: do it only for genuinely new behavior, skip it for a clear bug fix.
+- Confirm a device fix against the log FIRST — pull only the live-session tail (from the last `===== session start =====`), never the whole file.
 
 ## Push = Create PR + Address Review
 
@@ -203,50 +203,7 @@ The repo has three automated reviewers on every PR. After pushing, loop until al
 5. Push fixes, comment `/gemini review` on the PR to re-trigger Gemini
 6. Repeat until all three reviewers pass with no blocking issues
 
-## Every PR: small, Provit-proven, self-audited (MANDATORY)
+## PR hygiene (lean)
 
-This is the standing bar for **every** PR - no exceptions. A PR that is missing the Provit journey or the self-audit comment is not ready to merge.
-
-1. **One concern, small diff.** Extends the small-meaningful-commits rule to the PR level: one subsystem/behaviour per PR, minimal surface. If a change spans two concerns, split it into two PRs.
-2. **A Provit E2E journey.** Every PR ships (or updates) a [Provit](../ (its own repo)) journey that (a) exercises the exact user flow the change affects on a **real device** and (b) doubles as the **regression guard** - re-running it proves no regression. Reference the journey name + the run result (pass/fail + device) in the PR. If the change can't be proven on-device by a journey, say why in the self-audit.
-3. **A fails-before / passes-after jest test.** At least one unit/integration test that **fails without the change and passes with it** - the exact regression case. Mocks only at genuine boundaries (native/network/clock); never mock the thing under assertion (a green suite must mean the real thing works - deleting the impl must fail the test).
-4. **A self-audit comment on the PR** (template below), posted **as a comment alongside the Provit result**. It records the SOLID/abstraction verdict, the mock-honesty check, platform parity, and standards for that specific change - so the audit travels with the PR and the reviewer sees the reasoning, not just the diff.
-
-### Self-audit comment template (paste and fill on every PR)
-
-```markdown
-## Self-audit
-
-### SOLID / abstraction
-- Enough to abstract? [is there a real owning seam, or is a caller branching on a concrete type / `Platform.OS` mechanism?]
-- SRP / DIP: [one responsibility; callers depend on an interface, not a concrete - no `kind===` / `instanceof` / `Platform.OS`-mechanism branch in a View or store]
-- Single source of truth: [the rule/map/capability is defined ONCE, not duplicated across layers]
-- Verdict: [clean · justified exception (why) · follow-up filed]
-
-### Tests - no false green
-- Unit: [what it drives - the REAL class/store/reducer, not a mock of the thing asserted]
-- Integration: [the cross-layer path exercised end to end]
-- Mocks: [only boundaries (native module / network / clock). Deleting the implementation under test MUST fail these tests.]
-- Fails-before / passes-after: [the exact case that fails on `main` and passes here]
-
-### Provit (on-device E2E)
-- Journey: `<name>` - proves `<flow>` works on device AND guards regression
-- Run: [pass/fail · device] (or: why an on-device journey isn't applicable)
-
-### Platform parity
-- iOS + Android: [both covered - genuine gaps modelled as capability-as-data, NOT a leaked `if (ios)` branch. One contract test guards both.]
-
-### Standards (only if UI / copy touched)
-- Design tokens (no hardcoded colors/sizes, weights ≤400, no emoji - vector icons only); brand voice (no em dashes, no exclamation marks, no forbidden words, no curly quotes).
-```
-
-
-## Multi-agent operating model (how we build here)
-
-Substantial work is executed by a fleet of parallel subagents orchestrated by the main session - not one linear thread. The standard:
-
-- **Parallel workers, 3 at a time.** Decompose work into worktree-isolated subagents that run concurrently in a rolling window of ~3, each on a DISJOINT file-set so they never merge-conflict. As each lands: review against the engineering standards, merge, run a **local production build gate** (typecheck + tests do NOT catch build/route errors - build before deploy), deploy, verify, then launch the next from the backlog. One agent owns nav/shared-file changes per round; the others avoid them.
-- **The gap agent.** Any gap, regression, or "not fully done" is logged to the repo's gaps doc (`docs/GAPS_BACKLOG.md`). A standing gap agent is woken whenever there are gaps: it picks them up, closes them, and marks them resolved with evidence. Gaps are surfaced honestly, never hidden.
-- **The QA / platform-integration + docs sweep agent.** After every 3 agent completions, run a sweep agent that (a) verifies the whole platform integrates and works end-to-end (run the integration harness + exercise real cross-service/-surface flows), (b) surfaces any new gaps into the gaps doc, and (c) writes/updates USER-FACING documentation live - how to use / what to do / why / when, per surface - so docs stay current with the build.
-- **Merge gate (every merge, non-negotiable):** SOLID + pure logic isolated (unit-testable, zero-IO) separated from I/O; thin handlers; REAL tests exercising real behavior (mocks sparingly); typecheck clean; tests pass; a clean local production build; verify UI by screenshot (vision) and integration by the harness. Nothing is "done" until VERIFIED live, not merely merged.
-- **Honesty bar:** report status as a gate (code / wired / verified), never inflate "done." A premature "complete" is a defect.
+- One concern per PR, small diff. Ship the one rendered test that would fail without the change.
+- No Provit journey, no self-audit comment, no mandatory ceremony. Multi-agent fan-out is opt-in, only when asked.

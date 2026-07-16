@@ -23,7 +23,7 @@ import type {
   OpenAIStreamState,
 } from './openAICompatibleTypes';
 
-export type { OpenAIChatMessage, OpenAIToolCall, OpenAIConfig } from './openAICompatibleTypes';
+export type { OpenAIChatMessage, OpenAIConfig } from './openAICompatibleTypes';
 
 /** Returns true if the endpoint looks like an Ollama server (port 11434) */
 function isOllamaEndpoint(endpoint: string): boolean {

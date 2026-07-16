@@ -8,6 +8,7 @@
 jest.mock('@offgrid/core/utils/logger', () => ({ __esModule: true, default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 jest.mock('../../../pro/audio/ttsLog', () => ({ smLog: jest.fn() }));
 jest.mock('@offgrid/core/utils/messageContent', () => ({
+  ...jest.requireActual('@offgrid/core/utils/messageContent'),
   stripControlTokens: (s: string) => s,
   stripMarkdownForSpeech: (s: string) => s,
 }));

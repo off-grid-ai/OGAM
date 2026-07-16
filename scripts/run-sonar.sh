@@ -26,8 +26,14 @@ run_sonar() {
 }
 
 if ! output=$(run_sonar "$@" 2>&1); then
-  if echo "$output" | grep -q "running manual analysis while Automatic Analysis is enabled"; then
-    echo "SonarCloud automatic analysis is enabled — skipping local scan (runs automatically on push)."
+  # The authoritative Sonar analysis for this project is SERVER-SIDE (SonarCloud Automatic
+  # Analysis), so a local/manual scan is best-effort and must NEVER block a push. Skip (not
+  # fail) on the known can't-run-locally cases: automatic-analysis is on, OR the token is
+  # read-only / the project isn't manually scannable with it ("Not authorized or project not
+  # found" — what a local scan gets when Automatic Analysis owns the project). Any OTHER
+  # scanner error still hard-fails.
+  if echo "$output" | grep -qE "running manual analysis while Automatic Analysis is enabled|Not authorized or project not found"; then
+    echo "Skipping local Sonar scan — analysis runs server-side (SonarCloud Automatic Analysis) on push."
     exit 0
   fi
   echo "$output" >&2

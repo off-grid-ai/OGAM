@@ -1,7 +1,5 @@
 PODS:
   - boost (1.84.0)
-  - BVLinearGradient (2.8.3):
-    - React-Core
   - DoubleConversion (1.1.6)
   - fast_float (8.0.0)
   - FBLazyVector (0.83.1)
@@ -10,7 +8,7 @@ PODS:
   - hermes-engine (0.14.0):
     - hermes-engine/Pre-built (= 0.14.0)
   - hermes-engine/Pre-built (0.14.0)
-  - llama-rn (0.12.4):
+  - llama-rn (0.12.5):
     - boost
     - DoubleConversion
     - fast_float
@@ -40,73 +38,9 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - lottie-ios (4.5.0)
-  - lottie-react-native (7.3.5):
-    - boost
-    - DoubleConversion
-    - fast_float
-    - fmt
-    - glog
-    - hermes-engine
-    - lottie-ios (= 4.5.0)
-    - RCT-Folly
-    - RCT-Folly/Fabric
-    - RCTRequired
-    - RCTTypeSafety
-    - React-Core
-    - React-debug
-    - React-Fabric
-    - React-featureflags
-    - React-graphics
-    - React-ImageManager
-    - React-jsi
-    - React-NativeModulesApple
-    - React-RCTFabric
-    - React-renderercss
-    - React-rendererdebug
-    - React-utils
-    - ReactCodegen
-    - ReactCommon/turbomodule/bridging
-    - ReactCommon/turbomodule/core
-    - SocketRocket
-    - Yoga
   - MMKV (2.4.0):
     - MMKVCore (~> 2.4.0)
   - MMKVCore (2.4.0)
-  - OffgridPro (0.0.1):
-    - boost
-    - DoubleConversion
-    - fast_float
-    - fmt
-    - glog
-    - hermes-engine
-    - onnxruntime-objc
-    - RCT-Folly
-    - RCT-Folly/Fabric
-    - RCTRequired
-    - RCTTypeSafety
-    - React-Core
-    - React-debug
-    - React-Fabric
-    - React-featureflags
-    - React-graphics
-    - React-ImageManager
-    - React-jsi
-    - React-NativeModulesApple
-    - React-RCTFabric
-    - React-renderercss
-    - React-rendererdebug
-    - React-utils
-    - ReactCodegen
-    - ReactCommon/turbomodule/bridging
-    - ReactCommon/turbomodule/core
-    - SocketRocket
-    - Yoga
-  - onnxruntime-c (1.27.0)
-  - onnxruntime-objc (1.27.0):
-    - onnxruntime-objc/Core (= 1.27.0)
-  - onnxruntime-objc/Core (1.27.0):
-    - onnxruntime-c (= 1.27.0)
   - op-sqlite (15.2.5):
     - boost
     - DoubleConversion
@@ -136,11 +70,6 @@ PODS:
     - SocketRocket
     - Yoga
   - opencv-rne (4.11.0)
-  - PurchasesHybridCommon (18.15.1):
-    - RevenueCat (= 5.78.0)
-  - PurchasesHybridCommonUI (18.15.1):
-    - PurchasesHybridCommon (= 18.15.1)
-    - RevenueCatUI (= 5.78.0)
   - RCT-Folly (2024.11.18.00):
     - boost
     - DoubleConversion
@@ -2054,34 +1983,6 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - react-native-blur (4.4.1):
-    - boost
-    - DoubleConversion
-    - fast_float
-    - fmt
-    - glog
-    - hermes-engine
-    - RCT-Folly
-    - RCT-Folly/Fabric
-    - RCTRequired
-    - RCTTypeSafety
-    - React-Core
-    - React-debug
-    - React-Fabric
-    - React-featureflags
-    - React-graphics
-    - React-ImageManager
-    - React-jsi
-    - React-NativeModulesApple
-    - React-RCTFabric
-    - React-renderercss
-    - React-rendererdebug
-    - React-utils
-    - ReactCodegen
-    - ReactCommon/turbomodule/bridging
-    - ReactCommon/turbomodule/core
-    - SocketRocket
-    - Yoga
   - react-native-document-picker (12.0.1):
     - boost
     - DoubleConversion
@@ -2985,9 +2886,6 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - RevenueCat (5.78.0)
-  - RevenueCatUI (5.78.0):
-    - RevenueCat (= 5.78.0)
   - RNAudioAPI (0.11.7):
     - boost
     - DoubleConversion
@@ -3193,17 +3091,6 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - RNNotifee (9.1.8):
-    - React-Core
-    - RNNotifee/NotifeeCore (= 9.1.8)
-  - RNNotifee/NotifeeCore (9.1.8):
-    - React-Core
-  - RNPaywalls (10.4.0):
-    - PurchasesHybridCommonUI (= 18.15.1)
-    - React-Core
-  - RNPurchases (10.4.0):
-    - PurchasesHybridCommon (= 18.15.1)
-    - React-Core
   - RNReactNativeHapticFeedback (2.3.3):
     - boost
     - DoubleConversion
@@ -3600,7 +3487,6 @@ PODS:
 
 DEPENDENCIES:
   - boost (from `../node_modules/react-native/third-party-podspecs/boost.podspec`)
-  - BVLinearGradient (from `../node_modules/react-native-linear-gradient`)
   - DoubleConversion (from `../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec`)
   - fast_float (from `../node_modules/react-native/third-party-podspecs/fast_float.podspec`)
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
@@ -3608,9 +3494,6 @@ DEPENDENCIES:
   - glog (from `../node_modules/react-native/third-party-podspecs/glog.podspec`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
   - llama-rn (from `../node_modules/llama.rn`)
-  - lottie-react-native (from `../node_modules/lottie-react-native`)
-  - OffgridPro (from `../pro/ios`)
-  - onnxruntime-objc
   - "op-sqlite (from `../node_modules/@op-engineering/op-sqlite`)"
   - RCT-Folly (from `../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
@@ -3650,7 +3533,6 @@ DEPENDENCIES:
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - "react-native-background-downloader (from `../node_modules/@kesha-antonov/react-native-background-downloader`)"
-  - "react-native-blur (from `../node_modules/@react-native-community/blur`)"
   - "react-native-document-picker (from `../node_modules/@react-native-documents/picker`)"
   - "react-native-document-viewer (from `../node_modules/@react-native-documents/viewer`)"
   - react-native-executorch (from `../node_modules/react-native-executorch`)
@@ -3701,9 +3583,6 @@ DEPENDENCIES:
   - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
   - RNInAppBrowser (from `../node_modules/react-native-inappbrowser-reborn`)
   - RNKeychain (from `../node_modules/react-native-keychain`)
-  - "RNNotifee (from `../node_modules/@notifee/react-native`)"
-  - RNPaywalls (from `../node_modules/react-native-purchases-ui`)
-  - RNPurchases (from `../node_modules/react-native-purchases`)
   - RNReactNativeHapticFeedback (from `../node_modules/react-native-haptic-feedback`)
   - RNReanimated (from `../node_modules/react-native-reanimated`)
   - RNScreens (from `../node_modules/react-native-screens`)
@@ -3717,24 +3596,15 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
-    - lottie-ios
     - MMKV
     - MMKVCore
-    - onnxruntime-c
-    - onnxruntime-objc
     - opencv-rne
-    - PurchasesHybridCommon
-    - PurchasesHybridCommonUI
-    - RevenueCat
-    - RevenueCatUI
     - SocketRocket
     - SSZipArchive
 
 EXTERNAL SOURCES:
   boost:
     :podspec: "../node_modules/react-native/third-party-podspecs/boost.podspec"
-  BVLinearGradient:
-    :path: "../node_modules/react-native-linear-gradient"
   DoubleConversion:
     :podspec: "../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec"
   fast_float:
@@ -3750,10 +3620,6 @@ EXTERNAL SOURCES:
     :tag: hermes-v0.14.0
   llama-rn:
     :path: "../node_modules/llama.rn"
-  lottie-react-native:
-    :path: "../node_modules/lottie-react-native"
-  OffgridPro:
-    :path: "../pro/ios"
   op-sqlite:
     :path: "../node_modules/@op-engineering/op-sqlite"
   RCT-Folly:
@@ -3830,8 +3696,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
   react-native-background-downloader:
     :path: "../node_modules/@kesha-antonov/react-native-background-downloader"
-  react-native-blur:
-    :path: "../node_modules/@react-native-community/blur"
   react-native-document-picker:
     :path: "../node_modules/@react-native-documents/picker"
   react-native-document-viewer:
@@ -3932,12 +3796,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-inappbrowser-reborn"
   RNKeychain:
     :path: "../node_modules/react-native-keychain"
-  RNNotifee:
-    :path: "../node_modules/@notifee/react-native"
-  RNPaywalls:
-    :path: "../node_modules/react-native-purchases-ui"
-  RNPurchases:
-    :path: "../node_modules/react-native-purchases"
   RNReactNativeHapticFeedback:
     :path: "../node_modules/react-native-haptic-feedback"
   RNReanimated:
@@ -3959,25 +3817,17 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   boost: 7e761d76ca2ce687f7cc98e698152abd03a18f90
-  BVLinearGradient: cb006ba232a1f3e4f341bb62c42d1098c284da70
   DoubleConversion: cb417026b2400c8f53ae97020b2be961b59470cb
   fast_float: b32c788ed9c6a8c584d114d0047beda9664e7cc6
   FBLazyVector: 309703e71d3f2f1ed7dc7889d58309c9d77a95a4
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
-  hermes-engine: 8c6be38f94b3bf8b864981980e64e55f08e467ec
-  llama-rn: 7c9b9610cc259118508bd1264bbd9be47e17ffd0
-  lottie-ios: a881093fab623c467d3bce374367755c272bdd59
-  lottie-react-native: 691b8363e8c591fb78a78254ff2517258891456b
+  hermes-engine: 3de70ea2100f1780402cf146bb8110a0cdb2f34e
+  llama-rn: e6be4084699f0237fe0156c5f826cdaeb59e399e
   MMKV: 86859fdfa2b0b21db1fd6e48788474a6416a2c77
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
-  OffgridPro: c60bd1f326de83302835ae75857777b92f949fe8
-  onnxruntime-c: 412ab51682e622e3d77ddc9176aa92517d171820
-  onnxruntime-objc: f88cca350e7603f81c31b5823f3ddfaa67da9f84
   op-sqlite: bafff369cecaee4fe65c89eec47deaba26f2db95
   opencv-rne: 2305807573b6e29c8c87e3416ab096d09047a7a0
-  PurchasesHybridCommon: eed735a411c1aee8c05d62933fa7c4a40ede4009
-  PurchasesHybridCommonUI: 4f0efc542177185a0d38080bbc42210d4ac15f4a
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669
   RCTDeprecation: a41bbdd9af30bf2e5715796b313e44ec43eefff1
   RCTRequired: 7be34aabb0b77c3cefe644528df0fa0afad4e4d0
@@ -4015,10 +3865,9 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 7b72a669e94662359dad4f42b5af005eb24b4e83
   React-microtasksnativemodule: cdc02da075f2857803ed63f24f5f72fc40e094c0
   react-native-background-downloader: b02d12c3961322ce1c85fa0f8b3e4adb5b652106
-  react-native-blur: 6af83e7e3c4c1446a188d9b2c493600fc4beb173
   react-native-document-picker: dc2d83366e47e89e7c51e8a41eab99c1d54e941c
   react-native-document-viewer: 8c6ed07e7e27352743fa98e8dd6d288ad925b884
-  react-native-executorch: 65df20362342afff0040d227d270a1b9a59f0c54
+  react-native-executorch: 9a44ee2b18773cbe5ad2e6d7376eb76f347e2935
   react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
   react-native-image-picker: 0314366753615115fa55c3cc937ac44cb7e75702
   react-native-keyboard-controller: 7534b5a39d1e8b2b79f86e8e998ed71c7154f69f
@@ -4059,8 +3908,6 @@ SPEC CHECKSUMS:
   ReactCodegen: 3d48510bcef445f6403c0004047d4d9cbb915435
   ReactCommon: ac934cb340aee91282ecd6f273a26d24d4c55cae
   ReactNativeFs: e25a135240a730fe4326fd4054cc36830b9b9eb9
-  RevenueCat: f3641992451c1426da8d8d1466cec3bbdb765962
-  RevenueCatUI: 32998f100fe73f1d0172df7eef4f0dd1bc781a05
   RNAudioAPI: 106257d5f3713bb667d6d74ebb3105c9cf5d60db
   RNCalendarEvents: f90f73666b6bcbb3cc8a491ffbb5e48c0db3de37
   RNCAsyncStorage: 29f0230e1a25f36c20b05f65e2eb8958d6526e82
@@ -4068,9 +3915,6 @@ SPEC CHECKSUMS:
   RNGestureHandler: cd4be101cfa17ea6bbd438710caa02e286a84381
   RNInAppBrowser: 904d24dc75e8e6c6c98a3160329192608946f9df
   RNKeychain: a2c134ab796272c3d605e035ab727591000b30f3
-  RNNotifee: 5e3b271e8ea7456a36eec994085543c9adca9168
-  RNPaywalls: 66c42934ec5a9e666d69e74a27609855568daed6
-  RNPurchases: 1436e2381a4a06bfd6378158f9ebd11993e684cc
   RNReactNativeHapticFeedback: be4f1b4bf0398c30b59b76ed92ecb0a2ff3a69c6
   RNReanimated: 292cd58688552a22b3fc1cefcfbc49b336dfed68
   RNScreens: 714e10b6b554f7dc7ad9f78dcf36dc8e3fc73415
@@ -4083,6 +3927,6 @@ SPEC CHECKSUMS:
   whisper-rn: 7566faf9b7d78e39ab9fc634cb90fdee81177793
   Yoga: 5456bb010373068fc92221140921b09d126b116e
 
-PODFILE CHECKSUM: 7e3cc52eb1420b70214416b0f5e4aca31f6ba1c7
+PODFILE CHECKSUM: f66f810a788ead15881075527443239e49b50db1
 
 COCOAPODS: 1.16.2

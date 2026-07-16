@@ -32,7 +32,7 @@ function getLocalCapabilities(): ProviderCapabilities {
  *
  * Delegates to the existing llmService for local inference.
  */
-export class LocalProvider implements LLMProvider {
+class LocalProvider implements LLMProvider {
   readonly id = 'local';
   readonly type: ProviderType = 'local';
 
@@ -114,9 +114,8 @@ export class LocalProvider implements LLMProvider {
     let fullContent = '';
     let fullReasoningContent = '';
 
-    await llmService.generateResponse(
-      messages,
-      (data) => {
+    await llmService.generateResponse(messages, {
+      onStream: (data) => {
         if (data.content) {
           fullContent += data.content;
           callbacks.onToken(data.content);
@@ -126,7 +125,7 @@ export class LocalProvider implements LLMProvider {
           callbacks.onReasoning(data.reasoningContent);
         }
       },
-      (result) => {
+      onComplete: (result) => {
         fullContent = result.content || fullContent;
         fullReasoningContent = result.reasoningContent || fullReasoningContent;
 
@@ -135,8 +134,8 @@ export class LocalProvider implements LLMProvider {
           reasoningContent: fullReasoningContent || undefined,
           meta: buildMeta(),
         });
-      }
-    );
+      },
+    });
   }
 
   private async generateWithTools(

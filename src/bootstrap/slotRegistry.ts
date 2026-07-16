@@ -44,7 +44,7 @@ export function useSlot(name: string): ComponentType<any> | undefined {
   );
 }
 
-export function _clearSlotsForTesting(): void {
+function _clearSlotsForTesting(): void {
   for (const key of Object.keys(slots)) {
     delete slots[key];
   }

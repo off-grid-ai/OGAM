@@ -4,6 +4,7 @@
  */
 import { createNDJSONStreamingRequest } from '../httpClient';
 import logger from '../../utils/logger';
+import { REASONING_DELIMITERS, partialTagSuffix, maxPartialTagSuffix } from '../../utils/messageContent';
 import type { StreamCallbacks } from './types';
 import type {
   OpenAIChatMessage,
@@ -20,6 +21,14 @@ import type {
 export class ThinkTagParser {
   private inThinkBlock = false;
   private buffer = '';
+  // The close tag for the reasoning format currently open — set when an opener is matched,
+  // so a block opened as Gemma closes on `<channel|>` and one opened as <think> on </think>.
+  private activeClose = '';
+  // A single `\n` immediately after an opener is a SYNTACTIC separator (`<|channel>thought\n…`,
+  // `<think>\n…`), not reasoning — consume it once on block entry so reasoning has no leading
+  // newline. Mirrors the complete parser's `\n?` after the Gemma opener; without it the bare
+  // `<|channel>thought` opener would emit the separating newline as reasoning content.
+  private stripLeadingNewlineOnEntry = false;
 
   process(content: string, onToken: (t: string) => void, onReasoning: (t: string) => void): void {
     this.buffer += content;
@@ -27,13 +36,26 @@ export class ThinkTagParser {
   }
 
   /**
-   * Handle one iteration of the while loop when we are outside a think block.
+   * Handle one iteration of the while loop when we are outside a reasoning block.
+   * Scans for the EARLIEST opener across every reasoning format (the shared grammar), so
+   * remote-streamed Gemma/Qwen channel reasoning is recognised, not just <think> (DR1).
    * Returns true if the while loop should break (buffer needs more data).
    */
-  private handleOutsideThink(openTag: string, onToken: (t: string) => void): boolean {
-    const idx = this.buffer.indexOf(openTag);
-    if (idx === -1) {
-      const partial = this.partialSuffix(this.buffer, openTag);
+  private handleOutsideThink(onToken: (t: string) => void): boolean {
+    let bestIdx = -1;
+    let bestOpen = '';
+    let bestClose = '';
+    for (const d of REASONING_DELIMITERS) {
+      const idx = this.buffer.indexOf(d.open);
+      if (idx !== -1 && (bestIdx === -1 || idx < bestIdx)) {
+        bestIdx = idx;
+        bestOpen = d.open;
+        bestClose = d.close;
+      }
+    }
+    if (bestIdx === -1) {
+      // No complete opener. Hold back only a suffix that could still become one of the openers.
+      const partial = maxPartialTagSuffix(this.buffer, REASONING_DELIMITERS.map((d) => d.open));
       if (partial > 0) {
         onToken(this.buffer.slice(0, this.buffer.length - partial));
         this.buffer = this.buffer.slice(this.buffer.length - partial);
@@ -43,20 +65,32 @@ export class ThinkTagParser {
       this.buffer = '';
       return true;
     }
-    if (idx > 0) onToken(this.buffer.slice(0, idx));
-    this.buffer = this.buffer.slice(idx + openTag.length);
+    if (bestIdx > 0) onToken(this.buffer.slice(0, bestIdx));
+    this.buffer = this.buffer.slice(bestIdx + bestOpen.length);
     this.inThinkBlock = true;
+    this.activeClose = bestClose;
+    this.stripLeadingNewlineOnEntry = true;
     return false;
   }
 
   /**
-   * Handle one iteration of the while loop when we are inside a think block.
+   * Handle one iteration of the while loop when we are inside a reasoning block, matching the
+   * close tag for the format that opened it (this.activeClose).
    * Returns true if the while loop should break (buffer needs more data).
    */
-  private handleInsideThink(closeTag: string, onReasoning: (t: string) => void): boolean {
+  private handleInsideThink(onReasoning: (t: string) => void): boolean {
+    // Consume the one optional `\n` separator that follows the opener before any reasoning is
+    // emitted. Char-by-char safe: if the buffer is still empty, wait for the next char; if it
+    // starts with a non-newline, there was no separator — clear the flag and fall through.
+    if (this.stripLeadingNewlineOnEntry) {
+      if (this.buffer.length === 0) return true;
+      if (this.buffer[0] === '\n') this.buffer = this.buffer.slice(1);
+      this.stripLeadingNewlineOnEntry = false;
+    }
+    const closeTag = this.activeClose;
     const idx = this.buffer.indexOf(closeTag);
     if (idx === -1) {
-      const partial = this.partialSuffix(this.buffer, closeTag);
+      const partial = partialTagSuffix(this.buffer, closeTag);
       if (partial > 0) {
         onReasoning(this.buffer.slice(0, this.buffer.length - partial));
         this.buffer = this.buffer.slice(this.buffer.length - partial);
@@ -69,26 +103,17 @@ export class ThinkTagParser {
     if (idx > 0) onReasoning(this.buffer.slice(0, idx));
     this.buffer = this.buffer.slice(idx + closeTag.length);
     this.inThinkBlock = false;
+    this.activeClose = '';
     return false;
   }
 
   private flush(onToken: (t: string) => void, onReasoning: (t: string) => void): void {
-    const openTag = '<think>';
-    const closeTag = '</think>';
     while (this.buffer.length > 0) {
       const shouldBreak = this.inThinkBlock
-        ? this.handleInsideThink(closeTag, onReasoning)
-        : this.handleOutsideThink(openTag, onToken);
+        ? this.handleInsideThink(onReasoning)
+        : this.handleOutsideThink(onToken);
       if (shouldBreak) break;
     }
-  }
-
-  /** Length of the longest suffix of text that is a prefix of tag. */
-  private partialSuffix(text: string, tag: string): number {
-    for (let len = Math.min(tag.length - 1, text.length); len > 0; len--) {
-      if (text.endsWith(tag.slice(0, len))) return len;
-    }
-    return 0;
   }
 }
 
@@ -135,6 +160,7 @@ export function processDelta(
   state: OpenAIStreamState,
   ctx: DeltaCtx,
 ): void {
+  logger.log(`[WIRE-REMOTE] ${JSON.stringify(delta)}`); // [WIRE] raw OpenAI-compatible/Ollama delta from-device
   if (delta.content) {
     ctx.thinkTagParser.process(
       delta.content,
@@ -153,7 +179,11 @@ export function processDelta(
   // - delta.reasoning         (Ollama /v1/chat/completions)
   // - delta.thinking          (kept as fallback)
   const reasoningDelta = delta.reasoning_content || delta.reasoning || delta.thinking;
-  if (reasoningDelta && ctx.thinkingEnabled) {
+  // A DEDICATED reasoning field means the remote model chose to emit reasoning — surface
+  // it regardless of the local thinkingEnabled toggle. Remote has no thinking toggle, so
+  // gating on it dropped reasoning LM Studio actually sent (B16); providers that CAN be
+  // told not to think (Ollama's `think` param) simply won't send this field when off.
+  if (reasoningDelta) {
     state.fullReasoningContent += reasoningDelta;
     ctx.callbacks.onReasoning?.(reasoningDelta);
   }
@@ -198,6 +228,7 @@ function handleOllamaChatLine(
   req: { callbacks: StreamCallbacks; signal: AbortSignal; abort: () => void },
 ): void {
   if (req.signal.aborted) return;
+  logger.log(`[WIRE-OLLAMA] ${JSON.stringify(line)}`); // [WIRE] raw Ollama /api/chat NDJSON line from-device
 
   if (line.error) {
     streamState.streamErrorOccurred = true;

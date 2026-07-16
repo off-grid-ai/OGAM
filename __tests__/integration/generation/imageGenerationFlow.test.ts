@@ -11,6 +11,7 @@ import { imageGenerationService } from '../../../src/services/imageGenerationSer
 import { localDreamGeneratorService } from '../../../src/services/localDreamGenerator';
 import { activeModelService } from '../../../src/services/activeModelService';
 import { llmService } from '../../../src/services/llm';
+import { liteRTService } from '../../../src/services/litert';
 import {
   resetStores,
   flushPromises,
@@ -18,7 +19,7 @@ import {
   getChatState,
   setupWithConversation,
 } from '../../utils/testHelpers';
-import { createONNXImageModel, createGeneratedImage, createMessage } from '../../utils/factories';
+import { createONNXImageModel, createGeneratedImage, createMessage, createDownloadedModel } from '../../utils/factories';
 import { Message } from '../../../src/types';
 import { useModelFailureStore } from '../../../src/stores/modelFailureStore';
 import { OverridableMemoryError } from '../../../src/services/modelLoadErrors';
@@ -27,10 +28,20 @@ import { OverridableMemoryError } from '../../../src/services/modelLoadErrors';
 jest.mock('../../../src/services/localDreamGenerator');
 jest.mock('../../../src/services/activeModelService');
 jest.mock('../../../src/services/llm');
+jest.mock('../../../src/services/litert', () => ({
+  liteRTService: {
+    isModelLoaded: jest.fn(() => false),
+    prepareConversation: jest.fn(() => Promise.resolve()),
+    generateRaw: jest.fn(() => Promise.resolve('')),
+    invalidateConversation: jest.fn(),
+    stopGeneration: jest.fn(() => Promise.resolve()),
+  },
+}));
 
 const mockLocalDreamService = localDreamGeneratorService as jest.Mocked<typeof localDreamGeneratorService>;
 const mockActiveModelService = activeModelService as jest.Mocked<typeof activeModelService>;
 const mockLlmService = llmService as jest.Mocked<typeof llmService>;
+const mockLiteRTService = liteRTService as jest.Mocked<typeof liteRTService>;
 
 describe('Image Generation Flow Integration', () => {
   beforeEach(async () => {
@@ -69,6 +80,30 @@ describe('Image Generation Flow Integration', () => {
     // Reset imageGenerationService state by canceling any in-progress generation
     await imageGenerationService.cancelGeneration().catch(() => {});
   });
+
+  // Enhancement now dispatches through the engine seam (getActiveEngineService /
+  // generateStandalone), which resolves the active engine from the store. Seed a real llama
+  // text model so the seam returns the (boundary-mocked) llmService — mirrors the device
+  // where a text model is selected. Returns the model id.
+  const setupActiveTextModel = (id = 'text-1', engine: 'llama' | 'litert' = 'llama') => {
+    useAppStore.setState({
+      downloadedModels: [createDownloadedModel({ id, engine })],
+      activeModelId: id,
+    });
+    return id;
+  };
+
+  /** Make the given engine report loaded + return `enhanced` from its one-shot, so the flow
+   *  can be asserted identically across llama and LiteRT (the seam generateStandalone hides). */
+  const mockEngineEnhancement = (engine: 'llama' | 'litert', enhanced: string) => {
+    if (engine === 'litert') {
+      mockLiteRTService.isModelLoaded.mockReturnValue(true);
+      mockLiteRTService.generateRaw.mockResolvedValue(enhanced);
+    } else {
+      mockLlmService.isModelLoaded.mockReturnValue(true);
+      mockLlmService.generateResponse.mockResolvedValue(enhanced);
+    }
+  };
 
   const setupImageModelState = () => {
     const imageModel = createONNXImageModel({
@@ -555,10 +590,43 @@ describe('Image Generation Flow Integration', () => {
       await gen;
     });
 
+    // Engine matrix: the enhancement flow must behave IDENTICALLY whichever text engine is
+    // active. The device bug was that a LiteRT text model reported "not loaded" (the path
+    // hardcoded llmService) so enhancement was silently skipped — no test exercised litert.
+    // This asserts the TERMINAL artifact (the enhanced prompt actually reaching the image
+    // generator) for BOTH engines, so neither can diverge again.
+    describe.each(['llama', 'litert'] as const)('image-gen + prompt enhancement (engine=%s)', (engine) => {
+      it('enhances via the active engine and generates from the ENHANCED prompt', async () => {
+        setupImageModelState();
+        setupActiveTextModel('text-1', engine);
+        useAppStore.setState({
+          settings: { ...useAppStore.getState().settings, enhanceImagePrompts: true } as any,
+        });
+        mockEngineEnhancement(engine, 'a photorealistic golden retriever, studio lighting');
+
+        await imageGenerationService.generateImage({ prompt: 'a dog' });
+
+        // Terminal artifact: the image generator ran with the enhanced prompt, not the raw one.
+        expect(mockLocalDreamService.generateImage).toHaveBeenCalledWith(
+          expect.objectContaining({ prompt: 'a photorealistic golden retriever, studio lighting' }),
+          expect.any(Function),
+          expect.any(Function),
+        );
+        // And the enhancement ran on the RIGHT engine (not the other one).
+        if (engine === 'litert') {
+          expect(mockLiteRTService.generateRaw).toHaveBeenCalled();
+          expect(mockLlmService.generateResponse).not.toHaveBeenCalled();
+        } else {
+          expect(mockLlmService.generateResponse).toHaveBeenCalled();
+          expect(mockLiteRTService.generateRaw).not.toHaveBeenCalled();
+        }
+      });
+    });
+
     it('auto-loads the text model on demand to enhance when it is not loaded', async () => {
       setupImageModelState();
+      setupActiveTextModel('text-1');
       useAppStore.setState({
-        activeModelId: 'text-1',
         settings: { ...useAppStore.getState().settings, enhanceImagePrompts: true } as any,
       });
       // Not loaded initially; becomes loaded after the on-demand load.
@@ -576,6 +644,7 @@ describe('Image Generation Flow Integration', () => {
   describe('Prompt Enhancement with Conversation Context', () => {
     const setupEnhancement = () => {
       const imageModel = setupImageModelState();
+      setupActiveTextModel();
       mockActiveModelService.getActiveModels.mockReturnValue({
         text: { model: null, isLoaded: false, isLoading: false },
         image: { model: imageModel, isLoaded: true, isLoading: false },
@@ -1096,6 +1165,7 @@ describe('Image Generation Flow Integration', () => {
   describe('prompt enhancement strips thinking model tags', () => {
     const setupThinkingModelEnhancement = () => {
       const imageModel = setupImageModelState();
+      setupActiveTextModel();
       mockActiveModelService.getActiveModels.mockReturnValue({
         text: { model: null, isLoaded: false, isLoading: false },
         image: { model: imageModel, isLoaded: true, isLoading: false },
@@ -1202,6 +1272,7 @@ describe('Image Generation Flow Integration', () => {
   describe('prompt enhancement stopGeneration cleanup (lines 247, 287-291)', () => {
     const setupEnhancementWithConversation = () => {
       const imageModel = setupImageModelState();
+      setupActiveTextModel();
       mockActiveModelService.getActiveModels.mockReturnValue({
         text: { model: null, isLoaded: false, isLoading: false },
         image: { model: imageModel, isLoaded: true, isLoading: false },

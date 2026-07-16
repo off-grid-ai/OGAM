@@ -10,8 +10,8 @@
  * tab, model selector, chat turn) behaves identically — pass a load thunk that takes
  * the override opts and the screen's alert setter.
  */
-import { AlertState, showAlert, hideAlert } from '../components/CustomAlert';
-import { isOverridableMemoryError } from './modelLoadErrors';
+import { AlertState, showAlert, hideAlert } from '../utils/alertState';
+import { isOverridableMemoryError } from '../utils/modelLoadErrors';
 
 /** Safe message extraction — a thrown value isn't guaranteed to be an Error, and
  *  `(error as Error).message` renders "undefined" for a string/other throw. */

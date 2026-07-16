@@ -242,24 +242,24 @@ describe('ModelSettingsScreen', () => {
   });
 
   // ============================================================================
-  describe('aggressive loading toggle', () => {
-    it('renders the Aggressive Loading label', () => {
+  describe('model loading mode selector', () => {
+    it('renders the Model Loading label', () => {
       const { getByText } = renderWithSections('text');
-      expect(getByText('Aggressive Loading')).toBeTruthy();
+      expect(getByText('Model Loading')).toBeTruthy();
     });
 
-    it('turns the setting on', () => {
-      useAppStore.getState().updateSettings({ aggressiveModelLoading: false });
+    it('selects aggressive', () => {
+      useAppStore.getState().updateSettings({ modelLoadingMode: 'balanced' });
       const { getByTestId } = renderWithSections('text');
-      fireEvent.press(getByTestId('aggressive-loading-on-button'));
-      expect(useAppStore.getState().settings.aggressiveModelLoading).toBe(true);
+      fireEvent.press(getByTestId('model-loading-mode-aggressive-button'));
+      expect(useAppStore.getState().settings.modelLoadingMode).toBe('aggressive');
     });
 
-    it('turns the setting off', () => {
-      useAppStore.getState().updateSettings({ aggressiveModelLoading: true });
+    it('selects conservative', () => {
+      useAppStore.getState().updateSettings({ modelLoadingMode: 'balanced' });
       const { getByTestId } = renderWithSections('text');
-      fireEvent.press(getByTestId('aggressive-loading-off-button'));
-      expect(useAppStore.getState().settings.aggressiveModelLoading).toBe(false);
+      fireEvent.press(getByTestId('model-loading-mode-conservative-button'));
+      expect(useAppStore.getState().settings.modelLoadingMode).toBe('conservative');
     });
   });
 
@@ -708,12 +708,12 @@ describe('ModelSettingsScreen', () => {
       const allViews = UNSAFE_getAllByType(View);
       const sliders = allViews.filter((v: any) => v.props.onSlidingComplete && v.props.testID?.endsWith('-slider'));
 
-      const sizeSlider = sliders.find((s: any) => s.props.value === 512 && s.props.maximumValue === 512 && s.props.minimumValue === 128);
-      if (sizeSlider) {
-        fireEvent(sizeSlider, 'slidingComplete', 256);
-        expect(useAppStore.getState().settings.imageWidth).toBe(256);
-        expect(useAppStore.getState().settings.imageHeight).toBe(256);
-      }
+      // Min is the shared 256 floor (SWEET_SPOT_SIZE) — same as the chat modal, no divergence.
+      const sizeSlider = sliders.find((s: any) => s.props.value === 512 && s.props.maximumValue === 512 && s.props.minimumValue === 256);
+      expect(sizeSlider).toBeTruthy();
+      fireEvent(sizeSlider!, 'slidingComplete', 320);
+      expect(useAppStore.getState().settings.imageWidth).toBe(320);
+      expect(useAppStore.getState().settings.imageHeight).toBe(320);
     });
   });
 
@@ -978,5 +978,22 @@ describe('ModelSettingsScreen', () => {
       expect(s.inferenceBackend).toBe('metal'); // iOS default
       expect(s.gpuLayers).toBe(99);
     });
+  });
+});
+
+describe('Speech sections — Transcription (STT) + Text to Speech (TTS)', () => {
+  it('opening Transcription reveals the model row that opens the picker', () => {
+    const view = renderScreen();
+    // collapsed by default
+    expect(view.queryByTestId('stt-open-picker')).toBeNull();
+    fireEvent.press(view.getByTestId('transcription-accordion'));
+    // the row appears and shows the "no model yet" state (whisper store empty in a fresh app)
+    expect(view.getByTestId('stt-open-picker')).toBeTruthy();
+    expect(view.getByText('None selected — tap to choose')).toBeTruthy();
+  });
+
+  it('does NOT show Text to Speech without the pro TTS slot (free build)', () => {
+    const view = renderScreen();
+    expect(view.queryByTestId('tts-accordion')).toBeNull();
   });
 });

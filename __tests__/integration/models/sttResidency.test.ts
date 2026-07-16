@@ -24,7 +24,7 @@ import { hardwareService } from '../../../src/services/hardware';
 // Native boundary: the whisper native model. A dumb stub that just flips a flag
 // so the REAL residency bookkeeping and the REAL store logic run on top of it.
 let mockWhisperNativeLoaded = false;
-jest.mock('../../../src/services', () => ({
+jest.mock('../../../src/services/whisperService', () => ({
   whisperService: {
     getModelPath: (id: string) => `/models/ggml-${id}.bin`,
     loadModel: jest.fn(async () => { mockWhisperNativeLoaded = true; }),
@@ -41,7 +41,7 @@ jest.mock('../../../src/services/hardware');
 const mockHardware = hardwareService as jest.Mocked<typeof hardwareService>;
 
 import { useWhisperStore } from '../../../src/stores/whisperStore';
-import { whisperService } from '../../../src/services';
+import { whisperService } from '../../../src/services/whisperService';
 
 const mockWhisper = whisperService as jest.Mocked<typeof whisperService>;
 

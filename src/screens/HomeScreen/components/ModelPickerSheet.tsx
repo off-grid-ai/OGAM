@@ -8,6 +8,7 @@ import { Button, ModelRow } from '../../../components';
 import { useTheme, useThemedStyles } from '../../../theme';
 import { createStyles } from '../styles';
 import { hardwareService, ResourceUsage } from '../../../services';
+import { fileExceedsBudget } from '../../../services/memoryBudget';
 import { getMmProjFileSize } from '../../../utils/modelHelpers';
 import { DownloadedModel, ONNXImageModel, RemoteModel } from '../../../types';
 import { ModelPickerType, LoadingState } from '../hooks/useHomeScreen';
@@ -61,7 +62,8 @@ const ImageTabContent: React.FC<ImageTabProps> = ({ downloadedImageModels, activ
       )}
       {downloadedImageModels.map((model) => {
         const estimatedMemoryGB = (model.size * 1.8) / (1024 * 1024 * 1024);
-        const memoryFits = memoryInfo ? estimatedMemoryGB < memoryInfo.memoryAvailable / (1024 * 1024 * 1024) - 1.5 : true;
+        // Owned verdict (DR3 fix): file vs the device-tier budget of TOTAL RAM — never instantaneous free RAM.
+        const memoryFits = memoryInfo ? !fileExceedsBudget(model.size, memoryInfo.memoryTotal / (1024 * 1024 * 1024)) : true;
         return (
           <ModelRow
             key={model.id}
@@ -199,8 +201,9 @@ export const ModelPickerSheet: React.FC<Props> = ({
                     {downloadedModels.map((model, idx) => {
                       const totalSize = model.fileSize + getMmProjFileSize(model);
                       const estimatedMemoryGB = (totalSize * 1.5) / (1024 * 1024 * 1024);
+                      // Owned verdict (DR3 fix): file vs the device-tier budget of TOTAL RAM — never instantaneous free RAM.
                       const memoryFits = memoryInfo
-                        ? estimatedMemoryGB < memoryInfo.memoryAvailable / (1024 * 1024 * 1024) - 1.5
+                        ? !fileExceedsBudget(totalSize, memoryInfo.memoryTotal / (1024 * 1024 * 1024))
                         : true;
                       const isHighlighted = idx === 0 && highlightFirst;
                       const modelItem = (

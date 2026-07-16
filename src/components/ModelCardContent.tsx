@@ -34,7 +34,7 @@ export interface RecommendedConfig {
  * highlight must not print twice) and joined. Rendered identically on every card
  * in the common muted description slot — no special-case colour or position.
  */
-export function cardDescription(description?: string, highlightText?: string): string | undefined {
+function cardDescription(description?: string, highlightText?: string): string | undefined {
   const parts = [description, highlightText].filter((v): v is string => !!v);
   const unique = parts.filter((v, i) => parts.indexOf(v) === i);
   return unique.length ? unique.join(' ') : undefined;
@@ -100,6 +100,7 @@ export const CompactModelCardContent: React.FC<CompactModelCardContentProps> = (
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const description = cardDescription(model.description, recommended?.highlightText);
 
   return (
     <>
@@ -136,9 +137,9 @@ export const CompactModelCardContent: React.FC<CompactModelCardContentProps> = (
       </View>
       {/* One common description line for EVERY compact card: model description +
           any recommended highlight, same slot (under the name), same muted style. */}
-      {cardDescription(model.description, recommended?.highlightText) && (
+      {!!description && (
         <Text style={styles.descriptionCompact} numberOfLines={2}>
-          {cardDescription(model.description, recommended?.highlightText)}
+          {description}
         </Text>
       )}
       {recommended?.chips && recommended.chips.length > 0 ? (
@@ -207,6 +208,7 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const description = cardDescription(model.description, recommended?.highlightText);
 
   return (
     <>
@@ -251,9 +253,9 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
           </View>
         )}
       </View>
-      {cardDescription(model.description, recommended?.highlightText) && (
+      {!!description && (
         <Text style={styles.description} numberOfLines={2}>
-          {cardDescription(model.description, recommended?.highlightText)}
+          {description}
         </Text>
       )}
     </>
@@ -388,7 +390,7 @@ function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelet
   onSelect?: () => void; onDelete?: () => void; onRepairVision?: () => void; isRepairingVision?: boolean;
 }>) {
   const tid = (s: string) => testID ? `${testID}-${s}` : undefined;
-  if (!onSelect && !onDelete && !onRepairVision) return <Icon name="check-circle" size={16} color={colors.primary} />;
+  if (!onSelect && !onDelete && !onRepairVision) return <Icon name="check-circle" size={16} color={colors.primary} testID={tid('downloaded')} />;
   return (
     <>
       {isRepairingVision ? (
@@ -396,7 +398,7 @@ function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelet
           <ActivityIndicator size="small" color={colors.warning} />
         </View>
       ) : (
-        onRepairVision && <ActionButton icon="eye" color={colors.warning} haptic="impactLight" onPress={onRepairVision} testID={tid('repair-vision')} styles={styles} />
+        onRepairVision && <ActionButton icon="tool" color={colors.warning} haptic="impactLight" onPress={onRepairVision} testID={tid('repair-vision')} styles={styles} />
       )}
       {!isActive && onSelect && <ActionButton icon="check-circle" color={colors.primary} haptic="selection" onPress={onSelect} styles={styles} />}
       {onDelete && <ActionButton icon="trash-2" color={colors.error} haptic="notificationWarning" onPress={onDelete} styles={styles} />}

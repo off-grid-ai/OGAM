@@ -26,6 +26,7 @@ import { useChatStore } from '../../../src/stores/chatStore';
 import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
 import { useProjectStore } from '../../../src/stores/projectStore';
 import { resetStores, setupFullChat } from '../../utils/testHelpers';
+import { OverridableMemoryError } from '../../../src/services/modelLoadErrors';
 import {
   createDownloadedModel,
   createONNXImageModel,
@@ -60,8 +61,11 @@ jest.mock('@react-navigation/native', () => {
 // Mock services
 const mockGenerateResponse = jest.fn(() => Promise.resolve());
 const mockStopGeneration = jest.fn(() => Promise.resolve());
-const mockLoadModel = jest.fn(() => Promise.resolve());
-const mockUnloadModel = jest.fn(() => Promise.resolve());
+// Typed to accept any args (id, timeout, { override }) so the delegating arrows in
+// the jest.mock factory and the keyed mockImplementation refusal cases typecheck —
+// activeModelService.loadTextModel/unloadTextModel take arguments.
+const mockLoadModel = jest.fn((..._args: any[]) => Promise.resolve());
+const mockUnloadModel = jest.fn((..._args: any[]) => Promise.resolve());
 const mockGenerateImage = jest.fn(() => Promise.resolve(true));
 const mockClassifyIntent = jest.fn(() => Promise.resolve('text'));
 
@@ -97,10 +101,16 @@ jest.mock('../../../src/services/generationService', () => ({
 
 jest.mock('../../../src/services/activeModelService', () => ({
   activeModelService: {
-    loadModel: mockLoadModel,
-    loadTextModel: mockLoadModel,
-    unloadModel: mockUnloadModel,
-    unloadTextModel: mockUnloadModel,
+    // Delegate through arrows: this factory is hoisted ABOVE the `const mockLoadModel`
+    // declarations, so referencing the consts directly here captures them while still
+    // in the temporal dead zone (undefined) and freezes `undefined` onto the object —
+    // which makes the source's `activeModelService.loadTextModel(...)` throw a TypeError
+    // at call time (surfacing as a spurious "Error" alert, never reaching the mock).
+    // Wrapping defers the lookup to call time, when the consts are initialized.
+    loadModel: (...args: unknown[]) => mockLoadModel(...args),
+    loadTextModel: (...args: unknown[]) => mockLoadModel(...args),
+    unloadModel: (...args: unknown[]) => mockUnloadModel(...args),
+    unloadTextModel: (...args: unknown[]) => mockUnloadModel(...args),
     unloadImageModel: jest.fn(() => Promise.resolve()),
     getActiveModels: jest.fn(() => ({
       text: { modelId: null, modelPath: null, isLoading: false },
@@ -540,7 +550,16 @@ describe('ChatScreen', () => {
       lastTimeToFirstToken: 0,
     });
 
-    // Re-setup activeModelService mock after clearAllMocks
+    // Re-setup activeModelService mock after clearAllMocks.
+    // The jest.mock factory references mockLoadModel/mockUnloadModel, which are declared
+    // AFTER the hoisted jest.mock, so at factory-eval time they were undefined — the
+    // load/unload keys exist on the mock object but hold `undefined`. Bind them to the
+    // real mock fns here so every test (not just those after a manual patch) routes model
+    // load/unload through the mocks. (Loader path is exercised via the services barrel.)
+    (activeModelService as any).loadModel = mockLoadModel;
+    (activeModelService as any).loadTextModel = mockLoadModel;
+    (activeModelService as any).unloadModel = mockUnloadModel;
+    (activeModelService as any).unloadTextModel = mockUnloadModel;
     (activeModelService.getActiveModels as jest.Mock).mockReturnValue({
       text: { modelId: null, modelPath: null, isLoading: false },
       image: { modelId: null, modelPath: null, isLoading: false },
@@ -1516,14 +1535,8 @@ describe('ChatScreen', () => {
       return { model1, model2, conv };
     }
 
-    it('handles model selection with memory check', async () => {
+    it('routes model selection through the measured loader (no predictive pre-check)', async () => {
       setupTwoModelChat();
-
-      (activeModelService.checkMemoryForModel as jest.Mock).mockResolvedValue({
-        canLoad: true,
-        severity: 'safe',
-        message: null,
-      });
 
       const { getByTestId } = renderChatScreen();
       fireEvent.press(getByTestId('model-selector'));
@@ -1533,19 +1546,26 @@ describe('ChatScreen', () => {
         fireEvent.press(getByTestId('select-model-model-2'));
       });
 
+      // OD3: chat selection loads straight through the MEASURED residency loader
+      // (loadTextModel → makeRoomFor), the same path Home uses — NOT the old
+      // predictive checkMemoryForModel pre-check, which is no longer consulted here.
       await waitFor(() => {
-        expect(activeModelService.checkMemoryForModel).toHaveBeenCalled();
+        expect(mockLoadModel).toHaveBeenCalledWith('model-2', undefined, undefined);
       });
+      expect(activeModelService.checkMemoryForModel).not.toHaveBeenCalled();
     });
 
-    it('shows alert when memory check fails', async () => {
-      setupTwoModelChat();
+    it('shows an alert when the measured loader refuses (overridable)', async () => {
+      const { model2 } = setupTwoModelChat();
 
-      (activeModelService.checkMemoryForModel as jest.Mock).mockResolvedValue({
-        canLoad: false,
-        severity: 'critical',
-        message: 'Not enough memory to load this model',
-      });
+      // OD3: the MEASURED loader is the gate; it refuses with an overridable memory
+      // error (the old predictive checkMemoryForModel pre-check is no longer consulted).
+      // Keyed on id + override so an on-mount auto-load can't consume a one-shot reject:
+      // only model-2's initial (non-override) load is refused.
+      mockLoadModel.mockImplementation((id: string, _t?: unknown, opts?: { override?: boolean }) =>
+        id === model2.id && !opts?.override
+          ? Promise.reject(new OverridableMemoryError('Not enough memory to load this model'))
+          : Promise.resolve());
 
       const { getByTestId, queryByTestId } = renderChatScreen();
       fireEvent.press(getByTestId('model-selector'));
@@ -1558,16 +1578,18 @@ describe('ChatScreen', () => {
       await waitFor(() => {
         expect(queryByTestId('custom-alert')).toBeTruthy();
       });
+      expect(getByTestId('alert-title').props.children).toBe('Insufficient Memory');
     });
 
-    it('shows warning alert with Load Anyway option for low memory', async () => {
-      setupTwoModelChat();
+    it('shows a Load Anyway option when the measured loader refuses', async () => {
+      const { model2 } = setupTwoModelChat();
 
-      (activeModelService.checkMemoryForModel as jest.Mock).mockResolvedValue({
-        canLoad: true,
-        severity: 'warning',
-        message: 'Memory is low, loading may cause issues',
-      });
+      // OD3 removed the separate "Low Memory Warning" (severity) path; the single
+      // refusal affordance is the loader's OverridableMemoryError → "Load Anyway".
+      mockLoadModel.mockImplementation((id: string, _t?: unknown, opts?: { override?: boolean }) =>
+        id === model2.id && !opts?.override
+          ? Promise.reject(new OverridableMemoryError('Memory is low, loading may cause issues'))
+          : Promise.resolve());
 
       const { getByTestId, queryByTestId } = renderChatScreen();
       fireEvent.press(getByTestId('model-selector'));
@@ -1578,7 +1600,7 @@ describe('ChatScreen', () => {
       });
 
       await waitFor(() => {
-        expect(queryByTestId('custom-alert')).toBeTruthy();
+        expect(queryByTestId('alert-button-Load Anyway')).toBeTruthy();
       });
     });
 
@@ -2438,12 +2460,14 @@ describe('ChatScreen', () => {
       (llmService.isModelLoaded as jest.Mock).mockReturnValue(true);
       (llmService.getLoadedModelPath as jest.Mock).mockReturnValue(model.filePath);
 
-      // When selecting model2, memory check fails
-      (activeModelService.checkMemoryForModel as jest.Mock).mockResolvedValue({
-        canLoad: false,
-        severity: 'critical',
-        message: 'Not enough RAM',
-      });
+      // OD3: the MEASURED loader is the gate — it refuses with an overridable memory
+      // error (replaces the old predictive checkMemoryForModel pre-check). Keyed on the
+      // model id + override so an on-mount auto-load of the active model can't consume a
+      // one-shot rejection: only model-2's initial (non-override) load is refused.
+      mockLoadModel.mockImplementation((id: string, _t?: unknown, opts?: { override?: boolean }) =>
+        id === 'model-2' && !opts?.override
+          ? Promise.reject(new OverridableMemoryError('Not enough RAM'))
+          : Promise.resolve());
 
       const { getByTestId } = renderChatScreen();
       await act(async () => {});
@@ -2452,16 +2476,19 @@ describe('ChatScreen', () => {
       await act(async () => { fireEvent.press(getByTestId('model-selector')); });
       await act(async () => { fireEvent.press(getByTestId('models-row-text')); });
 
-      // Select model2 which will fail memory check
+      // Select model2 — the loader refuses (overridable)
       await act(async () => { fireEvent.press(getByTestId('select-model-model-2')); });
       await act(async () => {});
 
-      // Should show memory alert
+      // Should show the shared Insufficient Memory alert
       expect(getByTestId('custom-alert')).toBeTruthy();
       expect(getByTestId('alert-title').props.children).toBe('Insufficient Memory');
     });
 
-    it('shows warning with Load Anyway option when severity is warning', async () => {
+    it('offers a Load Anyway button when the measured loader refuses (overridable)', async () => {
+      // OD3 removed the separate "Low Memory Warning" (severity==='warning') path.
+      // The single refusal affordance now comes from the loader's OverridableMemoryError:
+      // an "Insufficient Memory" alert carrying a "Load Anyway" button.
       const model = createDownloadedModel();
       const model2 = createDownloadedModel({ id: 'model-2', name: 'Model 2', filePath: '/other.gguf' });
       useAppStore.setState({
@@ -2476,11 +2503,7 @@ describe('ChatScreen', () => {
       (llmService.isModelLoaded as jest.Mock).mockReturnValue(true);
       (llmService.getLoadedModelPath as jest.Mock).mockReturnValue(model.filePath);
 
-      (activeModelService.checkMemoryForModel as jest.Mock).mockResolvedValue({
-        canLoad: true,
-        severity: 'warning',
-        message: 'Low RAM - may be slow',
-      });
+      mockLoadModel.mockRejectedValueOnce(new OverridableMemoryError('Low RAM - may be slow'));
 
       const { getByTestId } = renderChatScreen();
       await act(async () => {});
@@ -2491,8 +2514,8 @@ describe('ChatScreen', () => {
       await act(async () => { fireEvent.press(getByTestId('select-model-model-2')); });
       await act(async () => {});
 
-      // Should show warning with Load Anyway button
-      expect(getByTestId('alert-title').props.children).toBe('Low Memory Warning');
+      // Insufficient Memory alert with a Load Anyway button (the shared override affordance)
+      expect(getByTestId('alert-title').props.children).toBe('Insufficient Memory');
       expect(getByTestId('alert-button-Load Anyway')).toBeTruthy();
     });
   });
@@ -2516,11 +2539,7 @@ describe('ChatScreen', () => {
       });
       (llmService.isModelLoaded as jest.Mock).mockReturnValue(true);
       (llmService.getLoadedModelPath as jest.Mock).mockReturnValue(model.filePath);
-      (activeModelService.checkMemoryForModel as jest.Mock).mockResolvedValue({
-        canLoad: true,
-        severity: 'safe',
-        message: null,
-      });
+      mockLoadModel.mockResolvedValue(undefined);
 
       const { getByTestId } = renderChatScreen();
       await act(async () => {});
@@ -2529,11 +2548,11 @@ describe('ChatScreen', () => {
       await act(async () => { fireEvent.press(getByTestId('model-selector')); });
       await act(async () => { fireEvent.press(getByTestId('models-row-text')); });
       await act(async () => { fireEvent.press(getByTestId('select-model-model-2')); });
-      // Wait for requestAnimationFrame chain + setTimeout(200) in proceedWithModelLoad
       await act(async () => { await new Promise<void>(r => setTimeout(() => r(), 500)); });
 
-      // Memory check should have been called for the new model
-      expect(activeModelService.checkMemoryForModel).toHaveBeenCalledWith('model-2', 'text');
+      // OD3: the measured loader (loadTextModel) is invoked for the new model — the
+      // authoritative gate, no predictive pre-check.
+      expect(mockLoadModel).toHaveBeenCalledWith('model-2', undefined, undefined);
     });
   });
 
@@ -3410,11 +3429,10 @@ describe('ChatScreen', () => {
 
       (llmService.isModelLoaded as jest.Mock).mockReturnValue(true);
       (llmService.getLoadedModelPath as jest.Mock).mockReturnValue(model1.filePath);
-      (activeModelService.checkMemoryForModel as jest.Mock).mockResolvedValue({
-        canLoad: true,
-        severity: 'warning',
-        message: 'Memory is low',
-      });
+      // First load refuses (overridable); the Load-Anyway retry succeeds.
+      mockLoadModel
+        .mockRejectedValueOnce(new OverridableMemoryError('Memory is low'))
+        .mockResolvedValue(undefined);
 
       const { getByTestId } = renderChatScreen();
       await act(async () => {});
@@ -3425,8 +3443,8 @@ describe('ChatScreen', () => {
       await act(async () => { fireEvent.press(getByTestId('select-model-warn-model-2')); });
       await act(async () => {});
 
-      // Low Memory Warning alert should appear
-      expect(getByTestId('alert-title').props.children).toBe('Low Memory Warning');
+      // The shared Insufficient Memory alert should appear
+      expect(getByTestId('alert-title').props.children).toBe('Insufficient Memory');
 
       // Press Load Anyway
       await act(async () => {
@@ -3434,8 +3452,8 @@ describe('ChatScreen', () => {
       });
       await act(async () => { await new Promise<void>(r => setTimeout(() => r(), 500)); });
 
-      // Alert should be dismissed; proceedWithModelLoad was called
-      expect(activeModelService.checkMemoryForModel).toHaveBeenCalledWith('warn-model-2', 'text');
+      // Load Anyway retries the MEASURED loader with { override: true }
+      expect(mockLoadModel).toHaveBeenCalledWith('warn-model-2', undefined, { override: true });
     });
   });
 
@@ -4190,11 +4208,6 @@ describe('ChatScreen', () => {
 
       (llmService.isModelLoaded as jest.Mock).mockReturnValue(true);
       (llmService.getLoadedModelPath as jest.Mock).mockReturnValue(model1.filePath);
-      (activeModelService.checkMemoryForModel as jest.Mock).mockResolvedValue({
-        canLoad: true,
-        severity: 'safe',
-        message: null,
-      });
       mockLoadModel.mockResolvedValue(undefined);
 
       const { getByTestId } = renderChatScreen();
@@ -4205,9 +4218,8 @@ describe('ChatScreen', () => {
       await act(async () => { fireEvent.press(getByTestId('select-model-sysgen-2')); });
       await act(async () => { await new Promise<void>(r => setTimeout(() => r(), 600)); });
 
-      // The proceedWithModelLoad flow is triggered. checkMemoryForModel was called
-      // for model2 (lines 482-495 exercised).
-      expect(activeModelService.checkMemoryForModel).toHaveBeenCalledWith('sysgen-2', 'text');
+      // The proceedWithModelLoad flow is triggered: the measured loader loads model2.
+      expect(mockLoadModel).toHaveBeenCalledWith('sysgen-2', undefined, undefined);
     });
   });
 

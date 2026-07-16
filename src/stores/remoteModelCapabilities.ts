@@ -7,6 +7,7 @@
  */
 
 import logger from '../utils/logger';
+import { templateEmitsReasoning } from '../utils/messageContent';
 
 export interface RemoteModelInfo {
   contextLength: number;
@@ -307,8 +308,11 @@ const propsInFlight = new Map<string, Promise<RemoteModelInfo | null>>();
 
 /** De-duplicated wrapper around fetchLlamaCppProps — one /props call per endpoint. */
 export function fetchLlamaCppPropsCached(endpoint: string): Promise<RemoteModelInfo | null> {
+  // Deliberate in-flight-promise cache: return the pending promise un-awaited so concurrent
+  // callers share one fetch. Explicit presence check (not a truthiness/await smell) so the
+  // Promise-in-conditional rule (S6544) doesn't misread it as a forgotten await.
   const existing = propsInFlight.get(endpoint);
-  if (existing) return existing;
+  if (existing !== undefined) return existing;
   const p = fetchLlamaCppProps(endpoint).finally(() => propsInFlight.delete(endpoint));
   propsInFlight.set(endpoint, p);
   return p;
@@ -324,7 +328,7 @@ function asObject(v: unknown): Record<string, unknown> | null {
  * payload carries no capability data (not a llama.cpp server) so the caller can
  * fall through to other detection arms. Pure — no I/O — so it is unit-testable.
  */
-export function parsePropsCapabilities(data: unknown): RemoteModelInfo | null {
+function parsePropsCapabilities(data: unknown): RemoteModelInfo | null {
   const root = asObject(data);
   if (!root) return null;
 
@@ -348,12 +352,17 @@ export function parsePropsCapabilities(data: unknown): RemoteModelInfo | null {
   // reports supports_preserve_reasoning=false). The reliable capability signal is the
   // chat template exposing an `enable_thinking` switch or `<think>` blocks.
   const template = typeof root.chat_template === 'string' ? root.chat_template : '';
-  // A template that references `enable_thinking` honors the chat_template_kwargs
-  // switch — the request builder can toggle reasoning per request on this server.
+  // A template referencing `enable_thinking` honors the chat_template_kwargs switch,
+  // so the request builder can toggle reasoning per request on this server. This is a
+  // distinct signal from supportsThinking (capability) and is returned for the builder.
   const acceptsThinkingKwarg = /enable_thinking/.test(template);
+  // Template-based reasoning detection goes through the SHARED predicate
+  // (templateEmitsReasoning) so remote and on-device (llmHelpers.detectThinkingSupport)
+  // never diverge on the same template - it covers both the enable_thinking kwarg switch
+  // and the <think>/channel output delimiters. The server-reported signals below are
+  // extra capability evidence specific to the remote path.
   const supportsThinking =
-    acceptsThinkingKwarg ||
-    /<think>/.test(template) ||
+    templateEmitsReasoning(template) ||
     templateCaps?.supports_preserve_reasoning === true ||
     (reasoningFormat !== 'none' && reasoningFormat !== '');
 

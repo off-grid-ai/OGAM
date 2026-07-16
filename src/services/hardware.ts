@@ -1,6 +1,7 @@
 import { Platform, NativeModules } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import RNFS from 'react-native-fs';
+import logger from '../utils/logger';
 // Access NativeModules.LocalDreamModule dynamically (not destructured)
 // so it can be mocked in tests after module import.
 const getLocalDreamModule = () => NativeModules.LocalDreamModule;
@@ -56,6 +57,7 @@ class HardwareService {
       systemVersion,
       isEmulator,
     };
+    logger.log(`[WIRE-DEVICE] ${JSON.stringify({ platform: Platform.OS, ...this.cachedDeviceInfo })}`); // [WIRE] real device caps (drives onboarding recs + memory budget)
     return this.cachedDeviceInfo;
   }
   /**
@@ -85,6 +87,7 @@ class HardwareService {
     if (!mod?.getMemoryInfo) return null;
     try {
       const info = await mod.getMemoryInfo();
+      logger.log(`[WIRE-RAM] ${JSON.stringify({ platform: Platform.OS, info })}`); // [WIRE] raw DeviceMemoryModule shape from-device
       const bytes = Number(info?.processAvailableBytes);
       return Number.isFinite(bytes) && bytes > 0 ? bytes : null;
     } catch {
@@ -332,6 +335,7 @@ class HardwareService {
       hasNPU: vendor === 'qualcomm' && !!qnnVariant,
       qnnVariant,
     };
+    logger.log(`[WIRE-DEVICE-SOC] ${JSON.stringify({ hardware, model, ...this.cachedSoCInfo })}`); // [WIRE] real SoC/NPU detection (drives qnn image-backend gate)
     return this.cachedSoCInfo;
   }
   private async getQnnVariantFromSoC(): Promise<

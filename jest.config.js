@@ -45,6 +45,11 @@ module.exports = {
     '<rootDir>/pro/',
     ...(proExists ? [] : proDependentTestPaths),
   ],
+  // Stale agent git-worktrees under .claude/worktrees/ each carry a full repo copy (incl. their own
+  // pro/package.json named @offgrid/pro), which collide in Haste's module map and make require('@offgrid/pro')
+  // throw ("looked up in the Haste module map ... several different files"). Exclude them so the ONE real
+  // @offgrid/pro resolves — and so those copies aren't test-collected as duplicates.
+  modulePathIgnorePatterns: ['<rootDir>/.claude/worktrees/'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     // Mirrors the metro alias so tests can import pro modules that reference core.
@@ -97,5 +102,6 @@ module.exports = {
     './src/utils/imageGenAdvice.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
     './src/services/modelLoadErrors.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
     './src/components/ImageGenAdviceCard.tsx': { statements: 100, branches: 100, functions: 100, lines: 100 },
+    './src/components/VoiceRecordButton/derive.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
   },
 };

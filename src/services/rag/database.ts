@@ -23,7 +23,7 @@ export interface RagSearchResult {
   metadata?: string | null;
 }
 
-export interface StoredEmbedding {
+interface StoredEmbedding {
   chunk_rowid: number;
   doc_id: number;
   name: string;

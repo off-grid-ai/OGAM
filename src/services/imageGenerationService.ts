@@ -1,91 +1,35 @@
 /** ImageGenerationService - Handles image generation independently of UI lifecycle */
 import { localDreamGeneratorService as onnxImageGeneratorService } from './localDreamGenerator';
 import { activeModelService } from './activeModelService';
-import { llmService } from './llm';
+import { getActiveEngineService, generateStandalone, isRemoteTextModelActive } from './engines';
 import { useAppStore, useChatStore } from '../stores';
 import { GeneratedImage } from '../types';
 import logger from '../utils/logger';
-import { shouldShowSharePrompt, emitSharePrompt } from '../utils/sharePrompt';
-import { checkProPromptForImage } from '../utils/proPrompt';
-import { SWEET_SPOT_SIZE } from '../utils/imageGenAdvice';
+import { maybeScheduleSharePrompt } from '../utils/sharePrompt';
+import { checkProPromptForImage } from './proPrompt';
+import { SWEET_SPOT_SIZE, DEFAULT_IMAGE_GUIDANCE } from '../utils/imageGenAdvice';
 import { buildEnhancementMessages, getConversationContext, cleanEnhancedPrompt, buildImageGenMeta } from './imageGenerationHelpers';
 import { reportModelFailure } from './modelFailureHandler';
 import { reasonFromLoadError } from './modelFailureReasons';
 import { isOverridableMemoryError } from './modelLoadErrors';
+import {
+  isInFlight,
+  ImageGenerationState,
+  ImageGenerationListener,
+  GenerateImageParams,
+  ActiveImageModel,
+  RunGenerationOptions,
+  UpdateEnhancementOptions,
+} from './imageGenerationTypes';
+
+// Re-export the public types + phase predicate (moved to imageGenerationTypes.ts to
+// keep this file within the max-lines budget). Behavior-neutral: every existing
+// `import { ImageGenPhase, isInFlight, ImageGenerationState } from './imageGenerationService'`
+// keeps working.
+export { isInFlight } from './imageGenerationTypes';
+export type { ImageGenPhase, ImageGenerationState } from './imageGenerationTypes';
 
 const SHARE_PROMPT_DELAY_MS = 2000;
-
-/**
- * Explicit lifecycle phase — the single source of truth for "what is image
- * generation doing right now". The UI projects this (it never assembles the
- * in-progress view from scattered flags), so the progress indicator can't flash
- * or desync: it's shown for exactly `enhancing | loading | generating | saving`
- * and hidden otherwise.
- */
-export type ImageGenPhase =
-  | 'idle'
-  | 'enhancing'  // running the text model to enrich the prompt
-  | 'loading'    // loading the image model into memory
-  | 'generating' // diffusion steps running
-  | 'saving'     // writing the result + adding the chat message
-  | 'done'
-  | 'error'
-  | 'cancelled';
-
-/** True while a generation is actively in flight (drives the progress indicator). */
-export function isInFlight(phase: ImageGenPhase): boolean {
-  return phase === 'enhancing' || phase === 'loading' || phase === 'generating' || phase === 'saving';
-}
-
-export interface ImageGenerationState {
-  phase: ImageGenPhase;
-  /** Derived from phase (isInFlight) — kept for back-compat with existing readers. */
-  isGenerating: boolean;
-  progress: { step: number; totalSteps: number } | null;
-  status: string | null;
-  previewPath: string | null;
-  prompt: string | null;
-  conversationId: string | null;
-  error: string | null;
-  result: GeneratedImage | null;
-}
-
-type ImageGenerationListener = (state: ImageGenerationState) => void;
-
-interface GenerateImageParams {
-  prompt: string;
-  conversationId?: string;
-  negativePrompt?: string;
-  steps?: number;
-  guidanceScale?: number;
-  seed?: number;
-  previewInterval?: number;
-}
-
-interface ActiveImageModel {
-  id: string;
-  name: string;
-  modelPath: string;
-  backend?: string;
-}
-
-interface RunGenerationOptions {
-  params: GenerateImageParams;
-  enhancedPrompt: string;
-  activeImageModel: ActiveImageModel;
-  steps: number;
-  guidanceScale: number;
-  imageWidth: number;
-  imageHeight: number;
-  useOpenCL: boolean;
-}
-
-interface UpdateEnhancementOptions {
-  conversationId: string | undefined;
-  tempMessageId: string | null;
-  enhancedPrompt: string;
-  originalPrompt: string;
-}
 
 // ---------------------------------------------------------------------------
 // Service class
@@ -204,18 +148,19 @@ class ImageGenerationService {
   private _checkSharePrompt(): void {
     const s = useAppStore.getState();
     const count = s.incrementImageGenerationCount();
-    if (!s.hasEngagedSharePrompt && shouldShowSharePrompt(count)) setTimeout(() => emitSharePrompt('image'), SHARE_PROMPT_DELAY_MS);
+    maybeScheduleSharePrompt({ variant: 'image', count, hasEngaged: s.hasEngagedSharePrompt, delayMs: SHARE_PROMPT_DELAY_MS });
     checkProPromptForImage(SHARE_PROMPT_DELAY_MS);
   }
 
   private async _resetLlmAfterEnhancement(): Promise<void> {
-    logger.log('[ImageGen] 🔄 Starting cleanup - generating:', llmService.isCurrentlyGenerating());
+    // Engine-agnostic: reset whichever text engine ran the enhancement (llama OR LiteRT).
+    // stopGeneration is supported by both; binding to llmService left a LiteRT generation
+    // running after enhancement.
     try {
-      await llmService.stopGeneration();
-      logger.log('[ImageGen] ✓ stopGeneration() called');
-      logger.log('[ImageGen] ✅ LLM service reset complete - generating:', llmService.isCurrentlyGenerating());
+      await getActiveEngineService()?.stopGeneration();
+      logger.log('[ImageGen] ✓ text engine stopGeneration() called');
     } catch (resetError) {
-      logger.error('[ImageGen] ❌ Failed to reset LLM service:', resetError);
+      logger.error('[ImageGen] ❌ Failed to reset text engine:', resetError);
     }
   }
 
@@ -238,9 +183,14 @@ class ImageGenerationService {
       logger.log('[ImageGen] Enhancement disabled, using original prompt');
       return params.prompt;
     }
-    let isTextModelLoaded = llmService.isModelLoaded();
-    const isLlmGenerating = llmService.isCurrentlyGenerating();
-    logger.log('[ImageGen] 🎨 Starting prompt enhancement - Model loaded:', isTextModelLoaded, 'LLM generating:', isLlmGenerating);
+    // Engine-agnostic loaded check — a LiteRT text model lives in liteRTService, so the
+    // old llmService.isModelLoaded() always read false for it and enhancement was skipped
+    // even though the model was resident. A REMOTE text model has no LOCAL residency at all
+    // (it runs over the network), so "loaded" for it means the remote provider is active —
+    // otherwise the gate below tries a pointless on-demand LOCAL load of a remote model id,
+    // stays "not loaded", and skips enhancement entirely (B30, remote path).
+    let isTextModelLoaded = isRemoteTextModelActive() || (getActiveEngineService()?.isModelLoaded() ?? false);
+    logger.log('[ImageGen] 🎨 Starting prompt enhancement - Model loaded:', isTextModelLoaded);
     if (!isTextModelLoaded) {
       // Text and image models are mutually exclusive (one resident at a time), so
       // during image gen the text model usually isn't loaded. Load it on demand to
@@ -262,7 +212,7 @@ class ImageGenerationService {
       let loadError: unknown = null;
       try {
         await activeModelService.loadTextModel(textModelId);
-        isTextModelLoaded = llmService.isModelLoaded();
+        isTextModelLoaded = getActiveEngineService()?.isModelLoaded() ?? false;
       } catch (err) {
         loadError = err;
         logger.warn('[ImageGen] Failed to load text model for enhancement, using original prompt:', err);
@@ -292,10 +242,22 @@ class ImageGenerationService {
       tempMessageId = tempMessage.id;
     }
     try {
-      logger.log('[ImageGen] 📤 Calling llmService.generateResponse for enhancement...');
-      let raw = await llmService.generateResponse(buildEnhancementMessages(params.prompt, contextMessages), (_data) => { });
-      logger.log('[ImageGen] 📥 llmService.generateResponse returned');
-      logger.log('[ImageGen] LLM state after enhancement - generating:', llmService.isCurrentlyGenerating());
+      logger.log('[ImageGen] 📤 Calling generateStandalone for enhancement (active engine)...');
+      // Stream the partial rewrite into the temp thinking message so the user sees live
+      // progress instead of a frozen "Enhancing..." (B30b) — the enhancement can take a
+      // while and looked hung. Rendered under the same "Enhanced prompt" label the final
+      // result uses, so the partial reads as the answer forming.
+      let streamed = '';
+      const onEnhanceToken = (token: string) => {
+        streamed += token;
+        if (params.conversationId && tempMessageId) {
+          useChatStore.getState().updateMessageContent(
+            params.conversationId, tempMessageId, `<think>__LABEL:Enhanced prompt__\n${streamed}</think>`,
+          );
+        }
+      };
+      let raw = await generateStandalone(buildEnhancementMessages(params.prompt, contextMessages), onEnhanceToken);
+      logger.log('[ImageGen] 📥 generateStandalone returned');
       raw = cleanEnhancedPrompt(raw);
       logger.log('[ImageGen] ✅ Original prompt:', params.prompt);
       logger.log('[ImageGen] ✅ Enhanced prompt:', raw);
@@ -447,7 +409,7 @@ class ImageGenerationService {
     if (!activeImageModel) return this._fail('No image model selected');
 
     const steps = params.steps || settings.imageSteps || 8;
-    const guidanceScale = params.guidanceScale || settings.imageGuidanceScale || 2.0;
+    const guidanceScale = params.guidanceScale || settings.imageGuidanceScale || DEFAULT_IMAGE_GUIDANCE;
     // Floor to 256: SD-class models render garbage (incoherent, not "smaller") below 256,
     // so a stale sub-256 setting must never reach the pipeline. The slider min is also 256;
     // this guards the persisted-value + programmatic paths so the user never sees garbage.

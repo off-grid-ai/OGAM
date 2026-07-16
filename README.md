@@ -15,7 +15,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20macOS-green.svg)](#install)
 [![codecov](https://codecov.io/gh/alichherawalla/off-grid-mobile/graph/badge.svg)](https://codecov.io/gh/alichherawalla/off-grid-mobile)
 [![Slack](https://img.shields.io/badge/Slack-Join%20Community-4A154B?logo=slack)](https://join.slack.com/t/off-grid-mobile/shared_invite/zt-411pbtz7r-lcOK4YCeY40vh_~FUdcvLA)
-[![Pro](https://img.shields.io/badge/Off%20Grid%20Pro-%2450%20lifetime-000000?style=flat)](https://offgridmobileai.co/pay/)
+[![Pro](https://img.shields.io/badge/Off%20Grid%20Pro-%2469%20lifetime%20and%20%2449%20annual-000000?style=flat)](https://offgridmobileai.co/pay/)
 
 </div>
 
@@ -37,24 +37,24 @@
 
 ## Off Grid AI Pro
 
-**Lifetime access for $50.**
+**A voice, personas, and actions. $69 for life, or $49/year.**
 
 </div>
 
 <br />
 
-The free OSS keeps shipping, MIT, forever - that's not changing. Pro is an optional, additive tier.
+Pro is an optional, additive tier. It gives the assistant a voice that talks back, personas you shape, and the tools to draft real actions you approve. One license covers your phone and your Mac. All on-device.
 
 ### What Pro adds
 
-- **Custom personas** - system prompts, voice, persistent memory per assistant
-- **End-to-end voice mode** - Whisper STT (already shipping) + Kokoro TTS, all on-device
-- **Calendar + email + MCP servers** - Linear, Notion, GitHub, your own MCP. Drafts only; you approve every send.
-- **Future Pro features** - included for the supported lifetime of the app
+- **Voice mode** - the free app transcribes your speech; Pro adds on-device Kokoro text-to-speech, so it talks back and you run the whole thing hands-free. The voice runs in your phone's RAM.
+- **Custom personas** - give each assistant its own system prompt, voice, and persistent memory, so it stays in character across conversations.
+- **Draft, then approve** - connect Calendar, email, and MCP servers like Linear, Notion, and GitHub. It drafts the reply or files the ticket and waits. Nothing sends without your tap.
+- **Sync, landing through July** - your phone and your Mac merge into one picture over your own network, never a relay. Your license includes it the day it ships.
 
-**[→ Get Pro access](https://offgridmobileai.co/pay/)**
+**[→ Get Pro access](https://offgridmobileai.co/pay/)** - $69 once and it is yours forever (the price climbs as more people join, never down), or $49/year.
 
-Pair this app with **[Off Grid AI Desktop](https://github.com/off-grid-ai/desktop/releases/latest)** on your Mac. It's free and open-source too, Pro or not.
+Pair it with **[Off Grid AI Desktop](https://github.com/off-grid-ai/desktop/releases/latest)** on your Mac. One Pro license covers both.
 
 ---
 

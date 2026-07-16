@@ -4,8 +4,8 @@ import { TYPOGRAPHY, SPACING } from '../../constants';
 
 const { width: screenWidth } = Dimensions.get('window');
 export const COLUMN_COUNT = 3;
-export const GRID_SPACING = 4;
-export const CELL_SIZE = (screenWidth - GRID_SPACING * (COLUMN_COUNT + 1)) / COLUMN_COUNT;
+const GRID_SPACING = 4;
+const CELL_SIZE = (screenWidth - GRID_SPACING * (COLUMN_COUNT + 1)) / COLUMN_COUNT;
 
 const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: {

@@ -289,19 +289,6 @@ describe('LLMService', () => {
       );
     });
 
-    it('uses llama.rn jinja support to detect thinking support', async () => {
-      mockedRNFS.exists.mockResolvedValue(true);
-      const ctx = createMockLlamaContext({
-        isJinjaSupported: jest.fn(() => true),
-      });
-      mockedInitLlama.mockResolvedValue(ctx as any);
-
-      await llmService.loadModel('/models/test.gguf');
-
-      expect(llmService.supportsThinking()).toBe(true);
-      expect(ctx.isJinjaSupported).toHaveBeenCalled();
-    });
-
     it('uses flashAttn=true from store and sets q8_0 KV cache', async () => {
       mockedRNFS.exists.mockResolvedValue(true);
       const ctx = createMockLlamaContext();
@@ -549,7 +536,7 @@ describe('LLMService', () => {
       const messages = [createUserMessage('Hello')];
       const tokens: Array<{ content?: string; reasoningContent?: string }> = [];
 
-      await llmService.generateResponse(messages, (token) => tokens.push(token));
+      await llmService.generateResponse(messages, { onStream: (token) => tokens.push(token) });
 
       expect(tokens).toEqual([
         { content: 'Hello', reasoningContent: undefined },
@@ -562,10 +549,57 @@ describe('LLMService', () => {
       const messages = [createUserMessage('Hello')];
       const onComplete = jest.fn();
 
-      const result = await llmService.generateResponse(messages, undefined, onComplete);
+      const result = await llmService.generateResponse(messages, { onComplete });
 
       expect(result).toBe('Hello World');
       expect(onComplete).toHaveBeenCalledWith({ content: 'Hello World', reasoningContent: '' });
+    });
+
+    // Native-first (reasoning_format:'auto') fail-safe: the runtime may return the answer in
+    // `content` (filtered) + `reasoning_content`, OR — if 'auto' mis-parses a model it doesn't
+    // recognise — an empty `content`. These prove the answer is NEVER lost: content falls back to
+    // the raw `text`, then to the streamed accumulation, and reasoning survives for the finalizer
+    // to hand-parse. Worst case = today's behavior (raw text + downstream hand-parse), never blank.
+    describe('native-parse fail-safe (reasoning_format auto result shapes)', () => {
+      it('uses native content + reasoning_content when the runtime parsed them (auto worked)', async () => {
+        await setupLoadedModel({
+          completion: jest.fn(async (_p: any, cb: any) => {
+            cb({ token: 'The clean answer.' });
+            return { content: 'The clean answer.', reasoning_content: 'the reasoning', text: '<think>the reasoning</think>The clean answer.', tokens_predicted: 1 };
+          }),
+          tokenize: jest.fn(() => Promise.resolve({ tokens: [1] })),
+        });
+        const onComplete = jest.fn();
+        const result = await llmService.generateResponse([createUserMessage('hi')], { onComplete });
+        expect(result).toBe('The clean answer.');
+        expect(onComplete).toHaveBeenCalledWith({ content: 'The clean answer.', reasoningContent: 'the reasoning' });
+      });
+
+      it('FAIL-SAFE: empty filtered content from auto → the raw text still surfaces (answer never blank)', async () => {
+        await setupLoadedModel({
+          completion: jest.fn(async (_p: any, cb: any) => {
+            cb({ token: 'The raw answer.' });
+            return { content: '', reasoning_content: '', text: 'The raw answer.', tokens_predicted: 1 };
+          }),
+          tokenize: jest.fn(() => Promise.resolve({ tokens: [1] })),
+        });
+        const result = await llmService.generateResponse([createUserMessage('hi')]);
+        expect(result).toBe('The raw answer.'); // cr.content('') → falls back to cr.text
+      });
+
+      it('FAIL-SAFE: auto emits NO content/reasoning fields → streamed tokens surface for the finalizer to hand-parse', async () => {
+        await setupLoadedModel({
+          completion: jest.fn(async (_p: any, cb: any) => {
+            cb({ token: '<think>r</think>the answer' });
+            return { text: '', tokens_predicted: 1 };
+          }),
+          tokenize: jest.fn(() => Promise.resolve({ tokens: [1] })),
+        });
+        const result = await llmService.generateResponse([createUserMessage('hi')]);
+        // Not blank: the accumulated raw stream is returned; chatStore.finalize hand-parses it
+        // (parseModelOutput is separately tested) → reasoning split from the clean answer.
+        expect(result).toContain('the answer');
+      });
     });
 
     it('updates performance stats', async () => {
@@ -621,28 +655,9 @@ describe('LLMService', () => {
       });
 
       const messages = [createUserMessage('Hello')];
-      await llmService.generateResponse(messages, (t) => tokens.push(t));
+      await llmService.generateResponse(messages, { onStream: (t) => tokens.push(t) });
 
       expect(tokens).toEqual([{ content: 'Hello', reasoningContent: undefined }]);
-    });
-
-    it('passes llama.rn native thinking params when enabled', async () => {
-      const ctx = await setupLoadedModel({
-        isJinjaSupported: jest.fn(() => true),
-      });
-
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          thinkingEnabled: true,
-        },
-      });
-
-      await llmService.generateResponse([createUserMessage('Hello')]);
-
-      const callArgs = ctx.completion.mock.calls[0]![0]!;
-      expect(callArgs.enable_thinking).toBe(true);
-      expect(callArgs.reasoning_format).toBe('deepseek');
     });
 
     it('disables llama.rn thinking params when the toggle is off', async () => {
@@ -684,7 +699,7 @@ describe('LLMService', () => {
         },
       });
 
-      const result = await llmService.generateResponse([createUserMessage('Hello')], (data) => streamChunks.push(data));
+      const result = await llmService.generateResponse([createUserMessage('Hello')], { onStream: (data) => streamChunks.push(data) });
 
       expect(streamChunks).toEqual([
         { content: undefined, reasoningContent: 'I am' },
@@ -1144,61 +1159,6 @@ describe('LLMService', () => {
   });
 
   // ========================================================================
-  // reloadWithSettings
-  // ========================================================================
-  describe('reloadWithSettings', () => {
-    it('unloads existing model and reloads with new settings', async () => {
-      mockedRNFS.exists.mockResolvedValue(true);
-      const ctx1 = createMockLlamaContext();
-      const ctx2 = createMockLlamaContext();
-      mockedInitLlama
-        .mockResolvedValueOnce(ctx1 as any)
-        .mockResolvedValueOnce(ctx2 as any);
-
-      await llmService.loadModel('/models/test.gguf');
-
-      await llmService.reloadWithSettings('/models/test.gguf', {
-        nThreads: 8,
-        nBatch: 512,
-        contextLength: 4096,
-      });
-
-      expect(ctx1.release).toHaveBeenCalled();
-      const settings = llmService.getPerformanceSettings();
-      expect(settings.nThreads).toBe(8);
-      expect(settings.nBatch).toBe(512);
-      expect(settings.contextLength).toBe(4096);
-    });
-
-    it('resets state on reload failure when all attempts fail', async () => {
-      mockedRNFS.exists.mockResolvedValue(true);
-      const ctx = createMockLlamaContext();
-      mockedInitLlama
-        .mockResolvedValueOnce(ctx as any) // initial load
-        .mockRejectedValueOnce(new Error('GPU reload failed')) // GPU attempt
-        .mockRejectedValueOnce(new Error('CPU reload failed')) // CPU fallback
-        .mockRejectedValueOnce(new Error('CPU reload failed')); // ctx=2048 fallback
-
-      // Enable GPU via Metal backend so both attempts happen
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, inferenceBackend: 'metal' as const, gpuLayers: 6 },
-      });
-
-      await llmService.loadModel('/models/test.gguf');
-
-      await expect(
-        llmService.reloadWithSettings('/models/test.gguf', {
-          nThreads: 8,
-          nBatch: 512,
-          contextLength: 4096,
-        })
-      ).rejects.toThrow('CPU reload failed');
-
-      expect(llmService.isModelLoaded()).toBe(false);
-    });
-  });
-
-  // ========================================================================
   // hashString
   // ========================================================================
   describe('hashString', () => {
@@ -1504,124 +1464,6 @@ describe('LLMService', () => {
     });
   });
 
-  describe('reloadWithSettings flash attention', () => {
-    it('passes flashAttn=true from store to reloadWithSettings', async () => {
-      mockedRNFS.exists.mockResolvedValue(true);
-      const ctx1 = createMockLlamaContext();
-      const ctx2 = createMockLlamaContext();
-      mockedInitLlama
-        .mockResolvedValueOnce(ctx1 as any)
-        .mockResolvedValueOnce(ctx2 as any);
-
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          flashAttn: true,
-          inferenceBackend: 'cpu' as const,
-        },
-      });
-
-      await llmService.loadModel('/models/test.gguf');
-      await llmService.reloadWithSettings('/models/test.gguf', {
-        nThreads: 4,
-        nBatch: 512,
-        contextLength: 2048,
-      });
-
-      const reloadCall = (initLlama as jest.Mock).mock.calls[1][0];
-      expect(reloadCall.flash_attn_type).toBe('auto');
-      expect(reloadCall.cache_type_k).toBe('q8_0');
-      expect(reloadCall.cache_type_v).toBe('q8_0');
-    });
-
-    it('passes flashAttn=false and cacheType=f16 from store to reloadWithSettings', async () => {
-      mockedRNFS.exists.mockResolvedValue(true);
-      const ctx1 = createMockLlamaContext();
-      const ctx2 = createMockLlamaContext();
-      mockedInitLlama
-        .mockResolvedValueOnce(ctx1 as any)
-        .mockResolvedValueOnce(ctx2 as any);
-
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          flashAttn: false,
-          cacheType: 'f16',
-          inferenceBackend: 'cpu' as const,
-        },
-      });
-
-      await llmService.loadModel('/models/test.gguf');
-      await llmService.reloadWithSettings('/models/test.gguf', {
-        nThreads: 4,
-        nBatch: 512,
-        contextLength: 2048,
-      });
-
-      const reloadCall = (initLlama as jest.Mock).mock.calls[1][0];
-      expect(reloadCall.flash_attn_type).toBe('off');
-      expect(reloadCall.cache_type_k).toBe('f16');
-      expect(reloadCall.cache_type_v).toBe('f16');
-    });
-
-    it('falls back to platform default in reloadWithSettings when flashAttn is undefined (iOS → ON)', async () => {
-      mockedRNFS.exists.mockResolvedValue(true);
-      const ctx1 = createMockLlamaContext();
-      const ctx2 = createMockLlamaContext();
-      mockedInitLlama
-        .mockResolvedValueOnce(ctx1 as any)
-        .mockResolvedValueOnce(ctx2 as any);
-
-      useAppStore.setState({
-        settings: {
-          ...useAppStore.getState().settings,
-          flashAttn: undefined as any,
-          inferenceBackend: 'cpu' as const,
-        },
-      });
-
-      await llmService.loadModel('/models/test.gguf');
-      await llmService.reloadWithSettings('/models/test.gguf', {
-        nThreads: 4,
-        nBatch: 512,
-        contextLength: 2048,
-      });
-
-      // Test env is iOS → flash_attn_type defaults to 'auto'
-      const reloadCall = (initLlama as jest.Mock).mock.calls[1][0];
-      expect(reloadCall.flash_attn_type).toBe('auto');
-      expect(reloadCall.cache_type_k).toBe('q8_0');
-    });
-  });
-
-  describe('reloadWithSettings GPU fallback', () => {
-    it('falls back to CPU when GPU reload fails', async () => {
-      mockedRNFS.exists.mockResolvedValue(true);
-      const ctx1 = createMockLlamaContext();
-      const ctx2 = createMockLlamaContext();
-      mockedInitLlama
-        .mockResolvedValueOnce(ctx1 as any) // initial load
-        .mockRejectedValueOnce(new Error('GPU failed')) // GPU reload fails
-        .mockResolvedValueOnce(ctx2 as any); // CPU reload succeeds
-
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, inferenceBackend: 'metal' as const, gpuLayers: 99 },
-      });
-
-      await llmService.loadModel('/models/test.gguf');
-
-      await llmService.reloadWithSettings('/models/test.gguf', {
-        nThreads: 4,
-        nBatch: 512,
-        contextLength: 2048,
-      });
-
-      // Should have fallen back to CPU
-      expect(initLlama).toHaveBeenCalledTimes(3);
-      expect(llmService.isModelLoaded()).toBe(true);
-    });
-  });
-
   describe('loadModel without mmproj calls checkMultimodalSupport', () => {
     it('calls checkMultimodalSupport when no mmproj provided', async () => {
       mockedRNFS.exists.mockResolvedValue(true);
@@ -1915,35 +1757,6 @@ describe('LLMService', () => {
 
       // Should still return a result using char estimation
       expect(debugInfo.estimatedTokens).toBeGreaterThan(0);
-    });
-  });
-
-  // ========================================================================
-  // reloadWithSettings with GPU disabled
-  // ========================================================================
-  describe('reloadWithSettings with GPU disabled', () => {
-    it('skips GPU attempt when GPU is disabled', async () => {
-      mockedRNFS.exists.mockResolvedValue(true);
-      const ctx1 = createMockLlamaContext();
-      const ctx2 = createMockLlamaContext();
-      mockedInitLlama
-        .mockResolvedValueOnce(ctx1 as any)
-        .mockResolvedValueOnce(ctx2 as any);
-
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, inferenceBackend: 'cpu' as const },
-      });
-
-      await llmService.loadModel('/models/test.gguf');
-      await llmService.reloadWithSettings('/models/test.gguf', {
-        nThreads: 4,
-        nBatch: 128,
-        contextLength: 1024,
-      });
-
-      // Second call should have n_gpu_layers=0
-      const secondCallArgs = (initLlama as jest.Mock).mock.calls[1][0];
-      expect(secondCallArgs.n_gpu_layers).toBe(0);
     });
   });
 

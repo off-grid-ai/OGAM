@@ -3,7 +3,7 @@ import { showAlert, hideAlert } from '../../../components';
 import { useRemoteServerStore } from '../../../stores/remoteServerStore';
 import { remoteServerManager } from '../../../services';
 import { discoverLANServers } from '../../../services/networkDiscovery';
-import type { HomeScreenNavigationProp } from './useHomeScreen';
+import type { HomeScreenNavigationProp } from './types';
 import type { RemoteServer } from '../../../types';
 import logger from '../../../utils/logger';
 

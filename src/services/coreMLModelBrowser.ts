@@ -1,5 +1,5 @@
 import logger from '../utils/logger';
-export interface CoreMLModelFile {
+interface CoreMLModelFile {
   path: string;
   relativePath: string;
   size: number;

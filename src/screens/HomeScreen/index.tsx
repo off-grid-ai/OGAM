@@ -289,6 +289,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         onClose={() => setModelsManagerOpen(false)}
         onClosed={runPendingAfterClose}
         labels={modelLabels}
+        remote={{ text: !!activeRemoteTextModelId, image: !!activeRemoteImageModelId }}
         loadingState={loadingState}
         isEjecting={isEjecting}
         hasActiveModel={!!(activeModelId || activeImageModelId || activeRemoteTextModelId || activeRemoteImageModelId)}

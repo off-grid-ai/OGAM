@@ -1,78 +1,37 @@
-import RNFS from 'react-native-fs';
-import { useDebugLogsStore } from '../stores/debugLogsStore';
+// Under jest, console.* is mocked to jest.fn() (see jest.setup.ts), so logger output is invisible in tests.
+// When DEBUG_LOGS is set (e.g. `DEBUG_LOGS=1 npx jest <file>`), ALSO mirror every log to process.stderr —
+// which jest does NOT mock — so the source's [X-SM] state-machine traces become visible while debugging a
+// test, without patching the logger per-test or sprinkling process.stderr.write through the source. Opt-in
+// so normal test runs stay quiet.
+const stderrDebug =
+  typeof process !== 'undefined' &&
+  !!process.env?.JEST_WORKER_ID &&
+  !!process.env?.DEBUG_LOGS;
 
-// Persistent on-disk log for export while testing. Rotated so a long session
-// doesn't grow unbounded (~250 bytes/line -> 20 MB buys ~80k lines).
-const LOG_FILE_NAME = 'download-debug.log';
-const MAX_LOG_FILE_BYTES = 20 * 1024 * 1024;
-const RETAINED_LOG_LINES = 50000;
-
-let writeQueue: Promise<void> = Promise.resolve();
-
-function getLogFilePath(): string {
-  return `${RNFS.DocumentDirectoryPath}/${LOG_FILE_NAME}`;
-}
-
-function formatArg(arg: unknown): string {
-  if (arg instanceof Error) {
-    return `${arg.name}: ${arg.message}${arg.stack ? `\n${arg.stack}` : ''}`;
-  }
-  if (typeof arg === 'string') return arg;
-  if (typeof arg === 'number' || typeof arg === 'boolean' || arg == null) return String(arg);
+const toStderr = (level: string, args: unknown[]): void => {
+  if (!stderrDebug) return;
   try {
-    return JSON.stringify(arg);
+    process.stderr.write(
+      `[${level}] ${args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')}\n`,
+    );
   } catch {
-    return String(arg);
+    /* stderr unavailable — ignore */
   }
-}
-
-function appendPersistentLog(level: 'log' | 'warn' | 'error', message: string): void {
-  const line = `[${new Date().toISOString()}] ${level.toUpperCase()}: ${message}\n`;
-  writeQueue = writeQueue.then(async () => {
-    try {
-      const path = getLogFilePath();
-      if (await RNFS.exists(path)) {
-        await RNFS.appendFile(path, line, 'utf8');
-      } else {
-        await RNFS.writeFile(path, line, 'utf8');
-      }
-      const stat = await RNFS.stat(path);
-      const size = typeof stat.size === 'string' ? Number.parseInt(stat.size, 10) : stat.size;
-      if (size > MAX_LOG_FILE_BYTES) {
-        const content = await RNFS.readFile(path, 'utf8');
-        const trimmed = content.split('\n').filter(Boolean).slice(-RETAINED_LOG_LINES).join('\n');
-        await RNFS.writeFile(path, trimmed ? `${trimmed}\n` : '', 'utf8');
-      }
-    } catch {
-      // Logging must never break app execution.
-    }
-  });
-}
-
-function capture(level: 'log' | 'warn' | 'error', args: unknown[]): void {
-  const message = args.map(formatArg).join(' ');
-  try {
-    useDebugLogsStore.getState().addLog({ timestamp: Date.now(), level, message });
-  } catch {
-    // Ignore store failures during logger bootstrap.
-  }
-  appendPersistentLog(level, message);
-}
+};
 
 const logger = {
   log: (...args: unknown[]): void => {
-    capture('log', args);
+    toStderr('log', args);
     if (__DEV__) console.log(...args); // NOSONAR
   },
   warn: (...args: unknown[]): void => {
-    capture('warn', args);
+    toStderr('warn', args);
     if (__DEV__) console.warn(...args); // NOSONAR
   },
   error: (...args: unknown[]): void => {
-    capture('error', args);
+    toStderr('error', args);
     if (__DEV__) console.error(...args); // NOSONAR
   },
-  getLogFilePath,
 };
 
 export default logger;

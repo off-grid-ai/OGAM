@@ -23,7 +23,8 @@ import { TextFiltersSection } from './TextFiltersSection';
 import { FilterState, SortOption } from './types';
 import { SORT_OPTIONS } from './constants';
 import { formatNumber, getTextModelCompatibility } from './utils';
-import { CURATED_LITERT_ENTRIES, buildCuratedLiteRTFiles, getCuratedLiteRTEntry, LITERT_PARENT_ID } from '../../services/curatedLiteRTRegistry';
+import { curatedLiteRTDownloadWarning, LITERT_PARENT_ID } from '../../services/curatedLiteRTRegistry';
+import { LITERT_FILE_META, LITERT_RECOMMENDED_MODEL, LITERT_PARENT_RECOMMENDED } from './litertRecommended';
 import { backgroundDownloadService, modelManager } from '../../services';
 import { useAppStore } from '../../stores';
 
@@ -67,18 +68,21 @@ type DetailProps = Pick<Props,
   | 'handleDownload' | 'handleRepairMmProj' | 'handleCancelDownload' | 'handleDeleteModel'
 > & { selectedModel: ModelInfo; onBack: () => void; };
 
-// Build the file card's onDownload handler (extracted to keep renderFileItem below the
-// ESLint complexity ceiling; behavior is identical to the previous inline form).
-function buildFileDownloadHandler({ s, curatedEntry, proceedDownload, setAlertState }: {
+// Build the file card's onDownload handler. Whether to show the curated confirm-download
+// warning is the registry's single DEVICE-AWARE decision (curatedLiteRTDownloadWarning),
+// shared with the onboarding screen — never a static per-model flag re-derived here.
+function buildFileDownloadHandler({ s, fileName, sizeBytes, ramGB, proceedDownload, setAlertState }: {
   s: { downloaded: boolean; progress: unknown; hasFailed: boolean };
-  curatedEntry: ReturnType<typeof getCuratedLiteRTEntry>;
+  fileName: string;
+  sizeBytes: number; ramGB: number;
   proceedDownload: () => void;
   setAlertState: (state: AlertState) => void;
 }): (() => void) | undefined {
   if (s.downloaded || s.progress || s.hasFailed) return undefined;
   return () => {
-    if (curatedEntry?.confirmDownload) {
-      setAlertState(showAlert(curatedEntry.confirmDownload.title, curatedEntry.confirmDownload.message, [
+    const warning = curatedLiteRTDownloadWarning(fileName, sizeBytes, ramGB);
+    if (warning) {
+      setAlertState(showAlert(warning.title, warning.message, [
         { text: 'Cancel', style: 'cancel', onPress: () => setAlertState(hideAlert()) },
         { text: 'Download anyway', style: 'default', onPress: () => { setAlertState(hideAlert()); proceedDownload(); } },
       ]));
@@ -111,6 +115,19 @@ const ModelDetailView: React.FC<DetailProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Heal the durable vision flag from the authoritative catalog: this screen KNOWS a model is vision (its
+  // repo ships an mmproj → modelFiles carry mmProjFile), so persist isVisionModel:true onto any downloaded
+  // record that lost it (old link-cleanup bug). The Download Manager has no catalog, so this makes the
+  // RECORD the single source both surfaces read — the wrench then shows consistently (device 2026-07-14).
+  useEffect(() => {
+    for (const f of modelFiles) {
+      if (!f.mmProjFile) continue;
+      const rec = getDownloadedModel(selectedModel.id, f.name);
+      if (rec?.engine === 'llama' && !rec.isVisionModel) void modelManager.markVisionModel(rec.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModel.id, modelFiles]);
 
   const storeDownloads = useDownloadStore(state => state.downloads);
 
@@ -178,12 +195,11 @@ const ModelDetailView: React.FC<DetailProps> = ({
 
   const renderFileItem = ({ item, index }: { item: ModelFile; index: number }) => {
     const s = getFileCardState(item);
-    const curatedEntry = getCuratedLiteRTEntry(item.name);
     const proceedDownload = () => {
       handleDownload(selectedModel, item);
       if (peekPendingSpotlight() !== null) setTimeout(onBack, 800);
     };
-    const onDownload = buildFileDownloadHandler({ s, curatedEntry, proceedDownload, setAlertState });
+    const onDownload = buildFileDownloadHandler({ s, fileName: item.name, sizeBytes: item.size, ramGB, proceedDownload, setAlertState });
     const liteRTMeta = LITERT_FILE_META[item.name];
     const displayName = liteRTMeta?.displayName ?? item.name.replace('.gguf', '');
     const recommended = liteRTMeta ? { pillLabel: 'Recommended', highlightText: liteRTMeta.highlight } : undefined;
@@ -289,35 +305,6 @@ const ModelDetailView: React.FC<DetailProps> = ({
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
     </View>
   );
-};
-
-export { LITERT_PARENT_ID };
-
-// LiteRT-specific per-file metadata (display name + highlight) used to render
-// individual file cards in the detail view. Derived from the curated registry —
-// the registry is the single source of truth; this map is just a UI-shaped view.
-export const LITERT_FILE_META: Record<string, { displayName: string; highlight: string }> =
-  Object.fromEntries(
-    CURATED_LITERT_ENTRIES.map(e => [e.fileName, { displayName: e.displayName, highlight: e.highlight }]),
-  );
-
-// Synthetic parent ModelInfo whose `files` are derived from the curated registry.
-// Adding a new curated LiteRT model only requires updating the registry — this
-// list, the display map above, and the download flow all pick it up automatically.
-export const LITERT_RECOMMENDED_MODEL: ModelInfo = {
-  id: LITERT_PARENT_ID,
-  name: 'Gemma 4 LiteRT',
-  author: 'google',
-  description: 'Hardware-accelerated inference with vision support.',
-  downloads: 0, likes: 0, tags: ['litert'], lastModified: '',
-  modelType: 'vision',
-  files: buildCuratedLiteRTFiles(),
-};
-
-const LITERT_PARENT_RECOMMENDED = {
-  pillLabel: 'Recommended',
-  chips: ['Vision', 'GPU'],
-  // No highlightText — the model description already carries it (rendered commonly).
 };
 
 const DeviceBanner: React.FC<{ ramGB: number; rec: { maxParameters: number; recommendedQuantization: string }; showTitle: boolean; styles: any }> = ({ ramGB, rec, showTitle, styles }) => (

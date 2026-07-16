@@ -13,6 +13,10 @@ import { createStyles } from './styles';
 import { SystemPromptSection } from './SystemPromptSection';
 import { ImageGenerationSection } from './ImageGenerationSection';
 import { TextGenerationSection } from './TextGenerationSection';
+import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
+import { useWhisperStore } from '../../stores/whisperStore';
+import { WHISPER_MODELS } from '../../services/whisperService';
 
 export const ModelSettingsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -25,6 +29,15 @@ export const ModelSettingsScreen: React.FC = () => {
   const [promptOpen, setPromptOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
   const [textOpen, setTextOpen] = useState(false);
+  const [ttsOpen, setTtsOpen] = useState(false);
+  const [sttOpen, setSttOpen] = useState(false);
+  const [whisperOpen, setWhisperOpen] = useState(false);
+  // TTS is a pro feature injected via a slot (same as the in-chat generation settings). Free builds have no
+  // slot → the section is not shown at all.
+  const TtsSection = getSlot(SLOTS.generationSettingsTts);
+  // Active transcription (STT/whisper) model — the single source is the whisper store (same as the picker).
+  const sttModelId = useWhisperStore((s) => s.downloadedModelId);
+  const sttModelName = WHISPER_MODELS.find((m) => m.id === sttModelId)?.name ?? null;
 
   // If user arrived here via onboarding spotlight flow, show accordion spotlight
   useEffect(() => {
@@ -107,6 +120,53 @@ export const ModelSettingsScreen: React.FC = () => {
         </TouchableOpacity>
         {textOpen && <TextGenerationSection />}
 
+        {/* Transcription (STT/whisper) — core. Reuses the same picker sheet Home/Chat open, and the same
+            whisper store as its single source, so the active model shown here is always consistent. */}
+        <TouchableOpacity
+          style={styles.accordionHeader}
+          onPress={() => setSttOpen(!sttOpen)}
+          activeOpacity={0.7}
+          testID="transcription-accordion"
+        >
+          <Text style={styles.accordionTitle}>Transcription (Speech to Text)</Text>
+          <Icon name={sttOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        {sttOpen && (
+          <View style={styles.settingSection}>
+            <Text style={styles.settingDesc}>
+              The on-device model used to transcribe your voice for dictation and voice chat.
+            </Text>
+            <TouchableOpacity
+              style={styles.toggleRow}
+              onPress={() => setWhisperOpen(true)}
+              activeOpacity={0.7}
+              testID="stt-open-picker"
+            >
+              <View style={styles.toggleInfo}>
+                <Text style={styles.toggleLabel}>Transcription model</Text>
+                <Text style={styles.toggleDesc}>{sttModelName ?? 'None selected — tap to choose'}</Text>
+              </View>
+              <Icon name="chevron-right" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Text to Speech — pro feature via slot; free builds render nothing (no accordion). */}
+        {TtsSection && (
+          <>
+            <TouchableOpacity
+              style={styles.accordionHeader}
+              onPress={() => setTtsOpen(!ttsOpen)}
+              activeOpacity={0.7}
+              testID="tts-accordion"
+            >
+              <Text style={styles.accordionTitle}>Text to Speech</Text>
+              <Icon name={ttsOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+            {ttsOpen && <TtsSection />}
+          </>
+        )}
+
         <Button
           title="Reset All to Defaults"
           variant="ghost"
@@ -116,6 +176,7 @@ export const ModelSettingsScreen: React.FC = () => {
           style={styles.resetButton}
         />
       </ScrollView>
+      <WhisperPickerSheet visible={whisperOpen} onClose={() => setWhisperOpen(false)} />
       <CustomAlert
         visible={alertState.visible}
         title={alertState.title}

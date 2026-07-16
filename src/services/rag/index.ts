@@ -5,19 +5,19 @@ import { embeddingService } from './embedding';
 import { documentService } from '../documentService';
 import logger from '../../utils/logger';
 
-export type { Chunk, ChunkOptions } from './chunking';
+;
 export type { RagDocument, RagSearchResult } from './database';
-export type { SearchResult } from './retrieval';
+;
 export { chunkDocument } from './chunking';
 export { retrievalService } from './retrieval';
-export { embeddingService } from './embedding';
+;
 
-export interface IndexProgress {
+interface IndexProgress {
   stage: 'extracting' | 'chunking' | 'indexing' | 'embedding' | 'done';
   message: string;
 }
 
-export interface IndexDocumentParams {
+interface IndexDocumentParams {
   projectId: string;
   filePath: string;
   fileName: string;
@@ -45,7 +45,14 @@ class RagService {
     const RAG_MAX_CHARS = 500_000;
     const attachment = await documentService.processDocumentFromPath(filePath, fileName, RAG_MAX_CHARS);
     if (!attachment?.textContent) {
-      throw new Error('Could not extract text from document');
+      // A PDF that extracts to zero text is a scanned / image-only PDF (no text layer);
+      // there is no on-device OCR, so name that cause instead of a generic failure (B-KB).
+      const isPdf = fileName.toLowerCase().endsWith('.pdf');
+      throw new Error(
+        isPdf
+          ? 'This looks like a scanned PDF with no text layer, so there was no text to extract (OCR is not available).'
+          : 'Could not extract text from document',
+      );
     }
 
     onProgress?.({ stage: 'chunking', message: 'Splitting into chunks...' });
@@ -71,7 +78,12 @@ class RagService {
       ragDatabase.insertEmbeddingsBatch(entries);
       logger.log(`[RAG] Generated ${embeddings.length} embeddings for ${fileName}`);
     } catch (err) {
-      logger.error('[RAG] Embedding generation failed (non-fatal):', err);
+      // A document with zero embeddings is invisible to semantic search and never
+      // auto-backfilled — a permanent dead entry. Roll back the just-inserted doc + chunks
+      // and surface the failure so the KB screen reports it, rather than swallowing it.
+      logger.error('[RAG] Embedding generation failed — rolling back index:', err);
+      ragDatabase.deleteDocument(docId);
+      throw err instanceof Error ? err : new Error('Embedding generation failed');
     }
 
     onProgress?.({ stage: 'done', message: 'Done' });

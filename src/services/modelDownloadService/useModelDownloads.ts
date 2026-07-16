@@ -41,8 +41,3 @@ export function useModelDownloads(): ModelDownload[] {
 
   return downloads;
 }
-
-/** Convenience: the active (in-progress) downloads only. */
-export function useActiveModelDownloads(): ModelDownload[] {
-  return useModelDownloads().filter(d => d.status === 'downloading' || d.status === 'queued' || d.status === 'paused');
-}

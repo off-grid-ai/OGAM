@@ -7,7 +7,7 @@
  * running — not just the first entry. Pure + testable; the card component is unchanged
  * and just consumes these fields.
  */
-import { DownloadEntry, isActiveStatus, isQueuedStatus } from '../stores/downloadStore';
+import { DownloadEntry, isActiveStatus, isQueuedStatus } from './downloadStatus';
 
 export interface AggregatedDownload {
   /** At least one entry is actively transferring (not just queued). */

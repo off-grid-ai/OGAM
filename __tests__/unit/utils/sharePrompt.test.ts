@@ -1,37 +1,58 @@
 import { Linking } from 'react-native';
-import { shouldShowSharePrompt, subscribeSharePrompt, emitSharePrompt, shareOnX } from '../../../src/utils/sharePrompt';
+import {
+  maybeScheduleSharePrompt,
+  resetSharePromptSession,
+  subscribeSharePrompt,
+  emitSharePrompt,
+  shareOnX,
+} from '../../../src/utils/sharePrompt';
 
-describe('shouldShowSharePrompt', () => {
-  it('returns false for count 1 (first generation is skipped)', () => {
-    expect(shouldShowSharePrompt(1)).toBe(false);
+describe('maybeScheduleSharePrompt — at most once per session', () => {
+  beforeEach(() => { jest.useFakeTimers(); resetSharePromptSession(); });
+  afterEach(() => { jest.useRealTimers(); });
+
+  // Count the emitted prompts (what drives the sheet to show) across a session.
+  function withListener(fn: (emits: string[]) => void): void {
+    const emits: string[] = [];
+    const unsub = subscribeSharePrompt(v => emits.push(v));
+    try { fn(emits); } finally { unsub(); }
+  }
+
+  it('emits ONCE per session even when triggered many times (no 2/10/20 re-show)', () => {
+    withListener(emits => {
+      for (const count of [2, 3, 10, 20, 50]) {
+        maybeScheduleSharePrompt({ variant: 'text', count, hasEngaged: false, delayMs: 0 });
+      }
+      jest.runOnlyPendingTimers();
+      expect(emits).toEqual(['text']); // exactly one, not one per milestone
+    });
   });
 
-  it('returns true for count 2 (second generation)', () => {
-    expect(shouldShowSharePrompt(2)).toBe(true);
+  it('does not emit on the very first generation (count < 2), avoids first-run stacking', () => {
+    withListener(emits => {
+      maybeScheduleSharePrompt({ variant: 'text', count: 1, hasEngaged: false, delayMs: 0 });
+      jest.runOnlyPendingTimers();
+      expect(emits).toEqual([]);
+    });
   });
 
-  it('returns false for counts 3-9', () => {
-    for (let i = 3; i <= 9; i++) {
-      expect(shouldShowSharePrompt(i)).toBe(false);
-    }
+  it('never emits once the user has already engaged (persisted)', () => {
+    withListener(emits => {
+      maybeScheduleSharePrompt({ variant: 'text', count: 2, hasEngaged: true, delayMs: 0 });
+      jest.runOnlyPendingTimers();
+      expect(emits).toEqual([]);
+    });
   });
 
-  it('returns true for every 10th generation', () => {
-    expect(shouldShowSharePrompt(10)).toBe(true);
-    expect(shouldShowSharePrompt(20)).toBe(true);
-    expect(shouldShowSharePrompt(30)).toBe(true);
-    expect(shouldShowSharePrompt(100)).toBe(true);
-  });
-
-  it('returns false for non-milestone counts', () => {
-    expect(shouldShowSharePrompt(5)).toBe(false);
-    expect(shouldShowSharePrompt(11)).toBe(false);
-    expect(shouldShowSharePrompt(15)).toBe(false);
-    expect(shouldShowSharePrompt(25)).toBe(false);
-  });
-
-  it('returns false for count 0', () => {
-    expect(shouldShowSharePrompt(0)).toBe(false);
+  it('emits again in a NEW session (after resetSharePromptSession)', () => {
+    withListener(emits => {
+      maybeScheduleSharePrompt({ variant: 'image', count: 2, hasEngaged: false, delayMs: 0 });
+      jest.runOnlyPendingTimers();
+      resetSharePromptSession(); // relaunch = new session
+      maybeScheduleSharePrompt({ variant: 'image', count: 2, hasEngaged: false, delayMs: 0 });
+      jest.runOnlyPendingTimers();
+      expect(emits).toEqual(['image', 'image']); // once each session
+    });
   });
 });
 

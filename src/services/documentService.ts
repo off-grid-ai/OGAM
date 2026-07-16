@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import { MediaAttachment } from '../types';
 import { pdfExtractor } from './pdfExtractor';
-import { useAppStore } from '../stores';
+import { useAppStore } from '../stores/appStore';
 import { APP_CONFIG } from '../constants';
 
 // File extensions we can read as text

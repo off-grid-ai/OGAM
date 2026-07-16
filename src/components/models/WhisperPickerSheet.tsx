@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../../components/AppSheet';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
@@ -22,6 +22,7 @@ export const WhisperPickerSheet: React.FC<Props> = ({ visible, onClose }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const downloadedModelId = useWhisperStore((s) => s.downloadedModelId);
+  const isModelLoading = useWhisperStore((s) => s.isModelLoading);
   const presentModelIds = useWhisperStore((s) => s.presentModelIds);
   const downloadProgressById = useWhisperStore((s) => s.downloadProgressById);
   const downloadModel = useWhisperStore((s) => s.downloadModel);
@@ -64,6 +65,9 @@ export const WhisperPickerSheet: React.FC<Props> = ({ visible, onClose }) => {
               </View>
               {(() => {
                 if (busy) return <Text style={styles.percent}>{Math.round(progress * 100)}%</Text>;
+                // selectModel sets downloadedModelId optimistically, so the active row IS the one loading —
+                // show a spinner on it while it loads (not a premature checkmark), matching text/image.
+                if (active && isModelLoading) return <ActivityIndicator testID="model-row-loading" size="small" color={colors.primary} />;
                 if (active) return <Icon name="check" size={16} color={colors.primary} />;
                 if (present) {
                   return (

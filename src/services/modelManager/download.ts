@@ -10,13 +10,115 @@ import {
   BackgroundDownloadMetadataCallback,
   BackgroundDownloadContext,
 } from './types';
-import { buildDownloadedModel, persistDownloadedModel, loadDownloadedModels, saveModelsList } from './storage';
+import { buildDownloadedModel, persistDownloadedModel } from './storage';
 import logger from '../../utils/logger';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { makeModelKey } from '../../utils/modelKey';
+import { extractBaseName } from './scan';
 
-export function mmProjLocalName(ggufFileName: string): string {
-  return `${ggufFileName.replace(/\.gguf$/i, '')}-mmproj.gguf`;
+/**
+ * The on-disk projector name for a model — QUANT-INDEPENDENT (built from extractBaseName = name+variant,
+ * quant stripped). One projector serves every quant of a model, so all quants map to the SAME file: the
+ * existence check then skips re-downloading the projector when a second quant is fetched, and the repair
+ * path resolves to the identical name (no more `…-Q4_K_M-mmproj.gguf` vs `…-mmproj-F16.gguf` divergence).
+ */
+export function mmProjLocalName(ggufFileName: string, mmProjSourceName?: string): string {
+  const base = extractBaseName(ggufFileName);
+  // Keep the projector's OWN precision (mmproj-F16 / mmproj-BF16) from its source filename, but strip any
+  // model prefix the repo added — so the on-disk name is `<model-base>-mmproj-<precision>.gguf`:
+  //  - model-prefixed  → two repos that both ship `mmproj-F16.gguf` can't collide on disk (the original loss),
+  //  - MODEL-quant-independent (extractBaseName drops the model quant) → every quant shares ONE projector file.
+  const proj = mmProjSourceName?.match(/mmproj.*$/i)?.[0] ?? 'mmproj.gguf';
+  return `${base}-${proj}`;
+}
+
+export interface MmProjRepairDownloadOpts {
+  modelId: string;
+  file: ModelFile;
+  modelsDir: string;
+  onProgress?: DownloadProgressCallback;
+  onDownloadIdReady?: (id: string) => void;
+}
+
+/**
+ * Re-download a model's mmproj (vision projector) sidecar, routing progress through
+ * the SAME download-store rows the normal download writes so the existing determinate
+ * progress bar lights up during the ~900MB fetch instead of an indeterminate spinner
+ * (BUG OD2). The store row is keyed on the model's modelKey (`repo/file`) — the id the
+ * completed model carries — and torn down once the repair settles. Returns the local
+ * path the mmproj resolved to.
+ */
+export async function performMmProjRepairDownload(opts: MmProjRepairDownloadOpts): Promise<string> {
+  const { modelId, file, modelsDir, onProgress, onDownloadIdReady } = opts;
+  const mmProjFile = file.mmProjFile;
+  if (!mmProjFile) throw new Error('Model file has no associated mmproj');
+
+  const modelKey = makeModelKey(modelId, file.name);
+  // Same quant-independent name the normal download uses — repair and download must agree on the file.
+  const mmProjLocalPath = `${modelsDir}/${mmProjLocalName(file.name, file.mmProjFile?.name)}`;
+  const totalBytes = mmProjFile.size;
+  if (await RNFS.exists(mmProjLocalPath)) await RNFS.unlink(mmProjLocalPath).catch(() => {});
+
+  const info = await backgroundDownloadService.startDownload({
+    url: mmProjFile.downloadUrl,
+    fileName: mmProjFile.name,
+    modelId,
+    totalBytes,
+  });
+  onDownloadIdReady?.(info.downloadId);
+
+  useDownloadStore.getState().add({
+    modelKey,
+    downloadId: info.downloadId,
+    modelId,
+    fileName: mmProjFile.name,
+    quantization: file.quantization ?? '',
+    modelType: 'text',
+    status: 'running',
+    bytesDownloaded: 0,
+    totalBytes,
+    combinedTotalBytes: totalBytes,
+    progress: 0,
+    createdAt: Date.now(),
+  });
+
+  let resolvedPath = mmProjLocalPath;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const removeProgress = backgroundDownloadService.onProgress(info.downloadId, (event) => {
+        useDownloadStore.getState().updateProgress(info.downloadId, event.bytesDownloaded, totalBytes);
+        onProgress?.({
+          downloadId: info.downloadId,
+          modelId,
+          fileName: mmProjFile.name,
+          bytesDownloaded: event.bytesDownloaded,
+          totalBytes,
+          progress: totalBytes > 0 ? event.bytesDownloaded / totalBytes : 0,
+        });
+      });
+      const removeComplete = backgroundDownloadService.onComplete(info.downloadId, async (event) => {
+        removeProgress(); removeComplete(); removeError();
+        try {
+          resolvedPath = await backgroundDownloadService.moveCompletedDownload(info.downloadId, mmProjLocalPath);
+        } catch {
+          resolvedPath = event.localUri?.replace('file://', '') || mmProjLocalPath;
+        }
+        useDownloadStore.getState().setCompleted(info.downloadId);
+        resolve();
+      });
+      const removeError = backgroundDownloadService.onError(info.downloadId, (err) => {
+        removeProgress(); removeComplete(); removeError();
+        useDownloadStore.getState().setStatus(info.downloadId, 'failed', { message: err.reason || 'Download failed' });
+        reject(new Error(err.reason || 'Download failed'));
+      });
+      backgroundDownloadService.startProgressPolling();
+    });
+    return resolvedPath;
+  } finally {
+    // The repair row is transient — remove it once settled so the completed model
+    // (rebuilt via loadDownloadedModels) is the only surviving row.
+    useDownloadStore.getState().remove(modelKey);
+  }
 }
 
 function makeAlreadyDownloadedId(modelId: string, fileName: string): string {
@@ -28,7 +130,7 @@ export {
   getOrphanedImageDirs,
   syncCompletedBackgroundDownloads,
 } from './downloadHelpers';
-export type { SyncDownloadsOpts } from './downloadHelpers';
+;
 
 export interface PerformBackgroundDownloadOpts {
   modelId: string;
@@ -43,7 +145,7 @@ export async function performBackgroundDownload(opts: PerformBackgroundDownloadO
   const { modelId, file, modelsDir, backgroundDownloadContext, backgroundDownloadMetadataCallback, onProgress } = opts;
   const localPath = `${modelsDir}/${file.name}`;
   const mmProjLocalPath = file.mmProjFile
-    ? `${modelsDir}/${mmProjLocalName(file.name)}`
+    ? `${modelsDir}/${mmProjLocalName(file.name, file.mmProjFile?.name)}`
     : null;
 
   const mainExists = await RNFS.exists(localPath);
@@ -124,7 +226,7 @@ async function startBgDownload(opts: StartBgDownloadOpts): Promise<BackgroundDow
   const skipSizeValidation = modelId.startsWith('offgrid/');
   const metadataObj: Record<string, unknown> = {};
   if (needsMmProj) {
-    metadataObj.mmProjFileName = mmProjLocalName(file.name);
+    metadataObj.mmProjFileName = mmProjLocalName(file.name, file.mmProjFile?.name);
     metadataObj.mmProjDownloadUrl = file.mmProjFile?.downloadUrl;
   }
   if (skipSizeValidation) metadataObj.skipSizeValidation = true;
@@ -142,11 +244,11 @@ async function startBgDownload(opts: StartBgDownloadOpts): Promise<BackgroundDow
     const mmProjFile = file.mmProjFile!;
     logger.log('[DownloadDebug] Starting mmproj sidecar download', {
       modelKey, modelId, fileName: file.name,
-      mmProjFileName: mmProjLocalName(file.name), mmProjBytes: mmProjFile.size,
+      mmProjFileName: mmProjLocalName(file.name, file.mmProjFile?.name), mmProjBytes: mmProjFile.size,
     });
     const mmProjInfo = await backgroundDownloadService.startDownload({
       url: mmProjFile.downloadUrl,
-      fileName: mmProjLocalName(file.name),
+      fileName: mmProjLocalName(file.name, file.mmProjFile?.name),
       modelId,
       modelType: 'text',
       totalBytes: mmProjFile.size,
@@ -215,9 +317,16 @@ async function startBgDownload(opts: StartBgDownloadOpts): Promise<BackgroundDow
       progress: 0,
       createdAt: Date.now(),
       ...(needsMmProj && {
-        mmProjFileName: mmProjLocalName(file.name),
+        mmProjFileName: mmProjLocalName(file.name, file.mmProjFile?.name),
         mmProjFileSize: file.mmProjFile?.size,
       }),
+      // Persist metadataJson on the store row too, not just in the native download — it
+      // carries mmProjDownloadUrl, which iOS retry/reconcile (restartIosTextDownload) needs
+      // to re-issue the vision sidecar (foreground URLSession can't resume, so it rebuilds
+      // the job from scratch). Without it, metadataJson only appeared after a hydrate from
+      // native (an app restart), so a same-session retry silently re-fetched the main GGUF
+      // alone and dropped the vision projector.
+      metadataJson,
     });
   }
   // Record the sidecar id on the (now-present) store row for restore + cancel.
@@ -640,4 +749,4 @@ export function watchBackgroundDownload(opts: WatchDownloadOpts): void {
   tryFinalize().catch(() => {});
 }
 
-export { loadDownloadedModels, saveModelsList };
+;

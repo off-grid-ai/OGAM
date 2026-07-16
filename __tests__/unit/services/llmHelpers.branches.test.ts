@@ -138,10 +138,12 @@ describe('buildThinkingCompletionParams', () => {
     });
   });
 
-  it('uses none format for Gemma 4 even when thinking is on', () => {
+  it('uses auto format for Gemma 4 so llama.cpp parses its channel format natively (native-first)', () => {
+    // Previously forced 'none' + hand-parse; now 'auto' lets llama.cpp populate
+    // reasoning_content/tool_calls itself, with our hand-parser as a fallback only.
     expect(buildThinkingCompletionParams(true, true)).toEqual({
       enable_thinking: true,
-      reasoning_format: 'none',
+      reasoning_format: 'auto',
     });
   });
 

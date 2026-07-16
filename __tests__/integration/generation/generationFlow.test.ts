@@ -80,7 +80,7 @@ describe('Generation Flow Integration', () => {
       let completeCallback: any = null;
 
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream, onComplete) => {
+        async (_messages, { onStream, onComplete } = {}) => {
           streamCallback = onStream!;
           completeCallback = onComplete!;
           return 'Hello world!';
@@ -124,7 +124,7 @@ describe('Generation Flow Integration', () => {
       let completeCallback: any = null;
 
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream, onComplete) => {
+        async (_messages, { onStream, onComplete } = {}) => {
           streamCallback = onStream!;
           completeCallback = onComplete!;
           return 'Test';
@@ -159,7 +159,7 @@ describe('Generation Flow Integration', () => {
       let completeCallback: any = null;
 
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream, onComplete) => {
+        async (_messages, { onStream, onComplete } = {}) => {
           streamCallback = onStream!;
           completeCallback = onComplete!;
           return 'Test';
@@ -192,7 +192,7 @@ describe('Generation Flow Integration', () => {
       let completeCallback: any = null;
 
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, _onStream, onComplete) => {
+        async (_messages, { onComplete } = {}) => {
           completeCallback = onComplete!;
           return 'Test';
         }
@@ -220,7 +220,7 @@ describe('Generation Flow Integration', () => {
       let completeCallback: any = null;
 
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream, onComplete) => {
+        async (_messages, { onStream, onComplete } = {}) => {
           streamCallback = onStream!;
           completeCallback = onComplete!;
           return 'Hello world';
@@ -260,7 +260,7 @@ describe('Generation Flow Integration', () => {
       let completeCallback: any = null;
 
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream, onComplete) => {
+        async (_messages, { onStream, onComplete } = {}) => {
           streamCallback = onStream!;
           completeCallback = onComplete!;
           return 'Complete response';
@@ -322,7 +322,7 @@ describe('Generation Flow Integration', () => {
       let completeCallback: any = null;
 
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream, onComplete) => {
+        async (_messages, { onStream, onComplete } = {}) => {
           streamCallback = onStream!;
           completeCallback = onComplete!;
           return 'Response';
@@ -354,7 +354,7 @@ describe('Generation Flow Integration', () => {
       const conversationId = setupWithConversation({ modelId });
 
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, _onStream, _onComplete) => {
+        async (_messages) => {
           throw new Error('Generation failed');
         }
       );
@@ -487,7 +487,7 @@ describe('Generation Flow Integration', () => {
       let streamCallback: any = null;
 
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream) => {
+        async (_messages, { onStream } = {}) => {
           streamCallback = onStream!;
           // Simulate long running generation by returning a never-resolving promise
           await new Promise(() => {});
@@ -536,7 +536,7 @@ describe('Generation Flow Integration', () => {
       let streamCallback: any = null;
 
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream) => {
+        async (_messages, { onStream } = {}) => {
           streamCallback = onStream!;
           return new Promise(() => {});
         }
@@ -595,7 +595,7 @@ describe('Generation Flow Integration', () => {
       let completeCallback: any = null;
 
       mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream, onComplete) => {
+        async (_messages, { onStream, onComplete } = {}) => {
           streamCallback = onStream!;
           completeCallback = onComplete!;
           return 'Test';

@@ -4,6 +4,7 @@
  */
 
 import { NativeModules } from 'react-native';
+import logger from '../utils/logger';
 
 const { PDFExtractorModule } = NativeModules;
 
@@ -25,7 +26,9 @@ class PDFExtractor {
     }
 
     try {
-      return await PDFExtractorModule.extractText(filePath, maxChars);
+      const __text = await PDFExtractorModule.extractText(filePath, maxChars);
+      logger.log(`[WIRE-PDF] ${JSON.stringify({ filePath, maxChars, textLength: __text?.length, sample: (__text ?? '').slice(0, 200) })}`); // [WIRE] native PDF→text extraction shape
+      return __text;
     } catch (error: any) {
       // Guard against NullPointerException when bridge promise is rejected after teardown
       if (error?.message?.includes('NullPointerException') || error?.code === 'BRIDGE_DESTROYED') {

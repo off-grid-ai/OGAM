@@ -61,6 +61,21 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderColor: colors.primary,
     borderTopColor: 'transparent',
   },
+  // Background STT download (send-slot footprint): a STATIC determinate ring —
+  // per-quadrant border colors are set from ringQuadrants at render. Matches the
+  // 44px send-slot size; visually distinct from the rotating loading ring.
+  buttonAsSendDownloading: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+  },
+  // Background STT download at the default 36px mic footprint (non-send variants).
+  buttonDownloadRing: {
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+  },
   // Audio (voice) mode loading/transcribing: a 56px spinner ring that matches the
   // buttonAudio mic footprint EXACTLY, so the center slot keeps one size across
   // mic / loading / transcribing / stop — the bottom bar never grows or shrinks.
@@ -115,11 +130,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.primary,
-  },
-  loadingText: {
-    fontSize: 11,
-    color: colors.primary,
-    marginLeft: 6,
   },
   transcribingText: {
     fontSize: 11,

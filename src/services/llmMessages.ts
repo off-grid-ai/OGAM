@@ -1,5 +1,19 @@
 import { RNLlamaOAICompatibleMessage, RNLlamaMessagePart } from 'llama.rn';
-import { Message } from '../types';
+import { Message, MediaAttachment } from '../types';
+
+/**
+ * PRODUCT RULE: every voice note is transcribed (whisper) and ONLY its transcript is sent to the
+ * model — the audio attachment is display/playback ONLY, never model input. So the llama message
+ * builders NEVER attach audio as media. Sending the audio broke turns two ways:
+ *  - the transcript is already in message.content, so the audio is redundant; and
+ *  - the audio path is an absolute iOS container path that goes stale on reinstall/rebuild (new
+ *    container UUID) → "File does not exist or cannot be opened", hard-failing every voice-mode turn
+ *    in a persisted conversation (B9); a non-audio mmproj also throws "Failed to load media" (B5).
+ * Returning [] unconditionally enforces the transcript-only contract for every model + state
+ * (including a not-yet-transcribed note — which must not reach the model as raw audio either). */
+function modelAudioAttachments(_attachments: MediaAttachment[] | undefined): MediaAttachment[] {
+  return [];
+}
 
 export function formatLlamaMessages(messages: Message[], supportsVision: boolean, supportsAudio = false): string {
   let prompt = '';
@@ -13,7 +27,7 @@ export function formatLlamaMessages(messages: Message[], supportsVision: boolean
           ? message.attachments.filter(a => a.type === 'image').map(() => '<__media__>').join('')
           : '';
         const audioMarkers = supportsAudio
-          ? message.attachments.filter(a => a.type === 'audio').map(() => '<__media__>').join('')
+          ? modelAudioAttachments(message.attachments).map(() => '<__media__>').join('')
           : '';
         content = imageMarkers + audioMarkers + content;
       }
@@ -61,7 +75,7 @@ function buildMediaParts(message: Message, supportsAudio: boolean): RNLlamaMessa
     parts.push({ type: 'image_url', image_url: { url: toFileUrl(a.uri) } });
   }
   if (supportsAudio) {
-    for (const a of message.attachments?.filter(att => att.type === 'audio') ?? []) {
+    for (const a of modelAudioAttachments(message.attachments)) {
       parts.push({ type: 'input_audio', input_audio: { format: a.audioFormat ?? 'wav', url: toFileUrl(a.uri, true) } });
     }
   }
@@ -80,7 +94,7 @@ export function buildOAIMessages(messages: Message[], supportsAudio = false): RN
       return { role: 'assistant' as const, content: message.content ? `${message.content}\n${toolCallText}` : toolCallText };
     }
     const hasImage = message.role === 'user' && message.attachments?.some(a => a.type === 'image');
-    const hasAudio = supportsAudio && message.role === 'user' && message.attachments?.some(a => a.type === 'audio');
+    const hasAudio = supportsAudio && message.role === 'user' && modelAudioAttachments(message.attachments).length > 0;
     if (!hasImage && !hasAudio) return { role: message.role, content: message.content };
     return { role: message.role, content: buildMediaParts(message, supportsAudio) };
   });

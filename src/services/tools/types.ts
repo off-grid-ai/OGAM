@@ -8,7 +8,7 @@ export interface ToolDefinition {
   requiresNetwork?: boolean;
 }
 
-export interface ToolParameter {
+interface ToolParameter {
   type: string;
   description: string;
   required?: boolean;
@@ -25,7 +25,7 @@ export interface ToolCall {
 /** How a tool call resolved. The loop sets this for EVERY call so the model and UI
  *  get an unambiguous signal — a failure or empty result is never mistaken for a
  *  successful one. */
-export type ToolResultStatus = 'ok' | 'empty' | 'error';
+type ToolResultStatus = 'ok' | 'empty' | 'error';
 
 /** Coarse failure cause, so the model/UI can tell "retry might help" (timeout/network)
  *  from "the call was wrong" (validation/not-found) from an internal bug. */

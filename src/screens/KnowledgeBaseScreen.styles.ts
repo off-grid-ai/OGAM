@@ -45,6 +45,40 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     color: colors.textSecondary,
     flex: 1,
   },
+  errorCard: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    gap: SPACING.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.error,
+  },
+  errorTextWrap: {
+    flex: 1,
+  },
+  errorTitle: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.text,
+  },
+  errorMessage: {
+    ...TYPOGRAPHY.labelSmall,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  errorRetry: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 6,
+  },
+  errorRetryText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.primary,
+    fontWeight: '400' as const,
+  },
   centered: {
     flex: 1,
     alignItems: 'center' as const,

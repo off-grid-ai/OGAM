@@ -7,11 +7,28 @@ import { useAppStore, useChatStore, useRemoteServerStore } from '../stores';
 import type { Message, GenerationMeta } from '../types';
 import { runToolLoop, buildLiteRTHistory } from './generationToolLoop';
 import { effectiveCacheType } from './llmHelpers';
+import { modelInputImageUris, modelInputAudioUris } from './modelMedia';
+import { clearModelFailure } from './modelFailureHandler';
 import type { ToolResult } from './tools/types';
 import type { GenerationOptions, CompletionResult } from './providers/types';
 import logger from '../utils/logger';
 
-export const FLUSH_INTERVAL_MS = 50; // ~20 updates/sec
+const FLUSH_INTERVAL_MS = 50; // ~20 updates/sec
+
+/**
+ * Keep whatever the user has ALREADY seen when a generation errors mid-stream — never discard shown output
+ * (device 2026-07-14, the Stop-drops-partial principle extended to the error path, for llama/litert/remote
+ * alike). Flush any buffered tokens to the store, then finalizeStreamingMessage: it persists content OR
+ * reasoning and resets the streaming state either way (a strict superset of clearStreamingMessage; an empty
+ * stream just resets, adding no message). Mirrors GenerationService.keepShownPartialOrClear on the stop path.
+ */
+function keepShownPartialOnError(svc: any, conversationId: string): void {
+  if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
+  svc.forceFlushTokens();
+  const generationTime = svc.state.startTime ? Date.now() - svc.state.startTime : undefined;
+  useChatStore.getState().finalizeStreamingMessage(conversationId, generationTime, buildGenerationMetaImpl(svc));
+  svc.resetState();
+}
 type StreamChunk = string | { content?: string; reasoningContent?: string };
 
 /** Returns true when the currently active model uses LiteRT engine. */
@@ -105,6 +122,7 @@ function buildBaseGenerationMeta(svc: any): GenerationMeta {
     timeToFirstToken: perf.lastTimeToFirstToken,
     tokenCount: perf.lastTokenCount,
     cacheType: effectiveCacheType(settings.inferenceBackend, settings.cacheType),
+    truncated: perf.lastTruncated,
   };
 }
 
@@ -159,13 +177,20 @@ async function checkProviderReadiness(svc: any): Promise<string | null> {
     if (!liteRTService.isModelLoaded()) return 'No LiteRT model loaded';
   } else {
     if (!llmService.isModelLoaded()) return 'No model loaded';
-    if (llmService.isCurrentlyGenerating()) return 'LLM service busy';
+    // A still-unwinding completion (a stop can only take effect once prefill finishes) is NOT an
+    // error — wait for the engine to go idle instead of failing the user's send. Only a genuinely
+    // stuck/concurrent generation (still busy after the bounded wait) surfaces the busy error.
+    if (llmService.isCurrentlyGenerating() && !(await llmService.waitForIdle())) return 'LLM service busy';
   }
   return null;
 }
 
 export async function prepareGenerationImpl(svc: any, conversationId: string): Promise<boolean> {
   if (svc.state.isGenerating) return false;
+  // A NEW attempt owns the text failure surface: clear any card left by a previous failed/stopped
+  // attempt at the ONE dispatch seam every path (send/retry/regenerate, local/remote, with/without
+  // tools) funnels through — a stale card must never sit next to a live stream (device IMG 00:23).
+  clearModelFailure('text');
   svc.updateState({
     isGenerating: true, isThinking: true, conversationId,
     streamingContent: '', startTime: Date.now(),
@@ -207,21 +232,8 @@ function assertLiteRTImageSupport(
   }
 }
 
-function assertLiteRTAudioSupport(
-  audioUris: string[] | undefined,
-  svc: any,
-  chatStore: ReturnType<typeof useChatStore.getState>,
-): void {
-  if (!audioUris || audioUris.length === 0) return;
-  const { downloadedModels, activeModelId } = useAppStore.getState();
-  const activeModel = downloadedModels.find((m: any) => m.id === activeModelId);
-  const liteRTActiveModel = activeModel?.engine === 'litert' ? activeModel : null;
-  if (!liteRTActiveModel?.liteRTAudio) {
-    chatStore.clearStreamingMessage();
-    svc.resetState();
-    throw new Error('This model does not support audio input. Remove the audio clip or switch to an audio-capable model.');
-  }
-}
+// assertLiteRTAudioSupport removed: audio is transcript-only (modelInputAudioUris always []), so it
+// only ever wrongly hard-rejected a non-audio LiteRT model carrying a voice note. Re-gate at modelMedia.
 
 async function runLiteRTResponseImpl(svc: any, req: GenerationRequest): Promise<void> {
   const { conversationId, messages, onFirstToken } = req;
@@ -238,15 +250,12 @@ async function runLiteRTResponseImpl(svc: any, req: GenerationRequest): Promise<
   const systemMsg = messages.find(m => m.role === 'system');
   const systemPrompt = typeof systemMsg?.content === 'string' ? systemMsg.content : '';
   const allAttachments = lastUser.attachments ?? [];
-  const imageUris = allAttachments
-    .filter((a: any) => a.type === 'image' && typeof a.uri === 'string' && a.uri.trim().length > 0)
-    .map((a: any) => a.uri);
-  const audioUris = allAttachments
-    .filter((a: any) => a.type === 'audio' && typeof a.uri === 'string' && a.uri.trim().length > 0)
-    .map((a: any) => a.uri);
+  // Single source of truth (modelMedia): images may be model input; a voice note is transcript-only
+  // (audioUris ALWAYS empty — transcript is already in lastUser.content), matching the llama/OAI path.
+  const imageUris = modelInputImageUris(allAttachments);
+  const audioUris = modelInputAudioUris(allAttachments);
 
   assertLiteRTImageSupport(imageUris, svc, chatStore);
-  assertLiteRTAudioSupport(audioUris, svc, chatStore);
 
   const history = buildLiteRTHistory(messages);
 
@@ -299,20 +308,14 @@ async function runLiteRTResponseImpl(svc: any, req: GenerationRequest): Promise<
         onError: (err: Error) => {
           if (svc.abortRequested) return;
           logger.error('[LiteRT] sendMessage error:', err.message);
-          if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
-          svc.tokenBuffer = '';
-          chatStore.clearStreamingMessage();
-          svc.resetState();
+          keepShownPartialOnError(svc, conversationId); // keep the partial the user already saw
         },
       },
       { imageUris, audioUris },
     );
   } catch (error: any) {
     if (svc.abortRequested) return;
-    if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
-    svc.tokenBuffer = '';
-    chatStore.clearStreamingMessage();
-    svc.resetState();
+    keepShownPartialOnError(svc, conversationId);
     throw error;
   }
 }
@@ -333,9 +336,8 @@ export async function generateResponseImpl(
 
   // llama.cpp path — unchanged
   try {
-    await llmService.generateResponse(
-      messages,
-      (data) => {
+    await llmService.generateResponse(messages, {
+      onStream: (data) => {
         if (svc.abortRequested) return;
         const chunk = typeof data === 'string' ? { content: data, reasoningContent: undefined } : data;
         if (!firstTokenReceived) {
@@ -354,7 +356,7 @@ export async function generateResponseImpl(
           svc.flushTimer = setTimeout(() => svc.flushTokenBuffer(), FLUSH_INTERVAL_MS);
         }
       },
-      () => {
+      onComplete: () => {
         // If aborted, stopGeneration() already handled cleanup — don't clobber new generation state.
         if (svc.abortRequested) return;
         svc.forceFlushTokens();
@@ -363,14 +365,11 @@ export async function generateResponseImpl(
         svc.checkSharePrompt();
         svc.resetState();
       },
-    );
+    });
   } catch (error) {
     if (svc.abortRequested) return;
     logger.error('[GenerationService] Generation error:', error);
-    if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
-    svc.tokenBuffer = '';
-    chatStore.clearStreamingMessage();
-    svc.resetState();
+    keepShownPartialOnError(svc, conversationId);
     throw error;
   }
 }
@@ -437,10 +436,7 @@ export async function generateRemoteResponseImpl(
       onError: (error: Error) => {
         if (generationSignal.aborted) return;
         logger.error('[GenerationService] Remote generation error:', error);
-        if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
-        svc.tokenBuffer = '';
-        chatStore.clearStreamingMessage();
-        svc.resetState();
+        keepShownPartialOnError(svc, conversationId);
         throw error;
       },
     });
@@ -450,10 +446,7 @@ export async function generateRemoteResponseImpl(
     // Mark server as offline so the Remote Servers screen reflects the failure
     const failedServerId = useRemoteServerStore.getState().activeServerId;
     if (failedServerId) useRemoteServerStore.getState().updateServerHealth(failedServerId, false);
-    if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
-    svc.tokenBuffer = '';
-    chatStore.clearStreamingMessage();
-    svc.resetState();
+    keepShownPartialOnError(svc, conversationId);
     throw error;
   } finally {
     svc.currentRemoteAbortController = null;
@@ -477,23 +470,31 @@ export async function generateRemoteWithToolsImpl(
 
   const { enabledToolIds, projectId, ...callbacks } = options;
 
-  // Use the same tool loop but with remote provider
-  await runToolLoop({
-    conversationId, messages, enabledToolIds, projectId, callbacks,
-    ...buildToolLoopHandlersImpl(svc),
-    forceRemote: true,
-  });
+  try {
+    // Use the same tool loop but with remote provider
+    await runToolLoop({
+      conversationId, messages, enabledToolIds, projectId, callbacks,
+      ...buildToolLoopHandlersImpl(svc),
+      forceRemote: true,
+    });
 
-  if (svc.abortRequested) {
-    logger.log(`[GenService][DEBUG] Generation was aborted, skipping finalize`);
-  } else {
-    svc.forceFlushTokens();
-    const generationTime = svc.state.startTime ? Date.now() - svc.state.startTime : undefined;
-    logger.log(`[GenService][DEBUG] Finalizing — streamingContent length=${svc.state.streamingContent?.length || 0}, generationTime=${generationTime}ms`);
-    useChatStore.getState().finalizeStreamingMessage(
-      conversationId, generationTime, buildGenerationMetaImpl(svc),
-    );
-    svc.checkSharePrompt();
-    svc.resetState();
+    if (svc.abortRequested) {
+      logger.log(`[GenService][DEBUG] Generation was aborted, skipping finalize`);
+    } else {
+      svc.forceFlushTokens();
+      const generationTime = svc.state.startTime ? Date.now() - svc.state.startTime : undefined;
+      logger.log(`[GenService][DEBUG] Finalizing — streamingContent length=${svc.state.streamingContent?.length || 0}, generationTime=${generationTime}ms`);
+      useChatStore.getState().finalizeStreamingMessage(
+        conversationId, generationTime, buildGenerationMetaImpl(svc),
+      );
+      svc.checkSharePrompt();
+      svc.resetState();
+    }
+  } catch (error) {
+    if (svc.abortRequested) return;
+    logger.error('[GenerationService] Remote tool generation error:', error);
+    // Reset generating state on error, else isGenerating stays stuck → red stop, next send blocked (2026-07-14).
+    keepShownPartialOnError(svc, conversationId);
+    throw error;
   }
 }

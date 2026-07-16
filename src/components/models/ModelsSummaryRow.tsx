@@ -45,7 +45,15 @@ export const ModelsSummaryRow: React.FC<Props> = ({ labels, counts, isLoading, o
           const active = !!labels[type] && labels[type] !== '—';
           const count = counts?.[type];
           return (
-            <View key={type} style={[styles.iconCol, !active && styles.inactive]}>
+            <View
+              key={type}
+              testID={`model-summary-${type}`}
+              // `selected` reflects "this model type has an active model" — the same signal the
+              // caption/icon colour encodes visually. Exposed so a test can observe active-vs-dimmed
+              // state without inspecting colours (e.g. a remote text model active while local count = 0).
+              accessibilityState={{ selected: active }}
+              style={[styles.iconCol, !active && styles.inactive]}
+            >
               <View style={styles.typeStack}>
                 <Icon name={icon} size={18} color={active ? colors.primary : colors.textMuted} />
                 <Text style={[styles.caption, active && styles.captionActive]}>{caption}</Text>
@@ -53,7 +61,7 @@ export const ModelsSummaryRow: React.FC<Props> = ({ labels, counts, isLoading, o
               {typeof count === 'number' && (
                 // Big numeral to the RIGHT of the icon+label, tall enough to span
                 // both — fills the gap between types so the row reads at a glance.
-                <Text style={[styles.count, count > 0 && styles.countActive]}>{count}</Text>
+                <Text testID={`model-summary-count-${type}`} style={[styles.count, count > 0 && styles.countActive]}>{count}</Text>
               )}
             </View>
           );

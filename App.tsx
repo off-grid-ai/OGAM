@@ -20,6 +20,7 @@ import { initDebugLogFile, appendDebugLine } from './src/utils/debugLogFile';
 import { loadProFeatures } from './src/bootstrap/loadProFeatures';
 import { checkProStatus } from './src/services/proLicenseService';
 import { hydrateDownloadStore } from './src/services/downloadHydration';
+import { restoreQueuedDownloads } from './src/services/restoreQueuedDownloads';
 import { startLoadPolicySync } from './src/services/loadPolicySync';
 import { registerCoreDownloadProviders } from './src/services/modelDownloadService/registerProviders';
 import { useDownloadListeners } from './src/hooks/useDownloads';
@@ -119,6 +120,11 @@ function App() {
     onForeground: useCallback(() => {
       // Rebuild the unified store before reattaching JS listeners so restored
       // progress events map onto current download entries instead of racing hydration.
+      // NOTE: restoreQueuedDownloads() is intentionally NOT called here — on a foreground
+      // resume the process was never killed, so backgroundDownloadService.startQueue (the
+      // in-memory FIFO) is still the live source of truth for queued items. Replaying the
+      // persisted queue here would DOUBLE-issue starts that are still waiting in memory.
+      // Restore is a cold-start-only concern (the queue owner is gone only after a kill).
       hydrateDownloadStore()
         .catch((error) => {
           logger.error('[App] Failed to hydrate download store on foreground:', error);
@@ -139,17 +145,15 @@ function App() {
     }
   }, []);
 
-  const initializeApp = useCallback(async () => {
-    try {
-      // Ensure persisted download metadata is loaded before restore logic reads it.
-      await ensureAppStoreHydrated();
-
-      // Project the persisted "aggressive model loading" setting onto the residency
-      // manager (single owner of the runtime load policy) now that settings are
-      // hydrated, and keep it in sync for the app's lifetime.
-      startLoadPolicySync();
-
-      // Hydrate download store from SQLite before any screen mounts.
+  /**
+   * Download-state recovery — the chain that reads/repairs the native download DB. Ordered
+   * internally exactly as before (hydrate → reattach → register providers → restore queued →
+   * image reconcile → model-list refresh), but NOT awaited by the boot gate: under heavy
+   * download I/O the Room read alone stalled ~10s (write-lock contention) and blanked boot.
+   * Screens read reactive stores, so recovered rows/models appear when this lands.
+   */
+  const recoverDownloadState = useCallback(() => {
+    (async () => {
       await hydrateDownloadStore().catch((error) => {
         logger.error('[App] Failed to hydrate download store during startup:', error);
       });
@@ -165,6 +169,52 @@ function App() {
       // and the old recovery paths are folded into the providers.
       registerCoreDownloadProviders();
 
+      // Re-surface QUEUED downloads that never started before an app kill. A queued item (waiting for
+      // one of the 3 concurrency slots) has no native row, so hydrateDownloadStore can't recover it —
+      // it lives only in the durably-persisted queue. restore replays it through the owning provider's
+      // real start (re-creating the pending row + watch); items auto-start as slots free. Runs AFTER
+      // provider registration (restore dispatches to the providers) and hydrate (so it dedupes against
+      // any native row that DID start). Fire-and-forget: a failure must not abort launch.
+      await restoreQueuedDownloads().catch((error) => {
+        logger.error('[App] Failed to restore queued downloads during startup:', error);
+      });
+
+      // Reconcile image model directories that finished extracting on disk but whose AsyncStorage
+      // registration was lost to an app kill. Reads the (just-hydrated) download store, so it lives
+      // in this chain; the closing refreshModelLists republishes any recovered models to the UI.
+      const activeImageModelIds = new Set(
+        Object.values(useDownloadStore.getState().downloads)
+          .filter(e => e.modelType === 'image')
+          .map(e => e.modelId.replace('image:', '')),
+      );
+      await modelManager.reconcileFinishedImageDownloads(activeImageModelIds).catch((error) => {
+        logger.error('[App] Image model reconciliation failed:', error);
+      });
+      const { textModels, imageModels } = await modelManager.refreshModelLists();
+      setDownloadedModels(textModels);
+      setDownloadedImageModels(imageModels);
+    })().catch((error) => {
+      logger.error('[App] Download-state recovery failed:', error);
+    });
+  }, [setDownloadedModels, setDownloadedImageModels]);
+
+  const initializeApp = useCallback(async () => {
+    try {
+      // Ensure persisted download metadata is loaded before restore logic reads it.
+      await ensureAppStoreHydrated();
+
+      // Project the persisted "aggressive model loading" setting onto the residency
+      // manager (single owner of the runtime load policy) now that settings are
+      // hydrated, and keep it in sync for the app's lifetime.
+      startLoadPolicySync();
+
+      // Download-state recovery runs OFF the boot gate (fire-and-forget, order preserved
+      // inside recoverDownloadState below): with many WorkManager downloads mid-flight the
+      // native Room DB read (getActiveDownloads) sat ~9.5s behind write-lock contention
+      // (device 2026-07-13, 9 active downloads) and the WHOLE app was hostage to it. The
+      // download rows/badges are reactive projections — they fill in when recovery lands.
+      recoverDownloadState();
+
       // Phase 1: Quick initialization - get app ready to show UI
       // Initialize hardware detection
       const deviceInfo = await hardwareService.getDeviceInfo();
@@ -178,20 +228,6 @@ function App() {
 
       // Clean up any mmproj files that were incorrectly added as standalone models
       await modelManager.cleanupMMProjEntries();
-
-      // Reconcile image model directories that finished extracting on disk but
-      // whose AsyncStorage registration was lost to an app kill. Runs before
-      // refreshModelLists so the recovered models are included in the initial
-      // setDownloadedImageModels call. activeModelIds guards against touching
-      // directories that are currently being downloaded/extracted.
-      const activeImageModelIds = new Set(
-        Object.values(useDownloadStore.getState().downloads)
-          .filter(e => e.modelType === 'image')
-          .map(e => e.modelId.replace('image:', '')),
-      );
-      await modelManager.reconcileFinishedImageDownloads(activeImageModelIds).catch((error) => {
-        logger.error('[App] Image model reconciliation failed:', error);
-      });
 
       // Scan for any models that may have been downloaded externally or
       // while the app was killed. hydrateDownloadStore (called on cold start
@@ -273,7 +309,7 @@ function App() {
   }, [
     authEnabled,
     ensureAppStoreHydrated,
-    reattachTextDownloadRecovery,
+    recoverDownloadState,
     setDeviceInfo,
     setDownloadedImageModels,
     setDownloadedModels,

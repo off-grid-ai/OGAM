@@ -20,7 +20,8 @@ import ReanimatedAnimated, {
 import { useThemedStyles } from '../../theme';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
 import { createStyles } from './styles';
-import { LoadingState, TranscribingState, UnavailableButton, ButtonIcon } from './states';
+import { LoadingState, TranscribingState, UnavailableButton, DownloadingButton, ButtonIcon } from './states';
+import { deriveVoiceButtonState } from './derive';
 import { useWhisperStore } from '../../stores';
 import logger from '../../utils/logger';
 
@@ -120,10 +121,17 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
 }) => {
   const styles = useThemedStyles(createStyles);
   const downloadModel = useWhisperStore((s) => s.downloadModel);
-  // Scope to the model this button downloads, so a concurrent download of a
-  // different transcription model doesn't drive this button's progress.
-  const downloadProgress = useWhisperStore((s) => s.downloadProgressById[DOWNLOAD_MODEL_ID]);
-  const isDownloading = downloadProgress !== undefined;
+  const downloadProgressById = useWhisperStore((s) => s.downloadProgressById);
+  // The ONE derivation of what the mic renders (see derive.ts): a background STT
+  // download is never the busy spinner — that is reserved for a tap-triggered
+  // model load and live transcription.
+  const buttonState = deriveVoiceButtonState({
+    isAvailable,
+    isModelLoading: !!isModelLoading,
+    isTranscribing: !!isTranscribing,
+    isRecording,
+    downloadProgressById,
+  });
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const loadingAnim = useRef(new Animated.Value(0)).current;
@@ -154,13 +162,13 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
   }));
 
   useEffect(() => {
-    if (isModelLoading || (isTranscribing && !isRecording)) {
+    if (buttonState.kind === 'loading' || buttonState.kind === 'transcribing') {
       const spin = Animated.loop(Animated.timing(loadingAnim, { toValue: 1, duration: 1000, useNativeDriver: true }));
       spin.start();
       return () => spin.stop();
     }
     loadingAnim.setValue(0);
-  }, [isModelLoading, isTranscribing, isRecording, loadingAnim]);
+  }, [buttonState.kind, loadingAnim]);
 
   const callbacksRef = useRef<CallbacksRef>({ onStartRecording, onStopRecording, onCancelRecording });
   callbacksRef.current = { onStartRecording, onStopRecording, onCancelRecording };
@@ -182,7 +190,6 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
   const panResponder = useRef(buildPanResponder({ isDraggingToCancel, cancelOffsetX, callbacksRef })).current;
 
   const handleUnavailableTap = () => {
-    if (isDownloading) { return; }
     setAlertState(showAlert(
       'Download Voice Model',
       `Download Whisper Base to enable voice input? (${DOWNLOAD_MODEL_SIZE_MB} MB)`,
@@ -211,7 +218,7 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
     />
   );
 
-  if (isModelLoading) {
+  if (buttonState.kind === 'loading') {
     return (
       <View style={styles.container}>
         <LoadingState asSendButton={asSendButton} loadingAnim={loadingAnim} />
@@ -220,7 +227,7 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
     );
   }
 
-  if (isTranscribing && !isRecording) {
+  if (buttonState.kind === 'transcribing') {
     return (
       <View style={styles.container}>
         <TranscribingState asSendButton={asSendButton} loadingAnim={loadingAnim} />
@@ -229,11 +236,18 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
     );
   }
 
-  if (!isAvailable) {
+  if (buttonState.kind === 'downloading' || buttonState.kind === 'unavailable') {
     return (
       <View style={styles.container}>
-        <TouchableOpacity style={styles.buttonWrapper} onPress={handleUnavailableTap} disabled={isDownloading}>
-          <UnavailableButton asSendButton={asSendButton} downloadProgress={isDownloading ? downloadProgress : undefined} />
+        <TouchableOpacity
+          testID="voice-record-button-unavailable"
+          style={styles.buttonWrapper}
+          onPress={handleUnavailableTap}
+          disabled={buttonState.kind === 'downloading'}
+        >
+          {buttonState.kind === 'downloading'
+            ? <DownloadingButton asSendButton={asSendButton} progress={buttonState.progress} />
+            : <UnavailableButton asSendButton={asSendButton} />}
         </TouchableOpacity>
         {alert}
       </View>
@@ -261,6 +275,7 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
           style={[styles.buttonWrapper, { transform: [{ scale: isRecording ? pulseAnim : 1 }] }]}
         >
           <TouchableOpacity
+            testID="voice-record-button-audio"
             onPress={handleToggle}
             disabled={disabled}
             activeOpacity={0.7}
@@ -294,6 +309,7 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
       )}
       {isRecording && <ReanimatedAnimated.View style={[styles.rippleRing, rippleStyle]} />}
       <Animated.View
+        testID="voice-record-button"
         style={[styles.buttonWrapper, { transform: [{ scale: isRecording ? pulseAnim : 1 }, { translateX: cancelOffsetX }] }]}
         {...(disabled ? {} : panResponder.panHandlers)}
       >

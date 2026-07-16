@@ -10,7 +10,6 @@ import {
   ImageGenerationState, hardwareService, QueuedMessage,
   contextCompactionService,
 } from '../../services';
-import { liteRTService } from '../../services/litert';
 import { effectiveCacheType } from '../../services/llmHelpers';
 import { generationSession } from '../../services/generationSession';
 import { useGeneratingConversationId } from '../../hooks/useGenerationSession';
@@ -19,15 +18,17 @@ import { RootStackParamList } from '../../navigation/types';
 import { ensureModelLoadedFn, ensureTextModelForChatFn, handleModelSelectFn, handleUnloadModelFn, initiateModelLoad, useChatImageModelEffects, useChatModelStateSync } from './useChatModelActions';
 import { startGenerationFn, handleSendFn, handleStopFn, handleSelectProjectFn, dispatchGenerationFn } from './useChatGenerationActions';
 import { handleRetryMessageFn, handleEditMessageFn, handleDeleteConversationFn, handleGenerateImageFromMsgFn } from './useChatMessageHandlers';
-import { getDisplayMessages, getPlaceholderText, ChatMessageItem, StreamingState } from './types';
+import { getDisplayMessages } from './types';
 import { saveImageToGallery } from './useSaveImage';
+import { needsVisionRepair } from '../../utils/visionRepair';
 import {
   isSuspiciousRecoveredImageModel,
   isSuspiciousRecoveredTextModel,
 } from '../../utils/modelSelectorFilters';
 
-export type { AlertState, ChatMessageItem, StreamingState };
-export { getDisplayMessages, getPlaceholderText };
+export type { AlertState };
+export type { ChatMessageItem } from './types';
+export { getPlaceholderText } from './types';
 
 type ChatScreenRouteProp = RouteProp<RootStackParamList, 'Chat'>;
 
@@ -339,13 +340,9 @@ export const useChatScreen = () => {
     // won't fast-path-skip. The memory gate — including the "Load Anyway" override
     // — is owned by initiateModelLoad, so reload matches normal load exactly (no
     // duplicated/stricter check in the view).
-    if (activeModel?.engine === 'litert') {
-      if (liteRTService.isModelLoaded()) {
-        await liteRTService.unloadModel().catch(() => { });
-      }
-    } else if (llmService.isModelLoaded()) {
-      await activeModelService.unloadTextModel(true);
-    }
+    // activeModelService.unloadTextModel now unloads whichever engine is active (LiteRT or llama)
+    // and no-ops when nothing is loaded — so no engine branch here.
+    await activeModelService.unloadTextModel(true);
     await initiateModelLoad(modelDeps, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeModelInfo.modelId, activeModelInfo.isRemote, settings, activeModel?.engine]);
@@ -383,6 +380,8 @@ export const useChatScreen = () => {
     imageGenerationStatus: imageGenState.status,
     imagePreviewPath: imageGenState.previewPath,
     isStreaming, isThinking, isCompacting, isGeneratingForThisConversation, hasPendingSettings, handleReloadTextModel, textModelEvicted, displayMessages, downloadedModels, hasAvailableModels, projects, settings,
+    // The chat knows the active model IS a vision model but is missing its projector — surface repair, not a crash.
+    visionNeedsRepair: !activeModelInfo.isRemote && needsVisionRepair(activeModel),
     navigation, hardwareService,
     handleSend,
     handleStop: () => handleStopFn(genDeps),
@@ -394,7 +393,7 @@ export const useChatScreen = () => {
     handleRetryMessage: (message: Message) =>
       handleRetryMessageFn(message, genDeps, { activeConversationId, hasActiveModel, activeConversation, deleteMessagesAfter, setDebugInfo }),
     handleEditMessage: (message: Message, newContent: string) =>
-      handleEditMessageFn(genDeps, { message, newContent, activeConversationId, hasActiveModel, updateMessageContent, deleteMessagesAfter, setDebugInfo }),
+      handleEditMessageFn(genDeps, { message, newContent, activeConversationId, hasActiveModel, activeConversation, updateMessageContent, deleteMessagesAfter, setDebugInfo }),
     handleSelectProject: (project: Project | null) => {
       setPendingProjectId(project?.id);
       if (!activeConversationId) {
@@ -406,6 +405,19 @@ export const useChatScreen = () => {
     handleGenerateImageFromMessage: (prompt: string) =>
       handleGenerateImageFromMsgFn(prompt, genDeps, { activeConversationId, activeImageModel, setAlertState }),
     handleImagePress: (uri: string) => setViewerImageUri(uri),
-    handleSaveImage: () => saveImageToGallery(viewerImageUri, setAlertState),
+    handleSaveImage: () => {
+      // Close the fullscreen viewer FIRST. The "Image Saved" confirmation is an AppSheet
+      // (a modal); iOS cannot present it on top of the still-open viewer <Modal> — two
+      // simultaneous modals wedge the UI and the chat input stops responding while nav
+      // still works (device 2026-07-15). Dismiss the viewer, then save + alert on the next
+      // tick once it has faded out. Harmless on Android (no nested-modal conflict there).
+      const uri = viewerImageUri;
+      setViewerImageUri(null);
+      // Let the viewer <Modal> (animationType="fade", ~300ms) finish dismissing before the "Saved"
+      // AppSheet presents, so the two modals never overlap on iOS. Named + given headroom over the
+      // fade duration so the coupling is explicit (Gitar).
+      const VIEWER_FADE_OUT_MS = 350;
+      setTimeout(() => { saveImageToGallery(uri, setAlertState).catch(() => {}); }, VIEWER_FADE_OUT_MS);
+    },
   };
 };

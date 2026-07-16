@@ -3,12 +3,12 @@
  */
 
 import logger from '../utils/logger';
-import type { SSEEvent, OpenAIStreamMessage, AnthropicStreamMessage } from './httpClient';
+import type { SSEEvent, OpenAIStreamMessage, AnthropicStreamMessage } from './httpClientTypes';
 
 /**
  * Process parsed event and yield it
  */
-export function yieldSSEvent(currentEvent: Partial<SSEEvent>): SSEEvent {
+function yieldSSEvent(currentEvent: Partial<SSEEvent>): SSEEvent {
   return {
     event: currentEvent.event,
     data: currentEvent.data as string,
@@ -20,7 +20,7 @@ export function yieldSSEvent(currentEvent: Partial<SSEEvent>): SSEEvent {
  * Parse a single SSE line into the current event
  * Returns true if an event should be yielded (empty line received)
  */
-export function parseSSELine(
+function parseSSELine(
   trimmed: string,
   currentEvent: Partial<SSEEvent>
 ): boolean {

@@ -20,6 +20,8 @@ import { useDownloadStore, isActiveStatus, DownloadEntry } from '../../../stores
 import logger from '../../../utils/logger';
 import { mapStoreStatus } from '../storeStatus';
 import { uniformDownloadId } from '../uniformId';
+import { startModelDownload } from '../../startModelDownload';
+import type { DownloadParams } from '../../backgroundDownloadTypes';
 import type { DownloadProvider, ModelDownload } from '../types';
 
 const TEXT_CAPABILITIES = {
@@ -51,6 +53,11 @@ async function restartIosTextDownload(entry: DownloadEntry): Promise<void> {
     downloadUrl: huggingFaceService.getDownloadUrl(entry.modelId, entry.fileName),
     ...(mmProjFile ? { mmProjFile } : {}),
   };
+  // Immediate feedback: mark the entry queued so its card shows "queued" instead of staying "failed"
+  // while the re-issued download waits for a free concurrency slot (device 2026-07-15: a retried item
+  // stuck behind the 3-download cap looked like retry did nothing). No-op if the store entry lost its
+  // downloadId; the re-issue below still restores it.
+  if (entry.downloadId) useDownloadStore.getState().setStatus(entry.downloadId, 'pending');
   const info = await modelManager.downloadModelBackground(entry.modelId, file);
   reattach(info.downloadId);
 }
@@ -111,8 +118,11 @@ export const textProvider: DownloadProvider = {
 
   async retry(id: string): Promise<void> {
     const entry = findEntry(keyOf(id));
-    if (!entry?.downloadId) return;
+    if (!entry) return;
     if (Platform.OS === 'android') {
+      // Android resumes the existing WorkManager job in place, so it genuinely needs the live
+      // downloadId to reattach to.
+      if (!entry.downloadId) return;
       useDownloadStore.getState().setStatus(entry.downloadId, 'pending');
       await backgroundDownloadService.retryDownload(entry.downloadId);
       if (entry.mmProjDownloadId && entry.mmProjStatus === 'failed') {
@@ -122,7 +132,12 @@ export const textProvider: DownloadProvider = {
       }
       reattach(entry.downloadId);
     } else {
-      await restartIosTextDownload(entry); // foreground URLSession can't resume → re-issue
+      // iOS re-issues from scratch (foreground URLSession can't resume) — it rebuilds the download
+      // from the entry's metadata and does NOT need a downloadId. A failed/rehydrated entry can lose
+      // its downloadId (device 2026-07-15: an app-kill mid-download cleared the store's downloadId
+      // while the native row kept it), so gating iOS retry on downloadId made every retry a silent
+      // no-op. Require only that the entry exists.
+      await restartIosTextDownload(entry);
     }
     backgroundDownloadService.startProgressPolling();
   },
@@ -149,6 +164,25 @@ export const textProvider: DownloadProvider = {
 
   subscribe(onChange: () => void): () => void {
     return useDownloadStore.subscribe(onChange);
+  },
+
+  async reissue(params: DownloadParams): Promise<void> {
+    // Reconstruct the text ModelFile from the persisted params and replay the SAME start the UI
+    // uses (startModelDownload → pending store row + completion watch). The queued item never had a
+    // native row, so this is the only way it re-enters the store and auto-starts as a slot frees.
+    const meta = params.metadataJson ? safeJson(params.metadataJson) : null;
+    const mmProjFile = meta?.mmProjFileName && meta?.mmProjDownloadUrl
+      ? { name: meta.mmProjFileName, size: params.combinedTotalBytes && params.totalBytes ? params.combinedTotalBytes - params.totalBytes : 0, downloadUrl: meta.mmProjDownloadUrl }
+      : undefined;
+    const file = {
+      name: params.fileName,
+      size: params.totalBytes ?? 0,
+      quantization: params.quantization ?? 'Unknown',
+      downloadUrl: params.url,
+      sha256: params.sha256,
+      ...(mmProjFile ? { mmProjFile } : {}),
+    };
+    await startModelDownload(params.modelId, file);
   },
 
   async reconcile(): Promise<void> {

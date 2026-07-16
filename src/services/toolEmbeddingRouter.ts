@@ -140,11 +140,16 @@ function discoveryBoost(tool: RoutableTool): number {
   return DISCOVERY_VERBS.some(v => name.includes(v)) ? 0.15 : 0;
 }
 
-async function embedTool(tool: RoutableTool): Promise<number[]> {
+async function embedTool(tool: RoutableTool, expectedDim?: number): Promise<number[]> {
   const text = `${tool.function.name}: ${firstLine(tool.function.description)}`;
   const hash = hashText(text);
   const cached = toolEmbeddingCache.get(tool.function.name);
-  if (cached && cached.h === hash) return cached.v;
+  // A cache hit needs BOTH the text hash AND the current embedding dimension to match.
+  // After an embedding-model swap the dimension changes while the text is identical, so
+  // the dimension check stops a stale-dim vector from poisoning cosineSimilarity with NaN.
+  if (cached && cached.h === hash && (expectedDim == null || cached.v.length === expectedDim)) {
+    return cached.v;
+  }
   const vec = await embeddingService.embed(text);
   toolEmbeddingCache.set(tool.function.name, { h: hash, v: vec });
   schedulePersist();
@@ -170,7 +175,7 @@ export async function selectToolsByEmbedding(
   const tokens = queryTokens(query);
   const scored: Array<{ name: string; score: number }> = [];
   for (const tool of tools) {
-    const vec = await embedTool(tool);
+    const vec = await embedTool(tool, queryVec.length);
     // Hybrid: semantic similarity + lexical (provider/verb word) + discovery boost.
     const score = cosineSimilarity(queryVec, vec) + lexicalBoost(tokens, tool) + discoveryBoost(tool);
     scored.push({ name: tool.function.name, score });

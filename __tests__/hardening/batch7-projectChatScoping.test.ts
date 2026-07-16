@@ -123,10 +123,21 @@ describe('BATCH7 project chat scoping (real chatStore)', () => {
 
   it('ProjectDetail ordering: newest-updated conversation is first in the project list', () => {
     const { createConversation, addMessage } = useChatStore.getState();
+    // Control the clock so the three updatedAt stamps STRICTLY increase. createConversation stamps
+    // updatedAt with a raw `new Date()` while addMessage bumps via `max(now, prev+1)`; if `newer`'s
+    // creation and `older`'s bump land in the same wall-clock millisecond, the two updatedAt values
+    // TIE and the sort order is undefined — a nondeterministic flake that fails on fast CI runs (no
+    // --coverage) and passes on slower ones. Advancing a fake clock removes the wall-clock race and
+    // tests the real "the conversation you just touched sorts to the top" behavior deterministically.
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
     const older = createConversation('model-1', 'Older', 'alpha');
+    jest.setSystemTime(new Date('2026-01-01T00:00:00.100Z'));
     const newer = createConversation('model-1', 'Newer', 'alpha');
-    // Touch the OLDER one after creation so its updatedAt is the latest.
+    // Touch the OLDER one LAST so its updatedAt is the latest.
+    jest.setSystemTime(new Date('2026-01-01T00:00:00.200Z'));
     addMessage(older, { role: 'user', content: 'bump' });
+    jest.useRealTimers();
 
     const sorted = chatsForProject('alpha').sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),

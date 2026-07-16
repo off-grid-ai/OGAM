@@ -110,6 +110,8 @@ class EmbeddingService {
     if (!this.context) throw new Error('Embedding model not loaded. Call load() first.');
     try {
       const result = await (this.context as any).embedding(text);
+      // [WIRE] embedding dim + a sample (not the whole vector) so fixtures match the real model's dimensionality.
+      logger.log(`[WIRE-EMBED] ${JSON.stringify({ dim: result?.embedding?.length, sample: result?.embedding?.slice?.(0, 8) })}`);
       return result.embedding;
     } catch (error: any) {
       const msg = error?.message || String(error) || '';

@@ -18,7 +18,7 @@
  */
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
-import { ImageModelIncompleteError } from '../services/modelLoadErrors';
+import { ImageModelIncompleteError } from './modelLoadErrors';
 import logger from './logger';
 
 type ReadDirItem = Awaited<ReturnType<typeof RNFS.readDir>>[number];
@@ -63,25 +63,44 @@ export function checkImageModelFiles(files: ImageDirEntry[], backend: ImageBacke
   BASE_REQUIRED.forEach(requirePresent);
   requirePresent(backend === 'mnn' ? 'unet.mnn' : 'unet.bin');
 
-  // Required graph files the native server always loads (beyond the primary unet): the
-  // weight-pairing loop below only fires for graphs that ARE present, so a partial extract
-  // that dropped the .mnn GRAPH itself (not just its .weight) would slip through unless we
-  // require it here. mnn always passes --clip + --vae_decoder; --vae_encoder is optional
-  // (added only when present), so it is NOT required. clip may be clip_v2.mnn (upgraded) or
-  // clip.mnn (base) — accept either.
-  if (backend === 'mnn') {
-    requirePresent('vae_decoder.mnn');
-    const hasClip = (sizeByName.get('clip_v2.mnn') ?? 0) > 0 || (sizeByName.get('clip.mnn') ?? 0) > 0;
+  // The clip graph the native server always loads. It may be clip_v2.mnn (upgraded) or
+  // clip.mnn (base) for both backends; qnn additionally accepts a self-contained clip.bin
+  // (LocalDreamModule falls back to clip.bin when no .mnn clip is present). Require the
+  // graph itself here because the mnn split-weight loop below only fires for graphs that
+  // ARE present — a dropped clip GRAPH would otherwise slip through.
+  const requireClip = (): void => {
+    const hasClip =
+      (sizeByName.get('clip_v2.mnn') ?? 0) > 0 ||
+      (sizeByName.get('clip.mnn') ?? 0) > 0 ||
+      (backend === 'qnn' && (sizeByName.get('clip.bin') ?? 0) > 0);
     if (!hasClip) missing.push('clip_v2.mnn');
-  }
+  };
 
-  // MNN split-weight pairing: a `*.mnn` graph is useless without its `*.mnn.weight`.
-  for (const [name, size] of sizeByName) {
-    if (name.endsWith('.mnn') && size > 0) {
-      const weight = `${name}.weight`;
-      const weightSize = sizeByName.get(weight);
-      if (weightSize == null || weightSize <= 0) missing.push(weight);
+  if (backend === 'mnn') {
+    // mnn always passes --clip + --vae_decoder; --vae_encoder is optional (native adds it
+    // only when present), so it is NOT required.
+    requirePresent('vae_decoder.mnn');
+    requireClip();
+    // MNN split-weight pairing: an MNN graph is useless without its `*.mnn.weight`. This is
+    // an MNN-FORMAT concern ONLY. QNN packages ship clip_v2.mnn as a MONOLITHIC graph with
+    // weights baked in — there is no `.weight` sibling (verified against the xororz/sd-qnn
+    // zip and a working on-device qnn model). Running this loop for qnn demanded a
+    // clip_v2.mnn.weight that never exists, so every fresh QNN download failed the integrity
+    // gate as "incomplete/corrupted" and surfaced a bogus "connection dropped" alert — even
+    // though the download and extraction were perfect (Android-only: iOS is coreml).
+    for (const [name, size] of sizeByName) {
+      if (name.endsWith('.mnn') && size > 0) {
+        const weight = `${name}.weight`;
+        const weightSize = sizeByName.get(weight);
+        if (weightSize == null || weightSize <= 0) missing.push(weight);
+      }
     }
+  } else {
+    // qnn: primary is unet.bin (native binary format), vae_decoder.bin is always loaded, and
+    // clip is a self-contained graph (no split weight). Mirror the mnn required set in .bin
+    // form; vae_encoder is optional (native adds --vae_encoder only when present).
+    requirePresent('vae_decoder.bin');
+    requireClip();
   }
 
   return { complete: missing.length === 0, missing: [...new Set(missing)] };

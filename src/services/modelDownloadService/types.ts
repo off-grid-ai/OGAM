@@ -40,7 +40,7 @@ export type ModelDownloadStatus =
  *  - the STT RNFS path → `resumable: false` (dies with the app) → a 'paused' such
  *    download surfaces as needing a manual retry, not a phantom "resuming".
  */
-export interface DownloadCapabilities {
+interface DownloadCapabilities {
   cancel: boolean;     // can an in-progress transfer be aborted + cleaned up?
   retry: boolean;      // can a failed/stuck download be restarted?
   remove: boolean;     // can the on-disk model be deleted?
@@ -110,4 +110,16 @@ export interface DownloadProvider {
    * state can omit it.
    */
   reconcile?(): Promise<void>;
+
+  /**
+   * Re-issue a QUEUED start that never began before an app kill, from its persisted DownloadParams.
+   * A queued item had no native row (it was waiting for a concurrency slot), so hydrate can't recover
+   * it; restoreQueuedDownloads() replays it through THIS — which must go through the SAME real start
+   * path the UI uses (creating the `pending` store row + completion watch), NOT a bare
+   * backgroundDownloadService.startDownload (that skips the store row + watch). Reconstructs the
+   * provider's domain input from params and calls its own start. Optional: a provider whose type is
+   * never admission-controlled/queued can omit it. `params` is passed as the shared shape so the
+   * service never branches on the concrete type.
+   */
+  reissue?(params: import('../backgroundDownloadTypes').DownloadParams): Promise<void>;
 }

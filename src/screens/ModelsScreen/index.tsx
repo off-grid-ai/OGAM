@@ -13,7 +13,7 @@ import { createStyles } from './styles';
 import { initialFilterState } from './constants';
 import { TextModelsTab } from './TextModelsTab';
 import { ImageModelsTab } from './ImageModelsTab';
-import { VoiceModelsUpsell } from './VoiceModelsUpsell';
+import { VoiceModelsUpsell } from '../../components/models/VoiceModelsUpsell';
 import { TranscriptionModelsTab } from './TranscriptionModelsTab';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
@@ -75,9 +75,9 @@ export const ModelsScreen: React.FC = () => {
               testID="downloads-icon"
             >
               <Icon name="download" size={20} color={colors.text} />
-              {vm.activeDownloadCount > 0 && (
+              {vm.downloadBadgeCount > 0 && (
                 <View style={styles.downloadBadge}>
-                  <Text style={styles.downloadBadgeText}>{vm.activeDownloadCount}</Text>
+                  <Text testID="downloads-badge-count" style={styles.downloadBadgeText}>{vm.downloadBadgeCount}</Text>
                 </View>
               )}
             </TouchableOpacity>

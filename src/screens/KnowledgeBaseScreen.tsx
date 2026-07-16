@@ -44,6 +44,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
   const [indexingFile, setIndexingFile] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPicking, setIsPicking] = useState(false);
+  const [indexError, setIndexError] = useState<{ fileName: string; message: string } | null>(null);
   const isPickingRef = useRef(false);
 
   const project = useProjectStore((s) => s.getProject(projectId));
@@ -70,6 +71,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
     }
     isPickingRef.current = true;
     setIsPicking(true);
+    setIndexError(null);
     logger.log(`[KnowledgeBase] picker opening — platform: ${Platform.OS}, projectId: ${projectId}`);
     try {
       // iOS: 'import' → Apple copies the file before handing it to us, original untouched.
@@ -95,8 +97,11 @@ export const KnowledgeBaseScreen: React.FC = () => {
           await ragService.indexDocument({ projectId, filePath: pathForDb, fileName, fileSize: file.size || 0 });
           logger.log(`[KnowledgeBase] indexed successfully: ${fileName}`);
         } catch (indexErr: any) {
+          // The index aborted mid-way and rolled back (ragService.indexDocument is atomic — no
+          // half-indexed doc is left behind). Surface it as a persistent, retriable error card on
+          // the screen rather than a fire-and-forget alert, so the user sees the failure and can retry.
           logger.error(`[KnowledgeBase] index failed for "${fileName}" — ${indexErr?.message}`);
-          Alert.alert('Error', `Failed to index "${fileName}": ${indexErr?.message || 'Unknown error'}`);
+          setIndexError({ fileName, message: indexErr?.message || 'Unknown error' });
         }
       }
       await loadKbDocs();
@@ -196,6 +201,26 @@ export const KnowledgeBaseScreen: React.FC = () => {
         <View style={styles.indexingBanner}>
           <ActivityIndicator size="small" color={colors.primary} />
           <Text style={styles.indexingText}>Indexing {indexingFile}...</Text>
+        </View>
+      )}
+
+      {indexError && !indexingFile && (
+        <View style={styles.errorCard} testID="kb-index-error-card">
+          <Icon name="alert-triangle" size={16} color={colors.error} />
+          <View style={styles.errorTextWrap}>
+            <Text style={styles.errorTitle} numberOfLines={2}>
+              Couldn't add "{indexError.fileName}"
+            </Text>
+            <Text style={styles.errorMessage} numberOfLines={3}>{indexError.message}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.errorRetry}
+            testID="kb-index-retry"
+            onPress={handleAddDocument}
+            disabled={isPicking}
+          >
+            <Text style={styles.errorRetryText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       )}
 

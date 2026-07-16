@@ -131,20 +131,17 @@ describe('buildVoiceNoteHandlers.onTranscript (Chat-mode dictation)', () => {
     return { deps, onSend, addAudioAttachment, clearAttachments, appendTranscript, onHaptic };
   };
 
-  it('standalone dictation (no audio file) auto-sends a plain text message, not appended to composer', () => {
-    const { deps, onSend, appendTranscript, clearAttachments } = makeDeps();
+  it('standalone dictation (empty composer) fills the input for review — never auto-sends (B26)', () => {
+    const { deps, onSend, appendTranscript } = makeDeps();
     const { onTranscript } = buildVoiceNoteHandlers(deps);
 
     onTranscript('what is the weather');
 
-    expect(appendTranscript).not.toHaveBeenCalled();
-    expect(onSend).toHaveBeenCalledTimes(1);
-    const [text, attachments, mode] = onSend.mock.calls[0];
-    expect(text).toBe('what is the weather');
-    // Whisper dictation has no persisted audio file — text-only message.
-    expect(attachments).toHaveLength(0);
-    expect(mode).toBe('auto');
-    expect(clearAttachments).toHaveBeenCalledTimes(1);
+    // Hold-to-talk dictation puts the words in the input box (the device-correct
+    // behavior — B26: a blank input after speaking was the bug), for the user to
+    // review and send. It does NOT auto-send.
+    expect(onSend).not.toHaveBeenCalled();
+    expect(appendTranscript).toHaveBeenCalledWith('what is the weather');
   });
 
   it('does NOT send when the transcription is blank and there is no audio', () => {

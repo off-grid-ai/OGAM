@@ -13,7 +13,7 @@ export { ProjectChatsScreen } from './ProjectChatsScreen';
 export { DocumentPreviewScreen } from './DocumentPreviewScreen';
 export { ChatsListScreen } from './ChatsListScreen';
 export { LockScreen } from './LockScreen';
-export { PassphraseSetupScreen } from './PassphraseSetupScreen';
+;
 export { DownloadManagerScreen } from './DownloadManagerScreen';
 export { ModelSettingsScreen } from './ModelSettingsScreen';
 export { DeviceInfoScreen } from './DeviceInfoScreen';

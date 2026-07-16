@@ -5,8 +5,8 @@ import { LMSTUDIO_AUTHORS, OFFICIAL_MODEL_AUTHORS, VERIFIED_QUANTIZERS } from '.
 import { getCuratedLiteRTEntry } from '../curatedLiteRTRegistry';
 import logger from '../../utils/logger';
 
-export const MODELS_STORAGE_KEY = '@local_llm/downloaded_models';
-export const IMAGE_MODELS_STORAGE_KEY = '@local_llm/downloaded_image_models';
+const MODELS_STORAGE_KEY = '@local_llm/downloaded_models';
+const IMAGE_MODELS_STORAGE_KEY = '@local_llm/downloaded_image_models';
 
 export function determineCredibility(author: string): ModelCredibility {
   if (LMSTUDIO_AUTHORS.includes(author)) {

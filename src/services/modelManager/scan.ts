@@ -1,16 +1,13 @@
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
-import { DownloadedModel, LlamaDownloadedModel, LiteRTDownloadedModel, ModelFile, ONNXImageModel } from '../../types';
+import { DownloadedModel, LlamaDownloadedModel, LiteRTDownloadedModel, ModelFile, ONNXImageModel, ModelEngine } from '../../types';
 import { buildDownloadedModel, persistDownloadedModel, loadDownloadedModels, saveModelsList } from './storage';
 import { copyFileWithProgress } from './copyFile';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
- 
-export function isMMProjFile(fileName: string): boolean {
-  const lower = fileName.toLowerCase();
-  return lower.includes('mmproj') ||
-    lower.includes('projector') ||
-    (lower.includes('clip') && lower.endsWith('.gguf'));
-}
+// Single source of truth for projector detection + model↔projector matching (see src/services/mmproj.ts).
+import { isMMProjFile, pickMmProjForModel } from '../mmproj';
+
+export { isMMProjFile };
 
 function parseSizeInt(size: string | number): number {
   return typeof size === 'string' ? Number.parseInt(size, 10) : size;
@@ -40,35 +37,21 @@ export async function deleteOrphanedFile(filePath: string): Promise<void> {
   }
 }
 
-function looksLikeVisionModel(model: DownloadedModel): boolean {
-  const nameLower = model.name.toLowerCase();
-  const fileLower = model.fileName.toLowerCase();
-  return nameLower.includes('vl') || nameLower.includes('vision') || nameLower.includes('smolvlm') ||
-    fileLower.includes('vl') || fileLower.includes('vision');
-}
-
+// The model base name (name + variant, quant stripped) used to NAME a downloaded projector. Matching a
+// projector TO a model is done by the shared strict rule (pickMmProjForModel), NOT this.
 export function extractBaseName(fileName: string): string {
   const match = fileName.match(/^(.+?)[-_](?:Q\d|q\d|F\d|f\d)/i);
   return match ? match[1].toLowerCase() : fileName.toLowerCase().replace('.gguf', '');
 }
 
-export function findMatchingMmProj(
-  baseName: string,
-  mmProjFiles: RNFS.ReadDirResItemT[],
-): RNFS.ReadDirResItemT | undefined {
-  const noSeparators = baseName.replaceAll('-', '').replaceAll('_', '');
-  return mmProjFiles.find(mf => {
-    const lower = mf.name.toLowerCase();
-    return lower.includes(noSeparators) || lower.includes(baseName);
-  });
-}
-
 function linkMmProjToModel(model: DownloadedModel, mmProjFiles: RNFS.ReadDirResItemT[]): void {
   if (model.engine !== 'llama') return;
   if (model.mmProjPath) return;
-  if (!looksLikeVisionModel(model)) return;
-  const baseName = extractBaseName(model.fileName);
-  const match = findMatchingMmProj(baseName, mmProjFiles);
+  // Link ONLY a projector that strictly belongs to this model (same name+variant stem). The physical
+  // presence of a belonging projector IS the vision signal — no fragile name heuristic that excluded models
+  // like gemma whose name has no "vl"/"vision" token.
+  const chosen = pickMmProjForModel(model.fileName, mmProjFiles.map(f => f.name));
+  const match = chosen ? mmProjFiles.find(f => f.name === chosen) : undefined;
   if (match) {
     model.mmProjPath = match.path;
     model.mmProjFileName = match.name;
@@ -381,7 +364,7 @@ export interface ImportLocalModelOpts {
   fileName: string;
   modelsDir: string;
   sourceSize?: number | null;
-  engine?: import('../../types').ModelEngine;
+  engine?: ModelEngine;
   liteRTVision?: boolean;
   onProgress?: (progress: { fraction: number; fileName: string }) => void;
   mmProjSourceUri?: string;

@@ -6,7 +6,39 @@
  * Priority: P0 (Critical) - Prevents raw control tokens from appearing in chat.
  */
 
-import { stripControlTokens } from '../../../src/utils/messageContent';
+import { stripControlTokens, templateEmitsReasoning } from '../../../src/utils/messageContent';
+
+describe('templateEmitsReasoning', () => {
+  it('returns false for null/undefined/empty template', () => {
+    expect(templateEmitsReasoning(null)).toBe(false);
+    expect(templateEmitsReasoning(undefined)).toBe(false);
+    expect(templateEmitsReasoning('')).toBe(false);
+  });
+
+  it('detects a <think> reasoning template (DeepSeek/Qwen, the OD7 Qwythos case)', () => {
+    expect(templateEmitsReasoning('{{ bos }}<think>\n{{ reasoning }}\n</think>{{ content }}')).toBe(true);
+  });
+
+  it('detects a Gemma <|channel>thought template', () => {
+    expect(templateEmitsReasoning('x <|channel>thought\n y')).toBe(true);
+  });
+
+  it('detects a Qwen <|channel|>analysis template', () => {
+    expect(templateEmitsReasoning('a <|channel|>analysis<|message|> b')).toBe(true);
+  });
+
+  it('detects an enable_thinking-kwarg template (capability, no literal <think> in the template)', () => {
+    // The reliable reasoning-capability signal remoteModelCapabilities keys on: a
+    // template that exposes the enable_thinking switch supports reasoning on demand
+    // even if it does not embed a literal <think>. Local detection MUST agree with
+    // remote, or a model reads reasoning-capable on the gateway but not on-device (OD7 §C).
+    expect(templateEmitsReasoning('{%- if enable_thinking %}...{%- endif %}')).toBe(true);
+  });
+
+  it('returns false for a plain (non-reasoning) chat template', () => {
+    expect(templateEmitsReasoning('{{ bos }}{{ system }}{{ user }}{{ assistant }}')).toBe(false);
+  });
+});
 
 describe('stripControlTokens', () => {
   // ==========================================================================

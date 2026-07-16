@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- 520 lines. Combines two independent attachment
+   features that landed on separate branches (document Summarize + image tap-to-view).
+   Extracting the attachment toolbar into its own component is deferred. */
 import React, { useState, useRef, useEffect } from 'react';
 import { View, TextInput, TouchableOpacity, Animated, StyleSheet, Platform, ActionSheetIOS } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -6,6 +9,7 @@ import { ImageModeState, MediaAttachment } from '../../types';
 import { VoiceRecordButton } from '../VoiceRecordButton';
 import { AttachStep } from 'react-native-spotlight-tour';
 import { triggerHaptic } from '../../utils/haptics';
+import logger from '../../utils/logger';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
 import { createStyles, PILL_ICON_SIZE, ANIM_DURATION_IN, ANIM_DURATION_OUT } from './styles';
 import { QueueRow } from './Toolbar';
@@ -44,8 +48,13 @@ interface ChatInputProps {
    * can't be repaired from the Download Manager, so the "no vision" dialog must
    * not offer that action for them. */
   isRemote?: boolean;
+  /** True when the active model IS a vision model but its projector isn't installed (repairable). */
+  visionNeedsRepair?: boolean;
   activeSpotlight?: number | null;
   showSettingsDot?: boolean;
+  /** Opens the shared fullscreen image viewer when a pending (pre-send)
+   * attachment thumbnail is tapped — the same handler in-message images use. */
+  onImagePress?: (uri: string) => void;
 }
 
 const IMAGE_MODE_CYCLE: ImageModeState[] = ['auto', 'force', 'disabled'];
@@ -128,6 +137,8 @@ const ActionButton: React.FC<ActionButtonProps> = (props) => {
  */
 const buildNoVisionAlert = (opts: {
   isRemote: boolean;
+  /** The active model IS a vision model but its projector (mmproj) isn't installed — repairable. */
+  needsRepair?: boolean;
   onRepairVision?: () => void;
   dismiss: () => void;
 }): AlertState => {
@@ -138,15 +149,24 @@ const buildNoVisionAlert = (opts: {
       [{ text: 'OK', onPress: opts.dismiss }],
     );
   }
+  // Distinguish the two states the system can tell apart: a vision model MISSING its projector (repairable)
+  // vs a model that simply has no vision. Only offer repair when it can actually be repaired.
+  if (opts.needsRepair) {
+    return showAlert(
+      'Vision File Missing',
+      'This model supports vision, but its vision file has not been installed.\n\nOpen Download Manager and tap the wrench next to the model to download it.',
+      [
+        { text: 'Cancel', onPress: opts.dismiss },
+        ...(opts.onRepairVision
+          ? [{ text: 'Go to Download Manager', onPress: () => { opts.dismiss(); opts.onRepairVision!(); } }]
+          : [{ text: 'OK' }]),
+      ],
+    );
+  }
   return showAlert(
     'Vision Not Supported',
-    'The loaded model does not have vision support.\n\nIf this model supports vision, open Download Manager and tap the eye icon next to the model to repair it.',
-    [
-      { text: 'Cancel', onPress: opts.dismiss },
-      ...(opts.onRepairVision
-        ? [{ text: 'Go to Download Manager', onPress: () => { opts.dismiss(); opts.onRepairVision!(); } }]
-        : [{ text: 'OK' }]),
-    ],
+    'This model does not support image input.\n\nSwitch to a vision-capable model to send images.',
+    [{ text: 'OK', onPress: opts.dismiss }],
   );
 };
 
@@ -159,6 +179,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   isGenerating,
   placeholder = 'Message',
   supportsVision = false,
+  visionNeedsRepair = false,
   conversationId,
   imageModelLoaded = false,
   onImageModeChange,
@@ -176,6 +197,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   isRemote = false,
   activeSpotlight = null,
   showSettingsDot = false,
+  onImagePress,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -245,6 +267,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const canSend = (message.trim().length > 0 || attachments.length > 0) && !disabled;
 
   const handleSend = () => {
+    logger.log(`[COMPOSER-SM] handleSend canSend=${canSend} disabled=${disabled} hasText=${message.trim().length > 0} attachments=${attachments.length} imageMode=${imageMode}`);
     if (!canSend) return;
     triggerHaptic('impactMedium');
     onSend(message.trim(), attachments.length > 0 ? attachments : undefined, imageMode);
@@ -277,7 +300,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleVisionPress = () => {
     if (!supportsVision) {
-      setAlertState(buildNoVisionAlert({ isRemote, onRepairVision, dismiss: () => setAlertState(hideAlert()) }));
+      setAlertState(buildNoVisionAlert({ isRemote, needsRepair: visionNeedsRepair, onRepairVision, dismiss: () => setAlertState(hideAlert()) }));
       return;
     }
     handlePickImage();
@@ -293,6 +316,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleQuickSettingsPress = () => quickSettings.show();
 
   const handleAttachPress = () => {
+    logger.log(`[COMPOSER-SM] attach pressed platform=${Platform.OS} supportsVision=${supportsVision}`);
     if (Platform.OS === 'ios') {
       const options = supportsVision
         ? ['Photo', 'Document', 'Cancel']
@@ -353,6 +377,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         mcpToolCount={mcpToolCount}
         onVisionPress={handleVisionPress}
         onPickDocument={handlePickDocument}
+        onAttachPress={handleAttachPress}
         attachPicker={attachPicker}
         voicePicker={voicePicker}
         quickSettings={quickSettings}
@@ -393,6 +418,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onRemove={removeAttachment}
         onSummarize={onSummarizeAttachment}
         summarizingId={summarizingId}
+        onImagePress={onImagePress}
       />
       <QueueRow
         queueCount={queueCount}

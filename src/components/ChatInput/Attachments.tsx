@@ -10,6 +10,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { MediaAttachment } from '../../types';
 import { documentService } from '../../services/documentService';
 import { takePendingChatAttachments } from '../../services/chatAttachmentInbox';
+import { audioSessionManager } from '../../services/audioSessionManager';
 import { AlertState, showAlert, hideAlert } from '../CustomAlert';
 import { createStyles } from './styles';
 import { isPickerStuck } from '../../utils/pickerErrorUtils';
@@ -43,19 +44,33 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
 
   const pickFromLibrary = async () => {
     try {
+      // Release the iOS audio session first: in voice mode the active playback session
+      // collides with the native picker and hangs the app (device 2026-07-15). No-op on
+      // Android and when no session is active.
+      await audioSessionManager.deactivate();
       const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8, maxWidth: 1024, maxHeight: 1024 });
       if (result.assets && result.assets.length > 0) addAttachments(result.assets);
     } catch (_pickError) {
       // no-op: image picker already reports failure to the user via native UI
+    } finally {
+      // Re-assert the playback session: if the user CANCELS the picker we deactivated for, voice
+      // mode would otherwise stay muted until the next audio action (Gitar). iOS-only no-op on Android.
+      audioSessionManager.ensurePlayback().catch(() => {});
     }
   };
 
   const pickFromCamera = async () => {
     try {
+      // Release the iOS audio session first (see pickFromLibrary): the camera grabs audio
+      // hardware and collides with an active voice-mode session. No-op on Android.
+      await audioSessionManager.deactivate();
       const result = await launchCamera({ mediaType: 'photo', quality: 0.8, maxWidth: 1024, maxHeight: 1024 });
       if (result.assets && result.assets.length > 0) addAttachments(result.assets);
     } catch (_cameraError) {
       // no-op: camera picker already reports failure to the user via native UI
+    } finally {
+      // Re-assert the playback session on cancel/return so voice mode isn't left muted (Gitar).
+      audioSessionManager.ensurePlayback().catch(() => {});
     }
   };
 
@@ -149,9 +164,13 @@ interface AttachmentPreviewProps {
   // context window. Optional so other ChatInput consumers can omit it.
   onSummarize?: (attachment: MediaAttachment) => void;
   summarizingId?: string | null;
+  /** Tapping an image thumbnail opens the shared fullscreen image viewer (same
+   * handler the in-message generated/attached images use). Optional so the
+   * component still renders without a viewer wired up. */
+  onImagePress?: (uri: string) => void;
 }
 
-export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({ attachments, onRemove, onSummarize, summarizingId }) => {
+export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({ attachments, onRemove, onSummarize, summarizingId, onImagePress }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
@@ -175,11 +194,17 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({ attachment
             style={[styles.attachmentPreview, canSummarize && styles.attachmentPreviewDoc]}
           >
             {attachment.type === 'image' ? (
-              <Image
+              <TouchableOpacity
                 testID={`attachment-image-${attachment.id}`}
-                source={{ uri: attachment.uri }}
-                style={styles.attachmentImage}
-              />
+                activeOpacity={0.8}
+                disabled={!onImagePress}
+                onPress={() => onImagePress?.(attachment.uri)}
+              >
+                <Image
+                  source={{ uri: attachment.uri }}
+                  style={styles.attachmentImage}
+                />
+              </TouchableOpacity>
             ) : attachment.type === 'audio' ? (
               <View testID={`audio-preview-${attachment.id}`} style={styles.documentPreview}>
                 <Icon name="mic" size={24} color={colors.primary} />

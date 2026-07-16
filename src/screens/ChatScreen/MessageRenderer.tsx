@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChatMessage } from '../../components';
-import { stripControlTokens } from '../../utils/messageContent';
+import { prepareMessageForSpeech } from '../../utils/messageContent';
 import { Message } from '../../types';
 import { useUiModeStore } from '../../stores';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
@@ -70,7 +70,7 @@ const MessageRendererInner: React.FC<MessageRendererProps> = (props) => {
   // No speaker on an in-progress reply (streaming, or the thinking/loading dots).
   const ttsMeta =
     isPlainAssistant && !isStreamingThis && !(msg as Message).isThinking && Speak
-      ? <Speak text={stripControlTokens(msg.content)} messageId={msg.id} />
+      ? <Speak text={prepareMessageForSpeech(msg.content)} messageId={msg.id} />
       : undefined;
 
   return (

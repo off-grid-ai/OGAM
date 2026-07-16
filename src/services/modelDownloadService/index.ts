@@ -21,6 +21,7 @@
  */
 import logger from '../../utils/logger';
 import { backgroundDownloadService } from '../backgroundDownloadService';
+import type { DownloadParams } from '../backgroundDownloadTypes';
 import { queuedUniformId } from './uniformId';
 import {
   DownloadProvider,
@@ -211,6 +212,23 @@ class ModelDownloadService {
     return queued ? backgroundDownloadService.cancelQueued(queued.modelKey) : false;
   }
 
+  /**
+   * Re-issue a QUEUED start (from its persisted params) after a relaunch, routing to the owning
+   * provider by `params.modelType` — the service never branches on the concrete type. Refuses (logs,
+   * no-op) if the type has no provider or the provider can't re-issue. Used by restoreQueuedDownloads().
+   */
+  async reissue(params: DownloadParams): Promise<void> {
+    const type = (params.modelType ?? 'text') as ModelDownloadType;
+    const provider = this.providers.get(type);
+    if (!provider?.reissue) {
+      logger.log(`[DL-SM] reissue REFUSED: no reissue for type=${type}`);
+      return;
+    }
+    const idLabel = params.modelKey ?? params.modelId;
+    logger.log(`[DL-SM] reissue ${type}:${idLabel} → dispatch`);
+    await provider.reissue(params);
+  }
+
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
@@ -233,4 +251,4 @@ class ModelDownloadService {
 }
 
 export const modelDownloadService = new ModelDownloadService();
-export type { DownloadProvider, ModelDownload, ModelDownloadStatus, ModelDownloadType } from './types';
+;

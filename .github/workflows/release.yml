@@ -168,3 +168,15 @@ jobs:
           ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ORG_GRADLE_PROJECT_OFFGRID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: bundle exec fastlane android release
+
+      # Announce the release in Slack: the GitHub release link + the notes generated above.
+      # Fail-soft (notify script always exits 0), so a Slack outage never fails a release.
+      # Needs secret SLACK_WEBHOOK_URL (an Incoming Webhook, channel-bound). No secret => no-op.
+      - name: Announce release in Slack
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PRODUCT: Off Grid AI Mobile (Android)
+          VERSION: ${{ env.NEW_VERSION }}
+          NOTES_FILE: release-notes.md
+        run: node scripts/notify-slack-release.mjs

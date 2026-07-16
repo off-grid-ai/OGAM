@@ -25,13 +25,13 @@ jest.mock('../../../src/services/modelResidency', () => ({
   modelResidencyManager: { makeRoomFor: jest.fn(), runExclusive: jest.fn((_k: string, fn: () => any) => fn()) },
 }));
 
-import { activeModelService } from '../../../src/services/activeModelService';
+import { checkImageModelCanLoad } from '../../../src/services/activeModelService/loaders';
 import { modelResidencyManager } from '../../../src/services/modelResidency';
 
 const makeRoomFor = modelResidencyManager.makeRoomFor as jest.Mock;
 const model = { id: 'img-1', name: 'Test Image Model', backend: 'gpu' } as any;
 const check = (opts?: { override?: boolean }) =>
-  (activeModelService as any).checkImageModelCanLoad('img-1', model, opts) as Promise<{ canLoad: boolean; overridable?: boolean; error?: string }>;
+  checkImageModelCanLoad('img-1', model, opts) as Promise<{ canLoad: boolean; overridable?: boolean; error?: string }>;
 
 describe('checkImageModelCanLoad — survival-floor overridability', () => {
   beforeEach(() => jest.clearAllMocks());

@@ -1,4 +1,4 @@
-# Fastlane Fastfile — Off Grid mobile release automation
+# Fastlane Fastfile - Off Grid mobile release automation
 # Docs: https://docs.fastlane.tools
 #
 # Lanes:
@@ -74,7 +74,7 @@ APPLE_TEAM_ID = ENV["APPLE_TEAM_ID"] || "84V6KCAC49"
 # stores as GitHub secrets and that the local .p8 in hand provides); falls back to a
 # pre-built key JSON at APP_STORE_CONNECT_API_KEY_PATH for local convenience. Returns a key
 # hash to pass as `api_key:`, or nil when only the JSON-path form is available.
-# The .p8 secret may be stored raw (PEM) or base64 — auto-detect so either works.
+# The .p8 secret may be stored raw (PEM) or base64 - auto-detect so either works.
 def asc_api_key
   if ENV["ASC_KEY_ID"] && ENV["ASC_ISSUER_ID"] && ENV["ASC_API_KEY_P8"] &&
      !ENV["ASC_KEY_ID"].empty? && !ENV["ASC_ISSUER_ID"].empty? && !ENV["ASC_API_KEY_P8"].empty?
@@ -139,7 +139,7 @@ end
 # ── Android ────────────────────────────────────────────────────────────────
 
 platform :android do
-  desc "Build a signed release AAB locally — NO upload. Artifact for testing the pipeline."
+  desc "Build a signed release AAB locally - NO upload. Artifact for testing the pipeline."
   lane :build do
     gradle(task: "bundle", build_type: "Release", project_dir: "android/")
     aab = File.join(REPO_ROOT, "android/app/build/outputs/bundle/release/app-release.aab")
@@ -148,12 +148,12 @@ platform :android do
   end
 
   # Upload an ALREADY-BUILT AAB to the Play internal track. Single source of truth for the
-  # Play upload — both `beta` (build+upload) and `upload_beta` (publish a pre-built artifact,
+  # Play upload - both `beta` (build+upload) and `upload_beta` (publish a pre-built artifact,
   # used by scripts/uat.sh's atomic build-all-then-publish flow) call this. No build here.
   private_lane :upload_android_internal do
     require_env("PLAY_STORE_JSON_KEY_PATH")
     aab = File.join(REPO_ROOT, "android/app/build/outputs/bundle/release/app-release.aab")
-    UI.user_error!("AAB not found at #{aab} — build it first (fastlane android build).") unless File.exist?(aab)
+    UI.user_error!("AAB not found at #{aab} - build it first (fastlane android build).") unless File.exist?(aab)
     # Release notes: scripts/uat.sh writes the changelog to UAT_CHANGELOG_PATH (one file per
     # build). Supply picks up a per-versionCode changelog from the metadata dir, so drop it
     # there keyed by the versionCode we just built.
@@ -176,7 +176,7 @@ platform :android do
       track: "internal",
       aab: aab,
       json_key: ENV["PLAY_STORE_JSON_KEY_PATH"],
-      skip_upload_apk: true,   # AAB only — a stale APK in the output dir must not fight the AAB
+      skip_upload_apk: true,   # AAB only - a stale APK in the output dir must not fight the AAB
       skip_upload_metadata: true,
       skip_upload_images: true,
       skip_upload_screenshots: true,
@@ -195,7 +195,7 @@ platform :android do
     upload_android_internal
   end
 
-  desc "Upload an ALREADY-BUILT AAB to Play internal (no build — for the atomic uat.sh flow)"
+  desc "Upload an ALREADY-BUILT AAB to Play internal (no build - for the atomic uat.sh flow)"
   lane :upload_beta do
     upload_android_internal
   end
@@ -211,7 +211,7 @@ platform :android do
       skip_upload_changelogs: false,
       release_status: "draft" # human confirms rollout in Play Console
     )
-    UI.success("Uploaded production build to Play (draft — confirm rollout in console)")
+    UI.success("Uploaded production build to Play (draft - confirm rollout in console)")
   end
 
   desc "Push Android store listing text + images (no build)"
@@ -224,6 +224,39 @@ platform :android do
     )
     UI.success("Pushed Android store metadata")
   end
+
+  desc "Promote the tested internal build to production (no rebuild, no re-upload)"
+  desc "Usage: fastlane android promote version_code:<n>  (the tested versionCode)"
+  lane :promote do |options|
+    require_env("PLAY_STORE_JSON_KEY_PATH")
+    # PIN the exact tested build. Without a version_code, upload_to_play_store's
+    # track_promote_to promotes whatever is CURRENTLY latest on the internal track - which may
+    # not be the beta we tested. promote.sh recovers the tested versionCode from the beta tag
+    # and passes it here; if it is missing we FAIL FAST rather than silently promote "latest".
+    version_code = options[:version_code]
+    UI.user_error!(
+      "android promote requires version_code: (the tested versionCode). Refusing to promote " \
+      "'latest on internal', which could ship the wrong build. promote.sh recovers this from " \
+      "the beta tag's 'Build: <n>' annotation."
+    ) if version_code.nil? || version_code.to_s.strip.empty?
+    # True promote-as-is: move the exact AAB (this versionCode) already on the internal track
+    # up to production. No gradle build, no new upload - the bytes users get are the bytes
+    # tested. Lands as a draft so a human confirms the rollout percentage in the console.
+    upload_to_play_store(
+      track: "internal",
+      track_promote_to: "production",
+      version_code: version_code.to_i,
+      json_key: ENV["PLAY_STORE_JSON_KEY_PATH"],
+      skip_upload_aab: true,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      release_status: "draft" # human confirms rollout in Play Console
+    )
+    UI.success("Promoted internal build (versionCode #{version_code}) to Play production (draft - confirm rollout in console)")
+  end
 end
 
 # ── iOS ──────────────────────────────────────────────────────────────────
@@ -231,7 +264,7 @@ end
 platform :ios do
   # Shared build helper: archives + exports an App Store IPA. Uses AUTOMATIC signing with
   # -allowProvisioningUpdates (the SAME mechanism scripts/release.sh's iOS archive uses and
-  # that works on this machine) — authenticated headlessly via the App Store Connect API key
+  # that works on this machine) - authenticated headlessly via the App Store Connect API key
   # so xcodebuild can create/refresh the App Store provisioning profile during archive
   # without a logged-in Xcode account. Falls back cleanly if the key isn't set.
   private_lane :build_ios_ipa do
@@ -263,7 +296,7 @@ platform :ios do
     )
   end
 
-  desc "Build a signed release IPA locally — NO upload. Artifact for testing the pipeline."
+  desc "Build a signed release IPA locally - NO upload. Artifact for testing the pipeline."
   lane :build do
     setup_signing
     build_ios_ipa
@@ -273,11 +306,11 @@ platform :ios do
   end
 
   # Upload an ALREADY-BUILT IPA to TestFlight. Single source of truth for the TestFlight
-  # upload — both `beta` (build+upload) and `upload_beta` (publish a pre-built artifact, used
+  # upload - both `beta` (build+upload) and `upload_beta` (publish a pre-built artifact, used
   # by scripts/uat.sh's atomic build-all-then-publish flow) call this. No build here.
   private_lane :upload_ios_testflight do
     ipa = File.join(REPO_ROOT, "build/OffgridMobile.ipa")
-    UI.user_error!("IPA not found at #{ipa} — build it first (fastlane ios build).") unless File.exist?(ipa)
+    UI.user_error!("IPA not found at #{ipa} - build it first (fastlane ios build).") unless File.exist?(ipa)
     tf = {
       **asc_auth_kwargs,
       ipa: "build/OffgridMobile.ipa",
@@ -285,7 +318,7 @@ platform :ios do
     }
     # Release notes: scripts/uat.sh writes the changelog to UAT_CHANGELOG_PATH. Attach it as
     # the TestFlight "What to Test". (Requires processing to finish, so only set the
-    # changelog when we have notes — otherwise keep skip_waiting for a fast upload.)
+    # changelog when we have notes - otherwise keep skip_waiting for a fast upload.)
     if ENV["UAT_CHANGELOG_PATH"] && !ENV["UAT_CHANGELOG_PATH"].empty? && File.exist?(ENV["UAT_CHANGELOG_PATH"])
       tf[:changelog] = File.read(ENV["UAT_CHANGELOG_PATH"])
       tf[:skip_waiting_for_build_processing] = false
@@ -301,7 +334,7 @@ platform :ios do
     upload_ios_testflight
   end
 
-  desc "Upload an ALREADY-BUILT IPA to TestFlight (no build — for the atomic uat.sh flow)"
+  desc "Upload an ALREADY-BUILT IPA to TestFlight (no build - for the atomic uat.sh flow)"
   lane :upload_beta do
     upload_ios_testflight
   end
@@ -320,7 +353,7 @@ platform :ios do
       skip_metadata: false,
       force: true
     )
-    UI.success("Uploaded to App Store (not submitted — submit in App Store Connect)")
+    UI.success("Uploaded to App Store (not submitted - submit in App Store Connect)")
   end
 
   desc "Push App Store listing metadata (no build)"
@@ -336,25 +369,45 @@ platform :ios do
     UI.success("Pushed App Store metadata")
   end
 
+  desc "Promote the tested TestFlight build to an App Store version (no rebuild)"
+  lane :promote do |options|
+    auth = asc_auth_kwargs
+    # True promote-as-is: attach the EXISTING processed TestFlight build (already the
+    # plain numeric MARKETING_VERSION - uat.sh never suffixes iOS) to a new App Store
+    # version. No build, no binary upload. A human hits Submit for Review in ASC.
+    upload_to_app_store(
+      **auth,
+      build_number: options[:build_number], # the tested TestFlight build; omit → latest processed
+      app_version: options[:app_version],
+      skip_binary_upload: true,
+      submit_for_review: false, # human submits in App Store Connect
+      precheck_include_in_app_purchases: false,
+      skip_screenshots: true,
+      skip_metadata: false,
+      force: true
+    )
+    UI.success("Attached TestFlight build to App Store version (not submitted - submit in App Store Connect)")
+  end
+
   # Reuses the existing signing secrets the repo already uses for AltStore/GitHub
   # releases (IOS_CERTIFICATE_P12, IOS_CERTIFICATE_PASSWORD, IOS_PROVISION_PROFILE,
-  # KEYCHAIN_PASSWORD). No fastlane match — same mechanism as release-ios.yml, so there
+  # KEYCHAIN_PASSWORD). No fastlane match - same mechanism as release-ios.yml, so there
   # is one signing scheme, not two. On a local Mac with the cert already in the login
   # keychain, set SKIP_KEYCHAIN_IMPORT=1 to skip the temp-keychain import.
   desc "Import the existing P12 cert + provisioning profile into a temp keychain"
   private_lane :setup_signing do
     if ENV["SKIP_KEYCHAIN_IMPORT"]
-      UI.message("SKIP_KEYCHAIN_IMPORT set — using the cert already in the local keychain")
+      UI.message("SKIP_KEYCHAIN_IMPORT set - using the cert already in the local keychain")
       next
     end
-    # NOTE: IOS_CERTIFICATE_PASSWORD is intentionally NOT required — a distribution p12 can
+    # NOTE: IOS_CERTIFICATE_PASSWORD is intentionally NOT required - a distribution p12 can
     # legitimately have an EMPTY password (fastlane's `cert` action mints them that way), and
     # require_env rejects empty strings. Default it to "" so an empty-password cert works.
     require_env("IOS_CERTIFICATE_P12", "KEYCHAIN_PASSWORD", "IOS_PROVISION_PROFILE")
 
     # Create + UNLOCK a dedicated keychain first (this fastlane's import_certificate has no
     # create_keychain option). Unlocking with a long timeout + adding it to the search list
-    # is what lets codesign use the private key non-interactively during EXPORT — without
+    # is what lets codesign use the private key non-interactively during EXPORT - without
     # this the export fails with errSecInternalComponent. import_certificate then imports the
     # p12 and sets the key partition list on this keychain.
     keychain = "app-signing.keychain-db"

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { whisperService, WHISPER_MODELS } from '../services';
+import { whisperService, WHISPER_MODELS } from '../services/whisperService';
 import { modelResidencyManager } from '../services/modelResidency';
 import { logMemory } from '../utils/memorySnapshot';
 import logger from '../utils/logger';
@@ -93,8 +93,12 @@ export const useWhisperStore = create<WhisperState>()(
             presentModelIds: s.presentModelIds.includes(modelId) ? s.presentModelIds : [...s.presentModelIds, modelId],
           }));
 
-          // Auto-load after download
-          await get().loadModel();
+          // Do NOT load resident on download (DEV-B1 #1). A download only puts the file on
+          // disk; loading is a separate concern owned by the transcribe path. Whisper is loaded
+          // on demand by startRecording (ensureWhisperForTranscription) and warmed fits-gated at
+          // launch by modelPreloader.preloadStt — matching the deferred-loading model every other
+          // model follows. Auto-loading here left a phantom ~1.5GB STT resident the user never
+          // used, which makeRoomFor then counted against a heavier text load → thrash/OOM.
         } catch (error) {
           // A user-initiated cancel rejects with a marked error — don't show it as
           // a failure on the model row, just let the finally clear its progress.
@@ -275,18 +279,25 @@ export const useWhisperStore = create<WhisperState>()(
         // which left the Home banner showing a deleted model. Check the active
         // model's own file (works for custom HF ids, not just the catalogue).
         const activeId = get().downloadedModelId;
-        const activeOnDisk = activeId ? await whisperService.isModelDownloaded(activeId) : false;
-        // Active model is fine (set and on disk): only refresh the present list.
-        if (activeId && activeOnDisk) {
+        // No active model was ever selected: just refresh the present list. Do NOT
+        // auto-adopt one — selection/loading is an explicit action, and pre-setting
+        // the pointer here would make an explicit select a no-op so the sidecar
+        // never loads/registers (co-residence).
+        if (!activeId) {
           set({ presentModelIds: present });
           return;
         }
-        // Otherwise there's no valid active model - either it was never set, or
-        // its file is gone (e.g. small deleted). Adopt a model that IS on disk
-        // (base) so transcription keeps working instead of silently doing
-        // nothing with "no model".
+        // Active model is set and on disk: only refresh the present list.
+        const activeOnDisk = await whisperService.isModelDownloaded(activeId);
+        if (activeOnDisk) {
+          set({ presentModelIds: present });
+          return;
+        }
+        // The active model's file is gone (e.g. deleted from the Download Manager,
+        // which bypasses this store). Adopt another model that IS on disk so
+        // transcription keeps working instead of pointing at a deleted file.
         const fallback = present[0] ?? null;
-        logger.log(`[WhisperStore] no valid active whisper model (was ${activeId ?? 'none'}); present [${present.join(', ') || 'none'}]; active -> ${fallback ?? 'none'}`);
+        logger.log(`[WhisperStore] active whisper model ${activeId} file gone; present [${present.join(', ') || 'none'}]; active -> ${fallback ?? 'none'}`);
         set({ presentModelIds: present, downloadedModelId: fallback, isModelLoaded: false });
       },
 

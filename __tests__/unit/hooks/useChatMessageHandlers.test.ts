@@ -85,6 +85,7 @@ describe('handleEditMessageFn — no active model', () => {
       newContent: 'edited',
       activeConversationId: 'conv-1',
       hasActiveModel: false,
+      activeConversation: { messages: [message] },
       updateMessageContent: jest.fn(),
       deleteMessagesAfter: jest.fn(),
       setDebugInfo: jest.fn(),

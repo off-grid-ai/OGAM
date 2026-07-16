@@ -1345,7 +1345,7 @@ describe('ChatInput', () => {
       expect(mockStartRecording).toHaveBeenCalled();
     });
 
-    it('auto-sends a standalone chat-mode dictation instead of inserting it into the composer', () => {
+    it('inserts a standalone chat-mode dictation into the composer (does NOT auto-send)', () => {
       const mockClearResult = jest.fn();
       const onSend = jest.fn();
       // First render: no finalResult, empty composer (standalone).
@@ -1385,14 +1385,12 @@ describe('ChatInput', () => {
 
       rerender(<ChatInput {...defaultProps} onSend={onSend} conversationId="conv-123" />);
 
-      // Standalone dictation auto-sends as a plain text message (no audio file
-      // on the whisper path) and does NOT sit in the composer.
-      expect(onSend).toHaveBeenCalledTimes(1);
-      const [text, attachments] = onSend.mock.calls[0];
-      expect(text).toBe('Hello from voice');
-      expect(attachments ?? []).toHaveLength(0);
+      // B26: chat-mode hold-to-talk dictation places the transcript INTO the composer for the
+      // user to review and send (the user spoke and expects the words in the input box) — it
+      // does NOT auto-send. The transcript is consumed (clearResult) into the input value.
+      expect(onSend).not.toHaveBeenCalled();
       const input = getByTestId('chat-input');
-      expect(input.props.value).toBe('');
+      expect(input.props.value).toBe('Hello from voice');
       expect(mockClearResult).toHaveBeenCalled();
     });
 

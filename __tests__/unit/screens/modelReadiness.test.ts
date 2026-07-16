@@ -2,8 +2,10 @@
  * Unit tests for modelReadiness — the single source of truth for mapping a load
  * failure to a typed reason and a reason to user-facing alert copy.
  */
-// Native boundaries mocked as dumb flag readers; the REAL ensureModelReady runs.
-jest.mock('../../../src/services', () => ({
+// Native boundaries mocked as dumb flag readers; the REAL ensureModelReady + engines.isModelReady
+// run. Mock the DIRECT modules engines.ts reads ('./llm', './litert') — NOT the barrel — so the
+// stubs are the exact instances the code under test calls (a barrel-only mock would silently miss).
+jest.mock('../../../src/services/llm', () => ({
   llmService: {
     getLoadedModelPath: jest.fn(() => null),
     isModelLoaded: jest.fn(() => false),
@@ -14,12 +16,14 @@ jest.mock('../../../src/services/litert', () => ({
 }));
 
 import { reasonFromLoadError, modelNotReadyAlert, ensureModelReady } from '../../../src/screens/ChatScreen/modelReadiness';
-import { llmService } from '../../../src/services';
+import { llmService } from '../../../src/services/llm';
+import { liteRTService } from '../../../src/services/litert';
 
 const mockLlm = llmService as unknown as {
   getLoadedModelPath: jest.Mock;
   isModelLoaded: jest.Mock;
 };
+const mockLiteRT = liteRTService as unknown as { isModelLoaded: jest.Mock };
 
 describe('reasonFromLoadError', () => {
   it('maps "not found" / missing-file errors to not-downloaded', () => {
@@ -113,7 +117,8 @@ describe('ensureModelReady — resume-after-Load-Anyway wiring (regression)', ()
     expect(resume).toHaveBeenCalledTimes(1);
   });
 
-  it('does not attempt a load (or resume) when the model is already loaded', async () => {
+  it('does not attempt a load (or resume) when the llama model is already resident', async () => {
+    mockLlm.isModelLoaded.mockReturnValue(true); // truly resident (not just a path set)
     mockLlm.getLoadedModelPath.mockReturnValue('/models/gemma-e4b.gguf');
     const resume = jest.fn();
     const ensureModelLoaded = jest.fn();
@@ -123,5 +128,28 @@ describe('ensureModelReady — resume-after-Load-Anyway wiring (regression)', ()
     expect(outcome).toEqual({ ok: true });
     expect(ensureModelLoaded).not.toHaveBeenCalled();
     expect(resume).not.toHaveBeenCalled();
+  });
+
+  it('reloads when the llama path is set but the model is NOT actually resident (desync guard)', async () => {
+    // The latent flakiness: fast-path used to trust getLoadedModelPath alone and generate
+    // against a non-resident model. Now isModelReady also requires isModelLoaded().
+    mockLlm.isModelLoaded.mockReturnValue(false);
+    mockLlm.getLoadedModelPath.mockReturnValue('/models/gemma-e4b.gguf');
+    const ensureModelLoaded = jest.fn(async () => ({ ok: false, reason: 'load-threw' as const }));
+
+    const outcome = await ensureModelReady(makeDeps(undefined, ensureModelLoaded));
+
+    expect(ensureModelLoaded).toHaveBeenCalled(); // it did NOT falsely short-circuit as ready
+    expect(outcome.ok).toBe(false);
+  });
+
+  it('does not attempt a load when the LiteRT model is already resident', async () => {
+    mockLiteRT.isModelLoaded.mockReturnValue(true);
+    const ensureModelLoaded = jest.fn();
+
+    const outcome = await ensureModelReady(makeDeps('litert', ensureModelLoaded));
+
+    expect(outcome).toEqual({ ok: true });
+    expect(ensureModelLoaded).not.toHaveBeenCalled();
   });
 });

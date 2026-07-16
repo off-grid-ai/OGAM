@@ -179,3 +179,65 @@ describe('stopStreamingSpeechForTurn (user stop)', () => {
     expect(isStreamingSpeechActive()).toBe(false);
   });
 });
+
+// Bug OD9: in voice mode TTS spoke the model's TOOL-CALL content aloud. A
+// <tool_call>…</tool_call> block contains sentence boundaries (periods, newlines),
+// so the old per-sentence stripControlTokens saw only fragments (e.g. `<tool_call>{`)
+// its whole-block regex could not match → the fragment was spoken. The fix strips
+// COMPLETE blocks from the whole answer before segmentation and WITHHOLDS text from an
+// unclosed opener until its closer arrives (mirroring how thinking is withheld).
+// These assert the OBSERVABLE SPOKEN OUTPUT never contains a tool-call fragment at ANY
+// streaming step — not call counts.
+describe('OD9 — never speak tool-call content', () => {
+  const spokenBlob = () => mockEngine.speak.mock.calls.map((c) => c[0] as string).join(' ');
+  const TOOL_LEAKS = ['<tool_call', 'tool_call>', '<|tool_call', '<function_call', '<invoke', '"name"', '"args"', '"search"'];
+  function expectNoToolLeak(): void {
+    const blob = spokenBlob();
+    for (const leak of TOOL_LEAKS) expect(blob).not.toContain(leak);
+  }
+  // A tool-call block spanning multiple sentence boundaries, interleaved with real answer.
+  const FULL = 'Sure, let me check. <tool_call>\n{"name": "search", "args": {"q": "x. y. z"}}\n</tool_call> Here is the result.';
+
+  it('streamed token-by-token: never speaks a tool-call fragment at ANY step', async () => {
+    for (let i = 1; i <= FULL.length; i++) {
+      feedStreamingText(FULL.slice(0, i)); // dynamic streaming — one more token each step
+      await flush();
+      expectNoToolLeak();
+    }
+    finishStreamingText(FULL, 'msg-od9'); // trailing flush must not leak either
+    await flush();
+    await flush();
+    expectNoToolLeak();
+    // And it DID speak the real answer — both prose sentences, nothing dropped.
+    expect(spokenBlob()).toContain('Sure, let me check.');
+    expect(spokenBlob()).toContain('Here is the result.');
+  });
+
+  it('withholds an UNCLOSED tool-call opener mid-stream (speaks nothing from the opener on)', async () => {
+    feedStreamingText('Checking now. <tool_call>\n{"name": "search"'); // opener, no closer
+    await flush();
+    await flush();
+    expectNoToolLeak();
+    expect(spokenBlob()).toContain('Checking now.');
+  });
+
+  it('a still-FORMING opener tag (no closing > yet) is withheld', async () => {
+    feedStreamingText('Okay. <tool_cal'); // bare partial opener, no boundary
+    await flush();
+    await flush();
+    expectNoToolLeak();
+    expect(spokenBlob()).toContain('Okay.');
+  });
+
+  it('a plain answer with NO tool call still streams normally (unchanged)', async () => {
+    feedStreamingText('First sentence. Second sen');
+    await flush();
+    await flush();
+    expect(mockEngine.speak).toHaveBeenCalledWith('First sentence.', expect.anything());
+    finishStreamingText('First sentence. Second sentence.', 'plain-1');
+    await flush();
+    await flush();
+    expect(spokenBlob()).toContain('Second sentence.');
+    expectNoToolLeak();
+  });
+});

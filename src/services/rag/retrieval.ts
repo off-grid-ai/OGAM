@@ -15,7 +15,7 @@ function stripAngleBracketTags(text: string): string {
   return result;
 }
 
-export interface SearchResult {
+interface SearchResult {
   chunks: RagSearchResult[];
   truncated: boolean;
 }

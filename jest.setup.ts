@@ -175,6 +175,33 @@ jest.mock('whisper.rn', () => ({
   },
 }), { virtual: true });
 
+// RN host-component native-measurement boundary. The RN jest preset stubs measure/measureInWindow as
+// no-op jest.fns that never invoke their callback, so any component that anchors UI off a measured node
+// (e.g. a dropdown whose open() runs INSIDE the measureInWindow callback) stalls in tests. Faithfully
+// invoke the layout callback (x, y, width, height[, pageX, pageY]) so that real UI proceeds — the only
+// non-faithful part of the preset's host mock for our flows.
+jest.mock('react-native/jest/mockNativeComponent', () => {
+  const ReactLocal = require('react');
+  let tag = 1;
+  return (viewName: string) => {
+    const Component = class extends ReactLocal.Component {
+      _nativeTag = tag++;
+      render() {
+        const self = this as unknown as { props: Record<string, unknown> & { children?: unknown } };
+        return ReactLocal.createElement(viewName, self.props, self.props.children);
+      }
+      blur = jest.fn();
+      focus = jest.fn();
+      measure = (cb?: (...a: number[]) => void) => cb?.(0, 0, 100, 40, 0, 0);
+      measureInWindow = (cb?: (...a: number[]) => void) => cb?.(0, 0, 100, 40);
+      measureLayout = jest.fn();
+      setNativeProps = jest.fn();
+    };
+    (Component as { displayName?: string }).displayName = viewName === 'RCTView' ? 'View' : viewName;
+    return Component;
+  };
+});
+
 // react-native-audio-api mock
 jest.mock('react-native-audio-api', () => ({
   AudioContext: jest.fn().mockImplementation(() => ({
@@ -208,6 +235,9 @@ jest.mock('react-native-audio-api', () => ({
   })),
   FileFormat: { Wav: 0, Caf: 1, M4A: 2, Flac: 3 },
   FileDirectory: { Document: 0, Cache: 1 },
+  BitDepth: { Bit8: 0, Bit16: 1, Bit24: 2, Bit32: 3 },
+  IOSAudioQuality: { Min: 0, Low: 1, Medium: 2, High: 3, Max: 4 },
+  FlacCompressionLevel: { L0: 0, L5: 5, L8: 8 },
 }), { virtual: true });
 
 // @react-native-community/slider mock
@@ -229,6 +259,15 @@ const mockVoiceConfig = {
   },
 };
 jest.mock('react-native-executorch', () => ({
+  // Faithful init leaf for the executorch native runtime (a genuine external native boundary):
+  // initExecutorch registers the resource fetcher so the runtime is ready to load models through
+  // it. With models faked at the fetcher + useTextToSpeech boundary there is nothing further to
+  // emulate in-process, so it is a ready-signal (EngineBridge calls it at module import — without
+  // this the pro TTS bootstrap throws "initExecutorch is not a function").
+  initExecutorch: () => {},
+  // useTextToSpeech is the executorch boundary the TTS bridge drives. The streaming/playback is
+  // exercised end-to-end by the KokoroTTSBridge suite, which feeds chunks + drives onEnded through
+  // the AudioContext itself; here stream() just resolves (the bridge owns the audio pump).
   useTextToSpeech: jest.fn(() => ({
     isReady: true,
     downloadProgress: 1,
@@ -302,6 +341,10 @@ jest.mock('react-native-device-info', () => ({
   isEmulator: jest.fn(() => Promise.resolve(false)),
   getDeviceId: jest.fn(() => 'test-device-id'),
   getHardware: jest.fn(() => Promise.resolve('unknown')),
+  // Power/battery — the pro recorder gates capture on power state. usePowerState is a
+  // hook (must return synchronously); getPowerState is the imperative form.
+  getPowerState: jest.fn(() => Promise.resolve({ batteryLevel: 0.8, batteryState: 'unplugged', lowPowerMode: false })),
+  usePowerState: jest.fn(() => ({ batteryLevel: 0.8, batteryState: 'unplugged', lowPowerMode: false })),
 }));
 
 // react-native-image-picker mock
@@ -333,26 +376,6 @@ jest.mock('react-native-keychain', () => ({
   resetGenericPassword: jest.fn(() => Promise.resolve(true)),
 }));
 
-// react-native-purchases mock — the real package loads a native module that
-// is unavailable in the node test env, so any (even transitive / coverage-only)
-// require would throw. Suites that need behaviour override this with a local mock.
-jest.mock('react-native-purchases', () => ({
-  __esModule: true,
-  default: {
-    setLogLevel: jest.fn(),
-    configure: jest.fn(),
-    getCustomerInfo: jest.fn(() => Promise.resolve({ entitlements: { active: {} }, originalAppUserId: 'anon', allPurchaseDates: {} })),
-    restorePurchases: jest.fn(() => Promise.resolve({ entitlements: { active: {} } })),
-    getOfferings: jest.fn(() => Promise.resolve({ all: {}, current: null })),
-    purchasePackage: jest.fn(() => Promise.resolve({ customerInfo: { entitlements: { active: {} } } })),
-    logIn: jest.fn(() => Promise.resolve({ customerInfo: { entitlements: { active: {} }, originalAppUserId: 'anon' }, created: false })),
-    invalidateCustomerInfoCache: jest.fn(() => Promise.resolve()),
-    logOut: jest.fn(() => Promise.resolve()),
-    ENTITLEMENT_VERIFICATION_MODE: { DISABLED: 'DISABLED', INFORMATIONAL: 'INFORMATIONAL' },
-    VERIFICATION_RESULT: { NOT_REQUESTED: 'NOT_REQUESTED', VERIFIED: 'VERIFIED', FAILED: 'FAILED', VERIFIED_ON_DEVICE: 'VERIFIED_ON_DEVICE' },
-  },
-  LOG_LEVEL: { DEBUG: 'debug', ERROR: 'error' },
-}));
 
 // @react-native-voice/voice mock
 jest.mock('@react-native-voice/voice', () => ({
@@ -386,6 +409,33 @@ jest.mock('@react-native-documents/picker', () => ({
   },
 }));
 
+// @notifee/react-native mock — the pro locket meeting-reminder code (permissions.ts +
+// meetingReminders.ts) imports notifee at module load, so WITHOUT this mock
+// require('@offgrid/pro') throws "Notifee native module not found" in jsdom/node, pro
+// activation aborts, and NO pro slots register (breaking every voice-mode/TTS test that
+// mounts the app.root EngineBridge). Enum values mirror notifee's real ones so any value
+// comparison in the code holds.
+jest.mock('@notifee/react-native', () => ({
+  __esModule: true,
+  default: {
+    getNotificationSettings: jest.fn(async () => ({ authorizationStatus: 1 })),
+    requestPermission: jest.fn(async () => ({ authorizationStatus: 1 })),
+    createChannel: jest.fn(async () => 'channel-id'),
+    createTriggerNotification: jest.fn(async () => 'notif-id'),
+    displayNotification: jest.fn(async () => 'notif-id'),
+    cancelTriggerNotification: jest.fn(async () => {}),
+    getTriggerNotificationIds: jest.fn(async () => []),
+    getTriggerNotifications: jest.fn(async () => []),
+    getInitialNotification: jest.fn(async () => null),
+    onForegroundEvent: jest.fn(() => () => {}),
+    onBackgroundEvent: jest.fn(() => {}),
+  },
+  AndroidImportance: { DEFAULT: 3, HIGH: 4 },
+  AuthorizationStatus: { NOT_DETERMINED: -1, DENIED: 0, AUTHORIZED: 1, PROVISIONAL: 2 },
+  TriggerType: { TIMESTAMP: 0, INTERVAL: 1 },
+  EventType: { DISMISSED: 0, PRESS: 1, ACTION_PRESS: 2, DELIVERED: 3 },
+}));
+
 // @react-native-documents/viewer mock
 jest.mock('@react-native-documents/viewer', () => ({
   viewDocument: jest.fn(() => Promise.resolve(null)),
@@ -395,9 +445,20 @@ jest.mock('@react-native-documents/viewer', () => ({
   },
 }));
 
+// A Swipeable whose swipe-revealed right actions (delete buttons etc.) are RENDERED, so those gestures are
+// reachable in tests (jest can't simulate the drag, but the actions a swipe reveals become tappable). Used
+// for both the barrel export and the direct import below.
+const makeMockSwipeable = () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return ({ children, renderRightActions, renderLeftActions }: { children?: unknown; renderRightActions?: () => unknown; renderLeftActions?: () => unknown }) =>
+    React.createElement(View, {}, children as never, renderRightActions ? (renderRightActions() as never) : null, renderLeftActions ? (renderLeftActions() as never) : null);
+};
+
 // react-native-gesture-handler mock
 jest.mock('react-native-gesture-handler', () => {
   const MockView = 'View';
+  const MockSwipeable = makeMockSwipeable();
   const mockGestureBuilder = () => {
     const gesture: any = {
       activeOffsetX: () => gesture,
@@ -410,7 +471,7 @@ jest.mock('react-native-gesture-handler', () => {
     return gesture;
   };
   return {
-    Swipeable: MockView,
+    Swipeable: MockSwipeable,
     GestureHandlerRootView: MockView,
     GestureDetector: MockView,
     ScrollView: MockView,
@@ -430,7 +491,7 @@ jest.mock('react-native-gesture-handler', () => {
 });
 
 // Mock the direct import of Swipeable
-jest.mock('react-native-gesture-handler/Swipeable', () => 'View');
+jest.mock('react-native-gesture-handler/Swipeable', () => makeMockSwipeable());
 
 // react-native-worklets mock — must come before reanimated
 jest.mock('react-native-worklets', () => ({}));
@@ -481,24 +542,9 @@ jest.mock('react-native-haptic-feedback', () => ({
   trigger: jest.fn(),
 }));
 
-// @react-native-community/blur mock
-jest.mock('@react-native-community/blur', () => ({
-  BlurView: 'BlurView',
-}));
 
-// lottie-react-native mock
-jest.mock('lottie-react-native', () => 'LottieView');
 
-// react-native-linear-gradient mock
-jest.mock('react-native-linear-gradient', () => 'LinearGradient');
 
-// moti mock (kept for any transitive imports)
-jest.mock('moti', () => ({
-  MotiView: 'MotiView',
-  MotiText: 'MotiText',
-  MotiImage: 'MotiImage',
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
-}), { virtual: true });
 
 // @op-engineering/op-sqlite mock
 jest.mock('@op-engineering/op-sqlite', () => {
@@ -541,15 +587,25 @@ jest.mock('react-native-spotlight-tour', () => ({
   }),
 }));
 
-// react-native-safe-area-context mock
-jest.mock('react-native-safe-area-context', () => {
-  const defaultInset = { top: 0, right: 0, bottom: 0, left: 0 };
-  return {
-    SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
-    SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
-    useSafeAreaInsets: jest.fn(() => defaultInset),
+// react-native-screens mock — the native Screen/ScreenStack components are undefined in jest, which
+// crashes @react-navigation/native-stack ($$typeof undefined). Map them to plain Views so a REAL
+// NavigationContainer + navigator mounts and real cross-screen navigation can be driven in tests.
+jest.mock('react-native-screens', () => {
+  const RN = require('react-native');
+  const noop = () => {};
+  const base: Record<string, unknown> = {
+    enableScreens: noop, enableFreeze: noop, screensEnabled: () => false,
+    Screen: RN.View, ScreenContainer: RN.View, ScreenStack: RN.View, ScreenStackHeaderConfig: RN.View,
+    NativeScreen: RN.View, NativeScreenContainer: RN.View, FullWindowOverlay: RN.View,
   };
+  return new Proxy(base, { get: (t, p) => (p in t ? t[p as string] : RN.View) });
 });
+
+// react-native-safe-area-context mock — use the library's SHIPPED jest mock, which exports the full
+// surface (SafeAreaInsetsContext / SafeAreaFrameContext / initialWindowMetrics) that @react-navigation's
+// SafeAreaProviderCompat reads. The old hand-rolled mock omitted the contexts, so a real
+// NavigationContainer could not mount (useContext(undefined)).
+jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 
 // ============================================================================
 // Global Test Utilities
@@ -612,6 +668,20 @@ if (!shouldPrintJestConsole) {
 beforeEach(() => {
   jest.clearAllMocks();
   clearMockStorage();
+});
+
+// Global test isolation for the native-boundary harness. Tests that call installNativeBoundary()
+// jest.resetModules() mid-test, which forks React Testing Library so its OWN auto-cleanup can't register
+// (requireRTL deliberately skips it to avoid the "hook after tests started" error). Without cleanup,
+// mounted screens persist and their store/residency writes BLEED into the next test (order-dependent
+// flakiness, far worse in-band). This afterEach requires RTL AFTER the test's resetModules, so it resolves
+// the SAME post-reset instance the test rendered on, and unmounts its tree. It also drops the global
+// `window` shim the harness installs for React 19's error reporter, so no true-global leaks across files.
+afterEach(() => {
+  // Only unmount when a test actually rendered via requireRTL (which stashed its own cleanup here). Do NOT
+  // require RTL fresh — after a test's resetModules that pulls a new module graph and breaks the next test.
+  const g = globalThis as unknown as { __RTL_CLEANUP__?: () => void };
+  if (g.__RTL_CLEANUP__) { try { g.__RTL_CLEANUP__(); } catch { /* already torn down */ } g.__RTL_CLEANUP__ = undefined; }
 });
 
 // Global timeout for async operations

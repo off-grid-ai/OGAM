@@ -93,3 +93,9 @@ docs/TRACTION_KNOWLEDGE_BASE.md
 /image-*.png
 # Local marketing drafts (not part of the app)
 marketing/
+
+# Personal device-test commentary (raw voice, not for the repo)
+docs/DEVICE_SESSION_COMMENTARY.md
+
+# Device wire-capture logs (raw, large, session-specific — kept locally, not versioned)
+docs/wire-captures/

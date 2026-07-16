@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { StyleSheet } from 'react-native';
-import { useTheme } from './index';
+import { useTheme } from './useTheme';
 import type { ThemeColors, ThemeShadows } from './palettes';
 
 /**
