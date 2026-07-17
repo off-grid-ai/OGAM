@@ -15,7 +15,7 @@ row does **not** mean that no test exists.
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **19 verified**, **8 partial/device-gated**, **6 audit pending**.
 - P1: **53 verified**, **1 partial/device-gated**, **63 audit pending**.
-- P2: **26 verified**, **0 partial/device-gated**, **58 audit pending**.
+- P2: **28 verified**, **0 partial/device-gated**, **56 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -384,8 +384,8 @@ row does **not** mean that no test exists.
 ### 11 Polish
 
 - [?] #156 Theme switch applies (System/Light/Dark) - existing-test evidence audit pending
-- [?] #157 Empty state: no models - existing-test evidence audit pending
-- [?] #158 Empty state: no chats - existing-test evidence audit pending
+- [x] #157 Empty state: no models
+- [x] #158 Empty state: no chats
 - [?] #159 Empty state: no KB docs - existing-test evidence audit pending
 - [?] #160 Long-text wrapping - existing-test evidence audit pending
 - [?] #161 Orientation behavior - existing-test evidence audit pending
