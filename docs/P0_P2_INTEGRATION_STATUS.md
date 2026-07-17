@@ -14,8 +14,8 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **19 verified**, **8 partial/device-gated**, **6 audit pending**.
-- P1: **34 verified**, **1 partial/device-gated**, **82 audit pending**.
-- P2: **3 verified**, **0 partial/device-gated**, **81 audit pending**.
+- P1: **37 verified**, **1 partial/device-gated**, **79 audit pending**.
+- P2: **4 verified**, **0 partial/device-gated**, **80 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -240,9 +240,9 @@ row does **not** mean that no test exists.
 
 ### 7 Tools
 
-- [?] #123 Calculator tool runs
-- [?] #127 Parallel tool calls
-- [?] #129 Messy tool JSON still runs
+- [x] #123 Calculator tool runs
+- [x] #127 Parallel tool calls
+- [x] #129 Messy tool JSON still runs
 - [?] #132 Empty final turn keeps tool data
 - [?] #133 Add / connect an MCP server
 - [?] #134 MCP server tools listed
@@ -361,7 +361,7 @@ row does **not** mean that no test exists.
 - [?] #125 Device info tool runs - existing-test evidence audit pending
 - [?] #126 Web search tool runs - existing-test evidence audit pending
 - [?] #128 Thinking + tool + answer render in order - existing-test evidence audit pending
-- [?] #130 Stringified tool args parsed - existing-test evidence audit pending
+- [x] #130 Stringified tool args parsed
 - [?] #131 Tool router no false positive - existing-test evidence audit pending
 - [?] #136 MCP tool error handled - existing-test evidence audit pending
 - [?] #137 MCP guide screen renders - existing-test evidence audit pending
