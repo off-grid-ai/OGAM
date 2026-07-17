@@ -42,11 +42,13 @@ describe('RagDatabase', () => {
     it('opens the database and creates tables', async () => {
       await ragDatabase.ensureReady();
       expect(open).toHaveBeenCalledWith({ name: 'rag.db' });
-      // rag_documents, rag_chunks, rag_embeddings = 3 tables
-      expect(mockExecuteSync).toHaveBeenCalledTimes(3);
+      // Three tables plus portable-id schema inspection/migration/index.
+      expect(mockExecuteSync).toHaveBeenCalledTimes(6);
       expect(mockExecuteSync.mock.calls[0][0]).toContain('rag_documents');
-      expect(mockExecuteSync.mock.calls[1][0]).toContain('rag_chunks');
-      expect(mockExecuteSync.mock.calls[2][0]).toContain('rag_embeddings');
+      expect(mockExecuteSync.mock.calls.some(call => call[0].includes('ALTER TABLE rag_documents'))).toBe(true);
+      expect(mockExecuteSync.mock.calls.some(call => call[0].includes('idx_rag_documents_portable_id'))).toBe(true);
+      expect(mockExecuteSync.mock.calls.some(call => call[0].includes('rag_chunks'))).toBe(true);
+      expect(mockExecuteSync.mock.calls.some(call => call[0].includes('rag_embeddings'))).toBe(true);
     });
 
     it('does not re-initialize on second call', async () => {

@@ -61,6 +61,8 @@ module.exports = {
     // Mirrors the metro alias: 'react-native-fs' resolves to the maintained fork
     // (the only RNFS native module we ship — see metro.config.js).
     '^react-native-fs$': '<rootDir>/src/shims/react-native-fs.ts',
+    '^@offgrid/sync/portable$': '<rootDir>/../shared/packages/sync/dist/portable/index.js',
+    '^@offgrid/sync-react-native$': '<rootDir>/../shared/packages/sync-react-native/dist/index.js',
   },
   transformIgnorePatterns: ['node_modules/(?!(react-native|@react-native|@react-navigation|react-native-.*|@react-native-.*|moti|@motify|@gorhom|@shopify|@ronradtke|@op-engineering|@offgrid)/)',],
   testEnvironment: 'node',

@@ -18,6 +18,7 @@ import { useAppStore, useAuthStore, useRemoteServerStore, useWhisperStore } from
 import { useDebugLogsStore } from './src/stores/debugLogsStore';
 import { initDebugLogFile, appendDebugLine, shutdownDebugLogFile } from './src/utils/debugLogFile';
 import { loadProFeatures } from './src/bootstrap/loadProFeatures';
+import './src/bootstrap/registerPortableWorkspace';
 import { checkProStatus } from './src/services/proLicenseService';
 import { hydrateDownloadStore } from './src/services/downloadHydration';
 import { initActiveDownloadPersistence } from './src/services/activeDownloadPersistence';
@@ -30,7 +31,11 @@ import { useSlot, SLOTS } from './src/bootstrap/slotRegistry';
 import { LockScreen } from './src/screens';
 import { useAppState } from './src/hooks/useAppState';
 import { useDownloadStore } from './src/stores/downloadStore';
+import { useChatStore } from './src/stores/chatStore';
+import { useProjectStore } from './src/stores/projectStore';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { initializeWorkspaceRecovery } from './src/services/portableWorkspace/importJournal';
+import { workspaceFiles } from './src/services/portableWorkspace/nativeWorkspaceBoundary';
 
 LogBox.ignoreAllLogs(); // Suppress all logs
 
@@ -210,6 +215,10 @@ function App() {
     try {
       // Ensure persisted download metadata is loaded before restore logic reads it.
       await ensureAppStoreHydrated();
+      await Promise.all([useChatStore.persist.rehydrate(), useProjectStore.persist.rehydrate()]);
+      if (!(await initializeWorkspaceRecovery(workspaceFiles))) {
+        logger.error('[App] Workspace import recovery failed; transfer disabled until restart');
+      }
 
       // Project the persisted "aggressive model loading" setting onto the residency
       // manager (single owner of the runtime load policy) now that settings are

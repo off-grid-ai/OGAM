@@ -7,12 +7,14 @@ const proStubPath = path.resolve(__dirname, 'src/bootstrap/proStub.js');
 // pro/ is a git submodule: the directory exists even when not checked out, so test
 // for a real file inside it (package.json) to detect a populated submodule.
 const proExists = fs.existsSync(path.resolve(proPackagePath, 'package.json'));
+const sharedPackagesPath = fs.realpathSync(path.resolve(__dirname, '..', 'shared', 'packages'));
 
 const config = {
   // pro/ is a submodule inside the project root, so Metro already watches it by
   // default; nothing extra needed here. (When absent it's just an empty dir.)
-  watchFolders: [],
+  watchFolders: [sharedPackagesPath],
   resolver: {
+    unstable_enablePackageExports: true,
     // When resolving modules from outside the project root (i.e. @offgrid/pro),
     // Metro falls back here so @babel/runtime and all other peer deps are found.
     nodeModulesPaths: [path.resolve(__dirname, 'node_modules')],
@@ -23,6 +25,8 @@ const config = {
       // Points to the real pro package when present on disk (store builds),
       // falls back to a null stub so free builds bundle cleanly.
       '@offgrid/pro': proExists ? proPackagePath : proStubPath,
+      '@offgrid/sync': path.resolve(sharedPackagesPath, 'sync'),
+      '@offgrid/sync-react-native': path.resolve(sharedPackagesPath, 'sync-react-native'),
       // Single source of truth for react-native-fs. The app imports
       // 'react-native-fs', but executorch's bare-resource-fetcher pulls the
       // maintained fork '@dr.pogodin/react-native-fs'. Shipping both produces

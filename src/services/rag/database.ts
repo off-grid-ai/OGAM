@@ -11,6 +11,7 @@ export interface RagDocument {
   size: number;
   created_at: string;
   enabled: number;
+  portable_id?: string | null;
 }
 
 export interface RagSearchResult {
@@ -19,6 +20,17 @@ export interface RagSearchResult {
   content: string;
   position: number;
   score: number;
+}
+
+export interface PortableRagDocumentInput {
+  portableId: string;
+  projectId: string;
+  name: string;
+  path: string;
+  size: number;
+  createdAt: string;
+  enabled: boolean;
+  chunks: Array<{ content: string; position: number; embedding: number[] }>;
 }
 
 interface StoredEmbedding {
@@ -48,6 +60,13 @@ class RagDatabase {
           created_at TEXT NOT NULL,
           enabled INTEGER NOT NULL DEFAULT 1
         )`
+      );
+      const columns = (this.db.executeSync('PRAGMA table_info(rag_documents)').rows ?? []) as unknown as Array<{ name: string }>;
+      if (!columns.some(column => column.name === 'portable_id')) {
+        this.db.executeSync('ALTER TABLE rag_documents ADD COLUMN portable_id TEXT');
+      }
+      this.db.executeSync(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_rag_documents_portable_id ON rag_documents(portable_id) WHERE portable_id IS NOT NULL'
       );
       this.db.executeSync(
         `CREATE TABLE IF NOT EXISTS rag_chunks (
@@ -173,6 +192,65 @@ class RagDatabase {
     return (result.rows ?? []) as unknown as { id: number; content: string; position: number }[];
   }
 
+  /**
+   * Transaction controls used by the portable-workspace adapter. The adapter
+   * spans SQLite, Zustand, and files, so it owns the compensating transaction;
+   * keeping the SQL primitives here avoids leaking the DB handle.
+   */
+  beginPortableImport(): void {
+    this.getDb().executeSync('BEGIN');
+  }
+
+  commitPortableImport(): void {
+    this.getDb().executeSync('COMMIT');
+  }
+
+  rollbackPortableImport(): void {
+    this.getDb().executeSync('ROLLBACK');
+  }
+
+  insertPortableDocument(document: PortableRagDocumentInput): void {
+    const db = this.getDb();
+    const result = db.executeSync(
+      `INSERT INTO rag_documents
+        (portable_id, project_id, name, path, size, created_at, enabled)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        document.portableId,
+        document.projectId,
+        document.name,
+        document.path,
+        document.size,
+        document.createdAt,
+        document.enabled ? 1 : 0,
+      ],
+    );
+    if (result.insertId == null) {
+      throw new Error('Failed to insert portable document');
+    }
+    for (const chunk of document.chunks) {
+      const chunkResult = db.executeSync(
+        'INSERT INTO rag_chunks (content, doc_id, position) VALUES (?, ?, ?)',
+        [chunk.content, result.insertId, chunk.position],
+      );
+      if (chunkResult.insertId == null) throw new Error('Failed to insert portable document chunk');
+      db.executeSync(
+        'INSERT INTO rag_embeddings (chunk_rowid, doc_id, embedding) VALUES (?, ?, ?)',
+        [chunkResult.insertId, result.insertId, this.embeddingToBlob(chunk.embedding)],
+      );
+    }
+  }
+
+  deletePortableDocuments(portableIds: readonly string[]): void {
+    if (portableIds.length === 0) return;
+    const db = this.getDb();
+    for (const portableId of portableIds) {
+      db.executeSync('DELETE FROM rag_embeddings WHERE doc_id IN (SELECT id FROM rag_documents WHERE portable_id = ?)', [portableId]);
+      db.executeSync('DELETE FROM rag_chunks WHERE doc_id IN (SELECT id FROM rag_documents WHERE portable_id = ?)', [portableId]);
+      db.executeSync('DELETE FROM rag_documents WHERE portable_id = ?', [portableId]);
+    }
+  }
+
   deleteDocument(docId: number): void {
     const db = this.getDb();
     db.executeSync('DELETE FROM rag_embeddings WHERE doc_id = ?', [docId]);
@@ -183,7 +261,7 @@ class RagDatabase {
   getDocumentsByProject(projectId: string): RagDocument[] {
     const db = this.getDb();
     const result = db.executeSync(
-      'SELECT id, project_id, name, path, size, created_at, enabled FROM rag_documents WHERE project_id = ? ORDER BY created_at DESC',
+      'SELECT id, portable_id, project_id, name, path, size, created_at, enabled FROM rag_documents WHERE project_id = ? ORDER BY created_at DESC',
       [projectId]
     );
     return (result.rows ?? []) as unknown as RagDocument[];

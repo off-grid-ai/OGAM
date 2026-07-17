@@ -5,6 +5,11 @@ entry has a verdict and evidence. The standing gap agent picks these up, closes 
 REMOVES them from this file once resolved (the record lives in git history + commit messages).
 This file only ever contains work that is still open.
 
+## Workspace transfer device QA (2026-07-17)
+
+- **Code:** wired under Settings with real store/SQLite/filesystem/picker/share adapters; focused integration tests and an Android release Metro bundle pass.
+- **Still unverified on hardware:** complete export → share/save → pick → import journey and visual screenshots on Android and iOS. No emulator or device was available in the integration worktree. Run the journey on both platforms before calling the Mobile surface live-verified.
+
 Verdict legend:
 - **delete-safe** - unreferenced / unreachable and provably unused; remove it.
 - **fix-the-guard** - the branch is SUPPOSED to fire but a condition prevents it; fix the condition (a latent bug, not litter).

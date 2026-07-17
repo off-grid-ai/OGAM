@@ -23,6 +23,14 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ATTACHMENTS_DIR = `${RNFS.DocumentDirectoryPath}/attachments`;
 
 class DocumentService {
+  /** Read a verified, already-local workspace file without creating another copy. */
+  async readPortableTextFromPath(filePath: string, fileName: string): Promise<string> {
+    const extension = `.${fileName.split('.').pop()?.toLowerCase()}`;
+    const isPdf = extension === PDF_EXTENSION;
+    this.validateFileType(extension, isPdf);
+    return this.readContent(filePath.replace(/^file:\/\//, ''), isPdf, 500_000);
+  }
+
   /**
    * Ensure the persistent attachments directory exists
    */
