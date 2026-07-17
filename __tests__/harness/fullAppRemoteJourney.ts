@@ -59,6 +59,22 @@ export function installRemoteDiscoveryBoundary(capabilities?: {
   };
 }
 
+/** Open Home's text-model picker whether Home is empty or already has a selection. */
+export async function openTextModelPickerThroughHome(
+  rtl: RenderedAppJourney['rtl'],
+  view: RenderedAppJourney['view'],
+): Promise<void> {
+  const browseModels = view.queryByTestId('browse-models-button');
+  if (browseModels) {
+    rtl.fireEvent.press(browseModels);
+    return;
+  }
+
+  rtl.fireEvent.press(view.getByTestId('models-summary'));
+  const textRow = await rtl.waitFor(() => view.getByTestId('models-row-text'));
+  rtl.fireEvent.press(textRow);
+}
+
 /** Configure, save, select, and open a remote chat using only rendered App gestures. */
 export async function openRemoteChatThroughApp(
   rtl: RenderedAppJourney['rtl'],
@@ -101,7 +117,12 @@ export async function openRemoteChatThroughApp(
   );
   rtl.fireEvent.press(view.getByTestId('home-tab'));
   await rtl.waitFor(() => expect(view.getByTestId('home-screen')).toBeTruthy());
-  rtl.fireEvent.press(view.getByTestId('browse-models-button'));
+
+  // An empty Home exposes the direct Browse button. When a local model is
+  // already selected, the same text picker lives behind the Models manager.
+  // Keep the shared journey faithful to both real UI states instead of forcing
+  // callers to clear the local selection outside the product.
+  await openTextModelPickerThroughHome(rtl, view);
   await rtl.waitFor(() => {
     expect(view.getByText(REMOTE_SERVER_NAME)).toBeTruthy();
     expect(view.getByText(REMOTE_MODEL_ID)).toBeTruthy();

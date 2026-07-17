@@ -7,7 +7,7 @@ import { hardwareService } from '../hardware';
 import { modelResidencyManager } from '../modelResidency';
 import { OverridableMemoryError, ImageModelIncompleteError } from '../modelLoadErrors';
 import { validateImageModelDir } from '../../utils/imageModelIntegrity';
-import { remoteServerManager } from '../remoteServerManager';
+import { clearActiveRemoteModelSelection } from '../remoteModelSelection';
 import { useAppStore, useRemoteServerStore } from '../../stores';
 import logger from '../../utils/logger';
 import { textOverheadMultiplier } from './types';
@@ -424,7 +424,7 @@ class ActiveModelService {
       if (ejected) count += 1;
     }
     if (hasRemote) {
-      remoteServerManager.clearActiveRemoteModel();
+      clearActiveRemoteModelSelection();
       count += 1;
     }
     logger.log(`[MODEL-SM] ejectAll → done count=${count}`);
