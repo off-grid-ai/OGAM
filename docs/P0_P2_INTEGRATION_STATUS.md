@@ -14,8 +14,8 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **18 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **5 audit pending**.
-- P1: **23 verified**, **1 partial/device-gated**, **33 confirmed gaps**, **60 audit pending**.
-- P2: **15 verified**, **0 partial/device-gated**, **16 confirmed gaps**, **53 audit pending**.
+- P1: **24 verified**, **1 partial/device-gated**, **32 confirmed gaps**, **60 audit pending**.
+- P2: **19 verified**, **0 partial/device-gated**, **15 confirmed gaps**, **50 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -202,7 +202,7 @@ row does **not** mean that no test exists.
 - [?] #69 Image steps applies
 - [x] #70 Tap image opens fullscreen preview
 - [?] #72 Non-draw prompt routes to text
-- [ ] #73 Resend of an image request re-draws
+- [x] #73 Resend of an image request re-draws
 
 ### 4 Vision
 
@@ -299,9 +299,9 @@ row does **not** mean that no test exists.
 
 ### 1 Downloads
 
-- [?] #5 Downloaded model shows Downloaded indicator - existing-test evidence audit pending
-- [?] #6 Model info / credibility shown on the card - existing-test evidence audit pending
-- [?] #10 Download a second whisper model - existing-test evidence audit pending
+- [x] #5 Downloaded model shows Downloaded indicator
+- [x] #6 Model info / credibility shown on the card
+- [x] #10 Download a second whisper model
 - [?] #22 Download an embedding model (first KB use) - existing-test evidence audit pending
 
 ### 2 Text gen
@@ -327,7 +327,7 @@ row does **not** mean that no test exists.
 ### 4 Image
 
 - [?] #68 Image size floors at 256 - existing-test evidence audit pending
-- [ ] #71 Tap attached (pre-send) image previews
+- [x] #71 Tap attached (pre-send) image previews
 - [?] #74 Reset to Defaults resets image params - existing-test evidence audit pending
 - [?] #75 Chat-modal vs Model-Settings sliders agree - existing-test evidence audit pending
 - [?] #76 First-gen warmup notice is accurate - existing-test evidence audit pending
