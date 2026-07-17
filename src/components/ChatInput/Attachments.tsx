@@ -46,6 +46,16 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
       // Android and when no session is active.
       await audioSessionManager.deactivate();
       const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8, maxWidth: 1024, maxHeight: 1024 });
+      if (result.errorCode === 'permission') {
+        setAlertState(
+          showAlert(
+            'Photo Access Denied',
+            'Allow photo access in your device settings, then try again.',
+            [{ text: 'OK' }],
+          ),
+        );
+        return;
+      }
       if (result.assets && result.assets.length > 0) addAttachments(result.assets);
     } catch (_pickError) {
       // no-op: image picker already reports failure to the user via native UI
