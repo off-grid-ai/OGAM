@@ -1,5 +1,5 @@
 /** P0 #167/#168/#171 — durable user data is visible after a real App boot. */
-import { renderMainApp } from '../../harness/appJourney';
+import { relaunchMainApp, renderMainApp } from '../../harness/appJourney';
 
 const CHAT_STORAGE_KEY = 'local-llm-chat-storage';
 const ACTIVE_DOWNLOADS_KEY = '@offgrid/active_downloads';
@@ -71,6 +71,43 @@ describe('P0 relaunch persistence journeys', () => {
       expect(view.getByText('Downloaded Models')).toBeTruthy();
       expect(view.getByText('journey-model-Q4_K_M.gguf')).toBeTruthy();
     });
+  });
+
+  it('keeps the selected active model for a new chat after relaunch', async () => {
+    const firstLaunch = await renderMainApp();
+
+    firstLaunch.rtl.fireEvent.press(
+      firstLaunch.view.getByTestId('browse-models-button'),
+    );
+    const modelRows = await firstLaunch.rtl.waitFor(() => {
+      const rows = firstLaunch.view.queryAllByTestId('model-item');
+      expect(rows.length).toBeGreaterThan(0);
+      return rows;
+    });
+    firstLaunch.rtl.fireEvent.press(modelRows[0]);
+    await firstLaunch.rtl.waitFor(async () => {
+      const raw = await firstLaunch.asyncStorage.getItem(
+        'local-llm-app-storage',
+      );
+      expect(JSON.parse(raw ?? '{}').state?.activeModelId).toBe(
+        'test/journey-model/journey-model-Q4_K_M.gguf',
+      );
+    });
+    firstLaunch.view.unmount();
+
+    const relaunched = await relaunchMainApp();
+    relaunched.rtl.fireEvent.press(
+      relaunched.view.getByTestId('new-chat-button'),
+    );
+    await relaunched.rtl.waitFor(() => {
+      expect(relaunched.view.getByTestId('chat-input')).toBeTruthy();
+      expect(
+        relaunched.view.getByText(
+          'Type a message below to begin chatting with Journey Model.',
+        ),
+      ).toBeTruthy();
+    });
+    relaunched.view.unmount();
   });
 
   it('restores an interrupted download as a visible retriable entry', async () => {
