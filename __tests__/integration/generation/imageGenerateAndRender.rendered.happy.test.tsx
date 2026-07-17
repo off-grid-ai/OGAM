@@ -84,6 +84,18 @@ describe('P0 image-generation journey', () => {
     expect(boundary.diffusion.module.loadModel).toHaveBeenCalledWith(
       expect.objectContaining({ modelPath: MODEL_PATH }),
     );
+
+    expect(view.queryByText('Close')).toBeNull();
+    fireEvent.press(view.getByTestId('generated-image'));
+    await waitFor(() => {
+      expect(view.getByText('Save')).toBeTruthy();
+      expect(view.getByText('Close')).toBeTruthy();
+    });
+    fireEvent.press(view.getByText('Close'));
+    await waitFor(() => {
+      expect(view.queryByText('Save')).toBeNull();
+      expect(view.queryByText('Close')).toBeNull();
+    });
     view.unmount();
   }, 30000);
 });
