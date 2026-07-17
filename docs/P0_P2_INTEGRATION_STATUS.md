@@ -14,7 +14,7 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **23 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
-- P1: **37 verified**, **2 partial/device-gated**, **20 confirmed gaps**, **58 audit pending**.
+- P1: **38 verified**, **2 partial/device-gated**, **19 confirmed gaps**, **58 audit pending**.
 - P2: **31 verified**, **0 partial/device-gated**, **15 confirmed gaps**, **38 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
@@ -175,7 +175,7 @@ row does **not** mean that no test exists.
 - [?] #28 GPU layers slider applies
 - [ ] #29 litert CPU backend fails gracefully
 - [?] #30 NPU/HTP backend gated or graceful
-- [ ] #31 Temperature applies to a generation
+- [x] #31 Temperature applies to a generation
 - [?] #33 Context length applies
 - [?] #34 System prompt applies
 - [?] #38 Plain reply has no stray think tags
