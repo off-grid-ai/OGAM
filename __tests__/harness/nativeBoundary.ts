@@ -486,11 +486,18 @@ export interface DiffusionFake {
 function makeDiffusionFake(seedFile?: (path: string, sizeBytes: number) => void): DiffusionFake {
   const calls: DiffusionFake['calls'] = { generateImage: [] };
   let seedCounter = 0;
+  let loadedModelPath: string | null = null;
   const module: Record<string, jest.Mock> = {
-    isModelLoaded: jest.fn().mockResolvedValue(true),
-    getLoadedModelPath: jest.fn().mockResolvedValue(null),
-    loadModel: jest.fn().mockResolvedValue(true),
-    unloadModel: jest.fn().mockResolvedValue(true),
+    isModelLoaded: jest.fn(async () => loadedModelPath !== null),
+    getLoadedModelPath: jest.fn(async () => loadedModelPath),
+    loadModel: jest.fn(async (request: string | { modelPath: string }) => {
+      loadedModelPath = typeof request === 'string' ? request : request.modelPath;
+      return true;
+    }),
+    unloadModel: jest.fn(async () => {
+      loadedModelPath = null;
+      return true;
+    }),
     cancelGeneration: jest.fn().mockResolvedValue(true),
     getGeneratedImages: jest.fn().mockResolvedValue([]),
     deleteGeneratedImage: jest.fn().mockResolvedValue(true),
@@ -501,6 +508,13 @@ function makeDiffusionFake(seedFile?: (path: string, sizeBytes: number) => void)
       SUPPORTED_WIDTHS: [256, 512], SUPPORTED_HEIGHTS: [256, 512],
     }),
     generateImage: jest.fn((nativeParams: Record<string, unknown>) => {
+      if (loadedModelPath === null) {
+        return Promise.reject(
+          Object.assign(new Error('No diffusion model loaded'), {
+            code: 'ERR_NO_MODEL',
+          }),
+        );
+      }
       calls.generateImage.push(nativeParams);
       seedCounter += 1;
       const imagePath = `/generated/img-${seedCounter}.png`;
