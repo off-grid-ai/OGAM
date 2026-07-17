@@ -13,7 +13,7 @@ row does **not** mean that no test exists.
 - Current scope: **244 journeys** - **33 P0**, **117 P1**, **84 P2**, and **10 P3**.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
-- P0: **18 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **5 audit pending**.
+- P0: **23 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
 - P1: **35 verified**, **1 partial/device-gated**, **23 confirmed gaps**, **58 audit pending**.
 - P2: **31 verified**, **0 partial/device-gated**, **15 confirmed gaps**, **38 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
@@ -36,11 +36,11 @@ row does **not** mean that no test exists.
 ### P0 additions
 
 - [x] APP-P0-001 Corrupt persisted app settings do not trap startup or wipe unrelated user data
-- [?] APP-P0-002 Persisted schema migrations retain chats, projects, models, and settings across old versions
-- [?] APP-P0-003 Partial database or filesystem initialization failure still reaches a recoverable screen
-- [?] APP-P0-004 Interrupted persistence writes do not erase previously committed chats or projects
-- [?] APP-P0-005 Lock state cannot be bypassed by cold start, background resume, or direct navigation
-- [?] APP-P0-006 Pro extension load failure cannot crash or disable the core app
+- [x] APP-P0-002 Persisted schema migrations retain chats, projects, models, and settings across old versions
+- [x] APP-P0-003 Partial database or filesystem initialization failure still reaches a recoverable screen
+- [x] APP-P0-004 Interrupted persistence writes do not erase previously committed chats or projects
+- [x] APP-P0-005 Lock state cannot be bypassed by cold start, background resume, or direct navigation
+- [x] APP-P0-006 Pro extension load failure cannot crash or disable the core app
 
 ### P1 additions
 
