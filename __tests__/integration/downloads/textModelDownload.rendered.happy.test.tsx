@@ -7,7 +7,7 @@
  * modelManager, download/app stores, persistence, and rendered card state. Only
  * HTTP, the native background downloader, filesystem, and device RAM are faked.
  */
-import { renderMainApp } from '../../harness/appJourney';
+import { relaunchMainApp, renderMainApp } from '../../harness/appJourney';
 import { GB } from '../../harness/nativeBoundary';
 
 const MODEL_ID = 'offgrid-tests/downloadable-model';
@@ -132,5 +132,20 @@ describe('P0 text-model download journey', () => {
     });
     expect(view.queryByTestId('file-card-0-download')).toBeNull();
     expect(view.queryByTestId('file-card-0-cancel')).toBeNull();
+
+    view.unmount();
+    const relaunched = await relaunchMainApp({ boundary: { download: true } });
+    relaunched.rtl.fireEvent.press(relaunched.view.getByTestId('models-tab'));
+    await relaunched.rtl.waitFor(() =>
+      expect(relaunched.view.getByTestId('models-screen')).toBeTruthy(),
+    );
+    relaunched.rtl.fireEvent.press(
+      relaunched.view.getByTestId('downloads-icon'),
+    );
+    await relaunched.rtl.waitFor(() => {
+      expect(relaunched.view.getByText('Downloaded Models')).toBeTruthy();
+      expect(relaunched.view.getByText(FILE_NAME)).toBeTruthy();
+    });
+    relaunched.view.unmount();
   }, 30000);
 });
