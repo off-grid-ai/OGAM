@@ -114,10 +114,4 @@ jobs:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
           FASTLANE_SKIP_UPDATE_CHECK: '1'
           FASTLANE_HIDE_CHANGELOG: '1'
-        run: |
-          echo "===== DIAGNOSTIC: git status before uat.sh ====="
-          git status --porcelain
-          echo "----- git diff --stat -----"
-          git diff --stat
-          echo "===== end diagnostic ====="
-          bash scripts/uat.sh $UAT_PLATFORM_ARG
+        run: bash scripts/uat.sh $UAT_PLATFORM_ARG

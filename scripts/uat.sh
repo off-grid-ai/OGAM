@@ -48,8 +48,10 @@ command -v gh     >/dev/null || error "gh CLI not installed"
 command -v bundle >/dev/null || error "bundler not installed (bundle install)"
 [ -f fastlane/Fastfile ]     || error "fastlane/Fastfile not found"
 # Ignore fastlane/README.md — fastlane regenerates it on every run, so it is dirty by the time a
-# second build starts (and after any prior run). It is not source we build from.
-[ -z "$(git status --porcelain | grep -vE 'fastlane/README\.md$' || true)" ] || error "Working tree is dirty. Commit or stash first."
+# second build starts (and after any prior run). It is not source we build from. Likewise
+# .bundle/config: CI's ruby/setup-ruby rewrites it (cache/deploy settings) during setup, so a
+# clean checkout is dirty by the time we get here. Neither is source we build from.
+[ -z "$(git status --porcelain | grep -vE '(fastlane/README\.md|\.bundle/config)$' || true)" ] || error "Working tree is dirty. Commit or stash first."
 [ "$DO_ANDROID" = 0 ] || { [ -f android/gradlew ] || error "android/gradlew not found"; [ -n "${ANDROID_HOME:-}" ] || error "ANDROID_HOME not set"; }
 [ "$DO_IOS" = 0 ]     || command -v xcodebuild >/dev/null || error "xcodebuild not installed"
 
