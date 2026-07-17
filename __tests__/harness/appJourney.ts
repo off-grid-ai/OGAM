@@ -30,6 +30,8 @@ export interface AppJourneyOptions {
     boundary: NativeBoundary;
     asyncStorage: typeof import('@react-native-async-storage/async-storage').default;
   }) => void | Promise<void>;
+  /** Skip the existing-user Home assertion when a journey intentionally tests a different boot outcome. */
+  waitForHome?: boolean;
 }
 
 async function renderApp() {
@@ -158,13 +160,15 @@ export async function renderMainApp(options: AppJourneyOptions = {}) {
 
   const { rtl, view } = await renderApp();
 
-  await rtl.waitFor(
-    () => {
-      expect(view.queryByTestId('app-loading')).toBeNull();
-      expect(view.queryByTestId('home-screen')).not.toBeNull();
-    },
-    { timeout: 15000 },
-  );
+  if (options.waitForHome !== false) {
+    await rtl.waitFor(
+      () => {
+        expect(view.queryByTestId('app-loading')).toBeNull();
+        expect(view.queryByTestId('home-screen')).not.toBeNull();
+      },
+      { timeout: 15000 },
+    );
+  }
 
   return { boundary, asyncStorage, rtl, view };
 }
