@@ -259,4 +259,98 @@ describe('P0 queued-download process-death recovery', () => {
 
     nextView.unmount();
   }, 45000);
+
+  it('APP-P1-002 removes a user-cancelled queued item from UI and persistence across relaunch', async () => {
+    installModelApiFixture();
+    const first = await renderMainApp({
+      boundary: {
+        download: true,
+        ram: {
+          platform: 'android',
+          totalBytes: 8 * 1024 ** 3,
+          availBytes: 6 * 1024 ** 3,
+        },
+      },
+    });
+    const { asyncStorage, boundary, rtl, view } = first;
+
+    rtl.fireEvent.press(view.getByTestId('models-tab'));
+    await rtl.waitFor(() =>
+      expect(view.getByTestId('models-screen')).toBeTruthy(),
+    );
+    for (const model of MODELS) {
+      await queueModelFromBrowse(rtl, view, model);
+    }
+
+    await rtl.waitFor(() =>
+      expect(boundary.download!.active()).toHaveLength(3),
+    );
+    await rtl.act(async () => {
+      for (const row of boundary.download!.active()) {
+        boundary.download!.events.emit('DownloadProgress', {
+          ...row,
+          bytesDownloaded: FILE_SIZE / 10,
+          totalBytes: FILE_SIZE,
+          status: 'running',
+        });
+      }
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    rtl.fireEvent.press(view.getByTestId('downloads-icon'));
+    await rtl.waitFor(() => {
+      expect(view.getByTestId('dm-active-queued-count')).toHaveTextContent(
+        '1 queued',
+      );
+      expect(view.getAllByTestId('remove-download-button')).toHaveLength(4);
+      expect(view.getByText(MODELS[3].fileName)).toBeTruthy();
+    });
+
+    const queuedCard = view.getByTestId(
+      `active-download-${MODELS[3].id}/${MODELS[3].fileName}`,
+    );
+    rtl.fireEvent.press(
+      rtl.within(queuedCard).getByTestId('remove-download-button'),
+    );
+    await rtl.waitFor(() =>
+      expect(view.getByText('Remove Download')).toBeTruthy(),
+    );
+    rtl.fireEvent.press(view.getByText('Yes'));
+    await rtl.waitFor(() => {
+      expect(view.queryByText(MODELS[3].fileName)).toBeNull();
+      expect(view.queryByTestId('dm-active-queued-count')).toBeNull();
+      expect(view.getAllByTestId('remove-download-button')).toHaveLength(3);
+    });
+    await rtl.waitFor(async () => {
+      const queued = await asyncStorage.getItem(QUEUED_DOWNLOADS_KEY);
+      expect(JSON.parse(queued ?? '[]')).toHaveLength(0);
+    });
+
+    const survivingRows = boundary.download!.active().map(row => ({
+      ...row,
+      status: 'running',
+    }));
+    view.unmount();
+
+    const relaunched = await relaunchWithSurvivingNativeRows(survivingRows);
+    relaunched.rtl.fireEvent.press(relaunched.view.getByTestId('models-tab'));
+    await relaunched.rtl.waitFor(() =>
+      expect(relaunched.view.getByTestId('models-screen')).toBeTruthy(),
+    );
+    relaunched.rtl.fireEvent.press(
+      relaunched.view.getByTestId('downloads-icon'),
+    );
+    await relaunched.rtl.waitFor(() => {
+      expect(
+        relaunched.view.getByTestId('dm-active-downloading-count'),
+      ).toHaveTextContent('3');
+      expect(
+        relaunched.view.queryByTestId('dm-active-queued-count'),
+      ).toBeNull();
+      expect(relaunched.view.queryByText(MODELS[3].fileName)).toBeNull();
+      for (const model of MODELS.slice(0, 3)) {
+        expect(relaunched.view.getByText(model.fileName)).toBeTruthy();
+      }
+    });
+    relaunched.view.unmount();
+  }, 45000);
 });
