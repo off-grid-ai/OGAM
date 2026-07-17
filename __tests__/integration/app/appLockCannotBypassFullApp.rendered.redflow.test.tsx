@@ -1,5 +1,9 @@
 /** APP-P0-005 - cold start, resume, and navigation cannot bypass App Lock. */
-import { renderMainApp } from '../../harness/appJourney';
+import {
+  openChatWithJourneyModel,
+  renderMainApp,
+  sendChatMessage,
+} from '../../harness/appJourney';
 
 const AUTH_STORAGE_KEY = 'local-llm-auth-storage';
 const AUTH_SERVICE = 'ai.offgridmobile.auth';
@@ -55,6 +59,7 @@ describe('APP-P0-005 App Lock enforcement', () => {
   it('blocks routes on background resume and throughout persisted-auth cold start', async () => {
     const credentials = new Map<string, KeychainCredential>();
     const first = await renderMainApp({
+      boundary: { llama: true },
       beforeRender: () => installStatefulKeychain(credentials),
     });
 
@@ -97,6 +102,54 @@ describe('APP-P0-005 App Lock enforcement', () => {
     await first.rtl.waitFor(() =>
       expect(first.view.getByTestId('home-screen')).toBeTruthy(),
     );
+
+    // APP-P1-018: locking hides the active transcript, and unlocking restores the
+    // same mounted conversation instead of resetting or leaking it.
+    await openChatWithJourneyModel(first.rtl, first.view);
+    first.boundary.llama!.scriptCompletion({
+      text: 'The private answer survives the lock.',
+    });
+    sendChatMessage(first.rtl, first.view, 'Keep this private conversation.');
+    await first.rtl.waitFor(() =>
+      expect(
+        first.view.getByText('The private answer survives the lock.'),
+      ).toBeTruthy(),
+    );
+    first.boundary.emitAppStateChange('background');
+    first.boundary.emitAppStateChange('active');
+    await first.rtl.waitFor(() => {
+      expect(first.view.getByTestId('app-locked')).toBeTruthy();
+      expect(
+        first.view.queryByText('Keep this private conversation.'),
+      ).toBeNull();
+      expect(
+        first.view.queryByText('The private answer survives the lock.'),
+      ).toBeNull();
+    });
+    await unlock(first.rtl, first.view);
+    await first.rtl.waitFor(() => {
+      expect(first.view.getByTestId('home-screen')).toBeTruthy();
+      expect(
+        first.view.getByText('Keep this private conversation.'),
+      ).toBeTruthy();
+      expect(
+        first.view.getByText('The private answer survives the lock.'),
+      ).toBeTruthy();
+    });
+    first.rtl.fireEvent.press(first.view.getByTestId('conversation-item-0'));
+    await first.rtl.waitFor(() =>
+      expect(first.view.getByTestId('chat-screen')).toBeTruthy(),
+    );
+    const restoredChat = first.rtl.within(
+      first.view.getByTestId('chat-screen'),
+    );
+    expect(
+      restoredChat.getAllByText('Keep this private conversation.').length,
+    ).toBeGreaterThan(0);
+    expect(
+      restoredChat.getAllByText('The private answer survives the lock.').length,
+    ).toBeGreaterThan(0);
+    first.rtl.fireEvent.press(first.view.getByTestId('chat-back-button'));
 
     // Lock while a nested route is open. Resume must still render only LockScreen.
     first.rtl.fireEvent.press(first.view.getByTestId('settings-tab'));
