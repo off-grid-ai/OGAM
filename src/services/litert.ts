@@ -10,7 +10,11 @@
  * - onComplete receives fully accumulated content, not an empty string.
  */
 
-import { NativeModules, NativeEventEmitter, EmitterSubscription } from 'react-native';
+import {
+  NativeModules,
+  NativeEventEmitter,
+  EmitterSubscription,
+} from 'react-native';
 import logger from '../utils/logger';
 import { summarizeSession, runCompaction } from './liteRTCompaction';
 
@@ -19,10 +23,10 @@ const TAG = '[LiteRTService]';
 const { LiteRTModule } = NativeModules;
 
 // Events emitted by the native module
-const EVENT_TOKEN     = 'litert_token';
-const EVENT_THINKING  = 'litert_thinking';
-const EVENT_COMPLETE  = 'litert_complete';
-const EVENT_ERROR     = 'litert_error';
+const EVENT_TOKEN = 'litert_token';
+const EVENT_THINKING = 'litert_thinking';
+const EVENT_COMPLETE = 'litert_complete';
+const EVENT_ERROR = 'litert_error';
 const EVENT_TOOL_CALL = 'litert_tool_call';
 
 type LiteRTBackend = 'cpu' | 'gpu' | 'npu';
@@ -54,7 +58,11 @@ interface LiteRTMemoryInfo {
 interface LiteRTGenerationCallbacks {
   onToken: (token: string) => void;
   onReasoning: (token: string) => void;
-  onComplete: (fullContent: string, fullReasoning: string, stats?: LiteRTBenchmarkStats) => void;
+  onComplete: (
+    fullContent: string,
+    fullReasoning: string,
+    stats?: LiteRTBenchmarkStats,
+  ) => void;
   onError: (error: Error) => void;
 }
 
@@ -68,7 +76,9 @@ class LiteRTService {
   // Accumulated content for current generation
   private currentContent = '';
   private currentReasoning = '';
-  private currentToolCallHandler: ((name: string, args: Record<string, unknown>) => Promise<string>) | null = null;
+  private currentToolCallHandler:
+    | ((name: string, args: Record<string, unknown>) => Promise<string>)
+    | null = null;
 
   // Multi-turn tracking — reset conversation only when context changes
   private activeConversationId: string | null = null;
@@ -101,11 +111,27 @@ class LiteRTService {
   // loadModel
   // ---------------------------------------------------------------------------
 
-  async loadModel(modelPath: string, preferredBackend: LiteRTBackend, opts: { supportsVision?: boolean; supportsAudio?: boolean; maxNumTokens?: number } = {}): Promise<void> {
-    if (!this.isAvailable()) throw new Error('LiteRT is not available on this platform');
-    const { supportsVision = false, supportsAudio = false, maxNumTokens = 4096 } = opts;
+  async loadModel(
+    modelPath: string,
+    preferredBackend: LiteRTBackend,
+    opts: {
+      supportsVision?: boolean;
+      supportsAudio?: boolean;
+      maxNumTokens?: number;
+    } = {},
+  ): Promise<void> {
+    if (!this.isAvailable())
+      throw new Error('LiteRT is not available on this platform');
+    const {
+      supportsVision = false,
+      supportsAudio = false,
+      maxNumTokens = 4096,
+    } = opts;
     this.configuredMaxTokens = maxNumTokens;
-    logger.log(TAG, `loadModel — path=${modelPath} backend=${preferredBackend} supportsVision=${supportsVision} supportsAudio=${supportsAudio} maxNumTokens=${maxNumTokens}`);
+    logger.log(
+      TAG,
+      `loadModel — path=${modelPath} backend=${preferredBackend} supportsVision=${supportsVision} supportsAudio=${supportsAudio} maxNumTokens=${maxNumTokens}`,
+    );
 
     try {
       // Native resolves a map { backend, maxNumTokens } — maxNumTokens is the EFFECTIVE
@@ -113,12 +139,33 @@ class LiteRTService {
       // thresholds + the context-usage bar aren't stale. Tolerate a bare string from an
       // older native build (backward-compatible).
       const res: string | { backend: string; maxNumTokens?: number } =
-        await LiteRTModule.loadModel(modelPath, preferredBackend, supportsVision, supportsAudio, maxNumTokens);
-      logger.log(`[WIRE-LITERT-LOAD] ${JSON.stringify({ requested: preferredBackend, supportsVision, supportsAudio, maxNumTokens, res })}`); // [WIRE]
+        await LiteRTModule.loadModel(
+          modelPath,
+          preferredBackend,
+          supportsVision,
+          supportsAudio,
+          maxNumTokens,
+        );
+      logger.log(
+        `[WIRE-LITERT-LOAD] ${JSON.stringify({
+          requested: preferredBackend,
+          supportsVision,
+          supportsAudio,
+          maxNumTokens,
+          res,
+        })}`,
+      ); // [WIRE]
       const actualBackend = typeof res === 'string' ? res : res.backend;
-      if (typeof res === 'object' && typeof res.maxNumTokens === 'number' && res.maxNumTokens > 0) {
+      if (
+        typeof res === 'object' &&
+        typeof res.maxNumTokens === 'number' &&
+        res.maxNumTokens > 0
+      ) {
         if (res.maxNumTokens !== this.configuredMaxTokens) {
-          logger.log(TAG, `loadModel — native clamped context ${this.configuredMaxTokens} → ${res.maxNumTokens}`);
+          logger.log(
+            TAG,
+            `loadModel — native clamped context ${this.configuredMaxTokens} → ${res.maxNumTokens}`,
+          );
         }
         this.configuredMaxTokens = res.maxNumTokens;
       }
@@ -152,24 +199,44 @@ class LiteRTService {
       history?: Array<{ role: 'user' | 'assistant'; content: string }>;
     },
   ): Promise<void> {
-    if (!this.isAvailable() || !this.loaded) throw new Error('No LiteRT model loaded');
+    if (!this.isAvailable() || !this.loaded)
+      throw new Error('No LiteRT model loaded');
     const { samplerConfig, tools, history } = opts ?? {};
     const temperature = samplerConfig?.temperature ?? 0.8;
     const topK = samplerConfig?.topK ?? 40;
     const topP = samplerConfig?.topP ?? 0.95;
     const toolsJson = tools && tools.length > 0 ? JSON.stringify(tools) : '';
-    const historyJson = history && history.length > 0 ? JSON.stringify(history) : '';
-    await LiteRTModule.resetConversation(systemPrompt, temperature, topK, topP, toolsJson, historyJson);
+    const nativeHistory = history?.map(({ role, content }) => ({
+      role,
+      content,
+    }));
+    const historyJson =
+      nativeHistory && nativeHistory.length > 0
+        ? JSON.stringify(nativeHistory)
+        : '';
+    await LiteRTModule.resetConversation(
+      systemPrompt,
+      temperature,
+      topK,
+      topP,
+      toolsJson,
+      historyJson,
+    );
     this.activeSystemPrompt = systemPrompt;
     this.activeToolsJson = toolsJson;
     this.activeSamplerJson = JSON.stringify({ temperature, topK, topP });
     // Seed the counter with estimated tokens already in the KV cache from history + system prompt.
     // The SDK loads these silently via ConversationConfig.initialMessages so they never appear
     // in lastPrefillTokenCount, causing cumulativeTokens to undercount and auto-compact to fire too late.
-    const historyChars = (history ?? []).reduce((sum, m) => sum + m.content.length, 0);
+    const historyChars = (history ?? []).reduce(
+      (sum, m) => sum + m.content.length,
+      0,
+    );
     const systemChars = systemPrompt.length;
     const toolsChars = toolsJson.length;
-    this.cumulativeTokens = Math.ceil((historyChars + systemChars + toolsChars) / 4);
+    this.cumulativeTokens = Math.ceil(
+      (historyChars + systemChars + toolsChars) / 4,
+    );
   }
 
   /**
@@ -193,19 +260,32 @@ class LiteRTService {
       history?: Array<{ role: 'user' | 'assistant'; content: string }>;
     },
   ): Promise<void> {
-    const toolsJson = opts?.tools && opts.tools.length > 0 ? JSON.stringify(opts.tools) : '';
+    const toolsJson =
+      opts?.tools && opts.tools.length > 0 ? JSON.stringify(opts.tools) : '';
 
     const maxTokens = this.configuredMaxTokens;
     const history = opts?.history;
-    const incomingEstimate = history ? Math.ceil((history.reduce((s, m) => s + m.content.length, 0) + systemPrompt.length + toolsJson.length) / 4) : 0;
+    const incomingEstimate = history
+      ? Math.ceil(
+          (history.reduce((s, m) => s + m.content.length, 0) +
+            systemPrompt.length +
+            toolsJson.length) /
+            4,
+        )
+      : 0;
 
     const COMPACT_THRESHOLD = 0.65;
     const threshold = maxTokens * COMPACT_THRESHOLD;
     // For an active session cumulativeTokens tracks actual KV cache usage — use it directly.
     // For a new/switched session cumulativeTokens is stale; use incomingEstimate instead.
     const isActiveSession = this.activeConversationId === conversationId;
-    const tokenMeasure = isActiveSession ? this.cumulativeTokens : incomingEstimate;
-    const needsCompact = maxTokens > 0 && history != null && history.length > 2 &&
+    const tokenMeasure = isActiveSession
+      ? this.cumulativeTokens
+      : incomingEstimate;
+    const needsCompact =
+      maxTokens > 0 &&
+      history != null &&
+      history.length > 2 &&
       tokenMeasure > threshold;
 
     if (needsCompact && history) {
@@ -217,7 +297,8 @@ class LiteRTService {
         conversationId,
         activeConversationId: this.activeConversationId,
         opts: { samplerConfig: opts?.samplerConfig, tools: opts?.tools },
-        summarize: (fullHistory) => this.summarizeCurrentSession(systemPrompt, fullHistory, opts?.tools),
+        summarize: fullHistory =>
+          this.summarizeCurrentSession(systemPrompt, fullHistory, opts?.tools),
         resetFn: (p, o) => this.resetConversation(p, o),
       });
       this.activeConversationId = conversationId;
@@ -238,9 +319,14 @@ class LiteRTService {
     // Re-apply the sampler when it differs even if id/sys/tools are unchanged — a
     // mid-conversation temperature/top-p change must take effect on the next send (Q18).
     const samplerChanged = this.activeSamplerJson !== incomingSamplerJson;
-    const needsReset = idChanged || sysChanged || toolsChanged || samplerChanged;
+    const needsReset =
+      idChanged || sysChanged || toolsChanged || samplerChanged;
     if (needsReset) {
-      await this.resetConversation(systemPrompt, { samplerConfig: opts?.samplerConfig, tools: opts?.tools, history: opts?.history });
+      await this.resetConversation(systemPrompt, {
+        samplerConfig: opts?.samplerConfig,
+        tools: opts?.tools,
+        history: opts?.history,
+      });
       this.activeConversationId = conversationId;
     }
   }
@@ -252,11 +338,20 @@ class LiteRTService {
   ): Promise<string | null> {
     // Strip <|think|> prefix so the summary call doesn't burn context on reasoning
     const noThinkPrompt = systemPrompt.replace(/^<\|think\|>\n?/, '');
-    await this.resetConversation(noThinkPrompt, { tools, history: fullHistory });
+    await this.resetConversation(noThinkPrompt, {
+      tools,
+      history: fullHistory,
+    });
     return summarizeSession(
       (text, cbs) => this.sendMessage(text, cbs),
       this.isAvailable() && this.loaded,
-      (h) => { const p = this.currentToolCallHandler; this.currentToolCallHandler = h; return () => { this.currentToolCallHandler = p; }; },
+      h => {
+        const p = this.currentToolCallHandler;
+        this.currentToolCallHandler = h;
+        return () => {
+          this.currentToolCallHandler = p;
+        };
+      },
       () => this.stopGeneration(),
     );
   }
@@ -270,7 +365,7 @@ class LiteRTService {
     logger.log(TAG, 'warmup — starting');
     try {
       await this.resetConversation('');
-      await new Promise<void>((resolve) => {
+      await new Promise<void>(resolve => {
         this.sendMessage('Hi', {
           onToken: () => {},
           onReasoning: () => {},
@@ -296,7 +391,10 @@ class LiteRTService {
     callbacks: LiteRTGenerationCallbacks,
     media?: { imageUris?: string[]; audioUris?: string[] },
   ): Promise<void> {
-    if (!this.isAvailable() || !this.loaded) { callbacks.onError(new Error('No LiteRT model loaded')); return; }
+    if (!this.isAvailable() || !this.loaded) {
+      callbacks.onError(new Error('No LiteRT model loaded'));
+      return;
+    }
 
     // A new native send supersedes any prior listener owner. Normally Stop has
     // already settled it; this is the final guard against an orphaned Promise.
@@ -348,9 +446,18 @@ class LiteRTService {
         callbacks.onReasoning(token);
       }),
       this.emitter!.addListener(EVENT_COMPLETE, (benchmarkJson: string) => {
-        logger.log(TAG, `sendMessage — complete, content=${this.currentContent.length} chars`);
+        logger.log(
+          TAG,
+          `sendMessage — complete, content=${this.currentContent.length} chars`,
+        );
         // [WIRE] Full raw event stream + accumulated content/reasoning, for real-format fixtures.
-        logger.log(`[WIRE-LITERT] ${JSON.stringify({ stream: __wire, content: this.currentContent, reasoning: this.currentReasoning })}`);
+        logger.log(
+          `[WIRE-LITERT] ${JSON.stringify({
+            stream: __wire,
+            content: this.currentContent,
+            reasoning: this.currentReasoning,
+          })}`,
+        );
         this.clearSubscriptions();
 
         this.currentToolCallHandler = null;
@@ -363,14 +470,19 @@ class LiteRTService {
             const native = JSON.parse(benchmarkJson) as Record<string, number>;
             nativePrefillCount = native.prefillTokenCount ?? 0;
             nativeDecodeCount = native.decodeTokenCount ?? jsDecodeTokenCount;
-          } catch { /* use JS fallback counts */ }
+          } catch {
+            /* use JS fallback counts */
+          }
         }
 
         // Accumulate into cumulative context usage.
         // Reasoning/thinking tokens fill the KV cache but are not included in
         // nativeDecodeCount, so estimate them from character length.
-        const reasoningTokenEstimate = Math.ceil(this.currentReasoning.length / 4);
-        this.cumulativeTokens += nativePrefillCount + nativeDecodeCount + reasoningTokenEstimate;
+        const reasoningTokenEstimate = Math.ceil(
+          this.currentReasoning.length / 4,
+        );
+        this.cumulativeTokens +=
+          nativePrefillCount + nativeDecodeCount + reasoningTokenEstimate;
 
         // Build wall-clock stats
         const completeTime = Date.now();
@@ -380,9 +492,10 @@ class LiteRTService {
           ttft = (firstTokenTime - sendStart) / 1000;
           decodeElapsed = (completeTime - firstTokenTime) / 1000;
         }
-        const decodeTokensPerSecond = decodeElapsed && decodeElapsed > 0 && jsDecodeTokenCount > 1
-          ? jsDecodeTokenCount / decodeElapsed
-          : undefined;
+        const decodeTokensPerSecond =
+          decodeElapsed && decodeElapsed > 0 && jsDecodeTokenCount > 1
+            ? jsDecodeTokenCount / decodeElapsed
+            : undefined;
 
         const wallClockStats: LiteRTBenchmarkStats = {
           ttft: ttft ?? 0,
@@ -395,7 +508,11 @@ class LiteRTService {
         };
 
         try {
-          callbacks.onComplete(this.currentContent, this.currentReasoning, wallClockStats);
+          callbacks.onComplete(
+            this.currentContent,
+            this.currentReasoning,
+            wallClockStats,
+          );
         } catch (error) {
           logger.error(TAG, 'sendMessage — onComplete callback failed:', error);
           settleTerminal(error);
@@ -418,20 +535,35 @@ class LiteRTService {
         }
       }),
       this.emitter!.addListener(EVENT_TOOL_CALL, async (json: string) => {
-        logger.log(TAG, `sendMessage — tool call received: ${json.substring(0, 200)}`);
+        logger.log(
+          TAG,
+          `sendMessage — tool call received: ${json.substring(0, 200)}`,
+        );
         logger.log(`[WIRE-LITERT-TOOL] ${json}`); // [WIRE] full untruncated raw litert tool_call json from-device
         try {
-          const { id, name, arguments: args } = JSON.parse(json) as {
+          const {
+            id,
+            name,
+            arguments: args,
+          } = JSON.parse(json) as {
             id: string;
             name: string;
             arguments: Record<string, unknown>;
           };
           const handler = this.currentToolCallHandler;
-          const result = handler ? await handler(name, args) : 'Tool unavailable during this operation. Please respond directly without using tools.';
-          logger.log(TAG, `sendMessage — responding to tool call id=${id} name=${name} resultLen=${result.length}`);
+          const result = handler
+            ? await handler(name, args)
+            : 'Tool unavailable during this operation. Please respond directly without using tools.';
+          logger.log(
+            TAG,
+            `sendMessage — responding to tool call id=${id} name=${name} resultLen=${result.length}`,
+          );
           await LiteRTModule.respondToToolCall(id, result);
         } catch (e) {
-          logger.log(TAG, `sendMessage — tool call handling error: ${String(e)}`);
+          logger.log(
+            TAG,
+            `sendMessage — tool call handling error: ${String(e)}`,
+          );
         }
       }),
     ];
@@ -442,7 +574,11 @@ class LiteRTService {
       if (normalizedAudioUris.length > 0 && normalizedImageUris.length > 0) {
         // Both modalities in one turn — a single audio branch would otherwise drop
         // the images (native buildSendContents emits image + audio + text together).
-        await LiteRTModule.sendMessageWithMedia(text, normalizedImageUris, normalizedAudioUris);
+        await LiteRTModule.sendMessageWithMedia(
+          text,
+          normalizedImageUris,
+          normalizedAudioUris,
+        );
       } else if (normalizedAudioUris.length > 0) {
         await LiteRTModule.sendMessageWithAudio(text, normalizedAudioUris);
       } else if (normalizedImageUris.length > 0) {
@@ -457,7 +593,11 @@ class LiteRTService {
       try {
         callbacks.onError(err);
       } catch (callbackError) {
-        logger.error(TAG, 'sendMessage — onError callback failed:', callbackError);
+        logger.error(
+          TAG,
+          'sendMessage — onError callback failed:',
+          callbackError,
+        );
         settleTerminal(callbackError);
       } finally {
         settleTerminal();
@@ -481,23 +621,42 @@ class LiteRTService {
   ): Promise<string> {
     const { imageUris, audioUris } = media ?? {};
     const { onToken, onToolCall, onReasoning } = handlers ?? {};
-    logger.log(TAG, `generateRaw — text=${text.length}ch, hasToolHandler=${!!onToolCall}, imageCount=${imageUris?.length ?? 0}, audioCount=${audioUris?.length ?? 0}, first100="${text.substring(0, 100)}"`);
+    logger.log(
+      TAG,
+      `generateRaw — text=${
+        text.length
+      }ch, hasToolHandler=${!!onToolCall}, imageCount=${
+        imageUris?.length ?? 0
+      }, audioCount=${audioUris?.length ?? 0}, first100="${text.substring(
+        0,
+        100,
+      )}"`,
+    );
     this.currentToolCallHandler = onToolCall ?? null;
     return new Promise((resolve, reject) => {
-      this.sendMessage(text, {
-        onToken: t => onToken?.(t),
-        onReasoning: t => onReasoning?.(t),
-        onComplete: (fullContent, _reasoning, stats) => {
-          logger.log(TAG, `generateRaw — complete, response=${fullContent.length}ch, first200="${fullContent.substring(0, 200)}"`);
-          this._lastBenchmarkStats = stats;
-          resolve(fullContent);
+      this.sendMessage(
+        text,
+        {
+          onToken: t => onToken?.(t),
+          onReasoning: t => onReasoning?.(t),
+          onComplete: (fullContent, _reasoning, stats) => {
+            logger.log(
+              TAG,
+              `generateRaw — complete, response=${
+                fullContent.length
+              }ch, first200="${fullContent.substring(0, 200)}"`,
+            );
+            this._lastBenchmarkStats = stats;
+            resolve(fullContent);
+          },
+          onError: err => {
+            logger.log(TAG, `generateRaw — error: ${err.message}`);
+            this.currentToolCallHandler = null;
+            reject(err);
+          },
         },
-        onError: (err) => {
-          logger.log(TAG, `generateRaw — error: ${err.message}`);
-          this.currentToolCallHandler = null;
-          reject(err);
-        },
-      }, { imageUris, audioUris }).catch(reject);
+        { imageUris, audioUris },
+      ).catch(reject);
     });
   }
 
@@ -508,7 +667,10 @@ class LiteRTService {
   // the real conversation. Deterministic (temperature 0).
   // ---------------------------------------------------------------------------
 
-  async generateToolSelection(systemPrompt: string, userText: string): Promise<string> {
+  async generateToolSelection(
+    systemPrompt: string,
+    userText: string,
+  ): Promise<string> {
     await this.prepareConversation('__tool_select__', systemPrompt, {
       samplerConfig: { temperature: 0, topK: 1, topP: 1 },
       tools: [],
@@ -537,8 +699,11 @@ class LiteRTService {
     // back to incomingEstimate (which sums all JS history) and triggering an unnecessary
     // compaction. Caller can invalidate explicitly via invalidateConversation() if
     // the message rewind requires a fresh native conversation.
-    try { await LiteRTModule.stopGeneration(); }
-    catch (e) { logger.log(TAG, `stopGeneration — error (ignored): ${String(e)}`); }
+    try {
+      await LiteRTModule.stopGeneration();
+    } catch (e) {
+      logger.log(TAG, `stopGeneration — error (ignored): ${String(e)}`);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -607,8 +772,12 @@ class LiteRTService {
 
   async getMemoryInfo(): Promise<LiteRTMemoryInfo | null> {
     if (!this.isAvailable()) return null;
-    try { return await LiteRTModule.getMemoryInfo(); }
-    catch (e) { logger.log(TAG, `getMemoryInfo — error: ${String(e)}`); return null; }
+    try {
+      return await LiteRTModule.getMemoryInfo();
+    } catch (e) {
+      logger.log(TAG, `getMemoryInfo — error: ${String(e)}`);
+      return null;
+    }
   }
 
   // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { contextCompactionService } from './contextCompaction';
 
-type Turn = { role: 'user' | 'assistant'; content: string };
+type Turn = { id?: string; role: 'user' | 'assistant'; content: string };
 type SamplerConfigOpts = { temperature?: number; topK?: number; topP?: number };
 type ResetFn = (
   prompt: string,
@@ -16,7 +16,10 @@ export type SendMessageFn = (
   },
 ) => void;
 
-type ToolHandler = (name: string, args: Record<string, unknown>) => Promise<string>;
+type ToolHandler = (
+  name: string,
+  args: Record<string, unknown>,
+) => Promise<string>;
 export type InstallToolHandlerFn = (h: ToolHandler) => () => void;
 
 const NEUTRAL_TOOL_HANDLER: ToolHandler = async () =>
@@ -34,8 +37,12 @@ export async function summarizeSession(
   // fallback ("Tool unavailable…") often makes the model emit 0-1 tokens and quit.
   // Install a neutral handler that nudges the model back to plain text.
   const restoreHandler = installToolHandler?.(NEUTRAL_TOOL_HANDLER);
-  return new Promise<string | null>((resolve) => {
-    if (!isReady) { restoreHandler?.(); resolve(null); return; }
+  return new Promise<string | null>(resolve => {
+    if (!isReady) {
+      restoreHandler?.();
+      resolve(null);
+      return;
+    }
     let summary = '';
     let finished = false;
     const finish = (value: string | null) => {
@@ -46,19 +53,23 @@ export async function summarizeSession(
     };
     const timeout = setTimeout(() => {
       // Stop native generation before resetConversation is called to avoid race condition
-      (stopGeneration?.() ?? Promise.resolve()).catch(() => {}).finally(() => finish(null));
+      (stopGeneration?.() ?? Promise.resolve())
+        .catch(() => {})
+        .finally(() => finish(null));
     }, 20_000);
     sendMessage(
       'Briefly summarize our conversation so far — key topics, decisions, and context. 3 to 5 sentences maximum. Do not call any tools, just answer in plain text.',
       {
-        onToken: (token) => { summary += token; },
+        onToken: token => {
+          summary += token;
+        },
         onReasoning: () => {},
         onComplete: () => {
           clearTimeout(timeout);
           const trimmed = summary.trim();
           finish(trimmed.length >= 30 ? trimmed : null);
         },
-        onError: (_err) => {
+        onError: _err => {
           clearTimeout(timeout);
           finish(null);
         },
@@ -78,16 +89,31 @@ export async function runCompaction(params: {
   summarize: (fullHistory: Turn[]) => Promise<string | null>;
   resetFn: ResetFn;
 }): Promise<void> {
-  const { history, systemPrompt, maxTokens, conversationId, activeConversationId, opts, summarize, resetFn } = params;
+  const {
+    history,
+    systemPrompt,
+    maxTokens,
+    conversationId,
+    activeConversationId,
+    opts,
+    summarize,
+    resetFn,
+  } = params;
   contextCompactionService.signalCompacting(true);
   try {
     const POST_COMPACT_TARGET = 0.45;
     const hasActiveSession = activeConversationId === conversationId;
     const SUMMARY_RESERVE_TOKENS = hasActiveSession ? 200 : 0;
-    const systemAndToolsChars = systemPrompt.length + (opts.tools && opts.tools.length > 0 ? JSON.stringify(opts.tools).length : 0);
+    const systemAndToolsChars =
+      systemPrompt.length +
+      (opts.tools && opts.tools.length > 0
+        ? JSON.stringify(opts.tools).length
+        : 0);
     const systemAndToolsTokens = Math.ceil(systemAndToolsChars / 4);
     const historyBudgetTokens = Math.max(
-      Math.floor(maxTokens * POST_COMPACT_TARGET) - systemAndToolsTokens - SUMMARY_RESERVE_TOKENS,
+      Math.floor(maxTokens * POST_COMPACT_TARGET) -
+        systemAndToolsTokens -
+        SUMMARY_RESERVE_TOKENS,
       50,
     );
     const recentBudgetChars = historyBudgetTokens * 4;
@@ -109,13 +135,29 @@ export async function runCompaction(params: {
 
     const compactedHistory: Turn[] = summary
       ? [
-          { role: 'user', content: `[Context from earlier in our conversation]: ${summary}` },
+          {
+            role: 'user',
+            content: `[Context from earlier in our conversation]: ${summary}`,
+          },
           { role: 'assistant', content: 'Understood.' },
           ...recentHistory,
         ]
       : recentHistory;
 
-    await resetFn(systemPrompt, { samplerConfig: opts.samplerConfig, tools: opts.tools, history: compactedHistory });
+    await resetFn(systemPrompt, {
+      samplerConfig: opts.samplerConfig,
+      tools: opts.tools,
+      history: compactedHistory,
+    });
+    const cutoffMessageId =
+      recentStart > 0 ? history[recentStart - 1]?.id : undefined;
+    if (summary && cutoffMessageId) {
+      contextCompactionService.persistSummary(
+        conversationId,
+        summary,
+        cutoffMessageId,
+      );
+    }
   } finally {
     contextCompactionService.signalCompacting(false);
   }
