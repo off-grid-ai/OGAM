@@ -84,6 +84,9 @@ class LiteRTService {
   // Context usage tracking — cumulative tokens across turns, reset on conversation reset
   private cumulativeTokens = 0;
   private configuredMaxTokens = 4096;
+  /** Settles the currently dispatched send when Stop/unload supersedes it before
+   *  native emits a terminal event. Only one native generation may own listeners. */
+  private settlePendingSend: (() => void) | null = null;
 
   constructor() {
     if (LiteRTModule) {
@@ -295,6 +298,10 @@ class LiteRTService {
   ): Promise<void> {
     if (!this.isAvailable() || !this.loaded) { callbacks.onError(new Error('No LiteRT model loaded')); return; }
 
+    // A new native send supersedes any prior listener owner. Normally Stop has
+    // already settled it; this is the final guard against an orphaned Promise.
+    this.settlePendingSend?.();
+
     // Reset accumulators
     this.currentContent = '';
     this.currentReasoning = '';
@@ -305,6 +312,24 @@ class LiteRTService {
     let firstTokenTime: number | undefined;
     let jsDecodeTokenCount = 0;
     const __wire: Array<{ ch: string; t: string }> = []; // [WIRE] raw per-event capture from-device
+    let terminalSettled = false;
+    let resolveTerminal: () => void = () => {};
+    let rejectTerminal: (error: unknown) => void = () => {};
+    const terminal = new Promise<void>((resolve, reject) => {
+      resolveTerminal = resolve;
+      rejectTerminal = reject;
+    });
+    const settleTerminal = (error?: unknown) => {
+      if (terminalSettled) return;
+      terminalSettled = true;
+      if (this.settlePendingSend === settlePendingSend) {
+        this.settlePendingSend = null;
+      }
+      if (error) rejectTerminal(error);
+      else resolveTerminal();
+    };
+    const settlePendingSend = () => settleTerminal();
+    this.settlePendingSend = settlePendingSend;
 
     // Register event listeners for this generation
     this.clearSubscriptions();
@@ -369,14 +394,28 @@ class LiteRTService {
           initTimeSeconds: 0,
         };
 
-        callbacks.onComplete(this.currentContent, this.currentReasoning, wallClockStats);
+        try {
+          callbacks.onComplete(this.currentContent, this.currentReasoning, wallClockStats);
+        } catch (error) {
+          logger.error(TAG, 'sendMessage — onComplete callback failed:', error);
+          settleTerminal(error);
+        } finally {
+          settleTerminal();
+        }
       }),
       this.emitter!.addListener(EVENT_ERROR, (message: string) => {
         logger.log(TAG, `sendMessage — error: ${message}`);
         this.clearSubscriptions();
 
         this.currentToolCallHandler = null;
-        callbacks.onError(new Error(message));
+        try {
+          callbacks.onError(new Error(message));
+        } catch (error) {
+          logger.error(TAG, 'sendMessage — onError callback failed:', error);
+          settleTerminal(error);
+        } finally {
+          settleTerminal();
+        }
       }),
       this.emitter!.addListener(EVENT_TOOL_CALL, async (json: string) => {
         logger.log(TAG, `sendMessage — tool call received: ${json.substring(0, 200)}`);
@@ -415,8 +454,19 @@ class LiteRTService {
       this.clearSubscriptions();
       const err = e instanceof Error ? e : new Error(String(e));
       logger.log(TAG, `sendMessage — native error: ${err.message}`);
-      callbacks.onError(err);
+      try {
+        callbacks.onError(err);
+      } catch (callbackError) {
+        logger.error(TAG, 'sendMessage — onError callback failed:', callbackError);
+        settleTerminal(callbackError);
+      } finally {
+        settleTerminal();
+      }
     }
+    // The command-dispatch promise only means native accepted the request. The
+    // generation contract completes on a terminal event so callers never inspect
+    // chat state before the final tokens/error have been committed.
+    await terminal;
   }
 
   // ---------------------------------------------------------------------------
@@ -480,6 +530,7 @@ class LiteRTService {
     if (!this.isAvailable()) return;
     logger.log(TAG, 'stopGeneration');
     this.clearSubscriptions();
+    this.settlePendingSend?.();
     // Don't null activeConversationId — the native conversation is still loaded and
     // its KV cache still reflects cumulativeTokens. Clearing the id would force the
     // next prepareConversation to classify the same conversation as "new", falling
@@ -498,6 +549,7 @@ class LiteRTService {
     if (!this.isAvailable()) return;
     logger.log(TAG, 'unloadModel');
     this.clearSubscriptions();
+    this.settlePendingSend?.();
     this.currentToolCallHandler = null;
     this.activeConversationId = null;
     this.activeSystemPrompt = null;

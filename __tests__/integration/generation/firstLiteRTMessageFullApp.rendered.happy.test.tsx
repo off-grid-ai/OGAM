@@ -16,6 +16,7 @@ const liteRTModel: DownloadedModel = {
   quantization: 'LiteRT',
   downloadedAt: '2026-07-17T00:00:00.000Z',
   engine: 'litert',
+  liteRTVision: false,
 };
 
 describe('P1 first LiteRT message full-App journey', () => {
