@@ -15,7 +15,7 @@ row does **not** mean that no test exists.
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **18 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **5 audit pending**.
 - P1: **16 verified**, **1 partial/device-gated**, **40 confirmed gaps**, **60 audit pending**.
-- P2: **5 verified**, **0 partial/device-gated**, **25 confirmed gaps**, **54 audit pending**.
+- P2: **7 verified**, **0 partial/device-gated**, **23 confirmed gaps**, **54 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -389,8 +389,8 @@ row does **not** mean that no test exists.
 - [x] #159 Empty state: no KB docs
 - [?] #160 Long-text wrapping - existing-test evidence audit pending
 - [?] #161 Orientation behavior - existing-test evidence audit pending
-- [ ] #162 About screen renders
-- [ ] #163 Storage usage screen
+- [x] #162 About screen renders
+- [x] #163 Storage usage screen
 - [ ] #165 Share/promo sheet once per session
 - [?] #175 Thermal / long-context stress - existing-test evidence audit pending
 - [?] #176 Stay-in-the-loop card placement - existing-test evidence audit pending
