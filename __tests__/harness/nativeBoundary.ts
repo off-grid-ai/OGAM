@@ -144,8 +144,10 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
   let pendingHang = false; // one-shot: next send never completes (generation stays in-flight)
   let pendingPartialHang: { content?: string; reasoning?: string } | null = null; // one-shot: emit a partial token/reasoning then never complete
 
-  const emitCompletion = (turn: LiteRTTurn) => {
-    if (turn.reasoning) handle.emit('litert_thinking', turn.reasoning);
+  const emitCompletion = (turn: LiteRTTurn, includeReasoning = true) => {
+    if (includeReasoning && turn.reasoning) {
+      handle.emit('litert_thinking', turn.reasoning);
+    }
     if (turn.content) handle.emit('litert_token', turn.content);
     handle.emit('litert_complete', '{}');
   };
@@ -160,9 +162,13 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
     const tcs = turn.toolCalls ?? [];
     toolCallsRemaining = tcs.length;
     if (tcs.length === 0) { defer(() => emitCompletion(turn)); return; }
-    // Emit each tool call; the REAL service dispatches it and calls respondToToolCall.
-    defer(() => tcs.forEach((tc, i) =>
-      handle.emit('litert_tool_call', JSON.stringify({ id: tc.id ?? `tc-${i}`, name: tc.name, arguments: tc.arguments }))));
+    // Native reasoning precedes the tool request. The REAL service must preserve
+    // that reason → tool → final-answer order when it commits the transcript.
+    defer(() => {
+      if (turn.reasoning) handle.emit('litert_thinking', turn.reasoning);
+      tcs.forEach((tc, i) =>
+        handle.emit('litert_tool_call', JSON.stringify({ id: tc.id ?? `tc-${i}`, name: tc.name, arguments: tc.arguments })));
+    });
   };
 
   const module: Record<string, jest.Mock> = {
@@ -174,7 +180,7 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
     sendMessageWithMedia: jest.fn((...args: unknown[]) => { calls.sendMessageWithMedia.push(args); onSend(); return Promise.resolve(); }),
     respondToToolCall: jest.fn(() => {
       // After the LAST tool result is delivered, the native model continues and completes.
-      if (currentTurn && --toolCallsRemaining <= 0) { const turn = currentTurn; defer(() => emitCompletion(turn)); }
+      if (currentTurn && --toolCallsRemaining <= 0) { const turn = currentTurn; defer(() => emitCompletion(turn, false)); }
       return Promise.resolve();
     }),
     generateRaw: jest.fn((...args: unknown[]) => { calls.generateRaw.push(args); return Promise.resolve(''); }),

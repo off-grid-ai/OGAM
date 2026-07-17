@@ -115,6 +115,7 @@ interface ChatState {
   deleteMessagesAfter: (conversationId: string, messageId: string) => void;
   startStreaming: (conversationId: string) => void;
   setStreamingMessage: (content: string) => void;
+  resetStreamingOutput: () => void;
   appendToStreamingMessage: (token: string) => void;
   appendToStreamingReasoningContent: (token: string) => void;
   setIsStreaming: (streaming: boolean) => void;
@@ -281,6 +282,10 @@ export const useChatStore = create<ChatState>()(
 
       setStreamingMessage: (content) => {
         set({ streamingMessage: content });
+      },
+
+      resetStreamingOutput: () => {
+        set({ streamingMessage: '', streamingReasoningContent: '' });
       },
 
       appendToStreamingMessage: (token) => {

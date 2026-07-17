@@ -157,7 +157,7 @@ export function buildToolLoopHandlersImpl(svc: any) {
     onStreamReset: () => {
       svc.forceFlushTokens();
       svc.state.streamingContent = '';
-      svc.tokenBuffer = '';
+      svc.tokenBuffer = ''; svc.reasoningBuffer = ''; useChatStore.getState().resetStreamingOutput();
     },
     onFinalResponse: (content: string) => {
       svc.state.streamingContent = content;

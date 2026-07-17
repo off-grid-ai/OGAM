@@ -472,7 +472,14 @@ export function buildLiteRTHistory(messages: Message[]): Array<{ role: 'user' | 
  *  still surface the fetched data instead of discarding it (Q5). */
 interface LiteRTToolOutcome { results: string[] }
 
-function buildLiteRTToolCallHandler(ctx: ToolLoopContext, conversationId: string, outcome?: LiteRTToolOutcome) {
+function buildLiteRTToolCallHandler(
+  ctx: ToolLoopContext,
+  conversationId: string,
+  opts: {
+    consumePreToolOutput: () => { content: string; reasoningContent: string };
+    outcome?: LiteRTToolOutcome;
+  },
+) {
   // Per-turn counter: this closure is rebuilt once per generation, so it resets each new
   // message and the native loop reuses it for every tool call within the turn.
   let toolCallCount = 0;
@@ -481,6 +488,10 @@ function buildLiteRTToolCallHandler(ctx: ToolLoopContext, conversationId: string
     toolCallCount++;
     if (toolCallCount > MAX_LITERT_TOOL_CALLS) {
       return `Tool call limit reached (${MAX_LITERT_TOOL_CALLS} per response). Do not call any more tools. Answer now using the information you already have.`;
+    }
+    const preToolOutput = opts.consumePreToolOutput();
+    if (preToolOutput.content || preToolOutput.reasoningContent) {
+      ctx.onStreamReset?.();
     }
     ctx.callbacks?.onToolCallStart?.(name, args as Record<string, any>);
     const toolCall: ToolCall = { id: `native-tc-${Date.now()}`, name, arguments: args as Record<string, any> };
@@ -493,13 +504,14 @@ function buildLiteRTToolCallHandler(ctx: ToolLoopContext, conversationId: string
     const result = await executeToolCallSafely(toolCall);
     ctx.callbacks?.onToolCallComplete?.(name, result);
     const resultContent = toolResultModelContent(result);
-    const toolCallMsg: Message = { id: `tc-${Date.now()}-${name}`, role: 'assistant', content: '',
+    const toolCallMsg: Message = { id: `tc-${Date.now()}-${name}`, role: 'assistant', content: preToolOutput.content,
+      ...(preToolOutput.reasoningContent ? { reasoningContent: preToolOutput.reasoningContent } : {}),
       toolCalls: [{ id: toolCall.id, name, arguments: JSON.stringify(toolCall.arguments) }], timestamp: Date.now() };
     const toolResultMsg: Message = { id: `tr-${Date.now()}-${name}`, role: 'tool', content: resultContent,
       toolCallId: toolCall.id, toolName: name, timestamp: Date.now() };
     useChatStore.getState().addMessage(conversationId, toolCallMsg);
     useChatStore.getState().addMessage(conversationId, toolResultMsg);
-    if (result.status === 'ok') outcome?.results.push(resultContent);
+    if (result.status === 'ok') opts.outcome?.results.push(resultContent);
     return resultContent;
   };
 }
@@ -533,10 +545,33 @@ async function callLiteRTForLoop(
   }
   await liteRTService.prepareConversation(conversationId, systemPrompt, { samplerConfig, tools, history });
   const outcome: LiteRTToolOutcome = { results: [] };
-  const onToolCall = ctx ? buildLiteRTToolCallHandler(ctx, conversationId, outcome) : undefined;
+  let preToolContent = '';
+  let preToolReasoning = '';
+  const consumePreToolOutput = () => {
+    const output = {
+      content: preToolContent.trim(),
+      reasoningContent: preToolReasoning.trim(),
+    };
+    preToolContent = '';
+    preToolReasoning = '';
+    return output;
+  };
+  const onToolCall = ctx
+    ? buildLiteRTToolCallHandler(
+      ctx,
+      conversationId,
+      { consumePreToolOutput, outcome },
+    )
+    : undefined;
   const handlers = {
-    onToken: (token: string) => onStream?.({ content: token }),
-    onReasoning: (token: string) => onStream?.({ reasoningContent: token }),
+    onToken: (token: string) => {
+      preToolContent += token;
+      onStream?.({ content: token });
+    },
+    onReasoning: (token: string) => {
+      preToolReasoning += token;
+      onStream?.({ reasoningContent: token });
+    },
   };
   try {
     const fullResponse = await liteRTService.generateRaw(text, { imageUris, audioUris }, { ...handlers, onToolCall });
@@ -918,7 +953,9 @@ export async function runToolLoop(ctx: ToolLoopContext): Promise<ToolLoopOutcome
     }
 
     // Execute the tool calls
-    if (state.streamedContent) { ctx.onStreamReset?.(); chatStore.setStreamingMessage(''); }
+    if (state.streamedContent || state.reasoningContent) {
+      ctx.onStreamReset?.();
+    }
 
     const assistantMsg: Message = {
       id: `tool-assist-${Date.now()}-${iteration}`, role: 'assistant',
