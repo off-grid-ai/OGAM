@@ -3,6 +3,7 @@
   "version": "0.0.103",
   "private": true,
   "scripts": {
+    "check:no-pro-mocks": "node scripts/check-no-pro-mocks.mjs",
     "android": "react-native run-android --mode=debug --appId ai.offgridmobile.dev",
     "ios": "react-native run-ios",
     "ios:device": "./scripts/ios-device.sh",

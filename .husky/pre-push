@@ -41,6 +41,9 @@ PUSHED_SWIFT=$(printf '%s\n' "$CHANGED_FILES" | grep '\.swift$' | grep -v 'Pods/
 PUSHED_KOTLIN=$(printf '%s\n' "$CHANGED_FILES" | grep -E '\.(kt|kts)$' || true)
 
 if [ -n "$PUSHED_JS" ]; then
+  echo "▶ Pro real-module gate..."
+  npm run check:no-pro-mocks
+
   echo "▶ JS/TS lint (push range)..."
   echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 eslint --max-warnings=999
 
