@@ -76,7 +76,7 @@ describe('cross-screen analysis sync (rendered): every state reads the SAME on T
     const App = () =>
       React.createElement(NavigationContainer, null,
         React.createElement(Stack.Navigator,
-          { initialRouteName: 'LocketToday', screenOptions: { headerShown: false } },
+          { initialRouteName: 'LocketFeed', screenOptions: { headerShown: false } },
           ...screens.map((sc: { name: string; component: React.ComponentType }) =>
             React.createElement(Stack.Screen, { key: sc.name, name: sc.name, component: sc.component })),
         ));
@@ -121,10 +121,15 @@ describe('cross-screen RUNNING sync (rendered): analysing clip A must not desync
 
     useRecordingsStore.setState({ recordings: [], jobs: [] });
     const NOW = Date.now();
-    // Two transcribed, not-analysed clips (distinct startedAt so both render as loose cards).
+    // Pin both clips to :30 / :29 of the CURRENT hour: distinct startedAt (addFinalized dedups by
+    // startedAt, so identical times collapse to one), yet the same hour → same time-of-day bucket as
+    // NOW (the bucket the feed expands), always mid-bucket so they can never straddle a boundary.
+    // Deterministic regardless of wall-clock. Full-length (30 min) so neither folds into a brief group.
+    const midHour = new Date(NOW); midHour.setMinutes(30, 0, 0);
+    const T = midHour.getTime();
     ['/docs/a.wav', '/docs/b.wav'].forEach((p, i) => {
       boundary.fs!.seedFile(p, 5_000_000);
-      useRecordingsStore.getState().addFinalized({ path: p, startedAt: NOW - (1 - i) * 3600_000, endedAt: NOW - (1 - i) * 3600_000, durationMs: 30 * 60 * 1000, sizeBytes: 5_000_000 });
+      useRecordingsStore.getState().addFinalized({ path: p, startedAt: T - i * 60_000, endedAt: T - i * 60_000, durationMs: 30 * 60 * 1000, sizeBytes: 5_000_000 });
     });
     const ids: string[] = useRecordingsStore.getState().recordings.map((r: { id: string }) => r.id);
     ids.forEach((id) => useRecordingsStore.getState().updateRecording(id, {
@@ -138,7 +143,7 @@ describe('cross-screen RUNNING sync (rendered): analysing clip A must not desync
     const Stack = createNativeStackNavigator();
     const screens = getRegisteredScreens();
     const App = () => React.createElement(NavigationContainer, null,
-      React.createElement(Stack.Navigator, { initialRouteName: 'LocketToday', screenOptions: { headerShown: false } },
+      React.createElement(Stack.Navigator, { initialRouteName: 'LocketFeed', screenOptions: { headerShown: false } },
         ...screens.map((sc: { name: string; component: React.ComponentType }) =>
           React.createElement(Stack.Screen, { key: sc.name, name: sc.name, component: sc.component }))));
     const ui = render(React.createElement(App));
