@@ -14,7 +14,7 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **19 verified**, **8 partial/device-gated**, **6 audit pending**.
-- P1: **48 verified**, **1 partial/device-gated**, **68 audit pending**.
+- P1: **52 verified**, **1 partial/device-gated**, **64 audit pending**.
 - P2: **24 verified**, **0 partial/device-gated**, **60 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
@@ -180,7 +180,7 @@ row does **not** mean that no test exists.
 - [?] #34 System prompt applies
 - [?] #38 Plain reply has no stray think tags
 - [x] #39 Thinking renders in block mid-stream
-- [?] #44 Queue while generating
+- [x] #44 Queue while generating
 - [x] #46 Edit a user message and resend
 - [x] #47 Regenerate a reply
 - [?] #48 Mid-conversation sampler change takes effect
@@ -231,7 +231,7 @@ row does **not** mean that no test exists.
 
 ### 6 KB/Projects
 
-- [?] #112 Create a project
+- [x] #112 Create a project
 - [?] #113 KB indexes a text PDF
 - [?] #117 Embedding failure aborts + retry
 - [?] #118 KB retrieval in a chat
@@ -250,7 +250,7 @@ row does **not** mean that no test exists.
 
 ### 8 Remote
 
-- [?] #138 Remote model replies
+- [x] #138 Remote model replies
 - [x] #142 Remote reasoning renders (LM Studio)
 - [x] #143 Remote parallel tool calls
 - [?] #144 Remote prompt-enhance runs
@@ -270,7 +270,7 @@ row does **not** mean that no test exists.
 
 - [?] #164 App lock passphrase set + enforce
 - [?] #166 Settings persist across relaunch
-- [?] #169 Active model selection survives relaunch
+- [x] #169 Active model selection survives relaunch
 - [?] #170 Projects + KB survive relaunch
 - [?] #172 Background -> foreground mid-generation
 - [?] #173 Kill mid-generation recovers
