@@ -14,8 +14,8 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **19 verified**, **8 partial/device-gated**, **6 audit pending**.
-- P1: **47 verified**, **1 partial/device-gated**, **69 audit pending**.
-- P2: **22 verified**, **0 partial/device-gated**, **62 audit pending**.
+- P1: **48 verified**, **1 partial/device-gated**, **68 audit pending**.
+- P2: **24 verified**, **0 partial/device-gated**, **60 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -60,7 +60,7 @@ row does **not** mean that no test exists.
 - [?] APP-P1-014 Add, edit, delete, and switch remote servers recover active model selection coherently
 - [?] APP-P1-015 Remote authentication failures are actionable and never expose credentials in UI or logs
 - [?] APP-P1-016 Pro activation registers routes live; entitlement revocation removes gated behavior safely
-- [?] APP-P1-017 Experimental MTP defaults off, persists explicitly, and never changes ordinary GGUF behavior
+- [x] APP-P1-017 Experimental MTP defaults off, persists explicitly, and never changes ordinary GGUF behavior
 - [?] APP-P1-018 Background locking and unlock preserve the current conversation without exposing its content
 
 ### P2 additions
@@ -306,8 +306,8 @@ row does **not** mean that no test exists.
 
 ### 2 Text gen
 
-- [?] #26 CPU backend (GGUF) - existing-test evidence audit pending
-- [?] #27 GPU init timeout falls back to CPU - existing-test evidence audit pending
+- [x] #26 CPU backend (GGUF)
+- [x] #27 GPU init timeout falls back to CPU
 - [?] #32 Top-P applies to a generation - existing-test evidence audit pending
 - [?] #35 CPU threads applies - existing-test evidence audit pending
 - [?] #36 Batch size applies - existing-test evidence audit pending
