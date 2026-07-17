@@ -1,4 +1,4 @@
-import type { DownloadedModel } from '../../src/types';
+import type { DownloadedModel, ONNXImageModel } from '../../src/types';
 import {
   installNativeBoundary,
   requireRTL,
@@ -8,6 +8,18 @@ import {
 
 const APP_STORAGE_KEY = 'local-llm-app-storage';
 const DOWNLOADED_MODELS_KEY = '@local_llm/downloaded_models';
+const DOWNLOADED_IMAGE_MODELS_KEY = '@local_llm/downloaded_image_models';
+const REQUIRED_MNN_FILES = [
+  'pos_emb.bin',
+  'token_emb.bin',
+  'tokenizer.json',
+  'unet.mnn',
+  'unet.mnn.weight',
+  'vae_decoder.mnn',
+  'vae_decoder.mnn.weight',
+  'clip_v2.mnn',
+  'clip_v2.mnn.weight',
+] as const;
 
 export interface AppJourneyOptions {
   boundary?: InstallOpts;
@@ -73,6 +85,35 @@ function defaultDownloadedModel(
     downloadedAt: '2026-01-01T00:00:00.000Z',
     engine: 'llama',
   };
+}
+
+/** Persist a complete downloaded MNN model at device boundaries for real App hydration/loading. */
+export async function seedDownloadedMnnImageModel(
+  boundary: NativeBoundary,
+  asyncStorage: typeof import('@react-native-async-storage/async-storage').default,
+  overrides: Partial<ONNXImageModel> = {},
+): Promise<ONNXImageModel> {
+  const id = overrides.id ?? 'journey-mnn';
+  const modelPath = overrides.modelPath ?? `/docs/image_models/${id}`;
+  const model: ONNXImageModel = {
+    id,
+    name: 'Journey Image',
+    description: 'Full-app image generation fixture',
+    modelPath,
+    downloadedAt: '2026-07-17T00:00:00.000Z',
+    size: 512 * 1024 * 1024,
+    style: 'Image',
+    backend: 'mnn',
+    ...overrides,
+  };
+  REQUIRED_MNN_FILES.forEach(file =>
+    boundary.fs!.seedFile(`${model.modelPath}/${file}`, 8 * 1024 * 1024),
+  );
+  await asyncStorage.setItem(
+    DOWNLOADED_IMAGE_MODELS_KEY,
+    JSON.stringify([model]),
+  );
+  return model;
 }
 
 /**

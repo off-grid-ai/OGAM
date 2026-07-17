@@ -1,45 +1,20 @@
 /** P0 #66 — select a downloaded image model, generate, and render through the real App. */
-import { renderMainApp } from '../../harness/appJourney';
+import {
+  renderMainApp,
+  seedDownloadedMnnImageModel,
+} from '../../harness/appJourney';
 import { GB } from '../../harness/nativeBoundary';
 
 const MODEL_PATH = '/docs/image_models/journey-mnn';
-const IMAGE_MODELS_KEY = '@local_llm/downloaded_image_models';
-const REQUIRED_MNN_FILES = [
-  'pos_emb.bin',
-  'token_emb.bin',
-  'tokenizer.json',
-  'unet.mnn',
-  'unet.mnn.weight',
-  'vae_decoder.mnn',
-  'vae_decoder.mnn.weight',
-  'clip_v2.mnn',
-  'clip_v2.mnn.weight',
-] as const;
 
 describe('P0 image-generation journey', () => {
   it('generates and renders an image after the user selects an MNN model', async () => {
-    const imageModel = {
-      id: 'journey-mnn',
-      name: 'Journey Image',
-      description: 'Full-app image generation fixture',
-      modelPath: MODEL_PATH,
-      downloadedAt: '2026-07-17T00:00:00.000Z',
-      size: 512 * 1024 * 1024,
-      style: 'Image',
-      backend: 'mnn' as const,
-    };
     const { boundary, rtl, view } = await renderMainApp({
       boundary: {
         ram: { platform: 'android', totalBytes: 8 * GB, availBytes: 6 * GB },
       },
       beforeRender: async ({ boundary: native, asyncStorage }) => {
-        REQUIRED_MNN_FILES.forEach(file =>
-          native.fs!.seedFile(`${MODEL_PATH}/${file}`, 8 * 1024 * 1024),
-        );
-        await asyncStorage.setItem(
-          IMAGE_MODELS_KEY,
-          JSON.stringify([imageModel]),
-        );
+        await seedDownloadedMnnImageModel(native, asyncStorage);
       },
     });
     const { act, fireEvent, waitFor } = rtl;
