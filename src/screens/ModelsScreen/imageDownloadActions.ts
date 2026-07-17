@@ -13,7 +13,7 @@ import { makeImageModelKey } from '../../utils/modelKey';
 import { ImageModelDescriptor, ImageDownloadDeps } from './types';
 import { getQnnWarningMessage, showQnnWarningAlert } from './imageDownloadQnn';
 import { wireZipFinalization } from './imageZipFinalization';
-import { ensureImageExtractionComplete } from '../../utils/imageModelIntegrity';
+import { ensureImageExtractionComplete, isImageModelDirUsable } from '../../utils/imageModelIntegrity';
 import logger from '../../utils/logger';
 
 // ImageDownloadDeps now lives in ./types (so imageDownloadQnn can import it without cycling back
@@ -380,14 +380,24 @@ export async function proceedWithDownload(
   const existing = useDownloadStore.getState().downloads[modelKey];
   if (existing && isActiveStatus(existing.status)) return;
 
-  // Guard: if files already exist on disk, register without re-downloading.
+  // Register an existing directory only after the integrity owner proves it is
+  // usable. A failed/interrupted extraction can leave a non-empty partial tree;
+  // publishing it here turns Retry into a false success and defers the failure to
+  // native generation. Invalid remnants are discarded before the clean download.
   const imageModelsDir = modelManager.getImageModelsDirectory();
   const modelDir = `${imageModelsDir}/${modelInfo.id}`;
   if (await RNFS.exists(modelDir)) {
-    const resolvedModelDir = modelInfo.backend === 'coreml' ? await resolveCoreMLModelDir(modelDir) : modelDir;
-    logger.log(`[ImageDownload] proceedWithDownload zip - files exist on disk, registering directly modelId=${modelInfo.id}`);
-    await registerAndNotify(deps, { imageModel: buildImageModel(modelInfo, resolvedModelDir), modelName: modelInfo.name });
-    return;
+    if (await isImageModelDirUsable(modelDir, modelInfo.backend)) {
+      const resolvedModelDir = modelInfo.backend === 'coreml' ? await resolveCoreMLModelDir(modelDir) : modelDir;
+      logger.log(`[ImageDownload] proceedWithDownload zip - validated files exist on disk, registering directly modelId=${modelInfo.id}`);
+      await registerAndNotify(deps, {
+        imageModel: buildImageModel(modelInfo, resolvedModelDir),
+        modelName: modelInfo.name,
+      });
+      return;
+    }
+    logger.warn(`[ImageDownload] proceedWithDownload zip - removing incomplete model dir modelId=${modelInfo.id}`);
+    await cleanupImageModelDir(modelInfo.id);
   }
 
   // Publish a QUEUED row IMMEDIATELY, before awaiting the (slot-limited) native start (same
