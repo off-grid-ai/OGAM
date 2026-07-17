@@ -1,16 +1,18 @@
 # P0-P2 integration status
 
-This is the living, conservative status for the canonical `docs/RELEASE_TEST_CHECKLIST.csv`.
-A row is credited only when a real rendered/native journey proves the user-visible behavior.
+This is the living, conservative evidence audit for the canonical
+`docs/RELEASE_TEST_CHECKLIST.csv`. A row is credited only after its real
+rendered/native journey has been mapped, rerun, and shown to prove the
+user-visible behavior. An audit-pending row does **not** mean that no test exists.
 
 ## Summary
 
 - Canonical scope: **196 journeys** - **27 P0**, **99 P1**, and **70 P2**.
 - The canonical checklist currently contains **no P3 rows**.
-- P0: **19 covered**, **8 partial/device-gated**, **0 not yet credited**.
-- P1: **12 covered**, **1 partial/device-gated**, **86 not yet credited**.
-- P2: **0 covered**, **0 partial/device-gated**, **70 not yet credited**.
-- `[x]` covered; `[~]` automated portion covered with a physical-device gate left; `[ ]` confirmed open; `[?]` evidence audit pending.
+- P0: **19 verified**, **8 partial/device-gated**, **0 audit pending**.
+- P1: **24 verified**, **1 partial/device-gated**, **74 audit pending**.
+- P2: **0 verified**, **0 partial/device-gated**, **70 audit pending**.
+- `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
 
 ## P0
@@ -80,7 +82,7 @@ A row is credited only when a real rendered/native journey proves the user-visib
 - [~] #13 Download a LARGE text model - automated coverage exists; physical-device action remains
 - [x] #14 Download a litert model
 - [x] #15 Delete does not cancel another download
-- [ ] #16 Concurrent / queued downloads
+- [?] #16 Concurrent / queued downloads
 - [x] #17 Download with NO network
 - [x] #19 Truncated file not listed as ready
 - [x] #20 Kill mid-extraction recovers
@@ -88,124 +90,124 @@ A row is credited only when a real rendered/native journey proves the user-visib
 
 ### 2 Text gen
 
-- [ ] #24 First message replies (litert)
-- [ ] #25 GPU/OpenCL backend
-- [ ] #28 GPU layers slider applies
-- [ ] #29 litert CPU backend fails gracefully
-- [ ] #30 NPU/HTP backend gated or graceful
-- [ ] #31 Temperature applies to a generation
-- [ ] #33 Context length applies
-- [ ] #34 System prompt applies
-- [ ] #38 Plain reply has no stray think tags
-- [ ] #39 Thinking renders in block mid-stream
-- [ ] #44 Queue while generating
-- [ ] #46 Edit a user message and resend
-- [ ] #47 Regenerate a reply
-- [ ] #48 Mid-conversation sampler change takes effect
+- [x] #24 First message replies (litert)
+- [x] #25 GPU/OpenCL backend
+- [?] #28 GPU layers slider applies
+- [x] #29 litert CPU backend fails gracefully
+- [?] #30 NPU/HTP backend gated or graceful
+- [x] #31 Temperature applies to a generation
+- [?] #33 Context length applies
+- [?] #34 System prompt applies
+- [?] #38 Plain reply has no stray think tags
+- [x] #39 Thinking renders in block mid-stream
+- [?] #44 Queue while generating
+- [x] #46 Edit a user message and resend
+- [x] #47 Regenerate a reply
+- [?] #48 Mid-conversation sampler change takes effect
 
 ### 3 Voice
 
-- [ ] #51 Mic permission prompt on first record
-- [ ] #52 Mic permission DENIED handled gracefully
-- [ ] #56 Voice note transcript on litert + tool
-- [ ] #57 Mic stops cleanly on leave
-- [ ] #59 Voice-mode transcript renders
-- [ ] #61 Voice draw-request routes to image
-- [ ] #62 Voice calculator journey
-- [ ] #63 Voice-mode Stop button while generating
+- [?] #51 Mic permission prompt on first record
+- [?] #52 Mic permission DENIED handled gracefully
+- [?] #56 Voice note transcript on litert + tool
+- [x] #57 Mic stops cleanly on leave
+- [x] #59 Voice-mode transcript renders
+- [x] #61 Voice draw-request routes to image
+- [x] #62 Voice calculator journey
+- [x] #63 Voice-mode Stop button while generating
 
 ### 4 Image
 
-- [ ] #67 Image Size + Guidance honored
-- [ ] #69 Image steps applies
-- [ ] #70 Tap image opens fullscreen preview
-- [ ] #72 Non-draw prompt routes to text
-- [ ] #73 Resend of an image request re-draws
+- [?] #67 Image Size + Guidance honored
+- [?] #69 Image steps applies
+- [?] #70 Tap image opens fullscreen preview
+- [?] #72 Non-draw prompt routes to text
+- [?] #73 Resend of an image request re-draws
 
 ### 4 Vision
 
-- [ ] #80 Vision answers about an image
-- [ ] #82 Big vision model decode handled
-- [ ] #83 litert vision affordance consistent
-- [ ] #84 Non-vision model image is refused gracefully
+- [?] #80 Vision answers about an image
+- [?] #82 Big vision model decode handled
+- [?] #83 litert vision affordance consistent
+- [?] #84 Non-vision model image is refused gracefully
 
 ### 5 Memory
 
-- [ ] #89 Text + whisper co-reside (roomy)
-- [ ] #90 Sidecars co-reside with a heavy
-- [ ] #94 Idle STT reclaimed in a voice turn
-- [ ] #95 Whisper blocked then freed then retried
-- [ ] #96 OS memory-warning evicts idle sidecars
-- [ ] #97 Aggressive loads bigger automatically
-- [ ] #100 Estimators agree (no safe-then-refuse)
-- [ ] #102 Survival floor blocks a guaranteed OOM
-- [ ] #103 Image->chat swap
-- [ ] #104 Switch active model mid-chat
-- [ ] #105 Eject All frees everything
-- [ ] #106 Eject one resident from In Memory
-- [ ] #107 Lazy reload after eject
-- [ ] #108 In Memory shows loaded model RAM
-- [ ] #109 Stale TTS pressure cleared on delete
+- [?] #89 Text + whisper co-reside (roomy)
+- [?] #90 Sidecars co-reside with a heavy
+- [?] #94 Idle STT reclaimed in a voice turn
+- [?] #95 Whisper blocked then freed then retried
+- [?] #96 OS memory-warning evicts idle sidecars
+- [?] #97 Aggressive loads bigger automatically
+- [?] #100 Estimators agree (no safe-then-refuse)
+- [?] #102 Survival floor blocks a guaranteed OOM
+- [?] #103 Image->chat swap
+- [?] #104 Switch active model mid-chat
+- [?] #105 Eject All frees everything
+- [?] #106 Eject one resident from In Memory
+- [?] #107 Lazy reload after eject
+- [?] #108 In Memory shows loaded model RAM
+- [?] #109 Stale TTS pressure cleared on delete
 
 ### 6 KB/Projects
 
-- [ ] #112 Create a project
-- [ ] #113 KB indexes a text PDF
-- [ ] #117 Embedding failure aborts + retry
-- [ ] #118 KB retrieval in a chat
-- [ ] #119 New chat inherits the project
-- [ ] #122 Delete project handles its chats
+- [?] #112 Create a project
+- [?] #113 KB indexes a text PDF
+- [?] #117 Embedding failure aborts + retry
+- [?] #118 KB retrieval in a chat
+- [?] #119 New chat inherits the project
+- [?] #122 Delete project handles its chats
 
 ### 7 Tools
 
-- [ ] #123 Calculator tool runs
-- [ ] #127 Parallel tool calls
-- [ ] #129 Messy tool JSON still runs
-- [ ] #132 Empty final turn keeps tool data
-- [ ] #133 Add / connect an MCP server
-- [ ] #134 MCP server tools listed
-- [ ] #135 Execute an MCP tool
+- [?] #123 Calculator tool runs
+- [?] #127 Parallel tool calls
+- [?] #129 Messy tool JSON still runs
+- [?] #132 Empty final turn keeps tool data
+- [?] #133 Add / connect an MCP server
+- [?] #134 MCP server tools listed
+- [?] #135 Execute an MCP tool
 
 ### 8 Remote
 
-- [ ] #138 Remote model replies
-- [ ] #142 Remote reasoning renders (LM Studio)
-- [ ] #143 Remote parallel tool calls
-- [ ] #144 Remote prompt-enhance runs
-- [ ] #145 Remote server dies mid-generation
+- [?] #138 Remote model replies
+- [?] #142 Remote reasoning renders (LM Studio)
+- [?] #143 Remote parallel tool calls
+- [?] #144 Remote prompt-enhance runs
+- [?] #145 Remote server dies mid-generation
 
 ### 9 Enhancement
 
-- [ ] #150 Enhancement request carries no thinking
-- [ ] #151 Enhanced prompt is a clean rewrite
+- [?] #150 Enhancement request carries no thinking
+- [?] #151 Enhanced prompt is a clean rewrite
 
 ### 10 TTS
 
-- [ ] #154 Speak a reply
-- [ ] #155 TTS text is markdown-stripped
+- [?] #154 Speak a reply
+- [?] #155 TTS text is markdown-stripped
 
 ### 11 Polish
 
-- [ ] #164 App lock passphrase set + enforce
-- [ ] #166 Settings persist across relaunch
-- [ ] #169 Active model selection survives relaunch
-- [ ] #170 Projects + KB survive relaunch
-- [ ] #172 Background -> foreground mid-generation
-- [ ] #173 Kill mid-generation recovers
-- [ ] #174 Airplane mode local-only still works
+- [?] #164 App lock passphrase set + enforce
+- [?] #166 Settings persist across relaunch
+- [?] #169 Active model selection survives relaunch
+- [?] #170 Projects + KB survive relaunch
+- [?] #172 Background -> foreground mid-generation
+- [?] #173 Kill mid-generation recovers
+- [?] #174 Airplane mode local-only still works
 
 ### 12 This-release
 
-- [ ] #182 Parse-once thinking+tool+answer on litert
-- [ ] #183 Parse-once thinking+tool+answer on remote
-- [ ] #184 Remote activation frees local heavy
-- [ ] #185 Mid-chat model switch stays coherent
-- [ ] #186 Remote stream interruption recovers
-- [ ] #188 Litert download warning is device-aware (BOTH screens)
-- [ ] #190 Send racing a settings reload keeps thinking
-- [ ] #191 GPU->CPU fallback is visibly reported
-- [ ] #192 Mic during a background STT download is not a loader
-- [ ] #193 Stale failure card cleared when a new attempt starts
+- [?] #182 Parse-once thinking+tool+answer on litert
+- [?] #183 Parse-once thinking+tool+answer on remote
+- [?] #184 Remote activation frees local heavy
+- [?] #185 Mid-chat model switch stays coherent
+- [?] #186 Remote stream interruption recovers
+- [?] #188 Litert download warning is device-aware (BOTH screens)
+- [?] #190 Send racing a settings reload keeps thinking
+- [?] #191 GPU->CPU fallback is visibly reported
+- [?] #192 Mic during a background STT download is not a loader
+- [?] #193 Stale failure card cleared when a new attempt starts
 - [x] #194 Embedded MTP activates only for capable GGUFs
 - [x] #196 Model file-list failure is retryable
 
