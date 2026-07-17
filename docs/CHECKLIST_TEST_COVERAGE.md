@@ -9,7 +9,7 @@ coverage.
 - Canonical critical rows: **126** — **27 P0** and **99 P1**.
 - A checked row requires a real `App`/navigation journey driven by user gestures and visible
   assertions. Native/OS-only behavior additionally requires XCTest, JUnit, or the release-device gate.
-- Current automated critical coverage: **25 complete rows** plus **7 partial device rows**. Test counts
+- Current automated critical coverage: **35 complete rows** plus **8 partial device rows**. Test counts
   and line coverage are not substitutes for this journey ledger.
 - Supporting pure-function or component contracts may remain useful, but they do not check a row here.
 
@@ -69,7 +69,7 @@ still required; `[ ]` critical journey is open.
 - [x] #168 Downloaded models survive relaunch.
 - [x] #171 Download entries survive relaunch.
 - [ ] #180 Gemma-4 native-first thinking + tool journey.
-- [ ] #181 Upgrade-over-install keeps data and loading mode.
+- [x] #181 Upgrade-over-install keeps data and Aggressive loading mode on a physical Android 16 device.
 - [ ] #187 Queued downloads survive app kill and resume.
 
 ## P1 — high-impact journeys (99)
@@ -86,7 +86,8 @@ still required; `[ ]` critical journey is open.
 - [ ] #13 Download a large text model.
 - [x] #14 Download a LiteRT model.
 - [ ] #15 Deleting one model does not cancel another download.
-- [ ] #16 Concurrent downloads queue and drain in order.
+- [x] #16 Concurrent downloads queue and drain in order.
+  - `__tests__/integration/downloads/queuedDownloadsKillDrainFullApp.rendered.happy.test.tsx`
 - [x] #17 No-network download fails clearly and can retry.
   - `__tests__/integration/downloads/networkFailureRetry.rendered.redflow.test.tsx`
 - [ ] #19 A truncated file is never listed as ready.
@@ -112,9 +113,12 @@ still required; `[ ]` critical journey is open.
 
 ### Voice
 
-- [ ] #51 First-record microphone permission flow.
-- [ ] #52 Denied microphone permission is handled clearly.
-- [ ] #56 LiteRT tool turn receives voice transcript, not raw audio.
+- [x] #51 First-record microphone permission flow.
+  - `__tests__/integration/audio/microphonePermissionFullApp.rendered.happy.test.tsx`
+- [x] #52 Denied microphone permission is handled clearly.
+  - `__tests__/integration/audio/microphonePermissionFullApp.rendered.happy.test.tsx`
+- [x] #56 LiteRT tool turn receives voice transcript, not raw audio.
+  - `__tests__/integration/audio/voiceModeCalculatorJourney.rendered.happy.test.tsx`
 - [ ] #57 Leaving chat stops the microphone session.
 - [ ] #59 Voice-mode transcript renders.
 - [ ] #61 Voice draw request routes to image generation.
@@ -144,7 +148,8 @@ still required; `[ ]` critical journey is open.
 - [ ] #100 Advisory and load-gate estimators agree.
 - [ ] #102 Survival floor blocks a guaranteed OOM.
 - [ ] #103 Image-to-chat transition swaps residency correctly.
-- [ ] #104 Active model can switch mid-chat.
+- [x] #104 Active model can switch mid-chat.
+  - `__tests__/integration/generation/midChatModelSwitchFullApp.rendered.redflow.test.tsx`
 - [ ] #105 Eject All frees every resident model.
 - [ ] #106 Eject one model from the In Memory surface.
 - [ ] #107 Ejected model lazy-reloads on use.
@@ -191,16 +196,21 @@ still required; `[ ]` critical journey is open.
 - [ ] #166 Settings persist across relaunch.
 - [ ] #169 Active model selection survives relaunch.
 - [ ] #170 Projects and knowledge-base data survive relaunch.
-- [ ] #172 Background -> foreground during generation is coherent.
-- [ ] #173 Kill during generation recovers without a stuck turn.
-- [ ] #174 Local generation still works in airplane mode.
+- [x] #172 Background -> foreground during generation is coherent.
+  - `__tests__/integration/generation/backgroundForegroundGenerationFullApp.rendered.happy.test.tsx`
+- [x] #173 Kill during generation recovers without a stuck turn.
+  - `__tests__/integration/generation/killMidGenerationRecoveryFullApp.rendered.redflow.test.tsx`
+- [~] #174 Local generation still works in airplane mode.
+  - `__tests__/integration/generation/airplaneModeLocalFullApp.rendered.happy.test.tsx`; physical radio-off action remains.
 
 ### This release
 
 - [ ] #182 Parse-once thinking + tool + answer on LiteRT.
 - [ ] #183 Parse-once thinking + tool + answer on remote.
-- [ ] #184 Activating remote frees the local heavy model.
-- [ ] #185 Mid-chat model switch stays coherent.
+- [x] #184 Activating remote frees the local heavy model.
+  - `__tests__/integration/memory/remoteActivationFreesLocalFullApp.rendered.happy.test.tsx`
+- [x] #185 Mid-chat model switch stays coherent.
+  - `__tests__/integration/generation/midChatModelSwitchFullApp.rendered.redflow.test.tsx`
 - [ ] #186 Remote stream interruption recovers.
 - [ ] #188 LiteRT download warning is device-aware on both screens.
 - [ ] #190 Send racing settings reload keeps thinking capability.

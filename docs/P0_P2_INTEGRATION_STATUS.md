@@ -13,8 +13,8 @@ row does **not** mean that no test exists.
 - Current scope: **245 journeys** - **33 P0**, **118 P1**, **84 P2**, and **10 P3**.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
-- P0: **23 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
-- P1: **69 verified**, **2 partial/device-gated**, **0 confirmed gaps**, **47 audit pending**.
+- P0: **24 verified**, **9 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
+- P1: **78 verified**, **3 partial/device-gated**, **0 confirmed gaps**, **37 audit pending**.
 - P2: **40 verified**, **0 partial/device-gated**, **8 confirmed gaps**, **36 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
@@ -145,7 +145,7 @@ row does **not** mean that no test exists.
 ### 12 This-release
 
 - [~] #180 Gemma-4 native-first thinking + tool - strict full-App reasoning/tool ordering coverage exists; physical-device action remains
-- [~] #181 Upgrade-over-install keeps data + loading mode - automated coverage exists; physical-device action remains
+- [x] #181 Upgrade-over-install keeps data + loading mode - Android 16 physical-device pass (2026-07-17): installed this debug build over the existing 0.0.103 dev app without clearing data; 11 text, 2 image, 1 voice, and 3 speech models, 19 chats, 11 gallery images, and Pro entitlement remained; persisted storage still contained `modelLoadingMode: aggressive`
 - [~] #187 Queued downloads survive app kill - strict full-App UI queue/relaunch/drain coverage exists; physical-device action remains
 - [x] #195 Boot is independent of download database recovery
 
@@ -163,7 +163,7 @@ row does **not** mean that no test exists.
 - [~] #13 Download a LARGE text model - automated coverage exists; physical-device action remains
 - [x] #14 Download a litert model
 - [x] #15 Delete does not cancel another download
-- [?] #16 Concurrent / queued downloads
+- [x] #16 Concurrent / queued downloads — `__tests__/integration/downloads/queuedDownloadsKillDrainFullApp.rendered.happy.test.tsx`
 - [x] #17 Download with NO network
 - [x] #19 Truncated file not listed as ready
 - [x] #20 Kill mid-extraction recovers
@@ -188,9 +188,9 @@ row does **not** mean that no test exists.
 
 ### 3 Voice
 
-- [?] #51 Mic permission prompt on first record
-- [?] #52 Mic permission DENIED handled gracefully
-- [?] #56 Voice note transcript on litert + tool
+- [x] #51 Mic permission prompt on first record — `__tests__/integration/audio/microphonePermissionFullApp.rendered.happy.test.tsx`
+- [x] #52 Mic permission DENIED handled gracefully — `__tests__/integration/audio/microphonePermissionFullApp.rendered.happy.test.tsx`
+- [x] #56 Voice note transcript on litert + tool — `__tests__/integration/audio/voiceModeCalculatorJourney.rendered.happy.test.tsx`
 - [x] #57 Mic stops cleanly on leave
 - [x] #59 Voice-mode transcript renders
 - [x] #61 Voice draw-request routes to image
@@ -223,7 +223,7 @@ row does **not** mean that no test exists.
 - [?] #100 Estimators agree (no safe-then-refuse)
 - [?] #102 Survival floor blocks a guaranteed OOM
 - [?] #103 Image->chat swap
-- [?] #104 Switch active model mid-chat
+- [x] #104 Switch active model mid-chat — `__tests__/integration/generation/midChatModelSwitchFullApp.rendered.redflow.test.tsx`
 - [x] #105 Eject All frees everything
 - [x] #106 Eject one resident from In Memory
 - [x] #107 Lazy reload after eject
@@ -273,16 +273,16 @@ row does **not** mean that no test exists.
 - [x] #166 Settings persist across relaunch
 - [x] #169 Active model selection survives relaunch
 - [?] #170 Projects + KB survive relaunch
-- [?] #172 Background -> foreground mid-generation
-- [?] #173 Kill mid-generation recovers
-- [?] #174 Airplane mode local-only still works
+- [x] #172 Background -> foreground mid-generation — `__tests__/integration/generation/backgroundForegroundGenerationFullApp.rendered.happy.test.tsx`
+- [x] #173 Kill mid-generation recovers — `__tests__/integration/generation/killMidGenerationRecoveryFullApp.rendered.redflow.test.tsx`
+- [~] #174 Airplane mode local-only still works — `__tests__/integration/generation/airplaneModeLocalFullApp.rendered.happy.test.tsx`; physical radio-off action remains
 
 ### 12 This-release
 
 - [x] #182 Parse-once thinking+tool+answer on litert
 - [x] #183 Parse-once thinking+tool+answer on remote
-- [?] #184 Remote activation frees local heavy
-- [?] #185 Mid-chat model switch stays coherent
+- [x] #184 Remote activation frees local heavy — `__tests__/integration/memory/remoteActivationFreesLocalFullApp.rendered.happy.test.tsx`
+- [x] #185 Mid-chat model switch stays coherent — `__tests__/integration/generation/midChatModelSwitchFullApp.rendered.redflow.test.tsx`
 - [?] #186 Remote stream interruption recovers
 - [?] #188 Litert download warning is device-aware (BOTH screens)
 - [x] #190 Send racing a settings reload keeps thinking

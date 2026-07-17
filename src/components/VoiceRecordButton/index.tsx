@@ -18,10 +18,23 @@ import ReanimatedAnimated, {
   Easing,
 } from 'react-native-reanimated';
 import { useThemedStyles } from '../../theme';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
+import {
+  CustomAlert,
+  showAlert,
+  hideAlert,
+  AlertState,
+  initialAlertState,
+} from '../CustomAlert';
 import { createStyles } from './styles';
-import { LoadingState, TranscribingState, UnavailableButton, DownloadingButton, ButtonIcon } from './states';
+import {
+  LoadingState,
+  TranscribingState,
+  UnavailableButton,
+  DownloadingButton,
+  ButtonIcon,
+} from './states';
 import { deriveVoiceButtonState } from './derive';
+import { useVoiceErrorAlert } from './useVoiceErrorAlert';
 import { useWhisperStore } from '../../stores';
 import logger from '../../utils/logger';
 
@@ -44,7 +57,11 @@ interface VoiceRecordButtonProps {
 
 const CANCEL_DISTANCE = 80;
 
-type CallbacksRef = { onStartRecording: () => void; onStopRecording: () => void; onCancelRecording: () => void };
+type CallbacksRef = {
+  onStartRecording: () => void;
+  onStopRecording: () => void;
+  onCancelRecording: () => void;
+};
 
 function buildPanResponder({
   isDraggingToCancel,
@@ -64,7 +81,10 @@ function buildPanResponder({
       isDraggingToCancel.current = false;
       callbacksRef.current.onStartRecording();
     },
-    onPanResponderMove: (_: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+    onPanResponderMove: (
+      _: GestureResponderEvent,
+      gestureState: PanResponderGestureState,
+    ) => {
       const offsetX = Math.min(0, gestureState.dx);
       cancelOffsetX.setValue(offsetX);
       const wasInCancelZone = isDraggingToCancel.current;
@@ -73,20 +93,29 @@ function buildPanResponder({
       isDraggingToCancel.current = isInCancelZone;
     },
     onPanResponderRelease: () => {
-      logger.log('[VoiceButton] Press released, cancel:', isDraggingToCancel.current);
+      logger.log(
+        '[VoiceButton] Press released, cancel:',
+        isDraggingToCancel.current,
+      );
       Vibration.vibrate(30);
       if (isDraggingToCancel.current) {
         callbacksRef.current.onCancelRecording();
       } else {
         callbacksRef.current.onStopRecording();
       }
-      Animated.spring(cancelOffsetX, { toValue: 0, useNativeDriver: true }).start();
+      Animated.spring(cancelOffsetX, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
       isDraggingToCancel.current = false;
     },
     onPanResponderTerminate: () => {
       logger.log('[VoiceButton] Press terminated');
       callbacksRef.current.onCancelRecording();
-      Animated.spring(cancelOffsetX, { toValue: 0, useNativeDriver: true }).start();
+      Animated.spring(cancelOffsetX, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
       isDraggingToCancel.current = false;
     },
   });
@@ -109,10 +138,15 @@ const buildChatButtonStyle = (
 /** Audio-mode (tap-to-toggle) busy face: the load vs transcribe spinner. Audio mode has no
  *  hold gesture, so it can safely replace the whole button while busy. Module scope keeps the
  *  pick out of the component's complexity budget. */
-const AudioBusyFace: React.FC<{ kind: 'loading' | 'transcribing'; loadingAnim: Animated.Value }> = ({ kind, loadingAnim }) =>
-  kind === 'loading'
-    ? <LoadingState asSendButton={false} loadingAnim={loadingAnim} />
-    : <TranscribingState asSendButton={false} loadingAnim={loadingAnim} />;
+const AudioBusyFace: React.FC<{
+  kind: 'loading' | 'transcribing';
+  loadingAnim: Animated.Value;
+}> = ({ kind, loadingAnim }) =>
+  kind === 'loading' ? (
+    <LoadingState asSendButton={false} loadingAnim={loadingAnim} />
+  ) : (
+    <TranscribingState asSendButton={false} loadingAnim={loadingAnim} />
+  );
 
 /** The inner face of the chat-mode hold button — a spinner while a cold model load /
  *  transcription is in flight, the mic otherwise. Extracted to module scope so the
@@ -125,8 +159,10 @@ const ChatButtonFace: React.FC<{
   buttonStyle: ReturnType<typeof buildChatButtonStyle>;
   isRecording: boolean;
 }> = ({ kind, loadingAnim, buttonStyle, isRecording }) => {
-  if (kind === 'loading') return <LoadingState asSendButton loadingAnim={loadingAnim} />;
-  if (kind === 'transcribing') return <TranscribingState asSendButton loadingAnim={loadingAnim} />;
+  if (kind === 'loading')
+    return <LoadingState asSendButton loadingAnim={loadingAnim} />;
+  if (kind === 'transcribing')
+    return <TranscribingState asSendButton loadingAnim={loadingAnim} />;
   return (
     <View style={buttonStyle}>
       <ButtonIcon asSendButton isRecording={isRecording} />
@@ -140,7 +176,7 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
   isModelLoading,
   isTranscribing,
   partialResult,
-  error: _error,
+  error,
   disabled,
   onStartRecording,
   onStopRecording,
@@ -148,8 +184,8 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
   asSendButton = false,
 }) => {
   const styles = useThemedStyles(createStyles);
-  const downloadModel = useWhisperStore((s) => s.downloadModel);
-  const downloadProgressById = useWhisperStore((s) => s.downloadProgressById);
+  const downloadModel = useWhisperStore(s => s.downloadModel);
+  const downloadProgressById = useWhisperStore(s => s.downloadProgressById);
   // The ONE derivation of what the mic renders (see derive.ts): a background STT
   // download is never the busy spinner — that is reserved for a tap-triggered
   // model load and live transcription.
@@ -164,13 +200,21 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
   // slide-to-cancel / release-during-load behaviour — when kind flips to 'loading'
   // the hold-to-record view (and its PanResponder) is replaced by a gesture-less
   // spinner, so the finger that is still down loses its cancel affordance.
-  logger.log('[VoiceButton-SM] render kind=', buttonState.kind, 'asSend=', asSendButton, 'recording=', isRecording);
+  logger.log(
+    '[VoiceButton-SM] render kind=',
+    buttonState.kind,
+    'asSend=',
+    asSendButton,
+    'recording=',
+    isRecording,
+  );
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const loadingAnim = useRef(new Animated.Value(0)).current;
   const cancelOffsetX = useRef(new Animated.Value(0)).current;
   const isDraggingToCancel = useRef(false);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
+  useVoiceErrorAlert(error, setAlertState);
 
   const rippleScale = useSharedValue(1);
   const rippleOpacity = useSharedValue(0);
@@ -179,14 +223,22 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
     if (isRecording) {
       rippleScale.value = 1;
       rippleOpacity.value = 0.4;
-      rippleScale.value = withRepeat(withTiming(2.2, { duration: 1200, easing: Easing.out(Easing.ease) }), -1, false);
-      rippleOpacity.value = withRepeat(withTiming(0, { duration: 1200, easing: Easing.out(Easing.ease) }), -1, false);
+      rippleScale.value = withRepeat(
+        withTiming(2.2, { duration: 1200, easing: Easing.out(Easing.ease) }),
+        -1,
+        false,
+      );
+      rippleOpacity.value = withRepeat(
+        withTiming(0, { duration: 1200, easing: Easing.out(Easing.ease) }),
+        -1,
+        false,
+      );
     } else {
       rippleScale.value = 1;
       rippleOpacity.value = 0;
     }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRecording]);
 
   const rippleStyle = useAnimatedStyle(() => ({
@@ -196,15 +248,29 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
 
   useEffect(() => {
     if (buttonState.kind === 'loading' || buttonState.kind === 'transcribing') {
-      const spin = Animated.loop(Animated.timing(loadingAnim, { toValue: 1, duration: 1000, useNativeDriver: true }));
+      const spin = Animated.loop(
+        Animated.timing(loadingAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      );
       spin.start();
       return () => spin.stop();
     }
     loadingAnim.setValue(0);
   }, [buttonState.kind, loadingAnim]);
 
-  const callbacksRef = useRef<CallbacksRef>({ onStartRecording, onStopRecording, onCancelRecording });
-  callbacksRef.current = { onStartRecording, onStopRecording, onCancelRecording };
+  const callbacksRef = useRef<CallbacksRef>({
+    onStartRecording,
+    onStopRecording,
+    onCancelRecording,
+  });
+  callbacksRef.current = {
+    onStartRecording,
+    onStopRecording,
+    onCancelRecording,
+  };
 
   useEffect(() => {
     if (isRecording) {
@@ -213,8 +279,16 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
       pulseAnim.setValue(1.4);
       const pulse = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.5, duration: 600, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1.4, duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseAnim, {
+            toValue: 1.5,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1.4,
+            duration: 600,
+            useNativeDriver: true,
+          }),
         ]),
       );
       pulse.start();
@@ -223,25 +297,29 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
     pulseAnim.setValue(1);
   }, [isRecording, pulseAnim]);
 
-  const panResponder = useRef(buildPanResponder({ isDraggingToCancel, cancelOffsetX, callbacksRef })).current;
+  const panResponder = useRef(
+    buildPanResponder({ isDraggingToCancel, cancelOffsetX, callbacksRef }),
+  ).current;
 
   const handleUnavailableTap = () => {
-    setAlertState(showAlert(
-      'Download Voice Model',
-      `Download Whisper Base to enable voice input? (${DOWNLOAD_MODEL_SIZE_MB} MB)`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Download',
-          onPress: () => {
-            setAlertState(hideAlert());
-            downloadModel(DOWNLOAD_MODEL_ID).catch((err) => {
-              logger.error('[VoiceRecordButton] Download failed:', err);
-            });
+    setAlertState(
+      showAlert(
+        'Download Voice Model',
+        `Download Whisper Base to enable voice input? (${DOWNLOAD_MODEL_SIZE_MB} MB)`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Download',
+            onPress: () => {
+              setAlertState(hideAlert());
+              downloadModel(DOWNLOAD_MODEL_ID).catch(err => {
+                logger.error('[VoiceRecordButton] Download failed:', err);
+              });
+            },
           },
-        },
-      ],
-    ));
+        ],
+      ),
+    );
   };
 
   const alert = (
@@ -261,7 +339,10 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
   // begins — that is what broke slide-to-cancel and left a ghost recording on release
   // (no responderRelease reached a handler). Chat mode keeps ONE gesturable wrapper
   // mounted across ready/loading/transcribing and swaps only the inner face (below).
-  if (!asSendButton && (buttonState.kind === 'loading' || buttonState.kind === 'transcribing')) {
+  if (
+    !asSendButton &&
+    (buttonState.kind === 'loading' || buttonState.kind === 'transcribing')
+  ) {
     return (
       <View style={styles.container}>
         <AudioBusyFace kind={buttonState.kind} loadingAnim={loadingAnim} />
@@ -270,7 +351,10 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
     );
   }
 
-  if (buttonState.kind === 'downloading' || buttonState.kind === 'unavailable') {
+  if (
+    buttonState.kind === 'downloading' ||
+    buttonState.kind === 'unavailable'
+  ) {
     return (
       <View style={styles.container}>
         <TouchableOpacity
@@ -279,16 +363,25 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
           onPress={handleUnavailableTap}
           disabled={buttonState.kind === 'downloading'}
         >
-          {buttonState.kind === 'downloading'
-            ? <DownloadingButton asSendButton={asSendButton} progress={buttonState.progress} />
-            : <UnavailableButton asSendButton={asSendButton} />}
+          {buttonState.kind === 'downloading' ? (
+            <DownloadingButton
+              asSendButton={asSendButton}
+              progress={buttonState.progress}
+            />
+          ) : (
+            <UnavailableButton asSendButton={asSendButton} />
+          )}
         </TouchableOpacity>
         {alert}
       </View>
     );
   }
 
-  const buttonStyle = buildChatButtonStyle(styles, { asSendButton, isRecording, disabled });
+  const buttonStyle = buildChatButtonStyle(styles, {
+    asSendButton,
+    isRecording,
+    disabled,
+  });
 
   // ── Audio mode: tap-to-toggle (tap to start, tap to stop & send) ───────────
   if (!asSendButton) {
@@ -304,9 +397,14 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
 
     return (
       <View style={styles.container}>
-        {isRecording && <ReanimatedAnimated.View style={[styles.rippleRing, rippleStyle]} />}
+        {isRecording && (
+          <ReanimatedAnimated.View style={[styles.rippleRing, rippleStyle]} />
+        )}
         <Animated.View
-          style={[styles.buttonWrapper, { transform: [{ scale: isRecording ? pulseAnim : 1 }] }]}
+          style={[
+            styles.buttonWrapper,
+            { transform: [{ scale: isRecording ? pulseAnim : 1 }] },
+          ]}
         >
           <TouchableOpacity
             testID="voice-record-button-audio"
@@ -314,10 +412,23 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
             disabled={disabled}
             activeOpacity={0.7}
           >
-            <View style={[styles.button, styles.buttonAudio, isRecording && styles.buttonRecording, disabled && styles.buttonDisabled]}>
-              {isRecording
-                ? <Icon name="square" size={24} color="#fff" />
-                : <ButtonIcon asSendButton={false} isRecording={false} size={30} />}
+            <View
+              style={[
+                styles.button,
+                styles.buttonAudio,
+                isRecording && styles.buttonRecording,
+                disabled && styles.buttonDisabled,
+              ]}
+            >
+              {isRecording ? (
+                <Icon name="square" size={24} color="#fff" />
+              ) : (
+                <ButtonIcon
+                  asSendButton={false}
+                  isRecording={false}
+                  size={30}
+                />
+              )}
             </View>
           </TouchableOpacity>
         </Animated.View>
@@ -335,16 +446,33 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
     <View style={styles.container}>
       {isRecording && partialResult && (
         <View style={styles.partialResultContainer}>
-          <Text style={styles.partialResultText} numberOfLines={1}>{partialResult}</Text>
+          <Text style={styles.partialResultText} numberOfLines={1}>
+            {partialResult}
+          </Text>
         </View>
       )}
-      {isRecording && <ReanimatedAnimated.View style={[styles.rippleRing, rippleStyle]} />}
+      {isRecording && (
+        <ReanimatedAnimated.View style={[styles.rippleRing, rippleStyle]} />
+      )}
       <Animated.View
         testID="voice-record-button"
-        style={[styles.buttonWrapper, { transform: [{ scale: isRecording ? pulseAnim : 1 }, { translateX: cancelOffsetX }] }]}
+        style={[
+          styles.buttonWrapper,
+          {
+            transform: [
+              { scale: isRecording ? pulseAnim : 1 },
+              { translateX: cancelOffsetX },
+            ],
+          },
+        ]}
         {...(disabled ? {} : panResponder.panHandlers)}
       >
-        <ChatButtonFace kind={buttonState.kind} loadingAnim={loadingAnim} buttonStyle={buttonStyle} isRecording={isRecording} />
+        <ChatButtonFace
+          kind={buttonState.kind}
+          loadingAnim={loadingAnim}
+          buttonStyle={buttonStyle}
+          isRecording={isRecording}
+        />
       </Animated.View>
       {alert}
     </View>
