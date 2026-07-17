@@ -14,8 +14,8 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **19 verified**, **8 partial/device-gated**, **6 audit pending**.
-- P1: **46 verified**, **1 partial/device-gated**, **70 audit pending**.
-- P2: **19 verified**, **0 partial/device-gated**, **65 audit pending**.
+- P1: **47 verified**, **1 partial/device-gated**, **69 audit pending**.
+- P2: **22 verified**, **0 partial/device-gated**, **62 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -286,7 +286,7 @@ row does **not** mean that no test exists.
 - [?] #188 Litert download warning is device-aware (BOTH screens)
 - [x] #190 Send racing a settings reload keeps thinking
 - [x] #191 GPU->CPU fallback is visibly reported
-- [?] #192 Mic during a background STT download is not a loader
+- [x] #192 Mic during a background STT download is not a loader
 - [x] #193 Stale failure card cleared when a new attempt starts
 - [x] #194 Embedded MTP activates only for capable GGUFs
 - [x] #196 Model file-list failure is retryable
@@ -320,9 +320,9 @@ row does **not** mean that no test exists.
 
 ### 3 Voice
 
-- [?] #58 Double-tap mic no collision - existing-test evidence audit pending
-- [?] #64 No stray empty bubble in voice tool turn - existing-test evidence audit pending
-- [?] #65 Voice thinking block width + alignment - existing-test evidence audit pending
+- [x] #58 Double-tap mic no collision
+- [x] #64 No stray empty bubble in voice tool turn
+- [x] #65 Voice thinking block width + alignment
 
 ### 4 Image
 
