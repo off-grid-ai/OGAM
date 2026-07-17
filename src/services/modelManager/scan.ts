@@ -6,6 +6,7 @@ import { copyFileWithProgress } from './copyFile';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
 // Single source of truth for projector detection + model↔projector matching (see src/services/mmproj.ts).
 import { isMMProjFile, pickMmProjForModel } from '../mmproj';
+import { validateModelFile } from '../llmSafetyChecks';
 
 export { isMMProjFile };
 
@@ -406,6 +407,14 @@ export async function importLocalModel(opts: ImportLocalModelOpts): Promise<Down
     knownTotalBytes: sourceSize ?? null,
     onProgress: onProgress ? (fraction: number) => onProgress({ fraction: fraction * mainProgressScale, fileName }) : undefined,
   });
+
+  if (!isLitert) {
+    const validation = await validateModelFile(destPath);
+    if (!validation.valid) {
+      await RNFS.unlink(destPath).catch(() => {});
+      throw new Error(validation.reason ?? 'Invalid or incomplete GGUF model file');
+    }
+  }
 
   const quantMatch = fileName.match(/[_-](Q\d+[_\w]*|f16|f32)/i);
   const quantization = quantMatch ? quantMatch[1].toUpperCase() : 'Unknown';

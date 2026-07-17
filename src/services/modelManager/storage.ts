@@ -4,6 +4,7 @@ import { DownloadedModel, LlamaDownloadedModel, LiteRTDownloadedModel, ModelFile
 import { LMSTUDIO_AUTHORS, OFFICIAL_MODEL_AUTHORS, VERIFIED_QUANTIZERS } from '../../constants';
 import { getCuratedLiteRTEntry } from '../curatedLiteRTRegistry';
 import logger from '../../utils/logger';
+import { validateModelFile } from '../llmSafetyChecks';
 
 const MODELS_STORAGE_KEY = '@local_llm/downloaded_models';
 const IMAGE_MODELS_STORAGE_KEY = '@local_llm/downloaded_image_models';
@@ -152,9 +153,17 @@ async function validateAndResolveModels(
         exists = resolutionResults[idx].exists;
       }
     }
-    if (exists) {
-      validModels.push(models[i]);
+    if (!exists) continue;
+    const model = models[i];
+    if (model.engine === 'llama') {
+      const validation = await validateModelFile(model.filePath);
+      if (!validation.valid) {
+        logger.warn(`[ModelManagerStorage] Removing invalid downloaded model ${model.id}: ${validation.reason ?? 'validation failed'}`);
+        await RNFS.unlink(model.filePath).catch(() => {});
+        continue;
+      }
     }
+    validModels.push(model);
   }
 
   return { validModels, pathsUpdated };
