@@ -13,7 +13,7 @@ row does **not** mean that no test exists.
 - Current scope: **244 journeys** - **33 P0**, **117 P1**, **84 P2**, and **10 P3**.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
-- P0: **11 verified**, **10 partial/device-gated**, **7 confirmed gaps**, **5 audit pending**.
+- P0: **12 verified**, **10 partial/device-gated**, **6 confirmed gaps**, **5 audit pending**.
 - P1: **11 verified**, **1 partial/device-gated**, **45 confirmed gaps**, **60 audit pending**.
 - P2: **4 verified**, **0 partial/device-gated**, **26 confirmed gaps**, **54 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
@@ -104,7 +104,7 @@ row does **not** mean that no test exists.
 ### 1 Downloads
 
 - [x] #4 Download a text (GGUF) model
-- [ ] #9 Download an STT (whisper) model
+- [x] #9 Download an STT (whisper) model
 - [x] #11 Download a TTS (voice) model
 - [~] #18 Interrupted download recovers after relaunch - automated coverage exists; physical-device action remains
 
