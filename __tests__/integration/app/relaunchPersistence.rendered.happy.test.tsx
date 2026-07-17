@@ -42,6 +42,61 @@ async function seedPersistedChat(
 }
 
 describe('P0 relaunch persistence journeys', () => {
+  it('keeps a chat created through the UI after relaunch', async () => {
+    const firstLaunch = await renderMainApp({
+      boundary: { llama: true },
+      persistedAppState: {
+        activeModelId: 'test/journey-model/journey-model-Q4_K_M.gguf',
+      },
+    });
+    firstLaunch.boundary.llama!.scriptCompletion({
+      text: 'This reply must survive the relaunch.',
+    });
+
+    firstLaunch.rtl.fireEvent.press(
+      firstLaunch.view.getByTestId('new-chat-button'),
+    );
+    const input = await firstLaunch.rtl.waitFor(() =>
+      firstLaunch.view.getByTestId('chat-input'),
+    );
+    firstLaunch.rtl.fireEvent.changeText(
+      input,
+      'Persist this chat across relaunch',
+    );
+    firstLaunch.rtl.fireEvent.press(
+      firstLaunch.view.getByTestId('send-button'),
+    );
+    await firstLaunch.rtl.waitFor(() =>
+      expect(
+        firstLaunch.view.getByText('This reply must survive the relaunch.'),
+      ).toBeTruthy(),
+    );
+    firstLaunch.view.unmount();
+
+    const relaunched = await relaunchMainApp({ boundary: { llama: true } });
+    relaunched.rtl.fireEvent.press(relaunched.view.getByTestId('chats-tab'));
+    await relaunched.rtl.waitFor(() =>
+      expect(
+        relaunched.view.getByText(/Persist this chat across relaunch/),
+      ).toBeTruthy(),
+    );
+    relaunched.rtl.fireEvent.press(
+      relaunched.view.getByTestId('conversation-item-0'),
+    );
+    await relaunched.rtl.waitFor(() => {
+      const chat = relaunched.rtl.within(
+        relaunched.view.getByTestId('chat-screen'),
+      );
+      expect(
+        chat.getAllByText('Persist this chat across relaunch').length,
+      ).toBeGreaterThan(0);
+      expect(
+        chat.getByText('This reply must survive the relaunch.'),
+      ).toBeTruthy();
+    });
+    relaunched.view.unmount();
+  });
+
   it('restores chat history and opens the persisted messages', async () => {
     const { rtl, view } = await renderMainApp({
       beforeRender: ({ asyncStorage }) => seedPersistedChat(asyncStorage),
