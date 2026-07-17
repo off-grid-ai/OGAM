@@ -231,7 +231,16 @@ class ModelDownloadService {
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
-    return () => { this.listeners.delete(listener); };
+    return () => {
+      this.listeners.delete(listener);
+      // The delayed refresh exists only for external consumers. Once the final
+      // screen unmounts, the service owns cancelling that work; letting it fire
+      // later performs provider I/O against a dead navigation/test lifecycle.
+      if (this.listeners.size === 0 && this.selfRefreshTimer) {
+        clearTimeout(this.selfRefreshTimer);
+        this.selfRefreshTimer = null;
+      }
+    };
   }
 
   private notify(): void {
