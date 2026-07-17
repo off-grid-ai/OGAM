@@ -233,29 +233,6 @@ function migrateEnabledTools(merged: any): void {
   }
 }
 
-// The removed MCP context auto-boost pinned context to 32768 (and maxTokens to 8192 /
-// liteRTMaxTokens to 32768) on MCP enable and never restored it, causing OOM crashes
-// and tanked tok/s on flagship devices. Reset anyone left at the boost ceiling back to
-// the device-safe defaults. Idempotent: once reset, the values no longer match.
-const MCP_BOOST_CTX_CEILING = 32768;
-const MCP_BOOST_MAX_OUTPUT_TOKENS = 8192;
-function migrateBoostedContext(merged: any): void {
-  const s = merged.settings;
-  if (!s) return;
-  // Match the EXACT values the boost wrote, not `>=`. The boost set these to
-  // precise constants; a `>=` test also clobbers a user who legitimately chose a
-  // large context/maxTokens above the default, which this one-time migration must
-  // not touch.
-  if (s.contextLength === MCP_BOOST_CTX_CEILING) {
-    s.contextLength = DEFAULT_SETTINGS.contextLength;
-    // maxTokens was raised alongside contextLength by the boost; only reset it when the
-    // boost's exact value is present, so a legitimately-large user maxTokens isn't clobbered.
-    if (s.maxTokens === MCP_BOOST_MAX_OUTPUT_TOKENS) s.maxTokens = DEFAULT_SETTINGS.maxTokens;
-  }
-  if (s.liteRTMaxTokens === MCP_BOOST_CTX_CEILING) {
-    s.liteRTMaxTokens = DEFAULT_SETTINGS.liteRTMaxTokens;
-  }
-}
 function migratePersistedState(persistedState: any, currentState: AppState): AppState {
   const merged = {
     ...currentState,
@@ -287,7 +264,6 @@ function migratePersistedState(persistedState: any, currentState: AppState): App
   if (merged.checklistDismissed && merged.onboardingChecklist &&
     !Object.values(merged.onboardingChecklist).every(Boolean)) merged.checklistDismissed = false;
   migrateEnabledTools(merged);
-  migrateBoostedContext(merged);
   return merged as AppState;
 }
 
@@ -431,6 +407,10 @@ export const useAppStore = create<AppState>()(
     {
       name: 'local-llm-app-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      // Versioned persistence must never discard an older user's state. Field-level
+      // upgrades remain centralized in migratePersistedState below via `merge`.
+      migrate: (persistedState) => persistedState as AppState,
       merge: migratePersistedState,
       partialize: (state) => ({
         themeMode: state.themeMode,
