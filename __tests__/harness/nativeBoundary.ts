@@ -808,6 +808,8 @@ export interface NativeBoundary {
   setRam(profile: RamProfile): void;
   /** Fire the OS 'memoryWarning' AppState event the app's residency manager listens to (auto-eviction). */
   emitMemoryWarning(): void;
+  /** Move the app between foreground/background through the real AppState listeners. */
+  emitAppStateChange(nextState: 'active' | 'background' | 'inactive'): void;
 }
 
 /**
@@ -921,5 +923,16 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     Object.defineProperty(RN.Platform, 'Version', { value: profile.platform === 'android' ? 34 : '17.0', configurable: true });
   };
 
-  return { litert, litertEvents: handle, diffusion, fs: fsFake, llama: llamaFake, download: downloadFake, whisper: whisperFake, setRam, emitMemoryWarning: () => appState.handle.emit('memoryWarning') };
+  return {
+    litert,
+    litertEvents: handle,
+    diffusion,
+    fs: fsFake,
+    llama: llamaFake,
+    download: downloadFake,
+    whisper: whisperFake,
+    setRam,
+    emitMemoryWarning: () => appState.handle.emit('memoryWarning'),
+    emitAppStateChange: nextState => appState.handle.emit('change', nextState),
+  };
 }

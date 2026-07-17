@@ -1,60 +1,98 @@
-/**
- * RED-FLOW (UI, rendered) — V1 at the pixel: on the REAL DownloadManagerScreen, deleting an unrelated
- * (already-downloaded) whisper model aborts an in-flight download, whose card then vanishes after the
- * next foreground re-hydrate.
- *
- * Native cancel emits no terminal event, so the card only reflects the abort on the next
- * hydrateDownloadStore (foregrounding). To avoid a false-green from "re-hydrate just empties everything",
- * a CONTROL asserts an uncancelled download SURVIVES the same re-hydrate. Real DownloadManagerScreen +
- * real whisperService + real hydrate over the download-native + memfs fakes.
- */
-import { installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
+/** P1 #15 — deleting a downloaded Whisper model leaves another transfer alone. */
+import { renderMainApp } from '../../harness/appJourney';
 
-async function setup() {
-  const boundary = installNativeBoundary({ download: true, fs: true });
-  /* eslint-disable @typescript-eslint/no-var-requires */
-  const React = require('react');
-  const rtl = requireRTL();
-  const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
-  const { whisperService } = require('../../../src/services/whisperService');
-  const { DownloadManagerScreen } = require('../../../src/screens/DownloadManagerScreen');
-  /* eslint-enable @typescript-eslint/no-var-requires */
+const MB = 1024 * 1024;
+const DOWNLOADED_FILE = 'ggml-small.en.bin';
+const ACTIVE_FILE = 'ggml-base.en.bin';
 
-  // base.en is downloading (native active row); the service tracks its downloadId.
-  boundary.download!.seedActive({ downloadId: 'dl-base', fileName: 'ggml-base.en.bin', modelId: 'base.en', modelType: 'stt', status: 'running', bytesDownloaded: 40 * 1024 * 1024, totalBytes: 142 * 1024 * 1024 });
-  (whisperService as unknown as { activeDownloadId: string }).activeDownloadId = 'dl-base';
-  // small.en is already downloaded on disk (a completed voice model).
-  boundary.fs!.seedFile('/docs/whisper-models/ggml-small.en.bin', 466 * 1024 * 1024);
-  await hydrateDownloadStore();
-  return { React, rtl, whisperService, hydrateDownloadStore, DownloadManagerScreen };
-}
+describe('P1 unrelated Whisper deletion journey', () => {
+  it('keeps the active Base download after Small is deleted and the app foregrounds', async () => {
+    const { boundary, rtl, view } = await renderMainApp({
+      boundary: { download: true },
+      beforeRender: ({ boundary: device }) => {
+        device.fs!.seedFile(
+          `${
+            device.fs!.DocumentDirectoryPath
+          }/whisper-models/${DOWNLOADED_FILE}`,
+          466 * MB,
+        );
+      },
+    });
+    const { act, fireEvent, waitFor } = rtl;
 
-describe('V1 (rendered) — deleting a whisper model aborts an unrelated download', () => {
-  it('keeps the in-flight base.en download card after deleting the unrelated small.en', async () => {
-    const t = await setup();
-    const before = t.rtl.render(t.React.createElement(t.DownloadManagerScreen, {}));
-    await t.rtl.waitFor(() => { expect(before.queryByText(/ggml-base\.en\.bin/)).not.toBeNull(); });
-    before.unmount();
+    await act(async () => {
+      fireEvent.press(view.getByTestId('models-tab'));
+    });
+    await waitFor(() => expect(view.getByTestId('models-screen')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(view.getByTestId('transcription-models-tab'));
+    });
+    await waitFor(() => {
+      expect(
+        view.getByTestId('transcription-model-card-1-download'),
+      ).toBeTruthy();
+      expect(view.getByTestId('transcription-model-card-2')).toBeTruthy();
+      expect(
+        view.queryByTestId('transcription-model-card-2-download'),
+      ).toBeNull();
+    });
 
-    // User deletes the already-downloaded small.en in the Download Manager.
-    await t.whisperService.deleteModel('small.en');
-    await t.hydrateDownloadStore(); // foreground re-hydrate reflects native state
+    // Start Base through the product so Whisper owns the transfer identity that
+    // must not be confused with the already-downloaded Small model.
+    await act(async () => {
+      fireEvent.press(view.getByTestId('transcription-model-card-1-download'));
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(boundary.download!.active()).toHaveLength(1));
+    expect(boundary.download!.active()[0]).toEqual(
+      expect.objectContaining({
+        fileName: ACTIVE_FILE,
+        modelId: 'whisper-base.en',
+        modelType: 'stt',
+      }),
+    );
 
-    const after = t.rtl.render(t.React.createElement(t.DownloadManagerScreen, {}));
-    await t.rtl.waitFor(() => { expect(after.queryByText('Download Manager')).not.toBeNull(); });
+    await act(async () => {
+      fireEvent.press(view.getByTestId('downloads-icon'));
+    });
+    await waitFor(() =>
+      expect(view.getByTestId('downloaded-models-screen')).toBeTruthy(),
+    );
+    await act(async () => {
+      fireEvent.press(view.getByText('Voice Models'));
+    });
+    await waitFor(() => {
+      expect(view.getByText(ACTIVE_FILE)).toBeTruthy();
+      expect(view.getByText(DOWNLOADED_FILE)).toBeTruthy();
+    });
 
-    // Correct: deleting small.en does not touch base.en — its download card is still there.
-    // Today deleteModel cancels the single activeDownloadId (base.en's) → its card vanishes → RED.
-    expect(after.queryByText(/ggml-base\.en\.bin/)).not.toBeNull();
-  });
+    // Under the Voice filter, Small is the sole completed card, so this is the
+    // real trash action associated with the downloaded model (not Base's cancel).
+    await act(async () => {
+      fireEvent.press(view.getByTestId('delete-model-button'));
+    });
+    await waitFor(() =>
+      expect(view.getByText('Delete Transcription Model')).toBeTruthy(),
+    );
+    await act(async () => {
+      fireEvent.press(view.getByText('Delete'));
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(view.queryByText(DOWNLOADED_FILE)).toBeNull());
 
-  it('control: without a delete, the base.en download card SURVIVES the re-hydrate', async () => {
-    const t = await setup();
-    // No delete — just a foreground re-hydrate.
-    await t.hydrateDownloadStore();
-    const view = t.rtl.render(t.React.createElement(t.DownloadManagerScreen, {}));
-    await t.rtl.waitFor(() => { expect(view.queryByText(/ggml-base\.en\.bin/)).not.toBeNull(); });
-    // Proves the RED above is caused by the delete-induced cancel, not re-hydrate emptying the list.
-    expect(view.queryByText(/ggml-base\.en\.bin/)).not.toBeNull();
-  });
+    // Foreground recovery rebuilds the rendered active list from native truth.
+    // This guards against a stale card hiding an accidental cancellation.
+    await act(async () => {
+      boundary.emitAppStateChange('background');
+      boundary.emitAppStateChange('active');
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(boundary.download!.active()).toHaveLength(1);
+      expect(view.getByText('Active Downloads')).toBeTruthy();
+      expect(view.getByText(ACTIVE_FILE)).toBeTruthy();
+    });
+
+    view.unmount();
+  }, 30000);
 });
