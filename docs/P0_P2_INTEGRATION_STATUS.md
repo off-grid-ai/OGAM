@@ -14,8 +14,8 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **18 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **5 audit pending**.
-- P1: **27 verified**, **1 partial/device-gated**, **29 confirmed gaps**, **60 audit pending**.
-- P2: **27 verified**, **0 partial/device-gated**, **15 confirmed gaps**, **42 audit pending**.
+- P1: **28 verified**, **1 partial/device-gated**, **28 confirmed gaps**, **60 audit pending**.
+- P2: **29 verified**, **0 partial/device-gated**, **15 confirmed gaps**, **40 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -193,7 +193,7 @@ row does **not** mean that no test exists.
 - [x] #57 Mic stops cleanly on leave
 - [x] #59 Voice-mode transcript renders
 - [x] #61 Voice draw-request routes to image
-- [ ] #62 Voice calculator journey
+- [x] #62 Voice calculator journey
 - [ ] #63 Voice-mode Stop button while generating
 
 ### 4 Image
@@ -330,8 +330,8 @@ row does **not** mean that no test exists.
 - [x] #71 Tap attached (pre-send) image previews
 - [x] #74 Reset to Defaults resets image params
 - [x] #75 Chat-modal vs Model-Settings sliders agree
-- [?] #76 First-gen warmup notice is accurate - existing-test evidence audit pending
-- [?] #77 Generated images appear in Gallery - existing-test evidence audit pending
+- [x] #76 First-gen warmup notice is accurate
+- [x] #77 Generated images appear in Gallery
 
 ### 4 Vision
 
