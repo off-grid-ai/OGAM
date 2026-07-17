@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { hydrateDownloadStore, isMmProjFileName } from '../../../src/services/downloadHydration';
-import { saveActiveDownloads } from '../../../src/services/activeDownloadPersistence';
+import {
+  hydrateDownloadStore,
+  isMmProjFileName,
+} from '../../../src/services/downloadHydration';
 import { useDownloadStore } from '../../../src/stores/downloadStore';
 
 jest.mock('../../../src/services/backgroundDownloadService', () => ({
@@ -10,7 +12,10 @@ jest.mock('../../../src/services/backgroundDownloadService', () => ({
   },
 }));
 
-const { backgroundDownloadService } = jest.requireMock('../../../src/services/backgroundDownloadService');
+const { backgroundDownloadService } = jest.requireMock(
+  '../../../src/services/backgroundDownloadService',
+);
+const ACTIVE_DOWNLOADS_KEY = '@offgrid/active_downloads';
 
 beforeEach(async () => {
   jest.clearAllMocks();
@@ -57,7 +62,8 @@ describe('hydrateDownloadStore', () => {
 
     await hydrateDownloadStore();
 
-    const entry = useDownloadStore.getState().downloads['author/model/model.gguf'];
+    const entry =
+      useDownloadStore.getState().downloads['author/model/model.gguf'];
     expect(entry).toBeDefined();
     expect(entry.status).toBe('running');
     expect(entry.bytesDownloaded).toBe(500);
@@ -152,7 +158,8 @@ describe('hydrateDownloadStore', () => {
     ]);
 
     await hydrateDownloadStore();
-    const entry = useDownloadStore.getState().downloads['author/model/model.gguf'];
+    const entry =
+      useDownloadStore.getState().downloads['author/model/model.gguf'];
     expect(entry.downloadId).toBe('dl-new');
   });
 
@@ -177,28 +184,38 @@ describe('hydrateDownloadStore', () => {
   it('strands a persisted in-flight download as failed when the native row is gone (cold app-kill)', async () => {
     // Cold kill: in-memory store empty (beforeEach), native snapshot empty (task dropped), but the
     // in-flight download survives in the durable snapshot loadActiveDownloads() reads.
-    await saveActiveDownloads([inflight]);
+    await AsyncStorage.setItem(
+      ACTIVE_DOWNLOADS_KEY,
+      JSON.stringify([inflight]),
+    );
     backgroundDownloadService.isAvailable.mockReturnValue(true);
     backgroundDownloadService.getActiveDownloads.mockResolvedValue([]);
 
     await hydrateDownloadStore();
 
-    const entry = useDownloadStore.getState().downloads['author/big-model/model.gguf'];
-    expect(entry).toBeDefined();               // did NOT vanish
-    expect(entry.status).toBe('failed');       // stranded as retriable
+    const entry =
+      useDownloadStore.getState().downloads['author/big-model/model.gguf'];
+    expect(entry).toBeDefined(); // did NOT vanish
+    expect(entry.status).toBe('failed'); // stranded as retriable
     expect(entry.errorMessage).toMatch(/Interrupted/);
   });
 
   it('does NOT strand when the native snapshot still reports the row (Android survives a kill)', async () => {
     // Android WorkManager survives a kill → the row reappears in the native snapshot → the persisted
     // snapshot must be ignored for that key, never flip a live download to a false "failed".
-    await saveActiveDownloads([inflight]);
+    await AsyncStorage.setItem(
+      ACTIVE_DOWNLOADS_KEY,
+      JSON.stringify([inflight]),
+    );
     backgroundDownloadService.isAvailable.mockReturnValue(true);
-    backgroundDownloadService.getActiveDownloads.mockResolvedValue([{ ...inflight, bytesDownloaded: 2_000_000_000 }]);
+    backgroundDownloadService.getActiveDownloads.mockResolvedValue([
+      { ...inflight, bytesDownloaded: 2_000_000_000 },
+    ]);
 
     await hydrateDownloadStore();
 
-    const entry = useDownloadStore.getState().downloads['author/big-model/model.gguf'];
-    expect(entry.status).toBe('running');      // live native row wins — no false strand (no Android regression)
+    const entry =
+      useDownloadStore.getState().downloads['author/big-model/model.gguf'];
+    expect(entry.status).toBe('running'); // live native row wins — no false strand (no Android regression)
   });
 });

@@ -180,6 +180,27 @@ function strandInterruptedEntries(
   return stranded;
 }
 
+/** Preserve a newer logical transfer and never move visible progress backwards when
+ * a foreground native snapshot races an already-delivered progress event. */
+function mergeNewerInMemory(entries: DownloadEntry[]): DownloadEntry[] {
+  const current = useDownloadStore.getState().downloads;
+  return entries.map(entry => {
+    const memory = current[entry.modelKey];
+    if (!memory) return entry;
+    if (memory.downloadId !== entry.downloadId && memory.createdAt > entry.createdAt) return memory;
+    if (memory.downloadId === entry.downloadId && isActiveStatus(memory.status) &&
+        isActiveStatus(entry.status) && memory.bytesDownloaded > entry.bytesDownloaded) {
+      return {
+        ...entry,
+        bytesDownloaded: memory.bytesDownloaded,
+        progress: Math.max(entry.progress, memory.progress),
+        mmProjBytesDownloaded: memory.mmProjBytesDownloaded ?? entry.mmProjBytesDownloaded,
+      };
+    }
+    return entry;
+  });
+}
+
 export async function hydrateDownloadStore(): Promise<void> {
   if (!backgroundDownloadService.isAvailable()) return;
 
@@ -208,9 +229,10 @@ export async function hydrateDownloadStore(): Promise<void> {
   // the OS discarded. Preserve the prior in-flight entry as failed/retriable so it never
   // silently disappears from the Download Manager — including across a cold app-kill, where
   // the prior entry survives only in the durably-persisted snapshot (loadActiveDownloads).
-  const hydratedKeys = new Set(entries.map(e => e.modelKey));
+  const mergedEntries = mergeNewerInMemory(entries);
+  const hydratedKeys = new Set(mergedEntries.map(e => e.modelKey));
   const persistedPrior = await loadActiveDownloads();
-  entries.push(...strandInterruptedEntries(hydratedKeys, persistedPrior));
+  mergedEntries.push(...strandInterruptedEntries(hydratedKeys, persistedPrior));
 
-  useDownloadStore.getState().hydrate(entries);
+  useDownloadStore.getState().hydrate(mergedEntries);
 }
