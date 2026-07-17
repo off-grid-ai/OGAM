@@ -9,7 +9,7 @@ coverage.
 - Canonical critical rows: **126** — **27 P0** and **99 P1**.
 - A checked row requires a real `App`/navigation journey driven by user gestures and visible
   assertions. Native/OS-only behavior additionally requires XCTest, JUnit, or the release-device gate.
-- Current automated critical coverage: **24 complete rows** plus **7 partial device rows**. Test counts
+- Current automated critical coverage: **25 complete rows** plus **7 partial device rows**. Test counts
   and line coverage are not substitutes for this journey ledger.
 - Supporting pure-function or component contracts may remain useful, but they do not check a row here.
 
@@ -87,7 +87,8 @@ still required; `[ ]` critical journey is open.
 - [x] #14 Download a LiteRT model.
 - [ ] #15 Deleting one model does not cancel another download.
 - [ ] #16 Concurrent downloads queue and drain in order.
-- [ ] #17 No-network download fails clearly and can retry.
+- [x] #17 No-network download fails clearly and can retry.
+  - `__tests__/integration/downloads/networkFailureRetry.rendered.redflow.test.tsx`
 - [ ] #19 A truncated file is never listed as ready.
 - [ ] #20 Kill during image extraction recovers safely.
 - [ ] #21 Failed image extraction retries successfully.
