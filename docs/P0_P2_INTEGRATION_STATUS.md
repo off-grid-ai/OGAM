@@ -14,8 +14,8 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **23 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
-- P1: **49 verified**, **2 partial/device-gated**, **15 confirmed gaps**, **51 audit pending**.
-- P2: **31 verified**, **0 partial/device-gated**, **15 confirmed gaps**, **38 audit pending**.
+- P1: **51 verified**, **2 partial/device-gated**, **13 confirmed gaps**, **51 audit pending**.
+- P2: **32 verified**, **0 partial/device-gated**, **14 confirmed gaps**, **38 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -258,8 +258,8 @@ row does **not** mean that no test exists.
 
 ### 9 Enhancement
 
-- [ ] #150 Enhancement request carries no thinking
-- [ ] #151 Enhanced prompt is a clean rewrite
+- [x] #150 Enhancement request carries no thinking
+- [x] #151 Enhanced prompt is a clean rewrite
 
 ### 10 TTS
 
@@ -379,7 +379,7 @@ row does **not** mean that no test exists.
 ### 9 Enhancement
 
 - [ ] #152 Enhancement shows progress
-- [ ] #153 Enhancement rewrites then regenerates
+- [x] #153 Enhancement rewrites then regenerates
 
 ### 11 Polish
 
