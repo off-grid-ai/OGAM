@@ -151,6 +151,9 @@ export const useProjectStore = create<ProjectState>()(
     {
       name: 'local-llm-project-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      // Project fields remain compatible with the legacy unversioned schema.
+      migrate: (persistedState) => persistedState as ProjectState,
     }
   )
 );

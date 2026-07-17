@@ -352,6 +352,10 @@ export const useChatStore = create<ChatState>()(
     {
       name: 'local-llm-chat-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      // Conversation records are append-only across the first versioned schema;
+      // retain all legacy data and let current defaults supply action functions.
+      migrate: (persistedState) => persistedState as ChatState,
       partialize: (state) => ({
         conversations: state.conversations,
         activeConversationId: state.activeConversationId,
