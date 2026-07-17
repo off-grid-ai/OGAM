@@ -124,5 +124,5 @@ export async function renderMainApp(options: AppJourneyOptions = {}) {
     { timeout: 15000 },
   );
 
-  return { boundary, rtl, view };
+  return { boundary, asyncStorage, rtl, view };
 }

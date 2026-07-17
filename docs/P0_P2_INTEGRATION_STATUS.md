@@ -7,7 +7,7 @@ A row is credited only when a real rendered/native journey proves the user-visib
 
 - Canonical scope: **196 journeys** - **27 P0**, **99 P1**, and **70 P2**.
 - The canonical checklist currently contains **no P3 rows**.
-- P0: **18 covered**, **7 partial/device-gated**, **2 not yet credited**.
+- P0: **18 covered**, **8 partial/device-gated**, **1 not yet credited**.
 - P1: **8 covered**, **0 partial/device-gated**, **91 not yet credited**.
 - P2: **0 covered**, **0 partial/device-gated**, **70 not yet credited**.
 - `[x]` covered; `[~]` automated portion covered with a physical-device gate left; `[ ]` confirmed open; `[?]` evidence audit pending.
@@ -62,7 +62,7 @@ A row is credited only when a real rendered/native journey proves the user-visib
 ### 12 This-release
 
 - [x] #180 Gemma-4 native-first thinking + tool
-- [ ] #181 Upgrade-over-install keeps data + loading mode
+- [~] #181 Upgrade-over-install keeps data + loading mode - automated coverage exists; physical-device action remains
 - [ ] #187 Queued downloads survive app kill
 - [x] #195 Boot is independent of download database recovery
 
