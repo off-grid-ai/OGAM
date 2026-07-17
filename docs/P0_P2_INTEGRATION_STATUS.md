@@ -117,8 +117,8 @@ row does **not** mean that no test exists.
 ### 3 Voice
 
 - [~] #53 Chat-mode dictation to composer - automated coverage exists; physical-device action remains
-- [~] #54 Chat-mode dictation on litert - automated coverage exists; physical-device action remains
-- [~] #55 Voice note carries transcript (chat mode) - automated coverage exists; physical-device action remains
+- [~] #54 Chat-mode dictation on litert - strict full-App realtime and direct-audio coverage exists; physical-device action remains
+- [~] #55 Voice note carries transcript (chat mode) - strict full-App transcript-only coverage exists; physical-device action remains
 - [~] #60 Full voice-mode journey (STT->reply->TTS) - automated coverage exists; physical-device action remains
 
 ### 4 Image
@@ -143,9 +143,9 @@ row does **not** mean that no test exists.
 
 ### 12 This-release
 
-- [~] #180 Gemma-4 native-first thinking + tool - partial automation exists; full App/device journey remains
+- [~] #180 Gemma-4 native-first thinking + tool - strict full-App reasoning/tool ordering coverage exists; physical-device action remains
 - [~] #181 Upgrade-over-install keeps data + loading mode - automated coverage exists; physical-device action remains
-- [~] #187 Queued downloads survive app kill - recovery rendering exists; UI queue/kill/drain journey remains
+- [~] #187 Queued downloads survive app kill - strict full-App UI queue/relaunch/drain coverage exists; physical-device action remains
 - [x] #195 Boot is independent of download database recovery
 
 ## P1
