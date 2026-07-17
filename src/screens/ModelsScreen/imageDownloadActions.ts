@@ -12,6 +12,7 @@ import { useDownloadStore, isActiveStatus } from '../../stores/downloadStore';
 import { makeImageModelKey } from '../../utils/modelKey';
 import { ImageModelDescriptor, ImageDownloadDeps } from './types';
 import { getQnnWarningMessage, showQnnWarningAlert } from './imageDownloadQnn';
+import { wireZipFinalization } from './imageZipFinalization';
 import { ensureImageExtractionComplete } from '../../utils/imageModelIntegrity';
 import logger from '../../utils/logger';
 
@@ -235,27 +236,6 @@ function addImageEntry(opts: {
   return true;
 }
 
-/** Wire complete + error listeners for a zip-style download. */
-function wireZipListeners(
-  ctx: { downloadId: string; modelId: string; deps: ImageDownloadDeps },
-  onCompleteWork: () => Promise<void>,
-) {
-  const { downloadId, deps } = ctx;
-  const unsubComplete = backgroundDownloadService.onComplete(downloadId, async () => {
-    unsubComplete(); unsubError();
-    try { await onCompleteWork(); } catch (e: any) {
-      deps.setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(e?.message || 'Failed to process model')));
-      useDownloadStore.getState().setStatus(downloadId, 'failed', { message: e?.message || 'Failed to process model' });
-    }
-  });
-  const unsubError = backgroundDownloadService.onError(downloadId, (ev) => {
-    unsubComplete(); unsubError();
-    deps.setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(ev.reason)));
-    // useDownloads at app root has already routed this to setStatus('failed').
-    // Keep the entry visible so the user can retry/remove. No removeStoreEntry here.
-  });
-}
-
 /** HuggingFace multi-file download. Each file goes through downloadFileTo sequentially. */
 export async function downloadHuggingFaceModel(
   modelInfo: ImageModelDescriptor,
@@ -432,7 +412,7 @@ export async function proceedWithDownload(
     // Reconcile the queued placeholder row to the real native downloadId so progress /
     // complete / error events (routed via downloadIdIndex) reach this entry.
     useDownloadStore.getState().retryEntry(modelKey, downloadInfo.downloadId);
-    wireZipListeners({ downloadId: downloadInfo.downloadId, modelId: modelInfo.id, deps }, async () => {
+    wireZipFinalization({ downloadId: downloadInfo.downloadId, modelId: modelInfo.id, deps }, async () => {
       const zipPath = `${imageModelsDir}/${fileName}`;
       try {
         useDownloadStore.getState().setProcessing(downloadInfo.downloadId);

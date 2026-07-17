@@ -15,6 +15,7 @@ import {
   handleDownloadImageModel as downloadImageModel,
   cancelSyntheticImageDownload,
 } from './imageDownloadActions';
+import { isLiveImageFinalization } from './imageZipFinalization';
 import { resumeImageDownload } from './imageDownloadResume';
 
 export function useImageModels(setAlertState: (s: AlertState) => void) {
@@ -99,6 +100,10 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
       for (const entry of processingEntries) {
         if (cancelled) return;
         if (resumingDownloadKeysRef.current.has(entry.modelKey)) continue;
+        // A same-session native completion already owns unzip/register. Recovery is
+        // only the fallback owner after a real restart (the transient ownership set
+        // is then empty); running both can register a model before unzip resolves.
+        if (isLiveImageFinalization(entry.modelKey)) continue;
 
         const modelId = entry.modelId.replace('image:', '');
         if (downloadedIds.has(modelId)) {
