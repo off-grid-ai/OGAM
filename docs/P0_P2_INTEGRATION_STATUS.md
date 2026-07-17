@@ -14,8 +14,8 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **18 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **5 audit pending**.
-- P1: **17 verified**, **1 partial/device-gated**, **39 confirmed gaps**, **60 audit pending**.
-- P2: **8 verified**, **0 partial/device-gated**, **22 confirmed gaps**, **54 audit pending**.
+- P1: **19 verified**, **1 partial/device-gated**, **37 confirmed gaps**, **60 audit pending**.
+- P2: **9 verified**, **0 partial/device-gated**, **21 confirmed gaps**, **54 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -161,7 +161,7 @@ row does **not** mean that no test exists.
 - [x] #12 Download an image model
 - [~] #13 Download a LARGE text model - automated coverage exists; physical-device action remains
 - [x] #14 Download a litert model
-- [ ] #15 Delete does not cancel another download
+- [x] #15 Delete does not cancel another download
 - [?] #16 Concurrent / queued downloads
 - [x] #17 Download with NO network
 - [x] #19 Truncated file not listed as ready
@@ -286,7 +286,7 @@ row does **not** mean that no test exists.
 - [?] #188 Litert download warning is device-aware (BOTH screens)
 - [ ] #190 Send racing a settings reload keeps thinking
 - [ ] #191 GPU->CPU fallback is visibly reported
-- [ ] #192 Mic during a background STT download is not a loader
+- [x] #192 Mic during a background STT download is not a loader
 - [x] #193 Stale failure card cleared when a new attempt starts
 - [x] #194 Embedded MTP activates only for capable GGUFs
 - [x] #196 Model file-list failure is retryable
@@ -368,7 +368,7 @@ row does **not** mean that no test exists.
 
 ### 8 Remote
 
-- [ ] #139 No phantom servers on empty scan
+- [x] #139 No phantom servers on empty scan
 - [ ] #140 Remote model has a visible indicator
 - [ ] #141 Remote reasoning renders (Ollama)
 - [?] #146 Remote request timeout - existing-test evidence audit pending
