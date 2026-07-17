@@ -11,7 +11,6 @@ import {
 
 const QUESTION = 'Describe the animal in this photo.';
 const ANSWER = 'A tabby cat is resting beside a window.';
-const PHOTO_URI = 'file:///mock/image.jpg';
 
 const visionModel: DownloadedModel = {
   id: 'test/gemma-vision-context/gemma-4-E2B-it.litertlm',
@@ -55,9 +54,12 @@ describe('P1 full-App LiteRT vision context recovery', () => {
     fireEvent.press(view.getByTestId('attach-button'));
     fireEvent.press(await waitFor(() => view.getByTestId('attach-photo')));
     fireEvent.press(await waitFor(() => view.getByText('Photo Library')));
-    await waitFor(() =>
-      expect(view.getByTestId(/^attachment-image-/)).toBeTruthy(),
+    const pendingPhoto = await waitFor(() =>
+      view.getByTestId(/^attachment-image-/),
     );
+    const photoUri = pendingPhoto.findByType(
+      require('react-native').Image as typeof import('react-native').Image,
+    ).props.source.uri as string;
 
     // First native attempt reproduces the Android LiteRT wording. The queued
     // completion is consumed only by the app's recovery attempt.
@@ -74,13 +76,11 @@ describe('P1 full-App LiteRT vision context recovery', () => {
     expect(view.queryByText('Generation Error')).toBeNull();
     expect(view.queryByText('Context window full')).toBeNull();
     expect(view.queryByTestId('stop-button')).toBeNull();
-    expect(view.getByTestId('message-image-0').props.source.uri).toBe(
-      PHOTO_URI,
-    );
+    expect(view.getByTestId('message-image-0').props.source.uri).toBe(photoUri);
 
     expect(boundary.litert.calls.sendMessageWithImages).toEqual([
-      [QUESTION, [PHOTO_URI]],
-      [QUESTION, [PHOTO_URI]],
+      [QUESTION, [photoUri]],
+      [QUESTION, [photoUri]],
     ]);
     const resetCalls = boundary.litert.calls.resetConversation;
     expect(resetCalls.length).toBeGreaterThanOrEqual(2);

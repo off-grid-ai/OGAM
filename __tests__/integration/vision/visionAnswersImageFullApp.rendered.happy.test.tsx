@@ -7,7 +7,6 @@ import {
 
 const QUESTION = 'What animal is sitting by the window?';
 const ANSWER = 'A tabby cat is sitting beside the window.';
-const PHOTO_URI = 'file:///mock/image.jpg';
 
 const visionModel: DownloadedModel = {
   id: 'test/journey-vision/journey-vision.litertlm',
@@ -36,11 +35,10 @@ describe('P1 full-App vision question journey', () => {
     const pendingPhoto = await waitFor(() =>
       view.getByTestId(/^attachment-image-/),
     );
-    expect(
-      pendingPhoto.findByType(
-        require('react-native').Image as typeof import('react-native').Image,
-      ).props.source.uri,
-    ).toBe(PHOTO_URI);
+    const photoUri = pendingPhoto.findByType(
+      require('react-native').Image as typeof import('react-native').Image,
+    ).props.source.uri as string;
+    expect(photoUri).toMatch(/^\/docs\/attachments\/images\//);
 
     boundary.litert.scriptTurn({ content: ANSWER });
     fireEvent.changeText(view.getByTestId('chat-input'), QUESTION);
@@ -51,7 +49,7 @@ describe('P1 full-App vision question journey', () => {
         expect(view.getByText(ANSWER)).toBeTruthy();
         expect(view.getByTestId('message-attachment-0')).toBeTruthy();
         expect(view.getByTestId('message-image-0').props.source.uri).toBe(
-          PHOTO_URI,
+          photoUri,
         );
       },
       { timeout: 8000 },
@@ -64,7 +62,7 @@ describe('P1 full-App vision question journey', () => {
     expect(boundary.litert.calls.sendMessageWithImages).toHaveLength(1);
     expect(boundary.litert.calls.sendMessageWithImages[0]).toEqual([
       QUESTION,
-      [PHOTO_URI],
+      [photoUri],
     ]);
     expect(
       boundary.litert.calls.sendMessage.some(([text]) => text === QUESTION),
