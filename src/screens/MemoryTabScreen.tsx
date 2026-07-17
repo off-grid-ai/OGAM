@@ -13,8 +13,8 @@ import type { RootStackParamList } from '../navigation/types';
 
 // Name the recorder registers itself under in pro.activate (screenRegistry).
 // Present only when Pro is active; absent in the free build. This is the main
-// recorder screen (start/stop controls + dashboard); it pushes to the full
-// recordings archive (LocketRecordings) itself.
+// recorder screen (start/stop controls + dashboard); it handles its own
+// in-feature navigation.
 const RECORDER_SCREEN = 'AlwaysOnTranscription';
 
 /**
