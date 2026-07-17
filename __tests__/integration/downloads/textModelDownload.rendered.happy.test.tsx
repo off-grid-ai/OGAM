@@ -44,13 +44,14 @@ function installModelApiFixture(): void {
   }) as typeof fetch;
 }
 
-async function startDownloadFromModels(
-  rtl: ReturnType<typeof import('../../harness/nativeBoundary').requireRTL>,
-  view: ReturnType<
-    ReturnType<
-      typeof import('../../harness/nativeBoundary').requireRTL
-    >['render']
-  >,
+type JourneyRtl = ReturnType<
+  typeof import('../../harness/nativeBoundary').requireRTL
+>;
+type JourneyView = ReturnType<JourneyRtl['render']>;
+
+async function searchForDownloadableModel(
+  rtl: JourneyRtl,
+  view: JourneyView,
 ): Promise<void> {
   const { act, fireEvent, waitFor } = rtl;
   await act(async () => {
@@ -66,13 +67,32 @@ async function startDownloadFromModels(
   await waitFor(() =>
     expect(view.getByText('downloadable-model')).toBeTruthy(),
   );
+}
 
+async function openDownloadableModel(
+  rtl: JourneyRtl,
+  view: JourneyView,
+): Promise<void> {
+  const { act, fireEvent, waitFor } = rtl;
+  await searchForDownloadableModel(rtl, view);
   await act(async () => {
     fireEvent.press(view.getByText('downloadable-model'));
   });
   await waitFor(() =>
     expect(view.getByText('downloadable-model-Q4_K_M')).toBeTruthy(),
   );
+}
+
+async function startDownloadFromModels(
+  rtl: ReturnType<typeof import('../../harness/nativeBoundary').requireRTL>,
+  view: ReturnType<
+    ReturnType<
+      typeof import('../../harness/nativeBoundary').requireRTL
+    >['render']
+  >,
+): Promise<void> {
+  const { act, fireEvent } = rtl;
+  await openDownloadableModel(rtl, view);
 
   await act(async () => {
     fireEvent.press(view.getByTestId('file-card-0-download'));
@@ -84,6 +104,33 @@ afterEach(() => {
 });
 
 describe('P0 text-model download journey', () => {
+  it('shows meaningful source, author, size, and format information', async () => {
+    installModelApiFixture();
+    const { rtl, view } = await renderMainApp({
+      boundary: {
+        ram: { platform: 'android', totalBytes: 8 * GB, availBytes: 6 * GB },
+      },
+    });
+
+    await searchForDownloadableModel(rtl, view);
+    const catalogueCard = view.getByTestId('model-card-0');
+    expect(rtl.within(catalogueCard).getByText('offgrid-tests')).toBeTruthy();
+    expect(rtl.within(catalogueCard).getByText('Community')).toBeTruthy();
+
+    await rtl.act(async () => {
+      rtl.fireEvent.press(view.getByText('downloadable-model'));
+    });
+    await rtl.waitFor(() =>
+      expect(view.getByTestId('model-detail-screen')).toBeTruthy(),
+    );
+    const fileCard = view.getByTestId('file-card-0');
+    expect(rtl.within(fileCard).getByText('offgrid-tests')).toBeTruthy();
+    expect(rtl.within(fileCard).getByText('Community')).toBeTruthy();
+    expect(rtl.within(fileCard).getByText('16.00 MB')).toBeTruthy();
+    expect(rtl.within(fileCard).getByText('Q4_K_M')).toBeTruthy();
+    view.unmount();
+  }, 30000);
+
   it('downloads a GGUF from its model detail and renders it as downloaded', async () => {
     installModelApiFixture();
 
@@ -93,7 +140,7 @@ describe('P0 text-model download journey', () => {
         ram: { platform: 'android', totalBytes: 8 * GB, availBytes: 6 * GB },
       },
     });
-    const { act, waitFor } = rtl;
+    const { act, fireEvent, waitFor } = rtl;
 
     await startDownloadFromModels(rtl, view);
     await waitFor(() => expect(boundary.download!.active()).toHaveLength(1));
@@ -145,6 +192,29 @@ describe('P0 text-model download journey', () => {
     });
     expect(view.queryByTestId('file-card-0-download')).toBeNull();
     expect(view.queryByTestId('file-card-0-cancel')).toBeNull();
+
+    // P2 #5: returning to the model list projects the completed download as the
+    // stable Downloaded check indicator. Revisit the detail and return once more
+    // so this cannot pass on a transient completion toast or stale local state.
+    await act(async () => {
+      fireEvent.press(view.getByTestId('model-detail-back'));
+    });
+    await waitFor(() =>
+      expect(view.getByTestId('model-card-0-downloaded')).toBeTruthy(),
+    );
+    await act(async () => {
+      fireEvent.press(view.getByText('downloadable-model'));
+    });
+    await waitFor(() => {
+      expect(view.getByTestId('model-detail-screen')).toBeTruthy();
+      expect(view.queryByTestId('file-card-0-download')).toBeNull();
+    });
+    await act(async () => {
+      fireEvent.press(view.getByTestId('model-detail-back'));
+    });
+    await waitFor(() =>
+      expect(view.getByTestId('model-card-0-downloaded')).toBeTruthy(),
+    );
 
     view.unmount();
     const relaunched = await relaunchMainApp({ boundary: { download: true } });
