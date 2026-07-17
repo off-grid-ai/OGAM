@@ -13,10 +13,10 @@ row does **not** mean that no test exists.
 - Current scope: **244 journeys** - **33 P0**, **117 P1**, **84 P2**, and **10 P3**.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
-- P0: **19 verified**, **8 partial/device-gated**, **6 audit pending**.
-- P1: **53 verified**, **1 partial/device-gated**, **63 audit pending**.
-- P2: **32 verified**, **0 partial/device-gated**, **52 audit pending**.
-- P3: **0 verified**, **0 partial/device-gated**, **10 audit pending**.
+- P0: **6 verified**, **10 partial/device-gated**, **12 confirmed gaps**, **5 audit pending**.
+- P1: **11 verified**, **1 partial/device-gated**, **45 confirmed gaps**, **60 audit pending**.
+- P2: **4 verified**, **0 partial/device-gated**, **26 confirmed gaps**, **54 audit pending**.
+- P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
 
@@ -35,7 +35,7 @@ row does **not** mean that no test exists.
 
 ### P0 additions
 
-- [?] APP-P0-001 Corrupt persisted app settings do not trap startup or wipe unrelated user data
+- [x] APP-P0-001 Corrupt persisted app settings do not trap startup or wipe unrelated user data
 - [?] APP-P0-002 Persisted schema migrations retain chats, projects, models, and settings across old versions
 - [?] APP-P0-003 Partial database or filesystem initialization failure still reaches a recoverable screen
 - [?] APP-P0-004 Interrupted persistence writes do not erase previously committed chats or projects
@@ -104,15 +104,15 @@ row does **not** mean that no test exists.
 ### 1 Downloads
 
 - [x] #4 Download a text (GGUF) model
-- [x] #9 Download an STT (whisper) model
+- [ ] #9 Download an STT (whisper) model
 - [x] #11 Download a TTS (voice) model
 - [~] #18 Interrupted download recovers after relaunch - automated coverage exists; physical-device action remains
 
 ### 2 Text gen
 
 - [x] #23 First message loads + replies (GGUF)
-- [x] #42 Failed generation clears the spinner
-- [x] #43 Stop mid-generation keeps partial
+- [ ] #42 Failed generation clears the spinner
+- [ ] #43 Stop mid-generation keeps partial
 
 ### 3 Voice
 
@@ -123,29 +123,29 @@ row does **not** mean that no test exists.
 
 ### 4 Image
 
-- [x] #66 Image generates and renders
+- [ ] #66 Image generates and renders
 
 ### 5 Memory
 
 - [x] #85 Loading mode selectable + persists
-- [x] #86 Whisper not resident on download
-- [x] #87 Conservative = one heavy at a time
-- [x] #88 Balanced = co-reside if they fit
-- [x] #93 Idle STT reclaimed for a text turn
-- [x] #99 Oversized model shows a graceful card
+- [ ] #86 Whisper not resident on download
+- [ ] #87 Conservative = one heavy at a time
+- [ ] #88 Balanced = co-reside if they fit
+- [ ] #93 Idle STT reclaimed for a text turn
+- [ ] #99 Oversized model shows a graceful card
 - [~] #101 Load Anyway always loads - automated coverage exists; physical-device action remains
 
 ### 11 Polish
 
-- [x] #167 Chat history survives relaunch
-- [x] #168 Downloaded models survive relaunch
-- [x] #171 Download entries survive relaunch
+- [ ] #167 Chat history survives relaunch
+- [ ] #168 Downloaded models survive relaunch
+- [ ] #171 Download entries survive relaunch
 
 ### 12 This-release
 
-- [x] #180 Gemma-4 native-first thinking + tool
+- [~] #180 Gemma-4 native-first thinking + tool - partial automation exists; full App/device journey remains
 - [~] #181 Upgrade-over-install keeps data + loading mode - automated coverage exists; physical-device action remains
-- [x] #187 Queued downloads survive app kill
+- [~] #187 Queued downloads survive app kill - recovery rendering exists; UI queue/kill/drain journey remains
 - [x] #195 Boot is independent of download database recovery
 
 ## P1
@@ -161,28 +161,28 @@ row does **not** mean that no test exists.
 - [x] #12 Download an image model
 - [~] #13 Download a LARGE text model - automated coverage exists; physical-device action remains
 - [x] #14 Download a litert model
-- [x] #15 Delete does not cancel another download
+- [ ] #15 Delete does not cancel another download
 - [?] #16 Concurrent / queued downloads
 - [x] #17 Download with NO network
-- [x] #19 Truncated file not listed as ready
-- [x] #20 Kill mid-extraction recovers
-- [x] #21 Retry a failed image extraction
+- [ ] #19 Truncated file not listed as ready
+- [ ] #20 Kill mid-extraction recovers
+- [ ] #21 Retry a failed image extraction
 
 ### 2 Text gen
 
-- [x] #24 First message replies (litert)
-- [x] #25 GPU/OpenCL backend
+- [ ] #24 First message replies (litert)
+- [ ] #25 GPU/OpenCL backend
 - [?] #28 GPU layers slider applies
-- [x] #29 litert CPU backend fails gracefully
+- [ ] #29 litert CPU backend fails gracefully
 - [?] #30 NPU/HTP backend gated or graceful
-- [x] #31 Temperature applies to a generation
+- [ ] #31 Temperature applies to a generation
 - [?] #33 Context length applies
 - [?] #34 System prompt applies
 - [?] #38 Plain reply has no stray think tags
-- [x] #39 Thinking renders in block mid-stream
-- [x] #44 Queue while generating
-- [x] #46 Edit a user message and resend
-- [x] #47 Regenerate a reply
+- [ ] #39 Thinking renders in block mid-stream
+- [ ] #44 Queue while generating
+- [ ] #46 Edit a user message and resend
+- [ ] #47 Regenerate a reply
 - [?] #48 Mid-conversation sampler change takes effect
 
 ### 3 Voice
@@ -190,48 +190,48 @@ row does **not** mean that no test exists.
 - [?] #51 Mic permission prompt on first record
 - [?] #52 Mic permission DENIED handled gracefully
 - [?] #56 Voice note transcript on litert + tool
-- [x] #57 Mic stops cleanly on leave
-- [x] #59 Voice-mode transcript renders
-- [x] #61 Voice draw-request routes to image
-- [x] #62 Voice calculator journey
-- [x] #63 Voice-mode Stop button while generating
+- [ ] #57 Mic stops cleanly on leave
+- [ ] #59 Voice-mode transcript renders
+- [ ] #61 Voice draw-request routes to image
+- [ ] #62 Voice calculator journey
+- [ ] #63 Voice-mode Stop button while generating
 
 ### 4 Image
 
 - [?] #67 Image Size + Guidance honored
 - [?] #69 Image steps applies
-- [x] #70 Tap image opens fullscreen preview
+- [ ] #70 Tap image opens fullscreen preview
 - [?] #72 Non-draw prompt routes to text
-- [x] #73 Resend of an image request re-draws
+- [ ] #73 Resend of an image request re-draws
 
 ### 4 Vision
 
-- [x] #80 Vision answers about an image
+- [ ] #80 Vision answers about an image
 - [?] #82 Big vision model decode handled
-- [x] #83 litert vision affordance consistent
+- [ ] #83 litert vision affordance consistent
 - [?] #84 Non-vision model image is refused gracefully
 
 ### 5 Memory
 
-- [x] #89 Text + whisper co-reside (roomy)
+- [ ] #89 Text + whisper co-reside (roomy)
 - [?] #90 Sidecars co-reside with a heavy
-- [x] #94 Idle STT reclaimed in a voice turn
-- [x] #95 Whisper blocked then freed then retried
-- [x] #96 OS memory-warning evicts idle sidecars
+- [ ] #94 Idle STT reclaimed in a voice turn
+- [ ] #95 Whisper blocked then freed then retried
+- [ ] #96 OS memory-warning evicts idle sidecars
 - [?] #97 Aggressive loads bigger automatically
 - [?] #100 Estimators agree (no safe-then-refuse)
 - [?] #102 Survival floor blocks a guaranteed OOM
 - [?] #103 Image->chat swap
 - [?] #104 Switch active model mid-chat
-- [x] #105 Eject All frees everything
-- [x] #106 Eject one resident from In Memory
-- [x] #107 Lazy reload after eject
-- [x] #108 In Memory shows loaded model RAM
+- [ ] #105 Eject All frees everything
+- [ ] #106 Eject one resident from In Memory
+- [ ] #107 Lazy reload after eject
+- [ ] #108 In Memory shows loaded model RAM
 - [?] #109 Stale TTS pressure cleared on delete
 
 ### 6 KB/Projects
 
-- [x] #112 Create a project
+- [ ] #112 Create a project
 - [?] #113 KB indexes a text PDF
 - [?] #117 Embedding failure aborts + retry
 - [?] #118 KB retrieval in a chat
@@ -240,9 +240,9 @@ row does **not** mean that no test exists.
 
 ### 7 Tools
 
-- [x] #123 Calculator tool runs
-- [x] #127 Parallel tool calls
-- [x] #129 Messy tool JSON still runs
+- [ ] #123 Calculator tool runs
+- [ ] #127 Parallel tool calls
+- [ ] #129 Messy tool JSON still runs
 - [?] #132 Empty final turn keeps tool data
 - [?] #133 Add / connect an MCP server
 - [?] #134 MCP server tools listed
@@ -250,21 +250,21 @@ row does **not** mean that no test exists.
 
 ### 8 Remote
 
-- [x] #138 Remote model replies
-- [x] #142 Remote reasoning renders (LM Studio)
-- [x] #143 Remote parallel tool calls
+- [ ] #138 Remote model replies
+- [ ] #142 Remote reasoning renders (LM Studio)
+- [ ] #143 Remote parallel tool calls
 - [?] #144 Remote prompt-enhance runs
 - [?] #145 Remote server dies mid-generation
 
 ### 9 Enhancement
 
-- [x] #150 Enhancement request carries no thinking
-- [x] #151 Enhanced prompt is a clean rewrite
+- [ ] #150 Enhancement request carries no thinking
+- [ ] #151 Enhanced prompt is a clean rewrite
 
 ### 10 TTS
 
-- [x] #154 Speak a reply
-- [x] #155 TTS text is markdown-stripped
+- [ ] #154 Speak a reply
+- [ ] #155 TTS text is markdown-stripped
 
 ### 11 Polish
 
@@ -278,16 +278,16 @@ row does **not** mean that no test exists.
 
 ### 12 This-release
 
-- [x] #182 Parse-once thinking+tool+answer on litert
+- [ ] #182 Parse-once thinking+tool+answer on litert
 - [?] #183 Parse-once thinking+tool+answer on remote
 - [?] #184 Remote activation frees local heavy
 - [?] #185 Mid-chat model switch stays coherent
 - [?] #186 Remote stream interruption recovers
 - [?] #188 Litert download warning is device-aware (BOTH screens)
-- [x] #190 Send racing a settings reload keeps thinking
-- [x] #191 GPU->CPU fallback is visibly reported
-- [x] #192 Mic during a background STT download is not a loader
-- [x] #193 Stale failure card cleared when a new attempt starts
+- [ ] #190 Send racing a settings reload keeps thinking
+- [ ] #191 GPU->CPU fallback is visibly reported
+- [ ] #192 Mic during a background STT download is not a loader
+- [ ] #193 Stale failure card cleared when a new attempt starts
 - [x] #194 Embedded MTP activates only for capable GGUFs
 - [x] #196 Model file-list failure is retryable
 
@@ -306,28 +306,28 @@ row does **not** mean that no test exists.
 
 ### 2 Text gen
 
-- [x] #26 CPU backend (GGUF)
-- [x] #27 GPU init timeout falls back to CPU
+- [ ] #26 CPU backend (GGUF)
+- [ ] #27 GPU init timeout falls back to CPU
 - [?] #32 Top-P applies to a generation - existing-test evidence audit pending
 - [?] #35 CPU threads applies - existing-test evidence audit pending
 - [?] #36 Batch size applies - existing-test evidence audit pending
 - [?] #37 Flash attention toggle applies - existing-test evidence audit pending
-- [x] #40 Thinking header reads Thinking while streaming
-- [x] #41 Long output cutoff indicator
-- [x] #45 Copy a message
-- [?] #49 Reset to Defaults (text params) - existing-test evidence audit pending
+- [ ] #40 Thinking header reads Thinking while streaming
+- [ ] #41 Long output cutoff indicator
+- [ ] #45 Copy a message
+- [x] #49 Reset to Defaults (text params)
 - [?] #50 Context-full new-chat prompt - existing-test evidence audit pending
 
 ### 3 Voice
 
-- [x] #58 Double-tap mic no collision
-- [x] #64 No stray empty bubble in voice tool turn
-- [x] #65 Voice thinking block width + alignment
+- [ ] #58 Double-tap mic no collision
+- [ ] #64 No stray empty bubble in voice tool turn
+- [ ] #65 Voice thinking block width + alignment
 
 ### 4 Image
 
 - [?] #68 Image size floors at 256 - existing-test evidence audit pending
-- [x] #71 Tap attached (pre-send) image previews
+- [ ] #71 Tap attached (pre-send) image previews
 - [?] #74 Reset to Defaults resets image params - existing-test evidence audit pending
 - [?] #75 Chat-modal vs Model-Settings sliders agree - existing-test evidence audit pending
 - [?] #76 First-gen warmup notice is accurate - existing-test evidence audit pending
@@ -337,15 +337,15 @@ row does **not** mean that no test exists.
 
 - [?] #78 Photo permission prompt on first attach - existing-test evidence audit pending
 - [?] #79 Photo permission DENIED handled gracefully - existing-test evidence audit pending
-- [x] #81 Image + text in one turn
+- [ ] #81 Image + text in one turn
 
 ### 5 Memory
 
-- [x] #91 TTS co-resident in a voice turn
-- [x] #92 Embedding sidecar resident on KB embed
-- [x] #98 Aggressive does not over-commit dirty
+- [ ] #91 TTS co-resident in a voice turn
+- [ ] #92 Embedding sidecar resident on KB embed
+- [ ] #98 Aggressive does not over-commit dirty
 - [?] #110 Delete mid-playback does not kill audio - existing-test evidence audit pending
-- [x] #111 Device info memory readout
+- [ ] #111 Device info memory readout
 
 ### 6 KB/Projects
 
@@ -357,29 +357,29 @@ row does **not** mean that no test exists.
 
 ### 7 Tools
 
-- [x] #124 Datetime tool runs
-- [x] #125 Device info tool runs
+- [ ] #124 Datetime tool runs
+- [ ] #125 Device info tool runs
 - [?] #126 Web search tool runs - existing-test evidence audit pending
 - [?] #128 Thinking + tool + answer render in order - existing-test evidence audit pending
-- [x] #130 Stringified tool args parsed
+- [ ] #130 Stringified tool args parsed
 - [?] #131 Tool router no false positive - existing-test evidence audit pending
 - [?] #136 MCP tool error handled - existing-test evidence audit pending
 - [?] #137 MCP guide screen renders - existing-test evidence audit pending
 
 ### 8 Remote
 
-- [x] #139 No phantom servers on empty scan
-- [x] #140 Remote model has a visible indicator
-- [x] #141 Remote reasoning renders (Ollama)
+- [ ] #139 No phantom servers on empty scan
+- [ ] #140 Remote model has a visible indicator
+- [ ] #141 Remote reasoning renders (Ollama)
 - [?] #146 Remote request timeout - existing-test evidence audit pending
 - [?] #147 Malformed remote response handled - existing-test evidence audit pending
 - [?] #148 Local select makes the model active - existing-test evidence audit pending
-- [x] #149 Home Text count truthful with remote active
+- [ ] #149 Home Text count truthful with remote active
 
 ### 9 Enhancement
 
-- [x] #152 Enhancement shows progress
-- [x] #153 Enhancement rewrites then regenerates
+- [ ] #152 Enhancement shows progress
+- [ ] #153 Enhancement rewrites then regenerates
 
 ### 11 Polish
 
@@ -389,9 +389,9 @@ row does **not** mean that no test exists.
 - [x] #159 Empty state: no KB docs
 - [?] #160 Long-text wrapping - existing-test evidence audit pending
 - [?] #161 Orientation behavior - existing-test evidence audit pending
-- [x] #162 About screen renders
-- [x] #163 Storage usage screen
-- [x] #165 Share/promo sheet once per session
+- [ ] #162 About screen renders
+- [ ] #163 Storage usage screen
+- [ ] #165 Share/promo sheet once per session
 - [?] #175 Thermal / long-context stress - existing-test evidence audit pending
 - [?] #176 Stay-in-the-loop card placement - existing-test evidence audit pending
 - [?] #177 Follow on X opens the profile - existing-test evidence audit pending
