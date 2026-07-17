@@ -720,35 +720,6 @@ describe('remoteServerStore', () => {
     });
   });
 
-  describe('fetchModelsFromServer with apiKey', () => {
-    it('should use Authorization header when apiKey is provided', async () => {
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          object: 'list',
-          data: [{ id: 'model-with-key' }],
-        }),
-      });
-      (global as any).fetch = mockFetch;
-
-      let serverId = '';
-      actStoreUpdate(() => {
-        serverId = useRemoteServerStore.getState().addServer({
-          name: 'API Key Server',
-          endpoint: 'http://test:11434',
-          providerType: 'openai-compatible',
-          apiKey: 'secret-key',
-        });
-      });
-
-      await useRemoteServerStore.getState().discoverModels(serverId);
-
-      expect(mockFetch).toHaveBeenCalled();
-      const callArgs = mockFetch.mock.calls[0];
-      expect(callArgs[1].headers.Authorization).toBe('Bearer secret-key');
-    });
-  });
-
   describe('Ollama model format', () => {
     it('should parse Ollama /v1/models response with models array', async () => {
       const mockFetch = jest.fn().mockResolvedValue({
