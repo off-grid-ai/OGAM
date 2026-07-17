@@ -14,8 +14,8 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **19 verified**, **8 partial/device-gated**, **6 audit pending**.
-- P1: **37 verified**, **1 partial/device-gated**, **79 audit pending**.
-- P2: **4 verified**, **0 partial/device-gated**, **80 audit pending**.
+- P1: **39 verified**, **1 partial/device-gated**, **77 audit pending**.
+- P2: **8 verified**, **0 partial/device-gated**, **76 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -251,8 +251,8 @@ row does **not** mean that no test exists.
 ### 8 Remote
 
 - [?] #138 Remote model replies
-- [?] #142 Remote reasoning renders (LM Studio)
-- [?] #143 Remote parallel tool calls
+- [x] #142 Remote reasoning renders (LM Studio)
+- [x] #143 Remote parallel tool calls
 - [?] #144 Remote prompt-enhance runs
 - [?] #145 Remote server dies mid-generation
 
@@ -368,13 +368,13 @@ row does **not** mean that no test exists.
 
 ### 8 Remote
 
-- [?] #139 No phantom servers on empty scan - existing-test evidence audit pending
-- [?] #140 Remote model has a visible indicator - existing-test evidence audit pending
-- [?] #141 Remote reasoning renders (Ollama) - existing-test evidence audit pending
+- [x] #139 No phantom servers on empty scan
+- [x] #140 Remote model has a visible indicator
+- [x] #141 Remote reasoning renders (Ollama)
 - [?] #146 Remote request timeout - existing-test evidence audit pending
 - [?] #147 Malformed remote response handled - existing-test evidence audit pending
 - [?] #148 Local select makes the model active - existing-test evidence audit pending
-- [?] #149 Home Text count truthful with remote active - existing-test evidence audit pending
+- [x] #149 Home Text count truthful with remote active
 
 ### 9 Enhancement
 
