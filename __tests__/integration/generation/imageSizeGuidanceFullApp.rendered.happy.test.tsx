@@ -1,4 +1,4 @@
-/** P1 #67 — rendered image size and guidance reach each native generation. */
+/** P1 #67/#69 — rendered image quality values reach each native generation. */
 import {
   renderMainApp,
   seedDownloadedMnnImageModel,
@@ -10,6 +10,7 @@ type Journey = Awaited<ReturnType<typeof renderMainApp>>;
 async function setImageQuality(
   journey: Journey,
   size: string,
+  steps: string,
   guidance: string,
 ): Promise<void> {
   const { rtl, view } = journey;
@@ -27,6 +28,13 @@ async function setImageQuality(
   rtl.fireEvent.changeText(sizeInput, size);
   rtl.fireEvent(sizeInput, 'submitEditing');
 
+  rtl.fireEvent.press(
+    await rtl.waitFor(() => view.getByTestId('image-steps-value-button')),
+  );
+  const stepsInput = view.getByTestId('image-steps-input');
+  rtl.fireEvent.changeText(stepsInput, steps);
+  rtl.fireEvent(stepsInput, 'submitEditing');
+
   if (!view.queryByTestId('guidance-scale-value-button')) {
     rtl.fireEvent.press(
       await rtl.waitFor(() => view.getByTestId('modal-image-advanced-toggle')),
@@ -43,6 +51,7 @@ async function setImageQuality(
     expect(view.getByTestId('image-size-value')).toHaveTextContent(
       `${size}x${size}`,
     );
+    expect(view.getByTestId('image-steps-value')).toHaveTextContent(steps);
     expect(view.getByTestId('guidance-scale-value')).toHaveTextContent(
       Number(guidance).toFixed(1),
     );
@@ -75,7 +84,7 @@ async function chooseOneTurnImageMode(journey: Journey): Promise<void> {
   });
 }
 
-describe('P1 full-app image size and guidance journey', () => {
+describe('P1 full-app image quality journey', () => {
   it('uses each rendered image configuration without a stale snapshot', async () => {
     const journey = await renderMainApp({
       boundary: {
@@ -102,7 +111,7 @@ describe('P1 full-app image size and guidance journey', () => {
       expect(view.getByTestId('chat-screen')).toBeTruthy(),
     );
 
-    await setImageQuality(journey, '320', '3.5');
+    await setImageQuality(journey, '320', '12', '3.5');
     await chooseOneTurnImageMode(journey);
     rtl.fireEvent.changeText(view.getByTestId('chat-input'), 'a blue lantern');
     rtl.fireEvent.press(view.getByTestId('send-button'));
@@ -121,14 +130,15 @@ describe('P1 full-app image size and guidance journey', () => {
       expect.objectContaining({
         width: 320,
         height: 320,
+        steps: 12,
         guidanceScale: 3.5,
       }),
     );
     const generationsAfterFirst = boundary.diffusion.calls.generateImage.length;
 
-    // Change both controls in the same live Chat. The next image must read the
+    // Change all controls in the same live Chat. The next image must read the
     // current rendered settings instead of retaining the first generation's values.
-    await setImageQuality(journey, '448', '11');
+    await setImageQuality(journey, '448', '24', '11');
     await chooseOneTurnImageMode(journey);
     rtl.fireEvent.changeText(view.getByTestId('chat-input'), 'a red lantern');
     rtl.fireEvent.press(view.getByTestId('send-button'));
@@ -156,10 +166,12 @@ describe('P1 full-app image size and guidance journey', () => {
       expect.objectContaining({
         width: 448,
         height: 448,
+        steps: 24,
         guidanceScale: 11,
       }),
     );
     expect(secondRequest?.width).not.toBe(firstRequest?.width);
+    expect(secondRequest?.steps).not.toBe(firstRequest?.steps);
     expect(secondRequest?.guidanceScale).not.toBe(firstRequest?.guidanceScale);
 
     view.unmount();
