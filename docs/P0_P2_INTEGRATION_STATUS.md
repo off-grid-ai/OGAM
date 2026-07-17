@@ -14,8 +14,8 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **19 verified**, **8 partial/device-gated**, **6 audit pending**.
-- P1: **43 verified**, **1 partial/device-gated**, **73 audit pending**.
-- P2: **10 verified**, **0 partial/device-gated**, **74 audit pending**.
+- P1: **44 verified**, **1 partial/device-gated**, **72 audit pending**.
+- P2: **15 verified**, **0 partial/device-gated**, **69 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -278,16 +278,16 @@ row does **not** mean that no test exists.
 
 ### 12 This-release
 
-- [?] #182 Parse-once thinking+tool+answer on litert
+- [x] #182 Parse-once thinking+tool+answer on litert
 - [?] #183 Parse-once thinking+tool+answer on remote
 - [?] #184 Remote activation frees local heavy
 - [?] #185 Mid-chat model switch stays coherent
 - [?] #186 Remote stream interruption recovers
 - [?] #188 Litert download warning is device-aware (BOTH screens)
-- [?] #190 Send racing a settings reload keeps thinking
-- [?] #191 GPU->CPU fallback is visibly reported
+- [x] #190 Send racing a settings reload keeps thinking
+- [x] #191 GPU->CPU fallback is visibly reported
 - [?] #192 Mic during a background STT download is not a loader
-- [?] #193 Stale failure card cleared when a new attempt starts
+- [x] #193 Stale failure card cleared when a new attempt starts
 - [x] #194 Embedded MTP activates only for capable GGUFs
 - [x] #196 Model file-list failure is retryable
 
@@ -312,8 +312,8 @@ row does **not** mean that no test exists.
 - [?] #35 CPU threads applies - existing-test evidence audit pending
 - [?] #36 Batch size applies - existing-test evidence audit pending
 - [?] #37 Flash attention toggle applies - existing-test evidence audit pending
-- [?] #40 Thinking header reads Thinking while streaming - existing-test evidence audit pending
-- [?] #41 Long output cutoff indicator - existing-test evidence audit pending
+- [x] #40 Thinking header reads Thinking while streaming
+- [x] #41 Long output cutoff indicator
 - [?] #45 Copy a message - existing-test evidence audit pending
 - [?] #49 Reset to Defaults (text params) - existing-test evidence audit pending
 - [?] #50 Context-full new-chat prompt - existing-test evidence audit pending
