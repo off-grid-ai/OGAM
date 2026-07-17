@@ -1,19 +1,99 @@
-# P0-P2 integration status
+# App-wide P0-P3 integration risk inventory
 
-This is the living, conservative evidence audit for the canonical
-`docs/RELEASE_TEST_CHECKLIST.csv`. A row is credited only after its real
-rendered/native journey has been mapped, rerun, and shown to prove the
-user-visible behavior. An audit-pending row does **not** mean that no test exists.
+This is the living, conservative evidence audit for the whole app. Product
+screens, navigation, services, stores, persistence, lifecycle behavior, native
+boundaries, and Pro extension seams define the scope. The canonical
+`docs/RELEASE_TEST_CHECKLIST.csv` is one traceability source, not the boundary of
+the inventory. A row is credited only after its real rendered/native journey has
+been mapped, rerun, and shown to prove the user-visible behavior. An audit-pending
+row does **not** mean that no test exists.
 
 ## Summary
 
-- Canonical scope: **196 journeys** - **27 P0**, **99 P1**, and **70 P2**.
-- The canonical checklist currently contains **no P3 rows**.
-- P0: **19 verified**, **8 partial/device-gated**, **0 audit pending**.
-- P1: **24 verified**, **1 partial/device-gated**, **74 audit pending**.
-- P2: **0 verified**, **0 partial/device-gated**, **70 audit pending**.
+- Current scope: **244 journeys** - **33 P0**, **117 P1**, **84 P2**, and **10 P3**.
+- Release-checklist traceability contributes 196 rows; the app-derived inventory
+  currently contributes 48 additional journeys, including the first P3 set.
+- P0: **19 verified**, **8 partial/device-gated**, **6 audit pending**.
+- P1: **26 verified**, **1 partial/device-gated**, **90 audit pending**.
+- P2: **0 verified**, **0 partial/device-gated**, **84 audit pending**.
+- P3: **0 verified**, **0 partial/device-gated**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
+
+## Priority model
+
+- **P0:** app availability, security boundary, irreversible data loss, or the core
+  offline model/download/chat path is unusable.
+- **P1:** a primary workflow is broken, state becomes inconsistent, or a common
+  failure cannot recover without reinstalling or losing work.
+- **P2:** a secondary workflow, management surface, or uncommon recovery path is
+  broken but the core app remains usable.
+- **P3:** polish, accessibility, layout, scale, and rare interaction edges that do
+  not corrupt data or block the main workflow.
+
+## App-derived additions beyond the release checklist
+
+### P0 additions
+
+- [?] APP-P0-001 Corrupt persisted app settings do not trap startup or wipe unrelated user data
+- [?] APP-P0-002 Persisted schema migrations retain chats, projects, models, and settings across old versions
+- [?] APP-P0-003 Partial database or filesystem initialization failure still reaches a recoverable screen
+- [?] APP-P0-004 Interrupted persistence writes do not erase previously committed chats or projects
+- [?] APP-P0-005 Lock state cannot be bypassed by cold start, background resume, or direct navigation
+- [?] APP-P0-006 Pro extension load failure cannot crash or disable the core app
+
+### P1 additions
+
+- [?] APP-P1-001 Cancelling a running download removes only that transfer and leaves a retriable state
+- [?] APP-P1-002 Cancelling a queued download prevents it from resurrecting after relaunch
+- [?] APP-P1-003 Repeated download taps coalesce to one native transfer and one visible row
+- [?] APP-P1-004 Foreground download hydration deduplicates native, persisted, and newer in-memory state
+- [?] APP-P1-005 Deleting the active resident model unloads it and selects a coherent fallback
+- [?] APP-P1-006 Local model import accepts a compatible file and rejects incompatible or partial files clearly
+- [?] APP-P1-007 Missing or corrupt downloaded files self-heal the model list without a phantom ready model
+- [?] APP-P1-008 Create, rename, open, and delete conversations preserve the correct active chat
+- [?] APP-P1-009 Attachments are copied durably and a missing attachment after relaunch fails gracefully
+- [?] APP-P1-010 Context compaction persists its summary without dropping recent messages
+- [?] APP-P1-011 Gallery deletion removes the file and updates the grid without stale thumbnails
+- [?] APP-P1-012 Deleting a KB document removes its index and prevents stale retrieval
+- [?] APP-P1-013 Replacing or re-indexing a KB document cannot mix old and new chunks
+- [?] APP-P1-014 Add, edit, delete, and switch remote servers recover active model selection coherently
+- [?] APP-P1-015 Remote authentication failures are actionable and never expose credentials in UI or logs
+- [?] APP-P1-016 Pro activation registers routes live; entitlement revocation removes gated behavior safely
+- [?] APP-P1-017 Experimental MTP defaults off, persists explicitly, and never changes ordinary GGUF behavior
+- [?] APP-P1-018 Background locking and unlock preserve the current conversation without exposing its content
+
+### P2 additions
+
+- [?] APP-P2-001 Model search, filters, and tabs retain coherent results through downloads and deletion
+- [?] APP-P2-002 Home and chat model pickers show the same active, downloaded, and resident state
+- [?] APP-P2-003 Download Manager cancel, retry, queued, processing, and terminal states expose valid actions
+- [?] APP-P2-004 Orphaned-file cleanup never removes a downloaded, active, or in-flight model file
+- [?] APP-P2-005 Cache clearing updates storage totals and preserves user conversations and models
+- [?] APP-P2-006 Tool enablement and disablement persist and affect only subsequent turns
+- [?] APP-P2-007 MCP servers reconnect after relaunch without duplicate clients, tools, or routes
+- [?] APP-P2-008 MCP OAuth cancel, expiry, refresh, and retry return to an actionable state
+- [?] APP-P2-009 LAN discovery deduplicates repeated scans and supports multiple configured servers
+- [?] APP-P2-010 Supported document types import and preview with stable names and metadata
+- [?] APP-P2-011 Every Settings card opens its registered screen and returns without losing tab state
+- [?] APP-P2-012 External community and support links fail gracefully when no handler is available
+- [?] APP-P2-013 Debug logs can be viewed, exported, and cleared without leaking secrets
+- [?] APP-P2-014 Dynamic Pro settings and screen registration stays deduplicated across refresh and reactivation
+
+### P3 additions
+
+- [?] APP-P3-001 Primary controls expose meaningful accessibility roles, names, values, and disabled state
+- [?] APP-P3-002 Screen-reader focus order and progress announcements follow the visible workflow
+- [?] APP-P3-003 Dynamic type does not clip critical actions, alerts, settings values, or message controls
+- [?] APP-P3-004 Keyboard, safe-area, and bottom-sheet transitions never hide the composer or confirmation actions
+- [?] APP-P3-005 Small-phone and tablet layouts keep navigation, cards, modals, and previews usable
+- [?] APP-P3-006 Rapid repeated taps on send, retry, delete, load, and record remain idempotent
+- [?] APP-P3-007 Long model, project, document, server, and conversation names wrap or truncate accessibly
+- [?] APP-P3-008 Large chat, model, project, and gallery collections remain responsive and scroll correctly
+- [?] APP-P3-009 Light, dark, and system themes preserve readable contrast across alerts and transient states
+- [?] APP-P3-010 Back gestures during loading, recording, generation, and modal presentation clean up safely
+
+## Release checklist traceability
 
 ## P0
 
@@ -120,9 +200,9 @@ user-visible behavior. An audit-pending row does **not** mean that no test exist
 
 - [?] #67 Image Size + Guidance honored
 - [?] #69 Image steps applies
-- [?] #70 Tap image opens fullscreen preview
+- [x] #70 Tap image opens fullscreen preview
 - [?] #72 Non-draw prompt routes to text
-- [?] #73 Resend of an image request re-draws
+- [x] #73 Resend of an image request re-draws
 
 ### 4 Vision
 
