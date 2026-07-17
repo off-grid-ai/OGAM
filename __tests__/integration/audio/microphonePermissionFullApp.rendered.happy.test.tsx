@@ -63,6 +63,22 @@ describe('P1 full-App microphone permission journey', () => {
       expect(view.getByText('Slide to cancel')).toBeTruthy();
     });
 
+    // #58: a second rapid grant while the first native realtime session is
+    // already capturing is absorbed; it never opens a colliding State:-100 session.
+    rtl.fireEvent(
+      view.getByTestId('voice-record-button'),
+      'responderGrant',
+      RESPONDER_EVENT,
+    );
+    await rtl.act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+    const whisperContext = await (
+      journey.boundary.whisper!.module.initWhisper as jest.Mock
+    ).mock.results[0].value;
+    expect(whisperContext.transcribeRealtime).toHaveBeenCalledTimes(1);
+    expect(journey.boundary.whisper!.realtimeActive()).toBe(true);
+
     await rtl.act(async () => {
       view.unmount();
       await new Promise(resolve => setTimeout(resolve, 0));

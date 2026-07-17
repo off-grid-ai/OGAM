@@ -1,4 +1,4 @@
-/** P1 #62 — a spoken calculator request completes the real full-App tool loop. */
+/** P1 #62 + P2 #91 — full-App Voice tool and residency journey. */
 import { Switch } from 'react-native';
 import {
   openChatWithJourneyModel,
@@ -126,6 +126,14 @@ describe('P1 full-app Voice-mode calculator journey', () => {
       expect(view.getAllByText(ANSWER).length).toBeGreaterThan(0);
       expect(view.getByText('500*321 = 160500')).toBeTruthy();
       expect(view.queryByTestId('voice-loading')).toBeNull();
+    });
+    // #91: the spoken turn leaves Voice as a reclaimable sidecar beside Text,
+    // visible through the real in-memory management surface.
+    rtl.fireEvent.press(view.getByTestId('model-selector'));
+    await rtl.waitFor(() => {
+      expect(view.getByTestId('models-row-text-ram')).toBeTruthy();
+      expect(view.getByTestId('models-row-voice-ram')).toBeTruthy();
+      expect(view.getByTestId('models-row-voice-ram')).toHaveTextContent(/GB/);
     });
     view.unmount();
   }, 30000);
