@@ -179,7 +179,7 @@ export async function renderMainApp(options: AppJourneyOptions = {}) {
  * downloaded-model records remain the device boundaries from the prior launch.
  */
 export async function relaunchMainApp(
-  options: Pick<AppJourneyOptions, 'boundary'> = {},
+  options: Pick<AppJourneyOptions, 'boundary' | 'beforeRender'> = {},
 ) {
   jest.resetModules();
   const boundary = installNativeBoundary({
@@ -196,6 +196,7 @@ export async function relaunchMainApp(
   for (const model of downloadedModels) {
     boundary.fs!.seedFile(model.filePath, model.fileSize);
   }
+  await options.beforeRender?.({ boundary, asyncStorage });
 
   const { rtl, view } = await renderApp();
   await rtl.waitFor(
