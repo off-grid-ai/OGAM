@@ -216,8 +216,8 @@ export async function openChatWithJourneyModel(
   view: RenderedAppJourney['view'],
 ): Promise<void> {
   rtl.fireEvent.press(view.getByTestId('browse-models-button'));
-  await rtl.waitFor(() => expect(view.getByText('Journey Model')).toBeTruthy());
-  rtl.fireEvent.press(view.getByTestId('model-item'));
+  const model = await rtl.waitFor(() => view.getByTestId('model-item'));
+  rtl.fireEvent.press(model);
   await rtl.waitFor(() =>
     expect(view.getByTestId('new-chat-button')).toBeTruthy(),
   );
