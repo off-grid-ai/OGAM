@@ -361,7 +361,16 @@ export const useChatScreen = () => {
     const pending = pendingMessageRef.current;
     if (pending) {
       pendingMessageRef.current = null;
-      handleSend(pending.text, pending.attachments);
+      // Model selection changes activeModelId while the load is awaited. Resume
+      // with the latest rendered dependency snapshot; this callback's original
+      // genDeps still says hasTextModel=false and would reopen the picker,
+      // silently dropping the stashed prompt.
+      await handleSendFn(genDepsRef.current, {
+        text: pending.text,
+        attachments: pending.attachments,
+        startGeneration: startGenerationRef.current,
+        setDebugInfo,
+      });
     }
   };
 

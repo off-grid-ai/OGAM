@@ -14,7 +14,7 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **24 verified**, **9 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
-- P1: **88 verified**, **3 partial/device-gated**, **0 confirmed gaps**, **27 audit pending**.
+- P1: **90 verified**, **3 partial/device-gated**, **0 confirmed gaps**, **25 audit pending**.
 - P2: **40 verified**, **0 partial/device-gated**, **8 confirmed gaps**, **36 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
@@ -202,13 +202,13 @@ row does **not** mean that no test exists.
 - [x] #67 Image Size + Guidance honored
 - [x] #69 Image steps applies
 - [x] #70 Tap image opens fullscreen preview
-- [?] #72 Non-draw prompt routes to text
+- [x] #72 Non-draw prompt routes to text — `__tests__/integration/generation/nonDrawRoutesToTextFullApp.rendered.happy.test.tsx`
 - [x] #73 Resend of an image request re-draws
 
 ### 4 Vision
 
 - [x] #80 Vision answers about an image
-- [?] #82 Big vision model decode handled
+- [x] #82 Big vision model decode handled — `__tests__/integration/generation/visionDecodeRecoveryFullApp.rendered.redflow.test.tsx`
 - [x] #83 litert vision affordance consistent
 - [x] #84 Non-vision model image is refused gracefully
 

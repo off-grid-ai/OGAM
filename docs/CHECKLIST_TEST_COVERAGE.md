@@ -9,7 +9,7 @@ coverage.
 - Canonical critical rows: **126** — **27 P0** and **99 P1**.
 - A checked row requires a real `App`/navigation journey driven by user gestures and visible
   assertions. Native/OS-only behavior additionally requires XCTest, JUnit, or the release-device gate.
-- Current automated critical coverage: **45 complete rows** plus **8 partial device rows**. Test counts
+- Current automated critical coverage: **47 complete rows** plus **8 partial device rows**. Test counts
   and line coverage are not substitutes for this journey ledger.
 - Supporting pure-function or component contracts may remain useful, but they do not check a row here.
 
@@ -130,10 +130,12 @@ still required; `[ ]` critical journey is open.
 - [ ] #67 Image size and guidance are honored.
 - [ ] #69 Image steps are honored.
 - [ ] #70 Generated image opens in the fullscreen viewer.
-- [ ] #72 A non-draw prompt routes to text with an image model active.
+- [x] #72 A non-draw prompt routes to text with an image model active.
+  - `__tests__/integration/generation/nonDrawRoutesToTextFullApp.rendered.happy.test.tsx`
 - [ ] #73 Regenerating an image request draws again.
 - [ ] #80 Vision model answers about an attached image.
-- [ ] #82 Large-model vision decode failure is user-visible and recoverable.
+- [x] #82 Large-model vision decode failure is user-visible and recoverable.
+  - `__tests__/integration/generation/visionDecodeRecoveryFullApp.rendered.redflow.test.tsx`
 - [ ] #83 LiteRT vision affordance matches capability.
 - [ ] #84 Non-vision models refuse image input gracefully.
 

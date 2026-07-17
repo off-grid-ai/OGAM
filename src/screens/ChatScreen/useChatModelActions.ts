@@ -305,6 +305,10 @@ export async function handleModelSelectFn(
   deps: ModelActionDeps,
   model: DownloadedModel,
 ): Promise<void> {
+  // Record the user's choice through the active-model owner before loading it.
+  // Besides keeping lastTextModelId accurate for later eviction/reload, this
+  // makes a selector choice semantically identical to Home and ChatsList.
+  activeModelService.selectTextModel(model.id);
   if (llmService.getLoadedModelPath() === model.filePath) {
     deps.setShowModelSelector(false);
     return;

@@ -278,7 +278,12 @@ export interface LlamaFake {
   calls: { completion: unknown[][] };
 }
 
-function makeLlamaFake(onRelease?: () => void, chatTemplate?: string, mtpLayers: number = 0): LlamaFake {
+function makeLlamaFake(
+  onRelease?: () => void,
+  chatTemplate?: string,
+  mtpLayers: number = 0,
+  vision: boolean = false,
+): LlamaFake {
   const calls: LlamaFake['calls'] = { completion: [] };
   let pending: { text: string; toolCalls?: LlamaScriptToolCall[]; throwMessage?: string; throwAfter?: string; pauseAfter?: string; holdBeforeStream?: boolean; thinkingText?: string; reasoning?: string; completionMeta?: CompletionMeta } = { text: '' };
   let scriptedQueue: Array<typeof pending> = [];
@@ -427,7 +432,7 @@ function makeLlamaFake(onRelease?: () => void, chatTemplate?: string, mtpLayers:
     // still-high footprint as its baseline and then observes the drop on a later poll (as on device).
     release: jest.fn(async () => { setTimeout(() => onRelease?.(), 50); }),
     tokenize: jest.fn().mockResolvedValue({ tokens: [1, 2, 3] }),
-    initMultimodal: jest.fn().mockResolvedValue(false),
+    initMultimodal: jest.fn().mockResolvedValue(vision),
     // The post-init multimodal probe. A scripted hold parks the caller here — the real device's
     // window between context init and capability detection — until releaseMultimodalHold().
     getMultimodalSupport: jest.fn(async () => {
@@ -437,7 +442,7 @@ function makeLlamaFake(onRelease?: () => void, chatTemplate?: string, mtpLayers:
         await new Promise<void>((res) => { mmHoldRelease = res; });
         mmHoldEngaged = false;
       }
-      return { vision: false, audio: false };
+      return { vision, audio: false };
     }),
     // Embedding boundary (embedding-model contexts, initLlama({embedding:true})): return a device-shaped
     // 384-dim vector derived from the text so RAG cosine ranking is real. Matches all-MiniLM-L6-v2 (384).
@@ -816,6 +821,8 @@ export interface InstallOpts {
   llamaChatTemplate?: string;
   /** Positive GGUF nextn_predict_layers metadata returned by loadLlamaModelInfo. */
   llamaMtpLayers?: number;
+  /** Report a vision-capable GGUF runtime after its projector is initialized. */
+  llamaVision?: boolean;
   /** Seed a stateful background-download native module (boundary.download). */
   download?: boolean;
   /** Replace the global whisper.rn stub with a driveable STT context (boundary.whisper). */
@@ -879,7 +886,14 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   const diffusion = makeDiffusionFake(fsFake?.seedFile);
 
   // Scriptable llama.rn: override the global stub so completion output is under test control.
-  const llamaFake = opts.llama ? makeLlamaFake(freeModelMemory, opts.llamaChatTemplate, opts.llamaMtpLayers) : undefined;
+  const llamaFake = opts.llama
+    ? makeLlamaFake(
+        freeModelMemory,
+        opts.llamaChatTemplate,
+        opts.llamaMtpLayers,
+        opts.llamaVision,
+      )
+    : undefined;
   if (llamaFake) jest.doMock('llama.rn', () => llamaFake.module);
 
   // Driveable whisper.rn: override the global stub so realtime/file transcription is under test control.
