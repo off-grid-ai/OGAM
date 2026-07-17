@@ -13,7 +13,7 @@ row does **not** mean that no test exists.
 - Current scope: **244 journeys** - **33 P0**, **117 P1**, **84 P2**, and **10 P3**.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
-- P0: **13 verified**, **10 partial/device-gated**, **5 confirmed gaps**, **5 audit pending**.
+- P0: **14 verified**, **10 partial/device-gated**, **4 confirmed gaps**, **5 audit pending**.
 - P1: **11 verified**, **1 partial/device-gated**, **45 confirmed gaps**, **60 audit pending**.
 - P2: **4 verified**, **0 partial/device-gated**, **26 confirmed gaps**, **54 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
@@ -128,7 +128,7 @@ row does **not** mean that no test exists.
 ### 5 Memory
 
 - [x] #85 Loading mode selectable + persists
-- [ ] #86 Whisper not resident on download
+- [x] #86 Whisper not resident on download
 - [ ] #87 Conservative = one heavy at a time
 - [ ] #88 Balanced = co-reside if they fit
 - [ ] #93 Idle STT reclaimed for a text turn
