@@ -14,8 +14,8 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **18 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **5 audit pending**.
-- P1: **19 verified**, **1 partial/device-gated**, **37 confirmed gaps**, **60 audit pending**.
-- P2: **10 verified**, **0 partial/device-gated**, **21 confirmed gaps**, **53 audit pending**.
+- P1: **20 verified**, **1 partial/device-gated**, **36 confirmed gaps**, **60 audit pending**.
+- P2: **11 verified**, **0 partial/device-gated**, **20 confirmed gaps**, **53 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -223,7 +223,7 @@ row does **not** mean that no test exists.
 - [?] #102 Survival floor blocks a guaranteed OOM
 - [?] #103 Image->chat swap
 - [?] #104 Switch active model mid-chat
-- [ ] #105 Eject All frees everything
+- [x] #105 Eject All frees everything
 - [ ] #106 Eject one resident from In Memory
 - [ ] #107 Lazy reload after eject
 - [ ] #108 In Memory shows loaded model RAM
@@ -369,7 +369,7 @@ row does **not** mean that no test exists.
 ### 8 Remote
 
 - [x] #139 No phantom servers on empty scan
-- [ ] #140 Remote model has a visible indicator
+- [x] #140 Remote model has a visible indicator
 - [ ] #141 Remote reasoning renders (Ollama)
 - [?] #146 Remote request timeout - existing-test evidence audit pending
 - [?] #147 Malformed remote response handled - existing-test evidence audit pending
