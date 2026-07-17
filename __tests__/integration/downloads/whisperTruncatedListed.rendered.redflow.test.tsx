@@ -1,33 +1,30 @@
-/**
- * RED-FLOW (UI, rendered) — V2 at the pixel: the REAL DownloadManagerScreen shows a truncated whisper
- * file as a downloaded-model card the user can tap. Mounts the real screen over the stateful in-memory
- * filesystem; the REAL whisperService + useVoiceDownloadItems + the screen's cards render.
- *
- * Method note: waitFor a VALID card first (proves the async list actually loaded), THEN assert the
- * truncated file is absent — otherwise asserting absence passes instantly for the wrong reason.
- */
-import { installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
+/** P1 #19 — truncated Whisper files never surface as ready in the real App. */
+import { renderMainApp } from '../../harness/appJourney';
 
-describe('V2 (rendered) — truncated whisper file shows as a downloaded card', () => {
-  it('renders no downloaded-model card for a truncated whisper file (but does for a valid one)', async () => {
-    const boundary = installNativeBoundary({ download: true, fs: true });
-    const dir = `${boundary.fs!.DocumentDirectoryPath}/whisper-models`;
-    boundary.fs!.seedFile(`${dir}/ggml-tiny.en.bin`, 75 * 1024 * 1024); // valid
-    boundary.fs!.seedFile(`${dir}/ggml-base.en.bin`, 5 * 1024 * 1024);  // truncated (< MIN_MODEL_FILE_SIZE)
-    /* eslint-disable @typescript-eslint/no-var-requires */
-    const React = require('react');
-    const { render, waitFor } = requireRTL();
-    const { DownloadManagerScreen } = require('../../../src/screens/DownloadManagerScreen');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+describe('P1 truncated Whisper-file journey', () => {
+  it('lists a valid positive control but hides the truncated model', async () => {
+    const { rtl, view } = await renderMainApp({
+      boundary: { download: true },
+      beforeRender: ({ boundary }) => {
+        const dir = `${boundary.fs!.DocumentDirectoryPath}/whisper-models`;
+        boundary.fs!.seedFile(`${dir}/ggml-tiny.en.bin`, 75 * 1024 * 1024);
+        boundary.fs!.seedFile(`${dir}/ggml-base.en.bin`, 5 * 1024 * 1024);
+      },
+    });
+    const { fireEvent, waitFor } = rtl;
 
-    const view = render(React.createElement(DownloadManagerScreen, {}));
+    fireEvent.press(view.getByTestId('models-tab'));
+    await waitFor(() => expect(view.getByTestId('models-screen')).toBeTruthy());
+    fireEvent.press(view.getByTestId('downloads-icon'));
+    await waitFor(() =>
+      expect(view.getByTestId('downloaded-models-screen')).toBeTruthy(),
+    );
+    fireEvent.press(view.getByText('Voice Models'));
 
-    // The valid model renders — this also flushes the async list load.
-    await waitFor(() => { expect(view.queryByText(/ggml-tiny\.en\.bin/)).not.toBeNull(); });
-
-    // Correct: the truncated file is NOT surfaced as a downloaded model. Today the DM renders it too
-    // (whisperService.listDownloadedModels has no size floor) → the user sees a corrupt "downloaded"
-    // card that then fails to load → RED.
-    expect(view.queryByText(/ggml-base\.en\.bin/)).toBeNull();
+    await waitFor(() =>
+      expect(view.getByText('ggml-tiny.en.bin')).toBeTruthy(),
+    );
+    expect(view.queryByText('ggml-base.en.bin')).toBeNull();
+    view.unmount();
   });
 });
