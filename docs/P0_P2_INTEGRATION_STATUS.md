@@ -10,12 +10,12 @@ row does **not** mean that no test exists.
 
 ## Summary
 
-- Current scope: **244 journeys** - **33 P0**, **117 P1**, **84 P2**, and **10 P3**.
+- Current scope: **245 journeys** - **33 P0**, **118 P1**, **84 P2**, and **10 P3**.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **23 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
-- P1: **53 verified**, **2 partial/device-gated**, **11 confirmed gaps**, **51 audit pending**.
-- P2: **38 verified**, **0 partial/device-gated**, **9 confirmed gaps**, **37 audit pending**.
+- P1: **57 verified**, **2 partial/device-gated**, **8 confirmed gaps**, **51 audit pending**.
+- P2: **40 verified**, **0 partial/device-gated**, **8 confirmed gaps**, **36 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -62,6 +62,7 @@ row does **not** mean that no test exists.
 - [?] APP-P1-016 Pro activation registers routes live; entitlement revocation removes gated behavior safely
 - [x] APP-P1-017 Experimental MTP defaults off, persists explicitly, and never changes ordinary GGUF behavior
 - [?] APP-P1-018 Background locking and unlock preserve the current conversation without exposing its content
+- [x] APP-P1-019 Android Gemma LiteRT vision preserves the image and recovers when native context is RAM-clamped
 
 ### P2 additions
 
@@ -231,7 +232,7 @@ row does **not** mean that no test exists.
 
 ### 6 KB/Projects
 
-- [ ] #112 Create a project
+- [x] #112 Create a project
 - [?] #113 KB indexes a text PDF
 - [?] #117 Embedding failure aborts + retry
 - [?] #118 KB retrieval in a chat
@@ -250,8 +251,8 @@ row does **not** mean that no test exists.
 
 ### 8 Remote
 
-- [ ] #138 Remote model replies
-- [ ] #142 Remote reasoning renders (LM Studio)
+- [x] #138 Remote model replies
+- [x] #142 Remote reasoning renders (LM Studio)
 - [ ] #143 Remote parallel tool calls
 - [?] #144 Remote prompt-enhance runs
 - [?] #145 Remote server dies mid-generation
@@ -359,7 +360,7 @@ row does **not** mean that no test exists.
 
 - [x] #124 Datetime tool runs
 - [x] #125 Device info tool runs
-- [?] #126 Web search tool runs - existing-test evidence audit pending
+- [x] #126 Web search tool runs
 - [x] #128 Thinking + tool + answer render in order
 - [x] #130 Stringified tool args parsed
 - [?] #131 Tool router no false positive - existing-test evidence audit pending
@@ -378,7 +379,7 @@ row does **not** mean that no test exists.
 
 ### 9 Enhancement
 
-- [ ] #152 Enhancement shows progress
+- [x] #152 Enhancement shows progress
 - [x] #153 Enhancement rewrites then regenerates
 
 ### 11 Polish
