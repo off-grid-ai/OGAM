@@ -96,7 +96,10 @@ describe('cross-screen analysis sync (rendered): every state reads the SAME on T
     await act(async () => { fireEvent.press(ui.getByTestId(`today-clip-${id}`)); await new Promise((r) => setTimeout(r, 0)); });
     await waitFor(() => ui.getByTestId('insights-overflow'));
     const offersAnalyse = ui.queryByTestId('insights-generate') != null || ui.queryByTestId('insights-analyse') != null;
-    const showsAnalysedBody = ui.queryByTestId('insights-regenerate') != null;
+    // Add-to-chat is the analysed-state primary (the detailActions row renders only when analysed +
+    // not generating — line 215 early-returns AnalyseCta otherwise). It replaced insights-regenerate,
+    // which was removed (it was a silent no-op that duplicated the 3-dot Re-analyse).
+    const showsAnalysedBody = ui.queryByTestId('insights-add-to-chat') != null;
     expect(offersAnalyse !== showsAnalysedBody).toBe(true); // decisive: exactly one, so a false green can't hide
     const detailAnalysed = showsAnalysedBody;
 
