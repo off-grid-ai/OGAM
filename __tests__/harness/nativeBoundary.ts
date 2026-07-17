@@ -739,6 +739,10 @@ function makeFsFake(): FsFake {
     }),
     readFile: jest.fn(async (p: string) => vol.readFileSync(norm(p), 'utf8')),
     read: jest.fn(async () => 'GGUF'),
+    getFSInfo: jest.fn(async () => ({
+      totalSpace: 128 * GB,
+      freeSpace: 96 * GB,
+    })),
     unlink: jest.fn(async (p: string) => { vol.rmSync(norm(p), { recursive: true, force: true }); }),
     moveFile: jest.fn(async (from: string, to: string) => { vol.renameSync(norm(from), norm(to)); }),
     copyFile: jest.fn(async (from: string, to: string) => { vol.copyFileSync(norm(from), norm(to)); }),
