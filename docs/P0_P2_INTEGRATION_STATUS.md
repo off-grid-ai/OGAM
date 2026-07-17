@@ -14,7 +14,7 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **23 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
-- P1: **66 verified**, **2 partial/device-gated**, **0 confirmed gaps**, **50 audit pending**.
+- P1: **68 verified**, **2 partial/device-gated**, **0 confirmed gaps**, **48 audit pending**.
 - P2: **40 verified**, **0 partial/device-gated**, **8 confirmed gaps**, **36 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
@@ -173,7 +173,7 @@ row does **not** mean that no test exists.
 
 - [x] #24 First message replies (litert)
 - [x] #25 GPU/OpenCL backend
-- [?] #28 GPU layers slider applies
+- [x] #28 GPU layers slider applies
 - [x] #29 litert CPU backend fails gracefully
 - [?] #30 NPU/HTP backend gated or graceful
 - [x] #31 Temperature applies to a generation
@@ -280,7 +280,7 @@ row does **not** mean that no test exists.
 ### 12 This-release
 
 - [x] #182 Parse-once thinking+tool+answer on litert
-- [?] #183 Parse-once thinking+tool+answer on remote
+- [x] #183 Parse-once thinking+tool+answer on remote
 - [?] #184 Remote activation frees local heavy
 - [?] #185 Mid-chat model switch stays coherent
 - [?] #186 Remote stream interruption recovers
