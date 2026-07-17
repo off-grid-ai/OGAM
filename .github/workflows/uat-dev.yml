@@ -70,12 +70,12 @@ jobs:
       - uses: ruby/setup-ruby@v1
         with: { ruby-version: '3.3', bundler-cache: true }
       - name: pod install
-        # Restore Podfile.lock afterward: a CI CocoaPods version can rewrite it, which would
-        # dirty the tree and trip uat.sh's clean-tree pre-check. The pods are already installed,
-        # so the lock's content doesn't affect the build.
-        run: |
-          cd ios && pod install
-          cd .. && git checkout -- ios/Podfile.lock 2>/dev/null || true
+        # Do NOT restore Podfile.lock afterward. CI's CocoaPods can rewrite it (e.g. the fmt patch),
+        # and the archive's "[CP] Check Pods Manifest.lock" phase compares Podfile.lock against the
+        # freshly generated Pods/Manifest.lock — restoring the committed lock makes them diverge and
+        # fails the archive. Let the regenerated lock stand (it matches Manifest.lock); uat.sh's
+        # clean-tree check whitelists ios/Podfile.lock so this no longer trips the pre-check.
+        run: cd ios && pod install
       - name: Decode signing secrets
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/release.keystore"
