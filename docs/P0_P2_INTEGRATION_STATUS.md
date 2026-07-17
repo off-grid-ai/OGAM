@@ -15,7 +15,7 @@ row does **not** mean that no test exists.
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **23 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
 - P1: **53 verified**, **2 partial/device-gated**, **11 confirmed gaps**, **51 audit pending**.
-- P2: **35 verified**, **0 partial/device-gated**, **12 confirmed gaps**, **37 audit pending**.
+- P2: **38 verified**, **0 partial/device-gated**, **9 confirmed gaps**, **37 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -306,7 +306,7 @@ row does **not** mean that no test exists.
 
 ### 2 Text gen
 
-- [ ] #26 CPU backend (GGUF)
+- [x] #26 CPU backend (GGUF)
 - [ ] #27 GPU init timeout falls back to CPU
 - [x] #32 Top-P applies to a generation
 - [x] #35 CPU threads applies
@@ -357,8 +357,8 @@ row does **not** mean that no test exists.
 
 ### 7 Tools
 
-- [ ] #124 Datetime tool runs
-- [ ] #125 Device info tool runs
+- [x] #124 Datetime tool runs
+- [x] #125 Device info tool runs
 - [?] #126 Web search tool runs - existing-test evidence audit pending
 - [x] #128 Thinking + tool + answer render in order
 - [x] #130 Stringified tool args parsed
