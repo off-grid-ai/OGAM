@@ -14,8 +14,8 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **18 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **5 audit pending**.
-- P1: **20 verified**, **1 partial/device-gated**, **36 confirmed gaps**, **60 audit pending**.
-- P2: **11 verified**, **0 partial/device-gated**, **20 confirmed gaps**, **53 audit pending**.
+- P1: **23 verified**, **1 partial/device-gated**, **33 confirmed gaps**, **60 audit pending**.
+- P2: **15 verified**, **0 partial/device-gated**, **16 confirmed gaps**, **53 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -179,7 +179,7 @@ row does **not** mean that no test exists.
 - [?] #33 Context length applies
 - [?] #34 System prompt applies
 - [?] #38 Plain reply has no stray think tags
-- [ ] #39 Thinking renders in block mid-stream
+- [x] #39 Thinking renders in block mid-stream
 - [x] #44 Queue while generating
 - [x] #46 Edit a user message and resend
 - [x] #47 Regenerate a reply
@@ -224,8 +224,8 @@ row does **not** mean that no test exists.
 - [?] #103 Image->chat swap
 - [?] #104 Switch active model mid-chat
 - [x] #105 Eject All frees everything
-- [ ] #106 Eject one resident from In Memory
-- [ ] #107 Lazy reload after eject
+- [x] #106 Eject one resident from In Memory
+- [x] #107 Lazy reload after eject
 - [ ] #108 In Memory shows loaded model RAM
 - [?] #109 Stale TTS pressure cleared on delete
 
@@ -312,8 +312,8 @@ row does **not** mean that no test exists.
 - [?] #35 CPU threads applies - existing-test evidence audit pending
 - [?] #36 Batch size applies - existing-test evidence audit pending
 - [?] #37 Flash attention toggle applies - existing-test evidence audit pending
-- [ ] #40 Thinking header reads Thinking while streaming
-- [ ] #41 Long output cutoff indicator
+- [x] #40 Thinking header reads Thinking while streaming
+- [x] #41 Long output cutoff indicator
 - [x] #45 Copy a message
 - [x] #49 Reset to Defaults (text params)
 - [?] #50 Context-full new-chat prompt - existing-test evidence audit pending
@@ -374,7 +374,7 @@ row does **not** mean that no test exists.
 - [?] #146 Remote request timeout - existing-test evidence audit pending
 - [?] #147 Malformed remote response handled - existing-test evidence audit pending
 - [?] #148 Local select makes the model active - existing-test evidence audit pending
-- [ ] #149 Home Text count truthful with remote active
+- [x] #149 Home Text count truthful with remote active
 
 ### 9 Enhancement
 
@@ -391,7 +391,7 @@ row does **not** mean that no test exists.
 - [?] #161 Orientation behavior - existing-test evidence audit pending
 - [x] #162 About screen renders
 - [x] #163 Storage usage screen
-- [ ] #165 Share/promo sheet once per session
+- [x] #165 Share/promo sheet once per session
 - [?] #175 Thermal / long-context stress - existing-test evidence audit pending
 - [?] #176 Stay-in-the-loop card placement - existing-test evidence audit pending
 - [?] #177 Follow on X opens the profile - existing-test evidence audit pending
