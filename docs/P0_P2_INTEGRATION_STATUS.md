@@ -13,7 +13,7 @@ row does **not** mean that no test exists.
 - Current scope: **244 journeys** - **33 P0**, **117 P1**, **84 P2**, and **10 P3**.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
-- P0: **6 verified**, **10 partial/device-gated**, **12 confirmed gaps**, **5 audit pending**.
+- P0: **7 verified**, **10 partial/device-gated**, **11 confirmed gaps**, **5 audit pending**.
 - P1: **11 verified**, **1 partial/device-gated**, **45 confirmed gaps**, **60 audit pending**.
 - P2: **4 verified**, **0 partial/device-gated**, **26 confirmed gaps**, **54 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
@@ -137,7 +137,7 @@ row does **not** mean that no test exists.
 
 ### 11 Polish
 
-- [ ] #167 Chat history survives relaunch
+- [x] #167 Chat history survives relaunch
 - [ ] #168 Downloaded models survive relaunch
 - [ ] #171 Download entries survive relaunch
 
