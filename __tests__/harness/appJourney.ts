@@ -126,3 +126,38 @@ export async function renderMainApp(options: AppJourneyOptions = {}) {
 
   return { boundary, asyncStorage, rtl, view };
 }
+
+/**
+ * Relaunch an existing-user App journey without rewriting its persisted state.
+ * A fresh module graph recreates every Zustand store, while AsyncStorage and the
+ * downloaded-model records remain the device boundaries from the prior launch.
+ */
+export async function relaunchMainApp(
+  options: Pick<AppJourneyOptions, 'boundary'> = {},
+) {
+  jest.resetModules();
+  const boundary = installNativeBoundary({
+    ...options.boundary,
+    fs: true,
+  });
+  const asyncStorageModule = require('@react-native-async-storage/async-storage');
+  const asyncStorage = (asyncStorageModule.default ??
+    asyncStorageModule) as typeof import('@react-native-async-storage/async-storage').default;
+  const rawModels = await asyncStorage.getItem(DOWNLOADED_MODELS_KEY);
+  const downloadedModels = rawModels
+    ? (JSON.parse(rawModels) as DownloadedModel[])
+    : [];
+  for (const model of downloadedModels) {
+    boundary.fs!.seedFile(model.filePath, model.fileSize);
+  }
+
+  const { rtl, view } = await renderApp();
+  await rtl.waitFor(
+    () => {
+      expect(view.queryByTestId('app-loading')).toBeNull();
+      expect(view.queryByTestId('home-screen')).not.toBeNull();
+    },
+    { timeout: 15000 },
+  );
+  return { boundary, asyncStorage, rtl, view };
+}
