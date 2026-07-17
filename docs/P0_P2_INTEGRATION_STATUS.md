@@ -14,8 +14,8 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **18 verified**, **10 partial/device-gated**, **0 confirmed gaps**, **5 audit pending**.
-- P1: **24 verified**, **1 partial/device-gated**, **32 confirmed gaps**, **60 audit pending**.
-- P2: **19 verified**, **0 partial/device-gated**, **15 confirmed gaps**, **50 audit pending**.
+- P1: **26 verified**, **1 partial/device-gated**, **30 confirmed gaps**, **60 audit pending**.
+- P2: **23 verified**, **0 partial/device-gated**, **15 confirmed gaps**, **46 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -190,8 +190,8 @@ row does **not** mean that no test exists.
 - [?] #51 Mic permission prompt on first record
 - [?] #52 Mic permission DENIED handled gracefully
 - [?] #56 Voice note transcript on litert + tool
-- [ ] #57 Mic stops cleanly on leave
-- [ ] #59 Voice-mode transcript renders
+- [x] #57 Mic stops cleanly on leave
+- [x] #59 Voice-mode transcript renders
 - [ ] #61 Voice draw-request routes to image
 - [ ] #62 Voice calculator journey
 - [ ] #63 Voice-mode Stop button while generating
@@ -308,10 +308,10 @@ row does **not** mean that no test exists.
 
 - [ ] #26 CPU backend (GGUF)
 - [ ] #27 GPU init timeout falls back to CPU
-- [?] #32 Top-P applies to a generation - existing-test evidence audit pending
-- [?] #35 CPU threads applies - existing-test evidence audit pending
-- [?] #36 Batch size applies - existing-test evidence audit pending
-- [?] #37 Flash attention toggle applies - existing-test evidence audit pending
+- [x] #32 Top-P applies to a generation
+- [x] #35 CPU threads applies
+- [x] #36 Batch size applies
+- [x] #37 Flash attention toggle applies
 - [x] #40 Thinking header reads Thinking while streaming
 - [x] #41 Long output cutoff indicator
 - [x] #45 Copy a message
