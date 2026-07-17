@@ -32,6 +32,7 @@ import { hardwareService } from '../services';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { GITHUB_URL, FOLLOW_X_URL, SLACK_INVITE_URL, shareOnX } from '../utils/sharePrompt';
 import { clearProForTesting } from '../services/proLicenseService';
+import { loadProFeatures } from '../bootstrap/loadProFeatures';
 import { useProStatusLabel } from '../hooks/useProStatusLabel';
 import packageJson from '../../package.json';
 
@@ -111,12 +112,8 @@ export const SettingsScreen: React.FC = () => {
     }
   };
 
-  // DEV-only: flip the Pro auto-unlock. Disabling also clears the cached license
-  // so the build behaves like a fresh free install. We flip the store flags
-  // synchronously (so the UI drops Pro immediately) and do NOT auto-reload —
-  // an immediate reload races the async persist write and rehydrates the old
-  // Pro-active state. A manual restart applies feature load/unload (slots
-  // registered at boot can't be cleanly torn down at runtime).
+  // DEV-only: exercise the same live feature activation/revocation lifecycle as
+  // a production entitlement change. Disabling also clears the cached license.
   const handleToggleDevPro = async () => {
     const disabling = !devProDisabled;
     if (disabling) {
@@ -125,10 +122,12 @@ export const SettingsScreen: React.FC = () => {
       setHasRegisteredPro(false);
     } else {
       setDevProDisabled(false);
+      await loadProFeatures(true);
+      setHasRegisteredPro(true);
     }
     Alert.alert(
       disabling ? 'Pro disabled (DEV)' : 'Pro enabled (DEV)',
-      `Restart the app to fully ${disabling ? 'unload' : 'load'} Pro features.`,
+      `Pro features are now ${disabling ? 'unavailable' : 'available'}.`,
     );
   };
 

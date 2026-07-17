@@ -23,9 +23,19 @@ function emitChange(): void {
   for (const l of listeners) l();
 }
 
-export function registerSlot(name: string, component: ComponentType<any>): void {
+export function registerSlot(
+  name: string,
+  component: ComponentType<any>,
+): void {
   if (slots[name] === component) return; // no-op re-register (dev Fast Refresh)
   slots[name] = component;
+  emitChange();
+}
+
+/** Remove a feature-owned component slot and reactively restore the core fallback. */
+export function unregisterSlot(name: string): void {
+  if (!slots[name]) return;
+  delete slots[name];
   emitChange();
 }
 
@@ -36,7 +46,7 @@ export function getSlot(name: string): ComponentType<any> | undefined {
 /** Reactive read of a slot — re-renders when the slot is (de)registered. */
 export function useSlot(name: string): ComponentType<any> | undefined {
   return useSyncExternalStore(
-    (onStoreChange) => {
+    onStoreChange => {
       listeners.add(onStoreChange);
       return () => listeners.delete(onStoreChange);
     },

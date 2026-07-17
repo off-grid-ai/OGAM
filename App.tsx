@@ -122,6 +122,12 @@ function App() {
       }
     }, [authEnabled, setLastBackgroundTime, setLocked]),
     onForeground: useCallback(() => {
+      // Refresh the paid-feature entitlement whenever the app comes back online.
+      // A revoked Keygen license tears down Pro routes/hooks/slots immediately;
+      // offline failures preserve the cached entitlement in proLicenseService.
+      checkProStatus().catch((error) => {
+        logger.error('[App] Failed to refresh Pro entitlement on foreground:', error);
+      });
       // Rebuild the unified store before reattaching JS listeners so restored
       // progress events map onto current download entries instead of racing hydration.
       // NOTE: restoreQueuedDownloads() is intentionally NOT called here — on a foreground

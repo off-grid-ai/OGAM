@@ -26,6 +26,14 @@ export function registerSettingsSection(component: ComponentType<any>): void {
   emitChange();
 }
 
+/** Remove a feature-owned section and update every mounted Settings screen. */
+export function unregisterSettingsSection(component: ComponentType<any>): void {
+  const index = sections.indexOf(component);
+  if (index === -1) return;
+  sections.splice(index, 1);
+  emitChange();
+}
+
 export function getSettingsSections(): ComponentType<any>[] {
   return sections;
 }
@@ -33,7 +41,7 @@ export function getSettingsSections(): ComponentType<any>[] {
 /** Reactive read — re-renders the consumer when a section is (de)registered. */
 export function useSettingsSections(): ComponentType<any>[] {
   return useSyncExternalStore(
-    (onStoreChange) => {
+    onStoreChange => {
       listeners.add(onStoreChange);
       return () => listeners.delete(onStoreChange);
     },

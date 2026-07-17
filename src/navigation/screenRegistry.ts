@@ -30,6 +30,14 @@ export function registerScreen(screen: RegisteredScreen): void {
   emitChange();
 }
 
+/** Remove a dynamically-owned route when its feature entitlement is revoked. */
+export function unregisterScreen(name: string): void {
+  const next = screens.filter(screen => screen.name !== name);
+  if (next.length === screens.length) return;
+  screens = next;
+  emitChange();
+}
+
 export function getRegisteredScreens(): RegisteredScreen[] {
   return screens;
 }
@@ -41,7 +49,9 @@ export function getRegisteredScreens(): RegisteredScreen[] {
  * the consumer re-render. Mirrors useSlot in slotRegistry.
  */
 export function useHasRegisteredScreen(name: string): boolean {
-  return useSyncExternalStore(subscribe, () => screens.some(s => s.name === name));
+  return useSyncExternalStore(subscribe, () =>
+    screens.some(s => s.name === name),
+  );
 }
 
 /**

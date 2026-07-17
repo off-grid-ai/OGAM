@@ -68,6 +68,20 @@ class ModelDownloadService {
     this.onProviderChange(); // capture/log this provider's initial state
   }
 
+  /** Stop observing and remove a dynamically-owned provider. */
+  unregister(modelType: ModelDownloadType): void {
+    if (!this.providers.has(modelType)) return;
+    this.providerUnsubs.get(modelType)?.();
+    this.providerUnsubs.delete(modelType);
+    this.providers.delete(modelType);
+    for (const id of [...this.lastStatus.keys()]) {
+      if (id.startsWith(`${modelType}:`)) this.lastStatus.delete(id);
+    }
+    this.lastList = this.lastList.filter(download => download.modelType !== modelType);
+    this.notify();
+    logger.log(`[DL-SM] provider unregistered type=${modelType}`);
+  }
+
   /**
    * A provider reported a change. Notify external subscribers AND self-drive a
    * (coalesced) list() so transitions are detected + [DL-SM]-logged even when NO UI

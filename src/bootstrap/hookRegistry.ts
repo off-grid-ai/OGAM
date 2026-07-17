@@ -16,6 +16,11 @@ export function registerHook(name: string, fn: HookFn): void {
   hooks[name] = fn;
 }
 
+/** Remove a feature-owned behavior hook when that feature becomes unavailable. */
+export function unregisterHook(name: string): void {
+  delete hooks[name];
+}
+
 /** Call a hook if registered; returns its result, or undefined when absent. */
 export function callHook<R = any>(name: string, ...args: any[]): R | undefined {
   const fn = hooks[name];

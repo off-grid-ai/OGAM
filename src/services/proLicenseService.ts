@@ -46,6 +46,10 @@ const NEEDS_ACTIVATION = ['NO_MACHINE', 'NO_MACHINES', 'FINGERPRINT_SCOPE_MISMAT
 function setProInStore(isPro: boolean): void {
   const { useAppStore } = require('../stores/appStore');
   useAppStore.getState().setHasRegisteredPro(isPro);
+  if (!isPro) {
+    const { unloadProFeatures } = require('../bootstrap/loadProFeatures');
+    unloadProFeatures();
+  }
 }
 
 /** Whether the cached license grants Pro right now (offline-safe). */
