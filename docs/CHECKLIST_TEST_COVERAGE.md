@@ -9,7 +9,7 @@ coverage.
 - Canonical critical rows: **126** — **27 P0** and **99 P1**.
 - A checked row requires a real `App`/navigation journey driven by user gestures and visible
   assertions. Native/OS-only behavior additionally requires XCTest, JUnit, or the release-device gate.
-- Current automated critical coverage: **39 complete rows** plus **8 partial device rows**. Test counts
+- Current automated critical coverage: **45 complete rows** plus **8 partial device rows**. Test counts
   and line coverage are not substitutes for this journey ledger.
 - Supporting pure-function or component contracts may remain useful, but they do not check a row here.
 
@@ -162,11 +162,16 @@ still required; `[ ]` critical journey is open.
 ### Knowledge base and projects
 
 - [ ] #112 Create a project.
-- [ ] #113 Index a text PDF in the knowledge base.
-- [ ] #117 Embedding failure aborts indexing and Retry succeeds.
-- [ ] #118 Retrieve indexed knowledge in a project chat.
-- [ ] #119 New chat inherits the selected project.
-- [ ] #122 Deleting a project handles its chats safely.
+- [x] #113 Index a text PDF in the knowledge base.
+  - `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
+- [x] #117 Embedding failure aborts indexing and Retry succeeds.
+  - `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
+- [x] #118 Retrieve indexed knowledge in a project chat.
+  - `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
+- [x] #119 New chat inherits the selected project.
+  - `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
+- [x] #122 Deleting a project handles its chats safely.
+  - `__tests__/integration/projects/deleteProjectChatsFullApp.rendered.happy.test.tsx`
 
 ### Tools and MCP
 
@@ -198,7 +203,8 @@ still required; `[ ]` critical journey is open.
 - [ ] #164 Set and enforce an app-lock passphrase.
 - [ ] #166 Settings persist across relaunch.
 - [ ] #169 Active model selection survives relaunch.
-- [ ] #170 Projects and knowledge-base data survive relaunch.
+- [x] #170 Projects and knowledge-base data survive relaunch.
+  - `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
 - [x] #172 Background -> foreground during generation is coherent.
   - `__tests__/integration/generation/backgroundForegroundGenerationFullApp.rendered.happy.test.tsx`
 - [x] #173 Kill during generation recovers without a stuck turn.

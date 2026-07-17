@@ -62,7 +62,14 @@ class RagService {
     }
 
     onProgress?.({ stage: 'indexing', message: 'Indexing chunks...' });
-    const docId = ragDatabase.insertDocument({ projectId, name: fileName, path: filePath, size: fileSize });
+    // documentService copies picker files into the app-owned attachments directory. Persist that
+    // durable URI, not the picker/import temporary path, so preview still works after relaunch.
+    const docId = ragDatabase.insertDocument({
+      projectId,
+      name: fileName,
+      path: attachment.uri || filePath,
+      size: fileSize,
+    });
     const rowIds = ragDatabase.insertChunks(docId, chunks);
 
     onProgress?.({ stage: 'embedding', message: 'Generating embeddings...' });

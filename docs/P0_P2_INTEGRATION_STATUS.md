@@ -14,7 +14,7 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **24 verified**, **9 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
-- P1: **82 verified**, **3 partial/device-gated**, **0 confirmed gaps**, **33 audit pending**.
+- P1: **88 verified**, **3 partial/device-gated**, **0 confirmed gaps**, **27 audit pending**.
 - P2: **40 verified**, **0 partial/device-gated**, **8 confirmed gaps**, **36 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
@@ -233,11 +233,11 @@ row does **not** mean that no test exists.
 ### 6 KB/Projects
 
 - [x] #112 Create a project
-- [?] #113 KB indexes a text PDF
-- [?] #117 Embedding failure aborts + retry
-- [?] #118 KB retrieval in a chat
-- [?] #119 New chat inherits the project
-- [?] #122 Delete project handles its chats
+- [x] #113 KB indexes a text PDF — `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
+- [x] #117 Embedding failure aborts + retry — `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
+- [x] #118 KB retrieval in a chat — `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
+- [x] #119 New chat inherits the project — `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
+- [x] #122 Delete project handles its chats — `__tests__/integration/projects/deleteProjectChatsFullApp.rendered.happy.test.tsx`
 
 ### 7 Tools
 
@@ -272,7 +272,7 @@ row does **not** mean that no test exists.
 - [x] #164 App lock passphrase set + enforce
 - [x] #166 Settings persist across relaunch
 - [x] #169 Active model selection survives relaunch
-- [?] #170 Projects + KB survive relaunch
+- [x] #170 Projects + KB survive relaunch — `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
 - [x] #172 Background -> foreground mid-generation — `__tests__/integration/generation/backgroundForegroundGenerationFullApp.rendered.happy.test.tsx`
 - [x] #173 Kill mid-generation recovers — `__tests__/integration/generation/killMidGenerationRecoveryFullApp.rendered.redflow.test.tsx`
 - [~] #174 Airplane mode local-only still works — `__tests__/integration/generation/airplaneModeLocalFullApp.rendered.happy.test.tsx`; physical radio-off action remains
