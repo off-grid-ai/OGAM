@@ -149,6 +149,14 @@ function App() {
     }
   }, []);
 
+  const ensureAuthStoreHydrated = useCallback(async () => {
+    const persistApi = useAuthStore.persist;
+    if (!persistApi?.hasHydrated || !persistApi.rehydrate) return;
+    if (!persistApi.hasHydrated()) {
+      await persistApi.rehydrate();
+    }
+  }, []);
+
   /**
    * Download-state recovery — the chain that reads/repairs the native download DB. Ordered
    * internally exactly as before (hydrate → reattach → register providers → restore queued →
@@ -208,8 +216,10 @@ function App() {
 
   const initializeApp = useCallback(async () => {
     try {
-      // Ensure persisted download metadata is loaded before restore logic reads it.
-      await ensureAppStoreHydrated();
+      // Keep navigation behind the boot gate until both product state and the
+      // persisted lock decision are known. Otherwise a slow auth-storage read can
+      // briefly render the navigator before a cold-start lock arrives.
+      await Promise.all([ensureAppStoreHydrated(), ensureAuthStoreHydrated()]);
 
       // Project the persisted "aggressive model loading" setting onto the residency
       // manager (single owner of the runtime load policy) now that settings are
@@ -258,7 +268,7 @@ function App() {
 
       // Check if passphrase is set and lock app if needed
       const hasPassphrase = await authService.hasPassphrase();
-      if (hasPassphrase && authEnabled) {
+      if (hasPassphrase && useAuthStore.getState().isEnabled) {
         setLocked(true);
       }
 
@@ -315,8 +325,8 @@ function App() {
       setIsInitializing(false);
     }
   }, [
-    authEnabled,
     ensureAppStoreHydrated,
+    ensureAuthStoreHydrated,
     recoverDownloadState,
     setDeviceInfo,
     setDownloadedImageModels,
