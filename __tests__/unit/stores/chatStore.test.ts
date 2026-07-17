@@ -351,6 +351,53 @@ describe('chatStore', () => {
       expect(updatedMessage.role).toBe('user');
       expect(updatedMessage.timestamp).toBe(originalTimestamp);
     });
+
+    it('updates the automatic title when the first user message is edited', () => {
+      const { createConversation, addMessage, updateMessageContent } =
+        useChatStore.getState();
+
+      const convId = createConversation('test-model');
+      const message = addMessage(convId, {
+        role: 'user',
+        content: 'Original question',
+      });
+
+      updateMessageContent(convId, message.id, 'Corrected question');
+
+      expect(getChatState().conversations[0].title).toBe('Corrected question');
+    });
+
+    it('preserves a custom title when the first user message is edited', () => {
+      const { createConversation, addMessage, updateMessageContent } =
+        useChatStore.getState();
+
+      const convId = createConversation('test-model', 'My saved topic');
+      const message = addMessage(convId, {
+        role: 'user',
+        content: 'Original question',
+      });
+
+      updateMessageContent(convId, message.id, 'Corrected question');
+
+      expect(getChatState().conversations[0].title).toBe('My saved topic');
+    });
+
+    it('preserves the first-message title when a later user message is edited', () => {
+      const { createConversation, addMessage, updateMessageContent } =
+        useChatStore.getState();
+
+      const convId = createConversation('test-model');
+      addMessage(convId, { role: 'user', content: 'Original topic' });
+      addMessage(convId, { role: 'assistant', content: 'First answer' });
+      const laterMessage = addMessage(convId, {
+        role: 'user',
+        content: 'Follow-up question',
+      });
+
+      updateMessageContent(convId, laterMessage.id, 'Edited follow-up');
+
+      expect(getChatState().conversations[0].title).toBe('Original topic');
+    });
   });
 
   describe('deleteMessage', () => {

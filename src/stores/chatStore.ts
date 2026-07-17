@@ -47,11 +47,39 @@ function speakableStreamingAnswer(streamingMessage: string, streamingReasoning: 
   return useAppStore.getState().settings?.thinkingEnabled ? '' : streamingMessage;
 }
 
-/** Derive conversation title from the first user message. */
-function deriveTitle(currentTitle: string, role: string, content: string): string {
-  if (currentTitle !== 'New Conversation' || role !== 'user') return currentTitle;
+/** The stable title projection owned by the first user message. */
+function automaticConversationTitle(content: string): string {
   const truncated = content.slice(0, 50);
   return content.length > 50 ? `${truncated}...` : truncated;
+}
+
+/** Derive conversation title from the first user message. */
+function deriveTitle(
+  currentTitle: string,
+  role: string,
+  content: string,
+): string {
+  if (currentTitle !== 'New Conversation' || role !== 'user')
+    return currentTitle;
+  return automaticConversationTitle(content);
+}
+
+/** Keep an automatically-derived title aligned when its owning first user turn is edited. */
+function titleAfterMessageEdit(
+  conv: Conversation,
+  messageId: string,
+  content: string,
+): string {
+  const firstUserMessage = conv.messages.find(
+    message => message.role === 'user',
+  );
+  if (
+    firstUserMessage?.id !== messageId ||
+    conv.title !== automaticConversationTitle(firstUserMessage.content)
+  ) {
+    return conv.title;
+  }
+  return automaticConversationTitle(content);
 }
 
 /** Map over conversations, applying `updater` only to the one matching `conversationId`. */
@@ -191,8 +219,16 @@ export const useChatStore = create<ChatState>()(
 
       updateMessageContent: (conversationId, messageId, content) => {
         set((state) => ({
-          conversations: mapConversation(state.conversations, conversationId, (conv) =>
-            updateMessageInConv(conv, messageId, (msg) => ({ ...msg, content }))
+          conversations: mapConversation(
+            state.conversations,
+            conversationId,
+            conv => ({
+              ...updateMessageInConv(conv, messageId, msg => ({
+                ...msg,
+                content,
+              })),
+              title: titleAfterMessageEdit(conv, messageId, content),
+            }),
           ),
         }));
       },

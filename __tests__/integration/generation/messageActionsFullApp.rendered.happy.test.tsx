@@ -65,7 +65,9 @@ describe('full-app message actions', () => {
     fireEvent.press(view.getByText('SAVE & RESEND'));
 
     await waitFor(() => {
-      expect(view.getByText('what is the capital of Spain')).toBeTruthy();
+      expect(
+        view.getAllByText('what is the capital of Spain').length,
+      ).toBeGreaterThan(0);
       expect(view.getByText('Madrid is the capital of Spain.')).toBeTruthy();
       expect(view.queryByText('The capital of Spain is Madrid.')).toBeNull();
     });

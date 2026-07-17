@@ -103,7 +103,7 @@ export const ChatHeader: React.FC<{
         <Icon name="arrow-left" size={20} color={colors.text} />
       </TouchableOpacity>
       <View style={styles.headerLeft}>
-        <Text style={styles.headerTitle} numberOfLines={1}>
+        <Text style={styles.headerTitle} numberOfLines={1} testID="chat-title">
           {activeConversation?.title || 'New Chat'}
         </Text>
         <View style={styles.headerSubtitleRow}>
