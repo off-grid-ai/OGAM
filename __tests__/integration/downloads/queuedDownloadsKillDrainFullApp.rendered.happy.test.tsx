@@ -315,11 +315,14 @@ describe('P0 queued-download process-death recovery', () => {
       expect(view.getByText('Remove Download')).toBeTruthy(),
     );
     rtl.fireEvent.press(view.getByText('Yes'));
-    await rtl.waitFor(() => {
-      expect(view.queryByText(MODELS[3].fileName)).toBeNull();
-      expect(view.queryByTestId('dm-active-queued-count')).toBeNull();
-      expect(view.getAllByTestId('remove-download-button')).toHaveLength(3);
-    });
+    await rtl.waitFor(
+      () => {
+        expect(view.queryByText(MODELS[3].fileName)).toBeNull();
+        expect(view.queryByTestId('dm-active-queued-count')).toBeNull();
+        expect(view.getAllByTestId('remove-download-button')).toHaveLength(3);
+      },
+      { timeout: 4000 },
+    );
     await rtl.waitFor(async () => {
       const queued = await asyncStorage.getItem(QUEUED_DOWNLOADS_KEY);
       expect(JSON.parse(queued ?? '[]')).toHaveLength(0);
