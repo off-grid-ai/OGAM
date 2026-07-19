@@ -1,5 +1,6 @@
 /** P1 #67/#69 — rendered image quality values reach each native generation. */
 import {
+  closeAppSheet,
   renderMainApp,
   seedDownloadedMnnImageModel,
 } from '../../harness/appJourney';
@@ -56,11 +57,7 @@ async function setImageQuality(
       Number(guidance).toFixed(1),
     );
   });
-  rtl.fireEvent.press(view.getByText('Done'));
-  await rtl.waitFor(
-    () => expect(view.queryByText('Chat Settings')).toBeNull(),
-    { timeout: 4000 },
-  );
+  await closeAppSheet(journey, 'Chat Settings');
 }
 
 async function chooseOneTurnImageMode(journey: Journey): Promise<void> {

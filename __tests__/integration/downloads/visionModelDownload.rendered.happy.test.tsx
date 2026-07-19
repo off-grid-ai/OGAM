@@ -90,7 +90,7 @@ describe('P1 vision-model download journey', () => {
     await waitFor(() => expect(boundary.download!.active()).toHaveLength(2));
 
     const rows = boundary.download!.active();
-    const projectorRow = rows.find(row => /mmproj/i.test(row.fileName));
+    const projectorRow = rows.find(row => /mmproj/i.test(row.fileName ?? ''));
     const mainRow = rows.find(row => row.fileName === MAIN_FILE);
     expect(projectorRow).toBeTruthy();
     expect(mainRow).toBeTruthy();

@@ -10,8 +10,13 @@ import { ConversationActionsSection } from './ConversationActionsSection';
 import { ImageGenerationSection } from './ImageGenerationSection';
 import { TextGenerationSection } from './TextGenerationSection';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
-import { SWEET_SPOT_SIZE, DEFAULT_IMAGE_GUIDANCE, DEFAULT_IMAGE_STEPS } from '../../utils/imageGenAdvice';
+import {
+  SWEET_SPOT_SIZE,
+  DEFAULT_IMAGE_GUIDANCE,
+  DEFAULT_IMAGE_STEPS,
+} from '../../utils/imageGenAdvice';
 import { TEXT_GENERATION_DEFAULTS } from '../../config/textGenerationDefaults';
+import { ModelLoadingModeSelector } from '../settings/textGenAdvancedSections';
 
 const DEFAULT_SETTINGS = {
   ...TEXT_GENERATION_DEFAULTS,
@@ -35,7 +40,9 @@ interface GenerationSettingsModalProps {
   isRemote?: boolean;
 }
 
-export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = ({
+export const GenerationSettingsModal: React.FC<
+  GenerationSettingsModalProps
+> = ({
   visible,
   onClose,
   onOpenProject,
@@ -50,7 +57,9 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
   const styles = useThemedStyles(createStyles);
   const { updateSettings } = useAppStore();
 
-  const [performanceStats, setPerformanceStats] = useState(llmService.getPerformanceStats());
+  const [performanceStats, setPerformanceStats] = useState(
+    llmService.getPerformanceStats(),
+  );
   const [imageSettingsOpen, setImageSettingsOpen] = useState(false);
   const [textSettingsOpen, setTextSettingsOpen] = useState(false);
   const [ttsSettingsOpen, setTtsSettingsOpen] = useState(false);
@@ -68,7 +77,11 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
     updateSettings(DEFAULT_SETTINGS);
   };
 
-  const hasConversationActions = !!(onOpenProject || onOpenGallery || onDeleteConversation);
+  const hasConversationActions = !!(
+    onOpenProject ||
+    onOpenGallery ||
+    onDeleteConversation
+  );
 
   return (
     <AppSheet
@@ -108,6 +121,10 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
           activeProjectName={activeProjectName}
         />
 
+        <View style={styles.sectionCard}>
+          <ModelLoadingModeSelector />
+        </View>
+
         {/* IMAGE GENERATION SETTINGS */}
         <TouchableOpacity
           style={[
@@ -145,7 +162,8 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
               <View style={styles.remoteNotice}>
                 <Icon name="info" size={13} color={colors.textMuted} />
                 <Text style={styles.remoteNoticeText}>
-                  These settings only apply to local models and won't affect the current remote session.
+                  These settings only apply to local models and won't affect the
+                  current remote session.
                 </Text>
               </View>
             )}
@@ -174,7 +192,10 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
           </>
         )}
 
-        <TouchableOpacity style={styles.resetButton} onPress={handleResetDefaults}>
+        <TouchableOpacity
+          style={styles.resetButton}
+          onPress={handleResetDefaults}
+        >
           <Text style={styles.resetButtonText}>Reset to Defaults</Text>
         </TouchableOpacity>
 

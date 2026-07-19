@@ -14,8 +14,8 @@ row does **not** mean that no test exists.
 - Release-checklist traceability contributes 196 rows; the app-derived inventory
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **24 verified**, **9 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
-- P1: **90 verified**, **3 partial/device-gated**, **0 confirmed gaps**, **25 audit pending**.
-- P2: **40 verified**, **0 partial/device-gated**, **8 confirmed gaps**, **36 audit pending**.
+- P1: **115 verified**, **3 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
+- P2: **56 verified**, **0 partial/device-gated**, **1 confirmed gap**, **27 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -44,38 +44,63 @@ row does **not** mean that no test exists.
 
 ### P1 additions
 
-- [?] APP-P1-001 Cancelling a running download removes only that transfer and leaves a retriable state
-- [?] APP-P1-002 Cancelling a queued download prevents it from resurrecting after relaunch
-- [?] APP-P1-003 Repeated download taps coalesce to one native transfer and one visible row
-- [?] APP-P1-004 Foreground download hydration deduplicates native, persisted, and newer in-memory state
-- [?] APP-P1-005 Deleting the active resident model unloads it and selects a coherent fallback
-- [?] APP-P1-006 Local model import accepts a compatible file and rejects incompatible or partial files clearly
-- [?] APP-P1-007 Missing or corrupt downloaded files self-heal the model list without a phantom ready model
-- [?] APP-P1-008 Create, rename, open, and delete conversations preserve the correct active chat
-- [?] APP-P1-009 Attachments are copied durably and a missing attachment after relaunch fails gracefully
-- [?] APP-P1-010 Context compaction persists its summary without dropping recent messages
-- [?] APP-P1-011 Gallery deletion removes the file and updates the grid without stale thumbnails
-- [?] APP-P1-012 Deleting a KB document removes its index and prevents stale retrieval
-- [?] APP-P1-013 Replacing or re-indexing a KB document cannot mix old and new chunks
-- [?] APP-P1-014 Add, edit, delete, and switch remote servers recover active model selection coherently
-- [?] APP-P1-015 Remote authentication failures are actionable and never expose credentials in UI or logs
-- [?] APP-P1-016 Pro activation registers routes live; entitlement revocation removes gated behavior safely
+- [x] APP-P1-001 Cancelling a running download removes only that transfer and leaves a retriable state
+  - `__tests__/integration/downloads/cancelAndDuplicateDownloadFullApp.rendered.happy.test.tsx`
+- [x] APP-P1-002 Cancelling a queued download prevents it from resurrecting after relaunch
+  - `__tests__/integration/downloads/queuedDownloadsKillDrainFullApp.rendered.happy.test.tsx`
+- [x] APP-P1-003 Repeated download taps coalesce to one native transfer and one visible row
+  - `__tests__/integration/downloads/cancelAndDuplicateDownloadFullApp.rendered.happy.test.tsx`
+- [x] APP-P1-004 Foreground download hydration deduplicates native, persisted, and newer in-memory state
+  - `__tests__/integration/downloads/foregroundHydrationDedupFullApp.rendered.happy.test.tsx`
+- [x] APP-P1-005 Deleting the active resident model unloads it and selects a coherent fallback
+  - `__tests__/integration/models/deleteActiveResidentFallbackFullApp.rendered.happy.test.tsx`
+- [x] APP-P1-006 Local model import accepts a compatible file and rejects incompatible or partial files clearly
+  - `__tests__/integration/models/localModelImportValidationFullApp.rendered.redflow.test.tsx`
+- [x] APP-P1-007 Missing or corrupt downloaded files self-heal the model list without a phantom ready model
+  - `__tests__/integration/models/missingCorruptModelSelfHealFullApp.rendered.redflow.test.tsx`
+- [x] APP-P1-008 Create, rename, open, and delete conversations preserve the correct active chat
+  - `__tests__/integration/chat/conversationCrudFullApp.rendered.happy.test.tsx`
+- [x] APP-P1-009 Attachments are copied durably and a missing attachment after relaunch fails gracefully
+  - `__tests__/integration/chat/imageAttachmentDurabilityFullApp.rendered.redflow.test.tsx`
+- [x] APP-P1-010 Context compaction persists its summary without dropping recent messages
+  - `__tests__/integration/generation/litertCompactionPersistenceFullApp.rendered.happy.test.tsx`
+- [x] APP-P1-011 Gallery deletion removes the file and updates the grid without stale thumbnails
+  - `__tests__/integration/gallery/galleryDeleteFullApp.rendered.happy.test.tsx`
+- [x] APP-P1-012 Deleting a KB document removes its index and prevents stale retrieval
+  - `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
+- [x] APP-P1-013 Replacing or re-indexing a KB document cannot mix old and new chunks
+  - `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
+- [x] APP-P1-014 Add, edit, delete, and switch remote servers recover active model selection coherently
+  - `__tests__/integration/remote/remoteServerLifecycleFullApp.rendered.happy.test.tsx`
+- [x] APP-P1-015 Remote authentication failures are actionable and never expose credentials in UI or logs
+  - `__tests__/integration/remote/remoteServerLifecycleFullApp.rendered.happy.test.tsx`
+- [x] APP-P1-016 Pro activation registers routes live; entitlement revocation removes gated behavior safely
+  - `__tests__/integration/onboarding/proEntitlementFullApp.rendered.happy.test.tsx`
 - [x] APP-P1-017 Experimental MTP defaults off, persists explicitly, and never changes ordinary GGUF behavior
-- [?] APP-P1-018 Background locking and unlock preserve the current conversation without exposing its content
+- [x] APP-P1-018 Background locking and unlock preserve the current conversation without exposing its content
+  - `__tests__/integration/app/appLockCannotBypassFullApp.rendered.redflow.test.tsx`
 - [x] APP-P1-019 Android Gemma LiteRT vision preserves the image and recovers when native context is RAM-clamped
 
 ### P2 additions
 
-- [?] APP-P2-001 Model search, filters, and tabs retain coherent results through downloads and deletion
-- [?] APP-P2-002 Home and chat model pickers show the same active, downloaded, and resident state
-- [?] APP-P2-003 Download Manager cancel, retry, queued, processing, and terminal states expose valid actions
-- [?] APP-P2-004 Orphaned-file cleanup never removes a downloaded, active, or in-flight model file
-- [?] APP-P2-005 Cache clearing updates storage totals and preserves user conversations and models
+- [x] APP-P2-001 Model search, filters, and tabs retain coherent results through downloads and deletion
+  - `__tests__/integration/models/modelBrowseLifecycleFullApp.rendered.happy.test.tsx`
+- [x] APP-P2-002 Home and chat model pickers show the same active, downloaded, and resident state
+  - `__tests__/integration/models/homeChatPickerParityFullApp.rendered.happy.test.tsx`
+- [x] APP-P2-003 Download Manager cancel, retry, queued, processing, and terminal states expose valid actions
+  - `__tests__/integration/downloads/cancelAndDuplicateDownloadFullApp.rendered.happy.test.tsx`
+  - `__tests__/integration/downloads/queuedDownloadsKillDrainFullApp.rendered.happy.test.tsx`
+  - `__tests__/integration/downloads/imageExtractionKillRelaunchFullApp.rendered.redflow.test.tsx`
+- [x] APP-P2-004 Orphaned-file cleanup never removes a downloaded, active, or in-flight model file
+  - `__tests__/integration/settings/storageMaintenanceFullApp.rendered.happy.test.tsx`
+- [x] APP-P2-005 Cache clearing updates storage totals and preserves user conversations and models
+  - `__tests__/integration/settings/storageMaintenanceFullApp.rendered.happy.test.tsx`
 - [?] APP-P2-006 Tool enablement and disablement persist and affect only subsequent turns
 - [?] APP-P2-007 MCP servers reconnect after relaunch without duplicate clients, tools, or routes
 - [?] APP-P2-008 MCP OAuth cancel, expiry, refresh, and retry return to an actionable state
 - [?] APP-P2-009 LAN discovery deduplicates repeated scans and supports multiple configured servers
-- [?] APP-P2-010 Supported document types import and preview with stable names and metadata
+- [x] APP-P2-010 Supported document types import and preview with stable names and metadata
+  - `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
 - [?] APP-P2-011 Every Settings card opens its registered screen and returns without losing tab state
 - [?] APP-P2-012 External community and support links fail gracefully when no handler is available
 - [?] APP-P2-013 Debug logs can be viewed, exported, and cleared without leaking secrets
@@ -134,7 +159,8 @@ row does **not** mean that no test exists.
 - [x] #88 Balanced = co-reside if they fit
 - [x] #93 Idle STT reclaimed for a text turn
 - [x] #99 Oversized model shows a graceful card
-- [~] #101 Load Anyway always loads - automated coverage exists; physical-device action remains
+- [~] #101 Load Anyway bypasses a cautious refusal when the survival check is safe - the full-App
+  override journey is automated; physical-device native loading remains
 
 ### 11 Polish
 
@@ -221,14 +247,15 @@ row does **not** mean that no test exists.
 - [~] #96 OS memory-warning evicts idle sidecars - strict full-App warning/reclaim coverage exists; physical-device pressure remains
 - [x] #97 Aggressive loads bigger automatically — `__tests__/integration/memory/aggressiveLargerModelFullApp.rendered.happy.test.tsx`
 - [x] #100 Estimators agree (no safe-then-refuse) — `__tests__/integration/memory/imageToChatSwapFullApp.rendered.happy.test.tsx`
-- [?] #102 Survival floor blocks a guaranteed OOM
+- [x] #102 Survival floor blocks a guaranteed OOM —
+      `__tests__/integration/memory/survivalFloorFullApp.rendered.happy.test.tsx`
 - [x] #103 Image->chat swap — `__tests__/integration/memory/imageToChatSwapFullApp.rendered.happy.test.tsx`
 - [x] #104 Switch active model mid-chat — `__tests__/integration/generation/midChatModelSwitchFullApp.rendered.redflow.test.tsx`
 - [x] #105 Eject All frees everything
 - [x] #106 Eject one resident from In Memory
 - [x] #107 Lazy reload after eject
 - [x] #108 In Memory shows loaded model RAM
-- [?] #109 Stale TTS pressure cleared on delete
+- [x] #109 Stale TTS pressure cleared on delete — `__tests__/integration/memory/ttsDeleteClearsResidencyFullApp.rendered.happy.test.tsx`
 
 ### 6 KB/Projects
 
@@ -244,17 +271,22 @@ row does **not** mean that no test exists.
 - [x] #123 Calculator tool runs
 - [x] #127 Parallel tool calls
 - [x] #129 Messy tool JSON still runs
-- [?] #132 Empty final turn keeps tool data
-- [?] #133 Add / connect an MCP server
-- [?] #134 MCP server tools listed
-- [?] #135 Execute an MCP tool
+- [x] #132 Empty final turn keeps tool data
+  - `__tests__/integration/chat/toolEmptyFinalFullApp.rendered.redflow.test.tsx`
+- [x] #133 Add / connect an MCP server
+  - `__tests__/integration/tools/mcpFullApp.rendered.happy.test.tsx`
+- [x] #134 MCP server tools listed
+  - `__tests__/integration/tools/mcpFullApp.rendered.happy.test.tsx`
+- [x] #135 Execute an MCP tool
+  - `__tests__/integration/tools/mcpFullApp.rendered.happy.test.tsx`
 
 ### 8 Remote
 
 - [x] #138 Remote model replies
 - [x] #142 Remote reasoning renders (LM Studio)
 - [x] #143 Remote parallel tool calls
-- [?] #144 Remote prompt-enhance runs
+- [x] #144 Remote prompt-enhance runs
+  - `__tests__/integration/generation/remoteEnhancementFullApp.rendered.happy.test.tsx`
 - [x] #145 Remote server dies mid-generation
 
 ### 9 Enhancement
@@ -283,7 +315,7 @@ row does **not** mean that no test exists.
 - [x] #183 Parse-once thinking+tool+answer on remote
 - [x] #184 Remote activation frees local heavy — `__tests__/integration/memory/remoteActivationFreesLocalFullApp.rendered.happy.test.tsx`
 - [x] #185 Mid-chat model switch stays coherent — `__tests__/integration/generation/midChatModelSwitchFullApp.rendered.redflow.test.tsx`
-- [?] #186 Remote stream interruption recovers
+- [x] #186 Remote stream interruption recovers — `__tests__/integration/generation/remoteDisconnectMidGenerationFullApp.rendered.redflow.test.tsx`
 - [x] #188 Litert download warning is device-aware (BOTH screens) — `__tests__/integration/models/litertWarningBothScreensFullApp.rendered.happy.test.tsx`
 - [x] #190 Send racing a settings reload keeps thinking
 - [x] #191 GPU->CPU fallback is visibly reported
@@ -303,12 +335,14 @@ row does **not** mean that no test exists.
 - [x] #5 Downloaded model shows Downloaded indicator
 - [x] #6 Model info / credibility shown on the card
 - [x] #10 Download a second whisper model
-- [?] #22 Download an embedding model (first KB use) - existing-test evidence audit pending
+- [x] #22 Install the bundled embedding model on first KB use —
+      `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
 
 ### 2 Text gen
 
 - [x] #26 CPU backend (GGUF)
-- [ ] #27 GPU init timeout falls back to CPU
+- [x] #27 GPU init timeout falls back to CPU —
+      `__tests__/integration/generation/ggufGpuFallbackFullApp.rendered.redflow.test.tsx`
 - [x] #32 Top-P applies to a generation
 - [x] #35 CPU threads applies
 - [x] #36 Batch size applies
@@ -321,9 +355,9 @@ row does **not** mean that no test exists.
 
 ### 3 Voice
 
-- [ ] #58 Double-tap mic no collision
-- [ ] #64 No stray empty bubble in voice tool turn
-- [ ] #65 Voice thinking block width + alignment
+- [x] #58 Double-tap mic no collision
+- [x] #64 No stray empty bubble in voice tool turn
+- [x] #65 Voice thinking block width + alignment
 
 ### 4 Image
 
@@ -342,10 +376,10 @@ row does **not** mean that no test exists.
 
 ### 5 Memory
 
-- [ ] #91 TTS co-resident in a voice turn
-- [ ] #92 Embedding sidecar resident on KB embed
-- [ ] #98 Aggressive does not over-commit dirty
-- [?] #110 Delete mid-playback does not kill audio - existing-test evidence audit pending
+- [x] #91 TTS co-resident in a voice turn
+- [x] #92 Embedding sidecar resident on KB embed
+- [x] #98 Aggressive does not over-commit dirty
+- [x] #110 Delete mid-playback does not kill audio
 - [x] #111 Device info memory readout
 
 ### 6 KB/Projects
@@ -401,4 +435,4 @@ row does **not** mean that no test exists.
 
 ### 12 This-release
 
-- [?] #189 TTS download respects the concurrency cap - existing-test evidence audit pending
+- [x] #189 TTS download respects the concurrency cap

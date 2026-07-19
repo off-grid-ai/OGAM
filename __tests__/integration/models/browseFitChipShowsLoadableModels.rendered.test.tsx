@@ -11,46 +11,72 @@
  * its Tight chip. RED before the relaxation (useTextModels hid it via fileExceedsBudget; ModelCardContent
  * had no chip). Boundary fakes only: native download + fs + RAM + the HuggingFace transport.
  */
-import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
+import { renderMainApp } from '../../harness/appJourney';
+import { GB } from '../../harness/nativeBoundary';
 
 const MODEL_ID = 'org/tight-fit';
+const originalFetch = global.fetch;
+
+afterEach(() => {
+  global.fetch = originalFetch;
+});
+
+function installHuggingFaceBoundary(file: { name: string; size: number }) {
+  global.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    const body = url.includes('/tree/main')
+      ? [{ type: 'file', path: file.name, size: file.size }]
+      : [
+          {
+            id: MODEL_ID,
+            author: 'org',
+            downloads: 50,
+            likes: 1,
+            tags: [],
+            lastModified: '',
+            siblings: [{ rfilename: file.name, size: file.size }],
+          },
+        ];
+    return { ok: true, status: 200, json: async () => body } as Response;
+  }) as typeof fetch;
+}
 
 describe('browse shows a loadable-but-over-balanced-budget model with a fit chip (rendered)', () => {
   it('renders the tight model (not hidden) and its Tight chip', async () => {
     // 8GB Android: balanced soft = 4.8GB, aggressive ceil = 6.0GB. A single 5GB quant is OVER the balanced
     // budget (old behaviour: hidden) but under the aggressive ceiling → 'tight' → now shown with a chip.
-    installNativeBoundary({ download: true, fs: true, ram: { platform: 'android', totalBytes: 8 * GB, availBytes: 5 * GB } });
+    const tightFile = {
+      name: 'model-Q5_K_M.gguf',
+      size: 5 * GB,
+      quantization: 'Q5_K_M',
+      downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-Q5_K_M.gguf`,
+    };
+    installHuggingFaceBoundary(tightFile);
 
-    const tightFile = { name: 'model-Q5_K_M.gguf', size: 5 * GB, quantization: 'Q5_K_M', downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-Q5_K_M.gguf` };
-    const modelInfo = { id: MODEL_ID, name: 'Tight Fit Model', author: 'org', description: 'test', downloads: 50, likes: 1, tags: [], lastModified: '', files: [tightFile] };
-    jest.doMock('../../../src/services/huggingface', () => ({
-      huggingFaceService: {
-        searchModels: jest.fn(async () => [modelInfo]),
-        getModelFiles: jest.fn(async () => [tightFile]),
-        getModelDetails: jest.fn(async () => modelInfo),
-        getDownloadUrl: (m: string, f: string, r = 'main') => `https://hf.co/${m}/resolve/${r}/${f}`,
-        formatModelSize: jest.fn(() => '5.0 GB'),
-        formatFileSize: jest.fn((b: number) => `${(b / GB).toFixed(1)} GB`),
+    const { rtl, view } = await renderMainApp({
+      boundary: {
+        download: true,
+        ram: { platform: 'android', totalBytes: 8 * GB, availBytes: 5 * GB },
       },
-    }));
+    });
+    const { fireEvent, waitFor, act } = rtl;
 
-    const React = require('react');
-    const { render, fireEvent, waitFor, act } = requireRTL();
-    const { hardwareService } = require('../../../src/services/hardware');
-    const { fitTier } = require('../../../src/services/memoryBudget');
-    const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
-
-    await hardwareService.refreshMemoryInfo();
-    const ramGB = hardwareService.getTotalMemoryGB();
-    // Precondition: this model is 'tight' — loadable, but over the balanced budget (old code hid it).
-    expect(fitTier(tightFile.size, ramGB)).toBe('tight');
-
-    const { getByTestId, getByText, queryByTestId } = render(React.createElement(ModelsScreen, {}));
-    await act(async () => { fireEvent.changeText(getByTestId('search-input'), 'tight'); });
-    await act(async () => { fireEvent(getByTestId('search-input'), 'submitEditing'); await new Promise((r) => setTimeout(r, 600)); });
+    await act(async () => {
+      fireEvent.press(view.getByTestId('models-tab'));
+    });
+    await waitFor(() => expect(view.getByTestId('models-screen')).toBeTruthy());
+    await act(async () => {
+      fireEvent.changeText(view.getByTestId('search-input'), 'tight');
+    });
+    await act(async () => {
+      fireEvent(view.getByTestId('search-input'), 'submitEditing');
+      await new Promise(resolve => setTimeout(resolve, 600));
+    });
 
     // TERMINAL artifact: the model is NOT hidden (renders), and carries the Tight fit chip.
-    await waitFor(() => expect(getByText('Tight Fit Model')).toBeTruthy(), { timeout: 6000 });
-    expect(queryByTestId('fit-chip-tight')).not.toBeNull();
+    await waitFor(() => expect(view.getByText('tight-fit')).toBeTruthy(), {
+      timeout: 6000,
+    });
+    expect(view.queryByTestId('fit-chip-tight')).not.toBeNull();
   }, 30000);
 });

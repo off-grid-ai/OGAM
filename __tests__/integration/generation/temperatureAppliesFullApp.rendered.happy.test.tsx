@@ -1,5 +1,6 @@
 /** P1 #31 — Chat temperature changes reach each subsequent native generation. */
 import {
+  closeAppSheet,
   openChatWithJourneyModel,
   renderMainApp,
   sendChatMessage,
@@ -28,11 +29,7 @@ async function setChatTemperature(
       Number(value).toFixed(2),
     ),
   );
-  rtl.fireEvent.press(view.getByText('Done'));
-  await rtl.waitFor(
-    () => expect(view.queryByText('Chat Settings')).toBeNull(),
-    { timeout: 4000 },
-  );
+  await closeAppSheet(journey, 'Chat Settings');
 }
 
 describe('P1 full-app temperature setting journey', () => {

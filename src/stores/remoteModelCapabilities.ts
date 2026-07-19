@@ -1,4 +1,3 @@
-
 /**
  * Remote Model Capabilities
  *
@@ -7,7 +6,10 @@
  */
 
 import logger from '../utils/logger';
-import { templateEmitsReasoning, REASONING_DELIMITERS } from '../utils/messageContent';
+import {
+  templateEmitsReasoning,
+  REASONING_DELIMITERS,
+} from '../utils/messageContent';
 
 export interface RemoteModelInfo {
   contextLength: number;
@@ -18,7 +20,10 @@ export interface RemoteModelInfo {
   acceptsThinkingKwarg?: boolean;
 }
 
-function parseModelInfoKeys(modelInfo: Record<string, unknown>): { contextLength: number; supportsVision: boolean } {
+function parseModelInfoKeys(modelInfo: Record<string, unknown>): {
+  contextLength: number;
+  supportsVision: boolean;
+} {
   let contextLength = 0;
   let supportsVision = false;
   for (const key of Object.keys(modelInfo)) {
@@ -42,7 +47,9 @@ function parseNumCtx(parameters: string): number {
   return 0;
 }
 
-function extractOllamaCapabilities(data: Record<string, unknown>): RemoteModelInfo {
+function extractOllamaCapabilities(
+  data: Record<string, unknown>,
+): RemoteModelInfo {
   let contextLength = 4096;
   let supportsVision = false;
 
@@ -56,15 +63,25 @@ function extractOllamaCapabilities(data: Record<string, unknown>): RemoteModelIn
   }
 
   if (data.model_info && typeof data.model_info === 'object') {
-    const parsed = parseModelInfoKeys(data.model_info as Record<string, unknown>);
+    const parsed = parseModelInfoKeys(
+      data.model_info as Record<string, unknown>,
+    );
     if (parsed.contextLength > 0) contextLength = parsed.contextLength;
     if (!supportsVision) supportsVision = parsed.supportsVision;
   }
 
   // projector_info is present for multimodal models when capabilities array is missing.
-  if (!supportsVision && data.projector_info && typeof data.projector_info === 'object') {
-    const projectorKeys = Object.keys(data.projector_info as Record<string, unknown>);
-    supportsVision = projectorKeys.some(k => k.includes('vision') || k.includes('clip'));
+  if (
+    !supportsVision &&
+    data.projector_info &&
+    typeof data.projector_info === 'object'
+  ) {
+    const projectorKeys = Object.keys(
+      data.projector_info as Record<string, unknown>,
+    );
+    supportsVision = projectorKeys.some(
+      k => k.includes('vision') || k.includes('clip'),
+    );
   }
 
   if (contextLength === 4096 && typeof data.parameters === 'string') {
@@ -81,7 +98,12 @@ function extractOllamaCapabilities(data: Record<string, unknown>): RemoteModelIn
     /\.Think|\.Thinking|\.IsThinkSet/.test(template) ||
     /^RENDERER\s/m.test(modelfile);
 
-  return { contextLength, supportsVision, supportsToolCalling, supportsThinking };
+  return {
+    contextLength,
+    supportsVision,
+    supportsToolCalling,
+    supportsThinking,
+  };
 }
 
 /**
@@ -90,7 +112,7 @@ function extractOllamaCapabilities(data: Record<string, unknown>): RemoteModelIn
  * Ollama populates these for multimodal models (e.g. clip.vision.block_count).
  * Falls back to contextLength=4096, supportsVision=false on any failure.
  */
-export async function fetchRemoteModelInfo(
+async function fetchRemoteModelInfo(
   endpoint: string,
   modelName: string,
 ): Promise<RemoteModelInfo> {
@@ -100,7 +122,10 @@ export async function fetchRemoteModelInfo(
 
     const response = await fetch(`${endpoint}/api/show`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
       body: JSON.stringify({ name: modelName }),
       signal: controller.signal,
     });
@@ -123,7 +148,7 @@ export async function fetchRemoteModelInfo(
  * LM Studio's native endpoint exposes vision and tool-use capability per model.
  * Falls back to contextLength=4096, supportsVision=false on any failure.
  */
-export async function fetchLmStudioModelInfo(
+async function fetchLmStudioModelInfo(
   endpoint: string,
   modelId: string,
 ): Promise<RemoteModelInfo> {
@@ -147,19 +172,23 @@ export async function fetchLmStudioModelInfo(
 
     const model = models.find(
       (m): m is Record<string, unknown> =>
-        typeof m === 'object' && m !== null && (m as Record<string, unknown>).key === modelId,
+        typeof m === 'object' &&
+        m !== null &&
+        (m as Record<string, unknown>).key === modelId,
     );
 
     if (!model) return { contextLength: 4096, supportsVision: false };
 
     // LM Studio capabilities: { vision: bool, trained_for_tool_use: bool }
     // Note: type is always "llm" even for VL models — use capabilities.vision instead
-    const caps = typeof model.capabilities === 'object' && model.capabilities !== null
-      ? model.capabilities as Record<string, unknown>
-      : {};
+    const caps =
+      typeof model.capabilities === 'object' && model.capabilities !== null
+        ? (model.capabilities as Record<string, unknown>)
+        : {};
 
     const contextLength =
-      typeof model.max_context_length === 'number' && model.max_context_length > 0
+      typeof model.max_context_length === 'number' &&
+      model.max_context_length > 0
         ? model.max_context_length
         : 4096;
 
@@ -205,17 +234,26 @@ function deltaHasThinking(delta: Record<string, unknown>): boolean {
   // with the rest of the reasoning parsers and catches Gemma/Qwen channel reasoning too.
   if (
     typeof delta.content === 'string' &&
-    REASONING_DELIMITERS.some((d) => (delta.content as string).includes(d.open))
+    REASONING_DELIMITERS.some(d => (delta.content as string).includes(d.open))
   ) {
     return true;
   }
-  if (typeof delta.reasoning_content === 'string' && delta.reasoning_content.length > 0) return true;
-  if (typeof delta.reasoning === 'string' && delta.reasoning.length > 0) return true;
-  if (typeof delta.thinking === 'string' && delta.thinking.length > 0) return true;
+  if (
+    typeof delta.reasoning_content === 'string' &&
+    delta.reasoning_content.length > 0
+  )
+    return true;
+  if (typeof delta.reasoning === 'string' && delta.reasoning.length > 0)
+    return true;
+  if (typeof delta.thinking === 'string' && delta.thinking.length > 0)
+    return true;
   return false;
 }
 
-async function probeLmStudioThinking(endpoint: string, modelId: string): Promise<boolean> {
+async function probeLmStudioThinking(
+  endpoint: string,
+  modelId: string,
+): Promise<boolean> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -248,13 +286,18 @@ async function probeLmStudioThinking(endpoint: string, modelId: string): Promise
         const chunk = JSON.parse(line.slice(6));
         const delta = chunk?.choices?.[0]?.delta;
         if (delta && deltaHasThinking(delta)) return true;
-      } catch { /* skip malformed lines */ }
+      } catch {
+        /* skip malformed lines */
+      }
     }
 
     return false;
   } catch (error) {
     // Timeout, network error, model not loaded
-    logger.warn('[probeLmStudioThinking] Failed to probe for thinking support:', error);
+    logger.warn(
+      '[probeLmStudioThinking] Failed to probe for thinking support:',
+      error,
+    );
   }
   return false;
 }
@@ -276,7 +319,7 @@ async function probeLmStudioThinking(endpoint: string, modelId: string): Promise
  * through to their own arms. Returns null on any failure so the orchestrator
  * can distinguish "no llama.cpp data" from a real all-false result.
  */
-export async function fetchLlamaCppProps(
+async function fetchLlamaCppProps(
   endpoint: string,
 ): Promise<RemoteModelInfo | null> {
   const controller = new AbortController();
@@ -296,7 +339,11 @@ export async function fetchLlamaCppProps(
     // expected and silent. Only an unexpected shape after a 200 is worth flagging,
     // but that path returns null from parsePropsCapabilities, not throw. Log at warn
     // for parity with probeLmStudioThinking so a regressing server leaves a breadcrumb.
-    logger.warn('[fetchLlamaCppProps] /props unavailable:', endpoint, error instanceof Error ? error.message : error);
+    logger.warn(
+      '[fetchLlamaCppProps] /props unavailable:',
+      endpoint,
+      error instanceof Error ? error.message : error,
+    );
   } finally {
     // Always clear — an early fetch rejection (e.g. DNS failure) otherwise leaves
     // the abort timer scheduled to fire after the function has returned.
@@ -315,20 +362,26 @@ export async function fetchLlamaCppProps(
 const propsInFlight = new Map<string, Promise<RemoteModelInfo | null>>();
 
 /** De-duplicated wrapper around fetchLlamaCppProps — one /props call per endpoint. */
-export function fetchLlamaCppPropsCached(endpoint: string): Promise<RemoteModelInfo | null> {
+function fetchLlamaCppPropsCached(
+  endpoint: string,
+): Promise<RemoteModelInfo | null> {
   // Deliberate in-flight-promise cache: return the pending promise un-awaited so concurrent
   // callers share one fetch. Explicit presence check (not a truthiness/await smell) so the
   // Promise-in-conditional rule (S6544) doesn't misread it as a forgotten await.
   const existing = propsInFlight.get(endpoint);
   if (existing !== undefined) return existing;
-  const p = fetchLlamaCppProps(endpoint).finally(() => propsInFlight.delete(endpoint));
+  const p = fetchLlamaCppProps(endpoint).finally(() =>
+    propsInFlight.delete(endpoint),
+  );
   propsInFlight.set(endpoint, p);
   return p;
 }
 
 /** Narrow an unknown value to a plain object, or null. */
 function asObject(v: unknown): Record<string, unknown> | null {
-  return typeof v === 'object' && v !== null ? v as Record<string, unknown> : null;
+  return typeof v === 'object' && v !== null
+    ? (v as Record<string, unknown>)
+    : null;
 }
 
 /**
@@ -347,7 +400,10 @@ function parsePropsCapabilities(data: unknown): RemoteModelInfo | null {
 
   const genSettings = asObject(root.default_generation_settings);
   const params = genSettings ? asObject(genSettings.params) : null;
-  const reasoningFormat = typeof params?.reasoning_format === 'string' ? params.reasoning_format : 'none';
+  const reasoningFormat =
+    typeof params?.reasoning_format === 'string'
+      ? params.reasoning_format
+      : 'none';
 
   // n_ctx lives on default_generation_settings (not on .params) for this build.
   const nCtx = genSettings?.n_ctx;
@@ -359,7 +415,8 @@ function parsePropsCapabilities(data: unknown): RemoteModelInfo | null {
   // on the Gateway returns reasoning_content when enable_thinking:true is sent, yet
   // reports supports_preserve_reasoning=false). The reliable capability signal is the
   // chat template exposing an `enable_thinking` switch or `<think>` blocks.
-  const template = typeof root.chat_template === 'string' ? root.chat_template : '';
+  const template =
+    typeof root.chat_template === 'string' ? root.chat_template : '';
   // A template referencing `enable_thinking` honors the chat_template_kwargs switch,
   // so the request builder can toggle reasoning per request on this server. This is a
   // distinct signal from supportsThinking (capability) and is returned for the builder.
@@ -384,7 +441,12 @@ function parsePropsCapabilities(data: unknown): RemoteModelInfo | null {
 }
 
 function hasRealData(info: RemoteModelInfo): boolean {
-  return info.supportsVision || info.contextLength !== 4096 || info.supportsToolCalling === true || info.supportsThinking === true;
+  return (
+    info.supportsVision ||
+    info.contextLength !== 4096 ||
+    info.supportsToolCalling === true ||
+    info.supportsThinking === true
+  );
 }
 
 /**
@@ -400,7 +462,10 @@ function hasRealData(info: RemoteModelInfo): boolean {
 export async function fetchModelCapabilities(
   endpoint: string,
   modelId: string,
-  nameBasedDetect: { vision: (id: string) => boolean; toolCalling: (id: string) => boolean },
+  nameBasedDetect: {
+    vision: (id: string) => boolean;
+    toolCalling: (id: string) => boolean;
+  },
 ): Promise<RemoteModelInfo> {
   const [propsInfo, ollamaInfo, lmInfo] = await Promise.all([
     // Deduped per endpoint — /props is server-wide, so all models on one server
@@ -424,12 +489,4 @@ export async function fetchModelCapabilities(
   };
 }
 
-/** Returns true for models that generate text/images — filters out embedding, reranker, etc. */
-export function isGenerativeModel(modelId: string): boolean {
-  const id = modelId.toLowerCase();
-  const nonGenerativePatterns = [
-    'embed', 'embedding', 'rerank', 'reranker', 'classifier',
-    'bge-', 'e5-', 'gte-', 'minilm', 'arctic-embed',
-  ];
-  return !nonGenerativePatterns.some(p => id.includes(p));
-}
+export { isGenerativeModel } from './generativeModelFilter';

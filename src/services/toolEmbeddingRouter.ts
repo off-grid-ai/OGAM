@@ -26,7 +26,10 @@ interface RoutableTool {
 }
 
 const CACHE_STORAGE_KEY = 'tool-embedding-cache-v1';
-interface CacheEntry { h: string; v: number[] }
+interface CacheEntry {
+  h: string;
+  v: number[];
+}
 /** name -> { hash of embed text, embedding }. Static per tool content. */
 const toolEmbeddingCache = new Map<string, CacheEntry>();
 let hydrated = false;
@@ -36,7 +39,8 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 function hashText(text: string): string {
   /* eslint-disable no-bitwise -- djb2 hash is defined in terms of bit ops */
   let h = 5381;
-  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  for (let i = 0; i < text.length; i++)
+    h = ((h << 5) + h + text.charCodeAt(i)) | 0;
   return (h >>> 0).toString(36);
   /* eslint-enable no-bitwise */
 }
@@ -54,11 +58,16 @@ async function hydrateCache(): Promise<void> {
       // entry with a non-numeric or NaN element would silently poison cosine similarity
       // (NaN scores) and destabilize tool routing. Drop anything that isn't a non-empty
       // vector of finite numbers.
-      const validVector = Array.isArray(entry?.v) && entry.v.length > 0
-        && entry.v.every(n => typeof n === 'number' && Number.isFinite(n));
-      if (entry && typeof entry.h === 'string' && validVector) toolEmbeddingCache.set(name, entry);
+      const validVector =
+        Array.isArray(entry?.v) &&
+        entry.v.length > 0 &&
+        entry.v.every(n => typeof n === 'number' && Number.isFinite(n));
+      if (entry && typeof entry.h === 'string' && validVector)
+        toolEmbeddingCache.set(name, entry);
     }
-    logger.log(`[ToolRouter] hydrated ${toolEmbeddingCache.size} cached tool embeddings`);
+    logger.log(
+      `[ToolRouter] hydrated ${toolEmbeddingCache.size} cached tool embeddings`,
+    );
   } catch (e) {
     logger.warn(`[ToolRouter] failed to hydrate embedding cache: ${String(e)}`);
   }
@@ -71,7 +80,9 @@ function schedulePersist(): void {
     saveTimer = null;
     const obj = Object.fromEntries(toolEmbeddingCache);
     AsyncStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(obj)).catch(e =>
-      logger.warn(`[ToolRouter] failed to persist embedding cache: ${String(e)}`),
+      logger.warn(
+        `[ToolRouter] failed to persist embedding cache: ${String(e)}`,
+      ),
     );
   }, 1000);
 }
@@ -96,9 +107,37 @@ function cosineSimilarity(a: number[], b: number[]): number {
 
 // Short/function words that shouldn't drive tool selection (they match too much).
 const STOPWORDS = new Set([
-  'the', 'and', 'for', 'you', 'your', 'can', 'get', 'are', 'was', 'with', 'that',
-  'this', 'have', 'has', 'from', 'about', 'what', 'which', 'show', 'tell', 'please',
-  'give', 'into', 'them', 'they', 'our', 'out', 'all', 'any', 'some', 'use',
+  'the',
+  'and',
+  'for',
+  'you',
+  'your',
+  'can',
+  'get',
+  'are',
+  'was',
+  'with',
+  'that',
+  'this',
+  'have',
+  'has',
+  'from',
+  'about',
+  'what',
+  'which',
+  'show',
+  'tell',
+  'please',
+  'give',
+  'into',
+  'them',
+  'they',
+  'our',
+  'out',
+  'all',
+  'any',
+  'some',
+  'use',
 ]);
 
 /** Meaningful query tokens: lowercase words ≥3 chars, minus stopwords. */
@@ -133,21 +172,36 @@ function lexicalBoost(tokens: string[], tool: RoutableTool): number {
 // before you can act on them). They embed poorly against natural phrasing like "get my
 // latest page", so give them a structural nudge — without one, the model gets fetch/
 // update tools but not the search/list tool it needs to start, and reports "no access".
-const DISCOVERY_VERBS = ['search', 'list', 'query', 'find', 'fetch', 'get', 'read'];
+const DISCOVERY_VERBS = [
+  'search',
+  'list',
+  'query',
+  'find',
+  'fetch',
+  'get',
+  'read',
+];
 
 function discoveryBoost(tool: RoutableTool): number {
   const name = tool.function.name.toLowerCase();
   return DISCOVERY_VERBS.some(v => name.includes(v)) ? 0.15 : 0;
 }
 
-async function embedTool(tool: RoutableTool, expectedDim?: number): Promise<number[]> {
+async function embedTool(
+  tool: RoutableTool,
+  expectedDim?: number,
+): Promise<number[]> {
   const text = `${tool.function.name}: ${firstLine(tool.function.description)}`;
   const hash = hashText(text);
   const cached = toolEmbeddingCache.get(tool.function.name);
   // A cache hit needs BOTH the text hash AND the current embedding dimension to match.
   // After an embedding-model swap the dimension changes while the text is identical, so
   // the dimension check stops a stale-dim vector from poisoning cosineSimilarity with NaN.
-  if (cached && cached.h === hash && (expectedDim == null || cached.v.length === expectedDim)) {
+  if (
+    cached &&
+    cached.h === hash &&
+    (expectedDim == null || cached.v.length === expectedDim)
+  ) {
     return cached.v;
   }
   const vec = await embeddingService.embed(text);
@@ -177,18 +231,18 @@ export async function selectToolsByEmbedding(
   for (const tool of tools) {
     const vec = await embedTool(tool, queryVec.length);
     // Hybrid: semantic similarity + lexical (provider/verb word) + discovery boost.
-    const score = cosineSimilarity(queryVec, vec) + lexicalBoost(tokens, tool) + discoveryBoost(tool);
+    const score =
+      cosineSimilarity(queryVec, vec) +
+      lexicalBoost(tokens, tool) +
+      discoveryBoost(tool);
     scored.push({ name: tool.function.name, score });
   }
   scored.sort((a, b) => b.score - a.score);
   const selected = scored.slice(0, topK).map(s => s.name);
-  logger.log(`[ToolRouter] hybrid-routed ${tools.length} → ${selected.length}: [${selected.join(', ')}]`);
+  logger.log(
+    `[ToolRouter] hybrid-routed ${tools.length} → ${
+      selected.length
+    }: [${selected.join(', ')}]`,
+  );
   return selected;
-}
-
-/** Test helper: clear the in-memory cache and re-arm hydration. */
-export function _resetToolEmbeddingCache(): void {
-  toolEmbeddingCache.clear();
-  hydrated = false;
-  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
 }

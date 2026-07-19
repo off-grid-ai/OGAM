@@ -10,6 +10,7 @@ import { buildDownloadedModel, persistDownloadedModel } from './storage';
 export async function getOrphanedTextFiles(
   modelsDir: string,
   modelsGetter: () => Promise<DownloadedModel[]>,
+  protectedPaths: Iterable<string> = [],
 ): Promise<Array<{ name: string; path: string; size: number }>> {
   const orphaned: Array<{ name: string; path: string; size: number }> = [];
   const modelsDirExists = await RNFS.exists(modelsDir);
@@ -19,9 +20,11 @@ export async function getOrphanedTextFiles(
   const models = await modelsGetter();
 
   const trackedPaths = new Set<string>();
+  for (const path of protectedPaths) trackedPaths.add(path);
   for (const model of models) {
     trackedPaths.add(model.filePath);
-    if (model.engine === 'llama' && model.mmProjPath) trackedPaths.add(model.mmProjPath);
+    if (model.engine === 'llama' && model.mmProjPath)
+      trackedPaths.add(model.mmProjPath);
   }
 
   for (const file of files) {
@@ -29,7 +32,10 @@ export async function getOrphanedTextFiles(
       orphaned.push({
         name: file.name,
         path: file.path,
-        size: typeof file.size === 'string' ? Number.parseInt(file.size, 10) : file.size,
+        size:
+          typeof file.size === 'string'
+            ? Number.parseInt(file.size, 10)
+            : file.size,
       });
     }
   }
@@ -90,17 +96,23 @@ export interface SyncDownloadsOpts {
 }
 
 /** Resolve the final mmproj path for a completed sync download. */
-async function resolveMmProjPath(metadata: PersistedDownloadInfo): Promise<string | undefined> {
+async function resolveMmProjPath(
+  metadata: PersistedDownloadInfo,
+): Promise<string | undefined> {
   const mmProjLocalPath = metadata.mmProjLocalPath ?? null;
   if (metadata.mmProjDownloadId && mmProjLocalPath) {
     try {
-      await backgroundDownloadService.moveCompletedDownload(metadata.mmProjDownloadId, mmProjLocalPath);
+      await backgroundDownloadService.moveCompletedDownload(
+        metadata.mmProjDownloadId,
+        mmProjLocalPath,
+      );
       return mmProjLocalPath;
     } catch {
       return (await RNFS.exists(mmProjLocalPath)) ? mmProjLocalPath : undefined;
     }
   }
-  if (mmProjLocalPath && await RNFS.exists(mmProjLocalPath)) return mmProjLocalPath;
+  if (mmProjLocalPath && (await RNFS.exists(mmProjLocalPath)))
+    return mmProjLocalPath;
   return undefined;
 }
 
@@ -110,12 +122,20 @@ function isMmProjStillRunning(
   activeDownloads: Array<{ downloadId: string; status: string }>,
 ): boolean {
   if (!metadata.mmProjDownloadId) return false;
-  const mmProjDl = activeDownloads.find(d => d.downloadId === metadata.mmProjDownloadId);
-  return !!mmProjDl && mmProjDl.status !== 'completed' && mmProjDl.status !== 'failed';
+  const mmProjDl = activeDownloads.find(
+    d => d.downloadId === metadata.mmProjDownloadId,
+  );
+  return (
+    !!mmProjDl &&
+    mmProjDl.status !== 'completed' &&
+    mmProjDl.status !== 'failed'
+  );
 }
 
 async function processCompletedDownload(
-  downloadId: string, metadata: PersistedDownloadInfo, modelsDir: string,
+  downloadId: string,
+  metadata: PersistedDownloadInfo,
+  modelsDir: string,
 ): Promise<DownloadedModel> {
   const localPath = `${modelsDir}/${metadata.fileName}`;
   await backgroundDownloadService.moveCompletedDownload(downloadId, localPath);
@@ -128,8 +148,10 @@ async function processCompletedDownload(
   // fileName, so the restore-after-kill path produces the same result as
   // the in-session path without explicit plumbing.
   const fileInfo: ModelFile = {
-    name: metadata.fileName, size: mainFileSize,
-    quantization: metadata.quantization, downloadUrl: '',
+    name: metadata.fileName,
+    size: mainFileSize,
+    quantization: metadata.quantization,
+    downloadUrl: '',
     mmProjFile: metadata.mmProjFileName
       ? { name: metadata.mmProjFileName, size: mmProjFileSize, downloadUrl: '' }
       : undefined,
@@ -143,22 +165,30 @@ async function processCompletedDownload(
     // Persist the sentinel even when the sidecar file is absent (failed/not-yet-moved).
     // This ensures needsVisionRepair() can show "Repair Vision" from the Download Manager
     // without relying on catalog data that the DM screen doesn't have.
-    expectedMmProjFileName: !finalMmProjPath ? metadata.mmProjFileName : undefined,
+    expectedMmProjFileName: !finalMmProjPath
+      ? metadata.mmProjFileName
+      : undefined,
   });
   await persistDownloadedModel(model, modelsDir);
   return model;
 }
 
 function handleFailedDownload(
-  metadata: PersistedDownloadInfo, clearDownloadCallback: (downloadId: string) => void, downloadId: string,
+  metadata: PersistedDownloadInfo,
+  clearDownloadCallback: (downloadId: string) => void,
+  downloadId: string,
 ): void {
   if (metadata.mmProjDownloadId) {
-    backgroundDownloadService.cancelDownload(metadata.mmProjDownloadId).catch(() => {});
+    backgroundDownloadService
+      .cancelDownload(metadata.mmProjDownloadId)
+      .catch(() => {});
   }
   clearDownloadCallback(downloadId);
 }
 
-export async function syncCompletedBackgroundDownloads(opts: SyncDownloadsOpts): Promise<DownloadedModel[]> {
+export async function syncCompletedBackgroundDownloads(
+  opts: SyncDownloadsOpts,
+): Promise<DownloadedModel[]> {
   const { persistedDownloads, modelsDir, clearDownloadCallback } = opts;
   const completedModels: DownloadedModel[] = [];
   const activeDownloads = await backgroundDownloadService.getActiveDownloads();
@@ -168,17 +198,31 @@ export async function syncCompletedBackgroundDownloads(opts: SyncDownloadsOpts):
     if (!metadata) continue;
     // image: (image models) and whisper- (STT models) belong to their own
     // managers; recovering them here mis-registered them as text models.
-    if (metadata.modelId.startsWith('image:') || metadata.modelId.startsWith('whisper-')) continue;
+    if (
+      metadata.modelId.startsWith('image:') ||
+      metadata.modelId.startsWith('whisper-')
+    )
+      continue;
 
     if (download.status === 'completed') {
       if (isMmProjStillRunning(metadata, activeDownloads)) continue;
       try {
-        const model = await processCompletedDownload(download.downloadId, metadata, modelsDir);
+        const model = await processCompletedDownload(
+          download.downloadId,
+          metadata,
+          modelsDir,
+        );
         completedModels.push(model);
         clearDownloadCallback(download.downloadId);
-      } catch { /* Skip failed syncs */ }
+      } catch {
+        /* Skip failed syncs */
+      }
     } else if (download.status === 'failed') {
-      handleFailedDownload(metadata, clearDownloadCallback, download.downloadId);
+      handleFailedDownload(
+        metadata,
+        clearDownloadCallback,
+        download.downloadId,
+      );
     }
   }
 

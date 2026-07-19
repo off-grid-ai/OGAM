@@ -333,9 +333,72 @@ describe('P1 full-App project knowledge-base journey', () => {
         .UNSAFE_getAllByType(Icon)
         .find(icon => icon.props.name === 'arrow-left')!,
     );
-    const [replacementDocument] = await ragService.getDocumentsByProject(
-      projectId,
+    // APP-P2-010: multi-select two supported text formats through the real
+    // picker/indexer, retain their stable names/sizes, and preview each format.
+    const markdownName = 'research notes.md';
+    const jsonName = 'metrics.json';
+    const markdownContent = '# Field Notes\nThe north sample is stable.';
+    const jsonContent = '{"sample":"north","stable":true}';
+    await (first.boundary.fs!.module.writeFile as jest.Mock)(
+      `/docs/${markdownName}`,
+      markdownContent,
+      'utf8',
     );
+    await (first.boundary.fs!.module.writeFile as jest.Mock)(
+      `/docs/${jsonName}`,
+      jsonContent,
+      'utf8',
+    );
+    require('@react-native-documents/picker').pick.mockResolvedValueOnce([
+      {
+        uri: `file:///docs/${markdownName}`,
+        name: markdownName,
+        type: 'text/markdown',
+        size: 2048,
+      },
+      {
+        uri: `file:///docs/${jsonName}`,
+        name: jsonName,
+        type: 'application/json',
+        size: 32,
+      },
+    ]);
+    first.rtl.fireEvent.press(first.view.getByText('Add'));
+    await first.rtl.waitFor(
+      () => {
+        expect(first.view.getByText(markdownName)).toBeTruthy();
+        expect(first.view.getByText(jsonName)).toBeTruthy();
+        expect(first.view.getByText('2.0 KB')).toBeTruthy();
+        expect(first.view.getByText('32 B')).toBeTruthy();
+      },
+      { timeout: 10000 },
+    );
+    first.rtl.fireEvent.press(first.view.getByText(markdownName));
+    await first.rtl.waitFor(() => {
+      expect(first.view.getByText(markdownContent)).toBeTruthy();
+      expect(first.view.getByText('2.0 KB')).toBeTruthy();
+    });
+    first.rtl.fireEvent.press(
+      first.view
+        .UNSAFE_getAllByType(Icon)
+        .find(icon => icon.props.name === 'arrow-left')!,
+    );
+    first.rtl.fireEvent.press(
+      await first.rtl.waitFor(() => first.view.getByText(jsonName)),
+    );
+    await first.rtl.waitFor(() => {
+      expect(first.view.getByText(jsonContent)).toBeTruthy();
+      expect(first.view.getByText('32 B')).toBeTruthy();
+    });
+    first.rtl.fireEvent.press(
+      first.view
+        .UNSAFE_getAllByType(Icon)
+        .find(icon => icon.props.name === 'arrow-left')!,
+    );
+
+    const replacementDocument = (
+      await ragService.getDocumentsByProject(projectId)
+    ).find((doc: { name: string }) => doc.name === PDF_NAME)!;
     const replacementPdfPath = replacementDocument.path;
 
     first.rtl.fireEvent.press(

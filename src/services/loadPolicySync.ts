@@ -20,7 +20,7 @@ import { LoadPolicy } from './memoryBudget';
 
 /** The one setting→policy mapping. Prefer the explicit 3-mode setting; fall back to
  *  the legacy aggressiveModelLoading boolean so pre-migration installs still work. */
-export function loadPolicyFromSettings(settings: {
+function loadPolicyFromSettings(settings: {
   modelLoadingMode?: LoadPolicy;
   aggressiveModelLoading?: boolean;
 }): LoadPolicy {
@@ -43,7 +43,9 @@ export function startLoadPolicySync(): () => void {
 
   let last: LoadPolicy | undefined;
   const apply = (
-    settings: { modelLoadingMode?: LoadPolicy; aggressiveModelLoading?: boolean } | undefined,
+    settings:
+      | { modelLoadingMode?: LoadPolicy; aggressiveModelLoading?: boolean }
+      | undefined,
   ) => {
     // Resolve through the ONE mapping (prefers the explicit 3-mode setting, falls back to
     // the legacy boolean) and diff on the RESULTING policy — so BOTH the new mode selector
@@ -60,7 +62,9 @@ export function startLoadPolicySync(): () => void {
     // several models already resident left them all in memory until the next load (device 2026-07-14).
     // ejectAll keeps the selections (rows still show the chosen models); it only frees RAM.
     if (!isInitialSeed) {
-      void activeModelService.ejectAll().catch(() => { /* eviction is best-effort; next load re-enforces */ });
+      void activeModelService.ejectAll().catch(() => {
+        /* eviction is best-effort; next load re-enforces */
+      });
     }
   };
   // Seed from the (already hydrated) current value.

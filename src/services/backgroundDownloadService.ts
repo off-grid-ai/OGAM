@@ -1,12 +1,24 @@
 /* eslint-disable max-lines -- cohesive download admission-control service: the concurrency cap, FIFO queue, slot accounting, native-bridge calls, and event fan-out are one tightly-coupled unit; splitting it would scatter the shared activeIds/startQueue state. */
-import { NativeModules, NativeEventEmitter, Platform, Alert } from 'react-native';
+import {
+  NativeModules,
+  NativeEventEmitter,
+  Platform,
+  Alert,
+} from 'react-native';
 import { BackgroundDownloadInfo, BackgroundDownloadStatus } from '../types';
 import logger from '../utils/logger';
-import { serializeQueue, saveQueuedDownloads } from './queuedDownloadPersistence';
+import {
+  serializeQueue,
+  saveQueuedDownloads,
+} from './queuedDownloadPersistence';
 import type {
   DownloadParams,
-  DownloadProgressEvent, DownloadCompleteEvent, DownloadErrorEvent,
-  DownloadProgressCallback, DownloadCompleteCallback, DownloadErrorCallback,
+  DownloadProgressEvent,
+  DownloadCompleteEvent,
+  DownloadErrorEvent,
+  DownloadProgressCallback,
+  DownloadCompleteCallback,
+  DownloadErrorCallback,
 } from './backgroundDownloadTypes';
 const { DownloadManagerModule } = NativeModules;
 
@@ -29,6 +41,13 @@ interface QueuedStart {
   reject: (err: unknown) => void;
 }
 
+interface QueuedExternalTask<T = unknown> {
+  key: string;
+  task: () => Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: unknown) => void;
+}
+
 class BackgroundDownloadService {
   private eventEmitter: NativeEventEmitter | null = null;
   private progressListeners: Map<string, DownloadProgressCallback> = new Map();
@@ -40,6 +59,9 @@ class BackgroundDownloadService {
   private activeIds = new Set<string>();
   /** Starts waiting for a free slot, in FIFO order. */
   private startQueue: QueuedStart[] = [];
+  /** Logical downloads performed by an external native fetcher (for example
+   * Executorch/Kokoro) waiting behind the same global three-download cap. */
+  private externalQueue: QueuedExternalTask[] = [];
   /** Monotonic counter for unique in-flight reservation tokens. */
   private startSeq = 0;
   /** Set once cleanup() runs, so a beginDownload() still awaiting the native start can't
@@ -78,14 +100,54 @@ class BackgroundDownloadService {
       return this.beginDownload(params);
     }
     const key = this.keyFor(params);
-    const dup = this.startQueue.find((q) => q.key === key);
+    const dup = this.startQueue.find(q => q.key === key);
     if (dup) return dup.promise; // coalesce a double-tap on an already-queued model
     let resolve!: (info: BackgroundDownloadInfo) => void;
     let reject!: (err: unknown) => void;
-    const promise = new Promise<BackgroundDownloadInfo>((res, rej) => { resolve = res; reject = rej; });
+    const promise = new Promise<BackgroundDownloadInfo>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
     this.startQueue.push({ params, key, promise, resolve, reject });
     this.persistQueue();
     return promise;
+  }
+
+  /**
+   * Admit a logical download implemented by another native fetcher through the
+   * same global cap as DownloadManagerModule. The task starts only after a slot
+   * is reserved and releases it on success or failure.
+   */
+  runWithDownloadSlot<T>(key: string, task: () => Promise<T>): Promise<T> {
+    if (this.activeIds.size < MAX_CONCURRENT_DOWNLOADS) {
+      return this.beginExternalTask(key, task);
+    }
+    return new Promise<T>((resolve, reject) => {
+      this.externalQueue.push({
+        key,
+        task,
+        resolve: value => resolve(value as T),
+        reject,
+      });
+    });
+  }
+
+  isWaitingForDownloadSlot(key: string): boolean {
+    return this.externalQueue.some(item => item.key === key);
+  }
+
+  private async beginExternalTask<T>(
+    key: string,
+    task: () => Promise<T>,
+  ): Promise<T> {
+    const token = `external:${key}:${++this.startSeq}`;
+    this.activeIds.add(token);
+    try {
+      return await task();
+    } finally {
+      this.activeIds.delete(token);
+      this.pump();
+    }
   }
 
   /**
@@ -95,7 +157,9 @@ class BackgroundDownloadService {
    * queue, and a failure is logged, not thrown (see queuedDownloadPersistence).
    */
   private persistQueue(): void {
-    saveQueuedDownloads(serializeQueue(this.startQueue)).catch(() => { /* best-effort; adapter logs */ });
+    saveQueuedDownloads(serializeQueue(this.startQueue)).catch(() => {
+      /* best-effort; adapter logs */
+    });
   }
 
   private keyFor(p: DownloadParams): string {
@@ -105,7 +169,10 @@ class BackgroundDownloadService {
   /** Actually start a native download. When `counted` (the default) it occupies one
    *  concurrency slot; an uncounted start (a sidecar) begins immediately and never
    *  touches activeIds, so it neither consumes a slot nor blocks the queue. */
-  private async beginDownload(params: DownloadParams, counted = true): Promise<BackgroundDownloadInfo> {
+  private async beginDownload(
+    params: DownloadParams,
+    counted = true,
+  ): Promise<BackgroundDownloadInfo> {
     if (!counted) return this.startNativeDownload(params); // sidecar: no slot bookkeeping
     // Reserve the slot synchronously (before the first await) so a burst of
     // startDownload() calls in the same tick can't all pass the size check and
@@ -118,7 +185,10 @@ class BackgroundDownloadService {
       // while we awaited the native start, don't re-add — the release listeners are gone,
       // so this id could never be freed and would leak a slot for the service's life.
       this.activeIds.delete(token);
-      if (this.shutDown) { DownloadManagerModule.cancelDownload(info.downloadId).catch(() => {}); return { ...info, status: 'failed' }; }
+      if (this.shutDown) {
+        DownloadManagerModule.cancelDownload(info.downloadId).catch(() => {});
+        return { ...info, status: 'failed' };
+      }
       this.activeIds.add(info.downloadId);
       return info;
     } catch (e) {
@@ -130,11 +200,20 @@ class BackgroundDownloadService {
 
   /** The raw native start + BackgroundDownloadInfo mapping — no concurrency accounting.
    *  Sidecars call this directly; the counted path wraps it in slot bookkeeping. */
-  private async startNativeDownload(params: DownloadParams): Promise<BackgroundDownloadInfo> {
+  private async startNativeDownload(
+    params: DownloadParams,
+  ): Promise<BackgroundDownloadInfo> {
     // Android 13+: prompt for notification permission so the foreground-service download
     // notification is visible (the download still runs as an FGS if denied). Best-effort.
-    if (Platform.OS === 'android' && typeof DownloadManagerModule.requestNotificationPermission === 'function') {
-      try { DownloadManagerModule.requestNotificationPermission(); } catch { /* non-fatal */ }
+    if (
+      Platform.OS === 'android' &&
+      typeof DownloadManagerModule.requestNotificationPermission === 'function'
+    ) {
+      try {
+        DownloadManagerModule.requestNotificationPermission();
+      } catch {
+        /* non-fatal */
+      }
     }
     const result = await DownloadManagerModule.startDownload({
       url: params.url,
@@ -170,7 +249,10 @@ class BackgroundDownloadService {
 
   private pump(): void {
     let admitted = false;
-    while (this.activeIds.size < MAX_CONCURRENT_DOWNLOADS && this.startQueue.length > 0) {
+    while (
+      this.activeIds.size < MAX_CONCURRENT_DOWNLOADS &&
+      this.startQueue.length > 0
+    ) {
       const next = this.startQueue.shift()!;
       admitted = true;
       // beginDownload reserves the slot synchronously, so the loop condition sees the
@@ -180,6 +262,16 @@ class BackgroundDownloadService {
     // An admitted item leaves the queue → it now has (or is starting) a native row, so it must drop
     // out of the persisted queue projection or a relaunch would re-issue a download that already began.
     if (admitted) this.persistQueue();
+    while (
+      this.activeIds.size < MAX_CONCURRENT_DOWNLOADS &&
+      this.externalQueue.length > 0
+    ) {
+      const next = this.externalQueue.shift()!;
+      this.beginExternalTask(next.key, next.task).then(
+        next.resolve,
+        next.reject,
+      );
+    }
   }
 
   /**
@@ -204,7 +296,9 @@ class BackgroundDownloadService {
     let nativeIds: Set<string>;
     try {
       const active = await DownloadManagerModule.getActiveDownloads();
-      nativeIds = new Set<string>((active ?? []).map((d: any) => String(d.downloadId ?? d.id)));
+      nativeIds = new Set<string>(
+        (active ?? []).map((d: any) => String(d.downloadId ?? d.id)),
+      );
     } catch {
       return; // bridge unavailable — leave accounting untouched
     }
@@ -226,7 +320,7 @@ class BackgroundDownloadService {
    * batch on top of the resumed ones. Their terminal events then free the slot.
    */
   adoptActive(downloadIds: string[]): void {
-    downloadIds.forEach((id) => this.activeIds.add(id));
+    downloadIds.forEach(id => this.activeIds.add(id));
   }
 
   /** Number of starts waiting for a slot (for a "queued" UI count). */
@@ -239,8 +333,14 @@ class BackgroundDownloadService {
    * them as "Queued". These have no native downloadId yet (they haven't started), so
    * they live only here — the queue's owner is the single source of truth for them.
    */
-  getQueuedItems(): Array<{ modelKey: string; modelId: string; fileName: string; modelType: string; totalBytes: number }> {
-    return this.startQueue.map((q) => ({
+  getQueuedItems(): Array<{
+    modelKey: string;
+    modelId: string;
+    fileName: string;
+    modelType: string;
+    totalBytes: number;
+  }> {
+    return this.startQueue.map(q => ({
       modelKey: q.key,
       modelId: q.params.modelId,
       fileName: q.params.fileName,
@@ -258,11 +358,13 @@ class BackgroundDownloadService {
    * of surfacing a "download failed". Returns true if a queued start matched the key.
    */
   cancelQueued(key: string): boolean {
-    const idx = this.startQueue.findIndex((q) => q.key === key);
+    const idx = this.startQueue.findIndex(q => q.key === key);
     if (idx === -1) return false;
     const [removed] = this.startQueue.splice(idx, 1);
     this.persistQueue(); // a cancelled queued start must not resurrect on relaunch
-    const error = new Error('Download cancelled') as Error & { cancelled?: boolean };
+    const error = new Error('Download cancelled') as Error & {
+      cancelled?: boolean;
+    };
     error.cancelled = true;
     removed.reject(error);
     return true;
@@ -296,7 +398,10 @@ class BackgroundDownloadService {
     try {
       await DownloadManagerModule.cancelDownload(downloadId);
     } catch (e) {
-      logger.log('[BackgroundDownload] cancelDownload failed (bridge may be torn down):', e);
+      logger.log(
+        '[BackgroundDownload] cancelDownload failed (bridge may be torn down):',
+        e,
+      );
     }
     // Free the concurrency slot and admit the next queued start. Native cancel emits
     // no terminal event, so the slot would otherwise leak.
@@ -333,7 +438,10 @@ class BackgroundDownloadService {
     try {
       await DownloadManagerModule.cancelDownload(downloadId);
     } catch (e) {
-      logger.log('[BackgroundDownload] purgeNativeRecord failed (bridge may be torn down):', e);
+      logger.log(
+        '[BackgroundDownload] purgeNativeRecord failed (bridge may be torn down):',
+        e,
+      );
     }
     this.release(downloadId);
   }
@@ -343,7 +451,12 @@ class BackgroundDownloadService {
       return [];
     }
     const downloads = await DownloadManagerModule.getActiveDownloads();
-    logger.log(`[WIRE-DOWNLOAD] ${JSON.stringify({ ev: 'getActiveDownloads', downloads })}`); // [WIRE] raw active/queued/parallel download rows (relaunch reconcile)
+    logger.log(
+      `[WIRE-DOWNLOAD] ${JSON.stringify({
+        ev: 'getActiveDownloads',
+        downloads,
+      })}`,
+    ); // [WIRE] raw active/queued/parallel download rows (relaunch reconcile)
     return downloads.map((d: any) => ({
       downloadId: d.downloadId ?? d.id,
       fileName: d.fileName,
@@ -366,32 +479,65 @@ class BackgroundDownloadService {
     }));
   }
 
-  async moveCompletedDownload(downloadId: string, targetPath: string): Promise<string> {
+  async moveCompletedDownload(
+    downloadId: string,
+    targetPath: string,
+  ): Promise<string> {
     if (!this.isAvailable()) {
       throw new Error('Background downloads not available on this platform');
     }
     return DownloadManagerModule.moveCompletedDownload(downloadId, targetPath);
   }
 
-  private registerListener<T>(listeners: Map<string, T>, key: string, callback: T): () => void {
+  private registerListener<T>(
+    listeners: Map<string, T>,
+    key: string,
+    callback: T,
+  ): () => void {
     listeners.set(key, callback);
     return () => listeners.delete(key);
   }
 
-  onProgress(downloadId: string, callback: DownloadProgressCallback): () => void {
-    return this.registerListener(this.progressListeners, `progress_${downloadId}`, callback);
+  onProgress(
+    downloadId: string,
+    callback: DownloadProgressCallback,
+  ): () => void {
+    return this.registerListener(
+      this.progressListeners,
+      `progress_${downloadId}`,
+      callback,
+    );
   }
-  onComplete(downloadId: string, callback: DownloadCompleteCallback): () => void {
-    return this.registerListener(this.completeListeners, `complete_${downloadId}`, callback);
+  onComplete(
+    downloadId: string,
+    callback: DownloadCompleteCallback,
+  ): () => void {
+    return this.registerListener(
+      this.completeListeners,
+      `complete_${downloadId}`,
+      callback,
+    );
   }
   onError(downloadId: string, callback: DownloadErrorCallback): () => void {
-    return this.registerListener(this.errorListeners, `error_${downloadId}`, callback);
+    return this.registerListener(
+      this.errorListeners,
+      `error_${downloadId}`,
+      callback,
+    );
   }
   onAnyProgress(callback: DownloadProgressCallback): () => void {
-    return this.registerListener(this.progressListeners, 'progress_all', callback);
+    return this.registerListener(
+      this.progressListeners,
+      'progress_all',
+      callback,
+    );
   }
   onAnyComplete(callback: DownloadCompleteCallback): () => void {
-    return this.registerListener(this.completeListeners, 'complete_all', callback);
+    return this.registerListener(
+      this.completeListeners,
+      'complete_all',
+      callback,
+    );
   }
   onAnyError(callback: DownloadErrorCallback): () => void {
     return this.registerListener(this.errorListeners, 'error_all', callback);
@@ -423,7 +569,10 @@ class BackgroundDownloadService {
     try {
       DownloadManagerModule.requestBatteryOptimizationIgnore();
     } catch (e) {
-      logger.log('[BackgroundDownload] requestBatteryOptimizationIgnore failed:', e);
+      logger.log(
+        '[BackgroundDownload] requestBatteryOptimizationIgnore failed:',
+        e,
+      );
     }
   }
 
@@ -451,15 +600,28 @@ class BackgroundDownloadService {
   }
 
   downloadFileTo(opts: {
-    params: Pick<DownloadParams, 'url' | 'fileName' | 'modelId' | 'totalBytes' | 'modelType' | 'metadataJson' | 'modelKey'>;
+    params: Pick<
+      DownloadParams,
+      | 'url'
+      | 'fileName'
+      | 'modelId'
+      | 'totalBytes'
+      | 'modelType'
+      | 'metadataJson'
+      | 'modelKey'
+    >;
     destPath: string;
     onProgress?: (bytesDownloaded: number, totalBytes: number) => void;
     silent?: boolean;
   }): { downloadIdPromise: Promise<string>; promise: Promise<void> } {
-    if (!this.isAvailable()) throw new Error('Background downloads not available on this platform');
+    if (!this.isAvailable())
+      throw new Error('Background downloads not available on this platform');
     let resolveId!: (id: string) => void;
     let rejectId!: (err: unknown) => void;
-    const downloadIdPromise = new Promise<string>((res, rej) => { resolveId = res; rejectId = rej; });
+    const downloadIdPromise = new Promise<string>((res, rej) => {
+      resolveId = res;
+      rejectId = rej;
+    });
 
     const promise = (async () => {
       const info = await this.startDownload({
@@ -468,18 +630,28 @@ class BackgroundDownloadService {
       });
       resolveId(info.downloadId);
       await new Promise<void>((resolve, reject) => {
-        const removeProgress = this.onProgress(info.downloadId, (event) => {
+        const removeProgress = this.onProgress(info.downloadId, event => {
           opts.onProgress?.(event.bytesDownloaded, event.totalBytes);
         });
-        const done = () => { removeProgress(); removeComplete(); removeError(); };
+        const done = () => {
+          removeProgress();
+          removeComplete();
+          removeError();
+        };
         const removeComplete = this.onComplete(info.downloadId, async () => {
           done();
-          try { await this.moveCompletedDownload(info.downloadId, opts.destPath); } catch { /* may already be moved */ }
+          try {
+            await this.moveCompletedDownload(info.downloadId, opts.destPath);
+          } catch {
+            /* may already be moved */
+          }
           resolve();
         });
-        const removeError = this.onError(info.downloadId, (err) => {
+        const removeError = this.onError(info.downloadId, err => {
           done();
-          const error = new Error(err.reason || 'Download failed') as Error & { cancelled?: boolean };
+          const error = new Error(err.reason || 'Download failed') as Error & {
+            cancelled?: boolean;
+          };
           // Let callers distinguish a user cancel from a real failure so they can
           // clean up quietly instead of surfacing a "download failed" error.
           if (err.reasonCode === 'user_cancelled') error.cancelled = true;
@@ -494,7 +666,11 @@ class BackgroundDownloadService {
   }
 
   async excludeFromBackup(path: string): Promise<boolean> {
-    if (!this.isAvailable() || typeof DownloadManagerModule.excludePathFromBackup !== 'function') return false;
+    if (
+      !this.isAvailable() ||
+      typeof DownloadManagerModule.excludePathFromBackup !== 'function'
+    )
+      return false;
     return DownloadManagerModule.excludePathFromBackup(path).catch(() => false);
   }
 
@@ -507,8 +683,14 @@ class BackgroundDownloadService {
     this.completeListeners.clear();
     this.errorListeners.clear();
     // Settle any still-queued starts so awaiting callers don't hang forever.
-    this.startQueue.forEach((q) => q.reject(new Error('Download service cleaned up')));
+    this.startQueue.forEach(q =>
+      q.reject(new Error('Download service cleaned up')),
+    );
     this.startQueue = [];
+    this.externalQueue.forEach(q =>
+      q.reject(new Error('Download service cleaned up')),
+    );
+    this.externalQueue = [];
     this.activeIds.clear();
   }
 
@@ -527,22 +709,46 @@ class BackgroundDownloadService {
     // [WIRE] raw native download events from-device (progress is throttled to one-per-downloadId to avoid
     // flooding; complete/error always logged). Grounds the download/relaunch adversarial fixtures.
     const __wireSeen = new Set<string>();
-    push(this.eventEmitter.addListener('DownloadProgress', (e: DownloadProgressEvent) => {
-      const pct = e.totalBytes ? e.bytesDownloaded / e.totalBytes : 0;
-      const key = `${e.downloadId}:${Math.floor(pct * 10)}`; // ~10 samples per download
-      if (!__wireSeen.has(key)) { __wireSeen.add(key); logger.log(`[WIRE-DOWNLOAD] ${JSON.stringify({ ev: 'progress', ...e })}`); }
-      this.dispatchToListeners(this.progressListeners, 'progress', e);
-    }));
-    push(this.eventEmitter.addListener('DownloadComplete', (e: DownloadCompleteEvent) => {
-      logger.log(`[WIRE-DOWNLOAD] ${JSON.stringify({ ev: 'complete', ...e })}`); // [WIRE]
-      this.release(e.downloadId);
-      this.dispatchToListeners(this.completeListeners, 'complete', e);
-    }));
-    push(this.eventEmitter.addListener('DownloadError', (e: DownloadErrorEvent) => {
-      logger.log(`[WIRE-DOWNLOAD] ${JSON.stringify({ ev: 'error', ...e })}`); // [WIRE]
-      this.release(e.downloadId);
-      this.dispatchToListeners(this.errorListeners, 'error', e);
-    }));
+    push(
+      this.eventEmitter.addListener(
+        'DownloadProgress',
+        (e: DownloadProgressEvent) => {
+          const pct = e.totalBytes ? e.bytesDownloaded / e.totalBytes : 0;
+          const key = `${e.downloadId}:${Math.floor(pct * 10)}`; // ~10 samples per download
+          if (!__wireSeen.has(key)) {
+            __wireSeen.add(key);
+            logger.log(
+              `[WIRE-DOWNLOAD] ${JSON.stringify({ ev: 'progress', ...e })}`,
+            );
+          }
+          this.dispatchToListeners(this.progressListeners, 'progress', e);
+        },
+      ),
+    );
+    push(
+      this.eventEmitter.addListener(
+        'DownloadComplete',
+        (e: DownloadCompleteEvent) => {
+          logger.log(
+            `[WIRE-DOWNLOAD] ${JSON.stringify({ ev: 'complete', ...e })}`,
+          ); // [WIRE]
+          this.release(e.downloadId);
+          this.dispatchToListeners(this.completeListeners, 'complete', e);
+        },
+      ),
+    );
+    push(
+      this.eventEmitter.addListener(
+        'DownloadError',
+        (e: DownloadErrorEvent) => {
+          logger.log(
+            `[WIRE-DOWNLOAD] ${JSON.stringify({ ev: 'error', ...e })}`,
+          ); // [WIRE]
+          this.release(e.downloadId);
+          this.dispatchToListeners(this.errorListeners, 'error', e);
+        },
+      ),
+    );
   }
 }
 

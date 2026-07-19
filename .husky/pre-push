@@ -1,6 +1,9 @@
 #!/usr/bin/env sh
+set -e
 
 ZERO_OID="0000000000000000000000000000000000000000"
+ROOT="$(git rev-parse --show-toplevel)"
+BIN="$ROOT/node_modules/.bin"
 
 collect_changed_files() {
   changed_files=""
@@ -45,13 +48,16 @@ if [ -n "$PUSHED_JS" ]; then
   npm run check:no-pro-mocks
 
   echo "▶ JS/TS lint (push range)..."
-  echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 eslint --max-warnings=999
+  echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 "$BIN/eslint" --max-warnings=999
 
   echo "▶ TypeScript type check..."
-  npx tsc --noEmit
+  "$BIN/tsc" --noEmit
 
   echo "▶ JS/TS tests (related to changed files)..."
-  echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 npx jest --findRelatedTests --passWithNoTests
+  RELATED_TESTS=$(echo "$PUSHED_JS" | tr '\n' '\0' | \
+    xargs -0 "$BIN/jest" --findRelatedTests --listTests --passWithNoTests)
+  [ -z "$RELATED_TESTS" ] || printf '%s\n' "$RELATED_TESTS" | tr '\n' '\0' | \
+    xargs -0 -n 1 "$BIN/jest" --runInBand --detectOpenHandles
 
   echo "▶ Architecture gate (dependency-cruiser)..."
   npm run depcruise

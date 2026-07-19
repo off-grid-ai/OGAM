@@ -25,7 +25,7 @@ describe('P2 Home text count with a remote model', () => {
               }
             : {},
         text: async () => '',
-      } as Response;
+      } as unknown as Response;
     });
 
     let view: Awaited<ReturnType<typeof renderMainApp>>['view'] | undefined;

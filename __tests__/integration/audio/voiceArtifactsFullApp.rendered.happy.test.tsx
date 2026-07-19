@@ -70,7 +70,7 @@ async function recordOnce(
   boundary.whisper!.setFileTranscript(transcript);
   rtl.fireEvent.press(view.getByTestId('voice-record-button-audio'));
   await rtl.act(async () => {
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise(resolve => setTimeout(resolve, 250));
   });
   rtl.fireEvent.press(view.getByTestId('voice-record-button-audio'));
 }

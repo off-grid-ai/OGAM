@@ -1,16 +1,9 @@
-import {
-  registerToolExtension,
-  unregisterToolExtension,
-} from '../services/tools/extensions';
-import { registerScreen, unregisterScreen } from '../navigation/screenRegistry';
-import {
-  registerSettingsSection,
-  unregisterSettingsSection,
-} from '../components/settings/sectionRegistry';
-import { registerSlot, unregisterSlot } from './slotRegistry';
-import { registerHook, unregisterHook } from './hookRegistry';
+import { registerToolExtension } from '../services/tools/extensions';
+import { registerScreen } from '../navigation/screenRegistry';
+import { registerSettingsSection } from '../components/settings/sectionRegistry';
+import { registerSlot } from './slotRegistry';
+import { registerHook } from './hookRegistry';
 import { readProFromKeychain } from '../services/proLicenseService';
-
 export async function loadProFeatures(isPro?: boolean): Promise<void> {
   let pro: any;
   try {
@@ -63,25 +56,4 @@ export async function loadProFeatures(isPro?: boolean): Promise<void> {
       console.warn('[pro] MCP OAuth adapters not configured:', err);
     }
   }
-}
-
-/** Reactively remove paid behavior after an entitlement is revoked. */
-export function unloadProFeatures(): void {
-  const { useAppStore } = require('../stores/appStore');
-  useAppStore.getState().setProActive(false);
-
-  let pro: any;
-  try {
-    pro = require('@offgrid/pro');
-  } catch {
-    return;
-  }
-  if (typeof pro?.deactivate !== 'function') return;
-  pro.deactivate({
-    unregisterToolExtension,
-    unregisterScreen,
-    unregisterSettingsSection,
-    unregisterSlot,
-    unregisterHook,
-  });
 }

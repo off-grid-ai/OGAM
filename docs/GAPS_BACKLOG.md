@@ -6,9 +6,69 @@ REMOVES them from this file once resolved (the record lives in git history + com
 This file only ever contains work that is still open.
 
 Verdict legend:
+
 - **delete-safe** - unreferenced / unreachable and provably unused; remove it.
 - **fix-the-guard** - the branch is SUPPOSED to fire but a condition prevents it; fix the condition (a latent bug, not litter).
 - **instrument-and-revisit** - uncertain trigger; add a `[*-SM]` trace + a Provit journey to observe it live before deciding.
+
+---
+
+## Repo-wide hygiene + tests audit - 2026-07-16
+
+**Verdict: honest baseline established; P0/P1 coverage ramp remains open.** The mock-heavy percentage is
+retired. Coverage below is collected only from the surviving integration suite.
+
+### Current evidence
+
+- Tests contain zero mocks of `src/` or `pro/`. The remaining 41 `jest.mock`/`jest.doMock` calls across 31
+  files are environment boundaries such as React Native packages, native runtimes, storage, and filesystem.
+- `__tests__/integration` contains zero module mocks, zero direct store `setState`, zero
+  `toHaveBeenCalled*` assertions, and zero React Navigation mocks.
+- The integration suite mounts the real App/navigation journeys where navigation is involved: 11 suites,
+  24 tests, all green under `--detectOpenHandles`, without `--forceExit`.
+- Integration-only coverage: **25.24% statements, 18.19% branches, 24.72% functions, 26.26% lines**.
+- MTP is covered by a real Home -> model selection -> Chat -> send journey. The llama native boundary is
+  the only fake, and the user sees accepted draft-token metrics in generation details.
+
+### P0/P1 coverage ramp to roughly 90%
+
+Prioritize user-impacting behavior, not global percentage padding:
+
+1. Boot and onboarding: fresh install, offline analysis, retry, persistence, and completed-user boot.
+2. Model lifecycle: discovery, memory-fit decisions, load/unload/eject, residency swaps, corrupt files,
+   accelerator fallback, MTP detection/fallback, and persisted selection.
+3. Downloads: start, progress, queue, retry, interruption, relaunch recovery, delete, and native-store parity.
+4. Chat: first send, streaming, stop, queue, retry/edit/resend, truncation, reasoning, tool loops, and errors.
+5. Text/image/voice routing: capability-driven mode selection, generation failures, attachments, STT, and TTS.
+6. Knowledge base: indexing, rollback, retrieval, project scoping, and embedding residency.
+7. Native-owned behavior: XCTest/JUnit for Swift/Kotlin state machines, with shared contract coverage where
+   both platforms implement the same capability.
+
+Measure coverage by these P0/P1 ownership areas and drive each toward 90%. P2/P3 cosmetics, formatting
+helpers, low-risk presentation branches, and diagnostic-only paths stay visible but deprioritized.
+
+### P1 - coverage checklist and backlog drift
+
+- Rebuild `docs/CHECKLIST_TEST_COVERAGE.md` against the real-integration contract. Deleted mockist tests do
+  not count as gaps closed; each P0/P1 behavior needs a user journey or an appropriate native contract.
+- Add a CI guard that rejects future `jest.mock`/`jest.doMock` targets resolving under `src/` or `pro/`.
+
+### P1 - product and architecture recurrence risks
+
+- Several metadata clients still use bare `fetch` without a timeout (Core ML model browsing, Hugging Face
+  image browsing, and Keygen among them). The onboarding outage can recur on those surfaces. Put request
+  deadlines in one HTTP boundary and render retryable failure states.
+- Concrete provider/engine checks remain (`instanceof` and engine/platform value branches). The dependency
+  graph cannot detect value branching, and the promised ESLint `no-restricted-syntax` guard is absent.
+- Character/token estimation and related control-token rules still have multiple owners (DR4-DR8 below).
+
+### P2 - UI standards are not mechanically protected
+
+Static heuristics found 27 accessibility props against roughly 274 pressable/touchable/button usages, and
+only 14 test files query accessibility behavior. They also found 67 font weights above the product's body
+weight, 86 hard-coded `fontSize` declarations, and 491 hard-coded spacing declarations (including token
+definitions and legitimate exceptions, so each needs review). Add focused lint rules and rendered a11y
+journeys instead of treating these raw counts as automatic edits.
 
 ---
 
@@ -24,13 +84,13 @@ untyped dead-branch rules — all hard CI gates). These three are the open follo
 2. **SonarJS warn→error ratchet.** These rules are at `warn` (tripped on legacy core); ratchet each to
    `error` as its count hits zero. (`no-duplicate-string` stays OFF — it fights RN style literals.)
 
-   | Rule | Count |
-   |---|---|
-   | sonarjs/prefer-single-boolean-return | 9 |
-   | sonarjs/no-nested-template-literals | 6 |
-   | sonarjs/no-collapsible-if | 2 |
-   | sonarjs/prefer-immediate-return | 1 |
-   | sonarjs/no-duplicated-branches | 1 |
+   | Rule                                 | Count |
+   | ------------------------------------ | ----- |
+   | sonarjs/prefer-single-boolean-return | 9     |
+   | sonarjs/no-nested-template-literals  | 6     |
+   | sonarjs/no-collapsible-if            | 2     |
+   | sonarjs/prefer-immediate-return      | 1     |
+   | sonarjs/no-duplicated-branches       | 1     |
 
 3. **Typed `@typescript-eslint/no-unnecessary-condition` (AI dead-branch killer).** Needs typed linting
    (`parserOptions.project: ['./tsconfig.json']` — SLOWS eslint) + the typed config. Floods on AI code.
@@ -48,33 +108,37 @@ Recon sweep findings that are real but deferred (changing them risks behaviour).
 (AU1, AU2, DL4, ML1, ML2 — verified USED by tests/prod) have been dropped from the register.
 
 ### Model-load / generation
-| # | Location | Symbol | Verdict | Note |
-|---|----------|--------|---------|------|
-| ML3 | activeModelService/utils.ts:16-17 vs types.ts:48-50 | overhead multipliers (1.2/1.3 hardcoded vs 1.5/1.8 constants) | fix-the-guard | HomeScreen memory display disagrees with the load-path math; import the shared constants |
-| ML5 | activeModelService/index.ts:~338 + loaders.ts | `cpuOnly: false` (always false) | delete-safe (deferred) | native CPU-only branch unreachable from TS; removing the arg changes the native call — do as a typed refactor with tests |
+
+| #   | Location                                            | Symbol                                                        | Verdict                | Note                                                                                                                     |
+| --- | --------------------------------------------------- | ------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| ML3 | activeModelService/utils.ts:16-17 vs types.ts:48-50 | overhead multipliers (1.2/1.3 hardcoded vs 1.5/1.8 constants) | fix-the-guard          | HomeScreen memory display disagrees with the load-path math; import the shared constants                                 |
+| ML5 | activeModelService/index.ts:~338 + loaders.ts       | `cpuOnly: false` (always false)                               | delete-safe (deferred) | native CPU-only branch unreachable from TS; removing the arg changes the native call — do as a typed refactor with tests |
 
 ### Download / model-manager
-| # | Location | Symbol | Verdict | Note |
-|---|----------|--------|---------|------|
-| DL1 | downloadHydration.ts:33 | `case 'retrying'` in mapNativeStatus | delete-safe (deferred) | native never emits 'retrying'; removing a union value risks exhaustiveness breakage — typed refactor with tests |
-| DL2 | DownloadManagerScreen/items.tsx (+ downloadStatusIcon.ts, downloadErrors.ts, useDownloads.ts) | branches on `status === 'retrying'` | fix-the-guard | unreachable given DL1; remove or document the contract |
-| DL3 | modelManager/types.ts:13 | `BackgroundDownloadMetadataCallback` (@deprecated no-op) | delete-safe (deferred) | author-confirmed no-op, still threaded through 3 sites; needs on-device observation |
-| DL5 | modelManager/download.ts:454-462 | `isFinalizing` reset only on error | instrument-and-revisit | verify re-entrancy window on the success path |
+
+| #   | Location                                                                                      | Symbol                                                   | Verdict                | Note                                                                                                            |
+| --- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------- |
+| DL1 | downloadHydration.ts:33                                                                       | `case 'retrying'` in mapNativeStatus                     | delete-safe (deferred) | native never emits 'retrying'; removing a union value risks exhaustiveness breakage — typed refactor with tests |
+| DL2 | DownloadManagerScreen/items.tsx (+ downloadStatusIcon.ts, downloadErrors.ts, useDownloads.ts) | branches on `status === 'retrying'`                      | fix-the-guard          | unreachable given DL1; remove or document the contract                                                          |
+| DL3 | modelManager/types.ts:13                                                                      | `BackgroundDownloadMetadataCallback` (@deprecated no-op) | delete-safe (deferred) | author-confirmed no-op, still threaded through 3 sites; needs on-device observation                             |
+| DL5 | modelManager/download.ts:454-462                                                              | `isFinalizing` reset only on error                       | instrument-and-revisit | verify re-entrancy window on the success path                                                                   |
 
 ### Audio / TTS / STT
-| # | Location | Symbol | Verdict | Note |
-|---|----------|--------|---------|------|
-| AU4 | ChatInput/Voice.ts:136-143 | stopRecording early-return guard | fix-the-guard | inverted condition; can't be true when recording |
-| AU5 | whisperService.ts:338-400 | `transcriptionFullyStopped` promise overwrite | fix-the-guard | new start replaces a promise unloadModel may await |
-| AU6 | audioRecorderService.ts:12-14 | `supportsDirectAudioInput()` stub `return true` | instrument-and-revisit | placeholder; add real capability detection |
+
+| #   | Location                      | Symbol                                          | Verdict                | Note                                               |
+| --- | ----------------------------- | ----------------------------------------------- | ---------------------- | -------------------------------------------------- |
+| AU4 | ChatInput/Voice.ts:136-143    | stopRecording early-return guard                | fix-the-guard          | inverted condition; can't be true when recording   |
+| AU5 | whisperService.ts:338-400     | `transcriptionFullyStopped` promise overwrite   | fix-the-guard          | new start replaces a promise unloadModel may await |
+| AU6 | audioRecorderService.ts:12-14 | `supportsDirectAudioInput()` stub `return true` | instrument-and-revisit | placeholder; add real capability detection         |
 
 ### Image-gen / tools / remote
-| # | Location | Symbol | Verdict | Note |
-|---|----------|--------|---------|------|
-| IM2 | localDreamGenerator.ts:67 (+ loaders.ts:296) | `backend` param always `'auto'` | delete-safe (deferred) | 'mnn'/'qnn' branches never reached from TS; removing the arg changes the native call |
-| IM3 | imageGenerationHelpers.ts:42-44 | iOS short-circuit ignores `backend` | fix-the-guard | 'coreml'/default 'mnn' unreachable on iOS; make explicit |
-| IM4 | localDreamGenerator.ts:236-238 | `hasKernelCache()` wraps `hasOpenCLCache` (name mismatch) | fix-the-guard | rename to match native call |
-| IM5 | localDreamGenerator.ts:231-239 | `clearOpenCLCache`/`hasKernelCache` silent iOS no-op | instrument-and-revisit | throw or gate at call site on iOS |
+
+| #   | Location                                     | Symbol                                                    | Verdict                | Note                                                                                 |
+| --- | -------------------------------------------- | --------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------ |
+| IM2 | localDreamGenerator.ts:67 (+ loaders.ts:296) | `backend` param always `'auto'`                           | delete-safe (deferred) | 'mnn'/'qnn' branches never reached from TS; removing the arg changes the native call |
+| IM3 | imageGenerationHelpers.ts:42-44              | iOS short-circuit ignores `backend`                       | fix-the-guard          | 'coreml'/default 'mnn' unreachable on iOS; make explicit                             |
+| IM4 | localDreamGenerator.ts:236-238               | `hasKernelCache()` wraps `hasOpenCLCache` (name mismatch) | fix-the-guard          | rename to match native call                                                          |
+| IM5 | localDreamGenerator.ts:231-239               | `clearOpenCLCache`/`hasKernelCache` silent iOS no-op      | instrument-and-revisit | throw or gate at call site on iOS                                                    |
 
 ---
 
@@ -114,23 +178,23 @@ If yes → expected first-run behaviour (maybe show a hint). If never on mnn →
 Surfaced live on real hardware during 0.0.103 vision/memory testing. None caught by the green suite —
 the reason the on-device gate is mandatory.
 
-| # | Finding | Verdict | Evidence |
-|---|---------|---------|----------|
-| OD1 | **Vision (mmproj) dropped on download retry** | fix-the-guard | `[DL-SM]` iPhone: main GGUF failed at 9% → auto-retry re-issued `needsMmProj:false, mmProjLocalPath:null` → finalized text-only. release/0.0.103 fix (persist metadataJson) targets this; UNVERIFIED on-device. |
-| OD2 | **Repair Vision has no progress feedback** | fix-the-guard | ~900MB mmproj re-download behind an indeterminate "Repairing…" spinner. Needs determinate progress. USER-SELECTED. |
-| OD3 | **Chat vs Home model-selector inconsistency** | fix-the-guard | `checkMemoryForModel` called ONLY in useChatModelActions.ts. Chat pre-checks (predictive fileSize×1.5 → gates behind "Load Anyway"); Home skips the pre-check → loads via measured makeRoomFor → succeeds. Two surfaces, one decision, divergent logic. USER-SELECTED. |
-| OD4 | **UI freeze on forced heavy load (Load Anyway on 9B multimodal)** | instrument-and-revisit | RN touchables dead; debug log stopped = JS thread blocked by the synchronous native load. Root cause turned out to be threads=1 (see nThreads follow-up below). |
-| OD5 | **Android download retry doesn't resume after network drop** | instrument-and-revisit | `[DL-SM]` android: errored at 75%, retry dispatched → NO further progress. Partly a real WiFi drop; retry-not-resuming is the reliability gap. |
-| OD6 | **Kokoro TTS asset stuck loop** | instrument-and-revisit | `[KOKORO-DL] checkAssetStatus → downloading (phase=ready progress=1.00 genuineCompletion=false)` spamming — stuck "downloading" while phase=ready/progress=1.0. |
-| OD7 | **Thinking toggle missing for Qwythos-9B in settings** | instrument-and-revisit | Model has reasoning + emits `<think>` but settings shows no toggle. Capability detection gap for community GGUF. |
-| OD8 | **Voice-mode thinking not streamed (appears suddenly)** | instrument-and-revisit | Thinking renders live in text chat but batches in voice mode. Suspected in the audio-layout display path (pro/audio/ui/AudioModeLayout.tsx). USER-SELECTED. |
-| OD9 | **TTS speaks tool-call content aloud (voice mode)** | fix-the-guard | DELEGATED (fix/tts-strip-tool-calls). `enqueueReadySentences` runs stripControlTokens per-SENTENCE-fragment, so a `<tool_call>…</tool_call>` spanning sentence boundaries leaks. Fix: withhold+strip whole control-token blocks before segmentation. |
-| OD10 | **TTS stops mid-speak** | instrument-and-revisit | `KOKORO_SPEAK The model is currently generating` + `stream segment FAILED` — a double-speak concurrency collision. Needs speak/stream serialization checked. |
-| OD11 | **Voice mode can't stream TTS alongside a large LLM** | fix-the-guard | With a big model resident, the single-model residency rule blocks the ~82MB Kokoro sidecar even with 4.4GB free; streamingSpeech loops `stream feed SKIP: engine not warm` then falls back to end-of-turn speech. Fix: allow SIDECAR types (tts/whisper/embedding) to co-reside when real free RAM fits them. |
-| OD12 | **9B loads slowly on CPU + feels frozen** | instrument-and-revisit | GPU (Adreno 4.6GB) can't hold the 9.3GB model → CPU fallback; with threads=1 the load took ~1m43s (janky UI). Root cause = nThreads (below). Also: keep UI responsive during a long native load. |
-| OD13 | **Qwythos output goes entirely to reasoning_content, answer undefined** | instrument-and-revisit | `content:undefined, reasoning_content:"The"`, `token:"<|channel>"` while `reasoning_format=deepseek`. Model's actual reasoning delimiters don't match the configured format. Needs per-model reasoning_format detection, or accept it's a bad-fit model. 'auto' native-first (parse-once) may fix it. |
-| OD15 | **"Unable to generate parser for this template / Jinja: Conversation roles must alternate" on model switch after a tool call** | fix-the-guard | llama.rn minja compiling a chat_template that asserts strict user/assistant alternation when tools enabled / history has assistant+tool+assistant. Pre-existing. Fix: catch the LOCAL tool-parser-gen failure and retry WITHOUT tools (app already does this for REMOTE via isToolGrammarError). Separate PR. |
-| OD16 | **Remote model capabilities feel flaky across Ollama / LM Studio / OGA Desktop** | instrument-and-revisit | remoteModelCapabilities has 39 unit + 4 integration tests but all FIXTURE-based. Real flakiness is response-shape variance across provider versions. Fix: capture real /props, /api/show, /v1/models from LIVE instances as fixtures; harden derivation; add a provider-abstraction contract test. Separate workstream. |
+| #    | Finding                                                                                                                        | Verdict                | Evidence                                                                                                                                                                                                                                                                                                                |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OD1  | **Vision (mmproj) dropped on download retry**                                                                                  | fix-the-guard          | `[DL-SM]` iPhone: main GGUF failed at 9% → auto-retry re-issued `needsMmProj:false, mmProjLocalPath:null` → finalized text-only. release/0.0.103 fix (persist metadataJson) targets this; UNVERIFIED on-device.                                                                                                         |
+| OD2  | **Repair Vision has no progress feedback**                                                                                     | fix-the-guard          | ~900MB mmproj re-download behind an indeterminate "Repairing…" spinner. Needs determinate progress. USER-SELECTED.                                                                                                                                                                                                      |
+| OD3  | **Chat vs Home model-selector inconsistency**                                                                                  | fix-the-guard          | `checkMemoryForModel` called ONLY in useChatModelActions.ts. Chat pre-checks (predictive fileSize×1.5 → gates behind "Load Anyway"); Home skips the pre-check → loads via measured makeRoomFor → succeeds. Two surfaces, one decision, divergent logic. USER-SELECTED.                                                  |
+| OD4  | **UI freeze on forced heavy load (Load Anyway on 9B multimodal)**                                                              | instrument-and-revisit | RN touchables dead; debug log stopped = JS thread blocked by the synchronous native load. Root cause turned out to be threads=1 (see nThreads follow-up below).                                                                                                                                                         |
+| OD5  | **Android download retry doesn't resume after network drop**                                                                   | instrument-and-revisit | `[DL-SM]` android: errored at 75%, retry dispatched → NO further progress. Partly a real WiFi drop; retry-not-resuming is the reliability gap.                                                                                                                                                                          |
+| OD6  | **Kokoro TTS asset stuck loop**                                                                                                | instrument-and-revisit | `[KOKORO-DL] checkAssetStatus → downloading (phase=ready progress=1.00 genuineCompletion=false)` spamming — stuck "downloading" while phase=ready/progress=1.0.                                                                                                                                                         |
+| OD7  | **Thinking toggle missing for Qwythos-9B in settings**                                                                         | instrument-and-revisit | Model has reasoning + emits `<think>` but settings shows no toggle. Capability detection gap for community GGUF.                                                                                                                                                                                                        |
+| OD8  | **Voice-mode thinking not streamed (appears suddenly)**                                                                        | instrument-and-revisit | Thinking renders live in text chat but batches in voice mode. Suspected in the audio-layout display path (pro/audio/ui/AudioModeLayout.tsx). USER-SELECTED.                                                                                                                                                             |
+| OD9  | **TTS speaks tool-call content aloud (voice mode)**                                                                            | fix-the-guard          | DELEGATED (fix/tts-strip-tool-calls). `enqueueReadySentences` runs stripControlTokens per-SENTENCE-fragment, so a `<tool_call>…</tool_call>` spanning sentence boundaries leaks. Fix: withhold+strip whole control-token blocks before segmentation.                                                                    |
+| OD10 | **TTS stops mid-speak**                                                                                                        | instrument-and-revisit | `KOKORO_SPEAK The model is currently generating` + `stream segment FAILED` — a double-speak concurrency collision. Needs speak/stream serialization checked.                                                                                                                                                            |
+| OD11 | **Voice mode can't stream TTS alongside a large LLM**                                                                          | fix-the-guard          | With a big model resident, the single-model residency rule blocks the ~82MB Kokoro sidecar even with 4.4GB free; streamingSpeech loops `stream feed SKIP: engine not warm` then falls back to end-of-turn speech. Fix: allow SIDECAR types (tts/whisper/embedding) to co-reside when real free RAM fits them.           |
+| OD12 | **9B loads slowly on CPU + feels frozen**                                                                                      | instrument-and-revisit | GPU (Adreno 4.6GB) can't hold the 9.3GB model → CPU fallback; with threads=1 the load took ~1m43s (janky UI). Root cause = nThreads (below). Also: keep UI responsive during a long native load.                                                                                                                        |
+| OD13 | **Qwythos output goes entirely to reasoning_content, answer undefined**                                                        | instrument-and-revisit | `content:undefined, reasoning_content:"The"`, `token:"<                                                                                                                                                                                                                                                                 | channel>"`while`reasoning_format=deepseek`. Model's actual reasoning delimiters don't match the configured format. Needs per-model reasoning_format detection, or accept it's a bad-fit model. 'auto' native-first (parse-once) may fix it. |
+| OD15 | **"Unable to generate parser for this template / Jinja: Conversation roles must alternate" on model switch after a tool call** | fix-the-guard          | llama.rn minja compiling a chat_template that asserts strict user/assistant alternation when tools enabled / history has assistant+tool+assistant. Pre-existing. Fix: catch the LOCAL tool-parser-gen failure and retry WITHOUT tools (app already does this for REMOTE via isToolGrammarError). Separate PR.           |
+| OD16 | **Remote model capabilities feel flaky across Ollama / LM Studio / OGA Desktop**                                               | instrument-and-revisit | remoteModelCapabilities has 39 unit + 4 integration tests but all FIXTURE-based. Real flakiness is response-shape variance across provider versions. Fix: capture real /props, /api/show, /v1/models from LIVE instances as fixtures; harden derivation; add a provider-abstraction contract test. Separate workstream. |
 
 **nThreads sane-default follow-up (own PR):** OD4/OD11/OD12 shared a root cause — the 9B ran with
 `threads=1` (device default nThreads:0/auto not resolving to a sane core count on an 8-core device).
@@ -148,42 +212,33 @@ Through-line: decision/capability logic derived ad-hoc at many call sites instea
 service.
 
 ### SOLID (§A/§B)
-| # | Location | Verdict | Fix |
-|---|----------|---------|-----|
-| SO1 | src/screens/ModelsScreen/TextModelsTab.tsx:143 handleRetryDownload | BLOCKING | Renderer re-implements download retry (Platform.OS branch, store mutation, mmproj, polling) — CLAUDE.md says this moved to ModelDownloadService. Delete; delegate to modelDownloadService.retry() like useDownloadManager. |
-| SO5 | src/screens/ModelsScreen/ImageFilterBar.tsx | DEBT | Platform.OS chooses which filter DIMENSIONS exist. Data-driven filter descriptor from service. |
-| SO6 | src/services/remoteServerManagerUtils.ts:122 | DEBT | `provider instanceof OpenAICompatibleProvider` to call updateCapabilities. Put on the provider interface (ISP). |
-| SO7 | pro/audio/ttsStore.ts:377,385 | DEBT | `instanceof OuteTTSEngine` for cache ops. Optional getAudioCacheSizeMB?/clearAudioCache? on the TTS engine interface. |
-| SO8 | src/stores/remoteServerHelpers.ts:32,188 | DEBT-low | `kind==='vision'` capability branch; fold into shared deriveRemoteCapabilities. |
+
+| #   | Location                                     | Verdict  | Fix                                                                                                                   |
+| --- | -------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| SO5 | src/screens/ModelsScreen/ImageFilterBar.tsx  | DEBT     | Platform.OS chooses which filter DIMENSIONS exist. Data-driven filter descriptor from service.                        |
+| SO6 | src/services/remoteServerManagerUtils.ts:122 | DEBT     | `provider instanceof OpenAICompatibleProvider` to call updateCapabilities. Put on the provider interface (ISP).       |
+| SO7 | pro/audio/ttsStore.ts:377,385                | DEBT     | `instanceof OuteTTSEngine` for cache ops. Optional getAudioCacheSizeMB?/clearAudioCache? on the TTS engine interface. |
+| SO8 | src/stores/remoteServerHelpers.ts:32,188     | DEBT-low | `kind==='vision'` capability branch; fold into shared deriveRemoteCapabilities.                                       |
 
 ### DRY (§C)
-| # | Location | Verdict | Fix |
-|---|----------|---------|-----|
-| DR3 | src/screens/HomeScreen/components/ModelPickerSheet.tsx:63,201 (*1.8/*1.5, -1.5) | DRIFTED (live) | Third memory-fit verdict bypassing memoryBudget.ts. Can say "fits" when residency refuses — the Load-Anyway/selector bug family. Call modelMemoryBudgetMB. |
-| DR4 | CHARS_PER_TOKEN=4 bare literal in llmHelpers,liteRTCompaction,litert,llm,generationServiceHelpers,providers/*,documentService | DEBT | Export CHARS_PER_TOKEN_ESTIMATE + estimateTokens(); all import. |
-| DR5 | STOP_TOKENS (llmHelpers:427) + CONTROL_TOKEN_PATTERNS (messageContent:1) + tests re-hardcode | DEBT | One token registry; derive stop-list + strip-patterns; tests import. |
-| DR6 | pro/audio outetts:363 + ttsService:207 '<\|im_end\|>' | DEBT-low | Shared IM_END_TOKEN. |
-| DR8 | remoteModelCapabilities:202 deltaHasThinking vs openAICompatibleStream:155 | DEBT | Shared REASONING_DELTA_FIELDS + deltaHasReasoning(delta). |
+
+| #   | Location                                                                                                                       | Verdict        | Fix                                                                                                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DR3 | src/screens/HomeScreen/components/ModelPickerSheet.tsx:63,201 (*1.8/*1.5, -1.5)                                                | DRIFTED (live) | Third memory-fit verdict bypassing memoryBudget.ts. Can say "fits" when residency refuses — the Load-Anyway/selector bug family. Call modelMemoryBudgetMB. |
+| DR4 | CHARS_PER_TOKEN=4 bare literal in llmHelpers,liteRTCompaction,litert,llm,generationServiceHelpers,providers/\*,documentService | DEBT           | Export CHARS_PER_TOKEN_ESTIMATE + estimateTokens(); all import.                                                                                            |
+| DR5 | STOP_TOKENS (llmHelpers:427) + CONTROL_TOKEN_PATTERNS (messageContent:1) + tests re-hardcode                                   | DEBT           | One token registry; derive stop-list + strip-patterns; tests import.                                                                                       |
+| DR6 | pro/audio outetts:363 + ttsService:207 '<\|im_end\|>'                                                                          | DEBT-low       | Shared IM_END_TOKEN.                                                                                                                                       |
+| DR8 | remoteModelCapabilities:202 deltaHasThinking vs openAICompatibleStream:155                                                     | DEBT           | Shared REASONING_DELTA_FIELDS + deltaHasReasoning(delta).                                                                                                  |
 
 ### Test quality (§D)
-| # | File | Verdict | Fix |
-|---|------|---------|-----|
-| TQ1 | __tests__/**/useDownloads.test.ts | WORST | Fakes the reducer under test (hand-sets entry.status then asserts the spy) — 37 call-asserts, 0 real-state. Drive real useDownloadStore; assert getState().downloads[key].status. |
-| TQ2 | ChatScreenSpotlight (step 3→12 block) | WORST | Block ends after advanceTimersByTime with ZERO expect() — can never fail. Assert the coachmark text. |
-| TQ3 | Spotlight trio (Chat/Home/ModelSettings, ~40 tests) | HIGH | Assert goTo(<int>) not the coachmark; unmock react-native-spotlight-tour, assert getByText(coachmark). |
-| TQ4 | useChatGenerationActions.test.ts | HIGH | L932 tautology + mock-on-mock "message appeared"; assert store/rendered outcome. |
-| TQ5 | coreMLModelUtils "downloads sequentially" | MED | Asserts order that only holds by .map push order while impl uses Promise.all. Assert real ordering w/ dynamic out-of-order mock or drop the claim. |
-| TQ6 | render tests w/ no getByText: TTSButton, ModelFailureCard, ImageGenAdviceCard, ToolAccordionStreaming, ModelsManagerSheet, McpAddServerSheet, PlaybackControls, KokoroTTSBridge | MED | Assert visible content/state, not just container testID. |
 
----
-
-## Pre-existing: mid-chat model switch doesn't refresh chat state until remount - 2026-07-10
-**instrument-and-revisit** | Reported on-device (iOS, gemma-4 local + remote), confirmed present on the
-OLD build (NOT introduced by this PR's work). Loading a new model from within the Chat screen mid-
-conversation does not update the screen's derived active-model state — not a freeze; navigating Home →
-back re-syncs. Suspect useChatModelStateSync / the chat's derived activeModel not re-running after an
-in-chat load (the model loads fine; only the screen's projection is stale). Fix separately with its own
-on-device repro — do NOT bundle into the current release PR (scope + risk).
+| #   | File                                                                                                                                                                            | Verdict | Fix                                                                                                                                                |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TQ2 | ChatScreenSpotlight (step 3→12 block)                                                                                                                                           | WORST   | Block ends after advanceTimersByTime with ZERO expect() — can never fail. Assert the coachmark text.                                               |
+| TQ3 | Spotlight trio (Chat/Home/ModelSettings, ~40 tests)                                                                                                                             | HIGH    | Assert goTo(<int>) not the coachmark; unmock react-native-spotlight-tour, assert getByText(coachmark).                                             |
+| TQ4 | useChatGenerationActions.test.ts                                                                                                                                                | HIGH    | L932 tautology + mock-on-mock "message appeared"; assert store/rendered outcome.                                                                   |
+| TQ5 | coreMLModelUtils "downloads sequentially"                                                                                                                                       | MED     | Asserts order that only holds by .map push order while impl uses Promise.all. Assert real ordering w/ dynamic out-of-order mock or drop the claim. |
+| TQ6 | render tests w/ no getByText: TTSButton, ModelFailureCard, ImageGenAdviceCard, ToolAccordionStreaming, ModelsManagerSheet, McpAddServerSheet, PlaybackControls, KokoroTTSBridge | MED     | Assert visible content/state, not just container testID.                                                                                           |
 
 ---
 
@@ -204,9 +259,9 @@ state-machine traces:
 - **Native-first Gemma flip** (buildThinkingCompletionParams reasoning_format 'none'→'auto') — a RUNTIME
   behavior change. Run a Gemma4 thinking + tool-call flow; grep `[GEMMA-FALLBACK]`. If it NEVER fires →
   native 'auto' works → DELETE parseGemmaNativeToolCalls + Gemma `<|channel>` hand-parser branches (dead)
-  + narrow the hand-parsers to the remote-only fallback. If it fires → keep the hand-parser as fallback.
-  ('auto' may also fix OD13.) Must not ship in a beta until this device check passes (TestFlight is
-  distribution-signed → no container logs; verify on the dev build first).
+  - narrow the hand-parsers to the remote-only fallback. If it fires → keep the hand-parser as fallback.
+    ('auto' may also fix OD13.) Must not ship in a beta until this device check passes (TestFlight is
+    distribution-signed → no container logs; verify on the dev build first).
 - **iOS collapsed thinking-box width fix** — screenshot check.
 - **STOP-PATH CLUSTER (device-diagnosed 2026-07-13, offgrid-debug.log 18:12–18:16 + IMG_0143/44/45): one root, four symptoms.**
   Root: a stop during PREFILL cannot interrupt llama until prefill completes (~9s on a 2.6k-token KB
@@ -224,10 +279,10 @@ state-machine traces:
   3. Resend/busy-error path left the send button latched as a fake STOP with phantom "..." while no
      session was live (IMG_0144; `prepareGenerationImpl` clears on readiness-throw, so the latch is in
      the RESEND caller's state) — find the resend action's generating flag + clear on error.
-  4. A stale "No response" error card is not cleared when a subsequent retry succeeds (IMG_0145→next).
-  Tests owed: rendered chat — send tool turn → stop mid-prefill (fake native with delayed unwind
-  honoring stopCompletion) → assert stopped-partial finalization, NO busy sheet, NO "_(No response)_"
-  bubble, button back to send; immediate resend then succeeds.
+  4. A stale "No response" error card is not cleared when a subsequent retry succeeds (IMG*0145→next).
+     Tests owed: rendered chat — send tool turn → stop mid-prefill (fake native with delayed unwind
+     honoring stopCompletion) → assert stopped-partial finalization, NO busy sheet, NO "*(No response)\_"
+     bubble, button back to send; immediate resend then succeeds.
 - **RESOLVED 2026-07-14 (reload capability drift + silent GPU→CPU): root cause was NOT a second load
   path.** Device log 18:50 proved the reload ran the ONE loadModel pipeline and detected thinking
   correctly (`Model loaded ... thinking: true` at 18:50:30.409) — but `applyLoadedContext` published
@@ -300,9 +355,6 @@ the actual rendered label value, then fix in `pro/audio/` UI. NOT a release haza
 - **Queued-message imageMode carry** (`useChatGenerationActions`/`generationService`/`useChatScreen`): a
   force-image send that gets queued loses its force flag (re-decided at 'auto' on drain). Needs the
   QueuedMessage interface + drain handler edited together — own PR.
-- **huggingface.findMatchingMMProj strict migration**: keep the generic-single-projector case, refuse a
-  projector naming a DIFFERENT model (E4B for E2B). Own download-listing matcher in mmproj.ts. See the
-  it.failing at `huggingfaceProjectorStrictness.test.ts`.
 - **Reclaim-aware pre-load gate**: in progress on its own branch (device-verify on 12GB Android before merge).
 
 ---
@@ -352,6 +404,7 @@ These are honestly NOT fully closed by the load-anyway batch — logged so they 
 
 Re-examined the two items I earlier logged as "partial fixes needed". Code inspection shows both are
 correct terminal states, NOT dead-ends — surfacing failure cards would be theater or a regression:
+
 - **Embedding load failure**: `src/services/rag/retrieval.ts:43,53` catch a failed embedding load/embed
   and RETURN `ragDatabase.getChunksByProject` (keyword/FTS chunks) — search still works (graceful
   degradation). `toolEmbeddingRouter`/`generationToolLoop:821` likewise fall back to "use all tools".
@@ -359,9 +412,10 @@ correct terminal states, NOT dead-ends — surfacing failure cards would be thea
 - **STT terminal**: `ensureWhisperForTranscription` frees the generation model and retries; if whisper
   STILL won't load, whisper-alone exceeds the device → a genuine HARD limit. The "free some memory"
   string is the honest message; a Load-Anyway there is a guaranteed-fail no-op. The recovery IS the fix.
-CONCLUSION: these two need no code change. Removed from the "to fix" list.
+  CONCLUSION: these two need no code change. Removed from the "to fix" list.
 
 ## #26 text-half (deferred, cosmetic-low)
+
 ModelPickerSheet text RAM hint still uses formatModelRam's 1.5 default, not the backend-aware
 textOverheadMultiplier the residency chip / TextTab use — so on a GPU backend the picker number can
 read lower than the chip. Verdict (fileExceedsBudget) is correct; this is a display-number nicety.
@@ -369,6 +423,7 @@ Fix = pass settings.inferenceBackend into ModelPickerSheet + formatModelRam(mode
 Deferred to avoid a new HomeScreen-picker dependency right before release. Image half fixed.
 
 ## M5a (marginal, logged) — exact budget boundary untested
+
 fileExceedsBudget's boundary (size == budget: `>` vs `>=`) has no test straddling the exact equality —
 the verifier's `>`↔`>=` mutant survived. Off-by-one-byte at the budget edge; no user-visible impact
 (a model exactly at the budget is a measure-zero case). Add a boundary test if fileExceedsBudget is

@@ -1,4 +1,4 @@
-/** P1 #59 — Voice mode turns a native STT result into visible user and assistant artifacts. */
+/** P1 #59 + P2 #110 — Voice artifacts survive a model-delete attempt during playback. */
 import {
   openChatWithJourneyModel,
   renderMainApp,
@@ -82,6 +82,33 @@ describe('P1 full-app Voice-mode transcript journey', () => {
       expect(view.getAllByText(ANSWER).length).toBeGreaterThan(0);
       expect(view.queryByTestId('voice-loading')).toBeNull();
     });
+
+    // #110: play the recorded native file, then attempt to delete the Voice
+    // model from Download Manager while the unified playback owner is active.
+    // The deletion is refused and the same conversation still exposes Stop.
+    rtl.fireEvent.press(view.getAllByLabelText('Play')[0]);
+    await rtl.waitFor(() =>
+      expect(view.getByTestId('tts-stop-button')).toBeTruthy(),
+    );
+    rtl.fireEvent.press(view.getByTestId('model-selector'));
+    rtl.fireEvent.press(
+      await rtl.waitFor(() => view.getByTestId('models-row-voice')),
+    );
+    await rtl.waitFor(() =>
+      expect(view.getByText(/Remove voice model/)).toBeTruthy(),
+    );
+    rtl.fireEvent.press(view.getByText(/Remove voice model/));
+    await rtl.waitFor(() =>
+      expect(view.getByText('Remove Voice Model')).toBeTruthy(),
+    );
+    rtl.fireEvent.press(view.getByText('Remove'));
+    await rtl.waitFor(() => {
+      expect(view.getByTestId('tts-stop-button')).toBeTruthy();
+      expect(
+        view.getByText('Stop voice playback before deleting the model.'),
+      ).toBeTruthy();
+      expect(view.getByTestId('voice-af_heart')).toBeTruthy();
+    });
     view.unmount();
-  }, 30000);
+  }, 45000);
 });

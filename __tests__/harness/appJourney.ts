@@ -236,6 +236,32 @@ export function sendChatMessage(
   rtl.fireEvent.press(view.getByTestId('send-button'));
 }
 
+/** Close a rendered AppSheet through its visible header control. */
+export async function closeAppSheet(
+  journey: RenderedAppJourney,
+  title: string,
+): Promise<void> {
+  const { rtl, view } = journey;
+  const ReactNative = require('react-native') as typeof import('react-native');
+  const sheet = await rtl.waitFor(() => {
+    const match = view
+      .UNSAFE_getAllByType(ReactNative.Modal)
+      .find(
+        modal =>
+          modal.props.visible && rtl.within(modal).queryByText(title) != null,
+      );
+    if (!match) throw new Error(`Visible sheet not found: ${title}`);
+    return match;
+  });
+
+  await rtl.act(async () => {
+    rtl.fireEvent.press(rtl.within(sheet).getByText('Done'));
+  });
+  await rtl.waitFor(() => expect(view.queryByText(title)).toBeNull(), {
+    timeout: 4000,
+  });
+}
+
 /** Download/select the Voice and Speech sidecars through Models, then open a local chat. */
 export async function openVoiceChatWithJourneyModel(
   journey: RenderedAppJourney,

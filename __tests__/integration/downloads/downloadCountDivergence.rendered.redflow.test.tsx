@@ -18,46 +18,96 @@
  * 'failed' divergence, and includes the vision+mmproj rows to confirm the vision entry itself counts
  * CONSISTENTLY (it is the failed row that diverges, not the mmproj).
  */
-import { installNativeBoundary, requireRTL, MB } from '../../harness/nativeBoundary';
+import { renderMainApp } from '../../harness/appJourney';
+import { MB } from '../../harness/nativeBoundary';
 
 describe('T001 (rendered) — download badge vs Download Manager active count', () => {
   it('shows the SAME active-download count on the badge and the Download Manager', async () => {
-    const boundary = installNativeBoundary({ download: true, fs: true });
-    /* eslint-disable @typescript-eslint/no-var-requires */
-    const React = require('react');
-    const { render, waitFor } = requireRTL();
-    const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
-    const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
-    const { DownloadManagerScreen } = require('../../../src/screens/DownloadManagerScreen');
-    /* eslint-enable @typescript-eslint/no-var-requires */
-
     // Device condition: two text models in flight + a vision model (main + mmproj sidecar, folded into ONE
     // store entry via mmProjDownloadId) + ONE model that FAILED (a network drop while others continued).
     // These are real native rows the OS reports; hydrateDownloadStore (our real code) maps them to the store.
-    boundary.download!.seedActive({ downloadId: 'dl-a', fileName: 'llama-q4.gguf', modelId: 'meta/llama', modelType: 'text', status: 'running', bytesDownloaded: 100 * MB, totalBytes: 3000 * MB });
-    boundary.download!.seedActive({ downloadId: 'dl-b', fileName: 'mistral-q4.gguf', modelId: 'mistral/mistral', modelType: 'text', status: 'running', bytesDownloaded: 50 * MB, totalBytes: 4000 * MB });
-    boundary.download!.seedActive({ downloadId: 'dl-v', fileName: 'SmolVLM-Instruct-Q4_K_M.gguf', modelId: 'HuggingFaceTB/SmolVLM', modelType: 'text', status: 'running', bytesDownloaded: 200 * MB, totalBytes: 1500 * MB, ...( { mmProjDownloadId: 'dl-v-mm' } as Record<string, unknown>) });
-    boundary.download!.seedActive({ downloadId: 'dl-v-mm', fileName: 'SmolVLM-Instruct-mmproj.gguf', modelId: 'HuggingFaceTB/SmolVLM', modelType: 'text', status: 'running', bytesDownloaded: 90 * MB, totalBytes: 190 * MB });
-    boundary.download!.seedActive({ downloadId: 'dl-c', fileName: 'qwen-q4.gguf', modelId: 'Qwen/Qwen', modelType: 'text', status: 'failed', bytesDownloaded: 10 * MB, totalBytes: 2000 * MB });
-    await hydrateDownloadStore();
+    const { rtl, view } = await renderMainApp({
+      boundary: { download: true },
+      beforeRender: ({ boundary }) => {
+        boundary.download!.seedActive({
+          downloadId: 'dl-a',
+          fileName: 'llama-q4.gguf',
+          modelId: 'meta/llama',
+          modelType: 'text',
+          status: 'running',
+          bytesDownloaded: 100 * MB,
+          totalBytes: 3000 * MB,
+        });
+        boundary.download!.seedActive({
+          downloadId: 'dl-b',
+          fileName: 'mistral-q4.gguf',
+          modelId: 'mistral/mistral',
+          modelType: 'text',
+          status: 'running',
+          bytesDownloaded: 50 * MB,
+          totalBytes: 4000 * MB,
+        });
+        boundary.download!.seedActive({
+          downloadId: 'dl-v',
+          fileName: 'SmolVLM-Instruct-Q4_K_M.gguf',
+          modelId: 'HuggingFaceTB/SmolVLM',
+          modelType: 'text',
+          status: 'running',
+          bytesDownloaded: 200 * MB,
+          totalBytes: 1500 * MB,
+          ...({ mmProjDownloadId: 'dl-v-mm' } as Record<string, unknown>),
+        });
+        boundary.download!.seedActive({
+          downloadId: 'dl-v-mm',
+          fileName: 'SmolVLM-Instruct-mmproj.gguf',
+          modelId: 'HuggingFaceTB/SmolVLM',
+          modelType: 'text',
+          status: 'running',
+          bytesDownloaded: 90 * MB,
+          totalBytes: 190 * MB,
+        });
+        boundary.download!.seedActive({
+          downloadId: 'dl-c',
+          fileName: 'qwen-q4.gguf',
+          modelId: 'Qwen/Qwen',
+          modelType: 'text',
+          status: 'failed',
+          bytesDownloaded: 10 * MB,
+          totalBytes: 2000 * MB,
+        });
+      },
+    });
+    const { fireEvent, waitFor, act } = rtl;
 
     // BADGE — the number a user sees on the real ModelsScreen (renders only when count > 0).
-    const models = render(React.createElement(ModelsScreen, {}));
+    await act(async () => {
+      fireEvent.press(view.getByTestId('models-tab'));
+    });
+    await waitFor(() => expect(view.getByTestId('models-screen')).toBeTruthy());
     let badge = NaN;
     await waitFor(() => {
-      badge = Number(models.getByTestId('downloads-badge-count').props.children);
+      badge = Number(view.getByTestId('downloads-badge-count').props.children);
       expect(Number.isNaN(badge)).toBe(false);
     });
-    models.unmount();
 
     // ACTIVE COUNT — the number a user sees on the real Download Manager, reading the SAME store.
-    const dm = render(React.createElement(DownloadManagerScreen, {}));
-    await waitFor(() => { expect(dm.queryByText('Download Manager')).not.toBeNull(); });
-    const downloading = Number(dm.getByTestId('dm-active-downloading-count').props.children);
-    const queuedEl = dm.queryByTestId('dm-active-queued-count');
-    const queued = queuedEl ? Number(String(queuedEl.props.children).match(/\d+/)?.[0] ?? '0') : 0;
-    const failedEl = dm.queryByTestId('dm-active-failed-count');
-    const failed = failedEl ? Number(String(failedEl.props.children).match(/\d+/)?.[0] ?? '0') : 0;
+    await act(async () => {
+      fireEvent.press(view.getByTestId('downloads-icon'));
+    });
+    await waitFor(() => {
+      expect(view.queryByText('Download Manager')).not.toBeNull();
+    });
+    const downloading = Number(
+      view.getByTestId('dm-active-downloading-count').props.children,
+    );
+    const queuedEl = view.queryByTestId('dm-active-queued-count');
+    const queued = queuedEl
+      ? Number(String(queuedEl.props.children).match(/\d+/)?.[0] ?? '0')
+      : 0;
+    const failedEl = view.queryByTestId('dm-active-failed-count');
+    const failed = failedEl
+      ? Number(String(failedEl.props.children).match(/\d+/)?.[0] ?? '0')
+      : 0;
 
     // SPEC (device 2026-07-15): the badge counts OUTSTANDING download work — downloading + queued +
     // failed/retriable — and the Download Manager surfaces the same three, so the two agree. A failed

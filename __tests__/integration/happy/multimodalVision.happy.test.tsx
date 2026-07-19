@@ -10,7 +10,12 @@ import { setupChatScreen } from '../../harness/chatHarness';
 import type { Message } from '../../../src/types';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
   useRoute: () => require('../../harness/chatHarness').routeHolder,
   useFocusEffect: () => {},
   useIsFocused: () => true,
@@ -23,14 +28,27 @@ describe('happy — attach a photo and a vision model answers about it (heavy en
 
     // Real attach-photo gesture (the faked native picker returns an image), then type + send.
     await h.attachImageViaUI();
-    await h.send('what is in this image', { content: 'I see a tabby cat sitting on a windowsill.' });
+    await h.send('what is in this image', {
+      content: 'I see a tabby cat sitting on a windowsill.',
+    });
 
     // The model's answer about the image renders.
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/tabby cat sitting on a windowsill/)).not.toBeNull(); });
+    await h.rtl.waitFor(() => {
+      expect(
+        h.view!.queryByText(/tabby cat sitting on a windowsill/),
+      ).not.toBeNull();
+    });
 
-    // The attached image reached the native model (sendMessageWithImages / sendMessageWithMedia).
-    const mediaArgs = [...h.boundary.litert.calls.sendMessageWithMedia, ...h.boundary.litert.calls.sendMessageWithImages].flat(2);
-    expect(JSON.stringify(mediaArgs)).toMatch(/mock\/image\.jpg/);
+    // The app-owned durable copy reached the native model. The picker URI is only a
+    // temporary boundary input and must not survive into the conversation/runtime.
+    const mediaArgs = [
+      ...h.boundary.litert.calls.sendMessageWithMedia,
+      ...h.boundary.litert.calls.sendMessageWithImages,
+    ].flat(2);
+    expect(JSON.stringify(mediaArgs)).toMatch(
+      /\/docs\/attachments\/images\/\d+-\d+\.jpg/,
+    );
+    expect(JSON.stringify(mediaArgs)).not.toMatch(/mock\/image\.jpg/);
     void ({} as Message);
   });
 });

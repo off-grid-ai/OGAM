@@ -9,7 +9,10 @@
  */
 import { useEffect, useState } from 'react';
 import { modelResidencyManager } from '../../services/modelResidency';
-import type { Resident, ResidentType } from '../../services/modelResidency/policy';
+import type {
+  Resident,
+  ResidentType,
+} from '../../services/modelResidency/policy';
 
 /** The manager sheet's modality rows. Defined HERE (the lower-level projection) rather than in
  *  ModelsManagerSheet so the hook doesn't import the component — that was a dependency cycle
@@ -25,27 +28,44 @@ const ROW_RESIDENT_TYPE: Record<ModelRowType, ResidentType> = {
 };
 
 /** Pure: pick the resident (if any) backing each sheet row. */
-function residentsByRow(residents: Resident[]): Partial<Record<ModelRowType, Resident>> {
+function residentsByRow(
+  residents: Resident[],
+): Partial<Record<ModelRowType, Resident>> {
   const out: Partial<Record<ModelRowType, Resident>> = {};
-  (Object.keys(ROW_RESIDENT_TYPE) as ModelRowType[]).forEach((row) => {
-    const match = residents.find((r) => r.type === ROW_RESIDENT_TYPE[row]);
+  (Object.keys(ROW_RESIDENT_TYPE) as ModelRowType[]).forEach(row => {
+    const match = residents.find(r => r.type === ROW_RESIDENT_TYPE[row]);
     if (match) out[row] = match;
   });
   return out;
 }
 
-export function useResidentRows(active: boolean): Partial<Record<ModelRowType, Resident>> {
-  const [byRow, setByRow] = useState<Partial<Record<ModelRowType, Resident>>>(
-    () => residentsByRow(modelResidencyManager.getResidents()),
+export type ResidencyProjection = {
+  byRow: Partial<Record<ModelRowType, Resident>>;
+  unassigned: Resident[];
+};
+
+function projectResidents(residents: Resident[]): ResidencyProjection {
+  const byRow = residentsByRow(residents);
+  const assignedKeys = new Set(Object.values(byRow).map(r => r?.key));
+  return {
+    byRow,
+    unassigned: residents.filter(resident => !assignedKeys.has(resident.key)),
+  };
+}
+
+export function useResidentRows(active: boolean): ResidencyProjection {
+  const [projection, setProjection] = useState<ResidencyProjection>(() =>
+    projectResidents(modelResidencyManager.getResidents()),
   );
   useEffect(() => {
     if (!active) return;
-    const tick = () => setByRow(residentsByRow(modelResidencyManager.getResidents()));
+    const tick = () =>
+      setProjection(projectResidents(modelResidencyManager.getResidents()));
     tick();
     const id = setInterval(tick, 300);
     return () => clearInterval(id);
   }, [active]);
-  return byRow;
+  return projection;
 }
 
 /** Eject one row's resident via the owning service (its registered unload runs; lazy-reload on next use). */

@@ -57,7 +57,9 @@ const CURATED_LITERT_INDEX: Map<string, CuratedLiteRTEntry> = new Map(
   CURATED_LITERT_ENTRIES.map(e => [e.fileName, e]),
 );
 
-export function getCuratedLiteRTEntry(fileName: string | undefined): CuratedLiteRTEntry | undefined {
+export function getCuratedLiteRTEntry(
+  fileName: string | undefined,
+): CuratedLiteRTEntry | undefined {
   if (!fileName) return undefined;
   return CURATED_LITERT_INDEX.get(fileName);
 }
@@ -82,7 +84,7 @@ export function curatedLiteRTDownloadWarning(
   return entry.confirmDownload;
 }
 
-export function buildCuratedLiteRTUrl(entry: CuratedLiteRTEntry): string {
+function buildCuratedLiteRTUrl(entry: CuratedLiteRTEntry): string {
   return `https://huggingface.co/${entry.hfRepoId}/resolve/${entry.commitHash}/${entry.fileName}?download=true`;
 }
 

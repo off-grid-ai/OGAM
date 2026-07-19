@@ -16,17 +16,18 @@
  * HuggingFace transport). The real huggingFaceService, screen, useTextModels hook,
  * handleSelectModel, timeout/fail-fast behavior, and filesLoadError state machine all run.
  */
-import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
+import { renderMainApp } from '../../harness/appJourney';
+import { GB } from '../../harness/nativeBoundary';
 
 const MODEL_ID = 'org/retry-model';
 const originalFetch = global.fetch;
 
-afterEach(() => { global.fetch = originalFetch; });
+afterEach(() => {
+  global.fetch = originalFetch;
+});
 
 describe('model detail Available Files — fetch failure shows Retry, success renders files', () => {
   it('shows the retry state on a failed file-list fetch, then renders files after Retry', async () => {
-    installNativeBoundary({ download: true, fs: true, ram: { platform: 'android', totalBytes: 8 * GB, availBytes: 6 * GB } });
-
     const hfModel = {
       id: MODEL_ID,
       author: 'org',
@@ -43,7 +44,10 @@ describe('model detail Available Files — fetch failure shows Retry, success re
     global.fetch = (async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/models?')) {
-        return { ok: true, json: async () => url.includes('search=retry') ? [hfModel] : [] } as Response;
+        return {
+          ok: true,
+          json: async () => (url.includes('search=retry') ? [hfModel] : []),
+        } as Response;
       }
       if (url.endsWith(`/models/${MODEL_ID}/tree/main`)) {
         fileListAttempts += 1;
@@ -54,39 +58,65 @@ describe('model detail Available Files — fetch failure shows Retry, success re
         }
         return {
           ok: true,
-          json: async () => [{ type: 'file', path: 'model-Q4_K_M.gguf', size: 2 * GB }],
+          json: async () => [
+            { type: 'file', path: 'model-Q4_K_M.gguf', size: 2 * GB },
+          ],
         } as Response;
       }
-      const modelId = decodeURIComponent(url.split('/models/')[1] || 'org/unknown');
-      return { ok: true, json: async () => ({ ...hfModel, id: modelId }) } as Response;
+      const modelId = decodeURIComponent(
+        url.split('/models/')[1] || 'org/unknown',
+      );
+      return {
+        ok: true,
+        json: async () => ({ ...hfModel, id: modelId }),
+      } as Response;
     }) as typeof fetch;
 
-    const React = require('react');
-    const { render, fireEvent, waitFor, act } = requireRTL();
-    const { hardwareService } = require('../../../src/services/hardware');
-    const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
+    const { rtl, view } = await renderMainApp({
+      boundary: {
+        download: true,
+        ram: { platform: 'android', totalBytes: 8 * GB, availBytes: 6 * GB },
+      },
+    });
+    const { fireEvent, waitFor, act } = rtl;
 
-    await hardwareService.refreshMemoryInfo();
-
-    const { getByTestId, getByText, queryByText, queryByTestId } = render(React.createElement(ModelsScreen, {}));
+    await act(async () => {
+      fireEvent.press(view.getByTestId('models-tab'));
+    });
+    await waitFor(() => expect(view.getByTestId('models-screen')).toBeTruthy());
 
     // Arrive at the model's detail the way a user does: search, submit, tap the result.
-    await act(async () => { fireEvent.changeText(getByTestId('search-input'), 'retry'); });
     await act(async () => {
-      fireEvent(getByTestId('search-input'), 'submitEditing');
-      await new Promise((r) => setTimeout(r, 600));
+      fireEvent.changeText(view.getByTestId('search-input'), 'retry');
     });
-    await waitFor(() => expect(getByText('retry-model')).toBeTruthy(), { timeout: 6000 });
-    await act(async () => { fireEvent.press(getByText('retry-model')); });
+    await act(async () => {
+      fireEvent(view.getByTestId('search-input'), 'submitEditing');
+      await new Promise(r => setTimeout(r, 600));
+    });
+    await waitFor(() => expect(view.getByText('retry-model')).toBeTruthy(), {
+      timeout: 6000,
+    });
+    await act(async () => {
+      fireEvent.press(view.getByText('retry-model'));
+    });
 
     // The first file-list fetch failed → the RETRY state renders, NOT "No compatible files found".
-    await waitFor(() => expect(getByTestId('model-files-load-error')).toBeTruthy(), { timeout: 4000 });
-    expect(getByText(/Couldn't load files/)).toBeTruthy();
-    expect(queryByText('No compatible files found for this model.')).toBeNull();
+    await waitFor(
+      () => expect(view.getByTestId('model-files-load-error')).toBeTruthy(),
+      { timeout: 4000 },
+    );
+    expect(view.getByText(/Couldn't load files/)).toBeTruthy();
+    expect(
+      view.queryByText('No compatible files found for this model.'),
+    ).toBeNull();
 
     // Tapping Retry re-runs the fetch — which now succeeds — and the file renders.
-    await act(async () => { fireEvent.press(getByTestId('model-files-retry')); });
-    await waitFor(() => expect(getByText('model-Q4_K_M')).toBeTruthy(), { timeout: 4000 });
-    expect(queryByTestId('model-files-load-error')).toBeNull();
+    await act(async () => {
+      fireEvent.press(view.getByTestId('model-files-retry'));
+    });
+    await waitFor(() => expect(view.getByText('model-Q4_K_M')).toBeTruthy(), {
+      timeout: 4000,
+    });
+    expect(view.queryByTestId('model-files-load-error')).toBeNull();
   }, 30000);
 });

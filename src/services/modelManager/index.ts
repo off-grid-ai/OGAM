@@ -1,7 +1,13 @@
 import RNFS from 'react-native-fs';
 import logger from '../../utils/logger';
 import { getMmProjFileSize } from '../../utils/modelHelpers';
-import { DownloadedModel, ModelFile, BackgroundDownloadInfo, ONNXImageModel, PersistedDownloadInfo } from '../../types';
+import {
+  DownloadedModel,
+  ModelFile,
+  BackgroundDownloadInfo,
+  ONNXImageModel,
+  PersistedDownloadInfo,
+} from '../../types';
 import { APP_CONFIG } from '../../constants';
 import { useAppStore } from '../../stores';
 import { backgroundDownloadService } from '../backgroundDownloadService';
@@ -12,12 +18,7 @@ import {
   DownloadCompleteCallback,
   DownloadErrorCallback,
 } from './types';
-import {
-  saveModelsList,
-  saveImageModelsList,
-  loadDownloadedModels,
-  loadDownloadedImageModels,
-} from './storage';
+import { saveModelsList, loadDownloadedModels } from './storage';
 import {
   performBackgroundDownload,
   watchBackgroundDownload,
@@ -36,82 +37,44 @@ import {
   scanForUntrackedTextModels as scanUntrackedText,
   importLocalModel as scanImportLocalModel,
   reconcileFinishedImageDownloads as reconcileImageDownloads,
-  isMMProjFile,
   ImportLocalModelOpts,
 } from './scan';
-import { mmProjBelongsToModel, pickMmProjForModel } from '../mmproj';
-import { resolveStoredPath, determineCredibility } from './storage';
-
-;
-;
+import {
+  addDownloadedImageModel,
+  deleteImageModel,
+  getDownloadedImageModels,
+  getImageModelPath,
+  getImageModelsStorageUsed,
+} from './imageModelStorage';
+import { linkOrphanMmProj } from './mmProjLinker';
+import { initializeModelDirectories } from './directories';
 
 class ModelManager {
   private readonly modelsDir: string;
   private readonly imageModelsDir: string;
-  private backgroundDownloadMetadataCallback: BackgroundDownloadMetadataCallback | null = null;
-  private readonly backgroundDownloadContext: Map<string, BackgroundDownloadContext> = new Map();
+  private backgroundDownloadMetadataCallback: BackgroundDownloadMetadataCallback | null =
+    null;
+  private readonly backgroundDownloadContext: Map<
+    string,
+    BackgroundDownloadContext
+  > = new Map();
 
   constructor() {
     this.modelsDir = `${RNFS.DocumentDirectoryPath}/${APP_CONFIG.modelStorageDir}`;
     this.imageModelsDir = `${RNFS.DocumentDirectoryPath}/image_models`;
   }
 
-  private resolveStoredPath(p: string, d: string) { return resolveStoredPath(p, d); }
-  private determineCredibility(a: string) { return determineCredibility(a); }
-  private isMMProjFile(f: string) { return isMMProjFile(f); }
-
   async initialize(): Promise<void> {
-    if (!(await RNFS.exists(this.modelsDir))) await RNFS.mkdir(this.modelsDir);
-    if (!(await RNFS.exists(this.imageModelsDir))) await RNFS.mkdir(this.imageModelsDir);
-    const exclude = (p: string) => backgroundDownloadService.excludeFromBackup(p);
-    await Promise.all([exclude(this.modelsDir), exclude(this.imageModelsDir),
-      exclude(`${RNFS.DocumentDirectoryPath}/${APP_CONFIG.whisperStorageDir}`)]);
+    return initializeModelDirectories(this.modelsDir, this.imageModelsDir);
   }
 
   async linkOrphanMmProj(): Promise<void> {
-    const models = await this.getDownloadedModels();
-    let dirFiles: RNFS.ReadDirResItemT[] = [];
-    try {
-      dirFiles = await RNFS.readDir(this.modelsDir);
-    } catch {
-      return;
-    }
-    const mmProjFiles = dirFiles.filter(f => f.isFile() && this.isMMProjFile(f.name));
-    if (mmProjFiles.length === 0) return;
-
-    const toSave: typeof models = [];
-    for (const m of models) {
-      if (m.engine !== 'llama') continue;
-      // Strict match (shared rule): the projector must belong to THIS model by name+variant. This is the
-      // SAME rule the loader uses, so link-time and load-time can no longer disagree (the E2B↔E4B split).
-      const chosenName = pickMmProjForModel(m.fileName, mmProjFiles.map(f => f.name));
-      const match = chosenName ? mmProjFiles.find(f => f.name === chosenName) : undefined;
-
-      if (m.mmProjPath) {
-        // Clear the link if the stored file no longer exists OR doesn't belong to this model (strict).
-        const belongs = mmProjBelongsToModel(m.fileName, m.mmProjPath.split('/').pop() ?? '');
-        const fileExists = await RNFS.exists(m.mmProjPath).catch(() => false);
-        if (!fileExists || !belongs) {
-          logger.log(`[linkOrphanMmProj] ${m.id} — clearing bad link: ${m.mmProjPath}`);
-          // Clear only the dead/wrong on-disk pointer — KEEP isVisionModel + mmProjFileName so the model is
-          // still recognized as a vision model that NEEDS REPAIR (needsVisionRepair → true → the wrench and
-          // the "download the vision file" prompt appear). Wiping the vision flag made it look like a plain
-          // text model, hiding the repair path entirely (device 2026-07-14).
-          toSave.push({ ...m, mmProjPath: undefined, mmProjFileSize: undefined, isVisionModel: true });
-        }
-        // If link is valid, leave it alone
-      } else if (match) {
-        logger.log(`[linkOrphanMmProj] ${m.id} — linking ${match.path}`);
-        await this.saveModelWithMmproj(m.id, match.path);
-      }
-    }
-
-    if (toSave.length > 0) {
-      const current = await this.getDownloadedModels();
-      const updated = current.map(m => toSave.find(s => s.id === m.id) ?? m);
-      await saveModelsList(updated);
-      useAppStore.getState().setDownloadedModels(updated);
-    }
+    return linkOrphanMmProj({
+      modelsDir: this.modelsDir,
+      getModels: () => this.getDownloadedModels(),
+      saveModelWithMmproj: (modelId, path) =>
+        this.saveModelWithMmproj(modelId, path),
+    });
   }
 
   async getDownloadedModels(): Promise<DownloadedModel[]> {
@@ -131,7 +94,10 @@ class ModelManager {
       throw new Error('Invalid model path: outside app directory');
     }
     const llamaModel = model.engine === 'llama' ? model : null;
-    if (llamaModel?.mmProjPath && !llamaModel.mmProjPath.startsWith(this.modelsDir)) {
+    if (
+      llamaModel?.mmProjPath &&
+      !llamaModel.mmProjPath.startsWith(this.modelsDir)
+    ) {
       throw new Error('Invalid mmproj path: outside app directory');
     }
     await RNFS.unlink(model.filePath);
@@ -139,7 +105,10 @@ class ModelManager {
     // Only delete mmproj if no other models reference it
     if (llamaModel?.mmProjPath) {
       const otherModelsUsingMmproj = models.some(
-        m => m.engine === 'llama' && m.id !== modelId && m.mmProjPath === llamaModel.mmProjPath,
+        m =>
+          m.engine === 'llama' &&
+          m.id !== modelId &&
+          m.mmProjPath === llamaModel.mmProjPath,
       );
       if (!otherModelsUsingMmproj) {
         await RNFS.unlink(llamaModel.mmProjPath).catch(() => {});
@@ -156,7 +125,10 @@ class ModelManager {
 
   async getStorageUsed(): Promise<number> {
     const models = await this.getDownloadedModels();
-    return models.reduce((total, model) => total + model.fileSize + getMmProjFileSize(model), 0);
+    return models.reduce(
+      (total, model) => total + model.fileSize + getMmProjFileSize(model),
+      0,
+    );
   }
 
   async getAvailableStorage(): Promise<number> {
@@ -164,11 +136,29 @@ class ModelManager {
     return freeSpace.freeSpace;
   }
 
-  async getOrphanedFiles(): Promise<Array<{ name: string; path: string; size: number }>> {
+  async getOrphanedFiles(): Promise<
+    Array<{ name: string; path: string; size: number }>
+  > {
     await this.initialize();
     try {
-      const textOrphans = await getOrphanedTextFiles(this.modelsDir, () => this.getDownloadedModels());
-      const imageOrphans = await getOrphanedImageDirs(this.imageModelsDir, () => this.getDownloadedImageModels());
+      // A completion can move its file into modelsDir before registration has
+      // finished. Protect every live context's destination so a storage scan
+      // cannot label (and let the user delete) an in-flight/processing model.
+      const activeTextPaths = [...this.backgroundDownloadContext.values()]
+        .filter(ctx => 'file' in ctx)
+        .flatMap(ctx =>
+          [ctx.localPath, ctx.mmProjLocalPath].filter(
+            (path): path is string => !!path,
+          ),
+        );
+      const textOrphans = await getOrphanedTextFiles(
+        this.modelsDir,
+        () => this.getDownloadedModels(),
+        activeTextPaths,
+      );
+      const imageOrphans = await getOrphanedImageDirs(this.imageModelsDir, () =>
+        this.getDownloadedImageModels(),
+      );
       return [...textOrphans, ...imageOrphans];
     } catch {
       return [];
@@ -179,7 +169,9 @@ class ModelManager {
     await scanDeleteOrphanedFile(filePath);
   }
 
-  setBackgroundDownloadMetadataCallback(callback: BackgroundDownloadMetadataCallback): void {
+  setBackgroundDownloadMetadataCallback(
+    callback: BackgroundDownloadMetadataCallback,
+  ): void {
     this.backgroundDownloadMetadataCallback = callback;
   }
 
@@ -201,7 +193,8 @@ class ModelManager {
       file,
       modelsDir: this.modelsDir,
       backgroundDownloadContext: this.backgroundDownloadContext,
-      backgroundDownloadMetadataCallback: this.backgroundDownloadMetadataCallback,
+      backgroundDownloadMetadataCallback:
+        this.backgroundDownloadMetadataCallback,
       onProgress,
     });
   }
@@ -215,7 +208,8 @@ class ModelManager {
       downloadId,
       modelsDir: this.modelsDir,
       backgroundDownloadContext: this.backgroundDownloadContext,
-      backgroundDownloadMetadataCallback: this.backgroundDownloadMetadataCallback,
+      backgroundDownloadMetadataCallback:
+        this.backgroundDownloadMetadataCallback,
       onComplete,
       onError,
     });
@@ -232,23 +226,38 @@ class ModelManager {
     ctx.mmProjCompleted = false;
     ctx.mmProjCompleteHandled = false;
     if (!ctx.mmProjLocalPath && ctx.file.mmProjFile) {
-      ctx.mmProjLocalPath = `${this.modelsDir}/${mmProjLocalName(ctx.file.name, ctx.file.mmProjFile?.name)}`;
+      ctx.mmProjLocalPath = `${this.modelsDir}/${mmProjLocalName(
+        ctx.file.name,
+        ctx.file.mmProjFile?.name,
+      )}`;
     }
   }
 
-  private async cleanupCancelledTextArtifacts(ctx: Extract<BackgroundDownloadContext, { file: ModelFile }>): Promise<void> {
-    const cleanupTargets = [ctx.localPath, ctx.mmProjLocalPath].filter((path): path is string => !!path);
+  private async cleanupCancelledTextArtifacts(
+    ctx: Extract<BackgroundDownloadContext, { file: ModelFile }>,
+  ): Promise<void> {
+    const cleanupTargets = [ctx.localPath, ctx.mmProjLocalPath].filter(
+      (path): path is string => !!path,
+    );
 
-    await Promise.all(cleanupTargets.map(async targetPath => {
-      try {
-        const exists = await RNFS.exists(targetPath);
-        if (!exists) return;
-        await RNFS.unlink(targetPath);
-        logger.warn(`[ModelManagerDownload] removed cancelled artifact ${targetPath}`);
-      } catch (error) {
-        logger.warn(`[ModelManagerDownload] failed to remove cancelled artifact ${targetPath}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }));
+    await Promise.all(
+      cleanupTargets.map(async targetPath => {
+        try {
+          const exists = await RNFS.exists(targetPath);
+          if (!exists) return;
+          await RNFS.unlink(targetPath);
+          logger.warn(
+            `[ModelManagerDownload] removed cancelled artifact ${targetPath}`,
+          );
+        } catch (error) {
+          logger.warn(
+            `[ModelManagerDownload] failed to remove cancelled artifact ${targetPath}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+      }),
+    );
   }
 
   async cancelBackgroundDownload(downloadId: string): Promise<void> {
@@ -257,7 +266,9 @@ class ModelManager {
     }
     const ctx = this.backgroundDownloadContext.get(downloadId);
     if (ctx && 'file' in ctx && ctx.mmProjDownloadId) {
-      await backgroundDownloadService.cancelDownload(ctx.mmProjDownloadId).catch(() => {});
+      await backgroundDownloadService
+        .cancelDownload(ctx.mmProjDownloadId)
+        .catch(() => {});
     }
 
     await backgroundDownloadService.cancelDownload(downloadId);
@@ -273,7 +284,11 @@ class ModelManager {
   ): Promise<DownloadedModel[]> {
     if (!this.isBackgroundDownloadSupported()) return [];
     await this.initialize();
-    return syncCompletedBackgroundDownloads({ persistedDownloads, modelsDir: this.modelsDir, clearDownloadCallback });
+    return syncCompletedBackgroundDownloads({
+      persistedDownloads,
+      modelsDir: this.modelsDir,
+      clearDownloadCallback,
+    });
   }
   async syncCompletedImageDownloads(
     persistedDownloads: Record<string, PersistedDownloadInfo>,
@@ -286,7 +301,7 @@ class ModelManager {
       persistedDownloads,
       clearDownloadCallback,
       getDownloadedImageModels: () => this.getDownloadedImageModels(),
-      addDownloadedImageModel: (model) => this.addDownloadedImageModel(model),
+      addDownloadedImageModel: model => this.addDownloadedImageModel(model),
     });
   }
 
@@ -298,7 +313,8 @@ class ModelManager {
     return restoreInProgressDownloads({
       modelsDir: this.modelsDir,
       backgroundDownloadContext: this.backgroundDownloadContext,
-      backgroundDownloadMetadataCallback: this.backgroundDownloadMetadataCallback,
+      backgroundDownloadMetadataCallback:
+        this.backgroundDownloadMetadataCallback,
       onProgress,
     });
   }
@@ -308,25 +324,34 @@ class ModelManager {
     return backgroundDownloadService.getActiveDownloads();
   }
   startBackgroundDownloadPolling(): void {
-    if (this.isBackgroundDownloadSupported()) backgroundDownloadService.startProgressPolling();
+    if (this.isBackgroundDownloadSupported())
+      backgroundDownloadService.startProgressPolling();
   }
 
   stopBackgroundDownloadPolling(): void {
-    if (this.isBackgroundDownloadSupported()) backgroundDownloadService.stopProgressPolling();
+    if (this.isBackgroundDownloadSupported())
+      backgroundDownloadService.stopProgressPolling();
   }
   async repairMmProj(
     modelId: string,
     file: ModelFile,
-    opts?: { onProgress?: DownloadProgressCallback; onDownloadIdReady?: (id: string) => void },
+    opts?: {
+      onProgress?: DownloadProgressCallback;
+      onDownloadIdReady?: (id: string) => void;
+    },
   ): Promise<void> {
-    if (!file.mmProjFile) throw new Error('Model file has no associated mmproj');
+    if (!file.mmProjFile)
+      throw new Error('Model file has no associated mmproj');
     await this.initialize();
     // download.ts owns background-download orchestration: it starts the sidecar,
     // drives the SAME download-store rows the normal download writes (so the existing
     // determinate progress bar lights up during the ~900MB fetch — BUG OD2), moves the
     // file, and tears the transient row down. We just persist the resolved path.
     const resolvedPath = await performMmProjRepairDownload({
-      modelId, file, modelsDir: this.modelsDir, ...opts,
+      modelId,
+      file,
+      modelsDir: this.modelsDir,
+      ...opts,
     });
     await this.saveModelWithMmproj(`${modelId}/${file.name}`, resolvedPath);
   }
@@ -340,21 +365,38 @@ class ModelManager {
   async markVisionModel(modelId: string): Promise<boolean> {
     const models = await this.getDownloadedModels();
     const target = models.find(m => m.id === modelId);
-    if (!target || target.engine !== 'llama' || target.isVisionModel) return false;
-    const updated = models.map(m => (m.id === modelId ? { ...m, isVisionModel: true } : m));
+    if (!target || target.engine !== 'llama' || target.isVisionModel)
+      return false;
+    const updated = models.map(m =>
+      m.id === modelId ? { ...m, isVisionModel: true } : m,
+    );
     await saveModelsList(updated);
     useAppStore.getState().setDownloadedModels(updated);
     return true;
   }
 
-  async saveModelWithMmproj(modelId: string, mmProjPath: string): Promise<void> {
+  async saveModelWithMmproj(
+    modelId: string,
+    mmProjPath: string,
+  ): Promise<void> {
     const mmProjFileName = mmProjPath.split('/').pop() || mmProjPath;
     const stat = await RNFS.stat(mmProjPath);
-    const mmProjFileSize = typeof stat.size === 'string' ? Number.parseInt(stat.size, 10) : stat.size;
+    const mmProjFileSize =
+      typeof stat.size === 'string'
+        ? Number.parseInt(stat.size, 10)
+        : stat.size;
 
     const models = await this.getDownloadedModels();
     const updated = models.map(m =>
-      m.id === modelId ? { ...m, mmProjPath, mmProjFileName, mmProjFileSize, isVisionModel: true } : m
+      m.id === modelId
+        ? {
+            ...m,
+            mmProjPath,
+            mmProjFileName,
+            mmProjFileSize,
+            isVisionModel: true,
+          }
+        : m,
     );
     await saveModelsList(updated);
     // Also update the in-memory Zustand store so UI reflects the change immediately.
@@ -364,7 +406,15 @@ class ModelManager {
   async clearMmProjLink(modelId: string): Promise<void> {
     const models = await this.getDownloadedModels();
     const updated = models.map(m =>
-      m.id === modelId ? { ...m, mmProjPath: undefined, mmProjFileName: undefined, mmProjFileSize: undefined, isVisionModel: false } : m
+      m.id === modelId
+        ? {
+            ...m,
+            mmProjPath: undefined,
+            mmProjFileName: undefined,
+            mmProjFileSize: undefined,
+            isVisionModel: false,
+          }
+        : m,
     );
     await saveModelsList(updated);
     useAppStore.getState().setDownloadedModels(updated);
@@ -374,47 +424,31 @@ class ModelManager {
     return scanCleanupMMProjEntries(this.modelsDir);
   }
 
-  async importLocalModel(opts: Omit<ImportLocalModelOpts, 'modelsDir'>): Promise<DownloadedModel> {
+  async importLocalModel(
+    opts: Omit<ImportLocalModelOpts, 'modelsDir'>,
+  ): Promise<DownloadedModel> {
     await this.initialize();
     return scanImportLocalModel({ ...opts, modelsDir: this.modelsDir });
   }
 
   async getDownloadedImageModels(): Promise<ONNXImageModel[]> {
-    try {
-      return await loadDownloadedImageModels(this.imageModelsDir);
-    } catch {
-      return [];
-    }
+    return getDownloadedImageModels(this.imageModelsDir);
   }
 
   async addDownloadedImageModel(model: ONNXImageModel): Promise<void> {
-    const models = await this.getDownloadedImageModels();
-    const idx = models.findIndex(m => m.id === model.id);
-    if (idx >= 0) models[idx] = model;
-    else models.push(model);
-    await saveImageModelsList(models);
+    return addDownloadedImageModel(this.imageModelsDir, model);
   }
 
   async deleteImageModel(modelId: string): Promise<void> {
-    const models = await this.getDownloadedImageModels();
-    const model = models.find(m => m.id === modelId);
-    if (!model) throw new Error('Image model not found');
-    const topLevelDir = `${this.imageModelsDir}/${modelId}`;
-    if (!topLevelDir.startsWith(`${this.imageModelsDir}/`)) {
-      throw new Error('Invalid image model path: outside app directory');
-    }
-    if (await RNFS.exists(topLevelDir)) await RNFS.unlink(topLevelDir);
-    await saveImageModelsList(models.filter(m => m.id !== modelId));
+    return deleteImageModel(this.imageModelsDir, modelId);
   }
 
   async getImageModelPath(modelId: string): Promise<string | null> {
-    const models = await this.getDownloadedImageModels();
-    return models.find(m => m.id === modelId)?.modelPath || null;
+    return getImageModelPath(this.imageModelsDir, modelId);
   }
 
   async getImageModelsStorageUsed(): Promise<number> {
-    const models = await this.getDownloadedImageModels();
-    return models.reduce((total, model) => total + model.size, 0);
+    return getImageModelsStorageUsed(this.imageModelsDir);
   }
 
   getImageModelsDirectory(): string {
@@ -426,16 +460,18 @@ class ModelManager {
     return scanUntrackedImage({
       imageModelsDir: this.imageModelsDir,
       getImageModels: () => this.getDownloadedImageModels(),
-      addImageModel: (model) => this.addDownloadedImageModel(model),
+      addImageModel: model => this.addDownloadedImageModel(model),
     });
   }
 
-  async reconcileFinishedImageDownloads(activeModelIds: Set<string>): Promise<ONNXImageModel[]> {
+  async reconcileFinishedImageDownloads(
+    activeModelIds: Set<string>,
+  ): Promise<ONNXImageModel[]> {
     await this.initialize();
     return reconcileImageDownloads({
       imageModelsDir: this.imageModelsDir,
       getImageModels: () => this.getDownloadedImageModels(),
-      addImageModel: (model) => this.addDownloadedImageModel(model),
+      addImageModel: model => this.addDownloadedImageModel(model),
       activeModelIds,
     });
   }
@@ -445,7 +481,10 @@ class ModelManager {
     return scanUntrackedText(this.modelsDir, () => this.getDownloadedModels());
   }
 
-  async refreshModelLists(): Promise<{ textModels: DownloadedModel[]; imageModels: ONNXImageModel[] }> {
+  async refreshModelLists(): Promise<{
+    textModels: DownloadedModel[];
+    imageModels: ONNXImageModel[];
+  }> {
     await this.scanForUntrackedTextModels();
     await this.scanForUntrackedImageModels();
     return {
@@ -456,4 +495,3 @@ class ModelManager {
 }
 
 export const modelManager = new ModelManager();
-;

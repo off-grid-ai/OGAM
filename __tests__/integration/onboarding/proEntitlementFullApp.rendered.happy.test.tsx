@@ -110,6 +110,17 @@ describe('P1 full-App Pro entitlement lifecycle', () => {
     await app.rtl.waitFor(() =>
       expect(app.view.queryByTestId('chat-mode-toggle')).toBeNull(),
     );
+
+    pressChatBack(app);
+    app.rtl.fireEvent.press(app.view.getByTestId('settings-tab'));
+    app.rtl.fireEvent.press(
+      await app.rtl.waitFor(() => app.view.getByText('Turn on Pro (DEV)')),
+    );
+    app.rtl.fireEvent.press(app.view.getByTestId('home-tab'));
+    await openChat(app);
+    await app.rtl.waitFor(() =>
+      expect(app.view.getAllByTestId('chat-mode-toggle')).toHaveLength(1),
+    );
   }, 60000);
 
   it('tears down gated behavior when Keygen revokes a cached license on foreground', async () => {

@@ -19,7 +19,6 @@ import {
   hashString,
   ensureSessionCacheDir,
   getSessionPath,
-  shouldDisableMmap,
 } from '../../../src/services/llmHelpers';
 import { INFERENCE_BACKENDS } from '../../../src/types';
 import { Platform } from 'react-native';
@@ -50,7 +49,9 @@ describe('hashString', () => {
 
 describe('getSessionPath', () => {
   it('builds a session-<hash>.bin path under the cache dir', () => {
-    expect(getSessionPath('/cache', 'deadbeef')).toBe('/cache/session-deadbeef.bin');
+    expect(getSessionPath('/cache', 'deadbeef')).toBe(
+      '/cache/session-deadbeef.bin',
+    );
   });
 });
 
@@ -71,27 +72,40 @@ describe('ensureSessionCacheDir', () => {
 
   it('swallows errors thrown while creating the dir', async () => {
     mockedRNFS.exists.mockRejectedValueOnce(new Error('fs error'));
-    await expect(ensureSessionCacheDir('/cache/sessions')).resolves.toBeUndefined();
+    await expect(
+      ensureSessionCacheDir('/cache/sessions'),
+    ).resolves.toBeUndefined();
   });
 });
 
-describe('shouldDisableMmap — android repackable quant branch', () => {
+describe('buildModelParams — Android mmap policy', () => {
   const origOS = Platform.OS;
-  afterEach(() => { (Platform as any).OS = origOS; });
-
-  it('returns true on android for a q4_0 model path', () => {
-    (Platform as any).OS = 'android';
-    expect(shouldDisableMmap('/models/llama.Q4_0.gguf')).toBe(true);
+  afterEach(() => {
+    (Platform as any).OS = origOS;
   });
 
-  it('returns true on android for an iq4_nl model path', () => {
+  it('disables mmap for repackable q4_0 model paths', () => {
     (Platform as any).OS = 'android';
-    expect(shouldDisableMmap('/models/llama.IQ4_NL.gguf')).toBe(true);
+    expect(
+      (buildModelParams('/models/llama.Q4_0.gguf', {}).baseParams as any)
+        .use_mmap,
+    ).toBe(false);
   });
 
-  it('returns false on android for a non-repackable quant', () => {
+  it('disables mmap for repackable iq4_nl model paths', () => {
     (Platform as any).OS = 'android';
-    expect(shouldDisableMmap('/models/llama.Q8_0.gguf')).toBe(false);
+    expect(
+      (buildModelParams('/models/llama.IQ4_NL.gguf', {}).baseParams as any)
+        .use_mmap,
+    ).toBe(false);
+  });
+
+  it('keeps mmap enabled for non-repackable model paths', () => {
+    (Platform as any).OS = 'android';
+    expect(
+      (buildModelParams('/models/llama.Q8_0.gguf', {}).baseParams as any)
+        .use_mmap,
+    ).toBe(true);
   });
 });
 
@@ -169,7 +183,9 @@ describe('initMultimodal', () => {
   it('reads support from getMultimodalSupport on success', async () => {
     const ctx = {
       initMultimodal: jest.fn().mockResolvedValue(true),
-      getMultimodalSupport: jest.fn().mockResolvedValue({ vision: true, audio: true }),
+      getMultimodalSupport: jest
+        .fn()
+        .mockResolvedValue({ vision: true, audio: true }),
     } as any;
     const res = await initMultimodal(ctx, '/mmproj.gguf', false);
     expect(res.initialized).toBe(true);
@@ -179,7 +195,9 @@ describe('initMultimodal', () => {
   it('keeps default support when getMultimodalSupport throws', async () => {
     const ctx = {
       initMultimodal: jest.fn().mockResolvedValue(true),
-      getMultimodalSupport: jest.fn().mockRejectedValue(new Error('no support api')),
+      getMultimodalSupport: jest
+        .fn()
+        .mockRejectedValue(new Error('no support api')),
     } as any;
     const res = await initMultimodal(ctx, '/mmproj.gguf', true);
     expect(res.initialized).toBe(true);
@@ -199,21 +217,32 @@ describe('initMultimodal', () => {
 describe('checkContextMultimodal', () => {
   it('returns support when getMultimodalSupport is a function', async () => {
     const ctx = {
-      getMultimodalSupport: jest.fn().mockResolvedValue({ vision: true, audio: false }),
+      getMultimodalSupport: jest
+        .fn()
+        .mockResolvedValue({ vision: true, audio: false }),
     } as any;
-    expect(await checkContextMultimodal(ctx)).toEqual({ vision: true, audio: false });
+    expect(await checkContextMultimodal(ctx)).toEqual({
+      vision: true,
+      audio: false,
+    });
   });
 
   it('returns all-false when method is missing', async () => {
     const ctx = {} as any;
-    expect(await checkContextMultimodal(ctx)).toEqual({ vision: false, audio: false });
+    expect(await checkContextMultimodal(ctx)).toEqual({
+      vision: false,
+      audio: false,
+    });
   });
 
   it('returns all-false when method throws', async () => {
     const ctx = {
       getMultimodalSupport: jest.fn().mockRejectedValue(new Error('boom')),
     } as any;
-    expect(await checkContextMultimodal(ctx)).toEqual({ vision: false, audio: false });
+    expect(await checkContextMultimodal(ctx)).toEqual({
+      vision: false,
+      audio: false,
+    });
   });
 });
 
@@ -290,7 +319,11 @@ describe('buildCompletionParams — default fallbacks', () => {
   });
 
   it('honours temperature 0 (nullish coalescing, not ||)', () => {
-    const params = buildCompletionParams({ temperature: 0, topP: 0, repeatPenalty: 0 });
+    const params = buildCompletionParams({
+      temperature: 0,
+      topP: 0,
+      repeatPenalty: 0,
+    });
     expect(params.temperature).toBe(0);
     expect(params.top_p).toBe(0);
     expect(params.penalty_repeat).toBe(0);
@@ -299,7 +332,9 @@ describe('buildCompletionParams — default fallbacks', () => {
 
 describe('recordGenerationStats', () => {
   const realNow = Date.now;
-  afterEach(() => { Date.now = realNow; });
+  afterEach(() => {
+    Date.now = realNow;
+  });
 
   it('computes positive tok/s and decode rate for multi-token generation', () => {
     // startTime such that elapsed = 2s
@@ -318,7 +353,7 @@ describe('recordGenerationStats', () => {
     const start = 5000;
     Date.now = jest.fn(() => 5000); // elapsed = 0
     const stats = recordGenerationStats(start, 0, 1);
-    expect(stats.lastTokensPerSecond).toBe(0);     // elapsed > 0 false
+    expect(stats.lastTokensPerSecond).toBe(0); // elapsed > 0 false
     expect(stats.lastDecodeTokensPerSecond).toBe(0); // decodeTime>0 && count>1 false
   });
 });

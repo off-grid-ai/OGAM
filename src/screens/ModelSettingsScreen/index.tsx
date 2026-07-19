@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, InteractionManager } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  InteractionManager,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { AttachStep, useSpotlightTour } from 'react-native-spotlight-tour';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '../../components';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../../components/CustomAlert';
+import {
+  CustomAlert,
+  showAlert,
+  hideAlert,
+  AlertState,
+  initialAlertState,
+} from '../../components/CustomAlert';
 import { consumePendingSpotlight } from '../../components/onboarding/spotlightState';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
@@ -17,13 +29,14 @@ import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services/whisperService';
+import { ModelLoadingModeSelector } from '../../components/settings/textGenAdvancedSections';
 
 export const ModelSettingsScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { goTo } = useSpotlightTour();
-  const resetSettings = useAppStore((s) => s.resetSettings);
+  const resetSettings = useAppStore(s => s.resetSettings);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
   const [promptOpen, setPromptOpen] = useState(false);
@@ -36,8 +49,9 @@ export const ModelSettingsScreen: React.FC = () => {
   // slot → the section is not shown at all.
   const TtsSection = getSlot(SLOTS.generationSettingsTts);
   // Active transcription (STT/whisper) model — the single source is the whisper store (same as the picker).
-  const sttModelId = useWhisperStore((s) => s.downloadedModelId);
-  const sttModelName = WHISPER_MODELS.find((m) => m.id === sttModelId)?.name ?? null;
+  const sttModelId = useWhisperStore(s => s.downloadedModelId);
+  const sttModelName =
+    WHISPER_MODELS.find(m => m.id === sttModelId)?.name ?? null;
 
   // If user arrived here via onboarding spotlight flow, show accordion spotlight
   useEffect(() => {
@@ -46,33 +60,47 @@ export const ModelSettingsScreen: React.FC = () => {
       const task = InteractionManager.runAfterInteractions(() => goTo(pending));
       return () => task.cancel();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleReset = () => {
-    setAlertState(showAlert(
-      'Reset All Settings',
-      'This will restore all model settings to their defaults. You may need to reload the model for changes to take effect.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: () => { resetSettings(); setAlertState(hideAlert()); },
-        },
-      ],
-    ));
+    setAlertState(
+      showAlert(
+        'Reset All Settings',
+        'This will restore all model settings to their defaults. You may need to reload the model for changes to take effect.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Reset',
+            style: 'destructive',
+            onPress: () => {
+              resetSettings();
+              setAlertState(hideAlert());
+            },
+          },
+        ],
+      ),
+    );
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          testID="back-button"
+        >
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Model Settings</Text>
       </View>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+      >
+        <ModelLoadingModeSelector />
+
         <AttachStep index={6} fill>
           <TouchableOpacity
             style={styles.accordionHeader}
@@ -128,13 +156,20 @@ export const ModelSettingsScreen: React.FC = () => {
           activeOpacity={0.7}
           testID="transcription-accordion"
         >
-          <Text style={styles.accordionTitle}>Transcription (Speech to Text)</Text>
-          <Icon name={sttOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+          <Text style={styles.accordionTitle}>
+            Transcription (Speech to Text)
+          </Text>
+          <Icon
+            name={sttOpen ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={colors.textMuted}
+          />
         </TouchableOpacity>
         {sttOpen && (
           <View style={styles.settingSection}>
             <Text style={styles.settingDesc}>
-              The on-device model used to transcribe your voice for dictation and voice chat.
+              The on-device model used to transcribe your voice for dictation
+              and voice chat.
             </Text>
             <TouchableOpacity
               style={styles.toggleRow}
@@ -144,7 +179,9 @@ export const ModelSettingsScreen: React.FC = () => {
             >
               <View style={styles.toggleInfo}>
                 <Text style={styles.toggleLabel}>Transcription model</Text>
-                <Text style={styles.toggleDesc}>{sttModelName ?? 'None selected — tap to choose'}</Text>
+                <Text style={styles.toggleDesc}>
+                  {sttModelName ?? 'None selected — tap to choose'}
+                </Text>
               </View>
               <Icon name="chevron-right" size={18} color={colors.textMuted} />
             </TouchableOpacity>
@@ -161,7 +198,11 @@ export const ModelSettingsScreen: React.FC = () => {
               testID="tts-accordion"
             >
               <Text style={styles.accordionTitle}>Text to Speech</Text>
-              <Icon name={ttsOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+              <Icon
+                name={ttsOpen ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={colors.textMuted}
+              />
             </TouchableOpacity>
             {ttsOpen && <TtsSection />}
           </>
@@ -176,7 +217,10 @@ export const ModelSettingsScreen: React.FC = () => {
           style={styles.resetButton}
         />
       </ScrollView>
-      <WhisperPickerSheet visible={whisperOpen} onClose={() => setWhisperOpen(false)} />
+      <WhisperPickerSheet
+        visible={whisperOpen}
+        onClose={() => setWhisperOpen(false)}
+      />
       <CustomAlert
         visible={alertState.visible}
         title={alertState.title}

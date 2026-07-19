@@ -18,7 +18,7 @@ describe('P1 LiteRT-model download journey', () => {
     global.fetch = (async () => ({
       ok: false,
       json: async () => ({}),
-    })) as typeof fetch;
+    })) as unknown as typeof fetch;
 
     const { boundary, rtl, view } = await renderMainApp({
       boundary: {

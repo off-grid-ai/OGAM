@@ -12,9 +12,10 @@
  * artifact: the boot loader ('app-loading') CLEARS anyway. RED on HEAD: the loader stays
  * forever because initializeApp awaits hydrateDownloadStore/reattach before first paint.
  */
-import { installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
-
-jest.mock('react-native-bootsplash', () => ({ hide: jest.fn(async () => {}) }), { virtual: true });
+import {
+  installNativeBoundary,
+  requireRTL,
+} from '../../harness/nativeBoundary';
 
 describe('app boot is not blocked by the download DB (rendered)', () => {
   it('clears the boot loader while getActiveDownloads never resolves (wedged download DB)', async () => {
@@ -39,7 +40,12 @@ describe('app boot is not blocked by the download DB (rendered)', () => {
     expect(view.queryByTestId('app-loading')).not.toBeNull();
 
     // Terminal artifact: the loader clears even though the download DB never answered.
-    await rtl.waitFor(() => { expect(view.queryByTestId('app-loading')).toBeNull(); }, { timeout: 8000 });
+    await rtl.waitFor(
+      () => {
+        expect(view.queryByTestId('app-loading')).toBeNull();
+      },
+      { timeout: 8000 },
+    );
 
     view.unmount();
     void boundary;

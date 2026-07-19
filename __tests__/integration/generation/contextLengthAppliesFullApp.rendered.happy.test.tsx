@@ -1,5 +1,6 @@
 /** P1 #33 — rendered context-length changes reach native model reloads. */
 import {
+  closeAppSheet,
   openChatWithJourneyModel,
   renderMainApp,
   sendChatMessage,
@@ -61,11 +62,7 @@ async function setContextInChat(
       '6K',
     ),
   );
-  rtl.fireEvent.press(view.getByText('Done'));
-  await rtl.waitFor(
-    () => expect(view.queryByText('Chat Settings')).toBeNull(),
-    { timeout: 4000 },
-  );
+  await closeAppSheet(journey, 'Chat Settings');
 }
 
 function textInitRequests(journey: Journey): Array<Record<string, unknown>> {

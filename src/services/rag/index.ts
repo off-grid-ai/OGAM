@@ -5,13 +5,8 @@ import { embeddingService } from './embedding';
 import { documentService } from '../documentService';
 import logger from '../../utils/logger';
 
-;
 export type { RagDocument, RagSearchResult } from './database';
-;
-export { chunkDocument } from './chunking';
 export { retrievalService } from './retrieval';
-;
-
 interface IndexProgress {
   stage: 'extracting' | 'chunking' | 'indexing' | 'embedding' | 'done';
   message: string;
@@ -37,13 +32,22 @@ class RagService {
     // Prevent duplicate indexing of the same file
     const existing = ragDatabase.getDocumentsByProject(projectId);
     if (existing.some(d => d.path === filePath || d.name === fileName)) {
-      throw new Error(`Document "${fileName}" is already in the knowledge base`);
+      throw new Error(
+        `Document "${fileName}" is already in the knowledge base`,
+      );
     }
 
-    onProgress?.({ stage: 'extracting', message: `Extracting text from ${fileName}...` });
+    onProgress?.({
+      stage: 'extracting',
+      message: `Extracting text from ${fileName}...`,
+    });
     // Extract full document text for RAG — don't truncate based on context window
     const RAG_MAX_CHARS = 500_000;
-    const attachment = await documentService.processDocumentFromPath(filePath, fileName, RAG_MAX_CHARS);
+    const attachment = await documentService.processDocumentFromPath(
+      filePath,
+      fileName,
+      RAG_MAX_CHARS,
+    );
     if (!attachment?.textContent) {
       // A PDF that extracts to zero text is a scanned / image-only PDF (no text layer);
       // there is no on-device OCR, so name that cause instead of a generic failure (B-KB).
@@ -83,14 +87,21 @@ class RagService {
         embedding: embeddings[i],
       }));
       ragDatabase.insertEmbeddingsBatch(entries);
-      logger.log(`[RAG] Generated ${embeddings.length} embeddings for ${fileName}`);
+      logger.log(
+        `[RAG] Generated ${embeddings.length} embeddings for ${fileName}`,
+      );
     } catch (err) {
       // A document with zero embeddings is invisible to semantic search and never
       // auto-backfilled — a permanent dead entry. Roll back the just-inserted doc + chunks
       // and surface the failure so the KB screen reports it, rather than swallowing it.
-      logger.error('[RAG] Embedding generation failed — rolling back index:', err);
+      logger.error(
+        '[RAG] Embedding generation failed — rolling back index:',
+        err,
+      );
       ragDatabase.deleteDocument(docId);
-      throw err instanceof Error ? err : new Error('Embedding generation failed');
+      throw err instanceof Error
+        ? err
+        : new Error('Embedding generation failed');
     }
 
     onProgress?.({ stage: 'done', message: 'Done' });
@@ -120,7 +131,9 @@ class RagService {
         }));
         ragDatabase.insertEmbeddingsBatch(entries);
         total += embeddings.length;
-        logger.log(`[RAG] Backfilled ${embeddings.length} embeddings for ${doc.name}`);
+        logger.log(
+          `[RAG] Backfilled ${embeddings.length} embeddings for ${doc.name}`,
+        );
       } catch (err) {
         logger.error(`[RAG] Backfill failed for ${doc.name}:`, err);
       }
@@ -144,10 +157,18 @@ class RagService {
     ragDatabase.toggleEnabled(docId, enabled);
   }
 
-  async searchProject(projectId: string, query: string, contextLength?: number) {
+  async searchProject(
+    projectId: string,
+    query: string,
+    contextLength?: number,
+  ) {
     await this.ensureReady();
     if (contextLength) {
-      return retrievalService.searchWithBudget({ projectId, query, contextLength });
+      return retrievalService.searchWithBudget({
+        projectId,
+        query,
+        contextLength,
+      });
     }
     return retrievalService.search(projectId, query);
   }

@@ -1,7 +1,18 @@
 import RNFS from 'react-native-fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DownloadedModel, LlamaDownloadedModel, LiteRTDownloadedModel, ModelFile, ModelCredibility, ONNXImageModel } from '../../types';
-import { LMSTUDIO_AUTHORS, OFFICIAL_MODEL_AUTHORS, VERIFIED_QUANTIZERS } from '../../constants';
+import {
+  DownloadedModel,
+  LlamaDownloadedModel,
+  LiteRTDownloadedModel,
+  ModelFile,
+  ModelCredibility,
+  ONNXImageModel,
+} from '../../types';
+import {
+  LMSTUDIO_AUTHORS,
+  OFFICIAL_MODEL_AUTHORS,
+  VERIFIED_QUANTIZERS,
+} from '../../constants';
 import { getCuratedLiteRTEntry } from '../curatedLiteRTRegistry';
 import logger from '../../utils/logger';
 import { validateModelFile } from '../llmSafetyChecks';
@@ -9,7 +20,7 @@ import { validateModelFile } from '../llmSafetyChecks';
 const MODELS_STORAGE_KEY = '@local_llm/downloaded_models';
 const IMAGE_MODELS_STORAGE_KEY = '@local_llm/downloaded_image_models';
 
-export function determineCredibility(author: string): ModelCredibility {
+function determineCredibility(author: string): ModelCredibility {
   if (LMSTUDIO_AUTHORS.includes(author)) {
     return {
       source: 'lmstudio',
@@ -44,8 +55,13 @@ export function determineCredibility(author: string): ModelCredibility {
   };
 }
 
-export function resolveStoredPath(storedPath: string, currentBaseDir: string): string | null {
-  const baseDirName = currentBaseDir.substring(currentBaseDir.lastIndexOf('/') + 1);
+function resolveStoredPath(
+  storedPath: string,
+  currentBaseDir: string,
+): string | null {
+  const baseDirName = currentBaseDir.substring(
+    currentBaseDir.lastIndexOf('/') + 1,
+  );
   const marker = `/${baseDirName}/`;
   const markerIndex = storedPath.indexOf(marker);
 
@@ -61,7 +77,9 @@ export async function saveModelsList(models: DownloadedModel[]): Promise<void> {
   await AsyncStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(models));
 }
 
-export async function saveImageModelsList(models: ONNXImageModel[]): Promise<void> {
+export async function saveImageModelsList(
+  models: ONNXImageModel[],
+): Promise<void> {
   await AsyncStorage.setItem(IMAGE_MODELS_STORAGE_KEY, JSON.stringify(models));
 }
 
@@ -70,7 +88,8 @@ async function tryResolveTextModelPath(
   modelsDir: string,
 ): Promise<{ exists: boolean; updated: boolean }> {
   const resolved = resolveStoredPath(model.filePath, modelsDir);
-  if (!resolved || resolved === model.filePath) return { exists: false, updated: false };
+  if (!resolved || resolved === model.filePath)
+    return { exists: false, updated: false };
   const exists = await RNFS.exists(resolved);
   if (exists) {
     model.filePath = resolved;
@@ -104,7 +123,7 @@ async function validateAndResolveModels(
   let pathsUpdated = false;
 
   const existenceChecks = await Promise.all(
-    models.map(m => RNFS.exists(m.filePath))
+    models.map(m => RNFS.exists(m.filePath)),
   );
 
   const modelsToResolve: Array<{ model: DownloadedModel; idx: number }> = [];
@@ -115,7 +134,9 @@ async function validateAndResolveModels(
   }
 
   const resolutionResults = await Promise.all(
-    modelsToResolve.map(({ model }) => tryResolveTextModelPath(model, modelsDir))
+    modelsToResolve.map(({ model }) =>
+      tryResolveTextModelPath(model, modelsDir),
+    ),
   );
 
   for (let i = 0; i < modelsToResolve.length; i++) {
@@ -123,7 +144,8 @@ async function validateAndResolveModels(
     if (result.updated) pathsUpdated = true;
   }
 
-  const modelsToCheckMmProj: Array<{ model: DownloadedModel; idx: number }> = [];
+  const modelsToCheckMmProj: Array<{ model: DownloadedModel; idx: number }> =
+    [];
   for (let i = 0; i < models.length; i++) {
     const mainExists = existenceChecks[i];
     if (!mainExists) {
@@ -137,7 +159,9 @@ async function validateAndResolveModels(
   }
 
   const mmProjResults = await Promise.all(
-    modelsToCheckMmProj.map(({ model }) => tryResolveMmProjPath(model, modelsDir))
+    modelsToCheckMmProj.map(({ model }) =>
+      tryResolveMmProjPath(model, modelsDir),
+    ),
   );
 
   for (const result of mmProjResults) {
@@ -158,7 +182,11 @@ async function validateAndResolveModels(
     if (model.engine === 'llama') {
       const validation = await validateModelFile(model.filePath);
       if (!validation.valid) {
-        logger.warn(`[ModelManagerStorage] Removing invalid downloaded model ${model.id}: ${validation.reason ?? 'validation failed'}`);
+        logger.warn(
+          `[ModelManagerStorage] Removing invalid downloaded model ${
+            model.id
+          }: ${validation.reason ?? 'validation failed'}`,
+        );
         await RNFS.unlink(model.filePath).catch(() => {});
         continue;
       }
@@ -169,7 +197,9 @@ async function validateAndResolveModels(
   return { validModels, pathsUpdated };
 }
 
-export async function loadDownloadedModels(modelsDir: string): Promise<DownloadedModel[]> {
+export async function loadDownloadedModels(
+  modelsDir: string,
+): Promise<DownloadedModel[]> {
   const stored = await AsyncStorage.getItem(MODELS_STORAGE_KEY);
   if (!stored) return [];
 
@@ -192,16 +222,22 @@ export async function loadDownloadedModels(modelsDir: string): Promise<Downloade
     });
   } catch (error) {
     // Corrupt AsyncStorage should not prevent the app from loading other state.
-    logger.error('[ModelManagerStorage] Failed to parse downloaded models JSON', {
-      storageKey: MODELS_STORAGE_KEY,
-      length: stored.length,
-      preview: stored.slice(0, 100),
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.error(
+      '[ModelManagerStorage] Failed to parse downloaded models JSON',
+      {
+        storageKey: MODELS_STORAGE_KEY,
+        length: stored.length,
+        preview: stored.slice(0, 100),
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
     return [];
   }
 
-  const { validModels, pathsUpdated } = await validateAndResolveModels(models, modelsDir);
+  const { validModels, pathsUpdated } = await validateAndResolveModels(
+    models,
+    modelsDir,
+  );
 
   if (validModels.length !== models.length || pathsUpdated) {
     await saveModelsList(validModels);
@@ -215,7 +251,8 @@ async function tryResolveImageModelPath(
   imageModelsDir: string,
 ): Promise<{ exists: boolean; updated: boolean }> {
   const resolved = resolveStoredPath(model.modelPath, imageModelsDir);
-  if (!resolved || resolved === model.modelPath) return { exists: false, updated: false };
+  if (!resolved || resolved === model.modelPath)
+    return { exists: false, updated: false };
   const exists = await RNFS.exists(resolved);
   if (exists) {
     model.modelPath = resolved;
@@ -224,7 +261,9 @@ async function tryResolveImageModelPath(
   return { exists: false, updated: false };
 }
 
-export async function loadDownloadedImageModels(imageModelsDir: string): Promise<ONNXImageModel[]> {
+export async function loadDownloadedImageModels(
+  imageModelsDir: string,
+): Promise<ONNXImageModel[]> {
   const stored = await AsyncStorage.getItem(IMAGE_MODELS_STORAGE_KEY);
   if (!stored) return [];
 
@@ -233,17 +272,20 @@ export async function loadDownloadedImageModels(imageModelsDir: string): Promise
     models = JSON.parse(stored) as ONNXImageModel[];
   } catch (error) {
     // Corrupt AsyncStorage should not prevent the app from loading other state.
-    logger.error('[ModelManagerStorage] Failed to parse downloaded image models JSON', {
-      storageKey: IMAGE_MODELS_STORAGE_KEY,
-      length: stored.length,
-      preview: stored.slice(0, 100),
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.error(
+      '[ModelManagerStorage] Failed to parse downloaded image models JSON',
+      {
+        storageKey: IMAGE_MODELS_STORAGE_KEY,
+        length: stored.length,
+        preview: stored.slice(0, 100),
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
     return [];
   }
 
   const existenceChecks = await Promise.all(
-    models.map(m => RNFS.exists(m.modelPath))
+    models.map(m => RNFS.exists(m.modelPath)),
   );
 
   const modelsToResolve: Array<{ model: ONNXImageModel; idx: number }> = [];
@@ -254,7 +296,9 @@ export async function loadDownloadedImageModels(imageModelsDir: string): Promise
   }
 
   const resolutionResults = await Promise.all(
-    modelsToResolve.map(({ model }) => tryResolveImageModelPath(model, imageModelsDir))
+    modelsToResolve.map(({ model }) =>
+      tryResolveImageModelPath(model, imageModelsDir),
+    ),
   );
 
   let pathsUpdated = false;
@@ -293,8 +337,16 @@ export interface BuildModelOpts {
   expectedMmProjFileName?: string;
 }
 
-export async function buildDownloadedModel(opts: BuildModelOpts): Promise<DownloadedModel> {
-  const { modelId, file, resolvedLocalPath, mmProjPath, expectedMmProjFileName } = opts;
+export async function buildDownloadedModel(
+  opts: BuildModelOpts,
+): Promise<DownloadedModel> {
+  const {
+    modelId,
+    file,
+    resolvedLocalPath,
+    mmProjPath,
+    expectedMmProjFileName,
+  } = opts;
   const stat = await RNFS.stat(resolvedLocalPath);
   const author = modelId.split('/')[0] || 'Unknown';
   const isLiteRT = file.name.toLowerCase().endsWith('.litertlm');
@@ -303,7 +355,10 @@ export async function buildDownloadedModel(opts: BuildModelOpts): Promise<Downlo
   if (mmProjPath) {
     try {
       const mmStat = await RNFS.stat(mmProjPath);
-      mmProjFileSize = typeof mmStat.size === 'string' ? Number.parseInt(mmStat.size, 10) : mmStat.size;
+      mmProjFileSize =
+        typeof mmStat.size === 'string'
+          ? Number.parseInt(mmStat.size, 10)
+          : mmStat.size;
     } catch {
       // Keep fallback size from metadata.
     }
@@ -314,16 +369,19 @@ export async function buildDownloadedModel(opts: BuildModelOpts): Promise<Downlo
   //   model.mmProjFileName is set  →  model was supposed to have vision
   //   model.mmProjPath is absent   →  file is missing, show "Repair Vision"
   const mmProjFileName = mmProjPath
-    ? (mmProjFile?.name ?? mmProjPath.split('/').pop())
-    : (expectedMmProjFileName ?? mmProjFile?.name);
+    ? mmProjFile?.name ?? mmProjPath.split('/').pop()
+    : expectedMmProjFileName ?? mmProjFile?.name;
 
   // Registry wins for curated LiteRT artifacts: display name and capability bits
   // come from a single source of truth keyed by fileName. Falls back to the
   // file's metadata for locally-imported .litertlm files, then to modelId basename
   // for everything else.
   const curatedLiteRT = isLiteRT ? getCuratedLiteRTEntry(file.name) : undefined;
-  const derivedName = curatedLiteRT?.displayName
-    ?? (isLiteRT ? file.name.replace(/\.litertlm$/i, '') : (modelId.split('/').pop() || modelId));
+  const derivedName =
+    curatedLiteRT?.displayName ??
+    (isLiteRT
+      ? file.name.replace(/\.litertlm$/i, '')
+      : modelId.split('/').pop() || modelId);
 
   const commonFields = {
     id: `${modelId}/${file.name}`,
@@ -331,14 +389,18 @@ export async function buildDownloadedModel(opts: BuildModelOpts): Promise<Downlo
     author,
     filePath: resolvedLocalPath,
     fileName: file.name,
-    fileSize: typeof stat.size === 'string' ? Number.parseInt(stat.size, 10) : stat.size,
+    fileSize:
+      typeof stat.size === 'string'
+        ? Number.parseInt(stat.size, 10)
+        : stat.size,
     quantization: file.quantization,
     downloadedAt: new Date().toISOString(),
     credibility: determineCredibility(author),
   };
 
   if (isLiteRT) {
-    const liteRTVision = curatedLiteRT?.liteRTVision ?? file.liteRTVision ?? false;
+    const liteRTVision =
+      curatedLiteRT?.liteRTVision ?? file.liteRTVision ?? false;
     const liteRTAudio = curatedLiteRT?.liteRTAudio ?? file.liteRTAudio ?? false;
     const liteRTModel: LiteRTDownloadedModel = {
       ...commonFields,

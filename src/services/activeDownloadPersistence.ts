@@ -15,7 +15,11 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDownloadStore } from '../stores/downloadStore';
-import { isActiveStatus, isQueuedStatus, type DownloadEntry } from '../utils/downloadStatus';
+import {
+  isActiveStatus,
+  isQueuedStatus,
+  type DownloadEntry,
+} from '../utils/downloadStatus';
 import type { ModelKey } from '../utils/modelKey';
 import logger from '../utils/logger';
 
@@ -23,18 +27,28 @@ const ACTIVE_DOWNLOADS_KEY = '@offgrid/active_downloads';
 
 /** PURE: the in-flight subset worth persisting — active (running/processing) but NOT queued (the
  *  queue owns its own persistence) and not terminal (completed/failed/cancelled). Zero-IO. */
-function serializeActiveDownloads(downloads: Record<ModelKey, DownloadEntry>): DownloadEntry[] {
-  return Object.values(downloads).filter((e) => isActiveStatus(e.status) && !isQueuedStatus(e.status));
+function serializeActiveDownloads(
+  downloads: Record<ModelKey, DownloadEntry>,
+): DownloadEntry[] {
+  return Object.values(downloads).filter(
+    e => isActiveStatus(e.status) && !isQueuedStatus(e.status),
+  );
 }
 
 /** Thin adapter: write the projection durably. Best-effort — never throws (a failed write must not
  *  wedge downloads), logged under [DL-SM] so a lost snapshot is diagnosable. */
-export async function saveActiveDownloads(entries: DownloadEntry[]): Promise<void> {
+async function saveActiveDownloads(entries: DownloadEntry[]): Promise<void> {
   try {
-    if (entries.length === 0) await AsyncStorage.removeItem(ACTIVE_DOWNLOADS_KEY);
-    else await AsyncStorage.setItem(ACTIVE_DOWNLOADS_KEY, JSON.stringify(entries));
+    if (entries.length === 0)
+      await AsyncStorage.removeItem(ACTIVE_DOWNLOADS_KEY);
+    else
+      await AsyncStorage.setItem(ACTIVE_DOWNLOADS_KEY, JSON.stringify(entries));
   } catch (e) {
-    logger.log(`[DL-SM] persist active downloads failed err=${e instanceof Error ? e.message : String(e)}`);
+    logger.log(
+      `[DL-SM] persist active downloads failed err=${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    );
   }
 }
 
@@ -46,7 +60,11 @@ export async function loadActiveDownloads(): Promise<DownloadEntry[]> {
     const parsed = JSON.parse(stored);
     return Array.isArray(parsed) ? (parsed as DownloadEntry[]) : [];
   } catch (e) {
-    logger.log(`[DL-SM] load active downloads failed err=${e instanceof Error ? e.message : String(e)}`);
+    logger.log(
+      `[DL-SM] load active downloads failed err=${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    );
     return [];
   }
 }
@@ -62,11 +80,16 @@ let lastSignature = '';
 export function initActiveDownloadPersistence(): void {
   if (subscribed) return;
   subscribed = true;
-  useDownloadStore.subscribe((state) => {
+  useDownloadStore.subscribe(state => {
     const active = serializeActiveDownloads(state.downloads);
-    const signature = active.map((e) => `${e.modelKey}:${e.status}`).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).join('|');
+    const signature = active
+      .map(e => `${e.modelKey}:${e.status}`)
+      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+      .join('|');
     if (signature === lastSignature) return;
     lastSignature = signature;
-    saveActiveDownloads(active).catch(() => { /* saveActiveDownloads already logs; never throws */ });
+    saveActiveDownloads(active).catch(() => {
+      /* saveActiveDownloads already logs; never throws */
+    });
   });
 }

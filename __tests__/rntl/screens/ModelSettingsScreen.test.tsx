@@ -431,7 +431,8 @@ describe('ModelSettingsScreen', () => {
     it('shows Context Length slider label and default value', () => {
       const { getByText } = renderWithSections('text');
       expect(getByText('Context Length')).toBeTruthy();
-      expect(getByText('4K')).toBeTruthy(); // 4096 -> 4K
+      // The test device defaults to 4 GB, so the rendered device-safe cap is 2K.
+      expect(getByText('2K')).toBeTruthy();
     });
 
     it('shows context length description', () => {

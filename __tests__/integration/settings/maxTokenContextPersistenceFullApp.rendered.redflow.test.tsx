@@ -1,4 +1,4 @@
-/** Regression — explicit maximum output and KV-cache settings survive hydration and relaunch. */
+/** Regression — output settings and the device-safe KV cap survive hydration and relaunch. */
 import {
   relaunchMainApp,
   renderMainApp,
@@ -26,13 +26,13 @@ async function expectMaximumLlamaSettings({
       view.getByText('KV cache size — larger uses more RAM (requires reload)'),
     ).toBeTruthy();
     expect(view.getByTestId('llama-context-length-value')).toHaveTextContent(
-      '32K',
+      '8K',
     );
   });
 }
 
 describe('maximum text settings persistence regression', () => {
-  it('keeps the configured maxima visible across migration and another app launch', async () => {
+  it('keeps output max and the safe device context cap across relaunch', async () => {
     const firstLaunch = await renderMainApp({
       persistedAppState: {
         settings: {

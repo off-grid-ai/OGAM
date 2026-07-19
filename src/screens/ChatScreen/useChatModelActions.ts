@@ -1,23 +1,19 @@
-import { Dispatch, SetStateAction, useEffect } from 'react';
+import { Dispatch, SetStateAction } from 'react';
 import { AlertState, showAlert, hideAlert } from '../../components';
-import { llmService, activeModelService, modelManager } from '../../services';
+import { llmService, activeModelService } from '../../services';
 import {
   isModelReady,
   activeLocalTextCapabilities,
-  activeTextCapabilities,
   consumeBackendFallbackNotice,
 } from '../../services/engines';
 import { useAppStore } from '../../stores';
-import {
-  DownloadedModel,
-  RemoteModel,
-  ONNXImageModel,
-  isLiteRTModel,
-} from '../../types';
+import { DownloadedModel, RemoteModel, isLiteRTModel } from '../../types';
 import logger from '../../utils/logger';
 import { ModelReadyOutcome, reasonFromLoadError } from './modelReadiness';
 import { isOverridableMemoryError } from '../../services/modelLoadErrors';
 import { loadModelWithOverride } from '../../services/loadModelWithOverride';
+
+export { useChatModelStateSync } from './useChatModelEffects';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -416,110 +412,4 @@ export async function handleUnloadModelFn(
     deps.setLoadingModel(null);
     deps.setShowModelSelector(false);
   }
-}
-
-type ImageModelEffectsDeps = {
-  setDownloadedImageModels: (models: ONNXImageModel[]) => void;
-};
-export function useChatImageModelEffects(deps: ImageModelEffectsDeps): void {
-  const { setDownloadedImageModels } = deps;
-  useEffect(() => {
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      if (!cancelled) {
-        const models = await modelManager.getDownloadedImageModels();
-        if (cancelled) return;
-        // Never orphan the currently-active image model: activeImageModelId is persisted
-        // but downloadedImageModels is not, so on a cold mount the disk scan is the sole
-        // hydrator. If it hasn't surfaced the active model yet (slow FS, or one already
-        // placed in the store), keep that entry rather than blanking the selection —
-        // otherwise activeImageModel resolves to undefined and image routing dies.
-        const { downloadedImageModels: current, activeImageModelId: activeId } =
-          useAppStore.getState();
-        const merged =
-          activeId && !models.some(m => m.id === activeId)
-            ? [...models, ...current.filter(m => m.id === activeId)]
-            : models;
-        setDownloadedImageModels(merged);
-      }
-    }, 0);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, []);
-  // Do not preload the private intent classifier here. loadTextModel owns the
-  // user's active text-model selection, so eager classifier loading made it the
-  // apparent default for every new chat. intentClassifier loads it just in time
-  // for an ambiguous image-routing decision and restores the user's model.
-}
-
-type ModelStateSyncDeps = {
-  activeModelInfo: { isRemote: boolean };
-  activeModelId: string | null;
-  activeModel: DownloadedModel | undefined;
-  modelDeps: any;
-  activeRemoteModel: {
-    capabilities?: {
-      supportsVision?: boolean;
-      supportsToolCalling?: boolean;
-      supportsThinking?: boolean;
-    };
-  } | null;
-  activeRemoteTextModelId: string | null;
-  isModelLoading: boolean;
-  setSupportsVision: (v: boolean) => void;
-  setSupportsToolCalling: (v: boolean) => void;
-  setSupportsThinking: (v: boolean) => void;
-};
-export function useChatModelStateSync(deps: ModelStateSyncDeps): void {
-  const {
-    activeModelInfo,
-    activeModelId,
-    activeModel,
-    activeRemoteModel,
-    activeRemoteTextModelId,
-    isModelLoading,
-    setSupportsVision,
-    setSupportsToolCalling,
-    setSupportsThinking,
-  } = deps;
-  const activeModelMmProjPath =
-    activeModel?.engine === 'llama' ? activeModel.mmProjPath : undefined;
-  // The active text model is NOT loaded here (on chat mount / model select). It loads
-  // lazily on send, when the generation path recognizes a local text model is needed
-  // (ensureModelReady → ensureModelLoaded). Loading eagerly here is what made opening a
-  // chat — and switching models — spin up the model before the user sent anything.
-  useEffect(() => {
-    // Single capability rule (engines.activeTextCapabilities); vision keys on activeModelInfo.isRemote.
-    setSupportsVision(
-      activeTextCapabilities({
-        isRemote: activeModelInfo.isRemote,
-        remoteCaps: activeRemoteModel?.capabilities,
-        model: activeModel,
-      }).vision,
-    );
-  }, [
-    activeModelInfo.isRemote,
-    activeRemoteModel?.capabilities?.supportsVision,
-    activeModelMmProjPath,
-    isModelLoading,
-  ]);
-  useEffect(() => {
-    // Same rule; tools/thinking key on activeRemoteTextModelId (preserved from the prior branch).
-    const caps = activeTextCapabilities({
-      isRemote: !!activeRemoteTextModelId,
-      remoteCaps: activeRemoteModel?.capabilities,
-      model: activeModel,
-    });
-    setSupportsToolCalling(caps.tools);
-    setSupportsThinking(caps.thinking);
-  }, [
-    activeModelId,
-    activeModel?.engine,
-    isModelLoading,
-    activeRemoteTextModelId,
-    activeRemoteModel?.capabilities?.supportsToolCalling,
-    activeRemoteModel?.capabilities?.supportsThinking,
-  ]);
 }

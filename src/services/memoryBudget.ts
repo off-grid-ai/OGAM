@@ -66,7 +66,7 @@ export const AGGRESSIVE_RESERVE_MB = 800;
  * probe says the process is already in the catastrophic zone. 700MB also preserves
  * the verified 2GB-at-3.1GB-free iOS override (about 1.1GB remains after the load).
  */
-export const OVERRIDE_SURVIVAL_FLOOR_MB = 700;
+const OVERRIDE_SURVIVAL_FLOOR_MB = 700;
 
 type Plat = 'ios' | 'android' | string;
 
@@ -168,20 +168,23 @@ export function modelBudgetFraction(
     // Lenient: use more of RAM. Low-RAM tiers stay comparatively cautious (a 60%
     // slice of 4GB is already close to what the OS will tolerate), high-RAM/entitled
     // tiers push near the physical ceiling so a 21GB model fits a 24GB phone.
-    if (totalRamGB <= 4) return 0.60;
+    if (totalRamGB <= 4) return 0.6;
     if (totalRamGB <= 8) return 0.75;
     return platform === 'ios' ? 0.92 : 0.88;
   }
-  if (totalRamGB <= 4) return 0.50; // ~2GB on 4GB — safe; dynamic guard tightens under pressure
-  if (totalRamGB <= 8) return 0.60; // 6-8GB
-  return platform === 'ios' ? 0.78 : 0.70; // 12GB+: iOS holds the increased-memory entitlement
+  if (totalRamGB <= 4) return 0.5; // ~2GB on 4GB — safe; dynamic guard tightens under pressure
+  if (totalRamGB <= 8) return 0.6; // 6-8GB
+  return platform === 'ios' ? 0.78 : 0.7; // 12GB+: iOS holds the increased-memory entitlement
 }
 
 /** Fraction at which we WARN (load allowed, perf may suffer). Below the budget. */
-function modelWarningFraction(totalRamGB: number, platform: Plat = Platform.OS): number {
-  if (totalRamGB <= 4) return 0.40;
-  if (totalRamGB <= 8) return 0.50;
-  return platform === 'ios' ? 0.66 : 0.60;
+function modelWarningFraction(
+  totalRamGB: number,
+  platform: Plat = Platform.OS,
+): number {
+  if (totalRamGB <= 4) return 0.4;
+  if (totalRamGB <= 8) return 0.5;
+  return platform === 'ios' ? 0.66 : 0.6;
 }
 
 /** Hard budget in MB: the smaller of the fraction-of-RAM and (RAM minus reserve). */
@@ -191,13 +194,17 @@ export function modelMemoryBudgetMB(
   policy: LoadPolicy = 'balanced',
 ): number {
   const totalRamGB = totalRamMB / 1024;
-  const byFraction = totalRamMB * modelBudgetFraction(totalRamGB, platform, policy);
+  const byFraction =
+    totalRamMB * modelBudgetFraction(totalRamGB, platform, policy);
   const byReserve = totalRamMB - memoryReserveMB(policy);
   return Math.max(0, Math.min(byFraction, byReserve));
 }
 
 /** Warning threshold in MB (always ≤ the hard budget). */
-export function modelWarningThresholdMB(totalRamMB: number, platform: Plat = Platform.OS): number {
+export function modelWarningThresholdMB(
+  totalRamMB: number,
+  platform: Plat = Platform.OS,
+): number {
   const totalRamGB = totalRamMB / 1024;
   const byFraction = totalRamMB * modelWarningFraction(totalRamGB, platform);
   return Math.min(byFraction, modelMemoryBudgetMB(totalRamMB, platform));
@@ -230,7 +237,11 @@ export type FitTier = 'easy' | 'fits' | 'tight' | 'wontFit';
  *   size < 0.6*soft → 'easy' · < soft → 'fits' · < ceil → 'tight' · else → 'wontFit'
  * Zero-IO; callers pass ramGB + platform from the device boundary (hardwareService).
  */
-export function fitTier(sizeBytes: number, ramGB: number, platform: Plat = Platform.OS): FitTier {
+export function fitTier(
+  sizeBytes: number,
+  ramGB: number,
+  platform: Plat = Platform.OS,
+): FitTier {
   const sizeGB = sizeBytes / BYTES_PER_GB;
   const soft = ramGB * modelBudgetFraction(ramGB, platform, 'balanced');
   const ceil = ramGB * modelBudgetFraction(ramGB, platform, 'aggressive');
@@ -243,17 +254,25 @@ export function fitTier(sizeBytes: number, ramGB: number, platform: Plat = Platf
 /** Loadable on THIS device: the tier is not 'wontFit' — i.e. within the aggressive ceiling, reachable
  *  via reclaim credit + Load Anyway. The ONE predicate the browse filter and the detail file list share,
  *  so "what counts as loadable" is defined once here, not copied inline per caller. */
-export function isLoadableOnDevice(sizeBytes: number, ramGB: number, platform: Plat = Platform.OS): boolean {
+export function isLoadableOnDevice(
+  sizeBytes: number,
+  ramGB: number,
+  platform: Plat = Platform.OS,
+): boolean {
   return fitTier(sizeBytes, ramGB, platform) !== 'wontFit';
 }
 
 /** The chip label for a fit tier. One source for the copy so every surface reads the same words. */
 export function fitTierLabel(tier: FitTier): string {
   switch (tier) {
-    case 'easy': return 'Easy';
-    case 'fits': return 'Fits';
-    case 'tight': return 'Tight';
-    case 'wontFit': return "Won't fit";
+    case 'easy':
+      return 'Easy';
+    case 'fits':
+      return 'Fits';
+    case 'tight':
+      return 'Tight';
+    case 'wontFit':
+      return "Won't fit";
   }
 }
 
@@ -268,12 +287,21 @@ export function fitTierLabel(tier: FitTier): string {
  */
 export async function awaitMemoryReclaim(
   getProcessMemory: () => Promise<{ footprintMB: number } | null>,
-  opts: { timeoutMs?: number; minDropMB?: number; intervalMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+  opts: {
+    timeoutMs?: number;
+    minDropMB?: number;
+    intervalMs?: number;
+    sleep?: (ms: number) => Promise<void>;
+  } = {},
 ): Promise<void> {
   const { timeoutMs = 2500, minDropMB = 200, intervalMs = 120 } = opts;
-  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const sleep =
+    opts.sleep ?? ((ms: number) => new Promise<void>(r => setTimeout(r, ms)));
   const before = await getProcessMemory();
-  if (!before) { await sleep(250); return; }
+  if (!before) {
+    await sleep(250);
+    return;
+  }
   let waited = 0;
   while (waited < timeoutMs) {
     await sleep(intervalMs);

@@ -22,7 +22,9 @@ const IMAGE_MODELS_DIR = '/mock/documents/image_models';
 // Helpers
 // ============================================================================
 
-function makeDownloadedModel(overrides: Partial<DownloadedModel> = {}): DownloadedModel {
+function makeDownloadedModel(
+  overrides: Partial<DownloadedModel> = {},
+): DownloadedModel {
   return {
     id: 'model-1',
     name: 'Model',
@@ -37,7 +39,9 @@ function makeDownloadedModel(overrides: Partial<DownloadedModel> = {}): Download
   } as DownloadedModel;
 }
 
-function makeImageModel(overrides: Partial<ONNXImageModel> = {}): ONNXImageModel {
+function makeImageModel(
+  overrides: Partial<ONNXImageModel> = {},
+): ONNXImageModel {
   return {
     id: 'img-1',
     name: 'Image Model',
@@ -49,12 +53,28 @@ function makeImageModel(overrides: Partial<ONNXImageModel> = {}): ONNXImageModel
   };
 }
 
-function makeRNFSFile(name: string, path: string, size: number | string = 1000) {
-  return { name, path, size, isFile: () => true, isDirectory: () => false } as any;
+function makeRNFSFile(
+  name: string,
+  path: string,
+  size: number | string = 1000,
+) {
+  return {
+    name,
+    path,
+    size,
+    isFile: () => true,
+    isDirectory: () => false,
+  } as any;
 }
 
 function makeRNFSDir(name: string, path: string) {
-  return { name, path, size: 0, isFile: () => false, isDirectory: () => true } as any;
+  return {
+    name,
+    path,
+    size: 0,
+    isFile: () => false,
+    isDirectory: () => true,
+  } as any;
 }
 
 // ============================================================================
@@ -69,7 +89,9 @@ describe('getOrphanedTextFiles', () => {
   it('returns empty array when models directory does not exist', async () => {
     mockedRNFS.exists.mockResolvedValue(false);
 
-    const result = await getOrphanedTextFiles(MODELS_DIR, () => Promise.resolve([]));
+    const result = await getOrphanedTextFiles(MODELS_DIR, () =>
+      Promise.resolve([]),
+    );
 
     expect(result).toEqual([]);
     expect(RNFS.readDir).not.toHaveBeenCalled();
@@ -79,7 +101,9 @@ describe('getOrphanedTextFiles', () => {
     mockedRNFS.exists.mockResolvedValue(true);
     mockedRNFS.readDir.mockResolvedValue([]);
 
-    const result = await getOrphanedTextFiles(MODELS_DIR, () => Promise.resolve([]));
+    const result = await getOrphanedTextFiles(MODELS_DIR, () =>
+      Promise.resolve([]),
+    );
 
     expect(result).toEqual([]);
   });
@@ -90,7 +114,9 @@ describe('getOrphanedTextFiles', () => {
       makeRNFSFile('orphan.gguf', `${MODELS_DIR}/orphan.gguf`, 2000),
     ]);
 
-    const result = await getOrphanedTextFiles(MODELS_DIR, () => Promise.resolve([]));
+    const result = await getOrphanedTextFiles(MODELS_DIR, () =>
+      Promise.resolve([]),
+    );
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('orphan.gguf');
@@ -103,22 +129,24 @@ describe('getOrphanedTextFiles', () => {
     mockedRNFS.readDir.mockResolvedValue([
       makeRNFSFile('model.gguf', `${MODELS_DIR}/model.gguf`),
     ]);
-    const modelsGetter = () => Promise.resolve([
-      makeDownloadedModel({ filePath: `${MODELS_DIR}/model.gguf` }),
-    ]);
+    const modelsGetter = () =>
+      Promise.resolve([
+        makeDownloadedModel({ filePath: `${MODELS_DIR}/model.gguf` }),
+      ]);
 
     const result = await getOrphanedTextFiles(MODELS_DIR, modelsGetter);
 
     expect(result).toHaveLength(0);
   });
 
-  const makeModelWithMmProj = () => Promise.resolve([
-    makeDownloadedModel({
-      filePath: `${MODELS_DIR}/model.gguf`,
-      mmProjPath: `${MODELS_DIR}/mmproj.gguf`,
-      engine: 'llama',
-    }),
-  ]);
+  const makeModelWithMmProj = () =>
+    Promise.resolve([
+      makeDownloadedModel({
+        filePath: `${MODELS_DIR}/model.gguf`,
+        mmProjPath: `${MODELS_DIR}/mmproj.gguf`,
+        engine: 'llama',
+      }),
+    ]);
 
   it('does not flag files tracked as model mmProjPath', async () => {
     mockedRNFS.exists.mockResolvedValue(true);
@@ -129,6 +157,22 @@ describe('getOrphanedTextFiles', () => {
     const result = await getOrphanedTextFiles(MODELS_DIR, makeModelWithMmProj);
 
     expect(result).toHaveLength(0);
+  });
+
+  it('does not flag a live download destination before registration finishes', async () => {
+    const processingPath = `${MODELS_DIR}/processing.gguf`;
+    mockedRNFS.exists.mockResolvedValue(true);
+    mockedRNFS.readDir.mockResolvedValue([
+      makeRNFSFile('processing.gguf', processingPath),
+    ]);
+
+    const result = await getOrphanedTextFiles(
+      MODELS_DIR,
+      () => Promise.resolve([]),
+      [processingPath],
+    );
+
+    expect(result).toEqual([]);
   });
 
   it('correctly identifies mix of tracked and untracked files', async () => {
@@ -151,7 +195,9 @@ describe('getOrphanedTextFiles', () => {
       makeRNFSFile('orphan.gguf', `${MODELS_DIR}/orphan.gguf`, '8192'),
     ]);
 
-    const result = await getOrphanedTextFiles(MODELS_DIR, () => Promise.resolve([]));
+    const result = await getOrphanedTextFiles(MODELS_DIR, () =>
+      Promise.resolve([]),
+    );
 
     expect(result[0].size).toBe(8192);
   });
@@ -169,7 +215,9 @@ describe('getOrphanedImageDirs', () => {
   it('returns empty array when image models directory does not exist', async () => {
     mockedRNFS.exists.mockResolvedValue(false);
 
-    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, () => Promise.resolve([]));
+    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, () =>
+      Promise.resolve([]),
+    );
 
     expect(result).toEqual([]);
     expect(RNFS.readDir).not.toHaveBeenCalled();
@@ -179,7 +227,9 @@ describe('getOrphanedImageDirs', () => {
     mockedRNFS.exists.mockResolvedValue(true);
     mockedRNFS.readDir.mockResolvedValue([]);
 
-    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, () => Promise.resolve([]));
+    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, () =>
+      Promise.resolve([]),
+    );
 
     expect(result).toEqual([]);
   });
@@ -191,10 +241,16 @@ describe('getOrphanedImageDirs', () => {
         makeRNFSDir('unknown-model', `${IMAGE_MODELS_DIR}/unknown-model`),
       ])
       .mockResolvedValueOnce([
-        makeRNFSFile('model.onnx', `${IMAGE_MODELS_DIR}/unknown-model/model.onnx`, 2000),
+        makeRNFSFile(
+          'model.onnx',
+          `${IMAGE_MODELS_DIR}/unknown-model/model.onnx`,
+          2000,
+        ),
       ]);
 
-    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, () => Promise.resolve([]));
+    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, () =>
+      Promise.resolve([]),
+    );
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('unknown-model');
@@ -206,11 +262,15 @@ describe('getOrphanedImageDirs', () => {
     mockedRNFS.readDir.mockResolvedValue([
       makeRNFSDir('sd-model', `${IMAGE_MODELS_DIR}/sd-model`),
     ]);
-    const imageModelsGetter = () => Promise.resolve([
-      makeImageModel({ modelPath: `${IMAGE_MODELS_DIR}/sd-model` }),
-    ]);
+    const imageModelsGetter = () =>
+      Promise.resolve([
+        makeImageModel({ modelPath: `${IMAGE_MODELS_DIR}/sd-model` }),
+      ]);
 
-    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, imageModelsGetter);
+    const result = await getOrphanedImageDirs(
+      IMAGE_MODELS_DIR,
+      imageModelsGetter,
+    );
 
     expect(result).toHaveLength(0);
   });
@@ -224,14 +284,18 @@ describe('getOrphanedImageDirs', () => {
     mockedRNFS.readDir.mockResolvedValue([
       makeRNFSDir('coreml-model', `${IMAGE_MODELS_DIR}/coreml-model`),
     ]);
-    const imageModelsGetter = () => Promise.resolve([
-      makeImageModel({
-        id: 'coreml-model',
-        modelPath: `${IMAGE_MODELS_DIR}/coreml-model/model_compiled.mlmodelc`,
-      }),
-    ]);
+    const imageModelsGetter = () =>
+      Promise.resolve([
+        makeImageModel({
+          id: 'coreml-model',
+          modelPath: `${IMAGE_MODELS_DIR}/coreml-model/model_compiled.mlmodelc`,
+        }),
+      ]);
 
-    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, imageModelsGetter);
+    const result = await getOrphanedImageDirs(
+      IMAGE_MODELS_DIR,
+      imageModelsGetter,
+    );
 
     expect(result).toHaveLength(0);
   });
@@ -244,12 +308,16 @@ describe('getOrphanedImageDirs', () => {
       ])
       .mockResolvedValueOnce([]);
 
-    const imageModelsGetter = () => Promise.resolve([
-      // Tracked model is in a completely different directory
-      makeImageModel({ modelPath: `${IMAGE_MODELS_DIR}/other-model` }),
-    ]);
+    const imageModelsGetter = () =>
+      Promise.resolve([
+        // Tracked model is in a completely different directory
+        makeImageModel({ modelPath: `${IMAGE_MODELS_DIR}/other-model` }),
+      ]);
 
-    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, imageModelsGetter);
+    const result = await getOrphanedImageDirs(
+      IMAGE_MODELS_DIR,
+      imageModelsGetter,
+    );
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('orphan-dir');
@@ -263,7 +331,9 @@ describe('getOrphanedImageDirs', () => {
       ])
       .mockRejectedValueOnce(new Error('Permission denied'));
 
-    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, () => Promise.resolve([]));
+    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, () =>
+      Promise.resolve([]),
+    );
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('broken-dir');
@@ -277,12 +347,22 @@ describe('getOrphanedImageDirs', () => {
         makeRNFSDir('orphan-model', `${IMAGE_MODELS_DIR}/orphan-model`),
       ])
       .mockResolvedValueOnce([
-        makeRNFSFile('unet.onnx', `${IMAGE_MODELS_DIR}/orphan-model/unet.onnx`, 1_000_000),
-        makeRNFSFile('vae.onnx', `${IMAGE_MODELS_DIR}/orphan-model/vae.onnx`, 500_000),
+        makeRNFSFile(
+          'unet.onnx',
+          `${IMAGE_MODELS_DIR}/orphan-model/unet.onnx`,
+          1_000_000,
+        ),
+        makeRNFSFile(
+          'vae.onnx',
+          `${IMAGE_MODELS_DIR}/orphan-model/vae.onnx`,
+          500_000,
+        ),
         makeRNFSDir('subdir', `${IMAGE_MODELS_DIR}/orphan-model/subdir`),
       ]);
 
-    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, () => Promise.resolve([]));
+    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, () =>
+      Promise.resolve([]),
+    );
 
     // Only files are summed, not subdirectories
     expect(result[0].size).toBe(1_500_000);
@@ -295,10 +375,16 @@ describe('getOrphanedImageDirs', () => {
         makeRNFSDir('orphan-model', `${IMAGE_MODELS_DIR}/orphan-model`),
       ])
       .mockResolvedValueOnce([
-        makeRNFSFile('model.onnx', `${IMAGE_MODELS_DIR}/orphan-model/model.onnx`, '2048000'),
+        makeRNFSFile(
+          'model.onnx',
+          `${IMAGE_MODELS_DIR}/orphan-model/model.onnx`,
+          '2048000',
+        ),
       ]);
 
-    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, () => Promise.resolve([]));
+    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, () =>
+      Promise.resolve([]),
+    );
 
     expect(result[0].size).toBe(2_048_000);
   });
@@ -314,11 +400,15 @@ describe('getOrphanedImageDirs', () => {
         makeRNFSFile('f.onnx', `${IMAGE_MODELS_DIR}/orphan-model/f.onnx`, 100),
       ]);
 
-    const imageModelsGetter = () => Promise.resolve([
-      makeImageModel({ modelPath: `${IMAGE_MODELS_DIR}/tracked-model` }),
-    ]);
+    const imageModelsGetter = () =>
+      Promise.resolve([
+        makeImageModel({ modelPath: `${IMAGE_MODELS_DIR}/tracked-model` }),
+      ]);
 
-    const result = await getOrphanedImageDirs(IMAGE_MODELS_DIR, imageModelsGetter);
+    const result = await getOrphanedImageDirs(
+      IMAGE_MODELS_DIR,
+      imageModelsGetter,
+    );
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('orphan-model');

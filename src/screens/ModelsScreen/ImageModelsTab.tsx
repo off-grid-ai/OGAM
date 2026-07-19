@@ -1,37 +1,73 @@
 import React, { useEffect } from 'react';
-import { View, Text, TextInput, ActivityIndicator, TouchableOpacity, ScrollView, InteractionManager } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  ActivityIndicator,
+  TouchableOpacity,
+  ScrollView,
+  InteractionManager,
+} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import { AttachStep, useSpotlightTour } from 'react-native-spotlight-tour';
 import { ModelCard } from '../../components';
 import { consumePendingSpotlight } from '../../components/onboarding/spotlightState';
 import { useTheme, useThemedStyles } from '../../theme';
-import { HFImageModel, getVariantLabel } from '../../services/huggingFaceModelBrowser';
+import {
+  HFImageModel,
+  getVariantLabel,
+} from '../../services/huggingFaceModelBrowser';
 import { ImageModelRecommendation } from '../../types';
-import { useDownloadStore, isActiveStatus, isQueuedStatus, isDownloadingStatus } from '../../stores/downloadStore';
+import {
+  useDownloadStore,
+  isActiveStatus,
+  isQueuedStatus,
+  isDownloadingStatus,
+} from '../../stores/downloadStore';
 import { makeImageModelKey } from '../../utils/modelKey';
 import { imageBackendLabel } from '../../utils/imageBackend';
 import { createStyles } from './styles';
 import { ModelsScreenViewModel } from './useModelsScreen';
 import { ImageFilterBar } from './ImageFilterBar';
 import { BackendFilter, ImageFilterDimension } from './types';
-import { formatBytes, getImageModelCompatibility, hfModelToDescriptor } from './utils';
+import {
+  formatBytes,
+  getImageModelCompatibility,
+  hfModelToDescriptor,
+} from './utils';
 
-type Props = Pick<ModelsScreenViewModel,
-  | 'imageSearchQuery' | 'setImageSearchQuery'
-  | 'hfModelsLoading' | 'hfModelsError'
-  | 'filteredHFModels' | 'availableHFModels'
-  | 'backendFilter' | 'setBackendFilter'
-  | 'styleFilter' | 'setStyleFilter'
-  | 'sdVersionFilter' | 'setSdVersionFilter'
-  | 'imageFilterExpanded' | 'setImageFilterExpanded'
-  | 'imageFiltersVisible' | 'setImageFiltersVisible'
+type Props = Pick<
+  ModelsScreenViewModel,
+  | 'imageSearchQuery'
+  | 'setImageSearchQuery'
+  | 'hfModelsLoading'
+  | 'hfModelsError'
+  | 'filteredHFModels'
+  | 'availableHFModels'
+  | 'backendFilter'
+  | 'setBackendFilter'
+  | 'styleFilter'
+  | 'setStyleFilter'
+  | 'sdVersionFilter'
+  | 'setSdVersionFilter'
+  | 'imageFilterExpanded'
+  | 'setImageFilterExpanded'
+  | 'imageFiltersVisible'
+  | 'setImageFiltersVisible'
   | 'hasActiveImageFilters'
-  | 'showRecommendedOnly' | 'setShowRecommendedOnly'
-  | 'showRecHint' | 'setShowRecHint'
-  | 'imageRec' | 'ramGB' | 'imageRecommendation'
-  | 'handleDownloadImageModel' | 'handleCancelImageDownload' | 'loadHFModels'
-  | 'clearImageFilters' | 'setUserChangedBackendFilter'
+  | 'showRecommendedOnly'
+  | 'setShowRecommendedOnly'
+  | 'showRecHint'
+  | 'setShowRecHint'
+  | 'imageRec'
+  | 'ramGB'
+  | 'imageRecommendation'
+  | 'handleDownloadImageModel'
+  | 'handleCancelImageDownload'
+  | 'loadHFModels'
+  | 'clearImageFilters'
+  | 'setUserChangedBackendFilter'
   | 'isRecommendedModel'
 >;
 
@@ -44,13 +80,20 @@ interface ImageModelCardProps {
   handleCancelImageDownload: Props['handleCancelImageDownload'];
 }
 
-export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
-  model, index, imageRec,
-  isRecommendedModel, handleDownloadImageModel, handleCancelImageDownload,
+const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
+  model,
+  index,
+  imageRec,
+  isRecommendedModel,
+  handleDownloadImageModel,
+  handleCancelImageDownload,
 }) => {
   const styles = useThemedStyles(createStyles);
   const recommended = isRecommendedModel(model);
-  const { isCompatible, incompatibleReason } = getImageModelCompatibility(model, imageRec);
+  const { isCompatible, incompatibleReason } = getImageModelCompatibility(
+    model,
+    imageRec,
+  );
   // Single source of truth: live download status read from useDownloadStore
   // via the stable image:<id> modelKey. Replaces drilled imageModelDownloading
   // and imageModelProgress props.
@@ -68,8 +111,12 @@ export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
   const isQueued = !!entry && isQueuedStatus(entry.status);
   const isDownloading = !!entry && isDownloadingStatus(entry.status);
   const progressValue = entry?.progress ?? 0;
-  const authorLabel = model._coreml ? 'Core ML' : imageBackendLabel(model.backend);
-  const variantSuffix = model.variant ? ` \u00B7 ${getVariantLabel(model.variant)}` : '';
+  const authorLabel = model._coreml
+    ? 'Core ML'
+    : imageBackendLabel(model.backend);
+  const variantSuffix = model.variant
+    ? ` \u00B7 ${getVariantLabel(model.variant)}`
+    : '';
   return (
     <View>
       {recommended && (
@@ -88,18 +135,41 @@ export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
         isDownloading={isDownloading}
         isQueued={isQueued}
         downloadProgress={progressValue}
-        downloadBytes={entry ? { downloaded: Math.round(progressValue * model.size), total: model.size } : undefined}
+        downloadBytes={
+          entry
+            ? {
+                downloaded: Math.round(progressValue * model.size),
+                total: model.size,
+              }
+            : undefined
+        }
         isCompatible={isCompatible}
         incompatibleReason={incompatibleReason}
         testID={`image-model-card-${index}`}
-        onDownload={isActive ? undefined : () => handleDownloadImageModel(hfModelToDescriptor(model))}
-        onCancel={isActive ? () => handleCancelImageDownload(model.id) : undefined}
+        onDownload={
+          isActive
+            ? undefined
+            : () => handleDownloadImageModel(hfModelToDescriptor(model))
+        }
+        onCancel={
+          isActive ? () => handleCancelImageDownload(model.id) : undefined
+        }
       />
     </View>
   );
 };
 
-function shouldShowEmptyMessage({ loading, error, filtered, available }: { loading: boolean; error: string | null; filtered: any[]; available: any[] }): boolean {
+function shouldShowEmptyMessage({
+  loading,
+  error,
+  filtered,
+  available,
+}: {
+  loading: boolean;
+  error: string | null;
+  filtered: any[];
+  available: any[];
+}): boolean {
   return !loading && !error && filtered.length === 0 && available.length > 0;
 }
 
@@ -118,14 +188,21 @@ interface ScrollContentProps {
   sdVersionFilter: string;
   setSdVersionFilter: (f: string) => void;
   imageFilterExpanded: ImageFilterDimension;
-  setImageFilterExpanded: (d: ImageFilterDimension | ((prev: ImageFilterDimension) => ImageFilterDimension)) => void;
+  setImageFilterExpanded: (
+    d:
+      | ImageFilterDimension
+      | ((prev: ImageFilterDimension) => ImageFilterDimension),
+  ) => void;
   hasActiveImageFilters: boolean;
   clearImageFilters: () => void;
   setUserChangedBackendFilter: (v: boolean) => void;
   hfModelsLoading: boolean;
   hfModelsError: string | null;
   loadHFModels: (forceRefresh?: boolean) => void;
-  filteredHFModels: (HFImageModel & { _coreml?: boolean; _coremlFiles?: any[] })[];
+  filteredHFModels: (HFImageModel & {
+    _coreml?: boolean;
+    _coremlFiles?: any[];
+  })[];
   availableHFModels: HFImageModel[];
   isRecommendedModel: (model: HFImageModel) => boolean;
   handleDownloadImageModel: Props['handleDownloadImageModel'];
@@ -134,15 +211,32 @@ interface ScrollContentProps {
 }
 
 const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
-  showRecHint, showRecommendedOnly, setShowRecHint,
-  imageRec, ramGB, imageRecommendation,
-  imageFiltersVisible, backendFilter, setBackendFilter,
-  styleFilter, setStyleFilter, sdVersionFilter, setSdVersionFilter,
-  imageFilterExpanded, setImageFilterExpanded,
-  hasActiveImageFilters, clearImageFilters, setUserChangedBackendFilter,
-  hfModelsLoading, hfModelsError, loadHFModels,
-  filteredHFModels, availableHFModels,
-  isRecommendedModel, handleDownloadImageModel, handleCancelImageDownload,
+  showRecHint,
+  showRecommendedOnly,
+  setShowRecHint,
+  imageRec,
+  ramGB,
+  imageRecommendation,
+  imageFiltersVisible,
+  backendFilter,
+  setBackendFilter,
+  styleFilter,
+  setStyleFilter,
+  sdVersionFilter,
+  setSdVersionFilter,
+  imageFilterExpanded,
+  setImageFilterExpanded,
+  hasActiveImageFilters,
+  clearImageFilters,
+  setUserChangedBackendFilter,
+  hfModelsLoading,
+  hfModelsError,
+  loadHFModels,
+  filteredHFModels,
+  availableHFModels,
+  isRecommendedModel,
+  handleDownloadImageModel,
+  handleCancelImageDownload,
   imageSearchQuery,
 }) => {
   const { colors } = useTheme();
@@ -154,7 +248,9 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
     if (!hfModelsLoading && filteredHFModels.length > 0) {
       const pending = consumePendingSpotlight();
       if (pending !== null) {
-        const task = InteractionManager.runAfterInteractions(() => goTo(pending));
+        const task = InteractionManager.runAfterInteractions(() =>
+          goTo(pending),
+        );
         return () => task.cancel();
       }
     }
@@ -172,18 +268,27 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
     <ScrollView keyboardShouldPersistTaps="handled">
       <View style={styles.imageModelsList}>
         {showRecHint && showRecommendedOnly && (
-          <TouchableOpacity style={styles.recHint} onPress={() => setShowRecHint(false)} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.recHint}
+            onPress={() => setShowRecHint(false)}
+            activeOpacity={0.7}
+          >
             <Icon name="info" size={11} color={colors.primary} />
             <Text style={styles.recHintText}>
-              Showing recommended models only. Tap{' '}<Text style={{ color: colors.primary }}>★</Text>{' '}to see all.
+              Showing recommended models only. Tap{' '}
+              <Text style={{ color: colors.primary }}>★</Text> to see all.
             </Text>
           </TouchableOpacity>
         )}
 
         <View style={styles.deviceBanner}>
-          <Text style={styles.deviceBannerText}>{Math.round(ramGB)}GB RAM — {imageRecommendation}</Text>
+          <Text style={styles.deviceBannerText}>
+            {Math.round(ramGB)}GB RAM — {imageRecommendation}
+          </Text>
           {imageRec?.warning && (
-            <Text style={[styles.deviceBannerText, styles.deviceBannerWarning]}>{imageRec.warning}</Text>
+            <Text style={[styles.deviceBannerText, styles.deviceBannerWarning]}>
+              {imageRec.warning}
+            </Text>
           )}
         </View>
 
@@ -213,14 +318,18 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
         {hfModelsError && !hfModelsLoading && (
           <View style={styles.hfErrorContainer}>
             <Text style={styles.hfErrorText}>{hfModelsError}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={() => loadHFModels(true)}>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => loadHFModels(true)}
+            >
               <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {!hfModelsLoading && !hfModelsError && filteredHFModels.map(
-          (model, index) => {
+        {!hfModelsLoading &&
+          !hfModelsError &&
+          filteredHFModels.map((model, index) => {
             const card = (
               <ImageModelCardItem
                 key={model.id}
@@ -234,35 +343,56 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
             );
             // Spotlight the first image model card for the onboarding flow
             if (index === 0) {
-              return <AttachStep key={model.id} index={17} fill>{card}</AttachStep>;
+              return (
+                <AttachStep key={model.id} index={17} fill>
+                  {card}
+                </AttachStep>
+              );
             }
             return card;
-          }
-        )}
+          })}
 
-        {shouldShowEmptyMessage({ loading: hfModelsLoading, error: hfModelsError, filtered: filteredHFModels, available: availableHFModels }) && (
-          <Text style={styles.allDownloadedText}>{emptyMessage}</Text>
-        )}
+        {shouldShowEmptyMessage({
+          loading: hfModelsLoading,
+          error: hfModelsError,
+          filtered: filteredHFModels,
+          available: availableHFModels,
+        }) && <Text style={styles.allDownloadedText}>{emptyMessage}</Text>}
       </View>
     </ScrollView>
   );
 };
 
 export const ImageModelsTab: React.FC<Props> = ({
-  imageSearchQuery, setImageSearchQuery,
-  hfModelsLoading, hfModelsError,
-  filteredHFModels, availableHFModels,
-  backendFilter, setBackendFilter,
-  styleFilter, setStyleFilter,
-  sdVersionFilter, setSdVersionFilter,
-  imageFilterExpanded, setImageFilterExpanded,
-  imageFiltersVisible, setImageFiltersVisible,
+  imageSearchQuery,
+  setImageSearchQuery,
+  hfModelsLoading,
+  hfModelsError,
+  filteredHFModels,
+  availableHFModels,
+  backendFilter,
+  setBackendFilter,
+  styleFilter,
+  setStyleFilter,
+  sdVersionFilter,
+  setSdVersionFilter,
+  imageFilterExpanded,
+  setImageFilterExpanded,
+  imageFiltersVisible,
+  setImageFiltersVisible,
   hasActiveImageFilters,
-  showRecommendedOnly, setShowRecommendedOnly,
-  showRecHint, setShowRecHint,
-  imageRec, ramGB, imageRecommendation,
-  handleDownloadImageModel, handleCancelImageDownload, loadHFModels,
-  clearImageFilters, setUserChangedBackendFilter,
+  showRecommendedOnly,
+  setShowRecommendedOnly,
+  showRecHint,
+  setShowRecHint,
+  imageRec,
+  ramGB,
+  imageRecommendation,
+  handleDownloadImageModel,
+  handleCancelImageDownload,
+  loadHFModels,
+  clearImageFilters,
+  setUserChangedBackendFilter,
   isRecommendedModel,
 }) => {
   const { colors } = useTheme();
@@ -279,24 +409,49 @@ export const ImageModelsTab: React.FC<Props> = ({
             value={imageSearchQuery}
             onChangeText={setImageSearchQuery}
             returnKeyType="search"
+            testID="image-search-input"
           />
           <TouchableOpacity
-            style={[styles.recToggle, showRecommendedOnly && styles.recToggleActive]}
+            style={[
+              styles.recToggle,
+              showRecommendedOnly && styles.recToggleActive,
+            ]}
             onPress={() => {
               setShowRecHint(false);
-              setShowRecommendedOnly(v => { if (v) { setBackendFilter('all'); } return !v; });
+              setShowRecommendedOnly(v => {
+                if (v) {
+                  setBackendFilter('all');
+                }
+                return !v;
+              });
             }}
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             testID="rec-toggle"
           >
-            <MaterialIcon name={showRecommendedOnly ? 'star' : 'star-border'} size={16} color={showRecommendedOnly ? colors.primary : colors.textMuted} />
+            <MaterialIcon
+              name={showRecommendedOnly ? 'star' : 'star-border'}
+              size={16}
+              color={showRecommendedOnly ? colors.primary : colors.textMuted}
+            />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterToggle, (imageFiltersVisible || hasActiveImageFilters) && styles.filterToggleActive]}
+            style={[
+              styles.filterToggle,
+              (imageFiltersVisible || hasActiveImageFilters) &&
+                styles.filterToggleActive,
+            ]}
             onPress={() => setImageFiltersVisible(v => !v)}
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Icon name="sliders" size={14} color={(imageFiltersVisible || hasActiveImageFilters) ? colors.primary : colors.textMuted} />
+            <Icon
+              name="sliders"
+              size={14}
+              color={
+                imageFiltersVisible || hasActiveImageFilters
+                  ? colors.primary
+                  : colors.textMuted
+              }
+            />
             {hasActiveImageFilters && <View style={styles.filterDot} />}
           </TouchableOpacity>
         </View>
@@ -324,7 +479,12 @@ export const ImageModelsTab: React.FC<Props> = ({
         hfModelsLoading={hfModelsLoading}
         hfModelsError={hfModelsError}
         loadHFModels={loadHFModels}
-        filteredHFModels={filteredHFModels as (HFImageModel & { _coreml?: boolean; _coremlFiles?: any[] })[]}
+        filteredHFModels={
+          filteredHFModels as (HFImageModel & {
+            _coreml?: boolean;
+            _coremlFiles?: any[];
+          })[]
+        }
         availableHFModels={availableHFModels}
         isRecommendedModel={isRecommendedModel}
         handleDownloadImageModel={handleDownloadImageModel}

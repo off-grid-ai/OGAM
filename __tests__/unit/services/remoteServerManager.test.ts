@@ -5,7 +5,10 @@
  */
 
 import { remoteServerManager } from '../../../src/services/remoteServerManager';
-import { detectVisionCapability, detectToolCallingCapability } from '../../../src/services/remoteServerManagerUtils';
+import {
+  detectVisionCapability,
+  detectToolCallingCapability,
+} from '../../../src/utils/remoteCapabilityDetect';
 import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
 import { providerRegistry } from '../../../src/services/providers/registry';
 import * as Keychain from 'react-native-keychain';
@@ -14,7 +17,9 @@ import * as Keychain from 'react-native-keychain';
 jest.mock('../../../src/stores/remoteServerStore');
 jest.mock('../../../src/services/providers/registry');
 jest.mock('../../../src/services/providers/openAICompatibleProvider', () => ({
-  createOpenAIProvider: jest.fn().mockReturnValue({ dispose: jest.fn().mockResolvedValue(undefined) }),
+  createOpenAIProvider: jest
+    .fn()
+    .mockReturnValue({ dispose: jest.fn().mockResolvedValue(undefined) }),
   OpenAICompatibleProvider: jest.fn(),
 }));
 jest.mock('react-native-keychain', () => ({
@@ -33,7 +38,12 @@ describe('remoteServerManager', () => {
 
   describe('addServer', () => {
     it('should add server without API key', async () => {
-      const mockServer = { id: 'server-1', name: 'Test', endpoint: 'http://localhost:11434', createdAt: Date.now() };
+      const mockServer = {
+        id: 'server-1',
+        name: 'Test',
+        endpoint: 'http://localhost:11434',
+        createdAt: Date.now(),
+      };
       const mockAddServer = jest.fn().mockReturnValue('server-1');
       const mockGetServerById = jest.fn().mockReturnValue(mockServer);
 
@@ -42,7 +52,9 @@ describe('remoteServerManager', () => {
         addServer: mockAddServer,
         getServerById: mockGetServerById,
       });
-      (providerRegistry.registerProvider as jest.Mock).mockReturnValue(undefined);
+      (providerRegistry.registerProvider as jest.Mock).mockReturnValue(
+        undefined,
+      );
       (Keychain.getGenericPassword as jest.Mock).mockResolvedValue(null);
 
       const result = await remoteServerManager.addServer({
@@ -56,7 +68,12 @@ describe('remoteServerManager', () => {
     });
 
     it('should add server with API key and store it', async () => {
-      const mockServer = { id: 'server-1', name: 'Test', endpoint: 'http://localhost:11434', createdAt: Date.now() };
+      const mockServer = {
+        id: 'server-1',
+        name: 'Test',
+        endpoint: 'http://localhost:11434',
+        createdAt: Date.now(),
+      };
       const mockAddServer = jest.fn().mockReturnValue('server-1');
       const mockGetServerById = jest.fn().mockReturnValue(mockServer);
 
@@ -65,7 +82,9 @@ describe('remoteServerManager', () => {
         addServer: mockAddServer,
         getServerById: mockGetServerById,
       });
-      (providerRegistry.registerProvider as jest.Mock).mockReturnValue(undefined);
+      (providerRegistry.registerProvider as jest.Mock).mockReturnValue(
+        undefined,
+      );
       (Keychain.setGenericPassword as jest.Mock).mockResolvedValue(true);
       (Keychain.getGenericPassword as jest.Mock).mockResolvedValue(null);
 
@@ -79,7 +98,9 @@ describe('remoteServerManager', () => {
       expect(Keychain.setGenericPassword).toHaveBeenCalledWith(
         'server_server-1',
         'secret-key',
-        expect.objectContaining({ service: expect.stringContaining('server-1') })
+        expect.objectContaining({
+          service: expect.stringContaining('server-1'),
+        }),
       );
       expect(result).toEqual(mockServer);
     });
@@ -94,17 +115,24 @@ describe('remoteServerManager', () => {
         getServerById: mockGetServerById,
       });
 
-      await expect(remoteServerManager.addServer({
-        name: 'Test',
-        endpoint: 'http://localhost:11434',
-        providerType: 'openai-compatible',
-      })).rejects.toThrow('Failed to create server');
+      await expect(
+        remoteServerManager.addServer({
+          name: 'Test',
+          endpoint: 'http://localhost:11434',
+          providerType: 'openai-compatible',
+        }),
+      ).rejects.toThrow('Failed to create server');
     });
   });
 
   describe('updateServer', () => {
     it('should update server without API key change', async () => {
-      const mockServer = { id: 'server-1', name: 'Test', endpoint: 'http://localhost:11434', createdAt: Date.now() };
+      const mockServer = {
+        id: 'server-1',
+        name: 'Test',
+        endpoint: 'http://localhost:11434',
+        createdAt: Date.now(),
+      };
       const mockGetServerById = jest.fn().mockReturnValue(mockServer);
       const mockUpdateServer = jest.fn();
 
@@ -116,11 +144,18 @@ describe('remoteServerManager', () => {
 
       await remoteServerManager.updateServer('server-1', { name: 'Updated' });
 
-      expect(mockUpdateServer).toHaveBeenCalledWith('server-1', { name: 'Updated' });
+      expect(mockUpdateServer).toHaveBeenCalledWith('server-1', {
+        name: 'Updated',
+      });
     });
 
     it('should update server with new API key', async () => {
-      const mockServer = { id: 'server-1', name: 'Test', endpoint: 'http://localhost:11434', createdAt: Date.now() };
+      const mockServer = {
+        id: 'server-1',
+        name: 'Test',
+        endpoint: 'http://localhost:11434',
+        createdAt: Date.now(),
+      };
       const mockGetServerById = jest.fn().mockReturnValue(mockServer);
       const mockUpdateServer = jest.fn();
 
@@ -138,7 +173,12 @@ describe('remoteServerManager', () => {
     });
 
     it('should remove API key when set to empty string', async () => {
-      const mockServer = { id: 'server-1', name: 'Test', endpoint: 'http://localhost:11434', createdAt: Date.now() };
+      const mockServer = {
+        id: 'server-1',
+        name: 'Test',
+        endpoint: 'http://localhost:11434',
+        createdAt: Date.now(),
+      };
       const mockGetServerById = jest.fn().mockReturnValue(mockServer);
       const mockUpdateServer = jest.fn();
 
@@ -159,8 +199,9 @@ describe('remoteServerManager', () => {
         getServerById: jest.fn().mockReturnValue(null),
       });
 
-      await expect(remoteServerManager.updateServer('nonexistent', { name: 'Test' }))
-        .rejects.toThrow('Server not found');
+      await expect(
+        remoteServerManager.updateServer('nonexistent', { name: 'Test' }),
+      ).rejects.toThrow('Server not found');
     });
   });
 
@@ -171,12 +212,16 @@ describe('remoteServerManager', () => {
       (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
         removeServer: mockRemoveServer,
       });
-      (providerRegistry.unregisterProvider as jest.Mock).mockReturnValue(undefined);
+      (providerRegistry.unregisterProvider as jest.Mock).mockReturnValue(
+        undefined,
+      );
       (Keychain.resetGenericPassword as jest.Mock).mockResolvedValue(true);
 
       await remoteServerManager.removeServer('server-1');
 
-      expect(providerRegistry.unregisterProvider).toHaveBeenCalledWith('server-1');
+      expect(providerRegistry.unregisterProvider).toHaveBeenCalledWith(
+        'server-1',
+      );
       expect(Keychain.resetGenericPassword).toHaveBeenCalled();
       expect(mockRemoveServer).toHaveBeenCalledWith('server-1');
     });
@@ -203,7 +248,9 @@ describe('remoteServerManager', () => {
     });
 
     it('should return null on keychain error', async () => {
-      (Keychain.getGenericPassword as jest.Mock).mockRejectedValue(new Error('Keychain error'));
+      (Keychain.getGenericPassword as jest.Mock).mockRejectedValue(
+        new Error('Keychain error'),
+      );
 
       const key = await remoteServerManager.getApiKey('server-1');
 
@@ -213,7 +260,11 @@ describe('remoteServerManager', () => {
 
   describe('getServerWithApiKey', () => {
     it('should return server with API key', async () => {
-      const mockServer = { id: 'server-1', name: 'Test', endpoint: 'http://localhost:11434' };
+      const mockServer = {
+        id: 'server-1',
+        name: 'Test',
+        endpoint: 'http://localhost:11434',
+      };
       (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
         getServerById: jest.fn().mockReturnValue(mockServer),
       });
@@ -232,7 +283,9 @@ describe('remoteServerManager', () => {
         getServerById: jest.fn().mockReturnValue(null),
       });
 
-      const result = await remoteServerManager.getServerWithApiKey('nonexistent');
+      const result = await remoteServerManager.getServerWithApiKey(
+        'nonexistent',
+      );
 
       expect(result).toBeNull();
     });
@@ -259,11 +312,20 @@ describe('remoteServerManager', () => {
         getModelById: jest.fn().mockReturnValue(null),
       });
 
-      await remoteServerManager.setActiveRemoteTextModel('server-123', 'llama2');
+      await remoteServerManager.setActiveRemoteTextModel(
+        'server-123',
+        'llama2',
+      );
 
-      expect(useRemoteServerStore.getState().setActiveServerId).toHaveBeenCalledWith('server-123');
-      expect(useRemoteServerStore.getState().setActiveRemoteTextModelId).toHaveBeenCalledWith('llama2');
-      expect(providerRegistry.setActiveProvider).toHaveBeenCalledWith('server-123');
+      expect(
+        useRemoteServerStore.getState().setActiveServerId,
+      ).toHaveBeenCalledWith('server-123');
+      expect(
+        useRemoteServerStore.getState().setActiveRemoteTextModelId,
+      ).toHaveBeenCalledWith('llama2');
+      expect(providerRegistry.setActiveProvider).toHaveBeenCalledWith(
+        'server-123',
+      );
       expect(mockLoadModel).toHaveBeenCalledWith('llama2');
     });
 
@@ -278,7 +340,7 @@ describe('remoteServerManager', () => {
 
       // Should not throw
       await expect(
-        remoteServerManager.setActiveRemoteTextModel('server-123', 'llama2')
+        remoteServerManager.setActiveRemoteTextModel('server-123', 'llama2'),
       ).resolves.not.toThrow();
     });
   });
@@ -302,10 +364,17 @@ describe('remoteServerManager', () => {
         getServerById: jest.fn().mockReturnValue(null),
       });
 
-      await remoteServerManager.setActiveRemoteImageModel('server-123', 'llava');
+      await remoteServerManager.setActiveRemoteImageModel(
+        'server-123',
+        'llava',
+      );
 
-      expect(useRemoteServerStore.getState().setActiveServerId).toHaveBeenCalledWith('server-123');
-      expect(useRemoteServerStore.getState().setActiveRemoteImageModelId).toHaveBeenCalledWith('llava');
+      expect(
+        useRemoteServerStore.getState().setActiveServerId,
+      ).toHaveBeenCalledWith('server-123');
+      expect(
+        useRemoteServerStore.getState().setActiveRemoteImageModelId,
+      ).toHaveBeenCalledWith('llava');
       expect(mockLoadModel).toHaveBeenCalledWith('llava');
     });
   });
@@ -322,16 +391,21 @@ describe('remoteServerManager', () => {
 
       remoteServerManager.clearActiveRemoteModel();
 
-      expect(useRemoteServerStore.getState().setActiveServerId).toHaveBeenCalledWith(null);
-      expect(useRemoteServerStore.getState().setActiveRemoteTextModelId).toHaveBeenCalledWith(null);
-      expect(useRemoteServerStore.getState().setActiveRemoteImageModelId).toHaveBeenCalledWith(null);
+      expect(
+        useRemoteServerStore.getState().setActiveServerId,
+      ).toHaveBeenCalledWith(null);
+      expect(
+        useRemoteServerStore.getState().setActiveRemoteTextModelId,
+      ).toHaveBeenCalledWith(null);
+      expect(
+        useRemoteServerStore.getState().setActiveRemoteImageModelId,
+      ).toHaveBeenCalledWith(null);
       expect(providerRegistry.setActiveProvider).toHaveBeenCalledWith('local');
     });
   });
 
   describe('detectVisionCapability', () => {
     it('should detect vision models from model name', () => {
-
       const visionModels = [
         'llava-v1.6-mistral-7b',
         'gpt-4-vision-preview',
@@ -359,7 +433,6 @@ describe('remoteServerManager', () => {
 
   describe('detectToolCallingCapability', () => {
     it('should detect tool-capable models from model name', () => {
-
       const toolCapableModels = [
         'gpt-4-turbo',
         'gpt-3.5-turbo',
@@ -375,12 +448,8 @@ describe('remoteServerManager', () => {
     });
 
     it('should return false for non-tool-capable models', () => {
-
       // These should NOT match the tool capability patterns
-      const nonToolModels = [
-        'phi-2',
-        'tinyllama',
-      ];
+      const nonToolModels = ['phi-2', 'tinyllama'];
 
       nonToolModels.forEach(modelId => {
         expect(detectToolCallingCapability(modelId)).toBe(false);
@@ -388,7 +457,6 @@ describe('remoteServerManager', () => {
     });
 
     it('should detect models with tool/function keywords', () => {
-
       expect(detectToolCallingCapability('llama-2-70b-tool')).toBe(true);
       expect(detectToolCallingCapability('mistral-function-call')).toBe(true);
       expect(detectToolCallingCapability('firefunction-v1')).toBe(true);
@@ -399,7 +467,6 @@ describe('remoteServerManager', () => {
 
   describe('detectVisionCapability comprehensive patterns', () => {
     it('should detect all vision model patterns', () => {
-
       const visionModels = [
         'llava-v1.6-mistral-7b',
         'bakllava-7b',
@@ -426,7 +493,6 @@ describe('remoteServerManager', () => {
     });
 
     it('should return false for non-vision models', () => {
-
       const nonVisionModels = [
         'llama-2-7b',
         'mistral-7b-instruct',
@@ -513,8 +579,12 @@ describe('remoteServerManager', () => {
 
       remoteServerManager.setActiveServer('server-1');
 
-      expect(useRemoteServerStore.getState().setActiveServerId).toHaveBeenCalledWith('server-1');
-      expect(providerRegistry.setActiveProvider).toHaveBeenCalledWith('server-1');
+      expect(
+        useRemoteServerStore.getState().setActiveServerId,
+      ).toHaveBeenCalledWith('server-1');
+      expect(providerRegistry.setActiveProvider).toHaveBeenCalledWith(
+        'server-1',
+      );
     });
 
     it('should set to local when id is null', () => {
@@ -525,7 +595,9 @@ describe('remoteServerManager', () => {
 
       remoteServerManager.setActiveServer(null);
 
-      expect(useRemoteServerStore.getState().setActiveServerId).toHaveBeenCalledWith(null);
+      expect(
+        useRemoteServerStore.getState().setActiveServerId,
+      ).toHaveBeenCalledWith(null);
       expect(providerRegistry.setActiveProvider).toHaveBeenCalledWith('local');
     });
   });
@@ -533,8 +605,16 @@ describe('remoteServerManager', () => {
   describe('testConnection', () => {
     it('should return store result as-is (capabilities come from server API, not name patterns)', async () => {
       const mockModels = [
-        { id: 'llava-v1.6', name: 'LLaVA', capabilities: { supportsVision: true } },
-        { id: 'llama-3-70b', name: 'Llama 3', capabilities: { supportsToolCalling: false } },
+        {
+          id: 'llava-v1.6',
+          name: 'LLaVA',
+          capabilities: { supportsVision: true },
+        },
+        {
+          id: 'llama-3-70b',
+          name: 'Llama 3',
+          capabilities: { supportsToolCalling: false },
+        },
       ];
       const mockTestConnection = jest.fn().mockResolvedValue({
         success: true,
@@ -599,9 +679,14 @@ describe('remoteServerManager', () => {
         testConnectionByEndpoint: mockTestConnectionByEndpoint,
       });
 
-      const result = await remoteServerManager.testConnectionByEndpoint('http://localhost:11434');
+      const result = await remoteServerManager.testConnectionByEndpoint(
+        'http://localhost:11434',
+      );
 
-      expect(mockTestConnectionByEndpoint).toHaveBeenCalledWith('http://localhost:11434', undefined);
+      expect(mockTestConnectionByEndpoint).toHaveBeenCalledWith(
+        'http://localhost:11434',
+        undefined,
+      );
       expect(result.success).toBe(true);
     });
 
@@ -614,9 +699,15 @@ describe('remoteServerManager', () => {
         testConnectionByEndpoint: mockTestConnectionByEndpoint,
       });
 
-      await remoteServerManager.testConnectionByEndpoint('http://localhost:11434', 'api-key');
+      await remoteServerManager.testConnectionByEndpoint(
+        'http://localhost:11434',
+        'api-key',
+      );
 
-      expect(mockTestConnectionByEndpoint).toHaveBeenCalledWith('http://localhost:11434', 'api-key');
+      expect(mockTestConnectionByEndpoint).toHaveBeenCalledWith(
+        'http://localhost:11434',
+        'api-key',
+      );
     });
   });
 
@@ -626,12 +717,17 @@ describe('remoteServerManager', () => {
         getServerById: jest.fn().mockReturnValue(null),
       });
 
-      await expect(remoteServerManager.discoverModels('nonexistent'))
-        .rejects.toThrow('Server not found');
+      await expect(
+        remoteServerManager.discoverModels('nonexistent'),
+      ).rejects.toThrow('Server not found');
     });
 
     it('should discover models from server', async () => {
-      const mockServer = { id: 'server-1', name: 'Test', endpoint: 'http://localhost:11434' };
+      const mockServer = {
+        id: 'server-1',
+        name: 'Test',
+        endpoint: 'http://localhost:11434',
+      };
       const mockModels = [{ id: 'model-1', name: 'Model 1' }];
 
       (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
@@ -646,7 +742,11 @@ describe('remoteServerManager', () => {
     });
 
     it('should pass API key when discovering models', async () => {
-      const mockServer = { id: 'server-1', name: 'Test', endpoint: 'http://localhost:11434' };
+      const mockServer = {
+        id: 'server-1',
+        name: 'Test',
+        endpoint: 'http://localhost:11434',
+      };
       const mockModels = [{ id: 'model-1', name: 'Model 1' }];
 
       (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
@@ -674,12 +774,18 @@ describe('remoteServerManager', () => {
         getLoadedModelId: jest.fn().mockReturnValue('llama2'),
         isReady: jest.fn().mockResolvedValue(true),
       };
-      const mockServer = { id: 'server-1', name: 'Test', endpoint: 'http://localhost:11434' };
+      const mockServer = {
+        id: 'server-1',
+        name: 'Test',
+        endpoint: 'http://localhost:11434',
+      };
 
       (providerRegistry.getProvider as jest.Mock)
         .mockReturnValueOnce(null) // First call returns null
         .mockReturnValueOnce(mockProvider); // Second call returns provider after creation
-      (providerRegistry.registerProvider as jest.Mock).mockReturnValue(undefined);
+      (providerRegistry.registerProvider as jest.Mock).mockReturnValue(
+        undefined,
+      );
       (providerRegistry.setActiveProvider as jest.Mock).mockReturnValue(true);
       (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
         setActiveServerId: jest.fn(),
@@ -706,12 +812,18 @@ describe('remoteServerManager', () => {
         isModelLoaded: jest.fn().mockReturnValue(true),
         isReady: jest.fn().mockResolvedValue(true),
       };
-      const mockServer = { id: 'server-1', name: 'Test', endpoint: 'http://localhost:11434' };
+      const mockServer = {
+        id: 'server-1',
+        name: 'Test',
+        endpoint: 'http://localhost:11434',
+      };
 
       (providerRegistry.getProvider as jest.Mock)
         .mockReturnValueOnce(null)
         .mockReturnValueOnce(mockProvider);
-      (providerRegistry.registerProvider as jest.Mock).mockReturnValue(undefined);
+      (providerRegistry.registerProvider as jest.Mock).mockReturnValue(
+        undefined,
+      );
       (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
         setActiveServerId: jest.fn(),
         setActiveRemoteTextModelId: jest.fn(),
@@ -727,7 +839,11 @@ describe('remoteServerManager', () => {
     });
 
     it('should warn when provider cannot be created', async () => {
-      const _mockServer = { id: 'server-1', name: 'Test', endpoint: 'http://localhost:11434' };
+      const _mockServer = {
+        id: 'server-1',
+        name: 'Test',
+        endpoint: 'http://localhost:11434',
+      };
       const _mockLogger = { warn: jest.fn() };
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 

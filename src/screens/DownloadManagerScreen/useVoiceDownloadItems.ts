@@ -20,10 +20,18 @@ async function loadItems(): Promise<DownloadItem[]> {
     const stt = await whisperService.listDownloadedModels();
     for (const m of stt) {
       items.push({
-        type: 'completed', modelType: 'stt', modelId: m.modelId, fileName: m.fileName,
-        author: 'Transcription', quantization: '', fileSize: m.sizeBytes,
-        bytesDownloaded: m.sizeBytes, progress: 1, status: 'completed',
-        filePath: m.filePath, name: m.modelId,
+        type: 'completed',
+        modelType: 'stt',
+        modelId: m.modelId,
+        fileName: m.fileName,
+        author: 'Transcription',
+        quantization: '',
+        fileSize: m.sizeBytes,
+        bytesDownloaded: m.sizeBytes,
+        progress: 1,
+        status: 'completed',
+        filePath: m.filePath,
+        name: m.modelId,
       });
     }
   } catch {
@@ -37,20 +45,38 @@ async function loadItems(): Promise<DownloadItem[]> {
     // defaulting, so a flaky/stale executorch disk probe made it show "completed 82MB"
     // while the panel (service) correctly showed it downloading 0% — the mismatch.
     // Reading the one projection makes divergence impossible.
-    const tts = (await modelDownloadService.list()).filter(d => d.modelType === 'tts');
+    const tts = (await modelDownloadService.list()).filter(
+      d => d.modelType === 'tts',
+    );
     for (const d of tts) {
       const engineId = d.id.replace(/^tts:/, '');
       if (d.status === 'completed') {
         items.push({
-          type: 'completed', modelType: 'tts', modelId: engineId, fileName: d.name,
-          author: 'Voice', quantization: '', fileSize: d.sizeBytes,
-          bytesDownloaded: d.sizeBytes, progress: 1, status: 'completed', name: d.name,
+          type: 'completed',
+          modelType: 'tts',
+          modelId: engineId,
+          fileName: d.name,
+          author: 'Voice',
+          quantization: '',
+          fileSize: d.sizeBytes,
+          bytesDownloaded: d.sizeBytes,
+          progress: 1,
+          status: 'completed',
+          name: d.name,
         });
       } else if (isModelDownloadInProgress(d.status)) {
         items.push({
-          type: 'active', modelType: 'tts', modelId: engineId, fileName: d.name,
-          author: 'Voice', quantization: '', fileSize: d.sizeBytes,
-          bytesDownloaded: d.bytesDownloaded, progress: d.progress, status: 'downloading', name: d.name,
+          type: 'active',
+          modelType: 'tts',
+          modelId: engineId,
+          fileName: d.name,
+          author: 'Voice',
+          quantization: '',
+          fileSize: d.sizeBytes,
+          bytesDownloaded: d.bytesDownloaded,
+          progress: d.progress,
+          status: d.status === 'queued' ? 'pending' : 'downloading',
+          name: d.name,
         });
       } else if (d.status === 'error') {
         // A failed Kokoro fetch. Surface it as a failed active item so the
@@ -63,9 +89,17 @@ async function loadItems(): Promise<DownloadItem[]> {
         // because isRetryable(undefined) === true. Fall back to the retryable
         // 'download_interrupted' code only when the engine gave no message.
         items.push({
-          type: 'active', modelType: 'tts', modelId: engineId, fileName: d.name,
-          author: 'Voice', quantization: '', fileSize: d.sizeBytes,
-          bytesDownloaded: d.bytesDownloaded, progress: d.progress, status: 'failed', name: d.name,
+          type: 'active',
+          modelType: 'tts',
+          modelId: engineId,
+          fileName: d.name,
+          author: 'Voice',
+          quantization: '',
+          fileSize: d.sizeBytes,
+          bytesDownloaded: d.bytesDownloaded,
+          progress: d.progress,
+          status: 'failed',
+          name: d.name,
           reason: d.error,
           ...(d.error ? {} : { reasonCode: 'download_interrupted' as const }),
         });
@@ -87,7 +121,10 @@ async function deleteItem(item: DownloadItem): Promise<void> {
   } else {
     // callHook returns undefined when the hook isn't registered (free build); await the promise
     // only when it exists. `?.` keeps a Promise out of a boolean condition (SonarJS).
-    await callHook<Promise<void>>(HOOKS.downloadsDeleteVoiceModel, item.modelId)?.catch(() => {});
+    await callHook<Promise<void>>(
+      HOOKS.downloadsDeleteVoiceModel,
+      item.modelId,
+    )?.catch(() => {});
   }
 }
 
@@ -98,24 +135,34 @@ export interface VoiceDownloadItems {
   buildDeleteAlert: (item: DownloadItem) => AlertState;
 }
 
-export function useVoiceDownloadItems(onAlertClose: () => void): VoiceDownloadItems {
+export function useVoiceDownloadItems(
+  onAlertClose: () => void,
+): VoiceDownloadItems {
   const [voiceItems, setVoiceItems] = useState<DownloadItem[]>([]);
   // Re-derives a new array reference whenever a Whisper model finishes
   // downloading or is deleted (downloadModel/deleteModelById/refreshPresentModels
   // all replace it). Subscribing here keeps the Download Manager in sync within
   // the same session — without it, the list only refreshed on mount.
-  const presentModelIds = useWhisperStore((s) => s.presentModelIds);
+  const presentModelIds = useWhisperStore(s => s.presentModelIds);
 
   const refreshVoiceItems = useCallback(async () => {
     setVoiceItems(await loadItems());
   }, []);
 
-  useEffect(() => { refreshVoiceItems(); }, [refreshVoiceItems, presentModelIds]);
+  useEffect(() => {
+    refreshVoiceItems();
+  }, [refreshVoiceItems, presentModelIds]);
 
   // Stay in lockstep with the Voice panel: both observe ModelDownloadService, so a
   // TTS phase change (download start/finish/delete) refreshes this list the same way
   // it updates the panel — no stale "completed" snapshot can linger.
-  useEffect(() => modelDownloadService.subscribe(() => { refreshVoiceItems(); }), [refreshVoiceItems]);
+  useEffect(
+    () =>
+      modelDownloadService.subscribe(() => {
+        refreshVoiceItems();
+      }),
+    [refreshVoiceItems],
+  );
 
   // Kokoro's download has no store to subscribe to (it's executorch's own fetcher),
   // so while a voice model is actively downloading, poll to advance its progress
@@ -123,25 +170,39 @@ export function useVoiceDownloadItems(onAlertClose: () => void): VoiceDownloadIt
   // failed item is also type:'active' (so ActiveDownloadCard renders its Retry),
   // but it's terminal and must NOT keep an 800ms interval alive.
   useEffect(() => {
-    if (!voiceItems.some((i) => i.type === 'active' && i.status === 'downloading')) return;
-    const t = setInterval(() => { refreshVoiceItems(); }, 800);
+    if (
+      !voiceItems.some(i => i.type === 'active' && i.status === 'downloading')
+    )
+      return;
+    const t = setInterval(() => {
+      refreshVoiceItems();
+    }, 800);
     return () => clearInterval(t);
   }, [voiceItems, refreshVoiceItems]);
 
-  const buildDeleteAlert = useCallback((item: DownloadItem): AlertState => {
-    const kind = item.modelType === 'tts' ? 'Voice' : 'Transcription';
-    return showAlert(
-      `Delete ${kind} Model`,
-      `Are you sure you want to delete "${item.fileName}"? This will free up ${formatBytes(item.fileSize)}.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive',
-          onPress: () => { onAlertClose(); deleteItem(item).then(refreshVoiceItems); },
-        },
-      ],
-    );
-  }, [onAlertClose, refreshVoiceItems]);
+  const buildDeleteAlert = useCallback(
+    (item: DownloadItem): AlertState => {
+      const kind = item.modelType === 'tts' ? 'Voice' : 'Transcription';
+      return showAlert(
+        `Delete ${kind} Model`,
+        `Are you sure you want to delete "${
+          item.fileName
+        }"? This will free up ${formatBytes(item.fileSize)}.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              onAlertClose();
+              deleteItem(item).then(refreshVoiceItems);
+            },
+          },
+        ],
+      );
+    },
+    [onAlertClose, refreshVoiceItems],
+  );
 
   return { voiceItems, refreshVoiceItems, buildDeleteAlert };
 }

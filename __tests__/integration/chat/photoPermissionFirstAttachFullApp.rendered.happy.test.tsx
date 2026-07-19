@@ -26,9 +26,10 @@ describe('P2 first-attach photo permission journey', () => {
   });
 
   it('presents native photo permission and attaches the selected image after Allow', async () => {
-    const { rtl, view } = await renderMainApp({
+    const { boundary, rtl, view } = await renderMainApp({
       downloadedModels: [visionModel],
     });
+    boundary.fs!.seedFile('/photos/first-attachment.jpg', 1024);
     const { act, fireEvent, waitFor } = rtl;
     await openChatWithJourneyModel(rtl, view);
 
@@ -93,7 +94,10 @@ describe('P2 first-attach photo permission journey', () => {
     );
     expect(view.getByTestId('attachments-container')).toBeTruthy();
     const preview = attachedImage.findByType(ReactNative.Image);
-    expect(preview.props.source.uri).toBe(PHOTO_URI);
+    expect(preview.props.source.uri).toMatch(
+      /^\/docs\/attachments\/images\/\d+-\d+\.jpg$/,
+    );
+    expect(preview.props.source.uri).not.toBe(PHOTO_URI);
 
     view.unmount();
   }, 30000);

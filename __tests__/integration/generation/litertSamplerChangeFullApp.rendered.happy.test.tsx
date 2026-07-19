@@ -1,6 +1,7 @@
 /** P1 #48 — a live LiteRT conversation applies each rendered Top P change. */
 import type { DownloadedModel } from '../../../src/types';
 import {
+  closeAppSheet,
   openChatWithJourneyModel,
   renderMainApp,
   sendChatMessage,
@@ -48,11 +49,7 @@ async function setLiteRTTopP(journey: Journey, value: string): Promise<void> {
       Number(value).toFixed(2),
     ),
   );
-  rtl.fireEvent.press(view.getByText('Done'));
-  await rtl.waitFor(
-    () => expect(view.queryByText('Chat Settings')).toBeNull(),
-    { timeout: 4000 },
-  );
+  await closeAppSheet(journey, 'Chat Settings');
 }
 
 function latestReset(journey: Journey): unknown[] {

@@ -1,4 +1,4 @@
-/** P1 #102 — Load Anyway cannot cross the post-eviction device survival floor. */
+/** P2 #98 + P1 #102 — Aggressive/Load Anyway cannot cross the device survival floor. */
 import {
   openChatWithJourneyModel,
   renderMainApp,
@@ -38,6 +38,22 @@ describe('P1 full-App override survival-floor journey', () => {
       },
     });
     const { act, fireEvent, waitFor } = rtl;
+
+    fireEvent.press(view.getByTestId('settings-tab'));
+    fireEvent.press(await waitFor(() => view.getByText('Model Settings')));
+    fireEvent.press(
+      await waitFor(() =>
+        view.getByTestId('model-loading-mode-aggressive-button'),
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        view.getByTestId('model-loading-mode-aggressive-button').props
+          .accessibilityState.selected,
+      ).toBe(true),
+    );
+    fireEvent.press(view.getByTestId('back-button'));
+    fireEvent.press(await waitFor(() => view.getByTestId('home-tab')));
 
     await openChatWithJourneyModel(rtl, view);
     fireEvent.press(view.getByTestId('quick-settings-button'));

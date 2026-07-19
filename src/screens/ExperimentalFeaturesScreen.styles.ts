@@ -28,7 +28,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     lineHeight: 18,
     marginBottom: SPACING.lg,
   },
-  featureCard: { backgroundColor: colors.surface },
+  featureCard: { backgroundColor: colors.surface, marginBottom: SPACING.lg },
   featureRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,

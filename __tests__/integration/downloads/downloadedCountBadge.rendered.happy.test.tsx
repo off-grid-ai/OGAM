@@ -21,7 +21,7 @@
  * probes the disk) runs, the REAL recommended list matches downloaded rows by id-prefix, and the REAL
  * ModelCard renders the mark. The N is EMERGENT from the seeded boundary, not programmed.
  */
-import { installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
+import { renderMainApp } from '../../harness/appJourney';
 import { createDownloadedModel } from '../../utils/factories';
 
 // Three recommended-model ids that render at the default 12GB RAM profile (params ≤ 13B). A downloaded
@@ -34,41 +34,49 @@ const RECOMMENDED_IDS = [
 ];
 
 async function mountWithNDownloaded(n: number) {
-  const boundary = installNativeBoundary({ fs: true });
-
-  const React = require('react');
-  const { render, waitFor } = requireRTL();
-  const AsyncStorage = require('@react-native-async-storage/async-storage').default
-    ?? require('@react-native-async-storage/async-storage');
-  const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
-
-  const docs = boundary.fs!.DocumentDirectoryPath;
+  const docs = '/docs';
   // Seed N downloaded models: a file on the in-memory disk + a persisted record whose id is prefixed by
   // a recommended id (so the recommended card recognises it as downloaded). This is the ONLY thing
   // pre-placed — a genuine device-boundary leaf (a completed download), never our own store state.
   const rows = RECOMMENDED_IDS.slice(0, n).map((recId, i) => {
     const fileName = `${recId.split('/').pop()}-Q4_K_M.gguf`;
     const filePath = `${docs}/models/${fileName}`;
-    boundary.fs!.seedFile(filePath, 500 * 1024 * 1024);
-    return createDownloadedModel({ id: `${recId}/${fileName}`, name: `Downloaded ${i}`, engine: 'llama', filePath, fileName });
+    return createDownloadedModel({
+      id: `${recId}/${fileName}`,
+      name: `Downloaded ${i}`,
+      engine: 'llama',
+      filePath,
+      fileName,
+      fileSize: 500 * 1024 * 1024,
+    });
   });
-  await AsyncStorage.setItem('@local_llm/downloaded_models', JSON.stringify(rows));
-
-  const view = render(React.createElement(ModelsScreen, {}));
-  return { view, waitFor };
+  return renderMainApp({ downloadedModels: rows });
 }
 
 describe('T012 (rendered) — ModelsScreen reflects N downloaded models', () => {
   it('renders exactly N downloaded-indicator marks when N models are downloaded', async () => {
     const N = 3;
-    const { view, waitFor } = await mountWithNDownloaded(N);
+    const { view, rtl } = await mountWithNDownloaded(N);
+    const { fireEvent, waitFor, act } = rtl;
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId('models-tab'));
+    });
+    await waitFor(() => expect(view.getByTestId('models-screen')).toBeTruthy());
 
     // The recommended list is present (it renders on mount, no search needed).
-    await waitFor(() => { expect(view.getByTestId('models-list')).not.toBeNull(); });
+    await waitFor(() => {
+      expect(view.getByTestId('models-list')).not.toBeNull();
+    });
 
     // The count of downloaded marks the user sees on ModelsScreen must equal N.
-    await waitFor(() => {
-      expect(view.queryAllByTestId(/^model-card-\d+-downloaded$/)).toHaveLength(N);
-    }, { timeout: 4000 });
+    await waitFor(
+      () => {
+        expect(
+          view.queryAllByTestId(/^model-card-\d+-downloaded$/),
+        ).toHaveLength(N);
+      },
+      { timeout: 4000 },
+    );
   });
 });

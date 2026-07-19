@@ -20,6 +20,12 @@ export function registerToolExtension(ext: ToolExtension): void {
   if (!extensions.some(e => e.id === ext.id)) extensions.push(ext);
 }
 
+/** Remove a feature-owned extension so revoked tools cannot execute. */
+export function unregisterToolExtension(id: string): void {
+  const index = extensions.findIndex(extension => extension.id === id);
+  if (index !== -1) extensions.splice(index, 1);
+}
+
 export function getToolExtensions(): ToolExtension[] {
   return extensions;
 }

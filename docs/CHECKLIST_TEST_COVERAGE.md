@@ -60,8 +60,9 @@ still required; `[ ]` critical journey is open.
 - [x] #88 Balanced mode co-resides heavy models when they fit.
 - [x] #93 Idle STT is reclaimed for a text turn.
 - [x] #99 Oversized model shows a graceful memory card.
-- [~] #101 Load Anyway follows the explicit override path — the real button overrides the refusal and
-  renders the generated image; physical-device jetsam/OOM survival remains an accepted-risk device gate.
+- [~] #101 Load Anyway follows the explicit override path — the real button bypasses a cautious refusal
+  and renders the generated image when the post-eviction survival check is safe; physical-device native
+  loading remains a device gate.
 
 ### Persistence and release
 
@@ -150,7 +151,8 @@ still required; `[ ]` critical journey is open.
   - `__tests__/integration/memory/aggressiveLargerModelFullApp.rendered.happy.test.tsx`
 - [x] #100 Advisory and load-gate estimators agree.
   - `__tests__/integration/memory/imageToChatSwapFullApp.rendered.happy.test.tsx`
-- [ ] #102 Survival floor blocks a guaranteed OOM.
+- [x] #102 Survival floor blocks a guaranteed OOM and does not offer a second override.
+  - `__tests__/integration/memory/survivalFloorFullApp.rendered.happy.test.tsx`
 - [x] #103 Image-to-chat transition swaps residency correctly.
   - `__tests__/integration/memory/imageToChatSwapFullApp.rendered.happy.test.tsx`
 - [x] #104 Active model can switch mid-chat.
@@ -159,7 +161,8 @@ still required; `[ ]` critical journey is open.
 - [ ] #106 Eject one model from the In Memory surface.
 - [ ] #107 Ejected model lazy-reloads on use.
 - [ ] #108 In Memory shows loaded RAM accurately.
-- [ ] #109 Deleting TTS clears stale memory pressure.
+- [x] #109 Deleting TTS clears stale memory pressure.
+  - `__tests__/integration/memory/ttsDeleteClearsResidencyFullApp.rendered.happy.test.tsx`
 
 ### Knowledge base and projects
 
@@ -180,18 +183,25 @@ still required; `[ ]` critical journey is open.
 - [ ] #123 Calculator tool runs and renders its result.
 - [ ] #127 Parallel tool calls both complete.
 - [ ] #129 Messy tool JSON is parsed without leaking markup.
-- [ ] #132 Empty final model turn retains visible tool data.
-- [ ] #133 Add and connect an MCP server.
-- [ ] #134 Connected MCP tools are listed.
-- [ ] #135 Execute an MCP tool and render its result.
+- [x] #132 Empty final model turn retains visible tool data.
+  - `__tests__/integration/chat/toolEmptyFinalFullApp.rendered.redflow.test.tsx`
+  - Full App -> Home model selection -> Chat lazy load -> quick settings -> Tools -> Calculator -> send; when the native model returns a successful calculator call and an empty final turn, the rendered assistant answer retains `2+2 = 4` with no blank/`(No response)` state.
+- [x] #133 Add and connect an MCP server.
+  - `__tests__/integration/tools/mcpFullApp.rendered.happy.test.tsx`
+- [x] #134 Connected MCP tools are listed.
+  - `__tests__/integration/tools/mcpFullApp.rendered.happy.test.tsx`
+- [x] #135 Execute an MCP tool and render its result.
+  - `__tests__/integration/tools/mcpFullApp.rendered.happy.test.tsx`
 
 ### Remote models
 
 - [ ] #138 Remote model replies.
 - [ ] #142 LM Studio reasoning renders.
 - [ ] #143 Remote parallel tool calls complete.
-- [ ] #144 Remote prompt enhancement runs.
-- [ ] #145 Remote server loss clears generation and surfaces an error.
+- [x] #144 Remote prompt enhancement runs.
+  - `__tests__/integration/generation/remoteEnhancementFullApp.rendered.happy.test.tsx`
+- [x] #145 Remote server loss clears generation and surfaces an error.
+  - `__tests__/integration/generation/remoteDisconnectMidGenerationFullApp.rendered.redflow.test.tsx`
 
 ### Prompt enhancement and TTS
 
@@ -222,7 +232,8 @@ still required; `[ ]` critical journey is open.
   - `__tests__/integration/memory/remoteActivationFreesLocalFullApp.rendered.happy.test.tsx`
 - [x] #185 Mid-chat model switch stays coherent.
   - `__tests__/integration/generation/midChatModelSwitchFullApp.rendered.redflow.test.tsx`
-- [ ] #186 Remote stream interruption recovers.
+- [x] #186 Remote stream interruption recovers.
+  - `__tests__/integration/generation/remoteDisconnectMidGenerationFullApp.rendered.redflow.test.tsx`
 - [x] #188 LiteRT download warning is device-aware on both screens.
   - `__tests__/integration/models/litertWarningBothScreensFullApp.rendered.happy.test.tsx`
 - [ ] #190 Send racing settings reload keeps thinking capability.

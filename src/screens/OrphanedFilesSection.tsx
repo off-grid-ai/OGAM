@@ -48,25 +48,30 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
     scanForOrphanedFiles();
   }, [scanForOrphanedFiles]);
 
-  const performDelete = useCallback(async (file: OrphanedFile) => {
-    setIsDeleting(file.path);
-    try {
-      await modelManager.deleteOrphanedFile(file.path);
-      setOrphanedFiles(prev => prev.filter(f => f.path !== file.path));
-      onStorageChange();
-    } catch (_err) {
-      setAlertState(showAlert('Error', 'Failed to delete file'));
-    } finally {
-      setIsDeleting(null);
-    }
-  }, [onStorageChange]);
+  const performDelete = useCallback(
+    async (file: OrphanedFile) => {
+      setIsDeleting(file.path);
+      try {
+        await modelManager.deleteOrphanedFile(file.path);
+        setOrphanedFiles(prev => prev.filter(f => f.path !== file.path));
+        onStorageChange();
+      } catch (_err) {
+        setAlertState(showAlert('Error', 'Failed to delete file'));
+      } finally {
+        setIsDeleting(null);
+      }
+    },
+    [onStorageChange],
+  );
 
   const handleDeleteFile = useCallback(
     (file: OrphanedFile) => {
       setAlertState(
         showAlert(
           'Delete Orphaned File',
-          `Delete "${file.name}"?\n\nThis will free up ${hardwareService.formatBytes(file.size)}.`,
+          `Delete "${
+            file.name
+          }"?\n\nThis will free up ${hardwareService.formatBytes(file.size)}.`,
           [
             { text: 'Cancel', style: 'cancel' },
             {
@@ -90,7 +95,11 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
     setAlertState(
       showAlert(
         'Delete All Orphaned Files',
-        `Delete ${orphanedFiles.length} orphaned file(s)?\n\nThis will free up ${hardwareService.formatBytes(totalSize)}.`,
+        `Delete ${
+          orphanedFiles.length
+        } orphaned file(s)?\n\nThis will free up ${hardwareService.formatBytes(
+          totalSize,
+        )}.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -148,7 +157,11 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
               They may be from failed or cancelled downloads.
             </Text>
             {orphanedFiles.map(file => (
-              <View key={file.path} style={styles.orphanedRow}>
+              <View
+                key={file.path}
+                testID={`orphaned-file-${file.name}`}
+                style={styles.orphanedRow}
+              >
                 <View style={styles.orphanedInfo}>
                   <Text style={styles.orphanedName} numberOfLines={1}>
                     {file.name}
@@ -175,7 +188,9 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
               onPress={handleDeleteAll}
             >
               <Icon name="trash-2" size={16} color={colors.error} />
-              <Text style={styles.deleteAllText}>Delete All Orphaned Files</Text>
+              <Text style={styles.deleteAllText}>
+                Delete All Orphaned Files
+              </Text>
             </TouchableOpacity>
           </>
         )}

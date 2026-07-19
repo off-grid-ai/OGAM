@@ -4,11 +4,23 @@ import { AlertState } from '../../components/CustomAlert';
 import { useAppStore } from '../../stores';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { makeImageModelKey } from '../../utils/modelKey';
-import { modelManager, hardwareService, backgroundDownloadService } from '../../services';
-import { fetchAvailableModels, HFImageModel, guessStyle } from '../../services/huggingFaceModelBrowser';
+import {
+  modelManager,
+  hardwareService,
+  backgroundDownloadService,
+} from '../../services';
+import {
+  fetchAvailableModels,
+  HFImageModel,
+  guessStyle,
+} from '../../services/huggingFaceModelBrowser';
 import { fetchAvailableCoreMLModels } from '../../services/coreMLModelBrowser';
 import { ImageModelRecommendation } from '../../types';
-import { BackendFilter, ImageFilterDimension, ImageModelDescriptor } from './types';
+import {
+  BackendFilter,
+  ImageFilterDimension,
+  ImageModelDescriptor,
+} from './types';
 import { matchesSdVersionFilter } from './utils';
 import {
   ImageDownloadDeps,
@@ -19,26 +31,35 @@ import { isLiveImageFinalization } from './imageZipFinalization';
 import { resumeImageDownload } from './imageDownloadResume';
 
 export function useImageModels(setAlertState: (s: AlertState) => void) {
-  const [availableHFModels, setAvailableHFModels] = useState<HFImageModel[]>([]);
+  const [availableHFModels, setAvailableHFModels] = useState<HFImageModel[]>(
+    [],
+  );
   const [hfModelsLoading, setHfModelsLoading] = useState(false);
   const [hfModelsError, setHfModelsError] = useState<string | null>(null);
   const [backendFilter, setBackendFilter] = useState<BackendFilter>('all');
   const [styleFilter, setStyleFilter] = useState<string>('all');
   const [sdVersionFilter, setSdVersionFilter] = useState<string>('all');
-  const [imageFilterExpanded, setImageFilterExpanded] = useState<ImageFilterDimension>(null);
+  const [imageFilterExpanded, setImageFilterExpanded] =
+    useState<ImageFilterDimension>(null);
   const [imageSearchQuery, setImageSearchQuery] = useState('');
   const [imageFiltersVisible, setImageFiltersVisible] = useState(false);
-  const [imageRec, setImageRec] = useState<ImageModelRecommendation | null>(null);
-  const [userChangedBackendFilter, setUserChangedBackendFilter] = useState(false);
+  const [imageRec, setImageRec] = useState<ImageModelRecommendation | null>(
+    null,
+  );
+  const [userChangedBackendFilter, setUserChangedBackendFilter] =
+    useState(false);
   const [showRecommendedOnly, setShowRecommendedOnly] = useState(true);
   const [showRecHint, setShowRecHint] = useState(true);
 
   const {
-    downloadedImageModels, setDownloadedImageModels, addDownloadedImageModel,
-    activeImageModelId, setActiveImageModelId,
+    downloadedImageModels,
+    setDownloadedImageModels,
+    addDownloadedImageModel,
+    activeImageModelId,
+    setActiveImageModelId,
     onboardingChecklist,
   } = useAppStore();
-  const downloads = useDownloadStore((s) => s.downloads);
+  const downloads = useDownloadStore(s => s.downloads);
   const resumingDownloadKeysRef = useRef<Set<string>>(new Set());
 
   const makeDeps = (): ImageDownloadDeps => ({
@@ -55,19 +76,33 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
   }, [setDownloadedImageModels]);
 
   const loadHFModels = useCallback(async (forceRefresh = false) => {
-    setHfModelsLoading(true); setHfModelsError(null);
+    setHfModelsLoading(true);
+    setHfModelsError(null);
     try {
       if (Platform.OS === 'ios') {
         const coremlModels = await fetchAvailableCoreMLModels(forceRefresh);
-        setAvailableHFModels(coremlModels.map(m => ({
-          id: m.id, name: m.name, displayName: m.displayName, backend: 'coreml' as any,
-          fileName: m.fileName, downloadUrl: m.downloadUrl, size: m.size, repo: m.repo,
-          _coreml: true, _coremlFiles: m.files,
-          _coremlAttentionVariant: m.attentionVariant,
-        })));
+        setAvailableHFModels(
+          coremlModels.map(m => ({
+            id: m.id,
+            name: m.name,
+            displayName: m.displayName,
+            backend: 'coreml' as any,
+            fileName: m.fileName,
+            downloadUrl: m.downloadUrl,
+            size: m.size,
+            repo: m.repo,
+            _coreml: true,
+            _coremlFiles: m.files,
+            _coremlAttentionVariant: m.attentionVariant,
+          })),
+        );
       } else {
         const socInfo = await hardwareService.getSoCInfo();
-        setAvailableHFModels(await fetchAvailableModels(forceRefresh, { skipQnn: !socInfo.hasNPU }));
+        setAvailableHFModels(
+          await fetchAvailableModels(forceRefresh, {
+            skipQnn: !socInfo.hasNPU,
+          }),
+        );
       }
     } catch (error: any) {
       setHfModelsError(error?.message || 'Failed to fetch models');
@@ -124,7 +159,9 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
     };
 
     resumeProcessingDownloads();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // makeDeps intentionally omitted: it is recreated each render and current store
     // values are read when resumeProcessingDownloads runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,7 +180,9 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
         setBackendFilter(filter);
       }
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
 
     // Intentionally mount-only: fetches hardware recommendation once.
     // userChangedBackendFilter is read inside but should not re-trigger this fetch.
@@ -151,38 +190,81 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
   }, []);
 
   const clearImageFilters = useCallback(() => {
-    setBackendFilter('all'); setUserChangedBackendFilter(true);
-    setStyleFilter('all'); setSdVersionFilter('all'); setImageFilterExpanded(null);
+    setBackendFilter('all');
+    setUserChangedBackendFilter(true);
+    setStyleFilter('all');
+    setSdVersionFilter('all');
+    setImageFilterExpanded(null);
   }, []);
 
-  const isRecommendedModel = useCallback((model: HFImageModel): boolean => {
-    if (!imageRec) return false;
-    if (model.backend !== imageRec.recommendedBackend && imageRec.recommendedBackend !== 'all') return false;
-    if (imageRec.qnnVariant && model.variant) return model.variant.includes(imageRec.qnnVariant);
-    if (imageRec.recommendedModels?.length) {
-      const fields = [model.name, model.repo, model.id].map(s => s.toLowerCase());
-      return imageRec.recommendedModels.some(p => fields.some(f => f.includes(p)));
-    }
-    return true;
-  }, [imageRec]);
+  const isRecommendedModel = useCallback(
+    (model: HFImageModel): boolean => {
+      if (!imageRec) return false;
+      if (
+        model.backend !== imageRec.recommendedBackend &&
+        imageRec.recommendedBackend !== 'all'
+      )
+        return false;
+      if (imageRec.qnnVariant && model.variant)
+        return model.variant.includes(imageRec.qnnVariant);
+      if (imageRec.recommendedModels?.length) {
+        const fields = [model.name, model.repo, model.id].map(s =>
+          s.toLowerCase(),
+        );
+        return imageRec.recommendedModels.some(p =>
+          fields.some(f => f.includes(p)),
+        );
+      }
+      return true;
+    },
+    [imageRec],
+  );
 
   const filteredHFModels = useMemo(() => {
     const query = imageSearchQuery.toLowerCase().trim();
     const filtered = availableHFModels.filter(m => {
-      if (showRecommendedOnly && imageRec && !isRecommendedModel(m)) return false;
-      if (backendFilter !== 'all' && m.backend !== backendFilter) return false;
-      if (styleFilter !== 'all' && guessStyle(m.name) !== styleFilter) return false;
-      if (!matchesSdVersionFilter(m.name, sdVersionFilter)) return false;
-      if (downloadedImageModels.some(d => d.id === m.id)) return false;
-      if (query && !m.displayName.toLowerCase().includes(query) && !m.name.toLowerCase().includes(query)) return false;
-      return true;
+      const hiddenByRecommendation =
+        showRecommendedOnly && imageRec && !isRecommendedModel(m);
+      const hiddenByBackend =
+        backendFilter !== 'all' && m.backend !== backendFilter;
+      const hiddenByStyle =
+        styleFilter !== 'all' && guessStyle(m.name) !== styleFilter;
+      const hiddenByVersion = !matchesSdVersionFilter(m.name, sdVersionFilter);
+      const alreadyDownloaded = downloadedImageModels.some(d => d.id === m.id);
+      const hiddenByQuery =
+        query &&
+        !m.displayName.toLowerCase().includes(query) &&
+        !m.name.toLowerCase().includes(query);
+      return !(
+        hiddenByRecommendation ||
+        hiddenByBackend ||
+        hiddenByStyle ||
+        hiddenByVersion ||
+        alreadyDownloaded ||
+        hiddenByQuery
+      );
     });
-    if (!showRecommendedOnly) filtered.sort((a, b) => a.displayName.localeCompare(b.displayName));
+    if (!showRecommendedOnly)
+      filtered.sort((a, b) => a.displayName.localeCompare(b.displayName));
     return filtered;
-  }, [availableHFModels, backendFilter, styleFilter, sdVersionFilter, downloadedImageModels, imageSearchQuery, imageRec, isRecommendedModel, showRecommendedOnly]);
+  }, [
+    availableHFModels,
+    backendFilter,
+    styleFilter,
+    sdVersionFilter,
+    downloadedImageModels,
+    imageSearchQuery,
+    imageRec,
+    isRecommendedModel,
+    showRecommendedOnly,
+  ]);
 
-  const hasActiveImageFilters = backendFilter !== 'all' || styleFilter !== 'all' || sdVersionFilter !== 'all';
-  const imageRecommendation = imageRec?.bannerText ?? 'Loading recommendation...';
+  const hasActiveImageFilters =
+    backendFilter !== 'all' ||
+    styleFilter !== 'all' ||
+    sdVersionFilter !== 'all';
+  const imageRecommendation =
+    imageRec?.bannerText ?? 'Loading recommendation...';
 
   const handleDownloadImageModel = (modelInfo: ImageModelDescriptor) =>
     downloadImageModel(modelInfo, makeDeps());
@@ -200,23 +282,41 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
       await cancelSyntheticImageDownload(modelId).catch(() => {});
       return;
     }
-    await backgroundDownloadService.cancelDownload(entry.downloadId).catch(() => {});
+    await backgroundDownloadService
+      .cancelDownload(entry.downloadId)
+      .catch(() => {});
   };
 
   return {
-    availableHFModels, hfModelsLoading, hfModelsError,
-    backendFilter, setBackendFilter,
-    styleFilter, setStyleFilter,
-    sdVersionFilter, setSdVersionFilter,
-    imageFilterExpanded, setImageFilterExpanded,
-    imageSearchQuery, setImageSearchQuery,
-    imageFiltersVisible, setImageFiltersVisible,
-    imageRec, showRecommendedOnly, setShowRecommendedOnly,
-    showRecHint, setShowRecHint,
+    availableHFModels,
+    hfModelsLoading,
+    hfModelsError,
+    backendFilter,
+    setBackendFilter,
+    styleFilter,
+    setStyleFilter,
+    sdVersionFilter,
+    setSdVersionFilter,
+    imageFilterExpanded,
+    setImageFilterExpanded,
+    imageSearchQuery,
+    setImageSearchQuery,
+    imageFiltersVisible,
+    setImageFiltersVisible,
+    imageRec,
+    showRecommendedOnly,
+    setShowRecommendedOnly,
+    showRecHint,
+    setShowRecHint,
     downloadedImageModels,
-    hasActiveImageFilters, filteredHFModels, imageRecommendation,
-    loadHFModels, loadDownloadedImageModels,
-    clearImageFilters, isRecommendedModel, handleDownloadImageModel,
+    hasActiveImageFilters,
+    filteredHFModels,
+    imageRecommendation,
+    loadHFModels,
+    loadDownloadedImageModels,
+    clearImageFilters,
+    isRecommendedModel,
+    handleDownloadImageModel,
     handleCancelImageDownload,
     setUserChangedBackendFilter,
   };
