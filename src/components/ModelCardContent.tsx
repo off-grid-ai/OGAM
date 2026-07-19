@@ -9,6 +9,37 @@ import { huggingFaceService } from '../services/huggingface';
 import { ModelCredibility } from '../types';
 import { triggerHaptic } from '../utils/haptics';
 
+/** iOS whisper CoreML encoder badge: 'ready' → ANE (accent), 'unavailable' → CPU
+ *  (muted). Extracted so the card content stays simple. Renders nothing otherwise. */
+const CoreMLBadge: React.FC<{
+  status?: 'ready' | 'downloading' | 'unavailable';
+  styles: ReturnType<typeof createStyles>;
+}> = ({ status, styles }) => {
+  if (status === 'ready') {
+    return (
+      <View style={styles.accelBadge} testID="coreml-badge">
+        <Text style={styles.accelBadgeText}>ANE</Text>
+      </View>
+    );
+  }
+  if (status === 'unavailable') {
+    return (
+      <View style={styles.infoBadge} testID="coreml-badge">
+        <Text style={styles.infoText}>CPU</Text>
+      </View>
+    );
+  }
+  return null;
+};
+
+/** Whether the compact card's badge row has anything to show. Kept out of the render so
+ *  the OR-chain doesn't inflate the component's cyclomatic complexity. */
+const hasCompactBadges = (
+  hasTypeOrParams: boolean,
+  supportsAcceleration?: boolean,
+  coreMLStatus?: string,
+): boolean => hasTypeOrParams || !!supportsAcceleration || !!coreMLStatus;
+
 interface CredibilityInfo {
   color: string;
   label: string;
@@ -56,6 +87,8 @@ interface CompactModelCardContentProps {
   recommended?: RecommendedConfig;
   /** Model can run on the GPU/NPU (LiteRT or Q4_0/Q8_0 GGUF) → show the badge. */
   supportsAcceleration?: boolean;
+  /** iOS whisper CoreML encoder state: 'ready' (ANE), 'unavailable' (CPU). Optional. */
+  coreMLStatus?: 'ready' | 'downloading' | 'unavailable';
 }
 
 function formatNumber(num: number): string {
@@ -97,6 +130,7 @@ export const CompactModelCardContent: React.FC<CompactModelCardContentProps> = (
   isTrending,
   recommended,
   supportsAcceleration,
+  coreMLStatus,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -150,7 +184,7 @@ export const CompactModelCardContent: React.FC<CompactModelCardContentProps> = (
             </View>
           ))}
         </View>
-      ) : (model.modelType || model.paramCount || supportsAcceleration) && (
+      ) : hasCompactBadges(!!model.modelType || !!model.paramCount, supportsAcceleration, coreMLStatus) && (
         <View style={[styles.infoRow, styles.infoRowCompact]}>
           {/* Capability badge: this model can run on the GPU/NPU (a LiteRT model or a
               Q4_0/Q8_0 GGUF). K-quants silently fall back to CPU, so they get no badge. */}
@@ -159,6 +193,8 @@ export const CompactModelCardContent: React.FC<CompactModelCardContentProps> = (
               <Text style={styles.accelBadgeText}>NPU/GPU</Text>
             </View>
           )}
+          {/* iOS whisper: Neural Engine (ANE) ready vs CPU-only, per model. */}
+          <CoreMLBadge status={coreMLStatus} styles={styles} />
           {model.modelType && (
             <View style={[styles.infoBadge, modelTypeBadgeStyle(styles, model.modelType)]}>
               <Text style={[styles.infoText, modelTypeTextStyle(styles, model.modelType)]}>
@@ -196,6 +232,8 @@ interface StandardModelCardContentProps {
   recommended?: RecommendedConfig;
   /** Model can run on the GPU/NPU (LiteRT or Q4_0/Q8_0 GGUF) → show the badge. */
   supportsAcceleration?: boolean;
+  /** iOS whisper CoreML encoder state: 'ready' (ANE), 'unavailable' (CPU). Optional. */
+  coreMLStatus?: 'ready' | 'downloading' | 'unavailable';
 }
 
 export const StandardModelCardContent: React.FC<StandardModelCardContentProps> = ({
@@ -205,6 +243,7 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
   isActive,
   recommended,
   supportsAcceleration,
+  coreMLStatus,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -252,6 +291,8 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
             <Text style={styles.accelBadgeText}>NPU/GPU</Text>
           </View>
         )}
+        {/* iOS whisper: Neural Engine (ANE) ready vs CPU-only, per model. */}
+        <CoreMLBadge status={coreMLStatus} styles={styles} />
       </View>
       {!!description && (
         <Text style={styles.description} numberOfLines={2}>

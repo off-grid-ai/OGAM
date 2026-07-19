@@ -58,6 +58,13 @@ interface ModelCardProps {
   recommended?: RecommendedConfig;
   /** Model can run on the GPU/NPU (LiteRT or Q4_0/Q8_0 GGUF) → show the badge. */
   supportsAcceleration?: boolean;
+  /**
+   * iOS whisper only: state of this model's CoreML (Neural Engine) encoder.
+   * 'ready' = encoder present & valid (runs on the ANE); 'unavailable' = downloaded but
+   * no valid encoder (runs on CPU). Undefined = don't show (non-iOS, not downloaded,
+   * or not a whisper model). Additive/optional so only the Transcription tab renders it.
+   */
+  coreMLStatus?: 'ready' | 'downloading' | 'unavailable';
   failedState?: {
     errorMessage: string;
     bytesDownloaded: number;
@@ -186,6 +193,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   isTrending,
   recommended,
   supportsAcceleration,
+  coreMLStatus,
   failedState,
 }) => {
   const styles = useThemedStyles(createStyles);
@@ -234,6 +242,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
               isTrending={isTrending}
               recommended={recommended}
               supportsAcceleration={supportsAcceleration}
+              coreMLStatus={coreMLStatus}
             />
           ) : (
             <StandardModelCardContent
@@ -243,6 +252,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
               isActive={isActive}
               recommended={recommended}
               supportsAcceleration={supportsAcceleration}
+              coreMLStatus={coreMLStatus}
             />
           )}
 
