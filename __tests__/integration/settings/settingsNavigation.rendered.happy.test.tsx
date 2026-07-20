@@ -13,11 +13,11 @@ const destinations = [
 ] as const;
 
 describe('P2 Settings navigation journeys', () => {
-  it.each(destinations)(
-    'opens %s from the real Settings screen',
-    async (cardLabel, evidenceKind, evidence) => {
-      const { rtl, view } = await renderMainApp();
-      rtl.fireEvent.press(view.getByTestId('settings-tab'));
+  it('opens every destination from the real Settings screen', async () => {
+    const { rtl, view } = await renderMainApp();
+    rtl.fireEvent.press(view.getByTestId('settings-tab'));
+
+    for (const [cardLabel, evidenceKind, evidence] of destinations) {
       rtl.fireEvent.press(await rtl.waitFor(() => view.getByText(cardLabel)));
 
       await rtl.waitFor(() => {
@@ -53,7 +53,8 @@ describe('P2 Settings navigation journeys', () => {
           expect(destination).toBeNull();
         }
       });
-      view.unmount();
-    },
-  );
+    }
+
+    view.unmount();
+  }, 30000);
 });
