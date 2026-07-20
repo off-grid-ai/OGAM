@@ -28,7 +28,6 @@ import { resetStores, setupWithConversation, flushPromises } from '../../utils/t
 jest.mock('../../../src/services/llm');
 jest.mock('../../../src/services/litert');
 jest.mock('../../../src/services/activeModelService');
-jest.mock('../../../src/services/modelPreloader', () => ({ abortPreload: jest.fn() }));
 jest.mock('../../../src/services/modelResidency', () => ({
   modelResidencyManager: { reclaimSttForGeneration: jest.fn(async () => {}) },
 }));
