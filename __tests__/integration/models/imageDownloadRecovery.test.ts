@@ -9,13 +9,14 @@ const mockBackgroundDownloadService = {
 
 const mockModelManager = {
   getImageModelsDirectory: jest.fn(),
+  getDownloadedImageModels: jest.fn(),
   addDownloadedImageModel: jest.fn(),
 };
 
 // Integrity is a boundary for this recovery test (it exercises the resume/move
 // orchestration, not the completeness rule — that has its own dedicated tests).
 jest.mock('../../../src/utils/imageModelIntegrity', () => ({
-  validateImageModelDir: jest.fn(async () => ({ complete: true, missing: [] })),
+  isImageModelDirUsable: jest.fn(async () => false),
   ensureImageExtractionComplete: jest.fn(async () => {}),
 }));
 
@@ -82,6 +83,7 @@ describe('image download recovery integration', () => {
     });
 
     mockModelManager.getImageModelsDirectory.mockReturnValue(imageModelsDir);
+    mockModelManager.getDownloadedImageModels.mockResolvedValue([]);
     mockModelManager.addDownloadedImageModel.mockResolvedValue(undefined);
     mockBackgroundDownloadService.isAvailable.mockReturnValue(true);
     mockBackgroundDownloadService.moveCompletedDownload.mockImplementation(async () => {

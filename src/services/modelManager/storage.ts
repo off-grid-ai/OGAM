@@ -20,7 +20,7 @@ import { validateModelFile } from '../llmSafetyChecks';
 const MODELS_STORAGE_KEY = '@local_llm/downloaded_models';
 const IMAGE_MODELS_STORAGE_KEY = '@local_llm/downloaded_image_models';
 
-function determineCredibility(author: string): ModelCredibility {
+export function determineCredibility(author: string): ModelCredibility {
   if (LMSTUDIO_AUTHORS.includes(author)) {
     return {
       source: 'lmstudio',
@@ -55,7 +55,7 @@ function determineCredibility(author: string): ModelCredibility {
   };
 }
 
-function resolveStoredPath(
+export function resolveStoredPath(
   storedPath: string,
   currentBaseDir: string,
 ): string | null {

@@ -10,7 +10,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { modelManager } from '../../../src/services/modelManager';
 import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
 import { huggingFaceService } from '../../../src/services/huggingface';
-import { buildDownloadedModel } from '../../../src/services/modelManager/storage';
+import {
+  buildDownloadedModel,
+  determineCredibility,
+  resolveStoredPath,
+} from '../../../src/services/modelManager/storage';
+import { isMMProjFile } from '../../../src/services/mmproj';
 import { createModelFile, createModelFileWithMmProj } from '../../utils/factories';
 
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
@@ -396,13 +401,9 @@ describe('ModelManager', () => {
   });
 
   // ========================================================================
-  // determineCredibility (private)
+  // determineCredibility
   // ========================================================================
   describe('determineCredibility', () => {
-    // Access private method
-    const determineCredibility = (author: string) =>
-      (modelManager as any).determineCredibility(author);
-
     it('recognizes lmstudio-community source', () => {
       const result = determineCredibility('lmstudio-community');
       expect(result.source).toBe('lmstudio');
@@ -1007,12 +1008,9 @@ describe('ModelManager', () => {
   });
 
   // ========================================================================
-  // resolveStoredPath (private, tested via cast)
+  // resolveStoredPath
   // ========================================================================
   describe('resolveStoredPath', () => {
-    const resolveStoredPath = (storedPath: string, currentBaseDir: string) =>
-      (modelManager as any).resolveStoredPath(storedPath, currentBaseDir);
-
     it('returns re-resolved path when UUID changes', () => {
       const storedPath = '/old-uuid/Documents/models/mymodel.gguf';
       const currentBaseDir = '/new-uuid/Documents/models';
@@ -1048,12 +1046,9 @@ describe('ModelManager', () => {
   });
 
   // ========================================================================
-  // isMMProjFile (private, tested via cast)
+  // isMMProjFile
   // ========================================================================
   describe('isMMProjFile', () => {
-    const isMMProjFile = (fileName: string) =>
-      (modelManager as any).isMMProjFile(fileName);
-
     it('detects mmproj filenames', () => {
       expect(isMMProjFile('model-mmproj-f16.gguf')).toBe(true);
       expect(isMMProjFile('Qwen3VL-2B-mmproj-Q4_0.gguf')).toBe(true);

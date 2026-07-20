@@ -736,7 +736,7 @@ describe('ModelResidencyManager', () => {
     });
     afterEach(() => jest.restoreAllMocks());
 
-    it('LOADS an override regardless of the old survival floor, while the SAME normal load refuses (background apps case)', async () => {
+    it('refuses an override that would cross the survival floor (background apps case)', async () => {
       modelResidencyManager.setBudgetOverrideMB(null);
       jest
         .spyOn(hardwareService, 'refreshMemoryInfo')
@@ -754,11 +754,11 @@ describe('ModelResidencyManager', () => {
       // Fails-before: a NORMAL load in this starved condition refuses (protection intact).
       expect((await modelResidencyManager.makeRoomFor(spec)).fits).toBe(false);
 
-      // Passes-after: "Load Anyway" is unconditional — the user accepted the risk, so it loads.
+      // "Load Anyway" crosses conservative policy, but not the hard physics floor.
       const { fits } = await modelResidencyManager.makeRoomFor(spec, {
         override: true,
       });
-      expect(fits).toBe(true); // override always loads, no survival floor
+      expect(fits).toBe(false);
     });
 
     it('ALLOWS the same override load when there is survival headroom', async () => {
@@ -813,7 +813,7 @@ describe('ModelResidencyManager', () => {
       expect(fits).toBe(true); // real post-evict RAM (5120-3600) clears the 1200 floor
     });
 
-    it('override LOADS an oversized dirty model (evicting everything first) even where a normal load refuses', async () => {
+    it('override evicts first but still refuses an oversized dirty model below the survival floor', async () => {
       modelResidencyManager.setBudgetOverrideMB(null);
       jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(8);
       let residentLoaded = true;
@@ -842,33 +842,29 @@ describe('ModelResidencyManager', () => {
       expect((await modelResidencyManager.makeRoomFor(huge)).fits).toBe(false);
       residentLoaded = true; // restore the pre-eviction condition for the override attempt
 
-      // Passes-after: "Load Anyway" is unconditional — it evicts everything first, then loads.
+      // Override evicts first and re-measures, then the hard floor still protects the process.
       const { fits, evicted } = await modelResidencyManager.makeRoomFor(huge, {
         override: true,
       });
 
       expect(unloadSmall).toHaveBeenCalled(); // freed the resident first
       expect(evicted).toEqual(['text']); // reported what it evicted
-      expect(fits).toBe(true); // override always loads regardless of the old physics floor
+      expect(fits).toBe(false);
     });
 
-    // Override is unconditional on every platform: "Load Anyway" always loads because the user
-    // explicitly accepted the risk. There is no survival floor and no platform-specific refusal
-    // under override — not the iOS jetsam floor, not the Android oversized-OOM guard. Every one of
-    // these dirty models, on either OS, LOADS under override regardless of the raw availMem read.
+    // Override may cross the conservative policy, but the hard survival floor remains
+    // platform-aware and can refuse a physically unsafe load.
     describe('platform-aware override floor', () => {
       const RN = require('react-native');
       const originalOS = RN.Platform.OS;
       afterEach(() => { RN.Platform.OS = originalOS; });
 
       // Same real seam (makeRoomFor with override on a dirty model) on a 12GB device whose raw
-      // availMem reads ~4.5GB. Under override, size and platform no longer gate the load: even a
-      // genuinely oversized 9GB dirty model on Android and a 3.7GB model on iOS (which a normal load
-      // would refuse) both LOAD, because override always loads.
+      // availMem reads ~4.5GB. Safe overrides proceed; an oversized load is still refused.
       it.each([
         { os: 'android', sizeMB: 3700, expected: true, why: 'override always loads' },
         { os: 'android', sizeMB: 5235, expected: true, why: 'override always loads (E4B on a 12GB phone)' },
-        { os: 'android', sizeMB: 9000, expected: true, why: 'override always loads (no oversized OOM guard under override)' },
+        { os: 'android', sizeMB: 9000, expected: false, why: 'hard survival floor prevents an oversized load' },
         { os: 'ios', sizeMB: 3700, expected: true, why: 'override always loads (no iOS jetsam floor under override)' },
       ])('$os: a $sizeMB MB dirty model under override → fits=$expected ($why)', async ({ os, sizeMB, expected }) => {
         RN.Platform.OS = os;

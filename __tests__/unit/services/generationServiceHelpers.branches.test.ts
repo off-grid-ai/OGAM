@@ -51,6 +51,7 @@ jest.mock('../../../src/stores', () => ({
       clearStreamingMessage: jest.fn(),
       appendToStreamingMessage: jest.fn(),
       finalizeStreamingMessage: jest.fn(),
+      resetStreamingOutput: jest.fn(),
     })),
   },
   useRemoteServerStore: {
@@ -124,6 +125,7 @@ function chatStoreMock(overrides: any = {}) {
     clearStreamingMessage: jest.fn(),
     appendToStreamingMessage: jest.fn(),
     finalizeStreamingMessage: jest.fn(),
+    resetStreamingOutput: jest.fn(),
     ...overrides,
   };
   (useChatStore.getState as jest.Mock).mockReturnValue(store);
