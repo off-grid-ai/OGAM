@@ -56,6 +56,11 @@ jest.mock('react-native-zip-archive', () => ({ unzip: jest.fn(() => Promise.reso
 jest.mock('../../../src/utils/coreMLModelUtils', () => ({
   resolveCoreMLModelDir: jest.fn((dir: string) => Promise.resolve(`${dir}/model.mlpackage`)),
 }));
+// Completeness gate is a collaborator here (covered by imageModelIntegrity unit tests + the G7
+// reconcile integration test); stub it so this test focuses on the reconcile flow.
+jest.mock('../../../src/utils/imageModelIntegrity', () => ({
+  ensureImageExtractionComplete: jest.fn().mockResolvedValue(undefined),
+}));
 
 import { unzip as mockedUnzip } from 'react-native-zip-archive';
 import { resolveCoreMLModelDir as mockedResolveCoreML } from '../../../src/utils/coreMLModelUtils';

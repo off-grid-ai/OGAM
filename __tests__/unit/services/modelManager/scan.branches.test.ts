@@ -36,6 +36,11 @@ jest.mock('../../../../src/services/modelManager/copyFile', () => ({
 jest.mock('../../../../src/utils/coreMLModelUtils', () => ({
   resolveCoreMLModelDir: jest.fn(async (p: string) => `${p}/coreml-resolved`),
 }));
+// Completeness gate is a collaborator here (its own behavior is covered by imageModelIntegrity
+// unit tests + the reconcile G7 integration test); stub it so these tests focus on reconcile flow.
+jest.mock('../../../../src/utils/imageModelIntegrity', () => ({
+  ensureImageExtractionComplete: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('../../../../src/utils/logger', () => ({
   __esModule: true,
   default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },

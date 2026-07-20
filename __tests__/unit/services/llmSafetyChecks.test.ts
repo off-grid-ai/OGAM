@@ -13,6 +13,7 @@ describe('validateModelFile', () => {
 
     const result = await validateModelFile('/models/tiny.gguf');
     expect(result.valid).toBe(false);
+    expect(result.corrupt).toBe(true); // provably corrupt → deletable
     expect(result.reason).toContain('too small');
   });
 
@@ -21,7 +22,7 @@ describe('validateModelFile', () => {
     mockedRNFS.read.mockResolvedValue('GGUF');
 
     const result = await validateModelFile('/models/test.gguf');
-    expect(result).toEqual({ valid: true });
+    expect(result).toEqual({ valid: true, corrupt: false });
   });
 
   it('returns invalid when header is not GGUF', async () => {
@@ -30,6 +31,7 @@ describe('validateModelFile', () => {
 
     const result = await validateModelFile('/models/test.bin');
     expect(result.valid).toBe(false);
+    expect(result.corrupt).toBe(true); // wrong magic → provably corrupt
     expect(result.reason).toContain('not a GGUF file');
   });
 
@@ -38,7 +40,7 @@ describe('validateModelFile', () => {
     mockedRNFS.read.mockRejectedValueOnce(new Error('NSInteger bridge error'));
 
     const result = await validateModelFile('/models/test.gguf');
-    expect(result).toEqual({ valid: true });
+    expect(result).toEqual({ valid: true, corrupt: false });
   });
 
   it('returns invalid when stat throws', async () => {
@@ -46,6 +48,7 @@ describe('validateModelFile', () => {
 
     const result = await validateModelFile('/models/missing.gguf');
     expect(result.valid).toBe(false);
+    expect(result.corrupt).toBe(false); // could NOT verify (transient) → must NOT be deleted (G1)
     expect(result.reason).toContain('Failed to validate');
   });
 
@@ -54,7 +57,7 @@ describe('validateModelFile', () => {
     mockedRNFS.read.mockResolvedValue('GGUF');
 
     const result = await validateModelFile('/models/test.gguf');
-    expect(result).toEqual({ valid: true });
+    expect(result).toEqual({ valid: true, corrupt: false });
   });
 });
 
