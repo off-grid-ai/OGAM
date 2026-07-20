@@ -342,6 +342,14 @@ row does **not** mean that no test exists.
 - [x] #194 Embedded MTP activates only for capable GGUFs
 - [x] #196 Model file-list failure is retryable
 
+### 15 Retained PR558
+
+- [~] #241 Image download Wi-Fi failure retries and finalizes - the full-App
+  failure, Download Manager Retry, resumed progress, archive finalization, and
+  single ready-model journey is automated; the physical radio transition remains
+  a device gate
+  - `__tests__/integration/downloads/imageNetworkRetryFinalizesFullApp.rendered.redflow.test.tsx`
+
 ## P2
 
 ### 0 Install
