@@ -1,6 +1,6 @@
 const BYTES_PER_GB = 1024 * 1024 * 1024;
 
-export const MIN_LLAMA_OUTPUT_TOKENS = 64;
+const MIN_LLAMA_OUTPUT_TOKENS = 64;
 
 /** The largest context this runtime will allocate for a device's physical RAM tier. */
 export function getDeviceContextLimit(totalMemoryBytes: number): number {
