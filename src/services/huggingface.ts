@@ -27,20 +27,22 @@ class HuggingFaceService {
    * (~75s). AbortController bounds every request; on timeout the fetch rejects (AbortError) and the
    * caller's existing catch handles it (falls back or returns empty).
    */
-  private async fetchWithTimeout(url: string, timeoutMs = HF_REQUEST_TIMEOUT_MS): Promise<Response> {
+  private async withTimeout<T>(operation: (signal: AbortSignal) => Promise<T>, timeoutMs = HF_REQUEST_TIMEOUT_MS): Promise<T> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
+      return await operation(controller.signal);
     } finally {
       clearTimeout(timer);
     }
   }
 
   private async fetchJson<T>(url: string): Promise<T> {
-    const response = await this.fetchWithTimeout(url);
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return response.json() as Promise<T>;
+    return this.withTimeout(async signal => {
+      const response = await fetch(url, { headers: { Accept: 'application/json' }, signal });
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      return response.json() as Promise<T>;
+    });
   }
 
   async searchModels(
@@ -62,9 +64,14 @@ class HuggingFaceService {
 
   async getModelFiles(modelId: string): Promise<ModelFile[]> {
     try {
-      const response = await this.fetchWithTimeout(`${this.apiUrl}/models/${modelId}/tree/main`);
-      if (!response.ok) return this.getModelFilesFromSiblings(modelId);
-      const files: Array<{ type: string; path: string; size?: number; lfs?: { size: number } }> = await response.json();
+      const files = await this.withTimeout(async signal => {
+        const response = await fetch(`${this.apiUrl}/models/${modelId}/tree/main`, {
+          headers: { Accept: 'application/json' }, signal,
+        });
+        if (!response.ok) return null;
+        return response.json() as Promise<Array<{ type: string; path: string; size?: number; lfs?: { size: number } }>>;
+      });
+      if (!files) return this.getModelFilesFromSiblings(modelId);
       const allGguf = files.filter(f => f.type === 'file' && f.path.endsWith('.gguf'));
       const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.path));
       const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.path));

@@ -1,3 +1,5 @@
+import type { FitTier } from '../services/memoryBudget';
+
 // Model source and credibility types
 export type ModelSource = 'lmstudio' | 'official' | 'verified-quantizer' | 'community';
 
@@ -24,7 +26,7 @@ export interface ModelInfo {
   minRamGB?: number;
   /** Device-fit tier of this model's BEST (most-fitting) quant, for the browse fit chip. Set by the
    *  models VM from memoryBudget.fitTier; undefined until the file sizes are known. */
-  fitTier?: import('../services/memoryBudget').FitTier;
+  fitTier?: FitTier;
 }
 
 export interface ModelFile {

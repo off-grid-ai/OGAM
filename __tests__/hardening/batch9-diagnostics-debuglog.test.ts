@@ -1,7 +1,7 @@
 /**
  * BATCH 9 — Device Info diagnostics computation + debug-log file sink rotation.
  *
- * Provit plan lines 1409-1549 (Device Info cases 5-10) + the CLAUDE.md debug-log sink.
+ * Provit plan lines 1409-1549 (Device Info cases 5-10) + the AGENTS.md debug-log sink.
  *
  * Two ABSENT-LOGIC gaps closed here — both drive the REAL service, mocking only the
  * genuine boundaries (the native memory module; the RNFS filesystem):

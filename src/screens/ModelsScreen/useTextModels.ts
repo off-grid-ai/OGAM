@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Keyboard, BackHandler } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { showAlert, AlertState } from '../../components/CustomAlert';
@@ -132,6 +132,7 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
   const [filterState, setFilterState] = useState<FilterState>(initialFilterState);
   const [textFiltersVisible, setTextFiltersVisible] = useState(false);
   const [recommendedModelDetails, setRecommendedModelDetails] = useState<Record<string, ModelInfo>>({});
+  const fileListRequestIdRef = useRef(0);
   const repairingVisionIds = useDownloadStore(s => s.repairingVisionIds);
   const setRepairingVision = useDownloadStore(s => s.setRepairingVision);
 
@@ -207,6 +208,7 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
   }, [filterState.type, filterState.size, filterState.orgs.length]);
 
   const handleSelectModel = async (model: ModelInfo) => {
+    const requestId = ++fileListRequestIdRef.current;
     setSelectedModel(model); setIsLoadingFiles(true); setFilesLoadError(false);
     // Curated entries under the offgrid/ namespace (e.g. the synthetic LiteRT
     // parent) ship with their files baked into the ModelInfo — skip the
@@ -219,14 +221,16 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
     }
     try {
       const files = await huggingFaceService.getModelFiles(model.id);
+      if (fileListRequestIdRef.current !== requestId) return;
       setModelFiles(files);
     } catch {
+      if (fileListRequestIdRef.current !== requestId) return;
       // Fetch failed (offline / HF unreachable / timeout). Surface an inline retry state rather
       // than a transient modal — the detail view reads filesLoadError and offers Retry.
       setModelFiles([]);
       setFilesLoadError(true);
     } finally {
-      setIsLoadingFiles(false);
+      if (fileListRequestIdRef.current === requestId) setIsLoadingFiles(false);
     }
   };
 

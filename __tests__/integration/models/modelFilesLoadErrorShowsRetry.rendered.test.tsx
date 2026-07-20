@@ -119,4 +119,92 @@ describe('model detail Available Files — fetch failure shows Retry, success re
     });
     expect(view.queryByTestId('model-files-load-error')).toBeNull();
   }, 30000);
+
+  it('ignores a stale file-list response after the user selects a different model', async () => {
+    const slowId = 'org/slow-model';
+    const fastId = 'org/fast-model';
+    const models = [slowId, fastId].map(id => ({
+      id,
+      author: 'org',
+      downloads: 50,
+      likes: 1,
+      tags: ['gguf'],
+      lastModified: '',
+      siblings: [],
+    }));
+    let resolveSlowTree!: (response: Response) => void;
+    const slowTree = new Promise<Response>(resolve => {
+      resolveSlowTree = resolve;
+    });
+
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/models?')) {
+        return {
+          ok: true,
+          json: async () => (url.includes('search=race') ? models : []),
+        } as Response;
+      }
+      if (url.endsWith(`/models/${slowId}/tree/main`)) return slowTree;
+      if (url.endsWith(`/models/${fastId}/tree/main`)) {
+        return {
+          ok: true,
+          json: async () => [
+            { type: 'file', path: 'fast-Q4_K_M.gguf', size: 2 * GB },
+          ],
+        } as Response;
+      }
+      const modelId = decodeURIComponent(
+        url.split('/models/')[1] || 'org/unknown',
+      );
+      return {
+        ok: true,
+        json: async () =>
+          models.find(model => model.id === modelId) ?? models[0],
+      } as Response;
+    }) as typeof fetch;
+
+    const { rtl, view } = await renderMainApp({
+      boundary: {
+        download: true,
+        ram: { platform: 'android', totalBytes: 8 * GB, availBytes: 6 * GB },
+      },
+    });
+    const { fireEvent, waitFor, act } = rtl;
+
+    fireEvent.press(view.getByTestId('models-tab'));
+    await waitFor(() => expect(view.getByTestId('models-screen')).toBeTruthy());
+    fireEvent.changeText(view.getByTestId('search-input'), 'race');
+    await act(async () => {
+      fireEvent(view.getByTestId('search-input'), 'submitEditing');
+      await new Promise(resolve => setTimeout(resolve, 600));
+    });
+    await waitFor(() => {
+      expect(view.getByText('slow-model')).toBeTruthy();
+      expect(view.getByText('fast-model')).toBeTruthy();
+    });
+
+    fireEvent.press(view.getByText('slow-model'));
+    await waitFor(() =>
+      expect(view.getByTestId('model-detail-screen')).toBeTruthy(),
+    );
+    fireEvent.press(view.getByTestId('model-detail-back'));
+    await waitFor(() => expect(view.getByText('fast-model')).toBeTruthy());
+    fireEvent.press(view.getByText('fast-model'));
+    await waitFor(() => expect(view.getByText('fast-Q4_K_M')).toBeTruthy());
+
+    await act(async () => {
+      resolveSlowTree({
+        ok: true,
+        json: async () => [
+          { type: 'file', path: 'slow-Q8_0.gguf', size: 3 * GB },
+        ],
+      } as Response);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(view.getByText('fast-Q4_K_M')).toBeTruthy());
+    expect(view.queryByText('slow-Q8_0')).toBeNull();
+    expect(view.getByText('fast-model')).toBeTruthy();
+    view.unmount();
+  }, 30000);
 });
