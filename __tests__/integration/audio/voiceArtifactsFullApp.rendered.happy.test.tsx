@@ -116,15 +116,19 @@ describe('P2 full-App Voice rendering artifacts', () => {
       view.queryAllByTestId(/^audio-bubble-/).length;
     await recordOnce(journey, 'Use the calculator for 500 times 321');
 
-    await rtl.waitFor(() => {
-      expect(view.getByTestId('tool-result-label-calculator')).toBeTruthy();
-      expect(view.getAllByTestId(/^audio-bubble-/)).toHaveLength(
-        bubbleCountBeforeTurn + 1,
-      );
-      expect(
-        rtl.within(view.getByTestId('chat-screen')).queryByText('#'),
-      ).toBeNull();
-    });
+    await rtl.waitFor(
+      () => {
+        expect(view.getByTestId('tool-result-label-calculator')).toBeTruthy();
+        expect(view.queryByTestId('stop-button')).toBeNull();
+        expect(view.getAllByTestId(/^audio-bubble-/)).toHaveLength(
+          bubbleCountBeforeTurn + 1,
+        );
+        expect(
+          rtl.within(view.getByTestId('chat-screen')).queryByText('#'),
+        ).toBeNull();
+      },
+      { timeout: 8000 },
+    );
     view.unmount();
   }, 30000);
 
