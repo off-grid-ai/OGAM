@@ -27,6 +27,32 @@ describe('P2 Settings navigation journeys', () => {
             : view.getByText(evidence);
         expect(destination).toBeTruthy();
       });
+
+      const back =
+        cardLabel === 'Remote Servers'
+          ? view.getByTestId('remote-servers-back-button')
+          : cardLabel === 'Off Grid AI PRO'
+          ? view.getByTestId('pro-detail-back-button')
+          : view
+              .UNSAFE_getAllByProps({ name: 'arrow-left' })
+              .find(icon => icon.props.name === 'arrow-left')?.parent;
+      if (!back) throw new Error(`${cardLabel} has no back control`);
+      rtl.fireEvent.press(back);
+      await rtl.waitFor(() => {
+        expect(view.getAllByText('Settings').length).toBeGreaterThan(0);
+        expect(
+          view.getByTestId('settings-tab').props.accessibilityState,
+        ).toEqual(expect.objectContaining({ selected: true }));
+        if (cardLabel === 'Off Grid AI PRO') {
+          expect(view.queryByTestId('pro-detail-back-button')).toBeNull();
+        } else {
+          const destination =
+            evidenceKind === 'testID'
+              ? view.queryByTestId(evidence)
+              : view.queryByText(evidence);
+          expect(destination).toBeNull();
+        }
+      });
       view.unmount();
     },
   );

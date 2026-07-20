@@ -15,7 +15,7 @@ row does **not** mean that no test exists.
   currently contributes 48 additional journeys, including the first P3 set.
 - P0: **24 verified**, **9 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
 - P1: **115 verified**, **3 partial/device-gated**, **0 confirmed gaps**, **0 audit pending**.
-- P2: **56 verified**, **0 partial/device-gated**, **1 confirmed gap**, **27 audit pending**.
+- P2: **80 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **4 audit pending**.
 - P3: **0 verified**, **0 partial/device-gated**, **0 confirmed gaps**, **10 audit pending**.
 - `[x]` verified; `[~]` automated portion verified with a physical-device gate left; `[ ]` confirmed coverage gap; `[?]` evidence audit pending.
 - This file is updated as journeys are verified or product fixes land.
@@ -96,15 +96,21 @@ row does **not** mean that no test exists.
 - [x] APP-P2-005 Cache clearing updates storage totals and preserves user conversations and models
   - `__tests__/integration/settings/storageMaintenanceFullApp.rendered.happy.test.tsx`
 - [?] APP-P2-006 Tool enablement and disablement persist and affect only subsequent turns
-- [?] APP-P2-007 MCP servers reconnect after relaunch without duplicate clients, tools, or routes
+- [x] APP-P2-007 MCP servers reconnect after relaunch without duplicate clients, tools, or routes
+  - `__tests__/integration/tools/mcpFullApp.rendered.happy.test.tsx`
 - [?] APP-P2-008 MCP OAuth cancel, expiry, refresh, and retry return to an actionable state
 - [?] APP-P2-009 LAN discovery deduplicates repeated scans and supports multiple configured servers
 - [x] APP-P2-010 Supported document types import and preview with stable names and metadata
   - `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
-- [?] APP-P2-011 Every Settings card opens its registered screen and returns without losing tab state
-- [?] APP-P2-012 External community and support links fail gracefully when no handler is available
-- [?] APP-P2-013 Debug logs can be viewed, exported, and cleared without leaking secrets
-- [?] APP-P2-014 Dynamic Pro settings and screen registration stays deduplicated across refresh and reactivation
+- [x] APP-P2-011 Every Settings card opens its registered screen and returns without losing tab state
+  - `__tests__/integration/settings/settingsNavigation.rendered.happy.test.tsx`
+- [x] APP-P2-012 External community and support links fail gracefully when no handler is available
+  - `__tests__/integration/settings/settingsPolishFullApp.rendered.happy.test.tsx`
+- [x] APP-P2-013 Debug logs can be viewed, exported, and cleared without leaking secrets
+  - `__tests__/integration/settings/settingsPolishFullApp.rendered.happy.test.tsx`
+  - `__tests__/unit/utils/logSanitizer.test.ts`
+- [x] APP-P2-014 Dynamic Pro settings and screen registration stays deduplicated across refresh and reactivation
+  - `__tests__/integration/onboarding/proEntitlementFullApp.rendered.happy.test.tsx`
 
 ### P3 additions
 
@@ -384,11 +390,11 @@ row does **not** mean that no test exists.
 
 ### 6 KB/Projects
 
-- [?] #114 Preview a KB document - existing-test evidence audit pending
-- [?] #115 Scanned PDF clear message - existing-test evidence audit pending
-- [?] #116 >5MB file rejected - existing-test evidence audit pending
-- [?] #120 Context-full new chat keeps project - existing-test evidence audit pending
-- [?] #121 Edit a project - existing-test evidence audit pending
+- [x] #114 Preview a KB document - `__tests__/integration/knowledge-base/projectKnowledgeBaseFullApp.rendered.happy.test.tsx`
+- [x] #115 Scanned PDF clear message - `__tests__/integration/knowledge-base/kbScannedPdfMessage.rendered.redflow.test.tsx`
+- [x] #116 >5MB file rejected - `__tests__/integration/knowledge-base/kbFileSizeGuard.rendered.happy.test.tsx`
+- [x] #120 Context-full new chat keeps project - `__tests__/integration/generation/contextFullNewChatFullApp.rendered.redflow.test.tsx`
+- [x] #121 Edit a project - `__tests__/integration/projects/createProjectFullApp.rendered.happy.test.tsx`
 
 ### 7 Tools
 
@@ -397,18 +403,18 @@ row does **not** mean that no test exists.
 - [x] #126 Web search tool runs
 - [x] #128 Thinking + tool + answer render in order
 - [x] #130 Stringified tool args parsed
-- [?] #131 Tool router no false positive - existing-test evidence audit pending
-- [?] #136 MCP tool error handled - existing-test evidence audit pending
-- [?] #137 MCP guide screen renders - existing-test evidence audit pending
+- [x] #131 Tool router no false positive - `__tests__/integration/chat/toolRouterFalsePositive.redflow.test.ts`
+- [x] #136 MCP tool error handled - `__tests__/integration/tools/mcpFullApp.rendered.happy.test.tsx`
+- [x] #137 MCP guide screen renders - `__tests__/integration/tools/mcpFullApp.rendered.happy.test.tsx`
 
 ### 8 Remote
 
 - [x] #139 No phantom servers on empty scan
 - [x] #140 Remote model has a visible indicator
-- [ ] #141 Remote reasoning renders (Ollama)
-- [?] #146 Remote request timeout - existing-test evidence audit pending
-- [?] #147 Malformed remote response handled - existing-test evidence audit pending
-- [?] #148 Local select makes the model active - existing-test evidence audit pending
+- [x] #141 Remote reasoning renders (Ollama) - `__tests__/integration/generation/remoteOllamaReasoningRenders.rendered.redflow.test.tsx`
+- [x] #146 Remote request timeout - `__tests__/integration/generation/remoteFailureRecoveryFullApp.rendered.redflow.test.tsx`
+- [x] #147 Malformed remote response handled - `__tests__/integration/generation/remoteFailureRecoveryFullApp.rendered.redflow.test.tsx`
+- [x] #148 Local select makes the model active - `__tests__/integration/generation/remoteFailureRecoveryFullApp.rendered.redflow.test.tsx`
 - [x] #149 Home Text count truthful with remote active
 
 ### 9 Enhancement
@@ -418,20 +424,20 @@ row does **not** mean that no test exists.
 
 ### 11 Polish
 
-- [?] #156 Theme switch applies (System/Light/Dark) - existing-test evidence audit pending
+- [x] #156 Theme switch applies (System/Light/Dark) - `__tests__/integration/settings/settingsPolishFullApp.rendered.happy.test.tsx`
 - [x] #157 Empty state: no models
 - [x] #158 Empty state: no chats
 - [x] #159 Empty state: no KB docs
-- [?] #160 Long-text wrapping - existing-test evidence audit pending
-- [?] #161 Orientation behavior - existing-test evidence audit pending
+- [x] #160 Long-text wrapping - `__tests__/integration/generation/longTextWrappingFullApp.rendered.happy.test.tsx`
+- [x] #161 Orientation behavior - `__tests__/integration/settings/settingsPolishFullApp.rendered.happy.test.tsx`
 - [x] #162 About screen renders
 - [x] #163 Storage usage screen
 - [x] #165 Share/promo sheet once per session
 - [?] #175 Thermal / long-context stress - existing-test evidence audit pending
-- [?] #176 Stay-in-the-loop card placement - existing-test evidence audit pending
-- [?] #177 Follow on X opens the profile - existing-test evidence audit pending
-- [?] #178 Join Slack opens the invite - existing-test evidence audit pending
-- [?] #179 Share on X prefilled - existing-test evidence audit pending
+- [x] #176 Stay-in-the-loop card placement - `__tests__/integration/settings/settingsPolishFullApp.rendered.happy.test.tsx`
+- [x] #177 Follow on X opens the profile - `__tests__/integration/settings/settingsPolishFullApp.rendered.happy.test.tsx`
+- [x] #178 Join Slack opens the invite - `__tests__/integration/settings/settingsPolishFullApp.rendered.happy.test.tsx`
+- [x] #179 Share on X prefilled - `__tests__/integration/settings/settingsPolishFullApp.rendered.happy.test.tsx`
 
 ### 12 This-release
 

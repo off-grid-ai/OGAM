@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Linking } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Linking,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../../components';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -13,6 +21,7 @@ import { loadProFeatures } from '../../bootstrap/loadProFeatures';
 import { getPricingCopy } from '../../utils/proPricing';
 import { ProManageSection } from './ProManageSection';
 import { ProUnlockModal } from './ProUnlockModal';
+import type { RootStackParamList } from '../../navigation/types';
 
 // Off Grid AI Pro is the ambient intelligence layer across desktop + phone, not a
 // mobile feature list. These pillars mirror the early-access page framing.
@@ -45,19 +54,29 @@ const PILLARS = [
 ];
 
 export const ProDetailScreen: React.FC = () => {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const hasRegisteredPro = useAppStore((s) => s.hasRegisteredPro);
+  const hasRegisteredPro = useAppStore(s => s.hasRegisteredPro);
   const [verifyModalVisible, setVerifyModalVisible] = useState(false);
   const pricing = getPricingCopy();
 
-  const openPayPage = () => { Linking.openURL(withUtm(PRO_PAY_PAGE_URL, 'pro-detail')).catch(() => {}); };
-  const openDesktop = () => { Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'pro-detail')).catch(() => {}); };
+  const openPayPage = () => {
+    Linking.openURL(withUtm(PRO_PAY_PAGE_URL, 'pro-detail')).catch(() => {});
+  };
+  const openDesktop = () => {
+    Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'pro-detail')).catch(
+      () => {},
+    );
+  };
   const openVerifyModal = () => setVerifyModalVisible(true);
 
   // Activation verified: load the pro bundle now so Pro lights up live (the
   // reactive appRoot slot mounts the engine without a restart). Registries dedupe.
-  const handleUnlocked = () => { loadProFeatures(true).catch(() => {}); };
+  const handleUnlocked = () => {
+    loadProFeatures(true).catch(() => {});
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -69,6 +88,16 @@ export const ProDetailScreen: React.FC = () => {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoRow}>
+            <TouchableOpacity
+              testID="pro-detail-back-button"
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Icon name="arrow-left" size={20} color={colors.text} />
+            </TouchableOpacity>
             <View style={styles.logoGrid}>
               <View style={styles.logoDotRow}>
                 <View style={styles.logoDot} />
@@ -97,7 +126,10 @@ export const ProDetailScreen: React.FC = () => {
               >
                 <Icon name="key" size={16} color={colors.primary} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.getProButton} onPress={openPayPage}>
+              <TouchableOpacity
+                style={styles.getProButton}
+                onPress={openPayPage}
+              >
                 <Text style={styles.getProButtonText}>Get Pro</Text>
               </TouchableOpacity>
             </View>
@@ -114,7 +146,9 @@ export const ProDetailScreen: React.FC = () => {
               <Text style={styles.heroTitle}>Intelligence, democratized.</Text>
               <Text style={styles.heroPrimary}>On your device.</Text>
               <Text style={styles.heroSubtitle}>
-                Ambient and proactive. It sees your day, remembers it, and gets ahead of you - and the model runs on your own hardware, so nothing is sent anywhere.
+                Ambient and proactive. It sees your day, remembers it, and gets
+                ahead of you - and the model runs on your own hardware, so
+                nothing is sent anywhere.
               </Text>
             </View>
 
@@ -131,7 +165,7 @@ export const ProDetailScreen: React.FC = () => {
             {/* Ambient pillars */}
             <View style={styles.pillarsSection}>
               <Text style={styles.sectionLabel}>ONE PRIVATE LAYER</Text>
-              {PILLARS.map((p) => (
+              {PILLARS.map(p => (
                 <View key={p.title} style={styles.pillarRow}>
                   <View style={styles.pillarIconWrap}>
                     <Icon name={p.icon} size={18} color={colors.primary} />
@@ -143,7 +177,8 @@ export const ProDetailScreen: React.FC = () => {
                 </View>
               ))}
               <Text style={styles.julyNote}>
-                We are building this through July. The full layer lands over the month, added as it ships.
+                We are building this through July. The full layer lands over the
+                month, added as it ships.
               </Text>
             </View>
 
@@ -178,7 +213,8 @@ export const ProDetailScreen: React.FC = () => {
           <View style={styles.desktopText}>
             <Text style={styles.desktopTitle}>Get Off Grid AI Desktop</Text>
             <Text style={styles.desktopDesc}>
-              Free for your Mac. Run your models there and use them from this phone over your own network.
+              Free for your Mac. Run your models there and use them from this
+              phone over your own network.
             </Text>
           </View>
           <Icon name="external-link" size={16} color={colors.textMuted} />
@@ -207,12 +243,32 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
   },
-  logoRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm },
+  backButton: {
+    width: 44,
+    height: 44,
+    marginLeft: -SPACING.sm,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  logoRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.sm,
+  },
   logoGrid: { gap: 3 },
   logoDotRow: { flexDirection: 'row' as const, gap: 3 },
-  logoDot: { width: 6, height: 6, borderRadius: 1, backgroundColor: colors.primary },
+  logoDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 1,
+    backgroundColor: colors.primary,
+  },
   logoText: { ...TYPOGRAPHY.body, color: colors.text },
-  headerActions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm },
+  headerActions: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.sm,
+  },
   headerKeyButton: {
     width: 36,
     height: 36,
@@ -245,9 +301,22 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   proActiveBadgeText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
 
   // Hero
-  hero: { paddingHorizontal: SPACING.xl, paddingVertical: SPACING.xl, alignItems: 'center' as const },
-  heroTitle: { ...TYPOGRAPHY.h1, color: colors.text, textAlign: 'center' as const },
-  heroPrimary: { ...TYPOGRAPHY.h1, color: colors.primary, textAlign: 'center' as const, marginBottom: SPACING.md },
+  hero: {
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.xl,
+    alignItems: 'center' as const,
+  },
+  heroTitle: {
+    ...TYPOGRAPHY.h1,
+    color: colors.text,
+    textAlign: 'center' as const,
+  },
+  heroPrimary: {
+    ...TYPOGRAPHY.h1,
+    color: colors.primary,
+    textAlign: 'center' as const,
+    marginBottom: SPACING.md,
+  },
   heroSubtitle: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
@@ -274,9 +343,23 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     gap: SPACING.xs,
     marginBottom: SPACING.sm,
   },
-  pricingLabel: { ...TYPOGRAPHY.label, color: colors.primary, letterSpacing: 0.8 },
-  pricingTitle: { ...TYPOGRAPHY.display, color: colors.text, textAlign: 'center' as const, marginBottom: SPACING.xs },
-  pricingSubtitle: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, textAlign: 'center' as const, lineHeight: 18 },
+  pricingLabel: {
+    ...TYPOGRAPHY.label,
+    color: colors.primary,
+    letterSpacing: 0.8,
+  },
+  pricingTitle: {
+    ...TYPOGRAPHY.display,
+    color: colors.text,
+    textAlign: 'center' as const,
+    marginBottom: SPACING.xs,
+  },
+  pricingSubtitle: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+    textAlign: 'center' as const,
+    lineHeight: 18,
+  },
 
   // Pillars
   pillarsSection: { paddingHorizontal: SPACING.xl, marginBottom: SPACING.lg },
@@ -286,7 +369,12 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     letterSpacing: 1,
     marginBottom: SPACING.md,
   },
-  pillarRow: { flexDirection: 'row' as const, gap: SPACING.md, paddingVertical: SPACING.md, alignItems: 'flex-start' as const },
+  pillarRow: {
+    flexDirection: 'row' as const,
+    gap: SPACING.md,
+    paddingVertical: SPACING.md,
+    alignItems: 'flex-start' as const,
+  },
   pillarIconWrap: {
     width: 40,
     height: 40,
@@ -297,11 +385,24 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   pillarText: { flex: 1, gap: 3 as number },
   pillarTitle: { ...TYPOGRAPHY.body, color: colors.text },
-  pillarDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, lineHeight: 18 },
-  julyNote: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, lineHeight: 18, marginTop: SPACING.md },
+  pillarDesc: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  julyNote: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textMuted,
+    lineHeight: 18,
+    marginTop: SPACING.md,
+  },
 
   // CTAs (Button supplies its own colours/border; these are layout-only).
-  ctaButton: { marginHorizontal: SPACING.xl, marginTop: SPACING.sm, marginBottom: SPACING.md },
+  ctaButton: {
+    marginHorizontal: SPACING.xl,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
   verifyButton: { marginHorizontal: SPACING.xl, marginBottom: SPACING.xl },
 
   // Desktop companion link
@@ -328,5 +429,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   desktopText: { flex: 1, gap: 3 as number },
   desktopTitle: { ...TYPOGRAPHY.body, color: colors.text },
-  desktopDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, lineHeight: 18 },
+  desktopDesc: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
 });
