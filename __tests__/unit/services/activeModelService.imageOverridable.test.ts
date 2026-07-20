@@ -8,10 +8,20 @@
  * request). This is the exact false branch qodo flagged.
  */
 jest.mock('../../../src/services/llm', () => ({
-  llmService: { loadModel: jest.fn(), unloadModel: jest.fn(), isModelLoaded: jest.fn(() => false), getLoadedModelPath: jest.fn(() => null), getMultimodalSupport: jest.fn(() => null) },
+  llmService: {
+    loadModel: jest.fn(),
+    unloadModel: jest.fn(),
+    isModelLoaded: jest.fn(() => false),
+    getLoadedModelPath: jest.fn(() => null),
+    getMultimodalSupport: jest.fn(() => null),
+  },
 }));
 jest.mock('../../../src/services/localDreamGenerator', () => ({
-  localDreamGeneratorService: { loadModel: jest.fn(), unloadModel: jest.fn(), isModelLoaded: jest.fn(async () => false) },
+  localDreamGeneratorService: {
+    loadModel: jest.fn(),
+    unloadModel: jest.fn(),
+    isModelLoaded: jest.fn(async () => false),
+  },
 }));
 jest.mock('../../../src/services/hardware', () => ({
   hardwareService: {
@@ -22,7 +32,11 @@ jest.mock('../../../src/services/hardware', () => ({
   },
 }));
 jest.mock('../../../src/services/modelResidency', () => ({
-  modelResidencyManager: { makeRoomFor: jest.fn(), runExclusive: jest.fn((_k: string, fn: () => any) => fn()) },
+  modelResidencyManager: {
+    makeRoomFor: jest.fn(),
+    hasSessionOverride: jest.fn(() => false),
+    runExclusive: jest.fn((_k: string, fn: () => any) => fn()),
+  },
 }));
 
 import { checkImageModelCanLoad } from '../../../src/services/activeModelService/loaders';
@@ -31,7 +45,11 @@ import { modelResidencyManager } from '../../../src/services/modelResidency';
 const makeRoomFor = modelResidencyManager.makeRoomFor as jest.Mock;
 const model = { id: 'img-1', name: 'Test Image Model', backend: 'gpu' } as any;
 const check = (opts?: { override?: boolean }) =>
-  checkImageModelCanLoad('img-1', model, opts) as Promise<{ canLoad: boolean; overridable?: boolean; error?: string }>;
+  checkImageModelCanLoad('img-1', model, opts) as Promise<{
+    canLoad: boolean;
+    overridable?: boolean;
+    error?: string;
+  }>;
 
 describe('checkImageModelCanLoad — survival-floor overridability', () => {
   beforeEach(() => jest.clearAllMocks());

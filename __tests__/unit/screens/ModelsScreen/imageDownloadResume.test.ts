@@ -1,6 +1,9 @@
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
-import { backgroundDownloadService, modelManager } from '../../../../src/services';
+import {
+  backgroundDownloadService,
+  modelManager,
+} from '../../../../src/services';
 import { registerAndNotify } from '../../../../src/screens/ModelsScreen/imageDownloadActions';
 import { resumeImageDownload } from '../../../../src/screens/ModelsScreen/imageDownloadResume';
 
@@ -22,6 +25,10 @@ jest.mock('react-native-zip-archive', () => ({
 // rule). Default to "complete" so mocked RNFS fixtures don't trip the post-unzip gate.
 jest.mock('../../../../src/utils/imageModelIntegrity', () => ({
   validateImageModelDir: jest.fn(async () => ({ complete: true, missing: [] })),
+  isImageModelDirUsable: jest.fn(async (path: string) => {
+    const fs = require('react-native-fs');
+    return (await fs.exists(path)) && (await fs.readDir(path)).length > 0;
+  }),
   ensureImageExtractionComplete: jest.fn(async () => {}),
 }));
 
@@ -50,9 +57,17 @@ jest.mock('../../../../src/screens/ModelsScreen/imageDownloadActions', () => ({
 
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
 const mockUnzip = unzip as jest.MockedFunction<typeof unzip>;
-const mockMoveCompletedDownload = backgroundDownloadService.moveCompletedDownload as jest.MockedFunction<typeof backgroundDownloadService.moveCompletedDownload>;
-const mockRegisterAndNotify = registerAndNotify as jest.MockedFunction<typeof registerAndNotify>;
-const mockGetImageModelsDirectory = modelManager.getImageModelsDirectory as jest.MockedFunction<typeof modelManager.getImageModelsDirectory>;
+const mockMoveCompletedDownload =
+  backgroundDownloadService.moveCompletedDownload as jest.MockedFunction<
+    typeof backgroundDownloadService.moveCompletedDownload
+  >;
+const mockRegisterAndNotify = registerAndNotify as jest.MockedFunction<
+  typeof registerAndNotify
+>;
+const mockGetImageModelsDirectory =
+  modelManager.getImageModelsDirectory as jest.MockedFunction<
+    typeof modelManager.getImageModelsDirectory
+  >;
 
 type DirItem = RNFS.ReadDirResItemT;
 
@@ -123,10 +138,18 @@ describe('resumeImageDownload', () => {
     headers = {};
 
     mockGetImageModelsDirectory.mockReturnValue(imageModelsDir);
-    mockedRNFS.exists.mockImplementation(async (path: string) => existingPaths.has(path));
-    mockedRNFS.readDir.mockImplementation(async (path: string) => dirEntries[path] ?? []);
-    mockedRNFS.stat.mockImplementation(async (path: string) => ({ size: statSizes[path] ?? 0 } as any));
-    mockedRNFS.read.mockImplementation(async (path: string) => headers[path] ?? '');
+    mockedRNFS.exists.mockImplementation(async (path: string) =>
+      existingPaths.has(path),
+    );
+    mockedRNFS.readDir.mockImplementation(
+      async (path: string) => dirEntries[path] ?? [],
+    );
+    mockedRNFS.stat.mockImplementation(
+      async (path: string) => ({ size: statSizes[path] ?? 0 } as any),
+    );
+    mockedRNFS.read.mockImplementation(
+      async (path: string) => headers[path] ?? '',
+    );
     mockedRNFS.mkdir.mockImplementation(async (path: string) => {
       existingPaths.add(path);
     });
@@ -206,7 +229,9 @@ describe('resumeImageDownload', () => {
     await resumeImageDownload(makeEntry(), makeDeps() as any);
 
     expect(mockedRNFS.unlink).toHaveBeenCalledWith(modelDir);
-    expect(mockSetStatus).toHaveBeenCalledWith('dl-1', 'failed', { message: 'corrupt zip' });
+    expect(mockSetStatus).toHaveBeenCalledWith('dl-1', 'failed', {
+      message: 'corrupt zip',
+    });
     expect(mockRegisterAndNotify).not.toHaveBeenCalled();
   });
 
