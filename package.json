@@ -14,6 +14,8 @@
     "sonar": "./scripts/run-sonar.sh",
     "start": "react-native start",
     "test": "jest --coverage --forceExit --detectOpenHandles && npm run test:android && npm run test:ios",
+    "release:gate": "./scripts/release-gate.sh",
+    "release:gate:fast": "./scripts/release-gate.sh --fast",
     "test:android": "cd android && ./gradlew :app:testDebugUnitTest",
     "test:ios": "cd ios && xcodebuild test -workspace OffgridMobile.xcworkspace -scheme OffgridMobile -destination 'platform=iOS Simulator,name=iPhone 16e' -only-testing:OffgridMobileTests | (xcpretty 2>/dev/null || cat)",
     "postinstall": "patch-package",
