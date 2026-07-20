@@ -143,9 +143,13 @@ function processToolCallChunk(
     Number.isInteger(tc.index) && tc.index! >= 0 ? tc.index : undefined;
   let target = index === undefined ? undefined : state.toolCalls[index];
 
-  if (!target && tc.id) {
+  // Create a target from EITHER an id or an index. Some OpenAI-compatible servers stream the first
+  // tool_calls chunk with `index` + `function.name` but defer the `id` to a later chunk — keying only
+  // off `id` dropped that chunk (losing the tool name) so the call never executed. When no id has
+  // arrived yet, slot a synthetic id off the index; a real id on a later chunk overwrites it below.
+  if (!target && (tc.id || index !== undefined)) {
     target = {
-      id: tc.id,
+      id: tc.id ?? `call_${index}`,
       type: 'function',
       function: { name: '', arguments: '' },
     };
