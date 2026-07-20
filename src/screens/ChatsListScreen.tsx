@@ -39,7 +39,7 @@ import {
   remoteServerManager,
 } from '../services';
 import { loadModelWithOverride } from '../services/loadModelWithOverride';
-import { Conversation } from '../types';
+import { Conversation, DownloadedModel, ONNXImageModel } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import {
   ConversationRenameRow,
@@ -110,24 +110,15 @@ export const ChatsListScreen: React.FC = () => {
     setShowModelSelector(true);
   };
 
-  const handleSelectTextModel = async (model: any) => {
-    // Shared inline Load-Anyway flow: a memory-blocked load offers "Load Anyway"
-    // here just like the chat screen (was a dead-end "Failed to load model").
-    await loadModelWithOverride(
-      opts => activeModelService.loadTextModel(model.id, undefined, opts),
-      {
-        setAlertState,
-        onAttemptStart: () => setIsModelLoading(true),
-        onAttemptEnd: () => setIsModelLoading(false),
-        onSuccess: () => {
-          setShowModelSelector(false);
-          navigation.navigate('Chat', {});
-        },
-      },
-    );
+  const handleSelectTextModel = (model: DownloadedModel) => {
+    // Match Home's new-chat flow: selecting records intent and enters Chat.
+    // The first send owns native loading, recovery, and any Load Anyway prompt.
+    activeModelService.selectTextModel(model.id);
+    setShowModelSelector(false);
+    navigation.navigate('Chat', {});
   };
 
-  const handleSelectImageModel = async (model: any) => {
+  const handleSelectImageModel = async (model: ONNXImageModel) => {
     await loadModelWithOverride(
       opts => activeModelService.loadImageModel(model.id, undefined, opts),
       {
