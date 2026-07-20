@@ -766,8 +766,10 @@ describe('ModelSettingsScreen', () => {
   describe('context length display formatting', () => {
     it('shows raw number when contextLength < 1024', () => {
       useAppStore.getState().updateSettings({ contextLength: 512, nBatch: 256 });
-      const { getAllByText } = renderWithSections('text');
-      expect(getAllByText('512').length).toBe(1);
+      const { getByTestId } = renderWithSections('text');
+      expect(getByTestId('llama-context-length-value')).toHaveTextContent(
+        '512',
+      );
     });
   });
 

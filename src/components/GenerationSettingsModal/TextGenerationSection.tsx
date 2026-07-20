@@ -7,7 +7,10 @@ import { useAppStore, selectIsLiteRT } from '../../stores';
 import { hardwareService } from '../../services';
 import { TEXT_GENERATION_DEFAULTS } from '../../config/textGenerationDefaults';
 import { createStyles } from './styles';
-import { getSelectableContextLimit } from '../../config/contextLimits';
+import {
+  getLlamaOutputTokenLimit,
+  getSelectableContextLimit,
+} from '../../config/contextLimits';
 import {
   CpuThreadsSlider,
   BatchSizeSlider,
@@ -38,8 +41,10 @@ const formatContext = (v: number) =>
 function buildLlamaConfig(
   modelMaxContext: number | null,
   totalMemory: number,
+  selectedContextLength: number,
 ): SettingConfig[] {
   const llmMax = getSelectableContextLimit(modelMaxContext, totalMemory);
+  const maxTokenLimit = getLlamaOutputTokenLimit(selectedContextLength, llmMax);
   return [
     {
       key: 'temperature',
@@ -54,7 +59,7 @@ function buildLlamaConfig(
       key: 'maxTokens',
       label: 'Max Tokens',
       min: 64,
-      max: 8192,
+      max: maxTokenLimit,
       step: 64,
       format: v => (v >= 1024 ? `${(v / 1024).toFixed(1)}K` : v.toString()),
       description: 'Maximum length of generated response',
@@ -208,12 +213,17 @@ const LiteRTTextGenerationSection: React.FC = () => {
 const LlamaTextGenerationSection: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const modelMaxContext = useAppStore(s => s.modelMaxContext);
+  const selectedContextLength = useAppStore(s => s.settings.contextLength);
   const totalMemory = useAppStore(
     s => s.deviceInfo?.totalMemory ?? 4 * 1024 * 1024 * 1024,
   );
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const config = buildLlamaConfig(modelMaxContext, totalMemory);
+  const config = buildLlamaConfig(
+    modelMaxContext,
+    totalMemory,
+    selectedContextLength,
+  );
   const basicKeys = new Set(['temperature', 'maxTokens', 'contextLength']);
   const advancedKeys = new Set(['topP', 'repeatPenalty']);
 

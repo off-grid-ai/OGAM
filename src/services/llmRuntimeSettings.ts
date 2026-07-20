@@ -1,5 +1,8 @@
 import { Platform } from 'react-native';
-import { getDeviceContextLimit } from '../config/contextLimits';
+import {
+  clampLlamaMaxTokens,
+  getDeviceContextLimit,
+} from '../config/contextLimits';
 import logger from '../utils/logger';
 import { LLMPerformanceStats } from './llmTypes';
 
@@ -57,14 +60,19 @@ export function getGpuLayersForDevice(
 export function buildCompletionParams(
   settings: {
     maxTokens?: number;
+    contextLength?: number;
     temperature?: number;
     topP?: number;
     repeatPenalty?: number;
   },
   options?: { disableCtxShift?: boolean },
 ): Record<string, any> {
+  const maxTokens = settings.maxTokens || RESPONSE_RESERVE;
   return {
-    n_predict: settings.maxTokens || RESPONSE_RESERVE,
+    n_predict:
+      settings.contextLength === undefined
+        ? maxTokens
+        : clampLlamaMaxTokens(maxTokens, settings.contextLength),
     temperature: settings.temperature ?? 0.7,
     top_k: 40,
     top_p: settings.topP ?? 0.95,

@@ -11,7 +11,10 @@ import {
   LiteRTTextGenerationAdvanced,
 } from './TextGenerationAdvanced';
 import { ShowGenerationDetailsToggle } from '../../components/settings/textGenAdvancedSections';
-import { getSelectableContextLimit } from '../../config/contextLimits';
+import {
+  getLlamaOutputTokenLimit,
+  getSelectableContextLimit,
+} from '../../config/contextLimits';
 
 const formatContext = (v: number) =>
   v >= 1024 ? `${(v / 1024).toFixed(0)}K` : String(v);
@@ -93,6 +96,11 @@ const LlamaTextSettings: React.FC = () => {
 
   const maxTokens = settings?.maxTokens ?? 512;
   const contextLength = settings?.contextLength ?? 2048;
+  const selectedContextLength = Math.min(contextLength, llmSliderMax);
+  const maxTokenLimit = getLlamaOutputTokenLimit(
+    selectedContextLength,
+    llmSliderMax,
+  );
 
   return (
     <Card style={styles.section}>
@@ -116,9 +124,9 @@ const LlamaTextSettings: React.FC = () => {
         testID="llama-max-tokens"
         label="Max Tokens"
         description="Maximum response length"
-        value={maxTokens}
+        value={Math.min(maxTokens, maxTokenLimit)}
         min={64}
-        max={8192}
+        max={maxTokenLimit}
         step={64}
         formatValue={formatMaxTokens}
         onChange={value => updateSettings({ maxTokens: value })}
@@ -133,7 +141,7 @@ const LlamaTextSettings: React.FC = () => {
             ? 'High context uses significant RAM and may crash on some devices'
             : null
         }
-        value={Math.min(contextLength, llmSliderMax)}
+        value={selectedContextLength}
         min={512}
         max={llmSliderMax}
         step={1024}

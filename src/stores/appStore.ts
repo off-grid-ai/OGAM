@@ -18,6 +18,7 @@ import {
   DEFAULT_SETTINGS,
   migratePersistedState,
 } from './appStorePersistence';
+import { clampLlamaMaxTokens } from '../config/contextLimits';
 
 function isUnknownLike(value: string): boolean {
   const normalized = value.trim().toLowerCase();
@@ -291,9 +292,19 @@ export const useAppStore = create<AppState>()(
       setModelMaxContext: ctx => set({ modelMaxContext: ctx }),
       settings: { ...DEFAULT_SETTINGS },
       updateSettings: newSettings =>
-        set(state => ({
-          settings: { ...state.settings, ...newSettings },
-        })),
+        set(state => {
+          const settings = { ...state.settings, ...newSettings };
+          if (
+            newSettings.contextLength !== undefined ||
+            newSettings.maxTokens !== undefined
+          ) {
+            settings.maxTokens = clampLlamaMaxTokens(
+              settings.maxTokens,
+              settings.contextLength,
+            );
+          }
+          return { settings };
+        }),
       resetSettings: () => set({ settings: { ...DEFAULT_SETTINGS } }),
       // Image models (ONNX-based)
       downloadedImageModels: [],

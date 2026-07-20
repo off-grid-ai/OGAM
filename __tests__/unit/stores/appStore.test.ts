@@ -1050,10 +1050,10 @@ describe('appStore', () => {
       expect(getAppState().settings.temperature).toBe(0);
     });
 
-    it('updateSettings can set maxTokens to very high value', () => {
+    it('updateSettings can set maxTokens to a large supported context', () => {
       const { updateSettings } = useAppStore.getState();
 
-      updateSettings({ maxTokens: 32768 });
+      updateSettings({ contextLength: 32768, maxTokens: 32768 });
 
       expect(getAppState().settings.maxTokens).toBe(32768);
     });

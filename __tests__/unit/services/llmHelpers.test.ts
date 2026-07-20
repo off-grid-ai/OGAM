@@ -534,6 +534,22 @@ describe('buildCompletionParams', () => {
     expect(params.penalty_repeat).toBe(1.1);
     expect(params.stop).toBeDefined();
   });
+
+  it('honors large contexts and clamps oversized output budgets', () => {
+    const largeContextParams = buildCompletionParams({
+      ...defaultSettings,
+      maxTokens: 32768,
+      contextLength: 32768,
+    });
+    const clampedParams = buildCompletionParams({
+      ...defaultSettings,
+      maxTokens: 4096,
+      contextLength: 2048,
+    });
+
+    expect(largeContextParams.n_predict).toBe(32768);
+    expect(clampedParams.n_predict).toBe(2048);
+  });
 });
 
 describe('initContextWithFallback — HTP device stripping and timeout', () => {
