@@ -109,6 +109,14 @@ describe('P0 full-app cold Whisper release recovery', () => {
     });
     await rtl.waitFor(() => expect(view.getByText(TRANSCRIPT)).toBeTruthy());
 
+    // Stay held beyond the cancelled attempt's normal trailing-capture window.
+    // A stale delayed stop from that first release must not terminate this take.
+    await rtl.act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 2700));
+    });
+    expect(view.getByTestId('recording-hint')).toBeTruthy();
+    expect(boundary.whisper!.realtimeActive()).toBe(true);
+
     rtl.fireEvent(
       view.getByTestId('voice-record-button'),
       'responderRelease',

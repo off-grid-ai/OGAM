@@ -7,7 +7,12 @@ import logger from '../utils/logger';
 /** Safely call a state setter only if the component is still mounted. */
 const useMountedRef = () => {
   const mounted = useRef(true);
-  useEffect(() => () => { mounted.current = false; }, []);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
   return mounted;
 };
 
@@ -37,7 +42,9 @@ export interface UseWhisperTranscriptionResult {
   clearResult: () => void;
 }
 
-export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscriptionParams): UseWhisperTranscriptionResult => {
+export const useWhisperTranscription = ({
+  ensureModelReady,
+}: UseWhisperTranscriptionParams): UseWhisperTranscriptionResult => {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [partialResult, setPartialResult] = useState('');
@@ -60,11 +67,14 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
   // capturing after the user navigated away without releasing the button — the
   // session stayed live for minutes with whisper pinned resident (B11). The
   // mountedRef only flips a flag; it never told the native session to stop.
-  useEffect(() => () => {
-    if (whisperService.isCurrentlyTranscribing()) {
-      whisperService.forceReset();
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (whisperService.isCurrentlyTranscribing()) {
+        whisperService.forceReset();
+      }
+    },
+    [],
+  );
 
   // NOTE: whisper is NOT eager-loaded here. It is warmed once at launch by
   // modelPreloader.preloadStt (fits-gated) and loaded on demand by startRecording. An eager
@@ -128,6 +138,21 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
 
     // Supersede any in-flight start still awaiting model load — it must not resurrect a recording.
     startNonce.current++;
+
+    // A release can arrive while startRecording is still parked in ensureModelReady().
+    // There is no capture to trail or stop in that state. Scheduling the ordinary
+    // delayed stop anyway lets it fire during the user's next recording and stop
+    // that new session. Superseding the parked start above is the complete cleanup.
+    if (!whisperService.isCurrentlyTranscribing()) {
+      if (mountedRef.current) {
+        setIsRecording(false);
+        setIsTranscribing(false);
+        setPartialResult('');
+      }
+      transcribingStartTime.current = null;
+      return;
+    }
+
     // Immediately update UI to show "Transcribing..." state
     // But keep recording in background for better accuracy
     if (mountedRef.current) setIsRecording(false);
@@ -137,8 +162,14 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
       // Continue recording for a bit longer to capture trailing audio
       // This helps Whisper process the speech more accurately
       // User sees "Transcribing..." during this time
-      logger.log('[Whisper] Capturing trailing audio for', TRAILING_RECORD_TIME, 'ms...');
-      await new Promise<void>(resolve => setTimeout(() => resolve(), TRAILING_RECORD_TIME));
+      logger.log(
+        '[Whisper] Capturing trailing audio for',
+        TRAILING_RECORD_TIME,
+        'ms...',
+      );
+      await new Promise<void>(resolve =>
+        setTimeout(() => resolve(), TRAILING_RECORD_TIME),
+      );
 
       // Check if cancelled or unmounted during the wait
       if (isCancelled.current || !mountedRef.current) {
@@ -187,7 +218,9 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
     // first session was still tearing down → the "State: -100" collision (B12). A
     // double-tap must be ONE clean recording, so ignore the extra start.
     if (isRecording || whisperService.isCurrentlyTranscribing()) {
-      logger.log('[Whisper] Already recording — ignoring redundant start (no second session)');
+      logger.log(
+        '[Whisper] Already recording — ignoring redundant start (no second session)',
+      );
       return;
     }
 
@@ -196,7 +229,9 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
     const currentNonce = ++startNonce.current;
 
     if (!whisperService.isModelLoaded()) {
-      logger.log('[Whisper] Model not loaded, ensuring readiness (blocked → free generation model → retry)...');
+      logger.log(
+        '[Whisper] Model not loaded, ensuring readiness (blocked → free generation model → retry)...',
+      );
       // Route through the SAME recovery the file path uses: a 'blocked' single-model refusal frees the
       // resident generation model and retries. Never call loadModel() directly here — a 'blocked' return
       // is not a throw, so it would dead-end into startRealtimeTranscription → 'No Whisper model loaded'.
@@ -207,11 +242,15 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
         ready = false;
       }
       if (startNonce.current !== currentNonce || !mountedRef.current) {
-        logger.log('[Whisper] Start superseded during model load (stopped/cancelled) — aborting, no ghost recording');
+        logger.log(
+          '[Whisper] Start superseded during model load (stopped/cancelled) — aborting, no ghost recording',
+        );
         return;
       }
       if (!ready) {
-        setError("Couldn't load the voice model — free some memory and try again");
+        setError(
+          "Couldn't load the voice model — free some memory and try again",
+        );
         return;
       }
     }
@@ -229,8 +268,12 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
 
       logger.log('[Whisper] Starting realtime transcription...');
 
-      await whisperService.startRealtimeTranscription((result) => {
-        logger.log('[Whisper] Transcription result:', result.isCapturing, result.text?.slice(0, 50));
+      await whisperService.startRealtimeTranscription(result => {
+        logger.log(
+          '[Whisper] Transcription result:',
+          result.isCapturing,
+          result.text?.slice(0, 50),
+        );
 
         if (isCancelled.current || !mountedRef.current) return;
 
@@ -266,7 +309,8 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
       // Force reset whisper service state
       whisperService.forceReset();
       if (mountedRef.current) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to start recording';
+        const errorMsg =
+          err instanceof Error ? err.message : 'Failed to start recording';
         setError(errorMsg);
         setIsRecording(false);
         setIsTranscribing(false);
