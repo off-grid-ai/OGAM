@@ -1176,6 +1176,11 @@ async function forceFinalTextResponse(
   state.streamedContent = '';
   state.reasoningContent = '';
   state.firstTokenFired = false;
+  // Scope the forced final round like every other round: a cumulative-replay runtime would otherwise
+  // leak the prior rounds' reasoning into the final thinking block (this round ran unscoped because
+  // it returns before the per-iteration arming below).
+  state.reasoningPrefixProbe = '';
+  state.probingRepeatedReasoning = state.previousRoundReasoning.length > 0;
   const forcedOnStream = buildStreamHandler(ctx, state);
   const { fullResponse: forcedResponse } = await callLLMWithRetry(
     loopMessages,
