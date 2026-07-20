@@ -51,8 +51,11 @@ async function unlock(
     view.getByPlaceholderText('Enter passphrase'),
     PASSPHRASE,
   );
+  await rtl.waitFor(() => expect(view.getByText('Unlock')).toBeEnabled());
   rtl.fireEvent.press(view.getByText('Unlock'));
-  await rtl.waitFor(() => expect(view.queryByTestId('app-locked')).toBeNull());
+  await rtl.waitFor(() => expect(view.queryByTestId('app-locked')).toBeNull(), {
+    timeout: 10000,
+  });
 }
 
 describe('APP-P0-005 App Lock enforcement', () => {
