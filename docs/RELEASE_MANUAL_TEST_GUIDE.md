@@ -1,7 +1,7 @@
 # Off Grid Mobile release test guide
 
 Use RELEASE_TEST_CHECKLIST.csv as the single runnable checklist. It contains
-219 end-to-end checks across fresh install, downloads, text/image/voice, memory,
+247 end-to-end checks across fresh install, downloads, text/image/voice, memory,
 projects and knowledge base, tools/MCP, remote models, persistence, current-release
 regressions, and performance. Fill the Android and iOS cells with PASS, FAIL,
 BLOCKED, or N/A, and put evidence or a short reason in Notes / annotations.

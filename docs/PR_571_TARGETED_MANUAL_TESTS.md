@@ -1,7 +1,7 @@
 # PR #571 Targeted Manual Tests
 
 This is the smallest honest device pass for PR #571. It is intentionally smaller than the
-canonical 219-row release checklist, but it is not a tiny smoke test: this PR changes production
+canonical 247-row release checklist, but it is not a tiny smoke test: this PR changes production
 code across onboarding, downloads, chat/generation, voice, image/vision, memory residency,
 projects, tools/MCP, remote models, settings, persistence, and Pro lifecycle.
 
@@ -109,7 +109,14 @@ regression over 15% is a release investigation, not an automatic waiver.
 - [ ] 218 — Low-RAM curated LiteRT remains visible with a warning
 - [ ] 219 — TTS memory-pressure failure remains actionable
 
+## Pass E — changed-owner and legacy-replacement journeys
+
+- [ ] 220–236 — Changed production-owner blast radius
+- [ ] 237–240 — P0 fault-recovery device confirmation
+- [ ] 241–244 — Retained PR #558 behavior not covered by the earlier rows
+- [ ] 245–247 — Legacy test replacement device gates
+
 ## Exit rule
 
-This targeted pass is sufficient for PR-specific manual verification only. The full 219-row list
+This targeted pass is sufficient for PR-specific manual verification only. The full 247-row list
 remains the release checklist because the production diff spans nearly every major app subsystem.
