@@ -4,6 +4,7 @@ import { DownloadedModel, LlamaDownloadedModel, LiteRTDownloadedModel, ModelFile
 import { buildDownloadedModel, persistDownloadedModel, loadDownloadedModels, saveModelsList } from './storage';
 import { copyFileWithProgress } from './copyFile';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
+import { ensureImageExtractionComplete } from '../../utils/imageModelIntegrity';
 // Single source of truth for projector detection + model↔projector matching (see src/services/mmproj.ts).
 import { isMMProjFile, pickMmProjForModel } from '../mmproj';
 import { validateModelFile } from '../llmSafetyChecks';
@@ -221,9 +222,24 @@ export async function reconcileFinishedImageDownloads(opts: ReconcileImageModels
 
           if (zipOk) {
             await unzip(zipPath, item.path);
+            const backend = detectBackend(item.name);
+            // Same completeness gate as the live/resume download paths: a truncated-but-PK zip yields
+            // a partial tree. NEVER mark _ready / register a partial model (it crashes natively on
+            // load) — throw → clean up so it resurfaces as re-downloadable.
+            try {
+              await ensureImageExtractionComplete({
+                backend,
+                modelDir: item.path,
+                zipPath,
+                modelId: item.name,
+              });
+            } catch {
+              await RNFS.unlink(item.path).catch(() => {});
+              await RNFS.unlink(zipPath).catch(() => {});
+              continue;
+            }
             await RNFS.unlink(zipPath).catch(() => {});
             await RNFS.writeFile(readyPath, '', 'utf8').catch(() => {});
-            const backend = detectBackend(item.name);
             let modelPath = item.path;
             if (backend === 'coreml') {
               modelPath = await resolveCoreMLModelDir(item.path).catch(() => item.path);
