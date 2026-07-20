@@ -164,11 +164,9 @@ Tests run across three platforms on every PR:
 | React Native | Jest + RNTL | Stores, services, components, screens, contracts |
 | Android | JUnit | LocalDream, DownloadManager, BroadcastReceiver |
 | iOS | XCTest | PDFExtractor, CoreMLDiffusion, DownloadManager |
-| E2E | Maestro | Critical path flows (launch, chat, models, downloads) |
 
 ```bash
 npm test              # Run all tests (Jest + Android + iOS)
-npm run test:e2e      # Run Maestro E2E flows (requires running app)
 ```
 
 This project is tested with BrowserStack.
