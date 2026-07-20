@@ -1087,6 +1087,39 @@ interface ToolLoopState {
   thinkingDoneFired: boolean;
   streamedContent: string;
   reasoningContent: string;
+  previousRoundReasoning: string;
+  reasoningPrefixProbe: string;
+  probingRepeatedReasoning: boolean;
+}
+
+/**
+ * Some native runtimes stream `reasoning_content` cumulatively across tool
+ * iterations, briefly replaying the previous round before adding the current
+ * one. Final completion metadata is scoped correctly, but forwarding that wire
+ * shape verbatim leaks round one into round two while it is visible. Hold only
+ * the possible repeated prefix; emit it unchanged as soon as it diverges.
+ */
+function scopeReasoningToCurrentRound(
+  state: ToolLoopState,
+  incoming: string | undefined,
+): string | undefined {
+  if (!incoming) return undefined;
+  if (!state.probingRepeatedReasoning) return incoming;
+
+  state.reasoningPrefixProbe += incoming;
+  const probe = state.reasoningPrefixProbe;
+  const previous = state.previousRoundReasoning;
+
+  if (probe.startsWith(previous)) {
+    state.probingRepeatedReasoning = false;
+    state.reasoningPrefixProbe = '';
+    return probe.slice(previous.length) || undefined;
+  }
+  if (previous.startsWith(probe)) return undefined;
+
+  state.probingRepeatedReasoning = false;
+  state.reasoningPrefixProbe = '';
+  return probe;
 }
 
 function buildStreamHandler(
@@ -1106,9 +1139,17 @@ function buildStreamHandler(
       ctx.callbacks?.onFirstToken?.();
     }
     if (chunk.content) state.streamedContent += chunk.content;
-    if (chunk.reasoningContent)
-      state.reasoningContent += chunk.reasoningContent;
-    ctx.onStream!(data);
+    const reasoningContent = scopeReasoningToCurrentRound(
+      state,
+      chunk.reasoningContent,
+    );
+    if (reasoningContent) state.reasoningContent += reasoningContent;
+    if (chunk.content || reasoningContent) {
+      ctx.onStream!({
+        ...(chunk.content ? { content: chunk.content } : {}),
+        ...(reasoningContent ? { reasoningContent } : {}),
+      });
+    }
   };
 }
 
@@ -1273,6 +1314,9 @@ export async function runToolLoop(
     thinkingDoneFired: false,
     streamedContent: '',
     reasoningContent: '',
+    previousRoundReasoning: '',
+    reasoningPrefixProbe: '',
+    probingRepeatedReasoning: false,
   };
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
     if (ctx.isAborted()) {
@@ -1290,6 +1334,10 @@ export async function runToolLoop(
 
     state.streamedContent = '';
     state.reasoningContent = '';
+    state.firstTokenFired = false;
+    state.thinkingDoneFired = false;
+    state.reasoningPrefixProbe = '';
+    state.probingRepeatedReasoning = state.previousRoundReasoning.length > 0;
 
     const onStream = buildStreamHandler(ctx, state);
     const { fullResponse, toolCalls, interrupted } = await callLLMWithRetry(
@@ -1382,6 +1430,9 @@ export async function runToolLoop(
     };
     loopMessages.push(assistantMsg);
     chatStore.addMessage(ctx.conversationId, assistantMsg);
+    if (state.reasoningContent.trim()) {
+      state.previousRoundReasoning = state.reasoningContent.trim();
+    }
 
     await executeToolCalls(ctx, cappedToolCalls, loopMessages);
 

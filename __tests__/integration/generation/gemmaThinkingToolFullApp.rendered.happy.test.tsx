@@ -8,6 +8,8 @@ import {
 } from '../../harness/appJourney';
 
 const REASONING = 'I should use the calculator before answering.';
+const SECOND_REASONING = 'Now I should explain the calculated result.';
+const SECOND_REASONING_PREFIX = 'Now I should explain';
 const TOOL_RESULT = '128*256 = 32768';
 const ANSWER = 'The answer is 32768.';
 
@@ -67,9 +69,28 @@ describe('P0 full-App Gemma native thinking and tool journey', () => {
         text: '<tool_call>{"name":"calculator","arguments":{"expression":"128*256"}}</tool_call>',
         reasoning: REASONING,
       },
-      { text: ANSWER },
+      {
+        text: ANSWER,
+        reasoning: SECOND_REASONING,
+        streamReasoning: `${REASONING}${SECOND_REASONING}`,
+        pauseAfter: `${REASONING}${SECOND_REASONING_PREFIX}`,
+      },
     ]);
     sendChatMessage(rtl, view, 'Think, then calculate 128 times 256');
+
+    // Some native runtimes briefly replay the previous round at the start of
+    // the next cumulative reasoning stream. The live second block must own only
+    // round two; waiting for finalization to repair it still leaks stale text.
+    const liveThinking = await rtl.waitFor(
+      () => {
+        const blocks = view.getAllByTestId('thinking-block-content');
+        expect(blocks).toHaveLength(1);
+        return blocks[0];
+      },
+      { timeout: 5000 },
+    );
+    const liveThinkingText = textContent(liveThinking.props.children);
+    boundary.llama!.releaseStream();
 
     await rtl.waitFor(
       () => {
@@ -83,11 +104,17 @@ describe('P0 full-App Gemma native thinking and tool journey', () => {
       },
       { timeout: 8000 },
     );
+    expect(liveThinkingText).toBe(SECOND_REASONING_PREFIX);
 
-    rtl.fireEvent.press(view.getAllByTestId('thinking-block-toggle')[0]);
+    const thinkingToggles = view.getAllByTestId('thinking-block-toggle');
+    expect(thinkingToggles).toHaveLength(2);
+    rtl.fireEvent.press(thinkingToggles[0]);
+    rtl.fireEvent.press(thinkingToggles[1]);
     rtl.fireEvent.press(view.getByTestId('tool-result-label-calculator'));
     await rtl.waitFor(() => {
       expect(view.getAllByText(REASONING).length).toBeGreaterThan(0);
+      expect(view.getAllByText(SECOND_REASONING).length).toBeGreaterThan(0);
+      expect(view.queryByText(`${REASONING}${SECOND_REASONING}`)).toBeNull();
       expect(view.getByText(TOOL_RESULT)).toBeTruthy();
     });
 

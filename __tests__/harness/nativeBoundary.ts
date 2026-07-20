@@ -335,6 +335,10 @@ type LlamaCompletionScript = {
   pauseAfter?: string;
   holdBeforeStream?: boolean;
   thinkingText?: string;
+  /** Optional cumulative reasoning wire for this completion. The final native
+   * result still returns `reasoning`, matching runtimes that briefly replay a
+   * previous tool round while streaming and scope it correctly on completion. */
+  streamReasoning?: string;
   reasoning?: string;
   completionMeta?: CompletionMeta;
 };
@@ -395,6 +399,7 @@ function makeLlamaFake(
     pauseAfter?: string;
     holdBeforeStream?: boolean;
     thinkingText?: string;
+    streamReasoning?: string;
     reasoning?: string;
     completionMeta?: CompletionMeta;
   } = { text: '' };
@@ -407,6 +412,7 @@ function makeLlamaFake(
     pauseAfter: r.pauseAfter,
     holdBeforeStream: r.holdBeforeStream,
     thinkingText: r.thinkingText,
+    streamReasoning: r.streamReasoning,
     reasoning: r.reasoning,
     completionMeta: r.completionMeta,
   });
@@ -500,10 +506,21 @@ function makeLlamaFake(
           typeof onToken === 'function'
         ) {
           let accR = '';
-          for (const c of [...pending.reasoning]) {
+          const streamedReasoning =
+            pending.streamReasoning ?? pending.reasoning;
+          for (const c of [...streamedReasoning]) {
             if (stopRequested) break;
             accR += c;
             onToken({ token: c, reasoning_content: accR });
+            if (pending.pauseAfter && accR.endsWith(pending.pauseAfter)) {
+              // Real native decoding yields between tokens. Give the app's
+              // 50ms stream flusher one paint opportunity before holding this
+              // exact frame for an in-flight rendering assertion.
+              await new Promise<void>(res => setTimeout(res, 75));
+              await new Promise<void>(res => {
+                releaseFn = res;
+              });
+            }
           }
           let accC = '';
           for (const c of [...pending.text]) {
