@@ -181,9 +181,11 @@ async function validateAndResolveModels(
     const model = models[i];
     if (model.engine === 'llama') {
       const validation = await validateModelFile(model.filePath);
-      if (!validation.valid) {
+      // Delete ONLY on provable corruption. A transient stat/read failure (valid:false, corrupt:false)
+      // must keep the model — the file exists (confirmed above) and unlinking it would be data loss.
+      if (validation.corrupt) {
         logger.warn(
-          `[ModelManagerStorage] Removing invalid downloaded model ${
+          `[ModelManagerStorage] Removing corrupt downloaded model ${
             model.id
           }: ${validation.reason ?? 'validation failed'}`,
         );

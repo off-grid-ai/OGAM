@@ -411,7 +411,9 @@ export async function importLocalModel(opts: ImportLocalModelOpts): Promise<Down
   if (!isLitert) {
     const validation = await validateModelFile(destPath);
     if (!validation.valid) {
-      await RNFS.unlink(destPath).catch(() => {});
+      // Only unlink a provably-corrupt copy; a transient stat/read failure must not destroy a
+      // freshly-imported file (the import still fails so the user can retry).
+      if (validation.corrupt) await RNFS.unlink(destPath).catch(() => {});
       throw new Error(validation.reason ?? 'Invalid or incomplete GGUF model file');
     }
   }
