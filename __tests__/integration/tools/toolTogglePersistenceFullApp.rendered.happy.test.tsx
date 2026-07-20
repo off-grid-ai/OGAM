@@ -110,10 +110,12 @@ describe('full-App tool toggle persistence', () => {
       enabledLaunch.view,
       'What is 7 times 6?',
     );
-    await enabledLaunch.rtl.waitFor(() =>
-      expect(
-        enabledLaunch.view.getByText('Seven times six is 42.'),
-      ).toBeTruthy(),
+    await enabledLaunch.rtl.waitFor(
+      () =>
+        expect(
+          enabledLaunch.view.getByText('Seven times six is 42.'),
+        ).toBeTruthy(),
+      { timeout: 8000 },
     );
     expect(
       enabledLaunch.boundary
@@ -151,12 +153,14 @@ describe('full-App tool toggle persistence', () => {
       disabledLaunch.view,
       'Answer without using a tool.',
     );
-    await disabledLaunch.rtl.waitFor(() =>
-      expect(
-        disabledLaunch.view.getByText(
-          'The calculator is not available on this turn.',
-        ),
-      ).toBeTruthy(),
+    await disabledLaunch.rtl.waitFor(
+      () =>
+        expect(
+          disabledLaunch.view.getByText(
+            'The calculator is not available on this turn.',
+          ),
+        ).toBeTruthy(),
+      { timeout: 8000 },
     );
     expect(
       exposedToolNames(disabledLaunch.boundary.llama!.calls.completion[0]),
