@@ -12,7 +12,7 @@ import { useAppStore } from '../../../src/stores/appStore';
 import { OFF_GRID_DESKTOP_URL } from '../../../src/constants';
 import { withUtm } from '../../../src/utils/utm';
 
-const PAY_URL = 'https://offgridmobileai.co/pay';
+const PAY_URL = 'https://getoffgridai.co/pro/#buy';
 const mockActivateProByKey = jest.fn();
 const mockGetProLicenseInfo = jest.fn();
 const mockListProDevices = jest.fn();
@@ -25,8 +25,11 @@ jest.mock('../../../src/services/proLicenseService', () => ({
   deactivateProDevice: (...args: unknown[]) => mockDeactivateProDevice(...args),
   // ProManageSection renders the status line from this map — mirror the real export
   // so the mock can't diverge (an omitted map made PRO_TIER_META[tier] throw).
-  PRO_TIER_META: { lifetime: { label: 'Lifetime', renews: false }, yearly: { label: 'Yearly', renews: true } },
-  PRO_PAY_PAGE_URL: 'https://offgridmobileai.co/pay',
+  PRO_TIER_META: {
+    lifetime: { label: 'Lifetime', renews: false },
+    yearly: { label: 'Yearly', renews: true },
+  },
+  PRO_PAY_PAGE_URL: 'https://getoffgridai.co/pro/#buy',
 }));
 
 jest.mock('../../../src/services/deviceFingerprint', () => ({
@@ -43,9 +46,16 @@ describe('ProDetailScreen', () => {
     jest.clearAllMocks();
     useAppStore.setState({ hasRegisteredPro: false });
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    linkingSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(true as never);
+    linkingSpy = jest
+      .spyOn(Linking, 'openURL')
+      .mockResolvedValue(true as never);
     // Defaults for the Pro-active management section.
-    mockGetProLicenseInfo.mockResolvedValue({ isPro: true, tier: 'lifetime', expiry: null, verifiedAt: 0 });
+    mockGetProLicenseInfo.mockResolvedValue({
+      isPro: true,
+      tier: 'lifetime',
+      expiry: null,
+      verifiedAt: 0,
+    });
     mockListProDevices.mockResolvedValue([]);
     mockDeactivateProDevice.mockResolvedValue(true);
   });
@@ -79,7 +89,9 @@ describe('ProDetailScreen', () => {
   it('shows the Off Grid AI Desktop link to Pro-active users too', async () => {
     useAppStore.setState({ hasRegisteredPro: true });
     const { getByText } = render(<ProDetailScreen />);
-    await waitFor(() => expect(getByText('Get Off Grid AI Desktop')).toBeTruthy());
+    await waitFor(() =>
+      expect(getByText('Get Off Grid AI Desktop')).toBeTruthy(),
+    );
     fireEvent.press(getByText('Get Off Grid AI Desktop'));
     expect(linkingSpy).toHaveBeenCalledWith(
       withUtm(OFF_GRID_DESKTOP_URL, 'pro-detail'),
@@ -90,7 +102,11 @@ describe('ProDetailScreen', () => {
     const { getByText } = render(<ProDetailScreen />);
     fireEvent.press(getByText('I have a license key'));
     expect(getByText('Enter your license key')).toBeTruthy();
-    expect(getByText('Paste the license key from your email. It works on up to 5 devices.')).toBeTruthy();
+    expect(
+      getByText(
+        'Paste the license key from your email. It works on up to 5 devices.',
+      ),
+    ).toBeTruthy();
   });
 
   it('activates the license key and shows the success card', async () => {
@@ -99,7 +115,9 @@ describe('ProDetailScreen', () => {
     fireEvent.press(getByText('I have a license key'));
     fireEvent.changeText(getByTestId('license-key-input'), 'key/abc123');
     fireEvent.press(getByTestId('unlock-cta'));
-    await waitFor(() => expect(mockActivateProByKey).toHaveBeenCalledWith('key/abc123'));
+    await waitFor(() =>
+      expect(mockActivateProByKey).toHaveBeenCalledWith('key/abc123'),
+    );
     await waitFor(() => expect(getByText('Pro activated')).toBeTruthy());
   });
 
@@ -115,12 +133,17 @@ describe('ProDetailScreen', () => {
   });
 
   it('shows an inline error when the key is invalid', async () => {
-    mockActivateProByKey.mockResolvedValueOnce({ ok: false, reason: 'invalid' });
+    mockActivateProByKey.mockResolvedValueOnce({
+      ok: false,
+      reason: 'invalid',
+    });
     const { getByText, getByTestId } = render(<ProDetailScreen />);
     fireEvent.press(getByText('I have a license key'));
     fireEvent.changeText(getByTestId('license-key-input'), 'key/nope');
     fireEvent.press(getByTestId('unlock-cta'));
-    await waitFor(() => expect(getByText(/isn't valid or active/)).toBeTruthy());
+    await waitFor(() =>
+      expect(getByText(/isn't valid or active/)).toBeTruthy(),
+    );
   });
 
   it('shows the device-limit error when the key is on its 5 devices', async () => {
@@ -129,7 +152,9 @@ describe('ProDetailScreen', () => {
     fireEvent.press(getByText('I have a license key'));
     fireEvent.changeText(getByTestId('license-key-input'), 'key/full');
     fireEvent.press(getByTestId('unlock-cta'));
-    await waitFor(() => expect(getByText(/already on its 5 devices/)).toBeTruthy());
+    await waitFor(() =>
+      expect(getByText(/already on its 5 devices/)).toBeTruthy(),
+    );
   });
 
   it('keeps the activate button disabled until a key is entered', async () => {
@@ -159,7 +184,9 @@ describe('ProDetailScreen', () => {
     fireEvent.press(getByText('I have a license key'));
     fireEvent.changeText(getByTestId('license-key-input'), '  key/abc123  ');
     fireEvent.press(getByTestId('unlock-cta'));
-    await waitFor(() => expect(mockActivateProByKey).toHaveBeenCalledWith('key/abc123'));
+    await waitFor(() =>
+      expect(mockActivateProByKey).toHaveBeenCalledWith('key/abc123'),
+    );
   });
 
   it('"Not a member yet? Get Pro" in the modal opens the pay page', () => {
@@ -174,7 +201,9 @@ describe('ProDetailScreen', () => {
     const { getByText } = render(<ProDetailScreen />);
     expect(getByText('Pro Active')).toBeTruthy();
     // ProManageSection loads license info async, then shows the status line.
-    await waitFor(() => expect(getByText('Lifetime · never expires')).toBeTruthy());
+    await waitFor(() =>
+      expect(getByText('Lifetime · never expires')).toBeTruthy(),
+    );
   });
 
   it('shows the yearly status line and a Manage subscription link for a recurring license', async () => {
@@ -199,7 +228,9 @@ describe('ProDetailScreen', () => {
       verifiedAt: 0,
     });
     const { getByText, queryByText } = render(<ProDetailScreen />);
-    await waitFor(() => expect(getByText(/Lifetime · never expires/)).toBeTruthy());
+    await waitFor(() =>
+      expect(getByText(/Lifetime · never expires/)).toBeTruthy(),
+    );
     expect(queryByText('Manage subscription')).toBeNull();
   });
 });

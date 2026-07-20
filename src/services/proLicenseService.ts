@@ -24,7 +24,7 @@ const KEYCHAIN_SERVICE = 'off-grid-pro-license';
 
 // Public web pay page (RevenueCat checkout). "Get Pro" opens this; the buyer is
 // emailed a license key by the issuance Worker and enters it via activateProByKey.
-export const PRO_PAY_PAGE_URL = 'https://offgridmobileai.co/pay';
+export const PRO_PAY_PAGE_URL = 'https://getoffgridai.co/pro/#buy';
 
 export type ActivateResult =
   | { ok: true }
@@ -70,11 +70,9 @@ function setProInStore(isPro: boolean): void {
 
 /** Whether the cached license grants Pro right now (offline-safe). */
 function isProActive(lic: ProLicense): boolean {
-  if (!lic.isPro) return false;
   // Monthly keys carry an expiry — once it passes, no Pro even offline. Lifetime
   // keys have null expiry. Revocation propagates at the next online revalidate.
-  if (lic.expiry && Date.parse(lic.expiry) <= Date.now()) return false;
-  return true;
+  return lic.isPro && (!lic.expiry || Date.parse(lic.expiry) > Date.now());
 }
 
 async function writeLicense(lic: ProLicense): Promise<void> {
