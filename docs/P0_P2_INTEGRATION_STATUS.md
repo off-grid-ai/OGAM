@@ -342,6 +342,23 @@ row does **not** mean that no test exists.
 - [x] #194 Embedded MTP activates only for capable GGUFs
 - [x] #196 Model file-list failure is retryable
 
+### 13 Performance
+
+- [~] #209 Repeated model-swap memory stability - two real local-text ->
+  local-image -> remote-text -> local-text cycles, rendered In Memory checks, and
+  Eject All are automated; the physical 10-cycle process-footprint gate remains
+  - `__tests__/integration/memory/repeatedTextImageRemoteEjectAllFullApp.rendered.happy.test.tsx`
+- [~] #210 Download-load UI contention - six downloads reach the real three-active
+  plus three-queued cap while a resident local generation completes and Download
+  Manager retains six unique rows; physical dropped-frame, latency, and throughput
+  measurements remain
+  - `__tests__/integration/downloads/downloadQueueDuringLocalGenerationFullApp.rendered.happy.test.tsx`
+- [~] #211 Background foreground latency and continuity - an active native-backed
+  download and paused local generation cross the real AppState lifecycle and both
+  remain coherent; the physical 30-second, five-cycle foreground-latency gate
+  remains
+  - `__tests__/integration/generation/backgroundForegroundWithDownloadsFullApp.rendered.happy.test.tsx`
+
 ### 15 Retained PR558
 
 - [~] #241 Image download Wi-Fi failure retries and finalizes - the full-App
