@@ -1,0 +1,30 @@
+diff --git a/node_modules/react-native-calendar-events/ios/RNCalendarEvents.m b/node_modules/react-native-calendar-events/ios/RNCalendarEvents.m
+index a85c013..e36e344 100644
+--- a/node_modules/react-native-calendar-events/ios/RNCalendarEvents.m
++++ b/node_modules/react-native-calendar-events/ios/RNCalendarEvents.m
+@@ -761,14 +761,23 @@ - (NSDictionary *)serializeCalendarEvent:(EKEvent *)event
+ 
+ RCT_EXPORT_METHOD(requestPermissions:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+ {
+-    [self.eventStore requestAccessToEntityType:EKEntityTypeEvent completion:^(BOOL granted, NSError *error) {
++    void (^handler)(BOOL, NSError *) = ^(BOOL granted, NSError *error) {
+         NSString *status = granted ? @"authorized" : @"denied";
+         if (!error) {
+             resolve(status);
+         } else {
+             reject(@"error", @"authorization request error", error);
+         }
+-    }];
++    };
++    // iOS 17+ made requestAccessToEntityType "no longer allowed" for reads; reading
++    // events requires the new full-access API (requestFullAccessToEventsWithCompletion).
++    // Fall back to the old API on iOS 16 and earlier. Patched here because
++    // react-native-calendar-events is unmaintained (latest 2.2.0, Jan 2021, predates iOS 17).
++    if (@available(iOS 17.0, *)) {
++        [self.eventStore requestFullAccessToEventsWithCompletion:handler];
++    } else {
++        [self.eventStore requestAccessToEntityType:EKEntityTypeEvent completion:handler];
++    }
+ }
+ 
+ RCT_EXPORT_METHOD(findCalendars:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
