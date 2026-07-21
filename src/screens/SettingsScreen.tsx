@@ -29,6 +29,7 @@ import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { clearProForTesting } from '../services/proLicenseService';
 import { loadProFeatures } from '../bootstrap/loadProFeatures';
 import { useProStatusLabel } from '../hooks/useProStatusLabel';
+import DeviceInfo from 'react-native-device-info';
 import packageJson from '../../package.json';
 
 type NavigationProp = CompositeNavigationProp<
@@ -222,7 +223,8 @@ export const SettingsScreen: React.FC = () => {
               <View style={styles.navItemContent}>
                 <Text style={styles.navItemTitle}>About</Text>
                 <Text style={styles.navItemDesc}>
-                  Version {packageJson.version}
+                  Version {packageJson.version} (build{' '}
+                  {DeviceInfo.getBuildNumber()})
                 </Text>
               </View>
               <Icon name="chevron-right" size={16} color={colors.textMuted} />

@@ -23,10 +23,18 @@ jest.mock('../../../src/components/AnimatedListItem', () => ({
 
 jest.mock('../../../package.json', () => ({ version: '1.0.0' }), { virtual: true });
 
+import DeviceInfo from 'react-native-device-info';
 import { AboutScreen } from '../../../src/screens/AboutScreen';
 
 describe('AboutScreen — Follow / Community', () => {
   afterEach(() => jest.restoreAllMocks());
+
+  it('shows the app version AND the build number (distinguishes successive betas)', () => {
+    // Successive betas share one versionName; the build number (versionCode) is what differs.
+    (DeviceInfo.getBuildNumber as jest.Mock).mockReturnValue('1784144999');
+    const { getByText } = render(<AboutScreen />);
+    expect(getByText('Version 1.0.0 (build 1784144999)')).toBeTruthy();
+  });
 
   it('renders the Follow-on-X and Join-Slack items', () => {
     const { getByText, getByTestId } = render(<AboutScreen />);

@@ -24,6 +24,7 @@ import {
 } from '../utils/sharePrompt';
 import { withUtm } from '../utils/utm';
 import { openExternalUrl } from '../utils/externalLinks';
+import DeviceInfo from 'react-native-device-info';
 import packageJson from '../../package.json';
 
 const WEDNESDAY_MOBILE_URL = withUtm('https://wednesday.is', 'about');
@@ -55,7 +56,9 @@ export const AboutScreen: React.FC = () => {
             style={staticStyles.appIcon}
           />
           <Text style={styles.appName}>Off Grid AI</Text>
-          <Text style={styles.version}>Version {packageJson.version}</Text>
+          <Text style={styles.version}>
+            Version {packageJson.version} (build {DeviceInfo.getBuildNumber()})
+          </Text>
           <Text style={styles.description}>
             Local AI that runs entirely on your phone. No cloud, no telemetry,
             nothing leaves the device.

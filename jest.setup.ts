@@ -342,6 +342,7 @@ jest.mock('react-native-device-info', () => ({
   getTotalMemory: jest.fn(() => Promise.resolve(8 * 1024 * 1024 * 1024)), // 8GB
   getUsedMemory: jest.fn(() => Promise.resolve(4 * 1024 * 1024 * 1024)), // 4GB
   getFreeDiskStorage: jest.fn(() => Promise.resolve(50 * 1024 * 1024 * 1024)), // 50GB
+  getBuildNumber: jest.fn(() => '1784144537'), // versionCode (Android) / CFBundleVersion (iOS)
   getModel: jest.fn(() => 'Test Device'),
   getSystemName: jest.fn(() => 'Android'),
   getSystemVersion: jest.fn(() => '13'),
