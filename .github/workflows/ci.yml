@@ -68,7 +68,7 @@ jobs:
         run: npm ci
 
       - name: Type check
-        run: npx tsc --noEmit
+        run: node_modules/.bin/tsc --noEmit
 
   architecture:
     # Standing gates: dependency-cruiser (layering, engine DIP, import cycles, orphans — 0 violations,
