@@ -81,7 +81,10 @@ module.exports = {
   testEnvironment: 'node',
   clearMocks: true,
   verbose: true,
-  testTimeout: 10000,
+  // 30s (was 10s): heavy multi-step full-app journeys run in ~1-2s alone but accumulate to >10s
+  // under a loaded serial suite run — cumulative slowdown, not a hang (each passes fast in isolation).
+  // 30s gives load grace so a correct-but-slowed test finishes instead of flaking, still bounded.
+  testTimeout: 30000,
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/index.ts',

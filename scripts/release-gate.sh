@@ -43,7 +43,9 @@ run "lint (js)"        npx eslint .
 run "no-pro-mocks"     npm run --silent check:no-pro-mocks
 run "arch (depcruise)" npm run --silent depcruise
 run "dead-code (knip)" npm run --silent knip
-run "jest + coverage"  npx jest --coverage --coverageReporters=json --coverageReporters=text-summary --runInBand --forceExit
+# --maxWorkers=1 + --workerIdleMemoryLimit (NOT --runInBand): serial execution, but the worker is
+# recycled before it accumulates the whole suite's leaked memory — fixes late-test timeout flakiness.
+run "jest + coverage"  npx jest --coverage --coverageReporters=json --coverageReporters=text-summary --maxWorkers=1 --workerIdleMemoryLimit=1536MB --forceExit
 # Advisory: 100%-on-changed-lines is a PER-PR forward gate. Against a long-lived release branch the
 # "changed lines" are the entire branch vs main, so it reports accumulated debt, not a regression —
 # useful signal, not a release blocker. Wire it as a HARD gate in per-PR CI where the diff is small.
