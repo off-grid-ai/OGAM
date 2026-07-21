@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
-: <<'PRE_PUSH_DISABLED'
-# Temporarily disabled: this hook expands long-lived push ranges into hundreds of
-# isolated Jest processes, making ordinary checkpoint pushes take tens of minutes.
-# CI remains the authoritative full gate while the SDLC workflow is redesigned.
+# Fast local pre-push gate. Re-enabled after being disabled (the old hook fanned the push range out
+# into ONE jest process PER test file via `xargs -n 1`, and ran Sonar on every push — tens of
+# minutes). Fixes: related tests run in a SINGLE jest invocation, and Sonar is left to CI (the
+# authoritative full gate). Scoped to the changed files in the push range, so ordinary pushes stay fast.
 set -e
 
 ZERO_OID="0000000000000000000000000000000000000000"
@@ -57,18 +57,18 @@ if [ -n "$PUSHED_JS" ]; then
   echo "▶ TypeScript type check..."
   "$BIN/tsc" --noEmit
 
+  # Run every test related to the changed files in ONE jest process (the old hook spawned one jest
+  # per file — hundreds of processes on a long branch). --passWithNoTests so a docs-only push is a no-op.
   echo "▶ JS/TS tests (related to changed files)..."
-  RELATED_TESTS=$(echo "$PUSHED_JS" | tr '\n' '\0' | \
-    xargs -0 "$BIN/jest" --findRelatedTests --listTests --passWithNoTests)
-  [ -z "$RELATED_TESTS" ] || printf '%s\n' "$RELATED_TESTS" | tr '\n' '\0' | \
-    xargs -0 -n 1 "$BIN/jest" --runInBand --detectOpenHandles
+  echo "$PUSHED_JS" | tr '\n' '\0' | \
+    xargs -0 "$BIN/jest" --findRelatedTests --runInBand --passWithNoTests
 
   echo "▶ Architecture gate (dependency-cruiser)..."
   npm run depcruise
 
   # knip runs in CI (the "architecture" job) as a hard 0-gate, but was NOT in this local hook, so
-  # unused-export failures only surfaced after a wasted CI round-trip (twice). Run it here too. It
-  # analyses the whole project (not just the push range), so keep it in the JS block.
+  # unused-export failures only surfaced after a wasted CI round-trip. Run it here too. It analyses
+  # the whole project (not just the push range), so keep it in the JS block.
   echo "▶ Dead-code gate (knip)..."
   npm run knip
 fi
@@ -95,9 +95,3 @@ if [ -n "$PUSHED_KOTLIN" ]; then
   echo "▶ Android tests..."
   npm run test:android
 fi
-
-if [ -n "$PUSHED_JS$PUSHED_SWIFT$PUSHED_KOTLIN" ]; then
-  echo "▶ Sonar scan..."
-  npm run sonar
-fi
-PRE_PUSH_DISABLED
