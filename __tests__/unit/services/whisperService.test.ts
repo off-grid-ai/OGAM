@@ -347,10 +347,10 @@ describe('WhisperService', () => {
       const mockContext = { id: 'ctx', release: jest.fn(), transcribeRealtime: jest.fn(), transcribe: jest.fn() };
       mockedInitWhisper.mockResolvedValue(mockContext as any);
 
-      await whisperService.loadModel('/path/to/model.bin', { useCoreML: true, useGpu: true, useFlashAttn: true });
+      await whisperService.loadModel('/path/to/model.bin', { useCoreML: true });
 
       expect(initWhisper).toHaveBeenCalledWith(
-        expect.objectContaining({ useCoreMLIos: true, useGpu: true, useFlashAttn: true }),
+        expect.objectContaining({ useCoreMLIos: true }),
       );
     });
 

@@ -13,6 +13,7 @@ import { WHISPER_MODELS, cleanTranscription } from './whisperModels';
 import { audioSessionManager } from './audioSessionManager';
 import { audioRecorderService } from './audioRecorderService';
 import * as whisperModelFiles from './whisperModelFiles';
+import { hardwareService } from './hardware';
 
 // Re-exported so existing consumers keep importing them from whisperService.
 export { WHISPER_MODELS, cleanTranscription };
@@ -284,11 +285,6 @@ class WhisperService {
     // Content-Length once the download starts.
     const totalBytes = model.size * 1024 * 1024;
     const modelKey = makeModelKey(`whisper-${modelId}`, fileName);
-    // On iOS with a published CoreML encoder, the encoder is fetched as the FINAL phase
-    // of this same download (see below) so it's visible in progress instead of a silent
-    // second fetch. Reserve the last 10% of the reported progress for it; the .bin gets
-    // 0..0.9. Elsewhere the .bin is the whole download (0..1).
-    const binWeight = Platform.OS === 'ios' && model.coreMLUrl ? 0.9 : 1.0;
     // Publish a QUEUED row to the CANONICAL store IMMEDIATELY, before the (possibly
     // slot-limited) native start — the same pattern text/image use (startModelDownload).
     // Previously the store entry was only added AFTER a concurrency slot opened, so a
@@ -337,7 +333,7 @@ class WhisperService {
       destPath,
       onProgress: onProgress
         ? (bytesDownloaded, total) => {
-            onProgress((total > 0 ? bytesDownloaded / total : 0) * binWeight);
+            onProgress(total > 0 ? bytesDownloaded / total : 0);
           }
         : undefined,
       silent: true,
@@ -372,13 +368,12 @@ class WhisperService {
         await RNFS.unlink(destPath).catch(err => logger.error('[Whisper] Failed to delete invalid model file:', err));
         throw new Error(`Downloaded model file is invalid: ${validationError instanceof Error ? validationError.message : 'unknown error'}`);
       }
-      // iOS: fetch the CoreML encoder as the FINAL phase of this same download (progress
-      // 90->100%) so it's visible, not a silent second fetch, and the download bar stays
-      // up until the model is truly ANE-ready. Non-fatal: on any failure the model is
-      // already usable on CPU (and loadModel will backfill later).
+      // iOS: fetch the CoreML encoder before we drop the download row, so the download
+      // stays "in progress" until the model is truly ANE-ready (not a silent second fetch
+      // after the bar disappears). Non-fatal: on any failure the model is already usable on
+      // CPU, and loadModel will backfill the encoder later.
       if (Platform.OS === 'ios' && model.coreMLUrl) {
-        await this.ensureCoreMLEncoder(modelId, (frac) => onProgress?.(binWeight + frac * (1 - binWeight))).catch(() => {});
-        onProgress?.(1);
+        await this.ensureCoreMLEncoder(modelId).catch(() => {});
       }
     } finally {
       // Completed STT models are listed from disk by useVoiceDownloadItems, so
@@ -449,14 +444,14 @@ class WhisperService {
 
   async loadModel(
     modelPath: string,
-    options?: { useGpu?: boolean; useFlashAttn?: boolean; useCoreML?: boolean },
+    options?: { useGpu?: boolean; useCoreML?: boolean },
   ): Promise<void> {
     wireNativeWhisperLog();
     // Reload when the model OR its acceleration options change - otherwise flipping the
     // Neural Engine / GPU / Flash toggle silently wouldn't take effect while a context is
     // live (loadModel used to early-return on same-path regardless of options). Keyed on
     // the REQUESTED options (default coreML ON) so a user toggle change forces a reload.
-    const optsKey = `gpu=${options?.useGpu ?? false},fa=${options?.useFlashAttn ?? false},coreml=${options?.useCoreML ?? true}`;
+    const optsKey = `gpu=${options?.useGpu ?? false},coreml=${options?.useCoreML ?? true}`;
     if (this.context && (this.currentModelPath !== modelPath || this.currentLoadOpts !== optsKey)) {
       await this.unloadModel();
     }
@@ -476,24 +471,29 @@ class WhisperService {
     const coreMLEnabled = options?.useCoreML ?? true;
     const { useCoreML, reason: coreMLReason } = await this.resolveCoreML(modelPath, coreMLEnabled);
 
-    const useGpu = options?.useGpu ?? false;
-    const useFlashAttn = options?.useFlashAttn ?? false;
+    // GPU offload is enforced HERE, at the whisper load site, so the stored setting can
+    // never request the GPU on an ineligible device regardless of the settings UI. One
+    // cross-platform rule via hardwareService.whisperSupportsGpu(): iOS -> Metal (real
+    // device, >4GB). Android has no whisper GPU backend (the ggml-OpenCL port was removed
+    // for crashing OpenCL-2.0 devices), so whisper runs on CPU there. Gates ONLY whisper.
+    const useGpu = (options?.useGpu ?? false) && (await hardwareService.whisperSupportsGpu());
     // One structured line stating the RESOLVED acceleration config for this load, so a
     // log pull can confirm exactly what was requested. For the DEFINITIVE proof CoreML
     // actually engaged (vs silently falling back), watch the whisper.cpp NATIVE line
     // "Core ML model loaded" that wireNativeWhisperLog pipes right after this.
     logger.log(
       `[Whisper][ACCEL] resolved for load: platform=${Platform.OS} ` +
-        `coreML=${useCoreML} (enabled=${coreMLEnabled}; ${coreMLReason}) ` +
-        `gpu=${useGpu} flashAttn=${useFlashAttn}`,
+        `coreML=${useCoreML} (enabled=${coreMLEnabled}; ${coreMLReason}) gpu=${useGpu}`,
     );
     try {
-      // useGpu/useFlashAttn/useCoreMLIos are real whisper.rn runtime options but
-      // absent from this version's WhisperContextOptions type, so pass via a cast.
+      // useGpu/useCoreMLIos are real whisper.rn runtime options but absent from this
+      // version's WhisperContextOptions type, so pass via a cast. Flash attention is
+      // intentionally forced off (removed as a setting): it only helps on the GPU, our
+      // encoder is on the ANE, and it's unsupported by the ggml OpenCL backend.
       const initOpts: Record<string, unknown> = {
         filePath: modelPath,
         useGpu,
-        useFlashAttn,
+        useFlashAttn: false,
         useCoreMLIos: useCoreML,
       };
       // Time initWhisper: this covers reading the .bin into memory AND, when

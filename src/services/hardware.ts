@@ -60,6 +60,16 @@ class HardwareService {
     logger.log(`[WIRE-DEVICE] ${JSON.stringify({ platform: Platform.OS, ...this.cachedDeviceInfo })}`); // [WIRE] real device caps (drives onboarding recs + memory budget)
     return this.cachedDeviceInfo;
   }
+
+  /**
+   * Single definition of "can this device safely offload to the GPU (Metal)". GPU offload
+   * is iOS-only (Metal), skips emulators (they misreport GPU), and needs >4GB RAM (Metal
+   * can OOM 4GB devices). Reused by the whisper load path, the whisper settings UI, and the
+   * LLM vision path so the rule lives in ONE place, not copied per caller.
+   */
+  deviceSupportsGpuOffload(info: DeviceInfoType): boolean {
+    return Platform.OS === 'ios' && !info.isEmulator && info.totalMemory > 4 * 1024 * 1024 * 1024;
+  }
   /**
    * Real free memory the system can hand out RIGHT NOW. On Android this reads
    * `MemAvailable` from /proc/meminfo (what the kernel will give without
@@ -449,6 +459,20 @@ class HardwareService {
     if (Platform.OS !== 'android') return { hasNpu: false, hasGpu: false };
     const [soc, opencl] = await Promise.all([this.getSoCInfo(), this.getOpenCLCapability()]);
     return { hasNpu: HTP_ENABLED && soc.hasNPU, hasGpu: opencl.supported };
+  }
+
+  /**
+   * Whisper GPU-offload eligibility, cross-platform and authoritative — the ONE predicate
+   * both the whisper load site and the whisper settings toggle read, so they always agree.
+   * iOS: Metal is safe on a real device with >4GB RAM (deviceSupportsGpuOffload).
+   * Android: the ggml OpenCL backend (ported into whisper.rn) needs a compatible GPU
+   *          (Adreno/Mali, OpenCL 3.0), probed via getAccelerationCapability().hasGpu.
+   * This is whisper-specific and does NOT change the iOS/LLM GPU rules.
+   */
+  async whisperSupportsGpu(): Promise<boolean> {
+    if (Platform.OS === 'ios') return this.deviceSupportsGpuOffload(await this.getDeviceInfo());
+    if (Platform.OS === 'android') return (await this.getAccelerationCapability()).hasGpu;
+    return false;
   }
 
   async getOpenCLCapability(): Promise<{ supported: boolean; reason?: string }> {
