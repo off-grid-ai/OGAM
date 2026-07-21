@@ -27,6 +27,7 @@ jest.mock('../../../src/utils/logger', () => ({ __esModule: true, default: { log
 
 import {
   resolveImageModelDir, validateImageModelDir, ensureImageExtractionComplete,
+  isImageModelDirUsable,
 } from '../../../src/utils/imageModelIntegrity';
 import { ImageModelIncompleteError } from '../../../src/services/modelLoadErrors';
 
@@ -137,6 +138,44 @@ describe('validateImageModelDir', () => {
     const res = await validateImageModelDir('/m', 'mnn');
     expect(res.complete).toBe(false);
     expect(res.missing).toContain('<unreadable model dir>');
+  });
+});
+
+describe('isImageModelDirUsable', () => {
+  it('returns false when the directory does not exist', async () => {
+    expect(await isImageModelDirUsable('/missing', 'mnn')).toBe(false);
+  });
+
+  it('returns false for an empty directory', async () => {
+    existing.add('/m');
+    dirListings['/m'] = [];
+    expect(await isImageModelDirUsable('/m', 'mnn')).toBe(false);
+  });
+
+  it('returns true for a non-empty dir on a non-mnn/qnn backend (no integrity contract)', async () => {
+    existing.add('/m');
+    dirListings['/m'] = [{ name: 'Model.mlmodelc', size: 1, isFile: true }];
+    expect(await isImageModelDirUsable('/m', 'coreml')).toBe(true);
+    expect(await isImageModelDirUsable('/m', undefined)).toBe(true);
+  });
+
+  it('applies the full integrity contract for mnn (complete → true)', async () => {
+    existing.add('/m');
+    existing.add('/m/unet.mnn');
+    dirListings['/m'] = COMPLETE_MNN;
+    expect(await isImageModelDirUsable('/m', 'mnn')).toBe(true);
+  });
+
+  it('returns false for mnn when the tree is incomplete', async () => {
+    existing.add('/m');
+    existing.add('/m/unet.mnn');
+    dirListings['/m'] = COMPLETE_MNN.filter(f => f.name !== 'pos_emb.bin');
+    expect(await isImageModelDirUsable('/m', 'mnn')).toBe(false);
+  });
+
+  it('returns false when the directory read throws', async () => {
+    existing.add('/m'); // exists, but no dirListings entry → readDir throws
+    expect(await isImageModelDirUsable('/m', 'coreml')).toBe(false);
   });
 });
 
