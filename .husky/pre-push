@@ -57,15 +57,11 @@ if [ -n "$PUSHED_JS" ]; then
   echo "▶ TypeScript type check..."
   "$BIN/tsc" --noEmit
 
-  # Run every test related to the changed files in ONE jest process (the old hook spawned one jest
-  # per file — hundreds of processes on a long branch). --passWithNoTests so a docs-only push is a no-op.
-  # EXCLUDE jest setup/config from findRelatedTests: every test depends on them, so relating against
-  # them selects the WHOLE suite (tens of minutes) — the same pathology that got this hook disabled.
-  # Their full impact is covered by CI's complete run; here we only relate against product/test files.
-  RELATED_INPUT=$(printf '%s\n' "$PUSHED_JS" | grep -vE '(^|/)(jest\.setup|jest\.config)\.' || true)
-  echo "▶ JS/TS tests (related to changed files)..."
-  [ -z "$RELATED_INPUT" ] || printf '%s\n' "$RELATED_INPUT" | tr '\n' '\0' | \
-    xargs -0 "$BIN/jest" --findRelatedTests --runInBand --passWithNoTests
+  # NOTE: no jest here. `--findRelatedTests` on any App-imported file (a screen, a core service,
+  # jest.setup) relates to EVERY full-app journey suite — hundreds of tests, tens of minutes: the
+  # exact "pathological" slowness that got this hook disabled. A pre-push hook must stay fast, so the
+  # local gate is the quick static checks below; CI runs the full jest suite as the authoritative
+  # test gate. (Run `npm test` locally when you want the suite before pushing.)
 
   echo "▶ Architecture gate (dependency-cruiser)..."
   npm run depcruise
