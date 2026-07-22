@@ -11,7 +11,7 @@
  * the active one.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { ModelCard } from '../../components';
@@ -21,7 +21,7 @@ import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { useWhisperStore } from '../../stores';
 import { useSttDownloadState } from '../../hooks/useSttDownloadState';
-import { WHISPER_MODELS } from '../../services';
+import { WHISPER_MODELS, whisperService } from '../../services';
 import { createStyles as createModelsScreenStyles } from './styles';
 import logger from '../../utils/logger';
 
@@ -48,6 +48,21 @@ const WhisperCard: React.FC<WhisperCardProps> = ({
 }) => {
   const present = presentModelIds.includes(model.id);
   const active = downloadedModelId === model.id;
+  // iOS only: is this downloaded model's CoreML (Neural Engine) encoder present & valid?
+  // Drives the ANE/CPU badge so users can see which models run on the Neural Engine.
+  const [coreMLStatus, setCoreMLStatus] = useState<'ready' | 'unavailable' | undefined>(undefined);
+  useEffect(() => {
+    if (Platform.OS !== 'ios' || !present || !model.coreMLUrl) {
+      setCoreMLStatus(undefined);
+      return;
+    }
+    let cancelled = false;
+    whisperService
+      .hasCoreMLEncoder(model.id)
+      .then((ok) => { if (!cancelled) setCoreMLStatus(ok ? 'ready' : 'unavailable'); })
+      .catch(() => { if (!cancelled) setCoreMLStatus('unavailable'); });
+    return () => { cancelled = true; };
+  }, [present, model.id, model.coreMLUrl]);
   // WHISPER_MODELS sizes are in MB. Surface bytes so the STT card matches the
   // Text/Image cards ("X MB / Y MB"); for a queued model this reads "0 B / 142 MB".
   const totalBytes = model.size * 1024 * 1024;
@@ -64,6 +79,7 @@ const WhisperCard: React.FC<WhisperCardProps> = ({
       isQueued={queued}
       downloadProgress={downloadProgress}
       downloadBytes={downloadBytes}
+      coreMLStatus={coreMLStatus}
       testID={`transcription-model-card-${index}`}
       // Present but not active → tap to use; not present → tap to download.
       onPress={downloading ? undefined : (present ? (active ? undefined : () => onSelect(model.id)) : () => onDownload(model.id))}

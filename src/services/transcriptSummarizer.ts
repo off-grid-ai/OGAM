@@ -234,6 +234,16 @@ class TranscriptSummarizerService {
     return llmService.isModelLoaded() || isLiteRTActive() || isRemoteActive();
   }
 
+  /**
+   * True when a remote provider is connected, so summaries can run WITHOUT a local
+   * model download. Exposed so callers (e.g. the recorder's model-readiness guard)
+   * decide "is a summary backend available" from the SAME signal the summarizer
+   * uses to route - never a second copy that could drift.
+   */
+  hasRemoteBackend(): boolean {
+    return isRemoteActive();
+  }
+
   /** Subscribe to progress. The listener is not called with a current value. */
   subscribe(listener: (p: SummarizeProgress) => void): () => void {
     this.listeners.add(listener);

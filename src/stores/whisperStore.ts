@@ -42,7 +42,7 @@ interface WhisperState {
   downloadModel: (modelId: string) => Promise<void>;
   /** Activate an already-downloaded model without re-downloading. */
   selectModel: (modelId: string) => Promise<void>;
-  loadModel: (options?: { useGpu?: boolean; useFlashAttn?: boolean; useCoreML?: boolean }) => Promise<WhisperLoadResult>;
+  loadModel: (options?: { useGpu?: boolean; useCoreML?: boolean }) => Promise<WhisperLoadResult>;
   unloadModel: () => Promise<void>;
   deleteModel: () => Promise<void>;
   /** Delete a specific on-disk model (active or not). */
@@ -134,7 +134,7 @@ export const useWhisperStore = create<WhisperState>()(
         }
       },
 
-      loadModel: async (options?: { useGpu?: boolean; useFlashAttn?: boolean; useCoreML?: boolean }): Promise<WhisperLoadResult> => {
+      loadModel: async (options?: { useGpu?: boolean; useCoreML?: boolean }): Promise<WhisperLoadResult> => {
         const { downloadedModelId, isModelLoading } = get();
         if (!downloadedModelId) {
           set({ error: 'No model downloaded' });

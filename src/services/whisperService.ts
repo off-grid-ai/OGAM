@@ -13,6 +13,7 @@ import { WHISPER_MODELS, cleanTranscription } from './whisperModels';
 import { audioSessionManager } from './audioSessionManager';
 import { audioRecorderService } from './audioRecorderService';
 import * as whisperModelFiles from './whisperModelFiles';
+import { hardwareService } from './hardware';
 
 // Re-exported so existing consumers keep importing them from whisperService.
 export { WHISPER_MODELS, cleanTranscription };
@@ -94,6 +95,10 @@ export class WhisperBusyError extends Error {
 class WhisperService {
   private context: WhisperContext | null = null;
   private currentModelPath: string | null = null;
+  // Acceleration options the live context was loaded with (serialized). Used to reload
+  // when the user flips a toggle - a same-path load with changed options must NOT
+  // early-return, or the new setting silently never takes effect.
+  private currentLoadOpts: string = '';
   private isTranscribing: boolean = false;
   private stopFn: (() => void) | null = null;
   private isReleasingContext: boolean = false;
@@ -126,10 +131,21 @@ class WhisperService {
     return this.getModelPath(modelId).replace(/\.bin$/i, '-encoder.mlmodelc');
   }
 
-  /** True when this model's CoreML encoder is present on disk (iOS only). */
+  /**
+   * A compiled CoreML model is a DIRECTORY; a partial/interrupted extraction can leave a
+   * dir that exists but is broken, and whisper.cpp may crash trying to load it. So
+   * "present" must mean VALID, not just exists: a compiled .mlmodelc always contains
+   * `coremldata.bin`. Existence-only checks are the bug that lets a corrupt encoder load.
+   */
+  private async isValidCoreMLEncoder(dir: string): Promise<boolean> {
+    if (!(await RNFS.exists(dir))) return false;
+    return RNFS.exists(`${dir}/coremldata.bin`);
+  }
+
+  /** True when this model's CoreML encoder is present AND valid on disk (iOS only). */
   async hasCoreMLEncoder(modelId: string): Promise<boolean> {
     if (Platform.OS !== 'ios') return false;
-    return RNFS.exists(this.coreMLPathFor(modelId));
+    return this.isValidCoreMLEncoder(this.coreMLPathFor(modelId));
   }
 
   /**
@@ -144,19 +160,30 @@ class WhisperService {
     const model = WHISPER_MODELS.find(m => m.id === modelId);
     if (!model?.coreMLUrl) return false;
     const targetDir = this.coreMLPathFor(modelId); // ggml-<id>-encoder.mlmodelc
-    if (await RNFS.exists(targetDir)) return true;
+    if (await this.isValidCoreMLEncoder(targetDir)) return true;
+    // A prior run may have left a stale/partial dir that failed validation - clear it
+    // so a corrupt encoder never lingers and blocks a clean re-fetch.
+    await RNFS.unlink(targetDir).catch(() => {});
     await this.ensureModelsDirExists();
     const zipPath = `${this.getModelsDir()}/ggml-${modelId}-encoder.mlmodelc.zip`;
-    await RNFS.unlink(zipPath).catch(() => {}); // clear any partial from a prior run
+    // Extract into a TEMP dir first, then atomic-rename into place only after an
+    // integrity check. A network drop mid-download must never leave a half-extracted
+    // encoder that whisper.cpp then tries (and crashes) to load.
+    const tmpDir = `${this.getModelsDir()}/.coreml-tmp-${modelId}`;
+    await RNFS.unlink(zipPath).catch(() => {});
+    await RNFS.unlink(tmpDir).catch(() => {});
+    const STALL_MS = 30000; // no bytes for 30s => treat as a dropped connection
     try {
       logger.log(`[Whisper][CoreML] START download ${modelId} from ${model.coreMLUrl}`);
       const t0 = Date.now();
       let lastPct = -1;
-      const { promise } = RNFS.downloadFile({
+      let lastProgressAt = Date.now();
+      const { jobId, promise } = RNFS.downloadFile({
         fromUrl: model.coreMLUrl,
         toFile: zipPath,
         progressInterval: 500,
         progress: (r) => {
+          lastProgressAt = Date.now();
           if (r.contentLength <= 0) return;
           const frac = r.bytesWritten / r.contentLength;
           onProgress?.(frac);
@@ -167,30 +194,82 @@ class WhisperService {
           }
         },
       });
-      const res = await promise;
+      // Stall watchdog: RNFS/iOS won't reject a dropped connection quickly (it hangs on
+      // OS defaults), so abort ourselves if no bytes arrive for STALL_MS -> clean CPU
+      // fallback instead of a wedged background fetch.
+      let stalled = false;
+      const watchdog = setInterval(() => {
+        if (Date.now() - lastProgressAt > STALL_MS) {
+          stalled = true;
+          RNFS.stopDownload(jobId);
+        }
+      }, 5000);
+      let res;
+      try {
+        res = await promise;
+      } finally {
+        clearInterval(watchdog);
+      }
+      if (stalled) throw new Error('download stalled (network drop)');
       if (res.statusCode && res.statusCode >= 400) throw new Error(`HTTP ${res.statusCode}`);
       const zipMB = (Number((await RNFS.stat(zipPath)).size) / 1e6).toFixed(0);
-      logger.log(`[Whisper][CoreML] downloaded ${modelId} (${zipMB} MB) in ${((Date.now() - t0) / 1000).toFixed(1)}s — unzipping`);
-      await unzip(zipPath, this.getModelsDir());
+      logger.log(`[Whisper][CoreML] downloaded ${modelId} (${zipMB} MB) in ${((Date.now() - t0) / 1000).toFixed(1)}s — unzipping to temp`);
+      // unzip throws on a truncated archive; that plus the integrity check below means a
+      // partial download can never become the live encoder.
+      await unzip(zipPath, tmpDir);
       await RNFS.unlink(zipPath).catch(() => {});
-      // The zip's top-level dir is named after the SOURCE encoder in the URL. For
-      // most models that already equals targetDir; when a model reuses another's
-      // encoder (tdrz -> small.en) the names differ, so rename it into place.
+      // The zip's top-level dir is named after the SOURCE encoder in the URL (a model may
+      // reuse another's encoder, e.g. tdrz -> small.en); fall back to the temp root if the
+      // archive extracted files directly.
       const extractedName = model.coreMLUrl.split('/').pop()!.replace(/\.zip$/i, '');
-      const extractedDir = `${this.getModelsDir()}/${extractedName}`;
-      if (extractedDir !== targetDir && (await RNFS.exists(extractedDir))) {
-        await RNFS.unlink(targetDir).catch(() => {}); // clear any stale target
-        await RNFS.moveFile(extractedDir, targetDir);
-        logger.log(`[Whisper][CoreML] reused ${extractedName} → ${targetDir.split('/').pop()}`);
+      const extractedDir = `${tmpDir}/${extractedName}`;
+      const src = (await RNFS.exists(extractedDir)) ? extractedDir : tmpDir;
+      if (!(await this.isValidCoreMLEncoder(src))) {
+        throw new Error('extracted CoreML encoder failed integrity check (partial/corrupt)');
       }
-      const ok = await RNFS.exists(targetDir);
-      logger.log(`[Whisper][CoreML] ${ok ? `READY for ${modelId} — next load will use the Neural Engine` : `FAILED for ${modelId}: no encoder dir after unzip`}`);
+      await RNFS.unlink(targetDir).catch(() => {}); // clear any stale target
+      await RNFS.moveFile(src, targetDir);
+      await RNFS.unlink(tmpDir).catch(() => {}); // remove the (now-empty) temp parent
+      const ok = await this.isValidCoreMLEncoder(targetDir);
+      const readyMsg = ok
+        ? `READY for ${modelId} — next load will use the Neural Engine`
+        : `FAILED for ${modelId}: invalid after move`;
+      logger.log(`[Whisper][CoreML] ${readyMsg}`);
       return ok;
     } catch (e) {
       logger.warn(`[Whisper][CoreML] fetch FAILED for ${modelId} (staying CPU-only): ${String(e)}`);
       await RNFS.unlink(zipPath).catch(() => {});
+      await RNFS.unlink(tmpDir).catch(() => {});
       return false;
     }
+  }
+
+  /**
+   * iOS CoreML (Neural Engine) gate for a load. Returns whether to use CoreML plus a
+   * human reason for the log. TWO gates, both required: (1) the user's "Neural Engine"
+   * setting (a real off-switch is the only reliable escape on a device where CoreML
+   * crashes/garbles - a native failure we can't catch, with no denylist), and (2) a
+   * VALID encoder asset on disk. When enabled but missing, kick off a one-time
+   * background backfill so the NEXT load uses the ANE (this load stays CPU). Non-iOS
+   * never uses CoreML.
+   */
+  private async resolveCoreML(
+    modelPath: string,
+    coreMLEnabled: boolean,
+  ): Promise<{ useCoreML: boolean; reason: string }> {
+    if (Platform.OS !== 'ios') return { useCoreML: false, reason: 'not iOS' };
+    if (!coreMLEnabled) return { useCoreML: false, reason: 'user disabled (Neural Engine off) - forcing CPU' };
+    const coreMLPath = modelPath.replace(/\.bin$/i, '-encoder.mlmodelc');
+    if (await this.isValidCoreMLEncoder(coreMLPath)) {
+      return { useCoreML: true, reason: `encoder asset present (${coreMLPath.split('/').pop()})` };
+    }
+    const model = WHISPER_MODELS.find(m => this.getModelPath(m.id) === modelPath);
+    if (model?.coreMLUrl && !this.coreMLBackfillTried.has(model.id)) {
+      this.coreMLBackfillTried.add(model.id);
+      logger.log(`[Whisper][CoreML] encoder missing for ${model.id}; fetching in background for next load`);
+      this.ensureCoreMLEncoder(model.id).catch(() => {});
+    }
+    return { useCoreML: false, reason: 'encoder asset missing - CPU this load, backfilling in background' };
   }
 
   async downloadModel(modelId: string, onProgress?: (progress: number) => void): Promise<string> {
@@ -289,17 +368,19 @@ class WhisperService {
         await RNFS.unlink(destPath).catch(err => logger.error('[Whisper] Failed to delete invalid model file:', err));
         throw new Error(`Downloaded model file is invalid: ${validationError instanceof Error ? validationError.message : 'unknown error'}`);
       }
+      // iOS: fetch the CoreML encoder before we drop the download row, so the download
+      // stays "in progress" until the model is truly ANE-ready (not a silent second fetch
+      // after the bar disappears). Non-fatal: on any failure the model is already usable on
+      // CPU, and loadModel will backfill the encoder later.
+      if (Platform.OS === 'ios' && model.coreMLUrl) {
+        await this.ensureCoreMLEncoder(modelId).catch(() => {});
+      }
     } finally {
       // Completed STT models are listed from disk by useVoiceDownloadItems, so
       // the in-flight store entry must be dropped on success AND failure: leaving
       // it would show a stale/duplicate active row and block a re-download (add()
       // refuses when an entry already exists for this modelKey).
       useDownloadStore.getState().remove(modelKey);
-    }
-    // iOS: also fetch the CoreML encoder so the ANE can run the encoder. Non-fatal
-    // and no-op off-iOS / when unpublished - the model is already usable on CPU.
-    if (Platform.OS === 'ios') {
-      await this.ensureCoreMLEncoder(modelId).catch(() => {});
     }
     logger.log(`[Whisper] Downloaded to ${destPath}`);
     return destPath;
@@ -320,6 +401,12 @@ class WhisperService {
     }
     const path = this.getModelPath(modelId);
     if (await RNFS.exists(path)) await RNFS.unlink(path);
+    // Also remove the CoreML encoder (iOS ANE asset). It's a derived companion to the
+    // .bin - useless on its own - so deleting the model must delete it too, else it
+    // orphans a ~tens-of-MB .mlmodelc directory on disk. RNFS.unlink removes the dir
+    // recursively; no-op when absent (Android, or a model with no encoder).
+    const encoderPath = this.coreMLPathFor(modelId);
+    if (await RNFS.exists(encoderPath)) await RNFS.unlink(encoderPath);
   }
 
   /**
@@ -357,11 +444,18 @@ class WhisperService {
 
   async loadModel(
     modelPath: string,
-    options?: { useGpu?: boolean; useFlashAttn?: boolean; useCoreML?: boolean },
+    options?: { useGpu?: boolean; useCoreML?: boolean },
   ): Promise<void> {
     wireNativeWhisperLog();
-    if (this.context && this.currentModelPath !== modelPath) await this.unloadModel();
-    if (this.context && this.currentModelPath === modelPath) return;
+    // Reload when the model OR its acceleration options change - otherwise flipping the
+    // Neural Engine / GPU / Flash toggle silently wouldn't take effect while a context is
+    // live (loadModel used to early-return on same-path regardless of options). Keyed on
+    // the REQUESTED options (default coreML ON) so a user toggle change forces a reload.
+    const optsKey = `gpu=${options?.useGpu ?? false},coreml=${options?.useCoreML ?? true}`;
+    if (this.context && (this.currentModelPath !== modelPath || this.currentLoadOpts !== optsKey)) {
+      await this.unloadModel();
+    }
+    if (this.context && this.currentModelPath === modelPath && this.currentLoadOpts === optsKey) return;
     if (this.isReleasingContext) {
       logger.log('[WhisperService] Waiting for context release to finish before loading');
       await this.contextReleasePromise;
@@ -371,43 +465,35 @@ class WhisperService {
     // Native initWithModelPath calls abort() on invalid files, crashing the app.
     await this.validateModelFile(modelPath);
 
-    // CoreML runs the whisper encoder on the Apple Neural Engine (iOS only, ~2-3x
-    // faster encode, frees the CPU). Drive it purely off the per-model encoder
-    // asset: if ggml-<model>-encoder.mlmodelc sits next to the .bin we use CoreML,
-    // else CPU. Enabling CoreML WITHOUT that asset makes whisper.rn fail to load it
-    // and can crash at transcribe (0%) on some A12 devices (e.g. iPhone XS), so
-    // presence is the gate - not a user toggle. Non-iOS never uses CoreML.
-    let useCoreML = false;
-    if (Platform.OS === 'ios') {
-      const coreMLPath = modelPath.replace(/\.bin$/i, '-encoder.mlmodelc');
-      useCoreML = await RNFS.exists(coreMLPath);
-      if (useCoreML) {
-        logger.log(`[Whisper][CoreML] encoder PRESENT for this model (${coreMLPath.split('/').pop()}) — requesting Neural Engine. Watch for whisper.cpp native line "Core ML model loaded" to confirm actual use.`);
-      } else {
-        if (options?.useCoreML) logger.warn('[Whisper] CoreML requested but encoder asset missing; using CPU instead');
-        // Backfill: model was downloaded before CoreML shipping. Fetch its encoder
-        // in the background (non-blocking, once per session) so the NEXT load uses
-        // the ANE. This load stays CPU.
-        const model = WHISPER_MODELS.find(m => this.getModelPath(m.id) === modelPath);
-        if (model?.coreMLUrl && !this.coreMLBackfillTried.has(model.id)) {
-          this.coreMLBackfillTried.add(model.id);
-          logger.log(`[Whisper] CoreML encoder missing for ${model.id}; fetching in background for next load`);
-          this.ensureCoreMLEncoder(model.id).catch(() => {});
-        }
-      }
-    }
+    // Resolve the CoreML (Neural Engine) gate: user setting (default ON) AND a valid
+    // encoder asset present. resolveCoreML also kicks off a one-time background backfill
+    // when enabled-but-missing.
+    const coreMLEnabled = options?.useCoreML ?? true;
+    const { useCoreML, reason: coreMLReason } = await this.resolveCoreML(modelPath, coreMLEnabled);
 
+    // GPU offload is enforced HERE, at the whisper load site, so the stored setting can
+    // never request the GPU on an ineligible device regardless of the settings UI. One
+    // cross-platform rule via hardwareService.whisperSupportsGpu(): iOS -> Metal (real
+    // device, >4GB). Android has no whisper GPU backend (the ggml-OpenCL port was removed
+    // for crashing OpenCL-2.0 devices), so whisper runs on CPU there. Gates ONLY whisper.
+    const useGpu = (options?.useGpu ?? false) && (await hardwareService.whisperSupportsGpu());
+    // One structured line stating the RESOLVED acceleration config for this load, so a
+    // log pull can confirm exactly what was requested. For the DEFINITIVE proof CoreML
+    // actually engaged (vs silently falling back), watch the whisper.cpp NATIVE line
+    // "Core ML model loaded" that wireNativeWhisperLog pipes right after this.
     logger.log(
-      `[Whisper] Loading model: ${modelPath} useGpu=${options?.useGpu ?? false} ` +
-        `useFlashAttn=${options?.useFlashAttn ?? false} useCoreML=${useCoreML}`,
+      `[Whisper][ACCEL] resolved for load: platform=${Platform.OS} ` +
+        `coreML=${useCoreML} (enabled=${coreMLEnabled}; ${coreMLReason}) gpu=${useGpu}`,
     );
     try {
-      // useGpu/useFlashAttn/useCoreMLIos are real whisper.rn runtime options but
-      // absent from this version's WhisperContextOptions type, so pass via a cast.
+      // useGpu/useCoreMLIos are real whisper.rn runtime options but absent from this
+      // version's WhisperContextOptions type, so pass via a cast. Flash attention is
+      // intentionally forced off (removed as a setting): it only helps on the GPU, our
+      // encoder is on the ANE, and it's unsupported by the ggml OpenCL backend.
       const initOpts: Record<string, unknown> = {
         filePath: modelPath,
-        useGpu: options?.useGpu ?? false,
-        useFlashAttn: options?.useFlashAttn ?? false,
+        useGpu,
+        useFlashAttn: false,
         useCoreMLIos: useCoreML,
       };
       // Time initWhisper: this covers reading the .bin into memory AND, when
@@ -418,11 +504,22 @@ class WhisperService {
       const tInit = Date.now();
       this.context = await initWhisper(initOpts as unknown as Parameters<typeof initWhisper>[0]);
       this.currentModelPath = modelPath;
-      logger.log(`[Whisper] Model loaded successfully — initWhisper took ${((Date.now() - tInit) / 1000).toFixed(1)}s (useCoreML=${useCoreML})`);
+      this.currentLoadOpts = optsKey;
+      const ctxGpu = (this.context as unknown as { gpu?: boolean }).gpu;
+      // Post-load confirmation: context.gpu reflects whether the Metal backend is live;
+      // if coreML was requested, the ABSENCE of the native "Core ML model loaded" line
+      // above means it silently fell back to CPU (e.g. a corrupt/partial encoder).
+      const coreMLNote = useCoreML
+        ? ' — confirm the native "Core ML model loaded" line; its absence = CPU fallback.'
+        : '';
+      logger.log(
+        `[Whisper][ACCEL] context ready in ${((Date.now() - tInit) / 1000).toFixed(1)}s — context.gpu=${ctxGpu} coreMLRequested=${useCoreML}${coreMLNote}`,
+      );
     } catch (error) {
       logger.error('[Whisper] Failed to load model:', error);
       this.context = null;
       this.currentModelPath = null;
+      this.currentLoadOpts = '';
       throw error;
     }
   }
@@ -447,7 +544,7 @@ class WhisperService {
     this.isReleasingContext = true;
     this.contextReleasePromise = (async () => {
       try { await this.context!.release(); } catch (error) { logger.error('[WhisperService] Error releasing context:', error); }
-      finally { this.context = null; this.currentModelPath = null; this.isReleasingContext = false; }
+      finally { this.context = null; this.currentModelPath = null; this.currentLoadOpts = ''; this.isReleasingContext = false; }
     })()
     await this.contextReleasePromise;
   }
