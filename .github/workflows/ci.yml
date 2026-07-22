@@ -68,7 +68,7 @@ jobs:
         run: npm ci
 
       - name: Type check
-        run: npx tsc --noEmit
+        run: node_modules/.bin/tsc --noEmit
 
   architecture:
     # Standing gates: dependency-cruiser (layering, engine DIP, import cycles, orphans — 0 violations,
@@ -155,7 +155,15 @@ jobs:
         run: npm ci
 
       - name: Run Jest tests
-        run: npx jest --coverage --forceExit --runInBand
+        # NOT --runInBand: a single in-band process accumulates every test's leaked handles/memory
+        # across ~6800 tests, and late heavy full-app tests get GC-starved and blow their timeout
+        # (flaky, position-dependent — each passes in ~2s alone). --maxWorkers=1 keeps execution
+        # SERIAL (no parallel-OOM, the reason in-band was chosen) but runs in a worker that
+        # --workerIdleMemoryLimit RECYCLES before it bloats, so memory stays bounded. Conclusive fix
+        # for the timeout flakiness without changing any test.
+        # Call the installed binary directly (not `npx`, which Sonar S6505 flags for on-demand
+        # install + lifecycle scripts). Deps are already installed by `npm ci` above.
+        run: node_modules/.bin/jest --coverage --forceExit --maxWorkers=1 --workerIdleMemoryLimit=1536MB
 
       - name: Install Android NDK
         # Configuring the native modules (op-sqlite etc.) needs the pinned NDK; the macOS

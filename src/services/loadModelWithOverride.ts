@@ -48,7 +48,7 @@ export async function loadModelWithOverride(
         deps.setAlertState(
           showAlert(
             'Insufficient Memory',
-            `${errorMessage(error)}\n\nWould you like to override these safeguards and load it anyway?`,
+            `${errorMessage(error)}\n\nLoad Anyway can bypass the cautious memory limit. The app will still stop the load if your device does not have enough memory to stay open.`,
             [
               { text: 'Cancel', style: 'cancel' },
               {

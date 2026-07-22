@@ -19,14 +19,14 @@
  */
 import { Platform } from 'react-native';
 import { BareResourceFetcher } from 'react-native-executorch-bare-resource-fetcher';
-import {
-  KokoroEngine,
-  type KokoroBridgeHandle,
-} from '@offgrid/pro/audio/engine/tts/engines/kokoro/KokoroEngine';
+import { KokoroEngine } from '@offgrid/pro/audio/engine/tts/engines/kokoro/KokoroEngine';
+import type { KokoroBridgeHandle } from '@offgrid/pro/audio/engine/tts/engines/kokoro';
 
-const fetchResources = (BareResourceFetcher as unknown as { fetch: jest.Mock }).fetch;
+const fetchResources = (BareResourceFetcher as unknown as { fetch: jest.Mock })
+  .fetch;
 const deleteResources = BareResourceFetcher.deleteResources as jest.Mock;
-const listDownloadedFiles = BareResourceFetcher.listDownloadedFiles as jest.Mock;
+const listDownloadedFiles =
+  BareResourceFetcher.listDownloadedFiles as jest.Mock;
 
 function makeHandle(): jest.Mocked<KokoroBridgeHandle> {
   return {
@@ -50,7 +50,7 @@ describe('KokoroEngine.extra — uncovered branches', () => {
 
   afterEach(() => {
     // No pollution: restore every Platform/console spy this file installed.
-    spies.forEach((s) => s.mockRestore());
+    spies.forEach(s => s.mockRestore());
     spies.length = 0;
     jest.restoreAllMocks(); // restores any jest.replaceProperty (Platform / executorch exports)
     jest.useRealTimers();
@@ -67,7 +67,9 @@ describe('KokoroEngine.extra — uncovered branches', () => {
       isFinal: true,
     };
     let received: typeof chunk | null = null;
-    engine.on('audioChunk', (d) => { received = d; });
+    engine.on('audioChunk', d => {
+      received = d;
+    });
 
     engine._onAudioChunk(chunk);
 
@@ -77,7 +79,9 @@ describe('KokoroEngine.extra — uncovered branches', () => {
   it('_onPlaybackTick forwards the elapsed seconds to playbackTick listeners', () => {
     const engine = new KokoroEngine();
     let secs = -1;
-    engine.on('playbackTick', (s) => { secs = s; });
+    engine.on('playbackTick', s => {
+      secs = s;
+    });
 
     engine._onPlaybackTick(4.5);
 
@@ -88,14 +92,22 @@ describe('KokoroEngine.extra — uncovered branches', () => {
     const engine = new KokoroEngine();
     engine._setBridge(makeHandle(), 'af_heart');
     expect(engine.getPhase()).toBe('ready');
-    const errors: Array<{ code: string; message: string; recoverable: boolean }> = [];
-    engine.on('error', (e) => errors.push(e));
+    const errors: Array<{
+      code: string;
+      message: string;
+      recoverable: boolean;
+    }> = [];
+    engine.on('error', e => errors.push(e));
 
     engine._onBridgeError('runtime exploded');
 
     expect(engine.getPhase()).toBe('error');
     expect(errors).toEqual([
-      { code: 'KOKORO_RUNTIME', message: 'runtime exploded', recoverable: false },
+      {
+        code: 'KOKORO_RUNTIME',
+        message: 'runtime exploded',
+        recoverable: false,
+      },
     ]);
     // Bridge was cleared: stop() from now on can't reach a handle and phase stays 'error'.
     engine.stop();
@@ -105,7 +117,7 @@ describe('KokoroEngine.extra — uncovered branches', () => {
   it('_setDownloadProgress emits downloadProgress AND flips idle→downloading only on a fractional tick', () => {
     const engine = new KokoroEngine();
     const events: number[] = [];
-    engine.on('downloadProgress', (d) => events.push(d.progress));
+    engine.on('downloadProgress', d => events.push(d.progress));
 
     // Fractional from idle → downloading (guard TRUE side).
     engine._setDownloadProgress(0.5);
@@ -150,7 +162,9 @@ describe('KokoroEngine.extra — uncovered branches', () => {
   it('speak() rejects with a timeout when the requested mount never attaches', async () => {
     jest.useFakeTimers();
     const engine = new KokoroEngine();
-    engine._setMountRequester(() => {/* never calls _setBridge */});
+    engine._setMountRequester(() => {
+      /* never calls _setBridge */
+    });
 
     const p = engine.speak('hello').catch((e: Error) => e);
     await jest.advanceTimersByTimeAsync(15000);
@@ -204,9 +218,11 @@ describe('KokoroEngine.extra — uncovered branches', () => {
   it('setVoice on an unknown id throws and does not emit voiceChanged', async () => {
     const engine = new KokoroEngine();
     const changed: string[] = [];
-    engine.on('voiceChanged', (id) => changed.push(id));
+    engine.on('voiceChanged', id => changed.push(id));
 
-    await expect(engine.setVoice('no_such_voice')).rejects.toThrow(/Unknown Kokoro voice/);
+    await expect(engine.setVoice('no_such_voice')).rejects.toThrow(
+      /Unknown Kokoro voice/,
+    );
     expect(changed).toEqual([]);
     expect(engine.getActiveVoice()?.id).toBe('af_heart'); // unchanged
   });
@@ -214,7 +230,7 @@ describe('KokoroEngine.extra — uncovered branches', () => {
   it('setVoice on a valid id fetches its assets, records completion and emits voiceChanged', async () => {
     const engine = new KokoroEngine();
     const changed: string[] = [];
-    engine.on('voiceChanged', (id) => changed.push(id));
+    engine.on('voiceChanged', id => changed.push(id));
 
     await engine.setVoice('bm_daniel');
 
@@ -227,7 +243,7 @@ describe('KokoroEngine.extra — uncovered branches', () => {
     const engine = new KokoroEngine();
     fetchResources.mockRejectedValueOnce(new Error('net down'));
     const changed: string[] = [];
-    engine.on('voiceChanged', (id) => changed.push(id));
+    engine.on('voiceChanged', id => changed.push(id));
 
     await engine.setVoice('am_adam'); // must not reject; failure is warn-and-continue
 
@@ -262,7 +278,7 @@ describe('KokoroEngine.extra — uncovered branches', () => {
     handle.speak.mockRejectedValue(new Error('engine on fire'));
     engine._setBridge(handle, 'af_heart');
     const errors: Array<{ code: string; recoverable: boolean }> = [];
-    engine.on('error', (e) => errors.push(e));
+    engine.on('error', e => errors.push(e));
 
     await expect(engine.speak('boom')).rejects.toThrow('engine on fire');
 
@@ -293,12 +309,18 @@ describe('KokoroEngine.extra — uncovered branches', () => {
     const handle = makeHandle();
     let releaseFirst!: () => void;
     handle.speak
-      .mockImplementationOnce(() => new Promise<void>((r) => { releaseFirst = r; }))
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>(r => {
+            releaseFirst = r;
+          }),
+      )
       .mockResolvedValueOnce(undefined);
     engine._setBridge(handle, 'af_heart');
 
-    const first = engine.speak('one');           // opens session 1 (pending)
-    const second = await engine.speak('two')      // session 2 runs and completes
+    const first = engine.speak('one'); // opens session 1 (pending)
+    const second = await engine
+      .speak('two') // session 2 runs and completes
       .then(() => 'second-done');
     expect(second).toBe('second-done');
     expect(engine.getPhase()).toBe('ready');
@@ -314,7 +336,7 @@ describe('KokoroEngine.extra — uncovered branches', () => {
     const engine = new KokoroEngine();
     fetchResources.mockRejectedValueOnce(new Error('disk full'));
     const errors: Array<{ code: string; recoverable: boolean }> = [];
-    engine.on('error', (e) => errors.push(e));
+    engine.on('error', e => errors.push(e));
 
     await expect(engine.downloadAssets()).rejects.toThrow('disk full');
 
@@ -354,7 +376,9 @@ describe('KokoroEngine.extra — uncovered branches', () => {
     fetchResources.mockImplementationOnce(async () => {
       // The concurrent fetch has finished writing every byte to the shared cache; the
       // engine learns this and latches completion, then the losing fetch throws.
-      (engine as unknown as { _genuineCompletion: boolean })._genuineCompletion = true;
+      (
+        engine as unknown as { _genuineCompletion: boolean }
+      )._genuineCompletion = true;
       throw new Error('Resource already downloading');
     });
 
@@ -381,7 +405,9 @@ describe('KokoroEngine.extra — uncovered branches', () => {
   it('generateAndSave rejects — Kokoro has no generate-and-save capability', async () => {
     const engine = new KokoroEngine();
     expect(engine.capabilities.generateAndSave).toBe(false);
-    await expect(engine.generateAndSave()).rejects.toThrow(/does not support generateAndSave/);
+    await expect(engine.generateAndSave()).rejects.toThrow(
+      /does not support generateAndSave/,
+    );
   });
 
   it('pause/resume drive processing↔paused only from the matching phase', () => {
@@ -395,7 +421,9 @@ describe('KokoroEngine.extra — uncovered branches', () => {
     expect(engine.getPhase()).toBe('ready');
 
     // put it into processing via the private setter path (speak), then pause↔resume.
-    (engine as unknown as { _setPhase: (p: string) => void })._setPhase('processing');
+    (engine as unknown as { _setPhase: (p: string) => void })._setPhase(
+      'processing',
+    );
     engine.pause();
     expect(engine.getPhase()).toBe('paused');
     engine.resume();
@@ -433,7 +461,9 @@ describe('KokoroEngine.extra — uncovered branches', () => {
   it('stop from paused returns to ready when the bridge is still mounted', () => {
     const engine = new KokoroEngine();
     engine._setBridge(makeHandle(), 'af_heart');
-    (engine as unknown as { _setPhase: (p: string) => void })._setPhase('paused');
+    (engine as unknown as { _setPhase: (p: string) => void })._setPhase(
+      'paused',
+    );
 
     engine.stop();
     expect(engine.getPhase()).toBe('ready');

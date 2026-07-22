@@ -1,40 +1,77 @@
-/**
- * Per-model eject — the LAZY-LOAD half. After a user ejects a model from memory, the next time it is needed
- * it must lazy-reload on its own (ensureResident) and produce the result — ejecting frees RAM, it does not
- * disable the model.
- *
- * Real interactions: setupChatScreen loads a text model (Home picker). The user ejects it (the exact service
- * action the In Memory "Eject" triggers: modelResidencyManager.evictByKey). Then a real send must bring it
- * back and render the answer, and it is resident again.
- */
-import { setupChatScreen } from '../../harness/chatHarness';
+/** P1 #107 — an ejected model reloads automatically on its next real use. */
+import {
+  openChatWithJourneyModel,
+  renderMainApp,
+  sendChatMessage,
+} from '../../harness/appJourney';
+import { GB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+describe('P1 lazy reload after eject journey', () => {
+  it('reloads ejected Text on the next send and renders its answer', async () => {
+    const { boundary, rtl, view } = await renderMainApp({
+      boundary: {
+        llama: true,
+        ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 10 * GB },
+      },
+    });
+    const { act, fireEvent, waitFor } = rtl;
 
-describe('per-model eject — lazy reload on next use', () => {
-  it('reloads an ejected text model when a message is sent, and answers', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android' });
-    h.render();
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { modelResidencyManager } = require('../../../src/services/modelResidency');
-    const textResident = () => (modelResidencyManager.getResidents() as Array<{ type: string }>).some(r => r.type === 'text');
+    await openChatWithJourneyModel(rtl, view);
+    boundary.llama!.scriptCompletion({ text: 'The model is warm.' });
+    sendChatMessage(rtl, view, 'warm up');
+    await waitFor(() =>
+      expect(view.getByText('The model is warm.')).toBeTruthy(),
+    );
 
-    // Text model is resident after load.
-    expect(textResident()).toBe(true);
+    // The real manager surface proves Text is resident, then the user ejects
+    // exactly that row without changing the selected model.
+    await act(async () => {
+      fireEvent.press(view.getByTestId('model-selector'));
+    });
+    await waitFor(() => {
+      expect(view.getByTestId('models-row-text-ram')).toBeTruthy();
+      expect(view.getByTestId('models-row-text-eject')).toBeTruthy();
+      expect(view.getByTestId('models-row-text')).toHaveTextContent(
+        /Journey Model/,
+      );
+    });
+    await act(async () => {
+      fireEvent.press(view.getByTestId('models-row-text-eject'));
+    });
+    await waitFor(() => {
+      expect(view.queryByTestId('models-row-text-ram')).toBeNull();
+      expect(view.queryByTestId('models-row-text-eject')).toBeNull();
+      expect(view.getByTestId('models-row-text')).toHaveTextContent(
+        /Journey Model/,
+      );
+    });
+    await act(async () => {
+      fireEvent.press(view.getByText('Done'));
+    });
+    await waitFor(() => expect(view.getByTestId('chat-input')).toBeTruthy());
 
-    // The user ejects it (what the In Memory "Eject" button calls) — freed from RAM.
-    await modelResidencyManager.evictByKey('text');
-    expect(textResident()).toBe(false);
+    // No re-selection or load control: the next owning Text action is a normal
+    // send. Its rendered reply proves the native engine was reloaded and used.
+    boundary.llama!.scriptCompletion({ text: 'Lazy reload succeeded.' });
+    sendChatMessage(rtl, view, 'answer after eject');
+    await waitFor(
+      () => expect(view.getByText('Lazy reload succeeded.')).toBeTruthy(),
+      { timeout: 8000 },
+    );
 
-    // When needed again, sending a message lazy-reloads it and the answer renders.
-    await h.send('what is 2 plus 2', { content: 'It is 4.' });
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/It is 4\./)).not.toBeNull(); }, { timeout: 6000 });
+    // Reopen the product residency surface to verify the successful turn put
+    // the still-selected Text model back in memory.
+    await act(async () => {
+      fireEvent.press(view.getByTestId('model-selector'));
+    });
+    await waitFor(() => {
+      expect(view.getByTestId('models-row-text-ram')).toBeTruthy();
+      expect(view.getByTestId('models-row-text-eject')).toBeTruthy();
+      expect(view.getByTestId('models-row-text')).toHaveTextContent(
+        /Journey Model/,
+      );
+    });
 
-    // ...and it is resident again.
-    expect(textResident()).toBe(true);
-  });
+    view.unmount();
+  }, 30000);
 });

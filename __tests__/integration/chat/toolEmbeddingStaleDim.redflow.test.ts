@@ -8,23 +8,45 @@
  * (:88) → NaN. Correct: a dimension change re-embeds the tool. Drives the REAL router; the only faked
  * boundary is the embedding model (embeddingService.embed), whose output DIMENSION we swap.
  */
-import { selectToolsByEmbedding, _resetToolEmbeddingCache } from '../../../src/services/toolEmbeddingRouter';
+import { selectToolsByEmbedding } from '../../../src/services/toolEmbeddingRouter';
 import { embeddingService } from '../../../src/services/rag/embedding';
 
-type Tool = { type: 'function'; function: { name: string; description: string } };
+type Tool = {
+  type: 'function';
+  function: { name: string; description: string };
+};
 const TOOLS: Tool[] = [
-  { type: 'function', function: { name: 'web_search', description: 'Search the web' } },
-  { type: 'function', function: { name: 'calculator', description: 'Evaluate a math expression' } },
-  { type: 'function', function: { name: 'get_current_datetime', description: 'Get the current date and time' } },
-  { type: 'function', function: { name: 'get_device_info', description: 'Get device information' } },
+  {
+    type: 'function',
+    function: { name: 'web_search', description: 'Search the web' },
+  },
+  {
+    type: 'function',
+    function: { name: 'calculator', description: 'Evaluate a math expression' },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_current_datetime',
+      description: 'Get the current date and time',
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_device_info',
+      description: 'Get device information',
+    },
+  },
 ];
 
 describe('PR#453 — stale-dimension tool-embedding cache (red-flow)', () => {
   it('re-embeds a cached tool vector when the embedding model dimension changes', async () => {
-    _resetToolEmbeddingCache();
     jest.spyOn(embeddingService, 'load').mockResolvedValue(undefined as never);
     let dim = 3;
-    const embed = jest.spyOn(embeddingService, 'embed').mockImplementation(async (_text: string) => new Array(dim).fill(0.1));
+    const embed = jest
+      .spyOn(embeddingService, 'embed')
+      .mockImplementation(async (_text: string) => new Array(dim).fill(0.1));
 
     // Turn 1 — old embedding model (dim 3): populates the cache with 3-dim tool vectors.
     await selectToolsByEmbedding('search the web for cats', TOOLS, 2);
@@ -39,7 +61,9 @@ describe('PR#453 — stale-dimension tool-embedding cache (red-flow)', () => {
     // Correct: at least one TOOL text is re-embedded this turn (dimension changed). Today embedTool
     // serves the stale 3-dim vectors on a hash match, so only the query is embedded → RED.
     const embeddedTexts = embed.mock.calls.map(c => String(c[0]));
-    const reEmbeddedATool = embeddedTexts.some(t => TOOLS.some(tool => t.includes(tool.function.name)));
+    const reEmbeddedATool = embeddedTexts.some(t =>
+      TOOLS.some(tool => t.includes(tool.function.name)),
+    );
     expect(reEmbeddedATool).toBe(true);
   });
 });

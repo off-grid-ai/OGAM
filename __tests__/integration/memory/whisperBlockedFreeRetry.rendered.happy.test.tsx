@@ -19,25 +19,42 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
   useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
+  useFocusEffect: () => {},
+  useIsFocused: () => true,
 }));
 
 describe('T119 (rendered) — voice note transcribes when whisper load is blocked (free→retry) (DEV-B1)', () => {
   it('frees the generation model, loads whisper, and the reply renders on a tight device', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', pro: true, whisper: true });
-    /* eslint-disable @typescript-eslint/no-var-requires */
+    const h = await setupChatScreen({
+      engine: 'llama',
+      platform: 'android',
+      pro: true,
+      whisper: true,
+    });
     const { useWhisperStore } = require('../../../src/stores/whisperStore');
-    const { modelResidencyManager } = require('../../../src/services/modelResidency');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+    const {
+      modelResidencyManager,
+    } = require('../../../src/services/modelResidency');
 
     // DOWNLOAD-ONLY whisper: the completed-download boundary artifact (file on disk + downloadedModelId) with
     // NO resident load — so the voice turn's first load attempt runs for real (and blocks on the tight budget).
     const docs = h.boundary.fs!.DocumentDirectoryPath;
-    h.boundary.fs!.seedFile(`${docs}/whisper-models/ggml-tiny.en.bin`, 75 * 1024 * 1024);
+    h.boundary.fs!.seedFile(
+      `${docs}/whisper-models/ggml-tiny.en.bin`,
+      75 * 1024 * 1024,
+    );
     await useWhisperStore.getState().refreshPresentModels();
-    useWhisperStore.setState({ downloadedModelId: 'tiny.en', isModelLoaded: false });
+    useWhisperStore.setState({
+      downloadedModelId: 'tiny.en',
+      isModelLoaded: false,
+    });
 
     // Pin the budget tight: the resident text model fills it, so the whisper sidecar cannot co-reside →
     // makeRoomFor returns fits=false → whisperStore.loadModel returns 'blocked'.
@@ -52,6 +69,27 @@ describe('T119 (rendered) — voice note transcribes when whisper load is blocke
 
     // The reply renders as an audio bubble — which, on a blocked device, is only possible if the free→retry
     // loaded whisper and the transcript reached the model.
-    await h.rtl.waitFor(() => { expect(h.view!.queryAllByTestId(/^audio-bubble-/).length).toBeGreaterThan(0); }, { timeout: 6000 });
+    await h.rtl.waitFor(
+      () => {
+        expect(
+          h.view!.queryAllByTestId(/^audio-bubble-/).length,
+        ).toBeGreaterThan(0);
+      },
+      { timeout: 6000 },
+    );
+
+    // Voice mode next attempts to speak the reply. This deliberately tiny
+    // budget cannot also admit TTS, so wait for that real asynchronous path to
+    // settle into its actionable card before teardown instead of letting the
+    // residency refresh escape the test environment.
+    await h.rtl.waitFor(
+      () => expect(h.view!.getByText('Insufficient Memory')).toBeTruthy(),
+      { timeout: 4000 },
+    );
+    h.rtl.fireEvent.press(h.view!.getByText('Cancel'));
+    await h.rtl.waitFor(() => {
+      expect(h.view!.queryByText('Insufficient Memory')).toBeNull();
+    });
+    h.view!.unmount();
   });
 });

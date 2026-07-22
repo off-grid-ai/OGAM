@@ -28,7 +28,6 @@ import {
 } from '../../services/modelFailureReasons';
 
 export { reasonFromLoadError, modelNotReadyAlert };
-;
 
 export type ModelReadyOutcome =
   | { ok: true }
@@ -49,7 +48,10 @@ export interface ReadinessDeps {
   activeModel: { engine?: string; filePath: string } | null | undefined;
   activeModelId: string | null;
   /** onLoadedResume: when a turn triggered the load, resume it after a "Load Anyway". */
-  ensureModelLoaded: (onLoadedResume?: () => void) => Promise<ModelReadyOutcome>;
+  ensureModelLoaded: (
+    onLoadedResume?: () => void,
+    noticeConversationId?: string | null,
+  ) => Promise<ModelReadyOutcome>;
   setAlertState: (a: AlertState) => void;
 }
 
@@ -59,20 +61,52 @@ export interface ReadinessDeps {
  * line records the branch. Every exit is explicit — no silent early-return can
  * collapse into a generic "Failed to load model" again.
  */
-export async function ensureModelReady(deps: ReadinessDeps, onLoadedResume?: () => void): Promise<ModelReadyOutcome> {
-  if (deps.activeModelInfo?.isRemote) { logger.log('[GEN-SM] ensureModelReady → remote ok'); return { ok: true }; }
-  if (!deps.activeModel || !deps.activeModelId) { logger.log('[GEN-SM] ensureModelReady → no-model-selected'); return { ok: false, reason: 'no-model-selected' }; }
+export async function ensureModelReady(
+  deps: ReadinessDeps,
+  onLoadedResume?: () => void,
+  noticeConversationId?: string | null,
+): Promise<ModelReadyOutcome> {
+  if (deps.activeModelInfo?.isRemote) {
+    logger.log('[GEN-SM] ensureModelReady → remote ok');
+    return { ok: true };
+  }
+  if (!deps.activeModel || !deps.activeModelId) {
+    logger.log('[GEN-SM] ensureModelReady → no-model-selected');
+    return { ok: false, reason: 'no-model-selected' };
+  }
   // ONE readiness predicate for BOTH engines (engines.isModelReady): LiteRT = engine loaded;
   // llama = the SELECTED model's path resident. The old llama fast-path skipped the isModelLoaded
   // check, so a path-set-but-not-resident desync generated against nothing — this closes that.
-  if (isModelReady(deps.activeModel)) { logger.log('[GEN-SM] ensureModelReady → already loaded'); return { ok: true }; }
+  if (isModelReady(deps.activeModel)) {
+    logger.log('[GEN-SM] ensureModelReady → already loaded');
+    return { ok: true };
+  }
   // Thread onLoadedResume for BOTH engines. Without it, a "Load Anyway" force-loaded the model
   // but never resumed the turn (the user's message sat there and they had to hit resend).
-  const outcome = await deps.ensureModelLoaded(onLoadedResume);
-  if (!outcome.ok) { logger.log(`[GEN-SM] ensureModelReady NOT ready reason=${outcome.reason} detail=${outcome.detail ?? ''} alerted=${!!outcome.alerted}`); return outcome; }
+  const outcome = await deps.ensureModelLoaded(
+    onLoadedResume,
+    noticeConversationId,
+  );
+  if (!outcome.ok) {
+    logger.log(
+      `[GEN-SM] ensureModelReady NOT ready reason=${outcome.reason} detail=${
+        outcome.detail ?? ''
+      } alerted=${!!outcome.alerted}`,
+    );
+    return outcome;
+  }
   // Post-verify against native truth — the load reported ok but the active model must actually
   // be resident (catches a desync where a different/no model is loaded).
-  if (!isModelReady(deps.activeModel)) { logger.log('[GEN-SM] ensureModelReady → load reported ok but native model mismatch'); return { ok: false, reason: 'load-threw', detail: 'the loaded model does not match the active selection' }; }
+  if (!isModelReady(deps.activeModel)) {
+    logger.log(
+      '[GEN-SM] ensureModelReady → load reported ok but native model mismatch',
+    );
+    return {
+      ok: false,
+      reason: 'load-threw',
+      detail: 'the loaded model does not match the active selection',
+    };
+  }
   logger.log('[GEN-SM] ensureModelReady → ready');
   return { ok: true };
 }
@@ -85,22 +119,35 @@ export async function ensureModelReady(deps: ReadinessDeps, onLoadedResume?: () 
 export async function ensureReadyOrAlert(
   deps: ReadinessDeps,
   tag: string,
-  /** Re-attempt the turn after the user frees memory. When given, an
-   *  insufficient-memory outcome shows a "Retry" button — eviction already ran and
-   *  still couldn't fit, so the user closes other apps then retries, and the load
-   *  re-reads the now-higher REAL per-process budget. */
-  onRetry?: () => void,
+  options?:
+    | (() => void)
+    | {
+        /** Re-attempt after the user frees memory or chooses Load Anyway. */
+        onRetry?: () => void;
+        noticeConversationId?: string | null;
+      },
 ): Promise<boolean> {
+  const onRetry = typeof options === 'function' ? options : options?.onRetry;
+  const noticeConversationId =
+    typeof options === 'function' ? undefined : options?.noticeConversationId;
   // Thread onRetry down so a "Load Anyway" on the insufficient-memory alert resumes the
   // turn after the forced load (the message would otherwise be silently dropped).
-  const outcome = await ensureModelReady(deps, onRetry);
+  const outcome = await ensureModelReady(deps, onRetry, noticeConversationId);
   if (outcome.ok) return true;
-  logger.log(`[GEN-SM] ${tag} BAIL reason=${outcome.reason} detail=${outcome.detail ?? ''} alerted=${!!outcome.alerted}`);
+  logger.log(
+    `[GEN-SM] ${tag} BAIL reason=${outcome.reason} detail=${
+      outcome.detail ?? ''
+    } alerted=${!!outcome.alerted}`,
+  );
   if (!outcome.alerted) {
     const a = modelNotReadyAlert(outcome.reason, outcome.detail);
-    const buttons = outcome.reason === 'insufficient-memory' && onRetry
-      ? [{ text: 'Cancel', style: 'cancel' as const }, { text: 'Retry', onPress: onRetry }]
-      : undefined;
+    const buttons =
+      outcome.reason === 'insufficient-memory' && onRetry
+        ? [
+            { text: 'Cancel', style: 'cancel' as const },
+            { text: 'Retry', onPress: onRetry },
+          ]
+        : undefined;
     deps.setAlertState(showAlert(a.title, a.message, buttons));
   }
   return false;

@@ -1,49 +1,62 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
-import type { StyleProp, ViewStyle } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useUiModeStore, useAccordionExpanded } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import Icon from 'react-native-vector-icons/Feather';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
+import {
+  CustomAlert,
+  showAlert,
+  hideAlert,
+  AlertState,
+  initialAlertState,
+} from '../CustomAlert';
 import { AnimatedEntry } from '../AnimatedEntry';
 import { triggerHaptic } from '../../utils/haptics';
 import { createStyles } from './styles';
-import { MessageAttachments } from './components/MessageAttachments';
-import { MessageContent } from './components/MessageContent';
-import { GenerationMeta } from './components/GenerationMeta';
-import { ToolsSentCollapsible } from './components/ToolsSentCollapsible';
 import { MessageOverlays } from './components/MessageOverlays';
 import { MarkdownText } from '../MarkdownText';
-import { formatTime, formatDuration, buildMessageData } from './utils';
+import { buildMessageData } from './utils';
 import { ThinkingBlock } from './components/ThinkingBlock';
 import type { ChatMessageProps } from './types';
 import type { Message } from '../../types';
+import { prepareMessageForSpeech } from '../../utils/messageContent';
+import { MessageBubble } from './MessageBubble';
 
 function getToolIcon(toolName?: string): string {
   switch (toolName) {
-    case 'web_search': return 'globe';
-    case 'calculator': return 'hash';
-    case 'get_current_datetime': return 'clock';
-    case 'get_device_info': return 'smartphone';
-    default: return 'tool';
+    case 'web_search':
+      return 'globe';
+    case 'calculator':
+      return 'hash';
+    case 'get_current_datetime':
+      return 'clock';
+    case 'get_device_info':
+      return 'smartphone';
+    default:
+      return 'tool';
   }
 }
 
 function getToolLabel(toolName?: string, content?: string): string {
   switch (toolName) {
     case 'web_search': {
-      const queryMatch = content ? /^No results found for "([^"]+)"/.exec(content) : null;
+      const queryMatch = content
+        ? /^No results found for "([^"]+)"/.exec(content)
+        : null;
       if (queryMatch) return `Searched: "${queryMatch[1]}" (no results)`;
       return 'Web search result';
     }
-    case 'calculator': return content || 'Calculated';
-    case 'get_current_datetime': return 'Retrieved date/time';
-    case 'get_device_info': return 'Retrieved device info';
-    default: return toolName || 'Tool result';
+    case 'calculator':
+      return content || 'Calculated';
+    case 'get_current_datetime':
+      return 'Retrieved date/time';
+    case 'get_device_info':
+      return 'Retrieved device info';
+    default:
+      return toolName || 'Tool result';
   }
 }
-
 
 type ToolResultBubbleProps = {
   /** Stable identity for persisting expanded state across the streaming→finalized
@@ -60,7 +73,15 @@ type ToolResultBubbleProps = {
 };
 
 const ToolResultBubbleInner: React.FC<ToolResultBubbleProps> = ({
-  stableKey, toolIcon, toolLabel, toolName, durationLabel, content, hasDetails, styles, colors,
+  stableKey,
+  toolIcon,
+  toolLabel,
+  toolName,
+  durationLabel,
+  content,
+  hasDetails,
+  styles,
+  colors,
 }) => {
   const [expanded, toggle] = useAccordionExpanded(`tool-result:${stableKey}`);
   return (
@@ -72,8 +93,13 @@ const ToolResultBubbleInner: React.FC<ToolResultBubbleProps> = ({
         disabled={!hasDetails}
       >
         <Icon name={toolIcon} size={13} color={colors.textMuted} />
-        <Text style={styles.toolStatusText} numberOfLines={expanded ? undefined : 2} testID={`tool-result-label-${toolName || 'unknown'}`}>
-          {toolLabel}{durationLabel}
+        <Text
+          style={styles.toolStatusText}
+          numberOfLines={expanded ? undefined : 2}
+          testID={`tool-result-label-${toolName || 'unknown'}`}
+        >
+          {toolLabel}
+          {durationLabel}
         </Text>
         {hasDetails && (
           <Icon
@@ -101,36 +127,60 @@ const ToolResultBubbleInner: React.FC<ToolResultBubbleProps> = ({
  */
 const ToolResultBubble = React.memo(ToolResultBubbleInner);
 
-/** Renders the routed-tools collapsible for a finished assistant message, or nothing. */
-const RoutedToolsRow: React.FC<{ message: Message; isUser: boolean; isStreaming?: boolean; styles: any; colors: any }> = ({ message, isUser, isStreaming, styles, colors }) => {
-  const names = message.generationMeta?.routedToolNames;
-  if (isUser || isStreaming || !names?.length) return null;
-  // This row only renders on a finalized assistant message (isStreaming is false),
-  // so message.id is already the real, stable id here.
-  return <ToolsSentCollapsible names={names} stableKey={message.id} styles={styles} colors={colors} />;
-};
-
-const ToolResultMessage: React.FC<{ message: Message; styles: any; colors: any }> = ({ message, styles, colors }) => {
+const ToolResultMessage: React.FC<{
+  message: Message;
+  styles: any;
+  colors: any;
+}> = ({ message, styles, colors }) => {
   const toolIcon = getToolIcon(message.toolName);
   const toolLabel = getToolLabel(message.toolName, message.content);
-  const durationLabel = message.generationTimeMs == null ? '' : ` (${message.generationTimeMs}ms)`;
-  const hasDetails = !!(message.content && message.content.length > 0 && !message.content.startsWith('No results'));
+  const durationLabel =
+    message.generationTimeMs == null ? '' : ` (${message.generationTimeMs}ms)`;
+  const hasDetails = !!(
+    message.content &&
+    message.content.length > 0 &&
+    !message.content.startsWith('No results')
+  );
   // Prefer toolCallId (carried on every tool-result message and stable across the
   // streaming→finalized remount); fall back to the message id.
   const stableKey = message.toolCallId || message.id;
-  return <ToolResultBubble stableKey={stableKey} toolIcon={toolIcon} toolLabel={toolLabel} toolName={message.toolName || 'unknown'} durationLabel={durationLabel} content={message.content} hasDetails={hasDetails} styles={styles} colors={colors} />;
+  return (
+    <ToolResultBubble
+      stableKey={stableKey}
+      toolIcon={toolIcon}
+      toolLabel={toolLabel}
+      toolName={message.toolName || 'unknown'}
+      durationLabel={durationLabel}
+      content={message.content}
+      hasDetails={hasDetails}
+      styles={styles}
+      colors={colors}
+    />
+  );
 };
 
-const ToolCallMessage: React.FC<{ message: Message; styles: any; colors: any }> = ({ message, styles, colors }) => (
+const ToolCallMessage: React.FC<{
+  message: Message;
+  styles: any;
+  colors: any;
+}> = ({ message, styles, colors }) => (
   <View testID="tool-call-message" style={styles.systemInfoContainer}>
     {message.toolCalls?.map((tc, i) => {
       let argsPreview = '';
-      try { argsPreview = Object.values(JSON.parse(tc.arguments)).join(', '); } catch { argsPreview = tc.arguments; }
+      try {
+        argsPreview = Object.values(JSON.parse(tc.arguments)).join(', ');
+      } catch {
+        argsPreview = tc.arguments;
+      }
       return (
         <View key={`${tc.id || i}`} style={styles.toolStatusRow}>
           <Icon name={getToolIcon(tc.name)} size={13} color={colors.primary} />
-          <Text style={[styles.toolStatusText, { color: colors.primary }]} numberOfLines={1}>
-            Using {tc.name}{argsPreview ? `: ${argsPreview}` : ''}
+          <Text
+            style={[styles.toolStatusText, { color: colors.primary }]}
+            numberOfLines={1}
+          >
+            Using {tc.name}
+            {argsPreview ? `: ${argsPreview}` : ''}
           </Text>
         </View>
       );
@@ -139,55 +189,40 @@ const ToolCallMessage: React.FC<{ message: Message; styles: any; colors: any }> 
 );
 
 const SystemInfoMessage: React.FC<{
-  content: string; styles: ReturnType<typeof createStyles>;
-  alertState: AlertState; onCloseAlert: () => void;
+  content: string;
+  styles: ReturnType<typeof createStyles>;
+  alertState: AlertState;
+  onCloseAlert: () => void;
 }> = ({ content, styles, alertState, onCloseAlert }) => (
   <>
     <View testID="system-info-message" style={styles.systemInfoContainer}>
       <Text style={styles.systemInfoText}>{content}</Text>
     </View>
     <CustomAlert
-      visible={alertState.visible} title={alertState.title}
-      message={alertState.message} buttons={alertState.buttons}
+      visible={alertState.visible}
+      title={alertState.title}
+      message={alertState.message}
+      buttons={alertState.buttons}
       onClose={onCloseAlert}
     />
   </>
 );
 
-type MetaRowProps = {
-  message: Message;
-  styles: ReturnType<typeof createStyles>;
-  isStreaming?: boolean;
-  showActions: boolean;
-  onMenuOpen: () => void;
-  metaExtra?: React.ReactNode;
-};
-
-const MessageMetaRow: React.FC<MetaRowProps> = ({ message, styles, isStreaming, showActions, onMenuOpen, metaExtra }) => (
-  <View style={styles.metaRow}>
-    <Text style={styles.timestamp}>{formatTime(message.timestamp)}</Text>
-    {message.generationTimeMs != null && message.role === 'assistant' && (
-      <Text style={styles.generationTime}>{formatDuration(message.generationTimeMs)}</Text>
-    )}
-    {metaExtra}
-    {showActions && !isStreaming && (
-      <TouchableOpacity style={styles.actionHint} onPress={onMenuOpen}>
-        <Text style={styles.actionHintText}>•••</Text>
-      </TouchableOpacity>
-    )}
-  </View>
-);
-
 const ToolCallWithThinking: React.FC<{
-  message: Message; showThinking: boolean; onToggle: () => void; styles: any; colors: any;
+  message: Message;
+  showThinking: boolean;
+  onToggle: () => void;
+  styles: any;
+  colors: any;
 }> = ({ message, showThinking, onToggle, styles, colors }) => {
   // Use buildMessageData (the single source that honors message.reasoningContent from the
   // separate reasoning channel AND inline <think> in content) so a tool-call message keeps
   // its pre-tool-call thinking block. Reading only parseThinkingContent(content) missed the
   // reasoningContent case → the first round of thinking vanished when the tool fired (OD14).
-  const tc = (message.content || message.reasoningContent)
-    ? buildMessageData(message).parsedContent
-    : null;
+  const tc =
+    message.content || message.reasoningContent
+      ? buildMessageData(message).parsedContent
+      : null;
   const hasText = !!tc?.response?.trim();
   // Left-aligned + bubble-width, matching a NORMAL assistant reply — a tool-call reply is an
   // assistant message, so its thinking box + pre-text + tool cards must line up with every other
@@ -198,7 +233,12 @@ const ToolCallWithThinking: React.FC<{
       <View style={styles.toolCallReplyContent}>
         {!!tc?.thinking && (
           <View style={styles.thinkingBlockWrapper}>
-            <ThinkingBlock parsedContent={tc} showThinking={showThinking} onToggle={onToggle} styles={styles} />
+            <ThinkingBlock
+              parsedContent={tc}
+              showThinking={showThinking}
+              onToggle={onToggle}
+              styles={styles}
+            />
           </View>
         )}
         {hasText && (
@@ -211,89 +251,6 @@ const ToolCallWithThinking: React.FC<{
     </View>
   );
 };
-
-// The rendered message bubble (attachments + content + tool row + meta). Split out of
-// ChatMessage so its per-section conditionals don't inflate ChatMessage's complexity.
-interface MessageBubbleProps {
-  message: Message;
-  styles: ReturnType<typeof createStyles>;
-  colors: ReturnType<typeof useTheme>['colors'];
-  isUser: boolean;
-  isStreaming?: boolean;
-  hasAttachments: boolean;
-  bubbleStyle: StyleProp<ViewStyle>;
-  parsedContent: ReturnType<typeof buildMessageData>['parsedContent'];
-  showThinking: boolean;
-  showActions: boolean;
-  showGenerationDetails: boolean;
-  metaExtra?: React.ReactNode;
-  onImagePress?: (uri: string) => void;
-  onToggleThinking: () => void;
-  onLongPress: () => void;
-  onMenuOpen: () => void;
-}
-
-const MessageBubble: React.FC<MessageBubbleProps> = ({
-  message, styles, colors, isUser, isStreaming, hasAttachments, bubbleStyle,
-  parsedContent, showThinking, showActions, showGenerationDetails, metaExtra,
-  onImagePress, onToggleThinking, onLongPress, onMenuOpen,
-}) => (
-  <TouchableOpacity
-    testID={isUser ? 'user-message' : 'assistant-message'}
-    style={[
-      styles.container,
-      isUser ? styles.userContainer : styles.assistantContainer,
-    ]}
-    activeOpacity={0.8}
-    onLongPress={onLongPress}
-    delayLongPress={300}
-  >
-    <View style={bubbleStyle}>
-      {hasAttachments && (
-        <MessageAttachments
-          attachments={message.attachments!}
-          isUser={isUser}
-          styles={styles}
-          colors={colors}
-          onImagePress={onImagePress}
-        />
-      )}
-
-      <MessageContent
-        isUser={isUser}
-        isThinking={message.isThinking}
-        content={message.content}
-        isStreaming={isStreaming}
-        parsedContent={parsedContent}
-        showThinking={showThinking}
-        onToggleThinking={onToggleThinking}
-        styles={styles}
-      />
-    </View>
-
-    <RoutedToolsRow message={message} isUser={isUser} isStreaming={isStreaming} styles={styles} colors={colors} />
-
-    {!isUser && !isStreaming && message.generationMeta?.truncated && (
-      <View testID="message-cutoff-indicator" style={styles.toolStatusRow}>
-        <Icon name="alert-triangle" size={12} color={colors.textMuted} />
-        <Text style={styles.toolStatusText}>Reply cut off at the token limit. Retry to continue.</Text>
-      </View>
-    )}
-
-    <MessageMetaRow
-      message={message}
-      styles={styles}
-      isStreaming={isStreaming}
-      showActions={showActions}
-      onMenuOpen={onMenuOpen}
-      metaExtra={metaExtra}
-    />
-
-    {showGenerationDetails && !isUser && message.generationMeta && (
-      <GenerationMeta generationMeta={message.generationMeta} styles={styles} />
-    )}
-  </TouchableOpacity>
-);
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({
   message,
@@ -314,7 +271,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const ttsCanSpeak = callHook<boolean>(HOOKS.audioCanSpeak) ?? false;
-  const interfaceMode = useUiModeStore((s) => s.interfaceMode);
+  const interfaceMode = useUiModeStore(s => s.interfaceMode);
   const [showActionMenu, setShowActionMenu] = useState(false);
   const [showSelectText, setShowSelectText] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -388,17 +345,37 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       onSpeakProp();
       return;
     }
-    callHook(HOOKS.audioSpeak, displayContent, message.id);
+    callHook(
+      HOOKS.audioSpeak,
+      prepareMessageForSpeech(displayContent),
+      message.id,
+    );
   };
 
   if (message.isSystemInfo) {
-    return <SystemInfoMessage content={displayContent} styles={styles}
-      alertState={alertState} onCloseAlert={() => setAlertState(hideAlert())} />;
+    return (
+      <SystemInfoMessage
+        content={displayContent}
+        styles={styles}
+        alertState={alertState}
+        onCloseAlert={() => setAlertState(hideAlert())}
+      />
+    );
   }
-  if (message.role === 'tool') return <ToolResultMessage message={message} styles={styles} colors={colors} />;
+  if (message.role === 'tool')
+    return (
+      <ToolResultMessage message={message} styles={styles} colors={colors} />
+    );
   if (message.role === 'assistant' && message.toolCalls?.length) {
-    return <ToolCallWithThinking message={message} showThinking={showThinking}
-      onToggle={() => setShowThinking(!showThinking)} styles={styles} colors={colors} />;
+    return (
+      <ToolCallWithThinking
+        message={message}
+        showThinking={showThinking}
+        onToggle={() => setShowThinking(!showThinking)}
+        styles={styles}
+        colors={colors}
+      />
+    );
   }
   const messageBody = (
     <MessageBubble
@@ -423,7 +400,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
   return (
     <>
-      {animateEntry ? <AnimatedEntry index={0}>{messageBody}</AnimatedEntry> : messageBody}
+      {animateEntry ? (
+        <AnimatedEntry index={0}>{messageBody}</AnimatedEntry>
+      ) : (
+        messageBody
+      )}
 
       <MessageOverlays
         message={message}

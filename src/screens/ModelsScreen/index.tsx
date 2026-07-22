@@ -1,5 +1,11 @@
 import React, { useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import { MainTabParamList } from '../../navigation/types';
@@ -34,7 +40,8 @@ export const ModelsScreen: React.FC = () => {
   const didAutoSelect = useRef(false);
   useFocusEffect(
     useCallback(() => {
-      const { initialTab, repairModelId, initialSearchQuery } = route.params ?? {};
+      const { initialTab, repairModelId, initialSearchQuery } =
+        route.params ?? {};
       if (initialTab) vm.setActiveTab(initialTab);
       // Deep-link from the chat "get an accelerated model" banner: land on the Text
       // tab with the HF search prefilled (the debounced search in useTextModels fires
@@ -46,7 +53,21 @@ export const ModelsScreen: React.FC = () => {
       if (repairModelId && !didAutoSelect.current) {
         didAutoSelect.current = true;
         const match = RECOMMENDED_MODELS.find(m => m.id === repairModelId);
-        if (match) vm.handleSelectModel({ id: match.id, name: match.name, author: match.id.split('/')[0], description: match.description, modelType: match.type, paramCount: match.params, minRamGB: match.minRam, downloads: 0, likes: 0, tags: [], lastModified: '', files: [] });
+        if (match)
+          vm.handleSelectModel({
+            id: match.id,
+            name: match.name,
+            author: match.id.split('/')[0],
+            description: match.description,
+            modelType: match.type,
+            paramCount: match.params,
+            minRamGB: match.minRam,
+            downloads: 0,
+            likes: 0,
+            tags: [],
+            lastModified: '',
+            files: [],
+          });
       }
       return () => {
         didAutoSelect.current = false;
@@ -60,7 +81,11 @@ export const ModelsScreen: React.FC = () => {
   const isShowingDetail = vm.activeTab === 'text' && vm.selectedModel !== null;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']} testID="models-screen">
+    <SafeAreaView
+      style={styles.container}
+      edges={['top']}
+      testID="models-screen"
+    >
       {/* Collapse header/import/tabs when showing model detail — detail has its own header.
            Use height:0 + overflow:hidden instead of unmounting so AttachStep components
            stay registered with the SpotlightTourProvider (prevents broken spotlight overlays). */}
@@ -77,7 +102,12 @@ export const ModelsScreen: React.FC = () => {
               <Icon name="download" size={20} color={colors.text} />
               {vm.downloadBadgeCount > 0 && (
                 <View style={styles.downloadBadge}>
-                  <Text testID="downloads-badge-count" style={styles.downloadBadgeText}>{vm.downloadBadgeCount}</Text>
+                  <Text
+                    testID="downloads-badge-count"
+                    style={styles.downloadBadgeText}
+                  >
+                    {vm.downloadBadgeCount}
+                  </Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -95,14 +125,26 @@ export const ModelsScreen: React.FC = () => {
                 </Text>
               </View>
               <View style={styles.imageProgressBar}>
-                <View style={[styles.imageProgressFill, { width: `${Math.round(vm.importProgress.fraction * 100)}%` }]} />
+                <View
+                  style={[
+                    styles.imageProgressFill,
+                    {
+                      width: `${Math.round(vm.importProgress.fraction * 100)}%`,
+                    },
+                  ]}
+                />
               </View>
               <Text style={styles.importProgressPercent}>
                 {Math.round(vm.importProgress.fraction * 100)}%
               </Text>
             </View>
           ) : (
-            <TouchableOpacity style={styles.importButton} onPress={vm.handleImportLocalModel} testID="import-local-model" disabled={vm.isImporting}>
+            <TouchableOpacity
+              style={styles.importButton}
+              onPress={vm.handleImportLocalModel}
+              testID="import-local-model"
+              disabled={vm.isImporting}
+            >
               <Icon name="folder-plus" size={20} color={colors.primary} />
               <Text style={styles.importButtonText}>Import Local File</Text>
             </TouchableOpacity>
@@ -117,6 +159,9 @@ export const ModelsScreen: React.FC = () => {
         >
           <TouchableOpacity
             style={styles.tabItem}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: vm.activeTab === 'text' }}
+            testID="text-models-tab"
             onPress={() => {
               vm.setActiveTab('text');
               vm.setFilterState(initialFilterState);
@@ -124,12 +169,22 @@ export const ModelsScreen: React.FC = () => {
               vm.setImageFiltersVisible(false);
             }}
           >
-            <Text style={[styles.tabText, vm.activeTab === 'text' && styles.tabTextActive]}>Text Models</Text>
+            <Text
+              style={[
+                styles.tabText,
+                vm.activeTab === 'text' && styles.tabTextActive,
+              ]}
+            >
+              Text Models
+            </Text>
             {vm.activeTab === 'text' && <View style={styles.tabIndicator} />}
           </TouchableOpacity>
           <AttachStep index={4}>
             <TouchableOpacity
               style={styles.tabItem}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: vm.activeTab === 'image' }}
+              testID="image-models-tab"
               onPress={() => {
                 vm.setActiveTab('image');
                 vm.setFilterState(initialFilterState);
@@ -137,12 +192,21 @@ export const ModelsScreen: React.FC = () => {
                 vm.setImageFiltersVisible(false);
               }}
             >
-              <Text style={[styles.tabText, vm.activeTab === 'image' && styles.tabTextActive]}>Image Models</Text>
+              <Text
+                style={[
+                  styles.tabText,
+                  vm.activeTab === 'image' && styles.tabTextActive,
+                ]}
+              >
+                Image Models
+              </Text>
               {vm.activeTab === 'image' && <View style={styles.tabIndicator} />}
             </TouchableOpacity>
           </AttachStep>
           <TouchableOpacity
             style={styles.tabItem}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: vm.activeTab === 'voice' }}
             testID="voice-models-tab"
             onPress={() => {
               vm.setActiveTab('voice');
@@ -151,11 +215,20 @@ export const ModelsScreen: React.FC = () => {
               vm.setImageFiltersVisible(false);
             }}
           >
-            <Text style={[styles.tabText, vm.activeTab === 'voice' && styles.tabTextActive]}>Voice Models</Text>
+            <Text
+              style={[
+                styles.tabText,
+                vm.activeTab === 'voice' && styles.tabTextActive,
+              ]}
+            >
+              Voice Models
+            </Text>
             {vm.activeTab === 'voice' && <View style={styles.tabIndicator} />}
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.tabItem}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: vm.activeTab === 'transcription' }}
             testID="transcription-models-tab"
             onPress={() => {
               vm.setActiveTab('transcription');
@@ -164,8 +237,17 @@ export const ModelsScreen: React.FC = () => {
               vm.setImageFiltersVisible(false);
             }}
           >
-            <Text style={[styles.tabText, vm.activeTab === 'transcription' && styles.tabTextActive]}>Transcription Models</Text>
-            {vm.activeTab === 'transcription' && <View style={styles.tabIndicator} />}
+            <Text
+              style={[
+                styles.tabText,
+                vm.activeTab === 'transcription' && styles.tabTextActive,
+              ]}
+            >
+              Transcription Models
+            </Text>
+            {vm.activeTab === 'transcription' && (
+              <View style={styles.tabIndicator} />
+            )}
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -183,6 +265,7 @@ export const ModelsScreen: React.FC = () => {
           modelFiles={vm.modelFiles}
           setModelFiles={vm.setModelFiles}
           isLoadingFiles={vm.isLoadingFiles}
+          filesLoadError={vm.filesLoadError}
           filterState={vm.filterState}
           textFiltersVisible={vm.textFiltersVisible}
           setTextFiltersVisible={vm.setTextFiltersVisible}
@@ -254,16 +337,22 @@ export const ModelsScreen: React.FC = () => {
       )}
 
       {/* Voice Models Tab: pro panel when registered, otherwise an upsell. */}
-      {vm.activeTab === 'voice' && (
-        VoiceModelsPanel
-          ? <VoiceModelsPanel />
-          : <VoiceModelsUpsell onGetPro={() => vm.navigation.navigate('ProDetail')} />
-      )}
+      {vm.activeTab === 'voice' &&
+        (VoiceModelsPanel ? (
+          <VoiceModelsPanel />
+        ) : (
+          <VoiceModelsUpsell
+            onGetPro={() => vm.navigation.navigate('ProDetail')}
+          />
+        ))}
 
       {/* Transcription Models Tab (speech-to-text, core). */}
       {vm.activeTab === 'transcription' && <TranscriptionModelsTab />}
 
-      <CustomAlert {...vm.alertState} onClose={() => vm.setAlertState(hideAlert())} />
+      <CustomAlert
+        {...vm.alertState}
+        onClose={() => vm.setAlertState(hideAlert())}
+      />
     </SafeAreaView>
   );
 };

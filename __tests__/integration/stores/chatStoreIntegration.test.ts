@@ -80,7 +80,7 @@ describe('ChatStore Streaming Integration', () => {
 
       // Streaming state should be cleared
       expect(state.streamingMessage).toBe('');
-      expect(state.streamingForConversationId).toBe(null);
+      expect(state.streamingForConversationId).toBeNull();
       expect(state.isStreaming).toBe(false);
 
       // Message should be added to conversation
@@ -162,7 +162,7 @@ describe('ChatStore Streaming Integration', () => {
 
       // Everything should be cleared
       expect(state.streamingMessage).toBe('');
-      expect(state.streamingForConversationId).toBe(null);
+      expect(state.streamingForConversationId).toBeNull();
       expect(state.isStreaming).toBe(false);
       expect(state.isThinking).toBe(false);
 
@@ -191,7 +191,7 @@ describe('ChatStore Streaming Integration', () => {
     it('should return idle state when not streaming', () => {
       const streamingState = useChatStore.getState().getStreamingState();
 
-      expect(streamingState.conversationId).toBe(null);
+      expect(streamingState.conversationId).toBeNull();
       expect(streamingState.content).toBe('');
       expect(streamingState.isStreaming).toBe(false);
       expect(streamingState.isThinking).toBe(false);

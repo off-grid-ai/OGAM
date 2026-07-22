@@ -26,20 +26,20 @@ describe('T062 (llama) — resend of an image request re-draws on the llama engi
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
     h.render();
     await h.placeImageModel({ backend: 'coreml' });
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { activeModelService } = require('../../../src/services/activeModelService');
     await activeModelService.loadImageModel('sd');
     await h.cycleImageMode(); // auto → ON(force)
     await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('image-mode-force-badge')).not.toBeNull(); });
 
     await h.tapSend('draw a dog');
-    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); }, { timeout: 6000 });
+    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1); }, { timeout: 6000 });
 
     // RESEND via the real action menu (3-dots) → the scripted text is what leaks if it misroutes to llama.
     await h.regenerateLast({ text: 'A dog is a domestic animal.' }, 'dots');
     await h.settle(500);
 
-    expect(h.boundary.diffusion.calls.generateImage.length).toBe(2);
+    expect(h.boundary.diffusion.calls.generateImage).toHaveLength(2);
     expect(h.view!.queryByText(/domestic animal/)).toBeNull();
   });
 });

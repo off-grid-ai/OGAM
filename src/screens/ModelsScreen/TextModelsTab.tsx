@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { View, Text, FlatList, TextInput, ActivityIndicator, RefreshControl, TouchableOpacity, InteractionManager, Platform } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import Icon from 'react-native-vector-icons/Feather';
-import { fileExceedsBudget } from '../../services/memoryBudget';
+import { fileExceedsBudget, isLoadableOnDevice } from '../../services/memoryBudget';
 import { AttachStep, useSpotlightTour } from 'react-native-spotlight-tour';
 import { Card, ModelCard } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
@@ -45,7 +45,7 @@ type Props = Pick<ModelsScreenViewModel,
   | 'hasSearched'
   | 'selectedModel' | 'setSelectedModel'
   | 'modelFiles' | 'setModelFiles'
-  | 'isLoadingFiles'
+  | 'isLoadingFiles' | 'filesLoadError'
   | 'filterState'
   | 'textFiltersVisible' | 'setTextFiltersVisible'
   | 'filteredResults' | 'recommendedAsModelInfo' | 'trendingAsModelInfo'
@@ -63,10 +63,10 @@ type Props = Pick<ModelsScreenViewModel,
 >;
 
 type DetailProps = Pick<Props,
-  | 'modelFiles' | 'isLoadingFiles' | 'filterState' | 'ramGB'
+  | 'modelFiles' | 'isLoadingFiles' | 'filesLoadError' | 'filterState' | 'ramGB'
   | 'alertState' | 'setAlertState'
   | 'getDownloadedModel' | 'isModelDownloaded' | 'isRepairingVisionModel'
-  | 'handleDownload' | 'handleRepairMmProj' | 'handleCancelDownload' | 'handleDeleteModel'
+  | 'handleDownload' | 'handleRepairMmProj' | 'handleCancelDownload' | 'handleDeleteModel' | 'handleSelectModel'
 > & { selectedModel: ModelInfo; onBack: () => void; };
 
 // Build the file card's onDownload handler. Whether to show the curated confirm-download
@@ -94,10 +94,10 @@ function buildFileDownloadHandler({ s, fileName, sizeBytes, ramGB, proceedDownlo
 }
 
 const ModelDetailView: React.FC<DetailProps> = ({
-  selectedModel, modelFiles, isLoadingFiles, filterState, ramGB,
+  selectedModel, modelFiles, isLoadingFiles, filesLoadError, filterState, ramGB,
   alertState, setAlertState, onBack,
   getDownloadedModel, isModelDownloaded, isRepairingVisionModel,
-  handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel,
+  handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel, handleSelectModel,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -124,7 +124,9 @@ const ModelDetailView: React.FC<DetailProps> = ({
     for (const f of modelFiles) {
       if (!f.mmProjFile) continue;
       const rec = getDownloadedModel(selectedModel.id, f.name);
-      if (rec?.engine === 'llama' && !rec.isVisionModel) void modelManager.markVisionModel(rec.id);
+      if (rec?.engine === 'llama' && !rec.isVisionModel) {
+        modelManager.markVisionModel(rec.id).catch(() => {});
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedModel.id, modelFiles]);
@@ -252,10 +254,22 @@ const ModelDetailView: React.FC<DetailProps> = ({
       )}
       {isLoadingFiles ? (
         <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>
+      ) : filesLoadError ? (
+        <Card style={styles.emptyCard} testID="model-files-load-error">
+          <Icon name="wifi-off" size={24} color={colors.textSecondary} />
+          <Text style={styles.emptyText}>Couldn't load files. Check your connection and try again.</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => handleSelectModel(selectedModel)} testID="model-files-retry">
+            <Icon name="refresh-cw" size={14} color={colors.primary} />
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </Card>
       ) : (
         <FlatList
           data={modelFiles
-            .filter(f => f.size > 0 && !fileExceedsBudget(f.size, ramGB) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
+            // Show every loadable quant (easy/fits/tight — down to the aggressive ceiling), not just
+            // those under the balanced budget, so a 'tight' model opened from browse still lists a
+            // downloadable file. isCompatible (below) still flags the snug ones for a Load-Anyway warning.
+            .filter(f => f.size > 0 && isLoadableOnDevice(f.size, ramGB) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
             .sort((a, b) => {
               if (selectedModel.id === LITERT_PARENT_ID) return a.size - b.size; // curated: small-first
               // Tier: Q4_K_M (CPU default, lowest size) → GPU/NPU Q4_0/Q8_0 → rest (CPU
@@ -330,7 +344,7 @@ const SortPanel: React.FC<SortPanelProps> = ({ filterState, setSortOption, style
 export const TextModelsTab: React.FC<Props> = (props) => {
   const {
     searchQuery, setSearchQuery, isLoading, isRefreshing, hasSearched,
-    selectedModel, setSelectedModel, modelFiles, setModelFiles, isLoadingFiles,
+    selectedModel, setSelectedModel, modelFiles, setModelFiles, isLoadingFiles, filesLoadError,
     filterState, textFiltersVisible, setTextFiltersVisible,
     filteredResults, recommendedAsModelInfo, trendingAsModelInfo, ramGB, deviceRecommendation,
     hasActiveFilters, downloadedModels,
@@ -362,6 +376,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
         selectedModel={selectedModel}
         modelFiles={modelFiles}
         isLoadingFiles={isLoadingFiles}
+        filesLoadError={filesLoadError}
         filterState={filterState}
         ramGB={ramGB}
         alertState={alertState}
@@ -374,6 +389,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
         handleRepairMmProj={handleRepairMmProj}
         handleCancelDownload={handleCancelDownload}
         handleDeleteModel={handleDeleteModel}
+        handleSelectModel={handleSelectModel}
       />
     );
   }

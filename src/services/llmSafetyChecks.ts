@@ -22,7 +22,22 @@ function decodeLittleEndianUint32(bytes: string): number | null {
  * Validate that a model file is a plausible GGUF file.
  * Checks magic bytes and minimum file size to catch corrupted/truncated downloads.
  */
-export async function validateModelFile(modelPath: string): Promise<{ valid: boolean; reason?: string }> {
+/**
+ * Result of a model-file validation.
+ * - `valid`   — the file passed every check we could run.
+ * - `corrupt` — the file is PROVABLY bad (present but too small, or wrong magic bytes). This is the
+ *   only signal callers may act on to DELETE the file. A validation that simply could not run — a
+ *   transient `RNFS.stat`/`read` failure — is `valid:false, corrupt:false` (indeterminate): the file
+ *   must be kept, because deleting a user's multi-GB model on a filesystem hiccup is data loss, and
+ *   llama.rn validates the format natively on load anyway.
+ */
+export interface ModelFileValidation {
+  valid: boolean;
+  corrupt: boolean;
+  reason?: string;
+}
+
+export async function validateModelFile(modelPath: string): Promise<ModelFileValidation> {
   try {
     const stat = await RNFS.stat(modelPath);
     const fileSize = typeof stat.size === 'string' ? Number.parseInt(stat.size, 10) : stat.size;
@@ -30,7 +45,7 @@ export async function validateModelFile(modelPath: string): Promise<{ valid: boo
     logger.log(`[LLM] Validating model: ${modelPath}`);
     logger.log(`[LLM] Model file size: ${fileSizeMB}MB (${fileSize} bytes)`);
     if (fileSize < MIN_GGUF_FILE_SIZE) {
-      return { valid: false, reason: `Model file too small (${fileSize} bytes) — likely corrupted or incomplete download` };
+      return { valid: false, corrupt: true, reason: `Model file too small (${fileSize} bytes) — likely corrupted or incomplete download` };
     }
     // Read first 4 bytes to check GGUF magic number.
     // RNFS.read() has an iOS bridging bug with NSInteger arguments on
@@ -43,7 +58,7 @@ export async function validateModelFile(modelPath: string): Promise<{ valid: boo
       logger.warn('[LLM] RNFS.read() failed for magic check, skipping header validation:', readErr);
     }
     if (header !== undefined && !header.startsWith(GGUF_MAGIC)) {
-      return { valid: false, reason: `Invalid model file — not a GGUF file (header: ${header})` };
+      return { valid: false, corrupt: true, reason: `Invalid model file — not a GGUF file (header: ${header})` };
     }
     if (header !== undefined) {
       logger.log(`[LLM] GGUF magic OK`);
@@ -61,9 +76,11 @@ export async function validateModelFile(modelPath: string): Promise<{ valid: boo
     // Log the model filename for easier identification
     const filename = modelPath.split('/').pop() || modelPath;
     logger.log(`[LLM] Model filename: ${filename}`);
-    return { valid: true };
+    return { valid: true, corrupt: false };
   } catch (e: any) {
-    return { valid: false, reason: `Failed to validate model file: ${e?.message || e}` };
+    // Could NOT verify (transient stat/read failure) — NOT proof of corruption. Report invalid so the
+    // load path can surface an error, but corrupt:false so no caller deletes the file on a hiccup.
+    return { valid: false, corrupt: false, reason: `Failed to validate model file: ${e?.message || e}` };
   }
 }
 

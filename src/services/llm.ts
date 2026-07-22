@@ -10,7 +10,7 @@ import {
   hashString, ensureSessionCacheDir, getSessionPath, buildModelParams,
   buildCompletionParams, buildThinkingCompletionParams, supportsNativeThinking,
   getMaxContextForDevice, getGpuLayersForDevice, BYTES_PER_GB,
-  validateModelFile, checkMemoryForModel, safeCompletion, resolveSafeContext,
+  validateModelFile, checkMemoryForModel, resolveSafeContext,
   describeGpuFallback, isTruncatedResult,
 } from './llmHelpers';
 import { awaitMemoryReclaim, effectiveAvailableMB } from './memoryBudget';
@@ -18,6 +18,8 @@ import { modelResidencyManager } from './modelResidency';
 import { hardwareService } from './hardware';
 import { formatLlamaMessages, buildOAIMessages } from './llmMessages';
 import { generateWithToolsImpl } from './llmToolGeneration';
+import { MtpSession } from './llmMtp';
+import { deriveToolCallingSupport, resolveGpuBackend } from './llmCapabilities';
 import type { ToolCall } from './tools/types';
 import type { MultimodalSupport, LLMPerformanceSettings, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
@@ -26,10 +28,6 @@ import type { StreamToken } from './llmStreamTypes';
 export type { StreamToken };
 type StreamCallback = (data: StreamToken) => void;
 type CompleteCallback = (result: { content: string; reasoningContent: string }) => void;
-function resolveGpuBackend(enabled: boolean, devices: string[]): string {
-  if (!enabled) return 'CPU';
-  return Platform.OS === 'ios' ? 'Metal' : (devices.length > 0 ? devices.join(', ') : 'OpenCL');
-}
 class LLMService {
   private context: LlamaContext | null = null;
   private currentModelPath: string | null = null;
@@ -46,9 +44,11 @@ class LLMService {
   private gpuAttemptFailed: boolean = false;
   private toolCallingSupported: boolean = false;
   private thinkingSupported: boolean = false;
+  private mtp = new MtpSession();
   /** GPU layers the user's settings asked for at load time (pre device-cap/backend resolution).
    *  >0 with activeGpuLayers 0 means the load silently downgraded to CPU — the fallback-notice verdict. */
   private requestedGpuLayers: number = 0;
+  private backendFallbackNoticeConsumed: boolean = false;
   private sessionCacheDir: string = `${RNFS.CachesDirectoryPath}/llm-sessions`;
   /** Serializes loadModel / unloadModel / reloadWithSettings to prevent concurrent native context init. */
   private contextMutexPromise: Promise<void> = Promise.resolve();
@@ -117,7 +117,7 @@ class LLMService {
     const multimodal = mmProjPath
       ? await this.deriveMultimodalFromProjector(context, modelPath, mmProjPath)
       : { initialized: false, support: await checkContextMultimodal(context) };
-    const toolCallingSupported = this.deriveToolCallingSupport(context);
+    const toolCallingSupported = deriveToolCallingSupport(context);
     const thinkingSupported = supportsNativeThinking(context);
     this.context = context;
     this.currentModelPath = modelPath;
@@ -127,9 +127,10 @@ class LLMService {
     this.toolCallingSupported = toolCallingSupported;
     this.thinkingSupported = thinkingSupported;
     this.requestedGpuLayers = requestedGpuLayers;
+    this.backendFallbackNoticeConsumed = false;
     Object.assign(this, captureGpuInfo(context, gpuAttemptFailed, nGpuLayers));
     useAppStore.getState().setModelMaxContext(getModelMaxContext(context));
-    logger.log(`[LLM] Model loaded, vision: ${this.supportsVision()}, tools: ${this.toolCallingSupported}, thinking: ${this.thinkingSupported}`);
+    logger.log(`[LLM] Model loaded, vision: ${this.supportsVision()}, tools: ${this.toolCallingSupported}, thinking: ${this.thinkingSupported}, mtp: ${this.mtp.description()}`);
   }
   async loadModel(modelPath: string, mmProjPath?: string, opts?: { override?: boolean }): Promise<void> {
     const mutex = this.acquireContextMutex();
@@ -144,16 +145,17 @@ class LLMService {
       const { fileSize, memCheck, params } = await this.validateAndPrepareModel(modelPath, opts?.override);
       if (mmProjPath && !await RNFS.exists(mmProjPath)) { logger.warn('[LLM] MMProj file not found, disabling vision support'); mmProjPath = undefined; }
       const { baseParams, nThreads, nBatch, ctxLen, nGpuLayers } = params;
+      await this.mtp.prepare(modelPath, useAppStore.getState().settings.experimentalMtp === true);
       this.currentSettings = { nThreads, nBatch, contextLength: ctxLen };
       logger.log(`[LLM] Loading model: ctx=${ctxLen}, threads=${nThreads}, batch=${nBatch}, fileSize=${(fileSize / (1024 * 1024)).toFixed(0)}MB, availRAM=${memCheck.availableMB.toFixed(0)}MB`);
       try {
-        const { context, gpuAttemptFailed, actualLength, attemptedGpuLayers } = await this.initWithAutoContext({ baseParams, ctxLen, nGpuLayers, fileSize });
+        const { context, gpuAttemptFailed, actualLength, attemptedGpuLayers } = await this.mtp.initialize(baseParams, resolved => this.initWithAutoContext({ baseParams: resolved, ctxLen, nGpuLayers, fileSize }));
         // attemptedGpuLayers (post device-cap/backend resolution) is what the init actually offered the
         // GPU — the truthful layer count for the meta; nGpuLayers is the raw settings request.
         await this.applyLoadedContext({ context, actualLength, gpuAttemptFailed, nGpuLayers: attemptedGpuLayers, requestedGpuLayers: nGpuLayers, modelPath, mmProjPath });
       } catch (error: any) {
         this.context = null; this.currentModelPath = null; this.multimodalSupport = null;
-        this.toolCallingSupported = false; this.thinkingSupported = false;
+        this.toolCallingSupported = false; this.thinkingSupported = false; this.mtp.reset();
         Object.assign(this, { gpuEnabled: false, gpuReason: '', activeGpuLayers: 0, gpuDevices: [], requestedGpuLayers: 0, gpuAttemptFailed: false });
         throw new Error(error?.message || 'Unknown error loading model');
       }
@@ -249,16 +251,6 @@ class LLMService {
   }
   /** Disable ctx_shift on Android when GPU layers are active — the OpenCL backend SIGSEGVs on the ggml set op used by KV cache shifting. */
   private shouldDisableCtxShift(): boolean { return Platform.OS === 'android' && this.activeGpuLayers > 0; }
-  private deriveToolCallingSupport(context: LlamaContext): boolean {
-    try {
-      const jinja = (context as any)?.model?.chatTemplates?.jinja;
-      logger.log('[LLM][TOOLS] Full jinja caps:', JSON.stringify(jinja));
-      logger.log(`[WIRE-CAPS] ${JSON.stringify({ jinja })}`); // [WIRE] real chat-template tool caps
-      const supported = !!(jinja?.defaultCaps?.toolCalls || jinja?.toolUse || jinja?.toolUseCaps?.toolCalls);
-      logger.log('[LLM][TOOLS] toolCallingSupported =', supported);
-      return supported;
-    } catch (e) { logger.warn('[LLM] Error detecting tool calling support:', e); return false; }
-  }
   /** Internal unload without acquiring the mutex (used by loadModel which already holds it). */
   private async doUnloadModel(): Promise<void> {
     if (!this.context) return;
@@ -274,6 +266,7 @@ class LLMService {
     // reload with ~2GB free ground to 0 tok/s then died). Wait (bounded) for the process footprint to drop.
     await awaitMemoryReclaim(() => hardwareService.getProcessMemory());
     useAppStore.getState().setModelMaxContext(null);
+    this.mtp.reset();
     Object.assign(this, { context: null, currentModelPath: null, multimodalSupport: null, multimodalInitialized: false, toolCallingSupported: false, thinkingSupported: false, gpuEnabled: false, gpuReason: '', gpuDevices: [], activeGpuLayers: 0, requestedGpuLayers: 0, gpuAttemptFailed: false });
   }
   async unloadModel(): Promise<void> {
@@ -292,7 +285,8 @@ class LLMService {
       const managed = await this.dropMissingImageAttachments(await this.manageContextWindow(messages));
       const hasImages = managed.some(m => m.attachments?.some(a => a.type === 'image'));
       if (hasImages && !this.multimodalInitialized) logger.warn('[LLM] Images attached but multimodal not initialized - falling back to text-only');
-      logger.log('[LLM] Generation mode:', this.hasVisionInputs(managed) ? 'VISION' : 'TEXT-ONLY');
+      const hasVisionInputs = this.hasVisionInputs(managed);
+      logger.log('[LLM] Generation mode:', hasVisionInputs ? 'VISION' : 'TEXT-ONLY');
       const oaiMessages = this.convertToOAIMessages(managed);
       const { settings } = useAppStore.getState();
       const startTime = Date.now();
@@ -306,7 +300,7 @@ class LLMService {
       const completionParams = { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift() }), ...buildThinkingCompletionParams(thinkingOn, this.isGemma4Model()) };
       logger.log(`[LLM][THINKING] thinkingSupported=${this.thinkingSupported}, thinkingEnabled=${useAppStore.getState().settings.thinkingEnabled}, isThinkingEnabled=${this.isThinkingEnabled()}, enable_thinking=${(completionParams as any).enable_thinking}, reasoning_format=${(completionParams as any).reasoning_format}`);
       logger.log(`[WIRE-LLAMA-PARAMS] ${JSON.stringify({ model: this.currentModelPath, params: { ...completionParams, messages: undefined } })}`); // [WIRE] settings→native params (temp/thinking/etc), messages elided
-      const completionResult = await safeCompletion(ctx, () => ctx.completion(completionParams, (data: any) => {
+      const completionResult = await this.mtp.complete(ctx, { params: completionParams, allowed: !hasVisionInputs, label: 'generateResponse', onToken: (data: any) => {
         if (__wire.length < 500) __wire.push({ token: data.token, content: data.content, reasoning_content: data.reasoning_content, tool_calls: data.tool_calls }); // [WIRE]
         if (!this.isGenerating || !data.token) return;
         if (!firstReceived) { firstReceived = true; firstTokenMs = Date.now() - startTime; logger.log(`[LLM][THINKING] First token raw data — token: ${JSON.stringify(data.token)}, content: ${JSON.stringify(data.content)}, reasoning_content: ${JSON.stringify(data.reasoning_content)}`); }
@@ -319,11 +313,12 @@ class LLMService {
         if (content) fullContent += content;
         if (reasoningContent) fullReasoningContent += reasoningContent;
         onStream?.({ reasoningContent, content });
-      }), 'generateResponse');
+      } });
       const cr = completionResult as any;
       // [WIRE] Full raw stream + final result, so we can build fixtures from real Gemma/Qwen wire format.
       logger.log(`[WIRE-LLAMA] ${JSON.stringify({ model: this.currentModelPath, stream: __wire, final: { content: cr?.content, text: cr?.text, reasoning_content: cr?.reasoning_content, tool_calls: cr?.tool_calls } })}`);
       this.performanceStats = recordGenerationStats(startTime, firstTokenMs, tokenCount);
+      Object.assign(this.performanceStats, this.mtp.performanceStats(cr));
       // Capture truncation (hit n_predict cap without EOS) so the UI can flag a cut-off
       // reply instead of it looking finished (B15).
       this.performanceStats.lastTruncated = isTruncatedResult(cr);
@@ -344,7 +339,8 @@ class LLMService {
       disableCtxShift: this.shouldDisableCtxShift(),
       manageContextWindow: (msgs, extra?) => this.manageContextWindow(msgs, extra),
       convertToOAIMessages: (msgs) => this.convertToOAIMessages(msgs),
-      setPerformanceStats: (s) => { this.performanceStats = s; },
+      complete: (params, onToken, label) => this.mtp.complete(this.context!, { params, onToken, label, allowed: !messages.some(m => m.attachments?.some(a => a.type === 'image')) }),
+      setPerformanceStats: (s, result) => { this.performanceStats = { ...s, ...this.mtp.performanceStats(result) }; },
       setIsGenerating: (v) => { this.isGenerating = v; },
     }, messages, {
       tools: options.tools,
@@ -409,10 +405,7 @@ class LLMService {
     const { settings } = useAppStore.getState();
     let fullResponse = '';
     const ctx = this.context;
-    const completionWork = safeCompletion(ctx, () => ctx.completion(
-      { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift() }), n_predict: maxTokens },
-      (data) => { if (this.isGenerating && data.token) fullResponse += data.token; },
-    ), 'generateWithMaxTokens');
+    const completionWork = this.mtp.complete(ctx, { params: { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift() }), n_predict: maxTokens }, onToken: (data) => { if (this.isGenerating && data.token) fullResponse += data.token; }, label: 'generateWithMaxTokens' });
     this.activeCompletionPromise = completionWork.then(() => { }, () => { });
     try { await completionWork; return fullResponse.trim(); } finally { this.isGenerating = false; this.activeCompletionPromise = null; }
   }
@@ -457,6 +450,13 @@ class LLMService {
   getBackendFallbackNotice(): string | null {
     if (!this.context) return null;
     return describeGpuFallback({ requestedGpuLayers: this.requestedGpuLayers, activeGpuLayers: this.activeGpuLayers, gpuAttemptFailed: this.gpuAttemptFailed });
+  }
+  /** Consume this native load's downgrade once; UI callers choose where to render it. */
+  consumeBackendFallbackNotice(): string | null {
+    if (this.backendFallbackNoticeConsumed) return null;
+    const notice = this.getBackendFallbackNotice();
+    if (notice) this.backendFallbackNoticeConsumed = true;
+    return notice;
   }
   isCurrentlyGenerating(): boolean { return this.isGenerating; }
   private formatMessages(messages: Message[]): string { return formatLlamaMessages(messages, this.supportsVision(), this.multimodalSupport?.audio ?? false); }

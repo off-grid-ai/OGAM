@@ -23,15 +23,18 @@ const SHARE_PROMPT_DELAY_MS = 1500;
 type StreamChunk = string | { content?: string; reasoningContent?: string };
 
 export interface QueuedMessage {
-  id: string; conversationId: string; text: string;
-  attachments?: MediaAttachment[]; messageText: string;
+  id: string;
+  conversationId: string;
+  text: string;
+  attachments?: MediaAttachment[];
+  messageText: string;
   /** The modality the user forced for THIS send (force/disabled/auto). Carried through the queue so a
    *  message the user explicitly forced to image mode is dispatched as image on drain — never re-decided
    *  at 'auto' by resolveTurnKind (#510: a queued force-image send generated as text). */
   imageMode?: 'auto' | 'force' | 'disabled';
 }
 
-export interface GenerationState {
+interface GenerationState {
   isGenerating: boolean;
   isThinking: boolean;
   conversationId: string | null;
@@ -45,15 +48,21 @@ type QueueProcessor = (item: QueuedMessage) => Promise<void>;
 
 class GenerationService {
   private state: GenerationState = {
-    isGenerating: false, isThinking: false, conversationId: null,
-    streamingContent: '', startTime: null, queuedMessages: [],
+    isGenerating: false,
+    isThinking: false,
+    conversationId: null,
+    streamingContent: '',
+    startTime: null,
+    queuedMessages: [],
   };
 
   private listeners: Set<GenerationListener> = new Set();
   private abortRequested: boolean = false;
   /** Whether the last/active generation was stopped by the user — lets callers skip a
    *  "no response" retry prompt when the empty result was an intentional abort. */
-  wasAborted(): boolean { return this.abortRequested; }
+  wasAborted(): boolean {
+    return this.abortRequested;
+  }
   private pendingStop: Promise<void> | null = null;
   private queueProcessor: QueueProcessor | null = null;
   private currentRemoteAbortController: AbortController | null = null;
@@ -77,16 +86,25 @@ class GenerationService {
   /** Check if using a remote provider */
   private isUsingRemoteProvider(): boolean {
     const { activeServerId } = useRemoteServerStore.getState();
-    const hasProvider = activeServerId ? providerRegistry.hasProvider(activeServerId) : false;
+    const hasProvider = activeServerId
+      ? providerRegistry.hasProvider(activeServerId)
+      : false;
     const localLoaded = llmService.isModelLoaded();
-    logger.log(`[REMOTE-SM] isUsingRemoteProvider? activeServerId=${activeServerId ?? 'none'} hasProvider=${hasProvider} localLoaded=${localLoaded}`);
+    logger.log(
+      `[REMOTE-SM] isUsingRemoteProvider? activeServerId=${
+        activeServerId ?? 'none'
+      } hasProvider=${hasProvider} localLoaded=${localLoaded}`,
+    );
     if (!activeServerId) return false;
     // Provider must be registered (not just persisted from a previous session)
     if (!hasProvider) return false;
     // If a local model is loaded, prefer it over the remote server.
     // Log a warning so this is diagnosable if a user selects remote but gets local responses.
     if (localLoaded) {
-      logger.warn('[GenerationService] Local model is loaded — preferring local over active remote server:', activeServerId);
+      logger.warn(
+        '[GenerationService] Local model is loaded — preferring local over active remote server:',
+        activeServerId,
+      );
       return false;
     }
     return true;
@@ -113,21 +131,32 @@ class GenerationService {
     this.flushTokenBuffer();
   }
 
-  private normalizeStreamChunk(data: StreamChunk): { content?: string; reasoningContent?: string } {
+  private normalizeStreamChunk(data: StreamChunk): {
+    content?: string;
+    reasoningContent?: string;
+  } {
     return typeof data === 'string' ? { content: data } : data;
   }
 
-  getState(): GenerationState { return { ...this.state }; }
+  getState(): GenerationState {
+    return { ...this.state };
+  }
 
   isGeneratingFor(conversationId: string): boolean {
-    return this.state.isGenerating && this.state.conversationId === conversationId;
+    return (
+      this.state.isGenerating && this.state.conversationId === conversationId
+    );
   }
 
   subscribe(listener: GenerationListener): () => void {
-    this.listeners.add(listener); listener(this.getState()); return () => this.listeners.delete(listener);
+    this.listeners.add(listener);
+    listener(this.getState());
+    return () => this.listeners.delete(listener);
   }
 
-  private notifyListeners(): void { this.listeners.forEach(l => l(this.getState())); }
+  private notifyListeners(): void {
+    this.listeners.forEach(l => l(this.getState()));
+  }
 
   private updateState(partial: Partial<GenerationState>): void {
     this.state = { ...this.state, ...partial };
@@ -137,12 +166,21 @@ class GenerationService {
   private checkSharePrompt(delayMs = SHARE_PROMPT_DELAY_MS): void {
     const s = useAppStore.getState();
     const count = s.incrementTextGenerationCount();
-    maybeScheduleSharePrompt({ variant: 'text', count, hasEngaged: s.hasEngagedSharePrompt, delayMs });
+    maybeScheduleSharePrompt({
+      variant: 'text',
+      count,
+      hasEngaged: s.hasEngagedSharePrompt,
+      delayMs,
+    });
     checkProPromptForText(delayMs);
   }
 
-  private buildToolLoopHandlers() { return buildToolLoopHandlersImpl(this); }
-  private buildGenerationMeta(): GenerationMeta { return buildGenerationMetaImpl(this); }
+  private buildToolLoopHandlers() {
+    return buildToolLoopHandlersImpl(this);
+  }
+  private buildGenerationMeta(): GenerationMeta {
+    return buildGenerationMetaImpl(this);
+  }
   private async prepareGeneration(conversationId: string): Promise<boolean> {
     return prepareGenerationImpl(this, conversationId);
   }
@@ -153,12 +191,22 @@ class GenerationService {
     messages: Message[],
     onFirstToken?: () => void,
   ): Promise<void> {
-    logger.log(`[REMOTE-SM] generateResponse entry conv=${conversationId} msgs=${messages.length}`);
+    logger.log(
+      `[REMOTE-SM] generateResponse entry conv=${conversationId} msgs=${messages.length}`,
+    );
     // Route to remote provider if active
     if (this.isUsingRemoteProvider()) {
-      return this.generateRemoteResponse(conversationId, messages, onFirstToken);
+      return this.generateRemoteResponse(
+        conversationId,
+        messages,
+        onFirstToken,
+      );
     }
-    return generateResponseImpl(this, { conversationId, messages, onFirstToken });
+    return generateResponseImpl(this, {
+      conversationId,
+      messages,
+      onFirstToken,
+    });
   }
 
   /** Generate a response with tool calling support (LLM → tools → repeat, max 5 iterations). */
@@ -192,14 +240,34 @@ class GenerationService {
       });
 
       // If aborted, stopGeneration() already handled cleanup.
-      logger.log(`[GenService][ToolLoop] runToolLoop done — aborted=${this.abortRequested}, streamingContent=${this.state.streamingContent?.length ?? 0}ch, tokenBuffer=${this.tokenBuffer?.length ?? 0}ch`);
+      logger.log(
+        `[GenService][ToolLoop] runToolLoop done — aborted=${
+          this.abortRequested
+        }, streamingContent=${
+          this.state.streamingContent?.length ?? 0
+        }ch, tokenBuffer=${this.tokenBuffer?.length ?? 0}ch`,
+      );
       if (!this.abortRequested) {
         this.forceFlushTokens();
         const store = useChatStore.getState();
-        logger.log(`[GenService][ToolLoop] pre-finalize — streamingForConvId=${store.streamingForConversationId}, targetConvId=${conversationId}, streamingMsg=${store.streamingMessage?.length ?? 0}ch`);
-        const generationTime = this.state.startTime ? Date.now() - this.state.startTime : undefined;
-        store.finalizeStreamingMessage(conversationId, generationTime, this.buildGenerationMeta());
-        logger.log(`[GenService][ToolLoop] finalizeStreamingMessage called — convId=${conversationId}`);
+        logger.log(
+          `[GenService][ToolLoop] pre-finalize — streamingForConvId=${
+            store.streamingForConversationId
+          }, targetConvId=${conversationId}, streamingMsg=${
+            store.streamingMessage?.length ?? 0
+          }ch`,
+        );
+        const generationTime = this.state.startTime
+          ? Date.now() - this.state.startTime
+          : undefined;
+        store.finalizeStreamingMessage(
+          conversationId,
+          generationTime,
+          this.buildGenerationMeta(),
+        );
+        logger.log(
+          `[GenService][ToolLoop] finalizeStreamingMessage called — convId=${conversationId}`,
+        );
         this.checkSharePrompt();
         this.resetState();
       }
@@ -231,10 +299,20 @@ class GenerationService {
     // either way, so it's a strict superset of clear. ALWAYS finalize when a conversation is streaming; only
     // clear when there is no streaming conversation at all (nothing was ever shown). The old check looked at
     // streamingMessage ONLY, so a reasoning-only partial (LiteRT still THINKING at stop) was wrongly cleared.
-    const shownLen = (store.streamingMessage + store.streamingReasoningContent).trim().length;
-    logger.log(`[STOP-SM] keepShownPartialOrClear convId=${convId ?? 'null'} shown=${shownLen}ch → ${convId ? 'finalize' : 'clear'}`);
+    const shownLen = (
+      store.streamingMessage + store.streamingReasoningContent
+    ).trim().length;
+    logger.log(
+      `[STOP-SM] keepShownPartialOrClear convId=${
+        convId ?? 'null'
+      } shown=${shownLen}ch → ${convId ? 'finalize' : 'clear'}`,
+    );
     if (convId) {
-      store.finalizeStreamingMessage(convId, generationTimeMs, this.buildGenerationMeta());
+      store.finalizeStreamingMessage(
+        convId,
+        generationTimeMs,
+        this.buildGenerationMeta(),
+      );
     } else {
       store.clearStreamingMessage();
     }
@@ -246,7 +324,7 @@ class GenerationService {
       // Stop generation on every engine through the registry — no engine enumeration leaked into the caller.
       await stopAllTextEngines();
       const provider = this.getCurrentProvider();
-      if (provider) provider.stopGeneration().catch(() => { });
+      if (provider) provider.stopGeneration().catch(() => {});
       if (this.currentRemoteAbortController) {
         this.currentRemoteAbortController.abort();
         this.currentRemoteAbortController = null;
@@ -265,7 +343,8 @@ class GenerationService {
     const { startTime } = this.state;
     const generationTime = startTime ? Date.now() - startTime : undefined;
     // Capture the return value BEFORE resetState clears it (prefer the shown text; fall back to state).
-    const partialContent = useChatStore.getState().streamingMessage || this.state.streamingContent;
+    const partialContent =
+      useChatStore.getState().streamingMessage || this.state.streamingContent;
 
     // Keep whatever is shown (based on the store, not this.state.streamingContent which LiteRT may not fill).
     const hadShownPartial = !!useChatStore.getState().streamingMessage.trim();
@@ -278,7 +357,7 @@ class GenerationService {
     if (this.isUsingRemoteProvider()) {
       // Abort the provider's XHR so the server connection is closed immediately
       const provider = this.getCurrentProvider();
-      if (provider) provider.stopGeneration().catch(() => { });
+      if (provider) provider.stopGeneration().catch(() => {});
       if (this.currentRemoteAbortController) {
         this.currentRemoteAbortController.abort();
         this.currentRemoteAbortController = null;
@@ -291,8 +370,10 @@ class GenerationService {
     // generations can drain it before starting.
     const engine = getActiveEngineService();
     this.pendingStop = (engine?.stopGeneration() ?? Promise.resolve())
-      .catch(() => { })
-      .finally(() => { this.pendingStop = null; });
+      .catch(() => {})
+      .finally(() => {
+        this.pendingStop = null;
+      });
 
     return partialContent;
   }
@@ -303,7 +384,11 @@ class GenerationService {
     messages: Message[],
     onFirstToken?: () => void,
   ): Promise<void> {
-    return generateRemoteResponseImpl(this, { conversationId, messages, onFirstToken });
+    return generateRemoteResponseImpl(this, {
+      conversationId,
+      messages,
+      onFirstToken,
+    });
   }
 
   /** Generate a response with tools using a remote provider */
@@ -312,22 +397,37 @@ class GenerationService {
     messages: Message[],
     options: GenerationWithToolsRequest['options'],
   ): Promise<void> {
-    return generateRemoteWithToolsImpl(this, { conversationId, messages, options });
+    return generateRemoteWithToolsImpl(this, {
+      conversationId,
+      messages,
+      options,
+    });
   }
 
   enqueueMessage(entry: QueuedMessage): void {
-    this.state = { ...this.state, queuedMessages: [...this.state.queuedMessages, entry] };
+    this.state = {
+      ...this.state,
+      queuedMessages: [...this.state.queuedMessages, entry],
+    };
     this.notifyListeners();
   }
 
   removeFromQueue(id: string): void {
-    this.state = { ...this.state, queuedMessages: this.state.queuedMessages.filter(m => m.id !== id) };
+    this.state = {
+      ...this.state,
+      queuedMessages: this.state.queuedMessages.filter(m => m.id !== id),
+    };
     this.notifyListeners();
   }
 
-  clearQueue(): void { this.state = { ...this.state, queuedMessages: [] }; this.notifyListeners(); }
+  clearQueue(): void {
+    this.state = { ...this.state, queuedMessages: [] };
+    this.notifyListeners();
+  }
 
-  setQueueProcessor(processor: QueueProcessor | null): void { this.queueProcessor = processor; }
+  setQueueProcessor(processor: QueueProcessor | null): void {
+    this.queueProcessor = processor;
+  }
 
   /**
    * Process queued messages now. Text generation drains its own queue on
@@ -345,16 +445,24 @@ class GenerationService {
     const all = this.state.queuedMessages;
     this.state = { ...this.state, queuedMessages: [] };
     this.notifyListeners();
-    const combined: QueuedMessage = all.length === 1 ? all[0] : {
-      id: all[0].id, conversationId: all[0].conversationId,
-      text: all.map(m => m.text).join('\n\n'),
-      attachments: all.flatMap(m => m.attachments || []),
-      messageText: all.map(m => m.messageText).join('\n\n'),
-      // If ANY coalesced send forced image mode, the combined dispatch must force image too — the
-      // user's explicit force must never be dropped by the merge (mirror of the single-message carry).
-      imageMode: all.some(m => m.imageMode === 'force') ? 'force' : all[0].imageMode,
-    };
-    this.queueProcessor(combined).catch(e => { logger.error('[GenerationService] Queue processor error:', e); });
+    const combined: QueuedMessage =
+      all.length === 1
+        ? all[0]
+        : {
+            id: all[0].id,
+            conversationId: all[0].conversationId,
+            text: all.map(m => m.text).join('\n\n'),
+            attachments: all.flatMap(m => m.attachments || []),
+            messageText: all.map(m => m.messageText).join('\n\n'),
+            // If ANY coalesced send forced image mode, the combined dispatch must force image too — the
+            // user's explicit force must never be dropped by the merge (mirror of the single-message carry).
+            imageMode: all.some(m => m.imageMode === 'force')
+              ? 'force'
+              : all[0].imageMode,
+          };
+    this.queueProcessor(combined).catch(e => {
+      logger.error('[GenerationService] Queue processor error:', e);
+    });
   }
 
   private resetState(): void {

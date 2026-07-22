@@ -16,7 +16,7 @@ try {
 // Raise RNTL's async-util timeout (waitFor/findBy) from the 1s default to 5s. Under heavy
 // parallelism (the pre-push --findRelatedTests run fans hundreds of Message-importing
 // suites across all workers), the 1s default starves — a genuinely-passing waitFor poll
-// doesn't get scheduled in time and flakes. 5s is load-tolerant yet well under the 10s
+// doesn't get scheduled in time and flakes. 5s is load-tolerant yet well under the 30s
 // jest testTimeout, so passing tests stay fast and only starved ones get grace. Removes a
 // whole class of load-dependent flakiness without changing any assertion.
 try {
@@ -40,6 +40,9 @@ jest.mock('react-native-edge-to-edge', () => ({
   StatusBar: () => null,
   NavigationBar: () => null,
 }));
+
+// Native splash is outside the JS product; keep the real App boot/navigation path mounted in Jest.
+jest.mock('react-native-bootsplash', () => ({ hide: jest.fn(async () => {}) }), { virtual: true });
 
 // ============================================================================
 // AsyncStorage Mock
@@ -95,6 +98,9 @@ export const clearMockStorage = () => {
 // ============================================================================
 // Navigation Mocks
 // ============================================================================
+// Direct-screen tests keep navigation as lightweight plumbing. Real-App journeys
+// explicitly unmock this module before importing App so route behavior stays real
+// whenever navigation is part of the user-visible behavior under test.
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
@@ -119,6 +125,7 @@ jest.mock('@react-navigation/native', () => {
 
 // llama.rn mock - use virtual mock since native module may not resolve
 jest.mock('llama.rn', () => ({
+  loadLlamaModelInfo: jest.fn(() => Promise.resolve({})),
   initLlama: jest.fn(() => Promise.resolve({
     id: 'test-context-id',
     gpu: false,
@@ -335,6 +342,7 @@ jest.mock('react-native-device-info', () => ({
   getTotalMemory: jest.fn(() => Promise.resolve(8 * 1024 * 1024 * 1024)), // 8GB
   getUsedMemory: jest.fn(() => Promise.resolve(4 * 1024 * 1024 * 1024)), // 4GB
   getFreeDiskStorage: jest.fn(() => Promise.resolve(50 * 1024 * 1024 * 1024)), // 50GB
+  getBuildNumber: jest.fn(() => '1784144537'), // versionCode (Android) / CFBundleVersion (iOS)
   getModel: jest.fn(() => 'Test Device'),
   getSystemName: jest.fn(() => 'Android'),
   getSystemVersion: jest.fn(() => '13'),

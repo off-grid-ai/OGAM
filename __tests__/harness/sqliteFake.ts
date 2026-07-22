@@ -18,21 +18,46 @@ export function installRealSqlite(): void {
  * before requiring the rag modules. installRealSqlite = resetModules + this.
  */
 export function doMockRealSqlite(): void {
-  jest.doMock('@op-engineering/op-sqlite', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+  doMockSqlite(() => {
     const { DatabaseSync } = require('node:sqlite');
+    return new DatabaseSync(':memory:');
+  });
+}
 
+/**
+ * A native-database boundary whose contents survive jest.resetModules(), matching an app relaunch.
+ * The returned installer must run after each native-boundary reset and before App is imported.
+ */
+export function createPersistentRealSqliteBoundary(): {
+  install: () => void;
+  close: () => void;
+} {
+  const { DatabaseSync } = require('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  return {
+    install: () => doMockSqlite(() => db),
+    close: () => db.close(),
+  };
+}
+
+function doMockSqlite(openDatabase: () => any): void {
+  jest.doMock('@op-engineering/op-sqlite', () => {
     const wrap = (db: any) => ({
       executeSync: (sql: string, params: unknown[] = []) => {
-        const bind = (params ?? []).map((p) =>
+        const bind = (params ?? []).map(p =>
           // op-sqlite accepts ArrayBuffer for BLOBs; node:sqlite wants a Uint8Array/Buffer. Use a
           // realm-safe check (Object.prototype.toString) because a composed harness (installNativeBoundary
           // + doMockRealSqlite) can hand us an ArrayBuffer from a different realm where `instanceof` fails.
-          (p instanceof ArrayBuffer || Object.prototype.toString.call(p) === '[object ArrayBuffer]')
-            ? new Uint8Array(p as ArrayBuffer) : p,
+          p instanceof ArrayBuffer ||
+          Object.prototype.toString.call(p) === '[object ArrayBuffer]'
+            ? new Uint8Array(p as ArrayBuffer)
+            : p,
         );
         // Transaction / DDL control statements: no params, run via exec.
-        if (/^\s*(BEGIN|COMMIT|ROLLBACK|CREATE|PRAGMA|DROP)/i.test(sql) && bind.length === 0) {
+        if (
+          /^\s*(BEGIN|COMMIT|ROLLBACK|CREATE|PRAGMA|DROP)/i.test(sql) &&
+          bind.length === 0
+        ) {
           db.exec(sql);
           return { rows: [], insertId: undefined, rowsAffected: 0 };
         }
@@ -44,15 +69,20 @@ export function doMockRealSqlite(): void {
         const info = stmt.run(...bind);
         return {
           rows: [],
-          insertId: info.lastInsertRowid != null ? Number(info.lastInsertRowid) : undefined,
+          insertId:
+            info.lastInsertRowid != null
+              ? Number(info.lastInsertRowid)
+              : undefined,
           rowsAffected: Number(info.changes ?? 0),
         };
       },
-      execute: async function (this: any, sql: string, params: unknown[] = []) { return this.executeSync(sql, params); },
+      execute: async function (this: any, sql: string, params: unknown[] = []) {
+        return this.executeSync(sql, params);
+      },
       close: () => db.close(),
       delete: () => {},
     });
 
-    return { open: () => wrap(new DatabaseSync(':memory:')) };
+    return { open: () => wrap(openDatabase()) };
   });
 }

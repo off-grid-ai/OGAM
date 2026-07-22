@@ -11,6 +11,7 @@ jest.mock('../../../src/utils/logger', () => ({
 jest.mock('../../../src/services/contextCompaction', () => ({
   contextCompactionService: {
     signalCompacting: jest.fn(),
+    persistSummary: jest.fn(),
   },
 }));
 
@@ -20,10 +21,14 @@ jest.mock('../../../src/stores/debugLogsStore', () => ({
   },
 }));
 
-import { summarizeSession, runCompaction } from '../../../src/services/liteRTCompaction';
+import {
+  summarizeSession,
+  runCompaction,
+} from '../../../src/services/liteRTCompaction';
 import { contextCompactionService } from '../../../src/services/contextCompaction';
 
 const mockedSignal = contextCompactionService.signalCompacting as jest.Mock;
+const mockedPersist = contextCompactionService.persistSummary as jest.Mock;
 
 // ---------------------------------------------------------------------------
 // summarizeSession
@@ -46,7 +51,8 @@ describe('summarizeSession', () => {
   it('returns summary text from onComplete when at least 30 chars', async () => {
     // Real summaries from the model are typically 300-500 chars; the 30-char
     // floor only rejects degenerate single-token outputs (see "too short" test).
-    const summary = 'We discussed the project plan, milestones, and the next steps.';
+    const summary =
+      'We discussed the project plan, milestones, and the next steps.';
     const sendMessage = jest.fn((_text, callbacks) => {
       callbacks.onToken(summary);
       callbacks.onComplete('', '');
@@ -138,6 +144,25 @@ describe('runCompaction', () => {
     expect(compactedHistory[1].content).toBe('Understood.');
   });
 
+  it('persists the summary with the last removed message as its cutoff', async () => {
+    await runCompaction({
+      ...baseParams,
+      maxTokens: 100,
+      history: [
+        { id: 'old-user', role: 'user', content: 'x'.repeat(300) },
+        { id: 'old-answer', role: 'assistant', content: 'y'.repeat(300) },
+        { id: 'recent-user', role: 'user', content: 'recent' },
+        { id: 'recent-answer', role: 'assistant', content: 'answer' },
+      ],
+    });
+
+    expect(mockedPersist).toHaveBeenCalledWith(
+      'conv-1',
+      'A summary.',
+      'old-answer',
+    );
+  });
+
   it('slices only (no summary) when activeConversationId differs', async () => {
     const summarize = jest.fn(() => Promise.resolve('should not be called'));
     const resetFn = jest.fn(() => Promise.resolve());
@@ -176,17 +201,20 @@ describe('runCompaction', () => {
 
   it('calls signalCompacting(false) even when resetFn throws', async () => {
     const resetFn = jest.fn(() => Promise.reject(new Error('reset failed')));
-    await expect(runCompaction({ ...baseParams, history: [], resetFn })).rejects.toThrow('reset failed');
+    await expect(
+      runCompaction({ ...baseParams, history: [], resetFn }),
+    ).rejects.toThrow('reset failed');
     expect(mockedSignal).toHaveBeenLastCalledWith(false);
   });
 
   it('slices history to stay within recent budget', async () => {
     const resetFn = jest.fn(() => Promise.resolve());
     // 10 turns, each with long content that exceeds the budget
-    const history: Array<{ role: 'user' | 'assistant'; content: string }> = Array.from({ length: 10 }, (_, i) => ({
-      role: i % 2 === 0 ? 'user' : 'assistant',
-      content: 'x'.repeat(500),
-    }));
+    const history: Array<{ role: 'user' | 'assistant'; content: string }> =
+      Array.from({ length: 10 }, (_, i) => ({
+        role: i % 2 === 0 ? 'user' : 'assistant',
+        content: 'x'.repeat(500),
+      }));
 
     await runCompaction({
       ...baseParams,

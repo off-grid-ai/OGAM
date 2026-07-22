@@ -25,12 +25,12 @@ interface AccordionState {
   toggle: (key: string) => void;
 }
 
-export const useAccordionStore = create<AccordionState>((set) => ({
+const useAccordionStore = create<AccordionState>(set => ({
   expanded: {},
   setExpanded: (key, value) =>
-    set((s) => ({ expanded: { ...s.expanded, [key]: value } })),
-  toggle: (key) =>
-    set((s) => ({ expanded: { ...s.expanded, [key]: !s.expanded[key] } })),
+    set(s => ({ expanded: { ...s.expanded, [key]: value } })),
+  toggle: key =>
+    set(s => ({ expanded: { ...s.expanded, [key]: !s.expanded[key] } })),
 }));
 
 /**
@@ -46,9 +46,12 @@ export const useAccordionStore = create<AccordionState>((set) => ({
  * row keeps the press target intact across the per-token re-renders.
  */
 export function useAccordionExpanded(key: string): [boolean, () => void] {
-  const expanded = useAccordionStore((s) => s.expanded[key] ?? false);
+  const expanded = useAccordionStore(s => s.expanded[key] ?? false);
   // Read `toggle` off the store lazily inside the callback (getState) so the handler
   // depends only on `key` — its identity never changes across re-renders.
-  const onToggle = useCallback(() => useAccordionStore.getState().toggle(key), [key]);
+  const onToggle = useCallback(
+    () => useAccordionStore.getState().toggle(key),
+    [key],
+  );
   return [expanded, onToggle];
 }

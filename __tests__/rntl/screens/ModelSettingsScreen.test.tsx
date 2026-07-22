@@ -431,7 +431,8 @@ describe('ModelSettingsScreen', () => {
     it('shows Context Length slider label and default value', () => {
       const { getByText } = renderWithSections('text');
       expect(getByText('Context Length')).toBeTruthy();
-      expect(getByText('4K')).toBeTruthy(); // 4096 -> 4K
+      // The test device defaults to 4 GB, so the rendered device-safe cap is 2K.
+      expect(getByText('2K')).toBeTruthy();
     });
 
     it('shows context length description', () => {
@@ -765,8 +766,10 @@ describe('ModelSettingsScreen', () => {
   describe('context length display formatting', () => {
     it('shows raw number when contextLength < 1024', () => {
       useAppStore.getState().updateSettings({ contextLength: 512, nBatch: 256 });
-      const { getAllByText } = renderWithSections('text');
-      expect(getAllByText('512').length).toBe(1);
+      const { getByTestId } = renderWithSections('text');
+      expect(getByTestId('llama-context-length-value')).toHaveTextContent(
+        '512',
+      );
     });
   });
 

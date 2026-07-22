@@ -29,7 +29,7 @@ describe('happy — image-mode toggle routes correctly (heavy entry point)', () 
     await h.tapSend('tell me about the ocean'); // not a draw request
 
     // ON forces image regardless of the text → the native image generator runs.
-    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); });
+    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1); });
   });
 
   it('OFF (disabled): the badge clears and a "draw …" prompt does NOT generate an image', async () => {
@@ -45,6 +45,6 @@ describe('happy — image-mode toggle routes correctly (heavy entry point)', () 
 
     // OFF disables image routing → the draw request is answered as text, no image generated.
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/A dragon is a mythical reptile\./)).not.toBeNull(); });
-    expect(h.boundary.diffusion.calls.generateImage.length).toBe(0);
+    expect(h.boundary.diffusion.calls.generateImage).toHaveLength(0);
   });
 });

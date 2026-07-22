@@ -88,6 +88,9 @@ class LocalProvider implements LLMProvider {
         decodeTokensPerSecond: perf.lastDecodeTokensPerSecond,
         timeToFirstToken: perf.lastTimeToFirstToken,
         tokenCount: perf.lastTokenCount,
+        mtpEnabled: perf.lastMtpEnabled,
+        draftTokens: perf.lastDraftTokens,
+        draftTokensAccepted: perf.lastDraftTokensAccepted,
       };
     };
 

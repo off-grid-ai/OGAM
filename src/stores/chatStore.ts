@@ -1,16 +1,22 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Message, Conversation, GenerationMeta } from '../types';
-import { stripStreamingControlTokens, parseModelOutput } from '../utils/messageContent';
+import { Message, Conversation } from '../types';
+import {
+  stripStreamingControlTokens,
+  parseModelOutput,
+} from '../utils/messageContent';
 import { generateId } from '../utils/generateId';
 import { callHook, HOOKS } from '../bootstrap/hookRegistry';
+import type { ChatState } from './chatStoreTypes';
 
 function nextUpdatedAt(previousUpdatedAt?: string): string {
   const now = Date.now();
   if (!previousUpdatedAt) return new Date(now).toISOString();
   const previousTime = Date.parse(previousUpdatedAt);
-  const nextTime = Number.isNaN(previousTime) ? now : Math.max(now, previousTime + 1);
+  const nextTime = Number.isNaN(previousTime)
+    ? now
+    : Math.max(now, previousTime + 1);
   return new Date(nextTime).toISOString();
 }
 
@@ -22,7 +28,9 @@ function updateMessageInConv(
 ): Conversation {
   return {
     ...conv,
-    messages: conv.messages.map((msg) => (msg.id === messageId ? updater(msg) : msg)),
+    messages: conv.messages.map(msg =>
+      msg.id === messageId ? updater(msg) : msg,
+    ),
     updatedAt: nextUpdatedAt(conv.updatedAt),
   };
 }
@@ -37,21 +45,55 @@ function updateMessageInConv(
  * sentence-by-sentence. onStreamingEnd still speaks the final answer if nothing
  * streamed.
  */
-function speakableStreamingAnswer(streamingMessage: string, streamingReasoning: string): string {
+function speakableStreamingAnswer(
+  streamingMessage: string,
+  streamingReasoning: string,
+): string {
   if (streamingReasoning.length > 0) return streamingMessage; // reasoning came separately
   const closeIdx = streamingMessage.toLowerCase().lastIndexOf('</think>');
-  if (closeIdx !== -1) return streamingMessage.slice(closeIdx + '</think>'.length);
+  if (closeIdx !== -1)
+    return streamingMessage.slice(closeIdx + '</think>'.length);
   // No close tag yet: inline reasoning may still be in progress. Withhold while
   // thinking is enabled; otherwise the content is the answer and is safe to speak.
   const { useAppStore } = require('./appStore');
-  return useAppStore.getState().settings?.thinkingEnabled ? '' : streamingMessage;
+  return useAppStore.getState().settings?.thinkingEnabled
+    ? ''
+    : streamingMessage;
+}
+
+/** The stable title projection owned by the first user message. */
+function automaticConversationTitle(content: string): string {
+  const truncated = content.slice(0, 50);
+  return content.length > 50 ? `${truncated}...` : truncated;
 }
 
 /** Derive conversation title from the first user message. */
-function deriveTitle(currentTitle: string, role: string, content: string): string {
-  if (currentTitle !== 'New Conversation' || role !== 'user') return currentTitle;
-  const truncated = content.slice(0, 50);
-  return content.length > 50 ? `${truncated}...` : truncated;
+function deriveTitle(
+  currentTitle: string,
+  role: string,
+  content: string,
+): string {
+  if (currentTitle !== 'New Conversation' || role !== 'user')
+    return currentTitle;
+  return automaticConversationTitle(content);
+}
+
+/** Keep an automatically-derived title aligned when its owning first user turn is edited. */
+function titleAfterMessageEdit(
+  conv: Conversation,
+  messageId: string,
+  content: string,
+): string {
+  const firstUserMessage = conv.messages.find(
+    message => message.role === 'user',
+  );
+  if (
+    firstUserMessage?.id !== messageId ||
+    conv.title !== automaticConversationTitle(firstUserMessage.content)
+  ) {
+    return conv.title;
+  }
+  return automaticConversationTitle(content);
 }
 
 /** Map over conversations, applying `updater` only to the one matching `conversationId`. */
@@ -60,43 +102,9 @@ function mapConversation(
   conversationId: string,
   updater: (conv: Conversation) => Conversation,
 ): Conversation[] {
-  return conversations.map((conv) => (conv.id === conversationId ? updater(conv) : conv));
-}
-
-interface ChatState {
-  conversations: Conversation[];
-  activeConversationId: string | null;
-  streamingMessage: string;
-  streamingReasoningContent: string;
-  streamingForConversationId: string | null;
-  isStreaming: boolean;
-  isThinking: boolean;
-  createConversation: (modelId: string, title?: string, projectId?: string) => string;
-  deleteConversation: (conversationId: string) => void;
-  setActiveConversation: (conversationId: string | null) => void;
-  getActiveConversation: () => Conversation | null;
-  setConversationProject: (conversationId: string, projectId: string | null) => void;
-  /** Unfile every conversation filed under a project (used when the project is deleted,
-   *  so no chat is left pointing at a project that no longer exists). */
-  unfileConversationsForProject: (projectId: string) => void;
-  addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>) => Message;
-  updateMessageContent: (conversationId: string, messageId: string, content: string) => void;
-  updateMessageThinking: (conversationId: string, messageId: string, isThinking: boolean) => void;
-  updateMessageAudio: (conversationId: string, messageId: string, audio: { audioPath?: string; waveformData?: number[]; audioDurationSeconds?: number; isGeneratingAudio?: boolean; isAudioModeMessage?: boolean }) => void;
-  deleteMessage: (conversationId: string, messageId: string) => void;
-  deleteMessagesAfter: (conversationId: string, messageId: string) => void;
-  startStreaming: (conversationId: string) => void;
-  setStreamingMessage: (content: string) => void;
-  appendToStreamingMessage: (token: string) => void;
-  appendToStreamingReasoningContent: (token: string) => void;
-  setIsStreaming: (streaming: boolean) => void;
-  setIsThinking: (thinking: boolean) => void;
-  finalizeStreamingMessage: (conversationId: string, generationTimeMs?: number, generationMeta?: GenerationMeta) => void;
-  clearStreamingMessage: () => void;
-  getStreamingState: () => { conversationId: string | null; content: string; reasoningContent: string; isStreaming: boolean; isThinking: boolean };
-  updateCompactionState: (conversationId: string, summary?: string, cutoffMessageId?: string) => void;
-  clearAllConversations: () => void;
-  getConversationMessages: (conversationId: string) => Message[];
+  return conversations.map(conv =>
+    conv.id === conversationId ? updater(conv) : conv,
+  );
 }
 
 export const useChatStore = create<ChatState>()(
@@ -122,7 +130,7 @@ export const useChatStore = create<ChatState>()(
           projectId: projectId,
         };
 
-        set((state) => ({
+        set(state => ({
           conversations: [conversation, ...state.conversations],
           activeConversationId: id,
         }));
@@ -130,38 +138,70 @@ export const useChatStore = create<ChatState>()(
         return id;
       },
 
-      deleteConversation: (conversationId) => {
-        set((state) => ({
-          conversations: state.conversations.filter((c) => c.id !== conversationId),
-          activeConversationId: state.activeConversationId === conversationId ? null : state.activeConversationId,
+      renameConversation: (conversationId, title) => {
+        const normalizedTitle = title.trim();
+        if (!normalizedTitle) return;
+        set(state => ({
+          conversations: mapConversation(
+            state.conversations,
+            conversationId,
+            conversation => ({
+              ...conversation,
+              title: normalizedTitle,
+              updatedAt: nextUpdatedAt(conversation.updatedAt),
+            }),
+          ),
         }));
       },
 
-      setActiveConversation: (conversationId) => {
+      deleteConversation: conversationId => {
+        set(state => ({
+          conversations: state.conversations.filter(
+            c => c.id !== conversationId,
+          ),
+          activeConversationId:
+            state.activeConversationId === conversationId
+              ? null
+              : state.activeConversationId,
+        }));
+      },
+
+      setActiveConversation: conversationId => {
         set({ activeConversationId: conversationId });
       },
 
       getActiveConversation: () => {
         const state = get();
-        return state.conversations.find((c) => c.id === state.activeConversationId) || null;
+        return (
+          state.conversations.find(c => c.id === state.activeConversationId) ||
+          null
+        );
       },
 
       setConversationProject: (conversationId, projectId) => {
-        set((state) => ({
-          conversations: state.conversations.map((conv) =>
+        set(state => ({
+          conversations: state.conversations.map(conv =>
             conv.id !== conversationId
               ? conv
-              : { ...conv, projectId: projectId || undefined, updatedAt: nextUpdatedAt(conv.updatedAt) }
+              : {
+                  ...conv,
+                  projectId: projectId || undefined,
+                  updatedAt: nextUpdatedAt(conv.updatedAt),
+                },
           ),
         }));
       },
 
-      unfileConversationsForProject: (projectId) => {
-        set((state) => ({
-          conversations: state.conversations.map((conv) =>
+      unfileConversationsForProject: projectId => {
+        set(state => ({
+          conversations: state.conversations.map(conv =>
             conv.projectId !== projectId
               ? conv
-              : { ...conv, projectId: undefined, updatedAt: nextUpdatedAt(conv.updatedAt) }
+              : {
+                  ...conv,
+                  projectId: undefined,
+                  updatedAt: nextUpdatedAt(conv.updatedAt),
+                },
           ),
         }));
       },
@@ -173,16 +213,20 @@ export const useChatStore = create<ChatState>()(
           timestamp: Date.now(),
         };
 
-        set((state) => ({
-          conversations: state.conversations.map((conv) =>
+        set(state => ({
+          conversations: state.conversations.map(conv =>
             conv.id === conversationId
               ? {
                   ...conv,
                   messages: [...conv.messages, message],
                   updatedAt: nextUpdatedAt(conv.updatedAt),
-                  title: deriveTitle(conv.title, messageData.role, messageData.content),
+                  title: deriveTitle(
+                    conv.title,
+                    messageData.role,
+                    messageData.content,
+                  ),
                 }
-              : conv
+              : conv,
           ),
         }));
 
@@ -190,50 +234,84 @@ export const useChatStore = create<ChatState>()(
       },
 
       updateMessageContent: (conversationId, messageId, content) => {
-        set((state) => ({
-          conversations: mapConversation(state.conversations, conversationId, (conv) =>
-            updateMessageInConv(conv, messageId, (msg) => ({ ...msg, content }))
+        set(state => ({
+          conversations: mapConversation(
+            state.conversations,
+            conversationId,
+            conv => ({
+              ...updateMessageInConv(conv, messageId, msg => ({
+                ...msg,
+                content,
+              })),
+              title: titleAfterMessageEdit(conv, messageId, content),
+            }),
           ),
         }));
       },
 
       updateMessageThinking: (conversationId, messageId, isThinking) => {
-        set((state) => ({
-          conversations: mapConversation(state.conversations, conversationId, (conv) =>
-            updateMessageInConv(conv, messageId, (msg) => ({ ...msg, isThinking }))
+        set(state => ({
+          conversations: mapConversation(
+            state.conversations,
+            conversationId,
+            conv =>
+              updateMessageInConv(conv, messageId, msg => ({
+                ...msg,
+                isThinking,
+              })),
           ),
         }));
       },
 
       updateMessageAudio: (conversationId, messageId, audio) => {
-        set((state) => ({ conversations: mapConversation(state.conversations, conversationId, (conv) => updateMessageInConv(conv, messageId, (msg) => ({ ...msg, ...audio }))) }));
+        set(state => ({
+          conversations: mapConversation(
+            state.conversations,
+            conversationId,
+            conv =>
+              updateMessageInConv(conv, messageId, msg => ({
+                ...msg,
+                ...audio,
+              })),
+          ),
+        }));
       },
 
       deleteMessage: (conversationId, messageId) => {
-        set((state) => ({
-          conversations: mapConversation(state.conversations, conversationId, (conv) => ({
-            ...conv,
-            messages: conv.messages.filter((msg) => msg.id !== messageId),
-            updatedAt: nextUpdatedAt(conv.updatedAt),
-          })),
+        set(state => ({
+          conversations: mapConversation(
+            state.conversations,
+            conversationId,
+            conv => ({
+              ...conv,
+              messages: conv.messages.filter(msg => msg.id !== messageId),
+              updatedAt: nextUpdatedAt(conv.updatedAt),
+            }),
+          ),
         }));
       },
 
       deleteMessagesAfter: (conversationId, messageId) => {
-        set((state) => ({
-          conversations: mapConversation(state.conversations, conversationId, (conv) => {
-            const messageIndex = conv.messages.findIndex((msg) => msg.id === messageId);
-            if (messageIndex === -1) return conv;
-            return {
-              ...conv,
-              messages: conv.messages.slice(0, messageIndex + 1),
-              updatedAt: nextUpdatedAt(conv.updatedAt),
-            };
-          }),
+        set(state => ({
+          conversations: mapConversation(
+            state.conversations,
+            conversationId,
+            conv => {
+              const messageIndex = conv.messages.findIndex(
+                msg => msg.id === messageId,
+              );
+              if (messageIndex === -1) return conv;
+              return {
+                ...conv,
+                messages: conv.messages.slice(0, messageIndex + 1),
+                updatedAt: nextUpdatedAt(conv.updatedAt),
+              };
+            },
+          ),
         }));
       },
 
-      startStreaming: (conversationId) => {
+      startStreaming: conversationId => {
         set({
           streamingForConversationId: conversationId,
           streamingMessage: '',
@@ -243,40 +321,61 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
-      setStreamingMessage: (content) => {
+      setStreamingMessage: content => {
         set({ streamingMessage: content });
       },
 
-      appendToStreamingMessage: (token) => {
-        set((state) => ({
-          streamingMessage: stripStreamingControlTokens(state.streamingMessage + token),
+      resetStreamingOutput: () => {
+        set({ streamingMessage: '', streamingReasoningContent: '' });
+      },
+
+      appendToStreamingMessage: token => {
+        set(state => ({
+          streamingMessage: stripStreamingControlTokens(
+            state.streamingMessage + token,
+          ),
           isStreaming: true,
           isThinking: false,
         }));
         // Feed only the ANSWER to pro audio for real-time sentence-by-sentence
         // TTS (never the reasoning) — no-op unless voice mode + engine ready;
         // free builds register nothing.
-        callHook(HOOKS.audioOnStreamingToken, speakableStreamingAnswer(get().streamingMessage, get().streamingReasoningContent));
+        callHook(
+          HOOKS.audioOnStreamingToken,
+          speakableStreamingAnswer(
+            get().streamingMessage,
+            get().streamingReasoningContent,
+          ),
+        );
       },
 
-      appendToStreamingReasoningContent: (token) => {
-        set((state) => ({
+      appendToStreamingReasoningContent: token => {
+        set(state => ({
           streamingReasoningContent: state.streamingReasoningContent + token,
           isStreaming: true,
           isThinking: false,
         }));
       },
 
-      setIsStreaming: (streaming) => {
+      setIsStreaming: streaming => {
         set({ isStreaming: streaming, isThinking: false });
       },
 
-      setIsThinking: (thinking) => {
+      setIsThinking: thinking => {
         set({ isThinking: thinking });
       },
 
-      finalizeStreamingMessage: (conversationId, generationTimeMs, generationMeta) => {
-        const { streamingMessage, streamingReasoningContent, streamingForConversationId, addMessage } = get();
+      finalizeStreamingMessage: (
+        conversationId,
+        generationTimeMs,
+        generationMeta,
+      ) => {
+        const {
+          streamingMessage,
+          streamingReasoningContent,
+          streamingForConversationId,
+          addMessage,
+        } = get();
 
         // Parse ONCE at this boundary through the single shared parser (SoC §A / DR1):
         // split the raw stream into reasoning + a clean answer. The answer is stripped of
@@ -286,7 +385,10 @@ export const useChatStore = create<ChatState>()(
         const parsed = parseModelOutput(streamingMessage, streamReasoning);
         const reasoningContent = parsed.reasoning ?? undefined;
         const sanitizedMessage = parsed.answer;
-        if (streamingForConversationId === conversationId && (sanitizedMessage || reasoningContent)) {
+        if (
+          streamingForConversationId === conversationId &&
+          (sanitizedMessage || reasoningContent)
+        ) {
           addMessage(conversationId, {
             role: 'assistant',
             content: sanitizedMessage,
@@ -326,8 +428,8 @@ export const useChatStore = create<ChatState>()(
       },
 
       updateCompactionState: (conversationId, summary, cutoffMessageId) => {
-        set((state) => ({
-          conversations: state.conversations.map((conv) =>
+        set(state => ({
+          conversations: state.conversations.map(conv =>
             conv.id === conversationId
               ? {
                   ...conv,
@@ -335,7 +437,7 @@ export const useChatStore = create<ChatState>()(
                   compactionCutoffMessageId: cutoffMessageId,
                   updatedAt: nextUpdatedAt(conv.updatedAt),
                 }
-              : conv
+              : conv,
           ),
         }));
       },
@@ -344,18 +446,24 @@ export const useChatStore = create<ChatState>()(
         set({ conversations: [], activeConversationId: null });
       },
 
-      getConversationMessages: (conversationId) => {
-        const conversation = get().conversations.find((c) => c.id === conversationId);
+      getConversationMessages: conversationId => {
+        const conversation = get().conversations.find(
+          c => c.id === conversationId,
+        );
         return conversation?.messages || [];
       },
     }),
     {
       name: 'local-llm-chat-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({
+      version: 1,
+      // Conversation records are append-only across the first versioned schema;
+      // retain all legacy data and let current defaults supply action functions.
+      migrate: persistedState => persistedState as ChatState,
+      partialize: state => ({
         conversations: state.conversations,
         activeConversationId: state.activeConversationId,
       }),
-    }
-  )
+    },
+  ),
 );

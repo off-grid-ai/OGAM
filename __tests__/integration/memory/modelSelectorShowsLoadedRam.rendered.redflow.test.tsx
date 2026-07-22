@@ -1,38 +1,84 @@
 /**
- * RESIDENCY VISIBILITY — the model selector must indicate WHAT is currently loaded AND how much memory it is
- * consuming (not a black box). Validated on the ACTUAL UI (the ModelSelectorModal "Currently Loaded" section),
- * with the loaded state arrived at through the real load path (setupChatScreen taps the Home picker → loads
- * the model), and the loaded path read from the real llmService (what the screen passes in).
+ * P1 #108 — In Memory reports the RAM owned by a model only after it is resident.
  *
- * SPEC: Currently Loaded shows the model's name and its RAM footprint (~X GB RAM), so residency is visible.
- * Falsified: removing hardwareService.formatModelRam from the meta drops the "GB RAM" the test asserts → red.
+ * The journey mounts the real App and proves downloaded storage does not claim
+ * RAM. It selects that model through Home, then a rendered chat send runs the
+ * production lazy-load and residency registration path. Back on Home, the same
+ * In Memory sheet must expose the resident model's estimated runtime footprint.
+ * Only the native model runtime, filesystem, and device RAM sensor are faked.
  */
-import { setupChatScreen } from '../../harness/chatHarness';
+import { renderMainApp, sendChatMessage } from '../../harness/appJourney';
+import { GB } from '../../harness/nativeBoundary';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+describe('P1 loaded-model RAM visibility', () => {
+  it('shows the loaded text model RAM after its first real turn', async () => {
+    const { boundary, rtl, view } = await renderMainApp({
+      boundary: {
+        llama: true,
+        ram: {
+          platform: 'android',
+          totalBytes: 12 * GB,
+          availBytes: 10 * GB,
+        },
+      },
+    });
+    const { act, fireEvent, waitFor } = rtl;
 
-describe('residency visibility — model selector shows the loaded model + its RAM', () => {
-  it('renders the currently-loaded model name and its RAM consumption', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
-    /* eslint-disable @typescript-eslint/no-var-requires */
-    const React = require('react');
-    const { ModelSelectorModal } = require('../../../src/components/ModelSelectorModal');
-    const { llmService } = require('../../../src/services/llm');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+    // Downloaded storage is not residency: before a runtime load, In Memory must
+    // not claim that the model consumes RAM.
+    await act(async () => {
+      fireEvent.press(view.getByTestId('models-summary'));
+    });
+    await waitFor(() => expect(view.getByText('MODELS')).toBeTruthy());
+    expect(view.queryByTestId('models-row-text-ram')).toBeNull();
+    await act(async () => {
+      fireEvent.press(view.getByText('Done'));
+    });
+    await waitFor(() => expect(view.queryByText('MODELS')).toBeNull());
 
-    // The real UI, wired with the real loaded path the screen passes in.
-    const v = h.rtl.render(React.createElement(ModelSelectorModal, {
-      visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {}, isLoading: false,
-      currentModelPath: llmService.getLoadedModelPath(),
-    }));
+    // Select the model only through Home's rendered picker.
+    await act(async () => {
+      fireEvent.press(view.getByTestId('browse-models-button'));
+    });
+    await waitFor(() => expect(view.getByText('Journey Model')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(view.getByTestId('model-item'));
+    });
+    await waitFor(() =>
+      expect(view.getByTestId('new-chat-button')).toBeTruthy(),
+    );
+    await waitFor(() => expect(view.queryByText('Text Models')).toBeNull());
 
-    // The selector indicates WHAT is loaded...
-    expect(String(v.getByTestId('currently-loaded-model-name').props.children)).toContain('Test Model');
-    // ...and HOW MUCH memory it consumes (RAM, not just disk size).
-    expect(String(v.getByTestId('currently-loaded-model-ram').props.children)).toMatch(/GB RAM/);
-  });
+    // Enter through the real Home navigation and lazy-load on the first turn.
+    await act(async () => {
+      fireEvent.press(view.getByTestId('new-chat-button'));
+    });
+    await waitFor(() => expect(view.getByTestId('chat-screen')).toBeTruthy());
+    boundary.llama!.scriptCompletion({ text: 'The model is resident.' });
+    sendChatMessage(rtl, view, 'load the selected model');
+    await waitFor(() =>
+      expect(view.getByText('The model is resident.')).toBeTruthy(),
+    );
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId('chat-back-button'));
+    });
+    await waitFor(() => expect(view.getByTestId('home-screen')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(view.getByTestId('models-summary'));
+    });
+
+    // Journey Model is 128 MiB. The production CPU residency estimator accounts
+    // for runtime overhead (1.5x), registers 192 MiB, then renders 0.2 GB.
+    await waitFor(() => {
+      expect(view.getByTestId('models-row-text')).toHaveTextContent(
+        /Journey Model/,
+      );
+      expect(view.getByTestId('models-row-text-ram')).toHaveTextContent(
+        '0.2 GB',
+      );
+    });
+
+    view.unmount();
+  }, 30000);
 });

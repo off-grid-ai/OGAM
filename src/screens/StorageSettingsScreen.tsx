@@ -1,15 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { Card } from '../components';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
+import {
+  CustomAlert,
+  showAlert,
+  hideAlert,
+  AlertState,
+  initialAlertState,
+} from '../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../theme';
 import { SPACING } from '../constants';
 import { useAppStore, useChatStore } from '../stores';
@@ -18,6 +19,7 @@ import { hardwareService, modelManager } from '../services';
 import { OrphanedFilesSection } from './OrphanedFilesSection';
 import { imageBackendLabel } from '../utils/imageBackend';
 import { createStyles } from './StorageSettingsScreen.styles';
+import { storageCache } from '../services/storageCache';
 
 export const StorageSettingsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -25,17 +27,18 @@ export const StorageSettingsScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const [storageUsed, setStorageUsed] = useState(0);
   const [availableStorage, setAvailableStorage] = useState(0);
+  const [cacheUsed, setCacheUsed] = useState(0);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  const {
-    downloadedModels,
-    downloadedImageModels,
-  } = useAppStore();
+  const { downloadedModels, downloadedImageModels } = useAppStore();
   const { conversations } = useChatStore();
   const downloads = useDownloadStore(s => s.downloads);
   const removeFromStore = useDownloadStore(s => s.remove);
 
-  const imageStorageUsed = downloadedImageModels.reduce((total, m) => total + (m.size || 0), 0);
+  const imageStorageUsed = downloadedImageModels.reduce(
+    (total, m) => total + (m.size || 0),
+    0,
+  );
 
   // A "stale" entry is a store entry missing the basic fields needed to
   // display or finalize it. Now sourced from the unified download store.
@@ -48,6 +51,7 @@ export const StorageSettingsScreen: React.FC = () => {
     const available = await modelManager.getAvailableStorage();
     setStorageUsed(used + imageStorageUsed);
     setAvailableStorage(available);
+    setCacheUsed(await storageCache.usedBytes());
   }, [imageStorageUsed]);
 
   useEffect(() => {
@@ -84,7 +88,8 @@ export const StorageSettingsScreen: React.FC = () => {
   }, [staleDownloads, removeFromStore]);
 
   const totalStorage = storageUsed + availableStorage;
-  const usedPercentage = totalStorage > 0 ? (storageUsed / totalStorage) * 100 : 0;
+  const usedPercentage =
+    totalStorage > 0 ? (storageUsed / totalStorage) * 100 : 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -98,21 +103,78 @@ export const StorageSettingsScreen: React.FC = () => {
         <Text style={styles.title}>Storage</Text>
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+      >
         <Card style={styles.section}>
           <Text style={styles.sectionTitle}>Storage Usage</Text>
           <View style={styles.storageBar}>
-            <View style={[styles.storageUsed, { width: `${Math.min(usedPercentage, 100)}%` }]} />
+            <View
+              style={[
+                styles.storageUsed,
+                { width: `${Math.min(usedPercentage, 100)}%` },
+              ]}
+            />
           </View>
           <View style={styles.storageLegend}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-              <Text style={styles.legendText}>Used: {hardwareService.formatBytes(storageUsed)}</Text>
+              <View
+                style={[styles.legendDot, { backgroundColor: colors.primary }]}
+              />
+              <Text style={styles.legendText}>
+                Used: {hardwareService.formatBytes(storageUsed)}
+              </Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.surfaceLight }]} />
-              <Text style={styles.legendText}>Free: {hardwareService.formatBytes(availableStorage)}</Text>
+              <View
+                style={[
+                  styles.legendDot,
+                  { backgroundColor: colors.surfaceLight },
+                ]}
+              />
+              <Text style={styles.legendText}>
+                Free: {hardwareService.formatBytes(availableStorage)}
+              </Text>
             </View>
+          </View>
+        </Card>
+
+        <Card style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>Temporary Cache</Text>
+              <Text testID="cache-storage-total" style={styles.hint}>
+                {hardwareService.formatBytes(cacheUsed)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              testID="clear-cache-button"
+              style={styles.clearAllButton}
+              disabled={cacheUsed === 0}
+              onPress={() =>
+                setAlertState(
+                  showAlert(
+                    'Clear Temporary Cache',
+                    'Clear temporary files? Conversations and downloaded models are preserved.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Clear Cache',
+                        style: 'destructive',
+                        onPress: async () => {
+                          setAlertState(hideAlert());
+                          await storageCache.clear();
+                          await loadStorageInfo();
+                        },
+                      },
+                    ],
+                  ),
+                )
+              }
+            >
+              <Text style={styles.clearAllText}>Clear Cache</Text>
+            </TouchableOpacity>
           </View>
         </Card>
 
@@ -123,7 +185,9 @@ export const StorageSettingsScreen: React.FC = () => {
               <Icon name="cpu" size={18} color={colors.primary} />
               <Text style={styles.infoLabel}>LLM Models</Text>
             </View>
-            <Text style={styles.infoValue}>{downloadedModels.length}</Text>
+            <Text testID="storage-text-model-count" style={styles.infoValue}>
+              {downloadedModels.length}
+            </Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
@@ -137,14 +201,18 @@ export const StorageSettingsScreen: React.FC = () => {
               <Icon name="hard-drive" size={18} color={colors.primary} />
               <Text style={styles.infoLabel}>Model Storage</Text>
             </View>
-            <Text style={styles.infoValue}>{hardwareService.formatBytes(storageUsed)}</Text>
+            <Text style={styles.infoValue}>
+              {hardwareService.formatBytes(storageUsed)}
+            </Text>
           </View>
           <View style={[styles.infoRow, styles.lastRow]}>
             <View style={styles.infoRowLeft}>
               <Icon name="message-circle" size={18} color={colors.primary} />
               <Text style={styles.infoLabel}>Conversations</Text>
             </View>
-            <Text style={styles.infoValue}>{conversations.length}</Text>
+            <Text testID="storage-conversation-count" style={styles.infoValue}>
+              {conversations.length}
+            </Text>
           </View>
         </Card>
 
@@ -154,13 +222,20 @@ export const StorageSettingsScreen: React.FC = () => {
             {downloadedModels.map((model, index) => (
               <View
                 key={model.id}
-                style={[styles.modelRow, index === downloadedModels.length - 1 && styles.lastRow]}
+                style={[
+                  styles.modelRow,
+                  index === downloadedModels.length - 1 && styles.lastRow,
+                ]}
               >
                 <View style={styles.modelInfo}>
-                  <Text style={styles.modelName} numberOfLines={1}>{model.name}</Text>
+                  <Text style={styles.modelName} numberOfLines={1}>
+                    {model.name}
+                  </Text>
                   <Text style={styles.modelMeta}>{model.quantization}</Text>
                 </View>
-                <Text style={styles.modelSize}>{hardwareService.formatModelSize(model)}</Text>
+                <Text style={styles.modelSize}>
+                  {hardwareService.formatModelSize(model)}
+                </Text>
               </View>
             ))}
           </Card>
@@ -172,16 +247,23 @@ export const StorageSettingsScreen: React.FC = () => {
             {downloadedImageModels.map((model, index) => (
               <View
                 key={model.id}
-                style={[styles.modelRow, index === downloadedImageModels.length - 1 && styles.lastRow]}
+                style={[
+                  styles.modelRow,
+                  index === downloadedImageModels.length - 1 && styles.lastRow,
+                ]}
               >
                 <View style={styles.modelInfo}>
-                  <Text style={styles.modelName} numberOfLines={1}>{model.name}</Text>
+                  <Text style={styles.modelName} numberOfLines={1}>
+                    {model.name}
+                  </Text>
                   <Text style={styles.modelMeta}>
                     {imageBackendLabel(model.backend, 'GPU')}
                     {model.style ? ` • ${model.style}` : ''}
                   </Text>
                 </View>
-                <Text style={styles.modelSize}>{hardwareService.formatBytes(model.size)}</Text>
+                <Text style={styles.modelSize}>
+                  {hardwareService.formatBytes(model.size)}
+                </Text>
               </View>
             ))}
           </Card>
@@ -198,15 +280,24 @@ export const StorageSettingsScreen: React.FC = () => {
                 <Text style={styles.clearAllText}>Clear All</Text>
               </TouchableOpacity>
             </View>
-            <Text style={[styles.hint, { textAlign: 'left' as const, marginBottom: SPACING.md }]}>
-              These download entries have invalid or missing data and can be safely cleared.
+            <Text
+              style={[
+                styles.hint,
+                { textAlign: 'left' as const, marginBottom: SPACING.md },
+              ]}
+            >
+              These download entries have invalid or missing data and can be
+              safely cleared.
             </Text>
             {staleDownloads.map(entry => (
               <View key={entry.modelKey} style={styles.orphanedRow}>
                 <View style={styles.orphanedInfo}>
-                  <Text style={styles.orphanedName}>Download #{entry.downloadId}</Text>
+                  <Text style={styles.orphanedName}>
+                    Download #{entry.downloadId}
+                  </Text>
                   <Text style={styles.orphanedMeta}>
-                    {entry.fileName || 'Unknown file'} • {entry.modelId || 'Unknown model'}
+                    {entry.fileName || 'Unknown file'} •{' '}
+                    {entry.modelId || 'Unknown model'}
                   </Text>
                 </View>
                 <TouchableOpacity

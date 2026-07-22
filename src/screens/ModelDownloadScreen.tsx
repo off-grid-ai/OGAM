@@ -170,17 +170,28 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
         const compat = recommendedModelsForDevice(ram);
         if (cancelled) return;
         setRecommendedModels(compat);
-        const files = await fetchModelFiles(compat);
-        if (!cancelled) setModelFiles(files);
+        // Device analysis is done here — show the screen NOW. The recommended cards
+        // (curated LiteRT + GGUF) render from local data; their download file lists come
+        // over the network and MUST NOT gate the screen. Awaiting fetchModelFiles here left
+        // fresh installs stuck on "Analyzing your device…" for ~75s (the OS fetch timeout)
+        // whenever HuggingFace was slow or unreachable. Load files in the background instead.
+        if (!cancelled) setIsLoading(false);
+        try {
+          const files = await fetchModelFiles(compat);
+          if (!cancelled) setModelFiles(files);
+        } catch (fileError) {
+          logger.error('Error fetching model files:', fileError);
+        }
       } catch (error) {
         logger.error('Error initializing:', error);
-        if (!cancelled) setAlertState(showAlert('Error', 'Failed to initialize. Please try again.'));
-      } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setAlertState(showAlert('Error', 'Failed to initialize. Please try again.'));
+          setIsLoading(false);
+        }
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [setDeviceInfo, setModelRecommendation]);
 
   // Health-check persisted servers — only show reachable ones.
   // Returns { ran, reachable }: `ran` is false when the in-flight guard short-circuited this call
@@ -378,8 +389,12 @@ export const ModelDownloadScreen: React.FC<Props> = ({ navigation }) => {
               <Text style={styles.deviceValue}>{deviceInfo?.deviceModel}</Text>
             </View>
             <View style={styles.deviceInfo}>
-              <Text style={styles.deviceLabel}>Available Memory</Text>
-              <Text style={styles.deviceValue}>{hardwareService.formatBytes(deviceInfo?.availableMemory || 0)}</Text>
+              <Text style={styles.deviceLabel}>Memory</Text>
+              {/* Show TOTAL physical RAM — the device spec the user expects and the SAME number the
+                  model recommendations are gated on (getTotalMemoryGB). deviceInfo.availableMemory is
+                  the per-process allocatable ceiling (os_proc_available_memory), a budget input that
+                  reads as a wrong "device memory" here — e.g. 4.57GB on the reported 11GB device. */}
+              <Text style={styles.deviceValue}>{hardwareService.formatBytes(deviceInfo?.totalMemory || 0)}</Text>
             </View>
           </Card>
 

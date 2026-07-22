@@ -22,14 +22,51 @@ export interface DeviceMemory {
   /** Real free RAM right now (os_proc_available), in GB. */
   availGB: number;
   policy?: LoadPolicy;
+  /**
+   * Optional reclaim-lag model. On iOS the OS reclaims a just-evicted model's pages SHORTLY AFTER
+   * the native release() returns, so the instantaneous free reading lags. Until getProcessMemory has
+   * been polled enough to observe the footprint DROP, getAvailableMemoryGB reports the low
+   * pre-reclaim value (`availGB`); once the footprint drops it reports `availAfterGB`. This lets a
+   * test exercise a survival probe that must wait for reclaim before reading RAM (G3). Without it the
+   * sensor is a single static value and a reclaim-lag refusal is structurally invisible.
+   */
+  reclaim?: {
+    /** Process footprint before the OS reclaims the evicted pages (high). */
+    footprintBeforeMB: number;
+    /** Process footprint after reclaim settles (dropped by >= 200MB so awaitMemoryReclaim returns). */
+    footprintAfterMB: number;
+    /** True free RAM once reclaim has settled (what a correct probe should see). */
+    availAfterGB: number;
+  };
 }
 
 /** Seed the device's RAM + platform + policy and reset the REAL residency manager to empty. */
 export function setDeviceMemory(d: DeviceMemory): void {
   Object.defineProperty(Platform, 'OS', { value: d.platform, configurable: true });
   jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(d.totalGB);
-  jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(d.availGB);
   jest.spyOn(hardwareService, 'refreshMemoryInfo').mockResolvedValue(undefined as never);
+  if (d.reclaim) {
+    const r = d.reclaim;
+    let pmCalls = 0;
+    let reclaimed = false;
+    // Free RAM lags: low until the footprint drop has been observed, then the true post-reclaim value.
+    jest
+      .spyOn(hardwareService, 'getAvailableMemoryGB')
+      .mockImplementation(() => (reclaimed ? r.availAfterGB : d.availGB));
+    // First poll = pre-reclaim footprint; subsequent polls = dropped footprint (reclaim settled).
+    jest.spyOn(hardwareService, 'getProcessMemory').mockImplementation(async () => {
+      pmCalls += 1;
+      if (pmCalls <= 1) {
+        return { availableMB: 0, footprintMB: r.footprintBeforeMB, limitMB: 0 };
+      }
+      reclaimed = true;
+      return { availableMB: 0, footprintMB: r.footprintAfterMB, limitMB: 0 };
+    });
+  } else {
+    jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(d.availGB);
+    // No reclaim model: the reclaim barrier gets a null reading and takes its short fixed beat.
+    jest.spyOn(hardwareService, 'getProcessMemory').mockResolvedValue(null);
+  }
   modelResidencyManager._reset();
   modelResidencyManager.setBudgetOverrideMB(null);
   modelResidencyManager.setLoadPolicy(d.policy ?? 'balanced');

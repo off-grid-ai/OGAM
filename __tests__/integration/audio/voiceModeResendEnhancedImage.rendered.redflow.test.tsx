@@ -30,7 +30,7 @@ describe('T062 (voice + enhancement) — resend of an enhanced image request re-
     h.render();
 
     await h.placeImageModel({ backend: 'mnn' });
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { activeModelService } = require('../../../src/services/activeModelService');
     await activeModelService.loadImageModel('sd');
     // Enable prompt enhancement — the setting that ran on the device before the failing resend.
@@ -42,7 +42,7 @@ describe('T062 (voice + enhancement) — resend of an enhanced image request re-
     // then the image is drawn.
     h.boundary.litert.scriptTurn({ content: 'a photorealistic dog in a park' });
     await h.voiceSend('draw a dog');
-    await h.rtl.waitFor(() => { expect(h.view!.queryAllByTestId('generated-image-content').length).toBe(1); }, { timeout: 6000 });
+    await h.rtl.waitFor(() => { expect(h.view!.queryAllByTestId('generated-image-content')).toHaveLength(1); }, { timeout: 6000 });
 
     // RESEND via the real action menu (3-dots) on the image-result message → Retry. Regenerate REPLACES the
     // reply, so a correct re-draw leaves one rendered image; a misroute-to-text would leave ZERO (the image
@@ -53,7 +53,7 @@ describe('T062 (voice + enhancement) — resend of an enhanced image request re-
 
     // SPEC: the resend re-ran the IMAGE pipeline (a second generateImage) AND the user still sees a rendered
     // image (not a text answer). RED (B33) would be zero rendered images + the text answer.
-    expect(h.boundary.diffusion.calls.generateImage.length).toBe(2);
-    expect(h.view!.queryAllByTestId('generated-image-content').length).toBe(1);
+    expect(h.boundary.diffusion.calls.generateImage).toHaveLength(2);
+    expect(h.view!.queryAllByTestId('generated-image-content')).toHaveLength(1);
   });
 });

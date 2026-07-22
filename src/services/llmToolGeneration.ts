@@ -6,7 +6,8 @@
 import { useAppStore } from '../stores/appStore';
 import type { Message } from '../types';
 import type { ToolCall } from './tools/types';
-import { recordGenerationStats, buildCompletionParams, buildThinkingCompletionParams, safeCompletion, isTruncatedResult, getStreamingDelta } from './llmHelpers';
+import { recordGenerationStats, buildCompletionParams, buildThinkingCompletionParams, isTruncatedResult, getStreamingDelta } from './llmHelpers';
+import { safeCompletion } from './llmSafetyChecks';
 import type { StreamToken } from './llmStreamTypes';
 import logger from '../utils/logger';
 import { TOOL_CALL_OPENERS, TOOL_CALL_CLOSERS, maxPartialTagSuffix } from '../utils/messageContent';
@@ -129,7 +130,8 @@ export interface ToolGenerationDeps {
   disableCtxShift: boolean;
   manageContextWindow: (messages: Message[], extraReserve?: number) => Promise<Message[]>;
   convertToOAIMessages: (messages: Message[]) => any[];
-  setPerformanceStats: (stats: any) => void;
+  complete?: (params: Record<string, unknown>, onToken: (data: any) => void, label: string) => Promise<any>;
+  setPerformanceStats: (stats: any, result?: any) => void;
   setIsGenerating: (v: boolean) => void;
 }
 
@@ -172,7 +174,7 @@ export async function generateWithToolsImpl(
     };
     logger.log('[LLM-Tools] === INPUT ===');
     logger.log(JSON.stringify(completionParams, null, 2));
-    const completionResult: any = await safeCompletion(deps.context, () => deps.context.completion(completionParams as any, (data: any) => {
+    const onToken = (data: any) => {
       if (!generating) return;
       if (data.tool_calls) {
         for (const tc of data.tool_calls) {
@@ -198,7 +200,14 @@ export async function generateWithToolsImpl(
         fullResponse += visible;
         if (visible) options.onStream?.({ content: visible });
       }
-    }), 'generateWithTools');
+    };
+    const completionResult: any = deps.complete
+      ? await deps.complete(completionParams, onToken, 'generateWithTools')
+      : await safeCompletion(
+          deps.context,
+          () => deps.context.completion(completionParams as any, onToken),
+          'generateWithTools',
+        );
     logger.log('[LLM-Tools] === OUTPUT ===');
     logger.log(JSON.stringify(completionResult, null, 2));
     // [WIRE] full tool-generation input+output on ONE tagged line so the lossless wire file captures the
@@ -237,7 +246,7 @@ export async function generateWithToolsImpl(
       // Flag a reply cut off at the n_predict cap so the UI can show it (B15) — but NOT a user stop
       // (interrupted), which also has stopped_eos:false. Single verdict shared with the plain path.
       lastTruncated: isTruncatedResult(cr),
-    });
+    }, cr);
     generating = false;
     deps.setIsGenerating(false);
     if (cr?.context_full) {

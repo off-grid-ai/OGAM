@@ -3,7 +3,7 @@ import { modelManager } from '../../services';
 import { showAlert, AlertState } from '../../components/CustomAlert';
 import { DownloadedModel } from '../../types';
 
-export type GgufFileRef = { uri: string; name: string; size: number };
+type GgufFileRef = { uri: string; name: string; size: number };
 
 export type GgufImportDeps = {
   setAlertState: (s: AlertState) => void;
@@ -11,7 +11,7 @@ export type GgufImportDeps = {
   addDownloadedModel: (model: DownloadedModel) => void;
 };
 
-export function isMmProj(name: string): boolean {
+function isMmProj(name: string): boolean {
   const lower = name.toLowerCase();
   return (
     lower.includes('mmproj') ||
@@ -20,7 +20,7 @@ export function isMmProj(name: string): boolean {
   );
 }
 
-export function classifyGgufPair(
+function classifyGgufPair(
   file1: GgufFileRef,
   file2: GgufFileRef,
 ): { mainFile: GgufFileRef; mmProjFile: GgufFileRef } {

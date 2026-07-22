@@ -107,8 +107,11 @@ export const imageProvider: DownloadProvider = {
     const nativeResumable = Platform.OS === 'android' && !isMultifile(entry) && !!entry.downloadId;
     if (nativeResumable) {
       try {
-        useDownloadStore.getState().setStatus(entry.downloadId, 'pending');
         await backgroundDownloadService.retryDownload(entry.downloadId);
+        // Publish "pending" only after native accepts ownership. If the completed
+        // archive is gone, the fallback below must still see a failed row so its
+        // replacement download is not coalesced as an already-active request.
+        useDownloadStore.getState().setStatus(entry.downloadId, 'pending');
         backgroundDownloadService.startProgressPolling();
         return;
       } catch (e) {

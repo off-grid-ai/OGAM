@@ -274,6 +274,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
         </View>
 
         <FlatList
+          testID="onboarding-slides"
           ref={flatListRef}
           data={ONBOARDING_SLIDES}
           renderItem={renderSlide}
@@ -281,6 +282,11 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           keyExtractor={item => item.id}
+          getItemLayout={(_, index) => ({
+            length: width,
+            offset: width * index,
+            index,
+          })}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { x: scrollX } } }],
             { useNativeDriver: false },

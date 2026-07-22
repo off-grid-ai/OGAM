@@ -15,11 +15,20 @@ jest.mock('../../../../src/utils/logger', () => ({
   default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 jest.mock('../../../../src/stores', () => ({
-  useAppStore: { getState: jest.fn(() => ({ downloadedModels: [], setDownloadedModels: jest.fn() })) },
+  useAppStore: {
+    getState: jest.fn(() => ({
+      downloadedModels: [],
+      setDownloadedModels: jest.fn(),
+    })),
+  },
 }));
 
 import { extractBaseName } from '../../../../src/services/modelManager/scan';
-import { getCuratedLiteRTEntry, buildCuratedLiteRTUrl, CURATED_LITERT_ENTRIES } from '../../../../src/services/curatedLiteRTRegistry';
+import {
+  getCuratedLiteRTEntry,
+  buildCuratedLiteRTFiles,
+  CURATED_LITERT_ENTRIES,
+} from '../../../../src/services/curatedLiteRTRegistry';
 
 // ---------------------------------------------------------------------------
 // curatedLiteRTRegistry
@@ -40,9 +49,9 @@ describe('getCuratedLiteRTEntry', () => {
     expect(getCuratedLiteRTEntry(undefined)).toBeUndefined();
   });
 
-  it('buildCuratedLiteRTUrl produces a valid HuggingFace URL', () => {
+  it('the public curated file projection contains a valid HuggingFace URL', () => {
     const entry = CURATED_LITERT_ENTRIES[0];
-    const url = buildCuratedLiteRTUrl(entry);
+    const url = buildCuratedLiteRTFiles()[0].downloadUrl;
     expect(url).toContain(entry.hfRepoId);
     expect(url).toContain(entry.commitHash);
     expect(url).toContain(entry.fileName);
@@ -55,11 +64,15 @@ describe('getCuratedLiteRTEntry', () => {
 
 describe('extractBaseName', () => {
   it('strips quantization suffix Q4_K_M', () => {
-    expect(extractBaseName('gemma-4-E2B-it-Q4_K_M.gguf')).toBe('gemma-4-e2b-it');
+    expect(extractBaseName('gemma-4-E2B-it-Q4_K_M.gguf')).toBe(
+      'gemma-4-e2b-it',
+    );
   });
 
   it('strips quantization suffix Q8_0', () => {
-    expect(extractBaseName('SmolLM2-360M-Instruct-Q8_0.gguf')).toBe('smollm2-360m-instruct');
+    expect(extractBaseName('SmolLM2-360M-Instruct-Q8_0.gguf')).toBe(
+      'smollm2-360m-instruct',
+    );
   });
 
   it('strips quantization suffix F16 (uppercase F)', () => {

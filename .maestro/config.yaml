@@ -1,9 +1,0 @@
-# Maestro workspace config
-#
-# All flows use ${APP_ID} — pass it at runtime:
-#
-#   iOS:           maestro test -e APP_ID=ai.offgridmobile <flow>
-#   Android debug: maestro test -e APP_ID=ai.offgridmobile.dev <flow>
-#
-# Or use the run script which auto-detects:
-#   ./scripts/run-tests.sh [folder] [--ios | --android]

@@ -14,6 +14,7 @@ export type RootStackParamList = {
   DocumentPreview: { filePath: string; fileName: string; fileSize: number };
   // Former SettingsStack
   ModelSettings: undefined;
+  ExperimentalFeatures: undefined;
   RemoteServers: undefined;
   DeviceInfo: undefined;
   StorageSettings: undefined;

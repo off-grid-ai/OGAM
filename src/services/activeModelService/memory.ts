@@ -15,7 +15,11 @@ import {
   IMAGE_MODEL_OVERHEAD_MULTIPLIER,
 } from './types';
 import { useAppStore } from '../../stores';
-import { modelMemoryBudgetMB, modelWarningThresholdMB, LoadPolicy } from '../memoryBudget';
+import {
+  modelMemoryBudgetMB,
+  modelWarningThresholdMB,
+  LoadPolicy,
+} from '../memoryBudget';
 
 // ---------------------------------------------------------------------------
 // Budget helpers
@@ -24,7 +28,9 @@ import { modelMemoryBudgetMB, modelWarningThresholdMB, LoadPolicy } from '../mem
 // The pre-load check reads the SAME budget owner as the residency manager, so it
 // must honour the SAME load policy — otherwise aggressive mode would relax the
 // residency gate while the pre-check kept blocking/warning at balanced limits.
-const getMemoryBudgetGB = async (policy: LoadPolicy = 'balanced'): Promise<number> => {
+const getMemoryBudgetGB = async (
+  policy: LoadPolicy = 'balanced',
+): Promise<number> => {
   const deviceInfo = await hardwareService.getDeviceInfo();
   const totalMB = deviceInfo.totalMemory / (1024 * 1024);
   return modelMemoryBudgetMB(totalMB, undefined, policy) / 1024;
@@ -48,7 +54,10 @@ function estimateModelMemoryGB(
     const textModel = model as DownloadedModel;
     const sizeGB = (textModel.fileSize || 0) / (1024 * 1024 * 1024);
     // GPU-aware overhead — same single source the residency gate uses, so pre-check and gate agree.
-    return sizeGB * textOverheadMultiplier(useAppStore.getState().settings.inferenceBackend);
+    return (
+      sizeGB *
+      textOverheadMultiplier(useAppStore.getState().settings.inferenceBackend)
+    );
   }
   const imageModel = model as ONNXImageModel;
   // ONE image-RAM estimator: delegate to the authoritative load-gate estimator so the
@@ -75,8 +84,13 @@ export function getCurrentlyLoadedMemoryGB(
 ): number {
   let totalGB = 0;
 
-  if (ids.loadedTextModelId && (llmService.isModelLoaded() || liteRTService.isModelLoaded())) {
-    const textModel = lists.downloadedModels.find(m => m.id === ids.loadedTextModelId);
+  if (
+    ids.loadedTextModelId &&
+    (llmService.isModelLoaded() || liteRTService.isModelLoaded())
+  ) {
+    const textModel = lists.downloadedModels.find(
+      m => m.id === ids.loadedTextModelId,
+    );
     if (textModel) {
       totalGB += estimateModelMemoryGB(textModel, 'text');
     }
@@ -95,7 +109,7 @@ export function getCurrentlyLoadedMemoryGB(
 }
 
 /** Memory used by OTHER models already loaded (not the one being replaced). */
-export function getOtherLoadedMemoryGB(
+function getOtherLoadedMemoryGB(
   modelType: ModelType,
   ids: LoadedModelIds,
   lists: ModelLists,
@@ -109,8 +123,14 @@ export function getOtherLoadedMemoryGB(
       totalGB += estimateModelMemoryGB(imageModel, 'image');
     }
   }
-  if (modelType === 'image' && ids.loadedTextModelId && (llmService.isModelLoaded() || liteRTService.isModelLoaded())) {
-    const textModel = lists.downloadedModels.find(m => m.id === ids.loadedTextModelId);
+  if (
+    modelType === 'image' &&
+    ids.loadedTextModelId &&
+    (llmService.isModelLoaded() || liteRTService.isModelLoaded())
+  ) {
+    const textModel = lists.downloadedModels.find(
+      m => m.id === ids.loadedTextModelId,
+    );
     if (textModel) {
       totalGB += estimateModelMemoryGB(textModel, 'text');
     }
@@ -169,9 +189,12 @@ export async function checkMemoryForModel(
   // re-prompted every time it's evicted and reloaded (text↔image↔TTS swaps).
   if (sessionOverride) {
     return {
-      canLoad: true, severity: 'safe',
+      canLoad: true,
+      severity: 'safe',
       availableMemoryGB: memoryBudgetGB - currentlyLoadedMemoryGB,
-      requiredMemoryGB, currentlyLoadedMemoryGB, totalRequiredMemoryGB,
+      requiredMemoryGB,
+      currentlyLoadedMemoryGB,
+      totalRequiredMemoryGB,
       remainingAfterLoadGB: remainingBudgetGB,
       message: `${modelName} — load override approved for this session.`,
     };
@@ -248,7 +271,9 @@ export async function checkMemoryForDualModel(
   }
 
   if (imageModelId) {
-    const imageModel = lists.downloadedImageModels.find(m => m.id === imageModelId);
+    const imageModel = lists.downloadedImageModels.find(
+      m => m.id === imageModelId,
+    );
     if (imageModel) {
       totalRequiredGB += estimateModelMemoryGB(imageModel, 'image');
       modelNames.push(imageModel.name);

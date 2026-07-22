@@ -26,7 +26,7 @@ async function scanDirForMmProj(modelFilePath: string): Promise<RNFS.ReadDirResI
   return mmProjFiles.find(f => f.name === chosen);
 }
 
-export async function resolveMmProjPath(
+async function resolveMmProjPath(
   model: LlamaDownloadedModel,
   modelId: string,
 ): Promise<string | undefined> {
@@ -336,6 +336,8 @@ export async function checkImageModelCanLoad(
   }
   // Residency manager is authoritative for memory: evict others to fit the budget
   // before loading. If it can't fit even after eviction, block — unless "Load Anyway".
+  const overrideApplied =
+    !!opts?.override || modelResidencyManager.hasSessionOverride(modelId);
   const { fits } = await modelResidencyManager.makeRoomFor(
     {
       key: 'image',
@@ -350,7 +352,7 @@ export async function checkImageModelCanLoad(
   if (!fits) {
     // Refusal UNDER override = survival floor (hard limit) → non-overridable, so the
     // UI stops re-offering "Load Anyway" as a no-op that re-runs the same failing load.
-    const overridable = !opts?.override;
+    const overridable = !overrideApplied;
     return { canLoad: false, overridable, error: overridable
       ? `Not enough memory to load ${model.name}. Free up space or choose a smaller model.`
       : `Not enough memory to load ${model.name}, even after freeing other models. Close other apps or choose a smaller model.` };

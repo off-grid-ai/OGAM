@@ -11,25 +11,50 @@
  * can't silently drop the guard or admit an unfittable load. (The RED over-admit/over-refuse edge cases
  * M3/M4/M5 are text-model gate-verdict bugs, reproduced in budgetRedflow.test.ts.)
  */
-import { installNativeBoundary, GB, MB, requireRTL } from '../../harness/nativeBoundary';
+import {
+  installNativeBoundary,
+  GB,
+  MB,
+  requireRTL,
+} from '../../harness/nativeBoundary';
 import { createONNXImageModel } from '../../utils/factories';
 
-async function setup(ram: { platform: 'ios' | 'android'; totalBytes: number; availBytes: number }, modelSizeBytes: number) {
+async function setup(
+  ram: { platform: 'ios' | 'android'; totalBytes: number; availBytes: number },
+  modelSizeBytes: number,
+) {
   const boundary = installNativeBoundary({ ram });
   void boundary;
   /* eslint-disable @typescript-eslint/no-var-requires */
   const React = require('react');
   const { render } = requireRTL();
-  const { imageGenerationService } = require('../../../src/services/imageGenerationService');
+  const {
+    imageGenerationService,
+  } = require('../../../src/services/imageGenerationService');
   const { hardwareService } = require('../../../src/services/hardware');
   const { useAppStore } = require('../../../src/stores');
-  const { ModelFailureCard } = require('../../../src/components/ModelFailureCard');
+  const {
+    ModelFailureCard,
+  } = require('../../../src/components/ModelFailureCard');
   /* eslint-enable @typescript-eslint/no-var-requires */
 
   // CoreML backend → activeModelService skips the mnn/qnn integrity (FS) gate, straight to the memory gate.
-  const model = createONNXImageModel({ id: 'sd', name: 'Big SD', modelPath: '/models/big', backend: 'coreml' as never, size: modelSizeBytes });
-  useAppStore.setState({ downloadedImageModels: [model], activeImageModelId: 'sd' });
-  useAppStore.getState().updateSettings({ imageThreads: 4, imageUseOpenCL: false, enhanceImagePrompts: false });
+  const model = createONNXImageModel({
+    id: 'sd',
+    name: 'Big SD',
+    modelPath: '/models/big',
+    backend: 'coreml' as never,
+    size: modelSizeBytes,
+  });
+  useAppStore.setState({
+    downloadedImageModels: [model],
+    activeImageModelId: 'sd',
+  });
+  useAppStore.getState().updateSettings({
+    imageThreads: 4,
+    imageUseOpenCL: false,
+    enhanceImagePrompts: false,
+  });
 
   await hardwareService.refreshMemoryInfo(); // pull seeded RAM into the cache the real gate reads
   return { React, render, imageGenerationService, ModelFailureCard };
@@ -37,8 +62,13 @@ async function setup(ram: { platform: 'ios' | 'android'; totalBytes: number; ava
 
 describe('memory OOM-avoidance — image gen + ModelFailureCard (guards)', () => {
   it('refuses an unfittable load and shows the "Not Enough Memory" card + Load Anyway', async () => {
-    const t = await setup({ platform: 'ios', totalBytes: 6 * GB, availBytes: 300 * MB }, 8 * GB);
-    const result = await t.imageGenerationService.generateImage({ prompt: 'a cat' });
+    const t = await setup(
+      { platform: 'ios', totalBytes: 6 * GB, availBytes: 300 * MB },
+      8 * GB,
+    );
+    const result = await t.imageGenerationService.generateImage({
+      prompt: 'a cat',
+    });
     expect(result).toBeNull(); // refused, not generated
 
     const view = t.render(t.React.createElement(t.ModelFailureCard, {}));
@@ -48,20 +78,24 @@ describe('memory OOM-avoidance — image gen + ModelFailureCard (guards)', () =>
     expect(view.queryByText(/Free up space/)).not.toBeNull();
   });
 
-  it('under "Load Anyway" (override), the budget gate no longer refuses — never a terminal dead-end', async () => {
-    const t = await setup({ platform: 'android', totalBytes: 12 * GB, availBytes: 665 * MB }, 8 * GB);
-    await t.imageGenerationService.generateImage({ prompt: 'a cat' });                 // 1st attempt: refused (overridable)
+  it('under "Load Anyway", catastrophic RAM pressure becomes a hard card without another override', async () => {
+    const t = await setup(
+      { platform: 'android', totalBytes: 12 * GB, availBytes: 665 * MB },
+      8 * GB,
+    );
+    await t.imageGenerationService.generateImage({ prompt: 'a cat' }); // 1st attempt: refused (overridable)
     // The Load Anyway button dismisses the refusal card, THEN re-runs with override — replicate that
     // dismiss so we isolate whether the OVERRIDE attempt itself produces a fresh memory refusal.
-    require('../../../src/stores/modelFailureStore').useModelFailureStore.getState().clear();
-    await t.imageGenerationService.generateImage({ prompt: 'a cat' }, { override: true }); // Load Anyway
+    require('../../../src/stores/modelFailureStore')
+      .useModelFailureStore.getState()
+      .clear();
+    await t.imageGenerationService.generateImage(
+      { prompt: 'a cat' },
+      { override: true },
+    ); // Load Anyway
 
-    // Load Anyway is unconditional: makeRoomFor under override always fits (no survival floor), so the
-    // budget stops refusing — the user is NEVER dead-ended at "we evicted everything and there's STILL
-    // no memory". After the override attempt the memory-refusal card is gone (the gate admitted the load).
-    // Whether the forced 8GB dirty load then survives on the physical device is the native OOM outcome —
-    // Provit, not something the in-Node fake can honestly assert.
     const view = t.render(t.React.createElement(t.ModelFailureCard, {}));
-    expect(view.queryByText('Image model: Not Enough Memory')).toBeNull();
+    expect(view.getByText('Image model: Not Enough Memory')).toBeTruthy();
+    expect(view.queryByTestId('model-failure-load-anyway-image')).toBeNull();
   });
 });

@@ -6,7 +6,10 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { BackgroundDownloadReasonCode } from '../../types';
 import { needsVisionRepair as checkNeedsVisionRepair } from '../../utils/visionRepair';
-import { getDownloadStatusLabel, isRetryable } from '../../utils/downloadErrors';
+import {
+  getDownloadStatusLabel,
+  isRetryable,
+} from '../../utils/downloadErrors';
 import { downloadStatusIcon } from '../../utils/downloadStatusIcon';
 import { formatBytes } from '../../utils/formatBytes';
 import { createStyles } from './styles';
@@ -55,7 +58,12 @@ export function getStatusText(status: string): string {
 
 function getStatusLabel(item: DownloadItem): string {
   if (item.status === 'running') return '';
-  if (item.status === 'failed' || item.status === 'retrying' || item.status === 'pending' || item.status === 'waiting_for_network') {
+  if (
+    item.status === 'failed' ||
+    item.status === 'retrying' ||
+    item.status === 'pending' ||
+    item.status === 'waiting_for_network'
+  ) {
     return getDownloadStatusLabel(item.status, item.reasonCode, item.reason);
   }
   if (!item.reason && !item.reasonCode) return getStatusText(item.status);
@@ -70,15 +78,19 @@ interface ActiveDownloadCardProps {
   onRetry: (item: DownloadItem) => void;
 }
 
-export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, onRemove, onRetry }) => {
+export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
+  item,
+  onRemove,
+  onRetry,
+}) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const progressColor =
     item.status === 'failed'
       ? colors.error
       : item.status === 'retrying' || item.status === 'waiting_for_network'
-        ? colors.warning
-        : colors.primary;
+      ? colors.warning
+      : colors.primary;
 
   // Icon per status is owned by downloadStatusIcon() so this row and ModelCard match
   // (queued -> clock, previously text-only here).
@@ -92,11 +104,18 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, on
   };
 
   return (
-    <Card style={styles.downloadCard}>
+    <Card
+      style={styles.downloadCard}
+      testID={`active-download-${item.modelId}`}
+    >
       <View style={styles.downloadHeader}>
         <View style={styles.downloadInfo}>
-          <Text style={styles.fileName} numberOfLines={1}>{item.fileName}</Text>
-          <Text style={styles.modelId} numberOfLines={1}>{item.author}</Text>
+          <Text style={styles.fileName} numberOfLines={1}>
+            {item.fileName}
+          </Text>
+          <Text style={styles.modelId} numberOfLines={1}>
+            {item.author}
+          </Text>
         </View>
         {item.status !== 'failed' && (
           <TouchableOpacity
@@ -110,7 +129,15 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, on
       </View>
       <View style={styles.progressContainer}>
         <View style={styles.progressBarBackground}>
-          <View style={[styles.progressBarFill, { width: `${Math.round(item.progress * 100)}%` as const, backgroundColor: progressColor }]} />
+          <View
+            style={[
+              styles.progressBarFill,
+              {
+                width: `${Math.round(item.progress * 100)}%` as const,
+                backgroundColor: progressColor,
+              },
+            ]}
+          />
         </View>
         <Text style={styles.progressText}>
           {formatBytes(item.bytesDownloaded)} / {formatBytes(item.fileSize)}
@@ -125,12 +152,22 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, on
         {(!!getStatusLabel(item) || !!getStatusIcon()) && (
           <View style={styles.statusIconRow}>
             {getStatusIcon() && (
-              <Icon name={getStatusIcon()!} size={14} color={getStatusIconColor()} accessibilityLabel={getStatusText(item.status)} />
+              <Icon
+                name={getStatusIcon()!}
+                size={14}
+                color={getStatusIconColor()}
+                accessibilityLabel={getStatusText(item.status)}
+              />
             )}
             {/* Queued is icon-only (clock) — the word is redundant next to it. Other states
                 (failed/retrying/network) keep their explanatory text. */}
             {item.status !== 'pending' && !!getStatusLabel(item) && (
-              <Text style={[styles.statusText, item.status === 'failed' && { color: colors.error }]}>
+              <Text
+                style={[
+                  styles.statusText,
+                  item.status === 'failed' && { color: colors.error },
+                ]}
+              >
                 {getStatusLabel(item)}
               </Text>
             )}
@@ -172,7 +209,10 @@ interface CompletedDownloadCardProps {
 
 /** Feather icon for a completed model row. A vision model missing its projector reads as
  *  "needs repair" (wrench), not "has vision" (eye) — actionable-broken, not a working capability. */
-function modelTypeIconName(item: DownloadItem, needsVisionRepair: boolean): string {
+function modelTypeIconName(
+  item: DownloadItem,
+  needsVisionRepair: boolean,
+): string {
   if (item.modelType === 'image') return 'image';
   if (item.modelType === 'tts') return 'volume-2';
   if (item.modelType === 'stt') return 'mic';
@@ -181,14 +221,24 @@ function modelTypeIconName(item: DownloadItem, needsVisionRepair: boolean): stri
   return 'message-square';
 }
 
-function modelTypeIconColor(item: DownloadItem, needsVisionRepair: boolean, colors: ReturnType<typeof useTheme>['colors']): string {
+function modelTypeIconColor(
+  item: DownloadItem,
+  needsVisionRepair: boolean,
+  colors: ReturnType<typeof useTheme>['colors'],
+): string {
   if (item.modelType === 'image') return colors.info;
-  if (item.modelType === 'tts' || item.modelType === 'stt') return colors.success;
+  if (item.modelType === 'tts' || item.modelType === 'stt')
+    return colors.success;
   if (needsVisionRepair || item.isVisionModel) return colors.warning;
   return colors.primary;
 }
 
-export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ item, onDelete, onRepairVision, isRepairingVision = false }) => {
+export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({
+  item,
+  onDelete,
+  onRepairVision,
+  isRepairingVision = false,
+}) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const needsVisionRepair = checkNeedsVisionRepair(item);
@@ -200,7 +250,10 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
   const showRepairProgress = isRepairingVision && !!repairEntry;
 
   return (
-    <Card style={styles.downloadCard}>
+    <Card
+      style={styles.downloadCard}
+      testID={`completed-download-${item.modelId}`}
+    >
       <View style={styles.downloadHeader}>
         <View style={styles.modelTypeIcon}>
           <Icon
@@ -210,8 +263,12 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
           />
         </View>
         <View style={styles.downloadInfo}>
-          <Text style={styles.fileName} numberOfLines={1}>{item.fileName}</Text>
-          <Text style={styles.modelId} numberOfLines={1}>{item.author}</Text>
+          <Text style={styles.fileName} numberOfLines={1}>
+            {item.fileName}
+          </Text>
+          <Text style={styles.modelId} numberOfLines={1}>
+            {item.author}
+          </Text>
         </View>
         {needsVisionRepair && !isRepairingVision && onRepairVision && (
           <TouchableOpacity
@@ -233,24 +290,45 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
       {showRepairProgress && (
         <View style={styles.progressContainer} testID="repair-vision-progress">
           <View style={styles.progressBarBackground}>
-            <View style={[styles.progressBarFill, { width: `${Math.round(repairEntry.progress * 100)}%` as const, backgroundColor: colors.primary }]} />
+            <View
+              style={[
+                styles.progressBarFill,
+                {
+                  width: `${Math.round(repairEntry.progress * 100)}%` as const,
+                  backgroundColor: colors.primary,
+                },
+              ]}
+            />
           </View>
           <Text style={styles.progressText}>
-            {formatBytes(repairEntry.bytesDownloaded)} / {formatBytes(repairEntry.totalBytes)}
+            {formatBytes(repairEntry.bytesDownloaded)} /{' '}
+            {formatBytes(repairEntry.totalBytes)}
           </Text>
         </View>
       )}
       <View style={styles.downloadMeta}>
         {!!item.quantization && (
-          <View style={[styles.quantBadge, item.modelType === 'image' && styles.imageBadge]}>
-            <Text style={[styles.quantText, item.modelType === 'image' && styles.imageQuantText]}>
+          <View
+            style={[
+              styles.quantBadge,
+              item.modelType === 'image' && styles.imageBadge,
+            ]}
+          >
+            <Text
+              style={[
+                styles.quantText,
+                item.modelType === 'image' && styles.imageQuantText,
+              ]}
+            >
               {item.quantization}
             </Text>
           </View>
         )}
         <Text style={styles.sizeText}>{formatBytes(item.fileSize)}</Text>
         {item.downloadedAt && (
-          <Text style={styles.dateText}>{new Date(item.downloadedAt).toLocaleDateString()}</Text>
+          <Text style={styles.dateText}>
+            {new Date(item.downloadedAt).toLocaleDateString()}
+          </Text>
         )}
         {isRepairingVision && (
           <View style={styles.repairingBadge} testID="repairing-vision-badge">

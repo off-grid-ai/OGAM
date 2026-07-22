@@ -31,11 +31,55 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/The answer is 4\./)).not.toBeNull(); });
   });
 
+  it('datetime: tool call executes and the answer renders', async () => {
+    const h = await setupChatScreen({ engine: 'litert' });
+    h.enableToolViaUI('get_current_datetime');
+    h.render();
+
+    await h.send('what time is it in UTC?', {
+      toolCalls: [
+        { name: 'get_current_datetime', arguments: { timezone: 'UTC' } },
+      ],
+      content: 'I retrieved the current UTC date and time.',
+    });
+
+    await h.rtl.waitFor(() => {
+      expect(
+        h.view!.queryByTestId('tool-result-label-get_current_datetime'),
+      ).not.toBeNull();
+      expect(
+        h.view!.queryByText(/I retrieved the current UTC date and time\./),
+      ).not.toBeNull();
+    });
+  });
+
+  it('device info: tool call executes and the answer renders', async () => {
+    const h = await setupChatScreen({ engine: 'litert' });
+    h.enableToolViaUI('get_device_info');
+    h.render();
+
+    await h.send('how much memory does this device have?', {
+      toolCalls: [
+        { name: 'get_device_info', arguments: { info_type: 'memory' } },
+      ],
+      content: 'I retrieved the device memory information.',
+    });
+
+    await h.rtl.waitFor(() => {
+      expect(
+        h.view!.queryByTestId('tool-result-label-get_device_info'),
+      ).not.toBeNull();
+      expect(
+        h.view!.queryByText(/I retrieved the device memory information\./),
+      ).not.toBeNull();
+    });
+  });
+
   it('MCP: a registered MCP tool executes and its result reaches the answer', async () => {
     const h = await setupChatScreen({ engine: 'litert' });
-    /* eslint-disable @typescript-eslint/no-var-requires */
+
     const { registerToolExtension, _clearExtensionsForTesting } = require('../../../src/services/tools/extensions');
-    /* eslint-enable @typescript-eslint/no-var-requires */
+
     _clearExtensionsForTesting();
     let executed = false;
     registerToolExtension({
@@ -70,7 +114,7 @@ describe('happy — a tool runs and its result renders (heavy entry point)', () 
       content: 'Results: 160500 and 25.',
     });
     // Two tool-result bubbles render (both calculator runs are visible).
-    await h.rtl.waitFor(() => { expect(h.view!.queryAllByTestId('tool-result-label-calculator').length).toBe(2); });
+    await h.rtl.waitFor(() => { expect(h.view!.queryAllByTestId('tool-result-label-calculator')).toHaveLength(2); });
     // ...and the answer with both results renders.
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/160500 and 25/)).not.toBeNull(); });
   });

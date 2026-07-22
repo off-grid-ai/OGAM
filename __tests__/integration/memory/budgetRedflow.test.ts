@@ -42,10 +42,8 @@ describe('memory budget — red-flow (correct behavior; currently RED due to the
   // only real concurrency is text streaming + TTS speaking, and TTS is an exempt sidecar. See the
   // residency matrix (residencyMatrix.modes) for the co-reside/swap cases that DO occur.
 
-  // M3 — Load-Anyway (override) is UNCONDITIONAL: the user explicitly accepted the risk, so
-  // we evict everything else and load, with NO survival floor and NO refusal. The UI frames
-  // it as "not recommended, but you can try" — if the user wants to load anyway, we let them.
-  it('M3: Load-Anyway a 7900MB dirty model with 665MB truly free on Android LOADS (override never refuses)', async () => {
+  // M3 — Android reclaim credit must not hide a critically low real-RAM reading.
+  it('M3: Load-Anyway a 7900MB dirty model with 665MB truly free on Android is blocked by the survival floor', async () => {
     setDeviceMemory({ platform: 'android', totalGB: 12, availGB: gbOf(665) });
 
     const { fits } = await modelResidencyManager.makeRoomFor(
@@ -53,7 +51,7 @@ describe('memory budget — red-flow (correct behavior; currently RED due to the
       { override: true },
     );
 
-    expect(fits).toBe(true); // override always loads — no floor, no refusal
+    expect(fits).toBe(false);
   });
 
   // Q15 — ensureResident must HONOR the fits verdict, not load anyway (the STT/OOM bug class).

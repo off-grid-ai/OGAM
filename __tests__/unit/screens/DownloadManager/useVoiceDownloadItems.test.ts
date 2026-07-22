@@ -86,14 +86,14 @@ describe('useVoiceDownloadItems', () => {
     expect(tts?.fileName).toBe('Kokoro TTS');
   });
 
-  it('shows an in-progress voice download as an ACTIVE item (service says downloading)', async () => {
+  it('maps an in-progress service download to the active-item status vocabulary', async () => {
     mockServiceList = [ttsEntry({ status: 'downloading', progress: 0.5, bytesDownloaded: 40_000_000 })];
     const { result } = renderHook(() => useVoiceDownloadItems(jest.fn()));
     await waitFor(() => expect(result.current.voiceItems.some(i => i.modelType === 'tts')).toBe(true));
 
     const tts = result.current.voiceItems.find(i => i.modelType === 'tts')!;
     expect(tts.type).toBe('active');
-    expect(tts.status).toBe('downloading');
+    expect(tts.status).toBe('running');
     expect(tts.progress).toBe(0.5);
     expect(tts.bytesDownloaded).toBe(40_000_000);
   });

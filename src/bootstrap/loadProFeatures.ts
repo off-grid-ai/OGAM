@@ -4,7 +4,6 @@ import { registerSettingsSection } from '../components/settings/sectionRegistry'
 import { registerSlot } from './slotRegistry';
 import { registerHook } from './hookRegistry';
 import { readProFromKeychain } from '../services/proLicenseService';
-
 export async function loadProFeatures(isPro?: boolean): Promise<void> {
   let pro: any;
   try {
@@ -34,7 +33,13 @@ export async function loadProFeatures(isPro?: boolean): Promise<void> {
     return; // paid features stay dormant until the user purchases
   }
 
-  pro.activate({ registerToolExtension, registerScreen, registerSettingsSection, registerSlot, registerHook });
+  pro.activate({
+    registerToolExtension,
+    registerScreen,
+    registerSettingsSection,
+    registerSlot,
+    registerHook,
+  });
 
   // Inject native OAuth adapters so MCP servers can use OAuth (browser sign-in +
   // Keychain token storage + PKCE crypto). Required before any OAuth connect;
@@ -42,7 +47,9 @@ export async function loadProFeatures(isPro?: boolean): Promise<void> {
   // free builds never pull in the native crypto/browser libs.
   if (typeof pro.configureOAuthAdapters === 'function') {
     try {
-      const { mcpOAuthNativeAdapters } = require('../services/mcpOAuthNativeAdapters');
+      const {
+        mcpOAuthNativeAdapters,
+      } = require('../services/mcpOAuthNativeAdapters');
       pro.configureOAuthAdapters(mcpOAuthNativeAdapters);
     } catch (err) {
       // Non-fatal: header/none MCP auth still works; OAuth simply stays unavailable.

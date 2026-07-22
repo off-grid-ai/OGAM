@@ -149,6 +149,30 @@ export async function validateImageModelDir(modelPath: string, backend: ImageBac
 }
 
 /**
+ * The shared on-disk publication gate used before an existing image-model
+ * directory can be registered. A directory entry alone is not evidence: an
+ * interrupted extraction can leave a non-empty tree that the native runtime
+ * cannot load. MNN/QNN use the full integrity contract; other/legacy layouts
+ * retain the minimum non-empty-directory rule.
+ */
+export async function isImageModelDirUsable(
+  modelPath: string,
+  backend?: ImageBackend,
+): Promise<boolean> {
+  if (!(await RNFS.exists(modelPath))) return false;
+  try {
+    const items = await RNFS.readDir(modelPath);
+    if (items.length === 0) return false;
+    if (backend === 'mnn' || backend === 'qnn') {
+      return (await validateImageModelDir(modelPath, backend)).complete;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Post-unzip completeness gate shared by the primary + resume download paths. On a
  * partial extraction, re-unzip ONCE (handles a transient interrupted write) and re-check;
  * if still incomplete, throw ImageModelIncompleteError so the caller cleans up and the

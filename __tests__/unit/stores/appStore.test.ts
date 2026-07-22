@@ -1050,10 +1050,10 @@ describe('appStore', () => {
       expect(getAppState().settings.temperature).toBe(0);
     });
 
-    it('updateSettings can set maxTokens to very high value', () => {
+    it('updateSettings can set maxTokens to a large supported context', () => {
       const { updateSettings } = useAppStore.getState();
 
-      updateSettings({ maxTokens: 32768 });
+      updateSettings({ contextLength: 32768, maxTokens: 32768 });
 
       expect(getAppState().settings.maxTokens).toBe(32768);
     });
@@ -1300,24 +1300,23 @@ describe('appStore', () => {
       expect(result.checklistDismissed).toBe(false);
     });
 
-    // Un-stick the removed MCP context auto-boost (pinned ctx to 32768, never restored).
-    it('resets llama context pinned at the boost ceiling back to the default', () => {
+    it('preserves user-selected maximum llama settings', () => {
       const merge = getMergeFn();
       const result = merge(
         { settings: { contextLength: 32768, maxTokens: 8192 } },
         useAppStore.getState(),
       );
-      expect(result.settings.contextLength).toBe(4096); // DEFAULT_SETTINGS.contextLength
-      expect(result.settings.maxTokens).toBe(1024); // DEFAULT_SETTINGS.maxTokens
+      expect(result.settings.contextLength).toBe(32768);
+      expect(result.settings.maxTokens).toBe(8192);
     });
 
-    it('resets liteRTMaxTokens pinned at the boost ceiling back to the default', () => {
+    it('preserves user-selected maximum LiteRT context', () => {
       const merge = getMergeFn();
       const result = merge(
         { settings: { liteRTMaxTokens: 32768 } },
         useAppStore.getState(),
       );
-      expect(result.settings.liteRTMaxTokens).toBe(4096); // DEFAULT_SETTINGS.liteRTMaxTokens
+      expect(result.settings.liteRTMaxTokens).toBe(32768);
     });
 
     it('leaves a legitimate non-boost context untouched', () => {
@@ -1342,16 +1341,14 @@ describe('appStore', () => {
       expect(result.settings.maxTokens).toBe(8192);
     });
 
-    it('keeps a user maxTokens above the boost value even when context was boosted', () => {
+    it('keeps independently selected maximum context and output settings', () => {
       const merge = getMergeFn();
       const result = merge(
-        // contextLength at the exact boost ceiling, but maxTokens raised by the
-        // user beyond the boost's value — only the exact boost value is reset.
         { settings: { contextLength: 32768, maxTokens: 16384 } },
         useAppStore.getState(),
       );
-      expect(result.settings.contextLength).toBe(4096); // boosted → reset
-      expect(result.settings.maxTokens).toBe(16384); // user's choice, not the boost value → kept
+      expect(result.settings.contextLength).toBe(32768);
+      expect(result.settings.maxTokens).toBe(16384);
     });
   });
 

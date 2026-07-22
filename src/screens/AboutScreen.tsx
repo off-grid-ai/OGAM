@@ -1,5 +1,12 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Linking, ScrollView, Image, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+  StyleSheet,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -10,8 +17,14 @@ import { SPACING, TYPOGRAPHY } from '../constants';
 import { MadeWithLove } from '../components/MadeWithLove';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
-import { GITHUB_URL, FOLLOW_X_URL, SLACK_INVITE_URL } from '../utils/sharePrompt';
+import {
+  GITHUB_URL,
+  FOLLOW_X_URL,
+  SLACK_INVITE_URL,
+} from '../utils/sharePrompt';
 import { withUtm } from '../utils/utm';
+import { openExternalUrl } from '../utils/externalLinks';
+import DeviceInfo from 'react-native-device-info';
 import packageJson from '../../package.json';
 
 const WEDNESDAY_MOBILE_URL = withUtm('https://wednesday.is', 'about');
@@ -25,7 +38,10 @@ export const AboutScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>About</Text>
@@ -35,11 +51,17 @@ export const AboutScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.content}>
         {/* App identity */}
         <View style={styles.heroSection}>
-          <Image source={require('../assets/logo.png')} style={staticStyles.appIcon} />
+          <Image
+            source={require('../assets/logo.png')}
+            style={staticStyles.appIcon}
+          />
           <Text style={styles.appName}>Off Grid AI</Text>
-          <Text style={styles.version}>Version {packageJson.version}</Text>
+          <Text style={styles.version}>
+            Version {packageJson.version} (build {DeviceInfo.getBuildNumber()})
+          </Text>
           <Text style={styles.description}>
-            Local AI that runs entirely on your phone. No cloud, no telemetry, nothing leaves the device.
+            Local AI that runs entirely on your phone. No cloud, no telemetry,
+            nothing leaves the device.
           </Text>
         </View>
 
@@ -50,7 +72,9 @@ export const AboutScreen: React.FC = () => {
             staggerMs={40}
             trigger={focusTrigger}
             style={[styles.navItem, styles.navItemLast]}
-            onPress={() => Linking.openURL(GITHUB_URL)}
+            onPress={() =>
+              openExternalUrl(GITHUB_URL, { label: 'GitHub page' })
+            }
           >
             <View style={styles.navItemIcon}>
               <Icon name="github" size={16} color={colors.textSecondary} />
@@ -71,14 +95,20 @@ export const AboutScreen: React.FC = () => {
             trigger={focusTrigger}
             style={styles.navItem}
             testID="about-follow-on-x"
-            onPress={() => Linking.openURL(FOLLOW_X_URL)}
+            onPress={() =>
+              openExternalUrl(FOLLOW_X_URL, { label: 'X profile' })
+            }
           >
             <View style={styles.navItemIcon}>
               <Icon name="twitter" size={16} color={colors.primary} />
             </View>
             <View style={styles.navItemContent}>
-              <Text style={styles.navItemTitle}>Follow @alichherawalla on X</Text>
-              <Text style={styles.navItemDesc}>New features first, promo discounts, roadmap</Text>
+              <Text style={styles.navItemTitle}>
+                Follow @alichherawalla on X
+              </Text>
+              <Text style={styles.navItemDesc}>
+                New features first, promo discounts, roadmap
+              </Text>
             </View>
             <Icon name="external-link" size={14} color={colors.textMuted} />
           </AnimatedListItem>
@@ -88,14 +118,18 @@ export const AboutScreen: React.FC = () => {
             trigger={focusTrigger}
             style={[styles.navItem, styles.navItemLast]}
             testID="about-join-slack"
-            onPress={() => Linking.openURL(SLACK_INVITE_URL)}
+            onPress={() =>
+              openExternalUrl(SLACK_INVITE_URL, { label: 'Slack invite' })
+            }
           >
             <View style={styles.navItemIcon}>
               <IconMC name="slack" size={16} color={colors.primary} />
             </View>
             <View style={styles.navItemContent}>
               <Text style={styles.navItemTitle}>Join the Slack community</Text>
-              <Text style={styles.navItemDesc}>Issues fixed fast, debug together, early access</Text>
+              <Text style={styles.navItemDesc}>
+                Issues fixed fast, debug together, early access
+              </Text>
             </View>
             <Icon name="external-link" size={14} color={colors.textMuted} />
           </AnimatedListItem>
@@ -108,14 +142,23 @@ export const AboutScreen: React.FC = () => {
             staggerMs={40}
             trigger={focusTrigger}
             style={[styles.navItem, styles.navItemLast]}
-            onPress={() => Linking.openURL(WEDNESDAY_MOBILE_URL)}
+            onPress={() =>
+              openExternalUrl(WEDNESDAY_MOBILE_URL, {
+                label: 'Wednesday Solutions page',
+              })
+            }
           >
             <View style={styles.navItemIcon}>
-              <Image source={require('../assets/wednesday_logo.png')} style={styles.wednesdayLogo} />
+              <Image
+                source={require('../assets/wednesday_logo.png')}
+                style={styles.wednesdayLogo}
+              />
             </View>
             <View style={styles.navItemContent}>
               <Text style={styles.navItemTitle}>Built by Wednesday</Text>
-              <Text style={styles.navItemDesc}>We build mobile apps for enterprise teams</Text>
+              <Text style={styles.navItemDesc}>
+                We build mobile apps for enterprise teams
+              </Text>
             </View>
             <Icon name="external-link" size={14} color={colors.textMuted} />
           </AnimatedListItem>
@@ -129,7 +172,12 @@ export const AboutScreen: React.FC = () => {
 };
 
 const staticStyles = StyleSheet.create({
-  appIcon: { width: 72, height: 72, borderRadius: 16, marginBottom: SPACING.md },
+  appIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 16,
+    marginBottom: SPACING.md,
+  },
 });
 
 const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
@@ -201,6 +249,10 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   navItemContent: { flex: 1 },
   navItemTitle: { ...TYPOGRAPHY.body, color: colors.text },
-  navItemDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, marginTop: 2 },
+  navItemDesc: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
   wednesdayLogo: { width: 24, height: 24, resizeMode: 'contain' as const },
 });

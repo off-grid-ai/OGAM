@@ -32,6 +32,8 @@ export const GalleryGridItem: React.FC<GalleryGridItemProps> = ({
         onPress={onPress}
         onLongPress={onLongPress}
         activeOpacity={0.8}
+        accessibilityLabel={`Generated image ${index + 1}`}
+        testID={`gallery-image-${index}`}
       >
         <Image
           source={{ uri: `file://${item.imagePath}` }}

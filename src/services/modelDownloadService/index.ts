@@ -68,6 +68,20 @@ class ModelDownloadService {
     this.onProviderChange(); // capture/log this provider's initial state
   }
 
+  /** Stop observing and remove a dynamically-owned provider. */
+  unregister(modelType: ModelDownloadType): void {
+    if (!this.providers.has(modelType)) return;
+    this.providerUnsubs.get(modelType)?.();
+    this.providerUnsubs.delete(modelType);
+    this.providers.delete(modelType);
+    for (const id of [...this.lastStatus.keys()]) {
+      if (id.startsWith(`${modelType}:`)) this.lastStatus.delete(id);
+    }
+    this.lastList = this.lastList.filter(download => download.modelType !== modelType);
+    this.notify();
+    logger.log(`[DL-SM] provider unregistered type=${modelType}`);
+  }
+
   /**
    * A provider reported a change. Notify external subscribers AND self-drive a
    * (coalesced) list() so transitions are detected + [DL-SM]-logged even when NO UI
@@ -135,10 +149,13 @@ class ModelDownloadService {
       seen.add(d.id);
       const prev = this.lastStatus.get(d.id);
       if (prev !== d.status) {
+        const errorSuffix = d.error ? ` error="${d.error}"` : '';
         logger.log(
-          `[DL-SM] ${d.id} ${prev ?? 'new'} → ${d.status}` +
-          ` bytes=${d.bytesDownloaded}/${d.sizeBytes} progress=${(d.progress * 100).toFixed(0)}%` +
-          `${d.error ? ` error="${d.error}"` : ''}`,
+          [
+            `[DL-SM] ${d.id} ${prev ?? 'new'} → ${d.status}`,
+            ` bytes=${d.bytesDownloaded}/${d.sizeBytes} progress=${(d.progress * 100).toFixed(0)}%`,
+            errorSuffix,
+          ].join(''),
         );
         this.lastStatus.set(d.id, d.status);
       }
@@ -164,6 +181,16 @@ class ModelDownloadService {
    * fall-through that dispatches.
    */
   private async dispatch(op: Op, id: string): Promise<void> {
+    // A start waiting for a concurrency slot is owned by the queue and has no
+    // provider/native transfer yet. Cancel it before consulting the merged provider
+    // list: list() may scan disk, which delayed the confirmed removal long enough for
+    // the queued row to remain visibly stale. Rejecting the queue-owned promise makes
+    // startModelDownload remove its placeholder store row in the same turn.
+    if ((op === 'cancel' || op === 'remove') && this.cancelQueuedStart(id)) {
+      logger.log(`[DL-SM] ${op} ${id} → cancelled queued start`);
+      this.notify();
+      return;
+    }
     let download = this.lastList.find(d => d.id === id);
     if (!download) { await this.list(); download = this.lastList.find(d => d.id === id); }
     if (!download) {
@@ -231,7 +258,16 @@ class ModelDownloadService {
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
-    return () => { this.listeners.delete(listener); };
+    return () => {
+      this.listeners.delete(listener);
+      // The delayed refresh exists only for external consumers. Once the final
+      // screen unmounts, the service owns cancelling that work; letting it fire
+      // later performs provider I/O against a dead navigation/test lifecycle.
+      if (this.listeners.size === 0 && this.selfRefreshTimer) {
+        clearTimeout(this.selfRefreshTimer);
+        this.selfRefreshTimer = null;
+      }
+    };
   }
 
   private notify(): void {

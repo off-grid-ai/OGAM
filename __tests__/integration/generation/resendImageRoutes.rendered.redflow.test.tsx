@@ -25,7 +25,7 @@ describe('T062 (rendered) — resend of an image request re-draws, not text (DEV
 
     // Original send → IMAGE (device-confirmed correct).
     await h.tapSend('draw a dog');
-    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); });
+    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1); });
 
     // RESEND via the real action menu (3-dots) on the image-result message → Retry.
     await h.regenerateLast({ content: 'A dog is a domestic animal.' }, 'dots'); // scripted text is what leaks if it misroutes
@@ -33,7 +33,7 @@ describe('T062 (rendered) — resend of an image request re-draws, not text (DEV
 
     // SPEC: resend re-runs the IMAGE pipeline → a SECOND generateImage; NO text answer leaked.
     // RED (B33): resend goes to the text model → generateImage stays 1 + the scripted text renders.
-    expect(h.boundary.diffusion.calls.generateImage.length).toBe(2);
+    expect(h.boundary.diffusion.calls.generateImage).toHaveLength(2);
     expect(h.view!.queryByText(/domestic animal/)).toBeNull();
   });
 });

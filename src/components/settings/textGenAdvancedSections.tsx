@@ -14,16 +14,21 @@ import { Platform, View, Text, TouchableOpacity } from 'react-native';
 import { SliderSetting } from '../SliderSetting';
 import { useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
-import { CacheType, InferenceBackend, LiteRTBackend, INFERENCE_BACKENDS } from '../../types';
+import {
+  CacheType,
+  InferenceBackend,
+  LiteRTBackend,
+  INFERENCE_BACKENDS,
+} from '../../types';
 import {
   useTextGenerationAdvanced,
   CACHE_TYPE_DESCRIPTIONS,
   GPU_LAYERS_MAX,
   CACHE_TYPE_OPTIONS,
 } from '../../hooks/useTextGenerationAdvanced';
+import { createTextGenAdvancedStyles } from './textGenAdvancedStyles';
 import { hardwareService } from '../../services/hardware';
 import { HTP_ENABLED as HTP_UI_ENABLED } from '../../config/featureFlags';
-import { createTextGenAdvancedStyles } from './textGenAdvancedStyles';
 
 const isAndroid = Platform.OS === 'android';
 
@@ -47,7 +52,16 @@ function SegmentedRow<T extends string>(props: {
   children?: React.ReactNode;
 }): React.ReactElement {
   const styles = useThemedStyles(createTextGenAdvancedStyles);
-  const { label, description, options, current, onSelect, testIdFor, isDisabled, children } = props;
+  const {
+    label,
+    description,
+    options,
+    current,
+    onSelect,
+    testIdFor,
+    isDisabled,
+    children,
+  } = props;
   return (
     <View style={styles.container}>
       <View style={styles.info}>
@@ -57,15 +71,22 @@ function SegmentedRow<T extends string>(props: {
       <View style={styles.buttons}>
         {options.map(o => {
           const active = current === o.id;
+          const disabled = !!isDisabled?.(o.id);
           return (
             <TouchableOpacity
               key={o.id}
               testID={testIdFor?.(o.id)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active, disabled }}
               style={[styles.button, active && styles.buttonActive]}
-              disabled={isDisabled?.(o.id)}
+              disabled={disabled}
               onPress={() => onSelect(o.id)}
             >
-              <Text style={[styles.buttonText, active && styles.buttonTextActive]}>{o.label}</Text>
+              <Text
+                style={[styles.buttonText, active && styles.buttonTextActive]}
+              >
+                {o.label}
+              </Text>
             </TouchableOpacity>
           );
         })}
@@ -85,14 +106,30 @@ const BOOL_OPTIONS: PillOption<'off' | 'on'>[] = [
 type BackendOption = { id: InferenceBackend; label: string; desc: string };
 
 const IOS_BACKENDS: BackendOption[] = [
-  { id: INFERENCE_BACKENDS.CPU, label: 'CPU', desc: 'Always available. Stable, predictable performance.' },
-  { id: INFERENCE_BACKENDS.METAL, label: 'Metal', desc: 'Offload layers to GPU via Metal. Faster for larger models. Requires model reload.' },
+  {
+    id: INFERENCE_BACKENDS.CPU,
+    label: 'CPU',
+    desc: 'Always available. Stable, predictable performance.',
+  },
+  {
+    id: INFERENCE_BACKENDS.METAL,
+    label: 'Metal',
+    desc: 'Offload layers to GPU via Metal. Faster for larger models. Requires model reload.',
+  },
 ];
 
 const ANDROID_BASE_BACKENDS: BackendOption[] = [
-  { id: INFERENCE_BACKENDS.CPU, label: 'CPU', desc: 'Always available. Stable, predictable performance.' },
+  {
+    id: INFERENCE_BACKENDS.CPU,
+    label: 'CPU',
+    desc: 'Always available. Stable, predictable performance.',
+  },
   // Display label 'GPU' (users don't know OpenCL); id stays OPENCL.
-  { id: INFERENCE_BACKENDS.OPENCL, label: 'GPU', desc: 'Offload layers to GPU via OpenCL. Fast decode on Adreno/Mali GPUs. Requires model reload.' },
+  {
+    id: INFERENCE_BACKENDS.OPENCL,
+    label: 'GPU',
+    desc: 'Offload layers to GPU via OpenCL. Fast decode on Adreno/Mali GPUs. Requires model reload.',
+  },
 ];
 
 const HTP_BACKEND: BackendOption = {
@@ -113,15 +150,23 @@ export const BackendSelector: React.FC = () => {
     }
   }, []);
 
-  const androidBackends = hasNPU && HTP_UI_ENABLED ? [...ANDROID_BASE_BACKENDS, HTP_BACKEND] : ANDROID_BASE_BACKENDS;
-  const backends: BackendOption[] = Platform.OS === 'ios' ? IOS_BACKENDS : androidBackends;
+  const androidBackends =
+    hasNPU && HTP_UI_ENABLED
+      ? [...ANDROID_BASE_BACKENDS, HTP_BACKEND]
+      : ANDROID_BASE_BACKENDS;
+  const backends: BackendOption[] =
+    Platform.OS === 'ios' ? IOS_BACKENDS : androidBackends;
 
-  const defaultBackend = Platform.OS === 'ios' ? INFERENCE_BACKENDS.METAL : INFERENCE_BACKENDS.CPU;
+  const defaultBackend =
+    Platform.OS === 'ios' ? INFERENCE_BACKENDS.METAL : INFERENCE_BACKENDS.CPU;
   const current = settings.inferenceBackend ?? defaultBackend;
   const showLayers = current !== INFERENCE_BACKENDS.CPU;
-  const layersLabel = current === INFERENCE_BACKENDS.HTP
-    ? 'NPU Layers'
-    : current === INFERENCE_BACKENDS.METAL ? 'GPU Layers (Metal)' : 'GPU Layers (OpenCL)';
+  const layersLabel =
+    current === INFERENCE_BACKENDS.HTP
+      ? 'NPU Layers'
+      : current === INFERENCE_BACKENDS.METAL
+      ? 'GPU Layers (Metal)'
+      : 'GPU Layers (OpenCL)';
 
   return (
     <SegmentedRow<InferenceBackend>
@@ -129,8 +174,8 @@ export const BackendSelector: React.FC = () => {
       description={backends.find(b => b.id === current)?.desc ?? ''}
       options={backends}
       current={current}
-      onSelect={(id) => updateSettings({ inferenceBackend: id })}
-      testIdFor={(id) => `backend-${id}-button`}
+      onSelect={id => updateSettings({ inferenceBackend: id })}
+      testIdFor={id => `backend-${id}-button`}
     >
       {showLayers && (
         <View style={styles.layersInline}>
@@ -139,8 +184,10 @@ export const BackendSelector: React.FC = () => {
             label={layersLabel}
             description="Layers offloaded to GPU. Higher = faster but may crash on low-VRAM devices. Requires model reload."
             value={gpuLayersEffective}
-            min={1} max={GPU_LAYERS_MAX} step={1}
-            onChange={(value) => updateSettings({ gpuLayers: value })}
+            min={1}
+            max={GPU_LAYERS_MAX}
+            step={1}
+            onChange={value => updateSettings({ gpuLayers: value })}
           />
         </View>
       )}
@@ -151,8 +198,16 @@ export const BackendSelector: React.FC = () => {
 // ─── LiteRT Acceleration ─────────────────────────────────────────────────────
 
 const LITERT_BACKENDS: { id: LiteRTBackend; label: string; desc: string }[] = [
-  { id: 'gpu', label: 'GPU', desc: 'Run on GPU via OpenCL. Best performance on most devices.' },
-  { id: 'cpu', label: 'CPU', desc: 'Always available. Use for battery savings or thermal relief.' },
+  {
+    id: 'gpu',
+    label: 'GPU',
+    desc: 'Run on GPU via OpenCL. Best performance on most devices.',
+  },
+  {
+    id: 'cpu',
+    label: 'CPU',
+    desc: 'Always available. Use for battery savings or thermal relief.',
+  },
 ];
 
 export const LiteRTBackendSelector: React.FC = () => {
@@ -164,8 +219,8 @@ export const LiteRTBackendSelector: React.FC = () => {
       description={LITERT_BACKENDS.find(b => b.id === current)?.desc ?? ''}
       options={LITERT_BACKENDS}
       current={current}
-      onSelect={(id) => updateSettings({ liteRTBackend: id })}
-      testIdFor={(id) => `litert-backend-${id}-button`}
+      onSelect={id => updateSettings({ liteRTBackend: id })}
+      testIdFor={id => `litert-backend-${id}-button`}
     />
   );
 };
@@ -181,8 +236,12 @@ export const FlashAttentionToggle: React.FC = () => {
       description="Faster inference and lower memory. Required for quantized KV cache (q8_0/q4_0). Requires model reload."
       options={BOOL_OPTIONS}
       current={isFlashAttnOn ? 'on' : 'off'}
-      onSelect={(id) => (id === 'on' ? updateSettings({ flashAttn: true }) : handleFlashAttnToggle(false))}
-      testIdFor={(id) => `flash-attn-${id}-button`}
+      onSelect={id =>
+        id === 'on'
+          ? updateSettings({ flashAttn: true })
+          : handleFlashAttnToggle(false)
+      }
+      testIdFor={id => `flash-attn-${id}-button`}
     />
   );
 };
@@ -191,16 +250,24 @@ export const FlashAttentionToggle: React.FC = () => {
 
 export const KvCacheTypeToggle: React.FC = () => {
   const styles = useThemedStyles(createTextGenAdvancedStyles);
-  const { isFlashAttnOn, cacheDisabled, displayCacheType, handleCacheTypeChange } = useTextGenerationAdvanced();
+  const {
+    isFlashAttnOn,
+    cacheDisabled,
+    displayCacheType,
+    handleCacheTypeChange,
+  } = useTextGenerationAdvanced();
   return (
     <SegmentedRow<CacheType>
       label="KV Cache Type"
       description={CACHE_TYPE_DESCRIPTIONS[displayCacheType]}
-      options={CACHE_TYPE_OPTIONS.map((ct: CacheType) => ({ id: ct, label: ct }))}
+      options={CACHE_TYPE_OPTIONS.map((ct: CacheType) => ({
+        id: ct,
+        label: ct,
+      }))}
       current={displayCacheType}
       onSelect={handleCacheTypeChange}
-      testIdFor={(ct) => `cache-type-${ct}-button`}
-      isDisabled={(ct) => cacheDisabled && ct !== 'f16'}
+      testIdFor={ct => `cache-type-${ct}-button`}
+      isDisabled={ct => cacheDisabled && ct !== 'f16'}
     >
       {!isFlashAttnOn && (
         <Text style={styles.warning}>
@@ -231,15 +298,16 @@ export const ModelLoadingModeSelector: React.FC = () => {
   const { settings, updateSettings } = useAppStore();
   // Single source of truth: the 3-mode setting, falling back to the legacy boolean.
   const current: ModelLoadingMode =
-    settings.modelLoadingMode ?? (settings.aggressiveModelLoading ? 'aggressive' : 'balanced');
+    settings.modelLoadingMode ??
+    (settings.aggressiveModelLoading ? 'aggressive' : 'balanced');
   return (
     <SegmentedRow<ModelLoadingMode>
       label="Model Loading"
-      description="Lean keeps ONE model in memory at a time. Balanced keeps models loaded together when they fit and swaps when they do not. Aggressive commits a larger share of RAM so bigger models load. You can always Load Anyway if a model is refused."
+      description="Lean keeps one model in memory. Balanced keeps models together when they fit. Aggressive gives models more RAM. Load Anyway can bypass a cautious refusal, but not the device survival limit."
       options={MODE_OPTIONS}
       current={current}
-      onSelect={(id) => updateSettings({ modelLoadingMode: id })}
-      testIdFor={(id) => `model-loading-mode-${id}-button`}
+      onSelect={id => updateSettings({ modelLoadingMode: id })}
+      testIdFor={id => `model-loading-mode-${id}-button`}
     />
   );
 };
@@ -255,8 +323,8 @@ export const ShowGenerationDetailsToggle: React.FC = () => {
       description="Display GPU, model, tok/s, and image settings below each message"
       options={BOOL_OPTIONS}
       current={on ? 'on' : 'off'}
-      onSelect={(id) => updateSettings({ showGenerationDetails: id === 'on' })}
-      testIdFor={(id) => `show-gen-details-${id}-button`}
+      onSelect={id => updateSettings({ showGenerationDetails: id === 'on' })}
+      testIdFor={id => `show-gen-details-${id}-button`}
     />
   );
 };
@@ -274,8 +342,10 @@ export const CpuThreadsSlider: React.FC = () => {
         label="CPU Threads"
         description="Parallel threads for inference"
         value={cpuThreadsSliderValue}
-        min={1} max={12} step={1}
-        onChange={(v) => updateSettings({ nThreads: v })}
+        min={1}
+        max={12}
+        step={1}
+        onChange={v => updateSettings({ nThreads: v })}
       />
     </View>
   );
@@ -291,8 +361,10 @@ export const BatchSizeSlider: React.FC = () => {
         label="Batch Size"
         description="Tokens processed per batch"
         value={settings.nBatch ?? 512}
-        min={32} max={512} step={32}
-        onChange={(v) => updateSettings({ nBatch: v })}
+        min={32}
+        max={512}
+        step={32}
+        onChange={v => updateSettings({ nBatch: v })}
       />
     </View>
   );

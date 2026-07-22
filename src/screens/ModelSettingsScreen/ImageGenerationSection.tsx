@@ -36,6 +36,7 @@ const EnhanceImageToggle: React.FC = () => {
         <Text style={styles.toggleDesc}>{description}</Text>
       </View>
       <Switch
+        testID="enhance-image-prompts-switch"
         value={enabled}
         disabled={!hasTextModel}
         onValueChange={(value) => updateSettings({ enhanceImagePrompts: value })}

@@ -1,10 +1,10 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Keyboard, BackHandler } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { showAlert, AlertState } from '../../components/CustomAlert';
 import { RECOMMENDED_MODELS, TRENDING_FAMILIES, MODEL_ORGS } from '../../constants';
 import { useAppStore } from '../../stores';
-import { fileExceedsBudget } from '../../services/memoryBudget';
+import { fitTier, isLoadableOnDevice, type FitTier } from '../../services/memoryBudget';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { huggingFaceService, modelManager, hardwareService, activeModelService } from '../../services';
 import { startModelDownload } from '../../services/startModelDownload';
@@ -69,6 +69,26 @@ async function fetchRecommendedModelDetails(): Promise<Record<string, ModelInfo>
   return details;
 }
 
+const TIER_RANK: Record<FitTier, number> = { easy: 0, fits: 1, tight: 2, wontFit: 3 };
+
+/** True when EVERY sized quant is past the aggressive ceiling ('wontFit') — the only case browse still
+ *  hides. A model with any easy/fits/tight quant stays visible (shown with a fit chip). */
+function noLoadableQuant(model: ModelInfo, ramGB: number): boolean {
+  const sized = (model.files || []).filter(f => f.size > 0);
+  return sized.length > 0 && !sized.some(f => isLoadableOnDevice(f.size, ramGB));
+}
+
+/** The fit tier of a model's BEST (most-fitting) quant — what the browse chip shows. undefined when
+ *  no file sizes are known yet (chip hidden until they load). */
+function bestFitTier(model: ModelInfo, ramGB: number): FitTier | undefined {
+  const sized = (model.files || []).filter(f => f.size > 0);
+  if (sized.length === 0) return undefined;
+  return sized.reduce<FitTier>((best, f) => {
+    const t = fitTier(f.size, ramGB);
+    return TIER_RANK[t] < TIER_RANK[best] ? t : best;
+  }, 'wontFit');
+}
+
 function computeFilteredResults(
   searchResults: ModelInfo[],
   filterState: FilterState,
@@ -85,14 +105,14 @@ function computeFilteredResults(
         if (sizeOpt && (params < sizeOpt.min || params >= sizeOpt.max)) return false;
       }
     }
-    const filesWithSize = (model.files || []).filter(f => f.size > 0);
-    if (filesWithSize.length > 0 && !filesWithSize.some(f => !fileExceedsBudget(f.size, ramGB))) return false;
-    return true;
+    // Browse no longer hides loadable models behind the balanced budget; keep a model unless EVERY
+    // quant is past the aggressive ceiling ('wontFit') — not loadable even with reclaim + Load Anyway.
+    return !noLoadableQuant(model, ramGB);
   });
   return filtered.map(model => {
     const type = getModelType(model);
     const params = parseParamCount(model);
-    return { ...model, modelType: type === 'image-gen' ? undefined : type as 'text' | 'vision' | 'code', paramCount: params ?? undefined };
+    return { ...model, modelType: type === 'image-gen' ? undefined : type as 'text' | 'vision' | 'code', paramCount: params ?? undefined, fitTier: bestFitTier(model, ramGB) };
   });
 }
 
@@ -105,9 +125,14 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
   const [selectedModel, setSelectedModel] = useState<ModelInfo | null>(null);
   const [modelFiles, setModelFiles] = useState<ModelFile[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  // True when the last file-list fetch FAILED (network/timeout) — distinct from "loaded, but no
+  // compatible files". Lets the detail view show a retry state instead of the misleading
+  // "No compatible files found" when the fetch simply couldn't reach HuggingFace.
+  const [filesLoadError, setFilesLoadError] = useState(false);
   const [filterState, setFilterState] = useState<FilterState>(initialFilterState);
   const [textFiltersVisible, setTextFiltersVisible] = useState(false);
   const [recommendedModelDetails, setRecommendedModelDetails] = useState<Record<string, ModelInfo>>({});
+  const fileListRequestIdRef = useRef(0);
   const repairingVisionIds = useDownloadStore(s => s.repairingVisionIds);
   const setRepairingVision = useDownloadStore(s => s.setRepairingVision);
 
@@ -183,7 +208,8 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
   }, [filterState.type, filterState.size, filterState.orgs.length]);
 
   const handleSelectModel = async (model: ModelInfo) => {
-    setSelectedModel(model); setIsLoadingFiles(true);
+    const requestId = ++fileListRequestIdRef.current;
+    setSelectedModel(model); setIsLoadingFiles(true); setFilesLoadError(false);
     // Curated entries under the offgrid/ namespace (e.g. the synthetic LiteRT
     // parent) ship with their files baked into the ModelInfo — skip the
     // HuggingFace fetch and use them as-is. Real HF models always go through
@@ -195,12 +221,16 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
     }
     try {
       const files = await huggingFaceService.getModelFiles(model.id);
+      if (fileListRequestIdRef.current !== requestId) return;
       setModelFiles(files);
     } catch {
-      setAlertState(showAlert('Error', 'Failed to load model files.'));
+      if (fileListRequestIdRef.current !== requestId) return;
+      // Fetch failed (offline / HF unreachable / timeout). Surface an inline retry state rather
+      // than a transient modal — the detail view reads filesLoadError and offers Retry.
       setModelFiles([]);
+      setFilesLoadError(true);
     } finally {
-      setIsLoadingFiles(false);
+      if (fileListRequestIdRef.current === requestId) setIsLoadingFiles(false);
     }
   };
 
@@ -347,6 +377,7 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
     selectedModel, setSelectedModel,
     modelFiles, setModelFiles,
     isLoadingFiles,
+    filesLoadError,
     filterState, setFilterState,
     textFiltersVisible, setTextFiltersVisible,
     downloadedModels,

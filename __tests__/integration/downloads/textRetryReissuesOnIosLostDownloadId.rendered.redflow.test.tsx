@@ -20,40 +20,72 @@
  * we own runs REAL: ModelsScreen, TextModelsTab, ModelCard, useTextModels, modelDownloadService,
  * textProvider, modelManager, backgroundDownloadService, the download store. Platform pinned to iOS.
  */
-import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
+import {
+  installNativeBoundary,
+  requireRTL,
+  GB,
+} from '../../harness/nativeBoundary';
 
 const MODEL_ID = 'meta/llama-lost';
 const FILE_NAME = 'llama-q4.gguf';
 const MODEL_KEY = `${MODEL_ID}/${FILE_NAME}`;
+const originalFetch = global.fetch;
+
+const modelInfo = {
+  id: MODEL_ID,
+  author: 'meta',
+  downloads: 100,
+  likes: 1,
+  tags: ['gguf'],
+  lastModified: '2026-07-15T00:00:00.000Z',
+  siblings: [{ rfilename: FILE_NAME, size: 3 * GB }],
+};
+
+function installHuggingFaceBoundary(): void {
+  global.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes('/models?')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [modelInfo],
+      } as Response;
+    }
+    if (url.endsWith(`/models/${MODEL_ID}/tree/main`)) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [{ type: 'file', path: FILE_NAME, size: 3 * GB }],
+      } as Response;
+    }
+    if (url.endsWith(`/models/${MODEL_ID}`)) {
+      return { ok: true, status: 200, json: async () => modelInfo } as Response;
+    }
+    return { ok: true, status: 200, json: async () => [] } as Response;
+  }) as typeof fetch;
+}
+
+afterEach(() => {
+  global.fetch = originalFetch;
+});
 
 describe('iOS text retry re-issues a rehydrated failed download that lost its downloadId (red-flow)', () => {
   it('tapping Retry on a lost-downloadId failed card re-issues a fresh download (not a silent no-op)', async () => {
     // Device boundary: an iOS phone with plenty of RAM (12GB) so the file is compatible/offered.
-    const boundary = installNativeBoundary({ download: true, fs: true, ram: { platform: 'ios', totalBytes: 12 * GB, availBytes: 8 * GB } });
+    const boundary = installNativeBoundary({
+      download: true,
+      fs: true,
+      ram: { platform: 'ios', totalBytes: 12 * GB, availBytes: 8 * GB },
+    });
+    installHuggingFaceBoundary();
 
-    // HuggingFace NETWORK transport is outside our system — fake it. getDownloadUrl is a PURE string
-    // builder (the retry re-issue path calls it), so implement it faithfully so a real URL is built.
-    const file = { name: FILE_NAME, size: 3 * GB, quantization: 'Q4_K_M', downloadUrl: `https://huggingface.co/${MODEL_ID}/resolve/main/${FILE_NAME}` };
-    const modelInfo = { id: MODEL_ID, name: 'Llama Lost', author: 'meta', description: 'test', downloads: 100, likes: 1, tags: [], lastModified: '', files: [file] };
-    jest.doMock('../../../src/services/huggingface', () => ({
-      huggingFaceService: {
-        searchModels: jest.fn(async () => [modelInfo]),
-        getModelFiles: jest.fn(async () => [file]),
-        getModelDetails: jest.fn(async () => modelInfo),
-        getDownloadUrl: (modelId: string, fileName: string, revision = 'main') =>
-          `https://huggingface.co/${modelId}/resolve/${revision}/${fileName}`,
-        formatModelSize: jest.fn(() => '3.0 GB'),
-        formatFileSize: jest.fn((b: number) => `${(b / GB).toFixed(1)} GB`),
-      },
-    }));
-
-    /* eslint-disable @typescript-eslint/no-var-requires */
     const React = require('react');
     const { render, fireEvent, waitFor, act } = requireRTL();
     const { useDownloadStore } = require('../../../src/stores/downloadStore');
-    const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
+    const {
+      registerCoreDownloadProviders,
+    } = require('../../../src/services/modelDownloadService/registerProviders');
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
-    /* eslint-enable @typescript-eslint/no-var-requires */
 
     // Providers must be registered so modelDownloadService can route text retries to textProvider.
     registerCoreDownloadProviders();
@@ -61,21 +93,23 @@ describe('iOS text retry re-issues a rehydrated failed download that lost its do
     // Device-boundary residue of the app-kill: a hydrated FAILED text entry whose downloadId was LOST
     // (empty string — the store's downloadId cleared while the native row was gone). This is the exact
     // rehydrated state the bug occurs on; it is an outside-our-system leaf (persisted/rehydrated row).
-    useDownloadStore.getState().hydrate([{
-      modelKey: MODEL_KEY,
-      downloadId: '', // LOST on the app-kill
-      modelId: MODEL_ID,
-      fileName: FILE_NAME,
-      quantization: 'Q4_K_M',
-      modelType: 'text',
-      status: 'failed',
-      bytesDownloaded: 1 * GB,
-      totalBytes: 3 * GB,
-      combinedTotalBytes: 3 * GB,
-      progress: 0.33,
-      errorMessage: 'Download failed',
-      createdAt: Date.now(),
-    }]);
+    useDownloadStore.getState().hydrate([
+      {
+        modelKey: MODEL_KEY,
+        downloadId: '', // LOST on the app-kill
+        modelId: MODEL_ID,
+        fileName: FILE_NAME,
+        quantization: 'Q4_K_M',
+        modelType: 'text',
+        status: 'failed',
+        bytesDownloaded: 1 * GB,
+        totalBytes: 3 * GB,
+        combinedTotalBytes: 3 * GB,
+        progress: 0.33,
+        errorMessage: 'Download failed',
+        createdAt: Date.now(),
+      },
+    ]);
 
     // Prime the synchronous RAM read (getTotalMemoryGB) from the seeded device-info boundary — the same
     // step Home does before handing the picker its memory numbers. Without it ramGB reads a stale default.
@@ -87,32 +121,53 @@ describe('iOS text retry re-issues a rehydrated failed download that lost its do
 
     // Arrive at the model detail via REAL gestures: type a search, then submit it (submit runs the
     // search immediately, past the 500ms debounce), tap the model card.
-    await act(async () => { fireEvent.changeText(getByTestId('search-input'), 'llama'); });
+    await act(async () => {
+      fireEvent.changeText(getByTestId('search-input'), 'llama');
+    });
     await act(async () => {
       fireEvent(getByTestId('search-input'), 'submitEditing');
-      await new Promise((r) => setTimeout(r, 600)); // let the debounced + submitted search resolve
+      await new Promise(r => setTimeout(r, 600)); // let the debounced + submitted search resolve
     });
-    await waitFor(() => expect(getByText('Llama Lost')).toBeTruthy(), { timeout: 6000 });
-    await act(async () => { fireEvent.press(getByText('Llama Lost')); });
-    await waitFor(() => expect(getByTestId('model-detail-screen')).toBeTruthy(), { timeout: 4000 });
+    await waitFor(() => expect(getByText('llama-lost')).toBeTruthy(), {
+      timeout: 6000,
+    });
+    await act(async () => {
+      fireEvent.press(getByText('llama-lost'));
+    });
+    await waitFor(
+      () => expect(getByTestId('model-detail-screen')).toBeTruthy(),
+      { timeout: 4000 },
+    );
 
     // The failed file card must expose a Retry control (a failed rehydrated entry the user must recover).
-    await waitFor(() => expect(getByText('Retry')).toBeTruthy(), { timeout: 4000 });
+    await waitFor(() => expect(getByText('Retry')).toBeTruthy(), {
+      timeout: 4000,
+    });
 
     // No native download exists yet (the row was lost on the kill).
-    expect(boundary.download!.active().length).toBe(0);
+    expect(boundary.download!.active()).toHaveLength(0);
 
     // Tap Retry.
-    await act(async () => { fireEvent.press(getByText('Retry')); });
+    await act(async () => {
+      fireEvent.press(getByText('Retry'));
+    });
 
     // TERMINAL artifact: the retry re-issued a fresh download. The status leaves 'failed' (the failed
     // section + its Retry button disappear) AND a real native download row now exists.
-    await waitFor(() => {
-      expect(useDownloadStore.getState().downloads[MODEL_KEY]?.status).not.toBe('failed');
-    }, { timeout: 4000 });
-    await waitFor(() => {
-      expect(boundary.download!.active().length).toBeGreaterThanOrEqual(1);
-    }, { timeout: 4000 });
+    await waitFor(
+      () => {
+        expect(
+          useDownloadStore.getState().downloads[MODEL_KEY]?.status,
+        ).not.toBe('failed');
+      },
+      { timeout: 4000 },
+    );
+    await waitFor(
+      () => {
+        expect(boundary.download!.active().length).toBeGreaterThanOrEqual(1);
+      },
+      { timeout: 4000 },
+    );
     expect(queryByText('Retry')).toBeNull();
   }, 30000);
 });

@@ -1,58 +1,77 @@
-# Project Instructions
+# Off Grid Mobile Engineering
 
-## Pre-Commit Quality Gates
+This file is the canonical instruction source for this repository. Keep it short. The engineering
+standard is simple: write clean production code, exercise the real product, and do not make tests
+pass by replacing the code they are meant to prove.
 
-All quality gates run automatically via Husky on every `git commit`, scoped to the file types you staged:
+## Engineering ethos
 
-| Staged file type | Checks that run automatically |
-|---|---|
-| `.ts` / `.tsx` / `.js` / `.jsx` | eslint (staged only), `tsc --noEmit`, `npm test` |
-| `.swift` | swiftlint (staged only), `npm run test:ios` |
-| `.kt` / `.kts` | `compileDebugKotlin` (type check), `lintDebug`, `npm run test:android` |
+- Follow SOLID, DRY, and clear separation of concerns.
+- Put each decision and resource under one owner. UI renders state and sends intent; services own
+  business rules, side effects, and state machines.
+- Depend on stable abstractions. Callers must not branch on concrete engines, providers, or platform
+  mechanisms. Add a seam when two real implementations need one; do not abstract speculatively.
+- Reuse existing components, hooks, services, stores, and tokens before creating another version.
+- Keep production code easy to test through explicit inputs and boundary interfaces.
+- Follow the repository ESLint and Prettier configuration. Do not weaken a rule to land a change.
 
-**Requirements:**
-- SwiftLint: `brew install swiftlint` (skipped with a warning if not installed)
-- Android checks require the Gradle wrapper in `android/`
+## Testing
 
-Before writing new code, ensure tests exist for your changes. If the hook fails, fix the issue and recommit — never skip with `--no-verify`.
+No mockist tests.
 
-## Testing Requirements
+- Never mock Off Grid code. This includes modules under `src/` and `pro/`, plus our services, stores,
+  hooks, components, screens, navigators, parsers, and registries.
+- Product behavior is proven with integration tests. Mount the real screen on the real navigation
+  stack, reach the state through real user gestures, run the real production path, and assert only
+  what the user can observe.
+- Fake only a boundary the test environment cannot control or reproduce faithfully, such as a native
+  device API, model runtime, remote server, filesystem exhaustion, or OOM. Put the fake at that
+  boundary and keep all Off Grid logic above it real.
+- Do not use direct store `setState` to manufacture an integration-test precondition. Do not use
+  `toHaveBeenCalled` as proof of product behavior.
+- Unit tests are appropriate for pure functions and narrow contracts. They do not replace the
+  integration test for changed product behavior.
+- When behavior is owned by Swift or Kotlin and can be tested there, add XCTest or JUnit coverage.
+  Keep a shared contract test when both platforms implement the same capability.
+- For a bug fix, prove the regression test fails against the broken code before accepting green.
+- New features and significant behavior changes require both focused unit coverage where useful and
+  a real integration test for the user journey.
 
-Always write **both** unit tests and integration tests for new features and significant changes:
+## Repository boundaries
 
-- **Unit tests** (`__tests__/unit/`): Test individual functions, hooks, and store actions in isolation with mocked dependencies.
-- **Integration tests** (`__tests__/integration/`): Test how multiple modules work together end-to-end (e.g., service A calls service B which writes to database C). Use mocked native modules but real logic across layers.
+All paid feature code lives in the private `pro/` submodule. Core may expose registries and contracts,
+but must not contain or directly import Pro implementations. A Pro change is committed and reviewed
+in the Pro repository.
 
-Do not consider a feature complete with only unit tests. Integration tests catch wiring bugs, incorrect data flow between layers, and lifecycle issues that unit tests miss.
+For UI work, read `../brand/DESIGN_PHILOSOPHY.md` and the relevant files under `docs/design/`. Use the
+shared typography, color, and spacing tokens. For copy or documentation, read
+`docs/brand_tone_voice.md`.
 
-## Push = Create PR + Address Review
+For physical-device diagnosis, use the dev-only `offgrid-debug.log` file exposed in Settings ->
+Debug Logs or pull it from the `ai.offgridmobile.dev` app container. React Native logs from a physical
+iOS device do not appear in Metro.
 
-When asked to push code, follow this full workflow:
+## Quality gates
 
-0. ensure that you are on a branch that is specific to this change i.e feat/new-feature or fix/bug-fix or docs/update-readme or chore/update-dependencies, or test/new-test, etc
-1. Push the branch to the remote (`git push -u origin <branch>`)
-2. Create a PR using `gh pr create`. Ensure that you are adhering to the PR template. **Do NOT include "Generated with Codex" or any AI attribution in PR descriptions.**
-3. Wait for Gemini to review the PR (poll with `gh pr checks` and `gh api repos/{owner}/{repo}/pulls/{number}/reviews` until a review appears)
-4. Once a review exists, pull down the review comments: `gh api repos/{owner}/{repo}/pulls/{number}/comments` and `gh api repos/{owner}/{repo}/pulls/{number}/reviews`
-5. Address every review comment — fix the code, re-run the quality gates (tests, lint, tsc).
-6. Reply to **each** review comment individually on the PR using `gh api` (use `/pulls/comments/{id}/replies` endpoint). Every comment must get its own reply confirming what was done — do not post a single summary comment.
-7. Push the fixes
-8. Report what was changed in response to the review
+Commits are intentionally ungated. The Husky gate is `.husky/pre-push` and checks the files in the
+push range:
 
-## CI Review Loop
+- JS/TS: ESLint, `tsc --noEmit`, related Jest suites, dependency-cruiser, and knip.
+- Swift: SwiftLint when installed and the iOS tests.
+- Kotlin: compilation, Android lint, and the Android tests.
+- Changed code also runs the configured Sonar scan.
 
-The repo has three automated reviewers on every PR. After pushing, loop until all are green:
+Before a push, run the relevant tests plus ESLint, Prettier, and TypeScript checks for the files you
+changed. Fix failures. Never use `--no-verify`.
 
-| Reviewer | What it checks | How to address |
-|---|---|---|
-| **Gemini Bot** | Code quality, style, logic issues | Read comments via `gh api`, fix code or reply explaining why it's fine, then comment `/gemini review` to trigger a fresh pass |
-| **Codecov** | Test coverage thresholds | Add missing tests, ensure new code is covered. Check the Codecov report for uncovered lines |
-| **SonarCloud** | Security hotspots, code smells, duplications, bugs | Fix flagged issues — especially security hotspots and duplications. Resolve quality gate failures before merging |
+## Branch and PR workflow
 
-**Workflow:**
-1. Push code → wait for all three reviewers to report
-2. Pull down Gemini comments, Codecov report, and SonarCloud findings
-3. Fix issues: code changes for Gemini/SonarCloud, add tests for Codecov
-4. Re-run local quality gates (`npm run lint && npm test && npx tsc --noEmit`)
-5. Push fixes, comment `/gemini review` on the PR to re-trigger Gemini
-6. Repeat until all three reviewers pass with no blocking issues
+- Never push directly to `main`. Work on a change-specific `feat/`, `fix/`, `docs/`, `chore/`, or
+  `test/` branch.
+- Commit small green steps. Use merge commits for PRs; never squash or rebase-merge.
+- A request to push means: push the branch, create or update the PR using the repository template,
+  wait for Gemini, Codecov, SonarCloud, and CI, then address every finding.
+- Reply to each review comment individually with the change made or the evidence for keeping the
+  code. Re-run the gates and re-request review until no blocking issue remains.
+- Do not merge without the user's explicit approval.
+- Do not add AI attribution to commits or PR descriptions.

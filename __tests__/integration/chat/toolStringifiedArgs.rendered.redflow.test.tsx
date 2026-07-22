@@ -10,7 +10,12 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
   useRoute: () => require('../../harness/chatHarness').routeHolder,
   useFocusEffect: () => {},
   useIsFocused: () => true,
@@ -23,16 +28,29 @@ describe('Q3 (behavioral) — stringified tool args surface an error bubble', ()
     h.render();
 
     // `arguments` is a STRING ("{\"expression\":\"2+2\"}") rather than an object.
-    await h.send('what is 2 + 2', { text: 'Calculating. <tool_call>{"name": "calculator", "arguments": "{\\"expression\\": \\"2+2\\"}"}</tool_call>' });
+    // The second native turn is the real post-tool answer.
+    h.boundary.llama!.scriptCompletions([
+      {
+        text: 'Calculating. <tool_call>{"name": "calculator", "arguments": "{\\"expression\\": \\"2+2\\"}"}</tool_call>',
+      },
+      { text: 'The answer is 4.' },
+    ]);
+    await h.tapSend('what is 2 + 2');
 
-    // Wait on the user-visible reply, then let the tool loop settle.
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Calculating\./)).not.toBeNull(); });
-    await h.settle();
+    // Wait on the terminal user-visible answer, not an intermediate tool turn.
+    await h.rtl.waitFor(() => {
+      expect(h.view!.queryByText(/The answer is 4\./)).not.toBeNull();
+    });
 
     // The tool ran and produced a result bubble...
-    expect(h.view!.queryByTestId('tool-result-label-calculator')).not.toBeNull();
+    expect(
+      h.view!.queryByTestId('tool-result-label-calculator'),
+    ).not.toBeNull();
     // ...which must show the computed answer, NOT an internal failure. Today the stringified args break the
     // calculator so the bubble shows a failure → RED.
-    expect(h.view!.queryByText(/failed \(internal\)|Cannot read properties|error/i)).toBeNull();
+    expect(
+      h.view!.queryByText(/failed \(internal\)|Cannot read properties|error/i),
+    ).toBeNull();
+    h.view!.unmount();
   });
 });

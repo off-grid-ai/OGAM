@@ -4,8 +4,10 @@ import { DownloadedModel, LlamaDownloadedModel, LiteRTDownloadedModel, ModelFile
 import { buildDownloadedModel, persistDownloadedModel, loadDownloadedModels, saveModelsList } from './storage';
 import { copyFileWithProgress } from './copyFile';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
+import { ensureImageExtractionComplete } from '../../utils/imageModelIntegrity';
 // Single source of truth for projector detection + model↔projector matching (see src/services/mmproj.ts).
 import { isMMProjFile, pickMmProjForModel } from '../mmproj';
+import { validateModelFile } from '../llmSafetyChecks';
 
 export { isMMProjFile };
 
@@ -133,6 +135,76 @@ async function isValidZip(zipPath: string): Promise<boolean> {
   return true;
 }
 
+type RecoveredDir = { name: string; path: string };
+type AddImageModel = ReconcileImageModelsOpts['addImageModel'];
+
+/** Build + register a recovered image model from its extracted directory. */
+async function registerRecoveredImageModel(
+  item: RecoveredDir,
+  addImageModel: AddImageModel,
+  recovered: ONNXImageModel[],
+): Promise<void> {
+  const backend = detectBackend(item.name);
+  let modelPath = item.path;
+  if (backend === 'coreml') {
+    modelPath = await resolveCoreMLModelDir(item.path).catch(() => item.path);
+  }
+  const newModel: ONNXImageModel = {
+    id: item.name,
+    name: item.name.replaceAll('_', ' '),
+    description: '',
+    modelPath,
+    size: await getDirSize(item.path),
+    downloadedAt: new Date().toISOString(),
+    backend,
+  };
+  await addImageModel(newModel);
+  recovered.push(newModel);
+}
+
+/**
+ * Recover from a mid-unzip kill: a `_zip_name` remnant + staged zip, no `_ready`. Re-unzip, then run
+ * the SAME completeness gate as the live/resume paths — a truncated-but-PK zip yields a partial tree
+ * that must NEVER be marked `_ready`/registered (it crashes natively on load); clean it up instead so
+ * it resurfaces as re-downloadable.
+ */
+async function recoverFromZipRemnant(args: {
+  item: RecoveredDir;
+  imageModelsDir: string;
+  addImageModel: AddImageModel;
+  recovered: ONNXImageModel[];
+}): Promise<void> {
+  const { item, imageModelsDir, addImageModel, recovered } = args;
+  try {
+    const zipFileName = (
+      await RNFS.readFile(`${item.path}/_zip_name`, 'utf8')
+    ).trim();
+    const zipPath = `${imageModelsDir}/${zipFileName}`;
+    if (!(await isValidZip(zipPath))) {
+      await RNFS.unlink(item.path).catch(() => {}); // gone/corrupt zip → unrecoverable
+      return;
+    }
+    await unzip(zipPath, item.path);
+    try {
+      await ensureImageExtractionComplete({
+        backend: detectBackend(item.name),
+        modelDir: item.path,
+        zipPath,
+        modelId: item.name,
+      });
+    } catch {
+      await RNFS.unlink(item.path).catch(() => {});
+      await RNFS.unlink(zipPath).catch(() => {});
+      return;
+    }
+    await RNFS.unlink(zipPath).catch(() => {});
+    await RNFS.writeFile(`${item.path}/_ready`, '', 'utf8').catch(() => {});
+    await registerRecoveredImageModel(item, addImageModel, recovered);
+  } catch {
+    // Non-fatal: leave for the next startup attempt.
+  }
+}
+
 export async function reconcileFinishedImageDownloads(opts: ReconcileImageModelsOpts): Promise<ONNXImageModel[]> {
   const { imageModelsDir, getImageModels, addImageModel, activeModelIds } = opts;
   const recovered: ONNXImageModel[] = [];
@@ -188,64 +260,13 @@ export async function reconcileFinishedImageDownloads(opts: ReconcileImageModels
 
       if (hasReady) {
         // Unzip completed but registerAndNotify was killed — register now.
-        const backend = detectBackend(item.name);
-        let modelPath = item.path;
-        if (backend === 'coreml') {
-          modelPath = await resolveCoreMLModelDir(item.path).catch(() => item.path);
-        }
-        const totalSize = await getDirSize(item.path);
-        const newModel: ONNXImageModel = {
-          id: item.name,
-          name: item.name.replaceAll('_', ' '),
-          description: '',
-          modelPath,
-          size: totalSize,
-          downloadedAt: new Date().toISOString(),
-          backend,
-        };
-        await addImageModel(newModel);
-        recovered.push(newModel);
+        await registerRecoveredImageModel(item, addImageModel, recovered);
         continue;
       }
 
       // No _ready — check if a zip exists to re-unzip (mid-unzip kill).
-      const zipNamePath = `${item.path}/_zip_name`;
-      const hasZipName = await RNFS.exists(zipNamePath);
-
-      if (hasZipName) {
-        try {
-          const zipFileName = (await RNFS.readFile(zipNamePath, 'utf8')).trim();
-          const zipPath = `${imageModelsDir}/${zipFileName}`;
-          const zipOk = await isValidZip(zipPath);
-
-          if (zipOk) {
-            await unzip(zipPath, item.path);
-            await RNFS.unlink(zipPath).catch(() => {});
-            await RNFS.writeFile(readyPath, '', 'utf8').catch(() => {});
-            const backend = detectBackend(item.name);
-            let modelPath = item.path;
-            if (backend === 'coreml') {
-              modelPath = await resolveCoreMLModelDir(item.path).catch(() => item.path);
-            }
-            const totalSize = await getDirSize(item.path);
-            const newModel: ONNXImageModel = {
-              id: item.name,
-              name: item.name.replaceAll('_', ' '),
-              description: '',
-              modelPath,
-              size: totalSize,
-              downloadedAt: new Date().toISOString(),
-              backend,
-            };
-            await addImageModel(newModel);
-            recovered.push(newModel);
-          } else {
-            // Zip is gone or corrupt — partial dir is unrecoverable, clean up.
-            await RNFS.unlink(item.path).catch(() => {});
-          }
-        } catch {
-          // Non-fatal: leave for the next startup attempt.
-        }
+      if (await RNFS.exists(`${item.path}/_zip_name`)) {
+        await recoverFromZipRemnant({ item, imageModelsDir, addImageModel, recovered });
       } else {
         // No _ready and no _zip_name — stale artifact from a cancelled or
         // pre-sentinel download. Delete to free space.
@@ -381,6 +402,17 @@ function resolveUri(uri: string): string {
   return decodeURIComponent(uri);
 }
 
+/**
+ * Validate a freshly-imported GGUF, throwing if unusable. Only a PROVABLY-corrupt copy is unlinked;
+ * a transient stat/read failure must not destroy the imported file (the import still fails so the
+ * user can retry). Extracted so importLocalModel stays within its complexity budget.
+ */
+async function assertImportedGgufValid(destPath: string): Promise<void> {
+  const validation = await validateModelFile(destPath);
+  if (validation.valid) return;
+  if (validation.corrupt) await RNFS.unlink(destPath).catch(() => {});
+  throw new Error(validation.reason ?? 'Invalid or incomplete GGUF model file');
+}
 
 export async function importLocalModel(opts: ImportLocalModelOpts): Promise<DownloadedModel> { // NOSONAR
   const { sourceUri, fileName, modelsDir, sourceSize, engine: _engine, liteRTVision, onProgress, mmProjSourceUri, mmProjFileName, mmProjSourceSize } = opts;
@@ -406,6 +438,8 @@ export async function importLocalModel(opts: ImportLocalModelOpts): Promise<Down
     knownTotalBytes: sourceSize ?? null,
     onProgress: onProgress ? (fraction: number) => onProgress({ fraction: fraction * mainProgressScale, fileName }) : undefined,
   });
+
+  if (!isLitert) await assertImportedGgufValid(destPath);
 
   const quantMatch = fileName.match(/[_-](Q\d+[_\w]*|f16|f32)/i);
   const quantization = quantMatch ? quantMatch[1].toUpperCase() : 'Unknown';

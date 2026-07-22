@@ -52,7 +52,7 @@ describe('T073 (rendered) — enhancement must stream / show live progress (DEV-
     h.render();
 
     await h.placeImageModel({ backend: 'coreml' });
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { activeModelService } = require('../../../src/services/activeModelService');
     await activeModelService.loadImageModel('sd');
     await h.cycleImageMode(); // auto → ON(force): "draw a cat" routes to IMAGE
@@ -82,7 +82,7 @@ describe('T073 (rendered) — enhancement must stream / show live progress (DEV-
     // Release the held stream so the turn completes cleanly (no dangling promise / open handle).
     h.boundary.llama!.releaseStream();
     await h.rtl.waitFor(
-      () => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); },
+      () => { expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1); },
       { timeout: 6000 },
     );
   });

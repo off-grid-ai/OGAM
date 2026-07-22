@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { sanitizeDiagnosticText } from '../utils/logSanitizer';
 
 const MAX_IN_MEMORY = 500;
 
@@ -14,12 +15,20 @@ interface DebugLogsState {
   clearLogs: () => void;
 }
 
-export const useDebugLogsStore = create<DebugLogsState>((set) => ({
+export const useDebugLogsStore = create<DebugLogsState>(set => ({
   logs: [],
-  addLog: (entry) => set((state) => ({
-    logs: state.logs.length >= MAX_IN_MEMORY
-      ? [...state.logs.slice(-(MAX_IN_MEMORY - 1)), entry]
-      : [...state.logs, entry],
-  })),
+  addLog: entry =>
+    set(state => {
+      const safeEntry = {
+        ...entry,
+        message: sanitizeDiagnosticText(entry.message),
+      };
+      return {
+        logs:
+          state.logs.length >= MAX_IN_MEMORY
+            ? [...state.logs.slice(-(MAX_IN_MEMORY - 1)), safeEntry]
+            : [...state.logs, safeEntry],
+      };
+    }),
   clearLogs: () => set({ logs: [] }),
 }));

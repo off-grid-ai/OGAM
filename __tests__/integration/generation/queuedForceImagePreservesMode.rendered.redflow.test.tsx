@@ -64,7 +64,7 @@ describe('#510 (rendered) — a queued force-image send preserves its force flag
     await h.settle(50); // let handleSendFn enqueue
 
     // No image generated yet — turn #2 is queued, turn #1 still holds.
-    expect(h.boundary.diffusion.calls.generateImage.length).toBe(0);
+    expect(h.boundary.diffusion.calls.generateImage).toHaveLength(0);
 
     // ---- Release turn #1 → the queue drains and dispatches the queued force-image message. ----
     h.boundary.llama!.releaseStream();
@@ -73,10 +73,10 @@ describe('#510 (rendered) — a queued force-image send preserves its force flag
     // SPEC: the queued force-image send draws → the generated-image bubble renders on screen, and the
     // scripted TEXT reply must NOT appear for turn #2.
     // RED (#510): force lost → classified text → QUEUED_TEXT_LEAK renders again as a second reply, no image.
-    await rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); }, { timeout: 4000 });
+    await rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1); }, { timeout: 4000 });
     expect(view.queryByTestId('generated-image')).not.toBeNull();
     // Only turn #1's single text reply may exist — turn #2 must NOT have produced a second text reply.
-    expect(view.queryAllByText(new RegExp(QUEUED_TEXT_LEAK)).length).toBe(1);
+    expect(view.queryAllByText(new RegExp(QUEUED_TEXT_LEAK))).toHaveLength(1);
   });
 
   it('COALESCE (M16): two sends queue together and one forced image — the merged dispatch draws an image', async () => {
@@ -101,12 +101,12 @@ describe('#510 (rendered) — a queued force-image send preserves its force flag
     await rtl.waitFor(() => { expect(view.queryByTestId('image-mode-force-badge')).not.toBeNull(); });
     await h.tapSend('tell me about cats'); // force → queued (now 2 queued, one forced)
     await h.settle(50);
-    expect(h.boundary.diffusion.calls.generateImage.length).toBe(0); // nothing drawn while #1 holds
+    expect(h.boundary.diffusion.calls.generateImage).toHaveLength(0); // nothing drawn while #1 holds
 
     // Drain: the 2 queued messages coalesce; because one was force, the merged dispatch must draw.
     h.boundary.llama!.releaseStream();
     await h.settle(400);
-    await rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); }, { timeout: 4000 });
+    await rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1); }, { timeout: 4000 });
     expect(view.queryByTestId('generated-image')).not.toBeNull();
   });
 });

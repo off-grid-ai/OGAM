@@ -1,8 +1,24 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DeviceInfo, DownloadedModel, ModelRecommendation, ONNXImageModel, ImageGenerationMode, AutoDetectMethod, CacheType, InferenceBackend, INFERENCE_BACKENDS, LiteRTBackend, GeneratedImage } from '../types';
+import {
+  DeviceInfo,
+  DownloadedModel,
+  ModelRecommendation,
+  ONNXImageModel,
+  ImageGenerationMode,
+  AutoDetectMethod,
+  CacheType,
+  InferenceBackend,
+  LiteRTBackend,
+  GeneratedImage,
+} from '../types';
+import {
+  DEFAULT_CHECKLIST,
+  DEFAULT_SETTINGS,
+  migratePersistedState,
+} from './appStorePersistence';
+import { clampLlamaMaxTokens } from '../config/contextLimits';
 
 function isUnknownLike(value: string): boolean {
   const normalized = value.trim().toLowerCase();
@@ -32,7 +48,8 @@ function isSuspiciousRecoveredImageModel(model: ONNXImageModel): boolean {
 function isWhisperTextModel(model: DownloadedModel): boolean {
   return (
     model.id.startsWith('whisper-') ||
-    (model.fileName?.startsWith('ggml-') === true && model.fileName.endsWith('.bin'))
+    (model.fileName?.startsWith('ggml-') === true &&
+      model.fileName.endsWith('.bin'))
   );
 }
 
@@ -41,19 +58,36 @@ function isExcludedTextModel(model: DownloadedModel): boolean {
 }
 
 type OnboardingChecklist = {
-  downloadedModel: boolean; loadedModel: boolean; sentMessage: boolean;
-  triedImageGen: boolean; exploredSettings: boolean; createdProject: boolean;
+  downloadedModel: boolean;
+  loadedModel: boolean;
+  sentMessage: boolean;
+  triedImageGen: boolean;
+  exploredSettings: boolean;
+  createdProject: boolean;
 };
 
 type AppSettings = {
-  systemPrompt: string; temperature: number; maxTokens: number;
-  topP: number; repeatPenalty: number; contextLength: number;
-  nThreads: number; nBatch: number;
-  imageGenerationMode: ImageGenerationMode; autoDetectMethod: AutoDetectMethod;
-  classifierModelId: string | null; imageSteps: number; imageGuidanceScale: number;
-  imageThreads: number; imageWidth: number; imageHeight: number;
-  imageUseOpenCL: boolean; enhanceImagePrompts: boolean;
-  enableGpu: boolean; gpuLayers: number; flashAttn: boolean;
+  systemPrompt: string;
+  temperature: number;
+  maxTokens: number;
+  topP: number;
+  repeatPenalty: number;
+  contextLength: number;
+  nThreads: number;
+  nBatch: number;
+  imageGenerationMode: ImageGenerationMode;
+  autoDetectMethod: AutoDetectMethod;
+  classifierModelId: string | null;
+  imageSteps: number;
+  imageGuidanceScale: number;
+  imageThreads: number;
+  imageWidth: number;
+  imageHeight: number;
+  imageUseOpenCL: boolean;
+  enhanceImagePrompts: boolean;
+  enableGpu: boolean;
+  gpuLayers: number;
+  flashAttn: boolean;
   /** Aggressive model loading: commit more RAM + a smaller reserve so large models
    *  load (with a "Load Anyway" override when the budget still blocks). Off by
    *  default (behaviour-neutral). Single source of truth read by both the Settings
@@ -64,8 +98,12 @@ type AppSettings = {
    *  'conservative' = one model at a time; 'balanced' = co-reside within budget;
    *  'aggressive' = co-reside with a larger RAM commitment. */
   modelLoadingMode?: 'conservative' | 'balanced' | 'aggressive';
-  cacheType: CacheType; showGenerationDetails: boolean; enabledTools: string[];
+  cacheType: CacheType;
+  showGenerationDetails: boolean;
+  enabledTools: string[];
   thinkingEnabled: boolean;
+  /** Experimental embedded Multi-Token Prediction. Off by default. */
+  experimentalMtp?: boolean;
   inferenceBackend: InferenceBackend;
   /** True once the user has explicitly picked an inference backend in Settings.
    *  While false, the boot-time backendSync may upgrade the default to the GPU
@@ -136,7 +174,9 @@ interface AppState {
   imageGenerationStatus: string | null;
   imagePreviewPath: string | null;
   setIsGeneratingImage: (generating: boolean) => void;
-  setImageGenerationProgress: (progress: { step: number; totalSteps: number } | null) => void;
+  setImageGenerationProgress: (
+    progress: { step: number; totalSteps: number } | null,
+  ) => void;
   setImageGenerationStatus: (status: string | null) => void;
   setImagePreviewPath: (path: string | null) => void;
   generatedImages: GeneratedImage[];
@@ -188,252 +228,206 @@ interface AppState {
   setLoadedSettings: (settings: Partial<AppSettings> | null) => void;
 }
 
-const DEFAULT_CHECKLIST: OnboardingChecklist = {
-  downloadedModel: false, loadedModel: false, sentMessage: false,
-  triedImageGen: false, exploredSettings: false, createdProject: false,
-};
-
-const DEFAULT_SETTINGS: AppSettings = {
-  systemPrompt: 'You are a helpful AI assistant running locally on the user\'s device. Be concise and helpful.',
-  temperature: 0.7,
-  maxTokens: 1024,
-  topP: 0.9,
-  repeatPenalty: 1.1,
-  contextLength: 4096,
-  nThreads: 0,
-  nBatch: 512,
-  imageGenerationMode: 'auto' as ImageGenerationMode,
-  autoDetectMethod: 'pattern' as AutoDetectMethod,
-  classifierModelId: null,
-  imageSteps: Platform.OS === 'ios' ? 20 : 8,
-  imageGuidanceScale: 7.5,
-  imageThreads: 4,
-  imageWidth: 512,
-  imageHeight: 512,
-  imageUseOpenCL: true,
-  enhanceImagePrompts: false,
-  enableGpu: Platform.OS === 'ios',
-  inferenceBackend: Platform.OS === 'ios' ? INFERENCE_BACKENDS.METAL : INFERENCE_BACKENDS.CPU,
-  gpuLayers: 99,
-  flashAttn: true,
-  aggressiveModelLoading: false,
-  modelLoadingMode: 'balanced',
-  cacheType: 'q8_0' as CacheType,
-  showGenerationDetails: false,
-  enabledTools: ['web_search', 'read_url', 'search_knowledge_base'],
-  thinkingEnabled: false,
-  liteRTBackend: 'gpu',
-  liteRTTemperature: 0.7,
-  liteRTTopP: 0.9,
-  liteRTMaxTokens: 4096,
-};
-
-function migrateEnabledTools(merged: any): void {
-  if (merged.settings?.enabledTools && !merged.settings.enabledTools.includes('search_knowledge_base')) {
-    merged.settings = { ...merged.settings, enabledTools: [...merged.settings.enabledTools, 'search_knowledge_base'] };
-  }
-}
-
-// The removed MCP context auto-boost pinned context to 32768 (and maxTokens to 8192 /
-// liteRTMaxTokens to 32768) on MCP enable and never restored it, causing OOM crashes
-// and tanked tok/s on flagship devices. Reset anyone left at the boost ceiling back to
-// the device-safe defaults. Idempotent: once reset, the values no longer match.
-const MCP_BOOST_CTX_CEILING = 32768;
-const MCP_BOOST_MAX_OUTPUT_TOKENS = 8192;
-function migrateBoostedContext(merged: any): void {
-  const s = merged.settings;
-  if (!s) return;
-  // Match the EXACT values the boost wrote, not `>=`. The boost set these to
-  // precise constants; a `>=` test also clobbers a user who legitimately chose a
-  // large context/maxTokens above the default, which this one-time migration must
-  // not touch.
-  if (s.contextLength === MCP_BOOST_CTX_CEILING) {
-    s.contextLength = DEFAULT_SETTINGS.contextLength;
-    // maxTokens was raised alongside contextLength by the boost; only reset it when the
-    // boost's exact value is present, so a legitimately-large user maxTokens isn't clobbered.
-    if (s.maxTokens === MCP_BOOST_MAX_OUTPUT_TOKENS) s.maxTokens = DEFAULT_SETTINGS.maxTokens;
-  }
-  if (s.liteRTMaxTokens === MCP_BOOST_CTX_CEILING) {
-    s.liteRTMaxTokens = DEFAULT_SETTINGS.liteRTMaxTokens;
-  }
-}
-function migratePersistedState(persistedState: any, currentState: AppState): AppState {
-  const merged = {
-    ...currentState,
-    ...persistedState,
-    settings: { ...DEFAULT_SETTINGS, ...persistedState?.settings },
-  };
-  // Drop legacy download tracking fields. The unified downloadStore (backed
-  // by the native Room DB) is now the source of truth. Persisted entries
-  // from old versions are silently ignored on rehydrate.
-  delete merged.downloadProgress;
-  delete merged.activeBackgroundDownloads;
-  delete merged.imageModelDownloading;
-  delete merged.imageModelDownloadIds;
-  delete merged.imageModelDownloadId;
-  // modelLoadingStrategy was removed (the residency manager owns swapping now).
-  if (merged.settings?.modelLoadingStrategy !== undefined) {
-    delete merged.settings.modelLoadingStrategy;
-  }
-  if (persistedState?.settings && !persistedState.settings.cacheType) {
-    merged.settings = { ...merged.settings, cacheType: persistedState.settings.flashAttn ? 'q8_0' : 'f16', flashAttn: true };
-  }
-  if (persistedState?.settings && !persistedState.settings.inferenceBackend) {
-    merged.settings = {
-      ...merged.settings,
-      inferenceBackend: Platform.OS === 'ios' ? INFERENCE_BACKENDS.METAL : INFERENCE_BACKENDS.CPU,
-    };
-  }
-
-  if (merged.checklistDismissed && merged.onboardingChecklist &&
-    !Object.values(merged.onboardingChecklist).every(Boolean)) merged.checklistDismissed = false;
-  migrateEnabledTools(merged);
-  migrateBoostedContext(merged);
-  return merged as AppState;
-}
-
 export const selectIsLiteRT = (state: AppState): boolean =>
-  state.downloadedModels.find(m => m.id === state.activeModelId)?.engine === 'litert';
+  state.downloadedModels.find(m => m.id === state.activeModelId)?.engine ===
+  'litert';
 
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       themeMode: 'system' as ThemeMode,
-      setThemeMode: (mode) => set({ themeMode: mode }),
+      setThemeMode: mode => set({ themeMode: mode }),
       hasCompletedOnboarding: false,
-      setOnboardingComplete: (complete) =>
+      setOnboardingComplete: complete =>
         set({ hasCompletedOnboarding: complete }),
       onboardingChecklist: { ...DEFAULT_CHECKLIST },
       checklistDismissed: false,
-      completeChecklistStep: (key) =>
-        set((state) => ({ onboardingChecklist: { ...state.onboardingChecklist, [key]: true } })),
+      completeChecklistStep: key =>
+        set(state => ({
+          onboardingChecklist: { ...state.onboardingChecklist, [key]: true },
+        })),
       dismissChecklist: () => set({ checklistDismissed: true }),
-      resetChecklist: () => set({ checklistDismissed: false, onboardingChecklist: { ...DEFAULT_CHECKLIST }, shownSpotlights: {} }),
+      resetChecklist: () =>
+        set({
+          checklistDismissed: false,
+          onboardingChecklist: { ...DEFAULT_CHECKLIST },
+          shownSpotlights: {},
+        }),
       deviceInfo: null,
       modelRecommendation: null,
-      setDeviceInfo: (info) => set({ deviceInfo: info }),
-      setModelRecommendation: (rec) => set({ modelRecommendation: rec }),
+      setDeviceInfo: info => set({ deviceInfo: info }),
+      setModelRecommendation: rec => set({ modelRecommendation: rec }),
       downloadedModels: [],
-      setDownloadedModels: (models) => set({ downloadedModels: models.filter(m => !isExcludedTextModel(m)) }),
-      addDownloadedModel: (model) =>
-        set((state) => {
+      setDownloadedModels: models =>
+        set({ downloadedModels: models.filter(m => !isExcludedTextModel(m)) }),
+      addDownloadedModel: model =>
+        set(state => {
           if (isExcludedTextModel(model)) return state;
           return {
-            downloadedModels: [...state.downloadedModels.filter(m => m.id !== model.id), model],
+            downloadedModels: [
+              ...state.downloadedModels.filter(m => m.id !== model.id),
+              model,
+            ],
           };
         }),
-      removeDownloadedModel: (modelId) =>
-        set((state) => ({
-          downloadedModels: state.downloadedModels.filter((m) => m.id !== modelId),
-          activeModelId: state.activeModelId === modelId ? null : state.activeModelId,
+      removeDownloadedModel: modelId =>
+        set(state => ({
+          downloadedModels: state.downloadedModels.filter(
+            m => m.id !== modelId,
+          ),
+          activeModelId:
+            state.activeModelId === modelId ? null : state.activeModelId,
         })),
       activeModelId: null,
-      setActiveModelId: (modelId) => set({ activeModelId: modelId }),
+      setActiveModelId: modelId => set({ activeModelId: modelId }),
       loadedTextModelId: null,
-      setLoadedTextModelId: (modelId) => set({ loadedTextModelId: modelId }),
+      setLoadedTextModelId: modelId => set({ loadedTextModelId: modelId }),
       textModelEvicted: false,
-      setTextModelEvicted: (evicted) => set({ textModelEvicted: evicted }),
+      setTextModelEvicted: evicted => set({ textModelEvicted: evicted }),
       lastTextModelId: null,
-      setLastTextModelId: (modelId) => set({ lastTextModelId: modelId }),
+      setLastTextModelId: modelId => set({ lastTextModelId: modelId }),
       isLoadingModel: false,
-      setIsLoadingModel: (loading) => set({ isLoadingModel: loading }),
+      setIsLoadingModel: loading => set({ isLoadingModel: loading }),
       modelMaxContext: null,
-      setModelMaxContext: (ctx) => set({ modelMaxContext: ctx }),
+      setModelMaxContext: ctx => set({ modelMaxContext: ctx }),
       settings: { ...DEFAULT_SETTINGS },
-      updateSettings: (newSettings) =>
-        set((state) => ({
-          settings: { ...state.settings, ...newSettings },
-        })),
+      updateSettings: newSettings =>
+        set(state => {
+          const settings = { ...state.settings, ...newSettings };
+          if (
+            newSettings.contextLength !== undefined ||
+            newSettings.maxTokens !== undefined
+          ) {
+            settings.maxTokens = clampLlamaMaxTokens(
+              settings.maxTokens,
+              settings.contextLength,
+            );
+          }
+          return { settings };
+        }),
       resetSettings: () => set({ settings: { ...DEFAULT_SETTINGS } }),
       // Image models (ONNX-based)
       downloadedImageModels: [],
       activeImageModelId: null,
-      setDownloadedImageModels: (models) => set({ downloadedImageModels: models.filter(m => !isSuspiciousRecoveredImageModel(m)) }),
-      addDownloadedImageModel: (model) =>
-        set((state) => {
+      setDownloadedImageModels: models =>
+        set({
+          downloadedImageModels: models.filter(
+            m => !isSuspiciousRecoveredImageModel(m),
+          ),
+        }),
+      addDownloadedImageModel: model =>
+        set(state => {
           if (isSuspiciousRecoveredImageModel(model)) return state;
           return {
-            downloadedImageModels: [...state.downloadedImageModels.filter(m => m.id !== model.id), model],
+            downloadedImageModels: [
+              ...state.downloadedImageModels.filter(m => m.id !== model.id),
+              model,
+            ],
           };
         }),
-      removeDownloadedImageModel: (modelId) =>
-        set((state) => ({
-          downloadedImageModels: state.downloadedImageModels.filter((m) => m.id !== modelId),
-          activeImageModelId: state.activeImageModelId === modelId ? null : state.activeImageModelId,
+      removeDownloadedImageModel: modelId =>
+        set(state => ({
+          downloadedImageModels: state.downloadedImageModels.filter(
+            m => m.id !== modelId,
+          ),
+          activeImageModelId:
+            state.activeImageModelId === modelId
+              ? null
+              : state.activeImageModelId,
         })),
-      setActiveImageModelId: (modelId) => set({ activeImageModelId: modelId }),
+      setActiveImageModelId: modelId => set({ activeImageModelId: modelId }),
       // Image generation state
       isGeneratingImage: false,
       imageGenerationProgress: null,
       imageGenerationStatus: null,
       imagePreviewPath: null,
-      setIsGeneratingImage: (generating) => set({ isGeneratingImage: generating }),
-      setImageGenerationProgress: (progress) => set({ imageGenerationProgress: progress }),
-      setImageGenerationStatus: (status) => set({ imageGenerationStatus: status }),
-      setImagePreviewPath: (path) => set({ imagePreviewPath: path }),
+      setIsGeneratingImage: generating =>
+        set({ isGeneratingImage: generating }),
+      setImageGenerationProgress: progress =>
+        set({ imageGenerationProgress: progress }),
+      setImageGenerationStatus: status =>
+        set({ imageGenerationStatus: status }),
+      setImagePreviewPath: path => set({ imagePreviewPath: path }),
       // Gallery
       generatedImages: [],
-      addGeneratedImage: (image) =>
-        set((state) => ({
+      addGeneratedImage: image =>
+        set(state => ({
           generatedImages: [image, ...state.generatedImages],
         })),
-      removeGeneratedImage: (imageId) =>
-        set((state) => ({
-          generatedImages: state.generatedImages.filter((img) => img.id !== imageId),
+      removeGeneratedImage: imageId =>
+        set(state => ({
+          generatedImages: state.generatedImages.filter(
+            img => img.id !== imageId,
+          ),
         })),
-      removeImagesByConversationId: (conversationId) => {
+      removeImagesByConversationId: conversationId => {
         const state = get();
         const imagesToRemove = state.generatedImages.filter(
-          (img) => img.conversationId === conversationId
+          img => img.conversationId === conversationId,
         );
-        const imageIds = imagesToRemove.map((img) => img.id);
+        const imageIds = imagesToRemove.map(img => img.id);
         set({
           generatedImages: state.generatedImages.filter(
-            (img) => img.conversationId !== conversationId
+            img => img.conversationId !== conversationId,
           ),
         });
         return imageIds;
       },
-      clearGeneratedImages: () =>
-        set({ generatedImages: [] }),
+      clearGeneratedImages: () => set({ generatedImages: [] }),
       // Reactive spotlight tracking
       shownSpotlights: {},
-      markSpotlightShown: (key) =>
-        set((state) => ({ shownSpotlights: { ...state.shownSpotlights, [key]: true } })),
+      markSpotlightShown: key =>
+        set(state => ({
+          shownSpotlights: { ...state.shownSpotlights, [key]: true },
+        })),
       resetShownSpotlights: () => set({ shownSpotlights: {} }),
       warmedImageModels: [],
-      markImageModelWarmed: (modelId) =>
-        set((state) => state.warmedImageModels.includes(modelId)
-          ? state
-          : { warmedImageModels: [...state.warmedImageModels, modelId] }),
+      markImageModelWarmed: modelId =>
+        set(state =>
+          state.warmedImageModels.includes(modelId)
+            ? state
+            : { warmedImageModels: [...state.warmedImageModels, modelId] },
+        ),
       textGenerationCount: 0,
       imageGenerationCount: 0,
-      incrementTextGenerationCount: () => { const c = get().textGenerationCount + 1; set({ textGenerationCount: c }); return c; },
-      incrementImageGenerationCount: () => { const c = get().imageGenerationCount + 1; set({ imageGenerationCount: c }); return c; },
+      incrementTextGenerationCount: () => {
+        const c = get().textGenerationCount + 1;
+        set({ textGenerationCount: c });
+        return c;
+      },
+      incrementImageGenerationCount: () => {
+        const c = get().imageGenerationCount + 1;
+        set({ imageGenerationCount: c });
+        return c;
+      },
       hasEngagedSharePrompt: false,
-      setHasEngagedSharePrompt: (v) => set({ hasEngagedSharePrompt: v }),
+      setHasEngagedSharePrompt: v => set({ hasEngagedSharePrompt: v }),
       hasRegisteredPro: false,
-      setHasRegisteredPro: (v) => set({ hasRegisteredPro: v }),
+      setHasRegisteredPro: v => set({ hasRegisteredPro: v }),
       isProActive: false,
-      setProActive: (v) => set({ isProActive: v }),
+      setProActive: v => set({ isProActive: v }),
       devProDisabled: false,
-      setDevProDisabled: (v) => set({ devProDisabled: v }),
+      setDevProDisabled: v => set({ devProDisabled: v }),
       proBannerDismissed: false,
-      setProBannerDismissed: (v) => set({ proBannerDismissed: v }),
+      setProBannerDismissed: v => set({ proBannerDismissed: v }),
       desktopPromoDismissed: false,
-      setDesktopPromoDismissed: (v) => set({ desktopPromoDismissed: v }),
+      setDesktopPromoDismissed: v => set({ desktopPromoDismissed: v }),
       proAhaTriggeredBy: null,
-      setProAhaTriggeredBy: (by) => set({ proAhaTriggeredBy: by }),
+      setProAhaTriggeredBy: by => set({ proAhaTriggeredBy: by }),
       toolCountHintDismissed: false,
       setToolCountHintDismissed: () => set({ toolCountHintDismissed: true }),
       loadedSettings: null,
-      setLoadedSettings: (settings) => set({ loadedSettings: settings }),
+      setLoadedSettings: settings => set({ loadedSettings: settings }),
     }),
     {
       name: 'local-llm-app-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      // Versioned persistence must never discard an older user's state. Field-level
+      // upgrades remain centralized in migratePersistedState below via `merge`.
+      migrate: persistedState => persistedState as AppState,
       merge: migratePersistedState,
-      partialize: (state) => ({
+      partialize: state => ({
         themeMode: state.themeMode,
         hasCompletedOnboarding: state.hasCompletedOnboarding,
         onboardingChecklist: state.onboardingChecklist,
@@ -445,7 +439,8 @@ export const useAppStore = create<AppState>()(
         generatedImages: state.generatedImages,
         shownSpotlights: state.shownSpotlights,
         warmedImageModels: state.warmedImageModels,
-        textGenerationCount: state.textGenerationCount, imageGenerationCount: state.imageGenerationCount,
+        textGenerationCount: state.textGenerationCount,
+        imageGenerationCount: state.imageGenerationCount,
         hasEngagedSharePrompt: state.hasEngagedSharePrompt,
         hasRegisteredPro: state.hasRegisteredPro,
         devProDisabled: state.devProDisabled,
@@ -454,6 +449,6 @@ export const useAppStore = create<AppState>()(
         proAhaTriggeredBy: state.proAhaTriggeredBy,
         loadedSettings: state.loadedSettings,
       }),
-    }
-  )
+    },
+  ),
 );

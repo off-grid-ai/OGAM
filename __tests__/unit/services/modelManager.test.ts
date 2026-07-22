@@ -10,7 +10,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { modelManager } from '../../../src/services/modelManager';
 import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
 import { huggingFaceService } from '../../../src/services/huggingface';
-import { buildDownloadedModel } from '../../../src/services/modelManager/storage';
+import {
+  buildDownloadedModel,
+  determineCredibility,
+  resolveStoredPath,
+} from '../../../src/services/modelManager/storage';
+import { isMMProjFile } from '../../../src/services/mmproj';
 import { createModelFile, createModelFileWithMmProj } from '../../utils/factories';
 
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
@@ -50,6 +55,11 @@ const mockedBackgroundDownloadService = backgroundDownloadService as jest.Mocked
 jest.mock('react-native-zip-archive', () => ({ unzip: jest.fn(() => Promise.resolve()) }));
 jest.mock('../../../src/utils/coreMLModelUtils', () => ({
   resolveCoreMLModelDir: jest.fn((dir: string) => Promise.resolve(`${dir}/model.mlpackage`)),
+}));
+// Completeness gate is a collaborator here (covered by imageModelIntegrity unit tests + the G7
+// reconcile integration test); stub it so this test focuses on the reconcile flow.
+jest.mock('../../../src/utils/imageModelIntegrity', () => ({
+  ensureImageExtractionComplete: jest.fn().mockResolvedValue(undefined),
 }));
 
 import { unzip as mockedUnzip } from 'react-native-zip-archive';
@@ -396,13 +406,9 @@ describe('ModelManager', () => {
   });
 
   // ========================================================================
-  // determineCredibility (private)
+  // determineCredibility
   // ========================================================================
   describe('determineCredibility', () => {
-    // Access private method
-    const determineCredibility = (author: string) =>
-      (modelManager as any).determineCredibility(author);
-
     it('recognizes lmstudio-community source', () => {
       const result = determineCredibility('lmstudio-community');
       expect(result.source).toBe('lmstudio');
@@ -474,7 +480,7 @@ describe('ModelManager', () => {
         .mockResolvedValueOnce(true);  // mmProjExists (no mmproj)
 
       mockedBackgroundDownloadService.startDownload.mockResolvedValue({
-        downloadId: 42,
+        downloadId: '42',
         fileName: 'bg-model.gguf',
         modelId: 'test/model',
         status: 'pending',
@@ -486,7 +492,7 @@ describe('ModelManager', () => {
       const result = await modelManager.downloadModelBackground('test/model', file);
 
       expect(mockedBackgroundDownloadService.startDownload).toHaveBeenCalled();
-      expect(result.downloadId).toBe(42);
+      expect(result.downloadId).toBe('42');
     });
 
     it('sets up progress listener during start and complete/error via watchDownload', async () => {
@@ -498,7 +504,7 @@ describe('ModelManager', () => {
         .mockResolvedValueOnce(true);
 
       mockedBackgroundDownloadService.startDownload.mockResolvedValue({
-        downloadId: 42,
+        downloadId: '42',
         fileName: 'bg-model.gguf',
         modelId: 'test/model',
         status: 'pending',
@@ -510,9 +516,9 @@ describe('ModelManager', () => {
       const info = await modelManager.downloadModelBackground('test/model', file);
       modelManager.watchDownload(info.downloadId, jest.fn(), jest.fn());
 
-      expect(mockedBackgroundDownloadService.onProgress).toHaveBeenCalledWith(42, expect.any(Function));
-      expect(mockedBackgroundDownloadService.onComplete).toHaveBeenCalledWith(42, expect.any(Function));
-      expect(mockedBackgroundDownloadService.onError).toHaveBeenCalledWith(42, expect.any(Function));
+      expect(mockedBackgroundDownloadService.onProgress).toHaveBeenCalledWith('42', expect.any(Function));
+      expect(mockedBackgroundDownloadService.onComplete).toHaveBeenCalledWith('42', expect.any(Function));
+      expect(mockedBackgroundDownloadService.onError).toHaveBeenCalledWith('42', expect.any(Function));
     });
 
     it('calls metadata callback with download info', async () => {
@@ -524,7 +530,7 @@ describe('ModelManager', () => {
         .mockResolvedValueOnce(true);
 
       mockedBackgroundDownloadService.startDownload.mockResolvedValue({
-        downloadId: 42,
+        downloadId: '42',
         fileName: 'bg-model.gguf',
         modelId: 'test/model',
         status: 'pending',
@@ -538,7 +544,7 @@ describe('ModelManager', () => {
 
       await modelManager.downloadModelBackground('test/model', file);
 
-      expect(metadataCallback).toHaveBeenCalledWith(42, expect.objectContaining({
+      expect(metadataCallback).toHaveBeenCalledWith('42', expect.objectContaining({
         modelId: 'test/model',
         fileName: 'bg-model.gguf',
       }));
@@ -562,7 +568,7 @@ describe('ModelManager', () => {
 
       mockedBackgroundDownloadService.startDownload
         .mockResolvedValueOnce({
-          downloadId: 42,
+          downloadId: '42',
           fileName: 'vision.gguf',
           modelId: 'test/model',
           status: 'pending',
@@ -1007,12 +1013,9 @@ describe('ModelManager', () => {
   });
 
   // ========================================================================
-  // resolveStoredPath (private, tested via cast)
+  // resolveStoredPath
   // ========================================================================
   describe('resolveStoredPath', () => {
-    const resolveStoredPath = (storedPath: string, currentBaseDir: string) =>
-      (modelManager as any).resolveStoredPath(storedPath, currentBaseDir);
-
     it('returns re-resolved path when UUID changes', () => {
       const storedPath = '/old-uuid/Documents/models/mymodel.gguf';
       const currentBaseDir = '/new-uuid/Documents/models';
@@ -1048,12 +1051,9 @@ describe('ModelManager', () => {
   });
 
   // ========================================================================
-  // isMMProjFile (private, tested via cast)
+  // isMMProjFile
   // ========================================================================
   describe('isMMProjFile', () => {
-    const isMMProjFile = (fileName: string) =>
-      (modelManager as any).isMMProjFile(fileName);
-
     it('detects mmproj filenames', () => {
       expect(isMMProjFile('model-mmproj-f16.gguf')).toBe(true);
       expect(isMMProjFile('Qwen3VL-2B-mmproj-Q4_0.gguf')).toBe(true);
@@ -1674,7 +1674,7 @@ describe('ModelManager', () => {
 
       mockedBackgroundDownloadService.startDownload
         .mockResolvedValueOnce({
-          downloadId: 42,
+          downloadId: '42',
           fileName: 'bg-vision.gguf',
           modelId: 'test/model',
           status: 'pending',

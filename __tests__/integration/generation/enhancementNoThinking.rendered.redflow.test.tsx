@@ -34,7 +34,7 @@ describe('T071 (rendered) — prompt enhancement must not think (DEV-B30)', () =
     h.render();
 
     await h.placeImageModel({ backend: 'coreml' });
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { activeModelService } = require('../../../src/services/activeModelService');
     await activeModelService.loadImageModel('sd');
     await h.cycleImageMode(); // auto → ON(force): "draw a cat" routes to IMAGE
@@ -45,7 +45,7 @@ describe('T071 (rendered) — prompt enhancement must not think (DEV-B30)', () =
 
     h.boundary.llama!.scriptCompletion({ text: 'a photorealistic cat in a garden' }); // the rewritten prompt
     await h.tapSend('draw a cat');
-    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); }, { timeout: 6000 });
+    await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1); }, { timeout: 6000 });
 
     // The enhancement completion reached the text engine.
     const enhancementReq = h.boundary.llama!.calls.completion.map(c => c[0] as { enable_thinking?: boolean; messages?: Array<{ role: string; content?: string }> }).find(isEnhancementRequest);

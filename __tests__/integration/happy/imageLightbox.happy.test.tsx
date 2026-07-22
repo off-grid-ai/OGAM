@@ -24,7 +24,7 @@ async function generateImage(h: Awaited<ReturnType<typeof setupChatScreen>>) {
   await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('image-mode-force-badge')).not.toBeNull(); });
   await h.tapSend('a fox in the snow');
   // The image is produced through the real service + native generateImage and rendered in the chat.
-  await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); });
+  await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage).toHaveLength(1); });
   await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('generated-image')).not.toBeNull(); });
 }
 

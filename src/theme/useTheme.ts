@@ -16,7 +16,6 @@ import {
 } from './palettes';
 import type { ThemeShadows } from './palettes';
 
-
 export interface Theme {
   colors: typeof COLORS_LIGHT;
   shadows: ThemeShadows;
@@ -25,7 +24,7 @@ export interface Theme {
 }
 
 /** Get theme for a given mode (non-hook, for use outside components) */
-export function getTheme(mode: 'light' | 'dark'): Theme {
+function getTheme(mode: 'light' | 'dark'): Theme {
   const isDark = mode === 'dark';
   const colors = isDark ? COLORS_DARK : COLORS_LIGHT;
   const shadows = isDark ? SHADOWS_DARK : SHADOWS_LIGHT;
@@ -35,7 +34,7 @@ export function getTheme(mode: 'light' | 'dark'): Theme {
 
 /** Hook that returns the current theme based on appStore themeMode */
 export function useTheme(): Theme {
-  const themeMode = useAppStore((s) => s.themeMode);
+  const themeMode = useAppStore(s => s.themeMode);
   const systemScheme = useColorScheme();
   let resolvedMode: 'light' | 'dark';
   if (themeMode === 'system') {

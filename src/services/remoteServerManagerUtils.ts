@@ -5,7 +5,10 @@
 import * as Keychain from 'react-native-keychain';
 import type { RemoteServer } from '../types';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
-import { createOpenAIProvider, OpenAICompatibleProvider } from './providers/openAICompatibleProvider';
+import {
+  createOpenAIProvider,
+  OpenAICompatibleProvider,
+} from './providers/openAICompatibleProvider';
 import { providerRegistry } from './providers/registry';
 import logger from '../utils/logger';
 
@@ -15,16 +18,15 @@ const KEYCHAIN_SERVICE = 'ai.offgridmobile.servers';
 // Keychain helpers
 // ---------------------------------------------------------------------------
 
-export async function storeApiKeyImpl(serverId: string, apiKey: string): Promise<void> {
+export async function storeApiKeyImpl(
+  serverId: string,
+  apiKey: string,
+): Promise<void> {
   try {
-    await Keychain.setGenericPassword(
-      `server_${serverId}`,
-      apiKey,
-      {
-        service: `${KEYCHAIN_SERVICE}.${serverId}`,
-        accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
-      }
-    );
+    await Keychain.setGenericPassword(`server_${serverId}`, apiKey, {
+      service: `${KEYCHAIN_SERVICE}.${serverId}`,
+      accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
+    });
     logger.log('[RemoteServerManager] API key stored for server:', serverId);
   } catch (error) {
     logger.error('[RemoteServerManager] Failed to store API key:', error);
@@ -46,7 +48,9 @@ export async function getApiKeyImpl(serverId: string): Promise<string | null> {
 
 export async function removeApiKeyImpl(serverId: string): Promise<void> {
   try {
-    await Keychain.resetGenericPassword({ service: `${KEYCHAIN_SERVICE}.${serverId}` });
+    await Keychain.resetGenericPassword({
+      service: `${KEYCHAIN_SERVICE}.${serverId}`,
+    });
     logger.log('[RemoteServerManager] API key removed for server:', serverId);
   } catch (error) {
     logger.error('[RemoteServerManager] Failed to remove API key:', error);
@@ -59,16 +63,27 @@ export async function removeApiKeyImpl(serverId: string): Promise<void> {
 
 // The pure capability detectors live in utils/remoteCapabilityDetect so the store layer can import
 // them without depending on this (store-touching) service — that was a cycle. Re-exported here.
-export { detectVisionCapability, detectToolCallingCapability } from '../utils/remoteCapabilityDetect';
+export { detectVisionCapability } from '../utils/remoteCapabilityDetect';
 
 // ---------------------------------------------------------------------------
 // Provider creation
 // ---------------------------------------------------------------------------
 
-export async function createProviderForServerImpl(server: RemoteServer): Promise<void> {
+export async function createProviderForServerImpl(
+  server: RemoteServer,
+): Promise<void> {
   const apiKey = await getApiKeyImpl(server.id);
-  logger.log('[RemoteServerManager] createProvider:', server.name, '| endpoint:', server.endpoint, '| hasApiKey:', !!apiKey);
-  const provider = createOpenAIProvider(server.id, server.endpoint, { apiKey: apiKey || undefined });
+  logger.log(
+    '[RemoteServerManager] createProvider:',
+    server.name,
+    '| endpoint:',
+    server.endpoint,
+    '| hasApiKey:',
+    !!apiKey,
+  );
+  const provider = createOpenAIProvider(server.id, server.endpoint, {
+    apiKey: apiKey || undefined,
+  });
   providerRegistry.registerProvider(server.id, provider);
 }
 
@@ -81,7 +96,10 @@ export async function setActiveRemoteTextModelImpl(
   modelId: string,
 ): Promise<void> {
   const store = useRemoteServerStore.getState();
-  logger.log('[RemoteServerManager] setActiveRemoteTextModel called:', { serverId, modelId });
+  logger.log('[RemoteServerManager] setActiveRemoteTextModel called:', {
+    serverId,
+    modelId,
+  });
 
   store.setActiveServerId(serverId);
   store.setActiveRemoteTextModelId(modelId);
@@ -90,7 +108,11 @@ export async function setActiveRemoteTextModelImpl(
   if (!provider) {
     const server = store.getServerById(serverId);
     if (server) {
-      logger.log('[RemoteServerManager] Creating provider for server:', serverId, server.endpoint);
+      logger.log(
+        '[RemoteServerManager] Creating provider for server:',
+        serverId,
+        server.endpoint,
+      );
       await createProviderForServerImpl(server);
       provider = providerRegistry.getProvider(serverId);
     }
@@ -107,15 +129,34 @@ export async function setActiveRemoteTextModelImpl(
         supportsThinking: discoveredModel.capabilities.supportsThinking,
         acceptsThinkingKwarg: discoveredModel.capabilities.acceptsThinkingKwarg,
       });
-      logger.log('[RemoteServerManager] Applied discovered capabilities for', modelId, '— supportsVision:', discoveredModel.capabilities.supportsVision, 'supportsThinking:', discoveredModel.capabilities.supportsThinking, 'acceptsThinkingKwarg:', discoveredModel.capabilities.acceptsThinkingKwarg);
+      logger.log(
+        '[RemoteServerManager] Applied discovered capabilities for',
+        modelId,
+        '— supportsVision:',
+        discoveredModel.capabilities.supportsVision,
+        'supportsThinking:',
+        discoveredModel.capabilities.supportsThinking,
+        'acceptsThinkingKwarg:',
+        discoveredModel.capabilities.acceptsThinkingKwarg,
+      );
     }
     providerRegistry.setActiveProvider(serverId);
-    logger.log('[RemoteServerManager] Provider ready:', await provider.isReady());
+    logger.log(
+      '[RemoteServerManager] Provider ready:',
+      await provider.isReady(),
+    );
   } else {
-    logger.warn('[RemoteServerManager] Could not create provider for server:', serverId);
+    logger.warn(
+      '[RemoteServerManager] Could not create provider for server:',
+      serverId,
+    );
   }
 
-  logger.log('[RemoteServerManager] Active remote text model set:', serverId, modelId);
+  logger.log(
+    '[RemoteServerManager] Active remote text model set:',
+    serverId,
+    modelId,
+  );
 }
 
 export async function setActiveRemoteImageModelImpl(
@@ -130,7 +171,10 @@ export async function setActiveRemoteImageModelImpl(
   if (!provider) {
     const server = store.getServerById(serverId);
     if (server) {
-      logger.log('[RemoteServerManager] Creating provider for server:', serverId);
+      logger.log(
+        '[RemoteServerManager] Creating provider for server:',
+        serverId,
+      );
       await createProviderForServerImpl(server);
       provider = providerRegistry.getProvider(serverId);
     }
@@ -139,10 +183,17 @@ export async function setActiveRemoteImageModelImpl(
   if (provider) {
     await provider.loadModel(modelId);
   } else {
-    logger.warn('[RemoteServerManager] Could not create provider for server:', serverId);
+    logger.warn(
+      '[RemoteServerManager] Could not create provider for server:',
+      serverId,
+    );
   }
 
-  logger.log('[RemoteServerManager] Active remote image model set:', serverId, modelId);
+  logger.log(
+    '[RemoteServerManager] Active remote image model set:',
+    serverId,
+    modelId,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -154,7 +205,11 @@ export async function initializeProvidersImpl(
 ): Promise<void> {
   const servers = getServers();
   const store = useRemoteServerStore.getState();
-  logger.log('[RemoteServerManager] Initializing providers for', servers.length, 'servers');
+  logger.log(
+    '[RemoteServerManager] Initializing providers for',
+    servers.length,
+    'servers',
+  );
 
   for (const server of servers) {
     try {
@@ -163,12 +218,25 @@ export async function initializeProvidersImpl(
       // (persisted data may be stale if models were added/removed while offline)
       try {
         const models = await store.discoverModels(server.id);
-        logger.log('[RemoteServerManager] Discovered', models.length, 'models for', server.name);
+        logger.log(
+          '[RemoteServerManager] Discovered',
+          models.length,
+          'models for',
+          server.name,
+        );
       } catch (discoverError) {
-        logger.warn('[RemoteServerManager] Failed to discover models for', server.name, discoverError);
+        logger.warn(
+          '[RemoteServerManager] Failed to discover models for',
+          server.name,
+          discoverError,
+        );
       }
     } catch (error) {
-      logger.error('[RemoteServerManager] Failed to initialize provider for', server.name, error);
+      logger.error(
+        '[RemoteServerManager] Failed to initialize provider for',
+        server.name,
+        error,
+      );
     }
   }
 
@@ -180,13 +248,25 @@ export async function initializeProvidersImpl(
   const activeRemoteTextModelId = currentStore.activeRemoteTextModelId;
 
   if (activeServerId && activeRemoteTextModelId) {
-    logger.log('[RemoteServerManager] Restoring active remote model:', activeRemoteTextModelId, 'on server:', activeServerId);
+    logger.log(
+      '[RemoteServerManager] Restoring active remote model:',
+      activeRemoteTextModelId,
+      'on server:',
+      activeServerId,
+    );
     try {
-      await setActiveRemoteTextModelImpl(activeServerId, activeRemoteTextModelId);
-      logger.log('[RemoteServerManager] Successfully restored remote model selection');
+      await setActiveRemoteTextModelImpl(
+        activeServerId,
+        activeRemoteTextModelId,
+      );
+      logger.log(
+        '[RemoteServerManager] Successfully restored remote model selection',
+      );
     } catch (error) {
-      logger.error('[RemoteServerManager] Failed to restore remote model selection:', error);
+      logger.error(
+        '[RemoteServerManager] Failed to restore remote model selection:',
+        error,
+      );
     }
   }
 }
-

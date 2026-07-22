@@ -31,23 +31,41 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
   useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
+  useFocusEffect: () => {},
+  useIsFocused: () => true,
 }));
 
 describe('realtime hold-to-talk dictation recovers when whisper load is blocked (free→retry) — device', () => {
   it('frees the generation model, loads whisper, and the transcript lands in the composer', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true });
+    const h = await setupChatScreen({
+      engine: 'llama',
+      platform: 'android',
+      whisper: true,
+    });
     const { useWhisperStore } = require('../../../src/stores/whisperStore');
-    const { modelResidencyManager } = require('../../../src/services/modelResidency');
+    const {
+      modelResidencyManager,
+    } = require('../../../src/services/modelResidency');
 
     // DOWNLOAD-ONLY whisper: the completed-download boundary artifact (file on disk + downloadedModelId) with
     // NO resident load — so the realtime turn's first load attempt runs for real (and blocks on the tight budget).
     const docs = h.boundary.fs!.DocumentDirectoryPath;
-    h.boundary.fs!.seedFile(`${docs}/whisper-models/ggml-tiny.en.bin`, 75 * 1024 * 1024);
+    h.boundary.fs!.seedFile(
+      `${docs}/whisper-models/ggml-tiny.en.bin`,
+      75 * 1024 * 1024,
+    );
     await useWhisperStore.getState().refreshPresentModels();
-    useWhisperStore.setState({ downloadedModelId: 'tiny.en', isModelLoaded: false });
+    useWhisperStore.setState({
+      downloadedModelId: 'tiny.en',
+      isModelLoaded: false,
+    });
 
     // Pin the budget tight: the resident text model fills it, so the whisper sidecar cannot co-reside →
     // makeRoomFor returns fits=false → whisperStore.loadModel returns 'blocked'.
@@ -57,25 +75,46 @@ describe('realtime hold-to-talk dictation recovers when whisper load is blocked 
     const view = h.view!;
 
     // Precondition (anti-false-green): the composer is empty.
-    const inputBefore = await h.rtl.waitFor(() => view.getByTestId('chat-input'));
+    const inputBefore = await h.rtl.waitFor(() =>
+      view.getByTestId('chat-input'),
+    );
     expect(inputBefore.props.value ?? '').toBe('');
 
     // REAL chat-mode hold-to-talk on a non-audio (llama) model → the whisper REALTIME path.
-    await h.tapMic();      // grant → onStartRecording → the whisper realtime dictation path
-    await h.settle(200);   // let the (blocked→free→retry) load resolve and the realtime session start
-    await h.releaseMic();  // release → onStopRecording (whisper path finalizes)
+    await h.tapMic(); // grant → onStartRecording → the whisper realtime dictation path
+    await h.settle(200); // let the (blocked→free→retry) load resolve and the realtime session start
+    await h.releaseMic(); // release → onStopRecording (whisper path finalizes)
+
+    // Release keeps a short trailing-capture window before it calls native stop.
+    // A native final event arrives only after that stop; waiting for the boundary
+    // to go idle keeps this journey faithful and leaves no timer behind at teardown.
+    await h.rtl.waitFor(
+      () => {
+        expect(h.boundary.whisper!.realtimeActive()).toBe(false);
+      },
+      { timeout: 4000 },
+    );
 
     // The realtime stream delivers the finished utterance (final event, isCapturing:false).
     await h.rtl.act(async () => {
-      h.boundary.whisper!.emitRealtime({ text: 'take a note', isCapturing: false });
+      h.boundary.whisper!.emitRealtime({
+        text: 'take a note',
+        isCapturing: false,
+      });
     });
     await h.settle(800); // MIN_TRANSCRIBING_TIME + the finalResult → onTranscript effect
 
     // THE FIX — dictation RECOVERED: the transcript is in the INPUT BOX.
     // RED before: the realtime path dead-ended on 'blocked' (startRealtimeTranscription threw
     // 'No Whisper model loaded') → the composer stayed empty.
-    await h.rtl.waitFor(() => {
-      expect(view.getByTestId('chat-input').props.value ?? '').toContain('take a note');
-    }, { timeout: 4000 });
+    await h.rtl.waitFor(
+      () => {
+        expect(view.getByTestId('chat-input').props.value ?? '').toContain(
+          'take a note',
+        );
+      },
+      { timeout: 4000 },
+    );
+    view.unmount();
   });
 });

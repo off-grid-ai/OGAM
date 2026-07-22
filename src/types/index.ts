@@ -1,3 +1,5 @@
+import type { FitTier } from '../services/memoryBudget';
+
 // Model source and credibility types
 export type ModelSource = 'lmstudio' | 'official' | 'verified-quantizer' | 'community';
 
@@ -22,6 +24,9 @@ export interface ModelInfo {
   modelType?: 'text' | 'vision' | 'code';
   paramCount?: number;
   minRamGB?: number;
+  /** Device-fit tier of this model's BEST (most-fitting) quant, for the browse fit chip. Set by the
+   *  models VM from memoryBudget.fitTier; undefined until the file sizes are known. */
+  fitTier?: FitTier;
 }
 
 export interface ModelFile {
@@ -185,6 +190,10 @@ export interface GenerationMeta {
   timeToFirstToken?: number;
   /** Token count (text generation only) */
   tokenCount?: number;
+  /** Embedded Multi-Token Prediction acceptance metrics (text generation only). */
+  mtpEnabled?: boolean;
+  draftTokens?: number;
+  draftTokensAccepted?: number;
   /** Model load/init time in seconds */
   modelLoadTimeSeconds?: number;
   /** Image generation steps */

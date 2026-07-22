@@ -12,6 +12,7 @@
  */
 import { Platform } from 'react-native';
 import { modelManager } from '../../modelManager';
+import { activeModelService } from '../../activeModelService';
 import { backgroundDownloadService } from '../../backgroundDownloadService';
 import { huggingFaceService } from '../../huggingface';
 import { hardwareService } from '../../hardware';
@@ -147,6 +148,11 @@ export const textProvider: DownloadProvider = {
     // deleteModel and removeDownloadedModel receive the right identity.
     const key = keyOf(id);
     const entry = findEntry(key);
+    const storeBeforeDelete = useAppStore.getState();
+    const wasSelected = storeBeforeDelete.activeModelId === key;
+    const wasResident = activeModelService.getLoadedModelIds().textModelId === key;
+    if (wasResident) await activeModelService.unloadTextModel()
+      .catch(err => logger.log(`[DL-SM] ${id} remove: resident unload failed err=${msg(err)}`));
     if (entry) {
       await modelManager.cancelBackgroundDownload(entry.downloadId)
         .catch(err => logger.log(`[DL-SM] ${id} remove: native cancel failed err=${msg(err)}`));
@@ -160,6 +166,10 @@ export const textProvider: DownloadProvider = {
     await modelManager.deleteModel(key)
       .catch(err => logger.log(`[DL-SM] ${id} remove: delete failed err=${msg(err)}`));
     useAppStore.getState().removeDownloadedModel(key);
+    if (wasSelected || wasResident) {
+      const fallback = useAppStore.getState().downloadedModels[0];
+      if (fallback) activeModelService.selectTextModel(fallback.id);
+    }
   },
 
   subscribe(onChange: () => void): () => void {

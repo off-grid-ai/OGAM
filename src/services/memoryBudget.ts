@@ -35,10 +35,10 @@
  *    safeguard": we still keep the OS + app baseline alive rather than guaranteeing
  *    an instant jetsam.
  *
- * "Load Anyway" (the per-load override that forces past the fit gate) is a separate,
- * ALWAYS-available escape hatch — not gated by this policy. Aggressive mode changes
- * the default budget so fewer loads need forcing; the override remains the explicit,
- * per-load, user-confirmed way to push past whatever budget is in effect.
+ * "Load Anyway" (the per-load override that forces past the conservative fit gate)
+ * is separate from this policy. It remains available for cautious refusals, but it
+ * cannot cross the hard survival floor where starting the native load would put the
+ * process at immediate risk of an uncatchable OS kill.
  */
 import { Platform } from 'react-native';
 
@@ -50,7 +50,8 @@ import { Platform } from 'react-native';
  *    lowest-priority/LRU when a new model doesn't fit.
  *  - 'aggressive': balanced co-residency but commits a larger share of RAM (smaller
  *    OS reserve) so bigger models load before the gate refuses.
- * (A per-load "Load Anyway" override is separate and works in every mode.)
+ * (A per-load "Load Anyway" override is separate and works in every mode, subject
+ * to the hard survival floor.)
  */
 export type LoadPolicy = 'conservative' | 'balanced' | 'aggressive';
 
@@ -58,10 +59,14 @@ export type LoadPolicy = 'conservative' | 'balanced' | 'aggressive';
 export const MEMORY_RESERVE_MB = 1500;
 /** Aggressive mode still keeps a floor alive (lenient, not absent). */
 export const AGGRESSIVE_RESERVE_MB = 800;
-// (Removed the override survival-floor cluster — OVERRIDE_SURVIVAL_FLOOR_MB /
-// ANDROID_OVERRIDE_SURVIVAL_FLOOR_MB / overrideSurvivalFloorMB.) It was defined but never wired to
-// any caller, so it enforced nothing, and the product decision is that "Load Anyway" gives the user
-// FULL control — they accept the OOM risk, the app does not impose a hard floor they can't cross.
+/** Absolute live-RAM floor retained even after the user chooses Load Anyway.
+ *
+ * This is deliberately smaller than the normal 1.5GB reserve: an override may cross
+ * conservative policy, but a native load may not start when the post-eviction RAM
+ * probe says the process is already in the catastrophic zone. 700MB also preserves
+ * the verified 2GB-at-3.1GB-free iOS override (about 1.1GB remains after the load).
+ */
+const OVERRIDE_SURVIVAL_FLOOR_MB = 700;
 
 type Plat = 'ios' | 'android' | string;
 
@@ -94,6 +99,60 @@ export function effectiveAvailableMB(
     : realAvailMB;
 }
 
+export interface OverrideSurvivalCheck {
+  fits: boolean;
+  realAvailableMB: number;
+  effectiveAvailableMB: number;
+  postLoadAvailableMB: number;
+  floorMB: number;
+}
+
+/**
+ * Hard physics check for a user-approved override, evaluated from a fresh RAM probe
+ * after real evictions finish.
+ *
+ * Android may reclaim background-app pages for a foreground load, so an ordinary
+ * dirty model is charged against the reclaim-aware physical allowance. The raw RAM
+ * reading still has an absolute floor: credited capacity must never hide that the
+ * device is already critically low. iOS receives no reclaim credit. Clean mmap
+ * weights are pageable, so only their live-RAM floor is enforced here; sizing their
+ * dirty KV/compute working set remains the engine estimator's responsibility.
+ */
+export function checkOverrideSurvival(args: {
+  realAvailableMB: number;
+  totalRamMB: number;
+  incomingDirtyMB: number;
+  platform?: Plat;
+  policy?: LoadPolicy;
+}): OverrideSurvivalCheck {
+  const {
+    realAvailableMB,
+    totalRamMB,
+    incomingDirtyMB,
+    platform = Platform.OS,
+    policy = 'balanced',
+  } = args;
+  // Aggressive's larger ceiling is appropriate for clean/pageable weights, but an
+  // override may not apply it to dirty GPU/anonymous pages. Keep dirty overrides
+  // within the balanced physical allowance; otherwise a 9GB dirty allocation on a
+  // 12GB Android device is admitted despite having no physical backing.
+  const survivalPolicy = incomingDirtyMB > 0 ? 'balanced' : policy;
+  const effectiveMB = effectiveAvailableMB(realAvailableMB, totalRamMB, {
+    platform,
+    policy: survivalPolicy,
+  });
+  const postLoadAvailableMB = effectiveMB - incomingDirtyMB;
+  return {
+    fits:
+      realAvailableMB >= OVERRIDE_SURVIVAL_FLOOR_MB &&
+      postLoadAvailableMB >= OVERRIDE_SURVIVAL_FLOOR_MB,
+    realAvailableMB,
+    effectiveAvailableMB: effectiveMB,
+    postLoadAvailableMB,
+    floorMB: OVERRIDE_SURVIVAL_FLOOR_MB,
+  };
+}
+
 /** OS/app reserve (MB) that is never committed to models, by policy. */
 export function memoryReserveMB(policy: LoadPolicy = 'balanced'): number {
   return policy === 'aggressive' ? AGGRESSIVE_RESERVE_MB : MEMORY_RESERVE_MB;
@@ -109,20 +168,23 @@ export function modelBudgetFraction(
     // Lenient: use more of RAM. Low-RAM tiers stay comparatively cautious (a 60%
     // slice of 4GB is already close to what the OS will tolerate), high-RAM/entitled
     // tiers push near the physical ceiling so a 21GB model fits a 24GB phone.
-    if (totalRamGB <= 4) return 0.60;
+    if (totalRamGB <= 4) return 0.6;
     if (totalRamGB <= 8) return 0.75;
     return platform === 'ios' ? 0.92 : 0.88;
   }
-  if (totalRamGB <= 4) return 0.50; // ~2GB on 4GB — safe; dynamic guard tightens under pressure
-  if (totalRamGB <= 8) return 0.60; // 6-8GB
-  return platform === 'ios' ? 0.78 : 0.70; // 12GB+: iOS holds the increased-memory entitlement
+  if (totalRamGB <= 4) return 0.5; // ~2GB on 4GB — safe; dynamic guard tightens under pressure
+  if (totalRamGB <= 8) return 0.6; // 6-8GB
+  return platform === 'ios' ? 0.78 : 0.7; // 12GB+: iOS holds the increased-memory entitlement
 }
 
 /** Fraction at which we WARN (load allowed, perf may suffer). Below the budget. */
-function modelWarningFraction(totalRamGB: number, platform: Plat = Platform.OS): number {
-  if (totalRamGB <= 4) return 0.40;
-  if (totalRamGB <= 8) return 0.50;
-  return platform === 'ios' ? 0.66 : 0.60;
+function modelWarningFraction(
+  totalRamGB: number,
+  platform: Plat = Platform.OS,
+): number {
+  if (totalRamGB <= 4) return 0.4;
+  if (totalRamGB <= 8) return 0.5;
+  return platform === 'ios' ? 0.66 : 0.6;
 }
 
 /** Hard budget in MB: the smaller of the fraction-of-RAM and (RAM minus reserve). */
@@ -132,13 +194,17 @@ export function modelMemoryBudgetMB(
   policy: LoadPolicy = 'balanced',
 ): number {
   const totalRamGB = totalRamMB / 1024;
-  const byFraction = totalRamMB * modelBudgetFraction(totalRamGB, platform, policy);
+  const byFraction =
+    totalRamMB * modelBudgetFraction(totalRamGB, platform, policy);
   const byReserve = totalRamMB - memoryReserveMB(policy);
   return Math.max(0, Math.min(byFraction, byReserve));
 }
 
 /** Warning threshold in MB (always ≤ the hard budget). */
-export function modelWarningThresholdMB(totalRamMB: number, platform: Plat = Platform.OS): number {
+export function modelWarningThresholdMB(
+  totalRamMB: number,
+  platform: Plat = Platform.OS,
+): number {
   const totalRamGB = totalRamMB / 1024;
   const byFraction = totalRamMB * modelWarningFraction(totalRamGB, platform);
   return Math.min(byFraction, modelMemoryBudgetMB(totalRamMB, platform));
@@ -158,6 +224,58 @@ export function fileExceedsBudget(sizeBytes: number, ramGB: number): boolean {
   return sizeBytes / BYTES_PER_GB >= ramGB * modelBudgetFraction(ramGB);
 }
 
+export type FitTier = 'easy' | 'fits' | 'tight' | 'wontFit';
+
+/**
+ * A device-fit TIER for a model file — a short chip label, NOT the load gate. The load path can
+ * attempt anything up to the aggressive ceiling (Android reclaim credit + Load Anyway), so browse
+ * no longer HIDES loadable models or says "Too large"; it shows how snug the fit is, and reserves an
+ * honest "Won't fit" only for models past even the aggressive ceiling (e.g. a 30B on a phone).
+ * Two thresholds, both from the SAME owned budgets — no new magic numbers:
+ *   soft = ramGB * modelBudgetFraction(balanced)   (recommended stays within this — see fileExceedsBudget)
+ *   ceil = ramGB * modelBudgetFraction(aggressive) (the most Load-Anyway/aggressive can hold)
+ *   size < 0.6*soft → 'easy' · < soft → 'fits' · < ceil → 'tight' · else → 'wontFit'
+ * Zero-IO; callers pass ramGB + platform from the device boundary (hardwareService).
+ */
+export function fitTier(
+  sizeBytes: number,
+  ramGB: number,
+  platform: Plat = Platform.OS,
+): FitTier {
+  const sizeGB = sizeBytes / BYTES_PER_GB;
+  const soft = ramGB * modelBudgetFraction(ramGB, platform, 'balanced');
+  const ceil = ramGB * modelBudgetFraction(ramGB, platform, 'aggressive');
+  if (sizeGB < 0.6 * soft) return 'easy';
+  if (sizeGB < soft) return 'fits';
+  if (sizeGB < ceil) return 'tight';
+  return 'wontFit';
+}
+
+/** Loadable on THIS device: the tier is not 'wontFit' — i.e. within the aggressive ceiling, reachable
+ *  via reclaim credit + Load Anyway. The ONE predicate the browse filter and the detail file list share,
+ *  so "what counts as loadable" is defined once here, not copied inline per caller. */
+export function isLoadableOnDevice(
+  sizeBytes: number,
+  ramGB: number,
+  platform: Plat = Platform.OS,
+): boolean {
+  return fitTier(sizeBytes, ramGB, platform) !== 'wontFit';
+}
+
+/** The chip label for a fit tier. One source for the copy so every surface reads the same words. */
+export function fitTierLabel(tier: FitTier): string {
+  switch (tier) {
+    case 'easy':
+      return 'Easy';
+    case 'fits':
+      return 'Fits';
+    case 'tight':
+      return 'Tight';
+    case 'wontFit':
+      return "Won't fit";
+  }
+}
+
 /**
  * Block until a just-released native model's memory is reclaimed (process footprint drops by
  * ~minDropMB) or a bounded timeout — so the NEXT model load never allocates on top of the outgoing
@@ -169,12 +287,21 @@ export function fileExceedsBudget(sizeBytes: number, ramGB: number): boolean {
  */
 export async function awaitMemoryReclaim(
   getProcessMemory: () => Promise<{ footprintMB: number } | null>,
-  opts: { timeoutMs?: number; minDropMB?: number; intervalMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+  opts: {
+    timeoutMs?: number;
+    minDropMB?: number;
+    intervalMs?: number;
+    sleep?: (ms: number) => Promise<void>;
+  } = {},
 ): Promise<void> {
   const { timeoutMs = 2500, minDropMB = 200, intervalMs = 120 } = opts;
-  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const sleep =
+    opts.sleep ?? ((ms: number) => new Promise<void>(r => setTimeout(r, ms)));
   const before = await getProcessMemory();
-  if (!before) { await sleep(250); return; }
+  if (!before) {
+    await sleep(250);
+    return;
+  }
   let waited = 0;
   while (waited < timeoutMs) {
     await sleep(intervalMs);

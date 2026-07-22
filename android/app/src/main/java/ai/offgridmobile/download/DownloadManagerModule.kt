@@ -9,6 +9,7 @@ import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import android.os.Environment
+import android.util.Log
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.lifecycle.Observer
@@ -162,7 +163,7 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
                     if (download != null) {
                         downloadDao.updateStatus(downloadId, DownloadStatus.CANCELLED, DownloadReason.USER_CANCELLED)
                         val file = File(download.destination)
-                        if (file.exists()) file.delete()
+                        if (file.exists() && !file.delete()) Log.w(NAME, "Failed to delete cancelled download file: ${file.path}")
                     }
                 }
                 WorkerDownload.cancel(reactApplicationContext, downloadId)

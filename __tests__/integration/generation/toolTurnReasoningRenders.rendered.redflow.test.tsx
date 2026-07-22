@@ -1,5 +1,5 @@
 /**
- * DEVICE 2026-07-14 (live log 21:11) — with a tool enabled and thinking ON, gemma-4 reasoned and llama
+ * P0 #180 / DEVICE 2026-07-14 (live log 21:11) — with a tool enabled and thinking ON, gemma-4 reasoned and llama
  * returned it cleanly separated:
  *   content:           "Hello! How can I help you today?"
  *   reasoning_content: "The user said \"Hi\"… friendly manner"
@@ -32,10 +32,14 @@ describe('tool turn reasoning renders (rendered) — device log 21:11', () => {
   it('shows gemma reasoning in the thinking block, with NO <|channel> leak into the answer', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
     h.enableToolViaUI('calculator');                              // real toggle → the turn runs the TOOL loop
-    h.useAppStore.getState().updateSettings({ thinkingEnabled: true });
     h.render();
     const { rtl } = h;
     const view = h.view!;
+
+    // Enable Thinking through the real composer control. The capability comes from the
+    // GGUF chat template exposed by the llama boundary, so this is the same path a user takes.
+    rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('quick-settings-button')));
+    rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('quick-thinking-toggle')));
 
     // Device-shaped: the model reasons (reasoning_content) then answers (content); raw markers only in text.
     await h.send('Hi', { text: ANSWER, reasoning: REASONING });

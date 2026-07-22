@@ -13,7 +13,9 @@ jest.mock('react-native-fs', () => ({
   readFile: jest.fn(() => Promise.resolve('')),
   writeFile: jest.fn(() => Promise.resolve()),
 }));
-jest.mock('react-native-zip-archive', () => ({ unzip: jest.fn(() => Promise.resolve()) }));
+jest.mock('react-native-zip-archive', () => ({
+  unzip: jest.fn(() => Promise.resolve()),
+}));
 jest.mock('../../../../src/services/modelManager/storage', () => ({
   buildDownloadedModel: jest.fn(async ({ resolvedLocalPath }) => ({
     filePath: resolvedLocalPath,
@@ -33,6 +35,11 @@ jest.mock('../../../../src/services/modelManager/copyFile', () => ({
 }));
 jest.mock('../../../../src/utils/coreMLModelUtils', () => ({
   resolveCoreMLModelDir: jest.fn(async (p: string) => `${p}/coreml-resolved`),
+}));
+// Completeness gate is a collaborator here (its own behavior is covered by imageModelIntegrity
+// unit tests + the reconcile G7 integration test); stub it so these tests focus on reconcile flow.
+jest.mock('../../../../src/utils/imageModelIntegrity', () => ({
+  ensureImageExtractionComplete: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('../../../../src/utils/logger', () => ({
   __esModule: true,
@@ -55,10 +62,26 @@ import { copyFileWithProgress } from '../../../../src/services/modelManager/copy
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
 
 function dir(name: string, path = `/img/${name}`) {
-  return { name, path, isFile: () => false, isDirectory: () => true, size: 0 } as any;
+  return {
+    name,
+    path,
+    isFile: () => false,
+    isDirectory: () => true,
+    size: 0,
+  } as any;
 }
-function file(name: string, path = `/img/${name}`, size: number | string = 100) {
-  return { name, path, isFile: () => true, isDirectory: () => false, size } as any;
+function file(
+  name: string,
+  path = `/img/${name}`,
+  size: number | string = 100,
+) {
+  return {
+    name,
+    path,
+    isFile: () => true,
+    isDirectory: () => false,
+    size,
+  } as any;
 }
 
 beforeEach(() => jest.clearAllMocks());
@@ -91,10 +114,16 @@ describe('scanForUntrackedImageModels (getDirSize recursion)', () => {
 
   it('skips registered paths and zero-size directories', async () => {
     const opts = base();
-    opts.getImageModels = jest.fn(async () => [{ modelPath: '/img/known' } as any]);
+    opts.getImageModels = jest.fn(async () => [
+      { modelPath: '/img/known' } as any,
+    ]);
     mockedRNFS.exists.mockResolvedValueOnce(true);
     mockedRNFS.readDir
-      .mockResolvedValueOnce([dir('known', '/img/known'), dir('empty', '/img/empty'), file('loose.txt')])
+      .mockResolvedValueOnce([
+        dir('known', '/img/known'),
+        dir('empty', '/img/empty'),
+        file('loose.txt'),
+      ])
       .mockResolvedValueOnce([]); // getDirSize of 'empty' -> 0
     const out = await scanForUntrackedImageModels(opts);
     expect(out).toEqual([]);
@@ -104,13 +133,17 @@ describe('scanForUntrackedImageModels (getDirSize recursion)', () => {
     const opts = base();
     mockedRNFS.exists.mockResolvedValueOnce(true);
     mockedRNFS.readDir
-      .mockResolvedValueOnce([dir('Stable_Diffusion.zip', '/img/Stable_Diffusion.zip')]) // top scan
+      .mockResolvedValueOnce([
+        dir('Stable_Diffusion.zip', '/img/Stable_Diffusion.zip'),
+      ]) // top scan
       // getDirSize on the model dir: one file + one nested directory (exercises recursion line 26-27)
       .mockResolvedValueOnce([
         file('weights.bin', '/img/Stable_Diffusion.zip/weights.bin', 1000),
         dir('nested', '/img/Stable_Diffusion.zip/nested'),
       ])
-      .mockResolvedValueOnce([file('extra.bin', '/img/Stable_Diffusion.zip/nested/extra.bin', '500')]);
+      .mockResolvedValueOnce([
+        file('extra.bin', '/img/Stable_Diffusion.zip/nested/extra.bin', '500'),
+      ]);
     const out = await scanForUntrackedImageModels(opts);
     expect(out).toHaveLength(1);
     expect(out[0].size).toBe(1500); // 1000 + nested 500
@@ -133,11 +166,16 @@ describe('scanForUntrackedImageModels (getDirSize recursion)', () => {
 describe('cleanupMMProjEntries', () => {
   it('links a discovered mmproj file to a vision model lacking a stored path', async () => {
     const model = {
-      name: 'Gemma VL', fileName: 'gemma-vl-Q4_K_M.gguf', engine: 'llama', mmProjPath: undefined,
+      name: 'Gemma VL',
+      fileName: 'gemma-vl-Q4_K_M.gguf',
+      engine: 'llama',
+      mmProjPath: undefined,
     };
     (storage.loadDownloadedModels as jest.Mock).mockResolvedValueOnce([model]);
     mockedRNFS.exists.mockResolvedValueOnce(true); // dir exists
-    mockedRNFS.readDir.mockResolvedValueOnce([file('gemma-vl-Q4_K_M-mmproj.gguf')]);
+    mockedRNFS.readDir.mockResolvedValueOnce([
+      file('gemma-vl-Q4_K_M-mmproj.gguf'),
+    ]);
 
     const removed = await cleanupMMProjEntries('/models');
 
@@ -188,11 +226,15 @@ describe('reconcileFinishedImageDownloads', () => {
 
   it('skips non-directories, registered ids, and active ids', async () => {
     const opts = base();
-    opts.getImageModels = jest.fn(async () => [{ id: 'reg', modelPath: '/elsewhere' } as any]);
+    opts.getImageModels = jest.fn(async () => [
+      { id: 'reg', modelPath: '/elsewhere' } as any,
+    ]);
     opts.activeModelIds = new Set(['busy']);
     mockedRNFS.exists.mockResolvedValue(true);
     mockedRNFS.readDir.mockResolvedValueOnce([
-      file('loose.bin'), dir('reg'), dir('busy'),
+      file('loose.bin'),
+      dir('reg'),
+      dir('busy'),
     ]);
     const out = await reconcileFinishedImageDownloads(opts);
     expect(out).toEqual([]);
@@ -202,12 +244,22 @@ describe('reconcileFinishedImageDownloads', () => {
   it('migrates a legacy recovered_ entry and resolves coreml model dir', async () => {
     const opts = base();
     opts.getImageModels = jest.fn(async () => [
-      { id: 'recovered_old_123', modelPath: '/img/coreml_model', name: 'Legacy', description: 'd', downloadedAt: 't', style: 's', attentionVariant: 'a' } as any,
+      {
+        id: 'recovered_old_123',
+        modelPath: '/img/coreml_model',
+        name: 'Legacy',
+        description: 'd',
+        downloadedAt: 't',
+        style: 's',
+        attentionVariant: 'a',
+      } as any,
     ]);
     mockedRNFS.exists.mockResolvedValue(true);
     mockedRNFS.readDir
       .mockResolvedValueOnce([dir('coreml_model', '/img/coreml_model')]) // top-level scan
-      .mockResolvedValueOnce([file('weights.bin', '/img/coreml_model/weights.bin', 2048)]); // getDirSize
+      .mockResolvedValueOnce([
+        file('weights.bin', '/img/coreml_model/weights.bin', 2048),
+      ]); // getDirSize
     const out = await reconcileFinishedImageDownloads(opts);
     expect(out).toHaveLength(1);
     expect(out[0].id).toBe('coreml_model');
@@ -220,7 +272,13 @@ describe('reconcileFinishedImageDownloads', () => {
   it('legacy migration is non-fatal when writeFile rejects synchronously', async () => {
     const opts = base();
     opts.getImageModels = jest.fn(async () => [
-      { id: 'recovered_x_1', modelPath: '/img/x', name: '', description: '', downloadedAt: '' } as any,
+      {
+        id: 'recovered_x_1',
+        modelPath: '/img/x',
+        name: '',
+        description: '',
+        downloadedAt: '',
+      } as any,
     ]);
     mockedRNFS.exists.mockResolvedValue(true);
     mockedRNFS.readDir.mockResolvedValueOnce([dir('x', '/img/x')]);
@@ -251,7 +309,9 @@ describe('reconcileFinishedImageDownloads', () => {
 
   it('skips a directory referenced by a properly registered model path', async () => {
     const opts = base();
-    opts.getImageModels = jest.fn(async () => [{ id: 'other', modelPath: '/img/dir' } as any]);
+    opts.getImageModels = jest.fn(async () => [
+      { id: 'other', modelPath: '/img/dir' } as any,
+    ]);
     mockedRNFS.exists.mockResolvedValue(true);
     mockedRNFS.readDir.mockResolvedValueOnce([dir('dir', '/img/dir')]);
     const out = await reconcileFinishedImageDownloads(opts);
@@ -316,7 +376,9 @@ describe('reconcileFinishedImageDownloads', () => {
 
 describe('scanForUntrackedTextModels', () => {
   it('outer catch returns [] when getModels throws', async () => {
-    const out = await scanForUntrackedTextModels('/m', async () => { throw new Error('boom'); });
+    const out = await scanForUntrackedTextModels('/m', async () => {
+      throw new Error('boom');
+    });
     expect(out).toEqual([]);
   });
 
@@ -345,7 +407,11 @@ describe('scanForUntrackedTextModels', () => {
     // for files at or above the 100MB minimum — use a large size.
     mockedRNFS.exists.mockResolvedValueOnce(true);
     mockedRNFS.readDir.mockResolvedValueOnce([
-      file('Qwen3-0.6B-Q4_K_M.gguf', '/m/Qwen3-0.6B-Q4_K_M.gguf', 200 * 1024 * 1024),
+      file(
+        'Qwen3-0.6B-Q4_K_M.gguf',
+        '/m/Qwen3-0.6B-Q4_K_M.gguf',
+        200 * 1024 * 1024,
+      ),
     ]);
     const out = await scanForUntrackedTextModels('/m', async () => []);
     expect(out).toHaveLength(1);
@@ -370,31 +436,40 @@ describe('scanForUntrackedTextModels', () => {
     mockedRNFS.readDir.mockResolvedValueOnce([
       file('Qwen3-0.6B-Q4_K_M.gguf', '/m/dup.gguf', 5_000_000),
     ]);
-    const out = await scanForUntrackedTextModels('/m', async () => [{ filePath: '/m/dup.gguf' } as any]);
+    const out = await scanForUntrackedTextModels('/m', async () => [
+      { filePath: '/m/dup.gguf' } as any,
+    ]);
     expect(out).toEqual([]);
   });
 });
 
 describe('importLocalModel', () => {
-  const baseOpts = () => ({ sourceUri: 'file:///tmp/a%20b.gguf', fileName: 'a b.gguf', modelsDir: '/models' });
+  const baseOpts = () => ({
+    sourceUri: 'file:///tmp/a%20b.gguf',
+    fileName: 'a b.gguf',
+    modelsDir: '/models',
+  });
 
   it('rejects unsupported extensions', async () => {
-    await expect(importLocalModel({ ...baseOpts(), fileName: 'model.bin' } as any))
-      .rejects.toThrow('Only .gguf and .litertlm files can be imported');
+    await expect(
+      importLocalModel({ ...baseOpts(), fileName: 'model.bin' } as any),
+    ).rejects.toThrow('Only .gguf and .litertlm files can be imported');
   });
 
   it('rejects when destination already exists', async () => {
     mockedRNFS.exists.mockResolvedValueOnce(true); // destExists
-    await expect(importLocalModel(baseOpts() as any))
-      .rejects.toThrow(/already exists/);
+    await expect(importLocalModel(baseOpts() as any)).rejects.toThrow(
+      /already exists/,
+    );
   });
 
   it('rejects when mmproj destination already exists', async () => {
     mockedRNFS.exists
       .mockResolvedValueOnce(false) // dest does not exist
       .mockResolvedValueOnce(true); // mmproj exists
-    await expect(importLocalModel({ ...baseOpts(), mmProjFileName: 'mmproj.gguf' } as any))
-      .rejects.toThrow('A file named "mmproj.gguf" already exists');
+    await expect(
+      importLocalModel({ ...baseOpts(), mmProjFileName: 'mmproj.gguf' } as any),
+    ).rejects.toThrow('A file named "mmproj.gguf" already exists');
   });
 
   it('imports a llama gguf with mmproj, decoding file:// uri and scaling progress', async () => {
@@ -404,6 +479,7 @@ describe('importLocalModel', () => {
     (mockedRNFS.stat as jest.Mock)
       .mockResolvedValueOnce({ size: 4_000_000 }) // main
       .mockResolvedValueOnce({ size: 800_000 }); // mmproj
+    mockedRNFS.read.mockResolvedValueOnce('GGUF');
     const onProgress = jest.fn();
     const result: any = await importLocalModel({
       ...baseOpts(),
@@ -418,9 +494,13 @@ describe('importLocalModel', () => {
     expect(result.isVisionModel).toBe(true);
     expect(copyFileWithProgress).toHaveBeenCalledTimes(2);
     // main copy scaled to 0.5 because mmproj present
-    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({ fraction: 0.5, fileName: 'a b.gguf' }));
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({ fraction: 0.5, fileName: 'a b.gguf' }),
+    );
     // mmproj copy scaled to 0.5..1
-    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({ fraction: 1, fileName: 'mm.gguf' }));
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({ fraction: 1, fileName: 'mm.gguf' }),
+    );
   });
 
   it('imports a litert model (no mmproj branch) and keeps content:// uri unchanged', async () => {
@@ -436,7 +516,11 @@ describe('importLocalModel', () => {
     expect(result.liteRTVision).toBe(true);
     expect(copyFileWithProgress).toHaveBeenCalledTimes(1);
     // content:// passed through unchanged
-    expect(copyFileWithProgress).toHaveBeenCalledWith('content://provider/x.litertlm', '/models/x.litertlm', expect.anything());
+    expect(copyFileWithProgress).toHaveBeenCalledWith(
+      'content://provider/x.litertlm',
+      '/models/x.litertlm',
+      expect.anything(),
+    );
     expect(storage.persistDownloadedModel).toHaveBeenCalled();
   });
 });

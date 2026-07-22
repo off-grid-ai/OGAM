@@ -19,6 +19,14 @@ function formatOptionalMeta(meta: NonNullable<Message['generationMeta']>, tps: n
     ['tps', tps != null && tps > 0 ? `${tps.toFixed(1)} tok/s` : undefined],
     ['ttft', m.timeToFirstToken != null && m.timeToFirstToken > 0 ? `TTFT ${m.timeToFirstToken.toFixed(2)}s` : undefined],
     ['tokens', m.tokenCount != null && m.tokenCount > 0 ? `${m.tokenCount} tokens` : undefined],
+    [
+      'mtp',
+      m.mtpEnabled
+        ? m.draftTokens != null
+          ? `MTP ${m.draftTokensAccepted ?? 0}/${m.draftTokens} accepted`
+          : 'MTP active'
+        : undefined,
+    ],
     ['steps', m.steps == null ? undefined : `${m.steps} steps`],
     ['cfg', m.guidanceScale == null ? undefined : `cfg ${m.guidanceScale}`],
     ['res', m.resolution],

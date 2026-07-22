@@ -3,7 +3,10 @@ import { llmService } from './llm';
 import { liteRTService } from './litert';
 import { providerRegistry } from './providers';
 import { isLiteRTModel, type DownloadedModel, type Message } from '../types';
-import { predictGgufCapabilities, type PredictedGgufCapabilities } from '../utils/ggufCapabilities';
+import {
+  predictGgufCapabilities,
+  type PredictedGgufCapabilities,
+} from '../utils/ggufCapabilities';
 import logger from '../utils/logger';
 
 /** Every text-generation engine, defined ONCE here so callers never hardcode the concrete set. */
@@ -19,7 +22,11 @@ export interface EngineCapabilities {
 
 /** Runtime inputs for deriveEngineCapabilities — passed explicitly so the rule is pure/testable. */
 /** A remote model's declared capabilities (single named type so callers don't index CapabilityInputs). */
-export type RemoteCaps = { supportsVision?: boolean; supportsToolCalling?: boolean; supportsThinking?: boolean } | null;
+export type RemoteCaps = {
+  supportsVision?: boolean;
+  supportsToolCalling?: boolean;
+  supportsThinking?: boolean;
+} | null;
 
 export interface CapabilityInputs {
   /** A remote (gateway) model is active — its declared capabilities win. */
@@ -32,7 +39,13 @@ export interface CapabilityInputs {
   /** Whether the LiteRT engine currently has a model resident (its tools/thinking need it loaded). */
   liteRTLoaded: boolean;
   /** The llama engine's live capabilities (only meaningful when loaded). */
-  llama: { loaded: boolean; vision: boolean; audio: boolean; tools: boolean; thinking: boolean };
+  llama: {
+    loaded: boolean;
+    vision: boolean;
+    audio: boolean;
+    tools: boolean;
+    thinking: boolean;
+  };
   /** Static PREDICTION for a llama model that is selected but not loaded (models load lazily on
    *  first send). Without it the Tools/Thinking affordances were hidden for a just-selected
    *  Gemma 4 until the first send loaded it (device 2026-07-13). Loaded live caps win. */
@@ -46,7 +59,9 @@ export interface CapabilityInputs {
  * tools/thinking only once the engine is loaded) → llama (all from the loaded engine) → none.
  * Pure and zero-IO so callers keep their own reactive inputs; adding an engine is a branch here (OCP).
  */
-export function deriveEngineCapabilities(i: CapabilityInputs): EngineCapabilities {
+export function deriveEngineCapabilities(
+  i: CapabilityInputs,
+): EngineCapabilities {
   if (i.isRemote) {
     return {
       vision: i.remoteCaps?.supportsVision ?? false,
@@ -67,10 +82,12 @@ export function deriveEngineCapabilities(i: CapabilityInputs): EngineCapabilitie
   // authoritative; before the lazy load, fall back to the static name/mmproj PREDICTION so a
   // just-selected model shows its real affordances (unknown names predict false — no change).
   return {
-    vision: i.llama.loaded ? i.llama.vision : (i.llamaPredicted?.vision ?? false),
+    vision: i.llama.loaded ? i.llama.vision : i.llamaPredicted?.vision ?? false,
     audio: i.llama.loaded ? i.llama.audio : false,
-    tools: i.llama.loaded ? i.llama.tools : (i.llamaPredicted?.tools ?? false),
-    thinking: i.llama.loaded ? i.llama.thinking : (i.llamaPredicted?.thinking ?? false),
+    tools: i.llama.loaded ? i.llama.tools : i.llamaPredicted?.tools ?? false,
+    thinking: i.llama.loaded
+      ? i.llama.thinking
+      : i.llamaPredicted?.thinking ?? false,
   };
 }
 
@@ -84,7 +101,10 @@ export async function unloadAllTextEngines(): Promise<void> {
     try {
       await engine.unloadModel();
     } catch (e) {
-      logger.warn('[engines] text engine unload during switch failed, continuing:', e);
+      logger.warn(
+        '[engines] text engine unload during switch failed, continuing:',
+        e,
+      );
     }
   }
 }
@@ -112,7 +132,9 @@ export async function stopAllTextEngines(): Promise<void> {
  */
 export function invalidateActiveConversation(): void {
   const engine = getActiveEngineService();
-  (engine as { invalidateConversation?: () => void } | null)?.invalidateConversation?.();
+  (
+    engine as { invalidateConversation?: () => void } | null
+  )?.invalidateConversation?.();
 }
 
 /**
@@ -121,11 +143,14 @@ export function invalidateActiveConversation(): void {
  * loaded (a different llama model resident is NOT ready). Callers pass their own model and use
  * this instead of branching on engine === 'litert' for readiness.
  */
-export function isModelReady(model: { engine?: string; filePath?: string } | null | undefined): boolean {
+export function isModelReady(
+  model: { engine?: string; filePath?: string } | null | undefined,
+): boolean {
   if (!model) return false;
   return model.engine === 'litert'
     ? liteRTService.isModelLoaded()
-    : llmService.isModelLoaded() && llmService.getLoadedModelPath() === model.filePath;
+    : llmService.isModelLoaded() &&
+        llmService.getLoadedModelPath() === model.filePath;
 }
 
 /**
@@ -134,20 +159,20 @@ export function isModelReady(model: { engine?: string; filePath?: string } | nul
  * the bundle (the liteRTVision flag). A missing/absent projector means the native completion would throw
  * "Multimodal support not enabled" — so the send must be blocked here, not sent and crashed (device 2026-07-14).
  */
-export function localModelAcceptsImages(model: DownloadedModel | null | undefined): boolean {
+export function localModelAcceptsImages(
+  model: DownloadedModel | null | undefined,
+): boolean {
   if (!model) return false;
   return isLiteRTModel(model) ? !!model.liteRTVision : !!model.mmProjPath;
 }
 
-/**
- * A user-facing notice when a just-loaded LOCAL text model silently downgraded its backend
- * (GPU selected, 0 layers offloaded — the device-reported "Backend=GPU but meta says CPU" class).
- * Engine-dispatched here so callers never branch: LiteRT reports its backend through its own
- * load result, so only the llama engine carries this verdict. Null = nothing to report.
- */
-export function backendFallbackNotice(model: { engine?: string } | null | undefined): string | null {
+/** Consume a local backend downgrade once per native load. Concurrent load
+ * waiters cannot produce duplicate conversation notices. */
+export function consumeBackendFallbackNotice(
+  model: { engine?: string } | null | undefined,
+): string | null {
   if (!model || model.engine === 'litert') return null;
-  return llmService.getBackendFallbackNotice();
+  return llmService.consumeBackendFallbackNotice();
 }
 
 /**
@@ -180,12 +205,17 @@ export function activeTextCapabilities(i: {
       tools: llmService.supportsToolCalling(),
       thinking: llmService.supportsThinking(),
     },
-    llamaPredicted: i.model?.engine === 'llama' ? predictGgufCapabilities(i.model) : undefined,
+    llamaPredicted:
+      i.model?.engine === 'llama'
+        ? predictGgufCapabilities(i.model)
+        : undefined,
   });
 }
 
 /** Local-only convenience for the generation routing path (no remote); reads .tools/.vision. */
-export function activeLocalTextCapabilities(model: DownloadedModel | null | undefined): EngineCapabilities {
+export function activeLocalTextCapabilities(
+  model: DownloadedModel | null | undefined,
+): EngineCapabilities {
   return activeTextCapabilities({ isRemote: false, model });
 }
 
@@ -222,7 +252,10 @@ export function wantsLeadingThinkToken(
  * (stopGeneration, isModelLoaded, unloadModel). For engine-specific
  * operations keep the explicit branch — it should be visible at the call site.
  */
-export function getActiveEngineService(): typeof llmService | typeof liteRTService | null {
+export function getActiveEngineService():
+  | typeof llmService
+  | typeof liteRTService
+  | null {
   const { downloadedModels, activeModelId } = useAppStore.getState();
   const model = downloadedModels.find(m => m.id === activeModelId);
   if (!model) return null;
@@ -268,13 +301,18 @@ export async function generateStandalone(
   // fall through to the (unloaded) local llama and throw, so it was silently skipped
   // (Q8). Route the one-shot through the active provider, streaming content so the UI
   // can show live progress (B30b). Thinking OFF — enhancement is a utility rewrite.
-  const { activeServerId, activeRemoteTextModelId } = useRemoteServerStore.getState();
+  const { activeServerId, activeRemoteTextModelId } =
+    useRemoteServerStore.getState();
   // A loaded LiteRT model still wins over a selected remote server (isRemoteTextModelActive only
   // rules out a loaded LLAMA model), so keep the litert guard here.
-  const useRemote = isRemoteTextModelActive() && getActiveEngineService() !== liteRTService;
+  const useRemote =
+    isRemoteTextModelActive() && getActiveEngineService() !== liteRTService;
   if (useRemote) {
     const provider = providerRegistry.getProvider(activeServerId!)!;
-    if (activeRemoteTextModelId && provider.getLoadedModelId() !== activeRemoteTextModelId) {
+    if (
+      activeRemoteTextModelId &&
+      provider.getLoadedModelId() !== activeRemoteTextModelId
+    ) {
       await provider.loadModel(activeRemoteTextModelId);
     }
     let content = '';
@@ -282,9 +320,16 @@ export async function generateStandalone(
       messages,
       { enableThinking: false },
       {
-        onToken: (t: string) => { content += t; onToken?.(t); },
-        onComplete: (result) => { if (result?.content) content = result.content; },
-        onError: (err) => { throw err instanceof Error ? err : new Error(String(err)); },
+        onToken: (t: string) => {
+          content += t;
+          onToken?.(t);
+        },
+        onComplete: result => {
+          if (result?.content) content = result.content;
+        },
+        onError: err => {
+          throw err instanceof Error ? err : new Error(String(err));
+        },
       },
     );
     return content;
@@ -292,15 +337,22 @@ export async function generateStandalone(
   if (getActiveEngineService() === liteRTService) {
     const system = messages.find(m => m.role === 'system');
     const lastUser = [...messages].reverse().find(m => m.role === 'user');
-    const systemPrompt = typeof system?.content === 'string' ? system.content : '';
-    const userText = typeof lastUser?.content === 'string' ? lastUser.content : '';
+    const systemPrompt =
+      typeof system?.content === 'string' ? system.content : '';
+    const userText =
+      typeof lastUser?.content === 'string' ? lastUser.content : '';
     const { settings } = useAppStore.getState();
     await liteRTService.prepareConversation('__standalone__', systemPrompt, {
-      samplerConfig: { temperature: settings.liteRTTemperature, topP: settings.liteRTTopP },
+      samplerConfig: {
+        temperature: settings.liteRTTemperature,
+        topP: settings.liteRTTopP,
+      },
       history: [],
     });
     try {
-      return await liteRTService.generateRaw(userText, undefined, { onToken: (t: string) => onToken?.(t) });
+      return await liteRTService.generateRaw(userText, undefined, {
+        onToken: (t: string) => onToken?.(t),
+      });
     } finally {
       liteRTService.invalidateConversation();
     }
@@ -308,7 +360,12 @@ export async function generateStandalone(
   // llama (default engine). Stream tokens for live progress; force thinking OFF so the
   // enhanced prompt is a clean rewrite, never a leaked reasoning chain (B30/B30b).
   return llmService.generateResponse(messages, {
-    onStream: onToken ? (data) => { if (typeof (data as { content?: string })?.content === 'string') onToken((data as { content: string }).content); } : () => {},
+    onStream: onToken
+      ? data => {
+          if (typeof (data as { content?: string })?.content === 'string')
+            onToken((data as { content: string }).content);
+        }
+      : () => {},
     disableThinking: true,
   });
 }

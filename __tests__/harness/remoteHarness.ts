@@ -9,7 +9,9 @@
 /** Behavior-faithful fake of the streaming XMLHttpRequest transport. Replays `sseBody` incrementally via
  *  onprogress (as chunked SSE arrives on device), then completes 200 — exactly what createStreamingRequest
  *  consumes (reads xhr.responseText in onprogress, finalises on readyState 4). Install before a remote send. */
-export function installRemoteStream(sseBody: string | string[]): { release: () => void } {
+export function installRemoteStream(sseBody: string | string[]): {
+  release: () => void;
+} {
   // Accept a QUEUE of per-request bodies so a multi-turn remote flow (a tool loop: request 1 returns
   // tool_calls, request 2 — sent WITH the tool results — returns the final reply) replays the right body per
   // XHR. A single string keeps the old behavior; with an array each send() shifts the next body, the last
@@ -17,7 +19,9 @@ export function installRemoteStream(sseBody: string | string[]): { release: () =
   //
   // A body line that is exactly `__PAUSE__` HALTS the pump there (the deltas before it are delivered, the
   // stream is NOT completed) until the returned release() is called — so a test can observe the mid-stream
-  // rendered state (e.g. the thinking-box header WHILE reasoning is still streaming). No pause line = no-op.
+  // rendered state (e.g. the thinking-box header WHILE reasoning is still streaming). `__NETWORK_ERROR__`
+  // terminates the request through XHR's real network-error callback, modeling a server disappearing after
+  // already-streamed deltas without replacing any Off Grid provider/generation logic.
   const bodies = Array.isArray(sseBody) ? [...sseBody] : [sseBody];
   let releaseFn: (() => void) | null = null;
   class FakeXHR {
@@ -28,9 +32,15 @@ export function installRemoteStream(sseBody: string | string[]): { release: () =
     onreadystatechange: null | (() => void) = null;
     onerror: null | (() => void) = null;
     ontimeout: null | (() => void) = null;
-    open(): void { this.readyState = 1; }
-    setRequestHeader(): void { /* headers irrelevant to the fake */ }
-    abort(): void { /* no-op */ }
+    open(): void {
+      this.readyState = 1;
+    }
+    setRequestHeader(): void {
+      /* headers irrelevant to the fake */
+    }
+    abort(): void {
+      /* no-op */
+    }
     send(): void {
       // Emit the captured body line-by-line, one per macrotask, so the REAL incremental parser runs like it
       // does on device — works for both OpenAI SSE (`data: {…}\n\n`) and Ollama NDJSON (`{…}\n`).
@@ -41,7 +51,14 @@ export function installRemoteStream(sseBody: string | string[]): { release: () =
       const pump = (): void => {
         if (i < chunks.length) {
           const chunk = chunks[i++];
-          if (chunk.trim() === '__PAUSE__') { releaseFn = () => setTimeout(pump, 0); return; } // hold here
+          if (chunk.trim() === '__PAUSE__') {
+            releaseFn = () => setTimeout(pump, 0);
+            return;
+          }
+          if (chunk.trim() === '__NETWORK_ERROR__') {
+            this.onerror?.();
+            return;
+          }
           this.responseText += chunk;
           this.onprogress?.();
           setTimeout(pump, 0);
@@ -62,18 +79,24 @@ export function installRemoteStream(sseBody: string | string[]): { release: () =
  *  added, its models discovered, the provider registered + made active). Discovery/connection is the
  *  network boundary; we pre-place its result, then mount + gesture as the user. `caps` mirrors what a
  *  server actually advertises (LM Studio/Ollama do NOT advertise supportsThinking → no thinking toggle). */
-export async function installRemoteModel(opts: {
-  name?: string;
-  endpoint?: string;
-  providerType?: 'openai-compatible' | 'anthropic';
-  caps?: Partial<{ supportsVision: boolean; supportsToolCalling: boolean; supportsThinking: boolean }>;
-} = {}): Promise<{ serverId: string; modelId: string }> {
-  /* eslint-disable @typescript-eslint/no-var-requires */
+export async function installRemoteModel(
+  opts: {
+    name?: string;
+    endpoint?: string;
+    providerType?: 'openai-compatible' | 'anthropic';
+    caps?: Partial<{
+      supportsVision: boolean;
+      supportsToolCalling: boolean;
+      supportsThinking: boolean;
+    }>;
+  } = {},
+): Promise<{ serverId: string; modelId: string }> {
   const { useRemoteServerStore } = require('../../src/stores');
   const { providerRegistry } = require('../../src/services/providers');
-  const { createProviderForServerImpl } = require('../../src/services/remoteServerManagerUtils');
+  const {
+    createProviderForServerImpl,
+  } = require('../../src/services/remoteServerManagerUtils');
   const { llmService } = require('../../src/services/llm');
-  /* eslint-enable @typescript-eslint/no-var-requires */
   // A remote model is only USED when no local model is loaded/selected: generationService prefers a loaded
   // local model, and the dispatch keys off appStore.activeModelId. On device, selecting a remote model
   // clears the local selection and no local model is loaded — mirror that so the send routes remote.
@@ -85,10 +108,20 @@ export async function installRemoteModel(opts: {
   const providerType = opts.providerType ?? 'openai-compatible';
   const modelId = 'remote-model';
 
-  const serverId = useRemoteServerStore.getState().addServer({ name, endpoint, providerType });
+  const serverId = useRemoteServerStore
+    .getState()
+    .addServer({ name, endpoint, providerType });
   const model = {
-    id: modelId, name: 'Remote Model', serverId, lastUpdated: 't',
-    capabilities: { supportsVision: false, supportsToolCalling: false, supportsThinking: false, ...opts.caps },
+    id: modelId,
+    name: 'Remote Model',
+    serverId,
+    lastUpdated: 't',
+    capabilities: {
+      supportsVision: false,
+      supportsToolCalling: false,
+      supportsThinking: false,
+      ...opts.caps,
+    },
   };
   const store = useRemoteServerStore.getState();
   store.setDiscoveredModels(serverId, [model]);
@@ -102,7 +135,11 @@ export async function installRemoteModel(opts: {
   await createProviderForServerImpl(server);
   const provider = providerRegistry.getProvider(serverId);
   provider.updateConfig?.({ modelId });
-  provider.modelCapabilities = { ...provider.modelCapabilities, ...model.capabilities, acceptsThinkingKwarg: !!opts.caps?.supportsThinking };
+  provider.modelCapabilities = {
+    ...provider.modelCapabilities,
+    ...model.capabilities,
+    acceptsThinkingKwarg: !!opts.caps?.supportsThinking,
+  };
   providerRegistry.setActiveProvider(serverId);
   return { serverId, modelId };
 }

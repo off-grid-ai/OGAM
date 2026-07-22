@@ -143,7 +143,7 @@ const TEXT_PATTERNS = [
 
   // Math and calculations
   /\b(calculate|compute|solve|evaluate)\b/i,
-  /^\d+\s*[+\-*/^%]/,  // Math operations like "2+2"
+  /^\d+\s*[+\-*/^%]/, // Math operations like "2+2"
   /\b\d+\s*(plus|minus|times|divided by|multiplied)\s*\d+\b/i,
   /\b(sum|average|mean|median|percentage|percent)\b/i,
 
@@ -165,7 +165,7 @@ const TEXT_PATTERNS = [
 
   // Questions ending with ?
   /\?$/,
-  /^[?!]/,  // Questions starting with ? or !
+  /^[?!]/, // Questions starting with ? or !
 
   // Instructions and guidance
   /\b(step by step|tutorial|guide|instructions|how-to)\b/i,
@@ -187,11 +187,13 @@ class IntentClassifier {
    * @param options Classification options including LLM settings
    * @returns 'image' if requesting image generation, 'text' otherwise
    */
-  async classifyIntent(message: string, options: ClassifyOptions | boolean = true): Promise<Intent> {
+  async classifyIntent(
+    message: string,
+    options: ClassifyOptions | boolean = true,
+  ): Promise<Intent> {
     // Handle legacy boolean parameter
-    const opts: ClassifyOptions = typeof options === 'boolean'
-      ? { useLLM: options }
-      : options;
+    const opts: ClassifyOptions =
+      typeof options === 'boolean' ? { useLLM: options } : options;
 
     const trimmedMessage = message.trim().toLowerCase();
     const logMsg = trimmedMessage.slice(0, 60);
@@ -200,14 +202,18 @@ class IntentClassifier {
     const cacheKey = trimmedMessage.slice(0, 200); // Limit key size
     const cachedIntent = intentCache.get(cacheKey);
     if (cachedIntent) {
-      logger.log(`[ROUTE-SM] classify CACHE intent=${cachedIntent} msg="${logMsg}"`);
+      logger.log(
+        `[ROUTE-SM] classify CACHE intent=${cachedIntent} msg="${logMsg}"`,
+      );
       return cachedIntent;
     }
 
     // Fast pattern matching
     const patternResult = this.classifyByPattern(trimmedMessage);
     if (patternResult !== null) {
-      logger.log(`[ROUTE-SM] classify PATTERN intent=${patternResult} msg="${logMsg}"`);
+      logger.log(
+        `[ROUTE-SM] classify PATTERN intent=${patternResult} msg="${logMsg}"`,
+      );
       this.cacheIntent(cacheKey, patternResult);
       return patternResult;
     }
@@ -216,7 +222,9 @@ class IntentClassifier {
     if (opts.useLLM) {
       try {
         const llmResult = await this.classifyWithLLM(message, opts);
-        logger.log(`[ROUTE-SM] classify LLM intent=${llmResult} msg="${logMsg}"`);
+        logger.log(
+          `[ROUTE-SM] classify LLM intent=${llmResult} msg="${logMsg}"`,
+        );
         this.cacheIntent(cacheKey, llmResult);
         return llmResult;
       } catch (error) {
@@ -225,7 +233,9 @@ class IntentClassifier {
     }
 
     // Default to text intent if uncertain
-    logger.log(`[ROUTE-SM] classify DEFAULT→text (uncertain, llm=${opts.useLLM}) msg="${logMsg}"`);
+    logger.log(
+      `[ROUTE-SM] classify DEFAULT→text (uncertain, llm=${opts.useLLM}) msg="${logMsg}"`,
+    );
     return 'text';
   }
 
@@ -237,7 +247,9 @@ class IntentClassifier {
     // Check for strong image generation indicators
     for (const pattern of IMAGE_PATTERNS) {
       if (pattern.test(message)) {
-        logger.log(`[ROUTE-SM] classify pattern=IMAGE matched /${pattern.source}/`);
+        logger.log(
+          `[ROUTE-SM] classify pattern=IMAGE matched /${pattern.source}/`,
+        );
         return 'image';
       }
     }
@@ -245,7 +257,9 @@ class IntentClassifier {
     // Check for strong text/chat indicators
     for (const pattern of TEXT_PATTERNS) {
       if (pattern.test(message)) {
-        logger.log(`[ROUTE-SM] classify pattern=TEXT matched /${pattern.source}/`);
+        logger.log(
+          `[ROUTE-SM] classify pattern=TEXT matched /${pattern.source}/`,
+        );
         return 'text';
       }
     }
@@ -259,7 +273,9 @@ class IntentClassifier {
     // Very long messages with multiple sentences are likely text
     const sentenceCount = (message.match(/[.!?]+/g) || []).length;
     if (sentenceCount >= 2 && message.length > 100) {
-      logger.log('[ROUTE-SM] classify pattern=TEXT (multi-sentence long message)');
+      logger.log(
+        '[ROUTE-SM] classify pattern=TEXT (multi-sentence long message)',
+      );
       return 'text';
     }
 
@@ -270,7 +286,10 @@ class IntentClassifier {
   /**
    * Use LLM for classification when pattern matching is uncertain
    */
-  private async classifyWithLLM(message: string, opts: ClassifyOptions): Promise<Intent> {
+  private async classifyWithLLM(
+    message: string,
+    opts: ClassifyOptions,
+  ): Promise<Intent> {
     const classificationPrompt = `Is this message asking to create, generate, or draw an image? Reply only YES or NO.
 
 Message: "${message.slice(0, 200)}"
@@ -289,7 +308,10 @@ Answer:`;
         const activeInfo = activeModelService.getActiveModels();
         originalModelId = activeInfo.text.model?.id || null;
 
-        logger.log('[IntentClassifier] Swapping to classifier model:', opts.classifierModel.name);
+        logger.log(
+          '[IntentClassifier] Swapping to classifier model:',
+          opts.classifierModel.name,
+        );
         opts.onStatusChange?.(`Loading ${opts.classifierModel.name}...`);
         // Use activeModelService singleton to load - prevents duplicate loads
         await activeModelService.loadTextModel(opts.classifierModel.id);
@@ -317,7 +339,7 @@ Answer:`;
           },
         ],
         {
-          onStream: (data) => {
+          onStream: data => {
             if (data.content) response += data.content;
           },
         },
@@ -349,7 +371,10 @@ Answer:`;
     // Prevent cache from growing too large
     if (intentCache.size >= CACHE_MAX_SIZE) {
       // Remove oldest entries (first 20%)
-      const keysToRemove = Array.from(intentCache.keys()).slice(0, Math.floor(CACHE_MAX_SIZE * 0.2));
+      const keysToRemove = Array.from(intentCache.keys()).slice(
+        0,
+        Math.floor(CACHE_MAX_SIZE * 0.2),
+      );
       keysToRemove.forEach(k => intentCache.delete(k));
     }
     intentCache.set(key, intent);
@@ -374,81 +399,3 @@ Answer:`;
 }
 
 export const intentClassifier = new IntentClassifier();
-
-// ---------------------------------------------------------------------------
-// Tool heuristics — pure local regex, zero LLM cost, runs in ~0.1ms
-// web_search and read_url are coupled: if either matches, both are included.
-// ---------------------------------------------------------------------------
-
-const TOOL_PATTERNS: Record<string, RegExp[]> = {
-  web_search: [
-    /\b(search|look up|look it up|google|find out|look for|look into)\b/i,
-    /\b(latest|current|recent|live|real.?time|up.?to.?date|right now)\b/i,
-    /\b(news|headlines|breaking|update|updates|announcement)\b/i,
-    /\b(weather|forecast|temperature|humidity|climate|rain|snow|sunny)\b/i,
-    /\b(price|cost|how much does|stock|market|exchange rate|crypto|bitcoin|ethereum|nft)\b/i,
-    /\b(score|standings|match|fixture|result|leaderboard|ranking)\b/i,
-    /\b(trending|viral|popular right now|who won|who is winning|what happened)\b/i,
-    /what('s| is) (happening|going on|the latest|the news|new|out now)/i,
-    /\b(just released|just launched|came out|available now)\b/i,
-  ],
-  read_url: [
-    /https?:\/\//i,
-    /\b(visit|open|read|fetch|check|scrape|summarize|summarise|analyse|analyze)\b.{0,30}\b(link|url|site|page|article|post|blog)\b/i,
-    /\b(this link|that link|the link|the url|the article|the page|this page|that page)\b/i,
-    /\b(from this|from that|from the)\b.{0,20}\b(link|url|site|page|article)\b/i,
-  ],
-  calculator: [
-    /\b(calculat|evaluat|compute|how much is|solve|work out|figure out)/i,
-    /\b(percent(age)?|discount|tax|tip|interest|convert|exchange|split)\b/i,
-    /^\s*[\d\s()]*[+\-*/^%][\d\s()]+/,
-    /\b\d+\s*(plus|minus|times|divided by|over|squared|cubed|mod)\s*\d+\b/i,
-    /\b(sum|total|add up|average|mean|median|factorial|square root|sqrt|power of)\b/i,
-    /\b(how many|how long|how far|how tall|how heavy)\b.{0,30}\b(in|to|from|is)\b/i,
-  ],
-  get_current_datetime: [
-    /\b(what time|current time|what is the time|what's the time)\b/i,
-    /\b(current date|today's date|what is today|what's today|date today|today is)\b/i,
-    /\b(what day|what day is it|which day|day of the week)\b/i,
-    /\b(what month|what year|current month|current year)\b/i,
-    /\b(what's the date|tell me the date|give me the date)\b/i,
-    /\b(right now|at the moment|at this moment)\b.{0,20}\b(time|date|day)\b/i,
-    /\b(how long (until|till|before)|how long ago|how many days (until|till|since|left))\b/i,
-  ],
-  get_device_info: [
-    /\b(battery|battery level|battery percentage|battery life|charge|charging|low battery)\b/i,
-    /\b(storage|free space|disk space|available space|how much space|running out of space)\b/i,
-    /\b(memory|ram|device info|phone info|device details|phone details|my device)\b/i,
-    /\b(cpu|processor|performance|my phone specs|phone model)\b/i,
-  ],
-};
-
-// Tools that must always travel together
-const COUPLED_TOOLS: string[][] = [['web_search', 'read_url']];
-
-/**
- * Classify which tools are needed for a given message using local regex patterns.
- * Runs in ~0.1ms — no LLM call, no network.
- * web_search and read_url are always coupled: matching either includes both.
- *
- * @param message - The user's raw message text
- * @returns Array of tool IDs that the heuristic thinks are needed
- */
-export function classifyToolsNeeded(message: string): string[] {
-  const needed = new Set<string>();
-
-  for (const [toolId, patterns] of Object.entries(TOOL_PATTERNS)) {
-    if (patterns.some(p => p.test(message))) {
-      needed.add(toolId);
-    }
-  }
-
-  // Apply coupling rules — if any tool in a group matched, add all siblings
-  for (const group of COUPLED_TOOLS) {
-    if (group.some(t => needed.has(t))) {
-      group.forEach(t => needed.add(t));
-    }
-  }
-
-  return Array.from(needed);
-}

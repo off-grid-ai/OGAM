@@ -4,7 +4,6 @@
  * Drives the REAL handleSendFn (src/screens/ChatScreen/useChatGenerationActions.ts)
  * against the REAL chatStore and the REAL generationService queue. The only mocked
  * things are genuine boundaries:
- *   - modelPreloader.abortPreload        (background native warm-up)
  *   - modelResidency.reclaimSttForGeneration (native memory reclaim)
  *   - the `startGeneration` callback passed IN by the caller (this is where the native
  *     LLM decode happens — it is a parameter, so stubbing it is a boundary, not the
@@ -25,9 +24,6 @@
  */
 
 // --- boundary mocks (native / background side-effects only) -----------------
-jest.mock('../../src/services/modelPreloader', () => ({
-  abortPreload: jest.fn(),
-}));
 jest.mock('../../src/services/modelResidency', () => ({
   modelResidencyManager: {
     reclaimSttForGeneration: jest.fn(() => Promise.resolve()),

@@ -53,7 +53,14 @@ class ProviderRegistry {
    */
   getProvider(id: string): LLMProvider | undefined {
     const provider = this.providers.get(id);
-    logger.log('[ProviderRegistry] getProvider:', id, 'found:', !!provider, 'providerIds:', this.getProviderIds());
+    logger.log(
+      '[ProviderRegistry] getProvider:',
+      id,
+      'found:',
+      !!provider,
+      'providerIds:',
+      this.getProviderIds(),
+    );
     return provider;
   }
 
@@ -63,7 +70,9 @@ class ProviderRegistry {
   getActiveProvider(): LLMProvider {
     const provider = this.providers.get(this.activeProviderId);
     if (!provider) {
-      logger.warn('[ProviderRegistry] Active provider not found, falling back to local');
+      logger.warn(
+        '[ProviderRegistry] Active provider not found, falling back to local',
+      );
       return localProvider;
     }
     return provider;
@@ -117,7 +126,8 @@ class ProviderRegistry {
    * Notify listeners of provider change
    */
   private notifyListeners(): void {
-    const providerId = this.activeProviderId === 'local' ? null : this.activeProviderId;
+    const providerId =
+      this.activeProviderId === 'local' ? null : this.activeProviderId;
     this.listeners.forEach(listener => listener(providerId));
   }
 
@@ -138,22 +148,3 @@ class ProviderRegistry {
 
 /** Singleton instance */
 export const providerRegistry = new ProviderRegistry();
-
-/**
- * Get provider for server ID
- *
- * Creates or returns an existing provider for a remote server.
- * Returns local provider for null/undefined.
- */
-export function getProviderForServer(serverId: string | null): LLMProvider {
-  if (!serverId) {
-    return localProvider;
-  }
-
-  const provider = providerRegistry.getProvider(serverId);
-  if (!provider) {
-    logger.warn('[ProviderRegistry] No provider for server:', serverId, 'falling back to local');
-    return localProvider;
-  }
-  return provider;
-}

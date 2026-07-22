@@ -16,6 +16,7 @@ export { LockScreen } from './LockScreen';
 ;
 export { DownloadManagerScreen } from './DownloadManagerScreen';
 export { ModelSettingsScreen } from './ModelSettingsScreen';
+export { ExperimentalFeaturesScreen } from './ExperimentalFeaturesScreen';
 export { DeviceInfoScreen } from './DeviceInfoScreen';
 export { StorageSettingsScreen } from './StorageSettingsScreen';
 export { SecuritySettingsScreen } from './SecuritySettingsScreen';

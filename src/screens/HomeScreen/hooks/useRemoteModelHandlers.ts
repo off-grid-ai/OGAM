@@ -1,27 +1,22 @@
 import { useCallback } from 'react';
 import { showAlert } from '../../../components';
-import { activeModelService, remoteServerManager } from '../../../services';
+import { remoteServerManager } from '../../../services';
 import { RemoteModel } from '../../../types';
 import { LoadingState } from './types';
 import logger from '../../../utils/logger';
 
 interface RemoteModelHandlersParams {
-  activeModelId: string | null;
   setPickerType: (type: 'text' | 'image' | null) => void;
   setLoadingState: (state: LoadingState) => void;
   setAlertState: (state: any) => void;
 }
 
-export function useRemoteModelHandlers({ activeModelId, setPickerType, setLoadingState, setAlertState }: RemoteModelHandlersParams) {
+export function useRemoteModelHandlers({ setPickerType, setLoadingState, setAlertState }: RemoteModelHandlersParams) {
   const handleSelectRemoteTextModel = useCallback(async (model: RemoteModel) => {
     logger.log('[useHomeScreen] handleSelectRemoteTextModel called:', model.id, model.serverId);
     setPickerType(null);
     setLoadingState({ isLoading: true, type: 'text', modelName: model.name });
     try {
-      // Unload any active local model first — only one active model at a time
-      if (activeModelId) {
-        await activeModelService.unloadTextModel();
-      }
       await remoteServerManager.setActiveRemoteTextModel(model.serverId, model.id);
       logger.log('[useHomeScreen] Remote text model set successfully');
     } catch (_error) {
@@ -30,7 +25,7 @@ export function useRemoteModelHandlers({ activeModelId, setPickerType, setLoadin
     } finally {
       setLoadingState({ isLoading: false, type: null, modelName: null });
     }
-  }, [activeModelId, setPickerType, setLoadingState, setAlertState]);
+  }, [setPickerType, setLoadingState, setAlertState]);
 
   const handleUnloadRemoteTextModel = useCallback(async () => {
     setPickerType(null);

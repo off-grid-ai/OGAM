@@ -12,6 +12,8 @@ import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { OpenAICompatibleProvider } from './providers/openAICompatibleProvider';
 import { providerRegistry } from './providers/registry';
 import logger from '../utils/logger';
+import { activeModelService } from './activeModelService';
+import { clearActiveRemoteModelSelection } from './remoteModelSelection';
 import {
   storeApiKeyImpl,
   getApiKeyImpl,
@@ -158,6 +160,10 @@ class RemoteServerManager {
 
   /** Set the active remote text model */
   async setActiveRemoteTextModel(serverId: string, modelId: string): Promise<void> {
+    // Remote text replaces local text; it never stacks on top of a resident
+    // heavyweight engine. Keep this lifecycle rule at the service boundary so
+    // Home, Chat, onboarding, and reconnection cannot drift apart.
+    await activeModelService.unloadTextModel();
     return setActiveRemoteTextModelImpl(serverId, modelId);
   }
 
@@ -170,11 +176,7 @@ class RemoteServerManager {
    * Clear active remote model (switch back to local)
    */
   clearActiveRemoteModel(): void {
-    const store = useRemoteServerStore.getState();
-    store.setActiveServerId(null);
-    store.setActiveRemoteTextModelId(null);
-    store.setActiveRemoteImageModelId(null);
-    providerRegistry.setActiveProvider('local');
+    clearActiveRemoteModelSelection();
     logger.log('[RemoteServerManager] Cleared active remote model');
   }
 

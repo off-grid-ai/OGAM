@@ -4,14 +4,11 @@ import {
   BYTES_PER_GB,
   supportsNativeThinking,
   getModelMaxContext,
-  estimateTokens,
-  fitMessagesInBudget,
   getStreamingDelta,
   buildModelParams,
   effectiveCacheType,
   backendForcesF16Cache,
   buildCompletionParams,
-  shouldDisableMmap,
   captureGpuInfo,
   logContextMetadata,
   initContextWithFallback,
@@ -122,16 +119,31 @@ describe('getGpuLayersForDevice', () => {
     // Platform.OS is mocked as 'ios' in the test env.
     it('offloads all layers when the model fits free RAM minus the reserve', () => {
       // 4GB free − 1.6GB reserve = 2.4GB budget; a 1GB model fits → full 99.
-      expect(getGpuLayersForDevice(6 * GB, 99, { modelBytes: 1 * GB, availableBytes: 4 * GB })).toBe(99);
+      expect(
+        getGpuLayersForDevice(6 * GB, 99, {
+          modelBytes: 1 * GB,
+          availableBytes: 4 * GB,
+        }),
+      ).toBe(99);
     });
 
     it('scales layers down when the model exceeds the weight budget', () => {
       // budget 2.4GB, model 3GB → floor(99 * 2.4/3) = 79.
-      expect(getGpuLayersForDevice(6 * GB, 99, { modelBytes: 3 * GB, availableBytes: 4 * GB })).toBe(79);
+      expect(
+        getGpuLayersForDevice(6 * GB, 99, {
+          modelBytes: 3 * GB,
+          availableBytes: 4 * GB,
+        }),
+      ).toBe(79);
     });
 
     it('falls back to CPU (0) when there is no headroom over the reserve', () => {
-      expect(getGpuLayersForDevice(6 * GB, 99, { modelBytes: 2 * GB, availableBytes: 1.5 * GB })).toBe(0);
+      expect(
+        getGpuLayersForDevice(6 * GB, 99, {
+          modelBytes: 2 * GB,
+          availableBytes: 1.5 * GB,
+        }),
+      ).toBe(0);
     });
 
     it('leaves layers unchanged on iOS when model/RAM info is absent (back-compat)', () => {
@@ -150,14 +162,20 @@ describe('supportsNativeThinking', () => {
   it('returns false for a jinja-supported model whose template has no reasoning markers (Mistral 7B)', () => {
     const ctx = {
       isJinjaSupported: jest.fn(() => true),
-      model: { metadata: { 'tokenizer.chat_template': "{{ bos }}[INST] {{ messages }} [/INST]" } },
+      model: {
+        metadata: {
+          'tokenizer.chat_template': '{{ bos }}[INST] {{ messages }} [/INST]',
+        },
+      },
     } as any;
     expect(supportsNativeThinking(ctx)).toBe(false);
   });
 
   it('returns false on exception', () => {
     const ctx = {
-      get model() { throw new Error('boom'); }
+      get model() {
+        throw new Error('boom');
+      },
     } as any;
     expect(supportsNativeThinking(ctx)).toBe(false);
   });
@@ -169,7 +187,12 @@ describe('supportsNativeThinking', () => {
   it('detects reasoning from a <think> chat template even when isJinjaSupported() is false (OD7 Qwythos)', () => {
     const ctx = {
       isJinjaSupported: jest.fn(() => false),
-      model: { metadata: { 'tokenizer.chat_template': '{{ bos }}<think>\n{{ reasoning }}\n</think>{{ content }}' } },
+      model: {
+        metadata: {
+          'tokenizer.chat_template':
+            '{{ bos }}<think>\n{{ reasoning }}\n</think>{{ content }}',
+        },
+      },
     } as any;
     expect(supportsNativeThinking(ctx)).toBe(true);
   });
@@ -177,7 +200,11 @@ describe('supportsNativeThinking', () => {
   it('detects reasoning from a Gemma <|channel>thought template even when jinja is false', () => {
     const ctx = {
       isJinjaSupported: jest.fn(() => false),
-      model: { metadata: { 'tokenizer.chat_template': 'x <|channel>thought\n y <channel|> z' } },
+      model: {
+        metadata: {
+          'tokenizer.chat_template': 'x <|channel>thought\n y <channel|> z',
+        },
+      },
     } as any;
     expect(supportsNativeThinking(ctx)).toBe(true);
   });
@@ -185,7 +212,11 @@ describe('supportsNativeThinking', () => {
   it('detects reasoning from a Qwen <|channel|>analysis template even when jinja is false', () => {
     const ctx = {
       isJinjaSupported: jest.fn(() => false),
-      model: { metadata: { 'tokenizer.chat_template': 'a <|channel|>analysis<|message|> b' } },
+      model: {
+        metadata: {
+          'tokenizer.chat_template': 'a <|channel|>analysis<|message|> b',
+        },
+      },
     } as any;
     expect(supportsNativeThinking(ctx)).toBe(true);
   });
@@ -193,7 +224,12 @@ describe('supportsNativeThinking', () => {
   it('stays false for a plain (non-reasoning) template when jinja is false', () => {
     const ctx = {
       isJinjaSupported: jest.fn(() => false),
-      model: { metadata: { 'tokenizer.chat_template': '{{ bos }}{{ system }}{{ user }}{{ assistant }}' } },
+      model: {
+        metadata: {
+          'tokenizer.chat_template':
+            '{{ bos }}{{ system }}{{ user }}{{ assistant }}',
+        },
+      },
     } as any;
     expect(supportsNativeThinking(ctx)).toBe(false);
   });
@@ -219,77 +255,26 @@ describe('getModelMaxContext', () => {
   });
 
   it('returns parsed context length', () => {
-    const ctx = { model: { metadata: { 'llama.context_length': '4096' } } } as any;
+    const ctx = {
+      model: { metadata: { 'llama.context_length': '4096' } },
+    } as any;
     expect(getModelMaxContext(ctx)).toBe(4096);
   });
 
   it('returns null when parseInt gives NaN', () => {
-    const ctx = { model: { metadata: { 'llama.context_length': 'not-a-number' } } } as any;
+    const ctx = {
+      model: { metadata: { 'llama.context_length': 'not-a-number' } },
+    } as any;
     expect(getModelMaxContext(ctx)).toBeNull();
   });
 
   it('returns null on exception', () => {
     const ctx = {
-      get model() { throw new Error('boom'); }
+      get model() {
+        throw new Error('boom');
+      },
     } as any;
     expect(getModelMaxContext(ctx)).toBeNull();
-  });
-});
-
-describe('estimateTokens', () => {
-  it('returns token count from context.tokenize', async () => {
-    const ctx = { tokenize: jest.fn().mockResolvedValue({ tokens: [1, 2, 3] }) } as any;
-    const count = await estimateTokens(ctx, 'hello');
-    expect(count).toBe(3);
-  });
-
-  it('falls back to char/4 estimate on exception', async () => {
-    const ctx = { tokenize: jest.fn().mockRejectedValue(new Error('fail')) } as any;
-    const count = await estimateTokens(ctx, '1234'); // 4 chars → 1 token
-    expect(count).toBe(1);
-  });
-
-  it('returns 0 when tokens array is empty', async () => {
-    const ctx = { tokenize: jest.fn().mockResolvedValue({ tokens: [] }) } as any;
-    expect(await estimateTokens(ctx, '')).toBe(0);
-  });
-});
-
-function makeMsg(content: string): any {
-  return { id: '1', role: 'user', content, timestamp: 0 };
-}
-
-describe('fitMessagesInBudget', () => {
-  it('includes all messages when budget is large', async () => {
-    const ctx = { tokenize: jest.fn().mockResolvedValue({ tokens: new Array(10).fill(1) }) } as any;
-    const msgs = [makeMsg('short'), makeMsg('message')];
-    const result = await fitMessagesInBudget(ctx, msgs, 1000);
-    expect(result).toHaveLength(2);
-  });
-
-  it('drops older messages that exceed budget', async () => {
-    // Each message tokenizes to 10 tokens + 10 overhead = 20
-    const ctx = { tokenize: jest.fn().mockResolvedValue({ tokens: new Array(10).fill(1) }) } as any;
-    const msgs = [makeMsg('old message'), makeMsg('new message')];
-    // Budget of 25: can fit new message (20 tokens) but not both (40 tokens)
-    const result = await fitMessagesInBudget(ctx, msgs, 25);
-    expect(result).toHaveLength(1);
-    expect(result[0].content).toBe('new message');
-  });
-
-  it('always includes at least the last message even if it exceeds budget', async () => {
-    const ctx = { tokenize: jest.fn().mockResolvedValue({ tokens: new Array(100).fill(1) }) } as any;
-    const msgs = [makeMsg('only message')];
-    // Budget of 5: 110 tokens exceeds budget, but result should still include it
-    const result = await fitMessagesInBudget(ctx, msgs, 5);
-    expect(result).toHaveLength(1);
-  });
-
-  it('falls back to char estimate when tokenize throws', async () => {
-    const ctx = { tokenize: jest.fn().mockRejectedValue(new Error('no tokenizer')) } as any;
-    const msgs = [makeMsg('hi')]; // 2 chars → ~1 token + 10 = 11
-    const result = await fitMessagesInBudget(ctx, msgs, 100);
-    expect(result).toHaveLength(1);
   });
 });
 
@@ -320,17 +305,33 @@ describe('getModelMaxContext — alternative metadata keys', () => {
   it('reads the ARCHITECTURE-prefixed key (gemma4.context_length = 131072) — device gemma-4-E2B', () => {
     // GGUF ground truth from the device log: general.architecture=gemma4, gemma4.context_length=131072.
     // Reading only the llama-prefixed key returned null → the slider was wrongly capped at 32K.
-    const ctx = { model: { metadata: { 'general.architecture': 'gemma4', 'gemma4.context_length': '131072' } } } as any;
+    const ctx = {
+      model: {
+        metadata: {
+          'general.architecture': 'gemma4',
+          'gemma4.context_length': '131072',
+        },
+      },
+    } as any;
     expect(getModelMaxContext(ctx)).toBe(131072);
   });
 
   it('reads the arch key for other architectures too (qwen3)', () => {
-    const ctx = { model: { metadata: { 'general.architecture': 'qwen3', 'qwen3.context_length': '32768' } } } as any;
+    const ctx = {
+      model: {
+        metadata: {
+          'general.architecture': 'qwen3',
+          'qwen3.context_length': '32768',
+        },
+      },
+    } as any;
     expect(getModelMaxContext(ctx)).toBe(32768);
   });
 
   it('falls back to general.context_length when llama key absent', () => {
-    const ctx = { model: { metadata: { 'general.context_length': '8192' } } } as any;
+    const ctx = {
+      model: { metadata: { 'general.context_length': '8192' } },
+    } as any;
     expect(getModelMaxContext(ctx)).toBe(8192);
   });
 
@@ -345,16 +346,12 @@ describe('getModelMaxContext — alternative metadata keys', () => {
   });
 });
 
-describe('shouldDisableMmap', () => {
-  it('returns false on non-android', () => {
-    // Platform.OS is mocked as 'ios' in test env
-    expect(shouldDisableMmap('/path/to/model.q4_0.gguf')).toBe(false);
-  });
-});
-
 describe('buildModelParams', () => {
   it('uses provided nThreads and nBatch over defaults', () => {
-    const params = buildModelParams('/model.gguf', { nThreads: 8, nBatch: 256 });
+    const params = buildModelParams('/model.gguf', {
+      nThreads: 8,
+      nBatch: 256,
+    });
     expect(params.nThreads).toBe(8);
     expect(params.nBatch).toBe(256);
   });
@@ -428,21 +425,41 @@ describe('describeGpuFallback — the silent GPU→CPU downgrade verdict (device
   const { describeGpuFallback } = require('../../../src/services/llmHelpers');
 
   it('null when the user selected CPU (nothing was downgraded)', () => {
-    expect(describeGpuFallback({ requestedGpuLayers: 0, activeGpuLayers: 0, gpuAttemptFailed: false })).toBeNull();
+    expect(
+      describeGpuFallback({
+        requestedGpuLayers: 0,
+        activeGpuLayers: 0,
+        gpuAttemptFailed: false,
+      }),
+    ).toBeNull();
   });
 
   it('null when the GPU offload succeeded', () => {
-    expect(describeGpuFallback({ requestedGpuLayers: 99, activeGpuLayers: 24, gpuAttemptFailed: false })).toBeNull();
+    expect(
+      describeGpuFallback({
+        requestedGpuLayers: 99,
+        activeGpuLayers: 24,
+        gpuAttemptFailed: false,
+      }),
+    ).toBeNull();
   });
 
   it('names the init failure when the GPU attempt failed (the 8000ms timeout class)', () => {
-    const notice = describeGpuFallback({ requestedGpuLayers: 99, activeGpuLayers: 0, gpuAttemptFailed: true });
+    const notice = describeGpuFallback({
+      requestedGpuLayers: 99,
+      activeGpuLayers: 0,
+      gpuAttemptFailed: true,
+    });
     expect(notice).toMatch(/running on CPU/i);
     expect(notice).toMatch(/failed or timed out/i);
   });
 
   it('names the device refusal when GPU was requested but never attempted (capability/RAM cap zeroed it)', () => {
-    const notice = describeGpuFallback({ requestedGpuLayers: 99, activeGpuLayers: 0, gpuAttemptFailed: false });
+    const notice = describeGpuFallback({
+      requestedGpuLayers: 99,
+      activeGpuLayers: 0,
+      gpuAttemptFailed: false,
+    });
     expect(notice).toMatch(/running on CPU/i);
     expect(notice).toMatch(/on this device/i);
   });
@@ -460,13 +477,17 @@ describe('logContextMetadata', () => {
   });
 
   it('logs warning when requested context exceeds model max', () => {
-    const ctx = { model: { metadata: { 'llama.context_length': '2048' } } } as any;
+    const ctx = {
+      model: { metadata: { 'llama.context_length': '2048' } },
+    } as any;
     logContextMetadata(ctx, 4096);
     expect(logger.warn).toHaveBeenCalled();
   });
 
   it('logs without warning when context is within model max', () => {
-    const ctx = { model: { metadata: { 'llama.context_length': '8192' } } } as any;
+    const ctx = {
+      model: { metadata: { 'llama.context_length': '8192' } },
+    } as any;
     logContextMetadata(ctx, 4096);
     expect(logger.log).toHaveBeenCalled();
     expect(logger.warn).not.toHaveBeenCalled();
@@ -477,7 +498,12 @@ describe('logContextMetadata', () => {
 // buildCompletionParams — ctx_shift disable for Android GPU (SIGSEGV fix)
 // ==========================================================================
 describe('buildCompletionParams', () => {
-  const defaultSettings = { maxTokens: 512, temperature: 0.7, topP: 0.95, repeatPenalty: 1.1 };
+  const defaultSettings = {
+    maxTokens: 512,
+    temperature: 0.7,
+    topP: 0.95,
+    repeatPenalty: 1.1,
+  };
 
   it('enables ctx_shift by default', () => {
     const params = buildCompletionParams(defaultSettings);
@@ -485,22 +511,44 @@ describe('buildCompletionParams', () => {
   });
 
   it('enables ctx_shift when disableCtxShift is false', () => {
-    const params = buildCompletionParams(defaultSettings, { disableCtxShift: false });
+    const params = buildCompletionParams(defaultSettings, {
+      disableCtxShift: false,
+    });
     expect(params.ctx_shift).toBe(true);
   });
 
   it('disables ctx_shift when disableCtxShift is true (Android GPU SIGSEGV fix)', () => {
-    const params = buildCompletionParams(defaultSettings, { disableCtxShift: true });
+    const params = buildCompletionParams(defaultSettings, {
+      disableCtxShift: true,
+    });
     expect(params.ctx_shift).toBe(false);
   });
 
   it('preserves other params when ctx_shift is disabled', () => {
-    const params = buildCompletionParams(defaultSettings, { disableCtxShift: true });
+    const params = buildCompletionParams(defaultSettings, {
+      disableCtxShift: true,
+    });
     expect(params.n_predict).toBe(512);
     expect(params.temperature).toBe(0.7);
     expect(params.top_p).toBe(0.95);
     expect(params.penalty_repeat).toBe(1.1);
     expect(params.stop).toBeDefined();
+  });
+
+  it('honors large contexts and clamps oversized output budgets', () => {
+    const largeContextParams = buildCompletionParams({
+      ...defaultSettings,
+      maxTokens: 32768,
+      contextLength: 32768,
+    });
+    const clampedParams = buildCompletionParams({
+      ...defaultSettings,
+      maxTokens: 4096,
+      contextLength: 2048,
+    });
+
+    expect(largeContextParams.n_predict).toBe(32768);
+    expect(clampedParams.n_predict).toBe(2048);
   });
 });
 
@@ -541,7 +589,10 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
 
     await initContextWithFallback(baseParams, 8192, 99);
 
-    const minCtxCall = mockedInitLlama.mock.calls[2][0] as Record<string, unknown>;
+    const minCtxCall = mockedInitLlama.mock.calls[2][0] as Record<
+      string,
+      unknown
+    >;
     expect(minCtxCall.devices).toBeUndefined();
     expect(minCtxCall.n_gpu_layers).toBe(0);
     expect(minCtxCall.n_ctx).toBe(2048);
@@ -582,14 +633,18 @@ describe('initContextWithFallback — GPU timeout on Android', () => {
 
   it('falls back to CPU when GPU init times out (withTimeout + tryGpuInit catch)', async () => {
     let resolveGpu!: (ctx: any) => void;
-    const slowGpu = new Promise<any>(resolve => { resolveGpu = resolve; });
+    const slowGpu = new Promise<any>(resolve => {
+      resolveGpu = resolve;
+    });
     const cpuCtx = { gpu: false, release: jest.fn() };
 
-    mockedInitLlama
-      .mockReturnValueOnce(slowGpu)
-      .mockResolvedValueOnce(cpuCtx);
+    mockedInitLlama.mockReturnValueOnce(slowGpu).mockResolvedValueOnce(cpuCtx);
 
-    const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, 4);
+    const resultPromise = initContextWithFallback(
+      { model: '/m.gguf' },
+      2048,
+      4,
+    );
     jest.advanceTimersByTime(25001);
     const result = await resultPromise;
 
@@ -606,19 +661,25 @@ describe('initContextWithFallback — GPU timeout on Android', () => {
 
   it('safeRelease swallows error when late GPU ctx release throws', async () => {
     let resolveGpu!: (ctx: any) => void;
-    const slowGpu = new Promise<any>(resolve => { resolveGpu = resolve; });
+    const slowGpu = new Promise<any>(resolve => {
+      resolveGpu = resolve;
+    });
     const cpuCtx = { gpu: false, release: jest.fn() };
 
-    mockedInitLlama
-      .mockReturnValueOnce(slowGpu)
-      .mockResolvedValueOnce(cpuCtx);
+    mockedInitLlama.mockReturnValueOnce(slowGpu).mockResolvedValueOnce(cpuCtx);
 
-    const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, 4);
+    const resultPromise = initContextWithFallback(
+      { model: '/m.gguf' },
+      2048,
+      4,
+    );
     jest.advanceTimersByTime(25001);
     await resultPromise;
 
     // Late ctx whose release() throws — safeRelease must swallow the error
-    const lateCtx = { release: jest.fn().mockRejectedValue(new Error('release fail')) };
+    const lateCtx = {
+      release: jest.fn().mockRejectedValue(new Error('release fail')),
+    };
     resolveGpu(lateCtx);
     await Promise.resolve();
     await Promise.resolve();
@@ -649,7 +710,12 @@ describe('backendForcesF16Cache / effectiveCacheType (single source)', () => {
 
   it('buildModelParams cache_type matches effectiveCacheType for the same inputs', () => {
     // Guards against the loader and the reporter drifting apart again.
-    const params = buildModelParams('/m.gguf', { inferenceBackend: INFERENCE_BACKENDS.HTP, cacheType: 'q8_0' });
-    expect((params.baseParams as any).cache_type_k).toBe(effectiveCacheType(INFERENCE_BACKENDS.HTP, 'q8_0'));
+    const params = buildModelParams('/m.gguf', {
+      inferenceBackend: INFERENCE_BACKENDS.HTP,
+      cacheType: 'q8_0',
+    });
+    expect((params.baseParams as any).cache_type_k).toBe(
+      effectiveCacheType(INFERENCE_BACKENDS.HTP, 'q8_0'),
+    );
   });
 });

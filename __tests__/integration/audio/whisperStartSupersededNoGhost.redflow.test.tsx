@@ -1,59 +1,144 @@
-/**
- * RED-FLOW (UI, rendered) — #558 CodeRabbit 🔴: no GHOST recording if the mic is released while the
- * whisper model is still loading.
- *
- * The realtime dictation start now awaits ensureModelReady() (which can free the generation model and
- * reload whisper — seconds on device). If the user RELEASES the mic during that await, the start's
- * continuation must NOT proceed to activate a recording — the stop already ran, so a session started
- * after it would never be stopped (a ghost recording that holds the mic forever).
- *
- * Fix under test: a session-intent nonce (useWhisperTranscription) captured before the await; stop/cancel
- * bump it; the start aborts if it changed. Mounts the real ChatScreen; holds the whisper load via the
- * device-boundary fake (holdNextLoad), releases the mic mid-load, then resolves the load — and asserts NO
- * realtime session is active. RED (revert the nonce guard): the continuation runs after release →
- * startRealtimeTranscription fires → realtimeActive() true (the ghost). Only the device leaves are faked.
- */
-import { setupChatScreen } from '../../harness/chatHarness';
+/** P0 #215 — releasing the mic during a cold Whisper load never creates a ghost recording. */
+import {
+  openChatWithJourneyModel,
+  renderMainApp,
+} from '../../harness/appJourney';
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
-}));
+const WHISPER_PATH = '/docs/whisper-models/ggml-tiny.en.bin';
+const WHISPER_STORAGE_KEY = 'local-llm-whisper-storage';
+const TRANSCRIPT = 'the second recording works once';
+const RESPONDER_EVENT = {
+  nativeEvent: {
+    touches: [],
+    changedTouches: [],
+    identifier: 1,
+    pageX: 0,
+    pageY: 0,
+    timestamp: 0,
+  },
+  touchHistory: {
+    touchBank: [],
+    numberActiveTouches: 0,
+    indexOfSingleActiveTouch: -1,
+    mostRecentTimeStamp: 0,
+  },
+};
 
-describe('realtime dictation: releasing the mic during model load starts NO ghost recording (#558)', () => {
-  it('aborts the superseded start — no realtime session after release-during-load', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true });
-    const { useWhisperStore } = require('../../../src/stores/whisperStore');
+describe('P0 full-app cold Whisper release recovery', () => {
+  it('returns to an idle composer without ghost text, then records one clean take', async () => {
+    const journey = await renderMainApp({
+      boundary: { llama: true, whisper: true },
+      beforeRender: async ({ boundary, asyncStorage }) => {
+        // This is the durable device state after a completed Whisper download:
+        // the model is selected on disk but is not resident after a cold launch.
+        boundary.fs!.seedFile(WHISPER_PATH, 75 * 1024 * 1024);
+        await asyncStorage.setItem(
+          WHISPER_STORAGE_KEY,
+          JSON.stringify({
+            state: { downloadedModelId: 'tiny.en' },
+            version: 0,
+          }),
+        );
+      },
+    });
+    const { boundary, rtl, view } = journey;
+    await openChatWithJourneyModel(rtl, view);
 
-    // Whisper downloaded-not-loaded, so the mic press must load it (the async gap the race lives in).
-    const docs = h.boundary.fs!.DocumentDirectoryPath;
-    h.boundary.fs!.seedFile(`${docs}/whisper-models/ggml-tiny.en.bin`, 75 * 1024 * 1024);
-    await useWhisperStore.getState().refreshPresentModels();
-    useWhisperStore.setState({ downloadedModelId: 'tiny.en', isModelLoaded: false });
+    const input = await rtl.waitFor(() => view.getByTestId('chat-input'));
+    expect(input.props.value).toBe('');
+    expect(view.queryByTestId('recording-hint')).toBeNull();
 
-    h.render();
+    // Keep the uncontrollable native model load open, just as a cold ggml init
+    // remains open for seconds on a device. The real PanResponder and app state
+    // machine continue running above this boundary.
+    boundary.whisper!.holdNextLoad();
+    rtl.fireEvent(
+      view.getByTestId('voice-record-button'),
+      'responderGrant',
+      RESPONDER_EVENT,
+    );
+    await rtl.waitFor(() =>
+      expect(view.getByTestId('voice-loading')).toBeTruthy(),
+    );
 
-    // HOLD the whisper load open (device-shaped: a real ggml init takes seconds) so the start is parked
-    // inside the ensureModelReady() await when we release the mic.
-    h.boundary.whisper!.holdNextLoad();
+    // Release while the spinner is still visible, then allow the load to finish.
+    // The release must supersede the parked start instead of resurrecting it.
+    rtl.fireEvent(
+      view.getByTestId('voice-record-button'),
+      'responderRelease',
+      RESPONDER_EVENT,
+    );
+    await rtl.act(async () => {
+      boundary.whisper!.releaseLoad();
+    });
 
-    await h.tapMic();     // start begins → awaits ensureModelReady() → whisper load HELD
-    await h.settle(150);  // the start is now parked in the await
-    await h.releaseMic(); // RELEASE during the load → stopRecording bumps the session nonce
-    await h.settle(50);
+    await rtl.waitFor(() => {
+      expect(view.queryByTestId('voice-loading')).toBeNull();
+      expect(view.getByTestId('voice-record-button')).toBeTruthy();
+      expect(view.queryByTestId('recording-hint')).toBeNull();
+      expect(view.getByTestId('chat-input').props.value).toBe('');
+      expect(view.queryByTestId('user-message')).toBeNull();
+    });
 
-    // Precondition (anti-false-green): the load really was in flight when we released — no session yet.
-    expect(h.boundary.whisper!.realtimeActive()).toBe(false);
+    // A late native final event from the cancelled attempt must not leak text.
+    await rtl.act(async () => {
+      boundary.whisper!.emitRealtime({
+        text: 'ghost transcript',
+        isCapturing: false,
+      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    expect(view.getByTestId('chat-input').props.value).toBe('');
+    expect(view.queryByText('ghost transcript')).toBeNull();
 
-    // Now let the load resolve. The superseded start must NOT resurrect a recording.
-    await h.rtl.act(async () => { h.boundary.whisper!.releaseLoad(); });
-    await h.settle(300);
+    // The very next hold is a normal recording. Its one final transcript lands
+    // in the composer for review; the cancelled take contributes nothing.
+    rtl.fireEvent(
+      view.getByTestId('voice-record-button'),
+      'responderGrant',
+      RESPONDER_EVENT,
+    );
+    await rtl.waitFor(() =>
+      expect(view.getByTestId('recording-hint')).toBeTruthy(),
+    );
+    await rtl.act(async () => {
+      boundary.whisper!.emitRealtime({
+        text: TRANSCRIPT,
+        isCapturing: true,
+      });
+    });
+    await rtl.waitFor(() => expect(view.getByText(TRANSCRIPT)).toBeTruthy());
 
-    // TERMINAL artifact: no realtime session is active and none was subscribed — the ghost never started.
-    // RED (revert the nonce guard): the continuation proceeds post-release → startRealtimeTranscription →
-    // realtimeActive() true.
-    expect(h.boundary.whisper!.realtimeActive()).toBe(false);
-    expect(h.boundary.whisper!.hasRealtimeSubscriber()).toBe(false);
+    // Stay held beyond the cancelled attempt's normal trailing-capture window.
+    // A stale delayed stop from that first release must not terminate this take.
+    await rtl.act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 2700));
+    });
+    expect(view.getByTestId('recording-hint')).toBeTruthy();
+    expect(boundary.whisper!.realtimeActive()).toBe(true);
+
+    rtl.fireEvent(
+      view.getByTestId('voice-record-button'),
+      'responderRelease',
+      RESPONDER_EVENT,
+    );
+    await rtl.waitFor(
+      () => expect(boundary.whisper!.realtimeActive()).toBe(false),
+      { timeout: 4000 },
+    );
+    await rtl.act(async () => {
+      boundary.whisper!.emitRealtime({
+        text: TRANSCRIPT,
+        isCapturing: false,
+      });
+    });
+    await rtl.waitFor(
+      () => expect(view.getByTestId('chat-input').props.value).toBe(TRANSCRIPT),
+      { timeout: 4000 },
+    );
+    expect(view.queryByTestId('recording-hint')).toBeNull();
+    expect(view.queryByTestId('user-message')).toBeNull();
+
+    view.unmount();
   }, 30000);
 });

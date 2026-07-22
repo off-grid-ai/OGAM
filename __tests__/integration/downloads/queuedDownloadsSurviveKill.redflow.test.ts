@@ -204,7 +204,7 @@ describe('queued downloads survive an app kill (red-flow)', () => {
     // so a second kill right now would not lose them (the found=11 → found=1 loss).
     await flush();
     const persisted = await loadQueuedDownloads();
-    expect(persisted.length).toBe(3);
+    expect(persisted).toHaveLength(3);
   });
 
   it('no regression: an in-flight (started) download still hydrates via the native path', async () => {

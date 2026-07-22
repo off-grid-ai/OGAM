@@ -50,7 +50,24 @@ export function formatOverrideForcingLine(specKey: string, evict: Array<{ key: s
     .join(',')}]`;
 }
 
-/** OVERRIDE post-eviction trace ("forced load after evicting … (no floor)"). */
-export function formatOverrideForcedLine(specKey: string, evict: Array<{ key: string }>): string {
-  return `[MEM-SM] makeRoomFor ${specKey} OVERRIDE - forced load after evicting [${evict.map(e => e.key).join(',')}] (no floor)`;
+/** OVERRIDE post-eviction trace after the survival check admits the load. */
+export function formatOverrideAdmittedLine(args: {
+  specKey: string;
+  evict: Array<{ key: string }>;
+  realAvailableMB: number;
+  postLoadAvailableMB: number;
+  floorMB: number;
+}): string {
+  return `[MEM-SM] makeRoomFor ${args.specKey} OVERRIDE - admitted after evicting [${args.evict.map(e => e.key).join(',')}] realAvailMB=${args.realAvailableMB} postLoadAvailMB=${args.postLoadAvailableMB} floorMB=${args.floorMB}`;
+}
+
+/** OVERRIDE post-eviction trace when the hard survival floor blocks native loading. */
+export function formatOverrideRefusedLine(args: {
+  specKey: string;
+  realAvailableMB: number;
+  effectiveAvailableMB: number;
+  postLoadAvailableMB: number;
+  floorMB: number;
+}): string {
+  return `[MEM-SM] makeRoomFor ${args.specKey} OVERRIDE - refused by survival floor realAvailMB=${args.realAvailableMB} effectiveAvailMB=${args.effectiveAvailableMB} postLoadAvailMB=${args.postLoadAvailableMB} floorMB=${args.floorMB}`;
 }

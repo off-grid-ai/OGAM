@@ -17,12 +17,15 @@ import {
   computeBudgetMB,
   Resident,
 } from './policy';
-import { LoadPolicy, effectiveAvailableMB } from '../memoryBudget';
+import {
+  LoadPolicy,
+  effectiveAvailableMB,
+} from '../memoryBudget';
 import {
   formatMakeRoomForLine,
   formatOverrideForcingLine,
-  formatOverrideForcedLine,
 } from './logging';
+import { overridePassesSurvivalFloor } from './overrideSurvival';
 import {
   UnloadFn,
   MIN_BUDGET_MB,
@@ -295,7 +298,6 @@ class ModelResidencyManager {
     // Session override: an explicit opts.override (from a fresh "Load Anyway") OR this
     // model already approved earlier this session. Remember an explicit one so the user
     // isn't re-prompted when it's evicted and reloaded during model swaps.
-    if (opts?.override) this.rememberSessionOverride(spec.modelId);
     const override = !!opts?.override || this.hasSessionOverride(spec.modelId);
     const budgetMB = this.budgetForSpec(spec);
     const residents = this.planningResidents();
@@ -327,8 +329,10 @@ class ModelResidencyManager {
     // INDEPENDENT of the total-budget check above, so it never changes the clean+dirty swap cases
     // (a large image still evicts a resident text via the total budget).
     const dirtyCeilingMB = computeBudgetMB(totalMB, { policy: 'balanced' });
+    // Exclude the incoming's own same-key resident: on a reload it REPLACES that resident, so
+    // spec.sizeMB already covers it — counting both double-charges and refuses a model already in RAM.
     const keptDirtyMB = residents
-      .filter(r => r.dirtyMemory && !plan.evict.some(e => e.key === r.key))
+      .filter(r => r.dirtyMemory && r.key !== spec.key && !plan.evict.some(e => e.key === r.key))
       .reduce((sum, r) => sum + r.sizeMB, 0);
     const dirtyFootprintMB = (spec.dirtyMemory ? spec.sizeMB : 0) + keptDirtyMB;
     const dirtyCeilingExceeded = !!spec.dirtyMemory && dirtyFootprintMB > dirtyCeilingMB;
@@ -377,10 +381,18 @@ class ModelResidencyManager {
     // SIGKILL (uncatchable) mid-load. This is the real physics guard; measuring after the
     // real unload (not predicting) is what stops the false refusals.
     if (override) {
-      // Load Anyway is unconditional: the user explicitly accepted the risk, so we evict
-      // everything else (via singleModel above) to free maximum RAM and load — NO survival
-      // floor, NO refusal. The UI frames it as "not recommended, but you can try".
-      logger.log(formatOverrideForcedLine(spec.key, plan.evict));
+      const survives = await overridePassesSurvivalFloor({
+        spec,
+        totalRamMB: totalMB,
+        policy: this.loadPolicy,
+        evict: plan.evict,
+      });
+      if (!survives) {
+        return { evicted: actuallyEvicted, fits: false };
+      }
+      // Remember only an override that passed the hard limit. A refused attempt must
+      // not silently weaken later normal loads in this session.
+      if (opts?.override) this.rememberSessionOverride(spec.modelId);
     }
     return { evicted: actuallyEvicted, fits: true };
   }

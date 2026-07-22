@@ -253,7 +253,11 @@ platform :android do
       skip_upload_changelogs: true,
       skip_upload_images: true,
       skip_upload_screenshots: true,
-      release_status: "draft" # human confirms rollout in Play Console
+      # A track PROMOTION reads track_promote_release_status, NOT release_status — the latter only
+      # applies to a fresh upload. Without this it defaulted to "completed", so the promotion went
+      # straight to review/100% rollout instead of parking as a draft (device 2026-07-16, 0.0.103).
+      release_status: "draft",
+      track_promote_release_status: "draft" # human confirms rollout in Play Console
     )
     UI.success("Promoted internal build (versionCode #{version_code}) to Play production (draft - confirm rollout in console)")
   end

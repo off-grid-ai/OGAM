@@ -120,7 +120,7 @@ function buildBaseGenerationMeta(svc: any): GenerationMeta {
     tokensPerSecond: perf.lastTokensPerSecond,
     decodeTokensPerSecond: perf.lastDecodeTokensPerSecond,
     timeToFirstToken: perf.lastTimeToFirstToken,
-    tokenCount: perf.lastTokenCount,
+    tokenCount: perf.lastTokenCount, mtpEnabled: perf.lastMtpEnabled, draftTokens: perf.lastDraftTokens, draftTokensAccepted: perf.lastDraftTokensAccepted,
     cacheType: effectiveCacheType(settings.inferenceBackend, settings.cacheType),
     truncated: perf.lastTruncated,
   };
@@ -157,7 +157,7 @@ export function buildToolLoopHandlersImpl(svc: any) {
     onStreamReset: () => {
       svc.forceFlushTokens();
       svc.state.streamingContent = '';
-      svc.tokenBuffer = '';
+      svc.tokenBuffer = ''; svc.reasoningBuffer = ''; useChatStore.getState().resetStreamingOutput();
     },
     onFinalResponse: (content: string) => {
       svc.state.streamingContent = content;

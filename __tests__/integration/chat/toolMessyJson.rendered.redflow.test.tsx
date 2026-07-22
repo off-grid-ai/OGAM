@@ -10,7 +10,12 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
   useRoute: () => require('../../harness/chatHarness').routeHolder,
   useFocusEffect: () => {},
   useIsFocused: () => true,
@@ -22,16 +27,26 @@ describe('Q2 (behavioral) — unquoted-key tool call renders no result bubble', 
     h.enableToolViaUI('calculator');
     h.render();
 
-    // The model emits its visible reply "Calculating." plus a tool call with an UNQUOTED key in arguments.
-    await h.send('what is 2 + 2', { text: 'Calculating. <tool_call>{"name": "calculator", "arguments": {expression: "2+2"}}</tool_call>' });
+    // The first native turn emits a tool call with an UNQUOTED key; after the
+    // calculator runs, the second turn supplies the final user-visible answer.
+    h.boundary.llama!.scriptCompletions([
+      {
+        text: 'Calculating. <tool_call>{"name": "calculator", "arguments": {expression: "2+2"}}</tool_call>',
+      },
+      { text: 'The answer is 4.' },
+    ]);
+    await h.tapSend('what is 2 + 2');
 
-    // Wait on a USER-VISIBLE signal that the turn finished: the model's reply text "Calculating." appears on
-    // screen. (We can't "wait for absence"; we wait for the turn to complete, then assert the tool bubble.)
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Calculating\./)).not.toBeNull(); });
-    await h.settle(); // let the tool loop finish after the visible reply
+    // Wait on the terminal user-visible answer, not an intermediate tool turn.
+    await h.rtl.waitFor(() => {
+      expect(h.view!.queryByText(/The answer is 4\./)).not.toBeNull();
+    });
     // Correct: the calculator ran, so its result bubble is shown. Today the unquoted-key call is dropped by
     // the parser → the tool never runs → no tool-result bubble → RED. (A quoted key DOES render it — the
     // falsification control confirms this same assertion passes when the key is quoted.)
-    expect(h.view!.queryByTestId('tool-result-label-calculator')).not.toBeNull();
+    expect(
+      h.view!.queryByTestId('tool-result-label-calculator'),
+    ).not.toBeNull();
+    h.view!.unmount();
   });
 });

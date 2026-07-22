@@ -25,17 +25,18 @@ import { render, fireEvent } from '@testing-library/react-native';
 import { Linking } from 'react-native';
 
 import { NetworkSection } from '../../../src/screens/ModelDownloadHelpers';
-import { getTheme } from '../../../src/theme';
+import { COLORS_DARK } from '../../../src/theme/palettes';
 import { OFF_GRID_DESKTOP_URL } from '../../../src/constants';
 import { withUtm } from '../../../src/utils/utm';
 
 // Fake ONLY the device boundary — the OS URL opener. openURL returns a resolved promise like the real
 // module does on a device that can handle the link.
-const openURLSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(true as unknown as never);
+const openURLSpy = jest
+  .spyOn(Linking, 'openURL')
+  .mockResolvedValue(true as unknown as never);
 
 /** Mount the real network section in its empty state (no servers, not scanning). */
 function renderEmptyNetworkSection() {
-  const { colors } = getTheme('dark');
   return render(
     <NetworkSection
       servers={[]}
@@ -47,7 +48,7 @@ function renderEmptyNetworkSection() {
       onConnectServer={() => {}}
       onScanNetwork={() => {}}
       onAddManually={() => {}}
-      colors={colors}
+      colors={COLORS_DARK}
     />,
   );
 }
@@ -61,7 +62,9 @@ describe('Onboarding network empty state — leads with Off Grid AI Desktop + Ge
     const ui = renderEmptyNetworkSection();
 
     // Terminal artifact 1: the copy the user reads names the first-party server first.
-    expect(ui.getByText(/Off Grid AI Desktop, Ollama, or LM Studio server/)).toBeTruthy();
+    expect(
+      ui.getByText(/Off Grid AI Desktop, Ollama, or LM Studio server/),
+    ).toBeTruthy();
 
     // Terminal artifact 2: a tappable link is present.
     const link = ui.getByTestId('onboarding-get-desktop');
@@ -71,7 +74,9 @@ describe('Onboarding network empty state — leads with Off Grid AI Desktop + Ge
     fireEvent.press(link);
 
     // Behavior: it opened the UTM-tagged desktop URL through the device boundary.
-    expect(openURLSpy).toHaveBeenCalledWith(withUtm(OFF_GRID_DESKTOP_URL, 'model-download'));
+    expect(openURLSpy).toHaveBeenCalledWith(
+      withUtm(OFF_GRID_DESKTOP_URL, 'model-download'),
+    );
   });
 
   it('does not open any URL when an unrelated control (Scan Network) is pressed — falsifier', () => {

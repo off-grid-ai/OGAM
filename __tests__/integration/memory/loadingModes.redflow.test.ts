@@ -12,7 +12,8 @@
  *  - balanced: co-reside while the budget holds; swap (evict) when the incoming doesn't fit.
  *  - aggressive: co-reside like balanced (NOT single-model) — the current bug is that
  *    aggressive behaves single-model.
- *  - Load Anyway (override): ALWAYS loads — evict everything else, never refuse, no floor.
+ *  - Load Anyway (override): evicts everything else and bypasses the cautious budget,
+ *    while the hard device-survival floor remains authoritative.
  *
  * Budget note: on a 12GB device the balanced budget is ~8GB, so 2000+2000 co-reside. A CLEAN
  * model always co-resides beside a dirty one (it pages — see M1/budgetRedflow), so a genuine
@@ -88,18 +89,17 @@ describe('model-loading modes — conservative / balanced / aggressive (red-flow
     expect(modelResidencyManager.isResident('text')).toBe(true);
   });
 
-  it('Load Anyway (override): ALWAYS loads — evicts everything, never refuses', async () => {
-    // A model far bigger than the budget with another model resident + tiny real free RAM.
-    setDeviceMemory({ platform: 'android', totalGB: 12, availGB: gbOf(640) });
+  it('Load Anyway (override): evicts everything to give an admitted load maximum room', async () => {
+    roomy();
     modelResidencyManager.setLoadPolicy('balanced');
-    makeResident({ key: 'text', type: 'text', modelId: 'gemma', sizeMB: 5000, dirtyMemory: false });
+    makeResident({ key: 'text', type: 'text', modelId: 'gemma', sizeMB: 2000, dirtyMemory: false });
 
     const { fits, evicted } = await modelResidencyManager.makeRoomFor(
-      { key: 'image', type: 'image', modelId: 'sd', sizeMB: 9000, dirtyMemory: true },
+      { key: 'image', type: 'image', modelId: 'sd', sizeMB: 2000, dirtyMemory: true },
       { override: true },
     );
 
-    expect(fits).toBe(true); // never refused under override
+    expect(fits).toBe(true);
     expect(evicted).toContain('text'); // evicts everything to free maximum RAM
   });
 });

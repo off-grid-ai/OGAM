@@ -275,7 +275,7 @@ class WorkerDownload(
         val current = downloadDao.getDownload(downloadId) ?: download
         return if (current.status == DownloadStatus.CANCELLED) {
             val partialFile = File(current.destination)
-            if (partialFile.exists()) partialFile.delete()
+            if (partialFile.exists() && !partialFile.delete()) Log.w(TAG, "Failed to delete partial file on cancel: ${partialFile.path}")
             Result.failure()
         } else {
             // System stopped the worker — retry silently, no JS state change.

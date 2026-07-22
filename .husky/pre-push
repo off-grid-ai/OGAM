@@ -1,6 +1,13 @@
 #!/usr/bin/env sh
+# Fast local pre-push gate. Re-enabled after being disabled (the old hook fanned the push range out
+# into ONE jest process PER test file via `xargs -n 1`, and ran Sonar on every push — tens of
+# minutes). Fixes: related tests run in a SINGLE jest invocation, and Sonar is left to CI (the
+# authoritative full gate). Scoped to the changed files in the push range, so ordinary pushes stay fast.
+set -e
 
 ZERO_OID="0000000000000000000000000000000000000000"
+ROOT="$(git rev-parse --show-toplevel)"
+BIN="$ROOT/node_modules/.bin"
 
 collect_changed_files() {
   changed_files=""
@@ -41,21 +48,27 @@ PUSHED_SWIFT=$(printf '%s\n' "$CHANGED_FILES" | grep '\.swift$' | grep -v 'Pods/
 PUSHED_KOTLIN=$(printf '%s\n' "$CHANGED_FILES" | grep -E '\.(kt|kts)$' || true)
 
 if [ -n "$PUSHED_JS" ]; then
+  echo "▶ Pro real-module gate..."
+  npm run check:no-pro-mocks
+
   echo "▶ JS/TS lint (push range)..."
-  echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 eslint --max-warnings=999
+  echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 "$BIN/eslint" --max-warnings=999
 
   echo "▶ TypeScript type check..."
-  npx tsc --noEmit
+  "$BIN/tsc" --noEmit
 
-  echo "▶ JS/TS tests (related to changed files)..."
-  echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 npx jest --findRelatedTests --passWithNoTests
+  # NOTE: no jest here. `--findRelatedTests` on any App-imported file (a screen, a core service,
+  # jest.setup) relates to EVERY full-app journey suite — hundreds of tests, tens of minutes: the
+  # exact "pathological" slowness that got this hook disabled. A pre-push hook must stay fast, so the
+  # local gate is the quick static checks below; CI runs the full jest suite as the authoritative
+  # test gate. (Run `npm test` locally when you want the suite before pushing.)
 
   echo "▶ Architecture gate (dependency-cruiser)..."
   npm run depcruise
 
   # knip runs in CI (the "architecture" job) as a hard 0-gate, but was NOT in this local hook, so
-  # unused-export failures only surfaced after a wasted CI round-trip (twice). Run it here too. It
-  # analyses the whole project (not just the push range), so keep it in the JS block.
+  # unused-export failures only surfaced after a wasted CI round-trip. Run it here too. It analyses
+  # the whole project (not just the push range), so keep it in the JS block.
   echo "▶ Dead-code gate (knip)..."
   npm run knip
 fi
@@ -81,9 +94,4 @@ if [ -n "$PUSHED_KOTLIN" ]; then
 
   echo "▶ Android tests..."
   npm run test:android
-fi
-
-if [ -n "$PUSHED_JS$PUSHED_SWIFT$PUSHED_KOTLIN" ]; then
-  echo "▶ Sonar scan..."
-  npm run sonar
 fi

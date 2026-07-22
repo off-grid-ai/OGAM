@@ -588,6 +588,73 @@ describe('HuggingFaceService', () => {
     });
   });
 
+  describe('HuggingFace request timeout', () => {
+    it('aborts an unresponsive file-list request after 5s without starting a fallback request', async () => {
+      jest.useFakeTimers();
+      const originalFetch = global.fetch;
+      const requestedUrls: string[] = [];
+      let requestSignal: AbortSignal | undefined;
+      global.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+        requestedUrls.push(String(input));
+        requestSignal = init?.signal ?? undefined;
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted.', 'AbortError'));
+          });
+        });
+      }) as typeof fetch;
+
+      try {
+        const request = huggingFaceService.getModelFiles('org/unresponsive');
+        const outcome = request.catch(error => error as Error);
+
+        await jest.advanceTimersByTimeAsync(4999);
+        expect(requestSignal?.aborted).toBe(false);
+        await jest.advanceTimersByTimeAsync(1);
+        expect(requestSignal?.aborted).toBe(true);
+        await expect(outcome).resolves.toMatchObject({ name: 'AbortError' });
+
+        expect(requestedUrls).toHaveLength(1);
+        expect(requestedUrls[0]).toContain('/models/org/unresponsive/tree/main');
+      } finally {
+        global.fetch = originalFetch;
+        jest.useRealTimers();
+      }
+    });
+
+    it('keeps the timeout active while the response body is being read', async () => {
+      jest.useFakeTimers();
+      const originalFetch = global.fetch;
+      let requestSignal: AbortSignal | undefined;
+      global.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+        requestSignal = init?.signal ?? undefined;
+        return Promise.resolve({
+          ok: true,
+          json: () => new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              reject(new DOMException('The operation was aborted.', 'AbortError'));
+            });
+          }),
+        } as Response);
+      }) as typeof fetch;
+
+      try {
+        const outcome = huggingFaceService
+          .getModelFiles('org/stalled-body')
+          .catch(error => error as Error);
+
+        await jest.advanceTimersByTimeAsync(4999);
+        expect(requestSignal?.aborted).toBe(false);
+        await jest.advanceTimersByTimeAsync(1);
+        expect(requestSignal?.aborted).toBe(true);
+        await expect(outcome).resolves.toMatchObject({ name: 'AbortError' });
+      } finally {
+        global.fetch = originalFetch;
+        jest.useRealTimers();
+      }
+    });
+  });
+
   describe('getModelFilesFromSiblings — sort with multiple files', () => {
     it('sorts sibling files by size ascending', async () => {
       global.fetch = jest.fn()

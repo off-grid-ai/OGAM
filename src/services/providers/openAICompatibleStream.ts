@@ -139,15 +139,36 @@ function processToolCallChunk(
   tc: NonNullable<DeltaShape['tool_calls']>[0],
   state: OpenAIStreamState,
 ): void {
-  if (tc.id) {
-    state.currentToolCall = { id: tc.id, type: 'function', function: { name: '', arguments: '' } };
-    state.toolCalls.push(state.currentToolCall as OpenAIToolCall);
+  const index =
+    Number.isInteger(tc.index) && tc.index! >= 0 ? tc.index : undefined;
+  let target = index === undefined ? undefined : state.toolCalls[index];
+
+  // Create a target from EITHER an id or an index. Some OpenAI-compatible servers stream the first
+  // tool_calls chunk with `index` + `function.name` but defer the `id` to a later chunk — keying only
+  // off `id` dropped that chunk (losing the tool name) so the call never executed. When no id has
+  // arrived yet, slot a synthetic id off the index; a real id on a later chunk overwrites it below.
+  if (!target && (tc.id || index !== undefined)) {
+    target = {
+      id: tc.id ?? `call_${index}`,
+      type: 'function',
+      function: { name: '', arguments: '' },
+    };
+    if (index === undefined) state.toolCalls.push(target);
+    else state.toolCalls[index] = target;
   }
-  if (tc.function?.name && state.currentToolCall?.function) {
-    state.currentToolCall.function.name = tc.function.name;
+
+  // Some providers omit `index` on continuation chunks. Preserve their legacy
+  // sequential behavior while preferring the OpenAI index whenever it exists.
+  if (!target && state.currentToolCall?.function) {
+    target = state.currentToolCall as OpenAIToolCall;
   }
-  if (tc.function?.arguments && state.currentToolCall?.function) {
-    state.currentToolCall.function.arguments += tc.function.arguments;
+  if (!target) return;
+
+  state.currentToolCall = target;
+  if (tc.id) target.id = tc.id;
+  if (tc.function?.name) target.function.name = tc.function.name;
+  if (tc.function?.arguments) {
+    target.function.arguments += tc.function.arguments;
   }
 }
 

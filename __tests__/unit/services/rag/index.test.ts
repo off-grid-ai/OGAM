@@ -68,7 +68,7 @@ describe('RagService', () => {
       const docId = await ragService.indexDocument({ projectId: 'proj1', filePath: '/path/test.txt', fileName: 'test.txt', fileSize: 100, onProgress });
 
       expect(mockDocService.processDocumentFromPath).toHaveBeenCalledWith('/path/test.txt', 'test.txt', 500_000);
-      expect(mockDb.insertDocument).toHaveBeenCalledWith({ projectId: 'proj1', name: 'test.txt', path: '/path/test.txt', size: 100 });
+      expect(mockDb.insertDocument).toHaveBeenCalledWith({ projectId: 'proj1', name: 'test.txt', path: '/path/to/doc', size: 100 });
       expect(mockDb.insertChunks).toHaveBeenCalled();
       expect(docId).toBe(1);
 

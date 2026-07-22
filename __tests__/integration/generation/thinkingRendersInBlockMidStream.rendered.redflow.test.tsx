@@ -14,18 +14,33 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
   useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
+  useFocusEffect: () => {},
+  useIsFocused: () => true,
 }));
 
-const REASON = 'Step one: consider six groups of seven. Step two: add them up carefully to reach the total.';
+const REASON =
+  'Step one: consider six groups of seven. Step two: add them up carefully to reach the total.';
 
 describe('T033 (rendered) — <think> reasoning renders in the thinking block mid-stream, not the answer (DEV-B14)', () => {
   it('shows the reasoning in the thinking block (not the answer) while <think> is still open', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
-    h.useAppStore.getState().updateSettings({ thinkingEnabled: true });
     h.render();
+
+    // Enable Thinking through the real composer control so the journey proves the
+    // same settings path a user takes instead of manufacturing store state.
+    h.rtl.fireEvent.press(
+      await h.rtl.waitFor(() => h.view!.getByTestId('quick-settings-button')),
+    );
+    h.rtl.fireEvent.press(
+      await h.rtl.waitFor(() => h.view!.getByTestId('quick-thinking-toggle')),
+    );
 
     // Stream <think>REASON</think>ANSWER but HOLD deep inside the still-open <think> (before </think>).
     h.boundary.llama!.scriptCompletion({
@@ -35,14 +50,24 @@ describe('T033 (rendered) — <think> reasoning renders in the thinking block mi
     await h.tapSend('what is 6 times 7');
 
     // MID-<think>: the reasoning renders INSIDE the thinking block (from token 1)...
-    const block = await h.rtl.waitFor(() => h.view!.getByTestId('thinking-block-content'), { timeout: 4000 });
-    expect(h.rtl.within(block).queryByText(/Step one: consider six/)).not.toBeNull();
+    const block = await h.rtl.waitFor(
+      () => h.view!.getByTestId('thinking-block-content'),
+      { timeout: 4000 },
+    );
+    expect(
+      h.rtl.within(block).queryByText(/Step one: consider six/),
+    ).not.toBeNull();
     // ...and it has NOT leaked into the answer: the assistant answer is not produced yet (still thinking).
     expect(h.view!.queryByText(/The answer is 42/)).toBeNull();
 
     h.boundary.llama!.releaseStream();
 
     // After </think> + the answer stream: the answer now renders.
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/The answer is 42/)).not.toBeNull(); }, { timeout: 4000 });
+    await h.rtl.waitFor(
+      () => {
+        expect(h.view!.queryByText(/The answer is 42/)).not.toBeNull();
+      },
+      { timeout: 4000 },
+    );
   });
 });

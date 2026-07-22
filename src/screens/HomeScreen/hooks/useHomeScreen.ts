@@ -115,7 +115,7 @@ export const useHomeScreen = (navigation: HomeScreenNavigationProp) => {
     handleUnloadRemoteTextModel,
     handleSelectRemoteImageModel,
     handleUnloadRemoteImageModel,
-  } = useRemoteModelHandlers({ activeModelId, setPickerType, setLoadingState, setAlertState });
+  } = useRemoteModelHandlers({ setPickerType, setLoadingState, setAlertState });
 
   useEffect(() => {
     const task = InteractionManager.runAfterInteractions(() => {
