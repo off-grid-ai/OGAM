@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator, ScrollView } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../../components/AppSheet';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
@@ -42,7 +42,10 @@ export const WhisperPickerSheet: React.FC<Props> = ({ visible, onClose }) => {
 
   return (
     <AppSheet visible={visible} onClose={onClose} title="TRANSCRIPTION MODEL" enableDynamicSizing>
-      <View style={styles.content}>
+      {/* Scrollable: the sheet caps at 85% of the screen, and the full model list
+          is taller than that on most phones - without a scroll container the last
+          rows are clipped by the sheet's overflow:hidden and can't be reached. */}
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator>
         {WHISPER_MODELS.map((m) => {
           const active = downloadedModelId === m.id;
           const present = presentModelIds.includes(m.id);
@@ -84,12 +87,15 @@ export const WhisperPickerSheet: React.FC<Props> = ({ visible, onClose }) => {
             </AnimatedPressable>
           );
         })}
-      </View>
+      </ScrollView>
     </AppSheet>
   );
 };
 
 const createStyles = (colors: ThemeColors) => ({
+  // flexShrink lets the list shrink to fit inside the sheet's 85% cap and scroll
+  // the overflow, instead of overflowing and being clipped.
+  scroll: { flexShrink: 1 as number },
   content: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm, paddingBottom: SPACING.xl, gap: SPACING.sm as number },
   row: {
     flexDirection: 'row' as const,
