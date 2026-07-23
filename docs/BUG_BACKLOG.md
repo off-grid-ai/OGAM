@@ -37,7 +37,30 @@ B24/B25/B26, B16–B21, B29/B30/B32, B34, B37/B38/B41, B42/B43/B44, B45, A2.
 
 ## Section A — NEW / open bugs (solve fresh, no existing fix)
 
-### A1. iOS: non-Qwen vision model crashes with "Multimodal support not enabled" `TODO`
+> **Method (set 2026-07-23):** every bug is proven with a REAL automated test that exercises the
+> real external boundary — e.g. A1's test calls Hugging Face live (no mocks) and runs the real
+> pair→rename→belongs pipeline over what HF actually publishes. Same approach for the download/zip
+> bugs (B13–B21): drive the real download/unzip/reconcile pipeline, fakes only at the device edge.
+
+### A1. iOS: non-Qwen vision model crashes with "Multimodal support not enabled" `FIX APPLIED — awaiting on-device`
+Branch `fix/ios-vision-mmproj-not-initialized` (`62fae4a8` test, `e4380b30` fix). Root cause: ggml-org
+names projectors `mmproj-<ModelName>-<quant>.gguf` (model name AFTER "mmproj"); the old `/mmproj.*$/`
+in `mmProjLocalName` baked that name into the on-disk file → doubled identity stem → `mmProjBelongsToModel`
+refused it → `linkOrphanMmProj` cleared the link → text-only load → `initMultimodal` never ran. Fix:
+keep only the precision token. Proven against LIVE HF: 8 rename-broken vision repos (3 curated: SmolVLM,
+SmolVLM2-2.2B, SmolVLM2-500M-Video; + SmolVLM-256M/500M, Qwen2.5-VL-3B/7B, pixtral, InternVL) now pass;
+the 6 already-working repos stay working. **Gate before PR/merge: repair SmolVLM on the `.dev` iOS build →
+attach image → vision answers (`[WIRE-VISION] … initialized:true`).**
+
+### A3. Vision projector NOT paired at all for several wild repos (`no-pairing`) `TODO`
+Discovered during A1's live-HF sweep. `pickMmProjForDownload` returns nothing (so no projector is ever
+downloaded → text-only) for these shapes: `mmproj-model-<prec>.gguf` literal token (ggml-org gemma-3,
+openbmb MiniCPM-V), a `UD-`packaged model quant (ggml-org Mistral-Small-3.1), and an infixed `mmproj` on a
+`-text-model-` weights name (moondream). **None are curated** → lower priority than A1, but real. Tracked
+as a ledger assertion in A1's network test so a new break/fix is caught. Separate seam (`mmproj.ts`
+`pickMmProjForDownload`), separate PR.
+
+### A1-orig. (original A1 note kept for reference)
 **Reported:** 2026-07-23 (Christophe Marinier, iPhone 12 iOS 26.5.2 / also iOS 17; app v0.0.102).
 - Model: `SmolVLM-256M-Instruct-Q8_0.gguf`. Model loads, Repair reports success, image
   attaches — then generation throws **"Multimodal support not enabled. Call initMultimodal first."**
