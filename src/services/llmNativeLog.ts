@@ -24,7 +24,11 @@ export function ensureNativeLogCapture(): void {
     toggleNativeLog(true);
     addNativeLogListener((level: string, text: string) => {
       const line = `${(level || 'info').trim()}: ${(text || '').trim()}`;
-      logger.log(`[LLM-NATIVE] ${line}`);
+      // Keep the native log in the ring buffer ONLY (surfaced on a load failure via
+      // recentNativeLog() -> [LLM] llama.cpp native log tail). We deliberately do NOT
+      // tee every native line to logger.log: llama.cpp emits load + per-generation
+      // spam that floods the Debug Logs and buries our own traces. The failure reason
+      // is still captured on demand; enabling the live tee is one line if ever needed.
       recent.push(line);
       if (recent.length > RING_SIZE) recent.shift();
     });
