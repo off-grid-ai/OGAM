@@ -1276,4 +1276,22 @@ describe('mmProjLocalName — one shared projector per model (dedup across quant
     expect(mmProjBelongsToModel('gemma-4-E2B-it-Q8_0.gguf', name)).toBe(true);
     expect(mmProjBelongsToModel('gemma-4-E4B-it-Q8_0.gguf', name)).toBe(false);
   });
+
+  // A1 (device 2026-07-23, iOS): ggml-org names projectors `mmproj-<ModelName>-<quant>.gguf` — the model name
+  // sits AFTER the "mmproj" token. The old `/mmproj.*$/` kept that model name, doubling the on-disk stem so
+  // mmProjBelongsToModel refused it → link cleared → "Multimodal support not enabled". Offline guard so the
+  // regression is caught without the network (the live-HF proof is the .network integration test).
+  it('ggml-org shape: model name AFTER the mmproj token is dropped, on-disk name still belongs (SmolVLM/Qwen-VL)', () => {
+    const smol = mmProjLocalName('SmolVLM-256M-Instruct-Q8_0.gguf', 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf');
+    expect(smol).toBe('smolvlm-256m-instruct-mmproj-Q8_0.gguf');
+    expect(mmProjBelongsToModel('SmolVLM-256M-Instruct-Q8_0.gguf', smol)).toBe(true);
+
+    const qwen = mmProjLocalName('Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf', 'mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf');
+    expect(qwen).toBe('qwen2.5-vl-3b-instruct-mmproj-f16.gguf');
+    expect(mmProjBelongsToModel('Qwen2.5-VL-3B-Instruct-Q8_0.gguf', qwen)).toBe(true);
+
+    // every quant of the ggml-org model still shares ONE projector file (quant-independent dedup preserved)
+    expect(mmProjLocalName('SmolVLM-256M-Instruct-Q8_0.gguf', 'mmproj-SmolVLM-256M-Instruct-f16.gguf'))
+      .toBe(mmProjLocalName('SmolVLM-256M-Instruct-Q4_K_M.gguf', 'mmproj-SmolVLM-256M-Instruct-f16.gguf'));
+  });
 });
