@@ -12,6 +12,26 @@ before the next starts.
 - Each bug below references the originating commit(s) on `fix/onboarding-analyzing-device-hang`
   so the known-good fix can be extracted, reviewed cleanly, and re-verified — not reinvented.
 - Status legend: `TODO` · `IN PROGRESS` · `PR OPEN` · `VERIFIED` · `MERGED`.
+- **Per-bug loop:** deep-research the issue AND the supposed fix → decide whether it earns a PR →
+  port + verify → next.
+
+---
+
+## Prioritized order
+
+**P0 — live blockers / data loss / crashes users hit now**
+1. **A1** — iOS vision "Multimodal support not enabled" (paying user blocked now)
+2. **B5** — silent data loss: valid model unlinked on transient FS error (G1)
+3. **B8** — Load-Anyway falsely refused: pre-reclaim RAM probe (G3)
+4. **B9** — already-resident image model double-counted (G4)
+5. **B15** — partial-extract zip registered complete → native crash (G7)
+6. **B1** — onboarding hangs on "Analyzing device"
+
+**P1 — functional breakage, recoverable**
+B13/B14, B22/B23, B6/B7, B10/B11/B12, B33, B35/B36, B31, B27/B28, B39/B40, B2/B3/B4.
+
+**P2 — polish / edge / display-only**
+B24/B25/B26, B16–B21, B29/B30/B32, B34, B37/B38/B41, B42/B43/B44, B45, A2.
 
 ---
 
