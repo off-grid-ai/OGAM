@@ -40,6 +40,12 @@ PUSHED_JS=$(printf '%s\n' "$CHANGED_FILES" | grep -E '\.(ts|tsx|js|jsx)$' || tru
 PUSHED_SWIFT=$(printf '%s\n' "$CHANGED_FILES" | grep '\.swift$' | grep -v 'Pods/' | grep -v 'build/' || true)
 PUSHED_KOTLIN=$(printf '%s\n' "$CHANGED_FILES" | grep -E '\.(kt|kts)$' || true)
 
+# Native BUILD gate — moved OUT of CI (the hosted android-build runner hung for 3+ hours on the
+# native C++ builds). Run the full native builds LOCALLY on push when native / gradle / pods / deps
+# change. JS-only and docs-only pushes skip these (they stay fast).
+PUSHED_ANDROID_NATIVE=$(printf '%s\n' "$CHANGED_FILES" | grep -E '\.(kt|kts)$|^android/|^package(-lock)?\.json$' | grep -v '/build/' || true)
+PUSHED_IOS_NATIVE=$(printf '%s\n' "$CHANGED_FILES" | grep -E '\.swift$|^ios/|Podfile' | grep -v 'Pods/' | grep -v '/build/' || true)
+
 if [ -n "$PUSHED_JS" ]; then
   echo "▶ JS/TS lint (push range)..."
   echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 eslint --max-warnings=999
@@ -81,6 +87,24 @@ if [ -n "$PUSHED_KOTLIN" ]; then
 
   echo "▶ Android tests..."
   npm run test:android
+fi
+
+if [ -n "$PUSHED_ANDROID_NATIVE" ]; then
+  echo "▶ Android build (assembleDebug + assembleRelease) — local gate, replaces CI android-build..."
+  (cd android && ./gradlew assembleDebug assembleRelease)
+fi
+
+if [ -n "$PUSHED_IOS_NATIVE" ]; then
+  echo "▶ iOS build (simulator, no code-signing) — local gate..."
+  (cd ios && xcodebuild \
+    -workspace OffgridMobile.xcworkspace \
+    -scheme OffgridMobile \
+    -configuration Debug \
+    -sdk iphonesimulator \
+    -destination 'generic/platform=iOS Simulator' \
+    -derivedDataPath build/prepush-ios \
+    CODE_SIGNING_ALLOWED=NO \
+    build)
 fi
 
 if [ -n "$PUSHED_JS$PUSHED_SWIFT$PUSHED_KOTLIN" ]; then
