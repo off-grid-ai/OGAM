@@ -44,7 +44,7 @@ PUSHED_KOTLIN=$(printf '%s\n' "$CHANGED_FILES" | grep -E '\.(kt|kts)$' || true)
 # native C++ builds). Run the full native builds LOCALLY on push when native / gradle / pods / deps
 # change. JS-only and docs-only pushes skip these (they stay fast).
 PUSHED_ANDROID_NATIVE=$(printf '%s\n' "$CHANGED_FILES" | grep -E '\.(kt|kts)$|^android/|^package(-lock)?\.json$' | grep -v '/build/' || true)
-PUSHED_IOS_NATIVE=$(printf '%s\n' "$CHANGED_FILES" | grep -E '\.swift$|^ios/|Podfile' | grep -v 'Pods/' | grep -v '/build/' || true)
+PUSHED_IOS_NATIVE=$(printf '%s\n' "$CHANGED_FILES" | grep -E '\.swift$|^ios/|Podfile|^package(-lock)?\.json$' | grep -v 'Pods/' | grep -v '/build/' || true)
 
 if [ -n "$PUSHED_JS" ]; then
   echo "▶ JS/TS lint (push range)..."
