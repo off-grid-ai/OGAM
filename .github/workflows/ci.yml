@@ -200,42 +200,11 @@ jobs:
           path: android/app/build/reports/tests/
           if-no-files-found: ignore
 
-  android-build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Free disk space
-        # The native C++ builds (react-native-audio-api, op-sqlite) exhausted the runner
-        # disk ("LLVM ERROR: IO failure on output stream: No space left on device").
-        # Reclaim large preinstalled toolchains we don't use; keep the Android SDK/NDK.
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
-          sudo docker image prune --all --force || true
-          df -h
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Android Debug
-        run: cd android && ./gradlew assembleDebug
-
-      - name: Build Android Release
-        run: cd android && ./gradlew assembleRelease
+  # NOTE: the Android build is NOT run in CI — it is a LOCAL pre-merge gate instead (the hosted
+  # runner repeatedly hung for 3+ hours on the native C++ builds and burned hours). Run it locally
+  # before merging any change that touches native/Android/gradle/deps:
+  #     cd android && ./gradlew assembleDebug assembleRelease
+  # (see rules.md → On-device testing & verification). Docs-only / JS-only PRs don't need it.
 
   # NOTE: SonarCloud runs via Automatic Analysis (SonarCloud-side, on the public core project) —
   # no CI job. A CI scan would only add coverage import, which Codecov (in the `test` job) already
