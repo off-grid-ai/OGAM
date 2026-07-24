@@ -142,16 +142,16 @@ describe('vision mmproj pairing/rename/download over cached REAL Hugging Face da
     },
   );
 
-  it('KNOWN-OPEN (separate, non-curated pairing bug): exactly these wild repos still fail to pair — tracked', () => {
-    const noPairing = ALL_REPOS.filter(id => {
+  it('EVERY examined vision repo (curated + popular, all naming shapes) pairs a projector that belongs', () => {
+    // Was a "known-open" ledger for the no-pairing shapes (mmproj-model literal, moondream infixed
+    // mmproj + -text-model weights, unsloth UD- quant packaging). All are fixed in mmproj.ts now, so the
+    // invariant is stronger: NO real vision repo is left unpaired or with a mismatched on-disk name.
+    const broken = ALL_REPOS.filter(id => {
       const repo = fx?.[id];
-      return repo?.exists && !repoPairsAndBelongs(repo).pairs;
+      if (!repo?.exists) return false;
+      const { pairs, belongs } = repoPairsAndBelongs(repo);
+      return !pairs || !belongs;
     }).sort();
-    expect(noPairing).toEqual([
-      'ggml-org/Mistral-Small-3.1-24B-Instruct-2503-GGUF',
-      'ggml-org/gemma-3-4b-it-GGUF',
-      'moondream/moondream2-gguf',
-      'openbmb/MiniCPM-V-2_6-gguf',
-    ]);
+    expect(broken).toEqual([]);
   });
 });

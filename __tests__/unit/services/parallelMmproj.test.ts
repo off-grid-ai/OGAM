@@ -17,7 +17,7 @@ import {
   syncCompletedBackgroundDownloads,
   mmProjLocalName,
 } from '../../../src/services/modelManager/download';
-import { mmProjBelongsToModel } from '../../../src/services/mmproj';
+import { mmProjBelongsToModel, pickMmProjForDownload } from '../../../src/services/mmproj';
 import { restoreInProgressDownloads } from '../../../src/services/modelManager/restore';
 import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
 import { BackgroundDownloadContext } from '../../../src/services/modelManager/types';
@@ -1293,5 +1293,31 @@ describe('mmProjLocalName — one shared projector per model (dedup across quant
     // every quant of the ggml-org model still shares ONE projector file (quant-independent dedup preserved)
     expect(mmProjLocalName('SmolVLM-256M-Instruct-Q8_0.gguf', 'mmproj-SmolVLM-256M-Instruct-f16.gguf'))
       .toBe(mmProjLocalName('SmolVLM-256M-Instruct-Q4_K_M.gguf', 'mmproj-SmolVLM-256M-Instruct-f16.gguf'));
+  });
+});
+
+// A1 no-pairing shapes (found in the live-HF sweep) — pickMmProjForDownload must pair these too.
+describe('pickMmProjForDownload — additional real-world projector shapes', () => {
+  it('literal `mmproj-model-<prec>` placeholder is generic (ggml-org gemma-3, openbmb MiniCPM)', () => {
+    expect(pickMmProjForDownload('gemma-3-4b-it-Q4_K_M.gguf', ['mmproj-model-f16.gguf']))
+      .toBe('mmproj-model-f16.gguf');
+    expect(pickMmProjForDownload('ggml-model-Q4_K_M.gguf', ['mmproj-model-f16.gguf']))
+      .toBe('mmproj-model-f16.gguf');
+  });
+
+  it('unsloth UD- dynamic-quant packaging is stripped so the model matches its non-UD projector', () => {
+    expect(mmProjBelongsToModel(
+      'Mistral-Small-3.1-24B-Instruct-2503-UD-IQ2_M.gguf',
+      'mmproj-Mistral-Small-3.1-24B-Instruct-2503-Q8_0.gguf',
+    )).toBe(true);
+  });
+
+  it('moondream `-text-model` weights match the `-mmproj` projector of the same base', () => {
+    expect(mmProjBelongsToModel('moondream2-text-model-f16.gguf', 'moondream2-mmproj-f16.gguf')).toBe(true);
+  });
+
+  it('still REFUSES a genuinely different model+variant (no over-loosening: E2B ≠ E4B)', () => {
+    expect(pickMmProjForDownload('gemma-4-E2B-it-Q4_K_M.gguf', ['gemma-4-E4B-it-mmproj-F16.gguf']))
+      .toBeUndefined();
   });
 });
