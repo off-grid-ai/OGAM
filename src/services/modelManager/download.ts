@@ -24,11 +24,19 @@ import { extractBaseName } from './scan';
  */
 export function mmProjLocalName(ggufFileName: string, mmProjSourceName?: string): string {
   const base = extractBaseName(ggufFileName);
-  // Keep the projector's OWN precision (mmproj-F16 / mmproj-BF16) from its source filename, but strip any
-  // model prefix the repo added — so the on-disk name is `<model-base>-mmproj-<precision>.gguf`:
-  //  - model-prefixed  → two repos that both ship `mmproj-F16.gguf` can't collide on disk (the original loss),
+  // Build the on-disk name as `<model-base>-mmproj-<precision>.gguf`, keeping ONLY the projector's own
+  // precision token from its source name and dropping every model-name token wherever it sits.
+  //  - `<model-base>` prefix → two repos that both ship `mmproj-F16.gguf` can't collide on disk.
   //  - MODEL-quant-independent (extractBaseName drops the model quant) → every quant shares ONE projector file.
-  const proj = mmProjSourceName?.match(/mmproj.*$/i)?.[0] ?? 'mmproj.gguf';
+  //  - precision-only projector portion → the on-disk stem always matches the model, so mmProjBelongsToModel
+  //    keeps the link. The old `/mmproj.*$/` swallowed a model name the repo put AFTER "mmproj"
+  //    (ggml-org ships `mmproj-<ModelName>-<quant>.gguf`), doubling the stem → the link was cleared and vision
+  //    never initialized ("Multimodal support not enabled" — device 2026-07-23, SmolVLM/Qwen2.5-VL on iOS).
+  // The projector's own precision is the token immediately before `.gguf`. Anchoring to `\.gguf$` makes the
+  // match LINEAR (no super-linear backtracking) and inherently takes the TRAILING token, so a precision-like
+  // token buried in a model name can never win.
+  const precision = mmProjSourceName?.match(/[-_.](iq\d[a-z0-9_]*|q\d[a-z0-9_]*|bf16|fp16|f16|f32)\.gguf$/i)?.[1];
+  const proj = precision ? `mmproj-${precision}.gguf` : 'mmproj.gguf';
   return `${base}-${proj}`;
 }
 

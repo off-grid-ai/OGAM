@@ -373,3 +373,23 @@ fileExceedsBudget's boundary (size == budget: `>` vs `>=`) has no test straddlin
 the verifier's `>`↔`>=` mutant survived. Off-by-one-byte at the budget edge; no user-visible impact
 (a model exactly at the budget is a measure-zero case). Add a boundary test if fileExceedsBudget is
 touched again. Not fixed now (marginal, near release).
+
+## A1 mmproj fix — possible load-immediately-after-download vision race (2026-07-24)
+
+**Verdict: instrument-and-revisit (LOW — unconfirmed). NOT a merge blocker; PR #605 verified on both
+platforms.**
+
+A1's fix is verified on-device on BOTH iOS and Android (ggml-org SmolVLM-256M → real vision answer;
+`[WIRE-VISION] initialized:true, vision:true` on both; mmproj on disk as the correct
+`smolvlm-256m-instruct-mmproj-Q8_0.gguf`, `mmProjFileExists:true`). So the naming/matching fix is
+correct and complete on both platforms.
+
+Watch-item: during the FIRST Android attempt — a messy sequence right after download, on a
+non-debuggable build, with a system notification-permission dialog intercepting taps — a vision send
+threw "Multimodal support not enabled". It did NOT reproduce on the clean debuggable run (model
+downloaded+linked, loaded fresh → vision:true → correct description). Possible unconfirmed cause: a
+model loaded text-only if loaded in the window before its mmProjPath is persisted on the record
+(load-immediately-after-download race), OR just the permission-dialog interference. If a real user
+reports vision failing right after a first download, instrument the load path: assert the model
+record's mmProjPath is set before the first load, and re-derive multimodal if a mmproj is linked after
+a text-only load.
