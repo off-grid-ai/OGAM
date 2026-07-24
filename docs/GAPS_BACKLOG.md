@@ -374,27 +374,22 @@ the verifier's `>`↔`>=` mutant survived. Off-by-one-byte at the budget edge; n
 (a model exactly at the budget is a measure-zero case). Add a boundary test if fileExceedsBudget is
 touched again. Not fixed now (marginal, near release).
 
-## A1 mmproj fix — VERIFIED iOS, REPRODUCES on Android (2026-07-24)
+## A1 mmproj fix — possible load-immediately-after-download vision race (2026-07-24)
 
-**Verdict: instrument-and-revisit — merge of PR #605 HELD until root-caused on Android.**
+**Verdict: instrument-and-revisit (LOW — unconfirmed). NOT a merge blocker; PR #605 verified on both
+platforms.**
 
-The vision-projector fix (mmProjLocalName precision-only rename + pickMmProjForDownload shape
-handling) is proven on iOS device (ggml-org SmolVLM-256M → real vision answer; log
-`[WIRE-VISION] initialized:true`) and by the live-HF fixture test. But the SAME model on Android
-(OnePlus CPH2707, Android 16, the fixed JS served via Metro) still throws **"Multimodal support
-not enabled. Call initMultimodal first."** at generation — Christophe's exact error.
+A1's fix is verified on-device on BOTH iOS and Android (ggml-org SmolVLM-256M → real vision answer;
+`[WIRE-VISION] initialized:true, vision:true` on both; mmproj on disk as the correct
+`smolvlm-256m-instruct-mmproj-Q8_0.gguf`, `mmProjFileExists:true`). So the naming/matching fix is
+correct and complete on both platforms.
 
-Observed: the model downloaded (model+mmproj), showed the **Vision badge (no repair wrench)** in the
-picker and a downloaded/trash state in the detail — so the app believes the mmproj is linked — yet
-`initMultimodal` did not take on the loaded Android context. Points to an Android load/init or
-Swift↔Kotlin download-path parity gap, NOT the shared naming logic.
-
-BLOCKER to root-cause: the installed `.dev` build is not debuggable (`run-as` refused), Settings has
-no Debug Logs entry, logcat is empty (file-sink only) — no device trace obtainable. Per the "pull the
-log, don't guess" rule, the Android fix is NOT being written speculatively.
-
-NEXT: install a debuggable `__DEV__` Android build (so `offgrid-debug.log` + Debug Logs exist),
-reproduce, grep `[DL-SM]`/`[WIRE-VISION]`/mmProjLocalPath to see whether (a) the mmproj file is at the
-`mmProjLocalName` path on disk, (b) mmProjPath is passed to the Android load, (c) initMultimodal
-returns false natively. Then fix the identified seam. Decide then whether it belongs in #605 or a
-separate Android-parity PR.
+Watch-item: during the FIRST Android attempt — a messy sequence right after download, on a
+non-debuggable build, with a system notification-permission dialog intercepting taps — a vision send
+threw "Multimodal support not enabled". It did NOT reproduce on the clean debuggable run (model
+downloaded+linked, loaded fresh → vision:true → correct description). Possible unconfirmed cause: a
+model loaded text-only if loaded in the window before its mmProjPath is persisted on the record
+(load-immediately-after-download race), OR just the permission-dialog interference. If a real user
+reports vision failing right after a first download, instrument the load path: assert the model
+record's mmProjPath is set before the first load, and re-derive multimodal if a mmproj is linked after
+a text-only load.
