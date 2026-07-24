@@ -144,13 +144,20 @@ since upstream:
 
 | Pushed file type | Checks that run automatically (pre-push) |
 |---|---|
-| `.ts` / `.tsx` / `.js` / `.jsx` | eslint, `tsc --noEmit`, `jest --findRelatedTests`, `npm run depcruise` |
-| `.swift` | `npm run test:ios` |
-| `.kt` / `.kts` | `npm run test:android` |
+| `.ts` / `.tsx` / `.js` / `.jsx` | eslint, `tsc --noEmit`, `jest --findRelatedTests`, `npm run depcruise`, `npm run knip` |
+| `.swift` | SwiftLint, `npm run test:ios` |
+| `.kt` / `.kts` | `compileDebugKotlin`, `lintDebug`, `npm run test:android` |
+| `.kt` / `.kts` · `android/` · `package*.json` | **Android build** `./gradlew assembleDebug assembleRelease` |
+| `.swift` · `ios/` · `Podfile` | **iOS build** (simulator, `CODE_SIGNING_ALLOWED=NO`) |
+
+**The native builds are a LOCAL pre-push gate, NOT in CI.** The hosted `android-build` CI job hung for
+3+ hours on the native C++ builds and was removed; both builds now run on push (scoped above so JS-only
+/ docs pushes stay fast). CI keeps lint / typecheck / test / architecture / SonarCloud / CodeRabbit.
 
 **Requirements:**
 - SwiftLint: `brew install swiftlint` (skipped with a warning if not installed)
-- Android checks require the Gradle wrapper in `android/`
+- Android checks require the Gradle wrapper in `android/`; the iOS build needs a booted-or-available
+  simulator SDK. Verified locally: `assembleDebug assembleRelease` produces both APKs (~14 min).
 
 **Workflow implication (TDD / adversarial red-first):** write a failing test, commit it red (commit is
 free), then drive it green; the branch must be green before `git push` (the gate blocks a red push).
