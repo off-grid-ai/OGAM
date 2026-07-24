@@ -22,18 +22,36 @@ interface SearchResult {
 
 class RetrievalService {
   async search(projectId: string, query: string, topK: number = 5): Promise<SearchResult> {
-    const chunks = await this.searchSemantic(projectId, query, topK);
+    const chunks = await this.searchSemantic(projectId, query, { topK });
     return { chunks, truncated: false };
   }
 
-  private async searchSemantic(projectId: string, query: string, topK: number): Promise<RagSearchResult[]> {
+  /**
+   * Semantic search over a project's chunks. `opts.docPath` scopes it to ONE document's
+   * chunks (e.g. a single recording) - the rest of the project is ignored. Ranking,
+   * embedding and fallbacks are otherwise unchanged, so the unscoped path (docPath absent)
+   * behaves exactly as before.
+   */
+  private async searchSemantic(projectId: string, query: string, opts: { topK: number; docPath?: string }): Promise<RagSearchResult[]> {
+    const { topK, docPath } = opts;
     if (!query.trim()) return [];
 
-    const stored = ragDatabase.getEmbeddingsByProject(projectId);
+    let docId: number | null = null;
+    if (docPath) {
+      const doc = ragDatabase.getDocumentByPath(docPath);
+      if (!doc) return []; // scoped to a doc that isn't indexed yet -> nothing
+      docId = doc.id;
+    }
+    const scopeToDoc = <T extends { doc_id?: number }>(rows: T[]): T[] =>
+      docId == null ? rows : rows.filter((r) => r.doc_id === docId);
+    const fallbackChunks = (): RagSearchResult[] =>
+      scopeToDoc(ragDatabase.getChunksByProject(projectId, docId != null ? 10000 : topK)).slice(0, topK);
+
+    const stored = scopeToDoc(ragDatabase.getEmbeddingsByProject(projectId));
     if (stored.length === 0) {
       // Fallback: return first chunks if no embeddings exist yet
       logger.log('[Retrieval] No embeddings found, returning first chunks as fallback');
-      return ragDatabase.getChunksByProject(projectId, topK);
+      return fallbackChunks();
     }
 
     if (!embeddingService.isLoaded()) {
@@ -41,7 +59,7 @@ class RetrievalService {
         await embeddingService.load();
       } catch (err) {
         logger.error('[Retrieval] Failed to load embedding model, falling back', err);
-        return ragDatabase.getChunksByProject(projectId, topK);
+        return fallbackChunks();
       }
     }
 
@@ -50,7 +68,7 @@ class RetrievalService {
       queryVec = await embeddingService.embed(query);
     } catch (err) {
       logger.error('[Retrieval] Failed to embed query, falling back', err);
-      return ragDatabase.getChunksByProject(projectId, topK);
+      return fallbackChunks();
     }
 
     const scored = stored.map(entry => ({
@@ -102,6 +120,30 @@ class RetrievalService {
     }
 
     return { chunks: fittingChunks, truncated };
+  }
+
+  /**
+   * Retrieve within a SINGLE document (e.g. one recording), budget-fitted: a short doc
+   * comes back whole, a long one returns the most relevant chunks that fit. Results are in
+   * chronological (position) order so the model reads a coherent slice, not shuffled
+   * fragments. This is the "chat with this recording" retrieval - scoped + bounded, run
+   * every turn.
+   */
+  async searchDocument(params: { projectId: string; query: string; docPath: string; contextLength: number }): Promise<SearchResult> {
+    // High candidate cap: consider ALL the doc's chunks; the budget below is the real limit.
+    const chunks = await this.searchSemantic(params.projectId, params.query, { topK: 10000, docPath: params.docPath });
+    const budget = this.estimateCharBudget(params.contextLength);
+
+    let totalChars = 0;
+    const fitting: RagSearchResult[] = [];
+    let truncated = false;
+    for (const chunk of chunks) {
+      totalChars += chunk.content.length;
+      if (totalChars > budget) { truncated = true; break; }
+      fitting.push(chunk);
+    }
+    fitting.sort((a, b) => a.position - b.position); // chronological
+    return { chunks: fitting, truncated };
   }
 }
 

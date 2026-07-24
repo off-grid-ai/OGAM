@@ -200,6 +200,18 @@ class RagDatabase {
     return (result.rows ?? []) as unknown as RagDocument[];
   }
 
+  // Look up a document by its `path`. For file-backed docs `path` is a filesystem
+  // path; for text-indexed docs (indexText) it's a synthetic id (e.g. a recordingId).
+  getDocumentByPath(path: string): RagDocument | null {
+    const db = this.getDb();
+    const result = db.executeSync(
+      'SELECT id, project_id, name, path, size, created_at, enabled FROM rag_documents WHERE path = ? LIMIT 1',
+      [path]
+    );
+    const rows = (result.rows ?? []) as unknown as RagDocument[];
+    return rows[0] ?? null;
+  }
+
   toggleEnabled(docId: number, enabled: boolean): void {
     const db = this.getDb();
     db.executeSync('UPDATE rag_documents SET enabled = ? WHERE id = ?', [enabled ? 1 : 0, docId]);

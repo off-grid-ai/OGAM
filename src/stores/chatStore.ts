@@ -76,6 +76,9 @@ interface ChatState {
   setActiveConversation: (conversationId: string | null) => void;
   getActiveConversation: () => Conversation | null;
   setConversationProject: (conversationId: string, projectId: string | null) => void;
+  /** Scope a conversation to ONE document within its project (docPath, e.g. a recording
+   *  id) so every turn retrieves only that document. null clears the scope. */
+  setConversationSource: (conversationId: string, docPath: string | null) => void;
   /** Unfile every conversation filed under a project (used when the project is deleted,
    *  so no chat is left pointing at a project that no longer exists). */
   unfileConversationsForProject: (projectId: string) => void;
@@ -152,6 +155,16 @@ export const useChatStore = create<ChatState>()(
             conv.id !== conversationId
               ? conv
               : { ...conv, projectId: projectId || undefined, updatedAt: nextUpdatedAt(conv.updatedAt) }
+          ),
+        }));
+      },
+
+      setConversationSource: (conversationId, docPath) => {
+        set((state) => ({
+          conversations: state.conversations.map((conv) =>
+            conv.id !== conversationId
+              ? conv
+              : { ...conv, sourceDocPath: docPath || undefined, updatedAt: nextUpdatedAt(conv.updatedAt) }
           ),
         }));
       },

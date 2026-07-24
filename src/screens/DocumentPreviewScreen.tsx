@@ -15,6 +15,7 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { documentService } from '../services';
+import { ragService } from '../services/rag';
 import { RootStackParamList } from '../navigation/types';
 import logger from '../utils/logger';
 
@@ -159,6 +160,15 @@ export const DocumentPreviewScreen: React.FC = () => {
       }
 
       if (!foundPath) {
+        // No backing file. It may be a TEXT-indexed doc (e.g. a recorder transcript added
+        // to a knowledge base via ragService.indexText, whose `path` is a synthetic id, not
+        // a file). Render its indexed text instead of erroring.
+        const indexed = await ragService.getIndexedText(filePath).catch(() => null);
+        if (indexed) {
+          logger.log('[DocumentPreview] No file; rendering indexed text', indexed.length);
+          setContent(indexed);
+          return;
+        }
         logger.error('[DocumentPreview] File not found in any location');
         setError('File not found. The document may have been stored in a previous app installation. Please re-upload the document.');
         return;

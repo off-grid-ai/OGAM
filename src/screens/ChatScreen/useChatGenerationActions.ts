@@ -296,9 +296,26 @@ async function generateWithCompactionRetry(
   }
   return turnInterrupted;
 }
-async function injectRagContext(projectId: string | undefined, query: string, prompt: string): Promise<string> {
+// Chars of the context window reserved for a recording-scoped chat's retrieved transcript
+// (~2k tokens). The budget loop fits as many chunks as this allows, so a short transcript
+// comes back whole and a long meeting returns only the relevant part - it never overflows.
+const RECORDING_RAG_BUDGET_CHARS = 8000;
+
+async function injectRagContext(scope: { projectId?: string; docPath?: string }, query: string, prompt: string): Promise<string> {
+  const { projectId, docPath } = scope;
   if (!projectId) return prompt;
   try {
+    // Recording-scoped chat ("chat with this recording"): retrieve ONLY this recording's
+    // relevant chunks, budget-fitted, every turn - so the transcript stays in context
+    // across the whole conversation via retrieval, not a one-shot attachment. No multi-doc
+    // list / search-tool preamble here; the conversation is about one thing.
+    if (docPath) {
+      if (!embeddingService.isLoaded()) {
+        embeddingService.load().catch(err => logger.error('[RAG] Embedding warmup failed', err));
+      }
+      const r = await ragService.searchProjectDocument({ projectId, query, docPath, contextLength: RECORDING_RAG_BUDGET_CHARS });
+      return r.chunks.length > 0 ? `${prompt}\n\n${retrievalService.formatForPrompt(r)}` : prompt;
+    }
     const docs = await ragService.getDocumentsByProject(projectId);
     const enabledDocs = docs.filter((d: import('../../services/rag').RagDocument) => d.enabled);
     if (enabledDocs.length === 0) return prompt;
@@ -364,7 +381,7 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
   }
   const conversation = useChatStore.getState().conversations.find(c => c.id === targetConversationId);
   const { enabledTools, rawPrompt, localToolSupport } = resolveToolsAndPrompt(deps, conversation, messageText);
-  let basePrompt = await injectRagContext(conversation?.projectId, messageText, rawPrompt);
+  let basePrompt = await injectRagContext({ projectId: conversation?.projectId, docPath: conversation?.sourceDocPath }, messageText, rawPrompt);
 
   // In voice/audio mode the pro audio feature augments the prompt for spoken
   // output. No-op (returns undefined) in free builds.
@@ -618,7 +635,7 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
   const { enabledTools, rawPrompt, localToolSupport } = resolveToolsAndPrompt(deps, conversation, messageText);
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
   const activeTools = enabledTools;
-  const basePrompt = await injectRagContext(conversation?.projectId, messageText, rawPrompt);
+  const basePrompt = await injectRagContext({ projectId: conversation?.projectId, docPath: conversation?.sourceDocPath }, messageText, rawPrompt);
   const useTextHint = !isRemote && !localToolSupport && activeTools.length > 0;
   // MCP/extension hints come solely from augmentSystemPromptForTools in the tool loop
   // (see the send path above) — adding them here too would double-inject.

@@ -169,6 +169,20 @@ class RagService {
     return ragDatabase.getDocumentsByProject(projectId);
   }
 
+  /** The concatenated indexed text for a document identified by its `path` (docPath).
+   *  Lets the doc preview render text-indexed docs (e.g. recorder transcripts added via
+   *  indexText, whose `path` is a synthetic id with no backing file). Null if there's no
+   *  such doc or it has no chunks. */
+  async getIndexedText(path: string): Promise<string | null> {
+    await this.ensureReady();
+    const doc = ragDatabase.getDocumentByPath(path);
+    if (!doc) return null;
+    const chunks = ragDatabase.getChunksByDocument(doc.id);
+    if (chunks.length === 0) return null;
+    const text = chunks.map((c) => c.content).join('\n\n').trim();
+    return text || null;
+  }
+
   async toggleDocument(docId: number, enabled: boolean): Promise<void> {
     await this.ensureReady();
     ragDatabase.toggleEnabled(docId, enabled);
@@ -180,6 +194,16 @@ class RagService {
       return retrievalService.searchWithBudget({ projectId, query, contextLength });
     }
     return retrievalService.search(projectId, query);
+  }
+
+  /**
+   * Retrieve within ONE document of a project (its docPath), budget-fitted. Backs "chat
+   * with this recording": the conversation is scoped to a recording's doc, so every turn
+   * retrieves only that recording's relevant chunks instead of the whole project.
+   */
+  async searchProjectDocument(params: { projectId: string; query: string; docPath: string; contextLength: number }) {
+    await this.ensureReady();
+    return retrievalService.searchDocument(params);
   }
 
   async deleteProjectDocuments(projectId: string): Promise<void> {

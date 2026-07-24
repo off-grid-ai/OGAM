@@ -250,6 +250,11 @@ export interface Conversation {
   createdAt: string;
   updatedAt: string;
   projectId?: string;
+  // When set, the conversation is scoped to ONE document within its project (the
+  // docPath, e.g. a recording id) - every turn retrieves only that document's chunks.
+  // Backs "chat with this recording": the transcript stays in context across the whole
+  // conversation via bounded per-turn retrieval, not a one-shot attachment.
+  sourceDocPath?: string;
   compactionSummary?: string;
   compactionCutoffMessageId?: string;
 }
