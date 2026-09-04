@@ -44,6 +44,7 @@ const forbiddenModelOwnerExports = new Set([
   'ModelResidencyManager',
 ]);
 const forbiddenAppModelServices = new Set([
+  'ModelDownloadApplicationService',
   'ModelDownloadCoordinator',
   'ModelDownloadRegistry',
   'ModelCommandApplicationService',
@@ -442,6 +443,7 @@ const controlPlaneNegativeProbes = [
   "const { ModelSelectionApplicationService: Owner } = await import('@offgrid/models'); new Owner({});",
   "const Models = await import('@offgrid/models'); new Models.ModelCommandApplicationService({});",
   "const legacy = await import('./services/modelServices/coordinatedDownloadBridge'); void legacy;",
+  "import { ModelDownloadApplicationService as Owner } from '@offgrid/models'; new Owner();",
 ];
 for (const [index, probe] of controlPlaneNegativeProbes.entries()) {
   const source = ts.createSourceFile(`negative-probe-${index}.ts`, probe, ts.ScriptTarget.Latest, true);
