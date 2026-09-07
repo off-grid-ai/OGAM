@@ -29,6 +29,7 @@ export type RootStackParamList = {
   About: undefined;
   Tools: undefined;
   Ambient: undefined;
+  AmbientDay: undefined;
   AmbientTimeline: undefined;
   AmbientSession: { sessionId: string };
 };

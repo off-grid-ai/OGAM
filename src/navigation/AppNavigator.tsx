@@ -40,6 +40,7 @@ import {
   AboutScreen,
   ToolsScreen,
   AmbientScreen,
+  AmbientDayScreen,
   AmbientTimelineScreen,
   AmbientSessionScreen,
 } from '../screens';
@@ -246,6 +247,7 @@ export const AppNavigator: React.FC = () => {
         />
         <RootStack.Screen name="Tools" component={ToolsScreen} />
         <RootStack.Screen name="Ambient" component={AmbientScreen} />
+        <RootStack.Screen name="AmbientDay" component={AmbientDayScreen} />
         <RootStack.Screen name="AmbientTimeline" component={AmbientTimelineScreen} />
         <RootStack.Screen name="AmbientSession" component={AmbientSessionScreen} />
         <RootStack.Screen
