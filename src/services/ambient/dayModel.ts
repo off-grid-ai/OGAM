@@ -10,7 +10,7 @@
  * this stays a testable projection.
  */
 
-import type { TimelineSession } from './timelineModel'
+import { dayKeyOf, type TimelineSession } from './timelineModel'
 
 export interface DayTask {
   /** Stable within a day: the conversation + the action's position in it. */
@@ -56,4 +56,25 @@ export function collectDayTasks(
 /** Count of tasks still to do - the number the Day view header shows. */
 export function openTaskCount(tasks: DayTask[]): number {
   return tasks.reduce((n, t) => (t.done ? n : n + 1), 0)
+}
+
+
+/** The sessions belonging to one day key ('YYYY-MM-DD'), newest first. Pure - date parts injected. */
+export function sessionsForDay(
+  sessions: TimelineSession[],
+  dayKey: string,
+  toParts: (ms: number) => { y: number; m: number; d: number }
+): TimelineSession[] {
+  return sessions
+    .filter(s => dayKeyOf(s.startMs, toParts) === dayKey)
+    .sort((a, b) => b.startMs - a.startMs)
+}
+
+/** The day keys that have any conversation, newest first - for day navigation. */
+export function dayKeysWithSessions(
+  sessions: TimelineSession[],
+  toParts: (ms: number) => { y: number; m: number; d: number }
+): string[] {
+  const keys = new Set(sessions.map(s => dayKeyOf(s.startMs, toParts)))
+  return [...keys].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
 }
