@@ -8,6 +8,7 @@
 import RNFS from 'react-native-fs'
 import { extractWavSegment } from '../wavSlicer'
 import { mobileSpeechInputPorts } from '../adapters/speech/mobileSpeechInputPorts'
+import { useWhisperStore } from '../../stores/whisperStore'
 import { createPhoneSttExecutor } from './phoneSttExecutor'
 import type { SttExecutor } from './sttExecutor'
 
@@ -19,7 +20,11 @@ export function createDefaultPhoneSttExecutor(language?: string): SttExecutor {
     transcribe: async (filePath, options) => {
       const result = await mobileSpeechInputPorts.transcriber.transcribe(
         { kind: 'file', path: filePath },
-        { language: options?.language }
+        {
+          language: options?.language ?? useWhisperStore.getState().transcriptionLanguage ?? 'en',
+          extension: 'wav',
+          signal: new AbortController().signal
+        }
       )
       return result.text
     },
