@@ -11,7 +11,7 @@
 |---|---|
 | Pipeline (capture → transcribe → summarise) | **done**, ported to release ports |
 | Ported onto `release/107-feedback` (bundles) | **done** |
-| Day-view components | in progress (journal + tasks + actions + timeline live; Replay/Reflect next) |
+| Day-view components | 5 of 6 live (journal, tasks, actions, timeline, reflect); Replay left |
 
 ## The pipeline (Phase 0) — done
 
@@ -35,7 +35,7 @@ The lead's model: one Day view, six components, led by "what to do".
 | **Actions** — approval-gated connector proposals | [x] via shared `proactive-action-policy` | [x] Day section | Approve → Share (OS connectors); one-tap MCP routing later |
 | **Timeline** — the day's conversations | [x] | [x] Day section | now a section of the Day view |
 | **Replay** — play a moment's audio | [ ] | [ ] | needs audio player + retained audio |
-| **Reflect** — the week | [ ] | [ ] | weekly aggregation over day stores |
+| **Reflect** — the week | [x] `reflectModel.reflectWeek` | [x] AmbientReflectScreen | bars, speech, commitments kept, top people |
 
 ### Done since last update
 - Day store state (doneTaskIds, journalByDay) + pure selectors (sessionsForDay, dayKeysWithSessions).
@@ -46,8 +46,13 @@ The lead's model: one Day view, six components, led by "what to do".
 - **Actions** — proposals via the lead's shared proactive-action policy (buildProactiveActionPrompt +
   parseProactiveActions); cached per day; Approve → Share to the OS, Dismiss to drop. In the Day view.
 
+### Done since last update
+- **Reflect** — pure week aggregation (`reflectWeek`: per-day bars, speech, commitments kept vs total,
+  top people) + `AmbientReflectScreen`, reached from the Day header.
+
 ### Next up
-1. **Replay** (play a moment's audio) + **Reflect** (the week) — the last two components.
+1. **Replay** — the last component. Needs audio-retention groundwork: persist the capture file path +
+   segment offsets on the session (we currently keep neither), then a player. Bigger than the others.
 2. One-tap MCP routing for Actions (Mac-side connectors) — beyond the Share fallback.
 3. Consolidate: retire the old `AmbientTimelineScreen` (capture now lives in `useAmbientCapture`).
 

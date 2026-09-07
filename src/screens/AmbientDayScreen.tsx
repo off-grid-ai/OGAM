@@ -163,7 +163,15 @@ export function AmbientDayScreen(): React.ReactElement {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Day" onBack={() => navigation.goBack()} />
+      <ScreenHeader
+        title="Day"
+        onBack={() => navigation.goBack()}
+        right={
+          <TouchableOpacity onPress={() => navigation.navigate('AmbientReflect')} testID="ambient-open-reflect">
+            <Icon name="bar-chart-2" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+        }
+      />
 
       <View style={styles.daynav}>
         <TouchableOpacity
