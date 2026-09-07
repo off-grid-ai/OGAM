@@ -39,6 +39,9 @@ import {
   ProDetailScreen,
   AboutScreen,
   ToolsScreen,
+  AmbientScreen,
+  AmbientTimelineScreen,
+  AmbientSessionScreen,
 } from '../screens';
 import {
   RootStackParamList,
@@ -242,6 +245,9 @@ export const AppNavigator: React.FC = () => {
           options={{ headerShown: false }}
         />
         <RootStack.Screen name="Tools" component={ToolsScreen} />
+        <RootStack.Screen name="Ambient" component={AmbientScreen} />
+        <RootStack.Screen name="AmbientTimeline" component={AmbientTimelineScreen} />
+        <RootStack.Screen name="AmbientSession" component={AmbientSessionScreen} />
         <RootStack.Screen
           name="DownloadManager"
           component={DownloadManagerScreen}

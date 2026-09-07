@@ -28,6 +28,9 @@ export type RootStackParamList = {
   ProDetail: undefined;
   About: undefined;
   Tools: undefined;
+  Ambient: undefined;
+  AmbientTimeline: undefined;
+  AmbientSession: { sessionId: string };
 };
 
 // Tab navigator — simple, no sub-stacks
