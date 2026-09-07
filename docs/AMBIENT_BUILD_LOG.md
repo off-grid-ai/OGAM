@@ -11,7 +11,7 @@
 |---|---|
 | Pipeline (capture → transcribe → summarise) | **done**, ported to release ports |
 | Ported onto `release/107-feedback` (bundles) | **done** |
-| Day-view components | in progress (Day screen live: journal + tasks + timeline) |
+| Day-view components | in progress (journal + tasks + actions + timeline live; Replay/Reflect next) |
 
 ## The pipeline (Phase 0) — done
 
@@ -32,7 +32,7 @@ The lead's model: one Day view, six components, led by "what to do".
 |---|---|---|---|
 | **Journal** — prose recap of the day | [x] `journal` + `journalPrompt` (+ factory) | [x] in Day view | auto-generated once per day, cached |
 | **Tasks** — action items across the day, checkable | [x] `dayModel.collectDayTasks` | [x] in Day view | checkable, toggles persisted done-set |
-| **Actions** — approval-gated connector proposals | [ ] | [ ] | on `@offgrid/models` proactive-action-policy |
+| **Actions** — approval-gated connector proposals | [x] via shared `proactive-action-policy` | [x] Day section | Approve → Share (OS connectors); one-tap MCP routing later |
 | **Timeline** — the day's conversations | [x] | [x] Day section | now a section of the Day view |
 | **Replay** — play a moment's audio | [ ] | [ ] | needs audio player + retained audio |
 | **Reflect** — the week | [ ] | [ ] | weekly aggregation over day stores |
@@ -42,10 +42,14 @@ The lead's model: one Day view, six components, led by "what to do".
 - `useAmbientCapture` hook — one capture lifecycle shared across surfaces.
 - `AmbientDayScreen` — the new home: Journal + Tasks + Timeline + ask + record FAB + day nav. Settings opens it.
 
+### Done since last update
+- **Actions** — proposals via the lead's shared proactive-action policy (buildProactiveActionPrompt +
+  parseProactiveActions); cached per day; Approve → Share to the OS, Dismiss to drop. In the Day view.
+
 ### Next up
-1. **Actions** component (proactive-action-policy) — approval-gated proposals. The wedge.
-2. **Replay** (play a moment's audio) + **Reflect** (the week).
-3. Consolidate: retire the old `AmbientTimelineScreen` (its capture logic now lives in `useAmbientCapture`; the Day view supersedes it).
+1. **Replay** (play a moment's audio) + **Reflect** (the week) — the last two components.
+2. One-tap MCP routing for Actions (Mac-side connectors) — beyond the Share fallback.
+3. Consolidate: retire the old `AmbientTimelineScreen` (capture now lives in `useAmbientCapture`).
 
 ## Cross-cutting / deferred
 - Configurable processing mode (live / nightly / balanced) — the scheduler + setting.

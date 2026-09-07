@@ -12,6 +12,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { TimelineSession } from '../services/ambient/timelineModel'
+import type { ProactiveActionProposal } from '@offgrid/models'
 
 interface AmbientTimelineState {
   sessions: TimelineSession[]
@@ -19,6 +20,8 @@ interface AmbientTimelineState {
   doneTaskIds: string[]
   /** The generated journal narrative per day key ('YYYY-MM-DD'), cached so it is written once. */
   journalByDay: Record<string, string>
+  /** Proposed actions per day, cached; resolving one (approve/dismiss) removes it. */
+  actionsByDay: Record<string, ProactiveActionProposal[]>
   /**
    * Keep the recorder's summaries + ask-your-day on-device even when a remote chat model is selected,
    * so an always-on recorder never sends transcripts to a server. Off by default (follows the active
@@ -31,6 +34,8 @@ interface AmbientTimelineState {
   setOnDeviceOnly: (value: boolean) => void
   toggleTask: (id: string) => void
   setDayJournal: (dayKey: string, text: string) => void
+  setDayActions: (dayKey: string, proposals: ProactiveActionProposal[]) => void
+  resolveDayAction: (dayKey: string, index: number) => void
 }
 
 /** Merge new sessions into existing, keeping one record per id (last write wins). Pure, exported for test. */
@@ -54,14 +59,24 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       sessions: [],
       doneTaskIds: [],
       journalByDay: {},
+      actionsByDay: {},
       onDeviceOnly: false,
       addSessions: incoming => set(state => ({ sessions: mergeSessions(state.sessions, incoming) })),
       removeSession: id => set(state => ({ sessions: state.sessions.filter(s => s.id !== id) })),
-      clearAll: () => set({ sessions: [], doneTaskIds: [], journalByDay: {} }),
+      clearAll: () => set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {} }),
       setOnDeviceOnly: value => set({ onDeviceOnly: value }),
       toggleTask: id => set(state => ({ doneTaskIds: toggleId(state.doneTaskIds, id) })),
       setDayJournal: (dayKey, text) =>
-        set(state => ({ journalByDay: { ...state.journalByDay, [dayKey]: text } }))
+        set(state => ({ journalByDay: { ...state.journalByDay, [dayKey]: text } })),
+      setDayActions: (dayKey, proposals) =>
+        set(state => ({ actionsByDay: { ...state.actionsByDay, [dayKey]: proposals } })),
+      resolveDayAction: (dayKey, index) =>
+        set(state => ({
+          actionsByDay: {
+            ...state.actionsByDay,
+            [dayKey]: (state.actionsByDay[dayKey] ?? []).filter((_, i) => i !== index)
+          }
+        }))
     }),
     {
       name: 'ambient-timeline',

@@ -13,6 +13,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -34,9 +35,12 @@ import {
   type DayTask
 } from '../services/ambient/dayModel';
 import { journalForDay } from '../services/ambient/journalFactory';
+import { proposeActionsForDay } from '../services/ambient/actionsFactory';
+import { formatTodosForActions, formatCallsForActions } from '../services/ambient/actionsModel';
 import { askDayWithDeviceLLM } from '../services/ambient/askDayFactory';
 import type { AskResult } from '../services/ambient/askDay';
 import type { TimelineSession } from '../services/ambient/timelineModel';
+import type { ProactiveActionProposal } from '@offgrid/models';
 
 function dateParts(epochMs: number): { y: number; m: number; d: number } {
   const date = new Date(epochMs);
@@ -73,7 +77,9 @@ export function AmbientDayScreen(): React.ReactElement {
   const sessions = useAmbientTimelineStore(s => s.sessions);
   const doneTaskIds = useAmbientTimelineStore(s => s.doneTaskIds);
   const journalByDay = useAmbientTimelineStore(s => s.journalByDay);
+  const actionsByDay = useAmbientTimelineStore(s => s.actionsByDay);
   const toggleTask = useAmbientTimelineStore(s => s.toggleTask);
+  const resolveDayAction = useAmbientTimelineStore(s => s.resolveDayAction);
 
   const dayKeys = useMemo(() => dayKeysWithSessions(sessions, dateParts), [sessions]);
   const [dayIndex, setDayIndex] = useState(0);
@@ -109,6 +115,26 @@ export function AmbientDayScreen(): React.ReactElement {
       })
       .finally(() => setJournalBusy(false));
   }, [dayKey, daySessions, journalByDay]);
+
+  // Propose the day's actions once, when it has conversations but no cached proposals.
+  const actionsRequested = useRef<Set<string>>(new Set());
+  const [actionsBusy, setActionsBusy] = useState(false);
+  const actions = actionsByDay[dayKey];
+  useEffect(() => {
+    if (daySessions.length === 0 || actionsByDay[dayKey] !== undefined) return;
+    if (actionsRequested.current.has(dayKey)) return;
+    actionsRequested.current.add(dayKey);
+    setActionsBusy(true);
+    proposeActionsForDay(
+      {
+        todos: formatTodosForActions(tasks),
+        calls: formatCallsForActions(daySessions)
+      },
+      useAmbientTimelineStore.getState().onDeviceOnly
+    )
+      .then(res => useAmbientTimelineStore.getState().setDayActions(dayKey, res.proposals))
+      .finally(() => setActionsBusy(false));
+  }, [dayKey, daySessions, actionsByDay, tasks]);
 
   // Ask-your-day, scoped to the current day.
   const [askQuery, setAskQuery] = useState('');
@@ -208,6 +234,33 @@ export function AmbientDayScreen(): React.ReactElement {
               )}
             </Section>
 
+            {actionsBusy || (actions && actions.length > 0) ? (
+              <Section
+                title="Actions"
+                count={actions && actions.length > 0 ? `${actions.length} to approve` : undefined}
+                styles={styles}
+                colors={colors}
+                icon="zap"
+              >
+                {actionsBusy && !actions ? (
+                  <Text style={styles.muted}>Looking for things it can do…</Text>
+                ) : (
+                  (actions ?? []).map((proposal, index) => (
+                    <ActionCard
+                      key={`${proposal.title ?? 'action'}-${index}`}
+                      proposal={proposal}
+                      styles={styles}
+                      onApprove={() => {
+                        Share.share({ message: actionShareText(proposal) }).catch(() => undefined);
+                        resolveDayAction(dayKey, index);
+                      }}
+                      onDismiss={() => resolveDayAction(dayKey, index)}
+                    />
+                  ))
+                )}
+              </Section>
+            ) : null}
+
             <Section
               title="Timeline"
               count={`${daySessions.length} conversation${daySessions.length === 1 ? '' : 's'}`}
@@ -305,6 +358,41 @@ function Section({
         {count ? <Text style={styles.sectionCount}>{count}</Text> : null}
       </View>
       {children}
+    </View>
+  );
+}
+
+function actionShareText(proposal: ProactiveActionProposal): string {
+  const title = proposal.title ?? 'Action';
+  return proposal.why ? `${title} — ${proposal.why}` : title;
+}
+
+function ActionCard({
+  proposal,
+  styles,
+  onApprove,
+  onDismiss
+}: {
+  proposal: ProactiveActionProposal;
+  styles: any;
+  onApprove: () => void;
+  onDismiss: () => void;
+}): React.ReactElement {
+  return (
+    <View style={styles.action} testID="ambient-action">
+      {proposal.connector ? (
+        <Text style={styles.actionConn}>{proposal.connector.toUpperCase()}</Text>
+      ) : null}
+      <Text style={styles.actionTitle}>{proposal.title ?? 'Action'}</Text>
+      {proposal.why ? <Text style={styles.actionWhy}>{proposal.why}</Text> : null}
+      <View style={styles.actionBtns}>
+        <TouchableOpacity style={styles.actionApprove} onPress={onApprove} testID="ambient-action-approve">
+          <Text style={styles.actionApproveText}>Approve</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionDismiss} onPress={onDismiss} testID="ambient-action-dismiss">
+          <Text style={styles.actionDismissText}>Dismiss</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -427,6 +515,16 @@ function createStyles(colors: {
     taskLead: { color: colors.text, fontSize: 14, lineHeight: 19 },
     taskDone: { color: colors.textMuted, textDecorationLine: 'line-through' },
     taskSrc: { color: colors.textMuted, fontSize: 10.5, marginTop: 3 },
+    // action
+    action: { marginHorizontal: 14, marginBottom: 8, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 9, backgroundColor: colors.surface },
+    actionConn: { color: colors.primary, fontSize: 9.5, letterSpacing: 1.4, fontWeight: '700', marginBottom: 5 },
+    actionTitle: { color: colors.text, fontSize: 13.5, fontWeight: '600', lineHeight: 18 },
+    actionWhy: { color: colors.textMuted, fontSize: 11.5, marginTop: 4, lineHeight: 16 },
+    actionBtns: { flexDirection: 'row', gap: 8, marginTop: 11 },
+    actionApprove: { backgroundColor: colors.primary, borderRadius: 6, paddingHorizontal: 14, paddingVertical: 7 },
+    actionApproveText: { color: colors.background, fontSize: 12, fontWeight: '700' },
+    actionDismiss: { borderWidth: 1, borderColor: colors.border, borderRadius: 6, paddingHorizontal: 14, paddingVertical: 7 },
+    actionDismissText: { color: colors.textSecondary, fontSize: 12, fontWeight: '700' },
     // timeline
     tcard: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 18, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.border },
     tcardTime: { color: colors.primary, fontSize: 11, fontWeight: '700', width: 42, fontVariant: ['tabular-nums'] },

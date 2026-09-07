@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
+import { Share } from 'react-native';
 
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
@@ -32,12 +33,18 @@ jest.mock('../../../src/services/ambient/journalFactory', () => ({
 jest.mock('../../../src/services/ambient/askDayFactory', () => ({
   askDayWithDeviceLLM: jest.fn(async () => ({ answer: '', sources: [], status: 'no-matches' }))
 }));
+jest.mock('../../../src/services/ambient/actionsFactory', () => ({
+  proposeActionsForDay: jest.fn(async () => ({ proposals: [], status: 'no-speech' }))
+}));
 
 const mockToggle = jest.fn();
+const mockResolveAction = jest.fn();
 jest.mock('../../../src/stores/ambientTimelineStore', () => {
   let state: any = {
-    sessions: [], doneTaskIds: [], journalByDay: {}, onDeviceOnly: false,
-    toggleTask: (id: string) => mockToggle(id)
+    sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {}, onDeviceOnly: false,
+    toggleTask: (id: string) => mockToggle(id),
+    setDayActions: jest.fn(),
+    resolveDayAction: (dayKey: string, i: number) => mockResolveAction(dayKey, i)
   };
   const hook = (selector: any) => selector(state);
   hook.getState = () => state;
@@ -60,7 +67,8 @@ describe('AmbientDayScreen', () => {
   beforeEach(() => {
     mockStart.mockClear();
     mockToggle.mockClear();
-    store.__set({ sessions: [], doneTaskIds: [], journalByDay: {} });
+    mockResolveAction.mockClear();
+    store.__set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {} });
   });
 
   it('shows the empty state when the day has nothing', () => {
@@ -91,5 +99,22 @@ describe('AmbientDayScreen', () => {
     const { getByTestId } = render(<AmbientDayScreen />);
     fireEvent.press(getByTestId('ambient-day-record'));
     expect(mockStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders cached actions and approves one (shares + resolves)', () => {
+    const today = new Date(now);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const key = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+    const shareSpy = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' } as any);
+    store.__set({
+      sessions: [session('s1')],
+      actionsByDay: { [key]: [{ title: 'Message Priya the build', connector: 'Messages', why: 'you committed' }] }
+    });
+    const { getByTestId, queryAllByTestId } = render(<AmbientDayScreen />);
+    expect(queryAllByTestId('ambient-action')).toHaveLength(1);
+    fireEvent.press(getByTestId('ambient-action-approve'));
+    expect(shareSpy).toHaveBeenCalledWith({ message: 'Message Priya the build — you committed' });
+    expect(mockResolveAction).toHaveBeenCalledWith(key, 0);
+    shareSpy.mockRestore();
   });
 });
