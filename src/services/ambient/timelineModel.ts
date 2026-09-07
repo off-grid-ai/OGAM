@@ -32,6 +32,10 @@ export interface TimelineSession {
   summaryStatus: SummaryStatus
   /** Segment ids the user flagged live (note-first anchoring). */
   flaggedSegmentIds: string[]
+  /** The capture file this conversation lives in, for Replay. Absent on older records. */
+  recordingPath?: string
+  /** Epoch ms the capture started, so a segment's offset within the file = its time - this. */
+  captureStartedAtMs?: number
   segments: TimelineSegment[]
 }
 

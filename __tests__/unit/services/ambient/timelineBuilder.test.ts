@@ -38,6 +38,9 @@ describe('buildTimelineSessions', () => {
     expect(sessions[1].startMs).toBe(CAPTURE_AT + 200_000)
     // segments carry absolute times too
     expect(sessions[0].segments[0].startMs).toBe(CAPTURE_AT)
+    // audio refs for Replay are persisted
+    expect(sessions[0].recordingPath).toBe('/rec.wav')
+    expect(sessions[0].captureStartedAtMs).toBe(CAPTURE_AT)
   })
 
   it('stitches a session transcript and summarises it', async () => {

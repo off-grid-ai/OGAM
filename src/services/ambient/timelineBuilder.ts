@@ -122,6 +122,8 @@ export async function buildTimelineSessions(
       summary,
       summaryStatus: status,
       flaggedSegmentIds: item.flaggedSegmentIds,
+      recordingPath,
+      captureStartedAtMs,
       segments: item.segments
     })
   }
