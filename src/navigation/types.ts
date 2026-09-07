@@ -33,6 +33,7 @@ export type RootStackParamList = {
   AmbientReflect: undefined;
   AmbientTimeline: undefined;
   AmbientSession: { sessionId: string };
+  AmbientReplay: { sessionId: string };
 };
 
 // Tab navigator — simple, no sub-stacks

@@ -45,6 +45,14 @@ export function AmbientSessionScreen(): React.ReactElement {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title={summary.title} onBack={() => navigation.goBack()} />
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+        <TouchableOpacity
+          style={styles.replayStrip}
+          onPress={() => (navigation as any).navigate('AmbientReplay', { sessionId: session.id })}
+          testID="ambient-open-replay"
+        >
+          <Icon name="play" size={16} color={colors.primary} />
+          <Text style={styles.replayText}>Replay this conversation</Text>
+        </TouchableOpacity>
         <Text style={styles.headline} testID="ambient-detail-headline">
           {summary.headline || summaryStatusHint(session.summaryStatus)}
         </Text>
@@ -175,6 +183,8 @@ function createStyles(colors: {
     body: { flex: 1 },
     bodyContent: { padding: 16, gap: 20, paddingBottom: 40 },
     headline: { color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' },
+    replayStrip: { flexDirection: 'row', alignItems: 'center', gap: 9, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: colors.border, borderRadius: 8, backgroundColor: colors.surface },
+    replayText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
     section: { gap: 8 },
     sectionTitle: {
       color: colors.textMuted,

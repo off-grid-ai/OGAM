@@ -44,6 +44,7 @@ import {
   AmbientReflectScreen,
   AmbientTimelineScreen,
   AmbientSessionScreen,
+  AmbientReplayScreen,
 } from '../screens';
 import {
   RootStackParamList,
@@ -252,6 +253,7 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="AmbientReflect" component={AmbientReflectScreen} />
         <RootStack.Screen name="AmbientTimeline" component={AmbientTimelineScreen} />
         <RootStack.Screen name="AmbientSession" component={AmbientSessionScreen} />
+        <RootStack.Screen name="AmbientReplay" component={AmbientReplayScreen} />
         <RootStack.Screen
           name="DownloadManager"
           component={DownloadManagerScreen}

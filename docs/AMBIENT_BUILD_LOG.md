@@ -11,7 +11,7 @@
 |---|---|
 | Pipeline (capture → transcribe → summarise) | **done**, ported to release ports |
 | Ported onto `release/107-feedback` (bundles) | **done** |
-| Day-view components | 5 of 6 live (journal, tasks, actions, timeline, reflect); Replay left |
+| Day-view components | **all 6 live** (journal, tasks, actions, timeline, reflect, replay) |
 
 ## The pipeline (Phase 0) — done
 
@@ -34,7 +34,7 @@ The lead's model: one Day view, six components, led by "what to do".
 | **Tasks** — action items across the day, checkable | [x] `dayModel.collectDayTasks` | [x] in Day view | checkable, toggles persisted done-set |
 | **Actions** — approval-gated connector proposals | [x] via shared `proactive-action-policy` | [x] Day section | Approve → Share (OS connectors); one-tap MCP routing later |
 | **Timeline** — the day's conversations | [x] | [x] Day section | now a section of the Day view |
-| **Replay** — play a moment's audio | [ ] | [ ] | needs audio player + retained audio |
+| **Replay** — play a conversation's audio | [x] `replayClip` + player hook | [x] AmbientReplayScreen | plays the span; player device-verified separately |
 | **Reflect** — the week | [x] `reflectModel.reflectWeek` | [x] AmbientReflectScreen | bars, speech, commitments kept, top people |
 
 ### Done since last update
@@ -47,14 +47,20 @@ The lead's model: one Day view, six components, led by "what to do".
   parseProactiveActions); cached per day; Approve → Share to the OS, Dismiss to drop. In the Day view.
 
 ### Done since last update
-- **Reflect** — pure week aggregation (`reflectWeek`: per-day bars, speech, commitments kept vs total,
-  top people) + `AmbientReflectScreen`, reached from the Day header.
+- **Reflect** — pure week aggregation + `AmbientReflectScreen` (Day header).
+- **Replay** — audio refs persisted on sessions; `replayClip` carves a conversation's span out of the
+  capture (tested); `useAudioClipPlayer` plays it via react-native-audio-api; `AmbientReplayScreen`
+  reached from the conversation detail. **All six Day-view components now exist.**
 
-### Next up
-1. **Replay** — the last component. Needs audio-retention groundwork: persist the capture file path +
-   segment offsets on the session (we currently keep neither), then a player. Bigger than the others.
-2. One-tap MCP routing for Actions (Mac-side connectors) — beyond the Share fallback.
-3. Consolidate: retire the old `AmbientTimelineScreen` (capture now lives in `useAmbientCapture`).
+### Remaining / follow-ups
+1. **Device verification** — especially the Replay audio player + the whole rewired STT/generation
+   path on `release/107-feedback` (built + bundles; not yet run on a phone).
+2. **Audio retention** — Replay assumes the capture WAV persists; add a retention window + cleanup so
+   clips resolve and storage stays bounded.
+3. One-tap MCP routing for Actions (Mac-side connectors) — beyond the Share fallback.
+4. Consolidate: retire the old `AmbientTimelineScreen` (capture now lives in `useAmbientCapture`).
+5. Configurable processing (live/nightly/balanced), true always-on, speaker attribution, onboarding,
+   move to `mobile-pro`.
 
 ## Cross-cutting / deferred
 - Configurable processing mode (live / nightly / balanced) — the scheduler + setting.
