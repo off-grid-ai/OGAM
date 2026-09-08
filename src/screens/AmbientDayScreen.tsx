@@ -37,6 +37,7 @@ import {
 } from '../services/ambient/dayModel';
 import { journalForDay } from '../services/ambient/journalFactory';
 import { proposeActionsForDay } from '../services/ambient/actionsFactory';
+import { runAudioRetention } from '../services/ambient/retentionService';
 import { formatTodosForActions, formatCallsForActions } from '../services/ambient/actionsModel';
 import { askDayWithDeviceLLM } from '../services/ambient/askDayFactory';
 import type { AskResult } from '../services/ambient/askDay';
@@ -86,6 +87,8 @@ export function AmbientDayScreen(): React.ReactElement {
   const setProcessingMode = useAmbientTimelineStore(s => s.setProcessingMode);
   const onDeviceOnly = useAmbientTimelineStore(s => s.onDeviceOnly);
   const setOnDeviceOnly = useAmbientTimelineStore(s => s.setOnDeviceOnly);
+  const audioRetentionDays = useAmbientTimelineStore(s => s.audioRetentionDays);
+  const setAudioRetentionDays = useAmbientTimelineStore(s => s.setAudioRetentionDays);
 
   const dayKeys = useMemo(() => dayKeysWithSessions(sessions, dateParts), [sessions]);
   const [dayIndex, setDayIndex] = useState(0);
@@ -164,6 +167,14 @@ export function AmbientDayScreen(): React.ReactElement {
       setAsking(false);
     }
   }, [askQuery, asking, daySessions]);
+
+  // Prune capture audio past the retention window, once per screen open.
+  const retentionRan = useRef(false);
+  useEffect(() => {
+    if (retentionRan.current) return;
+    retentionRan.current = true;
+    runAudioRetention(useAmbientTimelineStore.getState().sessions, useAmbientTimelineStore.getState().audioRetentionDays).catch(() => undefined);
+  }, []);
 
   const open = openTaskCount(tasks);
 
@@ -366,6 +377,21 @@ export function AmbientDayScreen(): React.ReactElement {
               trackColor={{ true: colors.primary, false: colors.border }}
               testID="ambient-day-privacy"
             />
+          </View>
+          <View style={[styles.settingRow, { marginTop: 14 }]}>
+            <Text style={styles.settingLabel}>Keep audio for Replay</Text>
+            <View style={styles.seg}>
+              {[7, 30].map(days => (
+                <TouchableOpacity
+                  key={days}
+                  onPress={() => setAudioRetentionDays(days)}
+                  style={[styles.segBtn, audioRetentionDays === days && styles.segBtnOn]}
+                  testID={`ambient-retention-${days}`}
+                >
+                  <Text style={[styles.segText, audioRetentionDays === days && styles.segTextOn]}>{days}d</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         </View>
         <View style={{ height: 20 }} />

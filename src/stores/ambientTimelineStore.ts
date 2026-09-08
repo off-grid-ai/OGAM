@@ -15,6 +15,7 @@ import type { TimelineSession } from '../services/ambient/timelineModel'
 import type { ProactiveActionProposal } from '@offgrid/models'
 import type { ProcessingMode, PendingCapture } from '../services/ambient/processingModel'
 import { DEFAULT_PROCESSING_MODE } from '../services/ambient/processingModel'
+import { DEFAULT_RETENTION_DAYS } from '../services/ambient/retentionModel'
 
 interface AmbientTimelineState {
   sessions: TimelineSession[]
@@ -34,6 +35,8 @@ interface AmbientTimelineState {
   processingMode: ProcessingMode
   /** Captures waiting to be processed (nightly mode). */
   pendingCaptures: PendingCapture[]
+  /** How many days of raw capture audio to keep (for Replay). */
+  audioRetentionDays: number
   addSessions: (sessions: TimelineSession[]) => void
   removeSession: (id: string) => void
   clearAll: () => void
@@ -45,6 +48,7 @@ interface AmbientTimelineState {
   setProcessingMode: (mode: ProcessingMode) => void
   addPendingCapture: (capture: PendingCapture) => void
   clearPendingCaptures: () => void
+  setAudioRetentionDays: (days: number) => void
 }
 
 /** Merge new sessions into existing, keeping one record per id (last write wins). Pure, exported for test. */
@@ -72,6 +76,7 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       onDeviceOnly: false,
       processingMode: DEFAULT_PROCESSING_MODE,
       pendingCaptures: [],
+      audioRetentionDays: DEFAULT_RETENTION_DAYS,
       addSessions: incoming => set(state => ({ sessions: mergeSessions(state.sessions, incoming) })),
       removeSession: id => set(state => ({ sessions: state.sessions.filter(s => s.id !== id) })),
       clearAll: () => set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {} }),
@@ -91,7 +96,8 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       setProcessingMode: mode => set({ processingMode: mode }),
       addPendingCapture: capture =>
         set(state => ({ pendingCaptures: [...state.pendingCaptures, capture] })),
-      clearPendingCaptures: () => set({ pendingCaptures: [] })
+      clearPendingCaptures: () => set({ pendingCaptures: [] }),
+      setAudioRetentionDays: days => set({ audioRetentionDays: days })
     }),
     {
       name: 'ambient-timeline',

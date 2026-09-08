@@ -37,19 +37,24 @@ jest.mock('../../../src/services/ambient/askDayFactory', () => ({
 jest.mock('../../../src/services/ambient/actionsFactory', () => ({
   proposeActionsForDay: jest.fn(async () => ({ proposals: [], status: 'no-speech' }))
 }));
+jest.mock('../../../src/services/ambient/retentionService', () => ({
+  runAudioRetention: jest.fn(async () => 0)
+}));
 
 const mockToggle = jest.fn();
 const mockResolveAction = jest.fn();
 const mockSetMode = jest.fn();
+const mockSetRetention = jest.fn();
 jest.mock('../../../src/stores/ambientTimelineStore', () => {
   let state: any = {
     sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {}, onDeviceOnly: false,
-    pendingCaptures: [], processingMode: 'live',
+    pendingCaptures: [], processingMode: 'live', audioRetentionDays: 7,
     toggleTask: (id: string) => mockToggle(id),
     setDayActions: jest.fn(),
     resolveDayAction: (dayKey: string, i: number) => mockResolveAction(dayKey, i),
     setProcessingMode: (m: string) => mockSetMode(m),
-    setOnDeviceOnly: jest.fn()
+    setOnDeviceOnly: jest.fn(),
+    setAudioRetentionDays: (d: number) => mockSetRetention(d)
   };
   const hook = (selector: any) => selector(state);
   hook.getState = () => state;
@@ -75,7 +80,8 @@ describe('AmbientDayScreen', () => {
     mockResolveAction.mockClear();
     mockProcessPending.mockClear();
     mockSetMode.mockClear();
-    store.__set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {}, pendingCaptures: [], processingMode: 'live' });
+    mockSetRetention.mockClear();
+    store.__set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {}, pendingCaptures: [], processingMode: 'live', audioRetentionDays: 7 });
   });
 
   it('shows the empty state when the day has nothing', () => {
@@ -137,5 +143,11 @@ describe('AmbientDayScreen', () => {
     const { getByTestId } = render(<AmbientDayScreen />);
     fireEvent.press(getByTestId('ambient-mode-nightly'));
     expect(mockSetMode).toHaveBeenCalledWith('nightly');
+  });
+
+  it('changes the audio retention window', () => {
+    const { getByTestId } = render(<AmbientDayScreen />);
+    fireEvent.press(getByTestId('ambient-retention-30'));
+    expect(mockSetRetention).toHaveBeenCalledWith(30);
   });
 });
