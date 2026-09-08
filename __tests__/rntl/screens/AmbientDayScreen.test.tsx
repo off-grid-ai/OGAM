@@ -21,10 +21,11 @@ jest.mock('../../../src/theme', () => {
 });
 
 const mockStart = jest.fn();
+const mockProcessPending = jest.fn();
 jest.mock('../../../src/hooks/useAmbientCapture', () => ({
   useAmbientCapture: () => ({
     phase: 'idle', recording: false, processing: false, liveCount: 0, elapsedMs: 0,
-    flagCount: 0, progress: null, error: null, start: mockStart, stop: jest.fn(), flag: jest.fn()
+    flagCount: 0, progress: null, error: null, start: mockStart, stop: jest.fn(), flag: jest.fn(), processPending: mockProcessPending
   })
 }));
 jest.mock('../../../src/services/ambient/journalFactory', () => ({
@@ -39,12 +40,16 @@ jest.mock('../../../src/services/ambient/actionsFactory', () => ({
 
 const mockToggle = jest.fn();
 const mockResolveAction = jest.fn();
+const mockSetMode = jest.fn();
 jest.mock('../../../src/stores/ambientTimelineStore', () => {
   let state: any = {
     sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {}, onDeviceOnly: false,
+    pendingCaptures: [], processingMode: 'live',
     toggleTask: (id: string) => mockToggle(id),
     setDayActions: jest.fn(),
-    resolveDayAction: (dayKey: string, i: number) => mockResolveAction(dayKey, i)
+    resolveDayAction: (dayKey: string, i: number) => mockResolveAction(dayKey, i),
+    setProcessingMode: (m: string) => mockSetMode(m),
+    setOnDeviceOnly: jest.fn()
   };
   const hook = (selector: any) => selector(state);
   hook.getState = () => state;
@@ -68,7 +73,9 @@ describe('AmbientDayScreen', () => {
     mockStart.mockClear();
     mockToggle.mockClear();
     mockResolveAction.mockClear();
-    store.__set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {} });
+    mockProcessPending.mockClear();
+    mockSetMode.mockClear();
+    store.__set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {}, pendingCaptures: [], processingMode: 'live' });
   });
 
   it('shows the empty state when the day has nothing', () => {
@@ -116,5 +123,19 @@ describe('AmbientDayScreen', () => {
     expect(shareSpy).toHaveBeenCalledWith({ message: 'Message Priya the build — you committed' });
     expect(mockResolveAction).toHaveBeenCalledWith(key, 0);
     shareSpy.mockRestore();
+  });
+
+  it('shows a pending banner and processes the queue', () => {
+    store.__set({ pendingCaptures: [{ id: '1' }, { id: '2' }] });
+    const { getByTestId, getByText } = render(<AmbientDayScreen />);
+    expect(getByText('2 recordings waiting')).toBeTruthy();
+    fireEvent.press(getByTestId('ambient-process-pending'));
+    expect(mockProcessPending).toHaveBeenCalledTimes(1);
+  });
+
+  it('switches the processing mode', () => {
+    const { getByTestId } = render(<AmbientDayScreen />);
+    fireEvent.press(getByTestId('ambient-mode-nightly'));
+    expect(mockSetMode).toHaveBeenCalledWith('nightly');
   });
 });

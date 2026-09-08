@@ -13,6 +13,7 @@ import { ensureAmbientSliceDir } from '../services/ambient/phoneSttExecutorFacto
 import { createDefaultTimelineBuildDeps } from '../services/ambient/timelineBuilderFactory'
 import { buildTimelineSessions, type BuildProgress } from '../services/ambient/timelineBuilder'
 import { mobileSpeechInputPorts } from '../services/adapters/speech/mobileSpeechInputPorts'
+import { processOnStop } from '../services/ambient/processingModel'
 import { useAmbientTimelineStore } from '../stores/ambientTimelineStore'
 import type { AmbientRecorder } from '../services/ambient/ambientRecorder'
 import type { SpeechSegment } from '../services/ambient/vadSegmenter'
@@ -31,6 +32,8 @@ export interface AmbientCapture {
   start: () => Promise<void>
   stop: () => Promise<void>
   flag: () => void
+  /** Process everything queued in nightly mode, then clear the queue. */
+  processPending: () => Promise<void>
 }
 
 export function useAmbientCapture(): AmbientCapture {
@@ -44,6 +47,58 @@ export function useAmbientCapture(): AmbientCapture {
   const [flagCount, setFlagCount] = useState(0)
   const [progress, setProgress] = useState<BuildProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Transcribe + summarise one capture and write it to the day store. Shared by live stop + the
+  // deferred (nightly) queue, so both take exactly the same path.
+  const buildAndStore = useCallback(
+    async (
+      segments: SpeechSegment[],
+      recordingPath: string,
+      captureStartedAtMs: number,
+      anchorsMs: number[]
+    ): Promise<void> => {
+      await ensureAmbientSliceDir()
+      const built = await buildTimelineSessions(
+        segments,
+        recordingPath,
+        captureStartedAtMs,
+        {
+          ...createDefaultTimelineBuildDeps(useAmbientTimelineStore.getState().onDeviceOnly),
+          onProgress: setProgress
+        },
+        anchorsMs
+      )
+      useAmbientTimelineStore.getState().addSessions(built)
+    },
+    []
+  )
+
+  const processPending = useCallback(async () => {
+    const pending = useAmbientTimelineStore.getState().pendingCaptures
+    if (pending.length === 0) return
+    if (!mobileSpeechInputPorts.transcriber.ready()) {
+      setError('Set up a transcription model in Models to process recordings.')
+      return
+    }
+    setPhase('processing')
+    setProgress({ phase: 'transcribing', done: 0, total: 1 })
+    try {
+      for (const capture of pending) {
+        await buildAndStore(
+          capture.segments,
+          capture.recordingPath,
+          capture.captureStartedAtMs,
+          capture.anchorsMs
+        )
+      }
+      useAmbientTimelineStore.getState().clearPendingCaptures()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not process the recordings.')
+    } finally {
+      setPhase('idle')
+      setProgress(null)
+    }
+  }, [buildAndStore])
 
   useEffect(() => {
     if (phase !== 'recording') {
@@ -98,6 +153,18 @@ export function useAmbientCapture(): AmbientCapture {
       setPhase('idle')
       return
     }
+    // Nightly mode: queue the capture for a later pass instead of processing now.
+    if (!processOnStop(useAmbientTimelineStore.getState().processingMode)) {
+      useAmbientTimelineStore.getState().addPendingCapture({
+        id: String(startedAt),
+        segments: captured,
+        recordingPath: result.path,
+        captureStartedAtMs: startedAt,
+        anchorsMs: anchorsRef.current
+      })
+      setPhase('idle')
+      return
+    }
     if (!mobileSpeechInputPorts.transcriber.ready()) {
       setError('Set up a transcription model in Models, then record.')
       setPhase('idle')
@@ -106,25 +173,14 @@ export function useAmbientCapture(): AmbientCapture {
     setPhase('processing')
     setProgress({ phase: 'transcribing', done: 0, total: 1 })
     try {
-      await ensureAmbientSliceDir()
-      const built = await buildTimelineSessions(
-        captured,
-        result.path,
-        startedAt,
-        {
-          ...createDefaultTimelineBuildDeps(useAmbientTimelineStore.getState().onDeviceOnly),
-          onProgress: setProgress
-        },
-        anchorsRef.current
-      )
-      useAmbientTimelineStore.getState().addSessions(built)
+      await buildAndStore(captured, result.path, startedAt, anchorsRef.current)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not process the recording.')
     } finally {
       setPhase('idle')
       setProgress(null)
     }
-  }, [])
+  }, [buildAndStore])
 
   return {
     phase,
@@ -137,6 +193,7 @@ export function useAmbientCapture(): AmbientCapture {
     error,
     start,
     stop,
-    flag
+    flag,
+    processPending
   }
 }

@@ -13,6 +13,8 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { TimelineSession } from '../services/ambient/timelineModel'
 import type { ProactiveActionProposal } from '@offgrid/models'
+import type { ProcessingMode, PendingCapture } from '../services/ambient/processingModel'
+import { DEFAULT_PROCESSING_MODE } from '../services/ambient/processingModel'
 
 interface AmbientTimelineState {
   sessions: TimelineSession[]
@@ -28,6 +30,10 @@ interface AmbientTimelineState {
    * model); on forces the local engine.
    */
   onDeviceOnly: boolean
+  /** Live = process on stop; nightly = queue for a later pass. */
+  processingMode: ProcessingMode
+  /** Captures waiting to be processed (nightly mode). */
+  pendingCaptures: PendingCapture[]
   addSessions: (sessions: TimelineSession[]) => void
   removeSession: (id: string) => void
   clearAll: () => void
@@ -36,6 +42,9 @@ interface AmbientTimelineState {
   setDayJournal: (dayKey: string, text: string) => void
   setDayActions: (dayKey: string, proposals: ProactiveActionProposal[]) => void
   resolveDayAction: (dayKey: string, index: number) => void
+  setProcessingMode: (mode: ProcessingMode) => void
+  addPendingCapture: (capture: PendingCapture) => void
+  clearPendingCaptures: () => void
 }
 
 /** Merge new sessions into existing, keeping one record per id (last write wins). Pure, exported for test. */
@@ -61,6 +70,8 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       journalByDay: {},
       actionsByDay: {},
       onDeviceOnly: false,
+      processingMode: DEFAULT_PROCESSING_MODE,
+      pendingCaptures: [],
       addSessions: incoming => set(state => ({ sessions: mergeSessions(state.sessions, incoming) })),
       removeSession: id => set(state => ({ sessions: state.sessions.filter(s => s.id !== id) })),
       clearAll: () => set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {} }),
@@ -76,7 +87,11 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
             ...state.actionsByDay,
             [dayKey]: (state.actionsByDay[dayKey] ?? []).filter((_, i) => i !== index)
           }
-        }))
+        })),
+      setProcessingMode: mode => set({ processingMode: mode }),
+      addPendingCapture: capture =>
+        set(state => ({ pendingCaptures: [...state.pendingCaptures, capture] })),
+      clearPendingCaptures: () => set({ pendingCaptures: [] })
     }),
     {
       name: 'ambient-timeline',

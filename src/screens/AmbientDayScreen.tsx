@@ -15,6 +15,7 @@ import {
   ScrollView,
   Share,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -80,6 +81,11 @@ export function AmbientDayScreen(): React.ReactElement {
   const actionsByDay = useAmbientTimelineStore(s => s.actionsByDay);
   const toggleTask = useAmbientTimelineStore(s => s.toggleTask);
   const resolveDayAction = useAmbientTimelineStore(s => s.resolveDayAction);
+  const pendingCaptures = useAmbientTimelineStore(s => s.pendingCaptures);
+  const processingMode = useAmbientTimelineStore(s => s.processingMode);
+  const setProcessingMode = useAmbientTimelineStore(s => s.setProcessingMode);
+  const onDeviceOnly = useAmbientTimelineStore(s => s.onDeviceOnly);
+  const setOnDeviceOnly = useAmbientTimelineStore(s => s.setOnDeviceOnly);
 
   const dayKeys = useMemo(() => dayKeysWithSessions(sessions, dateParts), [sessions]);
   const [dayIndex, setDayIndex] = useState(0);
@@ -195,6 +201,15 @@ export function AmbientDayScreen(): React.ReactElement {
 
       <CaptureStrip styles={styles} colors={colors} capture={capture} />
       {capture.error ? <Text style={styles.error}>{capture.error}</Text> : null}
+      {pendingCaptures.length > 0 && !capture.processing ? (
+        <TouchableOpacity style={styles.pending} onPress={capture.processPending} testID="ambient-process-pending">
+          <Icon name="clock" size={15} color={colors.primary} />
+          <Text style={styles.pendingText}>
+            {pendingCaptures.length} recording{pendingCaptures.length === 1 ? '' : 's'} waiting
+          </Text>
+          <Text style={styles.pendingCta}>Process now</Text>
+        </TouchableOpacity>
+      ) : null}
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
         {daySessions.length === 0 ? (
@@ -319,6 +334,41 @@ export function AmbientDayScreen(): React.ReactElement {
             <View style={{ height: 28 }} />
           </>
         )}
+
+        <View style={styles.settings} testID="ambient-day-settings">
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Processing</Text>
+            <View style={styles.seg}>
+              <TouchableOpacity
+                onPress={() => setProcessingMode('live')}
+                style={[styles.segBtn, processingMode === 'live' && styles.segBtnOn]}
+                testID="ambient-mode-live"
+              >
+                <Text style={[styles.segText, processingMode === 'live' && styles.segTextOn]}>Live</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setProcessingMode('nightly')}
+                style={[styles.segBtn, processingMode === 'nightly' && styles.segBtnOn]}
+                testID="ambient-mode-nightly"
+              >
+                <Text style={[styles.segText, processingMode === 'nightly' && styles.segTextOn]}>Later</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <Text style={styles.settingHint}>
+            Live processes each recording on stop. Later queues them to process together.
+          </Text>
+          <View style={[styles.settingRow, { marginTop: 14 }]}>
+            <Text style={styles.settingLabel}>Keep summaries on-device</Text>
+            <Switch
+              value={onDeviceOnly}
+              onValueChange={setOnDeviceOnly}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              testID="ambient-day-privacy"
+            />
+          </View>
+        </View>
+        <View style={{ height: 20 }} />
       </ScrollView>
 
       {!capture.recording && !capture.processing ? (
@@ -544,6 +594,20 @@ function createStyles(colors: {
     askInput: { flex: 1, color: colors.text, fontSize: 13, padding: 0 },
     answer: { margin: 18, marginTop: 10, borderWidth: 1, borderLeftWidth: 2, borderColor: colors.border, borderLeftColor: colors.primary, borderRadius: 6, padding: 12, backgroundColor: colors.surface },
     answerText: { color: colors.text, fontSize: 13, lineHeight: 19 },
+    // pending
+    pending: { flexDirection: 'row', alignItems: 'center', gap: 9, marginHorizontal: 12, marginTop: 8, padding: 11, borderWidth: 1, borderColor: colors.primary, borderRadius: 8, backgroundColor: colors.surface },
+    pendingText: { color: colors.text, fontSize: 12.5, flex: 1 },
+    pendingCta: { color: colors.primary, fontSize: 12, fontWeight: '700' },
+    // settings footer
+    settings: { marginTop: 26, marginHorizontal: 12, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border },
+    settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+    settingLabel: { color: colors.text, fontSize: 13, fontWeight: '600', flex: 1 },
+    settingHint: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 6 },
+    seg: { flexDirection: 'row', borderWidth: 1, borderColor: colors.border, borderRadius: 6, overflow: 'hidden' },
+    segBtn: { paddingHorizontal: 13, paddingVertical: 6 },
+    segBtnOn: { backgroundColor: 'rgba(52,211,153,0.14)' },
+    segText: { color: colors.textMuted, fontSize: 12 },
+    segTextOn: { color: colors.primary, fontWeight: '700' },
     // fab
     fab: { position: 'absolute', right: 20, bottom: 28, width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }
   });
