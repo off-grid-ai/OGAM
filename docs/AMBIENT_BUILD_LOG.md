@@ -11,7 +11,7 @@
 |---|---|
 | Pipeline (capture → transcribe → summarise) | **done**, ported to release ports |
 | Ported onto `release/107-feedback` (bundles) | **done** |
-| Day-view components | **all 6 live** (journal, tasks, actions, timeline, reflect, replay) |
+| Day-view components | **all 6 live**; configurable processing + retention added; old timeline retired |
 
 ## The pipeline (Phase 0) — done
 
@@ -52,15 +52,22 @@ The lead's model: one Day view, six components, led by "what to do".
   capture (tested); `useAudioClipPlayer` plays it via react-native-audio-api; `AmbientReplayScreen`
   reached from the conversation detail. **All six Day-view components now exist.**
 
-### Remaining / follow-ups
-1. **Device verification** — especially the Replay audio player + the whole rewired STT/generation
-   path on `release/107-feedback` (built + bundles; not yet run on a phone).
-2. **Audio retention** — Replay assumes the capture WAV persists; add a retention window + cleanup so
-   clips resolve and storage stays bounded.
-3. One-tap MCP routing for Actions (Mac-side connectors) — beyond the Share fallback.
-4. Consolidate: retire the old `AmbientTimelineScreen` (capture now lives in `useAmbientCapture`).
-5. Configurable processing (live/nightly/balanced), true always-on, speaker attribution, onboarding,
-   move to `mobile-pro`.
+### Done since last update
+- **Configurable processing** — live (process on stop) vs later (queue + a Process-now banner). Mode +
+  keep-on-device + retention window live in the Day settings footer.
+- **Audio retention** — capture files pruned past a 7/30-day window (transcript/summary kept).
+- **Retired** the old `AmbientTimelineScreen`; capture lives in `useAmbientCapture`, the Day view is home.
+
+### Remaining — needs a device, external infra, or a decision (not fake-buildable)
+1. **Device verification** — the Replay audio player + the whole rewired STT/generation path on
+   `release/107-feedback` (builds + bundles; not yet run on a phone). **Biggest open item.**
+2. **True always-on background capture** — iOS background-audio session + on-charge auto-trigger for
+   the nightly queue. Device work.
+3. **Actions one-tap MCP routing** — execute proposals via the Mac's connectors (beyond Share).
+4. **Speaker attribution** — diarization / entity graph.
+5. **Onboarding & autosetup** — reconcile with Dishit's scope, then build the screens.
+6. **Tier** — move the feature into the `mobile-pro` submodule before ship.
+7. Push `feat/ambient-107` + open the PR into `release/107-feedback`.
 
 ## Cross-cutting / deferred
 - Configurable processing mode (live / nightly / balanced) — the scheduler + setting.

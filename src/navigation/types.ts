@@ -31,7 +31,6 @@ export type RootStackParamList = {
   Ambient: undefined;
   AmbientDay: undefined;
   AmbientReflect: undefined;
-  AmbientTimeline: undefined;
   AmbientSession: { sessionId: string };
   AmbientReplay: { sessionId: string };
 };
