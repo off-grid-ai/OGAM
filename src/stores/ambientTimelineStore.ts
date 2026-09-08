@@ -13,8 +13,8 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { TimelineSession } from '../services/ambient/timelineModel'
 import type { ProactiveActionProposal } from '@offgrid/models'
-import type { ProcessingMode, PendingCapture } from '../services/ambient/processingModel'
-import { DEFAULT_PROCESSING_MODE } from '../services/ambient/processingModel'
+import type { ProcessingMode, CaptureMode, PendingCapture } from '../services/ambient/processingModel'
+import { DEFAULT_PROCESSING_MODE, DEFAULT_CAPTURE_MODE } from '../services/ambient/processingModel'
 import { DEFAULT_RETENTION_DAYS } from '../services/ambient/retentionModel'
 
 interface AmbientTimelineState {
@@ -33,6 +33,10 @@ interface AmbientTimelineState {
   onDeviceOnly: boolean
   /** Live = process on stop; nightly = queue for a later pass. */
   processingMode: ProcessingMode
+  /** Session (one-tap) vs always-on (passive continuous). */
+  captureMode: CaptureMode
+  /** Whether the recorder's first-run setup is done. */
+  onboardingComplete: boolean
   /** Captures waiting to be processed (nightly mode). */
   pendingCaptures: PendingCapture[]
   /** How many days of raw capture audio to keep (for Replay). */
@@ -49,6 +53,8 @@ interface AmbientTimelineState {
   addPendingCapture: (capture: PendingCapture) => void
   clearPendingCaptures: () => void
   setAudioRetentionDays: (days: number) => void
+  setCaptureMode: (mode: CaptureMode) => void
+  setOnboardingComplete: (done: boolean) => void
 }
 
 /** Merge new sessions into existing, keeping one record per id (last write wins). Pure, exported for test. */
@@ -75,6 +81,8 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       actionsByDay: {},
       onDeviceOnly: false,
       processingMode: DEFAULT_PROCESSING_MODE,
+      captureMode: DEFAULT_CAPTURE_MODE,
+      onboardingComplete: false,
       pendingCaptures: [],
       audioRetentionDays: DEFAULT_RETENTION_DAYS,
       addSessions: incoming => set(state => ({ sessions: mergeSessions(state.sessions, incoming) })),
@@ -97,7 +105,9 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       addPendingCapture: capture =>
         set(state => ({ pendingCaptures: [...state.pendingCaptures, capture] })),
       clearPendingCaptures: () => set({ pendingCaptures: [] }),
-      setAudioRetentionDays: days => set({ audioRetentionDays: days })
+      setAudioRetentionDays: days => set({ audioRetentionDays: days }),
+      setCaptureMode: mode => set({ captureMode: mode }),
+      setOnboardingComplete: done => set({ onboardingComplete: done })
     }),
     {
       name: 'ambient-timeline',

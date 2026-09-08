@@ -12,6 +12,11 @@ import type { SpeechSegment } from './vadSegmenter'
 
 export type ProcessingMode = 'live' | 'nightly'
 
+/** Session = one-tap capture; always-on = passive continuous capture (rotated). */
+export type CaptureMode = 'session' | 'always-on'
+
+export const DEFAULT_CAPTURE_MODE: CaptureMode = 'session'
+
 export const DEFAULT_PROCESSING_MODE: ProcessingMode = 'live'
 
 /** A finished capture waiting to be transcribed + summarised (nightly/deferred mode). */

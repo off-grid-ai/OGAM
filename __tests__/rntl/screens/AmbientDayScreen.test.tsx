@@ -10,7 +10,7 @@ import { Share } from 'react-native';
 
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
-  return { ...actual, useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }) };
+  return { ...actual, useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn(), replace: jest.fn() }) };
 });
 jest.mock('../../../src/theme', () => {
   const colors = {
@@ -49,12 +49,14 @@ jest.mock('../../../src/stores/ambientTimelineStore', () => {
   let state: any = {
     sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {}, onDeviceOnly: false,
     pendingCaptures: [], processingMode: 'live', audioRetentionDays: 7,
+    onboardingComplete: true,
     toggleTask: (id: string) => mockToggle(id),
     setDayActions: jest.fn(),
     resolveDayAction: (dayKey: string, i: number) => mockResolveAction(dayKey, i),
     setProcessingMode: (m: string) => mockSetMode(m),
     setOnDeviceOnly: jest.fn(),
-    setAudioRetentionDays: (d: number) => mockSetRetention(d)
+    setAudioRetentionDays: (d: number) => mockSetRetention(d),
+    setOnboardingComplete: jest.fn(), setCaptureMode: jest.fn()
   };
   const hook = (selector: any) => selector(state);
   hook.getState = () => state;
@@ -81,7 +83,7 @@ describe('AmbientDayScreen', () => {
     mockProcessPending.mockClear();
     mockSetMode.mockClear();
     mockSetRetention.mockClear();
-    store.__set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {}, pendingCaptures: [], processingMode: 'live', audioRetentionDays: 7 });
+    store.__set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {}, pendingCaptures: [], processingMode: 'live', audioRetentionDays: 7, onboardingComplete: true });
   });
 
   it('shows the empty state when the day has nothing', () => {

@@ -30,3 +30,4 @@ export { AmbientSessionScreen } from './AmbientSessionScreen';
 export { AmbientDayScreen } from './AmbientDayScreen';
 export { AmbientReflectScreen } from './AmbientReflectScreen';
 export { AmbientReplayScreen } from './AmbientReplayScreen';
+export { AmbientOnboardingScreen } from './AmbientOnboardingScreen';

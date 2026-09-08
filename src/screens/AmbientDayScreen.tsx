@@ -89,6 +89,7 @@ export function AmbientDayScreen(): React.ReactElement {
   const setOnDeviceOnly = useAmbientTimelineStore(s => s.setOnDeviceOnly);
   const audioRetentionDays = useAmbientTimelineStore(s => s.audioRetentionDays);
   const setAudioRetentionDays = useAmbientTimelineStore(s => s.setAudioRetentionDays);
+  const onboardingComplete = useAmbientTimelineStore(s => s.onboardingComplete);
 
   const dayKeys = useMemo(() => dayKeysWithSessions(sessions, dateParts), [sessions]);
   const [dayIndex, setDayIndex] = useState(0);
@@ -167,6 +168,14 @@ export function AmbientDayScreen(): React.ReactElement {
       setAsking(false);
     }
   }, [askQuery, asking, daySessions]);
+
+  // First run: send to onboarding.
+  const gated = useRef(false);
+  useEffect(() => {
+    if (gated.current || onboardingComplete) return;
+    gated.current = true;
+    navigation.replace('AmbientOnboarding');
+  }, [onboardingComplete, navigation]);
 
   // Prune capture audio past the retention window, once per screen open.
   const retentionRan = useRef(false);
