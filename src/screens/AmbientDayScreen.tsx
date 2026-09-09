@@ -27,6 +27,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAmbientCapture } from '../hooks/useAmbientCapture';
+import { useAlwaysOnCapture } from '../hooks/useAlwaysOnCapture';
 import { useAmbientTimelineStore } from '../stores/ambientTimelineStore';
 import {
   collectDayTasks,
@@ -89,6 +90,9 @@ export function AmbientDayScreen(): React.ReactElement {
   const setOnDeviceOnly = useAmbientTimelineStore(s => s.setOnDeviceOnly);
   const audioRetentionDays = useAmbientTimelineStore(s => s.audioRetentionDays);
   const setAudioRetentionDays = useAmbientTimelineStore(s => s.setAudioRetentionDays);
+  const captureMode = useAmbientTimelineStore(s => s.captureMode);
+  const setCaptureMode = useAmbientTimelineStore(s => s.setCaptureMode);
+  useAlwaysOnCapture(capture, captureMode === 'always-on');
   const onboardingComplete = useAmbientTimelineStore(s => s.onboardingComplete);
 
   const dayKeys = useMemo(() => dayKeysWithSessions(sessions, dateParts), [sessions]);
@@ -357,6 +361,23 @@ export function AmbientDayScreen(): React.ReactElement {
 
         <View style={styles.settings} testID="ambient-day-settings">
           <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Listening</Text>
+            <View style={styles.seg}>
+              {(['session', 'always-on'] as const).map(mode => (
+                <TouchableOpacity
+                  key={mode}
+                  onPress={() => setCaptureMode(mode)}
+                  style={[styles.segBtn, captureMode === mode && styles.segBtnOn]}
+                  testID={`ambient-capture-${mode}`}
+                >
+                  <Text style={[styles.segText, captureMode === mode && styles.segTextOn]}>
+                    {mode === 'session' ? 'One tap' : 'Always-on'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          <View style={[styles.settingRow, { marginTop: 14 }]}>
             <Text style={styles.settingLabel}>Processing</Text>
             <View style={styles.seg}>
               <TouchableOpacity

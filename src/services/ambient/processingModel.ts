@@ -17,6 +17,15 @@ export type CaptureMode = 'session' | 'always-on'
 
 export const DEFAULT_CAPTURE_MODE: CaptureMode = 'session'
 
+/** In always-on mode, finalise the current capture and start a fresh one every this many ms, so files
+ *  stay bounded and processing can happen in chunks. */
+export const ALWAYS_ON_ROTATE_MS = 10 * 60_000
+
+/** Whether an always-on capture has run long enough to rotate. */
+export function shouldRotate(elapsedMs: number, rotateMs: number = ALWAYS_ON_ROTATE_MS): boolean {
+  return elapsedMs >= rotateMs
+}
+
 export const DEFAULT_PROCESSING_MODE: ProcessingMode = 'live'
 
 /** A finished capture waiting to be transcribed + summarised (nightly/deferred mode). */
