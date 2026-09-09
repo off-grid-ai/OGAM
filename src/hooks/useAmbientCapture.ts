@@ -63,7 +63,10 @@ export function useAmbientCapture(): AmbientCapture {
         recordingPath,
         captureStartedAtMs,
         {
-          ...createDefaultTimelineBuildDeps(useAmbientTimelineStore.getState().onDeviceOnly),
+          ...createDefaultTimelineBuildDeps(
+            useAmbientTimelineStore.getState().onDeviceOnly,
+            useAmbientTimelineStore.getState().useMacForTranscription
+          ),
           onProgress: setProgress
         },
         anchorsMs

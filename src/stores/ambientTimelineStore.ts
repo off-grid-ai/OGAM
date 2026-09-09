@@ -31,6 +31,9 @@ interface AmbientTimelineState {
    * model); on forces the local engine.
    */
   onDeviceOnly: boolean
+  /** Offload transcription to a paired, reachable Mac (falls back to on-device). Ignored when
+   *  onDeviceOnly is on - that forces everything local. */
+  useMacForTranscription: boolean
   /** Live = process on stop; nightly = queue for a later pass. */
   processingMode: ProcessingMode
   /** Session (one-tap) vs always-on (passive continuous). */
@@ -45,6 +48,7 @@ interface AmbientTimelineState {
   removeSession: (id: string) => void
   clearAll: () => void
   setOnDeviceOnly: (value: boolean) => void
+  setUseMacForTranscription: (value: boolean) => void
   toggleTask: (id: string) => void
   setDayJournal: (dayKey: string, text: string) => void
   setDayActions: (dayKey: string, proposals: ProactiveActionProposal[]) => void
@@ -80,6 +84,7 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       journalByDay: {},
       actionsByDay: {},
       onDeviceOnly: false,
+      useMacForTranscription: false,
       processingMode: DEFAULT_PROCESSING_MODE,
       captureMode: DEFAULT_CAPTURE_MODE,
       onboardingComplete: false,
@@ -89,6 +94,7 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       removeSession: id => set(state => ({ sessions: state.sessions.filter(s => s.id !== id) })),
       clearAll: () => set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {} }),
       setOnDeviceOnly: value => set({ onDeviceOnly: value }),
+      setUseMacForTranscription: value => set({ useMacForTranscription: value }),
       toggleTask: id => set(state => ({ doneTaskIds: toggleId(state.doneTaskIds, id) })),
       setDayJournal: (dayKey, text) =>
         set(state => ({ journalByDay: { ...state.journalByDay, [dayKey]: text } })),

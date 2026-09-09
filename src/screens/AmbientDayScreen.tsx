@@ -88,6 +88,8 @@ export function AmbientDayScreen(): React.ReactElement {
   const setProcessingMode = useAmbientTimelineStore(s => s.setProcessingMode);
   const onDeviceOnly = useAmbientTimelineStore(s => s.onDeviceOnly);
   const setOnDeviceOnly = useAmbientTimelineStore(s => s.setOnDeviceOnly);
+  const useMacForTranscription = useAmbientTimelineStore(s => s.useMacForTranscription);
+  const setUseMacForTranscription = useAmbientTimelineStore(s => s.setUseMacForTranscription);
   const audioRetentionDays = useAmbientTimelineStore(s => s.audioRetentionDays);
   const setAudioRetentionDays = useAmbientTimelineStore(s => s.setAudioRetentionDays);
   const captureMode = useAmbientTimelineStore(s => s.captureMode);
@@ -406,6 +408,16 @@ export function AmbientDayScreen(): React.ReactElement {
               onValueChange={setOnDeviceOnly}
               trackColor={{ true: colors.primary, false: colors.border }}
               testID="ambient-day-privacy"
+            />
+          </View>
+          <View style={[styles.settingRow, { marginTop: 14, opacity: onDeviceOnly ? 0.4 : 1 }]}>
+            <Text style={styles.settingLabel}>Transcribe on Mac when paired</Text>
+            <Switch
+              value={useMacForTranscription && !onDeviceOnly}
+              onValueChange={setUseMacForTranscription}
+              disabled={onDeviceOnly}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              testID="ambient-day-mac-offload"
             />
           </View>
           <View style={[styles.settingRow, { marginTop: 14 }]}>
