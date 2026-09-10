@@ -13,6 +13,7 @@ import { ensureAmbientSliceDir } from '../services/ambient/phoneSttExecutorFacto
 import { createDefaultTimelineBuildDeps } from '../services/ambient/timelineBuilderFactory'
 import { buildTimelineSessions, type BuildProgress } from '../services/ambient/timelineBuilder'
 import { mobileSpeechInputPorts } from '../services/adapters/speech/mobileSpeechInputPorts'
+import { macOffloadReady } from '../services/ambient/macSttExecutorFactory'
 import { processOnStop } from '../services/ambient/processingModel'
 import { useAmbientTimelineStore } from '../stores/ambientTimelineStore'
 import type { AmbientRecorder } from '../services/ambient/ambientRecorder'
@@ -34,6 +35,17 @@ export interface AmbientCapture {
   flag: () => void
   /** Process everything queued in nightly mode, then clear the queue. */
   processPending: () => Promise<void>
+}
+
+/**
+ * Can a capture be transcribed right now? Either the phone's own transcriber is ready, OR Mac offload
+ * is turned on, permitted (not on-device-only), and a paired Mac is reachable to do it - so a user who
+ * offloads to the Mac and has no local model still records fine.
+ */
+function captureTranscriptionReady(): boolean {
+  if (mobileSpeechInputPorts.transcriber.ready()) return true
+  const s = useAmbientTimelineStore.getState()
+  return s.useMacForTranscription && !s.onDeviceOnly && macOffloadReady()
 }
 
 export function useAmbientCapture(): AmbientCapture {
@@ -79,8 +91,8 @@ export function useAmbientCapture(): AmbientCapture {
   const processPending = useCallback(async () => {
     const pending = useAmbientTimelineStore.getState().pendingCaptures
     if (pending.length === 0) return
-    if (!mobileSpeechInputPorts.transcriber.ready()) {
-      setError('Set up a transcription model in Models to process recordings.')
+    if (!captureTranscriptionReady()) {
+      setError('Set up a transcription model in Models (or pair a Mac) to process recordings.')
       return
     }
     setPhase('processing')
@@ -168,8 +180,8 @@ export function useAmbientCapture(): AmbientCapture {
       setPhase('idle')
       return
     }
-    if (!mobileSpeechInputPorts.transcriber.ready()) {
-      setError('Set up a transcription model in Models, then record.')
+    if (!captureTranscriptionReady()) {
+      setError('Set up a transcription model in Models, or pair a Mac and grant its tools, then record.')
       setPhase('idle')
       return
     }
