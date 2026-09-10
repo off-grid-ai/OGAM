@@ -275,7 +275,7 @@ export const SettingsScreen: React.FC = () => {
           <View style={styles.navSection}>
             <TouchableOpacity
               style={styles.navItem}
-              onPress={() => navigation.navigate('AmbientDay')}
+              onPress={() => navigation.navigate('DayTab')}
             >
               <View style={styles.navItemIcon}>
                 <Icon name="mic" size={16} color={colors.textSecondary} />
