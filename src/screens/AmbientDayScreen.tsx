@@ -461,17 +461,22 @@ export function AmbientDayScreen(): React.ReactElement {
               <Text style={styles.settingLabel}>Keep summaries on-device</Text>
               <Switch
                 value={onDeviceOnly}
-                onValueChange={setOnDeviceOnly}
+                onValueChange={next => {
+                  setOnDeviceOnly(next);
+                  if (next) setUseMacForTranscription(false);
+                }}
                 trackColor={{ true: colors.primary, false: colors.border }}
                 testID="ambient-day-privacy"
               />
             </View>
-            <View style={[styles.settingRow, { marginTop: 14, opacity: onDeviceOnly ? 0.4 : 1 }]}>
+            <View style={[styles.settingRow, { marginTop: 14 }]}>
               <Text style={styles.settingLabel}>Transcribe on Mac when paired</Text>
               <Switch
-                value={useMacForTranscription && !onDeviceOnly}
-                onValueChange={setUseMacForTranscription}
-                disabled={onDeviceOnly}
+                value={useMacForTranscription}
+                onValueChange={next => {
+                  setUseMacForTranscription(next);
+                  if (next) setOnDeviceOnly(false);
+                }}
                 trackColor={{ true: colors.primary, false: colors.border }}
                 testID="ambient-day-mac-offload"
               />
