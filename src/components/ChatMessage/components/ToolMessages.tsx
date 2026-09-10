@@ -201,13 +201,11 @@ export const ToolResultMessage: React.FC<{
   const isTaskTool = isTaskToolName(message.toolName);
   const taskDetail =
     isTaskTool && TaskToolDetail ? <TaskToolDetail message={message} /> : null;
-  const hasDetails = isTaskTool
-    ? Boolean(TaskToolDetail)
-    : !!(
-        message.content &&
-        message.content.length > 0 &&
-        !message.content.startsWith('No results')
-      );
+  const hasDetails = Boolean(taskDetail) || !!(
+    message.content &&
+    message.content.length > 0 &&
+    !message.content.startsWith('No results')
+  );
   // Prefer toolCallId (carried on every tool-result message and stable across the
   // streaming→finalized remount); fall back to the message id.
   const stableKey = message.toolCallId || message.id;
@@ -269,9 +267,7 @@ export const SyncedToolArtifacts: React.FC<{
             durationLabel=""
             content={artifact.result}
             hasDetails={
-              isTaskTool
-                ? Boolean(TaskToolDetail)
-                : !running && artifact.result.length > 0
+              Boolean(taskDetail) || (!running && artifact.result.length > 0)
             }
             active={running}
             styles={styles}

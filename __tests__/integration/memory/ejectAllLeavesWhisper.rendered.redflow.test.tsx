@@ -57,7 +57,8 @@ describe('T023 (rendered) — Eject All frees the whisper sidecar (DEV-B1, fixed
       boundary.fs!.seedFile('/docs/whisper-models/ggml-tiny.en.bin', 75 * 1024 * 1024);
       boundary.download!.events.emit('DownloadComplete', {
         downloadId: row.downloadId, fileName: row.fileName, modelId: row.modelId,
-        bytesDownloaded: row.totalBytes ?? 1, totalBytes: row.totalBytes ?? 1,
+        bytesDownloaded: 75 * 1024 * 1024,
+        totalBytes: 75 * 1024 * 1024,
         status: 'completed', localUri: '/docs/whisper-models/ggml-tiny.en.bin',
       });
       await new Promise((r) => setTimeout(r, 0));

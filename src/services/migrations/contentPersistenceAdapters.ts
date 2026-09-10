@@ -1,15 +1,14 @@
-import type {
-  ChatTurnRecord,
-  LocalMessageContentLocation,
-} from '@offgrid/application';
-import { serializeSyncedMessageContext } from '@offgrid/sync';
+import {recoverLegacyAttachmentContent} from '@offgrid/application';
 import type { DB } from '@op-engineering/op-sqlite';
 import {
   encodeWorkspaceMessageContent,
   openWorkspaceContentDatabase,
   WORKSPACE_CONTENT_SCHEMA_VERSION,
 } from '../adapters/workspaceContent/workspaceContentDatabase';
-import { projectMobileMessageContent } from '../adapters/workspaceContent/mobileWorkspaceContentRepository';
+import {
+  getMobileWorkspaceContentRepository,
+  projectMobileMessageContent,
+} from '../adapters/workspaceContent/mobileWorkspaceContentRepository';
 import type {
   ContentMigrationTargetFacts,
   ContentMigrationTargetPort,
@@ -18,11 +17,18 @@ import type {
 import {
   storedRecord as record,
   type LegacyContentSnapshot,
-  type StoredRecord,
 } from './legacyContentSource';
+import {
+  isoTime,
+  legacyTurns,
+  localMessageState,
+  optionalText,
+  portableContext,
+  stableMessageId,
+  text,
+} from './legacyMessageProjection';
 
 export { legacyContentSource } from './legacyContentSource';
-;
 
 // Upgrade-migration readers only. The legacy Zustand project and chat stores that wrote these two
 // AsyncStorage keys are retired; Workspace Content owns projects, conversations, and messages. These
@@ -30,232 +36,7 @@ export { legacyContentSource } from './legacyContentSource';
 // owner. They are never written here, and nothing reads them at runtime. Remove them only when no
 // supported upgrade path can still start from a device that holds them.
 const TARGET_VERSION = WORKSPACE_CONTENT_SCHEMA_VERSION;
-
-function text(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`${label} is not a non-empty string`);
-  }
-  return value;
-}
-
-function optionalText(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function assertPortableToolCalls(message: StoredRecord, label: string): void {
-  const toolArtifacts = message.toolArtifacts;
-  if (toolArtifacts !== undefined && !Array.isArray(toolArtifacts)) {
-    throw new Error(`${label}.toolArtifacts is not an array`);
-  }
-  if (message.toolCalls !== undefined) {
-    if (!Array.isArray(message.toolCalls)) {
-      throw new Error(`${label}.toolCalls is not an array`);
-    }
-    const artifacts = (toolArtifacts ?? []).map((value, index) =>
-      record(value, `${label}.toolArtifacts[${index}]`),
-    );
-    for (const [index, value] of message.toolCalls.entries()) {
-      const call = record(value, `${label}.toolCalls[${index}]`);
-      const matchingArtifact = artifacts.find(
-        artifact =>
-          (optionalText(call.id) === null || artifact.id === call.id) &&
-          artifact.name === call.name &&
-          artifact.arguments === call.arguments,
-      );
-      if (!matchingArtifact) {
-        throw new Error(
-          `${label}.toolCalls[${index}] has no lossless completed-tool artifact`,
-        );
-      }
-    }
-  }
-}
-
-function portableContext(message: StoredRecord, label: string): string | null {
-  assertPortableToolCalls(message, label);
-
-  const generationMeta =
-    message.generationMeta === undefined
-      ? undefined
-      : record(message.generationMeta, `${label}.generationMeta`);
-  const toolArtifacts = message.toolArtifacts as unknown[] | undefined;
-  const role = text(message.role, `${label}.role`);
-  const candidate = {
-    ...(message.reasoningContent === undefined
-      ? {}
-      : { reasoning: message.reasoningContent }),
-    ...(generationMeta?.routedToolNames === undefined
-      ? {}
-      : { toolsOffered: generationMeta.routedToolNames }),
-    ...(toolArtifacts?.length ? { toolCalls: toolArtifacts } : {}),
-    ...(role === 'tool'
-      ? {
-          tool: {
-            ...(message.toolCallId === undefined
-              ? {}
-              : { callId: message.toolCallId }),
-            ...(message.toolName === undefined
-              ? {}
-              : { name: message.toolName }),
-            status: 'completed',
-            ...(message.generationTimeMs === undefined
-              ? {}
-              : { durationMs: message.generationTimeMs }),
-          },
-        }
-      : {}),
-    ...(message.isSystemInfo === true ? { notice: true } : {}),
-    status: 'completed',
-    ...(message.generationTimeMs === undefined
-      ? {}
-      : { durationMs: message.generationTimeMs }),
-  };
-  const serialized = serializeSyncedMessageContext(candidate);
-  if (
-    serialized === null ||
-    stableJson(JSON.parse(serialized)) !== stableJson(candidate)
-  ) {
-    throw new Error(
-      `${label} has portable context that cannot be represented losslessly`,
-    );
-  }
-  return Object.keys(candidate).length === 1 ? null : serialized;
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value as StoredRecord)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, nested]) => `${JSON.stringify(key)}:${stableJson(nested)}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'undefined';
-}
-
-function stableMessageId(message: StoredRecord): string {
-  return optionalText(message.uuid) ?? text(message.id, 'message.id');
-}
-
-function legacyTurns(input: {
-  conversation: StoredRecord;
-  conversationId: string;
-  messages: readonly StoredRecord[];
-  now: string;
-}): { turns: ChatTurnRecord[]; turnIds: Map<string, string> } {
-  const { conversation, conversationId, messages, now } = input;
-  const turns: ChatTurnRecord[] = [];
-  const turnIds = new Map<string, string>();
-  for (let index = 0; index < messages.length; index += 1) {
-    const user = messages[index];
-    if (user.role !== 'user' || user.isSystemInfo === true) continue;
-    const nextUserOffset = messages
-      .slice(index + 1)
-      .findIndex(
-        message => message.role === 'user' && message.isSystemInfo !== true,
-      );
-    const end =
-      nextUserOffset < 0 ? messages.length : index + 1 + nextUserOffset;
-    const responses = messages
-      .slice(index + 1, end)
-      .filter(
-        message =>
-          (message.role === 'assistant' || message.role === 'tool') &&
-          message.isSystemInfo !== true,
-      );
-    const turnId = stableMessageId(user);
-    const userMessageId = turnId;
-    const responseMessageIds = responses.map(stableMessageId);
-    turnIds.set(text(user.id, 'message.id'), turnId);
-    for (const response of responses) {
-      turnIds.set(text(response.id, 'message.id'), turnId);
-    }
-    const createdAt = isoTime(user.timestamp, now);
-    const updatedAt = responses.reduce(
-      (latest, response) => isoTime(response.timestamp, latest),
-      createdAt,
-    );
-    const operation =
-      user.turnKind === 'image'
-        ? {
-            type: 'image' as const,
-            prompt: typeof user.content === 'string' ? user.content : '',
-          }
-        : Array.isArray(user.attachments) &&
-          user.attachments.some(
-            value => record(value, 'message.attachment').type === 'image',
-          )
-        ? { type: 'vision' as const }
-        : { type: 'text' as const };
-    const interrupted = [user, ...responses].some(
-      message => message.isStreaming === true || message.isThinking === true,
-    );
-    turns.push({
-      id: turnId,
-      conversationId,
-      ...(typeof conversation.projectId === 'string'
-        ? { projectId: conversation.projectId }
-        : {}),
-      userMessageId,
-      responseMessageIds,
-      status: interrupted
-        ? 'interrupted'
-        : responses.length > 0
-        ? 'completed'
-        : 'queued',
-      request: { operation, request: {} },
-      requestId: turnId,
-      position: turns.length,
-      recoveryAttempts: 0,
-      lastError: null,
-      createdAt,
-      updatedAt,
-    });
-  }
-  return { turns, turnIds };
-}
-
-function localMessageState(
-  message: StoredRecord,
-  locations: readonly LocalMessageContentLocation[] | undefined,
-): StoredRecord {
-  const local = { ...message };
-  delete local.id;
-  delete local.uuid;
-  delete local.role;
-  delete local.content;
-  delete local.timestamp;
-  delete local.reasoningContent;
-  delete local.turnKind;
-  delete local.isSystemInfo;
-  delete local.isStreaming;
-  delete local.isThinking;
-  delete local.attachments;
-  delete local.generationTimeMs;
-  delete local.toolCallId;
-  delete local.toolCalls;
-  delete local.toolArtifacts;
-  delete local.toolName;
-  if (locations) local.contentLocations = locations;
-  if (local.generationMeta && typeof local.generationMeta === 'object') {
-    const localGenerationMeta = { ...(local.generationMeta as StoredRecord) };
-    delete localGenerationMeta.routedToolNames;
-    if (Object.keys(localGenerationMeta).length > 0) {
-      local.generationMeta = localGenerationMeta;
-    } else {
-      delete local.generationMeta;
-    }
-  }
-  return local;
-}
-
-function isoTime(value: unknown, fallback: string): string {
-  if (typeof value === 'string' && value.length > 0) return value;
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return new Date(value).toISOString();
-  }
-  return fallback;
-}
+const ATTACHMENT_RECOVERY_VERSION = 1;
 
 function rowCount(db: DB, table: string): number {
   const row = db.executeSync(`SELECT COUNT(*) AS count FROM ${table}`).rows[0];
@@ -264,6 +45,7 @@ function rowCount(db: DB, table: string): number {
 
 class MobileContentMigrationTarget implements ContentMigrationTargetPort {
   private readonly db: DB;
+  private readonly workspaceContent = getMobileWorkspaceContentRepository();
 
   constructor() {
     this.db = openWorkspaceContentDatabase();
@@ -280,7 +62,96 @@ class MobileContentMigrationTarget implements ContentMigrationTargetPort {
         : row?.status === 'started' || row?.status === 'failed'
         ? 'partial'
         : 'none';
-    return { marker, counts: this.counts() };
+    const attachmentRecovery = this.db.executeSync(
+      `SELECT 1 AS complete FROM workspace_content_legacy_attachment_recovery
+       WHERE version = ?`,
+      [ATTACHMENT_RECOVERY_VERSION],
+    ).rows[0];
+    return {
+      marker,
+      counts: this.counts(),
+      attachmentRecoveryComplete: attachmentRecovery?.complete === 1,
+    };
+  }
+
+  /** Restore attachment identities that an old text-only Sync replay removed after migration. */
+  async recoverLegacyAttachments(
+    snapshot: LegacyContentSnapshot,
+    lifecycle: {
+      onProgress(copied: number, total: number): void;
+      onCopied(): void;
+      onVerified(): void;
+    },
+  ): Promise<void> {
+    const messages = snapshot.conversations.flatMap(conversation => {
+      const conversationId = text(conversation.id, 'conversation.id');
+      return (Array.isArray(conversation.messages)
+        ? conversation.messages
+        : []
+      ).map((value, index) => ({
+        conversationId,
+        message: record(value, `conversation.messages[${index}]`),
+      }));
+    });
+    const candidates = messages.filter(({message}) =>
+      Array.isArray(message.attachments) && message.attachments.length > 0,
+    );
+    let inspected = 0;
+    for (const {conversationId, message} of candidates) {
+      const messageId = stableMessageId(message);
+      const currentAtRevision =
+        await this.workspaceContent.readMessageAtCurrentRevision(messageId);
+      const current = currentAtRevision.message;
+      if (
+        current &&
+        current.conversationId === conversationId &&
+        current.portable.role === message.role
+      ) {
+        const rich = projectMobileMessageContent({
+          content: message.content,
+          attachments: message.attachments,
+        });
+        const recovered = recoverLegacyAttachmentContent(
+          current.portable.content,
+          rich.content,
+        );
+        if (recovered) {
+          const local = {
+            ...current.local,
+            ...(rich.locations?.length
+              ? {contentLocations: rich.locations}
+              : {}),
+          };
+          const committed = await this.workspaceContent.commit({
+            expectedRevision: currentAtRevision.revision,
+            origin: 'migration',
+            outbox: 'enqueue',
+            changes: [{
+              kind: 'put',
+              entity: 'message',
+              record: {
+                ...current,
+                portable: {...current.portable, content: recovered},
+                local,
+              },
+            }],
+          });
+          if (!committed.committed) {
+            throw new Error(
+              `Message ${messageId} changed during attachment recovery.`,
+            );
+          }
+        }
+      }
+      lifecycle.onProgress(++inspected, candidates.length);
+    }
+    lifecycle.onCopied();
+    this.db.executeSync(
+      `INSERT OR REPLACE INTO workspace_content_legacy_attachment_recovery
+       (version, completed_at) VALUES (?, ?)`,
+      [ATTACHMENT_RECOVERY_VERSION, new Date().toISOString()],
+    );
+    lifecycle.onVerified();
   }
 
   async replaceWithLegacy(
@@ -468,6 +339,11 @@ class MobileContentMigrationTarget implements ContentMigrationTargetPort {
           );
         }
         lifecycle.onVerified();
+        await tx.execute(
+          `INSERT OR REPLACE INTO workspace_content_legacy_attachment_recovery
+           (version, completed_at) VALUES (?, ?)`,
+          [ATTACHMENT_RECOVERY_VERSION, new Date().toISOString()],
+        );
         await tx.execute(
           `UPDATE workspace_content_migration_journal
            SET status = 'completed', finished_at = ?, failure_message = NULL

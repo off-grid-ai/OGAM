@@ -1,14 +1,14 @@
 /**
  * Detail "Available Files" device-fit hint — the single owned budget (memoryBudget.fileExceedsBudget).
  *
- * SPEC (the OGAM user's view): in a model's detail view, the "Available Files" list offers exactly the
- * quant files that FIT this device's RAM budget and hides the ones that don't — and that fit decision is
- * the ONE owned primitive `fileExceedsBudget` (device-tier fraction of TOTAL RAM), never a hand-rolled
- * copy of the budget arithmetic that could drift from the download-warning / picker / browse-list copies.
+ * SPEC (the OGAM user's view): a model's detail view lists every discovered quantization. Files that do
+ * not fit this device remain visible, show the owned compatibility warning, and cannot be downloaded.
+ * The fit decision is the ONE owned primitive `fileExceedsBudget` (device-tier fraction of TOTAL RAM),
+ * never a hand-rolled copy of the budget arithmetic that could drift from other model surfaces.
  *
  * This mounts the REAL ModelsScreen, arrives at a model's detail via a real search+tap, and asserts the
- * rendered file list against `fileExceedsBudget`'s verdict for each file: the under-budget quant renders,
- * the over-budget quant is absent. Boundary fakes only: native download + fs + RAM (installNativeBoundary)
+ * rendered file list against `fileExceedsBudget`'s verdict for each file: both quantizations render and
+ * the over-budget quant is disabled. Boundary fakes only: native download + fs + RAM (installNativeBoundary)
  * and the HuggingFace network transport. The REAL Mobile composition root (Shared application + download
  * coordinator) is booted via startMobileApplicationFixture; the budget math, screen, hooks, ModelCard all run REAL.
  *
@@ -31,7 +31,7 @@ async function bootApplication() {
 const MODEL_ID = 'org/fit-hint';
 
 describe('detail Available Files fit hint matches the owned fileExceedsBudget verdict (rendered)', () => {
-  it('offers exactly the files fileExceedsBudget says fit — hides the over-budget quant', async () => {
+  it('lists every quant and disables the one that exceeds the owned budget', async () => {
     // Device: a 6GB Android phone → budget = 6 * modelBudgetFraction(6)=0.60 = 3.6GB.
     installNativeBoundary({ download: true, fs: true, ram: { platform: 'android', totalBytes: 6 * GB, availBytes: 4 * GB } });
 
@@ -80,10 +80,11 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
     // Wait for the files to load (the fitting file card renders).
     await waitFor(() => expect(getByText('model-Q4_K_M')).toBeTruthy(), { timeout: 4000 });
 
-    // TERMINAL artifact: the list offers the under-budget quant and HIDES the over-budget one —
-    // exactly the fileExceedsBudget verdict. (Display names strip the .gguf extension.)
+    // All repository quantizations stay visible. The owned budget disables the unsafe one.
     expect(queryByText('model-Q4_K_M')).not.toBeNull();
-    expect(queryByText('model-Q8_0')).toBeNull();
+    expect(queryByText('model-Q8_0')).not.toBeNull();
+    expect(getByText(/Too large/)).toBeTruthy();
+    expect(getByTestId('file-card-1-download').props.accessibilityState.disabled).toBe(true);
   }, 30000);
 
   it('BOUNDARY (M5a): a file EXACTLY at the budget is treated as over-budget (>=), one just under fits', async () => {
@@ -91,8 +92,8 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
     // survived because no test straddled equality. Device chosen so the budget is a WHOLE number of
     // bytes: 4GB × balanced 0.50 = EXACTLY 2.0 GB (2147483648 B) — the only tier where integer bytes can
     // hit exact equality (0.60×6GB is 3.6GB, not an integer, so >= and > can't differ there). A file of
-    // EXACTLY 2.0GB must be HIDDEN (>= = exceeds); 2.0GB−1byte must SHOW. Reverting to `>` flips the
-    // exact-budget file to "fits" → this test goes red (mutant killed).
+    // EXACTLY 2.0GB must be disabled (>= = exceeds); 2.0GB−1byte must stay enabled. Reverting to `>`
+    // enables the exact-budget file and makes this test red (mutant killed).
     installNativeBoundary({ download: true, fs: true, ram: { platform: 'android', totalBytes: 4 * GB, availBytes: 3 * GB } });
 
      
@@ -135,8 +136,11 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
     await waitFor(() => expect(getByTestId('model-detail-screen')).toBeTruthy(), { timeout: 4000 });
     await waitFor(() => expect(getByText('model-under')).toBeTruthy(), { timeout: 4000 });
 
-    // TERMINAL artifact: just-under renders; EXACTLY-at-budget is hidden (the `>=` boundary).
+    // Both files render; EXACTLY-at-budget is disabled at the `>=` boundary.
     expect(queryByText('model-under')).not.toBeNull();
-    expect(queryByText('model-atbudget')).toBeNull();
+    expect(queryByText('model-atbudget')).not.toBeNull();
+    expect(getByText(/Too large/)).toBeTruthy();
+    expect(getByTestId('file-card-0-download').props.accessibilityState.disabled).toBe(true);
+    expect(getByTestId('file-card-1-download').props.accessibilityState.disabled).toBe(false);
   }, 30000);
 });

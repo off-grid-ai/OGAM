@@ -6,7 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { AppNavigator } from '../navigation';
-import { appNavigationRef } from '../navigation/useProExpiryRedirect';
+import { appNavigationRef } from '../navigation/navigationRef';
 import { LockScreen } from '../screens';
 import type { ThemeColors } from '../theme';
 
@@ -60,14 +60,12 @@ export function LockedSurface({
 
 interface MainSurfaceProps extends SurfaceTheme {
   AppRoot?: React.ComponentType;
-  onNavigationReady: () => void;
 }
 
 export function MainSurface({
   AppRoot,
   colors,
   isDark,
-  onNavigationReady,
 }: MainSurfaceProps) {
   return (
     <GestureHandlerRootView style={styles.flex}>
@@ -76,7 +74,6 @@ export function MainSurface({
         {AppRoot ? <AppRoot /> : null}
         <NavigationContainer
           ref={appNavigationRef}
-          onReady={onNavigationReady}
           theme={{
             dark: isDark,
             colors: {

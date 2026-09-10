@@ -527,6 +527,41 @@ describe('AppSheet', () => {
     });
   });
 
+  describe('keyboard surface continuity', () => {
+    it('keeps the sheet surface behind the rounded keyboard corners', () => {
+      const listeners = new Map<string, (event?: any) => void>();
+      const addListener = jest
+        .spyOn(Keyboard, 'addListener')
+        .mockImplementation((event: string, listener: any) => {
+          listeners.set(event, listener);
+          return { remove: jest.fn() } as any;
+        });
+      const { getByTestId, queryByTestId } = render(
+        <AppSheet {...defaultProps} visible={true} title="Keyboard Sheet" />,
+      );
+
+      expect(queryByTestId('app-sheet-keyboard-underlay')).toBeNull();
+
+      act(() => {
+        listeners.get('keyboardWillShow')?.({
+          endCoordinates: { height: 336 },
+        });
+      });
+
+      const underlay = getByTestId('app-sheet-keyboard-underlay');
+      expect(underlay.props.pointerEvents).toBe('none');
+      expect(underlay.props.style).toEqual(
+        expect.arrayContaining([expect.objectContaining({ height: 336 })]),
+      );
+
+      act(() => {
+        listeners.get('keyboardWillHide')?.();
+      });
+      expect(queryByTestId('app-sheet-keyboard-underlay')).toBeNull();
+      addListener.mockRestore();
+    });
+  });
+
   // ============================================================================
   // Visibility Transitions
   // ============================================================================

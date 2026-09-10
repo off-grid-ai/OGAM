@@ -46,6 +46,7 @@
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		A084C602C3B4A415DC74D43F /* libPods-OffgridMobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3A3BA1A946E10FA48AA4C0EB /* libPods-OffgridMobile.a */; };
 		AABB000100000000000001AA /* OffgridMobileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB000200000000000002AA /* OffgridMobileTests.swift */; };
+		AABB001100000000000001AA /* SyncScreenshotAssetCursorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB001200000000000002AA /* SyncScreenshotAssetCursorTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -100,6 +101,7 @@
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = OffgridMobile/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = OffgridMobile/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		AABB000200000000000002AA /* OffgridMobileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffgridMobileTests.swift; sourceTree = "<group>"; };
+		AABB001200000000000002AA /* SyncScreenshotAssetCursorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncScreenshotAssetCursorTests.swift; sourceTree = "<group>"; };
 		AABB000400000000000004AA /* OffgridMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OffgridMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B9DE36A1FFE10AF8CD81DBD2 /* Pods-OffgridMobileTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OffgridMobileTests.release.xcconfig"; path = "Target Support Files/Pods-OffgridMobileTests/Pods-OffgridMobileTests.release.xcconfig"; sourceTree = "<group>"; };
 		D0917E571600B3FFEDA59EF7 /* Pods-OffgridMobileTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OffgridMobileTests.debug.xcconfig"; path = "Target Support Files/Pods-OffgridMobileTests/Pods-OffgridMobileTests.debug.xcconfig"; sourceTree = "<group>"; };
@@ -215,6 +217,7 @@
 			isa = PBXGroup;
 			children = (
 				AABB000200000000000002AA /* OffgridMobileTests.swift */,
+				AABB001200000000000002AA /* SyncScreenshotAssetCursorTests.swift */,
 				0A7B3D082F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift */,
 			);
 			path = OffgridMobileTests;
@@ -473,6 +476,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AABB000100000000000001AA /* OffgridMobileTests.swift in Sources */,
+				AABB001100000000000001AA /* SyncScreenshotAssetCursorTests.swift in Sources */,
 				0A7B3D072F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

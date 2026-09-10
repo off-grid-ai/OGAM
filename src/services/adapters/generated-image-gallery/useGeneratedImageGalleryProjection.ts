@@ -2,6 +2,7 @@ import {useMemo, useSyncExternalStore} from 'react';
 import type {GeneratedImageRecord} from '@offgrid/application';
 import type {GeneratedImage} from '../../../types';
 import {applicationFacade} from '../../applicationFacade';
+import {resolveDocumentPath} from '../../../utils/resolveDocumentPath';
 
 export const projectGeneratedImage = (
   record: GeneratedImageRecord,
@@ -10,7 +11,7 @@ export const projectGeneratedImage = (
   ...(record.provenance ? {provenance: record.provenance} : {}),
   prompt: record.prompt,
   ...(record.negativePrompt ? {negativePrompt: record.negativePrompt} : {}),
-  imagePath: record.local.path,
+  imagePath: resolveDocumentPath(record.local.path),
   ...(record.local.fileName ? {fileName: record.local.fileName} : {}),
   width: record.width,
   height: record.height,

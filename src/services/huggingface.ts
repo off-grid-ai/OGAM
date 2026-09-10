@@ -15,6 +15,7 @@ import { looksLikeVisionModel } from '../utils/visionModel';
 import { huggingFaceRevisionPath } from '../utils/modelOrigin';
 import {
   QUANTIZATION_INFO,
+  isAuxiliaryModelFile,
   isModelProjectorFile as isMMProjFile,
   pickProjectorForDownload as pickMmProjForDownload,
 } from '@offgrid/models';
@@ -138,7 +139,9 @@ class HuggingFaceService {
         f => f.type === 'file' && isGgufFile(f.path),
       );
       const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.path));
-      const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.path));
+      const modelFiles = allGguf.filter(
+        f => !this.isMMProjFile(f.path) && !isAuxiliaryModelFile(f.path),
+      );
       return modelFiles
         .map(file => ({
           name: file.path,
@@ -168,7 +171,9 @@ class HuggingFaceService {
     if (!result.siblings) return [];
     const allGguf = result.siblings.filter(f => isGgufFile(f.rfilename));
     const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.rfilename));
-    const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.rfilename));
+    const modelFiles = allGguf.filter(
+      f => !this.isMMProjFile(f.rfilename) && !isAuxiliaryModelFile(f.rfilename),
+    );
     const mmProjForMatch = mmProjFiles.map(f => ({
       path: f.rfilename,
       size: f.size,

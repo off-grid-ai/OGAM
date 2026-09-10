@@ -44,13 +44,42 @@ export function catalogModelFiles(
     }));
 }
 
-/** Resolve catalog-owned files locally; use remote discovery only for uncatalogued models. */
+/**
+ * Resolve every downloadable variant for a repository-backed model.
+ *
+ * Shared catalog files remain the trusted fallback and override matching remote
+ * metadata. Remote discovery adds the other quantizations that the catalog does
+ * not need to duplicate. Runtime-owned entries have no catalog files and must
+ * never fall through to Hugging Face.
+ */
 export async function resolveModelFiles(
   modelId: string,
   discovery: ModelFileDiscoveryPort,
 ): Promise<ModelFile[]> {
   const catalogFiles = catalogModelFiles(modelId);
-  return catalogFiles ?? discovery.getModelFiles(modelId);
+  if (catalogFiles?.length === 0) return [];
+
+  if (catalogFiles === null) return discovery.getModelFiles(modelId);
+
+  try {
+    const discoveredFiles = await discovery.getModelFiles(modelId);
+    if (discoveredFiles.length === 0) return catalogFiles;
+
+    const catalogByName = new Map(
+      catalogFiles.map(file => [file.name, file] as const),
+    );
+    const discoveredNames = new Set(discoveredFiles.map(file => file.name));
+    return [
+      ...discoveredFiles.map(file => ({
+        ...file,
+        ...catalogByName.get(file.name),
+      })),
+      ...catalogFiles.filter(file => !discoveredNames.has(file.name)),
+    ];
+  } catch (error) {
+    logger.warn(`Could not discover model variants for ${modelId}:`, error);
+    return catalogFiles;
+  }
 }
 
 /** Resolve each curated model's standard Q4_K_M file from the catalog boundary. */

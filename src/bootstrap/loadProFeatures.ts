@@ -65,7 +65,7 @@ export async function loadProFeatures(isPro?: boolean): Promise<boolean> {
   // A credential is not access. If the roster last told us this device is deactivated, the paid bundle
   // must not load at all - loading it and then hiding the entry points leaves every Pro service running.
   const admitted = selectHasProAccess(useAppStore.getState()) || DEV_UNLOCK_PRO;
-  if (!expired && typeof pro.activateSyncBootstrap === 'function') {
+  if (typeof pro.activateSyncBootstrap === 'function') {
     pro.activateSyncBootstrap({
       registerScreen,
       registerSlot,

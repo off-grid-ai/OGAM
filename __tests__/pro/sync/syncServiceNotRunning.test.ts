@@ -60,7 +60,6 @@ function createStoppedSync(): SyncApplication {
 describePro('the Devices screen while Sync is not running', () => {
   it.each([
     ['rescan', (sync: SyncApplication) => sync.rescan()],
-    ['disconnect', (sync: SyncApplication) => sync.disconnect('the-mac')],
   ] as const)('refuses %s through the typed Shared outcome', async (operation, command) => {
     const sync = createStoppedSync();
 
@@ -69,19 +68,22 @@ describePro('the Devices screen while Sync is not running', () => {
     expect(outcome).toEqual({ok: false, failure: {kind: 'not_running'}});
     expect(sync.snapshot().lastFailure).toEqual({
       operation,
-      ...(operation === 'disconnect' ? {entityId: 'the-mac'} : {}),
       failure: {kind: 'not_running'},
     });
   });
 
-  it('does not fabricate a connection change after a refused disconnect', async () => {
+  it('allows local unpair while Sync is stopped without fabricating a connection change', async () => {
     const sync = createStoppedSync();
     const connections = sync.snapshot().connections;
 
-    await sync.disconnect('the-mac');
+    await expect(sync.disconnect('the-mac')).resolves.toEqual({
+      ok: true,
+      value: undefined,
+    });
 
     expect(sync.snapshot().connections).toBe(connections);
     expect(sync.mesh.connectedDeviceIds()).toEqual([]);
+    expect(sync.snapshot().lastFailure).toBeNull();
   });
 
   it('reports a missing membership revocation as not actionable', async () => {

@@ -325,6 +325,22 @@ export const AppSheet: React.FC<AppSheetProps> = ({
           />
         </TouchableWithoutFeedback>
 
+        {/* iOS rounds the keyboard's top corners. Keep the sheet surface behind those corners so
+            the modal backdrop cannot show through while the sheet is keyboard-adjusted. */}
+        {keyboardHeight > 0 && (
+          <View
+            testID="app-sheet-keyboard-underlay"
+            pointerEvents="none"
+            style={[
+              styles.keyboardUnderlay,
+              {
+                height: keyboardHeight,
+                backgroundColor: levelTokens.backgroundColor,
+              },
+            ]}
+          />
+        )}
+
         {/* Sheet */}
         <Animated.View
           testID="app-sheet-surface"

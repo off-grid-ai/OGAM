@@ -5,7 +5,7 @@
   "scripts": {
     "build:shared": "npm --prefix ../shared run build",
     "verify:shared-contract": "node scripts/verify-shared-consumer-contract.mjs",
-    "prepare:shared": "npm run build:shared && npm run verify:shared-contract",
+    "prepare:shared": "node scripts/prepare-shared.mjs && npm run verify:shared-contract",
     "prestart": "npm run prepare:shared",
     "preandroid": "npm run prepare:shared",
     "preios": "npm run prepare:shared",
@@ -13,6 +13,7 @@
     "build:android": "cd android && ./gradlew :app:build --no-parallel",
     "ios": "react-native run-ios",
     "ios:device": "./scripts/ios-device.sh",
+    "ios:reload": "./scripts/ios-reload.sh",
     "lint": "eslint . && npm run lint:android && npm run lint:ios",
     "lint:android": "cd android && ./gradlew :app:lintDebug",
     "lint:ios": "swiftlint lint --quiet || echo 'SwiftLint not installed, skipping iOS lint'",

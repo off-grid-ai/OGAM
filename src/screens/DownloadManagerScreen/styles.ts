@@ -40,7 +40,8 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.md,
-    marginBottom: SPACING.xs,
+    paddingVertical: SPACING.xs,
+    marginBottom: SPACING.sm,
     gap: SPACING.sm,
   },
   sectionTitle: {
@@ -199,7 +200,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
+    paddingVertical: SPACING.sm,
     gap: SPACING.xs,
   },
   filterChip: {

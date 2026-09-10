@@ -33,7 +33,10 @@ import type { MobileManagedArtifactIO } from '../modelServices/modelDownloadArti
 import { modelsChatPort } from './chat';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import { mobileCoreSpeechPorts } from '../adapters/speech/mobileSpeechInputPorts';
-import { MobileWorkspaceContentRepository } from '../adapters/workspaceContent/mobileWorkspaceContentRepository';
+import {
+  getMobileWorkspaceContentRepository,
+  type MobileWorkspaceContentRepository,
+} from '../adapters/workspaceContent/mobileWorkspaceContentRepository';
 import { MobileProjectDeletionIntentRepository } from '../adapters/workspaceContent/mobileProjectDeletionIntentRepository';
 import { MobileConversationDeletionIntentRepository } from '../adapters/workspaceContent/mobileConversationDeletionIntentRepository';
 import { MobileProjectMediaCleanup } from '../adapters/workspaceContent/mobileProjectMediaCleanup';
@@ -75,7 +78,6 @@ let releaseFailureObserver: (() => void) | null = null;
  * acknowledge, and failed-attempt transitions), so it satisfies Shared's
  * `createWorkspaceContentOutboxDeliveryOwner({repository, delivery, newClaimId})` unchanged.
  */
-let workspaceContentRepository: MobileWorkspaceContentRepository | null = null;
 let projectDeletionIntents: MobileProjectDeletionIntentRepository | null = null;
 let conversationDeletionIntents: MobileConversationDeletionIntentRepository | null =
   null;
@@ -101,11 +103,6 @@ function getReleaseAdmissions(): ReceivedMediaReleaseAdmissionPort {
   releaseAdmissions ??= new MobileReceivedMediaReleaseAdmissions();
   return releaseAdmissions;
 }
-function getMobileWorkspaceContentRepository(): MobileWorkspaceContentRepository {
-  workspaceContentRepository ??= new MobileWorkspaceContentRepository();
-  return workspaceContentRepository;
-}
-
 function getLocalResourcePrivacyWorkflow() {
   localResourcePrivacyWorkflow ??=
     getMobileWorkspaceContentRepository().createLocalResourcePrivacyWorkflow(
@@ -505,9 +502,7 @@ let starting: ReturnType<OffGridApplication['start']> | null = null;
 
 function mobileModelServices(): Pick<
   typeof import('../modelServices'),
-  | 'startMobileModelServices'
-  | 'stopMobileModelServices'
-  | 'refreshMobileModelServices'
+  'startMobileModelServices' | 'stopMobileModelServices'
 > {
   // Deferred because modelServices resolves this composition root through applicationFacade().
   // getMobileApplication() has created the root before this function is called, so both sides use
@@ -575,7 +570,6 @@ export function startMobileApplication(): ReturnType<
   starting ??= (async () => {
     const modelServices = mobileModelServices();
     modelServices.startMobileModelServices();
-    await modelServices.refreshMobileModelServices();
     try {
       const result = await current.start();
       if (result.status !== 'running') {

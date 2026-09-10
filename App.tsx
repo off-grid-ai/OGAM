@@ -6,7 +6,6 @@
 import 'react-native-gesture-handler';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { LogBox } from 'react-native';
-import { useProExpiryRedirect } from './src/navigation/useProExpiryRedirect';
 import { useTheme } from './src/theme';
 import {
   hardwareService,
@@ -142,7 +141,6 @@ function App() {
   // the appRoot slot (TTS engine bridge) registers and this re-renders to mount
   // it live — no restart needed.
   const AppRoot = useSlot(SLOTS.appRoot);
-  const applyPendingProRedirect = useProExpiryRedirect();
   const [isInitializing, setIsInitializing] = useState(true);
   const contentMigration = useContentMigrationStatus();
   const startupGeneration = useRef(0);
@@ -198,11 +196,6 @@ function App() {
         logger.log('[BOOT] workspace content migration');
         await startContentPersistenceMigration();
 
-        // Project the persisted "aggressive model loading" setting onto the residency
-        // manager (single owner of the runtime load policy) now that settings are
-        // hydrated, and keep it in sync for the app's lifetime.
-        loadPolicySync.start();
-
         // Phase 1: Quick initialization - get app ready to show UI
         // Initialize hardware detection
         logger.log('[BOOT] device info');
@@ -250,6 +243,12 @@ function App() {
             proError,
           );
         }
+
+        // Pro must register every application port before the first facade lookup constructs the
+        // single root. The policy projection resolves that root, so it starts only after optional
+        // ports are prepared and registered.
+        if (generation !== startupGeneration.current) return;
+        loadPolicySync.start();
 
         // Initialize remote server providers in the background — don't block
         // the home screen while fetching models from potentially unreachable servers.
@@ -347,7 +346,6 @@ function App() {
       AppRoot={AppRoot}
       colors={colors}
       isDark={isDark}
-      onNavigationReady={applyPendingProRedirect}
     />
   );
 }

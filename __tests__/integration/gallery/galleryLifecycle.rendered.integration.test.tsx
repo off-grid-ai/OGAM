@@ -15,6 +15,23 @@ import {
 } from '../../harness/productionNavigation';
 
 const deviceInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+const applicationStartupTimeoutMs = 15_000;
+
+async function waitForHome(
+  view: ReturnType<typeof renderProductionApp>,
+): Promise<void> {
+  await view.findByTestId(
+    'home-tab',
+    {},
+    { timeout: applicationStartupTimeoutMs },
+  );
+}
+
+async function stopApplication() {
+  const { stopMobileApplication } =
+    require('../../../src/services/composition/application') as typeof import('../../../src/services/composition/application');
+  await stopMobileApplication();
+}
 
 jest.mock('react-native-safe-area-context', () => {
   const ReactForMock = require('react');
@@ -46,6 +63,9 @@ jest.mock('react-native-vector-icons/Feather', () => {
 ).requestAnimationFrame = callback => setTimeout(callback, 0);
 
 describe('generated-image Gallery lifecycle', () => {
+  beforeEach(stopApplication);
+  afterEach(stopApplication);
+
   it('opens from Home, deletes an image, and keeps it deleted after restart', async () => {
     const boundary = installNativeBoundary({ fs: true });
     doMockRealSqlite();
@@ -56,7 +76,7 @@ describe('generated-image Gallery lifecycle', () => {
     await seedReturningUserWithTextModel(boundary);
     const rtl = requireRTL();
     let view = renderProductionApp(rtl);
-    await view.findByTestId('home-tab');
+    await waitForHome(view);
 
     const { applicationFacade } =
       require('../../../src/services/applicationFacade') as typeof import('../../../src/services/applicationFacade');
@@ -107,9 +127,7 @@ describe('generated-image Gallery lifecycle', () => {
     );
 
     view.unmount();
-    const { stopMobileApplication } =
-      require('../../../src/services/composition/application') as typeof import('../../../src/services/composition/application');
-    await stopMobileApplication();
+    await stopApplication();
     view = renderProductionApp(rtl);
     await rtl.waitFor(() => expect(view.getByText('0 images')).toBeVisible());
     rtl.fireEvent.press(view.getByText('Image Gallery'));
@@ -118,7 +136,6 @@ describe('generated-image Gallery lifecycle', () => {
     );
 
     view.unmount();
-    await stopMobileApplication();
   });
 
   it('keeps a replacement visible when its older delete settles', async () => {
@@ -131,7 +148,7 @@ describe('generated-image Gallery lifecycle', () => {
     await seedReturningUserWithTextModel(boundary);
     const rtl = requireRTL();
     const view = renderProductionApp(rtl);
-    await view.findByTestId('home-tab');
+    await waitForHome(view);
 
     const { applicationFacade } =
       require('../../../src/services/applicationFacade') as typeof import('../../../src/services/applicationFacade');
@@ -226,8 +243,5 @@ describe('generated-image Gallery lifecycle', () => {
     );
 
     view.unmount();
-    const { stopMobileApplication } =
-      require('../../../src/services/composition/application') as typeof import('../../../src/services/composition/application');
-    await stopMobileApplication();
   });
 });

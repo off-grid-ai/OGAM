@@ -1,4 +1,7 @@
 import type { GeneratedImageRecord, MessageRecord } from '@offgrid/application';
+import {
+  projectMobileWorkspaceContentAttachmentByteIdentities,
+} from './mobileWorkspaceContentAttachmentIdentity';
 
 export type MobileOwnedByteIdentity = `file:${string}` | `gallery:${string}`;
 
@@ -68,67 +71,22 @@ export function retainedMobileMessageByteIdentities(
       if (retained) identities.add(identity);
     }
 
-    const locations = local.contentLocations;
-    if (locations === undefined) continue;
-    for (const identity of localContentLocationIdentities(message, locations)) {
-      if (retained) identities.add(identity);
-    }
-  }
-  return identities;
-}
-
-/**
- * Validate one message's indexed local content locations and project the byte identities they name.
- * Validation is unconditional so a malformed shape rejects even for a message being deleted.
- */
-function localContentLocationIdentities(
-  message: MessageRecord,
-  locations: unknown,
-): readonly MobileOwnedByteIdentity[] {
-  if (!Array.isArray(locations)) {
-    throw new Error(
-      `Message ${message.id} has invalid local content locations.`,
-    );
-  }
-  const content = message.portable.content;
-  if (!Array.isArray(content)) {
-    throw new Error(
-      `Message ${message.id} has local content locations but no indexed portable content.`,
-    );
-  }
-  const identities: MobileOwnedByteIdentity[] = [];
-  const claimedIndexes = new Set<number>();
-  for (const location of locations) {
-    if (!Number.isInteger(location.index) || location.index < 0) {
-      throw new Error(
-        `Message ${message.id} has an invalid local content index.`,
+    if (local.contentLocations !== undefined) {
+      const projected = projectMobileWorkspaceContentAttachmentByteIdentities(
+        message,
       );
-    }
-    if (claimedIndexes.has(location.index)) {
-      throw new Error(
-        `Message ${message.id} has duplicate local content locations.`,
-      );
-    }
-    claimedIndexes.add(location.index);
-    const part = content[location.index];
-    if (!part || part.type === 'text') {
-      throw new Error(
-        `Message ${message.id} has a local location without a media part.`,
-      );
-    }
-    if (location.uri === undefined && location.data === undefined) {
-      throw new Error(
-        `Message ${message.id} has an empty local content location.`,
-      );
-    }
-    if (location.uri !== undefined) {
-      identities.push(
-        `file:${absoluteFilePath(
-          location.uri,
-          `message ${message.id} local content URI`,
-          false,
-        )}`,
-      );
+      if (!projected.ok) throw new Error(projected.failure.message);
+      for (const location of projected.value) {
+        if (retained && location.uri !== undefined) {
+          identities.add(
+            `file:${absoluteFilePath(
+              location.uri,
+              `message ${message.id} local content URI`,
+              true,
+            )}`,
+          );
+        }
+      }
     }
   }
   return identities;

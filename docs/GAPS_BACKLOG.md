@@ -642,7 +642,7 @@ proper-threads is the path.
 
 ---
 
-## Repo-wide /hygiene audit — open items - 2026-07-09 (SOLID §A/§B + DRY §C)
+## Repo-wide engineering audit — open items - 2026-07-09 (SOLID §A/§B + DRY §C)
 
 Through-line: decision/capability logic derived ad-hoc at many call sites instead of owned once by a
 service.
@@ -916,7 +916,7 @@ target. The shared layer is largely complete; these are the app-side holes.
 | PM5 | ~~No license-key revocation or rotation.~~ **Out of scope by product decision (2026-07-30).** We do not support revoking or rotating a key: if a key is compromised, that is the user's loss. Device eviction remains the only removal mechanism. Do not re-open this as a gap. |
 | PM6 | ~~Two shared projections have zero callers.~~ **Wrong - both are rendered** (`KnownDevicesSection.tsx:78`, `DevicesScreen.tsx:2348`); the original grep excluded `shared/`. The real defect was the COPY: the confirmation said eviction "removes the pairing from both devices", omitting that the seat is freed and what happens to the target's saved licence. Fixed in shared: the copy now splits on reachability, so an offline device is told cleanup stays queued rather than claimed already clean. Closed. |
 | PM7 | **Devices UI never audited against the brief's state table.** Both platforms consume `projectSyncControlCenter`, but nobody has checked all six credential x registered x paired x connected rows render distinctly, that capacity reads "N of 5 registered", or that roster freshness is shown rather than stale data presented as authoritative. | audit. Matrix rows 39-42. |
-| PM8 | **The four riskiest areas have zero verified coverage.** The iOS/macOS manual gate (`desktop/outputs/ios-macos-sync-manual-gate-20260729`) is 8/108 verified: pairing 0/9, discovery 0/9, membership 0/7, persistence 0/5. It also has no Android axis at all, and defers the five-device cap as needing real multi-device hardware. | superseded by `docs/PERSONAL_MESH_TEST_MATRIX.csv` (42 rows, macOS/iOS/Android columns). |
+| PM8 | **The four riskiest areas have zero verified coverage.** The iOS/macOS manual gate (`desktop/outputs/ios-macos-sync-manual-gate-20260729`) is 8/108 verified: pairing 0/9, discovery 0/9, membership 0/7, persistence 0/5. It also has no Android axis at all, and defers the five-device cap as needing real multi-device hardware. | Open; physical macOS, iOS, and Android coverage is still required. |
 
 | PM9 | ~~No receive-side consent.~~ **Out of scope by product decision (2026-07-30).** Same-owner devices auto-accept, which is what AirDrop does between devices on one Apple ID; Personal Mesh is same-owner-only by definition, so a prompt would be friction with no threat model behind it. The `admitIncoming` gate exists in shared but stays unwired, so behaviour is accept-everything. Do not re-open as a gap; if a shared/family mesh ever ships, that is when the gate gets a policy behind it. |
 
@@ -1693,8 +1693,8 @@ separate. They also prove that Hidden is applied before startup, a failed advert
 last true runtime and stored state, overlapping show and hide requests finish in order, and a retry
 can complete the stop.
 
-The remaining boundary is a real iPhone and Mac. Use the exact release builds and complete rows
-43-48 in `docs/PERSONAL_MESH_TEST_MATRIX.csv`. Confirm that Hidden survives a cold start, that each
+The remaining boundary is a real iPhone and Mac. Use the exact installed apps. Confirm that Hidden
+survives a cold start, that each
 visibility control leaves the other function active, that an existing encrypted session stays active,
 and that a second device sees the correct advertisement. Also confirm one private IP or machine-name
 route and one non-default Sync port on every device.

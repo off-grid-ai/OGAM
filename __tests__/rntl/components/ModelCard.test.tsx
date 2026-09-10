@@ -436,10 +436,11 @@ describe('ModelCard', () => {
     });
 
     it('shows trending icon in compact mode', () => {
-      const { getByText } = render(
+      const { getByLabelText, queryByText } = render(
         <ModelCard model={baseModel} compact={true} isTrending={true} />
       );
-      expect(getByText('')).toBeTruthy();
+      expect(getByLabelText('Trending')).toBeTruthy();
+      expect(queryByText('Trending')).toBeNull();
     });
 
     it('shows an accessible verified icon without visible Verified text', () => {

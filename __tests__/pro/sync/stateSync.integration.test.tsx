@@ -1,16 +1,15 @@
 import React from 'react';
-import {NativeModules} from 'react-native';
+import { NativeModules } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
 import TcpSocket from 'react-native-tcp-socket';
-import {
-  CORE_SYNC_ENTITIES,
-} from '@offgrid/application';
+import { CORE_SYNC_ENTITIES } from '@offgrid/application';
 import {
   OpLog,
   StateSync,
+  createSharedFileDescriptor,
   TASK_LAUNCH_ENTITY,
   TASK_RUN_ENTITY,
   TASK_VISUAL_STEP_ENTITY,
@@ -32,6 +31,7 @@ import {
 import { useAppStore } from '../../../src/stores/appStore';
 import { buildSyncEngine } from '../../../src/services/sync/engine';
 import {
+  sharedFilePutMutation,
   type SyncMutation,
 } from '../../../src/services/sync/mutation';
 import {
@@ -49,10 +49,10 @@ import {
   createLicensedMesh,
   installLicensedPhone,
 } from '../../harness/licensedMesh';
-import type {MobileApplicationFixture} from '../../harness/mobileApplicationFixture';
+import type { MobileApplicationFixture } from '../../harness/mobileApplicationFixture';
 
 jest.mock('@op-engineering/op-sqlite', () => {
-  const {createRealSqliteModule} = require('../../harness/sqliteFake');
+  const { createRealSqliteModule } = require('../../harness/sqliteFake');
   return createRealSqliteModule();
 });
 
@@ -102,17 +102,23 @@ describe('Pro mobile state sync journey', () => {
   let applicationFixture: MobileApplicationFixture;
 
   beforeAll(() => {
-    const {registerMobileApplicationPorts} = require('../../../src/services/composition/application') as typeof import('../../../src/services/composition/application');
-    const {createMobileApplicationPorts} = require('../../../pro/composition/application') as typeof import('../../../pro/composition/application');
+    const { registerMobileApplicationPorts } =
+      require('../../../src/services/composition/application') as typeof import('../../../src/services/composition/application');
+    const { createMobileApplicationPorts } =
+      require('../../../pro/composition/application') as typeof import('../../../pro/composition/application');
     registerMobileApplicationPorts(createMobileApplicationPorts);
-    ({AppNavigator} = require('../../../src/navigation/AppNavigator') as typeof import('../../../src/navigation/AppNavigator'));
-    ({SyncScreen} = require('../../../pro/ui/SyncScreen') as typeof import('../../../pro/ui/SyncScreen'));
-    ({SyncSharingSettingsScreen} = require('../../../pro/ui/SyncScreen/SyncSharingSettingsScreen') as typeof import('../../../pro/ui/SyncScreen/SyncSharingSettingsScreen'));
-    ({ProRoot} = require('../../../pro/ui/ProRoot') as typeof import('../../../pro/ui/ProRoot'));
+    ({ AppNavigator } =
+      require('../../../src/navigation/AppNavigator') as typeof import('../../../src/navigation/AppNavigator'));
+    ({ SyncScreen } =
+      require('../../../pro/ui/SyncScreen') as typeof import('../../../pro/ui/SyncScreen'));
+    ({ SyncSharingSettingsScreen } =
+      require('../../../pro/ui/SyncScreen/SyncSharingSettingsScreen') as typeof import('../../../pro/ui/SyncScreen/SyncSharingSettingsScreen'));
+    ({ ProRoot } =
+      require('../../../pro/ui/ProRoot') as typeof import('../../../pro/ui/ProRoot'));
   });
 
   beforeEach(async () => {
-    (require('@op-engineering/op-sqlite') as {reset(): void}).reset();
+    (require('@op-engineering/op-sqlite') as { reset(): void }).reset();
     mesh.reset();
     _clearHooksForTesting();
     if (applicationFixture) {
@@ -145,7 +151,8 @@ describe('Pro mobile state sync journey', () => {
       name: 'This phone',
       platform: 'ios',
     });
-    const {ProximityAir} = require('../../utils/proximityNativeBoundary') as typeof import('../../utils/proximityNativeBoundary');
+    const { ProximityAir } =
+      require('../../utils/proximityNativeBoundary') as typeof import('../../utils/proximityNativeBoundary');
     NativeModules.SyncProximityModule = new ProximityAir().device({
       id: PHONE_FINGERPRINT,
       name: 'This phone',
@@ -153,15 +160,20 @@ describe('Pro mobile state sync journey', () => {
     });
     (Keychain.setGenericPassword as jest.Mock).mockResolvedValue(true);
     if (!applicationFixture) {
-      const {startMobileApplicationFixture} = require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
-      applicationFixture = await startMobileApplicationFixture({pro: true});
+      const { startMobileApplicationFixture } =
+        require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+      applicationFixture = await startMobileApplicationFixture({ pro: true });
     } else {
       await applicationFixture.application.sync.start();
     }
-    const browsing = await applicationFixture.application.sync.setBrowsing(true);
+    const browsing = await applicationFixture.application.sync.setBrowsing(
+      true,
+    );
     if (!browsing.ok) throw new Error('Could not enable device discovery.');
-    const discoverable = await applicationFixture.application.sync.setDiscoverable(true);
-    if (!discoverable.ok) throw new Error('Could not enable device advertising.');
+    const discoverable =
+      await applicationFixture.application.sync.setDiscoverable(true);
+    if (!discoverable.ok)
+      throw new Error('Could not enable device advertising.');
   });
 
   afterEach(async () => {
@@ -280,9 +292,12 @@ describe('Pro mobile state sync journey', () => {
     fireEvent.press(ui.getByTestId('settings-tab'));
     fireEvent.press(await waitFor(() => ui!.getByTestId('open-sync-settings')));
 
-    let reconciliation!: ReturnType<typeof applicationFixture.application.sync.reconcileEntitlement>;
+    let reconciliation!: ReturnType<
+      typeof applicationFixture.application.sync.reconcileEntitlement
+    >;
     act(() => {
-      reconciliation = applicationFixture.application.sync.reconcileEntitlement('manual');
+      reconciliation =
+        applicationFixture.application.sync.reconcileEntitlement('manual');
     });
 
     const sync = applicationFixture.application.sync.snapshot();
@@ -343,17 +358,12 @@ describe('Pro mobile state sync journey', () => {
       context: null,
       created_at: '2026-07-27T12:01:00.000Z',
     });
-    sendLiveOp(
-      CORE_SYNC_ENTITIES.conversation,
-      'resend-conversation',
-      'put',
-      {
-        title: 'Resend keeps the user turn',
-        project_id: null,
-        created_at: '2026-07-27T12:00:00.000Z',
-        updated_at: '2026-07-27T12:03:00.000Z',
-      },
-    );
+    sendLiveOp(CORE_SYNC_ENTITIES.conversation, 'resend-conversation', 'put', {
+      title: 'Resend keeps the user turn',
+      project_id: null,
+      created_at: '2026-07-27T12:00:00.000Z',
+      updated_at: '2026-07-27T12:03:00.000Z',
+    });
     sendLiveOp(CORE_SYNC_ENTITIES.message, 'resend-old-answer', 'put', {
       conversation_id: 'resend-conversation',
       role: 'assistant',
@@ -361,11 +371,7 @@ describe('Pro mobile state sync journey', () => {
       context: null,
       created_at: '2026-07-27T12:02:00.000Z',
     });
-    sendLiveOp(
-      CORE_SYNC_ENTITIES.message,
-      'resend-old-answer',
-      'delete',
-    );
+    sendLiveOp(CORE_SYNC_ENTITIES.message, 'resend-old-answer', 'delete');
     sendLiveOp(CORE_SYNC_ENTITIES.message, 'resend-new-answer', 'put', {
       conversation_id: 'resend-conversation',
       role: 'assistant',
@@ -426,17 +432,20 @@ describe('Pro mobile state sync journey', () => {
     fireEvent.press(ui.getByLabelText('Back'));
 
     const phoneMessageId = 'phone-message-after-pairing';
-    const phoneMessage = await applicationFixture.application.workspaceContent.execute({
-      type: 'append_message',
-      origin: 'local',
-      conversationId: 'remote-conversation',
-      messageId: phoneMessageId,
-      portable: {
-        role: 'assistant',
-        content: 'The phone checked the notes.',
-        context: {reasoning: 'I should send the reasoning back to Desktop.'},
-      },
-    });
+    const phoneMessage =
+      await applicationFixture.application.workspaceContent.execute({
+        type: 'append_message',
+        origin: 'local',
+        conversationId: 'remote-conversation',
+        messageId: phoneMessageId,
+        portable: {
+          role: 'assistant',
+          content: 'The phone checked the notes.',
+          context: {
+            reasoning: 'I should send the reasoning back to Desktop.',
+          },
+        },
+      });
     if (!phoneMessage.ok) throw new Error(phoneMessage.failure.message);
     await waitFor(() =>
       expect(
@@ -534,7 +543,11 @@ describe('Pro mobile state sync journey', () => {
     );
     await remote.engine.stop();
     await waitFor(() =>
-      expect(applicationFixture!.application.sync.snapshot().connections[remoteDevice.id]).not.toBe('connected'),
+      expect(
+        applicationFixture!.application.sync.snapshot().connections[
+          remoteDevice.id
+        ],
+      ).not.toBe('connected'),
     );
 
     fireEvent(
@@ -559,7 +572,8 @@ describe('Pro mobile state sync journey', () => {
     await remote.engine.start(0);
     // Read from the store rather than the screen: this part of the journey is on another screen, and
     // the store holds the same code the Sync screen renders.
-    const currentCode = applicationFixture.application.sync.snapshot().pairingCode?.code;
+    const currentCode =
+      applicationFixture.application.sync.snapshot().pairingCode?.code;
     if (!currentCode)
       throw new Error('the phone has not issued a pairing code');
     await remote.engine.pair(
@@ -567,7 +581,11 @@ describe('Pro mobile state sync journey', () => {
       currentCode,
     );
     await waitFor(() =>
-      expect(applicationFixture!.application.sync.snapshot().connections[remoteDevice.id]).toBe('connected'),
+      expect(
+        applicationFixture!.application.sync.snapshot().connections[
+          remoteDevice.id
+        ],
+      ).toBe('connected'),
     );
 
     const winningTemperature =
@@ -620,7 +638,7 @@ describe('Pro mobile state sync journey', () => {
     );
   }, 30_000);
 
-  it('reconnects before slow owners finish and rejects forged task state', async () => {
+  it('starts before slow owners finish, reconnects, and rejects forged task state', async () => {
     let releaseSlowStartup: (() => void) | undefined;
     const slowStartup = new Promise<void>(resolve => {
       releaseSlowStartup = resolve;
@@ -631,6 +649,7 @@ describe('Pro mobile state sync journey', () => {
       throw new Error('Entitlement reconciliation failed.');
     }
     const stateStartup = stateSyncService.start(slowStartup);
+    await stateStartup;
     expect(applicationFixture.application.sync.snapshot().running).toBe(true);
 
     const remoteDevice: DeviceInfo = {
@@ -734,11 +753,33 @@ describe('Pro mobile state sync journey', () => {
       pairingCode,
     );
     await waitFor(() =>
-      expect(applicationFixture!.application.sync.snapshot().connections[remoteDevice.id]).toBe('connected'),
+      expect(
+        applicationFixture!.application.sync.snapshot().connections[
+          remoteDevice.id
+        ],
+      ).toBe('connected'),
     );
 
+    const screenshot = createSharedFileDescriptor({
+      syncId: '66e332d1-1809-4d70-a6da-36095c8cb5c9',
+      kind: 'screenshot',
+      name: 'Screenshot 2026-09-09 at 12.45.06 AM.png',
+      mimeType: 'image/png',
+      fileSize: 382_000,
+      createdAt: '2026-09-09T07:45:06.000Z',
+      width: 1179,
+      height: 2556,
+    });
+    if (!screenshot) throw new Error('The screenshot descriptor was invalid.');
+    await stateSyncService.stageMutation(sharedFilePutMutation(screenshot));
+    expect(
+      stateSyncService.sendSharedFileRecord(
+        remoteDevice.id,
+        screenshot.syncId,
+      ),
+    ).toBe(true);
+
     releaseSlowStartup?.();
-    await stateStartup;
     await stateSyncService.whenReady();
 
     await waitFor(() =>

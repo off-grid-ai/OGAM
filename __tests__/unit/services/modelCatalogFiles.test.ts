@@ -25,16 +25,54 @@ describe('modelCatalogFiles', () => {
     ]);
   });
 
-  it('does not call network discovery for a catalog-owned model', async () => {
-    const discovery = { getModelFiles: jest.fn() };
+  it('adds discovered quantizations and preserves matching catalog metadata', async () => {
+    const discovery = { getModelFiles: jest.fn().mockResolvedValue([
+      {
+        name: 'gemma-4-E2B-it-Q4_K_M.gguf',
+        size: 1,
+        quantization: 'Q4_K_M',
+        downloadUrl: 'https://untrusted.test/Q4_K_M.gguf',
+      },
+      {
+        name: 'gemma-4-E2B-it-Q5_K_M.gguf',
+        size: 3_356_037_216,
+        quantization: 'Q5_K_M',
+        downloadUrl: 'https://huggingface.test/Q5_K_M.gguf',
+      },
+    ]) };
 
     const files = await resolveModelFiles(
       'unsloth/gemma-4-E2B-it-GGUF',
       discovery,
     );
 
-    expect(files[0]?.name).toBe('gemma-4-E2B-it-Q4_K_M.gguf');
-    expect(discovery.getModelFiles).not.toHaveBeenCalled();
+    expect(files).toHaveLength(2);
+    expect(files[0]).toEqual(expect.objectContaining({
+      name: 'gemma-4-E2B-it-Q4_K_M.gguf',
+      size: 3_110_000_000,
+      downloadUrl: expect.stringContaining(
+        '/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf',
+      ),
+    }));
+    expect(files[1]?.name).toBe('gemma-4-E2B-it-Q5_K_M.gguf');
+    expect(discovery.getModelFiles).toHaveBeenCalledWith(
+      'unsloth/gemma-4-E2B-it-GGUF',
+    );
+  });
+
+  it('uses catalog files when remote variant discovery fails', async () => {
+    const discovery = {
+      getModelFiles: jest.fn().mockRejectedValue(new Error('offline')),
+    };
+
+    const files = await resolveModelFiles(
+      'unsloth/gemma-4-E2B-it-GGUF',
+      discovery,
+    );
+
+    expect(files.map(file => file.name)).toEqual([
+      'gemma-4-E2B-it-Q4_K_M.gguf',
+    ]);
   });
 
   it('uses network discovery for an uncatalogued model', async () => {

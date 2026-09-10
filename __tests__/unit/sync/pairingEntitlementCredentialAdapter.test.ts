@@ -3,6 +3,7 @@ import {
   type PairingEntitlementCredential,
   type PersonalMeshReconciliationSnapshot,
   type PersonalMeshRegistrationInput,
+  type ProDeviceAdmission,
 } from '@offgrid/sync';
 import { createPairingEntitlementHostAdapter } from '../../../pro/sync/pairingEntitlementCredentialAdapter';
 import { mobileEntitlementCredentialStore } from '../../../pro/licensing/mobileEntitlementCredentialStore';
@@ -40,7 +41,7 @@ describe('two devices agreeing about a shared licence', () => {
   let licenceId = '';
   let vault: Map<string, string>;
   let registryChanges: number;
-  let admissions: boolean[];
+  let admissions: ProDeviceAdmission[];
   let snapshots: PersonalMeshReconciliationSnapshot[];
   let forgotten: Array<[string, string]>;
   let syncIsRunning: boolean;
@@ -95,7 +96,7 @@ describe('two devices agreeing about a shared licence', () => {
             }
           : null,
       onReconciliationChanged: snapshot => snapshots.push(snapshot),
-      onLocalAdmissionChanged: active => admissions.push(active),
+      onLocalAdmissionChanged: admission => admissions.push(admission),
       onRegistryChanged: () => {
         registryChanges += 1;
       },
@@ -545,7 +546,7 @@ describe('two devices agreeing about a shared licence', () => {
       // not Pro. Something has to be done, and what has to be done is entering a key or pairing.
       expect(snapshot?.state).toBe('action_required');
       expect(adapter.reconciliationSnapshot()?.state).toBe('action_required');
-      expect(admissions).toEqual([false]);
+      expect(admissions).toEqual(['unknown']);
     });
 
     it('reads the roster and confirms this phone is on it', async () => {
@@ -558,7 +559,7 @@ describe('two devices agreeing about a shared licence', () => {
       expect(snapshot).toMatchObject({ state: 'ready', installations: 1 });
       // Pro stays on because the provider says this seat exists, not because the keychain says so. The
       // keychain is what this device remembers; the roster is what is true.
-      expect(admissions).toEqual([true]);
+      expect(admissions).toEqual(['active']);
       // The Devices screen renders from the published snapshot, so it is published and not merely returned -
       // a screen that is already open has to change without being reopened.
       expect(snapshots.at(-1)).toEqual(snapshot);
@@ -573,7 +574,7 @@ describe('two devices agreeing about a shared licence', () => {
 
       await adapter.reconcile('launch');
 
-      expect(admissions).toEqual([false]);
+      expect(admissions).toEqual(['inactive']);
     });
 
     it('retires trust in a device the licence has dropped', async () => {
@@ -670,7 +671,7 @@ describe('two devices agreeing about a shared licence', () => {
       // A phone on a train is not a phone that lost its licence. The roster it last saw is explicitly stale,
       // never treated as an answer, and Pro is not revoked on the strength of a failed request.
       expect(snapshot?.state).toBe('offline');
-      expect(admissions).toEqual([true, true]);
+      expect(admissions).toEqual(['active', 'active']);
     });
 
     it('will not talk to the provider if the credential goes while it is asking', async () => {
@@ -695,7 +696,7 @@ describe('two devices agreeing about a shared licence', () => {
       // Not a crash and not a guess: reconciliation comes back saying something needs doing, and Pro is
       // withdrawn because there is no longer a credential saying otherwise. The roster was never asked for.
       expect(snapshot?.state).toBe('action_required');
-      expect(admissions.at(-1)).toBe(false);
+      expect(admissions.at(-1)).toBe('unknown');
     });
   });
 

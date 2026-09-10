@@ -1,6 +1,5 @@
 import {
   CATALOG,
-  isProjectorFileName,
   planImportedModel,
   type ModelTransferRegistrationManifest,
 } from '@offgrid/models';
@@ -24,8 +23,10 @@ async function transferredDownloadedModel(
   },
   modelsDir: string,
 ): Promise<LlamaDownloadedModel> {
+  // The sending side already labelled every file. Guessing again from the file name here was a
+  // second rule that could disagree with it, which is how a projector gets installed as the model.
   const projector = input.manifest.files.find(
-    file => file.role === 'projector' || isProjectorFileName(file.name),
+    file => file.role === 'projector',
   );
   const primary = input.manifest.files.find(file => file !== projector);
   if (!primary) throw new Error('Transferred model has no primary GGUF file.');

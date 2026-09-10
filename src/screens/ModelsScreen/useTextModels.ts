@@ -42,6 +42,7 @@ import {
   resolveModelFiles,
 } from '../../services/modelCatalogFiles';
 import {
+  LITERT_PARENT_ID,
   MODEL_ORGS,
   RECOMMENDED_MODELS,
   prioritizeAccelerated,
@@ -336,10 +337,11 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
     setSelectedModel(model);
     setIsLoadingFiles(true);
     try {
-      // Synthetic and catalog-projected parents already carry their canonical
-      // artifacts. Do not discard them and query a non-repository parent ID.
-      const files = model.files?.length
-        ? model.files
+      // LiteRT is a synthetic runtime-owned parent. Repository-backed models use
+      // remote discovery so their detail screen includes every quantization; the
+      // Shared catalog stays the trusted fallback inside resolveModelFiles.
+      const files = model.id === LITERT_PARENT_ID
+        ? model.files ?? []
         : await resolveModelFiles(model.id, huggingFaceService);
       setModelFiles(files);
     } catch {

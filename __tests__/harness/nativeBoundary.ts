@@ -944,6 +944,26 @@ function makeDownloadFake(
   ) => void,
 ): DownloadFake {
   const rows = new Map<string, DownloadRow>();
+  const events: FakeEmitterHandle = {
+    emit(event, payload) {
+      if (event === 'DownloadComplete' && payload && typeof payload === 'object') {
+        const completion = payload as DownloadRow;
+        const downloadId = String(completion.downloadId ?? '');
+        const row = rows.get(downloadId);
+        if (row) {
+          rows.set(downloadId, {
+            ...row,
+            status: 'completed',
+            bytesDownloaded: completion.bytesDownloaded ?? row.bytesDownloaded,
+            totalBytes: completion.totalBytes ?? row.totalBytes,
+            sha256: completion.sha256 ?? row.sha256,
+          });
+        }
+      }
+      handle.emit(event, payload);
+    },
+    listenerCount: event => handle.listenerCount(event),
+  };
   const module: Record<string, jest.Mock> = {
     startDownload: jest.fn(async (params: DownloadRow) => {
       const row: DownloadRow = {
@@ -984,7 +1004,7 @@ function makeDownloadFake(
   };
   return {
     module,
-    events: handle,
+    events,
     seedActive: row => rows.set(row.downloadId, { status: 'running', ...row }),
     progress: (downloadId, bytesDownloaded, totalBytes) => {
       const row = rows.get(downloadId);
@@ -995,7 +1015,7 @@ function makeDownloadFake(
         bytesDownloaded,
         totalBytes,
       });
-      handle.emit('DownloadProgress', {
+      events.emit('DownloadProgress', {
         downloadId,
         bytesDownloaded,
         totalBytes,
@@ -1010,13 +1030,13 @@ function makeDownloadFake(
         bytesDownloaded: row.totalBytes ?? row.bytesDownloaded ?? 0,
         ...facts,
       });
-      handle.emit('DownloadComplete', { downloadId });
+      events.emit('DownloadComplete', { downloadId });
     },
     fail: (downloadId, reason) => {
       const row = rows.get(downloadId);
       if (!row) throw new Error(`Native download is not active: ${downloadId}`);
       rows.set(downloadId, { ...row, status: 'failed' });
-      handle.emit('DownloadError', { downloadId, reason });
+      events.emit('DownloadError', { downloadId, reason });
     },
     active: () => [...rows.values()],
     simulateRelaunch: opts => {

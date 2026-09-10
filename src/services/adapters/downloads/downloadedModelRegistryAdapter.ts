@@ -7,6 +7,7 @@ import {
   modelPackageIdentity,
   type TransferredModelManifest,
 } from '@offgrid/sync';
+import {whisperCatalogModelId} from '@offgrid/models';
 import { APP_CONFIG } from '../../../constants';
 import type { DownloadedModel, ONNXImageModel } from '../../../types';
 import {
@@ -272,6 +273,29 @@ export function createMobileDownloadedModelRegistryAdapter(
       managed?.ownsPath(relativePath)
         ? managed.size(relativePath)
         : installedSize(relativePath),
+    containsInstalledFamily: async input => {
+      const kind = registryKind(input.kind);
+      if (kind === 'voice') {
+        return (
+          managedRegistry?.contains({
+            record: {
+              id: input.familyId,
+              familyId: input.familyId,
+              name: input.familyId,
+              kind: input.kind,
+              files: [],
+            },
+          }) ?? false
+        );
+      }
+      if (kind === 'transcription') {
+        const file = input.artifactNames
+          .map(name => name.split('/').at(-1) ?? '')
+          .find(name => /^ggml-.+\.bin$/i.test(name));
+        return file ? isModelDownloaded(whisperCatalogModelId(file)) : false;
+      }
+      return (await rows(kind)).some(model => belongs(model, input.familyId));
+    },
     packageIdentity: input =>
       modelPackageIdentity({
         ...input,

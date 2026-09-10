@@ -31,13 +31,24 @@ describe('keygenClient', () => {
               metadata: { email: 'a@b.co' },
               name: 'n',
             },
+            relationships: {
+              policy: {data: {type: 'policies', id: 'policy-1'}},
+            },
           },
+          included: [
+            {
+              type: 'policies',
+              id: 'policy-1',
+              attributes: {maxMachines: 5},
+            },
+          ],
         }),
       );
       const out = await validateKey('key/abc', 'fp-1');
 
       const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
       expect(url).toContain('/licenses/actions/validate-key');
+      expect(url).toContain('include=policy');
       const body = JSON.parse(init.body);
       expect(body.meta.key).toBe('key/abc');
       expect(body.meta.scope.product).toBe(KEYGEN_PRODUCT_ID);
@@ -49,7 +60,7 @@ describe('keygenClient', () => {
         license: {
           id: 'lic-1',
           expiry: null,
-          maxMachines: null,
+          maxMachines: 5,
           metadata: { email: 'a@b.co' },
           name: 'n',
         },

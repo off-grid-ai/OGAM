@@ -24,7 +24,7 @@ export function decodeWorkspaceMessageContent(
 
 const WORKSPACE_CONTENT_DATABASE_NAME =
   'offgrid-workspace-content.sqlite';
-export const WORKSPACE_CONTENT_SCHEMA_VERSION = 1;
+export const WORKSPACE_CONTENT_SCHEMA_VERSION = 2;
 
 const WORKSPACE_CONTENT_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS workspace_content_projects (
@@ -71,6 +71,8 @@ const WORKSPACE_CONTENT_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS workspace_content_migration_journal (
     target_version INTEGER PRIMARY KEY NOT NULL, status TEXT NOT NULL,
     started_at TEXT NOT NULL, finished_at TEXT, failure_message TEXT)`,
+  `CREATE TABLE IF NOT EXISTS workspace_content_legacy_attachment_recovery (
+    version INTEGER PRIMARY KEY NOT NULL, completed_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS workspace_content_outbox (
     id TEXT PRIMARY KEY NOT NULL, sync_operation_id TEXT NOT NULL, transaction_id TEXT NOT NULL,
     transaction_order INTEGER NOT NULL, entity_type TEXT NOT NULL,

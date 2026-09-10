@@ -9,7 +9,7 @@
  *   - a device that cannot (4GB) → E4B is still OFFERED on the onboarding Recommended list
  *     (the over-budget E2B, which has no warning entry, is hidden) and tapping it renders the
  *     "Warning" sheet with Cancel / Download anyway; Cancel dismisses it.
- *   - in the full detail view at 4GB the device-fit filter hides both curated files.
+ *   - in the full detail view at 4GB every file stays visible, marked Too large and disabled.
  * Falsification: flipping ONLY the device RAM (12 → 4) flips every rendered outcome.
  *
  * Doctrine: REAL ModelsScreen (embedded = the onboarding surface, and the full detail view),
@@ -101,7 +101,7 @@ describe('curated LiteRT E4B download — device-aware memory warning (rendered)
     expect(queryByText('Download anyway')).toBeNull();
   }, 30000);
 
-  it('LOW-RAM device (4GB), full detail view: the device-fit filter hides both curated files (empty state)', async () => {
+  it('LOW-RAM device (4GB), full detail view: lists both files as too large', async () => {
     installNativeBoundary({ download: true, fs: true, ram: { platform: 'android', totalBytes: 4 * GB, availBytes: 3 * GB } });
     mockNetwork();
     await bootApplication();
@@ -111,13 +111,20 @@ describe('curated LiteRT E4B download — device-aware memory warning (rendered)
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
     await hardwareService.refreshMemoryInfo();
 
-    const { getByText, queryByText, getByTestId } = render(React.createElement(ModelsScreen, {}));
+    const { getAllByText, getByText, queryByText, getByTestId } = render(React.createElement(ModelsScreen, {}));
     await waitFor(() => expect(getByText('Gemma 4 LiteRT')).toBeTruthy(), { timeout: 6000 });
     await act(async () => { fireEvent.press(getByText('Gemma 4 LiteRT')); });
     await waitFor(() => expect(getByTestId('model-detail-screen')).toBeTruthy(), { timeout: 4000 });
 
-    await waitFor(() => expect(getByText('No compatible files found for this model.')).toBeTruthy(), { timeout: 6000 });
-    expect(queryByText('Gemma 4 E4B')).toBeNull();
+    await waitFor(() => expect(getByText('Gemma 4 E4B')).toBeTruthy(), { timeout: 6000 });
+    expect(getByText('Gemma 4 E2B')).toBeTruthy();
+    expect(getAllByText(/Too large/)).toHaveLength(2);
+    expect(
+      getByTestId('file-card-0').props.accessibilityState.disabled,
+    ).toBe(true);
+    expect(
+      getByTestId('file-card-1').props.accessibilityState.disabled,
+    ).toBe(true);
     expect(queryByText(WARNING_MESSAGE)).toBeNull();
   }, 30000);
 });

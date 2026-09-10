@@ -91,9 +91,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
   const sourceLabels = [
     model.author,
     isVerified ? undefined : credibilityLabel,
-    recommended
-      ? (recommended.pillLabel ?? 'Recommended')
-      : (isTrending ? 'Trending' : undefined),
+    recommended ? (recommended.pillLabel ?? 'Recommended') : undefined,
   ].filter((value): value is string => !!value);
 
   return (
@@ -113,7 +111,12 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
             {sourceLabels.join(' · ')}
           </Text>
           {(recommended || isTrending) && (
-            <MaterialIcon name="whatshot" size={14} color={colors.trending} />
+            <MaterialIcon
+              name="whatshot"
+              size={14}
+              color={colors.trending}
+              accessibilityLabel={isTrending ? 'Trending' : 'Recommended'}
+            />
           )}
         </View>
       </View>

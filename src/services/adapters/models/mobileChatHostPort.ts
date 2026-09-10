@@ -19,7 +19,6 @@ import {
   type GenerationResult,
   type MessageRecord,
 } from '@offgrid/application';
-import { portableMessageText } from '../../../utils/portableMessageText';
 import { Platform } from 'react-native';
 import type {
   CompactableGenerationMessage,
@@ -57,6 +56,7 @@ import {
   committedSystemPrompt,
   optionalNumberSetting,
 } from './mobileChatSettingsProjection';
+import {projectWorkspaceMessage} from '../workspaceContent/projectWorkspaceMessage';
 
 export { mobileChatRequestDefaults } from './mobileChatSettingsProjection';
 
@@ -194,28 +194,7 @@ export function mobileChatOperationCommand(input: {
 }
 
 function workspaceMessage(record: MessageRecord): Message {
-  const local = record.local as Partial<Message> | undefined;
-  const timestamp = Date.parse(record.createdAt);
-  return {
-    ...local,
-    id: record.id,
-    uuid: record.id,
-    role: record.portable.role,
-    content: portableMessageText(record.portable.content) ?? '',
-    timestamp: Number.isNaN(timestamp) ? 0 : timestamp,
-    ...(record.portable.context?.reasoning === undefined
-      ? {}
-      : { reasoningContent: record.portable.context.reasoning }),
-    ...(record.portable.context?.notice === undefined
-      ? {}
-      : { isSystemInfo: record.portable.context.notice }),
-    ...(record.portable.context?.tool?.name === undefined
-      ? {}
-      : { toolName: record.portable.context.tool.name }),
-    ...(record.portable.context?.tool?.callId === undefined
-      ? {}
-      : { toolCallId: record.portable.context.tool.callId }),
-  };
+  return projectWorkspaceMessage(record);
 }
 
 export function mobileChatContextPorts(): ChatContextApplicationPorts {

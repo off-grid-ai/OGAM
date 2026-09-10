@@ -9,6 +9,7 @@ import {
 } from '@offgrid/application';
 import { Message } from '../../types';
 import { visibleMessages } from '../../utils/visibleMessages';
+import {projectWorkspaceMessage} from '../../services/adapters/workspaceContent/projectWorkspaceMessage';
 
 /**
  * One durable message, read only from the canonical Workspace Content record - never from a
@@ -16,28 +17,7 @@ import { visibleMessages } from '../../utils/visibleMessages';
  * surface) has no such mirror, so this is the only path that can ever render its transcript.
  */
 export function toWorkspaceMessage(record: MessageRecord): Message {
-  const local = record.local as Partial<Message> | undefined;
-  const timestamp = Date.parse(record.createdAt);
-  return {
-    ...local,
-    id: record.id,
-    uuid: record.id,
-    role: record.portable.role,
-    content: typeof record.portable.content === 'string' ? record.portable.content : '',
-    timestamp: Number.isNaN(timestamp) ? 0 : timestamp,
-    ...(record.portable.context?.reasoning === undefined
-      ? {}
-      : { reasoningContent: record.portable.context.reasoning }),
-    ...(record.portable.context?.notice === undefined
-      ? {}
-      : { isSystemInfo: record.portable.context.notice }),
-    ...(record.portable.context?.tool?.name === undefined
-      ? {}
-      : { toolName: record.portable.context.tool.name }),
-    ...(record.portable.context?.tool?.callId === undefined
-      ? {}
-      : { toolCallId: record.portable.context.tool.callId }),
-  };
+  return projectWorkspaceMessage(record);
 }
 export type ChatMessageItem = Message & {
   statusText?: string;
@@ -68,6 +48,25 @@ function hasImageAttachment(message: Message): boolean {
       message.attachments?.some(attachment => attachment.type === 'image'),
     )
   );
+}
+
+/** Prefer canonical tool-result rows when they exist; recovered artifacts fill only missing rows. */
+function withoutDuplicateToolArtifacts(messages: readonly Message[]): Message[] {
+  const completedCallIds = new Set(
+    messages
+      .filter(message => message.role === 'tool' && message.toolCallId)
+      .map(message => message.toolCallId as string),
+  );
+  if (completedCallIds.size === 0) return [...messages];
+  return messages.map(message => {
+    if (!message.toolArtifacts?.length) return message;
+    const toolArtifacts = message.toolArtifacts.filter(
+      artifact => !artifact.id || !completedCallIds.has(artifact.id),
+    );
+    return toolArtifacts.length === message.toolArtifacts.length
+      ? message
+      : {...message, toolArtifacts};
+  });
 }
 
 function isGeneratedImageResult(message: Message): boolean {
@@ -257,7 +256,9 @@ export function getDisplayMessages(
     groupSupportingContextWithImage(
       localDisplayMessages(
         // The same rule the list rows use, so the thread and its preview never disagree.
-        [...visibleMessages(allMessages, streaming.localDeviceId)],
+        withoutDuplicateToolArtifacts([
+          ...visibleMessages(allMessages, streaming.localDeviceId),
+        ]),
         streaming,
       ),
     ),

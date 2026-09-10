@@ -74,17 +74,18 @@ describe('what this phone will accept, and from whom', () => {
   });
 
   describe('the master switch', () => {
-    it('refuses everything from every device when it is off', async () => {
+    it('refuses optional content but keeps direct model transfers available', async () => {
       const receiving = store();
       await receiving.load();
 
       await receiving.setOptionalEnabled(false);
 
-      // One switch that means it: "stop accepting" cannot leave a category quietly still arriving.
-      for (const category of ['files', 'models', 'clipboard']) {
+      // Models are a direct action between paired devices. They have no second receive switch.
+      for (const category of ['files', 'clipboard']) {
         expect(receiving.accepts('the-mac', category)).toBe(false);
         expect(receiving.accepts('the-ipad', category)).toBe(false);
       }
+      expect(receiving.accepts('the-mac', 'models')).toBe(true);
       expect(receiving.accepts('the-mac', 'chats')).toBe(true);
       expect(receiving.accepts('the-mac', 'projects')).toBe(true);
     });
@@ -152,14 +153,14 @@ describe('what this phone will accept, and from whom', () => {
   });
 
   describe('refusing one device', () => {
-    it('refuses everything from it and nothing from the others', async () => {
+    it('refuses its optional content but keeps direct model transfers available', async () => {
       const receiving = store();
       await receiving.load();
 
       await receiving.setDeviceOptionalEnabled('the-work-mac', false);
 
       expect(receiving.accepts('the-work-mac', 'files')).toBe(false);
-      expect(receiving.accepts('the-work-mac', 'models')).toBe(false);
+      expect(receiving.accepts('the-work-mac', 'models')).toBe(true);
       expect(receiving.accepts('the-work-mac', 'chats')).toBe(true);
       // A device the user distrusts is a per-device decision; the rest of their mesh is unaffected.
       expect(receiving.accepts('the-mac', 'files')).toBe(true);

@@ -908,6 +908,34 @@ describe('the licence this phone holds', () => {
       });
     });
 
+    it('locks Pro before protected storage finishes clearing', async () => {
+      const provider = load();
+      provider.setDirectEntitlementActivationOwner(activationOwner().owner);
+      await provider.proLicenseProvider.activate!(LICENCE_KEY);
+      let finishClear: (() => void) | undefined;
+      keychain().resetGenericPassword.mockImplementation(
+        () =>
+          new Promise<boolean>(resolve => {
+            finishClear = () => resolve(true);
+          }),
+      );
+
+      const clearing = provider.clearProAfterRemoteMembershipRevocation();
+      const { useAppStore } =
+        require('../../../src/stores/appStore') as typeof import('../../../src/stores/appStore');
+      const { selectHasProAccess } =
+        require('../../../src/stores/proAccessSlice') as typeof import('../../../src/stores/proAccessSlice');
+
+      expect(useAppStore.getState().proDeviceAdmission).toBe('inactive');
+      expect(selectHasProAccess(useAppStore.getState())).toBe(false);
+
+      finishClear?.();
+      await clearing;
+      keychain().resetGenericPassword.mockImplementation(
+        async ({ service }: { service: string }) => secrets.delete(service),
+      );
+    });
+
     it('can be reset for testing without leaving anything behind', async () => {
       const provider = load();
       provider.setDirectEntitlementActivationOwner(activationOwner().owner);

@@ -1,7 +1,6 @@
 import type { RuntimeModel, WorkspaceGenerationPort } from '@offgrid/models';
 import { mobileVoiceGenerationService as voiceGeneration } from '../composition/generation';
 import { applicationFacade } from '../applicationFacade';
-import { lazyInstance } from '../composition/lazy';
 import type { DownloadedModel, RemoteModel } from '../../types';
 import { useAppStore } from '../../stores/appStore';
 import { useRemoteServerStore } from '../../stores/remoteServerStore';
@@ -66,10 +65,14 @@ const mobileGenerationService: WorkspaceGenerationPort = {
 /**
  * Voice has its own queue so sentence playback can run while text is still streaming.
  *
- * Resolved LAZILY: this module can be imported before the composition root has registered the
- * facade, and a module-scope `voiceGeneration()` would then throw at import time.
+ * The stable forwarding port resolves the application only when a real operation starts. A Proxy
+ * cannot be used here: React Refresh inspects exported object properties during module loading,
+ * and that inspection would construct the application before Pro registers its ports.
  */
-export const mobileVoiceGenerationService = lazyInstance(voiceGeneration);
+export const mobileVoiceGenerationService: WorkspaceGenerationPort = {
+  generate: (request, events) => voiceGeneration().generate(request, events),
+  registerAdapter: adapter => voiceGeneration().registerAdapter(adapter),
+};
 const generationAdapterRegistrations = new Map<string, () => void>();
 const transcriptionAdapterRegistrations = new Map<string, () => void>();
 const voiceAdapterRegistrations = new Map<string, () => void>();

@@ -44,22 +44,24 @@ export interface LoadPolicySyncCoordinator {
 
 /** Create one explicit app-lifetime projection. Repeated start calls are idempotent. */
 export function createLoadPolicySync(): LoadPolicySyncCoordinator {
-  const policy = loadPolicyTransition();
-  const models = applicationFacade().models;
+  let policy: ReturnType<typeof loadPolicyTransition> | null = null;
   let unsubscribe: (() => void) | null = null;
   return {
     start() {
       if (unsubscribe) return;
+      policy = loadPolicyTransition();
+      const models = applicationFacade().models;
       policy.apply(loadPolicySettings(models.snapshot().settings));
       unsubscribe = models.watch(
         snapshot => snapshot.settings,
-        settings => policy.apply(loadPolicySettings(settings)),
+        settings => policy?.apply(loadPolicySettings(settings)),
       );
     },
     dispose() {
       unsubscribe?.();
       unsubscribe = null;
-      policy.dispose();
+      policy?.dispose();
+      policy = null;
     },
   };
 }

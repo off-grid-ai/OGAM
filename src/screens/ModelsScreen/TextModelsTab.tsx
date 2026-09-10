@@ -15,7 +15,7 @@ import { CREDIBILITY_LABELS } from '../../constants';
 import { ModelInfo, ModelFile } from '../../types';
 import { createStyles } from './styles';
 import { ModelsScreenViewModel } from './useModelsScreen';
-import { isQueuedStatus } from '../../stores/downloadStore';
+import { isDownloadingStatus, isFailedStatus, isPausedStatus, isQueuedStatus } from '../../utils/downloadStatus';
 import { makeModelKey } from '../../utils/modelKey';
 import { modelSupportsNpuGpu, isAccelerableQuant } from '../../utils/acceleration';
 import { TextFiltersSection } from './TextFiltersSection';
@@ -91,7 +91,9 @@ const ModelDetailView: React.FC<DetailProps> = ({
     const downloadedModel = getDownloadedModel(selectedModel.id, item.name);
     const needsVisionRepair = checkNeedsVisionRepair(downloadedModel, item);
     const repairingVision = isRepairingVisionModel(`${selectedModel.id}/${item.name}`);
-    let progress = entry ? {
+    const inProgress = entry ? isModelDownloadInProgress(entry.status) : false;
+    const hasFailed = entry ? isFailedStatus(entry.status) : false;
+    let progress = entry && (inProgress || hasFailed || entry.status === 'completed') ? {
       progress: entry.totalBytes > 0 ? entry.bytesDownloaded / entry.totalBytes : 0,
       bytesDownloaded: entry.bytesDownloaded,
       totalBytes: entry.totalBytes,
@@ -103,8 +105,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
     if (progress && progress.status === 'completed' && progress.bytesDownloaded < item.size) {
       progress = undefined;
     }
-    const canCancel   = !!entry && isModelDownloadInProgress(entry.status);
-    const hasFailed   = entry?.status === 'failed';
+    const canCancel   = inProgress;
     const errorMessage = hasFailed ? (entry?.reason ?? 'Download failed') : undefined;
     return { downloadKey: modelKey, progress, downloaded, downloadedModel, needsVisionRepair, repairingVision, canCancel, hasFailed, errorMessage };
   };
@@ -146,8 +147,9 @@ const ModelDetailView: React.FC<DetailProps> = ({
     return <ModelCard
         model={{ id: selectedModel.id, name: displayName, author: selectedModel.author, credibility: selectedModel.credibility }}
         file={item} downloadedModel={s.downloadedModel} isDownloaded={s.downloaded}
-        isDownloading={!!s.progress && !s.hasFailed && !isQueuedStatus(s.progress.status)}
+        isDownloading={isDownloadingStatus(s.progress?.status)}
         isQueued={isQueuedStatus(s.progress?.status ?? 'completed')}
+        isPaused={isPausedStatus(s.progress?.status)}
         downloadProgress={s.progress?.progress}
         downloadBytes={s.progress && !s.hasFailed ? {
           downloaded: s.progress.bytesDownloaded,
@@ -218,7 +220,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
       ) : (
         <FlatList
           data={modelFiles
-            .filter(f => f.size > 0 && !fileExceedsBudget(f.size, ramGB) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
+            .filter(f => f.size > 0 && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
             .sort((a, b) => {
               if (selectedModel.id === LITERT_PARENT_ID) return a.size - b.size; // curated: small-first
               // Tier: Q4_K_M (CPU default, lowest size) → GPU/NPU Q4_0/Q8_0 → rest (CPU

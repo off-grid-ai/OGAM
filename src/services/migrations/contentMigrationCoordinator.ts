@@ -99,7 +99,14 @@ async function executeMigration(): Promise<ContentMigrationState> {
     send({ type: 'start' });
     const snapshot = await legacyContentSource.readSnapshot();
     send({ type: 'prepared' });
-    await contentMigrationTarget.replaceWithLegacy(snapshot, {
+    const migrate =
+      preflight.state === 'needed' &&
+      preflight.reason === 'legacy-attachment-recovery'
+        ? contentMigrationTarget.recoverLegacyAttachments.bind(
+            contentMigrationTarget,
+          )
+        : contentMigrationTarget.replaceWithLegacy.bind(contentMigrationTarget);
+    await migrate(snapshot, {
       onProgress(copied, total) {
         send({ type: 'copy-progress', copied, total });
       },

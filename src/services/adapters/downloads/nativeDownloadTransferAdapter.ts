@@ -6,6 +6,7 @@ import {
   type DownloadTransferPort,
   type DownloadTransferStopDisposition,
 } from '@offgrid/models';
+import logger from '../../../utils/logger';
 
 const native = NativeModules.DownloadManagerModule;
 
@@ -129,6 +130,7 @@ export class NativeDownloadTransferAdapter implements DownloadTransferPort {
     disposition: DownloadTransferStopDisposition;
   }): Promise<{ outcome: DownloadTransferStopOutcome }> {
     this.assertAvailable();
+    logger.log('[ModelDownloadNative] stop requested', input);
     const existing = this.terminalOperations.get(input.transferId);
     if (existing?.kind === 'move') {
       this.listeners.get(input.transferId)?.completionWon();
@@ -168,6 +170,11 @@ export class NativeDownloadTransferAdapter implements DownloadTransferPort {
     this.terminalOperations.set(input.transferId, terminal);
     try {
       const result = await stop;
+      logger.log('[ModelDownloadNative] stop settled', {
+        transferId: input.transferId,
+        disposition: input.disposition,
+        outcome: result.outcome,
+      });
       if (this.terminalOperations.get(input.transferId) === terminal) {
         this.terminalOperations.delete(input.transferId);
       }

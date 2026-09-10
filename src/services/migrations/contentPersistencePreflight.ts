@@ -9,6 +9,7 @@ export interface ContentRecordCounts {
 export interface ContentMigrationTargetFacts {
   marker: ContentMigrationMarker;
   counts: ContentRecordCounts;
+  attachmentRecoveryComplete: boolean;
 }
 
 /** Read-only access to the two Zustand envelopes stored by the released app. */
@@ -31,7 +32,10 @@ export type ContentPersistencePreflight =
     }
   | {
       state: 'needed';
-      reason: 'legacy-data-found' | 'migration-interrupted';
+      reason:
+        | 'legacy-data-found'
+        | 'migration-interrupted'
+        | 'legacy-attachment-recovery';
       legacy: ContentRecordCounts;
       sqlite: ContentRecordCounts;
     }
@@ -150,6 +154,14 @@ export async function preflightContentPersistenceMigration(input: {
   }
 
   if (target.marker === 'complete') {
+    if (hasRows(legacy) && !target.attachmentRecoveryComplete) {
+      return {
+        state: 'needed',
+        reason: 'legacy-attachment-recovery',
+        legacy,
+        sqlite: target.counts,
+      };
+    }
     return {
       state: 'current',
       reason: 'migration-complete',

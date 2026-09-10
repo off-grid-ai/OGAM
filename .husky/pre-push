@@ -57,10 +57,7 @@ if [ -n "$PUSHED_JS" ]; then
   # Rendered RN journeys share native-boundary state and are memory-heavy. Parallel workers
   # starve one another and turn normal 10-second journeys into false multi-minute timeouts.
   # CI runs this same graph serially; keep the local merge gate deterministic too.
-  # Some React Native boundary shims keep native-style handles alive after Jest has completed every
-  # assertion. The repository's full test command already force-closes those handles. Apply the same
-  # completion policy here so a fully passing related suite does not return a false non-zero status.
-  echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 npx jest --findRelatedTests --passWithNoTests --runInBand --forceExit
+  echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 npx jest --findRelatedTests --passWithNoTests --runInBand
 
   echo "▶ Architecture gate (dependency-cruiser)..."
   npm run depcruise
@@ -113,7 +110,6 @@ if [ -n "$PUSHED_IOS_NATIVE" ]; then
     build)
 fi
 
-if [ -n "$PUSHED_JS$PUSHED_SWIFT$PUSHED_KOTLIN" ]; then
-  echo "▶ Sonar scan..."
-  npm run sonar
-fi
+# CI owns the full Sonar scan. Running it again before every local push adds a complete repository
+# scan to an otherwise file-scoped gate and gives no earlier signal than lint, types, tests, and the
+# architecture checks above.
