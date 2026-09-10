@@ -1,10 +1,10 @@
 /**
  * The Day view — the ambient recorder's home.
  *
- * Led by what to do, the same model as OGAD's desktop day view: a prose Journal of the day, the Tasks
- * pulled from its conversations (checkable, with their source), and the Timeline of conversations
- * underneath. Ask anything about the day; record from the button. Value is on the home screen; the
- * conversation it came from is one tap down.
+ * The main surface is the BRIEF - Journal, To do, Actions - the stuff you read each morning. The
+ * Timeline of conversations lives behind a chip (its own slide-over), Ask is docked at the bottom
+ * next to the record button so it's always at your thumb, and the recorder settings sit behind a gear.
+ * Value on the home screen; reference, config and the source conversation are each one tap away.
  *
  * Terminal/brutalist, Menlo, emerald. Reads the store; capture runs through the shared useAmbientCapture.
  */
@@ -12,6 +12,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   ScrollView,
   Share,
   StyleSheet,
@@ -156,6 +157,10 @@ export function AmbientDayScreen(): React.ReactElement {
   const [askQuery, setAskQuery] = useState('');
   const [asking, setAsking] = useState(false);
   const [askResult, setAskResult] = useState<AskResult | null>(null);
+
+  // Reference + config live off the main surface, one tap away.
+  const [showTimeline, setShowTimeline] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const ask = useCallback(async () => {
     const question = askQuery.trim();
     if (!question || asking) return;
@@ -199,9 +204,14 @@ export function AmbientDayScreen(): React.ReactElement {
         title="Day"
         onBack={() => navigation.goBack()}
         right={
-          <TouchableOpacity onPress={() => navigation.navigate('AmbientReflect')} testID="ambient-open-reflect">
-            <Icon name="bar-chart-2" size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
+          <View style={styles.headIcons}>
+            <TouchableOpacity onPress={() => navigation.navigate('AmbientReflect')} testID="ambient-open-reflect">
+              <Icon name="bar-chart-2" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowSettings(true)} testID="ambient-open-settings">
+              <Icon name="settings" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
         }
       />
 
@@ -310,140 +320,180 @@ export function AmbientDayScreen(): React.ReactElement {
               </Section>
             ) : null}
 
-            <Section
-              title="Timeline"
-              count={`${daySessions.length} conversation${daySessions.length === 1 ? '' : 's'}`}
-              styles={styles}
-              colors={colors}
-              icon="clock"
+            <TouchableOpacity
+              style={styles.tlChip}
+              onPress={() => setShowTimeline(true)}
+              testID="ambient-open-timeline"
             >
-              {daySessions.map(session => (
-                <TouchableOpacity
-                  key={session.id}
-                  style={styles.tcard}
-                  onPress={() => navigation.navigate('AmbientSession', { sessionId: session.id })}
-                  testID="ambient-timeline-row"
-                >
-                  <Text style={styles.tcardTime}>{clock(session.startMs)}</Text>
-                  <View style={styles.tcardMid}>
-                    <Text style={styles.tcardTitle} numberOfLines={1}>
-                      {session.summary.title}
-                    </Text>
-                    <Text style={styles.tcardHead} numberOfLines={1}>
-                      {session.summary.headline || 'No summary'}
-                    </Text>
-                  </View>
-                  <Icon name="chevron-right" size={16} color={colors.textMuted} />
-                </TouchableOpacity>
-              ))}
-            </Section>
-
-            <View style={styles.askbar}>
-              <Icon name="search" size={15} color={colors.textMuted} />
-              <TextInput
-                style={styles.askInput}
-                placeholder="Ask this day…"
-                placeholderTextColor={colors.textMuted}
-                value={askQuery}
-                onChangeText={setAskQuery}
-                onSubmitEditing={ask}
-                returnKeyType="search"
-                testID="ambient-day-ask"
-              />
-              {asking ? <ActivityIndicator size="small" color={colors.primary} /> : null}
-            </View>
-            {askResult && !asking ? (
-              <View style={styles.answer} testID="ambient-day-answer">
-                <Text style={styles.answerText}>{answerText(askResult)}</Text>
-              </View>
-            ) : null}
-            <View style={{ height: 28 }} />
+              <Icon name="clock" size={15} color={colors.textMuted} />
+              <Text style={styles.tlChipLabel}>Timeline</Text>
+              <Text style={styles.tlChipN}>
+                {daySessions.length} conversation{daySessions.length === 1 ? '' : 's'}
+              </Text>
+              <Icon name="chevron-right" size={16} color={colors.primary} />
+            </TouchableOpacity>
+            <View style={{ height: 16 }} />
           </>
         )}
+      </ScrollView>
 
-        <View style={styles.settings} testID="ambient-day-settings">
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Listening</Text>
-            <View style={styles.seg}>
-              {(['session', 'always-on'] as const).map(mode => (
-                <TouchableOpacity
-                  key={mode}
-                  onPress={() => setCaptureMode(mode)}
-                  style={[styles.segBtn, captureMode === mode && styles.segBtnOn]}
-                  testID={`ambient-capture-${mode}`}
-                >
-                  <Text style={[styles.segText, captureMode === mode && styles.segTextOn]}>
-                    {mode === 'session' ? 'One tap' : 'Always-on'}
+      {/* Docked: ask + record, always at the thumb. */}
+      {askResult && !asking ? (
+        <View style={styles.answer} testID="ambient-day-answer">
+          <Text style={styles.answerText}>{answerText(askResult)}</Text>
+        </View>
+      ) : null}
+      <View style={styles.dock}>
+        <View style={styles.askbar}>
+          <Icon name="search" size={15} color={colors.textMuted} />
+          <TextInput
+            style={styles.askInput}
+            placeholder="Ask this day…"
+            placeholderTextColor={colors.textMuted}
+            value={askQuery}
+            onChangeText={setAskQuery}
+            onSubmitEditing={ask}
+            returnKeyType="search"
+            testID="ambient-day-ask"
+          />
+          {asking ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+        </View>
+        {!capture.recording && !capture.processing ? (
+          <TouchableOpacity style={styles.fab} onPress={capture.start} testID="ambient-day-record">
+            <Icon name="mic" size={22} color={colors.background} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      {/* Timeline — reference, off the main surface. */}
+      <Modal
+        visible={showTimeline}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowTimeline(false)}
+      >
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+          <ScreenHeader title={`Timeline · ${dayLabel(dayKey)}`} onBack={() => setShowTimeline(false)} />
+          <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+            {daySessions.map(session => (
+              <TouchableOpacity
+                key={session.id}
+                style={styles.tcard}
+                onPress={() => {
+                  setShowTimeline(false);
+                  navigation.navigate('AmbientSession', { sessionId: session.id });
+                }}
+                testID="ambient-timeline-row"
+              >
+                <Text style={styles.tcardTime}>{clock(session.startMs)}</Text>
+                <View style={styles.tcardMid}>
+                  <Text style={styles.tcardTitle} numberOfLines={1}>
+                    {session.summary.title}
                   </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-          <View style={[styles.settingRow, { marginTop: 14 }]}>
-            <Text style={styles.settingLabel}>Processing</Text>
-            <View style={styles.seg}>
-              <TouchableOpacity
-                onPress={() => setProcessingMode('live')}
-                style={[styles.segBtn, processingMode === 'live' && styles.segBtnOn]}
-                testID="ambient-mode-live"
-              >
-                <Text style={[styles.segText, processingMode === 'live' && styles.segTextOn]}>Live</Text>
+                  <Text style={styles.tcardHead} numberOfLines={1}>
+                    {session.summary.headline || 'No summary'}
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={16} color={colors.textMuted} />
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setProcessingMode('nightly')}
-                style={[styles.segBtn, processingMode === 'nightly' && styles.segBtnOn]}
-                testID="ambient-mode-nightly"
-              >
-                <Text style={[styles.segText, processingMode === 'nightly' && styles.segTextOn]}>Later</Text>
-              </TouchableOpacity>
+            ))}
+            <View style={{ height: 20 }} />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Recorder settings — config, behind the gear. */}
+      <Modal
+        visible={showSettings}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowSettings(false)}
+      >
+        <TouchableOpacity
+          style={styles.sheetBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowSettings(false)}
+        />
+        <View style={styles.sheet}>
+          <View style={styles.sheetGrip} />
+          <Text style={styles.sheetTitle}>Recorder settings</Text>
+          <View style={styles.settings} testID="ambient-day-settings">
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Listening</Text>
+              <View style={styles.seg}>
+                {(['session', 'always-on'] as const).map(mode => (
+                  <TouchableOpacity
+                    key={mode}
+                    onPress={() => setCaptureMode(mode)}
+                    style={[styles.segBtn, captureMode === mode && styles.segBtnOn]}
+                    testID={`ambient-capture-${mode}`}
+                  >
+                    <Text style={[styles.segText, captureMode === mode && styles.segTextOn]}>
+                      {mode === 'session' ? 'One tap' : 'Always-on'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-          </View>
-          <Text style={styles.settingHint}>
-            Live processes each recording on stop. Later queues them to process together.
-          </Text>
-          <View style={[styles.settingRow, { marginTop: 14 }]}>
-            <Text style={styles.settingLabel}>Keep summaries on-device</Text>
-            <Switch
-              value={onDeviceOnly}
-              onValueChange={setOnDeviceOnly}
-              trackColor={{ true: colors.primary, false: colors.border }}
-              testID="ambient-day-privacy"
-            />
-          </View>
-          <View style={[styles.settingRow, { marginTop: 14, opacity: onDeviceOnly ? 0.4 : 1 }]}>
-            <Text style={styles.settingLabel}>Transcribe on Mac when paired</Text>
-            <Switch
-              value={useMacForTranscription && !onDeviceOnly}
-              onValueChange={setUseMacForTranscription}
-              disabled={onDeviceOnly}
-              trackColor={{ true: colors.primary, false: colors.border }}
-              testID="ambient-day-mac-offload"
-            />
-          </View>
-          <View style={[styles.settingRow, { marginTop: 14 }]}>
-            <Text style={styles.settingLabel}>Keep audio for Replay</Text>
-            <View style={styles.seg}>
-              {[7, 30].map(days => (
+            <View style={[styles.settingRow, { marginTop: 14 }]}>
+              <Text style={styles.settingLabel}>Processing</Text>
+              <View style={styles.seg}>
                 <TouchableOpacity
-                  key={days}
-                  onPress={() => setAudioRetentionDays(days)}
-                  style={[styles.segBtn, audioRetentionDays === days && styles.segBtnOn]}
-                  testID={`ambient-retention-${days}`}
+                  onPress={() => setProcessingMode('live')}
+                  style={[styles.segBtn, processingMode === 'live' && styles.segBtnOn]}
+                  testID="ambient-mode-live"
                 >
-                  <Text style={[styles.segText, audioRetentionDays === days && styles.segTextOn]}>{days}d</Text>
+                  <Text style={[styles.segText, processingMode === 'live' && styles.segTextOn]}>Live</Text>
                 </TouchableOpacity>
-              ))}
+                <TouchableOpacity
+                  onPress={() => setProcessingMode('nightly')}
+                  style={[styles.segBtn, processingMode === 'nightly' && styles.segBtnOn]}
+                  testID="ambient-mode-nightly"
+                >
+                  <Text style={[styles.segText, processingMode === 'nightly' && styles.segTextOn]}>Later</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            <Text style={styles.settingHint}>
+              Live processes each recording on stop. Later queues them to process together.
+            </Text>
+            <View style={[styles.settingRow, { marginTop: 14 }]}>
+              <Text style={styles.settingLabel}>Keep summaries on-device</Text>
+              <Switch
+                value={onDeviceOnly}
+                onValueChange={setOnDeviceOnly}
+                trackColor={{ true: colors.primary, false: colors.border }}
+                testID="ambient-day-privacy"
+              />
+            </View>
+            <View style={[styles.settingRow, { marginTop: 14, opacity: onDeviceOnly ? 0.4 : 1 }]}>
+              <Text style={styles.settingLabel}>Transcribe on Mac when paired</Text>
+              <Switch
+                value={useMacForTranscription && !onDeviceOnly}
+                onValueChange={setUseMacForTranscription}
+                disabled={onDeviceOnly}
+                trackColor={{ true: colors.primary, false: colors.border }}
+                testID="ambient-day-mac-offload"
+              />
+            </View>
+            <View style={[styles.settingRow, { marginTop: 14 }]}>
+              <Text style={styles.settingLabel}>Keep audio for Replay</Text>
+              <View style={styles.seg}>
+                {[7, 30].map(days => (
+                  <TouchableOpacity
+                    key={days}
+                    onPress={() => setAudioRetentionDays(days)}
+                    style={[styles.segBtn, audioRetentionDays === days && styles.segBtnOn]}
+                    testID={`ambient-retention-${days}`}
+                  >
+                    <Text style={[styles.segText, audioRetentionDays === days && styles.segTextOn]}>{days}d</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
         </View>
-        <View style={{ height: 20 }} />
-      </ScrollView>
-
-      {!capture.recording && !capture.processing ? (
-        <TouchableOpacity style={styles.fab} onPress={capture.start} testID="ambient-day-record">
-          <Icon name="mic" size={22} color={colors.background} />
-        </TouchableOpacity>
-      ) : null}
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -658,16 +708,28 @@ function createStyles(colors: {
     tcardTitle: { color: colors.text, fontSize: 13.5, fontWeight: '600' },
     tcardHead: { color: colors.textMuted, fontSize: 11 },
     // ask
-    askbar: { flexDirection: 'row', alignItems: 'center', gap: 9, margin: 18, marginBottom: 0, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 9, backgroundColor: colors.surface },
+    // header icons
+    headIcons: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+    // timeline chip
+    tlChip: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 18, marginTop: 4, padding: 13, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface },
+    tlChipLabel: { color: colors.text, fontSize: 12.5, fontWeight: '600' },
+    tlChipN: { color: colors.textMuted, fontSize: 11, flex: 1, textAlign: 'right' },
+    // docked ask + record
+    dock: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background },
+    askbar: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 14, paddingVertical: 11, borderWidth: 1, borderColor: colors.border, borderRadius: 22, backgroundColor: colors.surface },
     askInput: { flex: 1, color: colors.text, fontSize: 13, padding: 0 },
-    answer: { margin: 18, marginTop: 10, borderWidth: 1, borderLeftWidth: 2, borderColor: colors.border, borderLeftColor: colors.primary, borderRadius: 6, padding: 12, backgroundColor: colors.surface },
+    answer: { marginHorizontal: 14, marginBottom: 8, borderWidth: 1, borderLeftWidth: 2, borderColor: colors.border, borderLeftColor: colors.primary, borderRadius: 8, padding: 12, backgroundColor: colors.surface },
     answerText: { color: colors.text, fontSize: 13, lineHeight: 19 },
     // pending
     pending: { flexDirection: 'row', alignItems: 'center', gap: 9, marginHorizontal: 12, marginTop: 8, padding: 11, borderWidth: 1, borderColor: colors.primary, borderRadius: 8, backgroundColor: colors.surface },
     pendingText: { color: colors.text, fontSize: 12.5, flex: 1 },
     pendingCta: { color: colors.primary, fontSize: 12, fontWeight: '700' },
-    // settings footer
-    settings: { marginTop: 26, marginHorizontal: 12, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border },
+    // settings sheet
+    sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+    sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderTopWidth: 1, borderColor: colors.border, paddingHorizontal: 20, paddingBottom: 34, paddingTop: 8 },
+    sheetGrip: { width: 38, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 14 },
+    sheetTitle: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', fontWeight: '700', marginBottom: 12 },
+    settings: {},
     settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
     settingLabel: { color: colors.text, fontSize: 13, fontWeight: '600', flex: 1 },
     settingHint: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 6 },
@@ -676,7 +738,7 @@ function createStyles(colors: {
     segBtnOn: { backgroundColor: 'rgba(52,211,153,0.14)' },
     segText: { color: colors.textMuted, fontSize: 12 },
     segTextOn: { color: colors.primary, fontWeight: '700' },
-    // fab
-    fab: { position: 'absolute', right: 20, bottom: 28, width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }
+    // record fab (docked)
+    fab: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }
   });
 }
