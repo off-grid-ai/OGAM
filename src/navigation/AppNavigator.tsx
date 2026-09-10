@@ -58,6 +58,7 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 // Animated tab icon with scale spring on focus
 const TAB_ICON_MAP: Record<string, string> = {
   HomeTab: 'home',
+  DayTab: 'sunrise',
   ChatsTab: 'message-circle',
   ProjectsTab: 'folder',
   ModelsTab: 'cpu',
@@ -150,6 +151,14 @@ const MainTabs: React.FC = () => {
           name="HomeTab"
           component={HomeScreen}
           options={{ tabBarLabel: 'Home', tabBarButtonTestID: 'home-tab' }}
+          listeners={() => ({
+            tabPress: () => { triggerHaptic('selection'); },
+          })}
+        />
+        <Tab.Screen
+          name="DayTab"
+          component={AmbientDayScreen}
+          options={{ tabBarLabel: 'Day', tabBarButtonTestID: 'day-tab' }}
           listeners={() => ({
             tabPress: () => { triggerHaptic('selection'); },
           })}

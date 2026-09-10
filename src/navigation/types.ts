@@ -39,6 +39,7 @@ export type RootStackParamList = {
 // Tab navigator — simple, no sub-stacks
 export type MainTabParamList = {
   HomeTab: undefined;
+  DayTab: undefined;
   ChatsTab: undefined;
   ProjectsTab: undefined;
   ModelsTab:
