@@ -237,6 +237,8 @@ type StartGenerationCall = {
   turnId: string;
   /** The distinct durable identity of the already-committed user message. */
   userMessageId: string;
+  /** The final assistant row and its live audio use this one identity. */
+  assistantMessageId: string;
   userMessage: ReturnType<typeof mobileGenerationMessage>;
   projectId?: string;
   imageMode?: 'auto' | 'force' | 'disabled';
@@ -268,6 +270,7 @@ async function runPersistedChatTurnFn(
             conversationId: call.targetConversationId,
             turnId: call.turnId,
             userMessageId: call.userMessageId,
+            assistantMessageId: call.assistantMessageId,
             projectId: call.projectId,
             userMessage: call.userMessage,
             operation: recordedOperation,
@@ -341,6 +344,7 @@ export async function handleSendFn(
   }
   const messageId = generateId();
   const turnId = generateId();
+  const assistantMessageId = generateId();
   const userMessage = mobileGenerationMessage({
     id: messageId,
     uuid: messageId,
@@ -354,6 +358,7 @@ export async function handleSendFn(
     targetConversationId: conversationId,
     turnId,
     userMessageId: messageId,
+    assistantMessageId,
     userMessage,
     projectId,
     imageMode: call.imageMode,
@@ -387,6 +392,7 @@ export async function replayPersistedChatTurnFn(
       targetConversationId: conversationId,
       turnId: generateId(),
       userMessageId: persistedMessage.id,
+      assistantMessageId: generateId(),
       userMessage: mobileWorkspaceGenerationMessage(persistedMessage),
       projectId: conversation?.projectId ?? undefined,
       imageMode:

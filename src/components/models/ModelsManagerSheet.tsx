@@ -39,11 +39,14 @@ type Props = {
   /** Rows whose active selection lives on a REMOTE server (gateway) — shown with a cloud marker,
    *  matching the chat header's remote indicator, so a remote model is never mistaken for local. */
   remote?: Partial<Record<ModelRowType, boolean>>;
+  /** Availability for a selected remote route. False keeps the name visible with an error cloud. */
+  remoteAvailable?: Partial<Record<ModelRowType, boolean>>;
   loadingState: LoadingState;
   isEjecting: boolean;
   hasActiveModel: boolean;
   onOpenRow: (type: ModelRowType) => void;
   onEject: () => void;
+  onReconnectRemote: () => Promise<void>;
 };
 
 /**
@@ -57,11 +60,13 @@ export const ModelsManagerSheet: React.FC<Props> = ({
   onClosed,
   labels,
   remote,
+  remoteAvailable,
   loadingState,
   isEjecting,
   hasActiveModel,
   onOpenRow,
   onEject,
+  onReconnectRemote,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -69,6 +74,19 @@ export const ModelsManagerSheet: React.FC<Props> = ({
   // residency surface: a RAM chip + per-row eject on resident rows (agreed design 2026-07-14).
   const residentByRow = useResidentRows(visible);
   const [ejectingRow, setEjectingRow] = useState<ModelRowType | null>(null);
+  const [isReconnectingRemote, setIsReconnectingRemote] = useState(false);
+  const hasUnavailableRemote = ROWS.some(
+    row => remote?.[row.type] && remoteAvailable?.[row.type] === false,
+  );
+  const reconnectRemote = () => {
+    if (isReconnectingRemote) return;
+    setIsReconnectingRemote(true);
+    onReconnectRemote()
+      .catch(error =>
+        logger.warn('[ModelsManagerSheet] Remote reconnect failed:', error),
+      )
+      .finally(() => setIsReconnectingRemote(false));
+  };
   const ejectRow = (row: ModelRowType) => {
     const resident = residentByRow[row];
     if (!resident || ejectingRow) return;
@@ -152,7 +170,9 @@ export const ModelsManagerSheet: React.FC<Props> = ({
                   <Icon
                     name="cloud"
                     size={12}
-                    color={colors.primary}
+                    color={remoteAvailable?.[row.type] === false
+                      ? colors.error
+                      : colors.primary}
                     testID={`models-row-${row.type}-remote`}
                   />
                 )}
@@ -166,20 +186,42 @@ export const ModelsManagerSheet: React.FC<Props> = ({
           );
         })}
 
-        {hasActiveModel && (
-          <AnimatedPressable
-            style={styles.ejectButton}
-            hapticType="impactMedium"
-            disabled={isEjecting || loadingState.isLoading}
-            onPress={onEject}
-          >
-            {isEjecting ? (
-              <LoadingDots color={colors.error} />
-            ) : (
-              <Icon name="power" size={14} color={colors.error} />
+        {(hasUnavailableRemote || hasActiveModel) && (
+          <View style={styles.actions}>
+            {hasUnavailableRemote && (
+              <AnimatedPressable
+                style={styles.actionButton}
+                hapticType="impactMedium"
+                disabled={isReconnectingRemote || loadingState.isLoading}
+                onPress={reconnectRemote}
+                testID="models-reconnect-remote"
+              >
+                {isReconnectingRemote ? (
+                  <LoadingDots color={colors.primary} />
+                ) : (
+                  <Icon name="refresh-cw" size={14} color={colors.primary} />
+                )}
+                <Text style={styles.reconnectText}>
+                  {isReconnectingRemote ? 'Reconnecting' : 'Reconnect Remote'}
+                </Text>
+              </AnimatedPressable>
             )}
-            <Text style={styles.ejectText}>Eject All Models</Text>
-          </AnimatedPressable>
+            {hasActiveModel && (
+              <AnimatedPressable
+                style={styles.actionButton}
+                hapticType="impactMedium"
+                disabled={isEjecting || loadingState.isLoading}
+                onPress={onEject}
+              >
+                {isEjecting ? (
+                  <LoadingDots color={colors.error} />
+                ) : (
+                  <Icon name="power" size={14} color={colors.error} />
+                )}
+                <Text style={styles.ejectText}>Eject All Models</Text>
+              </AnimatedPressable>
+            )}
+          </View>
         )}
       </View>
     </AppSheet>
@@ -241,13 +283,20 @@ const createStyles = (colors: ThemeColors) => ({
     textAlign: 'right' as const,
   },
   valueSet: { color: colors.text },
-  ejectButton: {
+  actions: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-evenly' as const,
+    marginTop: SPACING.sm,
+  },
+  actionButton: {
+    minHeight: 44,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     gap: SPACING.sm,
-    paddingVertical: SPACING.md,
-    marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
   },
+  reconnectText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
   ejectText: { ...TYPOGRAPHY.bodySmall, color: colors.error },
 });

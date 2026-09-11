@@ -35,14 +35,21 @@ function project(snapshot: ImageApplicationSnapshot<GeneratedImage>): ImageGener
 
 class ImageGenerationService {
   private application: ReturnType<typeof imageGenerationApplication> | null = null;
+  private unsubscribe: (() => void) | null = null;
   private readonly listeners = new Set<ImageGenerationListener>();
   private previousPhase: ImageGenerationState['phase'] = 'idle';
 
   /** Resolve the facade seam only after the composition root has registered it. */
   private ensureApplication(): ReturnType<typeof imageGenerationApplication> {
-    if (this.application) return this.application;
     const application = imageGenerationApplication();
-    application.onChange(snapshot => {
+    if (this.application === application) return application;
+    this.unsubscribe?.();
+    this.unsubscribe = null;
+    // `onChange` delivers the current snapshot immediately. Publish the resolved application before
+    // subscribing so that a listener which reads `getState()` during that first delivery reuses this
+    // instance instead of recursively initialising it until the JavaScript stack overflows.
+    this.application = application;
+    this.unsubscribe = application.onChange(snapshot => {
       const state = project(snapshot);
       if (state.phase !== this.previousPhase) {
         logger.log(imagePhaseTransitionLog(this.previousPhase, state));
@@ -56,7 +63,6 @@ class ImageGenerationService {
       // every diffusion step.
       for (const listener of this.listeners) listener(state);
     });
-    this.application = application;
     return application;
   }
 

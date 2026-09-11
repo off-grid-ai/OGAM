@@ -3,14 +3,12 @@ import {
   type GenerationMessage,
   type MessageRecord,
 } from '@offgrid/application';
-import type {MediaAttachment, Message} from '../../../types';
-import {modelInputAudioUris} from '../../modelMedia';
+import type {Message} from '../../../types';
 
 export function generationMessage(message: Message): GenerationMessage {
-  return projectChatMessage(message, {
-    audioUris: attachment =>
-      modelInputAudioUris([attachment as MediaAttachment]),
-  });
+  // This value is persisted by ChatSessionService. Keep every display attachment here; Shared
+  // removes display-only media only when it composes a model request.
+  return projectChatMessage(message);
 }
 
 /** Project one canonical message without routing through the retired ChatStore shape. */

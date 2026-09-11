@@ -69,9 +69,10 @@ export const HOOKS = {
    *  protecting for a screen nobody is on, and a guard that reasons about flags is exactly how audio
    *  kept playing after the chat was closed. */
   audioStopForExit: 'audio.stopForExit',
-  /** (content: string) => void — fired as the assistant message streams; pro
+  /** (content: string, messageId: string | null) => void — fired as the assistant message streams; pro
    *  uses it to synthesize/play speech sentence-by-sentence while generation is
-   *  still in progress (no-op unless voice mode + engine ready). */
+   *  still in progress (no-op unless voice mode + engine ready). The durable message ID keeps the
+   *  playback control bound to the row that owns the reply. */
   audioOnStreamingToken: 'audio.onStreamingToken',
   /** (conversationId: string) => void — when streaming ends, speak the final
    *  assistant message if voice mode is active (pro checks mode/readiness). */

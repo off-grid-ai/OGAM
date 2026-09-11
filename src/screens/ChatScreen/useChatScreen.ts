@@ -150,6 +150,7 @@ export const useChatScreen = () => {
   const streamingReasoningContent = useChatStore(
     s => s.streamingReasoningContent,
   );
+  const streamingMessageUuid = useChatStore(s => s.streamingMessageUuid);
   const clearStreamingMessage = useChatStore(s => s.clearStreamingMessage);
   const setActiveConversation = useChatStore(s => s.setActiveConversation);
 
@@ -285,6 +286,7 @@ export const useChatScreen = () => {
       getDisplayMessages(activeConversation?.messages || [], {
         streamingMessage,
         streamingReasoningContent,
+        streamingMessageUuid,
         isStreamingForThisConversation,
         isModelLoading,
         loadingModelName,
@@ -296,6 +298,7 @@ export const useChatScreen = () => {
       activeConversation?.messages,
       streamingMessage,
       streamingReasoningContent,
+      streamingMessageUuid,
       isStreamingForThisConversation,
       isModelLoading,
       loadingModelName,

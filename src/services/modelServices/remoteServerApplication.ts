@@ -151,12 +151,18 @@ export const mobileRemoteServerPorts: Omit<
   },
   clearSelections: removeCanonicalServerSelections,
   async discover(server, credential) {
-    const models = await fetchModelsFromServer({
-      ...server,
-      createdAt: server.createdAt ?? new Date(0).toISOString(),
-      apiKey: credential ?? undefined,
-    });
-    return { models };
+    try {
+      const models = await fetchModelsFromServer({
+        ...server,
+        createdAt: server.createdAt ?? new Date(0).toISOString(),
+        apiKey: credential ?? undefined,
+      });
+      useRemoteServerStore.getState().updateServerHealth(server.id, true);
+      return { models };
+    } catch (error) {
+      useRemoteServerStore.getState().updateServerHealth(server.id, false);
+      throw error;
+    }
   },
   projectDiscovery(serverId, result) {
     const models = (result.models ?? []).filter(isRemoteModel);

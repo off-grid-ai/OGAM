@@ -4,6 +4,7 @@ import { useSpeechProjection } from '../../hooks/useApplicationProjection';
 import { useWhisperTranscription } from '../../hooks/useWhisperTranscription';
 import { supportsAudioInput } from '../../services/modelServices/modelState';
 import { recordingController } from '../../services/recordingController';
+import { applicationFacade } from '../../services/applicationFacade';
 import { useVoiceControllerEffects } from './voiceControllerEffects';
 import { useVoiceSessionDriver } from './useVoiceSessionDriver';
 import type { FinalizedRecording } from '@offgrid/application';
@@ -34,7 +35,7 @@ export function useVoiceInput({
   onAudioAttachment,
   onAutoSend,
 }: UseVoiceInputParams) {
-  const activeModel = useActiveMobileModel('transcription').model;
+  const activeTranscription = useActiveMobileModel('transcription');
   const recordingConversationIdRef = useRef<string | null>(null);
   const onTranscriptRef = useRef(onTranscript);
   onTranscriptRef.current = onTranscript;
@@ -44,6 +45,7 @@ export function useVoiceInput({
   onAutoSendRef.current = onAutoSend;
 
   const speech = useSpeechProjection();
+  const inputReady = activeTranscription.ready;
   const capture = useWhisperTranscription({
     mode: interfaceMode === 'audio' ? speech.preferences.turnMode : 'tap',
   });
@@ -55,7 +57,10 @@ export function useVoiceInput({
   const startRef = useRef(startRecording);
   startRef.current = startRecording;
   const stopRef = useRef(capture.stopRecording);
-  stopRef.current = capture.stopRecording;
+  stopRef.current =
+    interfaceMode === 'audio' && speech.preferences.turnMode === 'handsfree'
+      ? () => applicationFacade().speech.stopSession()
+      : capture.stopRecording;
   const cancelRef = useRef(() => {
     recordingConversationIdRef.current = null;
     capture.clearResult();
@@ -69,6 +74,7 @@ export function useVoiceInput({
     startTurn: () => {
       if (interfaceMode === 'audio') startRef.current().catch(() => undefined);
     },
+    inputReady: interfaceMode === 'audio' && inputReady,
   });
 
   const deliverTranscript = useCallback((text: string) => {
@@ -120,7 +126,9 @@ export function useVoiceInput({
     isTranscribing: capture.isTranscribing,
     partialResult: capture.partialResult,
     error: capture.error,
-    voiceAvailable: !!activeModel,
+    voiceAvailable:
+      activeTranscription.model !== null &&
+      (interfaceMode !== 'audio' || inputReady),
     startRecording: () => recordingController.start(),
     stopRecording: () => recordingController.stop(),
     cancelRecording: () => recordingController.cancel(),

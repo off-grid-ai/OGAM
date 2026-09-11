@@ -50,7 +50,12 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    logger.error('[ErrorBoundary] Caught render error:', error?.message, info?.componentStack);
+    logger.error(
+      '[ErrorBoundary] Caught render error:',
+      error?.message,
+      error?.stack,
+      info?.componentStack,
+    );
   }
 
   reset = () => {

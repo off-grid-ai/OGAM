@@ -127,6 +127,7 @@ interface MessageBubbleProps {
   showSupportingContext: boolean;
   showActions: boolean;
   showGenerationDetails: boolean;
+  hideProse?: boolean;
   metaExtra?: React.ReactNode;
   onImagePress?: (uri: string) => void;
   onToggleThinking: () => void;
@@ -149,6 +150,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   showSupportingContext,
   showActions,
   showGenerationDetails,
+  hideProse,
   metaExtra,
   onImagePress,
   onToggleThinking,
@@ -177,7 +179,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           />
         )}
 
-        {!isUser && (
+        {!isUser && hasAttachments && (
+          <MessageAttachments
+            attachments={message.attachments!}
+            isUser={isUser}
+            styles={styles}
+            colors={colors}
+            onImagePress={onImagePress}
+          />
+        )}
+
+        {!isUser && !hideProse && (
           <MessageContent
             isUser={isUser}
             isThinking={message.isThinking}
@@ -190,7 +202,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           />
         )}
 
-        {hasAttachments && (
+        {isUser && hasAttachments && (
           <MessageAttachments
             attachments={message.attachments!}
             isUser={isUser}
@@ -416,6 +428,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       showSupportingContext={showSupportingContext}
       showActions={showActions}
       showGenerationDetails={showGenerationDetails}
+      hideProse={hideProse}
       metaExtra={metaExtra}
       onImagePress={onImagePress}
       onToggleThinking={() => setShowThinking(!showThinking)}

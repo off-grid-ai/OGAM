@@ -5,6 +5,7 @@ import {
   reconcileModelSelection,
   selectionProjectionAfterRemoval,
   selectedRemoteModelName,
+  upgradeLegacySelectionProjection,
   type ModelModality,
   type ModelSelectionProjectionPort,
   type PersistedSelectionCandidate,
@@ -14,7 +15,11 @@ import {
 import { useAppStore } from '../../stores/appStore';
 import { useRemoteServerStore } from '../../stores/remoteServerStore';
 import { useWhisperStore } from '../../stores/whisperStore';
-import { useModelSelectionStore, type PersistedSelectionEntry } from '../../stores/modelSelectionStore';
+import {
+  awaitModelSelectionPersistence,
+  useModelSelectionStore,
+  type PersistedSelectionEntry,
+} from '../../stores/modelSelectionStore';
 import type { ZustandPersistApi } from '../adapters/persistence/zustandHydration';
 import { mobileRouteId } from './mobileRoute';
 import {
@@ -266,6 +271,45 @@ function entryFor(modality: ModelModality): PersistedSelectionEntry | null {
   return migrated;
 }
 
+/**
+ * Upgrade selection rows written before remote intent was durable. The saved server catalog is
+ * only an upgrade input; after this runs, the selection store remains the sole authority.
+ */
+export async function upgradeLegacyMobileModelSelections(): Promise<void> {
+  const store = useModelSelectionStore.getState();
+  const servers = useRemoteServerStore.getState().servers;
+  for (const modality of [
+    'text',
+    'image',
+    'transcription',
+    'voice',
+    'embedding',
+    'classifier',
+  ] as const) {
+    const candidates = modality === 'classifier'
+      ? []
+      : servers.flatMap(server => {
+          const modelId = server.enabled === false
+            ? undefined
+            : server.selections?.[modality];
+          return modelId
+            ? [mobileRouteId({
+                source: 'remote',
+                hostId: server.id,
+                modality,
+                modelId,
+              })]
+            : [];
+        });
+    const upgraded = upgradeLegacySelectionProjection(
+      store.entries[modality],
+      candidates,
+    );
+    if (upgraded) store.setEntry(modality, upgraded);
+  }
+  await awaitModelSelectionPersistence();
+}
+
 /** Read raw persistence facts. Shared owns every reconciliation decision. */
 function readMobileSelectionProjection(modality: ModelModality): PersistedSelectionProjection {
   const entry = entryFor(modality);
@@ -364,7 +408,9 @@ async function writeMobileSelectionProjection(
       : previous?.rememberedLocalRouteId
         ? { rememberedLocalRouteId: previous.rememberedLocalRouteId }
         : {}),
+    intentRecorded: projection.intentRecorded ?? true,
   });
+  await awaitModelSelectionPersistence();
   // The TTS engine is the one runtime that keeps its own copy of the selected voice, so it is
   // projected here. Every other modality - the classifier included - is read back from the entry
   // above, so there is no second place a selection can live.

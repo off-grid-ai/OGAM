@@ -12,9 +12,13 @@ import { logVoiceDiagnostic } from '../../utils/voiceDiagnostics';
  * in both directions: open the mic when the session listens, and cancel a recording the moment the
  * floor is seized out from under one.
  */
-export function useVoiceSessionDriver(opts: { startTurn: () => void }): void {
+export function useVoiceSessionDriver(opts: {
+  startTurn: () => void;
+  inputReady: boolean;
+}): void {
   const startRef = useRef(opts.startTurn);
   startRef.current = opts.startTurn;
+  const inputReady = opts.inputReady;
 
   useEffect(() => {
     // EDGE, not level: a turn begins on the transition INTO listen, never on any notification that
@@ -35,7 +39,7 @@ export function useVoiceSessionDriver(opts: { startTurn: () => void }): void {
         enteredListening: entered,
         replayReturnsTo: session.replayReturnsTo,
       });
-      if (entered) {
+      if (entered && inputReady) {
         logVoiceDiagnostic('session_dispatched_recording_start', {
           state: session.state,
           phase: session.phase,
@@ -50,7 +54,7 @@ export function useVoiceSessionDriver(opts: { startTurn: () => void }): void {
     });
     // The session may ALREADY be listening when this mounts (hands-free starts there), and a state
     // that never changes produces no event. Checking once is what makes entering the mode work.
-    if (voiceSession.micShouldBeOpen()) {
+    if (inputReady && voiceSession.micShouldBeOpen()) {
       const session = voiceSession.current();
       logVoiceDiagnostic('mounted_session_dispatched_recording_start', {
         state: session.state,
@@ -59,5 +63,5 @@ export function useVoiceSessionDriver(opts: { startTurn: () => void }): void {
       startRef.current();
     }
     return stop;
-  }, []);
+  }, [inputReady]);
 }

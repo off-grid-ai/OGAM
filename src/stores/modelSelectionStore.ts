@@ -4,7 +4,7 @@
  * the workspace's active route, not this store.
  */
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ModelModality, SelectionProjectionWrite } from '@offgrid/application';
 
@@ -14,6 +14,30 @@ interface ModelSelectionState {
   entries: Partial<Record<ModelModality, PersistedSelectionEntry>>;
   setEntry(modality: ModelModality, entry: PersistedSelectionEntry): void;
 }
+
+let persistenceTail = Promise.resolve();
+
+const durableModelSelectionStorage: StateStorage = {
+  getItem: name => AsyncStorage.getItem(name),
+  setItem: (name, value) => {
+    const write = persistenceTail
+      .catch(() => undefined)
+      .then(() => AsyncStorage.setItem(name, value));
+    persistenceTail = write;
+    return write;
+  },
+  removeItem: name => {
+    const removal = persistenceTail
+      .catch(() => undefined)
+      .then(() => AsyncStorage.removeItem(name));
+    persistenceTail = removal;
+    return removal;
+  },
+};
+
+/** A selection command is complete only when its canonical persisted record is durable. */
+export const awaitModelSelectionPersistence = (): Promise<void> =>
+  persistenceTail;
 
 export const useModelSelectionStore = create<ModelSelectionState>()(
   persist(
@@ -25,7 +49,7 @@ export const useModelSelectionStore = create<ModelSelectionState>()(
     {
       name: 'model-selection',
       version: 1,
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => durableModelSelectionStorage),
       partialize: state => ({ entries: state.entries }),
     },
   ),

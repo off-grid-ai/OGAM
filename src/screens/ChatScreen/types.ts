@@ -92,6 +92,20 @@ function withPendingGeneratedImage(message: Message): Message {
   };
 }
 
+function groupedImageItem(
+  message: Message | ChatMessageItem,
+  supportingContext: Message,
+): ChatMessageItem {
+  const cached = groupedImageCache.get(message);
+  if (cached?.supportingContext === supportingContext) return cached.item;
+  const item: ChatMessageItem = {
+    ...withPendingGeneratedImage(message),
+    supportingContext,
+  };
+  groupedImageCache.set(message, { supportingContext, item });
+  return item;
+}
+
 /**
  * Keep durable chat records unchanged, but present an image turn as one assistant result.
  *
@@ -111,18 +125,23 @@ function groupSupportingContextWithImage(
       isSupportingContextMessage(supportingContext)
     ) {
       grouped.pop();
-      const cached = groupedImageCache.get(message);
-      if (cached?.supportingContext === supportingContext) {
-        grouped.push(cached.item);
+      grouped.push(groupedImageItem(message, supportingContext));
+      continue;
+    }
+    // Workspace Content can commit the final chat turn before the queued enhancement-card update
+    // receives its position. Presentation must still converge on one image turn, independent of
+    // that I/O completion order: enhanced prompt, image, response.
+    if (isSupportingContextMessage(message)) {
+      const image = grouped.at(-1);
+      if (
+        image &&
+        (hasImageAttachment(image) || isGeneratedImageResult(image)) &&
+        !(image as ChatMessageItem).supportingContext
+      ) {
+        grouped.pop();
+        grouped.push(groupedImageItem(image, message));
         continue;
       }
-      const item: ChatMessageItem = {
-        ...withPendingGeneratedImage(message),
-        supportingContext,
-      };
-      groupedImageCache.set(message, { supportingContext, item });
-      grouped.push(item);
-      continue;
     }
     grouped.push(message);
   }
@@ -143,6 +162,7 @@ export const STREAMING_MESSAGE_ID = 'streaming';
 export type StreamingState = {
   streamingMessage: string;
   streamingReasoningContent: string;
+  streamingMessageUuid?: string | null;
   isStreamingForThisConversation: boolean;
   isModelLoading?: boolean;
   loadingModelName?: string;
@@ -263,6 +283,7 @@ function localDisplayMessages(
   const {
     streamingMessage,
     streamingReasoningContent,
+    streamingMessageUuid,
     isStreamingForThisConversation,
   } = streaming;
   // Model still loading for the in-progress reply: show it in the bubble so the
@@ -275,7 +296,7 @@ function localDisplayMessages(
     return [
       ...allMessages,
       {
-        id: STREAMING_MESSAGE_ID,
+        id: streamingMessageUuid ?? STREAMING_MESSAGE_ID,
         role: 'assistant' as const,
         content: streaming.loadingModelName
           ? `Loading ${streaming.loadingModelName}...`
@@ -296,7 +317,7 @@ function localDisplayMessages(
     return [
       ...allMessages,
       {
-        id: STREAMING_MESSAGE_ID,
+        id: streamingMessageUuid ?? STREAMING_MESSAGE_ID,
         role: 'assistant' as const,
         content: '',
         timestamp: Date.now(),
@@ -314,7 +335,7 @@ function localDisplayMessages(
     return [
       ...allMessages,
       {
-        id: STREAMING_MESSAGE_ID,
+        id: streamingMessageUuid ?? STREAMING_MESSAGE_ID,
         role: 'assistant' as const,
         content: streamingMessage,
         reasoningContent: streamingReasoningContent || undefined,
