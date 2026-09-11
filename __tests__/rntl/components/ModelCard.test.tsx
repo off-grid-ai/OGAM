@@ -948,7 +948,7 @@ describe('ModelCard', () => {
     });
 
     it('renders custom chips in place of the modelType chip row (compact)', () => {
-      const { getByText, queryByText } = render(
+      const { queryByText } = render(
         <ModelCard
           model={{ ...baseModel, modelType: 'vision' }}
           compact={true}
