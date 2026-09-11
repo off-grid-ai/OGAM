@@ -12,6 +12,17 @@ Verdict legend:
 
 ---
 
+## Project deletion leaves an empty gap in the list - 2026-09-11
+
+**Verdict: fix-the-guard.**
+
+After the user deletes a project, the Mobile Projects list leaves an empty space where the row was.
+The list should reflow immediately from its existing project state without navigation, refresh, or
+restart. Verify deletion at the start, middle, and end of the list and confirm that the remaining
+projects close the gap while their order stays stable.
+
+---
+
 ## Active Kokoro voice-model download cannot stop at Pro expiry - 2026-08-26
 
 **Verdict: instrument-and-revisit.**
