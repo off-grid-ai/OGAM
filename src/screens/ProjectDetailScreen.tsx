@@ -21,6 +21,7 @@ import { RootStackParamList } from '../navigation/types';
 import { KnowledgeBaseSection } from './ProjectDetailKnowledgeBaseSection';
 import { formatWhen } from '../utils/localTime';
 import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
+import { PROJECT_DELETE_FALLBACK_REASON } from '../stores/projectDeleteOutcome';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectDetail'>;
@@ -93,9 +94,18 @@ export const ProjectDetailScreen: React.FC = () => {
           {
             text: 'Delete',
             style: 'destructive',
-            onPress: () => {
-              deleteProject(projectId);
-              navigation.goBack();
+            onPress: async () => {
+              const outcome = await deleteProject(projectId);
+              if (outcome.ok) {
+                navigation.goBack();
+                return;
+              }
+              setAlertState(
+                showAlert(
+                  'Project Not Deleted',
+                  outcome.reason || PROJECT_DELETE_FALLBACK_REASON,
+                ),
+              );
             },
           },
         ],
