@@ -7,7 +7,7 @@ import {
   DEFAULT_SILENCE_AFTER_SPEECH_MS,
   DEFAULT_SPEAKER_DRAIN_MS,
 } from '@offgrid/speech';
-import { REASONING_BUDGET_AUTO } from '@offgrid/models';
+import { DEFAULT_MAX_TOOL_CALLS, REASONING_BUDGET_AUTO } from '@offgrid/models';
 import { APP_CONFIG } from '../constants';
 import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
 import {
@@ -230,7 +230,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   systemPrompt: APP_CONFIG.defaultSystemPrompt,
   temperature: 0.7,
   maxTokens: 1024,
-  maxToolCalls: 25,
+  maxToolCalls: DEFAULT_MAX_TOOL_CALLS,
   topP: 0.9,
   repeatPenalty: 1.1,
   contextLength: 4096,

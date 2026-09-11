@@ -288,6 +288,48 @@ describe('runToolLoop — Gemma text parsing branches', () => {
 describe('runToolLoop — bounded multi-tool completion', () => {
   beforeEach(resetMocks);
 
+  it('counts every parallel call against one total response budget', async () => {
+    mockAppState.settings.maxToolCalls = 2;
+    mockedGenerateResponseWithTools.mockResolvedValueOnce({
+      fullResponse: '',
+      toolCalls: [0, 1, 2].map(index => ({
+        id: `tc-${index}`,
+        name: 'web_search',
+        arguments: { query: `query-${index}` },
+      })),
+    });
+    const ctx = createContext();
+
+    await runToolLoop(ctx);
+
+    expect(mockExecuteToolCall).toHaveBeenCalledTimes(2);
+    expect(mockAddMessage).toHaveBeenCalledTimes(3);
+    expect(ctx.onFinalResponse).toHaveBeenCalledWith(toolStepLimitNotice(2));
+  });
+
+  it('shows successful tool output when the final model response is empty', async () => {
+    mockAppState.settings.maxToolCalls = 3;
+    mockExecuteToolCall.mockResolvedValue({
+      name: 'web_search',
+      content: 'Found on this device.',
+      durationMs: 1,
+    });
+    mockedGenerateResponseWithTools
+      .mockResolvedValueOnce({
+        fullResponse: '',
+        toolCalls: [
+          { id: 'tc-1', name: 'web_search', arguments: { query: 'result' } },
+        ],
+      })
+      .mockResolvedValueOnce({ fullResponse: '', toolCalls: [] })
+      .mockResolvedValueOnce({ fullResponse: '', toolCalls: [] });
+    const ctx = createContext();
+
+    await runToolLoop(ctx);
+
+    expect(ctx.onFinalResponse).toHaveBeenCalledWith('Found on this device.');
+  });
+
   it('stops after the configured tool steps and preserves the tool context for the next message', async () => {
     mockAppState.settings.maxToolCalls = 3;
     for (let index = 0; index < 3; index += 1) {

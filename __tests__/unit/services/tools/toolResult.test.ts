@@ -92,4 +92,14 @@ describe('toolResultModelContent', () => {
     const ok = 'B'.repeat(MAX_TOOL_RESULT_CHARS);
     expect(toolResultModelContent({ name: 't', content: ok, status: 'ok', durationMs: 1 })).toBe(ok);
   });
+
+  it('uses the result budget supplied by the active tool loop', () => {
+    const raw = 'C'.repeat(5000);
+    const text = toolResultModelContent(
+      { name: 'small-window', content: raw, status: 'ok', durationMs: 1 },
+      1000,
+    );
+    expect(text).toMatch(/showing the first 1000 of 5000 characters/);
+    expect(text.length).toBeLessThan(raw.length);
+  });
 });

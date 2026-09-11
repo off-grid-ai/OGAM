@@ -26,14 +26,18 @@ import {
   XML_TOOL_CALL_FUNCTION_MARKER,
   XML_TOOL_CALL_PARAMETER_MARKER,
 } from '../utils/messageContent';
-const DEFAULT_MAX_TOOL_STEPS_PER_RESPONSE = 25;
+import {
+  callsWithinToolBudget,
+  finalResponseFromToolResults,
+  normalizeMaxToolCalls,
+  toolPromptChars,
+  toolResultCharBudget,
+} from '@offgrid/models';
 export const toolStepLimitNotice = (maximum: number): string =>
   `This response reached the ${maximum}-step tool limit, so it stopped. The conversation context is still available. Send another message to continue.`;
 const currentMaxToolSteps = (): number => {
   const configured = useAppStore.getState().settings.maxToolCalls;
-  return Number.isInteger(configured) && configured >= 1 && configured <= 100
-    ? configured
-    : DEFAULT_MAX_TOOL_STEPS_PER_RESPONSE;
+  return normalizeMaxToolCalls(configured);
 };
 // On-device: above this many tools, run a fast routing pass to pick the relevant ones
 // before generating (small models can't fit many schemas in context). Tunable.
@@ -383,9 +387,14 @@ async function executeToolCallSafely(tc: ToolCall): Promise<ToolResult> {
 
 async function executeToolCalls(
   ctx: ToolLoopContext,
-  toolCalls: import('./tools/types').ToolCall[],
-  loopMessages: Message[],
+  input: {
+    toolCalls: import('./tools/types').ToolCall[];
+    loopMessages: Message[];
+    tools: readonly unknown[];
+    successfulResults: string[];
+  },
 ): Promise<number> {
+  const { toolCalls, loopMessages, tools, successfulResults } = input;
   const chatStore = useChatStore.getState();
   let executed = 0;
   for (const tc of toolCalls) {
@@ -409,10 +418,20 @@ async function executeToolCalls(
     ctx.callbacks?.onToolCallStart?.(tc.name, tc.arguments);
     const result = await executeToolCallSafely(tc);
     ctx.callbacks?.onToolCallComplete?.(tc.name, result);
+    const settings = useAppStore.getState().settings;
+    const resultBudget = toolResultCharBudget({
+      contextLength: settings.contextLength,
+      promptChars: toolPromptChars(loopMessages, tools),
+      replyReserveTokens: settings.maxTokens,
+    });
+    const resultContent = toolResultModelContent(result, resultBudget);
+    if (result.status === 'ok' && resultContent.trim()) {
+      successfulResults.push(resultContent);
+    }
     const toolResultMsg: Message = {
       id: `tool-result-${Date.now()}-${tc.id || tc.name}`,
       role: 'tool',
-      content: toolResultModelContent(result),
+      content: resultContent,
       timestamp: Date.now(),
       toolCallId: tc.id,
       toolName: tc.name,
@@ -660,14 +679,25 @@ interface LiteRTToolOutcome {
 
 function buildLiteRTToolCallHandler(
   ctx: ToolLoopContext,
-  conversationId: string,
-  outcome?: LiteRTToolOutcome,
+  input: {
+    conversationId: string;
+    outcome?: LiteRTToolOutcome;
+    initialMessages?: readonly Message[];
+    tools?: readonly unknown[];
+  },
 ) {
+  const {
+    conversationId,
+    outcome,
+    initialMessages = [],
+    tools = [],
+  } = input;
   const maxToolSteps = currentMaxToolSteps();
   const limitNotice = toolStepLimitNotice(maxToolSteps);
   // Per-turn counter: this closure is rebuilt once per generation, so it resets each new
   // message and the native loop reuses it for every tool call within the turn.
   let toolCallCount = 0;
+  const promptMessages: unknown[] = [...initialMessages];
   return async (
     name: string,
     args: Record<string, unknown>,
@@ -695,7 +725,13 @@ function buildLiteRTToolCallHandler(
     // mistake it for a successful answer.
     const result = await executeToolCallSafely(toolCall);
     ctx.callbacks?.onToolCallComplete?.(name, result);
-    const resultContent = toolResultModelContent(result);
+    const settings = useAppStore.getState().settings;
+    const resultBudget = toolResultCharBudget({
+      contextLength: settings.contextLength,
+      promptChars: toolPromptChars(promptMessages, tools),
+      replyReserveTokens: settings.maxTokens,
+    });
+    const resultContent = toolResultModelContent(result, resultBudget);
     const toolCallMsg: Message = {
       id: `tc-${Date.now()}-${name}`,
       role: 'assistant',
@@ -719,6 +755,7 @@ function buildLiteRTToolCallHandler(
     };
     useChatStore.getState().addMessage(conversationId, toolCallMsg);
     useChatStore.getState().addMessage(conversationId, toolResultMsg);
+    promptMessages.push(toolCallMsg, toolResultMsg);
     if (result.status === 'ok') outcome?.results.push(resultContent);
     if (toolCallCount === maxToolSteps) {
       if (outcome) outcome.limitReached = true;
@@ -771,7 +808,12 @@ async function callLiteRTForLoop(
   });
   const outcome: LiteRTToolOutcome = { results: [], limitReached: false };
   const onToolCall = ctx
-    ? buildLiteRTToolCallHandler(ctx, conversationId, outcome)
+    ? buildLiteRTToolCallHandler(ctx, {
+        conversationId,
+        outcome,
+        initialMessages: messages,
+        tools,
+      })
     : undefined;
   const handlers = {
     onToken: (token: string) => onStream?.({ content: token }),
@@ -1088,6 +1130,7 @@ interface ToolLoopState {
   thinkingDoneFired: boolean;
   streamedContent: string;
   reasoningContent: string;
+  successfulToolResults: string[];
 }
 
 function buildStreamHandler(
@@ -1271,6 +1314,7 @@ export async function runToolLoop(
     thinkingDoneFired: false,
     streamedContent: '',
     reasoningContent: '',
+    successfulToolResults: [],
   };
   for (let iteration = 0; iteration < maxToolSteps; iteration++) {
     if (ctx.isAborted()) {
@@ -1320,16 +1364,21 @@ export async function runToolLoop(
       fullResponse,
       toolCalls,
     );
-    const cappedToolCalls = effectiveToolCalls.slice(
-      0,
-      maxToolSteps - totalToolCalls,
+    const cappedToolCalls = callsWithinToolBudget(
+      effectiveToolCalls,
+      totalToolCalls,
+      maxToolSteps,
     );
 
     // No tool calls → model gave a final text response
     if (cappedToolCalls.length === 0) {
       // Empty response with tools — retry once without tools (some models choke on tool schemas).
       // Never after an abort: this retry is a FULL generation, the exact zombie a stop must kill.
-      if (!state.streamedContent && !displayResponse && !ctx.isAborted()) {
+      if (
+        !state.streamedContent.trim() &&
+        !displayResponse.trim() &&
+        !ctx.isAborted()
+      ) {
         state.streamedContent = '';
         state.reasoningContent = '';
         state.firstTokenFired = false;
@@ -1345,7 +1394,14 @@ export async function runToolLoop(
             ctx,
           },
         );
-        emitFinalResponse(ctx, state, fallbackResp);
+        emitFinalResponse(
+          ctx,
+          state,
+          finalResponseFromToolResults(
+            fallbackResp,
+            state.successfulToolResults,
+          ),
+        );
         return { interrupted: false };
       }
       emitFinalResponse(ctx, state, displayResponse);
@@ -1380,11 +1436,12 @@ export async function runToolLoop(
     loopMessages.push(assistantMsg);
     chatStore.addMessage(ctx.conversationId, assistantMsg);
 
-    totalToolCalls += await executeToolCalls(
-      ctx,
-      cappedToolCalls,
+    totalToolCalls += await executeToolCalls(ctx, {
+      toolCalls: cappedToolCalls,
       loopMessages,
-    );
+      tools: effectiveSchemas,
+      successfulResults: state.successfulToolResults,
+    });
 
     if (ctx.isAborted()) {
       return { interrupted: true };
