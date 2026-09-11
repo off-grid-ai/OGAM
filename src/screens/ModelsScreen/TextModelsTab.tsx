@@ -362,6 +362,15 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     ? buildCuratedLiteRTFiles().map((file, index) => {
         const entry = getCuratedLiteRTEntry(file.name);
         const model = { ...LITERT_RECOMMENDED_MODEL, name: entry?.displayName ?? file.name };
+        const proceedDownload = () => { handleDownload(model, file); };
+        const onDownload = buildFileDownloadHandler({
+          s: { downloaded: false, progress: undefined, hasFailed: false },
+          fileName: file.name,
+          sizeBytes: file.size,
+          ramGB,
+          proceedDownload,
+          setAlertState,
+        });
         return (
           <ModelCard
             key={file.name}
@@ -371,8 +380,8 @@ export const TextModelsTab: React.FC<Props> = (props) => {
             recommended={{ pillLabel: 'Recommended' }}
             supportsAcceleration
             testID={`onboarding-litert-model-${index}`}
-            onPress={() => { handleDownload(model, file); }}
-            onDownload={() => { handleDownload(model, file); }}
+            onPress={onDownload}
+            onDownload={onDownload}
           />
         );
       })
