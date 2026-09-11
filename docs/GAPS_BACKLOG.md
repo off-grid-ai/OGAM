@@ -853,6 +853,14 @@ is invisible when you only test that sharing works:
 
 ### Model transfer between devices
 
+F6 code evidence on 2026-09-11 proves explicit capability advertisement, preservation through saved
+and discovered device facts, encrypted package transfer through the real Shared engines, manifest
+validation, and a stable rendered transfer sheet while peer projections refresh. The development
+bundle also loads in the iOS simulator and publishes discovery. Keep the physical gate open: run a
+real multi-GB transfer in both directions, interrupt and resume it, load the received model, compare
+both device states, and complete the visual review. This task did not control the UI, and no physical
+phone was available.
+
 - image models send and WORK on the receiver
 - vision models send and WORK on the receiver
 - text models send and WORK on the receiver
