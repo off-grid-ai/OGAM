@@ -1,5 +1,10 @@
 import { DEFAULT_SETTINGS } from '../stores/appStore';
 import { selectIsLiteRT, useAppStore } from '../stores';
+import {
+  MAX_MAX_TOOL_CALLS,
+  MIN_MAX_TOOL_CALLS,
+  normalizeMaxToolCalls,
+} from '@offgrid/models';
 
 export interface NumericSettingModel {
   key: string;
@@ -68,12 +73,12 @@ export function useTextGenerationSettings() {
     label: 'Maximum Tool Calls',
     description: 'Emergency limit for tool calls in one response',
     value: maxToolCalls,
-    min: 1,
-    max: 100,
+    min: MIN_MAX_TOOL_CALLS,
+    max: MAX_MAX_TOOL_CALLS,
     step: 1,
     decimals: 0,
     onChange: (value: number) =>
-      updateSettings({ maxToolCalls: Math.round(value) }),
+      updateSettings({ maxToolCalls: normalizeMaxToolCalls(value) }),
   } satisfies NumericSettingModel;
 
   const llama = {

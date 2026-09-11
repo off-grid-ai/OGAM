@@ -171,7 +171,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
   );
   const rows = await rtl.waitFor(
     () => {
-      const r = home.queryAllByTestId('model-item');
+      const r = home.queryAllByTestId(/^text-model-row-/);
       expect(r.length).toBeGreaterThan(0);
       return r;
     },
@@ -254,6 +254,9 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
         TextGenerationSection,
       } = require('../../src/components/GenerationSettingsModal/TextGenerationSection');
       const s = rtl.render(React.createElement(TextGenerationSection, {}));
+      if (!s.queryByTestId(`setting-${key}-value-button`)) {
+        rtl.fireEvent.press(s.getByTestId('modal-text-advanced-toggle'));
+      }
       rtl.fireEvent.press(s.getByTestId(`setting-${key}-value-button`));
       const input = s.getByTestId(`setting-${key}-input`);
       rtl.fireEvent.changeText(input, String(value));
@@ -644,14 +647,12 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       // BOUNDARY: the persisted artifact a completed voice-model download leaves — drives shouldLoad in the
       // REAL KokoroTTSBridge. Set via the real store action (like the LLM's @local_llm/downloaded_models
       // record). NOT a phase/isReady poke: readiness below is EMERGENT from the real engine + executorch fake.
-      await useTTSStore
-        .getState()
-        .updateSettings({
-          modelDownloaded: {
-            ...(useTTSStore.getState().settings.modelDownloaded ?? {}),
-            [engineId]: true,
-          },
-        });
+      await useTTSStore.getState().updateSettings({
+        modelDownloaded: {
+          ...(useTTSStore.getState().settings.modelDownloaded ?? {}),
+          [engineId]: true,
+        },
+      });
       // The real EngineBridge (mounted in render()) now mounts KokoroTTSBridge → the executorch fake reports
       // isReady → KokoroEngine._setBridge → phase 'ready'. Wait for that emergent readiness (the same signal
       // the real Voice toggle gates on) — never set by the test.

@@ -150,6 +150,7 @@ if [ -n "${IOS_PROFILE:-}" ]; then
   xcodebuild -workspace OffgridMobile.xcworkspace -scheme OffgridMobile -configuration Debug \
     -destination "generic/platform=iOS" \
     -derivedDataPath build/device \
+    FORCE_BUNDLING=1 \
     CODE_SIGN_STYLE=Manual \
     DEVELOPMENT_TEAM="$TEAM" \
     PROVISIONING_PROFILE_SPECIFIER="$IOS_PROFILE" \
@@ -161,6 +162,7 @@ else
     -destination "generic/platform=iOS" \
     -derivedDataPath build/device \
     -allowProvisioningUpdates \
+    FORCE_BUNDLING=1 \
     CODE_SIGN_STYLE=Automatic \
     DEVELOPMENT_TEAM="$TEAM" \
     build

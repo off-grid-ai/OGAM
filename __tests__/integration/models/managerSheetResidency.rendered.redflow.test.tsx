@@ -66,8 +66,8 @@ async function setupHome() {
 
   // GESTURE: select the text model the way a user does — open the picker, tap the row.
   rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('browse-models-button')));
-  const rows = await rtl.waitFor(() => { const r = view.queryAllByTestId('model-item'); expect(r.length).toBeGreaterThan(0); return r; }, { timeout: 10000 });
-  rtl.fireEvent.press(rows[0]);
+  const row = await rtl.waitFor(() => view.getByTestId('text-model-row-m'), { timeout: 10000 });
+  rtl.fireEvent.press(row);
   await rtl.waitFor(() => { expect(useAppStore.getState().activeModelId).toBe('m'); }, { timeout: 10000 });
 
   return { boundary, React, rtl, useAppStore, activeModelService, view };
@@ -109,7 +109,7 @@ describe('manager sheet residency — RAM chip + per-row eject (agreed design 20
 
     // The row itself still opens the text picker (eject must not swallow the row tap).
     await rtl.act(async () => { pressByWalkingUp(view.getByTestId('models-row-text')); });
-    await rtl.waitFor(() => { expect(view.queryAllByTestId('model-item').length).toBeGreaterThan(0); }, { timeout: 10000 });
+    await rtl.waitFor(() => { expect(view.queryByTestId('text-model-row-m')).not.toBeNull(); }, { timeout: 10000 });
   }, 60000);
 
   it('the Select Model picker no longer renders the In Memory section (moved to the manager sheet)', async () => {

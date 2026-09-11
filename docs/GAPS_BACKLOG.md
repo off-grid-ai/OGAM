@@ -12,6 +12,17 @@ Verdict legend:
 
 ---
 
+## Project deletion leaves an empty gap in the list - 2026-09-11
+
+**Verdict: fix-the-guard.**
+
+After the user deletes a project, the Mobile Projects list leaves an empty space where the row was.
+The list should reflow immediately from its existing project state without navigation, refresh, or
+restart. Verify deletion at the start, middle, and end of the list and confirm that the remaining
+projects close the gap while their order stays stable.
+
+---
+
 ## Active Kokoro voice-model download cannot stop at Pro expiry - 2026-08-26
 
 **Verdict: instrument-and-revisit.**
@@ -852,6 +863,14 @@ is invisible when you only test that sharing works:
 - downloads ARE synced when allowed / are NOT synced when disallowed
 
 ### Model transfer between devices
+
+F6 code evidence on 2026-09-11 proves explicit capability advertisement, preservation through saved
+and discovered device facts, encrypted package transfer through the real Shared engines, manifest
+validation, and a stable rendered transfer sheet while peer projections refresh. The development
+bundle also loads in the iOS simulator and publishes discovery. Keep the physical gate open: run a
+real multi-GB transfer in both directions, interrupt and resume it, load the received model, compare
+both device states, and complete the visual review. This task did not control the UI, and no physical
+phone was available.
 
 - image models send and WORK on the receiver
 - vision models send and WORK on the receiver

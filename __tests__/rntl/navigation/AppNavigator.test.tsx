@@ -63,7 +63,10 @@ jest.mock('../../../src/services/activeModelService', () => ({
     unloadTextModel: jest.fn(() => Promise.resolve()),
     unloadImageModel: jest.fn(() => Promise.resolve()),
     unloadAllModels: jest.fn(() => Promise.resolve({ textUnloaded: true, imageUnloaded: true })),
-    getActiveModels: jest.fn(() => ({ text: null, image: null })),
+    getActiveModels: jest.fn(() => ({
+      text: { model: null, isLoaded: false, isLoading: false },
+      image: { model: null, isLoaded: false, isLoading: false },
+    })),
     checkMemoryForModel: jest.fn(() => Promise.resolve({ canLoad: true, severity: 'safe', message: '' })),
     subscribe: jest.fn(() => jest.fn()),
     getResourceUsage: jest.fn(() => Promise.resolve({

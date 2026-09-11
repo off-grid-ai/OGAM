@@ -23,9 +23,12 @@ describe('happy — a user-created project survives a relaunch (real persist + r
        
       const React = require('react');
       const { requireRTL } = require('../../harness/nativeBoundary');
-      const { render, fireEvent } = requireRTL();
+      const { render, fireEvent, waitFor } = requireRTL();
+      const { useProjectStore } = require('../../../src/stores');
       const { ProjectEditScreen } = require('../../../src/screens/ProjectEditScreen');
-       
+
+      await useProjectStore.persist?.rehydrate?.();
+      await waitFor(() => expect(useProjectStore.persist?.hasHydrated?.()).toBe(true));
 
       const form = render(React.createElement(ProjectEditScreen, {}));
       fireEvent.changeText(form.getByPlaceholderText('e.g., Spanish Learning, Code Review'), 'Persisted Project');
@@ -50,6 +53,6 @@ describe('happy — a user-created project survives a relaunch (real persist + r
 
     // The project the user created survived the relaunch and renders on the Projects screen.
     const view = render(React.createElement(ProjectsScreen, {}));
-    expect(view.getByText('Persisted Project')).toBeTruthy();
+    await waitFor(() => expect(view.getByText('Persisted Project')).toBeTruthy());
   });
 });

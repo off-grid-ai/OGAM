@@ -193,6 +193,7 @@ import { ProjectDetailScreen } from '../../../src/screens/ProjectDetailScreen';
 describe('ProjectDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDeleteProject.mockResolvedValue({ ok: true });
     mockProject = {
       id: 'proj1',
       name: 'Test Project',
@@ -450,7 +451,7 @@ describe('ProjectDetailScreen', () => {
       expect(message).toContain('Test Project');
     });
 
-    it('deletes project and navigates back when confirmed', () => {
+    it('deletes project and navigates back when confirmed', async () => {
       const { getByText, getByTestId } = render(<ProjectDetailScreen />);
       fireEvent.press(getByText('Delete Project'));
 
@@ -458,7 +459,7 @@ describe('ProjectDetailScreen', () => {
       fireEvent.press(getByTestId('alert-button-Delete'));
 
       expect(mockDeleteProject).toHaveBeenCalledWith('proj1');
-      expect(mockGoBack).toHaveBeenCalled();
+      await waitFor(() => expect(mockGoBack).toHaveBeenCalled());
     });
 
     it('does not delete project when cancelled', () => {

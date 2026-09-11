@@ -26,14 +26,17 @@ import {
   XML_TOOL_CALL_FUNCTION_MARKER,
   XML_TOOL_CALL_PARAMETER_MARKER,
 } from '../utils/messageContent';
-const DEFAULT_MAX_TOOL_STEPS_PER_RESPONSE = 25;
-export const toolStepLimitNotice = (maximum: number): string =>
-  `This response reached the ${maximum}-step tool limit, so it stopped. The conversation context is still available. Send another message to continue.`;
+import {
+  callsWithinToolBudget,
+  finalResponseFromToolResults,
+  normalizeMaxToolCalls,
+  toolLimitFinalAnswerInstruction,
+  toolPromptChars,
+  toolResultCharBudget,
+} from '@offgrid/models';
 const currentMaxToolSteps = (): number => {
   const configured = useAppStore.getState().settings.maxToolCalls;
-  return Number.isInteger(configured) && configured >= 1 && configured <= 100
-    ? configured
-    : DEFAULT_MAX_TOOL_STEPS_PER_RESPONSE;
+  return normalizeMaxToolCalls(configured);
 };
 // On-device: above this many tools, run a fast routing pass to pick the relevant ones
 // before generating (small models can't fit many schemas in context). Tunable.
@@ -383,9 +386,14 @@ async function executeToolCallSafely(tc: ToolCall): Promise<ToolResult> {
 
 async function executeToolCalls(
   ctx: ToolLoopContext,
-  toolCalls: import('./tools/types').ToolCall[],
-  loopMessages: Message[],
+  input: {
+    toolCalls: import('./tools/types').ToolCall[];
+    loopMessages: Message[];
+    tools: readonly unknown[];
+    successfulResults: string[];
+  },
 ): Promise<number> {
+  const { toolCalls, loopMessages, tools, successfulResults } = input;
   const chatStore = useChatStore.getState();
   let executed = 0;
   for (const tc of toolCalls) {
@@ -409,10 +417,20 @@ async function executeToolCalls(
     ctx.callbacks?.onToolCallStart?.(tc.name, tc.arguments);
     const result = await executeToolCallSafely(tc);
     ctx.callbacks?.onToolCallComplete?.(tc.name, result);
+    const settings = useAppStore.getState().settings;
+    const resultBudget = toolResultCharBudget({
+      contextLength: settings.contextLength,
+      promptChars: toolPromptChars(loopMessages, tools),
+      replyReserveTokens: settings.maxTokens,
+    });
+    const resultContent = toolResultModelContent(result, resultBudget);
+    if (result.status === 'ok' && resultContent.trim()) {
+      successfulResults.push(resultContent);
+    }
     const toolResultMsg: Message = {
       id: `tool-result-${Date.now()}-${tc.id || tc.name}`,
       role: 'tool',
-      content: toolResultModelContent(result),
+      content: resultContent,
       timestamp: Date.now(),
       toolCallId: tc.id,
       toolName: tc.name,
@@ -610,23 +628,23 @@ function isUsingRemote(forceRemote?: boolean): boolean {
 
 /** On first iteration: last user message. On tool-result iterations: formatted tool results. */
 function buildLiteRTSendText(messages: Message[]): string {
-  const toolResults: Message[] = [];
+  let lastUserIndex = -1;
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'tool') toolResults.unshift(messages[i]);
-    else break;
+    if (messages[i].role === 'user') {
+      lastUserIndex = i;
+      break;
+    }
   }
+  const toolResults = messages
+    .slice(lastUserIndex + 1)
+    .filter(message => message.role === 'tool');
   if (toolResults.length > 0) {
     const parts = toolResults.map(m => `${m.toolName || 'tool'}: ${m.content}`);
     return `Tool results:\n${parts.join(
       '\n\n',
     )}\n\nPlease continue based on these results.`;
   }
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'user') {
-      const c = messages[i].content;
-      return typeof c === 'string' ? c : '';
-    }
-  }
+  if (lastUserIndex >= 0) return messages[lastUserIndex].content;
   return '';
 }
 
@@ -655,19 +673,26 @@ export function buildLiteRTHistory(
  *  still surface the fetched data instead of discarding it (Q5). */
 interface LiteRTToolOutcome {
   results: string[];
+  messages: Message[];
   limitReached: boolean;
 }
 
 function buildLiteRTToolCallHandler(
   ctx: ToolLoopContext,
-  conversationId: string,
-  outcome?: LiteRTToolOutcome,
+  input: {
+    conversationId: string;
+    outcome?: LiteRTToolOutcome;
+    initialMessages?: readonly Message[];
+    tools?: readonly unknown[];
+  },
 ) {
+  const { conversationId, outcome, initialMessages = [], tools = [] } = input;
   const maxToolSteps = currentMaxToolSteps();
-  const limitNotice = toolStepLimitNotice(maxToolSteps);
+  const finalAnswerInstruction = toolLimitFinalAnswerInstruction(maxToolSteps);
   // Per-turn counter: this closure is rebuilt once per generation, so it resets each new
   // message and the native loop reuses it for every tool call within the turn.
   let toolCallCount = 0;
+  const promptMessages: unknown[] = [...initialMessages];
   return async (
     name: string,
     args: Record<string, unknown>,
@@ -676,7 +701,7 @@ function buildLiteRTToolCallHandler(
     toolCallCount++;
     if (toolCallCount > maxToolSteps) {
       if (outcome) outcome.limitReached = true;
-      return limitNotice;
+      return finalAnswerInstruction;
     }
     ctx.callbacks?.onToolCallStart?.(name, args as Record<string, any>);
     const toolCall: ToolCall = {
@@ -695,7 +720,13 @@ function buildLiteRTToolCallHandler(
     // mistake it for a successful answer.
     const result = await executeToolCallSafely(toolCall);
     ctx.callbacks?.onToolCallComplete?.(name, result);
-    const resultContent = toolResultModelContent(result);
+    const settings = useAppStore.getState().settings;
+    const resultBudget = toolResultCharBudget({
+      contextLength: settings.contextLength,
+      promptChars: toolPromptChars(promptMessages, tools),
+      replyReserveTokens: settings.maxTokens,
+    });
+    const resultContent = toolResultModelContent(result, resultBudget);
     const toolCallMsg: Message = {
       id: `tc-${Date.now()}-${name}`,
       role: 'assistant',
@@ -719,10 +750,12 @@ function buildLiteRTToolCallHandler(
     };
     useChatStore.getState().addMessage(conversationId, toolCallMsg);
     useChatStore.getState().addMessage(conversationId, toolResultMsg);
+    promptMessages.push(toolCallMsg, toolResultMsg);
+    outcome?.messages.push(toolCallMsg, toolResultMsg);
     if (result.status === 'ok') outcome?.results.push(resultContent);
     if (toolCallCount === maxToolSteps) {
       if (outcome) outcome.limitReached = true;
-      return `${resultContent}\n\n${limitNotice}`;
+      return `${resultContent}\n\n${finalAnswerInstruction}`;
     }
     return resultContent;
   };
@@ -740,6 +773,8 @@ async function callLiteRTForLoop(
   fullResponse: string;
   toolCalls: ToolCall[];
   toolStepLimitReached?: boolean;
+  completedToolMessages?: Message[];
+  completedToolResults?: string[];
 }> {
   const { tools, onStream, ctx } = opts;
   const systemMsg = messages.find(m => m.role === 'system');
@@ -769,9 +804,18 @@ async function callLiteRTForLoop(
     tools,
     history,
   });
-  const outcome: LiteRTToolOutcome = { results: [], limitReached: false };
+  const outcome: LiteRTToolOutcome = {
+    results: [],
+    messages: [],
+    limitReached: false,
+  };
   const onToolCall = ctx
-    ? buildLiteRTToolCallHandler(ctx, conversationId, outcome)
+    ? buildLiteRTToolCallHandler(ctx, {
+        conversationId,
+        outcome,
+        initialMessages: messages,
+        tools,
+      })
     : undefined;
   const handlers = {
     onToken: (token: string) => onStream?.({ content: token }),
@@ -784,7 +828,13 @@ async function callLiteRTForLoop(
       { ...handlers, onToolCall },
     );
     if (outcome.limitReached) {
-      return { fullResponse: '', toolCalls: [], toolStepLimitReached: true };
+      return {
+        fullResponse: '',
+        toolCalls: [],
+        toolStepLimitReached: true,
+        completedToolMessages: outcome.messages,
+        completedToolResults: outcome.results,
+      };
     }
     // Native SDK handles all tool→model cycles internally; toolCalls always empty here.
     // If the model ran a tool but then produced NO final answer, surface the fetched
@@ -797,7 +847,13 @@ async function callLiteRTForLoop(
     return { fullResponse, toolCalls: [] };
   } catch (e: any) {
     if (outcome.limitReached) {
-      return { fullResponse: '', toolCalls: [], toolStepLimitReached: true };
+      return {
+        fullResponse: '',
+        toolCalls: [],
+        toolStepLimitReached: true,
+        completedToolMessages: outcome.messages,
+        completedToolResults: outcome.results,
+      };
     }
     const msg = String(e?.message ?? e);
     // The litertlm native FC parser hard-fails (Status Code 3) when a small model emits
@@ -960,6 +1016,7 @@ interface CallLLMOptions {
   disableThinking?: boolean;
   conversationId?: string;
   ctx?: ToolLoopContext;
+  finalAnswerOnly?: boolean;
 }
 
 /** Call LLM with retry+backoff for transient native context errors. */
@@ -972,12 +1029,15 @@ async function callLLMWithRetry(
     disableThinking,
     conversationId,
     ctx,
+    finalAnswerOnly,
   }: CallLLMOptions = {},
 ): Promise<{
   fullResponse: string;
   toolCalls: ToolCall[];
   interrupted?: boolean;
   toolStepLimitReached?: boolean;
+  completedToolMessages?: Message[];
+  completedToolResults?: string[];
 }> {
   // Append tool-use behavioral guidance to the system prompt when tools are present.
   // Only covers the "when and how" — schemas are injected separately by each engine.
@@ -996,11 +1056,11 @@ async function callLLMWithRetry(
     `[ToolLoop] preLLM: tools=${tools.length} extCount=${extCount} ` +
       `enabledToolIds=[${(ctx?.enabledToolIds ?? []).join(',')}] ` +
       `willAugment=${
-        tools.length > 0 || extCount > 0
+        !finalAnswerOnly && (tools.length > 0 || extCount > 0)
       } liteRT=${isLiteRTActive()} useRemote=${useRemote} nativeToolCalling=${nativeToolCalling}`,
   );
   const augmentedMessages =
-    tools.length > 0 || extCount > 0
+    !finalAnswerOnly && (tools.length > 0 || extCount > 0)
       ? augmentSystemPromptForTools(
           messages,
           ctx?.enabledToolIds,
@@ -1012,7 +1072,7 @@ async function callLLMWithRetry(
     return callLiteRTForLoop(conversationId, augmentedMessages, {
       tools,
       onStream,
-      ctx,
+      ctx: finalAnswerOnly ? undefined : ctx,
     });
   }
   if (useRemote) {
@@ -1088,6 +1148,7 @@ interface ToolLoopState {
   thinkingDoneFired: boolean;
   streamedContent: string;
   reasoningContent: string;
+  successfulToolResults: string[];
 }
 
 function buildStreamHandler(
@@ -1127,24 +1188,56 @@ function emitFinalResponse(
   }
 }
 
-/** Stop the turn at the product limit and save one explicit, resumable notice. */
-function emitToolStepLimitNotice(
+/** Run one final model pass with completed results and no available tool execution path. */
+async function emitToolLimitFinalAnswer(
   ctx: ToolLoopContext,
   state: ToolLoopState,
+  loopMessages: Message[],
   maximum: number,
-): void {
+  completed: {
+    messages?: Message[];
+    results?: string[];
+  } = {},
+): Promise<ToolLoopOutcome> {
+  if (ctx.isAborted()) return { interrupted: true };
+  loopMessages.push(...(completed.messages ?? []));
+  state.successfulToolResults.push(...(completed.results ?? []));
   if (state.streamedContent || state.reasoningContent) {
     ctx.onStreamReset?.();
   }
   state.streamedContent = '';
   state.reasoningContent = '';
-  if (!state.thinkingDoneFired) {
-    state.thinkingDoneFired = true;
-    ctx.onThinkingDone();
-    ctx.callbacks?.onFirstToken?.();
+  state.firstTokenFired = false;
+  const finalMessages: Message[] = [
+    {
+      id: `tool-limit-final-${Date.now()}`,
+      role: 'system',
+      content: toolLimitFinalAnswerInstruction(maximum),
+      timestamp: Date.now(),
+    },
+    ...loopMessages.filter(message => message.role !== 'system'),
+  ];
+  const { fullResponse, interrupted } = await callLLMWithRetry(
+    finalMessages,
+    [],
+    {
+      onStream: buildStreamHandler(ctx, state),
+      forceRemote: ctx.forceRemote,
+      disableThinking: true,
+      conversationId: ctx.conversationId,
+      finalAnswerOnly: true,
+    },
+  );
+  if (interrupted || ctx.isAborted()) {
+    return { interrupted: true };
   }
-  state.firstTokenFired = true;
-  ctx.onFinalResponse(toolStepLimitNotice(maximum));
+  const { displayResponse } = resolveToolCalls(fullResponse, []);
+  emitFinalResponse(
+    ctx,
+    state,
+    finalResponseFromToolResults(displayResponse, state.successfulToolResults),
+  );
+  return { interrupted: false };
 }
 
 /**
@@ -1271,6 +1364,7 @@ export async function runToolLoop(
     thinkingDoneFired: false,
     streamedContent: '',
     reasoningContent: '',
+    successfulToolResults: [],
   };
   for (let iteration = 0; iteration < maxToolSteps; iteration++) {
     if (ctx.isAborted()) {
@@ -1279,21 +1373,26 @@ export async function runToolLoop(
 
     // Defensive guard. The normal path emits this notice at the configured ceiling.
     if (totalToolCalls >= maxToolSteps) {
-      emitToolStepLimitNotice(ctx, state, maxToolSteps);
-      return { interrupted: false };
+      return emitToolLimitFinalAnswer(ctx, state, loopMessages, maxToolSteps);
     }
 
     state.streamedContent = '';
     state.reasoningContent = '';
 
     const onStream = buildStreamHandler(ctx, state);
-    const { fullResponse, toolCalls, interrupted, toolStepLimitReached } =
-      await callLLMWithRetry(loopMessages, effectiveSchemas, {
-        onStream,
-        forceRemote: ctx.forceRemote,
-        conversationId: ctx.conversationId,
-        ctx,
-      });
+    const {
+      fullResponse,
+      toolCalls,
+      interrupted,
+      toolStepLimitReached,
+      completedToolMessages,
+      completedToolResults,
+    } = await callLLMWithRetry(loopMessages, effectiveSchemas, {
+      onStream,
+      forceRemote: ctx.forceRemote,
+      conversationId: ctx.conversationId,
+      ctx,
+    });
 
     // A user STOP landing mid-completion returns `interrupted` — the turn is OVER. Before this
     // guard, the interrupted (usually empty) result fell into the no-tools fallback below and
@@ -1312,24 +1411,31 @@ export async function runToolLoop(
     }
 
     if (toolStepLimitReached) {
-      emitToolStepLimitNotice(ctx, state, maxToolSteps);
-      return { interrupted: false };
+      return emitToolLimitFinalAnswer(ctx, state, loopMessages, maxToolSteps, {
+        messages: completedToolMessages,
+        results: completedToolResults,
+      });
     }
 
     const { effectiveToolCalls, displayResponse } = resolveToolCalls(
       fullResponse,
       toolCalls,
     );
-    const cappedToolCalls = effectiveToolCalls.slice(
-      0,
-      maxToolSteps - totalToolCalls,
+    const cappedToolCalls = callsWithinToolBudget(
+      effectiveToolCalls,
+      totalToolCalls,
+      maxToolSteps,
     );
 
     // No tool calls → model gave a final text response
     if (cappedToolCalls.length === 0) {
       // Empty response with tools — retry once without tools (some models choke on tool schemas).
       // Never after an abort: this retry is a FULL generation, the exact zombie a stop must kill.
-      if (!state.streamedContent && !displayResponse && !ctx.isAborted()) {
+      if (
+        !state.streamedContent.trim() &&
+        !displayResponse.trim() &&
+        !ctx.isAborted()
+      ) {
         state.streamedContent = '';
         state.reasoningContent = '';
         state.firstTokenFired = false;
@@ -1345,7 +1451,14 @@ export async function runToolLoop(
             ctx,
           },
         );
-        emitFinalResponse(ctx, state, fallbackResp);
+        emitFinalResponse(
+          ctx,
+          state,
+          finalResponseFromToolResults(
+            fallbackResp,
+            state.successfulToolResults,
+          ),
+        );
         return { interrupted: false };
       }
       emitFinalResponse(ctx, state, displayResponse);
@@ -1380,19 +1493,19 @@ export async function runToolLoop(
     loopMessages.push(assistantMsg);
     chatStore.addMessage(ctx.conversationId, assistantMsg);
 
-    totalToolCalls += await executeToolCalls(
-      ctx,
-      cappedToolCalls,
+    totalToolCalls += await executeToolCalls(ctx, {
+      toolCalls: cappedToolCalls,
       loopMessages,
-    );
+      tools: effectiveSchemas,
+      successfulResults: state.successfulToolResults,
+    });
 
     if (ctx.isAborted()) {
       return { interrupted: true };
     }
 
     if (totalToolCalls >= maxToolSteps) {
-      emitToolStepLimitNotice(ctx, state, maxToolSteps);
-      return { interrupted: false };
+      return emitToolLimitFinalAnswer(ctx, state, loopMessages, maxToolSteps);
     }
 
     chatStore.setIsThinking(true);

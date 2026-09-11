@@ -1,15 +1,15 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
 import type { RecordProvenance } from '@offgrid/sync';
 import {
   DEFAULT_SILENCE_AFTER_SPEECH_MS,
   DEFAULT_SPEAKER_DRAIN_MS,
 } from '@offgrid/speech';
-import { REASONING_BUDGET_AUTO } from '@offgrid/models';
+import { DEFAULT_MAX_TOOL_CALLS, REASONING_BUDGET_AUTO } from '@offgrid/models';
 import { APP_CONFIG } from '../constants';
+import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
 import {
   VoiceTurnMode,
   DeviceInfo,
@@ -230,7 +230,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   systemPrompt: APP_CONFIG.defaultSystemPrompt,
   temperature: 0.7,
   maxTokens: 1024,
-  maxToolCalls: 25,
+  maxToolCalls: DEFAULT_MAX_TOOL_CALLS,
   topP: 0.9,
   repeatPenalty: 1.1,
   contextLength: 4096,
@@ -273,6 +273,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export const selectIsLiteRT = (state: AppState): boolean =>
   state.downloadedModels.find(m => m.id === state.activeModelId)?.engine ===
   'litert';
+
+const appStorage = createHydrationGatedStorage<ReturnType<typeof persistedAppState>>();
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -457,13 +459,20 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'local-llm-app-storage',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: appStorage.storage,
+      onRehydrateStorage: () => () => appStorage.markHydrated(),
       merge: (persisted, current) =>
         migratePersistedState(persisted, current, {
           defaultSettings: DEFAULT_SETTINGS,
           documentsPath: RNFS.DocumentDirectoryPath,
         }),
-      partialize: state => ({
+      partialize: persistedAppState,
+    },
+  ),
+);
+
+function persistedAppState(state: AppState) {
+  return {
         themeMode: state.themeMode,
         hasCompletedOnboarding: state.hasCompletedOnboarding,
         onboardingChecklist: state.onboardingChecklist,
@@ -479,16 +488,12 @@ export const useAppStore = create<AppState>()(
         imageGenerationCount: state.imageGenerationCount,
         hasEngagedSharePrompt: state.hasEngagedSharePrompt,
         hasRegisteredPro: state.hasRegisteredPro,
-        // Persisted so an eviction STICKS. Without it every relaunch starts at 'unknown', which grants
-        // access, and a device the owner removed is Pro again for as long as the roster takes to answer -
-        // or forever, if it never does because the app is offline.
+        // Persist eviction so a relaunch cannot grant Pro while the roster is offline.
         proDeviceAdmission: state.proDeviceAdmission,
         devProDisabled: state.devProDisabled,
         proBannerDismissed: state.proBannerDismissed,
         desktopPromoDismissed: state.desktopPromoDismissed,
         proAhaTriggeredBy: state.proAhaTriggeredBy,
         loadedSettings: state.loadedSettings,
-      }),
-    },
-  ),
-);
+  };
+}

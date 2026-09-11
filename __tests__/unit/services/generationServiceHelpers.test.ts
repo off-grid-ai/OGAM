@@ -266,6 +266,7 @@ function makeSvc(overrides: any = {}) {
   const state = { isGenerating: false, startTime: Date.now(), streamingContent: '', ...overrides.state };
   const svc = {
     state,
+    generationAttempt: 0,
     updateState: jest.fn((patch: any) => { Object.assign(state, patch); }),
     pendingStop: null,
     abortRequested: false,

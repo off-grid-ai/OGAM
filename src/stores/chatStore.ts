@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persist } from 'zustand/middleware';
 import { Message, Conversation, GenerationMeta } from '../types';
 import {
   stripStreamingControlTokens,
 } from '../utils/messageContent';
 import { generateId } from '../utils/generateId';
+import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
 import {
   finalizeStreamedReply,
   type ReplyEnd,
@@ -16,6 +16,7 @@ import {
   CHAT_STORAGE_VERSION,
   createPersistedMessage,
   migratePersistedChatState,
+  type PersistedChatState,
 } from './chatPersistence';
 import {
   createMessageMutationActions,
@@ -29,7 +30,6 @@ import {
   emitSyncMutation,
   messagePutMutation,
 } from '../services/sync/mutation';
-
 /**
  * The portion of the in-progress stream that is safe to SPEAK in voice mode —
  * never the reasoning/thinking. Models that stream reasoning on a separate
@@ -55,7 +55,6 @@ function speakableStreamingAnswer(
     ? ''
     : streamingMessage;
 }
-
 /** Derive conversation title from the first user message. */
 function deriveTitle(
   currentTitle: string,
@@ -67,7 +66,6 @@ function deriveTitle(
   const truncated = content.slice(0, 50);
   return content.length > 50 ? `${truncated}...` : truncated;
 }
-
 export interface ChatState extends ChatMessageMutationActions {
   conversations: Conversation[];
   activeConversationId: string | null;
@@ -165,7 +163,6 @@ const MODEL_NOT_LOADING = {
   isModelLoading: false,
   loadingModelName: null,
 };
-
 const NO_REPLY_ENDED = { lastReplyEnd: null };
 
 const NO_REPLY_FORMING: StreamingFields = {
@@ -176,6 +173,8 @@ const NO_REPLY_FORMING: StreamingFields = {
   isStreaming: false,
   isThinking: false,
 };
+
+const chatStorage = createHydrationGatedStorage<PersistedChatState>();
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -488,10 +487,11 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: 'local-llm-chat-storage',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: chatStorage.storage,
+      onRehydrateStorage: () => () => chatStorage.markHydrated(),
       version: CHAT_STORAGE_VERSION,
       migrate: migratePersistedChatState,
-      partialize: state => ({
+      partialize: (state): PersistedChatState => ({
         conversations: state.conversations,
         activeConversationId: state.activeConversationId,
       }),

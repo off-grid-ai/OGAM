@@ -61,7 +61,7 @@ describe('Models manager sheet — remote TEXT selection carries the cloud marke
     const home = rtl.render(React.createElement(HomeScreen, { navigation: nav }));
     // Select the remote model the way a user does: browse → tap the discovered remote model.
     rtl.fireEvent.press(await rtl.waitFor(() => home.getByTestId('browse-models-button'), { timeout: 4000 }));
-    rtl.fireEvent.press(await rtl.waitFor(() => home.getByTestId('remote-model-item'), { timeout: 4000 }));
+    rtl.fireEvent.press(await rtl.waitFor(() => home.getByText('llama-3-8b'), { timeout: 4000 }));
     await rtl.waitFor(() => { expect(useRemoteServerStore.getState().activeRemoteTextModelId).toBe('llama-3-8b'); }, { timeout: 4000 });
 
     // Real gesture: open the Models manager sheet from the Home summary card.

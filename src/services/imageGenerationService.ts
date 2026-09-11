@@ -4,14 +4,9 @@ import { useAppStore } from '../stores';
 import { GeneratedImage } from '../types';
 import logger from '../utils/logger';
 import { generateId } from '../utils/generateId';
-import {
-  SWEET_SPOT_SIZE,
-  DEFAULT_IMAGE_GUIDANCE,
-  defaultImageSteps,
-} from '../utils/imageGenAdvice';
-import { Platform } from 'react-native';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { runRemoteImageGeneration } from './remoteImageGeneration';
+import { resolveMobileImageParameters } from './imageParameterPolicy';
 import {
   generationProgressStatus,
   imagePhaseTransitionLog,
@@ -355,7 +350,9 @@ class ImageGenerationService {
     }
     this.cancelRequested = false;
     this._lastParams = params; // so a failure card's Retry can re-run this exact request
-    const remoteServer = useRemoteServerStore.getState().getActiveRemoteMediaServer('image');
+    const remoteServer = useRemoteServerStore
+      .getState()
+      .getActiveRemoteMediaServer('image');
     if (remoteServer?.mediaModels?.image) {
       return runRemoteImageGeneration(params, remoteServer, {
         updateState: state => this.updateState(state),
@@ -375,23 +372,14 @@ class ImageGenerationService {
 
     const messageId = params.conversationId ? generateId() : null;
 
-    const steps =
-      params.steps || settings.imageSteps || defaultImageSteps(Platform.OS);
-    const guidanceScale =
-      params.guidanceScale ||
-      settings.imageGuidanceScale ||
-      DEFAULT_IMAGE_GUIDANCE;
-    // Floor to 256: SD-class models render garbage (incoherent, not "smaller") below 256,
-    // so a stale sub-256 setting must never reach the pipeline. The slider min is also 256;
-    // this guards the persisted-value + programmatic paths so the user never sees garbage.
-    const imageWidth = Math.max(
-      SWEET_SPOT_SIZE,
-      settings.imageWidth || SWEET_SPOT_SIZE,
+    const imageParameters = resolveMobileImageParameters(
+      activeImageModel,
+      settings,
+      params,
     );
-    const imageHeight = Math.max(
-      SWEET_SPOT_SIZE,
-      settings.imageHeight || SWEET_SPOT_SIZE,
-    );
+    const { steps, guidanceScale } = imageParameters;
+    const imageWidth = imageParameters.size;
+    const imageHeight = imageParameters.size;
 
     this.updateState({
       phase: settings.enhanceImagePrompts ? 'enhancing' : 'loading',

@@ -92,7 +92,10 @@ jest.mock('../../../src/services/activeModelService', () => ({
     unloadImageModel: mockUnloadImageModel,
     unloadAllModels: mockUnloadAllModels,
     ejectAll: mockEjectAll,
-    getActiveModels: jest.fn(() => ({ text: null, image: null })),
+    getActiveModels: jest.fn(() => ({
+      text: { model: null, isLoaded: false, isLoading: false },
+      image: { model: null, isLoaded: false, isLoading: false },
+    })),
     checkMemoryForModel: mockCheckMemoryForModel,
     checkMemoryForDualModel: jest.fn(() => Promise.resolve({ canLoad: true, severity: 'safe', message: '' })),
     subscribe: jest.fn(() => jest.fn()),
@@ -124,6 +127,8 @@ jest.mock('../../../src/services/hardware', () => ({
     getTotalMemoryGB: jest.fn(() => 8),
     formatBytes: jest.fn((bytes: number) => `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`),
     formatModelSize: jest.fn(() => '4.0 GB'),
+    formatModelRam: jest.fn(() => '6.0 GB'),
+    estimateImageModelRam: jest.fn((model: { size?: number }) => (model.size ?? 0) * 1.8),
   },
 }));
 
@@ -274,9 +279,14 @@ describe('HomeScreen', () => {
 
     // Re-setup activeModelService mock after clearAllMocks
     (activeModelService.subscribe as jest.Mock).mockReturnValue(jest.fn());
-    (activeModelService.getActiveModels as jest.Mock).mockReturnValue({
-      text: { modelId: null, modelPath: null, isLoading: false },
-      image: { modelId: null, modelPath: null, isLoading: false },
+    (activeModelService.getActiveModels as jest.Mock).mockImplementation(() => {
+      const state = useAppStore.getState();
+      const textModel = state.downloadedModels.find(model => model.id === state.activeModelId) ?? null;
+      const imageModel = state.downloadedImageModels.find(model => model.id === state.activeImageModelId) ?? null;
+      return {
+        text: { model: textModel, isLoaded: textModel !== null, isLoading: false },
+        image: { model: imageModel, isLoaded: imageModel !== null, isLoading: false },
+      };
     });
     mockCheckMemoryForModel.mockResolvedValue({
       canLoad: true,
@@ -575,7 +585,7 @@ describe('HomeScreen', () => {
 
     it('shows "Add remote server or download" when no models downloaded', () => {
       const { getByText } = renderHomeScreen();
-      expect(getByText('Add a remote server or download a model to start chatting')).toBeTruthy();
+      expect(getByText('Choose a model here or on your network.')).toBeTruthy();
     });
 
     it('shows "Select Model" button when models exist but none active', () => {
@@ -986,6 +996,7 @@ describe('HomeScreen', () => {
       useAppStore.setState({
         downloadedModels: [model],
         activeModelId: model.id,
+        loadedTextModelId: model.id,
       });
 
       const result = renderHomeScreen();
@@ -1027,7 +1038,7 @@ describe('HomeScreen', () => {
       openTextPicker(result);
 
       // Picker sheet shows its title (manager sheet has closed).
-      expect(queryAllByTestId('app-sheet-title').map(n => n.props.children)).toContain('Text Models');
+      expect(queryAllByTestId('app-sheet-title').map(n => n.props.children)).toContain('Select Model');
     });
 
     it('opens image model picker when the image manager row is pressed', () => {
@@ -1037,21 +1048,21 @@ describe('HomeScreen', () => {
       const result = renderHomeScreen();
       openImagePicker(result);
 
-      expect(result.queryAllByTestId('app-sheet-title').map(n => n.props.children)).toContain('Image Models');
+      expect(result.queryAllByTestId('app-sheet-title').map(n => n.props.children)).toContain('Select Model');
     });
 
     it('shows "No text models available" when picker opened with no models', () => {
       const result = renderHomeScreen();
       openTextPicker(result);
 
-      expect(result.queryByText('No text models available')).toBeTruthy();
+      expect(result.queryByText('No Text Models')).toBeTruthy();
     });
 
     it('shows "No image models available" when image picker opened with no models', () => {
       const result = renderHomeScreen();
       openImagePicker(result);
 
-      expect(result.queryByText('No image models available')).toBeTruthy();
+      expect(result.queryByText('No Image Models')).toBeTruthy();
     });
 
     it('shows model items in text picker', () => {
@@ -1062,7 +1073,8 @@ describe('HomeScreen', () => {
       const result = renderHomeScreen();
       openTextPicker(result);
 
-      expect(result.getAllByTestId('model-item').length).toBe(2);
+      expect(result.getByTestId(`text-model-row-${model1.id}`)).toBeTruthy();
+      expect(result.getByTestId(`text-model-row-${model2.id}`)).toBeTruthy();
       expect(result.getByText('Model Alpha')).toBeTruthy();
       expect(result.getByText('Model Beta')).toBeTruthy();
     });
@@ -1082,12 +1094,13 @@ describe('HomeScreen', () => {
       useAppStore.setState({
         downloadedModels: [model],
         activeModelId: model.id,
+        loadedTextModelId: model.id,
       });
 
       const result = renderHomeScreen();
       openTextPicker(result);
 
-      expect(result.queryByTestId('unload-text-model-button')).toBeTruthy();
+      expect(result.queryByText('Unload')).toBeTruthy();
     });
 
     it('shows "Unload current model" when image model is active', () => {
@@ -1100,7 +1113,7 @@ describe('HomeScreen', () => {
       const result = renderHomeScreen();
       openImagePicker(result);
 
-      expect(result.queryByText('Unload current model')).toBeTruthy();
+      expect(result.queryByText('Unload')).toBeTruthy();
     });
 
     it('shows model item for active text model', () => {
@@ -1114,7 +1127,7 @@ describe('HomeScreen', () => {
       openTextPicker(result);
 
       // The model item should exist
-      expect(result.getByTestId('model-item')).toBeTruthy();
+      expect(result.getByTestId(`text-model-row-${model.id}`)).toBeTruthy();
     });
 
     it('closes picker when close button pressed', () => {
@@ -1152,7 +1165,7 @@ describe('HomeScreen', () => {
       expect(mockNavigate).toHaveBeenCalledWith('ModelsTab', { initialTab: 'text' });
     });
 
-    it('shows memory estimate per model in picker', () => {
+    it('shows the model size in the picker', () => {
       const model = createDownloadedModel({
         name: 'RAM Model',
         fileSize: 4 * 1024 * 1024 * 1024,
@@ -1162,8 +1175,7 @@ describe('HomeScreen', () => {
       const result = renderHomeScreen();
       openTextPicker(result);
 
-      // Shows ~6.0 GB RAM (4 * 1.5 = 6.0)
-      expect(result.getByText(/6\.0 GB RAM/)).toBeTruthy();
+      expect(result.getByText('4.0 GB')).toBeTruthy();
     });
 
     it('shows vision indicator for vision models in picker', () => {
@@ -1193,7 +1205,7 @@ describe('HomeScreen', () => {
       openTextPicker(result);
 
       await act(async () => {
-        fireEvent.press(result.getByTestId('model-item'));
+        fireEvent.press(result.getByTestId(`text-model-row-${model.id}`));
       });
 
       await waitFor(() => {
@@ -1206,7 +1218,7 @@ describe('HomeScreen', () => {
       expect(mockCheckMemoryForModel).not.toHaveBeenCalled();
     });
 
-    it('marks image model active without loading or checking memory', async () => {
+    it('loads and marks the selected image model active', async () => {
       const imageModel = createONNXImageModel({ name: 'Pick Image' });
       useAppStore.setState({ downloadedImageModels: [imageModel] });
 
@@ -1214,14 +1226,13 @@ describe('HomeScreen', () => {
       openImagePicker(result);
 
       await act(async () => {
-        fireEvent.press(result.getByTestId('model-item'));
+        fireEvent.press(result.getByTestId(`image-model-row-${imageModel.id}`));
       });
 
       await waitFor(() => {
         expect(useAppStore.getState().activeImageModelId).toBe(imageModel.id);
       });
-      expect(mockLoadImageModel).not.toHaveBeenCalled();
-      expect(mockCheckMemoryForModel).not.toHaveBeenCalled();
+      expect(mockLoadImageModel).toHaveBeenCalledWith(imageModel.id, undefined, undefined);
     });
 
     it('does not show a memory dialog when selecting a text model', async () => {
@@ -1232,7 +1243,7 @@ describe('HomeScreen', () => {
       openTextPicker(result);
 
       await act(async () => {
-        fireEvent.press(result.getByTestId('model-item'));
+        fireEvent.press(result.getByTestId(`text-model-row-${model.id}`));
       });
       await act(async () => { await new Promise<void>(r => setTimeout(r, 50)); });
 
@@ -1250,7 +1261,7 @@ describe('HomeScreen', () => {
       expect(result.getByText('Browse more models')).toBeTruthy();
 
       await act(async () => {
-        fireEvent.press(result.getByTestId('model-item'));
+        fireEvent.press(result.getByTestId(`text-model-row-${model.id}`));
       });
 
       await waitFor(() => {
@@ -1268,13 +1279,14 @@ describe('HomeScreen', () => {
       useAppStore.setState({
         downloadedModels: [model],
         activeModelId: model.id,
+        loadedTextModelId: model.id,
       });
 
       const result = renderHomeScreen();
       openTextPicker(result);
 
       await act(async () => {
-        fireEvent.press(result.getByTestId('unload-text-model-button'));
+        fireEvent.press(result.getByText('Unload'));
       });
 
       await waitFor(() => {
@@ -1293,7 +1305,7 @@ describe('HomeScreen', () => {
       openImagePicker(result);
 
       await act(async () => {
-        fireEvent.press(result.getByText('Unload current model'));
+        fireEvent.press(result.getByText('Unload'));
       });
 
       await waitFor(() => {
@@ -1308,13 +1320,14 @@ describe('HomeScreen', () => {
       useAppStore.setState({
         downloadedModels: [model],
         activeModelId: model.id,
+        loadedTextModelId: model.id,
       });
 
       const result = renderHomeScreen();
       openTextPicker(result);
 
       await act(async () => {
-        fireEvent.press(result.getByTestId('unload-text-model-button'));
+        fireEvent.press(result.getByText('Unload'));
       });
 
       await waitFor(() => {
@@ -1322,7 +1335,7 @@ describe('HomeScreen', () => {
       });
     });
 
-    it('shows error alert when image model unload fails', async () => {
+    it('keeps the active image selected when image unload fails', async () => {
       mockUnloadImageModel.mockRejectedValue(new Error('Unload failed'));
 
       const imageModel = createONNXImageModel({ name: 'Fail Image Unload' });
@@ -1335,12 +1348,11 @@ describe('HomeScreen', () => {
       openImagePicker(result);
 
       await act(async () => {
-        fireEvent.press(result.getByText('Unload current model'));
+        fireEvent.press(result.getByText('Unload'));
       });
 
-      await waitFor(() => {
-        expect(result.queryByText('Failed to unload model')).toBeTruthy();
-      });
+      expect(mockUnloadImageModel).toHaveBeenCalled();
+      expect(useAppStore.getState().activeImageModelId).toBe(imageModel.id);
     });
   });
 
@@ -1402,6 +1414,7 @@ describe('HomeScreen', () => {
       useAppStore.setState({
         downloadedModels: [model],
         activeModelId: model.id,
+        loadedTextModelId: model.id,
       });
 
       // Make unload hang
@@ -1411,7 +1424,7 @@ describe('HomeScreen', () => {
       openTextPicker(result);
 
       await act(async () => {
-        fireEvent.press(result.getByTestId('unload-text-model-button'));
+        fireEvent.press(result.getByText('Unload'));
       });
       await act(async () => { await new Promise<void>(r => setTimeout(r, 50)); });
 

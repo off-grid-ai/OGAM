@@ -21,6 +21,35 @@ private func makeTempDirectory() -> URL {
   return url
 }
 
+final class MetroBundleResolutionTests: XCTestCase {
+  func testConfiguredMetroHostWinsAndPreservesItsPort() {
+    let endpoint = ReactNativeDelegate.resolveMetroHostAndPort(
+      configuredLocation: "http://100.64.0.8:9090",
+      bundledLocation: "192.168.1.20")
+
+    XCTAssertEqual(endpoint.0, "100.64.0.8")
+    XCTAssertEqual(endpoint.1, 9090)
+  }
+
+  func testBundledHostIsUsedWhenMetroHasNoConfiguredLocation() {
+    let endpoint = ReactNativeDelegate.resolveMetroHostAndPort(
+      configuredLocation: nil,
+      bundledLocation: " 192.168.1.20\n")
+
+    XCTAssertEqual(endpoint.0, "192.168.1.20")
+    XCTAssertEqual(endpoint.1, 8081)
+  }
+
+  func testLocalhostIsTheFinalFallback() {
+    let endpoint = ReactNativeDelegate.resolveMetroHostAndPort(
+      configuredLocation: "",
+      bundledLocation: nil)
+
+    XCTAssertEqual(endpoint.0, "localhost")
+    XCTAssertEqual(endpoint.1, 8081)
+  }
+}
+
 final class BlobChannelInterfaceCandidatesTests: XCTestCase {
   func testUsableKeepsOnlyActiveUnicastInterfacesAndPreservesNames() {
     let candidates = [

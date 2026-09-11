@@ -146,7 +146,7 @@ describe('Scan Network — alert matches the rendered list (device state-mismatc
     installFetch({ serverReachable: false });
 
     const ui = render(<AdvancedSetupScreen navigation={navigation} />);
-    await waitFor(() => { expect(ui.queryByText('Network Models')).not.toBeNull(); }, { timeout: 5000 });
+    await waitFor(() => { expect(ui.queryByText('Network')).not.toBeNull(); }, { timeout: 5000 });
 
     fireEvent.press(ui.getByText('Scan Network'));
 

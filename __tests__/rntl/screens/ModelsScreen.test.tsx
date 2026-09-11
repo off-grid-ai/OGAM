@@ -954,7 +954,7 @@ describe('ModelsScreen', () => {
         createModelFile({ name: 'model.gguf', size: 1000000000 }),
       ]);
 
-      const { getByTestId, getByText } = renderModelsScreen();
+      const { getByTestId, getByText, getByLabelText } = renderModelsScreen();
 
       await waitFor(() => expect(getByTestId('search-input')).toBeTruthy());
 
@@ -969,12 +969,12 @@ describe('ModelsScreen', () => {
       });
 
       await waitFor(() => {
-        expect(getByTestId('model-detail-back')).toBeTruthy();
+        expect(getByLabelText('Back')).toBeTruthy();
       });
 
       // Press back to return to models list
       await act(async () => {
-        fireEvent.press(getByTestId('model-detail-back'));
+        fireEvent.press(getByLabelText('Back'));
       });
 
       await waitFor(() => {
@@ -2187,7 +2187,7 @@ describe('ModelsScreen', () => {
         createModelFile({ name: 'model-Q4_K_M.gguf', size: 2000000000 }),
       ]);
 
-      const { getByTestId, getByText } = renderModelsScreen();
+      const { getByTestId, getByText, getByLabelText } = renderModelsScreen();
 
       await waitFor(() => expect(getByTestId('search-input')).toBeTruthy());
 
@@ -2202,7 +2202,7 @@ describe('ModelsScreen', () => {
 
       // Press back
       await act(async () => {
-        fireEvent.press(getByTestId('model-detail-back'));
+        fireEvent.press(getByLabelText('Back'));
       });
 
       // Should return to main list
