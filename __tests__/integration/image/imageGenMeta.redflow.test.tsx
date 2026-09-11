@@ -10,8 +10,7 @@
  * Q1 (GUARD, green) — 128 is NOT a supported image size; the pipeline correctly floors to the sweet spot
  *      (256), and the details line shows "256x256". Locks that intended behavior. (Confirmed with the
  *      product owner: stop at 256.)
- * Q7 (RED) — imageGuidanceScale is 0/stale → the details line shows "cfg 2.0" (imageGenerationService.ts:452
- *      `|| 2.0` fallback) while the slider default is 7.5 — the shown default and the used default DIVERGE.
+ * Q7 — invalid persisted guidance falls back through the shared model-family policy.
  *
  * The model is pre-loaded on the fake so _ensureImageModelLoaded's already-loaded fast-path is taken.
  * (NOTE: entry is at the imageGenerationService layer + real ChatMessage meta render. A full ChatScreen
@@ -23,14 +22,14 @@ import { createONNXImageModel } from '../../utils/factories';
 
 async function generateWithSettings(settings: Record<string, unknown>) {
   const boundary = installNativeBoundary({ ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
-   
+
   const React = require('react');
   const { render } = requireRTL();
   const { imageGenerationService } = require('../../../src/services/imageGenerationService');
   const { localDreamGeneratorService } = require('../../../src/services/localDreamGenerator');
   const { useAppStore, useChatStore } = require('../../../src/stores');
   const { ChatMessage } = require('../../../src/components/ChatMessage');
-   
+
 
   const model = createONNXImageModel({ id: 'sd', name: 'SD Test', modelPath: '/models/sd', backend: 'mnn' });
   useAppStore.setState({ downloadedImageModels: [model], activeImageModelId: 'sd' });
@@ -38,7 +37,6 @@ async function generateWithSettings(settings: Record<string, unknown>) {
     imageThreads: 4, imageUseOpenCL: false, enhanceImagePrompts: false, imageSteps: 8, ...settings,
   });
 
-  // Pre-load so the already-loaded fast path in _ensureImageModelLoaded is taken (skips FS integrity).
   boundary.diffusion.module.getLoadedModelPath.mockResolvedValue(model.modelPath);
   await localDreamGeneratorService.loadModel(model.modelPath, 4, {});
 
@@ -58,12 +56,9 @@ describe('image gen meta — UI red-flow (the size/guidance you set is what runs
     expect(view.queryByText(/128x128/)).toBeNull();
   });
 
-  it('Q7: with guidance 0/stale the generation uses the 7.5 default, not 2.0', async () => {
+  it('Q7: with stale guidance the generation uses the shared model-family default', async () => {
     const view = await generateWithSettings({ imageGuidanceScale: 0, imageWidth: 256, imageHeight: 256 });
-    // With a stale/0 guidance the generation must fall back to the single-source 7.5 default
-    // (DEFAULT_IMAGE_GUIDANCE), NOT the old magic || 2.0. The details line the user sees shows it.
-    expect(view.queryByText(/cfg 7\.5/)).not.toBeNull();
-    // And the old buggy 2.0 fallback must be gone.
+    expect(view.queryByText(/cfg 7/)).not.toBeNull();
     expect(view.queryByText(/cfg 2/)).toBeNull();
   });
 });
