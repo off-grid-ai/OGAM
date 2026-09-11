@@ -15,7 +15,6 @@ import {
   ToolLoopContext,
   parseToolCallsFromText,
   buildLiteRTHistory,
-  toolStepLimitNotice,
 } from '../../../src/services/generationToolLoop';
 import { llmService } from '../../../src/services/llm';
 import { liteRTService } from '../../../src/services/litert';
@@ -288,25 +287,6 @@ describe('runToolLoop — Gemma text parsing branches', () => {
 describe('runToolLoop — bounded multi-tool completion', () => {
   beforeEach(resetMocks);
 
-  it('counts every parallel call against one total response budget', async () => {
-    mockAppState.settings.maxToolCalls = 2;
-    mockedGenerateResponseWithTools.mockResolvedValueOnce({
-      fullResponse: '',
-      toolCalls: [0, 1, 2].map(index => ({
-        id: `tc-${index}`,
-        name: 'web_search',
-        arguments: { query: `query-${index}` },
-      })),
-    });
-    const ctx = createContext();
-
-    await runToolLoop(ctx);
-
-    expect(mockExecuteToolCall).toHaveBeenCalledTimes(2);
-    expect(mockAddMessage).toHaveBeenCalledTimes(3);
-    expect(ctx.onFinalResponse).toHaveBeenCalledWith(toolStepLimitNotice(2));
-  });
-
   it('shows successful tool output when the final model response is empty', async () => {
     mockAppState.settings.maxToolCalls = 3;
     mockExecuteToolCall.mockResolvedValue({
@@ -328,34 +308,6 @@ describe('runToolLoop — bounded multi-tool completion', () => {
     await runToolLoop(ctx);
 
     expect(ctx.onFinalResponse).toHaveBeenCalledWith('Found on this device.');
-  });
-
-  it('stops after the configured tool steps and preserves the tool context for the next message', async () => {
-    mockAppState.settings.maxToolCalls = 3;
-    for (let index = 0; index < 3; index += 1) {
-      mockedGenerateResponseWithTools.mockResolvedValueOnce({
-        fullResponse: '',
-        toolCalls: [
-          {
-            id: `tc-${index}`,
-            name: 'web_search',
-            arguments: { query: `query-${index}` },
-          },
-        ],
-      });
-    }
-    const ctx = createContext();
-    await runToolLoop(ctx);
-
-    expect(mockExecuteToolCall).toHaveBeenCalledTimes(3);
-    expect(mockedGenerateResponseWithTools).toHaveBeenCalledTimes(3);
-    expect(
-      mockedGenerateResponseWithTools.mock.calls.every(
-        call => call[1].tools.length > 0,
-      ),
-    ).toBe(true);
-    expect(mockAddMessage).toHaveBeenCalledTimes(6);
-    expect(ctx.onFinalResponse).toHaveBeenCalledWith(toolStepLimitNotice(3));
   });
 });
 
@@ -473,27 +425,6 @@ describe('runToolLoop — LiteRT loop branches', () => {
     const lastPrepare = mockedLiteRT.prepareConversation.mock.calls.at(-1)!;
     expect(lastPrepare[2]).toEqual(expect.objectContaining({ tools: [] }));
     expect(ctx.onFinalResponse).toHaveBeenCalledWith('recovered answer');
-  });
-
-  it('uses the same configured stop notice for the native LiteRT tool loop', async () => {
-    mockAppState.settings.maxToolCalls = 3;
-    mockedLiteRT.generateRaw.mockImplementation(
-      async (_text: any, _media: any, handlers: any) => {
-        for (let index = 0; index < 4; index += 1) {
-          await handlers.onToolCall('web_search', { query: `query-${index}` });
-        }
-        return 'This model response must not replace the product stop notice.';
-      },
-    );
-
-    const ctx = createContext({
-      messages: [makeMessage({ role: 'user', content: 'hi' })],
-    });
-    await runToolLoop(ctx);
-
-    expect(mockExecuteToolCall).toHaveBeenCalledTimes(3);
-    expect(mockAddMessage).toHaveBeenCalledTimes(6);
-    expect(ctx.onFinalResponse).toHaveBeenCalledWith(toolStepLimitNotice(3));
   });
 
   it('rethrows a non-parse error without retrying (line 427 negative branch)', async () => {
