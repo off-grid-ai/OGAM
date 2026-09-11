@@ -11,6 +11,12 @@
  * Pure + UI-free so both core and pro depend on it without dragging UI in.
  */
 import type { ToolCall, ToolResult, ToolErrorCategory } from './types';
+import {
+  boundToolResult,
+  MAX_TOOL_RESULT_CHARS,
+} from '@offgrid/models';
+
+export { MAX_TOOL_RESULT_CHARS } from '@offgrid/models';
 
 /** Best-effort classification of a failure from its message (one place this lives). */
 export function classifyToolError(err: unknown): ToolErrorCategory {
@@ -60,23 +66,24 @@ export function normalizeToolResult(call: ToolCall, raw: ToolResult): ToolResult
  * model it was truncated so it doesn't assume it saw everything. This gate is upstream-agnostic — it
  * protects against any oversized result, no matter how the tool is written.
  */
-export const MAX_TOOL_RESULT_CHARS = 24000;
-
 /**
  * The content string the MODEL sees. Never empty; failures and empties are stated
  * explicitly so the model treats them as such instead of inventing an answer.
  */
-export function toolResultModelContent(result: ToolResult): string {
+export function toolResultModelContent(
+  result: ToolResult,
+  maxChars = MAX_TOOL_RESULT_CHARS,
+): string {
   if (result.status === 'error') {
     const cat = result.errorCategory ?? 'internal';
-    return `Tool "${result.name}" failed (${cat}): ${result.error ?? 'unknown error'}. It returned no data — do not assume it succeeded.`;
+    return boundToolResult(
+      result.name,
+      `Tool "${result.name}" failed (${cat}): ${result.error ?? 'unknown error'}. It returned no data — do not assume it succeeded.`,
+      maxChars,
+    );
   }
   if (result.status === 'empty') {
     return `Tool "${result.name}" ran but returned no content.`;
   }
-  if (result.content.length > MAX_TOOL_RESULT_CHARS) {
-    const kept = result.content.slice(0, MAX_TOOL_RESULT_CHARS);
-    return `${kept}\n\n[Tool "${result.name}" result truncated: showing the first ${MAX_TOOL_RESULT_CHARS} of ${result.content.length} characters. The result was too large to send in full — ask a more specific follow-up if you need more.]`;
-  }
-  return result.content;
+  return boundToolResult(result.name, result.content, maxChars);
 }
