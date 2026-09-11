@@ -22,8 +22,4 @@ export { ragService, retrievalService } from './rag';
 // HTTP Client
 // Remote Server Manager
 export { remoteServerManager } from './remoteServerManager';
-export {
-  remoteServerModelOptions,
-  selectedRemoteModelName,
-} from './remoteModelSelection';
-export type { RemoteServerModelOption } from './remoteModelSelection';
+export { remoteServerModelOptions } from './remoteModelSelection';

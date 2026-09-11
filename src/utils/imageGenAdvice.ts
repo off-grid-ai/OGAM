@@ -32,8 +32,7 @@ export const QUALITY_STEP_FLOOR = 20;
  */
 export const SWEET_SPOT_SIZE = 256;
 
-/** Default guidance scale and platform step counts. */
-export const DEFAULT_IMAGE_GUIDANCE = 7.5;
+/** Platform step counts. */
 export const MAX_IMAGE_STEPS = 50;
 const IMAGE_STEP_DEFAULTS = {
   android: 8,
