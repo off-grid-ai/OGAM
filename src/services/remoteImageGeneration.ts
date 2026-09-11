@@ -1,14 +1,9 @@
 import RNFS from 'react-native-fs';
-import { Platform } from 'react-native';
 import type { GeneratedImage, RemoteServer } from '../types';
 import { useAppStore } from '../stores';
 import { generateId } from '../utils/generateId';
-import {
-  DEFAULT_IMAGE_GUIDANCE,
-  SWEET_SPOT_SIZE,
-  defaultImageSteps,
-} from '../utils/imageGenAdvice';
 import type { GenerateImageParams, ImageGenerationState } from './imageGenerationTypes';
+import { resolveMobileImageParameters } from './imageParameterPolicy';
 import { remoteMediaRuntime } from './remoteMediaRuntime';
 import {
   completedImageGenerationState,
@@ -30,10 +25,12 @@ export async function runRemoteImageGeneration(
   const modelId = server.mediaModels?.image;
   if (!modelId) return deps.fail('No remote image model is configured');
   const settings = useAppStore.getState().settings;
-  const width = Math.max(SWEET_SPOT_SIZE, settings.imageWidth || SWEET_SPOT_SIZE);
-  const height = Math.max(SWEET_SPOT_SIZE, settings.imageHeight || SWEET_SPOT_SIZE);
-  const steps = params.steps || settings.imageSteps || defaultImageSteps(Platform.OS);
-  const guidanceScale = params.guidanceScale || settings.imageGuidanceScale || DEFAULT_IMAGE_GUIDANCE;
+  const imageParameters = resolveMobileImageParameters(
+    { id: modelId, name: modelId }, settings, params,
+  );
+  const width = imageParameters.size;
+  const height = imageParameters.size;
+  const { steps, guidanceScale } = imageParameters;
   const messageId = params.conversationId ? generateId() : null;
   const startTime = Date.now();
   deps.updateState({
