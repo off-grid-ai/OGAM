@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persist } from 'zustand/middleware';
+import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
 
 interface AuthState {
   isEnabled: boolean;
@@ -21,6 +21,9 @@ interface AuthState {
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+type PersistedAuthState = Pick<AuthState, 'isEnabled' | 'failedAttempts' | 'lockoutUntil'>;
+const authStorage = createHydrationGatedStorage<PersistedAuthState>();
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -86,8 +89,9 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'local-llm-auth-storage',
-      storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({
+      storage: authStorage.storage,
+      onRehydrateStorage: () => () => authStorage.markHydrated(),
+      partialize: (state): PersistedAuthState => ({
         isEnabled: state.isEnabled,
         failedAttempts: state.failedAttempts,
         lockoutUntil: state.lockoutUntil,

@@ -1,12 +1,12 @@
 import { create } from 'zustand';
 import { APP_CONFIG } from '../constants';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persist } from 'zustand/middleware';
 import { Project } from '../types';
 import { generateId } from '../utils/generateId';
 import { ragService } from '../services/rag';
 import { useChatStore } from './chatStore';
 import logger from '../utils/logger';
+import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
 import {
   CORE_SYNC_ENTITIES,
   emitSyncMutation,
@@ -28,6 +28,8 @@ interface ProjectState {
   getProject: (id: string) => Project | undefined;
   duplicateProject: (id: string) => Project | null;
 }
+
+type PersistedProjectState = Pick<ProjectState, 'projects'>;
 
 // Default projects as examples
 const DEFAULT_PROJECTS: Project[] = [
@@ -95,6 +97,8 @@ When editing, explain your changes. When brainstorming, offer multiple options.`
     updatedAt: new Date().toISOString(),
   },
 ];
+
+const projectStorage = createHydrationGatedStorage<PersistedProjectState>();
 
 export const useProjectStore = create<ProjectState>()(
   persist(
@@ -182,7 +186,9 @@ export const useProjectStore = create<ProjectState>()(
     }),
     {
       name: 'local-llm-project-storage',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: projectStorage.storage,
+      onRehydrateStorage: () => () => projectStorage.markHydrated(),
+      partialize: (state): PersistedProjectState => ({ projects: state.projects }),
     },
   ),
 );

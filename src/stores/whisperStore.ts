@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persist } from 'zustand/middleware';
 import { whisperService, WHISPER_MODELS } from '../services/whisperService';
 import { modelResidencyManager } from '../services/modelResidency';
 import logger from '../utils/logger';
+import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
 
 /**
  * Outcome of a whisper load, so callers can tell WHY it didn't load:
@@ -54,6 +54,8 @@ interface WhisperState {
   setTranscriptionLanguage: (language: string) => void;
 }
 
+type PersistedWhisperState = Pick<WhisperState, 'downloadedModelId' | 'transcriptionLanguage'>;
+
 type SetState = (partial: Partial<WhisperState> | ((s: WhisperState) => Partial<WhisperState>)) => void;
 
 /** Set one model's in-flight progress without disturbing other concurrent downloads. */
@@ -70,6 +72,8 @@ function clearProgress(set: SetState, modelId: string): void {
     return { downloadProgressById: next };
   });
 }
+
+const whisperStorage = createHydrationGatedStorage<PersistedWhisperState>();
 
 export const useWhisperStore = create<WhisperState>()(
   persist(
@@ -267,8 +271,9 @@ export const useWhisperStore = create<WhisperState>()(
     }),
     {
       name: 'local-llm-whisper-storage',
-      storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({
+      storage: whisperStorage.storage,
+      onRehydrateStorage: () => () => whisperStorage.markHydrated(),
+      partialize: (state): PersistedWhisperState => ({
         downloadedModelId: state.downloadedModelId,
         transcriptionLanguage: state.transcriptionLanguage,
       }),
