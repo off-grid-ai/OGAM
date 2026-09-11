@@ -19,6 +19,7 @@ import { useProjectStore } from '../../../src/stores/projectStore';
 
 describe('projectStore', () => {
   beforeEach(() => {
+    mockDeleteProjectDocuments.mockReset().mockResolvedValue(undefined);
     // Reset to default projects
     useProjectStore.setState({
       projects: [
@@ -281,7 +282,7 @@ describe('projectStore', () => {
   // deleteProject
   // ============================================================================
   describe('deleteProject', () => {
-    it('removes the project from the store', () => {
+    it('removes the project from the store', async () => {
       const { createProject, deleteProject } = useProjectStore.getState();
       const project = createProject({
         name: 'To Delete',
@@ -290,13 +291,13 @@ describe('projectStore', () => {
         icon: '#000',
       });
 
-      deleteProject(project.id);
+      await deleteProject(project.id);
 
       const found = useProjectStore.getState().getProject(project.id);
       expect(found).toBeUndefined();
     });
 
-    it('reduces the projects count by one', () => {
+    it('reduces the projects count by one', async () => {
       const { createProject, deleteProject } = useProjectStore.getState();
       const project = createProject({
         name: 'To Delete',
@@ -306,13 +307,13 @@ describe('projectStore', () => {
       });
 
       const beforeCount = useProjectStore.getState().projects.length;
-      deleteProject(project.id);
+      await deleteProject(project.id);
       const afterCount = useProjectStore.getState().projects.length;
 
       expect(afterCount).toBe(beforeCount - 1);
     });
 
-    it('does not affect other projects', () => {
+    it('does not affect other projects', async () => {
       const { createProject, deleteProject } = useProjectStore.getState();
       const p1 = createProject({
         name: 'Keep',
@@ -327,15 +328,15 @@ describe('projectStore', () => {
         icon: '#222',
       });
 
-      deleteProject(p2.id);
+      await deleteProject(p2.id);
 
       const kept = useProjectStore.getState().getProject(p1.id);
       expect(kept?.name).toBe('Keep');
     });
 
-    it('handles deleting non-existent project gracefully', () => {
+    it('handles deleting non-existent project gracefully', async () => {
       const initialCount = useProjectStore.getState().projects.length;
-      useProjectStore.getState().deleteProject('non-existent');
+      await useProjectStore.getState().deleteProject('non-existent');
       expect(useProjectStore.getState().projects.length).toBe(initialCount);
     });
   });
@@ -480,19 +481,22 @@ describe('projectStore', () => {
   // RAG cleanup on delete
   // ============================================================================
   describe('RAG cleanup on deleteProject', () => {
-    it('calls ragService.deleteProjectDocuments when deleting a project', () => {
+    it('calls ragService.deleteProjectDocuments when deleting a project', async () => {
       const { deleteProject } = useProjectStore.getState();
-      deleteProject('default-assistant');
-      expect(mockDeleteProjectDocuments).toHaveBeenCalledWith('default-assistant');
+      await deleteProject('default-assistant');
+      expect(mockDeleteProjectDocuments).toHaveBeenCalledWith(
+        'default-assistant',
+      );
     });
 
-    it('removes the project even if RAG cleanup fails', () => {
+    it('preserves the project and returns a refusal if RAG cleanup fails', async () => {
       mockDeleteProjectDocuments.mockRejectedValueOnce(new Error('DB error'));
       const { deleteProject } = useProjectStore.getState();
       const beforeCount = useProjectStore.getState().projects.length;
-      deleteProject('default-assistant');
+      const outcome = await deleteProject('default-assistant');
       const afterCount = useProjectStore.getState().projects.length;
-      expect(afterCount).toBe(beforeCount - 1);
+      expect(outcome).toEqual({ ok: false, reason: 'DB error' });
+      expect(afterCount).toBe(beforeCount);
     });
   });
 });

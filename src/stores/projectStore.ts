@@ -8,6 +8,10 @@ import { useChatStore } from './chatStore';
 import logger from '../utils/logger';
 import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
 import {
+  projectDeleteFailure,
+  type ProjectDeleteOutcome,
+} from './projectDeleteOutcome';
+import {
   CORE_SYNC_ENTITIES,
   emitSyncMutation,
   projectPutMutation,
@@ -24,7 +28,7 @@ interface ProjectState {
     id: string,
     updates: Partial<Omit<Project, 'id' | 'createdAt'>>,
   ) => void;
-  deleteProject: (id: string) => void;
+  deleteProject: (id: string) => Promise<ProjectDeleteOutcome>;
   getProject: (id: string) => Project | undefined;
   duplicateProject: (id: string) => Project | null;
 }
@@ -133,16 +137,19 @@ export const useProjectStore = create<ProjectState>()(
         if (project) emitSyncMutation(projectPutMutation(project));
       },
 
-      deleteProject: id => {
+      deleteProject: async id => {
         const projectExists = get().projects.some(project => project.id === id);
-        ragService
-          .deleteProjectDocuments(id)
-          .catch(err =>
-            logger.error(
-              `Failed to delete RAG documents for project ${id}`,
-              err,
-            ),
+        if (!projectExists) return { ok: true };
+
+        try {
+          await ragService.deleteProjectDocuments(id);
+        } catch (error) {
+          logger.error(
+            `Failed to delete RAG documents for project ${id}`,
+            error,
           );
+          return projectDeleteFailure(error);
+        }
         // Cascade: unfile the project's chats so none is left pointing at a project that
         // no longer exists (a dangling projectId isn't re-filable and still tripped the
         // KB-tool injection). The project store owns "what happens on delete" (like RAG
@@ -151,13 +158,12 @@ export const useProjectStore = create<ProjectState>()(
         set(state => ({
           projects: state.projects.filter(project => project.id !== id),
         }));
-        if (projectExists) {
-          emitSyncMutation({
-            entity: CORE_SYNC_ENTITIES.project,
-            entityId: id,
-            kind: 'delete',
-          });
-        }
+        emitSyncMutation({
+          entity: CORE_SYNC_ENTITIES.project,
+          entityId: id,
+          kind: 'delete',
+        });
+        return { ok: true };
       },
 
       getProject: id => {

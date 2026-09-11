@@ -24,6 +24,7 @@ import { TYPOGRAPHY, SPACING } from '../constants';
 import { useProjectStore, useChatStore } from '../stores';
 import { Project } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
+import { PROJECT_DELETE_FALLBACK_REASON } from '../stores/projectDeleteOutcome';
 
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ProjectsTab'>,
@@ -49,21 +50,31 @@ export const ProjectsScreen: React.FC = () => {
   };
 
   const handleDeleteProject = (project: Project) => {
-    setAlertState(showAlert(
-      'Delete Project',
-      `Delete "${project.name}"? This will not delete the chats associated with this project.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setAlertState(hideAlert());
-            deleteProject(project.id);
+    setAlertState(
+      showAlert(
+        'Delete Project',
+        `Delete "${project.name}"? This will not delete the chats associated with this project.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              setAlertState(hideAlert());
+              const outcome = await deleteProject(project.id);
+              if (!outcome.ok) {
+                setAlertState(
+                  showAlert(
+                    'Project Not Deleted',
+                    outcome.reason || PROJECT_DELETE_FALLBACK_REASON,
+                  ),
+                );
+              }
+            },
           },
-        },
-      ]
-    ));
+        ],
+      ),
+    );
   };
 
   const renderRightActions = (project: Project) => (
