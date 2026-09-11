@@ -109,18 +109,25 @@ export function AmbientOnboardingScreen(): React.ReactElement {
         ) : null}
 
         {step === 5 ? (
-          <Step icon="lock" title="Keep it on-device" styles={styles} colors={colors}>
+          <Step
+            icon="lock"
+            title="Keep it on-device"
+            styles={styles}
+            colors={colors}
+            extra={
+              <View style={styles.toggleRow}>
+                <Text style={styles.toggleLabel}>Keep summaries on-device</Text>
+                <Switch
+                  value={onDeviceOnly}
+                  onValueChange={setOnDeviceOnly}
+                  trackColor={{ true: colors.primary, false: colors.border }}
+                  testID="ambient-onboard-privacy"
+                />
+              </View>
+            }
+          >
             Capture and transcription always stay on this device. Keep summaries and ask-your-day on-device
             too, even if you pick a remote chat model?
-            <View style={styles.toggleRow}>
-              <Text style={styles.toggleLabel}>Keep summaries on-device</Text>
-              <Switch
-                value={onDeviceOnly}
-                onValueChange={setOnDeviceOnly}
-                trackColor={{ true: colors.primary, false: colors.border }}
-                testID="ambient-onboard-privacy"
-              />
-            </View>
           </Step>
         ) : null}
 
@@ -163,13 +170,15 @@ function Step({
   title,
   styles,
   colors,
-  children
+  children,
+  extra
 }: {
   icon: string;
   title: string;
   styles: any;
   colors: any;
   children: React.ReactNode;
+  extra?: React.ReactNode;
 }): React.ReactElement {
   return (
     <View style={styles.step}>
@@ -178,6 +187,7 @@ function Step({
       </View>
       <Text style={styles.stepTitle}>{title}</Text>
       <Text style={styles.stepBody}>{children}</Text>
+      {extra}
     </View>
   );
 }
