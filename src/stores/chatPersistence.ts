@@ -1,6 +1,11 @@
 import { generateId } from '../utils/generateId';
 import type { Message } from '../types';
 
+export interface PersistedChatState {
+  conversations: unknown[];
+  activeConversationId: string | null;
+}
+
 export const CHAT_STORAGE_VERSION = 2;
 
 export function createPersistedMessage(
@@ -47,16 +52,24 @@ function migrateMessage(message: unknown, version: number): unknown {
 export function migratePersistedChatState(
   persistedState: unknown,
   version: number,
-): unknown {
-  if (version >= CHAT_STORAGE_VERSION || !isRecord(persistedState)) {
-    return persistedState;
+): PersistedChatState {
+  if (
+    !isRecord(persistedState) ||
+    !Array.isArray(persistedState.conversations) ||
+    !(persistedState.activeConversationId === null || typeof persistedState.activeConversationId === 'string')
+  ) {
+    return { conversations: [], activeConversationId: null };
   }
-  const conversations = persistedState.conversations;
-  if (!Array.isArray(conversations)) return persistedState;
+  if (version >= CHAT_STORAGE_VERSION) {
+    return {
+      conversations: persistedState.conversations,
+      activeConversationId: persistedState.activeConversationId,
+    };
+  }
 
   return {
-    ...persistedState,
-    conversations: conversations.map(conversation => {
+    activeConversationId: persistedState.activeConversationId,
+    conversations: persistedState.conversations.map(conversation => {
       if (!isRecord(conversation) || !Array.isArray(conversation.messages)) {
         return conversation;
       }
