@@ -90,7 +90,7 @@ describe('T097 (rendered) — Home Text count with a remote model active is not 
     rtl.fireEvent.press(await rtl.waitFor(() => home.getByTestId('browse-models-button'), { timeout: 4000 }));
 
     // Tap the discovered remote model → real handleSelectRemoteTextModel → setActiveRemoteTextModel.
-    rtl.fireEvent.press(await rtl.waitFor(() => home.getByTestId('remote-model-item'), { timeout: 4000 }));
+    rtl.fireEvent.press(await rtl.waitFor(() => home.getByText('llama-3-8b'), { timeout: 4000 }));
 
     // The real store now reports a remote model active (EMERGENT from the gesture, not setState).
     await rtl.waitFor(() => { expect(useRemoteServerStore.getState().activeRemoteTextModelId).toBe('llama-3-8b'); }, { timeout: 4000 });

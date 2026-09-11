@@ -101,8 +101,8 @@ describe('RAM display agreement — picker label matches the residency chip for 
 
     // GESTURE: select the text model the way a user does — open the picker, tap the row.
     rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('browse-models-button')));
-    const rows = await rtl.waitFor(() => { const r = view.queryAllByTestId('model-item'); expect(r.length).toBeGreaterThan(0); return r; }, { timeout: 10000 });
-    rtl.fireEvent.press(rows[0]);
+    const row = await rtl.waitFor(() => view.getByTestId('text-model-row-m'), { timeout: 10000 });
+    rtl.fireEvent.press(row);
     await rtl.waitFor(() => { expect(useAppStore.getState().activeModelId).toBe('m'); }, { timeout: 10000 });
 
     // GESTURE: switch the inference backend to GPU (OpenCL) via the REAL BackendSelector control — the same

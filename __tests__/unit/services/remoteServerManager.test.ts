@@ -304,11 +304,19 @@ describe('remoteServerManager', () => {
 
       (providerRegistry.getProvider as jest.Mock).mockReturnValue(mockProvider);
       (providerRegistry.setActiveProvider as jest.Mock).mockReturnValue(true);
+      const configuredServer = {
+        id: 'server-123',
+        name: 'Test',
+        endpoint: 'http://localhost:11434',
+        mediaModels: {},
+      };
       (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
         setActiveServerId: jest.fn(),
         setActiveRemoteTextModelId: jest.fn(),
         setActiveRemoteImageModelId: jest.fn(),
-        getServerById: jest.fn().mockReturnValue(null),
+        updateServer: jest.fn(),
+        discoverModels: jest.fn().mockResolvedValue([]),
+        getServerById: jest.fn().mockReturnValue(configuredServer),
         getModelById: jest.fn().mockReturnValue(null),
       });
 
@@ -331,11 +339,18 @@ describe('remoteServerManager', () => {
 
     it('should handle missing provider gracefully', async () => {
       (providerRegistry.getProvider as jest.Mock).mockReturnValue(undefined);
+      const configuredServer = {
+        id: 'server-123',
+        name: 'Test',
+        endpoint: 'http://localhost:11434',
+        mediaModels: {},
+      };
       (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
         setActiveServerId: jest.fn(),
         setActiveRemoteTextModelId: jest.fn(),
         setActiveRemoteImageModelId: jest.fn(),
-        getServerById: jest.fn().mockReturnValue(null),
+        updateServer: jest.fn(),
+        getServerById: jest.fn().mockReturnValue(configuredServer),
       });
 
       // Should not throw
@@ -359,6 +374,7 @@ describe('remoteServerManager', () => {
       (providerRegistry.getProvider as jest.Mock).mockReturnValue(mockProvider);
       (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
         setActiveServerId: jest.fn(),
+        setActiveRemoteMediaServerId: jest.fn(),
         setActiveRemoteTextModelId: jest.fn(),
         setActiveRemoteImageModelId: jest.fn(),
         getServerById: jest.fn().mockReturnValue(null),
@@ -370,8 +386,8 @@ describe('remoteServerManager', () => {
       );
 
       expect(
-        useRemoteServerStore.getState().setActiveServerId,
-      ).toHaveBeenCalledWith('server-123');
+        useRemoteServerStore.getState().setActiveRemoteMediaServerId,
+      ).toHaveBeenCalledWith('image', 'server-123');
       expect(
         useRemoteServerStore.getState().setActiveRemoteImageModelId,
       ).toHaveBeenCalledWith('llava');
@@ -384,6 +400,7 @@ describe('remoteServerManager', () => {
       (providerRegistry.setActiveProvider as jest.Mock).mockReturnValue(true);
       (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
         setActiveServerId: jest.fn(),
+        setActiveRemoteMediaServerId: jest.fn(),
         setActiveRemoteTextModelId: jest.fn(),
         setActiveRemoteImageModelId: jest.fn(),
         getServerById: jest.fn().mockReturnValue(null),
@@ -400,6 +417,9 @@ describe('remoteServerManager', () => {
       expect(
         useRemoteServerStore.getState().setActiveRemoteImageModelId,
       ).toHaveBeenCalledWith(null);
+      expect(
+        useRemoteServerStore.getState().setActiveRemoteMediaServerId,
+      ).toHaveBeenCalledTimes(3);
       expect(providerRegistry.setActiveProvider).toHaveBeenCalledWith('local');
     });
   });
@@ -791,6 +811,7 @@ describe('remoteServerManager', () => {
         setActiveServerId: jest.fn(),
         setActiveRemoteTextModelId: jest.fn(),
         setActiveRemoteImageModelId: jest.fn(),
+        updateServer: jest.fn(),
         getServerById: jest.fn().mockReturnValue(mockServer),
         getModelById: jest.fn().mockReturnValue(null),
       });
@@ -826,6 +847,7 @@ describe('remoteServerManager', () => {
       );
       (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
         setActiveServerId: jest.fn(),
+        setActiveRemoteMediaServerId: jest.fn(),
         setActiveRemoteTextModelId: jest.fn(),
         setActiveRemoteImageModelId: jest.fn(),
         getServerById: jest.fn().mockReturnValue(mockServer),
@@ -850,6 +872,7 @@ describe('remoteServerManager', () => {
       (providerRegistry.getProvider as jest.Mock).mockReturnValue(null);
       (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
         setActiveServerId: jest.fn(),
+        setActiveRemoteMediaServerId: jest.fn(),
         setActiveRemoteTextModelId: jest.fn(),
         setActiveRemoteImageModelId: jest.fn(),
         getServerById: jest.fn().mockReturnValue(null), // No server found

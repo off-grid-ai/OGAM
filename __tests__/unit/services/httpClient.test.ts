@@ -903,10 +903,13 @@ describe('httpClient', () => {
     const TEST_ENDPOINT = 'http://localhost:11434/api/chat';
     let streamEvents: any[] = [];
 
-    function startStream(headers: Record<string, string> = {}): Promise<void> {
+    function startStream(
+      headers: Record<string, string> = {},
+      timeout = 0,
+    ): Promise<void> {
       return createStreamingRequest(
         TEST_ENDPOINT,
-        { body: { model: 'test' }, headers },
+        { body: { model: 'test' }, headers, timeout },
         e => streamEvents.push(e),
       );
     }
@@ -1011,7 +1014,7 @@ describe('httpClient', () => {
     });
 
     it('should reject on timeout', async () => {
-      const promise = startStream();
+      const promise = startStream({}, 300000);
 
       // Advance timers past timeout
       jest.advanceTimersByTime(300000);
@@ -1103,7 +1106,7 @@ describe('httpClient', () => {
     });
 
     it('should handle XHR timeout via ontimeout', async () => {
-      const promise = startStream();
+      const promise = startStream({}, 300000);
 
       // Simulate XHR timeout
       jest.advanceTimersByTime(300000);

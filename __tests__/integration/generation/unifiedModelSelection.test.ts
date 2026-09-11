@@ -198,7 +198,7 @@ describe('Unified Model Selection', () => {
       await remoteServerManager.setActiveRemoteImageModel(serverId, 'llava');
 
       expect(useRemoteServerStore.getState().activeRemoteImageModelId).toBe('llava');
-      expect(useRemoteServerStore.getState().activeServerId).toBe(serverId);
+      expect(useRemoteServerStore.getState().activeRemoteMediaServerIds.image).toBe(serverId);
       expect(mockLoadModel).toHaveBeenCalledWith('llava');
     });
   });

@@ -139,9 +139,9 @@ describe('synced Web Use and Computer Use task in chat', () => {
     expect(screen.getAllByText('DONE')).toHaveLength(2);
     expect(screen.getByText('NOW')).toBeTruthy();
     expect(screen.getByText('Typing the message')).toBeTruthy();
-    expect(screen.getByText('ACTIVITY')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('task-activity-disclosure'));
     expect(screen.getByText('Opened Slack')).toBeTruthy();
-    expect(screen.getByText('Found Ali')).toBeTruthy();
+    expect(screen.getAllByText('Found Ali')).toHaveLength(2);
     act(() =>
       fireEvent(screen.getByTestId('task-session-frame'), 'layout', {
         nativeEvent: { layout: { width: 300, height: 200, x: 0, y: 0 } },

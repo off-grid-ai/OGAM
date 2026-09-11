@@ -43,8 +43,9 @@ jest.mock('../../../src/services', () => ({
   },
   remoteServerManager: {
     setActiveRemoteTextModel: jest.fn().mockResolvedValue(undefined),
-    setActiveRemoteImageModel: jest.fn().mockResolvedValue(undefined),
-    clearActiveRemoteModel: jest.fn(),
+    setActiveRemoteMediaModel: jest.fn().mockResolvedValue(undefined),
+    clearActiveRemoteTextModel: jest.fn(),
+    clearActiveRemoteMediaModel: jest.fn(),
     addServer: jest.fn().mockResolvedValue({ id: 'mock-id', name: 'mock', endpoint: 'http://mock' }),
     updateServer: jest.fn().mockResolvedValue(undefined),
     testConnection: jest.fn().mockResolvedValue({ success: true }),
@@ -96,6 +97,7 @@ jest.mock('../../../src/stores', () => {
     activeRemoteTextModelId: null,
     activeRemoteImageModelId: null,
     activeServerId: null,
+    activeRemoteMediaServerIds: { text: null, image: null },
   };
   const useAppStore: any = jest.fn((selector?: any) => (selector ? selector(appState) : appState));
   useAppStore.getState = () => appState;
@@ -136,6 +138,7 @@ describe('useHomeScreen', () => {
         activeRemoteTextModelId: null,
         activeRemoteImageModelId: null,
         activeServerId: null,
+        activeRemoteMediaServerIds: { text: null, image: null },
       };
       return selector ? selector(state) : state;
     });
@@ -194,6 +197,7 @@ describe('useHomeScreen', () => {
         activeRemoteTextModelId: 'remote-model-1',
         activeRemoteImageModelId: null,
         activeServerId: 'server-1',
+        activeRemoteMediaServerIds: { text: 'server-1', image: null },
       }; return sel ? sel(st) : st; });
       const { result } = renderHook(() => useHomeScreen(mockNavigation));
       act(() => { result.current.startNewChat(); });
@@ -274,6 +278,7 @@ describe('useHomeScreen', () => {
         activeRemoteTextModelId: 'remote-1',
         activeRemoteImageModelId: null,
         activeServerId: 'server-1',
+        activeRemoteMediaServerIds: { text: 'server-1', image: null },
       }; return sel ? sel(st) : st; });
       const { result } = renderHook(() => useHomeScreen(mockNavigation));
       act(() => { result.current.handleEjectAll(); });
@@ -308,7 +313,7 @@ describe('useHomeScreen', () => {
     it('calls clearActiveRemoteModel', async () => {
       const { result } = renderHook(() => useHomeScreen(mockNavigation));
       await act(async () => { await result.current.handleUnloadRemoteTextModel(); });
-      expect(remoteServerManager.clearActiveRemoteModel).toHaveBeenCalled();
+      expect(remoteServerManager.clearActiveRemoteTextModel).toHaveBeenCalled();
     });
   });
 
@@ -317,11 +322,11 @@ describe('useHomeScreen', () => {
       const { result } = renderHook(() => useHomeScreen(mockNavigation));
       const model = { id: 'img-1', serverId: 'server-1', name: 'Vision Model', capabilities: {} } as any;
       await act(async () => { await result.current.handleSelectRemoteImageModel(model); });
-      expect(remoteServerManager.setActiveRemoteImageModel).toHaveBeenCalledWith('server-1', 'img-1');
+      expect(remoteServerManager.setActiveRemoteMediaModel).toHaveBeenCalledWith('server-1', 'image', 'img-1');
     });
 
     it('shows error alert when setActiveRemoteImageModel fails', async () => {
-      (remoteServerManager.setActiveRemoteImageModel as jest.Mock).mockRejectedValueOnce(
+      (remoteServerManager.setActiveRemoteMediaModel as jest.Mock).mockRejectedValueOnce(
         new Error('Vision unavailable'),
       );
       const { result } = renderHook(() => useHomeScreen(mockNavigation));
@@ -335,7 +340,7 @@ describe('useHomeScreen', () => {
     it('calls clearActiveRemoteModel', async () => {
       const { result } = renderHook(() => useHomeScreen(mockNavigation));
       await act(async () => { await result.current.handleUnloadRemoteImageModel(); });
-      expect(remoteServerManager.clearActiveRemoteModel).toHaveBeenCalled();
+      expect(remoteServerManager.clearActiveRemoteMediaModel).toHaveBeenCalledWith('image');
     });
   });
 
@@ -362,11 +367,16 @@ describe('useHomeScreen', () => {
     it('returns remote text model when no local model', () => {
       const remoteModel = { id: 'remote-1', serverId: 'server-1', name: 'Remote', capabilities: { supportsVision: false } } as any;
       (useRemoteServerStore as unknown as jest.Mock).mockImplementation((sel?: any) => { const st = {
-        servers: [{ id: 'server-1' }],
+        servers: [{
+          id: 'server-1',
+          name: 'Office Mac',
+          modelCatalog: { image: [{ id: 'img-remote-1', name: 'Vision' }] },
+        }],
         discoveredModels: { 'server-1': [remoteModel] },
         activeRemoteTextModelId: 'remote-1',
         activeRemoteImageModelId: null,
         activeServerId: 'server-1',
+        activeRemoteMediaServerIds: { text: 'server-1', image: null },
       }; return sel ? sel(st) : st; });
       const { result } = renderHook(() => useHomeScreen(mockNavigation));
       expect(result.current.activeTextModel).toEqual(remoteModel);
@@ -384,7 +394,7 @@ describe('useHomeScreen', () => {
   // ==========================================================================
   describe('handleUnloadRemoteTextModel error path', () => {
     it('shows error alert when clearActiveRemoteModel throws', async () => {
-      (remoteServerManager.clearActiveRemoteModel as jest.Mock).mockImplementationOnce(() => {
+      (remoteServerManager.clearActiveRemoteTextModel as jest.Mock).mockImplementationOnce(() => {
         throw new Error('Clear failed');
       });
       const { result } = renderHook(() => useHomeScreen(mockNavigation));
@@ -395,7 +405,7 @@ describe('useHomeScreen', () => {
 
   describe('handleUnloadRemoteImageModel error path', () => {
     it('shows error alert when clearActiveRemoteModel throws', async () => {
-      (remoteServerManager.clearActiveRemoteModel as jest.Mock).mockImplementationOnce(() => {
+      (remoteServerManager.clearActiveRemoteMediaModel as jest.Mock).mockImplementationOnce(() => {
         throw new Error('Clear failed');
       });
       const { result } = renderHook(() => useHomeScreen(mockNavigation));
@@ -411,14 +421,23 @@ describe('useHomeScreen', () => {
     it('returns remote image model when active', () => {
       const remoteImgModel = { id: 'img-remote-1', serverId: 'server-1', name: 'Vision', capabilities: { supportsVision: true } } as any;
       (useRemoteServerStore as unknown as jest.Mock).mockImplementation((sel?: any) => { const st = {
-        servers: [{ id: 'server-1' }],
+        servers: [{
+          id: 'server-1',
+          name: 'Office Mac',
+          modelCatalog: { image: [{ id: 'img-remote-1', name: 'Vision' }] },
+        }],
         discoveredModels: { 'server-1': [remoteImgModel] },
         activeRemoteTextModelId: null,
         activeRemoteImageModelId: 'img-remote-1',
         activeServerId: 'server-1',
+        activeRemoteMediaServerIds: { text: null, image: 'server-1' },
       }; return sel ? sel(st) : st; });
       const { result } = renderHook(() => useHomeScreen(mockNavigation));
-      expect(result.current.activeImageModel).toEqual(remoteImgModel);
+      expect(result.current.activeImageModel).toEqual(expect.objectContaining({
+        id: remoteImgModel.id,
+        name: remoteImgModel.name,
+        serverId: remoteImgModel.serverId,
+      }));
     });
   });
 
@@ -432,6 +451,7 @@ describe('useHomeScreen', () => {
         activeRemoteTextModelId: null,
         activeRemoteImageModelId: null,
         activeServerId: null,
+        activeRemoteMediaServerIds: { text: null, image: null },
       }; return sel ? sel(st) : st; });
       const { result } = renderHook(() => useHomeScreen(mockNavigation));
       // All remote models (including VL) go into remoteTextModels — remote image gen not supported

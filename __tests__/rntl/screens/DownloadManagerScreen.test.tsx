@@ -380,8 +380,7 @@ describe('DownloadManagerScreen', () => {
 
     const { getByText, queryByText } = render(<DownloadManagerScreen />);
     expect(getByText('test-model-q4.gguf')).toBeTruthy();
-    expect(getByText('test-author')).toBeTruthy();
-    expect(getByText('Q4_K_M')).toBeTruthy();
+    expect(getByText(/test-author · 4\.0 GB · Q4_K_M/)).toBeTruthy();
     expect(queryByText('No models downloaded yet')).toBeNull();
   });
 
@@ -404,7 +403,7 @@ describe('DownloadManagerScreen', () => {
 
     const { getByText } = render(<DownloadManagerScreen />);
     expect(getByText('SD Turbo')).toBeTruthy();
-    expect(getByText('Image Generation')).toBeTruthy();
+    expect(getByText(/Image Generation · 2\.0 GB/)).toBeTruthy();
   });
 
   it('renders active download with progress info', () => {
@@ -970,8 +969,8 @@ describe('DownloadManagerScreen', () => {
     setupSingleModelState({ modelOverrides: { id: 'model-zero', name: 'Zero Model', fileName: 'zero-model.gguf', fileSize: 0 } }, 0);
 
     const { getByText } = render(<DownloadManagerScreen />);
-    // The size display for a 0-byte model shows '0 B'
-    expect(getByText('0 B')).toBeTruthy();
+    // The metadata row includes the zero-byte size.
+    expect(getByText(/author · 0 B · Q4_K_M/)).toBeTruthy();
   });
 
   it('image model with quantization renders imageBadge and imageQuantText styles (covers lines 424-425)', () => {

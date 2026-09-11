@@ -122,6 +122,7 @@ function makeServiceSvc(overrides: any = {}) {
   const { state: _s, ...rest } = overrides;
   return {
     state,
+    generationAttempt: 0,
     updateState: jest.fn((patch: any) => Object.assign(state, patch)),
     resetState: jest.fn(),
     pendingStop: null,
