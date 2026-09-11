@@ -33,6 +33,7 @@ import {
 import {
   refreshMobileModelServices,
 } from './src/services/modelServices';
+import { upgradeLegacyMobileModelSelections } from './src/services/modelServices/modelSelectionProjection';
 import {
   startNetworkReconnectWatcher,
   stopNetworkReconnectWatcher,
@@ -232,6 +233,7 @@ function App() {
           ensureModelSelectionStoreHydrated(),
           ensureWhisperStoreHydrated(),
         ]);
+        await upgradeLegacyMobileModelSelections();
 
         try {
           // Pro supplies optional domain ports before core creates the single application root.

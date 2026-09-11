@@ -61,9 +61,10 @@ export const useWhisperTranscription = ({
     speech.snapshot,
     speech.snapshot,
   );
-  const [finalResult, setFinalResult] = useState('');
-  const [finalRecording, setFinalRecording] =
-    useState<FinalizedRecording | null>(null);
+  const [finalCapture, setFinalCapture] = useState<{
+    text: string;
+    recording: FinalizedRecording | null;
+  }>({ text: '', recording: null });
   const [commandError, setCommandError] = useState<string | null>(null);
   const transcriptionModels = useTranscriptionModelsProjection();
   const isModelLoaded = transcriptionModels.models.some(
@@ -79,8 +80,12 @@ export const useWhisperTranscription = ({
     () =>
       speech.events(event => {
         if (event.type === 'transcription_final') {
-          setFinalResult(event.text);
-          setFinalRecording(event.recording ?? null);
+          // A transcript and its recording are one completed capture. Separate React writes let
+          // the delivery effect observe the text before the WAV path and send a plain text turn.
+          setFinalCapture({
+            text: event.text,
+            recording: event.recording ?? null,
+          });
           Vibration.vibrate(30);
         }
       }),
@@ -107,8 +112,7 @@ export const useWhisperTranscription = ({
       sessionPhase: before.voice.phase,
     });
     setCommandError(null);
-    setFinalResult('');
-    setFinalRecording(null);
+    setFinalCapture({ text: '', recording: null });
     const ready = await applicationFacade().workflows.prepareTranscription();
     logVoiceDiagnostic('transcription_prepare_finished', {
       attempt,
@@ -165,8 +169,7 @@ export const useWhisperTranscription = ({
   }, [speech]);
 
   const clearResult = useCallback(() => {
-    setFinalResult('');
-    setFinalRecording(null);
+    setFinalCapture({ text: '', recording: null });
     setCommandError(null);
     cancelActiveTranscription(speech).catch(error => {
       logger.error(
@@ -183,8 +186,8 @@ export const useWhisperTranscription = ({
     isStartingRecording: false,
     isTranscribing: speechSnapshot.transcription.status === 'transcribing',
     partialResult: speechSnapshot.transcription.partial,
-    finalResult,
-    finalRecording,
+    finalResult: finalCapture.text,
+    finalRecording: finalCapture.recording,
     error:
       commandError ||
       (speechSnapshot.transcription.failure

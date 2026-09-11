@@ -33,6 +33,7 @@ import { useOpenSync } from '../../hooks/useOpenSync';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
 import { useActiveMobileModel } from '../../hooks/useActiveMobileModel';
 import { openSupportEmail } from '../../utils/supportEmail';
+import { remoteServerManager } from '../../services/modelServices/remoteServerController';
 
 type HomeScreenProps = {
   navigation: HomeScreenNavigationProp;
@@ -101,6 +102,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [whisperOpen, setWhisperOpen] = React.useState(false);
   const [voiceOpen, setVoiceOpen] = React.useState(false);
   const transcriptionRoute = useActiveMobileModel('transcription').model;
+  const textRoute = useActiveMobileModel('text');
+  const imageRoute = useActiveMobileModel('image');
   const whisperPresentCount = useTranscriptionModelsProjection().models.filter(
     model => model.installed,
   ).length;
@@ -108,8 +111,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const remoteLabels = useActiveRemoteModelLabels();
 
   const modelLabels = homeModelLabels({
-    text: activeTextModel?.name,
-    image: activeImageModel?.name,
+    text: textRoute.model?.name ?? activeTextModel?.name,
+    image: imageRoute.model?.name ?? activeImageModel?.name,
     voice: remoteLabels.voice,
     transcription: remoteLabels.transcription,
     localVoice: voiceSummary,
@@ -346,16 +349,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         onClosed={runPendingAfterClose}
         labels={modelLabels}
         remote={{
-          text: !!activeRemoteTextModelId,
-          image: !!activeRemoteImageModelId,
+          text: textRoute.model?.source === 'remote',
+          image: imageRoute.model?.source === 'remote',
           voice: !!remoteLabels.voice,
           speech: !!remoteLabels.transcription,
+        }}
+        remoteAvailable={{
+          text: textRoute.ready,
+          image: imageRoute.ready,
+          voice: remoteLabels.voiceReady ?? true,
+          speech: remoteLabels.transcriptionReady ?? true,
         }}
         loadingState={loadingState}
         isEjecting={isEjecting}
         hasActiveModel={hasEjectableModel}
         onOpenRow={openModelRow}
         onEject={() => closeManagerThen(handleEjectAll)}
+        onReconnectRemote={() => remoteServerManager.recoverActiveConnection(true)}
       />
       <WhisperPickerSheet
         visible={whisperOpen}

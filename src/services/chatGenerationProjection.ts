@@ -79,7 +79,12 @@ class MobileGenerationProjection {
     // Shared Models resolved this committed setting into the immutable turn request before native
     // generation began. The UI store must not read a second writable settings projection.
     this.thinkingEnabled = turn.request.request.reasoning?.enabled === true;
-    useChatStore.getState().startStreaming(turn.conversationId);
+    if (!turn.assistantMessageId) {
+      throw new Error(`Assistant message identity missing for turn: ${turn.id}`);
+    }
+    useChatStore
+      .getState()
+      .startStreaming(turn.conversationId, turn.assistantMessageId);
   }
 
   private partial(turn: ChatTurn, content: string, reasoning: string): void {
@@ -166,7 +171,13 @@ class MobileGenerationProjection {
   }
 
   private complete(turn: ChatTurn): void {
-    if (turn.request.operation.type === 'image') return;
+    if (turn.request.operation.type === 'image') {
+      // ChatSession publishes completion only after the final assistant row is durable. Starting
+      // voice from the image engine's earlier `done` phase raced that write and read the prompt card
+      // or the user row instead of the generated-image response.
+      callHook(HOOKS.audioOnStreamingEnd, turn.conversationId);
+      return;
+    }
     if (!this.isActive(turn)) {
       this.checkSharePrompt();
       return;
@@ -229,6 +240,7 @@ class MobileGenerationProjection {
           reasoning: streaming.streamingReasoningContent,
           thinkingEnabled: this.thinkingEnabled,
         }),
+        streaming.streamingMessageUuid,
       );
     }
     if (this.reasoningBuffer) {

@@ -133,12 +133,13 @@ function mobileImagePromptEnhancementPorts(
       enqueue('update enhancement card', () =>
         updateEnhancementCard(messageId, buildEnhancementCardContent(text)));
     },
-    onCompleted() {
+    onCompleted(prompt) {
       if (!temporaryMessageId) return;
       const messageId = temporaryMessageId;
-      // The completed prompt belongs to the final generated-image message. Remove this
-      // temporary streaming row so retries cannot leave detached prompt cards behind.
-      queueTerminal(() => discardEnhancementCard(messageId));
+      // Keep one durable prompt row from the first partial through image completion. The chat
+      // presentation groups this row into the following image result when that result arrives.
+      queueTerminal(() =>
+        updateEnhancementCard(messageId, buildEnhancementCardContent(prompt)));
     },
     onDiscarded() {
       if (!temporaryMessageId) return;

@@ -18,6 +18,7 @@ import {
 } from '../../services/adapters/models/mobileChatHostPort';
 import { registerMobileChatSessionControl } from '../../services/modelServices/chatSessionControl';
 import type { Message } from '../../types';
+import { generateId } from '../../utils/generateId';
 
 export type { MobileChatCommandOptions } from '../../services/adapters/models/mobileChatHostPort';
 export { projectClassifierFailure } from '../../services/adapters/models/mobileChatHostPort';
@@ -89,6 +90,7 @@ export const mobileChatSession = {
           conversationId,
           turnId,
           userMessageId: message.id,
+          assistantMessageId: generateId(),
           projectId: conversation.projectId ?? undefined,
           userMessage,
           operation: recordedOperation,
@@ -116,6 +118,7 @@ export const mobileChatSession = {
         await applicationFacade().models.chat.regenerate({
           conversationId,
           turnId,
+          assistantMessageId: generateId(),
           operation,
           request: mobileChatRequestDefaults(),
         }),
@@ -135,6 +138,7 @@ export const mobileChatSession = {
         await applicationFacade().models.chat.edit({
           conversationId,
           turnId,
+          assistantMessageId: generateId(),
           userMessage: mobileGenerationMessage(message),
           request: mobileChatRequestDefaults(),
         }),

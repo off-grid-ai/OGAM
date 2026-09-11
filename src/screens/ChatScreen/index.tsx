@@ -40,6 +40,8 @@ import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useTranscriptionModelsProjection } from '../../hooks/useTranscriptionModelsProjection';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
+import { useActiveMobileModel } from '../../hooks/useActiveMobileModel';
+import { remoteServerManager } from '../../services/modelServices/remoteServerController';
 
 function countConversationImages(conv: Conversation | undefined): number {
   return (conv?.messages || []).reduce(
@@ -69,8 +71,9 @@ export const ChatScreen: React.FC = () => {
   const voiceSummary = useUiModeStore(s => s.voiceSummary);
   const whisperModelId = useTranscriptionModelsProjection().selectedModelId;
   const remoteLabels = useActiveRemoteModelLabels();
+  const textRoute = useActiveMobileModel('text');
   const modelLabels: Record<ModelRowType, string> = {
-    text: chat.activeModelName ?? chat.activeModel?.name ?? '—',
+    text: textRoute.model?.name ?? chat.activeModelName ?? chat.activeModel?.name ?? '—',
     image: remoteLabels.image ?? chat.activeImageModel?.name ?? '—',
     voice: remoteLabels.voice ?? voiceSummary ?? '—',
     speech:
@@ -272,6 +275,12 @@ export const ChatScreen: React.FC = () => {
             voice: !!remoteLabels.voice,
             speech: !!remoteLabels.transcription,
           }}
+          remoteAvailable={{
+            text: textRoute.ready,
+            image: remoteLabels.imageReady ?? true,
+            voice: remoteLabels.voiceReady ?? true,
+            speech: remoteLabels.transcriptionReady ?? true,
+          }}
           loadingState={{ isLoading: !!chat.isModelLoading, type: 'text' }}
           isEjecting={isEjecting}
           hasActiveModel={hasEjectableModel}
@@ -280,6 +289,7 @@ export const ChatScreen: React.FC = () => {
             pendingEjectRef.current = true;
             setModelsManagerOpen(false);
           }}
+          onReconnectRemote={() => remoteServerManager.recoverActiveConnection(true)}
         />
         <WhisperPickerSheet
           visible={whisperOpen}

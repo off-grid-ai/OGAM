@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { stripStreamingControlTokens } from '../utils/messageContent';
-import { generateId } from '../utils/generateId';
 import {
   type ReplyEnd,
   type StreamingSnapshot,
@@ -20,7 +19,7 @@ export interface ChatState {
    */
   streamingMessageUuid: string | null;
   setActiveConversation: (conversationId: string | null) => void;
-  startStreaming: (conversationId: string) => void;
+  startStreaming: (conversationId: string, messageId: string) => void;
   setStreamingMessage: (content: string) => void;
   appendToStreamingMessage: (token: string) => void;
   appendToStreamingReasoningContent: (token: string) => void;
@@ -67,14 +66,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set({ activeConversationId: conversationId });
   },
 
-  startStreaming: conversationId => {
+  startStreaming: (conversationId, messageId) => {
     set({
       ...NO_REPLY_FORMING,
       streamingForConversationId: conversationId,
-      // Minted here, before the first token, and carried all the way to the stored row. This is
-      // the id a paired device sees on every live frame, so when the record arrives it recognises
-      // the answer it is already showing instead of drawing it a second time.
-      streamingMessageUuid: generateId(),
+      streamingMessageUuid: messageId,
     });
   },
 

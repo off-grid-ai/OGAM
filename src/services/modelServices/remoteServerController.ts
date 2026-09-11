@@ -117,9 +117,11 @@ class RemoteServerManager {
     const result = requireSuccess(outcome);
     return { ...result, found: result.found.map(server => ({ ...server, type: 'gateway' })) };
   }
-  async recoverActiveConnection(): Promise<void> {
+  async recoverActiveConnection(forceDiscovery = false): Promise<void> {
     requireSuccess(
-      await applicationFacade().models.recoverRemoteServers(shouldRecoverRemoteServers()),
+      await applicationFacade().models.recoverRemoteServers(
+        forceDiscovery || shouldRecoverRemoteServers(),
+      ),
     );
   }
   async clearAllServers(): Promise<void> {

@@ -55,7 +55,6 @@ import {
   optionalNumberSetting,
 } from './mobileChatSettingsProjection';
 import {projectWorkspaceMessage} from '../workspaceContent/projectWorkspaceMessage';
-import {buildEnhancementReasoningContent} from '../../imageGenerationHelpers';
 
 export { mobileChatRequestDefaults } from './mobileChatSettingsProjection';
 
@@ -309,12 +308,6 @@ async function generateForSession(
     const localImageModel = useAppStore
       .getState()
       .downloadedImageModels.find(candidate => candidate.id === model.id);
-    const enhancedPrompt =
-      settings.enhanceImagePrompts === true &&
-      model.source === 'local' &&
-      generated.prompt.trim() !== request.operation.prompt.trim()
-        ? buildEnhancementReasoningContent(generated.prompt)
-        : '';
     return {
       model,
       output: {
@@ -349,7 +342,9 @@ async function generateForSession(
         ],
       },
       content: '',
-      reasoning: enhancedPrompt,
+      // The preceding durable enhancement row is the single prompt owner and becomes this image's
+      // supporting context in the chat projection.
+      reasoning: '',
       toolCalls: [],
       finishReason: 'stop',
       attemptedModelIds: [model.id],
