@@ -17,6 +17,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import { useAmbientTimelineStore } from '../stores/ambientTimelineStore';
 import { audioRecorderService } from '../services/audioRecorderService';
+import { ProcessingSchedulePicker } from '../components/ambient/ProcessingSchedulePicker';
 import type { ProcessingMode, CaptureMode } from '../services/ambient/processingModel';
 
 const STEP_COUNT = 7;
@@ -28,6 +29,8 @@ export function AmbientOnboardingScreen(): React.ReactElement {
 
   const processingMode = useAmbientTimelineStore(s => s.processingMode);
   const setProcessingMode = useAmbientTimelineStore(s => s.setProcessingMode);
+  const processingMinuteOfDay = useAmbientTimelineStore(s => s.processingMinuteOfDay);
+  const setProcessingMinuteOfDay = useAmbientTimelineStore(s => s.setProcessingMinuteOfDay);
   const captureMode = useAmbientTimelineStore(s => s.captureMode);
   const setCaptureMode = useAmbientTimelineStore(s => s.setCaptureMode);
   const onDeviceOnly = useAmbientTimelineStore(s => s.onDeviceOnly);
@@ -91,6 +94,14 @@ export function AmbientOnboardingScreen(): React.ReactElement {
             ]}
             value={processingMode}
             onSelect={id => setProcessingMode(id as ProcessingMode)}
+            below={
+              processingMode === 'nightly' ? (
+                <ProcessingSchedulePicker
+                  minuteOfDay={processingMinuteOfDay}
+                  onChange={setProcessingMinuteOfDay}
+                />
+              ) : null
+            }
           />
         ) : null}
 
@@ -198,7 +209,8 @@ function Choice({
   value,
   onSelect,
   styles,
-  colors
+  colors,
+  below
 }: {
   title: string;
   options: { id: string; label: string; desc: string }[];
@@ -206,6 +218,7 @@ function Choice({
   onSelect: (id: string) => void;
   styles: any;
   colors: any;
+  below?: React.ReactNode;
 }): React.ReactElement {
   return (
     <View style={styles.step}>
@@ -229,6 +242,7 @@ function Choice({
           );
         })}
       </View>
+      {below}
     </View>
   );
 }

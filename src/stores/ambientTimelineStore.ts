@@ -16,6 +16,7 @@ import type { ProactiveActionProposal } from '@offgrid/models'
 import type { ProcessingMode, CaptureMode, PendingCapture } from '../services/ambient/processingModel'
 import { DEFAULT_PROCESSING_MODE, DEFAULT_CAPTURE_MODE } from '../services/ambient/processingModel'
 import { DEFAULT_RETENTION_DAYS } from '../services/ambient/retentionModel'
+import { DEFAULT_PROCESSING_MINUTE_OF_DAY } from '../services/ambient/scheduleModel'
 
 interface AmbientTimelineState {
   sessions: TimelineSession[]
@@ -42,6 +43,10 @@ interface AmbientTimelineState {
   onboardingComplete: boolean
   /** Captures waiting to be processed (nightly mode). */
   pendingCaptures: PendingCapture[]
+  /** Local minute-of-day the deferred queue should drain (nightly mode). */
+  processingMinuteOfDay: number
+  /** When the scheduled drain last ran, so it fires once per day and catches up on open. */
+  lastScheduledProcessAt: number | null
   /** How many days of raw capture audio to keep (for Replay). */
   audioRetentionDays: number
   addSessions: (sessions: TimelineSession[]) => void
@@ -56,6 +61,8 @@ interface AmbientTimelineState {
   setProcessingMode: (mode: ProcessingMode) => void
   addPendingCapture: (capture: PendingCapture) => void
   clearPendingCaptures: () => void
+  setProcessingMinuteOfDay: (minuteOfDay: number) => void
+  markScheduledProcess: (atMs: number) => void
   setAudioRetentionDays: (days: number) => void
   setCaptureMode: (mode: CaptureMode) => void
   setOnboardingComplete: (done: boolean) => void
@@ -89,6 +96,8 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       captureMode: DEFAULT_CAPTURE_MODE,
       onboardingComplete: false,
       pendingCaptures: [],
+      processingMinuteOfDay: DEFAULT_PROCESSING_MINUTE_OF_DAY,
+      lastScheduledProcessAt: null,
       audioRetentionDays: DEFAULT_RETENTION_DAYS,
       addSessions: incoming => set(state => ({ sessions: mergeSessions(state.sessions, incoming) })),
       removeSession: id => set(state => ({ sessions: state.sessions.filter(s => s.id !== id) })),
@@ -111,6 +120,8 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       addPendingCapture: capture =>
         set(state => ({ pendingCaptures: [...state.pendingCaptures, capture] })),
       clearPendingCaptures: () => set({ pendingCaptures: [] }),
+      setProcessingMinuteOfDay: minuteOfDay => set({ processingMinuteOfDay: minuteOfDay }),
+      markScheduledProcess: atMs => set({ lastScheduledProcessAt: atMs }),
       setAudioRetentionDays: days => set({ audioRetentionDays: days }),
       setCaptureMode: mode => set({ captureMode: mode }),
       setOnboardingComplete: done => set({ onboardingComplete: done })

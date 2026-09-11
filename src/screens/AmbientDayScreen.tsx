@@ -12,6 +12,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Modal,
   ScrollView,
   Share,
@@ -40,6 +41,8 @@ import {
 import { journalForDay } from '../services/ambient/journalFactory';
 import { proposeActionsForDay } from '../services/ambient/actionsFactory';
 import { runAudioRetention } from '../services/ambient/retentionService';
+import { ProcessingSchedulePicker } from '../components/ambient/ProcessingSchedulePicker';
+import { shouldRunScheduled } from '../services/ambient/scheduleModel';
 import { formatTodosForActions, formatCallsForActions } from '../services/ambient/actionsModel';
 import { askDayWithDeviceLLM } from '../services/ambient/askDayFactory';
 import type { AskResult } from '../services/ambient/askDay';
@@ -87,6 +90,8 @@ export function AmbientDayScreen(): React.ReactElement {
   const pendingCaptures = useAmbientTimelineStore(s => s.pendingCaptures);
   const processingMode = useAmbientTimelineStore(s => s.processingMode);
   const setProcessingMode = useAmbientTimelineStore(s => s.setProcessingMode);
+  const processingMinuteOfDay = useAmbientTimelineStore(s => s.processingMinuteOfDay);
+  const setProcessingMinuteOfDay = useAmbientTimelineStore(s => s.setProcessingMinuteOfDay);
   const onDeviceOnly = useAmbientTimelineStore(s => s.onDeviceOnly);
   const setOnDeviceOnly = useAmbientTimelineStore(s => s.setOnDeviceOnly);
   const useMacForTranscription = useAmbientTimelineStore(s => s.useMacForTranscription);
@@ -195,6 +200,37 @@ export function AmbientDayScreen(): React.ReactElement {
     retentionRan.current = true;
     runAudioRetention(useAmbientTimelineStore.getState().sessions, useAmbientTimelineStore.getState().audioRetentionDays).catch(() => undefined);
   }, []);
+
+  // Deferred ("Later") queue: catch-up drain. If the background task never fired the scheduled run
+  // (iOS gated it, or the app was closed), process the queue the next time we're open past today's
+  // scheduled time. Runs at most once per scheduled day; marks the run only when the queue actually drained.
+  const scheduledInFlight = useRef(false);
+  useEffect(() => {
+    const tryScheduled = (): void => {
+      if (scheduledInFlight.current) return;
+      const st = useAmbientTimelineStore.getState();
+      if (st.processingMode !== 'nightly') return;
+      if (st.pendingCaptures.length === 0) return;
+      if (!shouldRunScheduled(Date.now(), st.processingMinuteOfDay, st.lastScheduledProcessAt)) return;
+      scheduledInFlight.current = true;
+      capture
+        .processPending()
+        .then(() => {
+          if (useAmbientTimelineStore.getState().pendingCaptures.length === 0) {
+            useAmbientTimelineStore.getState().markScheduledProcess(Date.now());
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          scheduledInFlight.current = false;
+        });
+    };
+    tryScheduled();
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') tryScheduled();
+    });
+    return () => sub.remove();
+  }, [capture]);
 
   const open = openTaskCount(tasks);
 
@@ -456,6 +492,14 @@ export function AmbientDayScreen(): React.ReactElement {
             <Text style={styles.settingHint}>
               Live processes each recording on stop. Later queues them to process together.
             </Text>
+            {processingMode === 'nightly' ? (
+              <View style={{ marginTop: 12 }}>
+                <ProcessingSchedulePicker
+                  minuteOfDay={processingMinuteOfDay}
+                  onChange={setProcessingMinuteOfDay}
+                />
+              </View>
+            ) : null}
             <View style={[styles.settingRow, { marginTop: 14 }]}>
               <Text style={styles.settingLabel}>Keep summaries on-device</Text>
               <Switch
