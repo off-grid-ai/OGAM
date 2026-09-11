@@ -1,4 +1,4 @@
-import { hasProAccess, type ProDeviceAdmission } from '@offgrid/sync';
+import { hasProAccess, type ProDeviceAdmission } from '@offgrid/application';
 
 export interface ProAccessSlice {
   /** Cached protected Pro credential grants offline feature access. */

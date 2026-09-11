@@ -2,7 +2,7 @@ import { modelTransferFsBoundary } from '../../utils/modelTransferFsBoundary';
 import {
   noteTitle,
   writePastedNote,
-} from '../../../src/services/rag/pastedNote';
+} from '../../../src/services/adapters/rag/pastedNoteFileAdapter';
 
 jest.mock('react-native-fs', () => {
   const {

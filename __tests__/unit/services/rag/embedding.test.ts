@@ -12,8 +12,7 @@ const mockCopyFileAssets = (RNFS as any).copyFileAssets as jest.MockedFunction<a
 const mockCopyFile = RNFS.copyFile as jest.MockedFunction<typeof RNFS.copyFile>;
 
 // Must import after mocks are set up
-import { embeddingService } from '../../../../src/services/rag/embedding';
-import { modelResidencyManager } from '../../../../src/services/modelResidency';
+import { embeddingService } from '../../../../src/services/adapters/native/embeddingRuntimeAdapter';
 
 const mockEmbedding = jest.fn();
 const mockRelease = jest.fn();
@@ -24,7 +23,6 @@ describe('EmbeddingService', () => {
     // Reset internal state
     (embeddingService as any).context = null;
     (embeddingService as any).loading = null;
-    modelResidencyManager._reset();
 
     mockEmbedding.mockResolvedValue({ embedding: new Array(384).fill(0.1) });
     mockRelease.mockResolvedValue(undefined);
@@ -78,15 +76,7 @@ describe('EmbeddingService', () => {
       expect(mockInitLlama).toHaveBeenCalledTimes(1);
     });
 
-    it('registers with the residency manager so its RAM is budgeted (F2)', async () => {
-      await embeddingService.load();
-      expect(modelResidencyManager.isResident('embedding')).toBe(true);
-      const resident = modelResidencyManager.getResidents().find(r => r.key === 'embedding');
-      expect(resident?.type).toBe('embedding');
-      expect(resident?.sizeMB).toBeGreaterThan(0);
-    });
-
-    it('rejects and does not register if the native load times out (F5)', async () => {
+    it('rejects and stays unloaded if the native load times out (F5)', async () => {
       jest.useFakeTimers();
       // initLlama never resolves → the timeout must fire and release the lock.
       mockInitLlama.mockReturnValue(new Promise(() => {}) as any);
@@ -96,7 +86,6 @@ describe('EmbeddingService', () => {
       expect(result).toBeInstanceOf(Error);
       expect((result as Error).message).toMatch('timed out');
       expect(embeddingService.isLoaded()).toBe(false);
-      expect(modelResidencyManager.isResident('embedding')).toBe(false);
       jest.useRealTimers();
     });
   });
@@ -132,13 +121,6 @@ describe('EmbeddingService', () => {
 
       expect(mockRelease).toHaveBeenCalled();
       expect(embeddingService.isLoaded()).toBe(false);
-    });
-
-    it('releases its residency registration on unload (F2)', async () => {
-      await embeddingService.load();
-      expect(modelResidencyManager.isResident('embedding')).toBe(true);
-      await embeddingService.unload();
-      expect(modelResidencyManager.isResident('embedding')).toBe(false);
     });
 
     it('is safe to call when not loaded', async () => {

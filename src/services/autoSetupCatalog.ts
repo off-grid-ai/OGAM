@@ -1,85 +1,88 @@
-import { recommendedModelsForDevice, ramFitScore } from '../utils/recommendedModels';
-import { fileExceedsBudget } from './memoryBudget';
+import { Platform } from 'react-native';
+import {
+  buildGuidedSetupCatalog,
+  guidedSetupTextDiscoveryModels,
+  WHISPER_MODELS,
+  type GuidedSetupCatalog,
+} from '@offgrid/models';
 import { fetchModelFiles } from './modelCatalogFiles';
+import { huggingFaceService } from './huggingface';
 import { hardwareService } from './hardware';
-import { WHISPER_MODELS } from './whisperModels';
-import type { AutoSetupCompatibleCatalog } from './autoSetupPlan';
 import { autoSetupImageCatalogProvider } from './autoSetupImageCatalogProvider';
+import type { ModelFile } from '../types';
+import type { ImageModelDescriptor } from './imageModelDownloadTypes';
 
-const MB = 1024 * 1024;
-
-type CompatibleTextModel = ReturnType<typeof recommendedModelsForDevice>[number];
+export type AutoSetupTextPayload = { modelId: string; file: ModelFile };
+export type AutoSetupImagePayload = ImageModelDescriptor;
+export type AutoSetupSttPayload = { modelId: string };
+export type AutoSetupCompatibleCatalog = GuidedSetupCatalog<
+  AutoSetupTextPayload,
+  AutoSetupImagePayload,
+  AutoSetupSttPayload,
+  never
+>;
 
 export interface AutoSetupCatalogBoundaries {
   totalMemoryGB: () => number;
-  fetchTextFiles: typeof fetchModelFiles;
+  fetchTextFiles: (
+    models: { id: string }[],
+  ) => ReturnType<typeof fetchModelFiles>;
   imageRecommendation: typeof hardwareService.getImageModelRecommendation;
   imageModels: typeof autoSetupImageCatalogProvider.load;
 }
 
 const productionCatalogBoundaries: AutoSetupCatalogBoundaries = {
   totalMemoryGB: () => hardwareService.getTotalMemoryGB(),
-  fetchTextFiles: fetchModelFiles,
+  fetchTextFiles: models => fetchModelFiles(models, huggingFaceService),
   imageRecommendation: () => hardwareService.getImageModelRecommendation(),
   imageModels: () => autoSetupImageCatalogProvider.load(),
 };
 
-export function buildAutoSetupTextCandidates(
-  models: CompatibleTextModel[],
-  files: Record<string, import('../types').ModelFile[]>,
-  ramGB: number,
-): AutoSetupCompatibleCatalog['text'] {
-  return models.filter(model => model.type === 'vision').flatMap(model => {
-    const file = files[model.id]?.[0];
-    const sizeBytes = file ? file.size + (file.mmProjFile?.size ?? 0) : 0;
-    if (!file || fileExceedsBudget(sizeBytes, ramGB)) return [];
-    return [{
-      id: `${model.id}/${file.name}`,
-      name: model.name,
-      kind: 'text' as const,
-      sizeBytes,
-      fitScore: ramFitScore(model.minRam, ramGB),
-      parameterCountB: model.params,
-      payload: { modelId: model.id, file },
-    }];
-  });
-}
-
-/** Resolve the live catalogs, then admit candidates through the existing device-fit owners. */
+/** Native/network catalog adapter. Shared owns admission, costs, compatibility, and tiers. */
 export async function loadAutoSetupCompatibleCatalog(
   boundaries: AutoSetupCatalogBoundaries = productionCatalogBoundaries,
 ): Promise<AutoSetupCompatibleCatalog> {
   const ramGB = boundaries.totalMemoryGB();
-  const textModels = recommendedModelsForDevice(ramGB).filter(model => model.type === 'vision');
-  const files = await boundaries.fetchTextFiles(textModels);
-  const text = buildAutoSetupTextCandidates(textModels, files, ramGB);
-
-  const imageRecommendation = await boundaries.imageRecommendation();
-  const imageModels = await boundaries.imageModels();
-  const compatibleImages = imageModels.filter(model =>
-    imageRecommendation.compatibleBackends.includes(model.backend) &&
-    (!imageRecommendation.qnnVariant || model.backend !== 'qnn' || model.variant === imageRecommendation.qnnVariant) &&
-    !fileExceedsBudget(model.size, ramGB),
-  );
-  const image = compatibleImages.map((model, index) => ({
-    id: model.id,
-    name: model.name,
-    kind: 'image' as const,
-    sizeBytes: model.size,
-    fitScore: imageRecommendation.recommendedModels?.some(label => model.name.toLowerCase().includes(label)) ? 0 : index + 1,
-    payload: model,
-  }));
-
-  const stt = WHISPER_MODELS.filter(model =>
-    model.lang === 'multi' && !fileExceedsBudget(model.size * MB, ramGB),
-  ).map(model => ({
-    id: model.id,
-    name: `${model.name} Speech`,
-    kind: 'stt' as const,
-    sizeBytes: model.size * MB,
-    fitScore: Math.abs(model.size - Math.min(809, ramGB * 100)),
-    payload: { modelId: model.id },
-  }));
-
-  return { text, image, stt };
+  const textModels = guidedSetupTextDiscoveryModels(ramGB);
+  const [files, imageRecommendation, imageModels] = await Promise.all([
+    boundaries.fetchTextFiles(textModels),
+    boundaries.imageRecommendation(),
+    boundaries.imageModels(),
+  ]);
+  return buildGuidedSetupCatalog({
+    ramGb: ramGB,
+    platform: Platform.OS,
+    imageRecommendation,
+    text: textModels.map(model => ({
+      ...model,
+      files: (files[model.id] ?? []).map(file => ({
+        name: file.name,
+        size: file.size,
+        mmProjFile: file.mmProjFile
+          ? { size: file.mmProjFile.size }
+          : undefined,
+        payload: { modelId: model.id, file },
+      })),
+    })),
+    image: imageModels.map(model => {
+      const id = model.repo ?? model.huggingFaceRepo ?? model.id;
+      const payload = id === model.id ? model : { ...model, id };
+      return {
+        id,
+        name: model.name,
+        backend: model.backend,
+        variant: model.variant,
+        size: model.size,
+        artifacts: model.coremlFiles ?? model.huggingFaceFiles,
+        payload,
+      };
+    }),
+    stt: WHISPER_MODELS.map(model => ({
+      id: model.id,
+      name: model.name,
+      sizeMb: model.size,
+      language: model.lang,
+      payload: { modelId: model.id },
+    })),
+  });
 }

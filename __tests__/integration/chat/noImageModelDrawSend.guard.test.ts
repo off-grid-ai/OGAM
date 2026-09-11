@@ -15,7 +15,7 @@
  * Falsified: forcing shouldRouteToImageGenerationFn to return true (image route with no image model) makes
  * line 448 fire and the marker appears in the sendMessage text → this goes red.
  */
-import { setupChatScreen } from '../../harness/chatHarness';
+import {setupChatScreen, usingLiteRT} from '../../harness/chatHarness';
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
@@ -26,7 +26,7 @@ jest.mock('@react-navigation/native', () => ({
 
 describe('N3 (guard) — draw request with no image model routes safely', () => {
   it('renders a text answer and leaks NO image marker into the text the model receives', async () => {
-    const h = await setupChatScreen({ engine: 'litert' });
+    const h = await setupChatScreen(usingLiteRT());
     h.render();
 
     // No image model is downloaded/active → "draw …" must route to the text model.

@@ -4,20 +4,9 @@
  * the mounted ChatScreen, arrived at by real gestures. Real everything; fakes only the RAM sensor +
  * native leaves.
  *
- * DEVICE GROUND TRUTH (2026-07-15, 12GB Android, Aggressive): loading a large text model ("qwythos")
- * refused with "Failed to load model: … it needs ~6738MB but only 5030MB is available" — an OK-only
- * alert, NO Load Anyway. Root cause: the pre-load context gate (llmSafetyChecks.resolveSafeContext)
- * threw a plain Error; loadModelWithOverride only offers "Load Anyway" for an OverridableMemoryError,
- * so a plain Error fell to the dead-end "Failed to load model" alert.
- *
- * The intersection reproduced (numbers pinned from the live [MEM-SM] trace, not guessed): Aggressive
- * mode → residency makeRoomFor ADMITS (sizeMB 5376 < budget 10813, fits=true); then resolveSafeContext
- * REFUSES because the model's weight estimate (6144MB, from the 5GB on-disk file) exceeds the raw
- * available snapshot (5120MB). That refusal — signature "it needs ~XMB but only YMB is available" — is
- * the device error and the fix site. So the test can ONLY pass when THAT gate refuses (it asserts the
- * signature), never false-greening on the residency gate.
- *
- * RED on HEAD (fix reverted): plain Error → the alert reads "Failed to load model", no "Load Anyway".
+ * Shared residency is the canonical admission owner. This test uses a model that
+ * cannot fit its aggressive budget and proves the typed refusal reaches the real
+ * rendered override surface.
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB } from '../../harness/nativeBoundary';
@@ -31,15 +20,12 @@ jest.mock('@react-navigation/native', () => ({
 
 describe('memory refusal shows "Load Anyway" on the rendered alert, not a dead-end (red-flow)', () => {
   it('tapping send when the pre-load context gate refuses surfaces a "Load Anyway" override the user can tap', async () => {
-    // Pinned to iOS ON PURPOSE: the reclaim-aware gate fix (textPreloadGateReclaimAware) makes the
-    // Android-aggressive cell ADMIT via the LMK reclaim credit, so the refusal this test needs only
-    // survives on iOS (no reclaim credit — the gate reads raw). residency still admits (3.5GB record);
-    // resolveSafeContext refuses on the raw 5GB on-disk weight estimate. deferInitialLoad → first send
-    // triggers the real lazy load. This is why the two memory tests don't contradict each other.
+    // The first send triggers the real lazy load. A 9GB model cannot fit the
+    // aggressive budget on this 12GB iOS device.
     const h = await setupChatScreen({
       engine: 'llama',
       platform: 'ios',
-      modelFileSizeBytes: 3.5 * GB,
+      modelFileSizeBytes: 9 * GB,
       ram: { platform: 'ios', totalBytes: 12 * GB, availBytes: 5 * GB },
       deferInitialLoad: true,
     });
@@ -50,10 +36,7 @@ describe('memory refusal shows "Load Anyway" on the rendered alert, not a dead-e
     const { startLoadPolicySync } = require('../../../src/services/loadPolicySync');
      
 
-    // BOUNDARY: the ACTUAL on-disk model file is 5GB — resolveSafeContext sizes the model from the real
-    // file (RNFS.stat), so its weight estimate (6144MB) exceeds the 5120MB raw-available snapshot and it
-    // refuses. (The harness seeds a 500MB placeholder; a real 5GB download is the device reality.)
-    h.boundary.fs!.seedFile('/docs/models/ggml-small.gguf', Math.round(5 * GB));
+    h.boundary.fs!.seedFile('/docs/models/ggml-small.gguf', Math.round(9 * GB));
 
     h.render();
 
@@ -62,23 +45,25 @@ describe('memory refusal shows "Load Anyway" on the rendered alert, not a dead-e
     // GESTURE: turn on Aggressive via the real segmented control (the device was in Aggressive).
     const toggle = h.rtl.render(React.createElement(ModelLoadingModeSelector, {}));
     h.rtl.fireEvent.press(toggle.getByTestId('model-loading-mode-aggressive-button'));
-    await h.rtl.waitFor(() => { expect(require('../../../src/services/modelResidency').modelResidencyManager.getLoadPolicy()).toBe('aggressive'); });
+    await h.rtl.waitFor(() => { expect(require('../../harness/activeModelLifecycle').modelResidencyManager.getLoadPolicy()).toBe('aggressive'); });
 
     // Precondition: no refusal surface yet.
-    expect(h.view!.queryByText('Load Anyway')).toBeNull();
+    expect(h.view!.queryByText('Run anyway')).toBeNull();
 
-    // GESTURE: the real first-send lazy load → residency admits → resolveSafeContext refuses.
+    // GESTURE: the real first-send lazy load → shared residency refuses.
     await h.tapSend('hello');
 
-    // TERMINAL ARTIFACT: the override alert offers "Load Anyway", AND its body carries resolveSafeContext's
-    // signature ("it needs ~") so this can only pass when THAT gate (the fix site) refuses — no false-green
-    // on the residency gate. RED on HEAD: plain Error → dead-end "Failed to load model", no "Load Anyway".
+    // TERMINAL ARTIFACT: the typed memory refusal offers the override instead of
+    // degrading into a generic failed-load alert.
     await h.rtl.waitFor(() => {
-      expect(h.view!.queryByText('Load Anyway')).not.toBeNull();
+      expect(h.view!.queryByText('Run anyway')).not.toBeNull();
     }, { timeout: 8000 });
-    expect(h.view!.queryByText(/it needs ~/)).not.toBeNull();
+    expect(h.view!.queryByText(/Not Enough Memory/)).not.toBeNull();
     expect(h.view!.queryByText(/Failed to load model/)).toBeNull();
 
+    // This settings root owns an asynchronous hardware refresh. Unmount it before
+    // Jest tears down the native-boundary module graph.
+    toggle.unmount();
     stopSync();
   }, 30000);
 });

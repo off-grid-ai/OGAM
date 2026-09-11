@@ -132,6 +132,7 @@ export const RemoteServerEditorScreen: React.FC = () => {
         <RemoteModelField
           label="Text model"
           value={form.textModelId}
+          displayValue={form.modelNames.text}
           options={form.discoveredModels}
           onChange={form.setTextModelId}
           placeholder="llama3.2"
@@ -142,7 +143,8 @@ export const RemoteServerEditorScreen: React.FC = () => {
         <RemoteModelField
           label="Image model"
           value={form.imageModelId}
-          options={form.modelCatalog.image ?? []}
+          displayValue={form.modelNames.image}
+          options={form.catalog.image ?? []}
           onChange={form.setImageModelId}
           placeholder="gpt-image-1"
           testID="server-image-model"
@@ -152,7 +154,8 @@ export const RemoteServerEditorScreen: React.FC = () => {
         <RemoteModelField
           label="Transcription model"
           value={form.transcriptionModelId}
-          options={form.modelCatalog.transcription ?? []}
+          displayValue={form.modelNames.transcription}
+          options={form.catalog.transcription ?? []}
           onChange={form.setTranscriptionModelId}
           placeholder="whisper-1"
           testID="server-transcription-model"
@@ -162,7 +165,8 @@ export const RemoteServerEditorScreen: React.FC = () => {
         <RemoteModelField
           label="Voice model"
           value={form.voiceModelId}
-          options={form.modelCatalog.voice ?? []}
+          displayValue={form.modelNames.voice}
+          options={form.catalog.voice ?? []}
           onChange={form.setVoiceModelId}
           placeholder="gpt-4o-mini-tts"
           testID="server-voice-model"

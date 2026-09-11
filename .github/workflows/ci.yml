@@ -21,6 +21,9 @@ on:
 # `if: ${{ !cancelled() && steps.install.outcome == 'success' }}`, so a red gate does NOT hide the
 # ones after it - the whole list still reports, which is the one thing the four separate checks were
 # genuinely good at. The trade-off is wall-clock: the gates no longer run in parallel.
+permissions:
+  contents: read
+
 jobs:
   ci:
     runs-on: macos-latest
@@ -79,9 +82,8 @@ jobs:
           # Node 26, pinned by the TEST gate and now shared by all of them. The RAG/knowledge-base
           # suites run a REAL in-memory database via node's built-in `node:sqlite`
           # (__tests__/harness/sqliteFake.ts). That module is absent on Node 20 and flag-gated on
-          # Node 22. On Node 24 it loads but its native teardown SEGFAULTs the process under jest's
-          # --forceExit (exit 139) — reproduced locally: the full suite exits 139 on Node 24 and
-          # exits 0 on Node 26. Node 26's node:sqlite fixes that teardown crash.
+          # Node 22. Node 26 provides the stable node:sqlite lifecycle used by the real database
+          # journeys, including normal Jest teardown without forced process termination.
           node-version: '26'
           cache: 'npm'
 
@@ -137,13 +139,11 @@ jobs:
           # against dependencies nobody committed. The drift it papered over was real (five packages committed to
           # shared without regenerating its lock) and is fixed at the source; if it recurs, this should stop.
           npm --prefix ../shared ci
-          # Build every shared package this app consumes, because npm resolves each file: dependency
-          # to its dist/ (Jest reads src/, but TypeScript and Metro read dist/).
-          npm --prefix ../shared/packages/sync run build
-          npm --prefix ../shared/packages/rag run build
-          npm --prefix ../shared/packages/models run build
-          npm --prefix ../shared/packages/speech run build
-          npm --prefix ../shared/packages/ui run build
+          # Use Shared's dependency-ordered root build. It builds application last, after every
+          # package that application re-exports. Individual package builds left a valid-looking but
+          # stale application/dist that failed only when Metro imported a new symbol.
+          npm --prefix ../shared run build
+          npm run verify:shared-contract
 
       - name: Install dependencies
         id: install
@@ -187,14 +187,14 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run knip
 
-      - name: Run Jest tests
+      - name: Run Mobile and Shared consumer coverage
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         env:
           # The serial RN + jsdom suite retains more than Node's default 2 GB heap before
           # coverage is written. The macOS runner has 14 GB; keep enough headroom for native
           # tooling while allowing the complete suite to finish without weakening the gate.
           NODE_OPTIONS: --max-old-space-size=8192
-        run: npx jest --coverage --forceExit --runInBand
+        run: npm run test:coverage:workspace
 
       - name: Install Android NDK
         # Configuring the native modules (op-sqlite etc.) needs the pinned NDK; the macOS

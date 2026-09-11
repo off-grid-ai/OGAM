@@ -1,21 +1,18 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-} from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
 import { AppSheet } from './AppSheet';
 import { useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING, APP_CONFIG } from '../constants';
 import { DebugInfo, Project, Conversation } from '../types';
+import type { ModelSettingsRecord } from '@offgrid/application';
 
 interface DebugSheetProps {
   visible: boolean;
   onClose: () => void;
   debugInfo: DebugInfo | null;
   activeProject: Project | null;
-  settings: { systemPrompt?: string };
+  settings: ModelSettingsRecord;
   activeConversation: Conversation | null;
 }
 
@@ -28,6 +25,12 @@ export const DebugSheet: React.FC<DebugSheetProps> = ({
   activeConversation,
 }) => {
   const styles = useThemedStyles(createStyles);
+  const displayedSystemPrompt =
+    typeof debugInfo?.systemPrompt === 'string'
+      ? debugInfo.systemPrompt
+      : typeof settings.systemPrompt === 'string'
+      ? settings.systemPrompt
+      : APP_CONFIG.defaultSystemPrompt;
 
   return (
     <AppSheet
@@ -64,7 +67,12 @@ export const DebugSheet: React.FC<DebugSheetProps> = ({
             <View
               style={[
                 styles.contextBarFill,
-                { width: `${Math.min(debugInfo?.contextUsagePercent || 0, 100)}%` }
+                {
+                  width: `${Math.min(
+                    debugInfo?.contextUsagePercent || 0,
+                    100,
+                  )}%`,
+                },
               ]}
             />
           </View>
@@ -75,15 +83,24 @@ export const DebugSheet: React.FC<DebugSheetProps> = ({
           <Text style={styles.debugSectionTitle}>Message Stats</Text>
           <View style={styles.debugRow}>
             <Text style={styles.debugLabel}>Original Messages:</Text>
-            <Text style={styles.debugValue}>{debugInfo?.originalMessageCount || 0}</Text>
+            <Text style={styles.debugValue}>
+              {debugInfo?.originalMessageCount || 0}
+            </Text>
           </View>
           <View style={styles.debugRow}>
             <Text style={styles.debugLabel}>After Context Mgmt:</Text>
-            <Text style={styles.debugValue}>{debugInfo?.managedMessageCount || 0}</Text>
+            <Text style={styles.debugValue}>
+              {debugInfo?.managedMessageCount || 0}
+            </Text>
           </View>
           <View style={styles.debugRow}>
             <Text style={styles.debugLabel}>Truncated:</Text>
-            <Text style={[styles.debugValue, debugInfo?.truncatedCount ? styles.debugWarning : null]}>
+            <Text
+              style={[
+                styles.debugValue,
+                debugInfo?.truncatedCount ? styles.debugWarning : null,
+              ]}
+            >
               {debugInfo?.truncatedCount || 0}
             </Text>
           </View>
@@ -94,7 +111,9 @@ export const DebugSheet: React.FC<DebugSheetProps> = ({
           <Text style={styles.debugSectionTitle}>Active Project</Text>
           <View style={styles.debugRow}>
             <Text style={styles.debugLabel}>Name:</Text>
-            <Text style={styles.debugValue}>{activeProject?.name || 'Default'}</Text>
+            <Text style={styles.debugValue}>
+              {activeProject?.name || 'Default'}
+            </Text>
           </View>
         </View>
 
@@ -103,7 +122,7 @@ export const DebugSheet: React.FC<DebugSheetProps> = ({
           <Text style={styles.debugSectionTitle}>System Prompt</Text>
           <View style={styles.debugCodeBlock}>
             <Text style={styles.debugCode} selectable>
-              {debugInfo?.systemPrompt || settings.systemPrompt || APP_CONFIG.defaultSystemPrompt}
+              {displayedSystemPrompt}
             </Text>
           </View>
         </View>
@@ -116,7 +135,8 @@ export const DebugSheet: React.FC<DebugSheetProps> = ({
           </Text>
           <View style={styles.debugCodeBlock}>
             <Text style={styles.debugCode} selectable>
-              {debugInfo?.formattedPrompt || 'Send a message to see the formatted prompt'}
+              {debugInfo?.formattedPrompt ||
+                'Send a message to see the formatted prompt'}
             </Text>
           </View>
         </View>
@@ -129,10 +149,14 @@ export const DebugSheet: React.FC<DebugSheetProps> = ({
           {(activeConversation?.messages || []).map((msg, index) => (
             <View key={msg.id} style={styles.debugMessage}>
               <View style={styles.debugMessageHeader}>
-                <Text style={[
-                  styles.debugMessageRole,
-                  msg.role === 'user' ? styles.debugRoleUser : styles.debugRoleAssistant
-                ]}>
+                <Text
+                  style={[
+                    styles.debugMessageRole,
+                    msg.role === 'user'
+                      ? styles.debugRoleUser
+                      : styles.debugRoleAssistant,
+                  ]}
+                >
                   {msg.role.toUpperCase()}
                 </Text>
                 <Text style={styles.debugMessageIndex}>#{index + 1}</Text>
@@ -250,11 +274,11 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     borderRadius: 4,
   },
   debugRoleUser: {
-    backgroundColor: `${colors.primary  }30`,
+    backgroundColor: `${colors.primary}30`,
     color: colors.primary,
   },
   debugRoleAssistant: {
-    backgroundColor: `${colors.info  }30`,
+    backgroundColor: `${colors.info}30`,
     color: colors.info,
   },
   debugMessageIndex: {

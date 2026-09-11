@@ -72,7 +72,7 @@ const mockServer: RemoteServer = {
   id: 'server-1',
   name: 'Ollama (192.168.1.10)',
   endpoint: 'http://192.168.1.10:11434',
-  providerType: 'openai-compatible',
+  provider: 'openai-compatible',
   createdAt: '2024-01-01',
 };
 
@@ -80,7 +80,7 @@ const mockLMStudioServer: RemoteServer = {
   id: 'server-2',
   name: 'LM Studio (192.168.1.20)',
   endpoint: 'http://192.168.1.20:1234',
-  providerType: 'openai-compatible',
+  provider: 'openai-compatible',
   createdAt: '2024-01-01',
 };
 
@@ -143,7 +143,7 @@ describe('NetworkSection', () => {
   it('shows empty text when no servers and not checking', () => {
     const { getByText } = render(<NetworkSection {...defaultNetworkProps} />);
     expect(
-      getByText(/No servers found\. Make sure you're on the same WiFi/),
+      getByText(/No Off Grid AI Desktop, Ollama, or LM Studio server found/),
     ).toBeTruthy();
   });
 
@@ -331,7 +331,7 @@ describe('fetchModelFiles', () => {
     };
     mockGetModelFiles.mockResolvedValueOnce([otherFile, q4kmFile]);
 
-    const result = await fetchModelFiles([{ id: 'test/model' }]);
+    const result = await fetchModelFiles([{ id: 'test/model' }], huggingFaceService);
     expect(result['test/model']).toEqual([q4kmFile]);
   });
 
@@ -341,7 +341,7 @@ describe('fetchModelFiles', () => {
     const q8File = { name: 'model-Q8_0.gguf', size: 8000000000, quantization: 'Q8_0', downloadUrl: 'https://example.com/q8' };
     mockGetModelFiles.mockResolvedValueOnce([q4ksFile, q4kmFile, q8File]);
 
-    const result = await fetchModelFiles([{ id: 'test/model' }]);
+    const result = await fetchModelFiles([{ id: 'test/model' }], huggingFaceService);
     expect(result['test/model']).toEqual([q4kmFile]);
   });
 
@@ -353,7 +353,7 @@ describe('fetchModelFiles', () => {
     ];
     mockGetModelFiles.mockResolvedValueOnce(files);
 
-    const result = await fetchModelFiles([{ id: 'test/model' }]);
+    const result = await fetchModelFiles([{ id: 'test/model' }], huggingFaceService);
     // No Q4_K_M → model excluded from results
     expect(result['test/model']).toBeUndefined();
   });
@@ -366,14 +366,14 @@ describe('fetchModelFiles', () => {
     ];
     mockGetModelFiles.mockResolvedValueOnce(files);
 
-    const result = await fetchModelFiles([{ id: 'test/model' }]);
+    const result = await fetchModelFiles([{ id: 'test/model' }], huggingFaceService);
     expect(result['test/model']).toBeUndefined();
   });
 
   it('handles fetch errors gracefully', async () => {
     mockGetModelFiles.mockRejectedValueOnce(new Error('Network error'));
 
-    const result = await fetchModelFiles([{ id: 'test/model' }]);
+    const result = await fetchModelFiles([{ id: 'test/model' }], huggingFaceService);
     expect(result['test/model']).toBeUndefined();
   });
 });

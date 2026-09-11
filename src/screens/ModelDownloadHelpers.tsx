@@ -83,7 +83,7 @@ export const NetworkSection: React.FC<{
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Network</Text>
+      <Text style={styles.sectionTitle}>Network Models</Text>
 
       {isCheckingNetwork && !hasServers && (
         <View style={styles.scanningRow}>
@@ -107,7 +107,7 @@ export const NetworkSection: React.FC<{
       {!isCheckingNetwork && !hasServers && (
         <>
           <Text style={styles.emptyText}>
-            No model servers found. Scan again or add one.
+            No Off Grid AI Desktop, Ollama, or LM Studio server found. Scan again or add one.
           </Text>
           <TouchableOpacity
             onPress={() => Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'model-download')).catch(() => {})}

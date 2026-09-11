@@ -1,6 +1,6 @@
 import type { ThemeColors, ThemeShadows } from '../../theme';
 
-export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: {
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
@@ -24,6 +24,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     backgroundColor: colors.surfaceLight,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+    ...shadows.small,
   },
   buttonAsSend: {
     width: 44,

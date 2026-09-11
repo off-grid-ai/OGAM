@@ -5,7 +5,7 @@ import { ThinkingIndicator } from '../../components/ThinkingIndicator';
 import { SPACING } from '../../constants';
 import { prepareMessageForSpeech } from '../../utils/messageContent';
 import { Message } from '../../types';
-import { useUiModeStore } from '../../stores';
+import { useSpeechProjection } from '../../hooks/useApplicationProjection';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { ChatMessageItem } from './useChatScreen';
 
@@ -42,7 +42,7 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
     onImagePress,
   } = props;
 
-  const interfaceMode = useUiModeStore(s => s.interfaceMode);
+  const voiceMode = useSpeechProjection().preferences.voiceMode;
   const msg = item as Message;
   const animateEntry =
     animateLastN > 0 && index >= displayMessagesLength - animateLastN;
@@ -53,9 +53,9 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
 
   // Audio mode: the pro audio feature owns the whole message presentation
   // (user/assistant bubbles, thinking, streaming). Free builds never reach
-  // this branch (interfaceMode stays 'chat').
+  // this branch because the audio slot is absent.
   const AudioMessage = getSlot(SLOTS.messageAudioMode);
-  if (interfaceMode === 'audio' && AudioMessage) {
+  if (voiceMode && AudioMessage) {
     const audioMessage = (
       <AudioMessage
         msg={msg}
@@ -131,13 +131,14 @@ const styles = StyleSheet.create({
 });
 
 /**
- * Memoized so a ChatScreen re-render (a streaming token, a focus after returning from
- * the document picker, a keyboard event, any unrelated store tick) does NOT re-render
- * and re-parse the markdown of every message — the cause of the chat-screen freeze
- * (unresponsive until you leave + re-enter). getDisplayMessages returns
- * [...allMessages, streamingItem], so the historical message objects keep stable refs
- * across renders; only the 'streaming'/'thinking' item is a new object per token, so
- * only IT re-renders while the rest skip.
+ * Memoized so a ChatScreen re-render (a focus after returning from the document picker, a keyboard
+ * event, any unrelated store tick) does NOT re-render and re-parse the markdown of every message —
+ * the cause of the chat-screen freeze (unresponsive until you leave + re-enter). getDisplayMessages
+ * returns [...allMessages, syntheticItem], so the historical message objects keep stable refs
+ * across renders and every committed row skips.
+ *
+ * A token produces a new streaming item. Historical message objects keep stable references, so
+ * only the live row renders again while the committed transcript remains cached.
  *
  * The on* callbacks are recreated every parent render (defined inline in useChatScreen)
  * and are deliberately NOT compared: within a conversation they are behaviorally stable,
@@ -160,7 +161,9 @@ export function messageRendererPropsEqual(
   );
 }
 
-export const MessageRenderer = React.memo(
+const CommittedMessageRenderer = React.memo(
   MessageRendererInner,
   messageRendererPropsEqual,
 );
+
+export const MessageRenderer = CommittedMessageRenderer;

@@ -179,8 +179,12 @@ const createActionStyles = (colors: ThemeColors) => ({
   },
 });
 
-const createModelPickerStyles = (colors: ThemeColors) => ({
+const createModelPickerStyles = (
+  colors: ThemeColors,
+  shadows: ThemeShadows,
+) => ({
   modelPickerButton: {
+    ...shadows.small,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
@@ -313,12 +317,12 @@ const createToggleStyles = (colors: ThemeColors) => ({
   },
 });
 
-export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   ...createLayoutStyles(colors),
   ...createStatsStyles(colors),
   ...createAccordionStyles(colors),
   ...createSliderStyles(colors),
   ...createActionStyles(colors),
-  ...createModelPickerStyles(colors),
+  ...createModelPickerStyles(colors, shadows),
   ...createToggleStyles(colors),
 });

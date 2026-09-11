@@ -1,19 +1,5 @@
+import { isSuspiciousRecoveredTextModel } from '@offgrid/models';
 import { LlamaDownloadedModel } from '../../../../src/types';
-
-function isUnknownLike(value: string): boolean {
-  const normalized = value.trim().toLowerCase();
-  return normalized.length === 0 || normalized === 'unknown';
-}
-
-function isSuspiciousRecoveredModel(model: LlamaDownloadedModel): boolean {
-  const isRecovered = model.id.startsWith('recovered_');
-  if (!isRecovered) return false;
-
-  const hasUnknownAuthor = isUnknownLike(model.author);
-  const hasUnknownQuantization = isUnknownLike(model.quantization);
-
-  return hasUnknownAuthor || hasUnknownQuantization;
-}
 
 describe('isSuspiciousRecoveredModel', () => {
   it('should filter recovered models with unknown author', () => {
@@ -28,7 +14,7 @@ describe('isSuspiciousRecoveredModel', () => {
       fileSize: 14 * 1024 * 1024,
       downloadedAt: new Date().toISOString(),
     };
-    expect(isSuspiciousRecoveredModel(model)).toBe(true);
+    expect(isSuspiciousRecoveredTextModel(model)).toBe(true);
   });
 
   it('should filter recovered models with unknown quantization', () => {
@@ -43,7 +29,7 @@ describe('isSuspiciousRecoveredModel', () => {
       fileSize: 220 * 1024 * 1024,
       downloadedAt: new Date().toISOString(),
     };
-    expect(isSuspiciousRecoveredModel(model)).toBe(true);
+    expect(isSuspiciousRecoveredTextModel(model)).toBe(true);
   });
 
   it('should filter recovered models with both unknown author and quantization', () => {
@@ -58,7 +44,7 @@ describe('isSuspiciousRecoveredModel', () => {
       fileSize: 16 * 1024 * 1024,
       downloadedAt: new Date().toISOString(),
     };
-    expect(isSuspiciousRecoveredModel(model)).toBe(true);
+    expect(isSuspiciousRecoveredTextModel(model)).toBe(true);
   });
 
   it('should not filter recovered models with valid metadata', () => {
@@ -73,7 +59,7 @@ describe('isSuspiciousRecoveredModel', () => {
       fileSize: 5 * 1024 * 1024 * 1024,
       downloadedAt: new Date().toISOString(),
     };
-    expect(isSuspiciousRecoveredModel(model)).toBe(false);
+    expect(isSuspiciousRecoveredTextModel(model)).toBe(false);
   });
 
   it('should not filter non-recovered models even with unknown metadata', () => {
@@ -88,7 +74,7 @@ describe('isSuspiciousRecoveredModel', () => {
       fileSize: 5 * 1024 * 1024 * 1024,
       downloadedAt: new Date().toISOString(),
     };
-    expect(isSuspiciousRecoveredModel(model)).toBe(false);
+    expect(isSuspiciousRecoveredTextModel(model)).toBe(false);
   });
 
   it('should handle empty author/quantization as unknown', () => {
@@ -103,6 +89,6 @@ describe('isSuspiciousRecoveredModel', () => {
       fileSize: 50 * 1024 * 1024,
       downloadedAt: new Date().toISOString(),
     };
-    expect(isSuspiciousRecoveredModel(model)).toBe(true);
+    expect(isSuspiciousRecoveredTextModel(model)).toBe(true);
   });
 });

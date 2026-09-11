@@ -1,60 +1,65 @@
 /**
- * checkImageModelCanLoad — overridability of a memory-gate refusal.
+ * Image hardware preflight after the shared residency migration.
  *
- * Guards the reliability fix: a first refusal is OVERRIDABLE (offer "Load Anyway"),
- * but a refusal that PERSISTS under override hit the residency survival floor — a hard
- * limit forcing can't cross — so it must be reported NON-overridable, or the failure
- * surface would re-offer "Load Anyway" forever as a no-op (the caller re-runs the same
- * request). This is the exact false branch qodo flagged.
+ * Memory admission and the unconditional Load Anyway contract belong to the
+ * shared residency lifecycle. This native preflight now answers only whether
+ * the selected image runtime can run on this hardware.
  */
 jest.mock('../../../src/services/llm', () => ({
-  llmService: { loadModel: jest.fn(), unloadModel: jest.fn(), isModelLoaded: jest.fn(() => false), getLoadedModelPath: jest.fn(() => null), getMultimodalSupport: jest.fn(() => null) },
-}));
-jest.mock('../../../src/services/localDreamGenerator', () => ({
-  localDreamGeneratorService: { loadModel: jest.fn(), unloadModel: jest.fn(), isModelLoaded: jest.fn(async () => false) },
-}));
-jest.mock('../../../src/services/hardware', () => ({
-  hardwareService: {
-    getSoCInfo: jest.fn(async () => ({ hasNPU: true })),
-    // 4.5GB estimated runtime footprint — the number is irrelevant here; makeRoomFor's
-    // verdict is what's mocked. Kept realistic for a Stable-Diffusion-class model.
-    estimateImageModelRam: jest.fn(() => 4_500 * 1024 * 1024),
+  llmService: {
+    isModelLoaded: jest.fn(() => false),
+    getLoadedModelPath: jest.fn(() => null),
+    getMultimodalSupport: jest.fn(() => null),
   },
 }));
-jest.mock('../../../src/services/modelResidency', () => ({
-  modelResidencyManager: { makeRoomFor: jest.fn(), runExclusive: jest.fn((_k: string, fn: () => any) => fn()) },
+
+jest.mock('../../../src/services/localDreamGenerator', () => ({
+  localDreamGeneratorService: {
+    isModelLoaded: jest.fn(async () => false),
+  },
 }));
 
-import { checkImageModelCanLoad } from '../../../src/services/activeModelService/loaders';
-import { modelResidencyManager } from '../../../src/services/modelResidency';
+const mockGetSoCInfo = jest.fn(async () => ({ hasNPU: true }));
+jest.mock('../../../src/services/hardware', () => ({
+  hardwareService: {
+    getSoCInfo: () => mockGetSoCInfo(),
+  },
+}));
 
-const makeRoomFor = modelResidencyManager.makeRoomFor as jest.Mock;
-const model = { id: 'img-1', name: 'Test Image Model', backend: 'gpu' } as any;
-const check = (opts?: { override?: boolean }) =>
-  checkImageModelCanLoad('img-1', model, opts) as Promise<{ canLoad: boolean; overridable?: boolean; error?: string }>;
+import { checkImageHardwareSupport } from '../../../src/services/adapters/native/modelLoaders';
 
-describe('checkImageModelCanLoad — survival-floor overridability', () => {
-  beforeEach(() => jest.clearAllMocks());
+const check = (backend: string, override = false) =>
+  checkImageHardwareSupport(
+    'img-1',
+    { id: 'img-1', name: 'Test Image Model', backend } as any,
+    { override },
+  );
 
-  it('allows the load when the gate fits', async () => {
-    makeRoomFor.mockResolvedValue({ fits: true, evicted: [] });
-    const res = await check({ override: false });
-    expect(res.canLoad).toBe(true);
+describe('checkImageHardwareSupport — hardware-only preflight', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetSoCInfo.mockResolvedValue({ hasNPU: true });
   });
 
-  it('a FIRST refusal is overridable (offer Load Anyway)', async () => {
-    makeRoomFor.mockResolvedValue({ fits: false, evicted: [] });
-    const res = await check({ override: false });
-    expect(res.canLoad).toBe(false);
-    expect(res.overridable).toBe(true);
+  it.each([false, true])(
+    'leaves GPU memory admission to shared residency (override=%s)',
+    async override => {
+      await expect(check('gpu', override)).resolves.toEqual({ canLoad: true });
+      expect(mockGetSoCInfo).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects QNN on a device without an NPU as non-overridable', async () => {
+    mockGetSoCInfo.mockResolvedValue({ hasNPU: false });
+
+    const result = await check('qnn', true);
+
+    expect(result.canLoad).toBe(false);
+    expect(result.overridable).toBeUndefined();
+    expect(result.error).toContain('compatible NPU');
   });
 
-  it('a refusal UNDER override is NOT overridable (stop re-offering the no-op)', async () => {
-    makeRoomFor.mockResolvedValue({ fits: false, evicted: [] });
-    const res = await check({ override: true });
-    expect(res.canLoad).toBe(false);
-    expect(res.overridable).toBe(false);
-    // The copy must acknowledge freeing was already attempted.
-    expect(res.error).toContain('even after freeing');
+  it('allows QNN when the device reports a compatible NPU', async () => {
+    await expect(check('qnn')).resolves.toEqual({ canLoad: true });
   });
 });

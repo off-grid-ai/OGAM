@@ -32,6 +32,7 @@ describe('the licence s record of the mesh, from the phone', () => {
     entitlementId: licenceId,
     secret: LICENCE_KEY,
     expiresAt: null,
+    maxDevices: 3,
     verifiedAt: 1_700_000_000_000,
   });
 

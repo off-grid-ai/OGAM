@@ -10,15 +10,11 @@
 
 import React from 'react';
 import { Linking } from 'react-native';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 // Import the SAME shared URL constants the screen uses, so the tap assertions ride on the
 // single source of truth (test-side DRY) rather than re-hardcoding the URL strings.
 import { FOLLOW_X_URL, SLACK_INVITE_URL } from '../../../src/utils/sharePrompt';
 import { SUPPORT_EMAIL } from '../../../src/utils/supportEmail';
-
-jest.mock('react-native-fs', () => ({
-  getFSInfo: jest.fn(async () => ({ freeSpace: 8 * 1024 * 1024 * 1024 })),
-}));
 
 // Navigation is globally mocked in jest.setup.ts
 
@@ -59,20 +55,23 @@ const mockCompleteChecklistStep = jest.fn();
 // hoisted factory is allowed to reference it.
 const mockProState = { hasRegisteredPro: false, proBannerDismissed: false };
 jest.mock('../../../src/stores', () => ({
-  useAppStore: Object.assign(jest.fn((selector?: any) => {
-    const state = {
-      setOnboardingComplete: mockSetOnboardingComplete,
-      themeMode: 'system',
-      setThemeMode: mockSetThemeMode,
-      completeChecklistStep: mockCompleteChecklistStep,
-      setProBannerDismissed: jest.fn(),
-      hasRegisteredPro: mockProState.hasRegisteredPro,
-      proBannerDismissed: mockProState.proBannerDismissed,
-    };
-    return selector ? selector(state) : state;
-  }), {
-    getState: () => ({ downloadedModels: [], activeModelId: null }),
-  }),
+  useAppStore: Object.assign(
+    jest.fn((selector?: any) => {
+      const state = {
+        setOnboardingComplete: mockSetOnboardingComplete,
+        themeMode: 'system',
+        setThemeMode: mockSetThemeMode,
+        completeChecklistStep: mockCompleteChecklistStep,
+        setProBannerDismissed: jest.fn(),
+        hasRegisteredPro: mockProState.hasRegisteredPro,
+        proBannerDismissed: mockProState.proBannerDismissed,
+      };
+      return selector ? selector(state) : state;
+    }),
+    {
+      getState: () => ({ downloadedModels: [], activeModelId: null }),
+    },
+  ),
   useRemoteServerStore: {
     getState: () => ({ activeServerId: null }),
   },
@@ -105,7 +104,9 @@ describe('SettingsScreen', () => {
   it('shows the Pro upsell banner when Pro is not active and not dismissed', () => {
     const { getByText } = render(<SettingsScreen />);
     expect(
-      getByText('Your private AI stays current across your devices with live sync.'),
+      getByText(
+        'Your private AI stays current across your devices with live sync.',
+      ),
     ).toBeTruthy();
   });
 
@@ -143,8 +144,12 @@ describe('SettingsScreen', () => {
 
   it('renders navigation item descriptions', () => {
     const { getByText } = render(<SettingsScreen />);
-    expect(getByText('System prompt, generation, and performance')).toBeTruthy();
-    expect(getByText('Connect to Off Grid AI Desktop, Ollama, LM Studio, and more')).toBeTruthy();
+    expect(
+      getByText('System prompt, generation, and performance'),
+    ).toBeTruthy();
+    expect(
+      getByText('Connect to Off Grid AI Desktop, Ollama, LM Studio, and more'),
+    ).toBeTruthy();
     expect(getByText('Passphrase and app lock')).toBeTruthy();
     expect(getByText('Hardware and compatibility')).toBeTruthy();
     expect(getByText('Models and data usage')).toBeTruthy();
@@ -187,9 +192,7 @@ describe('SettingsScreen', () => {
   it('renders Privacy First section', () => {
     const { getByText } = render(<SettingsScreen />);
     expect(getByText('Privacy First')).toBeTruthy();
-    expect(
-      getByText(/All your data stays on this device/),
-    ).toBeTruthy();
+    expect(getByText(/All your data stays on this device/)).toBeTruthy();
   });
 
   it('renders about section text', () => {
@@ -208,7 +211,9 @@ describe('SettingsScreen', () => {
   });
 
   it('opens the X profile URL when Follow-on-X is tapped', () => {
-    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
+    const openURL = jest
+      .spyOn(Linking, 'openURL')
+      .mockResolvedValue(undefined as never);
     const { getByTestId } = render(<SettingsScreen />);
     fireEvent.press(getByTestId('follow-on-x'));
     // Terminal artifact of a link tap: the OS is handed the exact X profile URL (the shared constant).
@@ -217,22 +222,12 @@ describe('SettingsScreen', () => {
   });
 
   it('opens the Slack invite URL when Join-Slack is tapped', () => {
-    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
+    const openURL = jest
+      .spyOn(Linking, 'openURL')
+      .mockResolvedValue(undefined as never);
     const { getByTestId } = render(<SettingsScreen />);
     fireEvent.press(getByTestId('join-slack'));
     expect(openURL).toHaveBeenCalledWith(SLACK_INVITE_URL);
-    openURL.mockRestore();
-  });
-
-  it('sends feedback to the shared support address', async () => {
-    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
-    const { getByText } = render(<SettingsScreen />);
-
-    fireEvent.press(getByText('Send Feedback'));
-
-    await waitFor(() => {
-      expect(openURL.mock.calls[0]?.[0]).toContain(`mailto:${SUPPORT_EMAIL}?`);
-    });
     openURL.mockRestore();
   });
 
@@ -259,5 +254,47 @@ describe('SettingsScreen', () => {
       routes: [{ name: 'Onboarding' }],
     });
     expect(mockDispatch).toHaveBeenCalled();
+  });
+
+  it('sends feedback to the shared support address', async () => {
+    const { installNativeBoundary, requireRTL } =
+      require('../../harness/nativeBoundary') as typeof import('../../harness/nativeBoundary');
+    installNativeBoundary();
+    jest.unmock('../../../src/stores');
+    const nativeFs =
+      require('react-native-fs') as typeof import('react-native-fs').default;
+    Object.defineProperty(nativeFs, 'getFSInfo', {
+      configurable: true,
+      value: jest.fn(async () => ({
+        freeSpace: 8 * 1024 * 1024 * 1024,
+        freeSpaceEx: 8 * 1024 * 1024 * 1024,
+        totalSpace: 16 * 1024 * 1024 * 1024,
+        totalSpaceEx: 16 * 1024 * 1024 * 1024,
+      })),
+    });
+    const { startMobileApplicationFixture } =
+      require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+    const fixture = await startMobileApplicationFixture();
+    const rtl = requireRTL();
+    const { SettingsScreen: RealSettingsScreen } =
+      require('../../../src/screens/SettingsScreen') as typeof import('../../../src/screens/SettingsScreen');
+    const { Linking: nativeLinking } =
+      require('react-native') as typeof import('react-native');
+    const openURL = jest
+      .spyOn(nativeLinking, 'openURL')
+      .mockResolvedValue(undefined as never);
+    try {
+      const { getByText } = rtl.render(<RealSettingsScreen />);
+      rtl.fireEvent.press(getByText('Send Feedback'));
+
+      await rtl.waitFor(() => {
+        expect(openURL.mock.calls[0]?.[0]).toContain(
+          `mailto:${SUPPORT_EMAIL}?`,
+        );
+      });
+    } finally {
+      openURL.mockRestore();
+      await fixture.dispose();
+    }
   });
 });

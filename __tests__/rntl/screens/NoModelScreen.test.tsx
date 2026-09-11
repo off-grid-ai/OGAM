@@ -52,7 +52,7 @@ describe('NoModelScreen', () => {
   it('shows a loading indicator (not the prompt) while a model loads in the background', () => {
     const { getByText, getByTestId, queryByText } = renderScreen({ isModelLoading: true });
     expect(getByTestId('no-model-loading-indicator')).toBeTruthy();
-    expect(getByText('Loading Model')).toBeTruthy();
+    expect(getByText('Loading model...')).toBeTruthy();
     // The idle prompt + Select button must be hidden so the user isn't told to
     // re-select a model that is already loading.
     expect(queryByText('No Model Selected')).toBeNull();

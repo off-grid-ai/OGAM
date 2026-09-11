@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -21,8 +21,9 @@ import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { useProjectStore, useChatStore } from '../stores';
-import { Project } from '../types';
+import { useWorkspaceContentProjection } from '../hooks/useApplicationProjection';
+import { workflowFailureMessage, type ProjectRecord } from '@offgrid/application';
+import { applicationFacade } from '../services/applicationFacade';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 
 type NavigationProp = CompositeNavigationProp<
@@ -35,20 +36,23 @@ export const ProjectsScreen: React.FC = () => {
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const { projects, deleteProject } = useProjectStore();
-  const { conversations } = useChatStore();
+  const { projects, conversations } = useWorkspaceContentProjection();
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  // Get chat count for a project
-  const getChatCount = (projectId: string) => {
-    return conversations.filter((c) => c.projectId === projectId).length;
-  };
+  const chatCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const conversation of conversations) {
+      if (conversation.projectId === null) continue;
+      counts[conversation.projectId] = (counts[conversation.projectId] ?? 0) + 1;
+    }
+    return counts;
+  }, [conversations]);
 
-  const handleProjectPress = (project: Project) => {
+  const handleProjectPress = (project: ProjectRecord) => {
     navigation.navigate('ProjectDetail', { projectId: project.id });
   };
 
-  const handleDeleteProject = (project: Project) => {
+  const handleDeleteProject = (project: ProjectRecord) => {
     setAlertState(showAlert(
       'Delete Project',
       `Delete "${project.name}"? This will not delete the chats associated with this project.`,
@@ -57,16 +61,33 @@ export const ProjectsScreen: React.FC = () => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             setAlertState(hideAlert());
-            deleteProject(project.id);
+            try {
+              const outcome = await applicationFacade().workflows.deleteProject(project.id);
+              if (!outcome.ok) {
+                setAlertState(
+                  showAlert('Project Not Deleted', workflowFailureMessage(outcome.failure)),
+                );
+                return;
+              }
+            } catch (error: unknown) {
+              setAlertState(
+                showAlert(
+                  'Project Not Deleted',
+                  error instanceof Error
+                    ? error.message
+                    : 'Failed to delete project',
+                ),
+              );
+            }
           },
         },
       ]
     ));
   };
 
-  const renderRightActions = (project: Project) => (
+  const renderRightActions = (project: ProjectRecord) => (
     <TouchableOpacity
       style={styles.deleteAction}
       onPress={() => handleDeleteProject(project)}
@@ -79,8 +100,8 @@ export const ProjectsScreen: React.FC = () => {
     navigation.navigate('ProjectEdit', {});
   };
 
-  const renderProject = ({ item, index }: { item: Project; index: number }) => {
-    const chatCount = getChatCount(item.id);
+  const renderProject = ({ item, index }: { item: ProjectRecord; index: number }) => {
+    const chatCount = chatCounts[item.id] ?? 0;
 
     return (
       <Swipeable

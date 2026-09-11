@@ -6,7 +6,7 @@
  * injected native (zeroconf) + the engine collaborator are faked; the
  * discovery/orchestrator behavior under test is the package's real code.
  */
-import { buildDiscovery } from '../../../src/services/sync/discovery';
+import { buildDiscovery } from '../../../src/services/composition/sync-discovery';
 import { createTxtRecord } from '@offgrid/sync';
 import type { RnZeroconf } from '@offgrid/sync/rn-discovery';
 

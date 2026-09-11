@@ -1,31 +1,45 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  Platform,
-} from 'react-native';
+  chatListPreviewLine,
+  newProjectChatRouteId,
+  workflowFailureMessage,
+  type ConversationRecord,
+} from '@offgrid/application';
+import { View, Text, FlatList, TouchableOpacity, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { portableMessageText } from '../utils/portableMessageText';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
+import {
+  CustomAlert,
+  showAlert,
+  hideAlert,
+  AlertState,
+  initialAlertState,
+} from '../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../theme';
 import { formatWhen } from '../utils/localTime';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { useChatStore, useProjectStore, useAppStore } from '../stores';
-import { Conversation } from '../types';
+import { useChatStore, useAppStore } from '../stores';
 import { RootStackParamList } from '../navigation/types';
-import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
+import { useActiveTextModel } from '../hooks/useActiveTextModel';
+import { useWorkspaceContentProjection } from '../hooks/useApplicationProjection';
+import { applicationFacade } from '../services/applicationFacade';
+import {
+  describeWorkspaceContentFailure,
+  useWorkspaceContentCommands,
+} from '../hooks/useWorkspaceContentCommands';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectChats'>;
 
 const formatDate = (dateString: string): string => formatWhen(dateString);
+
+const chatKey = (conversation: ConversationRecord): string => conversation.id;
 
 const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: {
@@ -147,7 +161,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
 });
 
 export const ProjectChatsScreen: React.FC = () => {
-  const previewLine = useConversationPreviewLine();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
   const { projectId } = route.params;
@@ -155,51 +168,131 @@ export const ProjectChatsScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  const { getProject } = useProjectStore();
-  const { conversations, deleteConversation, setActiveConversation, createConversation } = useChatStore();
-  const { downloadedModels, activeModelId } = useAppStore();
+  const workspaceContent = useWorkspaceContentProjection();
+  const { conversations, messages, projects, status } = workspaceContent;
+  const { execute } = useWorkspaceContentCommands();
+  const project = projects.find(item => item.id === projectId);
+  const setActiveConversation = useChatStore(
+    state => state.setActiveConversation,
+  );
+  const downloadedModels = useAppStore(state => state.downloadedModels);
+  const { modelId: activeTextModelId } = useActiveTextModel();
 
-  const project = getProject(projectId);
   const hasModels = downloadedModels.length > 0;
 
-  // Get chats for this project
-  const projectChats = conversations
-    .filter((c) => c.projectId === projectId)
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  const lastMessageByConversation = useMemo(() => {
+    const latest = new Map<string, (typeof messages)[number]>();
+    for (const message of messages) {
+      const current = latest.get(message.conversationId);
+      if (
+        !current ||
+        message.position > current.position ||
+        (message.position === current.position && message.id > current.id)
+      ) {
+        latest.set(message.conversationId, message);
+      }
+    }
+    return latest;
+  }, [messages]);
+  const projectChats = useMemo(
+    () =>
+      conversations.filter(
+        conversation => conversation.projectId === projectId,
+      ),
+    [conversations, projectId],
+  );
 
-  const handleChatPress = (conversation: Conversation) => {
+  const handleChatPress = (conversation: ConversationRecord) => {
     setActiveConversation(conversation.id);
     navigation.navigate('Chat', { conversationId: conversation.id });
   };
 
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
     if (!hasModels) {
-      setAlertState(showAlert('No Model', 'Please download a model first from the Models tab.'));
+      setAlertState(
+        showAlert(
+          'No Model',
+          'Please download a model first from the Models tab.',
+        ),
+      );
       return;
     }
-    const modelId = activeModelId || downloadedModels[0]?.id;
+    const modelId = newProjectChatRouteId({
+      selectedRouteId: activeTextModelId,
+      fallbackModelId: downloadedModels[0]?.id,
+    });
     if (modelId) {
-      const newConversationId = createConversation(modelId, undefined, projectId);
-      navigation.navigate('Chat', { conversationId: newConversationId, projectId });
+      const outcome = await execute({
+        type: 'create_conversation',
+        modelId,
+        projectId,
+      });
+      if (!outcome.ok) {
+        setAlertState(
+          showAlert(
+            'Chat Not Created',
+            describeWorkspaceContentFailure(outcome.failure),
+          ),
+        );
+        return;
+      }
+      const created = outcome.value.changes.find(
+        change => change.kind === 'put' && change.entity === 'conversation',
+      );
+      if (
+        !created ||
+        created.kind !== 'put' ||
+        created.entity !== 'conversation'
+      ) {
+        setAlertState(
+          showAlert('Chat Not Created', 'The new chat ID was not returned.'),
+        );
+        return;
+      }
+      setActiveConversation(created.record.id);
+      navigation.navigate('Chat', {
+        conversationId: created.record.id,
+        projectId,
+      });
     }
   };
 
-  const handleDeleteChat = (conversation: Conversation) => {
-    setAlertState(showAlert(
-      'Delete Chat',
-      `Delete "${conversation.title}"?`,
-      [
+  const handleDeleteChat = (conversation: ConversationRecord) => {
+    setAlertState(
+      showAlert('Delete Chat', `Delete "${conversation.title}"?`, [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => deleteConversation(conversation.id),
+          onPress: async () => {
+            try {
+              const outcome =
+                await applicationFacade().workflows.deleteConversation(
+                  conversation.id,
+                );
+              if (!outcome.ok) {
+                setAlertState(
+                  showAlert(
+                    'Chat Not Deleted',
+                    workflowFailureMessage(outcome.failure),
+                  ),
+                );
+              }
+            } catch (error) {
+              setAlertState(
+                showAlert(
+                  'Chat Not Deleted',
+                  error instanceof Error ? error.message : String(error),
+                ),
+              );
+            }
+          },
         },
-      ]
-    ));
+      ]),
+    );
   };
 
-  const renderChatRightActions = (conversation: Conversation) => (
+  const renderChatRightActions = (conversation: ConversationRecord) => (
     <TouchableOpacity
       style={styles.deleteAction}
       onPress={() => handleDeleteChat(conversation)}
@@ -208,8 +301,12 @@ export const ProjectChatsScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  const renderChat = ({ item }: { item: Conversation }) => {
-    const preview = previewLine(item.messages);
+  const renderChat = ({ item }: { item: ConversationRecord }) => {
+    const lastMessage = lastMessageByConversation.get(item.id);
+    const preview = chatListPreviewLine(
+      lastMessage?.portable.role,
+      portableMessageText(lastMessage?.portable.content),
+    );
 
     return (
       <Swipeable
@@ -246,7 +343,10 @@ export const ProjectChatsScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
@@ -254,12 +354,40 @@ export const ProjectChatsScreen: React.FC = () => {
             {project?.name || 'Chats'}
           </Text>
         </View>
-        <TouchableOpacity onPress={handleNewChat} style={styles.addButton} disabled={!hasModels}>
-          <Icon name="plus" size={20} color={hasModels ? colors.primary : colors.textMuted} />
+        <TouchableOpacity
+          onPress={handleNewChat}
+          style={styles.addButton}
+          disabled={!hasModels || !project || status !== 'ready'}
+        >
+          <Icon
+            name="plus"
+            size={20}
+            color={
+              hasModels && project && status === 'ready'
+                ? colors.primary
+                : colors.textMuted
+            }
+          />
         </TouchableOpacity>
       </View>
 
-      {projectChats.length === 0 ? (
+      {status !== 'ready' ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>
+            {status === 'stopped' ? 'Chats unavailable' : 'Loading chats…'}
+          </Text>
+        </View>
+      ) : !project ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>Project not found</Text>
+          <Button
+            title="Go Back"
+            variant="primary"
+            size="medium"
+            onPress={() => navigation.goBack()}
+          />
+        </View>
+      ) : projectChats.length === 0 ? (
         <View style={styles.emptyState}>
           <View style={styles.emptyIcon}>
             <Icon name="message-circle" size={28} color={colors.textMuted} />
@@ -283,7 +411,7 @@ export const ProjectChatsScreen: React.FC = () => {
         <FlatList
           data={projectChats}
           renderItem={renderChat}
-          keyExtractor={(item) => item.id}
+          keyExtractor={chatKey}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={Platform.OS !== 'android'}

@@ -7,12 +7,12 @@ import { LoadingDots } from '../components/LoadingDots';
 import { SLOTS, useSlot } from '../bootstrap/slotRegistry';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import type { RootStackParamList } from '../navigation/types';
-import type { AutoSetupPlan } from '../services/autoSetupPlan';
+import { guidedSetupDownloadId } from '@offgrid/application';
 import {
-  autoSetupDownloadId,
   createAutoSetupSession,
+  type AutoSetupPlan,
   type AutoSetupSession,
-} from '../services/autoSetupService';
+} from '../services/composition/guided-setup';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 
@@ -55,8 +55,9 @@ export const AutoSetupScreen: React.FC<Props> = ({
     snapshot.plans.find(plan => plan.tier === snapshot.selectedTier) ??
     snapshot.plans[0];
   const selectedOutcomes =
-    selected?.items.map(item => snapshot.outcomes[autoSetupDownloadId(item)]) ??
-    [];
+    selected?.items.map(
+      item => snapshot.outcomes[guidedSetupDownloadId(item)],
+    ) ?? [];
   const progress =
     selectedOutcomes.length === 0
       ? 0
@@ -112,7 +113,9 @@ export const AutoSetupScreen: React.FC<Props> = ({
           {snapshot.plans.map(plan => (
             <Card
               key={plan.tier}
-              onPress={() => session.selectTier(plan.tier)}
+              onPress={() => {
+                session.selectTier(plan.tier).catch(() => undefined);
+              }}
               style={{
                 ...styles.planCard,
                 ...(width >= 700 ? styles.planCardWide : {}),
@@ -141,7 +144,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
                         <Text style={styles.itemSize}>
                           {formatBytes(item.sizeBytes)}
                           {outcomeLabel(
-                            snapshot.outcomes[autoSetupDownloadId(item)],
+                            snapshot.outcomes[guidedSetupDownloadId(item)],
                           )}
                         </Text>
                       </View>
@@ -169,8 +172,8 @@ export const AutoSetupScreen: React.FC<Props> = ({
                   {isComplete ? (
                     <Button
                       title="Continue"
-                      onPress={() => {
-                        session.complete();
+                      onPress={async () => {
+                        await session.complete();
                         navigation.replace('Main');
                       }}
                       testID="auto-setup-continue"

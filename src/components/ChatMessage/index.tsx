@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
-import { useUiModeStore } from '../../stores';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import Icon from 'react-native-vector-icons/Feather';
 import {
@@ -30,7 +29,7 @@ import {
 } from './components/ToolMessages';
 import type { ChatMessageProps } from './types';
 import type { Message } from '../../types';
-import { isSupportingChatContext } from '@offgrid/sync';
+import { isSupportingChatContext } from '@offgrid/application';
 
 type MetaRowProps = {
   message: Message;
@@ -128,6 +127,7 @@ interface MessageBubbleProps {
   showSupportingContext: boolean;
   showActions: boolean;
   showGenerationDetails: boolean;
+  hideProse?: boolean;
   metaExtra?: React.ReactNode;
   onImagePress?: (uri: string) => void;
   onToggleThinking: () => void;
@@ -150,6 +150,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   showSupportingContext,
   showActions,
   showGenerationDetails,
+  hideProse,
   metaExtra,
   onImagePress,
   onToggleThinking,
@@ -178,7 +179,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           />
         )}
 
-        {hasAttachments && (
+        {!isUser && hasAttachments && (
           <MessageAttachments
             attachments={message.attachments!}
             isUser={isUser}
@@ -188,16 +189,41 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           />
         )}
 
-        <MessageContent
-          isUser={isUser}
-          isThinking={message.isThinking}
-          content={message.content}
-          isStreaming={isStreaming}
-          parsedContent={parsedContent}
-          showThinking={showThinking}
-          onToggleThinking={onToggleThinking}
-          styles={styles}
-        />
+        {!isUser && !hideProse && (
+          <MessageContent
+            isUser={isUser}
+            isThinking={message.isThinking}
+            content={message.content}
+            isStreaming={isStreaming}
+            parsedContent={parsedContent}
+            showThinking={showThinking}
+            onToggleThinking={onToggleThinking}
+            styles={styles}
+          />
+        )}
+
+        {isUser && hasAttachments && (
+          <MessageAttachments
+            attachments={message.attachments!}
+            isUser={isUser}
+            styles={styles}
+            colors={colors}
+            onImagePress={onImagePress}
+          />
+        )}
+
+        {isUser && (
+          <MessageContent
+            isUser={isUser}
+            isThinking={message.isThinking}
+            content={message.content}
+            isStreaming={isStreaming}
+            parsedContent={parsedContent}
+            showThinking={showThinking}
+            onToggleThinking={onToggleThinking}
+            styles={styles}
+          />
+        )}
       </View>
 
       <SyncedToolArtifacts message={message} styles={styles} colors={colors} />
@@ -259,11 +285,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const ttsCanSpeak = callHook<boolean>(HOOKS.audioCanSpeak) ?? false;
-  const interfaceMode = useUiModeStore(s => s.interfaceMode);
   const [showActionMenu, setShowActionMenu] = useState(false);
-  const [showSelectText, setShowSelectText] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(message.content);
   const [showThinking, setShowThinking] = useState(!!isStreaming);
   const [showSupportingContext, setShowSupportingContext] = useState(false);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
@@ -302,25 +325,19 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   };
 
   const handleEdit = () => {
-    setEditedContent(message.content);
     setShowActionMenu(false);
     setTimeout(() => setIsEditing(true), 350);
   };
 
-  const handleSelectText = () => {
-    setShowActionMenu(false);
-    // Let the action sheet finish closing before opening the select-text sheet.
-    setTimeout(() => setShowSelectText(true), 350);
-  };
-
-  const handleSaveEdit = () => {
-    const trimmed = editedContent.trim();
-    if (trimmed !== message.content) onEdit?.(message, trimmed);
+  // The candidate comes from the sheet that owns the draft, so this can never judge a stale
+  // value from an earlier render.
+  const handleSaveEdit = (text: string) => {
+    const trimmed = text.trim();
+    if (trimmed !== displayContent) onEdit?.(message, trimmed);
     setIsEditing(false);
   };
 
   const handleCancelEdit = () => {
-    setEditedContent(message.content);
     setIsEditing(false);
   };
 
@@ -347,6 +364,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     callHook(HOOKS.audioSpeak, displayContent, message.id);
   };
 
+  // A tool row can also be system info (kept out of the prompt): render it as the tool row.
+  if (message.role === 'tool')
+    return (
+      <ToolResultMessage message={message} styles={styles} colors={colors} />
+    );
   if (message.isSystemInfo) {
     return (
       <SystemInfoMessage
@@ -357,10 +379,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       />
     );
   }
-  if (message.role === 'tool')
-    return (
-      <ToolResultMessage message={message} styles={styles} colors={colors} />
-    );
   if (message.role === 'assistant' && message.toolCalls?.length) {
     return (
       <ToolCallWithThinking
@@ -410,6 +428,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       showSupportingContext={showSupportingContext}
       showActions={showActions}
       showGenerationDetails={showGenerationDetails}
+      hideProse={hideProse}
       metaExtra={metaExtra}
       onImagePress={onImagePress}
       onToggleThinking={() => setShowThinking(!showThinking)}
@@ -434,25 +453,20 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         styles={styles}
         colors={colors}
         showActionMenu={showActionMenu}
-        showSelectText={showSelectText}
         isEditing={isEditing}
         isUser={isUser}
         canEdit={!!onEdit}
         canRetry={!!onRetry}
         canGenerateImage={canGenerateImage && !!onGenerateImage}
         canSpeak={canSpeak}
-        showSelectTextAction={interfaceMode === 'chat'}
         displayContent={displayContent}
         alertState={alertState}
         onCloseActionMenu={() => setShowActionMenu(false)}
-        onCloseSelectText={() => setShowSelectText(false)}
-        onChangeEditText={setEditedContent}
         onCopy={handleCopy}
         onEdit={handleEdit}
         onRetry={handleRetry}
         onGenerateImage={handleGenerateImage}
         onSpeak={handleSpeak}
-        onSelectText={handleSelectText}
         onSaveEdit={handleSaveEdit}
         onCancelEdit={handleCancelEdit}
         onCloseAlert={() => setAlertState(hideAlert())}

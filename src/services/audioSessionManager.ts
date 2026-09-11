@@ -54,7 +54,9 @@ class AudioSessionManager {
   private queue: Promise<unknown> = Promise.resolve();
   private runSerial<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.queue.then(fn, fn);
-    this.queue = next.catch(() => {}); // never let a rejection wedge the chain
+    // `next` is returned to the caller, so that caller observes the failure. Only the private queue
+    // tail consumes it to keep a failed operation from wedging all later session work.
+    this.queue = next.catch(() => undefined);
     return next;
   }
 

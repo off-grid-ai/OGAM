@@ -17,7 +17,7 @@ import { hardwareService } from '../services';
 
 export const DeviceInfoScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { deviceInfo } = useAppStore();
+  const deviceInfo = useAppStore(s => s.deviceInfo);
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 

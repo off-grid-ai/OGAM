@@ -8,7 +8,7 @@ import {
   textOverheadMultiplier,
   TEXT_MODEL_OVERHEAD_MULTIPLIER,
   TEXT_MODEL_GPU_OVERHEAD_MULTIPLIER,
-} from '../../../src/services/activeModelService/types';
+} from '../../../src/services/modelServices/modelStateTypes';
 import { INFERENCE_BACKENDS } from '../../../src/types';
 
 describe('textOverheadMultiplier — GPU-aware text RAM estimate', () => {

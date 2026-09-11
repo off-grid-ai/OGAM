@@ -29,7 +29,9 @@
  * module is absent, which is what the harness above is for, and which five neighbouring suites were already
  * doing. That version was deleted rather than repaired; this is what replaces it.
  */
-import { renderHook, act, waitFor } from '@testing-library/react-native';
+import { renderHook, act } from '@testing-library/react-native';
+import {Platform} from 'react-native';
+import type {MobileApplicationFixture} from '../../harness/mobileApplicationFixture';
 
 jest.mock('react-native-tcp-socket', () => {
   const {
@@ -58,55 +60,27 @@ import { proIsPresent, requirePro } from '../helpers/requirePro';
 
 type HookModule =
   typeof import('@offgrid/pro/ui/SyncScreen/useExplicitFileShare');
-type ServiceModule = typeof import('@offgrid/pro/sync/sharedFileSyncService');
-
-type StateSyncModule = typeof import('@offgrid/pro/sync/stateSyncService');
-type SyncServiceModule = typeof import('@offgrid/pro/sync/syncService');
 
 let useExplicitFileShare: HookModule['useExplicitFileShare'];
-let sharedFileSyncService: ServiceModule['sharedFileSyncService'];
-let stopStateSync: (() => Promise<void>) | undefined;
-let stopSync: (() => Promise<void>) | undefined;
+let applicationFixture: MobileApplicationFixture | undefined;
+const platform = Platform.OS;
 
 const describePro = proIsPresent() ? describe : describe.skip;
 
 beforeAll(async () => {
+  Object.defineProperty(Platform, 'OS', {value: 'android', configurable: true});
   const hook = requirePro<HookModule>(
     '@offgrid/pro/ui/SyncScreen/useExplicitFileShare',
   );
-  const service = requirePro<ServiceModule>(
-    '@offgrid/pro/sync/sharedFileSyncService',
-  );
-  const stateSync = requirePro<StateSyncModule>(
-    '@offgrid/pro/sync/stateSyncService',
-  );
-  const sync = requirePro<SyncServiceModule>('@offgrid/pro/sync/syncService');
-  if (!hook || !service || !stateSync || !sync) return;
+  if (!hook) return;
   useExplicitFileShare = hook.useExplicitFileShare;
-  sharedFileSyncService = service.sharedFileSyncService;
-  stopStateSync = () => stateSync.stateSyncService.stop();
-  stopSync = () => sync.syncService.stop();
-
-  // The app's bootstrap, not a shortcut. The real service refuses with "Sync is not ready yet." until it has
-  // been started and wired to the state-sync owner - a precondition the previous, mocked version of this file
-  // could not have surfaced, because a stub is always ready. Wired exactly as ambientShare.integration wires it:
-  // without publishControl the control record is never published and every send fails as a transfer error when
-  // it is really a half-built service.
-  await sharedFileSyncService.start({
-    stageStateMutation: (mutation: never) =>
-      stateSync.stateSyncService.stageMutation(mutation),
-    recordStateMutation: (mutation: never) =>
-      stateSync.stateSyncService.recordMutation(mutation),
-    publishControl: (deviceId: string, syncId: string) =>
-      stateSync.stateSyncService.sendSharedFileRecord(deviceId, syncId),
-  } as never);
-  await stateSync.stateSyncService.start();
-  await sync.syncService.start();
+  const {startMobileApplicationFixture} = require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+  applicationFixture = await startMobileApplicationFixture({pro: true});
 });
 
 afterAll(async () => {
-  await stopStateSync?.();
-  await stopSync?.();
+  await applicationFixture?.dispose();
+  Object.defineProperty(Platform, 'OS', {value: platform, configurable: true});
 });
 
 const CONNECTED_MAC = {
@@ -170,9 +144,7 @@ describePro('sharing a file to a paired device', () => {
     });
 
     // Silence on a real failure is the worse bug of the two: the user believes the file is on its way.
-    await waitFor(() =>
-      expect(result.current.error).toBe('the file could not be read'),
-    );
+    expect(result.current.error).toBe('the file could not be read');
     expect(result.current.message).toBeNull();
   });
 

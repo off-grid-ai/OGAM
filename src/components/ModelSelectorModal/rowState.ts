@@ -1,4 +1,4 @@
-import type { ActiveModelInfo } from '../../services/activeModelService/types';
+import type { ActiveModelInfo } from '../../services/modelServices/modelStateTypes';
 
 /**
  * Which text row shows a spinner: the model a load is actually running for, and nothing otherwise.
@@ -10,11 +10,14 @@ import type { ActiveModelInfo } from '../../services/activeModelService/types';
  * `parentIsLoading` stays in the answer for the reload path: the "settings changed, reload" card opens
  * this sheet while the screen reloads the SAME active model, and that load is reported by the screen.
  */
-export function loadingTextRowId(
-  status: ActiveModelInfo,
-  parentIsLoading: boolean,
-  selectedId: string | null,
-): string | null {
+export function loadingTextRowId(input: {
+  status: ActiveModelInfo;
+  parentIsLoading: boolean;
+  selectedId: string | null;
+  pendingSelectionId?: string | null;
+}): string | null {
+  const { status, parentIsLoading, selectedId, pendingSelectionId } = input;
+  if (pendingSelectionId) return pendingSelectionId;
   if (!status.text.isLoading && !parentIsLoading) return null;
   return status.text.model?.id ?? selectedId;
 }

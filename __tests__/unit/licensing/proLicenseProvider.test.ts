@@ -631,7 +631,9 @@ describe('the licence this phone holds', () => {
         credentialSaved: true,
         expired: true,
       });
-      expect(keygen.calls).toHaveLength(providerCalls);
+      // The local deadline closes access first. An expired credential bypasses the ordinary
+      // foreground throttle so an authoritative renewal can restore access in this session.
+      expect(keygen.calls).toHaveLength(providerCalls + 1);
     });
 
     it('reports an expired saved credential as inactive on cold start', async () => {
@@ -684,6 +686,63 @@ describe('the licence this phone holds', () => {
       });
       expect(decisions).toContain(false);
       expect(keygen.calls).toHaveLength(providerCalls);
+      jest.useRealTimers();
+    });
+
+    it('serializes expiry shutdown and Keygen renewal without an app restart', async () => {
+      jest.useFakeTimers();
+      const start = Date.UTC(2026, 7, 26, 9, 0, 0);
+      jest.setSystemTime(start);
+      keygen.reset();
+      keygen.addLicence({
+        key: LICENCE_KEY,
+        seats: 3,
+        expiry: new Date(start + 5_000).toISOString(),
+      });
+      const provider = load();
+      provider.setDirectEntitlementActivationOwner(activationOwner().owner);
+      await provider.proLicenseProvider.activate!(LICENCE_KEY);
+
+      const runtimeChanges: string[] = [];
+      const { createEntitlementRuntimeTransition } =
+        require('../../../pro/licensing/entitlementRuntimeTransition') as typeof import('../../../pro/licensing/entitlementRuntimeTransition');
+      const runtime = createEntitlementRuntimeTransition({
+        activate: async () => {
+          runtimeChanges.push('activate');
+        },
+        deactivate: async () => {
+          runtimeChanges.push('deactivate');
+        },
+        report: error => {
+          throw error;
+        },
+      });
+      const stop = provider.onProLicenseInfoChanged(runtime.apply);
+
+      await jest.advanceTimersByTimeAsync(5_000);
+      await runtime.settled();
+      expect(runtimeChanges).toEqual(['deactivate']);
+
+      keygen.reset();
+      keygen.addLicence({
+        key: LICENCE_KEY,
+        seats: 3,
+        expiry: new Date(start + 60_000).toISOString(),
+      });
+      keygen.activate({
+        key: LICENCE_KEY,
+        fingerprint: FINGERPRINT,
+        name: "Mac's iPhone",
+        platform: 'ios',
+      });
+      await provider.proLicenseProvider.revalidate!('foreground');
+      await runtime.settled();
+
+      await expect(provider.proLicenseProvider.readActive()).resolves.toBe(
+        true,
+      );
+      expect(runtimeChanges).toEqual(['deactivate', 'activate']);
+      stop();
       jest.useRealTimers();
     });
 
@@ -847,6 +906,34 @@ describe('the licence this phone holds', () => {
       ).resolves.toMatchObject({
         credentialSaved: false,
       });
+    });
+
+    it('locks Pro before protected storage finishes clearing', async () => {
+      const provider = load();
+      provider.setDirectEntitlementActivationOwner(activationOwner().owner);
+      await provider.proLicenseProvider.activate!(LICENCE_KEY);
+      let finishClear: (() => void) | undefined;
+      keychain().resetGenericPassword.mockImplementation(
+        () =>
+          new Promise<boolean>(resolve => {
+            finishClear = () => resolve(true);
+          }),
+      );
+
+      const clearing = provider.clearProAfterRemoteMembershipRevocation();
+      const { useAppStore } =
+        require('../../../src/stores/appStore') as typeof import('../../../src/stores/appStore');
+      const { selectHasProAccess } =
+        require('../../../src/stores/proAccessSlice') as typeof import('../../../src/stores/proAccessSlice');
+
+      expect(useAppStore.getState().proDeviceAdmission).toBe('inactive');
+      expect(selectHasProAccess(useAppStore.getState())).toBe(false);
+
+      finishClear?.();
+      await clearing;
+      keychain().resetGenericPassword.mockImplementation(
+        async ({ service }: { service: string }) => secrets.delete(service),
+      );
     });
 
     it('can be reset for testing without leaving anything behind', async () => {

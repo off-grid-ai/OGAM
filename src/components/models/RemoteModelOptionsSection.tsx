@@ -3,11 +3,12 @@ import { Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { SPACING, TYPOGRAPHY } from '../../constants';
-import { remoteServerManager } from '../../services/remoteServerManager';
-import { remoteServerModelOptions } from '../../services/remoteModelSelection';
-import { useRemoteServerStore } from '../../stores/remoteServerStore';
+import { modelsFailureMessage, remoteServerModelOptions } from '@offgrid/application';
+import { applicationFacade } from '../../services/applicationFacade';
+import { useModelsProjection } from '../../hooks/useApplicationProjection';
+import { useActiveMobileModel } from '../../hooks/useActiveMobileModel';
 import { useTheme, useThemedStyles } from '../../theme';
-import type { ThemeColors } from '../../theme';
+import type { ThemeColors, ThemeShadows } from '../../theme';
 import type { RemoteModelCategory } from '../../types';
 
 interface Props {
@@ -16,16 +17,36 @@ interface Props {
 }
 
 /** Shared remote rows for image, transcription, and voice model pickers. */
+/**
+ * You should read what happened and what still works, not a transport error. The device name is
+ * the one you gave it; local models keep working while it is away.
+ */
+export function remoteSelectionFailureText(serverName: string, reason: unknown): string {
+  const message = reason instanceof Error ? reason.message : String(reason ?? '');
+  if (
+    /network request failed|failed to fetch|unreachable|not connected|econn|enotfound|timed? ?out|offline|socket/i.test(
+      message,
+    )
+  ) {
+    return `${serverName} can't be reached right now. Models on this phone keep working.`;
+  }
+  return message || `${serverName} could not take this model right now.`;
+}
+
 export const RemoteModelOptionsSection: React.FC<Props> = ({
   category,
   onSelect,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const servers = useRemoteServerStore(state => state.servers);
-  const activeServerId = useRemoteServerStore(
-    state => state.activeRemoteMediaServerIds[category] ?? null,
-  );
+  const servers = useModelsProjection().servers;
+  const activeRoute = useActiveMobileModel(category).model;
+  const activeServerId = activeRoute?.source === 'remote'
+    ? activeRoute.serverId ?? null
+    : null;
+  const activeModelId = activeRoute?.source === 'remote'
+    ? activeRoute.id
+    : null;
   const [selecting, setSelecting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const options = useMemo(
@@ -33,9 +54,6 @@ export const RemoteModelOptionsSection: React.FC<Props> = ({
     [servers, category],
   );
   if (options.length === 0) return null;
-
-  const activeServer = servers.find(server => server.id === activeServerId);
-  const activeModelId = activeServer?.mediaModels?.[category];
 
   return (
     <View style={styles.section} testID={`remote-${category}-models`}>
@@ -55,18 +73,24 @@ export const RemoteModelOptionsSection: React.FC<Props> = ({
               setSelecting(key);
               setError(null);
               try {
-                await remoteServerManager.setActiveRemoteMediaModel(
+                const routeId = applicationFacade().models.remoteModelRoute(
                   option.serverId,
-                  category,
                   option.id,
+                  category,
                 );
+                if (!routeId) {
+                  throw new Error('The selected server model is unavailable.');
+                }
+                const selected = await applicationFacade().models.select({
+                  modality: category,
+                  modelId: routeId,
+                });
+                if (!selected.ok) {
+                  throw new Error(modelsFailureMessage(selected.failure));
+                }
                 onSelect?.();
               } catch (reason) {
-                setError(
-                  reason instanceof Error
-                    ? reason.message
-                    : 'The remote model could not be selected.',
-                );
+                setError(remoteSelectionFailureText(option.serverName, reason));
               } finally {
                 setSelecting(null);
               }
@@ -96,7 +120,7 @@ export const RemoteModelOptionsSection: React.FC<Props> = ({
   );
 };
 
-const createStyles = (colors: ThemeColors) => ({
+const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   section: { gap: SPACING.sm as number },
   sectionLabel: {
     ...TYPOGRAPHY.label,
@@ -105,6 +129,7 @@ const createStyles = (colors: ThemeColors) => ({
     letterSpacing: 0.3,
   },
   row: {
+    ...shadows.small,
     minHeight: 44,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,

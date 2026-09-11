@@ -12,15 +12,15 @@
  * must NOT carry a `tools` array or `tool_choice`. Sending `tools` to a server
  * that advertised it cannot do tool calling can make the server 400 / reject the
  * request or hallucinate. The single owning decision point is
- * OpenAICompatibleProvider.buildRequestBody (invoked from generate()).
+ * OpenAICompatibleTransport.buildRequestBody (invoked from generate()).
  *
- * These tests drive the REAL OpenAICompatibleProvider.generate() and inspect the
+ * These tests drive the REAL OpenAICompatibleTransport.generate() and inspect the
  * REAL request body handed to the (boundary-mocked) HTTP client. The only mock is
  * the network transport (createStreamingRequest) — the request-building logic under
  * assertion runs for real, so deleting/altering the gate would fail these tests.
  */
 
-import { OpenAICompatibleProvider } from '../../src/services/providers/openAICompatibleProvider';
+import { OpenAICompatibleTransport } from '../../src/services/adapters/providers/openAICompatibleProvider';
 import * as httpClient from '../../src/services/httpClient';
 
 // Boundary mock: the network transport only. The provider's request-building
@@ -52,19 +52,11 @@ const TOOLS = [
  * endpoint (not port 11434) so the code takes the buildRequestBody path.
  */
 async function captureRequestBody(opts: {
-  supportsToolCalling?: boolean;
   tools?: typeof TOOLS;
 }): Promise<Record<string, unknown>> {
-  const provider = new OpenAICompatibleProvider('srv', {
+  const provider = new OpenAICompatibleTransport('srv', {
     endpoint: 'http://192.168.1.50:1234', // NOT :11434 → OpenAI path, carries `tools`
-    modelId: 'some-model',
   });
-  await provider.loadModel('some-model');
-  if (opts.supportsToolCalling !== undefined) {
-    // Authoritative capability applied post-discovery (as remoteServerManager does).
-    provider.updateCapabilities({ supportsToolCalling: opts.supportsToolCalling });
-  }
-
   const mock = httpClient.createStreamingRequest as jest.Mock;
   mock.mockImplementation((_url, _req, onEvent) => {
     onEvent({ data: '{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}' });
@@ -72,6 +64,7 @@ async function captureRequestBody(opts: {
   });
 
   await provider.generate(
+    'some-model',
     [{ id: '1', role: 'user', content: 'Hi', timestamp: 0 }],
     { tools: opts.tools },
     { onToken: jest.fn(), onComplete: jest.fn(), onError: jest.fn() },
@@ -85,21 +78,16 @@ describe('Batch 8 — remote server tool-calling capability gate (request builde
 
   // COVERED-REAL baseline (mirrors existing provider test, kept as the "before" side
   // of the contract): tools present + capable server → tools go on the wire.
-  it('includes tools + tool_choice when the server supports tool calling and tools are provided', async () => {
-    const body = await captureRequestBody({ supportsToolCalling: true, tools: TOOLS });
+  it('sends tools selected by Shared GenerationService', async () => {
+    const body = await captureRequestBody({ tools: TOOLS });
     expect(body.tools).toEqual(TOOLS);
     expect(body.tool_choice).toBe('auto');
   });
 
-  it('omits tools + tool_choice when no tools are provided (regardless of capability)', async () => {
-    const body = await captureRequestBody({ supportsToolCalling: true });
+  it('omits tools + tool_choice when Shared GenerationService provides none', async () => {
+    const body = await captureRequestBody({});
     expect(body.tools).toBeUndefined();
     expect(body.tool_choice).toBeUndefined();
   });
 
-  it('omits tools + tool_choice when the server advertised supportsToolCalling=false', async () => {
-    const body = await captureRequestBody({ supportsToolCalling: false, tools: TOOLS });
-    expect(body.tools).toBeUndefined();
-    expect(body.tool_choice).toBeUndefined();
-  });
 });

@@ -71,7 +71,7 @@ export const SettingsOptionSelect: React.FC<SettingsOptionSelectProps> = ({
   );
 };
 
-const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: { gap: SPACING.xs as number, marginBottom: SPACING.md },
   label: { ...TYPOGRAPHY.label, color: colors.textMuted, textTransform: 'uppercase' as const },
   trigger: {
@@ -79,6 +79,7 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingHorizontal: SPACING.md, flexDirection: 'row' as const,
     alignItems: 'center' as const, justifyContent: 'space-between' as const,
     backgroundColor: colors.surface,
+    ...shadows.small,
   },
   value: { ...TYPOGRAPHY.body, color: colors.text, flex: 1 },
   description: { ...TYPOGRAPHY.meta, color: colors.textMuted },

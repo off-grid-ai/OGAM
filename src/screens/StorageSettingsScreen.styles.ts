@@ -97,31 +97,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.body,
     color: colors.primary,
   },
-  modelRow: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  modelInfo: {
-    flex: 1,
-    marginRight: SPACING.md,
-  },
-  modelName: {
-    ...TYPOGRAPHY.body,
-    color: colors.text,
-  },
-  modelMeta: {
-    ...TYPOGRAPHY.meta,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  modelSize: {
-    ...TYPOGRAPHY.body,
-    color: colors.textSecondary,
-  },
   hint: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textMuted,

@@ -2,7 +2,7 @@
  * T071 / DEV-B30 — prompt enhancement must NOT think.
  *
  * Device (part37 WIRE-LLAMA-PARAMS, enhancement ON + thinking ON globally): the enhancement
- * generateStandalone request went out with enable_thinking=true, so the model emitted a reasoning chain
+ * enhancement request went out with enable_thinking=true, so the model emitted a reasoning chain
  * ("Thinking Process:…") that became the image prompt — slow, non-streaming, garbage prompt. User's fix
  * spec: "enhancing prompt should not think — that turn shouldn't think." The enhancement is a utility
  * rewrite, not a reasoning task; its request must force enable_thinking=false regardless of the global
@@ -26,17 +26,18 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 const isEnhancementRequest = (p: { messages?: Array<{ role: string; content?: string }> }) =>
-  !!p.messages?.some(m => m.role === 'system' && /image generation prompt/i.test(m.content || ''));
+  !!p.messages?.some(m => m.role === 'system' && /rewrite a short image request/i.test(m.content || ''));
 
 describe('T071 (rendered) — prompt enhancement must not think (DEV-B30)', () => {
   it('sends the enhancement request with enable_thinking !== true even when thinking is ON globally', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
     h.render();
 
-    await h.placeImageModel({ backend: 'coreml' });
+    // 57ee10c1: the harness composes the real application root and the import adapter owns the model id.
+    const imageModel = await h.placeImageModel({ backend: 'coreml' });
      
-    const { activeModelService } = require('../../../src/services/activeModelService');
-    await activeModelService.loadImageModel('sd');
+    const { activeModelService } = require('../../harness/activeModelLifecycle');
+    await activeModelService.loadImageModel(imageModel.id);
     await h.cycleImageMode(); // auto → ON(force): "draw a cat" routes to IMAGE
     await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('image-mode-force-badge')).not.toBeNull(); });
 

@@ -1,52 +1,91 @@
 /**
- * RED-FLOW (UI, rendered) — an orphaned projector sidecar must NOT hydrate as a phantom model card.
+ * A projector sidecar is an artifact of a vision-model download. It must not
+ * become a standalone card when Mobile recovers native work after relaunch.
  *
- * A `*-projector.gguf` (equally `*-clip.gguf`) is a multimodal PROJECTOR that rides with a text/vision
- * model — it is never a standalone downloadable model. On relaunch, hydrateDownloadStore rebuilds the
- * download list from the native rows. If a projector sidecar row survives with NO parent back-link
- * (mmProjDownloadId), downloadHydration must classify it as a projector (via the canonical isMMProjFile,
- * which matches mmproj/projector/clip) and DROP it — so the user never sees a bogus model row for it.
- *
- * The old isMmProjFileName only matched 'mmproj', so a '-projector.gguf' sidecar slipped past the
- * projector filter, hydrated as a real DownloadEntry, and rendered as a phantom ActiveDownloadCard on
- * the Download Manager. Revert the fix (match only 'mmproj') and the phantom card reappears → RED.
- *
- * Mounts the real DownloadManagerScreen over the download-native + fs harness (fakes ONLY at the device
- * boundary), calls the real hydrateDownloadStore, and asserts the rendered surface: no card for the
- * projector filename. Modeled on imageExtractLostRelaunch.rendered.redflow.test.tsx.
+ * The durable Shared journal is the lifecycle source of truth. Native rows are
+ * platform facts, and the rendered Mobile screen consumes the Shared projection.
  */
-import { installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
+import type {MobileApplicationFixture} from '../../harness/mobileApplicationFixture';
+import {installNativeBoundary, MB, requireRTL} from '../../harness/nativeBoundary';
 
-describe('orphaned projector sidecar (rendered) — no phantom model on hydrate', () => {
-  it('does not surface a `-projector.gguf` sidecar as a model card on the Download Manager', async () => {
-    const boundary = installNativeBoundary({ download: true, fs: true });
+let fixture: MobileApplicationFixture | null = null;
+
+afterEach(async () => {
+  await fixture?.dispose();
+  fixture = null;
+});
+
+describe('orphaned projector sidecar recovery', () => {
+  it('does not render a projector sidecar as a model download card', async () => {
+    const boundary = installNativeBoundary({download: true, fs: true});
     const React = require('react');
-    const { render, waitFor } = requireRTL();
-    const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
-    const { DownloadManagerScreen } = require('../../../src/screens/DownloadManagerScreen');
+    const {render, waitFor} = requireRTL();
+    const {DownloadManagerScreen} = require('../../../src/screens/DownloadManagerScreen');
+    const {
+      seedMobileDownloadJournal,
+      startMobileApplicationFixture,
+    } = require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
 
-    // A projector sidecar left in the native active set with NO parent back-link (mmProjDownloadId):
-    // an orphan a relaunch reconcile finds. It is a projector, not a model — must be dropped by hydrate.
+    const modelFileName = 'gemma-4-E2B-it-Q4_K_M.gguf';
     const projectorFileName = 'gemma-4-E2B-it-projector.gguf';
+
     boundary.download!.seedActive({
-      downloadId: 'dl-proj',
+      downloadId: 'dl-model',
+      fileName: modelFileName,
+      modelId: 'unsloth/gemma-4-E2B-it-GGUF',
+      modelType: 'text',
+      status: 'running',
+      bytesDownloaded: 500 * MB,
+      totalBytes: 1000 * MB,
+    });
+    // This native task has no durable Shared owner. A retry left it without a
+    // parent link, so it must not become an independent model download.
+    boundary.download!.seedActive({
+      downloadId: 'dl-projector',
       fileName: projectorFileName,
       modelId: 'unsloth/gemma-4-E2B-it-GGUF',
       modelType: 'text',
       status: 'running',
-      bytesDownloaded: 300 * 1024 * 1024,
-      totalBytes: 300 * 1024 * 1024,
+      bytesDownloaded: 100 * MB,
+      totalBytes: 200 * MB,
     });
-    boundary.fs!.seedFile('/docs/models/gemma-4-E2B-it-projector.gguf', 300 * 1024 * 1024);
 
-    await hydrateDownloadStore();
+    await seedMobileDownloadJournal([{
+      manifest: {
+        id: 'unsloth/gemma-4-E2B-it-GGUF',
+        modelId: 'unsloth/gemma-4-E2B-it-GGUF',
+        kind: 'text',
+        revision: 'main',
+        artifacts: [{
+          id: 'primary',
+          name: modelFileName,
+          role: 'primary',
+          required: true,
+          localName: modelFileName,
+          url: `https://example.test/${modelFileName}`,
+        }],
+      },
+      phase: 'downloading',
+      artifacts: [{
+        artifactId: 'primary',
+        phase: 'downloading',
+        transferId: 'dl-model',
+        bytesDownloaded: 500 * MB,
+        totalBytes: 1000 * MB,
+      }],
+      createdAt: 1,
+      updatedAt: 1,
+      attempt: 1,
+    }]);
+
+    fixture = await startMobileApplicationFixture();
+    await fixture.refreshModels();
 
     const view = render(React.createElement(DownloadManagerScreen, {}));
-    // Re-render proof: the screen mounted (its title is on screen) before we assert an absence.
-    await waitFor(() => { expect(view.queryByText('Download Manager')).not.toBeNull(); });
-
-    // Correct: the projector is classified as a projector, not a model, so NO card shows its filename.
-    // Before the fix (isMmProjFileName matched only 'mmproj') the sidecar leaked in as a phantom card → RED.
+    await waitFor(() => {
+      expect(view.queryByText('Download Manager')).not.toBeNull();
+      expect(view.queryByText(modelFileName)).not.toBeNull();
+    });
     expect(view.queryByText(projectorFileName)).toBeNull();
   });
 });

@@ -8,8 +8,12 @@
  * does NOT catch the `engine === 'litert'` VALUE branch (an ESLint no-restricted-syntax rule
  * guards that) or DRY drift / logic bugs. Complements the hygiene standard; does not replace it.
  *
- * The tree is CLEAN — zero violations, no baseline file. Every rule is fully enforced with no
- * exceptions; any new violation fails `npm run depcruise` (CI + pre-push). If you ever must adopt
+ * The tree is CLEAN — zero violations, no baseline file. Every rule is fully enforced; any new
+ * violation fails `npm run depcruise` (CI + pre-push). The one static-analysis boundary is
+ * `applicationFacade.ts`: it is a late-bound composition locator whose deferred `require` prevents
+ * a runtime initialization cycle. Dependency Cruiser treats it as a leaf so it does not expand one
+ * intentional locator edge into every possible path through the composed application graph.
+ * If you ever must adopt
  * a new strict rule onto legacy debt, baseline it (`depcruise --output-type baseline >
  * .dependency-cruiser-known-violations.json` + run the gate with `--ignore-known`) and burn it
  * down — never regenerate a baseline to hide a fresh violation.
@@ -53,6 +57,44 @@ module.exports = {
       to: { path: '^src/(screens|navigation)/' },
     },
     // ── Dead code ─────────────────────────────────────────────────────────────
+    // ── Application facade boundary ──
+    {
+      name: 'presentation-not-to-raw-rag-use-or-speech',
+      severity: 'error',
+      comment: 'Presentation reads RAG, Use, and Speech through @offgrid/application facades. Shared domain packages are composition and platform-adapter dependencies, not UI or store dependencies.',
+      from: { path: '^(src/(screens|components|hooks|stores)/|pro/ui/)' },
+      to: { path: '^\\.\\./shared/packages/(rag|use|speech)/' },
+    },
+    {
+      name: 'presentation-not-to-raw-models',
+      severity: 'error',
+      comment: 'Presentation reads Models through @offgrid/application. Raw Models imports are limited to explicit composition and platform-adapter paths.',
+      from: {
+        path: '^(src/(screens|components|hooks|stores)/|pro/ui/)',
+        pathNot: '^src/services/(adapters|composition)/',
+      },
+      to: {
+        path: '^(node_modules/@offgrid/models/|\\.\\./shared/packages/models/)',
+      },
+    },
+    {
+      name: 'presentation-not-to-raw-sync',
+      severity: 'error',
+      comment: 'Presentation reads Sync through @offgrid/application. Raw Sync imports stay in explicit composition and platform-adapter seams, which are outside this presentation scope.',
+      from: { path: '^(src/(screens|components|hooks|stores)/|pro/ui/)' },
+      to: {
+        path: '^(node_modules/@offgrid/sync/|@offgrid/sync(?:/|$)|\\.\\./shared/packages/sync/)',
+      },
+    },
+    {
+      name: 'presentation-not-to-raw-automation',
+      severity: 'error',
+      comment: 'Presentation reads Automation through @offgrid/application. Raw Automation imports stay in explicit composition and platform-adapter seams, which are outside this presentation scope.',
+      from: { path: '^(src/(screens|components|hooks|stores)/|pro/ui/)' },
+      to: {
+        path: '^(node_modules/@offgrid/automation/|@offgrid/automation(?:/|$)|\\.\\./shared/packages/automation/)',
+      },
+    },
     {
       name: 'no-orphans',
       severity: 'error',
@@ -67,9 +109,11 @@ module.exports = {
           // Core utilities whose only importers are in the private pro/ submodule. The cruiser scans src
           // alone, so a module used exclusively by pro reads as an orphan even though deleting it would
           // break the build - coalesce is imported by pro/sync/fileTransferService and
-          // pro/sync/ambientShareService. Same reasoning as the @offgrid/pro exception below: not real
-          // debt, so excluded rather than baselined. Confirm with grep in pro/ before adding to this list.
+          // pro/sync/ambientShareService; lazy is the public proxy used by Pro composition services.
+          // Same reasoning as the @offgrid/pro exception below: not real debt, so excluded rather than
+          // baselined. Confirm with grep in pro/ before adding to this list.
           '^src/utils/coalesce\\.ts$',
+          '^src/services/composition/lazy\\.ts$',
         ],
       },
       to: {},
@@ -116,7 +160,9 @@ module.exports = {
     // classify them from this package.json instead of treating their real paths as
     // undeclared source files outside the mobile project.
     preserveSymlinks: true,
-    doNotFollow: { path: 'node_modules' },
+    doNotFollow: {
+      path: '^(node_modules|src/services/applicationFacade\\.ts$)',
+    },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.json' },
     enhancedResolveOptions: {

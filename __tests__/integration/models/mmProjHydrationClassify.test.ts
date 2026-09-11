@@ -1,85 +1,93 @@
 /**
- * DRY / single-owner — the "is this download row a projector?" predicate in downloadHydration must be the
- * canonical isMMProjFile (src/services/mmproj.ts), not a divergent copy.
+ * Projector sidecars belong to their vision-model download. They must never
+ * appear as independent downloads in the Mobile projection.
  *
- * downloadHydration.isMmProjFileName only matched 'mmproj' — it MISSED the 'projector' and 'clip' names the
- * canonical isMMProjFile (introduced by #510 c815752f) also recognises. getParentRows uses that predicate as
- * the belt-and-suspenders filter that drops an ORPHANED projector sidecar row (one whose parent lost its
- * mmProjDownloadId back-link after a retry — see modelManager/restore.ts). With the divergent predicate a
- * '*-projector.gguf' / '*-clip.gguf' sidecar slips through and hydrates as a PHANTOM standalone model entry
- * in the Download Manager.
- *
- * Real hydrateDownloadStore + real downloadStore; only the native backgroundDownloadService snapshot (the
- * device boundary) is faked. Asserts the observable outcome: no phantom projector entry appears in the store.
+ * This journey enters through the native and durable boundaries, refreshes
+ * the public Shared application facade, and observes the real Mobile store.
  */
-import { hydrateDownloadStore } from '../../../src/services/downloadHydration';
-import { useDownloadStore } from '../../../src/stores/downloadStore';
+import type { MobileApplicationFixture } from '../../harness/mobileApplicationFixture';
+import { installNativeBoundary, MB } from '../../harness/nativeBoundary';
 
-jest.mock('../../../src/services/backgroundDownloadService', () => ({
-  backgroundDownloadService: {
-    isAvailable: jest.fn(() => true),
-    getActiveDownloads: jest.fn(),
-  },
-}));
+let applicationFixture: MobileApplicationFixture | null = null;
 
-const { backgroundDownloadService } = jest.requireMock('../../../src/services/backgroundDownloadService');
-
-beforeEach(() => {
-  jest.clearAllMocks();
-  backgroundDownloadService.isAvailable.mockReturnValue(true);
-  useDownloadStore.setState({ downloads: {}, downloadIdIndex: {} });
+afterEach(async () => {
+  await applicationFixture?.dispose();
+  applicationFixture = null;
 });
 
-describe('downloadHydration classifies a projector sidecar via the canonical isMMProjFile', () => {
-  // A vision model download whose projector sidecar row has NO mmProjDownloadId back-link (the post-retry
-  // orphan case restore.ts documents) and is named with 'projector' rather than 'mmproj'.
-  const snapshotWith = (projectorFileName: string) => [
-    {
-      downloadId: 'dl-model',
-      modelId: 'author/vision-model',
-      modelKey: 'author/vision-model/vision-Q4_K_M.gguf',
-      fileName: 'vision-Q4_K_M.gguf',
-      modelType: 'text',
-      status: 'running',
-      bytesDownloaded: 500,
-      totalBytes: 1000,
-      combinedTotalBytes: 1000,
-      createdAt: 1000,
-      // no mmProjDownloadId — the back-link was lost, so ONLY the filename predicate can catch the sidecar
+describe('vision download projection', () => {
+  it.each(['vision-Q4_K_M-projector.gguf', 'vision-Q4_K_M-clip.gguf'])(
+    'does not project %s as a standalone model download',
+    async projectorFileName => {
+      const boundary = installNativeBoundary({ download: true, fs: true });
+      const { seedMobileDownloadJournal, startMobileApplicationFixture } =
+        require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+
+      boundary.download!.seedActive({
+        downloadId: 'dl-model',
+        modelId: 'author/vision-model',
+        fileName: 'vision-Q4_K_M.gguf',
+        modelType: 'text',
+        status: 'running',
+        bytesDownloaded: 500 * MB,
+        totalBytes: 1000 * MB,
+      });
+      boundary.download!.seedActive({
+        downloadId: 'dl-projector',
+        modelId: 'author/vision-model',
+        fileName: projectorFileName,
+        modelType: 'text',
+        status: 'running',
+        bytesDownloaded: 100 * MB,
+        totalBytes: 200 * MB,
+      });
+
+      await seedMobileDownloadJournal([
+        {
+          manifest: {
+            id: 'author/vision-model',
+            modelId: 'author/vision-model',
+            kind: 'text',
+            revision: 'main',
+            artifacts: [
+              {
+                id: 'primary',
+                name: 'vision-Q4_K_M.gguf',
+                role: 'primary',
+                required: true,
+                localName: 'vision-Q4_K_M.gguf',
+                url: 'https://example.test/vision-Q4_K_M.gguf',
+              },
+            ],
+          },
+          phase: 'downloading',
+          artifacts: [
+            {
+              artifactId: 'primary',
+              phase: 'downloading',
+              transferId: 'dl-model',
+              bytesDownloaded: 500 * MB,
+              totalBytes: 1000 * MB,
+            },
+          ],
+          createdAt: 1,
+          updatedAt: 1,
+          attempt: 1,
+        },
+      ]);
+
+      applicationFixture = await startMobileApplicationFixture();
+      await applicationFixture.refreshModels();
+
+      const { useDownloadStore } =
+        require('../../../src/stores/downloadStore') as typeof import('../../../src/stores/downloadStore');
+      const downloads = useDownloadStore.getState().downloads;
+      const projectedFiles = Object.values(downloads).map(
+        download => download.fileName,
+      );
+      expect(projectedFiles).toContain('vision-Q4_K_M.gguf');
+      expect(projectedFiles).not.toContain(projectorFileName);
+      expect(Object.keys(downloads)).toHaveLength(1);
     },
-    {
-      downloadId: 'dl-proj',
-      modelId: 'author/vision-model',
-      modelKey: `author/vision-model/${projectorFileName}`,
-      fileName: projectorFileName,
-      modelType: 'text',
-      status: 'running',
-      bytesDownloaded: 100,
-      totalBytes: 200,
-      combinedTotalBytes: 200,
-      createdAt: 1001,
-    },
-  ];
-
-  it('a *-projector.gguf sidecar is NOT hydrated as a standalone model entry', async () => {
-    backgroundDownloadService.getActiveDownloads.mockResolvedValue(snapshotWith('vision-Q4_K_M-projector.gguf'));
-
-    await hydrateDownloadStore();
-
-    const downloads = useDownloadStore.getState().downloads;
-    // The real model row is present…
-    expect(downloads['author/vision-model/vision-Q4_K_M.gguf']).toBeDefined();
-    // …but the projector sidecar must NOT appear as its own entry.
-    expect(downloads['author/vision-model/vision-Q4_K_M-projector.gguf']).toBeUndefined();
-  });
-
-  it('a *-clip.gguf sidecar is NOT hydrated as a standalone model entry', async () => {
-    backgroundDownloadService.getActiveDownloads.mockResolvedValue(snapshotWith('vision-Q4_K_M-clip.gguf'));
-
-    await hydrateDownloadStore();
-
-    const downloads = useDownloadStore.getState().downloads;
-    expect(downloads['author/vision-model/vision-Q4_K_M.gguf']).toBeDefined();
-    expect(downloads['author/vision-model/vision-Q4_K_M-clip.gguf']).toBeUndefined();
-  });
+  );
 });

@@ -1,77 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import RNFS from 'react-native-fs';
-import { unzip } from 'react-native-zip-archive';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import { showAlert, AlertState, initialAlertState } from '../../components/CustomAlert';
 import { useFocusTrigger } from '../../hooks/useFocusTrigger';
 import { useAppStore } from '../../stores';
-import { useDownloadStore, isActiveStatus, isFailedStatus } from '../../stores/downloadStore';
-import { modelManager } from '../../services';
-import { isLiteRTAvailable } from '../../services/engines';
-import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
-import { ONNXImageModel } from '../../types';
+import { isActiveStatus, isFailedStatus } from '../../stores/downloadStore';
+import { useModelDownloadsProjection } from '../../hooks/useModelDownloadsProjection';
+import { mobileTextEngineControl } from '../../services/modelServices/textEngineControl';
 import { ModelTab, NavigationProp } from './types';
 import { initialFilterState } from './constants';
-import { getDirectorySize } from './utils';
 import { useTextModels } from './useTextModels';
 import { useImageModels } from './useImageModels';
 import { importGgufFiles, getErrorMessage } from './importHelpers';
 import { isPickerStuck } from '../../utils/pickerErrorUtils';
-import { isLiteRTFileName } from '../../utils/modelHelpers';
-
-type ZipImportDeps = {
-  addDownloadedImageModel: (model: ONNXImageModel) => void;
-  activeImageModelId: string | null;
-  setActiveImageModelId: (id: string | null) => void;
-  setImportProgress: (p: { fraction: number; fileName: string } | null) => void;
-  setAlertState: (s: AlertState) => void;
-};
-
-async function importImageModelZip(sourceUri: string, fileName: string, deps: ZipImportDeps): Promise<void> {
-  const { addDownloadedImageModel, activeImageModelId, setActiveImageModelId, setImportProgress, setAlertState } = deps;
-  const imageModelsDir = modelManager.getImageModelsDirectory();
-  const modelId = `local_${fileName.replaceAll(/\.zip$/gi, '').replaceAll(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}`;
-  const modelDir = `${imageModelsDir}/${modelId}`;
-  const zipPath = `${imageModelsDir}/${modelId}.zip`;
-  if (!(await RNFS.exists(imageModelsDir))) await RNFS.mkdir(imageModelsDir);
-  setImportProgress({ fraction: 0.1, fileName });
-  if (Platform.OS === 'ios') await RNFS.moveFile(sourceUri, zipPath);
-  else await RNFS.copyFile(sourceUri, zipPath);
-  setImportProgress({ fraction: 0.5, fileName });
-  if (!(await RNFS.exists(modelDir))) await RNFS.mkdir(modelDir);
-  setImportProgress({ fraction: 0.6, fileName });
-  await unzip(zipPath, modelDir);
-  setImportProgress({ fraction: 0.85, fileName });
-  const dirContents = await RNFS.readDir(modelDir);
-  const hasMLModelC = dirContents.some(f => f.name.endsWith('.mlmodelc'));
-  const hasNestedMLModelC = !hasMLModelC && dirContents.some(f => f.isDirectory());
-  let resolvedModelDir = modelDir;
-  let backend: 'mnn' | 'qnn' | 'coreml' | undefined;
-  if (hasMLModelC || hasNestedMLModelC) {
-    backend = 'coreml';
-    resolvedModelDir = await resolveCoreMLModelDir(modelDir);
-  } else {
-    const hasMNN = dirContents.some(f => f.name.endsWith('.mnn'));
-    const hasQNN = dirContents.some(f => f.name.endsWith('.bin') || f.name.includes('qnn'));
-    if (hasMNN) backend = 'mnn';
-    else if (hasQNN) backend = 'qnn';
-  }
-  await RNFS.unlink(zipPath).catch(() => { });
-  const totalSize = await getDirectorySize(resolvedModelDir);
-  setImportProgress({ fraction: 0.95, fileName });
-  const modelName = fileName.replaceAll(/\.zip$/gi, '').replaceAll(/[_-]/g, ' ');
-  const imageModel: ONNXImageModel = {
-    id: modelId, name: modelName, description: 'Locally imported image model',
-    modelPath: resolvedModelDir, downloadedAt: new Date().toISOString(), size: totalSize, backend,
-  };
-  await modelManager.addDownloadedImageModel(imageModel);
-  addDownloadedImageModel(imageModel);
-  if (!activeImageModelId) setActiveImageModelId(imageModel.id);
-  setImportProgress({ fraction: 1, fileName });
-  setAlertState(showAlert('Success', `${modelName} imported successfully!`));
-}
+import { classifyModelImport } from '@offgrid/application';
+import { importMobileImageArchive } from '../../services/adapters/models/library/imageArchiveImportAdapter';
 
 
 export function useModelsScreen() {
@@ -82,7 +25,8 @@ export function useModelsScreen() {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<{ fraction: number; fileName: string } | null>(null);
 
-  const { addDownloadedModel, activeImageModelId, setActiveImageModelId, addDownloadedImageModel } = useAppStore();
+  // Action only. A whole-store read here re-ran the Models screen on every unrelated app write.
+  const { addDownloadedModel } = useAppStore.getState();
 
   const text = useTextModels(setAlertState);
   const image = useImageModels(setAlertState);
@@ -110,22 +54,26 @@ export function useModelsScreen() {
     text.setIsRefreshing(false);
   };
 
-  const handleImportImageModelZip = (sourceUri: string, fileName: string) =>
-    importImageModelZip(sourceUri, fileName, { addDownloadedImageModel, activeImageModelId, setActiveImageModelId, setImportProgress, setAlertState });
+  const handleImportImageModelZip = async (sourceUri: string, fileName: string) => {
+    const result = await importMobileImageArchive({
+      sourceUri,
+      fileName,
+      onProgress: progress => setImportProgress({ fraction: progress.fraction, fileName: progress.fileName }),
+    });
+    if (result.status === 'imported') {
+      const repairMessage = result.repair
+        ? ` The model was imported, but ${result.repair.kind === 'activate' ? 'it could not be selected' : result.repair.kind === 'refresh' ? 'the model list could not be refreshed' : 'temporary files could not be removed'}.`
+        : '';
+      setAlertState(showAlert('Success', `${result.model.name} imported successfully.${repairMessage}`));
+      return;
+    }
+    const cleanup = result.repair.kind === 'cleanup_required'
+      ? ' Temporary files could not be removed. Try the import again after restarting the app.'
+      : '';
+    setAlertState(showAlert('Import Failed', `${result.error}${cleanup}`));
+  };
 
   const isPickingRef = useRef(false);
-
-  const validateImportFiles = (resolvedFiles: Array<{ name: string; uri: string }>): string | null => {
-    const singleLitert = resolvedFiles.length === 1 && isLiteRTFileName(resolvedFiles[0].name);
-    if (singleLitert && !isLiteRTAvailable()) {
-      return 'litert_unsupported';
-    }
-    const allGguf = resolvedFiles.every(f => f.name.toLowerCase().endsWith('.gguf'));
-    const singleZip = resolvedFiles.length === 1 && resolvedFiles[0].name.toLowerCase().endsWith('.zip');
-    if (!allGguf && !singleZip && !singleLitert) return 'invalid_format';
-    if (resolvedFiles.length > 2) return 'too_many';
-    return null;
-  };
 
   const handleImportLocalModel = async () => {
     if (isImporting || isPickingRef.current) return;
@@ -141,7 +89,15 @@ export function useModelsScreen() {
         name: (f.name?.trim() || decodeURIComponent(f.uri.split('/').pop() ?? '') || 'unknown').split('/').pop() || 'unknown',
       }));
 
-      const validationError = validateImportFiles(resolvedFiles);
+      const selection = classifyModelImport({
+        artifacts: resolvedFiles.map(file => ({
+          uri: file.uri,
+          name: file.name,
+          sizeBytes: file.size ?? 0,
+        })),
+        liteRTAvailable: mobileTextEngineControl.isProviderAvailable('litert'),
+      });
+      const validationError = selection.type === 'invalid' ? selection.reason : null;
       if (validationError === 'litert_unsupported') {
         setAlertState(showAlert('Not Supported', 'LiteRT models are only supported on Android.'));
         return;
@@ -160,12 +116,12 @@ export function useModelsScreen() {
         return;
       }
 
-      const firstUri = resolvedFiles[0].uri;
-      const firstFileName = resolvedFiles[0].name;
+      if (selection.type === 'invalid') return;
+      const firstUri = selection.type === 'image-archive' ? selection.archive.uri : selection.primary.uri;
+      const firstFileName = selection.type === 'image-archive' ? selection.archive.name : selection.primary.name;
       setImportProgress({ fraction: 0, fileName: firstFileName });
 
-      const singleZip = resolvedFiles.length === 1 && resolvedFiles[0].name.toLowerCase().endsWith('.zip');
-      if (singleZip) {
+      if (selection.type === 'image-archive') {
         await handleImportImageModelZip(firstUri, firstFileName);
         return;
       }
@@ -188,18 +144,13 @@ export function useModelsScreen() {
     }
   };
 
-  const activeDownloadCount = useDownloadStore(state =>
-    Object.values(state.downloads).filter(
-      d => isActiveStatus(d.status),
-    ).length,
-  );
+  const downloads = useModelDownloadsProjection();
+  const activeDownloadCount = downloads.filter(d => isActiveStatus(d.status)).length;
   // The icon badge answers "is there download work outstanding?" — so it counts active AND
   // failed/retriable (a failed download needs a retry or remove and must not be invisible).
-  const downloadBadgeCount = useDownloadStore(state =>
-    Object.values(state.downloads).filter(
-      d => isActiveStatus(d.status) || isFailedStatus(d.status),
-    ).length,
-  );
+  const downloadBadgeCount = downloads.filter(
+    d => isActiveStatus(d.status) || isFailedStatus(d.status),
+  ).length;
   const totalModelCount =
     text.downloadedModels.length +
     image.downloadedImageModels.length +

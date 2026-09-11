@@ -106,7 +106,13 @@ describePro('validating a key when the provider answers badly', () => {
 
     // Present but sparse is normal: a licence with no expiry is perpetual, and absent metadata is an empty
     // object rather than undefined, so callers can read it without guarding every access.
-    expect(result.license).toMatchObject({ id: 'lic-1', expiry: null, metadata: {}, name: null });
+    expect(result.license).toMatchObject({
+      id: 'lic-1',
+      expiry: null,
+      metadata: {},
+      name: null,
+      maxMachines: 5,
+    });
   });
 
   it('raises a network error, not a validation result, when the request cannot be made', async () => {

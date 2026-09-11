@@ -1,9 +1,9 @@
 import {
-  trimToolForSmallModel,
-  truncateDescription,
-  pruneToolNoise,
+  trimToolSchemaForSmallModel as trimToolForSmallModel,
+  truncateToolDescription as truncateDescription,
+  pruneToolSchemaNoise as pruneToolNoise,
   SMALL_MODEL_TOOL_BUDGET,
-} from '@offgrid/pro/mcp/schemaTrim';
+} from '@offgrid/models';
 import type { McpTool } from '@offgrid/pro/mcp/types';
 
 // No mocks: schemaTrim is pure JSON-schema transformation. Every assertion drives

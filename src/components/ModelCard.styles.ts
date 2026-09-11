@@ -49,6 +49,13 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   denseMeta: {
     ...TYPOGRAPHY.meta,
     color: colors.textMuted,
+    flex: 1,
+  },
+  denseMetaRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: SPACING.sm,
     marginTop: SPACING.xs,
   },
   authorTag: {
@@ -163,16 +170,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   recommendedText: {
     color: colors.info,
   },
-  recommendedPill: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  recommendedPillText: {
-    ...TYPOGRAPHY.metaSmall,
-    color: colors.surface,
-  },
   // GPU/NPU capability badge — emerald accent to signal hardware acceleration.
   accelBadge: {
     backgroundColor: `${colors.primary}20`,
@@ -222,12 +219,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   progressSection: {
     marginTop: 10,
-    marginBottom: 12,
-  },
-  progressContainer: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 12,
   },
   progressBar: {
     // Full card width (own row); the caption row below carries bytes + %.
@@ -262,6 +253,9 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   queuedText: {
     color: colors.textMuted,
   },
+  pausedText: {
+    color: colors.textSecondary,
+  },
   progressBytesText: {
     ...TYPOGRAPHY.meta,
     color: colors.textMuted,
@@ -271,23 +265,39 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     padding: 4,
     flexShrink: 0,
   },
+  downloadActions: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.xs,
+  },
+  transferRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.sm,
+  },
+  transferProgress: {
+    flex: 1,
+  },
   failedSection: {
-    marginTop: 8,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    marginTop: SPACING.xs,
   },
   failedProgressFill: {
     height: '100%' as const,
     backgroundColor: colors.error,
     borderRadius: 4,
   },
+  failedFooterRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
   failedMessageRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 6,
-    marginTop: 8,
-    marginBottom: 10,
+    flex: 1,
   },
   failedMessageText: {
     ...TYPOGRAPHY.meta,
@@ -296,18 +306,15 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   failedActionsRow: {
     flexDirection: 'row' as const,
-    gap: 8,
+    alignItems: 'center' as const,
+    gap: SPACING.sm,
   },
   retryButton: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: `${colors.primary}15` as const,
-    borderWidth: 1,
-    borderColor: `${colors.primary}40` as const,
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: SPACING.xs,
   },
   retryButtonText: {
     ...TYPOGRAPHY.meta,
@@ -317,12 +324,8 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: `${colors.error}12` as const,
-    borderWidth: 1,
-    borderColor: `${colors.error}30` as const,
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: SPACING.xs,
   },
   removeButtonText: {
     ...TYPOGRAPHY.meta,

@@ -20,7 +20,6 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { authService } from '../services/authService';
 import { useAuthStore } from '../stores/authStore';
-import logger from '../utils/logger';
 
 interface LockScreenProps {
   onUnlock: () => void;
@@ -34,13 +33,15 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
+  // The lock screen is a PASSPHRASE INPUT. It renders one number; the rest are actions and
+  // getters, read at call time, so a keystroke elsewhere in the auth state cannot re-render it.
+  const failedAttempts = useAuthStore(s => s.failedAttempts);
   const {
-    failedAttempts,
     recordFailedAttempt,
     resetFailedAttempts,
     checkLockout,
     getLockoutRemaining,
-  } = useAuthStore();
+  } = useAuthStore.getState();
 
   // Check and update lockout timer
   useEffect(() => {
@@ -69,6 +70,8 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
 
     setIsVerifying(true);
 
+    // authService is the port to the keystore: an unreadable keystore comes back as `false`
+    // (a failed attempt), never as a throw. There is no separate error path to render.
     try {
       const isValid = await authService.verifyPassphrase(passphrase);
 
@@ -95,9 +98,6 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
           setAlertState(showAlert('Incorrect Passphrase', alertMessage));
         }
       }
-    } catch (error) {
-      logger.warn('[LockScreen] Passphrase verification failed:', error);
-      setAlertState(showAlert('Error', 'Failed to verify passphrase'));
     } finally {
       setIsVerifying(false);
     }

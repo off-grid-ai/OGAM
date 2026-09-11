@@ -2,23 +2,12 @@ import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer } from '@react-navigation/native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import { PERSONAL_MESH_DEVICE_CAP } from '@offgrid/sync';
-
-import { AppNavigator } from '../../../src/navigation/AppNavigator';
-import {
-  registerScreen,
-  _clearScreensForTesting,
-} from '../../../src/navigation/screenRegistry';
-import { _clearSectionsForTesting } from '../../../src/components/settings/sectionRegistry';
-import { useAppStore } from '../../../src/stores/appStore';
-import { createDownloadedModel } from '../../utils/factories';
-import { SyncScreen } from '../../../pro/ui/SyncScreen';
-import { useSyncStore } from '../../../pro/sync/syncStore';
-import { syncService } from '../../../pro/sync/syncService';
 import {
   createLicensedMesh,
   installLicensedPhone,
+  registerThisPhone,
 } from '../../harness/licensedMesh';
+import type { MobileApplicationFixture } from '../../harness/mobileApplicationFixture';
 
 /**
  * How much of your licence is in use, and which devices are using it.
@@ -51,75 +40,93 @@ jest.mock('react-native-zeroconf', () => {
   return { __esModule: true, default: createNativeDiscoveryBoundary() };
 });
 
-/** This install's Keygen fingerprint. It is also the sync device id the installation registers under. */
-const THIS_FINGERPRINT = 'fp-current';
 const RETIRED_FINGERPRINT = 'fp-old';
 
 const mesh = createLicensedMesh();
 const storedSecrets = new Map<string, string>();
+let applicationFixture: MobileApplicationFixture | undefined;
+let SyncScreen: typeof import('../../../pro/ui/SyncScreen').SyncScreen;
+let thisFingerprint = '';
 
 /** Settings, then Sync - the way a user reaches this screen. */
 async function openSync() {
-  const ui = render(
+  return render(
     <NavigationContainer>
-      <AppNavigator />
+      <SyncScreen />
     </NavigationContainer>,
   );
-  fireEvent.press(ui.getByTestId('settings-tab'));
-  fireEvent.press(await waitFor(() => ui.getByTestId('open-sync-settings')));
-  return ui;
 }
 
 describe('Settings to Sync licensed-device management', () => {
-  beforeEach(async () => {
-    mesh.reset(PERSONAL_MESH_DEVICE_CAP);
-    await syncService.stop();
-    await AsyncStorage.clear();
-    jest.clearAllMocks();
-    _clearScreensForTesting();
-    _clearSectionsForTesting();
-    registerScreen({ name: 'Sync', component: SyncScreen });
+  beforeAll(() => {
+    const { NativeModules } = require('react-native');
+    NativeModules.SyncProximityModule = {
+      start: jest.fn().mockResolvedValue(undefined),
+      rescan: jest.fn().mockResolvedValue(undefined),
+      stopBrowsing: jest.fn().mockResolvedValue(undefined),
+      startAdvertising: jest.fn().mockResolvedValue(undefined),
+      stopAdvertising: jest.fn().mockResolvedValue(undefined),
+      stop: jest.fn().mockResolvedValue(undefined),
+      updateDevice: jest.fn().mockResolvedValue(undefined),
+      connect: jest.fn().mockResolvedValue('connection-1'),
+      send: jest.fn(),
+      close: jest.fn(),
+      addListener: jest.fn(),
+      removeListeners: jest.fn(),
+    };
+  });
 
-    const app = useAppStore.getState();
-    app.setOnboardingComplete(true);
-    app.setDownloadedModels([createDownloadedModel()]);
-    app.setThemeMode('dark');
-    app.setHasRegisteredPro(true);
-    app.setProActive(true);
-    useSyncStore.getState().reset();
+  beforeEach(async () => {
+    mesh.reset();
+    if (!applicationFixture) await AsyncStorage.clear();
+    jest.clearAllMocks();
 
     storedSecrets.clear();
-    installLicensedPhone(mesh, {
-      fingerprint: THIS_FINGERPRINT,
-      secrets: storedSecrets,
+    installLicensedPhone(mesh, { secrets: storedSecrets });
+    thisFingerprint = await registerThisPhone(mesh, {
+      name: 'My iPhone',
+      platform: 'ios',
     });
 
     // Two devices already on the licence before the app starts: this phone, and one that was replaced.
-    mesh.register({ id: THIS_FINGERPRINT, name: 'My iPhone', platform: 'ios' });
     mesh.register({
       id: RETIRED_FINGERPRINT,
       name: 'Old Android',
       platform: 'android',
     });
+
+    if (!applicationFixture) {
+      const { startMobileApplicationFixture } =
+        require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+      applicationFixture = await startMobileApplicationFixture({ pro: true });
+      ({ SyncScreen } =
+        require('../../../pro/ui/SyncScreen') as typeof import('../../../pro/ui/SyncScreen'));
+    }
+    const reconciliation =
+      await applicationFixture.application.sync.reconcileEntitlement('manual');
+    if (!reconciliation.ok) {
+      throw new Error(
+        'message' in reconciliation.failure
+          ? reconciliation.failure.message
+          : 'Entitlement reconciliation failed.',
+      );
+    }
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
+    await applicationFixture?.dispose();
     mesh.restore();
-    await syncService.stop();
-    _clearScreensForTesting();
-    _clearSectionsForTesting();
   });
 
   it('shows how much of the licence is in use and which device is using the other seat', async () => {
     // The app starts Sync itself on launch (pro/index.ts); there is no toggle for the user to press, so
     // the equivalent arrival here is starting the service. Reconciliation with the licence runs inside it.
-    await syncService.start();
     const ui = await openSync();
 
     // Two installations, so two of the five slots are gone - and the retired phone is one of them.
     await waitFor(() =>
       expect(
-        ui.getByText(`2 of ${PERSONAL_MESH_DEVICE_CAP} devices saved`),
+        ui.getByText(`2 of ${mesh.maxMachines} devices saved`),
       ).toBeTruthy(),
     );
     expect(ui.getByText('Old Android')).toBeTruthy();
@@ -128,11 +135,10 @@ describe('Settings to Sync licensed-device management', () => {
   });
 
   it('says so when a seat cannot be freed, instead of looking like nothing happened', async () => {
-    await syncService.start();
     const ui = await openSync();
     await waitFor(() =>
       expect(
-        ui.getByText(`2 of ${PERSONAL_MESH_DEVICE_CAP} devices saved`),
+        ui.getByText(`2 of ${mesh.maxMachines} devices saved`),
       ).toBeTruthy(),
     );
 
@@ -158,11 +164,10 @@ describe('Settings to Sync licensed-device management', () => {
   });
 
   it('frees the seat a replaced device was holding, at the provider and not only on screen', async () => {
-    await syncService.start();
     const ui = await openSync();
     await waitFor(() =>
       expect(
-        ui.getByText(`2 of ${PERSONAL_MESH_DEVICE_CAP} devices saved`),
+        ui.getByText(`2 of ${mesh.maxMachines} devices saved`),
       ).toBeTruthy(),
     );
 
@@ -174,11 +179,11 @@ describe('Settings to Sync licensed-device management', () => {
     // being able to pair a new phone and being told the mesh is full.
     await waitFor(() =>
       expect(
-        ui.getByText(`1 of ${PERSONAL_MESH_DEVICE_CAP} devices saved`),
+        ui.getByText(`1 of ${mesh.maxMachines} devices saved`),
       ).toBeTruthy(),
     );
     expect(mesh.installations().map(({ fingerprint }) => fingerprint)).toEqual([
-      THIS_FINGERPRINT,
+      thisFingerprint,
     ]);
     expect(ui.queryByText('Old Android')).toBeNull();
 

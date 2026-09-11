@@ -4,7 +4,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import {
   projectPersonalMeshActivationFailure,
   type PersonalMeshActivationFailureProjection,
-} from '@offgrid/sync';
+} from '@offgrid/application';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { SPACING, TYPOGRAPHY } from '../../constants';
@@ -140,7 +140,7 @@ export const ProUnlockModal: React.FC<Props> = ({
         ) : (
           <>
             <Text style={styles.subtitle}>
-              Paste the license key from your email. It works on up to 5
+              Paste the license key from your email. It works on your licensed
               devices.
             </Text>
 

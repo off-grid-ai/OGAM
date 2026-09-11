@@ -1,14 +1,17 @@
 import { Dispatch, MutableRefObject, SetStateAction, useCallback } from 'react';
 import { AlertState } from '../../components';
+import type { ModelSettingsRecord } from '@offgrid/application';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
-import { useAppStore, useChatStore } from '../../stores';
 import {
+  Conversation,
   DebugInfo,
   DownloadedModel,
   MediaAttachment,
+  Message,
   Project,
 } from '../../types';
 import type { ActiveTextModelResult } from '../../hooks/useActiveTextModel';
+import type { AppSettings } from '../../stores/appStore';
 import { saveImageToGallery } from './useSaveImage';
 import { computePendingSettings } from './pendingSettings';
 import { reloadTextModel } from './reloadTextModel';
@@ -21,7 +24,6 @@ import {
   handleSelectProjectFn,
   handleSendFn,
   handleStopFn,
-  startGenerationFn,
 } from './useChatGenerationActions';
 import {
   handleDeleteConversationFn,
@@ -31,35 +33,23 @@ import {
 } from './useChatMessageHandlers';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
-type ChatStoreState = ReturnType<typeof useChatStore.getState>;
-type StartGeneration = (
-  conversationId: string,
-  text: string,
-) => Promise<void>;
-
 const VIEWER_FADE_OUT_MS = 350;
 
 interface ChatScreenActionsArgs {
   generationDeps: GenerationDeps;
   modelDeps: Parameters<typeof handleModelSelectFn>[0];
   activeModelInfo: ActiveTextModelResult;
-  supportsToolCalling: boolean;
   activeModel?: DownloadedModel;
-  settings: ReturnType<typeof useAppStore.getState>['settings'];
-  loadedSettings: ReturnType<typeof useAppStore.getState>['loadedSettings'];
+  settings: ModelSettingsRecord;
+  loadedSettings: Partial<AppSettings> | null;
   pendingMessageRef: MutableRefObject<{
     text: string;
     attachments?: MediaAttachment[];
   } | null>;
-  startGenerationRef: MutableRefObject<StartGeneration | null>;
   setDebugInfo: SetState<DebugInfo | null>;
   setAlertState: SetState<AlertState>;
   activeConversationId: string | null;
-  activeConversation: ChatStoreState['conversations'][number] | undefined;
-  hasActiveModel: boolean;
-  deleteMessagesAfter: ChatStoreState['deleteMessagesAfter'];
-  updateMessageContent: ChatStoreState['updateMessageContent'];
-  setConversationProject: ChatStoreState['setConversationProject'];
+  activeConversation: Conversation | undefined;
   setPendingProjectId: (projectId?: string) => void;
   setShowProjectSelector: SetState<boolean>;
   activeImageModel: GenerationDeps['activeImageModel'];
@@ -71,38 +61,20 @@ export function useChatScreenActions({
   generationDeps,
   modelDeps,
   activeModelInfo,
-  supportsToolCalling,
   activeModel,
   settings,
   loadedSettings,
   pendingMessageRef,
-  startGenerationRef,
   setDebugInfo,
   setAlertState,
   activeConversationId,
   activeConversation,
-  hasActiveModel,
-  deleteMessagesAfter,
-  updateMessageContent,
-  setConversationProject,
   setPendingProjectId,
   setShowProjectSelector,
   activeImageModel,
   viewerImageUri,
   setViewerImageUri,
 }: ChatScreenActionsArgs) {
-  const startGeneration: StartGeneration = async (
-    targetConversationId,
-    messageText,
-  ) => {
-    await startGenerationFn(generationDeps, {
-      setDebugInfo,
-      targetConversationId,
-      messageText,
-    });
-  };
-  startGenerationRef.current = startGeneration;
-
   const handleSend = (
     text: string,
     attachments?: MediaAttachment[],
@@ -112,7 +84,6 @@ export function useChatScreenActions({
       text,
       attachments,
       imageMode,
-      startGeneration,
       setDebugInfo,
     });
 
@@ -143,28 +114,16 @@ export function useChatScreenActions({
     }
   };
 
-  const enabledTools = supportsToolCalling
-    ? settings.enabledTools || []
-    : [];
   const canReloadTextModel =
     Boolean(activeModelInfo.modelId) && !activeModelInfo.isRemote;
 
   return {
-    enabledTools,
     hasPendingSettings:
       canReloadTextModel &&
       computePendingSettings(activeModel?.engine, settings, loadedSettings),
     handleReloadTextModel,
     handleSend,
     handleModelSelect,
-    handleToggleTool: (toolId: string) => {
-      const current = settings.enabledTools || [];
-      useAppStore.getState().updateSettings({
-        enabledTools: current.includes(toolId)
-          ? current.filter(id => id !== toolId)
-          : [...current, toolId],
-      });
-    },
     handleStop: () => handleStopFn(generationDeps),
     handleUnloadModel: () => handleUnloadModelFn(modelDeps),
     handleDeleteConversation: () =>
@@ -176,24 +135,21 @@ export function useChatScreenActions({
     handleCopyMessage: (content: string) => {
       callHook(HOOKS.clipboardRecordLocalText, content, Date.now());
     },
-    handleRetryMessage: (message: ChatStoreState['conversations'][number]['messages'][number]) =>
+    handleRetryMessage: (
+      message: Message,
+    ) =>
       handleRetryMessageFn(message, generationDeps, {
         activeConversationId,
-        hasActiveModel,
-        deleteMessagesAfter,
         setDebugInfo,
       }),
     handleEditMessage: (
-      message: ChatStoreState['conversations'][number]['messages'][number],
+      message: Message,
       newContent: string,
     ) =>
       handleEditMessageFn(generationDeps, {
         message,
         newContent,
         activeConversationId,
-        hasActiveModel,
-        updateMessageContent,
-        deleteMessagesAfter,
         setDebugInfo,
       }),
     handleSelectProject: (project: Project | null) => {
@@ -205,7 +161,6 @@ export function useChatScreenActions({
       handleSelectProjectFn(
         {
           activeConversationId,
-          setConversationProject,
           setShowProjectSelector,
         },
         project,

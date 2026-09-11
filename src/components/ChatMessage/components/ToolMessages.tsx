@@ -31,6 +31,10 @@ function getToolIcon(toolName?: string): string {
       return 'clock';
     case 'get_device_info':
       return 'smartphone';
+    case 'context_compaction':
+      return 'archive';
+    case 'model_fallback':
+      return 'shuffle';
     default:
       return 'tool';
   }
@@ -55,6 +59,10 @@ function getToolLabel(toolName?: string, content?: string): string {
       return 'Web Use';
     case 'computer_use':
       return 'Computer Use';
+    case 'context_compaction':
+      return 'Context compacted';
+    case 'model_fallback':
+      return 'Model changed';
     default:
       return toolName || 'Tool result';
   }
@@ -193,13 +201,11 @@ export const ToolResultMessage: React.FC<{
   const isTaskTool = isTaskToolName(message.toolName);
   const taskDetail =
     isTaskTool && TaskToolDetail ? <TaskToolDetail message={message} /> : null;
-  const hasDetails = isTaskTool
-    ? Boolean(TaskToolDetail)
-    : !!(
-        message.content &&
-        message.content.length > 0 &&
-        !message.content.startsWith('No results')
-      );
+  const hasDetails = Boolean(taskDetail) || !!(
+    message.content &&
+    message.content.length > 0 &&
+    !message.content.startsWith('No results')
+  );
   // Prefer toolCallId (carried on every tool-result message and stable across the
   // streaming→finalized remount); fall back to the message id.
   const stableKey = message.toolCallId || message.id;
@@ -261,9 +267,7 @@ export const SyncedToolArtifacts: React.FC<{
             durationLabel=""
             content={artifact.result}
             hasDetails={
-              isTaskTool
-                ? Boolean(TaskToolDetail)
-                : !running && artifact.result.length > 0
+              Boolean(taskDetail) || (!running && artifact.result.length > 0)
             }
             active={running}
             styles={styles}
@@ -284,39 +288,85 @@ export const SyncedToolArtifacts: React.FC<{
  * while every finished result sat 16px from its neighbour - the same tool, two rhythms, in one
  * transcript.
  */
+type ToolCallRow = {
+  key: string;
+  stableKey: string;
+  name: string;
+  icon: string;
+  label: string;
+};
+
+/** The arguments the model sent, read as a human phrase. JSON when it parses, raw when it does not. */
+function toolArgumentsLabel(args: string | undefined): string {
+  let preview: string | undefined;
+  try {
+    preview = Object.values(JSON.parse(args as string)).join(', ');
+  } catch {
+    preview = args;
+  }
+  return preview ? `: ${preview}` : '';
+}
+
+/**
+ * The rows one assistant turn's tool calls draw, built ONCE per turn.
+ *
+ * Every call's `arguments` is a JSON string, and it used to be JSON.parse'd inside the map - so a
+ * turn with four calls re-parsed four JSON documents on every render of that row, and a chat-wide
+ * re-render re-parsed them for every tool turn in the transcript. The calls array is part of the
+ * durable message, so keying on the message (and re-checking the array) parses when the domain
+ * projection changes and never per render.
+ */
+const toolCallRowsByMessage = new WeakMap<
+  Message,
+  { calls: NonNullable<Message['toolCalls']>; rows: readonly ToolCallRow[] }
+>();
+
+const NO_TOOL_CALL_ROWS: readonly ToolCallRow[] = [];
+
+function toolCallRows(message: Message): readonly ToolCallRow[] {
+  const calls = message.toolCalls;
+  if (!calls?.length) return NO_TOOL_CALL_ROWS;
+  const cached = toolCallRowsByMessage.get(message);
+  if (cached?.calls === calls) return cached.rows;
+  const messageKey = message.uuid ?? message.id;
+  const rows = calls.map((call, index) => {
+    const callKey = `${call.id || index}`;
+    return {
+      key: callKey,
+      stableKey: `${messageKey}:call:${callKey}`,
+      name: call.name,
+      icon: getToolIcon(call.name),
+      label: `Using ${call.name}${toolArgumentsLabel(call.arguments)}`,
+    };
+  });
+  toolCallRowsByMessage.set(message, { calls, rows });
+  return rows;
+}
+
 export const ToolCallMessage: React.FC<{
   message: Message;
   styles: any;
   colors: any;
 }> = ({ message, styles, colors }) => (
   <View testID="tool-call-message">
-    {message.toolCalls?.map((tc, i) => {
-      let argsPreview = '';
-      try {
-        argsPreview = Object.values(JSON.parse(tc.arguments)).join(', ');
-      } catch {
-        argsPreview = tc.arguments;
-      }
-      const argsLabel = argsPreview ? `: ${argsPreview}` : '';
-      return (
-        <ToolResultBubble
-          key={`${tc.id || i}`}
-          stableKey={`${message.uuid ?? message.id}:call:${tc.id || i}`}
-          toolIcon={getToolIcon(tc.name)}
-          toolLabel={`Using ${tc.name}${argsLabel}`}
-          toolName={tc.name}
-          durationLabel=""
-          content=""
-          hasDetails={false}
-          active
-          paired
-          rowTestID="tool-call-row"
-          labelTestID={`tool-call-label-${tc.name || 'unknown'}`}
-          styles={styles}
-          colors={colors}
-        />
-      );
-    })}
+    {toolCallRows(message).map(row => (
+      <ToolResultBubble
+        key={row.key}
+        stableKey={row.stableKey}
+        toolIcon={row.icon}
+        toolLabel={row.label}
+        toolName={row.name}
+        durationLabel=""
+        content=""
+        hasDetails={false}
+        active
+        paired
+        rowTestID="tool-call-row"
+        labelTestID={`tool-call-label-${row.name || 'unknown'}`}
+        styles={styles}
+        colors={colors}
+      />
+    ))}
   </View>
 );
 

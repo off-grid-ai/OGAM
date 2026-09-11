@@ -1,4 +1,4 @@
-import { downloadStatusIcon, QUEUED_ICON } from '../../../src/utils/downloadStatusIcon';
+import { downloadStatusIcon, PAUSED_ICON, QUEUED_ICON } from '../../../src/utils/downloadStatusIcon';
 
 describe('downloadStatusIcon (single status->icon source of truth)', () => {
   it('maps a queued (pending) download to the clock icon', () => {
@@ -12,6 +12,13 @@ describe('downloadStatusIcon (single status->icon source of truth)', () => {
     expect(downloadStatusIcon('failed')).toBe('alert-circle');
     expect(downloadStatusIcon('retrying')).toBe('refresh-cw');
     expect(downloadStatusIcon('waiting_for_network')).toBe('wifi-off');
+  });
+
+  it('maps a paused download to the pause glyph, so the row and the card agree on it', () => {
+    // Paused used to fall through to null: a person stopped it on purpose, yet the row showed
+    // nothing where every other non-running state shows its glyph.
+    expect(downloadStatusIcon('paused')).toBe('pause-circle');
+    expect(PAUSED_ICON).toBe('pause-circle');
   });
 
   it('returns null for running/completed (no status glyph)', () => {

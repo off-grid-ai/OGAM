@@ -5,7 +5,7 @@
  * Use these factories to create consistent test data across all test files.
  */
 
-import type { ImageDownloadDeps } from '../../src/services/imageDownloadActions';
+import type { ImageDownloadDeps } from '../../src/services/imageModelDownloadTypes';
 import {
   Message,
   Conversation,
@@ -533,7 +533,7 @@ export const makeImageDownloadDeps = (
 ): ImageDownloadDeps => ({
   addDownloadedImageModel: jest.fn(),
   activeImageModelId: null,
-  setActiveImageModelId: jest.fn(),
+  selectActiveImageModel: jest.fn(async () => undefined),
   setAlertState: jest.fn(),
   triedImageGen: false,
   ...overrides,

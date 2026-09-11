@@ -74,7 +74,7 @@ describe('reload race — a send during the load window keeps thinking (device 2
     // capability is live, so its absence after the reload cannot be a never-worked.
     await h.send('what is 6 times 7', {
       text: 'The answer is 42.',
-      thinkingText: `<think>${REASON_BEFORE}</think>The answer is 42.`,
+      reasoning: REASON_BEFORE,
     });
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/The answer is 42/)).not.toBeNull(); }, { timeout: 4000 });
     expect(h.view!.queryByText(new RegExp('six sevens are forty-two'))).not.toBeNull();
@@ -88,7 +88,7 @@ describe('reload race — a send during the load window keeps thinking (device 2
     h.boundary.llama!.scriptMultimodalHold();
     h.boundary.llama!.scriptCompletion({
       text: 'Yes, 17 is prime.',
-      thinkingText: `<think>${REASON_AFTER}</think>Yes, 17 is prime.`,
+      reasoning: REASON_AFTER,
     });
 
     // GESTURE: tap the reload banner. The reload parks inside the capability window (hold engaged).

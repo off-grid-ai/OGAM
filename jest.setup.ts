@@ -225,22 +225,33 @@ jest.mock('react-native/jest/mockNativeComponent', () => {
 
 // react-native-audio-api mock
 jest.mock('react-native-audio-api', () => ({
-  AudioContext: jest.fn().mockImplementation(() => ({
-    createBuffer: jest.fn().mockReturnValue({ copyToChannel: jest.fn() }),
-    createBufferSource: jest.fn().mockReturnValue({
+  AudioContext: jest.fn().mockImplementation(() => {
+    const source = {
       connect: jest.fn(),
       start: jest.fn(),
       stop: jest.fn(),
       playbackRate: { value: 1.0 },
-      onEnded: null,
+      onEnded: null as null | (() => void),
       buffer: null,
-    }),
-    destination: {},
-    state: 'suspended',
-    resume: jest.fn().mockResolvedValue(undefined),
-    suspend: jest.fn().mockResolvedValue(undefined),
-    close: jest.fn().mockResolvedValue(undefined),
-  })),
+    };
+    source.start.mockImplementation(() => {
+      Promise.resolve().then(() => source.onEnded?.());
+    });
+    return {
+      createBuffer: jest.fn().mockReturnValue({ copyToChannel: jest.fn() }),
+      createBufferSource: jest.fn().mockReturnValue(source),
+      decodeAudioData: jest.fn().mockResolvedValue({
+        duration: 1,
+        getChannelData: jest.fn().mockReturnValue(new Float32Array([0])),
+      }),
+      currentTime: 0,
+      destination: {},
+      state: 'suspended',
+      resume: jest.fn().mockResolvedValue(undefined),
+      suspend: jest.fn().mockResolvedValue(undefined),
+      close: jest.fn().mockResolvedValue(undefined),
+    };
+  }),
   AudioManager: {
     setAudioSessionOptions: jest.fn(),
     setAudioSessionActivity: jest.fn().mockResolvedValue(true),
@@ -627,19 +638,13 @@ jest.mock('react-native-haptic-feedback', () => ({
 
 
 
-// @op-engineering/op-sqlite mock
-jest.mock('@op-engineering/op-sqlite', () => {
-  const mockResults = { rows: [], insertId: 0, rowsAffected: 0 };
-  const mockDb = {
-    executeSync: jest.fn(() => mockResults),
-    execute: jest.fn(() => Promise.resolve(mockResults)),
-    close: jest.fn(),
-    delete: jest.fn(),
-  };
-  return {
-    open: jest.fn(() => mockDb),
-  };
-});
+// @op-engineering/op-sqlite is a native boundary, but application tests still need its real SQL
+// semantics. In particular, schema migrations inspect PRAGMA output and verify copied row counts
+// before any rendered screen can mount. Use Node's in-memory SQLite adapter by default so a product
+// module imported before a per-test fixture never captures the old empty-row stub.
+jest.mock('@op-engineering/op-sqlite', () =>
+  require('./__tests__/harness/sqliteFake').createRealSqliteModule(),
+);
 
 // react-native-zip-archive mock
 jest.mock('react-native-zip-archive', () => ({
@@ -747,6 +752,7 @@ afterEach(async () => {
   const g = globalThis as unknown as {
     __RTL_CLEANUP__?: () => void;
     __GEN_CLEANUP__?: () => Promise<void>;
+    __PRO_CLEANUP__?: () => Promise<void>;
   };
   if (g.__RTL_CLEANUP__) { try { g.__RTL_CLEANUP__(); } catch { /* already torn down */ } g.__RTL_CLEANUP__ = undefined; }
   // A generation left IN FLIGHT outlives its test. generationServiceHelpers schedules a 50ms token-buffer
@@ -756,6 +762,11 @@ afterEach(async () => {
   // running. That is why exactly one rendered suite failed per run, with a different name each time, and why
   // it always passed in isolation. Whoever started a generation registers the stop here.
   if (g.__GEN_CLEANUP__) { try { await g.__GEN_CLEANUP__(); } catch { /* already torn down */ } g.__GEN_CLEANUP__ = undefined; }
+  // Whoever activates the real Pro runtime owns its teardown. Clear the
+  // registration first, then expose any cleanup failure to the test runner.
+  const cleanupPro = g.__PRO_CLEANUP__;
+  g.__PRO_CLEANUP__ = undefined;
+  if (cleanupPro) await cleanupPro();
 });
 
 // Global timeout for async operations

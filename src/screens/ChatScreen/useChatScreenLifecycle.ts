@@ -1,6 +1,4 @@
 import {
-  MutableRefObject,
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -10,22 +8,13 @@ import type { NavigationProp } from '@react-navigation/native';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import {
   contextCompactionService,
-  generationService,
   imageGenerationService,
   ImageGenerationState,
-  QueuedMessage,
 } from '../../services';
-import { generationSession } from '../../services/generationSession';
 import type { RootStackParamList } from '../../navigation/types';
-import {
-  dispatchGenerationFn,
-  GenerationDeps,
-} from './useChatGenerationActions';
-
-type StartGeneration = (
-  conversationId: string,
-  text: string,
-) => Promise<void>;
+import { mobileChatSession } from './mobileChatSession';
+import { requireWorkspaceConversationMessages } from '../../hooks/useApplicationProjection';
+import { toWorkspaceMessage } from './types';
 
 /** A missing stream never belongs to a missing conversation. */
 export function isStreamingActiveConversation(
@@ -70,13 +59,12 @@ export function useChatAudioLifecycle(
 }
 
 export function useChatRuntimeSubscriptions(
-  generationDepsRef: MutableRefObject<GenerationDeps | null>,
-  startGenerationRef: MutableRefObject<StartGeneration | null>,
 ): {
   imageGenState: ImageGenerationState;
   isCompacting: boolean;
   queueCount: number;
   queuedTexts: string[];
+  generatingConversationIds: readonly string[];
 } {
   const [imageGenState, setImageGenState] = useState<ImageGenerationState>(
     imageGenerationService.getState(),
@@ -84,6 +72,9 @@ export function useChatRuntimeSubscriptions(
   const [isCompacting, setIsCompacting] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
   const [queuedTexts, setQueuedTexts] = useState<string[]>([]);
+  const [generatingConversationIds, setGeneratingConversationIds] = useState<
+    readonly string[]
+  >([]);
 
   useEffect(() => {
     const unsubscribeImage =
@@ -96,46 +87,34 @@ export function useChatRuntimeSubscriptions(
     };
   }, []);
 
-  useEffect(
-    () =>
-      generationService.subscribe(state => {
-        setQueueCount(state.queuedMessages.length);
-        setQueuedTexts(
-          state.queuedMessages.map((message: QueuedMessage) => message.text),
-        );
-      }),
-    [],
-  );
-
-  const handleQueuedSend = useCallback(
-    async (item: QueuedMessage) => {
-      if (!generationDepsRef.current || !startGenerationRef.current) return;
-      await dispatchGenerationFn(
-        generationDepsRef.current,
-        {
-          text: item.text,
-          attachments: item.attachments,
-          conversationId: item.conversationId,
-          imageMode: item.imageMode,
-        },
-        startGenerationRef.current,
-      );
-    },
-    [generationDepsRef, startGenerationRef],
-  );
-
   useEffect(() => {
-    generationService.setQueueProcessor(handleQueuedSend);
-    return () => generationService.setQueueProcessor(null);
-  }, [handleQueuedSend]);
+    return mobileChatSession.subscribeQueue(projection => {
+      const queued = projection.entries.filter(entry => entry.status === 'queued');
+      setQueueCount(queued.length);
+      setGeneratingConversationIds([
+        ...new Set(projection.entries.map(entry => entry.conversationId)),
+      ]);
+      setQueuedTexts(queued.map(entry => {
+        const message = requireWorkspaceConversationMessages(entry.conversationId)
+          .map(toWorkspaceMessage)
+          .find(candidate => candidate.id === entry.turnId);
+        return message?.content ?? '';
+      }));
+    });
+  }, []);
 
-  return { imageGenState, isCompacting, queueCount, queuedTexts };
+  return {
+    imageGenState,
+    isCompacting,
+    queueCount,
+    queuedTexts,
+    generatingConversationIds,
+  };
 }
 
 interface ConversationLifecycleArgs {
   routeConversationId?: string;
   routeProjectId?: string;
-  activeConversationId: string | null;
   setActiveConversation: (conversationId: string | null) => void;
   setPendingProjectId: (projectId?: string) => void;
 }
@@ -143,7 +122,6 @@ interface ConversationLifecycleArgs {
 export function useChatConversationLifecycle({
   routeConversationId,
   routeProjectId,
-  activeConversationId,
   setActiveConversation,
   setPendingProjectId,
 }: ConversationLifecycleArgs): void {
@@ -156,18 +134,6 @@ export function useChatConversationLifecycle({
   useEffect(() => {
     setPendingProjectId(routeProjectId);
   }, [routeProjectId, setPendingProjectId]);
-
-  useEffect(() => {
-    if (
-      generationSession.getConversationId() &&
-      !generationSession.isGeneratingFor(activeConversationId)
-    ) {
-      generationSession.end('conversation-switch');
-    }
-    // Native conversation isolation is awaited by generationService immediately
-    // before a local turn starts. A navigation timer here raced the first Send and
-    // could clear too late (context leak) or during prefill (no-op).
-  }, [activeConversationId]);
 }
 
 export function useChatPresentationLifecycle(

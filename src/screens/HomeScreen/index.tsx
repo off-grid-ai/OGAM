@@ -26,13 +26,14 @@ import {
 } from '../../components/models/ModelsManagerSheet';
 import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
-import { useWhisperStore } from '../../stores/whisperStore';
-import { WHISPER_MODELS } from '../../services';
+import { useTranscriptionModelsProjection } from '../../hooks/useTranscriptionModelsProjection';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { SLOTS, useSlot } from '../../bootstrap/slotRegistry';
 import { useOpenSync } from '../../hooks/useOpenSync';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
+import { useActiveMobileModel } from '../../hooks/useActiveMobileModel';
 import { openSupportEmail } from '../../utils/supportEmail';
+import { remoteServerManager } from '../../services/modelServices/remoteServerController';
 
 type HomeScreenProps = {
   navigation: HomeScreenNavigationProp;
@@ -67,12 +68,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     setPickerType,
     loadingState,
     isEjecting,
+    hasEjectableModel,
+    hasChatModel,
     alertState,
     setAlertState,
     downloadedModels,
-    activeModelId,
     downloadedImageModels,
-    activeImageModelId,
     generatedImages,
     conversations,
     activeTextModel,
@@ -84,7 +85,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     activeRemoteImageModelId,
     handleSelectTextModel,
     handleUnloadTextModel,
-    handleSelectImageModel,
     handleUnloadImageModel,
     // Remote model handlers
     handleEjectAll,
@@ -101,20 +101,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const pendingAfterCloseRef = React.useRef<(() => void) | null>(null);
   const [whisperOpen, setWhisperOpen] = React.useState(false);
   const [voiceOpen, setVoiceOpen] = React.useState(false);
-  const whisperModelId = useWhisperStore(s => s.downloadedModelId);
-  const whisperPresentCount = useWhisperStore(
-    s => s.presentModelIds?.length ?? 0,
-  );
+  const transcriptionRoute = useActiveMobileModel('transcription').model;
+  const textRoute = useActiveMobileModel('text');
+  const imageRoute = useActiveMobileModel('image');
+  const whisperPresentCount = useTranscriptionModelsProjection().models.filter(
+    model => model.installed,
+  ).length;
   const voiceSummary = useUiModeStore(s => s.voiceSummary);
   const remoteLabels = useActiveRemoteModelLabels();
 
   const modelLabels = homeModelLabels({
-    text: activeTextModel?.name,
-    image: activeImageModel?.name,
+    text: textRoute.model?.name ?? activeTextModel?.name,
+    image: imageRoute.model?.name ?? activeImageModel?.name,
     voice: remoteLabels.voice,
     transcription: remoteLabels.transcription,
     localVoice: voiceSummary,
-    localTranscription: WHISPER_MODELS.find(m => m.id === whisperModelId)?.name,
+    localTranscription: transcriptionRoute?.source === 'local'
+      ? transcriptionRoute.name
+      : undefined,
   });
 
   // Downloaded-model counts shown in the Models card (replaces the old stats row).
@@ -133,13 +137,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     setModelsManagerOpen(false);
   };
 
+  // One sheet per model type. From the summary card it opens at once; from inside the manager it
+  // waits for the manager to finish dismissing (two modals mid-transition wedge iOS).
+  const presentModelSheet = (type: ModelRowType) => {
+    if (type === 'text') setPickerType('text');
+    else if (type === 'image') setPickerType('image');
+    else if (type === 'speech') setWhisperOpen(true);
+    else setVoiceOpen(true);
+  };
   const openModelRow = (type: ModelRowType) => {
-    closeManagerThen(() => {
-      if (type === 'text') setPickerType('text');
-      else if (type === 'image') setPickerType('image');
-      else if (type === 'speech') setWhisperOpen(true);
-      else setVoiceOpen(true);
-    });
+    closeManagerThen(() => presentModelSheet(type));
   };
 
   const runPendingAfterClose = () => {
@@ -194,11 +201,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               counts={modelCounts}
               isLoading={loadingState.isLoading}
               onPress={() => setModelsManagerOpen(true)}
+              onPressType={presentModelSheet}
             />
           </AnimatedEntry>
 
           {/* New Chat Button */}
-          {activeTextModel || activeImageModelId ? (
+          {hasChatModel ? (
             <Button
               title="New Chat"
               onPress={startNewChat}
@@ -284,9 +292,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <Icon name="chevron-right" size={16} color={colors.textMuted} />
           </AnimatedPressable>
 
-          {/* Off Grid AI Desktop — live announcement; owns its own copy/dismiss state. */}
-          <DesktopPromoCard />
-
           <AnimatedEntry index={5} staggerMs={50} trigger={focusTrigger}>
             <Card style={styles.supportCard} testID="home-support-card">
               <View style={styles.supportHeader}>
@@ -313,6 +318,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </Card>
           </AnimatedEntry>
 
+          {/* Off Grid AI Desktop — live announcement; owns its own copy/dismiss state. */}
+          <DesktopPromoCard />
+
           {/* Model Stats row removed — the per-type counts now live in the Models
               card above, and the chat count sits next to "See all". */}
         </ScrollView>
@@ -324,7 +332,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         onClose={() => setPickerType(null)}
         onSelectModel={handleSelectTextModel}
         onUnloadModel={handleUnloadTextModel}
-        onSelectImageModel={handleSelectImageModel}
         onUnloadImageModel={handleUnloadImageModel}
         isLoading={loadingState.isLoading}
         onSelectionComplete={() => setPickerType(null)}
@@ -342,23 +349,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         onClosed={runPendingAfterClose}
         labels={modelLabels}
         remote={{
-          text: !!activeRemoteTextModelId,
-          image: !!activeRemoteImageModelId,
+          text: textRoute.model?.source === 'remote',
+          image: imageRoute.model?.source === 'remote',
           voice: !!remoteLabels.voice,
           speech: !!remoteLabels.transcription,
         }}
+        remoteAvailable={{
+          text: textRoute.ready,
+          image: imageRoute.ready,
+          voice: remoteLabels.voiceReady ?? true,
+          speech: remoteLabels.transcriptionReady ?? true,
+        }}
         loadingState={loadingState}
         isEjecting={isEjecting}
-        hasActiveModel={
-          !!(
-            activeModelId ||
-            activeImageModelId ||
-            activeRemoteTextModelId ||
-            activeRemoteImageModelId
-          )
-        }
+        hasActiveModel={hasEjectableModel}
         onOpenRow={openModelRow}
         onEject={() => closeManagerThen(handleEjectAll)}
+        onReconnectRemote={() => remoteServerManager.recoverActiveConnection(true)}
       />
       <WhisperPickerSheet
         visible={whisperOpen}

@@ -19,7 +19,7 @@
 import React from 'react';
 import { Text } from 'react-native';
 // Required AFTER installNativeBoundary() → resolves the same fresh module graph the screens use.
-import { modelResidencyManager } from '../../src/services/modelResidency';
+import { modelApplication } from './activeModelLifecycle';
 
 export const ResidentsProbe: React.FC = () => {
   // `modelResidencyManager` holds a plain (non-reactive) Map, and residency changes (load / eject /
@@ -33,8 +33,8 @@ export const ResidentsProbe: React.FC = () => {
     return () => clearInterval(id);
   }, []);
 
-  const types = modelResidencyManager
-    .getResidents()
+  const types = modelApplication()
+    .models.snapshot().residents
     .map((r) => r.type)
     .sort()
     .join(',');

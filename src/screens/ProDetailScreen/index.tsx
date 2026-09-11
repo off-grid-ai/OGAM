@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Linking,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -30,6 +31,7 @@ import { ProManageSection } from './ProManageSection';
 import { ProIncludedSection } from './ProIncludedSection';
 import { ProUnlockModal } from './ProUnlockModal';
 import type { RootStackParamList } from '../../navigation/types';
+import logger from '../../utils/logger';
 
 // Off Grid AI Pro is the ambient intelligence layer across desktop + phone, not a
 // mobile feature list. These pillars mirror the early-access page framing.
@@ -85,11 +87,23 @@ export const ProDetailScreen: React.FC = () => {
   const deviceStatusColor = hasProAccess ? colors.primary : colors.textMuted;
 
   const openPayPage = () => {
-    Linking.openURL(withUtm(PRO_PAY_PAGE_URL, 'pro-detail')).catch(() => {});
+    Linking.openURL(withUtm(PRO_PAY_PAGE_URL, 'pro-detail')).catch(error => {
+      logger.error(`[Pro] purchase page failed: ${String(error)}`);
+      Alert.alert(
+        'Could not open the purchase page',
+        'Check your connection and try again.',
+      );
+    });
   };
   const openDesktop = () => {
     Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'pro-detail')).catch(
-      () => {},
+      error => {
+        logger.error(`[Pro] desktop page failed: ${String(error)}`);
+        Alert.alert(
+          'Could not open the desktop page',
+          'Check your connection and try again.',
+        );
+      },
     );
   };
   const openVerifyModal = () => setVerifyModalVisible(true);
@@ -97,7 +111,13 @@ export const ProDetailScreen: React.FC = () => {
   // Activation verified: load the pro bundle now so Pro lights up live (the
   // reactive appRoot slot mounts the engine without a restart). Registries dedupe.
   const handleUnlocked = () => {
-    loadProFeatures(true).catch(() => {});
+    loadProFeatures(true).catch(error => {
+      logger.error(`[Pro] activation refresh failed: ${String(error)}`);
+      Alert.alert(
+        'Pro is active',
+        'The screen could not refresh. Reopen Off Grid AI to use your Pro features.',
+      );
+    });
   };
 
   return (
@@ -106,9 +126,13 @@ export const ProDetailScreen: React.FC = () => {
           entitlement state where a screen's actions go. */}
       <ScreenHeader
         title="Off Grid AI Pro"
-        onBack={() => navigation.goBack()}
+        onBack={() =>
+          navigation.canGoBack()
+            ? navigation.goBack()
+            : navigation.navigate('Main', {screen: 'HomeTab'})
+        }
         right={
-<View style={styles.headerActions}>
+          <View style={styles.headerActions}>
             {deviceStatus ? (
               <View
                 style={[

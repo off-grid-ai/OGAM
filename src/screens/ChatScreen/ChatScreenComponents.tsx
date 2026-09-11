@@ -54,7 +54,7 @@ export const NoModelScreen: React.FC<{
         // indicator instead of the "Select Model" prompt.
         <>
           <LoadingDots color={colors.primary} size={8} testID="no-model-loading-indicator" />
-          <Text style={[styles.noModelTitle, styles.noModelLoadingTitle]}>Loading Model</Text>
+          <Text style={[styles.noModelTitle, styles.noModelLoadingTitle]}>Loading model...</Text>
           <Text style={styles.noModelText}>Getting your model ready. This can take a moment.</Text>
         </>
       ) : (

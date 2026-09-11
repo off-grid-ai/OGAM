@@ -274,8 +274,8 @@ class WorkerDownload(
     private suspend fun handleStoppedState(downloadId: String, download: DownloadEntity, bytesWritten: Long): Result {
         val current = downloadDao.getDownload(downloadId) ?: download
         return if (current.status == DownloadStatus.CANCELLED) {
-            val partialFile = File(current.destination)
-            if (partialFile.exists()) partialFile.delete()
+            // The native stop boundary has already applied Shared's explicit retain/delete policy.
+            // A retained partial stays at `destination`; a deleted partial is already absent.
             Result.failure()
         } else {
             // System stopped the worker — retry silently, no JS state change.
@@ -411,10 +411,6 @@ class WorkerDownload(
                 request,
             )
             return request
-        }
-
-        fun cancel(context: Context, downloadId: String) {
-            WorkManager.getInstance(context).cancelUniqueWork(workName(downloadId))
         }
 
         fun workName(downloadId: String) = "download_$downloadId"

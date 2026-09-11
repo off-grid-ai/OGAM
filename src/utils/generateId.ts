@@ -1,4 +1,25 @@
-let fallbackSequence = 0;
+// Fallback entropy, used only when no secure random source exists. The state is
+// seeded once per JS context and then advances on every byte, so two calls can
+// never yield the same bytes - not even within the same millisecond, and not
+// when a fresh module load restarts the counter.
+let fallbackState = 0;
+
+function nextFallbackState(): number {
+  if (fallbackState === 0) {
+    const clock = Date.now() >>> 0;
+    const jitter = (Math.random() * 0x100000000) >>> 0; // NOSONAR - not security relevant
+    fallbackState = ((clock ^ jitter) >>> 0) || 0x9e3779b9;
+  }
+  // xorshift32: full period over every non-zero state, so a 16-byte draw can
+  // never repeat the previous draw.
+  let state = fallbackState;
+  state ^= state << 13;
+  state >>>= 0;
+  state ^= state >>> 17;
+  state ^= state << 5;
+  fallbackState = state >>> 0;
+  return fallbackState;
+}
 
 function randomBytes(): Uint8Array {
   const bytes = new Uint8Array(16);
@@ -9,11 +30,8 @@ function randomBytes(): Uint8Array {
 
   // App bootstrap installs react-native-get-random-values. This fallback keeps
   // isolated JS environments functional without weakening the persisted format.
-  fallbackSequence += 1;
-  let seed = ((Date.now() >>> 0) ^ fallbackSequence) >>> 0;
   for (let index = 0; index < bytes.length; index += 1) {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; // NOSONAR
-    bytes[index] = seed % 256;
+    bytes[index] = nextFallbackState() >>> 24;
   }
   return bytes;
 }
@@ -43,7 +61,5 @@ export function generateRandomSeed(): number {
     return a[0] % 2147483647;
   }
   // Fallback for environments without crypto API
-  return Math.floor(
-    (((Date.now() * 9301 + 49297) % 233280) / 233280) * 2147483647,
-  ); // NOSONAR
+  return nextFallbackState() % 2147483647;
 }

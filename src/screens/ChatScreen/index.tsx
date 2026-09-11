@@ -5,6 +5,7 @@ import { FlatList, Keyboard, Platform } from 'react-native';
 // this one reconciles the keyboard frame against the navigation-bar inset.
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useUiModeStore } from '../../stores/uiModeStore';
+import { useSpeechProjection } from '../../hooks/useApplicationProjection';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,6 +17,7 @@ import {
   SharePromptSheet,
   ProAhaSheet,
 } from '../../components';
+import { WHISPER_MODELS } from '@offgrid/application';
 import { useEjectAllModels } from '../../hooks/useEjectAllModels';
 import { subscribeSharePrompt } from '../../utils/sharePrompt';
 import { subscribeProPrompt } from '../../services/proPrompt';
@@ -23,7 +25,10 @@ import type { Conversation, Message } from '../../types';
 import { useTheme, useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
 import { useChatScreen } from './useChatScreen';
-import { MessageRenderer } from './MessageRenderer';
+import {
+  useChatRowRenderer,
+  useChatScrollTracker,
+} from './useChatListCallbacks';
 import { NoModelScreen, ChatHeader } from './ChatScreenComponents';
 import { ChatModalSection } from './ChatModalSection';
 import { ChatMessageArea } from './ChatMessageArea';
@@ -33,9 +38,10 @@ import {
 } from '../../components/models/ModelsManagerSheet';
 import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
-import { useWhisperStore } from '../../stores/whisperStore';
-import { WHISPER_MODELS } from '../../services';
+import { useTranscriptionModelsProjection } from '../../hooks/useTranscriptionModelsProjection';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
+import { useActiveMobileModel } from '../../hooks/useActiveMobileModel';
+import { remoteServerManager } from '../../services/modelServices/remoteServerController';
 
 function countConversationImages(conv: Conversation | undefined): number {
   return (conv?.messages || []).reduce(
@@ -63,10 +69,11 @@ export const ChatScreen: React.FC = () => {
   const [whisperOpen, setWhisperOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const voiceSummary = useUiModeStore(s => s.voiceSummary);
-  const whisperModelId = useWhisperStore(s => s.downloadedModelId);
+  const whisperModelId = useTranscriptionModelsProjection().selectedModelId;
   const remoteLabels = useActiveRemoteModelLabels();
+  const textRoute = useActiveMobileModel('text');
   const modelLabels: Record<ModelRowType, string> = {
-    text: chat.activeModelName ?? chat.activeModel?.name ?? '—',
+    text: textRoute.model?.name ?? chat.activeModelName ?? chat.activeModel?.name ?? '—',
     image: remoteLabels.image ?? chat.activeImageModel?.name ?? '—',
     voice: remoteLabels.voice ?? voiceSummary ?? '—',
     speech:
@@ -90,14 +97,14 @@ export const ChatScreen: React.FC = () => {
         'Eject All Models',
         'Unload all active models to free up memory?',
         [
-      { text: 'Cancel', style: 'cancel' },
-      {
+          { text: 'Cancel', style: 'cancel' },
+          {
             text: 'Eject',
             style: 'destructive',
-        onPress: async () => {
-          chat.setAlertState(hideAlert());
-          try {
-            const count = await ejectAll();
+            onPress: async () => {
+              chat.setAlertState(hideAlert());
+              try {
+                const count = await ejectAll();
                 if (count > 0)
                   chat.setAlertState(
                     showAlert(
@@ -105,13 +112,13 @@ export const ChatScreen: React.FC = () => {
                       `Unloaded ${count} model${count > 1 ? 's' : ''}`,
                     ),
                   );
-          } catch {
+              } catch {
                 chat.setAlertState(
                   showAlert('Error', 'Failed to unload models'),
                 );
-          }
-        },
-      },
+              }
+            },
+          },
         ],
       ),
     );
@@ -143,9 +150,9 @@ export const ChatScreen: React.FC = () => {
   useEffect(
     () =>
       subscribeProPrompt(() => {
-    if (proAhaShownThisSession.current) return;
-    proAhaShownThisSession.current = true;
-    setProAhaVisible(true);
+        if (proAhaShownThisSession.current) return;
+        proAhaShownThisSession.current = true;
+        setProAhaVisible(true);
       }),
     [],
   );
@@ -169,11 +176,11 @@ export const ChatScreen: React.FC = () => {
   }, []);
 
   // Reset scroll when switching between chat/audio interface modes
-  const interfaceMode = useUiModeStore(s => s.interfaceMode);
-  const prevModeRef = React.useRef(interfaceMode);
+  const voiceMode = useSpeechProjection().preferences.voiceMode;
+  const prevModeRef = React.useRef(voiceMode);
   React.useEffect(() => {
-    if (prevModeRef.current !== interfaceMode) {
-      prevModeRef.current = interfaceMode;
+    if (prevModeRef.current !== voiceMode) {
+      prevModeRef.current = voiceMode;
       isNearBottomRef.current = true;
       chat.setShowScrollToBottom(false);
       // FlatList re-renders via extraData; onContentSizeChange fires and scrolls.
@@ -182,8 +189,15 @@ export const ChatScreen: React.FC = () => {
         flatListRef.current?.scrollToEnd({ animated: false });
       }, 300);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interfaceMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceMode]);
+
+  // Both stable, and both declared BEFORE the no-model early return so the hook order never varies.
+  const handleScroll = useChatScrollTracker(
+    isNearBottomRef,
+    chat.setShowScrollToBottom,
+  );
+  const renderItem = useChatRowRenderer(chat);
 
   const alertEl = (
     <CustomAlert
@@ -217,32 +231,6 @@ export const ChatScreen: React.FC = () => {
   // Model loading is shown inline (a "Loading model" bar above the input via
   // ChatMessageArea), so the chat stays visible while a text/image model loads —
   // no full-screen takeover.
-
-  const handleScroll = (event: any) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const distFromBottom =
-      contentSize.height - layoutMeasurement.height - contentOffset.y;
-    isNearBottomRef.current = distFromBottom < 100;
-    chat.setShowScrollToBottom(!isNearBottomRef.current);
-  };
-
-  const renderItem = ({ item, index }: { item: any; index: number }) => (
-    <MessageRenderer
-      item={item}
-      index={index}
-      displayMessagesLength={chat.displayMessages.length}
-      animateLastN={chat.animateLastN}
-      imageModelLoaded={chat.imageModelLoaded}
-      isStreaming={chat.isStreaming}
-      isGeneratingImage={chat.isGeneratingImage}
-      showGenerationDetails={chat.settings.showGenerationDetails}
-      onCopy={chat.handleCopyMessage}
-      onRetry={chat.handleRetryMessage}
-      onEdit={chat.handleEditMessage}
-      onGenerateImage={chat.handleGenerateImageFromMessage}
-      onImagePress={chat.handleImagePress}
-    />
-  );
 
   const imageCount = countConversationImages(chat.activeConversation);
 
@@ -287,6 +275,12 @@ export const ChatScreen: React.FC = () => {
             voice: !!remoteLabels.voice,
             speech: !!remoteLabels.transcription,
           }}
+          remoteAvailable={{
+            text: textRoute.ready,
+            image: remoteLabels.imageReady ?? true,
+            voice: remoteLabels.voiceReady ?? true,
+            speech: remoteLabels.transcriptionReady ?? true,
+          }}
           loadingState={{ isLoading: !!chat.isModelLoading, type: 'text' }}
           isEjecting={isEjecting}
           hasActiveModel={hasEjectableModel}
@@ -295,6 +289,7 @@ export const ChatScreen: React.FC = () => {
             pendingEjectRef.current = true;
             setModelsManagerOpen(false);
           }}
+          onReconnectRemote={() => remoteServerManager.recoverActiveConnection(true)}
         />
         <WhisperPickerSheet
           visible={whisperOpen}

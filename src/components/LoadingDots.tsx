@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, ViewStyle } from 'react-native';
+import { View, StyleSheet, Animated, Easing, ViewStyle } from 'react-native';
 import { useTheme } from '../theme';
 
 interface LoadingDotsProps {
@@ -25,36 +25,41 @@ export const LoadingDots: React.FC<LoadingDotsProps> = ({
   testID,
 }) => {
   const { colors } = useTheme();
-  const dot1Anim = useRef(new Animated.Value(0.3)).current;
-  const dot2Anim = useRef(new Animated.Value(0.3)).current;
-  const dot3Anim = useRef(new Animated.Value(0.3)).current;
-
+  // One native loop drives all three dots. Every step of the old per-dot sequence (the stagger
+  // delay, the hand-off between rise and fall, each loop restart) went through the JavaScript
+  // thread, so the dots froze exactly when that thread was busy: while stores hydrate at boot and
+  // while a reply streams. Here the only animation is a single native timing looped natively, and
+  // each dot is a native interpolation of it with its own phase, so nothing on the JS thread can
+  // stall the motion.
+  const progress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const duration = 400;
-    // Each dot runs the same fade, offset by 150ms, so the brightness travels left to right.
-    const loops = [dot1Anim, dot2Anim, dot3Anim].map((anim, i) =>
-      Animated.sequence([
-        Animated.delay(i * 150),
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(anim, {
-              toValue: 1,
-              duration,
-              useNativeDriver: true,
-            }),
-            Animated.timing(anim, {
-              toValue: 0.3,
-              duration,
-              useNativeDriver: true,
-            }),
-          ]),
-        ),
-      ]),
+    const loop = Animated.loop(
+      Animated.timing(progress, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
     );
-    loops.forEach(loop => loop.start());
+    loop.start();
+    return () => loop.stop();
+  }, [progress]);
 
-    return () => loops.forEach(loop => loop.stop());
-  }, [dot1Anim, dot2Anim, dot3Anim]);
+  // Desktop's loader (Tailwind animate-bounce) rises a quarter of the dot's height; at the sizes used
+  // here that is 1 to 2 points and reads as static, so half. Dots are 150ms apart, as on desktop.
+  const rise = -size / 2;
+  const translateFor = (phase: number) =>
+    progress.interpolate({
+      inputRange:
+        phase > 0
+          ? [0, phase, phase + 0.25, phase + 0.5, 1]
+          : [0, 0.25, 0.5, 1],
+      outputRange: phase > 0 ? [0, 0, rise, 0, 0] : [0, rise, 0, 0],
+      easing: Easing.inOut(Easing.quad),
+    });
+  const dotTransforms = [0, 0.15, 0.3].map(phase => ({
+    transform: [{ translateY: translateFor(phase) }],
+  }));
 
   const dotStyle = {
     width: size,
@@ -70,9 +75,12 @@ export const LoadingDots: React.FC<LoadingDotsProps> = ({
       accessibilityRole="progressbar"
       accessibilityLabel="Working"
     >
-      <Animated.View style={[styles.dot, dotStyle, { opacity: dot1Anim }]} />
-      <Animated.View style={[styles.dot, dotStyle, { opacity: dot2Anim }]} />
-      <Animated.View style={[styles.dot, dotStyle, { opacity: dot3Anim }]} />
+      {dotTransforms.map((transformStyle, index) => (
+        <Animated.View
+          key={index}
+          style={[styles.dot, dotStyle, transformStyle]}
+        />
+      ))}
     </View>
   );
 };

@@ -1,58 +1,95 @@
 /**
- * UI (rendered) — DEVICE 2026-07-14: switching a text model's backend (GPU→NPU for llama gguf, CPU↔GPU
- * for litert) keeps the SAME model id, so it's a RELOAD of the already-active model. The "Settings changed
- * — tap to reload model" card opens the model sheet and reloads that model WITHOUT the user tapping a row.
- * The per-row spinner was keyed only on the just-tapped row (loadingTextModelId), so with no tap the sheet
- * opened with the active row highlighted-but-idle and NO spinner — "feels weird / looks broken".
- *
- * Real ModelSelectorModal over the real store; fake only the native boundary. Model A is loaded AND active;
- * NO row is tapped; the parent flips isLoading true (the reload began). The spinner must appear on A — the
- * active model being reloaded. Sibling of selectorLoaderOnRow (the just-tapped-row case).
+ * Reloading the selected text model must project its real Shared loading state onto
+ * that model's row. No row tap or local loading flag manufactures this transition.
  */
-import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
+import { setupChatScreen } from '../../harness/chatHarness';
 import { createDownloadedModel } from '../../utils/factories';
 
-describe('model selector loader — spinner on the active row during a no-tap reload (settings-changed card)', () => {
-  it('reloading the already-active model (no row tapped) puts the spinner on the active row', async () => {
-    installNativeBoundary({ llama: true, fs: true, ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
-     
-    const React = require('react');
-    const rtl = requireRTL();
-    const { useAppStore } = require('../../../src/stores');
-    const { ModelSelectorModal } = require('../../../src/components/ModelSelectorModal');
-     
-    const A = createDownloadedModel({ id: 'a', name: 'Model A', engine: 'llama', filePath: '/models/a.gguf', fileName: 'a.gguf' });
-    const B = createDownloadedModel({ id: 'b', name: 'Model B', engine: 'llama', filePath: '/models/b.gguf', fileName: 'b.gguf' });
-    // A is the ACTIVE model and it is currently loaded — the exact state when the "settings changed" card
-    // fires: the user did not switch models, they changed a backend/setting for the active one.
-    useAppStore.setState({ downloadedModels: [A, B], activeModelId: 'a' });
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
+  useRoute: () => require('../../harness/chatHarness').routeHolder,
+  useFocusEffect: () => {},
+  useIsFocused: () => true,
+}));
 
-    const props = {
-      visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {},
-      isLoading: false, currentModelPath: '/models/a.gguf',
-    };
-    const view = rtl.render(React.createElement(ModelSelectorModal, props));
+describe('model selector loader during an active-model reload', () => {
+  it('shows one spinner on the active row until the real reload finishes', async () => {
+    const h = await setupChatScreen({
+      engine: 'llama',
+      platform: 'android',
+      modelName: 'Model A',
+      modelFileName: 'a.gguf',
+    });
+    const { ModelSelectorModal } =
+      require('../../../src/components/ModelSelectorModal') as typeof import('../../../src/components/ModelSelectorModal');
+    const { reloadLocalTextModel } =
+      require('../../../src/services/modelServices/modelFacadeCommands') as typeof import('../../../src/services/modelServices/modelFacadeCommands');
+    const { currentMobileApplicationFixture } =
+      require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
 
-    // Nothing is loading yet — no row shows a spinner. (So a later spinner is a real observed transition,
-    // not something that was always on screen.)
-    await rtl.waitFor(() => view.getByTestId('text-model-row-a'));
+    const modelB = createDownloadedModel({
+      id: 'b',
+      name: 'Model B',
+      engine: 'llama',
+      filePath: '/models/b.gguf',
+      fileName: 'b.gguf',
+    });
+    h.boundary.fs!.seedFile(modelB.filePath, modelB.fileSize);
+    h.useAppStore.getState().addDownloadedModel(modelB);
+    await currentMobileApplicationFixture()!.refreshModels();
+
+    const view = h.rtl.render(
+      h.React.createElement(ModelSelectorModal, {
+        visible: true,
+        onClose: () => {},
+        onSelectModel: () => {},
+        onUnloadModel: () => {},
+        isLoading: false,
+      }),
+    );
+
+    await h.rtl.waitFor(() => {
+      expect(view.getByTestId('text-model-row-m')).toBeTruthy();
+      expect(view.getByTestId('text-model-row-b')).toBeTruthy();
+    });
     expect(view.queryByTestId('model-row-loading')).toBeNull();
 
-    // The reload begins with NO row tapped (the card opened the sheet and kicked the load): isLoading → true.
-    // RED on the old code: loadingTextModelId is null (no tap) → loadingModelId is null → no spinner anywhere.
-    view.rerender(React.createElement(ModelSelectorModal, { ...props, isLoading: true, currentModelPath: null }));
+    let finishNativeLoad: () => void = () => {};
+    h.boundary.llama!.module.initLlama.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          finishNativeLoad = () =>
+            resolve({ backend: 'gpu', maxNumTokens: 4096 });
+        }),
+    );
 
-    // The spinner is on A — the active model being reloaded — even though the user tapped nothing.
-    await rtl.waitFor(() => {
-      expect(rtl.within(view.getByTestId('text-model-row-a')).queryByTestId('model-row-loading')).not.toBeNull();
-    }, { timeout: 4000 });
-    // and not on the other row.
-    expect(rtl.within(view.getByTestId('text-model-row-b')).queryByTestId('model-row-loading')).toBeNull();
+    const reload = reloadLocalTextModel('m');
 
-    // Load finishes (isLoading → false) → the spinner clears (no stuck spinner).
-    view.rerender(React.createElement(ModelSelectorModal, { ...props, isLoading: false, currentModelPath: '/models/a.gguf' }));
-    await rtl.waitFor(() => {
-      expect(view.queryByTestId('model-row-loading')).toBeNull();
-    }, { timeout: 4000 });
+    await h.rtl.waitFor(() => {
+      expect(
+        h.rtl
+          .within(view.getByTestId('text-model-row-m'))
+          .queryByTestId('model-row-loading'),
+      ).not.toBeNull();
+    });
+    expect(
+      h.rtl
+        .within(view.getByTestId('text-model-row-b'))
+        .queryByTestId('model-row-loading'),
+    ).toBeNull();
+
+    await h.rtl.act(async () => {
+      finishNativeLoad();
+      await reload;
+    });
+    await h.rtl.waitFor(() =>
+      expect(view.queryByTestId('model-row-loading')).toBeNull(),
+    );
+    view.unmount();
   });
 });

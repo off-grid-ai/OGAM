@@ -1,494 +1,360 @@
 /**
- * LockScreen Tests
+ * LockScreen — the real screen, as the user sees it.
  *
- * Tests for the lock screen including:
- * - Lock icon rendering
- * - Passphrase input
- * - Unlock button
- * - Successful verification calls onUnlock
- * - Failed verification shows error and records attempt
- * - Empty passphrase shows error
- * - Lockout state rendering
- * - Attempts remaining counter
- * - Lockout after too many failed attempts
- * - Error handling for service failures
+ * Real LockScreen + real PassphraseSetupScreen (to arrive at "a passphrase exists" by gesture)
+ * + real authService (real hashing) + the real useAuthStore lockout state machine.
+ * The ONLY fakes are device-boundary ones: `react-native-keychain` (the OS keystore) and the
+ * wall clock (Date.now), which the lockout countdown reads.
+ *
+ * No Off Grid module is mocked. Every precondition is reached by typing and pressing;
+ * nothing calls store.setState. Every assertion is made on rendered UI.
  */
-
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
-
-// Navigation is globally mocked in jest.setup.ts
-
-jest.mock('../../../src/hooks/useFocusTrigger', () => ({
-  useFocusTrigger: () => 0,
-}));
-
-jest.mock('../../../src/components', () => ({
-  Card: ({ children, style }: any) => {
-    const { View } = require('react-native');
-    return <View style={style}>{children}</View>;
-  },
-  Button: ({ title, onPress, disabled }: any) => {
-    const { TouchableOpacity, Text } = require('react-native');
-    return (
-      <TouchableOpacity onPress={onPress} disabled={disabled} testID={`button-${title}`}>
-        <Text>{title}</Text>
-      </TouchableOpacity>
-    );
-  },
-  // Use a functional mock so onClose can be exercised (line 181)
-  CustomAlert: ({ visible, title, message, onClose }: any) => {
-    if (!visible) return null;
-    const { View, Text, TouchableOpacity } = require('react-native');
-    return (
-      <View testID="custom-alert">
-        <Text testID="alert-title">{title}</Text>
-        <Text testID="alert-message">{message}</Text>
-        <TouchableOpacity testID="alert-close-button" onPress={onClose}>
-          <Text>Close</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  },
-}));
-
-jest.mock('../../../src/components/AnimatedEntry', () => ({
-  AnimatedEntry: ({ children }: any) => children,
-}));
-
-const mockShowAlert = jest.fn((_t: string, _m: string, _b?: any) => ({
-  visible: true,
-  title: _t,
-  message: _m,
-  buttons: _b || [],
-}));
-
-jest.mock('../../../src/components/CustomAlert', () => ({
-  CustomAlert: ({ visible, title, message, onClose }: any) => {
-    if (!visible) return null;
-    const { View, Text, TouchableOpacity } = require('react-native');
-    return (
-      <View testID="custom-alert">
-        <Text testID="alert-title">{title}</Text>
-        <Text testID="alert-message">{message}</Text>
-        <TouchableOpacity testID="alert-close-button" onPress={onClose}>
-          <Text>Close</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  },
-  showAlert: (...args: any[]) => (mockShowAlert as any)(...args),
-  hideAlert: jest.fn(() => ({ visible: false, title: '', message: '', buttons: [] })),
-  initialAlertState: { visible: false, title: '', message: '', buttons: [] },
-}));
-
-jest.mock('../../../src/components/Button', () => ({
-  Button: ({ title, onPress, disabled }: any) => {
-    const { TouchableOpacity, Text } = require('react-native');
-    return (
-      <TouchableOpacity onPress={onPress} disabled={disabled} testID={`button-${title}`}>
-        <Text>{title}</Text>
-      </TouchableOpacity>
-    );
-  },
-}));
-
-const mockVerifyPassphrase = jest.fn();
-jest.mock('../../../src/services/authService', () => ({
-  authService: {
-    verifyPassphrase: (...args: any[]) => mockVerifyPassphrase(...args),
-  },
-}));
-
-const mockRecordFailedAttempt = jest.fn(() => false);
-const mockResetFailedAttempts = jest.fn();
-const mockCheckLockout = jest.fn(() => false);
-const mockGetLockoutRemaining = jest.fn(() => 0);
-let mockFailedAttempts = 0;
-
-jest.mock('../../../src/stores/authStore', () => ({
-  useAuthStore: jest.fn(() => ({
-    failedAttempts: mockFailedAttempts,
-    recordFailedAttempt: mockRecordFailedAttempt,
-    resetFailedAttempts: mockResetFailedAttempts,
-    checkLockout: mockCheckLockout,
-    getLockoutRemaining: mockGetLockoutRemaining,
-  })),
-}));
-
-jest.mock('../../../src/stores', () => ({
-  useAppStore: jest.fn((selector?: any) => {
-    const state = { themeMode: 'system' };
-    return selector ? selector(state) : state;
-  }),
-}));
-
+import { render, fireEvent, waitFor, screen } from '@testing-library/react-native';
 import { LockScreen } from '../../../src/screens/LockScreen';
+import { PassphraseSetupScreen } from '../../../src/screens/PassphraseSetupScreen';
+import { useAuthStore } from '../../../src/stores/authStore';
 
-const defaultProps = {
-  onUnlock: jest.fn(),
-};
+/** The OS keystore, faked at the native line: one in-memory credential entry. */
+jest.mock('react-native-keychain', () => {
+  let entry: { username: string; password: string } | false = false;
+  return {
+    setGenericPassword: async (username: string, password: string) => {
+      entry = { username, password };
+      return true;
+    },
+    getGenericPassword: async () => entry,
+    resetGenericPassword: async () => {
+      entry = false;
+      return true;
+    },
+    ACCESSIBLE: { WHEN_UNLOCKED: 'WhenUnlocked', AFTER_FIRST_UNLOCK: 'AfterFirstUnlock' },
+    __reset: () => {
+      entry = false;
+    },
+  };
+});
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const Keychain = require('react-native-keychain') as { __reset: () => void };
+
+const LOCK_INPUT = 'Enter passphrase';
+const SETUP_NEW = 'Enter passphrase (min 6 characters)';
+const SETUP_CONFIRM = 'Re-enter passphrase';
+const PASSPHRASE = 'correct horse';
+
+/** The wall clock is a boundary, not our code: shift it to age the lockout countdown. */
+const realNow = Date.now.bind(Date);
+let clockOffsetMs = 0;
+beforeAll(() => {
+  jest.spyOn(Date, 'now').mockImplementation(() => realNow() + clockOffsetMs);
+});
+afterAll(() => {
+  (Date.now as jest.Mock).mockRestore();
+});
+
+/** Set the app passphrase the only way a user can: through the real setup screen. */
+async function enableLockThroughSetupScreen(passphrase: string): Promise<void> {
+  const view = render(
+    <PassphraseSetupScreen onComplete={jest.fn()} onCancel={jest.fn()} />
+  );
+  fireEvent.changeText(view.getByPlaceholderText(SETUP_NEW), passphrase);
+  fireEvent.changeText(view.getByPlaceholderText(SETUP_CONFIRM), passphrase);
+  fireEvent.press(view.getByText('Enable Lock'));
+  await waitFor(() => expect(view.getByText('Passphrase lock enabled')).toBeTruthy());
+  view.unmount();
+}
+
+/** Type a wrong passphrase and press Unlock, dismissing the alert that follows. */
+async function failOneAttempt(attempt: number): Promise<void> {
+  fireEvent.changeText(screen.getByPlaceholderText(LOCK_INPUT), `wrong ${attempt}`);
+  fireEvent.press(screen.getByText('Unlock'));
+  await waitFor(() => expect(screen.getByText('OK')).toBeTruthy());
+  fireEvent.press(screen.getByText('OK'));
+}
 
 describe('LockScreen', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockFailedAttempts = 0;
-    mockCheckLockout.mockReturnValue(false);
-    mockGetLockoutRemaining.mockReturnValue(0);
-    mockRecordFailedAttempt.mockReturnValue(false);
+    Keychain.__reset();
+    clockOffsetMs = 0;
+    // Real store actions only — never a direct state write.
+    useAuthStore.getState().resetFailedAttempts();
+    useAuthStore.getState().setEnabled(false);
   });
 
-  // ---- Rendering tests ----
+  // ---- Rendering ----
 
   it('renders lock icon and title', () => {
-    const { getByText } = render(<LockScreen {...defaultProps} />);
-    expect(getByText('App Locked')).toBeTruthy();
+    render(<LockScreen onUnlock={jest.fn()} />);
+    expect(screen.getByText('App Locked')).toBeTruthy();
   });
 
   it('renders passphrase input', () => {
-    const { getByPlaceholderText } = render(<LockScreen {...defaultProps} />);
-    expect(getByPlaceholderText('Enter passphrase')).toBeTruthy();
+    render(<LockScreen onUnlock={jest.fn()} />);
+    expect(screen.getByPlaceholderText(LOCK_INPUT)).toBeTruthy();
   });
 
   it('shows unlock button', () => {
-    const { getByText } = render(<LockScreen {...defaultProps} />);
-    expect(getByText('Unlock')).toBeTruthy();
+    render(<LockScreen onUnlock={jest.fn()} />);
+    expect(screen.getByText('Unlock')).toBeTruthy();
   });
 
   it('shows subtitle text', () => {
-    const { getByText } = render(<LockScreen {...defaultProps} />);
-    expect(getByText('Enter your passphrase to unlock')).toBeTruthy();
+    render(<LockScreen onUnlock={jest.fn()} />);
+    expect(screen.getByText('Enter your passphrase to unlock')).toBeTruthy();
   });
 
   it('shows footer with security message', () => {
-    const { getByText } = render(<LockScreen {...defaultProps} />);
-    expect(getByText('Your data is protected and stored locally')).toBeTruthy();
+    render(<LockScreen onUnlock={jest.fn()} />);
+    expect(screen.getByText('Your data is protected and stored locally')).toBeTruthy();
   });
 
-  // ---- Unlock flow tests ----
+  // ---- Unlock flow ----
 
   it('calls onUnlock after successful verification', async () => {
-    mockVerifyPassphrase.mockResolvedValue(true);
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    const onUnlock = jest.fn();
+    render(<LockScreen onUnlock={onUnlock} />);
 
-    const { getByPlaceholderText, getByText } = render(
-      <LockScreen {...defaultProps} />,
-    );
+    fireEvent.changeText(screen.getByPlaceholderText(LOCK_INPUT), PASSPHRASE);
+    fireEvent.press(screen.getByText('Unlock'));
 
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase'),
-      'correct-pass',
-    );
-
-    await act(async () => {
-      fireEvent.press(getByText('Unlock'));
-    });
-
-    expect(mockVerifyPassphrase).toHaveBeenCalledWith('correct-pass');
-    expect(mockResetFailedAttempts).toHaveBeenCalled();
-    expect(defaultProps.onUnlock).toHaveBeenCalled();
+    await waitFor(() => expect(onUnlock).toHaveBeenCalled());
+    expect(screen.queryByText('Incorrect Passphrase')).toBeNull();
   });
 
   it('shows error when passphrase is empty', async () => {
-    const { getByText } = render(<LockScreen {...defaultProps} />);
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    const onUnlock = jest.fn();
+    render(<LockScreen onUnlock={onUnlock} />);
 
-    // The unlock button should be disabled when input is empty
-    // But let's also test the handleUnlock validation
-    // The button is disabled when !passphrase.trim(), so let's enter spaces
-    fireEvent.press(getByText('Unlock'));
-
-    // Button is disabled so onPress won't fire - verify no verification call
-    expect(mockVerifyPassphrase).not.toHaveBeenCalled();
+    // The button is disabled with an empty field: pressing it does nothing at all.
+    fireEvent.press(screen.getByText('Unlock'));
+    await waitFor(() => expect(onUnlock).not.toHaveBeenCalled());
+    expect(screen.queryByText('Incorrect Passphrase')).toBeNull();
   });
 
   it('records failed attempt on incorrect passphrase', async () => {
-    mockVerifyPassphrase.mockResolvedValue(false);
-    mockRecordFailedAttempt.mockReturnValue(false);
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    const onUnlock = jest.fn();
+    render(<LockScreen onUnlock={onUnlock} />);
 
-    const { getByPlaceholderText, getByText } = render(
-      <LockScreen {...defaultProps} />,
-    );
+    fireEvent.changeText(screen.getByPlaceholderText(LOCK_INPUT), 'wrong horse');
+    fireEvent.press(screen.getByText('Unlock'));
 
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase'),
-      'wrong-pass',
-    );
-
-    await act(async () => {
-      fireEvent.press(getByText('Unlock'));
-    });
-
-    expect(mockVerifyPassphrase).toHaveBeenCalledWith('wrong-pass');
-    expect(mockRecordFailedAttempt).toHaveBeenCalled();
-    expect(defaultProps.onUnlock).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByText('4 attempts remaining')).toBeTruthy());
+    expect(onUnlock).not.toHaveBeenCalled();
   });
 
   it('shows "Incorrect Passphrase" alert on wrong password', async () => {
-    mockVerifyPassphrase.mockResolvedValue(false);
-    mockRecordFailedAttempt.mockReturnValue(false);
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    render(<LockScreen onUnlock={jest.fn()} />);
 
-    const { getByPlaceholderText, getByText } = render(
-      <LockScreen {...defaultProps} />,
-    );
+    fireEvent.changeText(screen.getByPlaceholderText(LOCK_INPUT), 'wrong horse');
+    fireEvent.press(screen.getByText('Unlock'));
 
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase'),
-      'wrong-pass',
-    );
-
-    await act(async () => {
-      fireEvent.press(getByText('Unlock'));
-    });
-
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Incorrect Passphrase',
-      expect.stringContaining('attempt'),
-    );
+    await waitFor(() => expect(screen.getByText('Incorrect Passphrase')).toBeTruthy());
+    expect(screen.getByText('4 attempts remaining before lockout.')).toBeTruthy();
   });
 
   it('shows lockout alert when too many failed attempts', async () => {
-    mockVerifyPassphrase.mockResolvedValue(false);
-    mockRecordFailedAttempt.mockReturnValue(true); // Returns true = locked out
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    render(<LockScreen onUnlock={jest.fn()} />);
 
-    const { getByPlaceholderText, getByText } = render(
-      <LockScreen {...defaultProps} />,
-    );
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await failOneAttempt(attempt);
+    }
+    fireEvent.changeText(screen.getByPlaceholderText(LOCK_INPUT), 'wrong 5');
+    fireEvent.press(screen.getByText('Unlock'));
 
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase'),
-      'wrong-pass',
-    );
-
-    await act(async () => {
-      fireEvent.press(getByText('Unlock'));
-    });
-
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Too Many Attempts',
-      expect.stringContaining('locked out'),
-    );
+    await waitFor(() => expect(screen.getByText('Too Many Attempts')).toBeTruthy());
+    expect(
+      screen.getByText(
+        'You have been locked out for 5 minutes due to too many failed attempts.'
+      )
+    ).toBeTruthy();
   });
 
-  // ---- Lockout state tests ----
+  // ---- Lockout state ----
 
-  it('shows lockout UI when locked out', () => {
-    mockCheckLockout.mockReturnValue(true);
-    mockGetLockoutRemaining.mockReturnValue(180);
+  it('shows lockout UI when locked out', async () => {
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    render(<LockScreen onUnlock={jest.fn()} />);
 
-    const { getByText, queryByPlaceholderText } = render(
-      <LockScreen {...defaultProps} />,
-    );
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await failOneAttempt(attempt);
+    }
 
-    expect(getByText('Too many failed attempts')).toBeTruthy();
-    expect(getByText('Please wait before trying again')).toBeTruthy();
-    // The timer should show formatted time (3:00)
-    expect(getByText('3:00')).toBeTruthy();
-    // Input should not be visible during lockout
-    expect(queryByPlaceholderText('Enter passphrase')).toBeNull();
+    await waitFor(() => expect(screen.getByText('Too many failed attempts')).toBeTruthy());
+    expect(screen.getByText('Please wait before trying again')).toBeTruthy();
+    // The input is gone while locked out — there is no way to submit a passphrase.
+    expect(screen.queryByPlaceholderText(LOCK_INPUT)).toBeNull();
   });
 
-  it('shows lockout timer with correct format', () => {
-    mockCheckLockout.mockReturnValue(true);
-    mockGetLockoutRemaining.mockReturnValue(65); // 1:05
+  it('shows lockout timer counting down from five minutes', async () => {
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    render(<LockScreen onUnlock={jest.fn()} />);
 
-    const { getByText } = render(<LockScreen {...defaultProps} />);
-    expect(getByText('1:05')).toBeTruthy();
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await failOneAttempt(attempt);
+    }
+    await waitFor(() => expect(screen.getByText('Too many failed attempts')).toBeTruthy());
+    expect(screen.getByText('5:00')).toBeTruthy();
+
+    // Two minutes later the same lockout reads three minutes remaining.
+    screen.unmount();
+    clockOffsetMs = 2 * 60 * 1000;
+    render(<LockScreen onUnlock={jest.fn()} />);
+    expect(screen.getByText('3:00')).toBeTruthy();
   });
 
-  // ---- Attempts counter tests ----
+  it('shows lockout timer with correct format', async () => {
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    render(<LockScreen onUnlock={jest.fn()} />);
 
-  it('shows remaining attempts when there are failed attempts', () => {
-    mockFailedAttempts = 2;
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await failOneAttempt(attempt);
+    }
+    await waitFor(() => expect(screen.getByText('Too many failed attempts')).toBeTruthy());
 
-    // Need to re-mock the store with updated failedAttempts
-    const { useAuthStore } = require('../../../src/stores/authStore');
-    (useAuthStore as jest.Mock).mockReturnValue({
-      failedAttempts: 2,
-      recordFailedAttempt: mockRecordFailedAttempt,
-      resetFailedAttempts: mockResetFailedAttempts,
-      checkLockout: mockCheckLockout,
-      getLockoutRemaining: mockGetLockoutRemaining,
-    });
-
-    const { getByText } = render(<LockScreen {...defaultProps} />);
-    expect(getByText('3 attempts remaining')).toBeTruthy();
+    // 3 minutes 55 seconds into a 5 minute lockout: 1:05 remains, zero-padded.
+    screen.unmount();
+    clockOffsetMs = 235 * 1000;
+    render(<LockScreen onUnlock={jest.fn()} />);
+    expect(screen.getByText('1:05')).toBeTruthy();
   });
 
-  it('shows singular "attempt" when only 1 remaining', () => {
-    const { useAuthStore } = require('../../../src/stores/authStore');
-    (useAuthStore as jest.Mock).mockReturnValue({
-      failedAttempts: 4,
-      recordFailedAttempt: mockRecordFailedAttempt,
-      resetFailedAttempts: mockResetFailedAttempts,
-      checkLockout: mockCheckLockout,
-      getLockoutRemaining: mockGetLockoutRemaining,
-    });
+  // ---- Attempts counter ----
 
-    const { getByText } = render(<LockScreen {...defaultProps} />);
-    expect(getByText('1 attempt remaining')).toBeTruthy();
+  it('shows remaining attempts when there are failed attempts', async () => {
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    render(<LockScreen onUnlock={jest.fn()} />);
+
+    await failOneAttempt(1);
+    await failOneAttempt(2);
+
+    await waitFor(() => expect(screen.getByText('3 attempts remaining')).toBeTruthy());
   });
 
-  it('does not show attempts counter when no failed attempts', () => {
-    // Ensure failedAttempts is 0
-    const { useAuthStore } = require('../../../src/stores/authStore');
-    (useAuthStore as jest.Mock).mockReturnValue({
-      failedAttempts: 0,
-      recordFailedAttempt: mockRecordFailedAttempt,
-      resetFailedAttempts: mockResetFailedAttempts,
-      checkLockout: mockCheckLockout,
-      getLockoutRemaining: mockGetLockoutRemaining,
-    });
+  it('shows singular "attempt" when only 1 remaining', async () => {
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    render(<LockScreen onUnlock={jest.fn()} />);
 
-    const { queryByText } = render(<LockScreen {...defaultProps} />);
-    expect(queryByText(/attempts? remaining/)).toBeNull();
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await failOneAttempt(attempt);
+    }
+
+    await waitFor(() => expect(screen.getByText('1 attempt remaining')).toBeTruthy());
   });
 
-  // ---- Error handling tests ----
+  it('does not show attempts counter when no failed attempts', async () => {
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    render(<LockScreen onUnlock={jest.fn()} />);
 
-  it('shows error alert when verification service throws', async () => {
-    mockVerifyPassphrase.mockRejectedValue(new Error('Service error'));
-
-    const { getByPlaceholderText, getByText } = render(
-      <LockScreen {...defaultProps} />,
-    );
-
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase'),
-      'some-pass',
-    );
-
-    await act(async () => {
-      fireEvent.press(getByText('Unlock'));
-    });
-
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Error',
-      'Failed to verify passphrase',
-    );
-    expect(defaultProps.onUnlock).not.toHaveBeenCalled();
+    expect(screen.queryByText(/attempts? remaining/)).toBeNull();
   });
 
-  it('unlock button is disabled when input is empty', () => {
-    const { getByText } = render(<LockScreen {...defaultProps} />);
-    // When disabled, pressing Unlock should NOT trigger verifyPassphrase
-    fireEvent.press(getByText('Unlock'));
-    expect(mockVerifyPassphrase).not.toHaveBeenCalled();
+  // ---- Button enablement ----
+
+  it('unlock button is disabled when input is empty', async () => {
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    const onUnlock = jest.fn();
+    render(<LockScreen onUnlock={onUnlock} />);
+
+    fireEvent.press(screen.getByText('Unlock'));
+
+    // Nothing happened: no unlock, no failed-attempt counter appeared.
+    await waitFor(() => expect(onUnlock).not.toHaveBeenCalled());
+    expect(screen.queryByText(/attempts? remaining/)).toBeNull();
   });
 
   it('unlock button is enabled when input has text', async () => {
-    mockVerifyPassphrase.mockResolvedValue(true);
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    const onUnlock = jest.fn();
+    render(<LockScreen onUnlock={onUnlock} />);
 
-    const { getByPlaceholderText, getByText } = render(
-      <LockScreen {...defaultProps} />,
-    );
+    fireEvent.changeText(screen.getByPlaceholderText(LOCK_INPUT), PASSPHRASE);
+    fireEvent.press(screen.getByText('Unlock'));
 
-    fireEvent.changeText(
-      getByPlaceholderText('Enter passphrase'),
-      'some-text',
-    );
-
-    await act(async () => {
-      fireEvent.press(getByText('Unlock'));
-    });
-
-    // When enabled with text, pressing Unlock SHOULD trigger verifyPassphrase
-    expect(mockVerifyPassphrase).toHaveBeenCalledWith('some-text');
+    await waitFor(() => expect(onUnlock).toHaveBeenCalled());
   });
 
   it('does not call verify when already locked out', async () => {
-    mockCheckLockout.mockReturnValue(true);
-    mockGetLockoutRemaining.mockReturnValue(60);
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    const onUnlock = jest.fn();
+    render(<LockScreen onUnlock={onUnlock} />);
 
-    const { queryByPlaceholderText } = render(
-      <LockScreen {...defaultProps} />,
-    );
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await failOneAttempt(attempt);
+    }
+    await waitFor(() => expect(screen.getByText('Too many failed attempts')).toBeTruthy());
 
-    // During lockout the input is hidden, so user can't submit
-    expect(queryByPlaceholderText('Enter passphrase')).toBeNull();
-    expect(mockVerifyPassphrase).not.toHaveBeenCalled();
+    // Even the CORRECT passphrase has nowhere to go: the field is not on screen.
+    expect(screen.queryByPlaceholderText(LOCK_INPUT)).toBeNull();
+    expect(onUnlock).not.toHaveBeenCalled();
   });
 
   it('clears passphrase after failed attempt', async () => {
-    mockVerifyPassphrase.mockResolvedValue(false);
-    mockRecordFailedAttempt.mockReturnValue(false);
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    render(<LockScreen onUnlock={jest.fn()} />);
 
-    const { getByPlaceholderText, getByText } = render(
-      <LockScreen {...defaultProps} />,
-    );
+    fireEvent.changeText(screen.getByPlaceholderText(LOCK_INPUT), 'wrong horse');
+    fireEvent.press(screen.getByText('Unlock'));
+    await waitFor(() => expect(screen.getByText('Incorrect Passphrase')).toBeTruthy());
+    fireEvent.press(screen.getByText('OK'));
 
-    const input = getByPlaceholderText('Enter passphrase');
-    fireEvent.changeText(input, 'wrong-pass');
-
-    await act(async () => {
-      fireEvent.press(getByText('Unlock'));
-    });
-
-    // After failed attempt, the input should be cleared
-    // The button should be disabled again (empty input)
-    expect(mockRecordFailedAttempt).toHaveBeenCalled();
+    expect(screen.getByPlaceholderText(LOCK_INPUT).props.value).toBe('');
   });
 
-  // ---- Uncovered branch coverage ----
+  // ---- Keyboard submit ----
 
-  it('shows error when passphrase is empty via onSubmitEditing (lines 61-62)', async () => {
-    // The button is disabled when input is empty, but onSubmitEditing still fires
-    const { getByPlaceholderText } = render(<LockScreen {...defaultProps} />);
+  it('shows error when passphrase is empty via onSubmitEditing', async () => {
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    const onUnlock = jest.fn();
+    render(<LockScreen onUnlock={onUnlock} />);
 
-    const input = getByPlaceholderText('Enter passphrase');
-    // Passphrase is empty — fire keyboard return key
-    await act(async () => {
-      fireEvent(input, 'onSubmitEditing');
-    });
+    // The button is disabled on an empty field, but the keyboard return key still fires.
+    fireEvent(screen.getByPlaceholderText(LOCK_INPUT), 'onSubmitEditing');
 
-    // handleUnlock ran the empty-passphrase guard and showed an alert
-    expect(mockShowAlert).toHaveBeenCalledWith(
-      'Error',
-      'Please enter your passphrase',
-    );
-    expect(mockVerifyPassphrase).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByText('Please enter your passphrase')).toBeTruthy());
+    expect(onUnlock).not.toHaveBeenCalled();
   });
 
-  it('skips verification when already locked out during handleUnlock (line 66)', async () => {
-    // checkLockout returns false on first call (useEffect → shows input),
-    // then true on the second call (inside handleUnlock → early return).
-    mockCheckLockout
-      .mockReturnValueOnce(false) // initial useEffect call → show input
-      .mockReturnValue(true);     // handleUnlock guard → skip verification
+  it('skips verification when already locked out during handleUnlock', async () => {
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    const onUnlock = jest.fn();
+    render(<LockScreen onUnlock={onUnlock} />);
 
-    const { getByPlaceholderText } = render(<LockScreen {...defaultProps} />);
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await failOneAttempt(attempt);
+    }
+    // The fifth failure trips the lockout while the field is still on screen.
+    fireEvent.changeText(screen.getByPlaceholderText(LOCK_INPUT), 'wrong 5');
+    fireEvent.press(screen.getByText('Unlock'));
+    await waitFor(() => expect(screen.getByText('Too Many Attempts')).toBeTruthy());
+    fireEvent.press(screen.getByText('OK'));
 
-    const input = getByPlaceholderText('Enter passphrase');
-    fireEvent.changeText(input, 'some-pass');
-
-    await act(async () => {
-      fireEvent(input, 'onSubmitEditing');
-    });
-
-    // handleUnlock returned early without calling verify
-    expect(mockVerifyPassphrase).not.toHaveBeenCalled();
+    // The screen has switched to the lockout panel; nothing can be submitted.
+    await waitFor(() => expect(screen.getByText('Too many failed attempts')).toBeTruthy());
+    expect(onUnlock).not.toHaveBeenCalled();
   });
 
-  it('closes alert via onClose callback (line 181)', async () => {
-    mockVerifyPassphrase.mockResolvedValue(false);
-    mockRecordFailedAttempt.mockReturnValue(false);
+  it('closes the alert when the user dismisses it', async () => {
+    await enableLockThroughSetupScreen(PASSPHRASE);
+    render(<LockScreen onUnlock={jest.fn()} />);
 
-    const { getByPlaceholderText, getByText, queryByTestId } = render(
-      <LockScreen {...defaultProps} />,
-    );
+    fireEvent.changeText(screen.getByPlaceholderText(LOCK_INPUT), 'wrong horse');
+    fireEvent.press(screen.getByText('Unlock'));
+    await waitFor(() => expect(screen.getByText('Incorrect Passphrase')).toBeTruthy());
 
-    fireEvent.changeText(getByPlaceholderText('Enter passphrase'), 'wrong');
+    fireEvent.press(screen.getByText('OK'));
 
-    await act(async () => {
-      fireEvent.press(getByText('Unlock'));
-    });
-
-    // Alert is now visible
-    expect(queryByTestId('custom-alert')).toBeTruthy();
-
-    // Press the close button rendered by our mock — triggers onClose
-    fireEvent.press(getByText('Close'));
-
-    // Alert should be dismissed (hideAlert was called)
-    const { hideAlert } = require('../../../src/components/CustomAlert');
-    expect(hideAlert).toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByText('Incorrect Passphrase')).toBeNull());
   });
 });

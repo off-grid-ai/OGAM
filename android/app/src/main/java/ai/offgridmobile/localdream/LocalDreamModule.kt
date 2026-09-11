@@ -924,20 +924,67 @@ class LocalDreamModule(reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun deleteGeneratedImage(imageId: String, promise: Promise) {
+    fun deleteGeneratedImage(persistedPath: String, promise: Promise) {
         try {
-            val outputDir = File(reactApplicationContext.filesDir, "generated_images")
-            val imageFile = File(outputDir, "$imageId.png")
-
-            if (imageFile.exists()) {
-                imageFile.delete()
-                safeResolve(promise, true)
-            } else {
-                safeReject(promise, "NOT_FOUND", "Image not found: $imageId")
+            val outputDir = File(reactApplicationContext.filesDir, "generated_images").canonicalFile
+            val imageFile = File(persistedPath).canonicalFile
+            if (imageFile.parentFile != outputDir) {
+                safeResolve(
+                    promise,
+                    imageDeleteOutcome(
+                        "failure",
+                        "UNSAFE_DELETE_PATH",
+                        "The generated-image deletion path is outside the generated-image directory.",
+                    ),
+                )
+                return
             }
+
+            // Three outcomes, never a bare boolean and never a rejection for an absent file. The
+            // caller is settling a DURABLE deletion intent: a retry that arrives after a previous
+            // attempt unlinked the file but died before the journal acknowledged it MUST settle as
+            // `already_missing`, so a missing file is success, not "NOT_FOUND".
+            if (!imageFile.exists()) {
+                safeResolve(promise, imageDeleteOutcome("already_missing"))
+                return
+            }
+            // `File.delete()` returns false without throwing - a read-only parent, a mandatory lock
+            // or an I/O error all look like this. Ignoring it would drop an intent whose bytes are
+            // still on disk, so the false is re-read from the filesystem and reported as a failure.
+            if (imageFile.delete() || !imageFile.exists()) {
+                safeResolve(promise, imageDeleteOutcome("deleted"))
+                return
+            }
+            safeResolve(
+                promise,
+                imageDeleteOutcome(
+                    "failure",
+                    "DELETE_REFUSED",
+                    "The filesystem refused to delete ${imageFile.absolutePath}; " +
+                        "canWrite=${imageFile.canWrite()}, parentCanWrite=${outputDir.canWrite()}.",
+                ),
+            )
         } catch (e: Exception) {
-            safeReject(promise, "DELETE_ERROR", "Failed to delete image: ${e.message}", e)
+            safeResolve(
+                promise,
+                imageDeleteOutcome(
+                    "failure",
+                    e.javaClass.simpleName,
+                    "Failed to delete image at the persisted path: ${e.message}",
+                ),
+            )
         }
+    }
+
+    /** Build one delete outcome map; `code`/`message` are present only on a failure. */
+    private fun imageDeleteOutcome(
+        status: String,
+        code: String? = null,
+        message: String? = null,
+    ): WritableMap = Arguments.createMap().apply {
+        putString("status", status)
+        code?.let { putString("code", it) }
+        message?.let { putString("message", it) }
     }
 
     /**

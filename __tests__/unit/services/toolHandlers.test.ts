@@ -10,12 +10,6 @@ import { executeToolCall } from '../../../src/services/tools/handlers';
 const mockFetch = jest.fn();
 (globalThis as any).fetch = mockFetch;
 
-// Mock RAG service for search_knowledge_base tests
-const mockSearchProject = jest.fn();
-jest.mock('../../../src/services/rag', () => ({
-  ragService: { searchProject: (...args: any[]) => mockSearchProject(...args) },
-}));
-
 describe('read_url handler', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -164,111 +158,6 @@ describe('read_url handler', () => {
       id: 'call_8',
       name: 'read_url',
       arguments: { url: 'https://example.com' },
-    });
-
-    expect(result.durationMs).toBeDefined();
-    expect(typeof result.durationMs).toBe('number');
-  });
-});
-
-describe('search_knowledge_base handler', () => {
-  beforeEach(() => {
-    mockSearchProject.mockReset();
-  });
-
-  it('returns error when no projectId in context', async () => {
-    const result = await executeToolCall({
-      id: 'call_kb_1',
-      name: 'search_knowledge_base',
-      arguments: { query: 'test' },
-    });
-
-    expect(result.error).toBeUndefined();
-    expect(result.content).toContain('No project context');
-  });
-
-  it('returns error for missing query parameter', async () => {
-    const result = await executeToolCall({
-      id: 'call_kb_2',
-      name: 'search_knowledge_base',
-      arguments: {},
-      context: { projectId: 'proj-1' },
-    });
-
-    expect(result.error).toContain('Missing required parameter: query');
-  });
-
-  it('returns error for empty query string', async () => {
-    const result = await executeToolCall({
-      id: 'call_kb_3',
-      name: 'search_knowledge_base',
-      arguments: { query: '   ' },
-      context: { projectId: 'proj-1' },
-    });
-
-    expect(result.error).toContain('Missing required parameter: query');
-  });
-
-  it('returns no results message when search finds nothing', async () => {
-    mockSearchProject.mockResolvedValue({ chunks: [], truncated: false });
-
-    const result = await executeToolCall({
-      id: 'call_kb_4',
-      name: 'search_knowledge_base',
-      arguments: { query: 'nonexistent topic' },
-      context: { projectId: 'proj-1' },
-    });
-
-    expect(result.error).toBeUndefined();
-    expect(result.content).toContain('No results found');
-    expect(result.content).toContain('nonexistent topic');
-  });
-
-  it('returns formatted chunks when search finds matches', async () => {
-    mockSearchProject.mockResolvedValue({
-      chunks: [
-        { doc_id: 1, name: 'guide.pdf', content: 'Machine learning basics', position: 0, score: 0.95 },
-        { doc_id: 1, name: 'guide.pdf', content: 'Neural network architecture', position: 1, score: 0.8 },
-      ],
-      truncated: false,
-    });
-
-    const result = await executeToolCall({
-      id: 'call_kb_5',
-      name: 'search_knowledge_base',
-      arguments: { query: 'machine learning' },
-      context: { projectId: 'proj-1' },
-    });
-
-    expect(result.error).toBeUndefined();
-    expect(result.content).toContain('[1] guide.pdf (part 1)');
-    expect(result.content).toContain('Machine learning basics');
-    expect(result.content).toContain('[2] guide.pdf (part 2)');
-    expect(result.content).toContain('Neural network architecture');
-    expect(result.content).toContain('---');
-  });
-
-  it('trims whitespace from query', async () => {
-    mockSearchProject.mockResolvedValue({ chunks: [], truncated: false });
-
-    await executeToolCall({
-      id: 'call_kb_6',
-      name: 'search_knowledge_base',
-      arguments: { query: '  trimmed query  ' },
-      context: { projectId: 'proj-1' },
-    });
-
-    expect(mockSearchProject).toHaveBeenCalledWith('proj-1', 'trimmed query');
-  });
-
-  it('includes durationMs in result', async () => {
-    mockSearchProject.mockResolvedValue({ chunks: [], truncated: false });
-
-    const result = await executeToolCall({
-      id: 'call_kb_7',
-      name: 'search_knowledge_base',
-      arguments: { query: 'test' },
-      context: { projectId: 'proj-1' },
     });
 
     expect(result.durationMs).toBeDefined();

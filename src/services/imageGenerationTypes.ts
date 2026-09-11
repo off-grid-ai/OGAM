@@ -6,6 +6,11 @@
  * symbols (ImageGenPhase, ImageGenerationState, isInFlight), so every existing
  * `import { ... } from './imageGenerationService'` keeps working unchanged.
  */
+import {
+  isImageApplicationInFlight,
+  type ImageApplicationPhase,
+  type ImageApplicationRequest,
+} from '@offgrid/models';
 import { GeneratedImage } from '../types';
 
 /**
@@ -15,20 +20,10 @@ import { GeneratedImage } from '../types';
  * or desync: it's shown for exactly `enhancing | loading | generating | saving`
  * and hidden otherwise.
  */
-export type ImageGenPhase =
-  | 'idle'
-  | 'enhancing'  // running the text model to enrich the prompt
-  | 'loading'    // loading the image model into memory
-  | 'generating' // diffusion steps running
-  | 'saving'     // writing the result + adding the chat message
-  | 'done'
-  | 'error'
-  | 'cancelled';
+export type ImageGenPhase = ImageApplicationPhase;
 
 /** True while a generation is actively in flight (drives the progress indicator). */
-export function isInFlight(phase: ImageGenPhase): boolean {
-  return phase === 'enhancing' || phase === 'loading' || phase === 'generating' || phase === 'saving';
-}
+export const isInFlight = isImageApplicationInFlight;
 
 export interface ImageGenerationState {
   phase: ImageGenPhase;
@@ -47,30 +42,11 @@ export interface ImageGenerationState {
 
 export type ImageGenerationListener = (state: ImageGenerationState) => void;
 
-export interface GenerateImageParams {
-  prompt: string;
-  conversationId?: string;
-  negativePrompt?: string;
-  steps?: number;
-  guidanceScale?: number;
-  seed?: number;
-  previewInterval?: number;
-}
+export interface GenerateImageParams extends ImageApplicationRequest {}
 
 export interface ActiveImageModel {
   id: string;
   name: string;
   modelPath: string;
   backend?: string;
-}
-
-export interface RunGenerationOptions {
-  params: GenerateImageParams;
-  enhancedPrompt: string;
-  activeImageModel: ActiveImageModel;
-  steps: number;
-  guidanceScale: number;
-  imageWidth: number;
-  imageHeight: number;
-  useOpenCL: boolean;
 }

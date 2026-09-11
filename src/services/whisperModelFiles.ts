@@ -6,16 +6,15 @@
  * functions; their signatures and behavior are unchanged.
  */
 import RNFS from 'react-native-fs';
-import { statFile } from '../utils/fileStat';
+import { artifactVerificationError } from '@offgrid/models';
 import logger from '../utils/logger';
+import { artifactVerification } from './composition/artifact-verification';
 
 /**
  * Minimum valid model file size in bytes (10 MB).
  * The smallest whisper model (tiny) is ~75 MB, so anything under 10 MB
  * is almost certainly a corrupted or incomplete download.
  */
-const MIN_MODEL_FILE_SIZE = 10 * 1024 * 1024;
-
 export function getModelsDir(): string {
   return `${RNFS.DocumentDirectoryPath}/whisper-models`;
 }
@@ -45,19 +44,20 @@ export async function listDownloadedModels(): Promise<
   const dir = getModelsDir();
   if (!(await RNFS.exists(dir))) return [];
   const entries = await RNFS.readDir(dir);
-  return entries
-    .filter(
-      f =>
-        f.isFile() &&
-        f.name.startsWith('ggml-') &&
-        f.name.endsWith('.bin') &&
-        // Apply the same corrupt-file floor the load path uses: an app-kill
-        // mid-download leaves a short ggml-<id>.bin at the final path (no .part),
-        // which would otherwise be surfaced as "downloaded" and then fail to load
-        // with no retry. Size gate here so the Download Manager never lists it.
-        (Number(f.size) || 0) >= MIN_MODEL_FILE_SIZE,
-    )
-    .map(f => ({
+  const verified = await Promise.all(
+    entries.map(async file => ({
+      file,
+      verification: await artifactVerification().verify({
+        path: file.path,
+        name: file.name,
+        origin: 'inventory',
+        removeInvalid: false,
+      }),
+    })),
+  );
+  return verified
+    .filter(entry => entry.verification.valid && entry.verification.format === 'whisper')
+    .map(({ file: f }) => ({
       modelId: f.name.replace(/^ggml-/, '').replace(/\.bin$/, ''),
       fileName: f.name,
       sizeBytes: Number(f.size) || 0,
@@ -76,32 +76,20 @@ export async function validateModelFile(modelPath: string): Promise<void> {
     throw new Error('Whisper model path is empty or undefined');
   }
 
-  const exists = await RNFS.exists(modelPath);
-  if (!exists) {
-    throw new Error(`Whisper model file not found at: ${modelPath}`);
-  }
-
-  const facts = await statFile(modelPath);
-  if (!facts) {
-    throw new Error(
-      'Could not read Whisper model file metadata. Please try again.',
-    );
-  }
-  const fileSize = facts.size;
-  if (Number.isNaN(fileSize) || fileSize < MIN_MODEL_FILE_SIZE) {
-    // Remove the corrupted file so the user can re-download
-    await RNFS.unlink(modelPath).catch(() => {});
-    throw new Error(
-      `Whisper model file is too small (${Math.round(
-        fileSize / 1024,
-      )} KB) and likely corrupted. ` +
-        'The file has been removed. Please re-download the model.',
-    );
+  const request = {
+    path: modelPath,
+    name: modelPath.split('/').pop() || modelPath,
+    format: 'whisper' as const,
+    origin: 'runtime' as const,
+  };
+  const result = await artifactVerification().verify(request);
+  if (!result.valid) {
+    throw new Error(artifactVerificationError(request, result));
   }
 
   logger.log(
     `[Whisper] Model file validated: ${modelPath} (${Math.round(
-      fileSize / (1024 * 1024),
+      result.sizeBytes / (1024 * 1024),
     )} MB)`,
   );
 }

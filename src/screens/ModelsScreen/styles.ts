@@ -2,7 +2,7 @@ import { TYPOGRAPHY, SPACING } from '../../constants';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { createImageModelsStyles } from './imageStyles';
 
-const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   flex1: { flex: 1 },
   backButton: { padding: 4, marginRight: 8 },
   searchContainerNoPadding: { paddingHorizontal: 0 },
@@ -28,9 +28,14 @@ const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     paddingHorizontal: SPACING.md,
     gap: SPACING.md,
+  },
+  tabBarFrame: {
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    marginTop: SPACING.md,
     marginBottom: 12,
+    flexGrow: 0,
+    ...shadows.bottom,
   },
   tabItem: { paddingVertical: 10, alignItems: 'center' as const },
   tabText: { ...TYPOGRAPHY.body, color: colors.textMuted },
@@ -47,7 +52,8 @@ const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.md,
-    paddingBottom: 16,
+    paddingTop: SPACING.xs,
+    paddingBottom: 12,
     gap: 8,
   },
   searchInput: {
@@ -58,23 +64,8 @@ const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingHorizontal: 16,
     paddingVertical: 12,
     color: colors.text,
+    ...shadows.small,
   },
-  importButton: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: 10,
-    marginHorizontal: SPACING.md,
-    marginTop: 12,
-    marginBottom: 8,
-    paddingVertical: 12,
-    borderWidth: 2,
-    borderStyle: 'dashed' as const,
-    borderColor: `${colors.primary}60`,
-    borderRadius: 12,
-    backgroundColor: `${colors.primary}08`,
-  },
-  importButtonText: { ...TYPOGRAPHY.body, color: colors.primary },
   importProgressCard: {
     marginHorizontal: SPACING.md,
     marginTop: 12,
@@ -100,7 +91,12 @@ const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     gap: 16,
   },
   loadingText: { ...TYPOGRAPHY.body, color: colors.textSecondary },
-  listContent: { paddingHorizontal: SPACING.md, paddingBottom: 32 },
+  // Keep the first card inside the scroll viewport so its upper shadow is not clipped.
+  listContent: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
+    paddingBottom: 32,
+  },
   deviceBanner: {
     backgroundColor: `${colors.trending}15`,
     borderRadius: 8,
@@ -119,7 +115,7 @@ const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   emptyText: { color: colors.textSecondary, textAlign: 'center' as const },
 });
 
-const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+const createFilterStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   filterBar: { marginBottom: 4, paddingBottom: 4 },
   filterPillRow: {
     paddingHorizontal: SPACING.md,
@@ -168,7 +164,12 @@ const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   filterChipActive: { backgroundColor: `${colors.primary}25`, borderColor: colors.primary },
   filterChipText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   filterChipTextActive: { color: colors.primary },
-  filterToggle: { padding: 12, borderRadius: 12, backgroundColor: colors.surface },
+  filterToggle: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    ...shadows.small,
+  },
   filterToggleActive: { backgroundColor: `${colors.primary}15` },
   filterDot: {
     position: 'absolute' as const,
@@ -181,7 +182,7 @@ const createFilterStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
 });
 
-const createTextModelsStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+const createTextModelsStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   modelInfoCard: {
     marginHorizontal: SPACING.md,
     marginTop: SPACING.md,
@@ -213,12 +214,17 @@ const createTextModelsStyles = (colors: ThemeColors, _shadows: ThemeShadows) => 
   modelDescription: { ...TYPOGRAPHY.bodySmall, color: colors.text, marginBottom: SPACING.xs },
   modelStats: { flexDirection: 'row' as const, gap: 16 },
   statText: { ...TYPOGRAPHY.meta, color: colors.textMuted },
+  fileListHeader: {
+    backgroundColor: colors.background,
+    paddingBottom: SPACING.md,
+    zIndex: 1,
+    ...shadows.bottom,
+  },
   sectionTitle: { ...TYPOGRAPHY.h3, color: colors.text, paddingHorizontal: SPACING.md, marginBottom: 4 },
   sectionSubtitle: {
     ...TYPOGRAPHY.body,
     color: colors.textSecondary,
     paddingHorizontal: SPACING.md,
-    marginBottom: 16,
   },
   recommendedTitle: { ...TYPOGRAPHY.meta, color: colors.textMuted, marginBottom: SPACING.md },
 });

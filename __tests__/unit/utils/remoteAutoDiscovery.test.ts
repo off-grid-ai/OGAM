@@ -1,7 +1,7 @@
 import {
   shouldAutoDiscoverRemoteModels,
   resolveAutoDiscoverMigration,
-} from '../../../src/utils/remoteAutoDiscovery';
+} from '@offgrid/models';
 
 describe('shouldAutoDiscoverRemoteModels — auto LAN scan runs only when explicitly ON', () => {
   it('OFF when unset (fresh install)', () => {

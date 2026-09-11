@@ -1,12 +1,3 @@
-export {
-  MODEL_RECOMMENDATIONS,
-  RECOMMENDED_MODELS,
-  TRENDING_FAMILIES,
-  TRENDING_MODEL_IDS,
-  MODEL_ORGS,
-  QUANTIZATION_INFO,
-} from './models';
-
 // External URLs
 export const WEDNESDAY_URL = 'https://wednesday.is';
 

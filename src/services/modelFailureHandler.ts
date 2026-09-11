@@ -51,6 +51,9 @@ export interface ReportFailureContext {
    *  errors and for warnings — so a caller can pass it unconditionally and it only
    *  surfaces when the gate is actually overridable. */
   onLoadAnyway?: () => void;
+  /** A typed failure from the owning application decides these; message sniffing is the fallback. */
+  memoryPressure?: boolean;
+  overridable?: boolean;
   /** Stable id so repeated reports for the same surface replace, not stack.
    *  Defaults to the modelType (one card per subsystem). */
   id?: string;
@@ -74,7 +77,7 @@ export function reportModelFailure(
   // memory gate — derived once here from the typed discriminant (never re-sniffed
   // from the message). Callers pass onLoadAnyway unconditionally; it's dropped unless
   // the gate is genuinely overridable, so a non-memory failure never shows the button.
-  const overridable = severity === 'error' && isOverridableMemoryError(error);
+  const overridable = severity === 'error' && (ctx.overridable ?? isOverridableMemoryError(error));
 
   const failure: ModelFailure = {
     id: ctx.id ?? modelType,
@@ -83,7 +86,7 @@ export function reportModelFailure(
     title: ctx.title ?? (copy ? `${TYPE_LABEL[modelType]}: ${copy.title}` : `${TYPE_LABEL[modelType]} notice`),
     message: ctx.message ?? copy?.message ?? (detail ?? 'Something went wrong.'),
     onRetry: severity === 'error' ? ctx.onRetry : undefined,
-    memoryPressure: reason === 'insufficient-memory',
+    memoryPressure: ctx.memoryPressure ?? reason === 'insufficient-memory',
     overridable,
     onLoadAnyway: overridable ? ctx.onLoadAnyway : undefined,
   };

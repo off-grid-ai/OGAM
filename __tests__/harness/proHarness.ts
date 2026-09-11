@@ -16,5 +16,15 @@ export async function installPro(): Promise<void> {
   // registering every pro slot (chatInput.modeToggle, chatInput.audioMode, message.speakButton, …).
    
   const { loadProFeatures } = require('../../src/bootstrap/loadProFeatures');
-  await loadProFeatures(true);
+  const activated = await loadProFeatures(true);
+  if (!activated) return;
+
+  // The test that activates the real Pro runtimes also owns their teardown.
+  // Resolve this from the same post-reset module graph used above.
+  const pro: { deactivate?: () => Promise<void> } = require('@offgrid/pro');
+  const deactivate = pro?.deactivate;
+  if (typeof deactivate === 'function') {
+    (globalThis as unknown as { __PRO_CLEANUP__?: () => Promise<void> }).__PRO_CLEANUP__ = () =>
+      deactivate();
+  }
 }

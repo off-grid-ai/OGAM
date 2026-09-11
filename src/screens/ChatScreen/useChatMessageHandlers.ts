@@ -1,77 +1,58 @@
 import { Dispatch, SetStateAction } from 'react';
 import { showAlert, AlertState } from '../../components';
 import { Message } from '../../types';
+import { replacePortableMessageText } from '@offgrid/application';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
-import logger from '../../utils/logger';
-import { modelResidencyManager } from '../../services/modelResidency';
-import { hardwareService } from '../../services/hardware';
 import {
-  regenerateResponseFn, executeDeleteConversationFn, handleImageGenerationFn,
-  recordedTurnKind,
+  editPersistedChatTurnFn,
+  executeDeleteConversationFn,
+  generateImageForPersistedTurnFn,
+  replayPersistedChatTurnFn,
 } from './useChatGenerationActions';
 import type { GenerationDeps } from './useChatGenerationActions';
 import { supersedeSyncedReplies } from '../../services/sync/supersedeSyncedReplies';
-import { useChatStore } from '../../stores/chatStore';
+import { applicationFacade } from '../../services/applicationFacade';
+import { requireWorkspaceConversationMessages } from '../../hooks/useApplicationProjection';
+import { toWorkspaceMessage } from './types';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
 type RetryParams = {
   activeConversationId: string | null | undefined;
-  hasActiveModel: boolean;
-  deleteMessagesAfter: (c: string, m: string) => void;
   setDebugInfo: SetState<any>;
 };
 
 /** Shared context for the retry-branch helpers (bundled so each stays within the param limit). */
-type RetryCtx = { message: Message; genDeps: GenerationDeps; p: RetryParams; convId: string; msgs: Message[] };
+type RetryCtx = { message: Message; genDeps: GenerationDeps; msgs: Message[] };
 
 /** Retry from a USER message: read the turn's recorded modality BEFORE deleting the reply that
  *  carries it, so resend re-runs the SAME pipeline (deterministic) instead of re-classifying. */
-async function retryFromUserMessage({ message, genDeps, p, convId, msgs }: RetryCtx): Promise<void> {
+async function retryFromUserMessage({ message, genDeps, msgs }: RetryCtx): Promise<void> {
   const idx = msgs.findIndex((m: Message) => m.id === message.id);
-  const recordedKind = recordedTurnKind(msgs, message.id);
-  logger.log(`[RESEND-SM] retry user msg idx=${idx} willDelete=${idx !== -1 && idx < msgs.length - 1} recordedKind=${recordedKind ?? 'none'}`);
-  if (idx !== -1 && idx < msgs.length - 1) p.deleteMessagesAfter(convId, message.id);
-  await regenerateResponseFn(genDeps, { setDebugInfo: p.setDebugInfo, userMessage: message, recordedKind });
+  if (idx !== -1) await replayPersistedChatTurnFn(genDeps, message);
 }
 
 /** Retry from an ASSISTANT message: regenerate the preceding user turn. Uses the SAME whole-turn
  *  recordedTurnKind (keyed on that user message) as the user-message path, so tapping resend on
  *  EITHER the enhanced-prompt or the image-result message of an image turn re-draws the image. */
-async function retryFromAssistantMessage({ message, genDeps, p, convId, msgs }: RetryCtx): Promise<void> {
+async function retryFromAssistantMessage({ message, genDeps, msgs }: RetryCtx): Promise<void> {
   const idx = msgs.findIndex((m: Message) => m.id === message.id);
   const prev = idx > 0 ? msgs.slice(0, idx).reverse().find((m: Message) => m.role === 'user') ?? null : null;
-  const recordedKind = prev ? recordedTurnKind(msgs, prev.id) : undefined;
-  logger.log(`[RESEND-SM] retry assistant msg idx=${idx} prevUser=${prev?.id ?? 'none'} recordedKind=${recordedKind ?? 'none'}`);
-  if (prev) {
-    p.deleteMessagesAfter(convId, prev.id);
-    await regenerateResponseFn(genDeps, { setDebugInfo: p.setDebugInfo, userMessage: prev, recordedKind });
-  }
+  if (prev) await replayPersistedChatTurnFn(genDeps, prev);
 }
 
 export async function handleRetryMessageFn(
   message: Message, genDeps: GenerationDeps, p: RetryParams,
 ): Promise<void> {
   const msgs = p.activeConversationId
-    ? useChatStore.getState().getConversationMessages(p.activeConversationId)
+    ? requireWorkspaceConversationMessages(p.activeConversationId).map(toWorkspaceMessage)
     : [];
-  // Memory breakdown at the crash-prone moment: the JetsamEvent shows the app
-  // hitting the ~2GB per-process limit, but not WHAT's resident. Dump it so we see
-  // whether an un-evicted model (image?) or a leak is eating the budget.
-  try {
-    const residents = modelResidencyManager.getResidents().map(r => `${r.type}:${r.sizeMB}MB`).join(',');
-    logger.log(`[MEM-SM] resend: residents=[${residents}] availMB=${Math.round(hardwareService.getAvailableMemoryGB() * 1024)} totalMB=${Math.round(hardwareService.getTotalMemoryGB() * 1024)}`);
-  } catch { /* diagnostics only */ }
-  logger.log(`[RESEND-SM] retry msg role=${message.role} id=${message.id} hasActiveModel=${p.hasActiveModel} conv=${p.activeConversationId} totalMsgs=${msgs.length}`);
-  // No model loaded (e.g. user ejected all models): tell them, don't silently
-  // no-op. Mirrors the send path's "No Model Selected" alert (handleSendFn).
-  if (!p.hasActiveModel) { logger.log('[RESEND-SM] retry BAIL: no active model'); genDeps.setAlertState(showAlert('No Model Selected', 'Please select a model first.')); return; }
-  if (!p.activeConversationId) { logger.log('[RESEND-SM] retry BAIL: no conv'); return; }
+  if (!p.activeConversationId) return;
   // Stop any in-flight TTS before deleting messages (no-op without pro audio)
   callHook(HOOKS.audioStop);
   // A synced reply shows as a live preview until its op lands; clear it too, or resend duplicates it.
   supersedeSyncedReplies(p.activeConversationId);
-  const ctx: RetryCtx = { message, genDeps, p, convId: p.activeConversationId, msgs };
+  const ctx: RetryCtx = { message, genDeps, msgs };
   if (message.role === 'user') await retryFromUserMessage(ctx);
   else await retryFromAssistantMessage(ctx);
 }
@@ -80,27 +61,56 @@ type EditParams = {
   message: Message;
   newContent: string;
   activeConversationId: string | null | undefined;
-  hasActiveModel: boolean;
-  updateMessageContent: (c: string, m: string, v: string) => void;
-  deleteMessagesAfter: (c: string, m: string) => void;
   setDebugInfo: SetState<any>;
 };
 
+async function editAssistantMessage(
+  conversationId: string,
+  message: Message,
+  newContent: string,
+): Promise<void> {
+  const workspaceContent = applicationFacade().workspaceContent;
+  const record = workspaceContent
+    .snapshot()
+    .messages.find(
+      candidate =>
+        candidate.id === message.id &&
+        candidate.conversationId === conversationId,
+    );
+  if (!record || record.portable.role !== 'assistant') {
+    throw new Error(`Assistant message not found: ${message.id}`);
+  }
+  const outcome = await workspaceContent.execute({
+    type: 'update_message',
+    messageId: record.id,
+    portable: {
+      ...record.portable,
+      content: replacePortableMessageText(record.portable.content, newContent),
+    },
+  });
+  if (!outcome.ok) throw new Error(outcome.failure.message);
+}
+
 export async function handleEditMessageFn(genDeps: GenerationDeps, p: EditParams): Promise<void> {
-  // Same as retry: no model loaded → alert instead of a silent no-op.
-  if (!p.hasActiveModel) { genDeps.setAlertState(showAlert('No Model Selected', 'Please select a model first.')); return; }
   if (!p.activeConversationId) return;
+  if (p.message.role === 'assistant') {
+    try {
+      await editAssistantMessage(
+        p.activeConversationId,
+        p.message,
+        p.newContent,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      genDeps.setAlertState(showAlert('Edit Error', message));
+    }
+    return;
+  }
   // Same as resend: a synced reply is a live preview until its op lands, so clear it before regenerating.
   supersedeSyncedReplies(p.activeConversationId);
-  // Preserve the turn's modality across an edit: an edited image prompt re-runs the image pipeline
-  // (read BEFORE the update/delete strips the reply that records it), not a re-classification.
-  const messages = useChatStore
-    .getState()
-    .getConversationMessages(p.activeConversationId);
-  const recordedKind = recordedTurnKind(messages, p.message.id);
-  p.updateMessageContent(p.activeConversationId, p.message.id, p.newContent);
-  p.deleteMessagesAfter(p.activeConversationId, p.message.id);
-  await regenerateResponseFn(genDeps, { setDebugInfo: p.setDebugInfo, userMessage: { ...p.message, content: p.newContent }, recordedKind });
+  // Shared ChatSession.edit is the sole durable writer; the edited content reaches the UI through
+  // the reactive Workspace Content projection after commit, not a local mirror write here.
+  await editPersistedChatTurnFn(genDeps, { ...p.message, content: p.newContent });
 }
 
 export function handleDeleteConversationFn(
@@ -126,5 +136,5 @@ export async function handleGenerateImageFromMsgFn(
     p.setAlertState(showAlert('No Image Model', 'Please load an image model first from the Models screen.'));
     return;
   }
-  await handleImageGenerationFn(genDeps, { prompt, conversationId: p.activeConversationId, skipUserMessage: true });
+  await generateImageForPersistedTurnFn(genDeps, prompt, p.activeConversationId);
 }

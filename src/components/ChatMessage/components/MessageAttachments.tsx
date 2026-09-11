@@ -1,11 +1,5 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -27,7 +21,13 @@ interface FadeInImageProps {
   onPress?: () => void;
 }
 
-function FadeInImage({ uri, imageStyle, testID, wrapperTestID, onPress }: FadeInImageProps) {
+function FadeInImage({
+  uri,
+  imageStyle,
+  testID,
+  wrapperTestID,
+  onPress,
+}: FadeInImageProps) {
   const opacity = useSharedValue(0);
   const [loaded, setLoaded] = React.useState(false);
   const fadeStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
@@ -41,7 +41,9 @@ function FadeInImage({ uri, imageStyle, testID, wrapperTestID, onPress }: FadeIn
         activeOpacity={0.8}
         accessibilityRole="button"
         accessibilityLabel={
-          isGeneratedImage ? `Generated image ${loaded ? 'loaded' : 'loading'}` : undefined
+          isGeneratedImage
+            ? `Generated image ${loaded ? 'loaded' : 'loading'}`
+            : undefined
         }
       >
         <Image
@@ -52,6 +54,13 @@ function FadeInImage({ uri, imageStyle, testID, wrapperTestID, onPress }: FadeIn
           onLoad={() => {
             setLoaded(true);
             opacity.value = withTiming(1, { duration: 300 });
+          }}
+          onError={event => {
+            logger.error(
+              '[ChatMessage] local image failed to load',
+              event.nativeEvent.error,
+              uri,
+            );
           }}
         />
       </TouchableOpacity>
@@ -79,8 +88,12 @@ function imageAspectRatio(attachment: MediaAttachment): number {
 }
 
 function formatFileSize(bytes: number): string {
-  if (bytes < 1024) { return `${bytes}B`; }
-  if (bytes < 1024 * 1024) { return `${(bytes / 1024).toFixed(0)}KB`; }
+  if (bytes < 1024) {
+    return `${bytes}B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(0)}KB`;
+  }
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
@@ -122,14 +135,16 @@ function ArrivingAttachment({
     >
       <LoadingDots
         size={5}
-        color={isUser ? colors.background : colors.textSecondary}
+        color={colors.primary}
         testID={`attachment-pending-dots-${index}`}
       />
       <Text
         numberOfLines={1}
         style={[
           styles.documentBadgeText,
-          isUser ? styles.documentBadgeTextUser : styles.documentBadgeTextAssistant,
+          isUser
+            ? styles.documentBadgeTextUser
+            : styles.documentBadgeTextAssistant,
         ]}
       >
         {attachment.fileName || 'Arriving'}
@@ -170,9 +185,18 @@ export function MessageAttachments({
             ]}
           >
             <View style={styles.audioBadgeHeader}>
-              <Icon name="mic" size={14} color={isUser ? colors.background : colors.textSecondary} />
+              <Icon
+                name="mic"
+                size={14}
+                color={isUser ? colors.background : colors.textSecondary}
+              />
               <Text
-                style={[styles.documentBadgeText, isUser ? styles.documentBadgeTextUser : styles.documentBadgeTextAssistant]}
+                style={[
+                  styles.documentBadgeText,
+                  isUser
+                    ? styles.documentBadgeTextUser
+                    : styles.documentBadgeTextAssistant,
+                ]}
               >
                 Voice message
               </Text>
@@ -180,7 +204,12 @@ export function MessageAttachments({
             {attachment.textContent ? (
               <Text
                 testID={`audio-transcription-${index}`}
-                style={[styles.audioTranscription, isUser ? styles.documentBadgeTextUser : styles.documentBadgeTextAssistant]}
+                style={[
+                  styles.audioTranscription,
+                  isUser
+                    ? styles.documentBadgeTextUser
+                    : styles.documentBadgeTextAssistant,
+                ]}
               >
                 {attachment.textContent}
               </Text>
@@ -195,8 +224,13 @@ export function MessageAttachments({
               isUser ? styles.documentBadgeUser : styles.documentBadgeAssistant,
             ]}
             onPress={() => {
-              if (!attachment.uri) { return; }
-              const ext = (attachment.fileName || '').split('.').pop()?.toLowerCase();
+              if (!attachment.uri) {
+                return;
+              }
+              const ext = (attachment.fileName || '')
+                .split('.')
+                .pop()
+                ?.toLowerCase();
               const mimeMap: Record<string, string> = {
                 pdf: 'application/pdf',
                 txt: 'text/plain',
@@ -209,7 +243,9 @@ export function MessageAttachments({
                 js: 'text/javascript',
                 ts: 'text/typescript',
               };
-              const mimeType = ext ? mimeMap[ext] || 'application/octet-stream' : undefined;
+              const mimeType = ext
+                ? mimeMap[ext] || 'application/octet-stream'
+                : undefined;
               let uri = attachment.uri;
               if (uri.startsWith('/')) {
                 uri = `file://${uri}`;
@@ -217,17 +253,28 @@ export function MessageAttachments({
                 uri = `file://${uri}`;
               }
               logger.log('[ChatMessage] Opening document:', uri);
-              viewDocument({ uri, mimeType, grantPermissions: 'read' }).catch((err: any) => {
-                logger.warn('[ChatMessage] Failed to open document:', err?.message || err);
-              });
+              viewDocument({ uri, mimeType, grantPermissions: 'read' }).catch(
+                (err: any) => {
+                  logger.warn(
+                    '[ChatMessage] Failed to open document:',
+                    err?.message || err,
+                  );
+                },
+              );
             }}
             activeOpacity={0.7}
           >
-            <Icon name="file-text" size={14} color={isUser ? colors.background : colors.textSecondary} />
+            <Icon
+              name="file-text"
+              size={14}
+              color={isUser ? colors.background : colors.textSecondary}
+            />
             <Text
               style={[
                 styles.documentBadgeText,
-                isUser ? styles.documentBadgeTextUser : styles.documentBadgeTextAssistant,
+                isUser
+                  ? styles.documentBadgeTextUser
+                  : styles.documentBadgeTextAssistant,
               ]}
               numberOfLines={1}
             >
@@ -237,7 +284,9 @@ export function MessageAttachments({
               <Text
                 style={[
                   styles.documentBadgeSize,
-                  isUser ? styles.documentBadgeSizeUser : styles.documentBadgeSizeAssistant,
+                  isUser
+                    ? styles.documentBadgeSizeUser
+                    : styles.documentBadgeSizeAssistant,
                 ]}
               >
                 {formatFileSize(attachment.fileSize)}
@@ -252,11 +301,15 @@ export function MessageAttachments({
               styles.attachmentImage,
               { aspectRatio: imageAspectRatio(attachment) },
             ]}
-            wrapperTestID={isUser ? `message-attachment-${index}` : 'generated-image'}
-            testID={isUser ? `message-image-${index}` : 'generated-image-content'}
+            wrapperTestID={
+              isUser ? `message-attachment-${index}` : 'generated-image'
+            }
+            testID={
+              isUser ? `message-image-${index}` : 'generated-image-content'
+            }
             onPress={() => onImagePress?.(attachment.uri)}
           />
-        )
+        ),
       )}
     </View>
   );

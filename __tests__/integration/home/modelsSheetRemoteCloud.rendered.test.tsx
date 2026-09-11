@@ -1,88 +1,125 @@
 /**
- * DEVICE 2026-07-14 (IMG report) — the Models manager sheet's TEXT row showed a remote model
- * (Qwen3.5-2B on the Off Grid AI Gateway) with NO remote marker: indistinguishable from a local
- * model. SPEC (OGAM user's view): a remote selection carries the cloud marker hugging the right
- * of the model name (matching the chat header's remote indicator), so a remote model is never
- * mistaken for local. A LOCAL/absent selection shows no cloud (falsified both ways).
+ * The Home models sheet marks a selected remote text model with its cloud indicator.
  *
- * ARRIVAL IS REAL (same journey as homeRemoteModelTextCount): connect a server through the REAL
- * RemoteServersScreen Add-Server UI over a faked LAN fetch → mount the REAL HomeScreen → tap the
- * real "Select Model" → tap the discovered remote model (real setActiveRemoteTextModel) → tap the
- * real Models summary card ('models-summary') to open the REAL ModelsManagerSheet. No setState of
- * the state under test. Boundary fakes: global.fetch (LAN) + installNativeBoundary leaves only.
- *
- * Terminal artifact: the cloud marker ('models-row-text-remote') inside the sheet's TEXT row.
+ * The real editor, Home screen, stores, services, and Shared application run over
+ * native, HTTP, and navigation boundaries only.
  */
-import { installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
+import type { MobileApplicationFixture } from '../../harness/mobileApplicationFixture';
+import { installNativeBoundary } from '../../harness/nativeBoundary';
 
-describe('Models manager sheet — remote TEXT selection carries the cloud marker (rendered)', () => {
-  const setup = () => {
-    installNativeBoundary();
-     
-    const React = require('react');
-    const rtl = requireRTL();
-    const { RemoteServerEditorScreen } = require('../../../src/screens/RemoteServerEditorScreen');
-    const { HomeScreen } = require('../../../src/screens/HomeScreen');
-    const { useRemoteServerStore, useAppStore } = require('../../../src/stores');
-     
+const mockGoBack = jest.fn();
 
-    useRemoteServerStore.setState({ servers: [], serverHealth: {}, discoveredModels: {}, activeServerId: null, activeRemoteTextModelId: null, activeRemoteImageModelId: null });
-    useAppStore.setState({ downloadedModels: [], activeModelId: null, downloadedImageModels: [], activeImageModelId: null });
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: mockGoBack,
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
+  useRoute: () => ({ params: undefined }),
+  useIsFocused: () => true,
+  useFocusEffect: () => {},
+}));
 
-    (global as unknown as { fetch: unknown }).fetch = jest.fn(async (url: string) => {
-      if (String(url).includes('/v1/models')) {
-        return { ok: true, status: 200, json: async () => ({ object: 'list', data: [{ id: 'llama-3-8b', object: 'model', owned_by: 'local' }] }) };
+describe('Models manager sheet remote indicator', () => {
+  let fixture: MobileApplicationFixture;
+  let React: typeof import('react');
+  let rtl: typeof import('@testing-library/react-native');
+  let RemoteServerEditorScreen: typeof import('../../../src/screens/RemoteServerEditorScreen').RemoteServerEditorScreen;
+  let HomeScreen: typeof import('../../../src/screens/HomeScreen').HomeScreen;
+  let realFetch: typeof global.fetch;
+
+  const setup = async () => {
+    realFetch = global.fetch;
+    mockGoBack.mockClear();
+    installNativeBoundary({ download: true, fs: true });
+    await require('@react-native-async-storage/async-storage').clear();
+    global.fetch = jest.fn(async (input: string | URL | Request) => {
+      if (String(input).includes('/v1/models')) {
+        return new Response(
+          JSON.stringify({
+            object: 'list',
+            data: [{ id: 'llama-3-8b', object: 'model', owned_by: 'local' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
       }
-      return { ok: false, status: 404, json: async () => ({}) };
+      return new Response('{}', { status: 404 });
     });
 
-    const nav = { navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} };
-    return { React, rtl, RemoteServerEditorScreen, HomeScreen, useRemoteServerStore, nav };
+    React = require('react') as typeof import('react');
+    const { requireRTL } =
+      require('../../harness/nativeBoundary') as typeof import('../../harness/nativeBoundary');
+    rtl = requireRTL();
+    ({ RemoteServerEditorScreen } =
+      require('../../../src/screens/RemoteServerEditorScreen') as typeof import('../../../src/screens/RemoteServerEditorScreen'));
+    ({ HomeScreen } =
+      require('../../../src/screens/HomeScreen') as typeof import('../../../src/screens/HomeScreen'));
+    const { startMobileApplicationFixture } =
+      require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+    fixture = await startMobileApplicationFixture();
   };
 
-  /** Connect a server through the REAL Add-Server UI (the T046/T097 gesture chain). */
-  const connectServerViaUI = async (env: ReturnType<typeof setup>) => {
-    const { React, rtl, RemoteServerEditorScreen } = env;
-    const srv = rtl.render(React.createElement(RemoteServerEditorScreen));
-    rtl.fireEvent.changeText(await rtl.waitFor(() => srv.getByPlaceholderText('Off Grid AI Desktop')), 'My LM Studio');
-    rtl.fireEvent.changeText(srv.getByPlaceholderText('http://192.168.1.50:7878'), 'http://localhost:1234');
-    rtl.fireEvent.press(srv.getByTestId('test-connection'));
-    await rtl.waitFor(() => { expect(srv.queryByText(/Connected \(/)).not.toBeNull(); }, { timeout: 4000 });
-    rtl.fireEvent.press(srv.getByTestId('save-server'));
-    await rtl.waitFor(() => { expect(env.useRemoteServerStore.getState().servers).toHaveLength(1); }, { timeout: 4000 });
-    srv.unmount();
+  afterEach(async () => {
+    await fixture.dispose();
+    global.fetch = realFetch;
+  });
+
+  const connectServer = async () => {
+    const editor = rtl.render(React.createElement(RemoteServerEditorScreen));
+    rtl.fireEvent.changeText(
+      editor.getByPlaceholderText('Off Grid AI Desktop'),
+      'My LM Studio',
+    );
+    rtl.fireEvent.changeText(
+      editor.getByPlaceholderText('http://192.168.1.50:7878'),
+      'http://localhost:1234',
+    );
+    rtl.fireEvent.press(editor.getByTestId('test-connection'));
+    await rtl.waitFor(() =>
+      expect(editor.queryByText(/Connected \(/)).not.toBeNull(),
+    );
+    rtl.fireEvent.press(editor.getByTestId('save-server'));
+    await rtl.waitFor(() => expect(mockGoBack).toHaveBeenCalled());
+    editor.unmount();
   };
 
-  it('remote model selected → the sheet TEXT row shows the cloud marker next to the name', async () => {
-    const env = setup();
-    const { React, rtl, HomeScreen, useRemoteServerStore, nav } = env;
-    await connectServerViaUI(env);
+  const renderHome = () =>
+    rtl.render(
+      React.createElement(HomeScreen, {
+        navigation: {
+          navigate: () => {},
+          goBack: () => {},
+          setOptions: () => {},
+          addListener: () => () => {},
+        } as never,
+      }),
+    );
 
-    const home = rtl.render(React.createElement(HomeScreen, { navigation: nav }));
-    // Select the remote model the way a user does: browse → tap the discovered remote model.
-    rtl.fireEvent.press(await rtl.waitFor(() => home.getByTestId('browse-models-button'), { timeout: 4000 }));
-    rtl.fireEvent.press(await rtl.waitFor(() => home.getByTestId('remote-model-item'), { timeout: 4000 }));
-    await rtl.waitFor(() => { expect(useRemoteServerStore.getState().activeRemoteTextModelId).toBe('llama-3-8b'); }, { timeout: 4000 });
+  it('shows the cloud marker after the user selects a remote text model', async () => {
+    await setup();
+    await connectServer();
+    const home = renderHome();
 
-    // Real gesture: open the Models manager sheet from the Home summary card.
-    rtl.fireEvent.press(await rtl.waitFor(() => home.getByTestId('models-summary'), { timeout: 4000 }));
+    rtl.fireEvent.press(await home.findByTestId('browse-models-button'));
+    rtl.fireEvent.press(await home.findByTestId('remote-model-item'));
+    rtl.fireEvent.press(await home.findByTestId('models-summary'));
 
-    // Terminal artifact: the TEXT row renders the remote cloud marker (hugging the model name).
-    await rtl.waitFor(() => { expect(home.queryByTestId('models-row-text-remote')).not.toBeNull(); }, { timeout: 4000 });
+    await rtl.waitFor(() =>
+      expect(home.queryByTestId('models-row-text-remote')).not.toBeNull(),
+    );
     home.unmount();
   });
 
-  it('falsifier — no remote model selected → the sheet TEXT row shows NO cloud marker', async () => {
-    const env = setup();
-    const { React, rtl, HomeScreen, nav } = env;
-    await connectServerViaUI(env); // server connected, but its model is NEVER selected
+  it('shows no cloud marker before a remote model is selected', async () => {
+    await setup();
+    await connectServer();
+    const home = renderHome();
 
-    const home = rtl.render(React.createElement(HomeScreen, { navigation: nav }));
-    rtl.fireEvent.press(await rtl.waitFor(() => home.getByTestId('models-summary'), { timeout: 4000 }));
-
-    // The sheet is open (its TEXT row renders)…
-    await rtl.waitFor(() => { expect(home.queryByTestId('models-row-text')).not.toBeNull(); }, { timeout: 4000 });
-    // …but with no remote selection there is no cloud marker.
+    rtl.fireEvent.press(await home.findByTestId('models-summary'));
+    await rtl.waitFor(() =>
+      expect(home.queryByTestId('models-row-text')).not.toBeNull(),
+    );
     expect(home.queryByTestId('models-row-text-remote')).toBeNull();
     home.unmount();
   });

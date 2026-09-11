@@ -7,7 +7,11 @@ import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
-import { useResidentRows, ejectResident, type ModelRowType } from './useResidentRows';
+import {
+  useResidentRows,
+  ejectResident,
+  type ModelRowType,
+} from './useResidentRows';
 import logger from '../../utils/logger';
 
 // Defined in useResidentRows (breaks the sheet<->hook import cycle); re-exported here so existing
@@ -35,11 +39,14 @@ type Props = {
   /** Rows whose active selection lives on a REMOTE server (gateway) — shown with a cloud marker,
    *  matching the chat header's remote indicator, so a remote model is never mistaken for local. */
   remote?: Partial<Record<ModelRowType, boolean>>;
+  /** Availability for a selected remote route. False keeps the name visible with an error cloud. */
+  remoteAvailable?: Partial<Record<ModelRowType, boolean>>;
   loadingState: LoadingState;
   isEjecting: boolean;
   hasActiveModel: boolean;
   onOpenRow: (type: ModelRowType) => void;
   onEject: () => void;
+  onReconnectRemote: () => Promise<void>;
 };
 
 /**
@@ -48,7 +55,18 @@ type Props = {
  * type's picker.
  */
 export const ModelsManagerSheet: React.FC<Props> = ({
-  visible, onClose, onClosed, labels, remote, loadingState, isEjecting, hasActiveModel, onOpenRow, onEject,
+  visible,
+  onClose,
+  onClosed,
+  labels,
+  remote,
+  remoteAvailable,
+  loadingState,
+  isEjecting,
+  hasActiveModel,
+  onOpenRow,
+  onEject,
+  onReconnectRemote,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -56,21 +74,47 @@ export const ModelsManagerSheet: React.FC<Props> = ({
   // residency surface: a RAM chip + per-row eject on resident rows (agreed design 2026-07-14).
   const residentByRow = useResidentRows(visible);
   const [ejectingRow, setEjectingRow] = useState<ModelRowType | null>(null);
+  const [isReconnectingRemote, setIsReconnectingRemote] = useState(false);
+  const hasUnavailableRemote = ROWS.some(
+    row => remote?.[row.type] && remoteAvailable?.[row.type] === false,
+  );
+  const reconnectRemote = () => {
+    if (isReconnectingRemote) return;
+    setIsReconnectingRemote(true);
+    onReconnectRemote()
+      .catch(error =>
+        logger.warn('[ModelsManagerSheet] Remote reconnect failed:', error),
+      )
+      .finally(() => setIsReconnectingRemote(false));
+  };
   const ejectRow = (row: ModelRowType) => {
     const resident = residentByRow[row];
     if (!resident || ejectingRow) return;
     setEjectingRow(row);
-    logger.log(`[MODEL-SM] sheet eject → ${resident.type} (${resident.key}) ~${(resident.sizeMB / 1024).toFixed(1)}GB`);
+    logger.log(
+      `[MODEL-SM] sheet eject → ${resident.type} (${resident.key}) ~${(
+        resident.sizeMB / 1024
+      ).toFixed(1)}GB`,
+    );
     ejectResident(resident)
-      .catch((err) => logger.log(`[MODEL-SM] sheet eject ${resident.key} failed:`, err))
+      .catch(err =>
+        logger.log(`[MODEL-SM] sheet eject ${resident.key} failed:`, err),
+      )
       .finally(() => setEjectingRow(null));
   };
 
   return (
-    <AppSheet visible={visible} onClose={onClose} onClosed={onClosed} title="MODELS" enableDynamicSizing>
+    <AppSheet
+      visible={visible}
+      onClose={onClose}
+      onClosed={onClosed}
+      title="MODELS"
+      enableDynamicSizing
+    >
       <View style={styles.content}>
-        {ROWS.map((row) => {
-          const isLoading = loadingState.isLoading && loadingState.type === row.type;
+        {ROWS.map(row => {
+          const isLoading =
+            loadingState.isLoading && loadingState.type === row.type;
           const value = labels[row.type];
           const isSet = value && value !== '—';
           const resident = residentByRow[row.type];
@@ -86,51 +130,98 @@ export const ModelsManagerSheet: React.FC<Props> = ({
               <Text style={styles.label}>{row.label}</Text>
               {/* Fixed-width eject column right of the label so all four rows align; empty when not resident. */}
               <View style={styles.ejectSlot}>
-                {resident && (ejectingRow === row.type
-                  ? <LoadingDots color={colors.error} />
-                  : (
+                {resident &&
+                  (ejectingRow === row.type ? (
+                    <LoadingDots color={colors.error} />
+                  ) : (
                     <TouchableOpacity
                       testID={`models-row-${row.type}-eject`}
                       accessibilityLabel={`Eject ${row.label} model from memory`}
                       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                       onPress={() => ejectRow(row.type)}
                     >
-                      <Icon name="power" size={14} color={colors.error} style={styles.ejectGlyph} />
+                      <Icon
+                        name="power"
+                        size={14}
+                        color={colors.error}
+                        style={styles.ejectGlyph}
+                      />
                     </TouchableOpacity>
                   ))}
               </View>
               <View style={styles.valueGroup}>
                 {resident && (
-                  <View testID={`models-row-${row.type}-ram`} style={styles.ramChip}>
-                    <Text style={styles.ramChipText}>{`${(resident.sizeMB / 1024).toFixed(1)} GB`}</Text>
+                  <View
+                    testID={`models-row-${row.type}-ram`}
+                    style={styles.ramChip}
+                  >
+                    <Text style={styles.ramChipText}>{`${(
+                      resident.sizeMB / 1024
+                    ).toFixed(1)} GB`}</Text>
                   </View>
                 )}
-                <Text style={[styles.value, isSet && styles.valueSet]} numberOfLines={1}>
-                  {isLoading ? 'Loading…' : value}
+                <Text
+                  style={[styles.value, isSet && styles.valueSet]}
+                  numberOfLines={1}
+                >
+                  {isLoading ? 'Loading...' : value}
                 </Text>
                 {!!remote?.[row.type] && isSet && (
-                  <Icon name="cloud" size={12} color={colors.primary} testID={`models-row-${row.type}-remote`} />
+                  <Icon
+                    name="cloud"
+                    size={12}
+                    color={remoteAvailable?.[row.type] === false
+                      ? colors.error
+                      : colors.primary}
+                    testID={`models-row-${row.type}-remote`}
+                  />
                 )}
               </View>
-              {isLoading
-                ? <LoadingDots color={colors.primary} />
-                : <Icon name="chevron-right" size={16} color={colors.textMuted} />}
+              {isLoading ? (
+                <LoadingDots color={colors.primary} />
+              ) : (
+                <Icon name="chevron-right" size={16} color={colors.textMuted} />
+              )}
             </AnimatedPressable>
           );
         })}
 
-        {hasActiveModel && (
-          <AnimatedPressable
-            style={styles.ejectButton}
-            hapticType="impactMedium"
-            disabled={isEjecting || loadingState.isLoading}
-            onPress={onEject}
-          >
-            {isEjecting
-              ? <LoadingDots color={colors.error} />
-              : <Icon name="power" size={14} color={colors.error} />}
-            <Text style={styles.ejectText}>Eject All Models</Text>
-          </AnimatedPressable>
+        {(hasUnavailableRemote || hasActiveModel) && (
+          <View style={styles.actions}>
+            {hasUnavailableRemote && (
+              <AnimatedPressable
+                style={styles.actionButton}
+                hapticType="impactMedium"
+                disabled={isReconnectingRemote || loadingState.isLoading}
+                onPress={reconnectRemote}
+                testID="models-reconnect-remote"
+              >
+                {isReconnectingRemote ? (
+                  <LoadingDots color={colors.primary} />
+                ) : (
+                  <Icon name="refresh-cw" size={14} color={colors.primary} />
+                )}
+                <Text style={styles.reconnectText}>
+                  {isReconnectingRemote ? 'Reconnecting' : 'Reconnect Remote'}
+                </Text>
+              </AnimatedPressable>
+            )}
+            {hasActiveModel && (
+              <AnimatedPressable
+                style={styles.actionButton}
+                hapticType="impactMedium"
+                disabled={isEjecting || loadingState.isLoading}
+                onPress={onEject}
+              >
+                {isEjecting ? (
+                  <LoadingDots color={colors.error} />
+                ) : (
+                  <Icon name="power" size={14} color={colors.error} />
+                )}
+                <Text style={styles.ejectText}>Eject All Models</Text>
+              </AnimatedPressable>
+            )}
+          </View>
         )}
       </View>
     </AppSheet>
@@ -138,7 +229,12 @@ export const ModelsManagerSheet: React.FC<Props> = ({
 };
 
 const createStyles = (colors: ThemeColors) => ({
-  content: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm, paddingBottom: SPACING.md, gap: SPACING.sm as number },
+  content: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.md,
+    gap: SPACING.sm as number,
+  },
   row: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -150,9 +246,18 @@ const createStyles = (colors: ThemeColors) => ({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  label: { ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted, width: 64 },
+  label: {
+    ...TYPOGRAPHY.label,
+    textTransform: 'uppercase' as const,
+    color: colors.textMuted,
+    width: 64,
+  },
   // Fixed-width control column right of the label — all four rows align whether or not resident.
-  ejectSlot: { width: 22, alignItems: 'center' as const, justifyContent: 'center' as const },
+  ejectSlot: {
+    width: 22,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
   ejectGlyph: { opacity: 0.8 },
   ramChip: {
     borderWidth: 1,
@@ -164,16 +269,34 @@ const createStyles = (colors: ThemeColors) => ({
   ramChipText: { ...TYPOGRAPHY.label, color: colors.textMuted },
   // Right-aligned value cluster: the name (shrinks/ellipsizes) with the remote cloud hugging its
   // right edge at the minimum token gap (xs) — the marker reads as part of the name, not the row.
-  valueGroup: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'flex-end' as const, gap: SPACING.xs },
-  value: { ...TYPOGRAPHY.body, color: colors.textMuted, flexShrink: 1, textAlign: 'right' as const },
+  valueGroup: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'flex-end' as const,
+    gap: SPACING.xs,
+  },
+  value: {
+    ...TYPOGRAPHY.body,
+    color: colors.textMuted,
+    flexShrink: 1,
+    textAlign: 'right' as const,
+  },
   valueSet: { color: colors.text },
-  ejectButton: {
+  actions: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-evenly' as const,
+    marginTop: SPACING.sm,
+  },
+  actionButton: {
+    minHeight: 44,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     gap: SPACING.sm,
-    paddingVertical: SPACING.md,
-    marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
   },
+  reconnectText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
   ejectText: { ...TYPOGRAPHY.bodySmall, color: colors.error },
 });

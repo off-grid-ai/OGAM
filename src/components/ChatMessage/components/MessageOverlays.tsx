@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTheme } from '../../../theme';
 import { CustomAlert, AlertState } from '../../CustomAlert';
-import { ActionMenuSheet, EditSheet, SelectTextSheet } from './ActionMenuSheet';
+import { ActionMenuSheet, EditSheet } from './ActionMenuSheet';
 import { createStyles } from '../styles';
 import type { Message } from '../../../types';
 
@@ -12,35 +12,30 @@ interface MessageOverlaysProps {
   styles: ReturnType<typeof createStyles>;
   colors: ReturnType<typeof useTheme>['colors'];
   showActionMenu: boolean;
-  showSelectText: boolean;
   isEditing: boolean;
   isUser: boolean;
   canEdit: boolean;
   canRetry: boolean;
   canGenerateImage: boolean;
   canSpeak: boolean;
-  showSelectTextAction: boolean;
   displayContent: string;
   alertState: AlertState;
   onCloseActionMenu: () => void;
-  onCloseSelectText: () => void;
-  onChangeEditText: (text: string) => void;
   onCopy: () => void;
   onEdit: () => void;
   onRetry: () => void;
   onGenerateImage: () => void;
   onSpeak: () => void;
-  onSelectText: () => void;
-  onSaveEdit: () => void;
+  onSaveEdit: (text: string) => void;
   onCancelEdit: () => void;
   onCloseAlert: () => void;
 }
 
 export const MessageOverlays: React.FC<MessageOverlaysProps> = ({
-  message, styles, colors, showActionMenu, showSelectText, isEditing, isUser,
-  canEdit, canRetry, canGenerateImage, canSpeak, showSelectTextAction, displayContent,
-  alertState, onCloseActionMenu, onCloseSelectText, onChangeEditText, onCopy, onEdit,
-  onRetry, onGenerateImage, onSpeak, onSelectText, onSaveEdit, onCancelEdit, onCloseAlert,
+  message, styles, colors, showActionMenu, isEditing, isUser,
+  canEdit, canRetry, canGenerateImage, canSpeak, displayContent,
+  alertState, onCloseActionMenu, onCopy, onEdit,
+  onRetry, onGenerateImage, onSpeak, onSaveEdit, onCancelEdit, onCloseAlert,
 }) => (
   <>
     <ActionMenuSheet
@@ -57,21 +52,14 @@ export const MessageOverlays: React.FC<MessageOverlaysProps> = ({
       onRetry={onRetry}
       onGenerateImage={onGenerateImage}
       onSpeak={onSpeak}
-      onSelectText={showSelectTextAction ? onSelectText : undefined}
-    />
-    <SelectTextSheet
-      visible={showSelectText}
-      onClose={onCloseSelectText}
-      content={displayContent}
-      styles={styles}
     />
     <EditSheet
       visible={isEditing}
       onClose={onCancelEdit}
-      defaultValue={message.content}
-      onChangeText={onChangeEditText}
+      defaultValue={isUser ? message.content : displayContent}
       onSave={onSaveEdit}
       onCancel={onCancelEdit}
+      resendsAfterSave={isUser}
       styles={styles}
       colors={colors}
     />

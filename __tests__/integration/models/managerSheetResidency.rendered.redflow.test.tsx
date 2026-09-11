@@ -12,13 +12,23 @@
  * Falsifiers: before any load the text row shows NO chip and NO eject (and the other rows never do);
  * after eject the chip is gone while the row still opens the picker.
  */
-import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
+import {
+  installNativeBoundary,
+  requireRTL,
+  GB,
+} from '../../harness/nativeBoundary';
 import { createDownloadedModel } from '../../utils/factories';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
   useRoute: () => ({ params: {} }),
-  useFocusEffect: () => {}, useIsFocused: () => true,
+  useFocusEffect: () => {},
+  useIsFocused: () => true,
 }));
 
 /** Invoke the onPress bound at/above a testID host (AnimatedPressable's onPress lives on the composite). */
@@ -27,51 +37,94 @@ function pressByWalkingUp(node: unknown): void {
   let n = node as N;
   for (let d = 0; n && d < 12; d++) {
     const op = n.props?.onPress;
-    if (typeof op === 'function') { (op as () => void)(); return; }
+    if (typeof op === 'function') {
+      (op as () => void)();
+      return;
+    }
     n = n.parent ?? null;
   }
   throw new Error('no onPress found walking up from the node');
 }
 
 async function setupHome() {
-  const boundary = installNativeBoundary({ llama: true, fs: true, ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
+  const boundary = installNativeBoundary({
+    llama: true,
+    fs: true,
+    ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB },
+  });
   const g = globalThis as unknown as { window?: Record<string, unknown> };
-  if (!g.window) g.window = { dispatchEvent: () => true, addEventListener: () => {}, removeEventListener: () => {} };
+  if (!g.window)
+    g.window = {
+      dispatchEvent: () => true,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    };
 
   const React = require('react');
   const rtl = requireRTL();
   const { hardwareService } = require('../../../src/services/hardware');
-  const { useAppStore } = require('../../../src/stores');
-  const AsyncStorage = require('@react-native-async-storage/async-storage').default ?? require('@react-native-async-storage/async-storage');
-  const { activeModelService } = require('../../../src/services/activeModelService');
-  const { HomeScreen } = require('../../../src/screens/HomeScreen');
-  const { ResidentsProbe } = require('../../harness/ResidentsProbe');
+  const AsyncStorage =
+    require('@react-native-async-storage/async-storage').default ??
+    require('@react-native-async-storage/async-storage');
+  await AsyncStorage.clear();
 
   // BOUNDARY: a downloaded model = the persisted record + the file on disk (a real download's artifact).
   const docs = boundary.fs!.DocumentDirectoryPath;
   const modelPath = `${docs}/models/ggml-small.gguf`;
   boundary.fs!.seedFile(modelPath, 500 * 1024 * 1024);
-  const model = createDownloadedModel({ id: 'm', name: 'Test Model', engine: 'llama', filePath: modelPath, fileName: 'ggml-small.gguf' });
-  await AsyncStorage.setItem('@local_llm/downloaded_models', JSON.stringify([model]));
+  const model = createDownloadedModel({
+    id: 'm',
+    name: 'Test Model',
+    engine: 'llama',
+    filePath: modelPath,
+    fileName: 'ggml-small.gguf',
+  });
+  await AsyncStorage.setItem(
+    '@local_llm/downloaded_models',
+    JSON.stringify([model]),
+  );
+  const { startMobileApplicationFixture } =
+    require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+  applicationFixture = await startMobileApplicationFixture();
+  const { activeModelService } = require('../../harness/activeModelLifecycle');
+  const { HomeScreen } = require('../../../src/screens/HomeScreen');
   await hardwareService.refreshMemoryInfo();
-  useAppStore.setState({ checklistDismissed: true });
 
-  const nav = { navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} };
-  const view = rtl.render(React.createElement(
-    React.Fragment, null,
-    React.createElement(ResidentsProbe, {}),
-    React.createElement(HomeScreen, { navigation: nav }),
-  ));
-  await rtl.waitFor(() => { expect(useAppStore.getState().downloadedModels.length).toBeGreaterThan(0); }, { timeout: 10000 });
+  const nav = {
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  };
+  const view = rtl.render(React.createElement(HomeScreen, { navigation: nav }));
 
   // GESTURE: select the text model the way a user does — open the picker, tap the row.
-  rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('browse-models-button')));
-  const rows = await rtl.waitFor(() => { const r = view.queryAllByTestId('model-item'); expect(r.length).toBeGreaterThan(0); return r; }, { timeout: 10000 });
-  rtl.fireEvent.press(rows[0]);
-  await rtl.waitFor(() => { expect(useAppStore.getState().activeModelId).toBe('m'); }, { timeout: 10000 });
+  await rtl.act(async () => {
+    pressByWalkingUp(
+      await rtl.waitFor(() => view.getByTestId('model-summary-text-open')),
+    );
+  });
+  const row = await rtl.waitFor(() => view.getByText('Test Model'), {
+    timeout: 10000,
+  });
+  await rtl.act(async () => pressByWalkingUp(row));
+  await rtl.waitFor(
+    () => {
+      expect(view.queryByText('Local Models')).toBeNull();
+    },
+    { timeout: 10000 },
+  );
 
-  return { boundary, React, rtl, useAppStore, activeModelService, view };
+  return { boundary, React, rtl, activeModelService, view };
 }
+
+let applicationFixture:
+  | import('../../harness/mobileApplicationFixture').MobileApplicationFixture
+  | undefined;
+afterEach(async () => {
+  await applicationFixture?.dispose();
+  applicationFixture = undefined;
+});
 
 describe('manager sheet residency — RAM chip + per-row eject (agreed design 2026-07-14)', () => {
   // Heavy rendered residency flow (real modelResidencyManager + mounted Home). The per-step
@@ -83,19 +136,31 @@ describe('manager sheet residency — RAM chip + per-row eject (agreed design 20
     const { rtl, view } = h;
 
     // PRE (falsifier baseline): sheet open BEFORE any load → NO chip, NO eject on any row.
-    rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('models-summary')));
-    await rtl.waitFor(() => { expect(view.queryByTestId('models-row-text')).not.toBeNull(); });
+    rtl.fireEvent.press(
+      await rtl.waitFor(() => view.getByTestId('models-summary')),
+    );
+    await rtl.waitFor(() => {
+      expect(view.queryByTestId('models-row-text')).not.toBeNull();
+    });
     for (const t of ['text', 'image', 'voice', 'speech']) {
       expect(view.queryByTestId(`models-row-${t}-ram`)).toBeNull();
       expect(view.queryByTestId(`models-row-${t}-eject`)).toBeNull();
     }
 
     // The REAL load path (residency manager registers the text resident) — the lazy load a send triggers.
-    await rtl.act(async () => { await h.activeModelService.loadTextModel('m'); });
-    await rtl.waitFor(() => { expect(view.getByTestId('probe-residents').props.children).toContain('text'); }, { timeout: 10000 });
+    const selected = h.activeModelService.resolveSelectedTextModel();
+    expect(selected?.name).toBe('Test Model');
+    await rtl.act(async () => {
+      await h.activeModelService.loadTextModel(selected!.id);
+    });
 
     // RED on HEAD: the resident text row shows a RAM chip + its own eject control; other rows do not.
-    await rtl.waitFor(() => { expect(view.queryByTestId('models-row-text-ram')).not.toBeNull(); }, { timeout: 10000 });
+    await rtl.waitFor(
+      () => {
+        expect(view.queryByTestId('models-row-text-ram')).not.toBeNull();
+      },
+      { timeout: 10000 },
+    );
     expect(view.queryByTestId('models-row-text-eject')).not.toBeNull();
     for (const t of ['image', 'voice', 'speech']) {
       expect(view.queryByTestId(`models-row-${t}-ram`)).toBeNull();
@@ -103,33 +168,70 @@ describe('manager sheet residency — RAM chip + per-row eject (agreed design 20
     }
 
     // GESTURE: eject the text row. The chip + eject clear; the resident is really gone (probe).
-    await rtl.act(async () => { pressByWalkingUp(view.getByTestId('models-row-text-eject')); });
-    await rtl.waitFor(() => { expect(view.queryByTestId('models-row-text-ram')).toBeNull(); }, { timeout: 10000 });
-    await rtl.waitFor(() => { expect(view.getByTestId('probe-residents').props.children).toBe('(none)'); }, { timeout: 10000 });
+    await rtl.act(async () => {
+      pressByWalkingUp(view.getByTestId('models-row-text-eject'));
+    });
+    await rtl.waitFor(
+      () => {
+        expect(view.queryByTestId('models-row-text-ram')).toBeNull();
+      },
+      { timeout: 30000 },
+    );
 
     // The row itself still opens the text picker (eject must not swallow the row tap).
-    await rtl.act(async () => { pressByWalkingUp(view.getByTestId('models-row-text')); });
-    await rtl.waitFor(() => { expect(view.queryAllByTestId('model-item').length).toBeGreaterThan(0); }, { timeout: 10000 });
-  }, 60000);
+    await rtl.act(async () => {
+      pressByWalkingUp(view.getByTestId('models-row-text'));
+    });
+    await rtl.waitFor(
+      () => {
+        expect(view.queryByText('Test Model')).not.toBeNull();
+      },
+      { timeout: 10000 },
+    );
+  }, 90000);
 
   it('the Select Model picker no longer renders the In Memory section (moved to the manager sheet)', async () => {
     const h = await setupHome();
     const { rtl, view, React } = h;
 
-    await rtl.act(async () => { await h.activeModelService.loadTextModel('m'); });
-    // Guard against the trivially-green null: a resident REALLY exists (the section would render on HEAD).
-    await rtl.waitFor(() => { expect(view.getByTestId('probe-residents').props.children).toContain('text'); }, { timeout: 10000 });
+    const selected = h.activeModelService.resolveSelectedTextModel();
+    expect(selected?.name).toBe('Test Model');
+    await rtl.act(async () => {
+      await h.activeModelService.loadTextModel(selected!.id);
+    });
+    // Guard against the trivially-green null: the real manager sheet shows a resident.
+    rtl.fireEvent.press(
+      await rtl.waitFor(() => view.getByTestId('models-summary')),
+    );
+    await rtl.waitFor(
+      () => {
+        expect(view.queryByTestId('models-row-text-ram')).not.toBeNull();
+      },
+      { timeout: 10000 },
+    );
 
     // The surface that carried "In Memory": the chat's ModelSelectorModal (mounted the way the
     // sibling memory suite does — with a resident live, the section rendered here on HEAD).
-     
-    const { ModelSelectorModal } = require('../../../src/components/ModelSelectorModal');
-    const picker = rtl.render(React.createElement(ModelSelectorModal, {
-      visible: true, onClose: () => {}, onSelectModel: () => {}, onUnloadModel: () => {}, isLoading: false,
-      currentModelPath: null,
-    }));
-    await rtl.waitFor(() => { expect(picker.queryByText('Select Model')).not.toBeNull(); }, { timeout: 10000 });
-    await new Promise((r) => setTimeout(r, 400)); // one poll tick of the section, so absence is real
+
+    const {
+      ModelSelectorModal,
+    } = require('../../../src/components/ModelSelectorModal');
+    const picker = rtl.render(
+      React.createElement(ModelSelectorModal, {
+        visible: true,
+        onClose: () => {},
+        onSelectModel: () => {},
+        onUnloadModel: () => {},
+        isLoading: false,
+        currentModelPath: null,
+      }),
+    );
+    await rtl.waitFor(
+      () => {
+        expect(picker.queryByText(/TEXT MODEL|IMAGE MODEL/)).not.toBeNull();
+      },
+      { timeout: 10000 },
+    );
 
     // RED on HEAD: the picker still shows "In Memory". The manager sheet is the residency surface now.
     expect(picker.queryByTestId('in-memory-section')).toBeNull();

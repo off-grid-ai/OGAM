@@ -1,5 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  type GestureResponderEvent,
+} from 'react-native';
 import { LoadingDots } from './LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
@@ -18,7 +23,6 @@ interface CredibilityInfo {
 // ── Compact header (name + author tag + optional downloads + description + type badges) ──
 
 export interface RecommendedConfig {
-  pillLabel?: string;
   /** An extra descriptive line for a curated/recommended model (e.g. "Up to 2x
    *  faster than CPU via GPU"). Rendered as part of the SAME common description
    *  line as every other card — not a separately coloured/positioned highlight. */
@@ -34,7 +38,11 @@ interface DenseModelCardContentProps {
     name: string;
     author: string;
     description?: string;
+    downloads?: number;
     modelType?: 'text' | 'vision' | 'code';
+    paramCount?: number;
+    minRamGB?: number;
+    facts?: string[];
   };
   fileSize: number;
   quantization?: string;
@@ -45,6 +53,28 @@ interface DenseModelCardContentProps {
   credibilitySource?: ModelCredibility['source'];
   credibilityLabel?: string;
   incompatibleReason?: string;
+  trailingAction?: React.ReactNode;
+}
+
+function denseModelFacts(input: {
+  model: DenseModelCardContentProps['model'];
+  fileSize: number;
+  quantization?: string;
+  modelType?: string;
+  supportsAcceleration?: boolean;
+  customFacts?: string[];
+  incompatibleReason?: string;
+}): string[] {
+  return input.customFacts ?? input.model.facts ?? [
+    input.fileSize > 0 ? huggingFaceService.formatFileSize(input.fileSize) : undefined,
+    input.quantization,
+    input.modelType,
+    input.model.paramCount ? `${input.model.paramCount}B params` : undefined,
+    input.model.minRamGB ? `${input.model.minRamGB}GB+ RAM` : undefined,
+    input.supportsAcceleration ? 'NPU/GPU' : undefined,
+    input.model.downloads ? `${formatCompactNumber(input.model.downloads)} dl` : undefined,
+    input.incompatibleReason,
+  ].filter((value): value is string => !!value);
 }
 
 /**
@@ -62,22 +92,27 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
   credibilitySource,
   credibilityLabel,
   incompatibleReason,
+  trailingAction,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const description = cardDescription(model.description, recommended?.highlightText);
-  const facts = [
-    fileSize > 0 ? huggingFaceService.formatFileSize(fileSize) : undefined,
-    quantization,
-    isVisionModel || model.modelType === 'vision' ? 'Vision' : undefined,
-    supportsAcceleration ? 'NPU/GPU' : undefined,
-    incompatibleReason,
-  ].filter((value): value is string => !!value);
+  const customFacts = recommended?.chips;
+  const modelType = isVisionModel || model.modelType === 'vision'
+    ? 'Vision'
+    : model.modelType === 'code'
+      ? 'Code'
+      : model.modelType === 'text'
+        ? 'Text'
+        : undefined;
+  const facts = denseModelFacts({
+    model, fileSize, quantization, modelType, supportsAcceleration,
+    customFacts, incompatibleReason,
+  });
   const isVerified = credibilitySource === 'verified-quantizer';
   const sourceLabels = [
     model.author,
     isVerified ? undefined : credibilityLabel,
-    recommended?.pillLabel ?? (isTrending ? 'Trending' : undefined),
   ].filter((value): value is string => !!value);
 
   return (
@@ -97,19 +132,35 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
             {sourceLabels.join(' · ')}
           </Text>
           {(recommended || isTrending) && (
-            <MaterialIcon name="whatshot" size={14} color={colors.trending} />
+            <MaterialIcon
+              name="whatshot"
+              size={14}
+              color={colors.trending}
+              accessibilityLabel={isTrending ? 'Trending' : 'Recommended'}
+            />
           )}
         </View>
       </View>
       {!!description && (
         <Text style={styles.denseDescription} numberOfLines={1}>{description}</Text>
       )}
-      {facts.length > 0 && (
-        <Text style={styles.denseMeta} numberOfLines={1}>{facts.join(' · ')}</Text>
+      {(facts.length > 0 || trailingAction) && (
+        <View style={styles.denseMetaRow}>
+          {facts.length > 0 && (
+            <Text style={styles.denseMeta} numberOfLines={1}>{facts.join(' · ')}</Text>
+          )}
+          {trailingAction}
+        </View>
       )}
     </>
   );
 };
+
+function formatCompactNumber(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return String(value);
+}
 
 /**
  * The ONE description string a card shows: the model's description plus any
@@ -180,12 +231,7 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
           </View>
         )}
         {recommended && (
-          <>
-            <MaterialIcon name="whatshot" size={14} color={colors.trending} />
-            <View style={styles.recommendedPill}>
-              <Text style={styles.recommendedPillText}>{recommended.pillLabel ?? 'Recommended'}</Text>
-            </View>
-          </>
+          <MaterialIcon name="whatshot" size={14} color={colors.trending} accessibilityLabel="Recommended" />
         )}
         {/* GPU/NPU capability badge — a LiteRT or Q4_0/Q8_0 quant this device can accelerate. */}
         {supportsAcceleration && (
@@ -295,6 +341,9 @@ export const ModelInfoBadges: React.FC<ModelInfoBadgesProps> = ({
 interface ModelCardActionsProps {
   isDownloaded: boolean | undefined;
   isDownloading: boolean | undefined;
+  isQueued: boolean | undefined;
+  isPaused: boolean | undefined;
+  isDownloadPending: boolean | undefined;
   isActive: boolean | undefined;
   isCompatible: boolean;
   incompatibleReason: string | undefined;
@@ -305,21 +354,28 @@ interface ModelCardActionsProps {
   onRepairVision: (() => void) | undefined;
   isRepairingVision?: boolean;
   onCancel: (() => void) | undefined;
+  onPause: (() => void) | undefined;
+  onResume: (() => void) | undefined;
 }
 
 const HIT_SLOP = { top: 14, bottom: 14, left: 14, right: 14 };
 
-function ActionButton({ icon, color, haptic, onPress, disabled, testID, styles }: {
+function ActionButton({ icon, color, haptic, onPress, disabled, testID, accessibilityLabel, styles }: {
   icon: string; color: string; haptic: string; onPress: () => void;
-  disabled?: boolean; testID?: string; styles: ReturnType<typeof createStyles>;
+  disabled?: boolean; testID?: string; accessibilityLabel?: string; styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <TouchableOpacity
       style={styles.iconButton}
-      onPress={() => { triggerHaptic(haptic as any); onPress(); }}
+      onPress={(event: GestureResponderEvent) => {
+        event.stopPropagation();
+        triggerHaptic(haptic as any);
+        onPress();
+      }}
       disabled={disabled}
       hitSlop={HIT_SLOP}
       testID={testID}
+      accessibilityLabel={accessibilityLabel}
     >
       <Icon name={icon} size={16} color={color} />
     </TouchableOpacity>
@@ -336,27 +392,46 @@ function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelet
     <>
       {isRepairingVision ? (
         <View style={styles.iconButton} testID={tid('repairing-vision')}>
-          <LoadingDots color={colors.warning} />
+          <LoadingDots color={colors.primary} />
         </View>
       ) : (
         onRepairVision && <ActionButton icon="tool" color={colors.warning} haptic="impactLight" onPress={onRepairVision} testID={tid('repair-vision')} styles={styles} />
       )}
-      {!isActive && onSelect && <ActionButton icon="check-circle" color={colors.primary} haptic="selection" onPress={onSelect} styles={styles} />}
-      {onDelete && <ActionButton icon="trash-2" color={colors.error} haptic="notificationWarning" onPress={onDelete} styles={styles} />}
+      {!isActive && onSelect && <ActionButton icon="check-circle" color={colors.primary} haptic="selection" onPress={onSelect} testID={tid('select')} accessibilityLabel="Use this model" styles={styles} />}
+      {onDelete && <ActionButton icon="trash-2" color={colors.error} haptic="notificationWarning" onPress={onDelete} testID={tid('delete')} accessibilityLabel="Delete this model" styles={styles} />}
     </>
   );
 }
 
 export const ModelCardActions: React.FC<ModelCardActionsProps> = ({
-  isDownloaded, isDownloading, isActive, isCompatible,
+  isDownloaded, isDownloading, isQueued, isPaused, isDownloadPending, isActive, isCompatible,
   testID, onDownload, onSelect, onDelete, onRepairVision, isRepairingVision, onCancel,
+  onPause, onResume,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const tid = (suffix: string) => testID ? `${testID}-${suffix}` : undefined;
 
-  if (isDownloading && onCancel) {
-    return <ActionButton icon="x" color={colors.error} haptic="notificationWarning" onPress={onCancel} testID={tid('cancel')} styles={styles} />;
+  if (isDownloadPending) {
+    return (
+      <View style={styles.iconButton} testID={tid('loading')}>
+        <LoadingDots color={colors.primary} />
+      </View>
+    );
+  }
+
+  if ((isDownloading || isQueued || isPaused) && onCancel) {
+    return (
+      <View style={styles.downloadActions}>
+        {isDownloading && onPause && (
+          <ActionButton icon="pause" color={colors.textSecondary} haptic="impactLight" onPress={onPause} testID={tid('pause')} accessibilityLabel="Pause download" styles={styles} />
+        )}
+        {isPaused && onResume && (
+          <ActionButton icon="play" color={colors.textSecondary} haptic="impactLight" onPress={onResume} testID={tid('resume')} accessibilityLabel="Resume download" styles={styles} />
+        )}
+        <ActionButton icon="x" color={colors.error} haptic="notificationWarning" onPress={onCancel} testID={tid('cancel')} accessibilityLabel="Cancel download" styles={styles} />
+      </View>
+    );
   }
   if (!isDownloaded && onDownload) {
     return <ActionButton icon="download" color={colors.primary} haptic="impactLight" onPress={onDownload} disabled={!isCompatible} testID={tid('download')} styles={styles} />;

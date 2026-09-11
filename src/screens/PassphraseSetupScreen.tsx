@@ -17,7 +17,6 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { authService } from '../services/authService';
 import { useAuthStore } from '../stores/authStore';
-import logger from '../utils/logger';
 
 interface PassphraseSetupScreenProps {
   isChanging?: boolean;
@@ -38,7 +37,9 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
-  const { setEnabled } = useAuthStore();
+  // Action only: nothing here RENDERS auth state, so subscribing to the store made this screen
+  // re-render for every unlock attempt and every passphrase change elsewhere.
+  const { setEnabled } = useAuthStore.getState();
 
   const validatePassphrase = (passphrase: string): string | null => {
     if (passphrase.length < 6) {
@@ -66,13 +67,14 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
 
     setIsSubmitting(true);
 
+    // authService is the port to the keystore: it reports success or failure as a boolean and
+    // never throws. There is exactly one failure path here, and it is the `!success` branch.
     try {
       if (isChanging) {
         // Verify current passphrase and change
         const success = await authService.changePassphrase(currentPassphrase, newPassphrase);
         if (!success) {
           setAlertState(showAlert('Error', 'Current passphrase is incorrect'));
-          setIsSubmitting(false);
           return;
         }
         setAlertState(showAlert('Success', 'Passphrase changed successfully'));
@@ -81,7 +83,6 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
         const success = await authService.setPassphrase(newPassphrase);
         if (!success) {
           setAlertState(showAlert('Error', 'Failed to set passphrase'));
-          setIsSubmitting(false);
           return;
         }
         setEnabled(true);
@@ -89,9 +90,6 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
       }
 
       onComplete();
-    } catch (err) {
-      logger.warn('[PassphraseSetup] Operation failed:', err);
-      setAlertState(showAlert('Error', 'An error occurred. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }

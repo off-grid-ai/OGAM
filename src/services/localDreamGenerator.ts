@@ -1,4 +1,10 @@
 import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
+import RNFS from 'react-native-fs';
+import {
+  projectNativeGeneratedImageResult,
+  projectNativeImageGeneration,
+  type NativeImageGenerationProjection,
+} from '@offgrid/models';
 import {
   ImageGenerationParams,
   ImageGenerationProgress,
@@ -6,6 +12,13 @@ import {
 } from '../types';
 import { generateRandomSeed } from '../utils/generateId';
 import logger from '../utils/logger';
+import { shouldLogProgressStep } from './image/progressDiagnostics';
+import {
+  nativeImageDeleteFailure,
+  projectStoredNativeImageDeletePath,
+  projectNativeImageDeleteOutcome,
+  type NativeImageDeleteOutcome,
+} from './image/nativeImageDeleteOutcome';
 
 const { LocalDreamModule, CoreMLDiffusionModule } = NativeModules;
 
@@ -115,7 +128,10 @@ class LocalDreamGeneratorService {
     return this.getEmitter().addListener(
       'LocalDreamProgress',
       (event: { step: number; totalSteps: number; progress: number; previewPath?: string }) => {
-        logger.log(`[WIRE-IMAGE-PROGRESS] ${JSON.stringify(event)}`); // [WIRE] raw LocalDreamProgress event shape
+        // Sampled, not per step: logging every event is a write storm on the JS thread.
+        if (shouldLogProgressStep(event.step, event.totalSteps)) {
+          logger.log(`[WIRE-IMAGE-PROGRESS] ${JSON.stringify(event)}`); // [WIRE] raw LocalDreamProgress event shape
+        }
         onProgress?.({
           step: event.step,
           totalSteps: event.totalSteps,
@@ -128,39 +144,21 @@ class LocalDreamGeneratorService {
     );
   }
 
-  private buildNativeParams(params: ImageGenerationParams & { previewInterval?: number }, prompt: string) {
-    const np = {
-      prompt,
-      negativePrompt: params.negativePrompt || '',
-      steps: params.steps || 8,
-      guidanceScale: params.guidanceScale || 7.5,
-      seed: params.seed ?? generateRandomSeed(),
-      width: params.width || 512,
-      height: params.height || 512,
-      previewInterval: params.previewInterval ?? 2,
-      useOpenCL: params.useOpenCL ?? true,
-    };
+  private buildNativeParams(params: ImageGenerationParams & { previewInterval?: number }): NativeImageGenerationProjection {
+    const np = projectNativeImageGeneration({
+      platform: Platform.OS,
+      request: params,
+      randomSeed: generateRandomSeed(),
+    });
     logger.log(`[WIRE-IMAGE-PARAMS] ${JSON.stringify({ requested: { steps: params.steps, guidanceScale: params.guidanceScale, width: params.width, height: params.height }, native: { ...np, prompt: undefined } })}`); // [WIRE] settings→native image params
     return np;
   }
 
-  private buildResult(params: ImageGenerationParams, result: any): GeneratedImage {
+  private buildResult(params: NativeImageGenerationProjection, result: unknown): GeneratedImage {
     logger.log(`[WIRE-IMAGE] ${JSON.stringify(result)}`); // [WIRE] raw native generateImage result shape from-device
-    return {
-      id: result.id,
-      prompt: params.prompt,
-      negativePrompt: params.negativePrompt,
-      imagePath: result.imagePath,
-      width: result.width,
-      height: result.height,
-      steps: params.steps || 8,
-      seed: result.seed,
-      modelId: '',
-      // ISO-8601, the one form every consumer of this field can read - the gallery's date, and the
-      // sync descriptor that a peer validates with Date.parse. Epoch milliseconds as text passes the
-      // `string` type and fails every reader.
-      createdAt: new Date().toISOString(),
-    };
+    const projected = projectNativeGeneratedImageResult({ value: result, request: params });
+    if (!projected) throw new Error('Native image generation returned an invalid result');
+    return projected;
   }
 
   async generateImage(
@@ -174,8 +172,7 @@ class LocalDreamGeneratorService {
     if (this.generating) {
       throw new Error('Image generation already in progress');
     }
-    const trimmedPrompt = (params.prompt || '').trim();
-    if (!trimmedPrompt) {
+    if (!(params.prompt || '').trim()) {
       throw new Error('Cannot generate image with an empty prompt');
     }
 
@@ -183,11 +180,12 @@ class LocalDreamGeneratorService {
     const progressSubscription = this.subscribeToProgress(onProgress, onPreview);
 
     try {
-      const result = await DiffusionModule.generateImage(this.buildNativeParams(params, trimmedPrompt));
+      const nativeParams = this.buildNativeParams(params);
+      const result = await DiffusionModule.generateImage(nativeParams);
       // Native side releases the CoreML pipeline after generation to free
       // memory, so clear TS-side state so the next request triggers a reload.
       this.loadedThreads = null;
-      return this.buildResult(params, result);
+      return this.buildResult(nativeParams, result);
     } catch (error: any) {
       const msg = error?.message || '';
       if (msg.includes('ERR_NO_MODEL') || msg.includes('unloaded') || msg.includes('Pipeline failed')) {
@@ -210,29 +208,43 @@ class LocalDreamGeneratorService {
     return this.generating;
   }
 
-  async getGeneratedImages(): Promise<GeneratedImage[]> {
-    if (!this.isAvailable()) return [];
-    try {
-      const images = await DiffusionModule.getGeneratedImages();
-      return images.map((img: any) => ({
-        id: img.id,
-        prompt: img.prompt || '',
-        imagePath: img.imagePath,
-        width: img.width || 512,
-        height: img.height || 512,
-        steps: img.steps || 20,
-        seed: img.seed || 0,
-        modelId: img.modelId || '',
-        createdAt: img.createdAt,
-      }));
-    } catch {
-      return [];
+  /**
+   * Ask the native store to release one generated image's bytes.
+   *
+   * Never throws: a rejected bridge call is a `failure` outcome, because the caller settles a
+   * durable intent and needs the three-way answer (gone / already gone / still there) rather than
+   * an exception it would have to re-classify.
+   */
+  async deleteGeneratedImage(
+    imagePath: string,
+    commitFence?: () => boolean,
+  ): Promise<NativeImageDeleteOutcome> {
+    const admitted = projectStoredNativeImageDeletePath(
+      imagePath,
+      `${RNFS.DocumentDirectoryPath}/generated_images`,
+    );
+    if (!admitted.ok) return admitted.outcome;
+    if (!this.isAvailable()) {
+      return nativeImageDeleteFailure(
+        'NATIVE_MODULE_UNAVAILABLE',
+        'No native image store is available to delete generated image bytes.',
+      );
     }
-  }
-
-  async deleteGeneratedImage(imageId: string): Promise<boolean> {
-    if (!this.isAvailable()) return false;
-    return await DiffusionModule.deleteGeneratedImage(imageId);
+    // This is the last synchronous JavaScript boundary before native file I/O is admitted.
+    // A stale remote workflow must not enqueue an irreversible unlink.
+    if (commitFence && !commitFence()) return {status: 'fenced'};
+    try {
+      return projectNativeImageDeleteOutcome(
+        await DiffusionModule.deleteGeneratedImage(admitted.path),
+      );
+    } catch (error) {
+      return nativeImageDeleteFailure(
+        typeof (error as { code?: unknown })?.code === 'string'
+          ? String((error as { code: string }).code)
+          : 'NATIVE_DELETE_REJECTED',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   }
 
   async clearOpenCLCache(modelPath: string): Promise<number> {
@@ -246,16 +258,7 @@ class LocalDreamGeneratorService {
   }
 
   getConstants() {
-    if (!this.isAvailable()) {
-      return {
-        DEFAULT_STEPS: 20,
-        DEFAULT_GUIDANCE_SCALE: 7.5,
-        DEFAULT_WIDTH: 512,
-        DEFAULT_HEIGHT: 512,
-        SUPPORTED_WIDTHS: [128, 192, 256, 320, 384, 448, 512],
-        SUPPORTED_HEIGHTS: [128, 192, 256, 320, 384, 448, 512],
-      };
-    }
+    if (!this.isAvailable()) return null;
     const __c = DiffusionModule.getConstants();
     logger.log(`[WIRE-IMAGE-CONSTANTS] ${JSON.stringify(__c)}`); // [WIRE] raw native diffusion constants (steps/guidance/supported sizes)
     return __c;

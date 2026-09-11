@@ -14,6 +14,8 @@ interface SliderSettingProps {
   decimals?: number;
   /** Formats the value shown in the header. */
   formatValue?: (value: number) => string;
+  /** Allow direct numeric entry from the value label. Defaults to true. */
+  editableValue?: boolean;
   description?: string;
   warning?: string | null;
   warningColor?: string;
@@ -35,6 +37,7 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
   step,
   decimals,
   formatValue,
+  editableValue = true,
   description,
   warning,
   warningColor,
@@ -93,7 +96,7 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
             selectTextOnFocus
             returnKeyType="done"
           />
-        ) : (
+        ) : editableValue ? (
           <TouchableOpacity
             testID={testID ? `${testID}-value-button` : undefined}
             onPress={startEdit}
@@ -106,6 +109,13 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
               {display}
             </Text>
           </TouchableOpacity>
+        ) : (
+          <Text
+            testID={testID ? `${testID}-value` : undefined}
+            style={[styles.value, { color: colors.primary, borderColor: colors.border, backgroundColor: colors.surfaceLight }]}
+          >
+            {display}
+          </Text>
         )}
       </View>
 
@@ -131,6 +141,8 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
         minimumTrackTintColor={colors.primary}
         maximumTrackTintColor={colors.surfaceLight}
         thumbTintColor={colors.primary}
+        accessibilityLabel={label}
+        accessibilityValue={{ min, max, now: shown, text: display }}
       />
     </View>
   );

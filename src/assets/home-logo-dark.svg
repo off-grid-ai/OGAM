@@ -29,13 +29,13 @@
     <feMerge><feMergeNode in="cardFar"/><feMergeNode in="cardNear"/><feMergeNode in="SourceGraphic"/></feMerge>
   </filter>
   <filter id="markDepthDark" x="-30%" y="-30%" width="170%" height="185%" color-interpolation-filters="sRGB">
-    <feGaussianBlur in="SourceAlpha" stdDeviation="50" result="farBlur"/>
-    <feOffset in="farBlur" dx="0" dy="76" result="farOffset"/>
-    <feFlood flood-color="#00A961" flood-opacity="0.25" result="farColor"/>
+    <feGaussianBlur in="SourceAlpha" stdDeviation="64" result="farBlur"/>
+    <feOffset in="farBlur" dx="0" dy="96" result="farOffset"/>
+    <feFlood flood-color="#00A961" flood-opacity="0.42" result="farColor"/>
     <feComposite in="farColor" in2="farOffset" operator="in" result="farShadow"/>
     <feGaussianBlur in="SourceAlpha" stdDeviation="14" result="nearBlur"/>
-    <feOffset in="nearBlur" dx="0" dy="26" result="nearOffset"/>
-    <feFlood flood-color="#000000" flood-opacity="0.64" result="nearColor"/>
+    <feOffset in="nearBlur" dx="0" dy="34" result="nearOffset"/>
+    <feFlood flood-color="#000000" flood-opacity="0.72" result="nearColor"/>
     <feComposite in="nearColor" in2="nearOffset" operator="in" result="nearShadow"/>
     <feGaussianBlur in="SourceAlpha" stdDeviation="16" result="liftBlur"/>
     <feOffset in="liftBlur" dx="-10" dy="-12" result="liftOffset"/>

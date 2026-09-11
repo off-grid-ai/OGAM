@@ -1,3 +1,4 @@
+import { activeMobileRoute } from '../services/modelServices/mobileLLMService';
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -29,7 +30,8 @@ import { ProUpsellBanner } from '../components/settings/ProUpsellBanner';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import RNFS from 'react-native-fs';
-import { useAppStore, useRemoteServerStore } from '../stores';
+import { useAppStore } from '../stores';
+import { activeLocalModelId } from '../services/modelServices/activeRoute';
 import { hardwareService } from '../services';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { useHasRegisteredScreen } from '../navigation/screenRegistry';
@@ -74,8 +76,9 @@ export const SettingsScreen: React.FC = () => {
   }, [completeChecklistStep]);
 
   const handleSendFeedback = async () => {
-    const { downloadedModels, activeModelId } = useAppStore.getState();
-    const { activeServerId } = useRemoteServerStore.getState();
+    const { downloadedModels } = useAppStore.getState();
+    const activeModelId = activeLocalModelId('text');
+    const activeServerId = activeMobileRoute('text').model?.serverId ?? null;
 
     const fsInfo = await RNFS.getFSInfo();
 

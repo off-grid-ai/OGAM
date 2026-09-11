@@ -7,7 +7,7 @@ export const ANIM_DURATION_IN = 180;
 export const ANIM_DURATION_OUT = 200;
 const TOOL_WARNING_COLOR = '#F59E0B';
 
-export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: {
     paddingHorizontal: 12,
     paddingTop: 12,
@@ -112,13 +112,11 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     backgroundColor: colors.surface,
     borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden' as const,
     paddingLeft: 16,
     paddingRight: 4,
     paddingVertical: 6,
     minHeight: 56,
+    ...shadows.small,
   },
   pillInput: {
     flex: 1,
@@ -225,6 +223,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     backgroundColor: colors.primary,
+    ...shadows.small,
   },
   circleButtonStop: {
     backgroundColor: `${colors.error}`,
@@ -242,8 +241,6 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   circleButtonIdle: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   visionBadge: {
     backgroundColor: `${colors.primary}20`,
@@ -273,6 +270,10 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingHorizontal: SPACING.sm,
     height: 32,
     borderRadius: 16,
+  },
+  audioControlButton: {
+    backgroundColor: colors.surface,
+    ...shadows.small,
   },
   audioVoiceLabel: {
     ...TYPOGRAPHY.meta,

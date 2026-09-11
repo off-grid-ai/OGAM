@@ -35,6 +35,8 @@ export interface AnimatedListItemProps {
   accessibilityLabel?: string;
   /** What the row is, for assistive tech. List rows that navigate are buttons. */
   accessibilityRole?: AnimatedPressableProps['accessibilityRole'];
+  /** Current checked, selected, or disabled state for assistive tech. */
+  accessibilityState?: AnimatedPressableProps['accessibilityState'];
   /** Secondary detail (counts, description) that should not crowd the label. */
   accessibilityHint?: string;
   children: React.ReactNode;
@@ -58,6 +60,7 @@ export function AnimatedListItem({
   testID,
   accessibilityLabel,
   accessibilityRole,
+  accessibilityState,
   accessibilityHint,
   children,
 }: AnimatedListItemProps) {
@@ -73,6 +76,7 @@ export function AnimatedListItem({
         testID={testID}
         accessibilityLabel={accessibilityLabel}
         accessibilityRole={accessibilityRole}
+        accessibilityState={accessibilityState}
         accessibilityHint={accessibilityHint}
       >
         {children}

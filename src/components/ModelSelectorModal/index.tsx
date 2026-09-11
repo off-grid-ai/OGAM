@@ -1,24 +1,28 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { Text, ScrollView, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../AppSheet';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore, useRemoteServerStore } from '../../stores';
+import { serverDiscoveredModels } from '../../stores/remoteServerProjection';
+import { useActiveLocalModelId } from '../../hooks/useActiveMobileModel';
 import { useLoadedTextModelPath } from '../../hooks/useLoadedTextModelPath';
 import { useActiveModelStatus } from '../../hooks/useActiveModelStatus';
+import { useActiveMobileModel } from '../../hooks/useActiveMobileModel';
 import { loadingTextRowId } from './rowState';
+import { usePendingModelCommand } from '../../hooks/usePendingModelCommand';
 import {
   DownloadedModel,
   ONNXImageModel,
   RemoteModel,
   RemoteServer,
 } from '../../types';
+import { resolveSelectedTextModel } from '../../services';
+import { remoteServerModelOptions } from '@offgrid/application';
 import {
-  activeModelService,
-  remoteServerManager,
-  remoteServerModelOptions,
-} from '../../services';
-import { loadModelWithOverride } from '../../services/loadModelWithOverride';
+  selectModelRoute,
+  unloadAndClearModel,
+} from '../../services/modelServices/modelFacadeCommands';
 import {
   CustomAlert,
   AlertState,
@@ -32,36 +36,55 @@ import {
   isSuspiciousRecoveredImageModel,
   isSuspiciousRecoveredTextModel,
   isUnsupportedJetsamImageModel,
-} from '../../utils/modelSelectorFilters';
+} from '@offgrid/application';
 import logger from '../../utils/logger';
 
 type TabType = 'text' | 'image';
 
-function savedTextModels(
-  server: RemoteServer,
-  discovered: RemoteModel[],
-): RemoteModel[] {
-  return remoteServerModelOptions([server], 'text').map(option =>
-    discovered.find(model => model.id === option.id) ?? {
-      id: option.id,
-      name: option.name,
-      serverId: option.serverId,
-      capabilities: {
-        supportsVision: false,
-        supportsToolCalling: false,
-        supportsThinking: false,
-      },
-      details: { serverName: option.serverName },
-      lastUpdated: server.lastHealthCheck ?? server.createdAt,
-    },
-  );
+const remoteModelId = (model: { source: string; id: string } | null) =>
+  model?.source === 'remote' ? model.id : null;
+
+const remoteServerId = (model: { source: string; serverId?: string } | null) =>
+  model?.source === 'remote' ? model.serverId ?? null : null;
+
+function evidenceBasedRemoteCapabilities(
+  evidence?: Partial<RemoteModel['capabilities']>,
+): RemoteModel['capabilities'] {
+  // RemoteModel predates Shared's evidence-based capability contract and still
+  // declares these fields as required. An empty projection preserves "unknown"
+  // at runtime instead of inventing negative capability evidence.
+  return { ...evidence } as RemoteModel['capabilities'];
+}
+
+/** A server's text rows are the store's derived read of its catalog. */
+const savedTextModels = serverDiscoveredModels;
+
+function savedImageModels(server: RemoteServer): RemoteModel[] {
+  return remoteServerModelOptions([server], 'image').map(option => ({
+    id: option.id,
+    name: option.name,
+    serverId: option.serverId,
+    capabilities: evidenceBasedRemoteCapabilities(option.capabilities),
+    details: { serverName: option.serverName },
+    lastUpdated: server.createdAt,
+  }));
+}
+
+function selectLocalImageModelOnDemand(
+  model: ONNXImageModel,
+): Promise<void> {
+  return selectModelRoute({
+    source: 'local',
+    hostId: model.backend ?? 'image-runtime',
+    modality: 'image',
+    modelId: model.id,
+  });
 }
 
 interface ModelSelectorModalProps {
   visible: boolean;
   onClose: () => void;
   onSelectModel: (model: DownloadedModel) => void;
-  onSelectImageModel?: (model: ONNXImageModel) => void;
   onUnloadModel: () => void;
   onUnloadImageModel?: () => void;
   isLoading: boolean;
@@ -75,7 +98,6 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   visible,
   onClose,
   onSelectModel,
-  onSelectImageModel,
   onUnloadModel,
   onUnloadImageModel,
   isLoading,
@@ -86,12 +108,10 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createAllStyles);
-  const {
-    downloadedModels,
-    downloadedImageModels,
-    activeImageModelId,
-    activeModelId,
-  } = useAppStore();
+  const downloadedModels = useAppStore(s => s.downloadedModels);
+  const downloadedImageModels = useAppStore(s => s.downloadedImageModels);
+  const activeImageModelId = useActiveLocalModelId('image');
+  const activeModelId = useActiveLocalModelId('text');
   // "Currently loaded" comes from the ONE reactive source (ActiveModelService's loaded state, projected to
   // the store) — engine-agnostic and never stale. Callers no longer pass it, so the sheet can't disagree
   // with the overview (which reads activeModelId, the SELECTION). See useLoadedTextModelPath.
@@ -100,27 +120,18 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   // (the loaded path) is null and the switcher would show "Available Models" with
   // nothing marked active. Fall back to the SELECTED model so the user can see and
   // switch their active model before it's loaded.
-  // Resolved by the owning service (activeModelService), so a selected id whose entry was rebuilt
+  // Resolved by the shared state projection, so a selected id whose entry was rebuilt
   // under a different id still marks its row instead of leaving the sheet looking empty.
   const selectedModelPath =
-    activeModelService.resolveSelectedTextModel()?.filePath ?? null;
-  const {
-    servers,
-    discoveredModels,
-    serverHealth,
-    activeRemoteTextModelId,
-    activeRemoteImageModelId,
-    activeRemoteMediaServerIds,
-  } = useRemoteServerStore();
-
+    resolveSelectedTextModel()?.filePath ?? null;
+  const servers = useRemoteServerStore(s => s.servers);
+  const serverHealth = useRemoteServerStore(s => s.serverHealth);
+  const activeTextRoute = useActiveMobileModel('text').model;
+  const activeImageRoute = useActiveMobileModel('image').model;
+  const activeRemoteTextModelId = remoteModelId(activeTextRoute);
+  const activeRemoteImageModelId = remoteModelId(activeImageRoute);
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
-  // The image model currently being LOADED (the row the user just tapped) — distinct from
-  // activeImageModelId, which only flips to the new model on success. The row spinner keys off THIS,
-  // else it shows on the previously-active model instead of the one that's loading (device 2026-07-14).
-  const [loadingImageModelId, setLoadingImageModelId] = useState<string | null>(
-    null,
-  );
   // Which text row shows the spinner: the model the SERVICE is loading, and only while it is loading.
   //
   // This used to be the row the user tapped, cleared by an effect on the parent's isLoading. Tapping a
@@ -129,11 +140,21 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   // to be loading a model nothing was loading (device, 2026-07-31). Deriving it from the owner means
   // the sheet cannot invent a load, and it still spins the right row for a reload of the active model.
   const modelStatus = useActiveModelStatus();
-  const effectiveLoadingTextModelId = loadingTextRowId(
-    modelStatus,
-    isLoading,
-    activeModelId,
-  );
+  // A remote handoff is a round trip to the server. The owner says which route it is switching to.
+  const pendingText = usePendingModelCommand('text');
+  const pendingImage = usePendingModelCommand('image');
+  const pendingRemoteTextModelId =
+    pendingText?.source === 'remote' ? pendingText.modelId : null;
+  const pendingLocalTextModelId =
+    pendingText?.source === 'local' ? pendingText.modelId : null;
+  const pendingRemoteImageModelId =
+    pendingImage?.source === 'remote' ? pendingImage.modelId : null;
+  const effectiveLoadingTextModelId = loadingTextRowId({
+    status: modelStatus,
+    parentIsLoading: isLoading,
+    selectedId: activeModelId,
+    pendingSelectionId: pendingLocalTextModelId,
+  });
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
   const filteredDownloadedModels = useMemo(
@@ -158,64 +179,45 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   // Group remote models by server for TextTab — exclude servers known to be offline
   const remoteTextModels = useMemo(() => {
     return servers
-      .filter(server => serverHealth[server.id]?.isHealthy !== false)
+      .filter(server => serverHealth[server.id]?.status !== 'unhealthy')
       .map(server => ({
         serverId: server.id,
         serverName: server.name,
-        models: savedTextModels(server, discoveredModels[server.id] ?? []),
+        models: savedTextModels(server),
       }))
       .filter(group => group.models.length > 0);
-  }, [servers, discoveredModels, serverHealth]);
+  }, [servers, serverHealth]);
 
   const remoteImageModels = useMemo(() => {
     return servers
-      .filter(server => serverHealth[server.id]?.isHealthy !== false)
+      .filter(server => serverHealth[server.id]?.status !== 'unhealthy')
       .map(server => ({
         serverId: server.id,
         serverName: server.name,
-        models: remoteServerModelOptions([server], 'image').map(option => ({
-          id: option.id,
-          name: option.name,
-          serverId: option.serverId,
-          capabilities: { supportsVision: false, supportsToolCalling: false, supportsThinking: false },
-          details: { serverName: option.serverName },
-          lastUpdated: server.lastHealthCheck ?? server.createdAt,
-        })),
+        models: savedImageModels(server),
       }))
       .filter(group => group.models.length > 0);
   }, [servers, serverHealth]);
 
   const handleSelectImageModel = async (model: ONNXImageModel) => {
     if (activeImageModelId === model.id) return;
-    // Shared inline Load-Anyway flow so a memory-blocked image load offers the
-    // override here too, instead of a dead-end "Failed to Load".
-    await loadModelWithOverride(
-      opts => activeModelService.loadImageModel(model.id, undefined, opts),
-      {
-        setAlertState,
-        onAttemptStart: () => {
-          setIsLoadingImage(true);
-          setLoadingImageModelId(model.id);
-        },
-        onAttemptEnd: () => {
-          setIsLoadingImage(false);
-          setLoadingImageModelId(null);
-        },
-        onSuccess: () => {
-          remoteServerManager.clearActiveRemoteMediaModel('image');
-          onSelectImageModel?.(model);
-          onSelectionComplete?.();
-        },
-        onError: error => logger.error('Failed to load image model:', error),
-      },
-    );
+    try {
+      // Selection records intent only. The first image operation owns admission
+      // and loading through Shared, just as the text route does.
+      await selectLocalImageModelOnDemand(model);
+      onSelectionComplete?.();
+    } catch (error) {
+      logger.error('[ModelSelectorModal] Failed to select image model:', error);
+      setAlertState(
+        showAlert('Failed to Select Model', (error as Error).message),
+      );
+    }
   };
 
   const handleUnloadImageModel = async () => {
     setIsLoadingImage(true);
     try {
-      await activeModelService.unloadImageModel();
-      remoteServerManager.clearActiveRemoteMediaModel('image');
+      await unloadAndClearModel('image');
       onUnloadImageModel?.();
     } catch (error) {
       logger.error('Failed to unload image model:', error);
@@ -224,7 +226,6 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
     }
   };
 
-  // Handle selecting a remote text model
   const handleSelectRemoteTextModel = async (
     model: RemoteModel,
     serverId: string,
@@ -232,8 +233,12 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
     try {
       // Always go through the owner. It also waits for an in-flight local load,
       // which is not yet visible as a loaded native model.
-      await activeModelService.unloadTextModel();
-      await remoteServerManager.setActiveRemoteTextModel(serverId, model.id);
+      await selectModelRoute({
+        source: 'remote',
+        hostId: serverId,
+        modality: 'text',
+        modelId: model.id,
+      });
       onSelectionComplete?.();
     } catch (error) {
       logger.error(
@@ -252,7 +257,12 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
     serverId: string,
   ) => {
     try {
-      await remoteServerManager.setActiveRemoteImageModel(serverId, model.id);
+      await selectModelRoute({
+        source: 'remote',
+        hostId: serverId,
+        modality: 'image',
+        modelId: model.id,
+      });
       onSelectionComplete?.();
     } catch (error) {
       logger.error(
@@ -268,85 +278,23 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   // Handle selecting a local model - clear remote selection. The tap records a SELECTION; the row
   // reflects that as selected, and shows a spinner only once the service actually starts loading.
   const handleSelectLocalModel = (model: DownloadedModel) => {
-    remoteServerManager.clearActiveRemoteTextModel();
     onSelectModel(model);
   };
 
   // Handle unload - also clear remote selection
   const handleUnloadModel = () => {
-    remoteServerManager.clearActiveRemoteTextModel();
     onUnloadModel();
   };
 
-  const isAnyLoading = isLoading || isLoadingImage;
-  const hasLoadedTextModel =
-    currentModelPath !== null || activeRemoteTextModelId !== null;
-  const hasLoadedImageModel =
-    !!activeImageModelId || activeRemoteImageModelId !== null;
+  const isAnyLoading = isLoading || isLoadingImage || pendingText !== null || pendingImage !== null;
 
   return (
     <AppSheet
       visible={visible}
       onClose={onClose}
       snapPoints={['40%', '75%']}
-      title="Select Model"
+      title={activeTab === 'image' ? 'IMAGE MODEL' : 'TEXT MODEL'}
     >
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'text' && styles.tabActive]}
-            onPress={() => setActiveTab('text')}
-            disabled={isAnyLoading}
-          >
-          <Icon
-            name="message-square"
-            size={16}
-            color={activeTab === 'text' ? colors.primary : colors.textMuted}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'text' && styles.tabTextActive,
-            ]}
-          >
-            Text
-          </Text>
-            {hasLoadedTextModel && (
-              <View style={styles.tabBadge}>
-                <View style={styles.tabBadgeDot} />
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'image' && styles.tabActive]}
-            onPress={() => setActiveTab('image')}
-            disabled={isAnyLoading}
-          >
-          <Icon
-            name="image"
-            size={16}
-            color={activeTab === 'image' ? colors.info : colors.textMuted}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'image' && styles.tabTextActive,
-              activeTab === 'image' && { color: colors.info },
-            ]}
-          >
-              Image
-            </Text>
-            {hasLoadedImageModel && (
-            <View
-              style={[styles.tabBadge, { backgroundColor: `${colors.info}30` }]}
-            >
-              <View
-                style={[styles.tabBadgeDot, { backgroundColor: colors.info }]}
-              />
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
 
         {/* Text-model loading now shows an inline spinner ON the selected row (TextTab → ModelRow),
             not a banner over the list. The image tab keeps its own indicator, so no banner for text. */}
@@ -364,6 +312,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
               currentRemoteModelId={activeRemoteTextModelId}
               isAnyLoading={isAnyLoading}
               loadingModelId={effectiveLoadingTextModelId}
+              loadingRemoteModelId={pendingRemoteTextModelId}
               onSelectModel={handleSelectLocalModel}
               onSelectRemoteModel={handleSelectRemoteTextModel}
               onUnloadModel={handleUnloadModel}
@@ -381,10 +330,11 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
             remoteVisionModels={remoteImageModels}
               activeImageModelId={activeImageModelId}
               activeRemoteImageModelId={activeRemoteImageModelId}
-            activeRemoteImageServerId={activeRemoteMediaServerIds.image ?? null}
+            activeRemoteImageServerId={remoteServerId(activeImageRoute)}
               isAnyLoading={isAnyLoading}
               isLoadingImage={isLoadingImage}
-              loadingModelId={loadingImageModelId}
+              loadingModelId={null}
+              loadingRemoteModelId={pendingRemoteImageModelId}
               onSelectImageModel={handleSelectImageModel}
               onSelectRemoteVisionModel={handleSelectRemoteVisionModel}
               onUnloadImageModel={handleUnloadImageModel}

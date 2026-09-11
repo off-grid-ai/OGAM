@@ -1,6 +1,8 @@
 package ai.offgridmobile.download
 
 import android.app.Application
+import androidx.room.Room
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -21,6 +23,75 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = Application::class)
 class DownloadManagerModuleTest {
+
+    @Test
+    fun pauseRetainsPartialBytesForResume() {
+        val partial = java.nio.file.Files.createTempFile("paused-model", ".part").toFile()
+        try {
+            partial.writeBytes(byteArrayOf(1, 2, 3))
+
+            assertTrue(applyStoppedPartialPolicy(partial.absolutePath, retainPartial = true))
+            assertTrue(partial.exists())
+            assertEquals(3L, partial.length())
+        } finally {
+            partial.delete()
+        }
+    }
+
+    @Test
+    fun cancelDeletesPartialBytes() {
+        val partial = java.nio.file.Files.createTempFile("cancelled-model", ".part").toFile()
+        partial.writeBytes(byteArrayOf(1, 2, 3))
+
+        assertTrue(applyStoppedPartialPolicy(partial.absolutePath, retainPartial = false))
+        assertFalse(partial.exists())
+    }
+
+    @Test
+    fun stopClaimCannotOverwriteCompletedVerdict() = runBlocking {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val database = Room.inMemoryDatabaseBuilder(context, DownloadDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val dao = database.downloadDao()
+            dao.insertDownload(downloadEntity(id = "completed", status = DownloadStatus.COMPLETED))
+
+            assertEquals(0, dao.markStopRequested("completed", DownloadReason.USER_CANCELLED))
+            assertEquals(DownloadStatus.COMPLETED, dao.getDownload("completed")?.status)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun stopClaimAtomicallyMarksAnActiveTransfer() = runBlocking {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val database = Room.inMemoryDatabaseBuilder(context, DownloadDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val dao = database.downloadDao()
+            dao.insertDownload(downloadEntity(id = "running", status = DownloadStatus.RUNNING))
+
+            assertEquals(1, dao.markStopRequested("running", DownloadReason.USER_CANCELLED))
+            assertEquals(DownloadStatus.CANCELLED, dao.getDownload("running")?.status)
+        } finally {
+            database.close()
+        }
+    }
+
+    private fun downloadEntity(id: String, status: DownloadStatus) = DownloadEntity(
+        id = id,
+        url = "https://huggingface.co/test/model.gguf",
+        fileName = "model.gguf",
+        modelId = "test/model",
+        destination = "/tmp/$id.part",
+        totalBytes = 3,
+        downloadedBytes = 1,
+        status = status,
+        createdAt = 1,
+    )
 
     // ── WorkerDownload.isHostAllowed ──────────────────────────────────────────
 
@@ -304,4 +375,3 @@ class DownloadManagerModuleTest {
         assertNotNull(mgr.getNotificationChannel("model_downloads"))
     }
 }
-

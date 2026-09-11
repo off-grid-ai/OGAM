@@ -128,7 +128,7 @@ describe('ProDetailScreen', () => {
     expect(getByText('Enter your license key')).toBeTruthy();
     expect(
       getByText(
-        'Paste the license key from your email. It works on up to 5 devices.',
+        'Paste the license key from your email. It works on your licensed devices.',
       ),
     ).toBeTruthy();
   });
@@ -302,7 +302,10 @@ describe('ProDetailScreen', () => {
   });
 
   it('shows a lifetime status line and NO Manage subscription link for a one-time license', async () => {
-    useAppStore.setState({ hasRegisteredPro: true, hasSavedProCredential: true });
+    useAppStore.setState({
+      hasRegisteredPro: true,
+      hasSavedProCredential: true,
+    });
     mockGetProLicenseInfo.mockResolvedValue({
       isPro: true,
       tier: 'lifetime',

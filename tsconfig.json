@@ -5,6 +5,8 @@
     "paths": {
       "@offgrid/core/*": ["./src/*"],
       "@offgrid/pro/*": ["./pro/*"],
+      "@offgrid/models/catalog": ["../shared/packages/models/src/catalog/index.ts"],
+      "@offgrid/models/quant": ["../shared/packages/models/src/quant.ts"],
       "react-native-fs": ["./src/shims/react-native-fs.ts"]
     },
   },

@@ -124,6 +124,7 @@ export function createKeygenFake(): KeygenFake {
     type: 'licenses',
     attributes: {
       expiry: licence.expiry ?? null,
+      maxMachines: licence.seats,
       name: licence.name ?? null,
       metadata: licence.metadata ?? {},
     },
@@ -225,7 +226,7 @@ export function createKeygenFake(): KeygenFake {
   const handle = async (request: Request, path: string): Promise<Response> => {
     calls.push({ method: request.method, path });
     if (
-      path === '/licenses/actions/validate-key' &&
+      path.startsWith('/licenses/actions/validate-key') &&
       request.method === 'POST'
     ) {
       return validate(request);

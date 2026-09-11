@@ -5,9 +5,20 @@ import {
   isSupportingChatContext,
   splitInlineReasoning,
   type ChatStreamPreviewRow,
-} from '@offgrid/sync';
+  type MessageRecord,
+} from '@offgrid/application';
 import { Message } from '../../types';
 import { visibleMessages } from '../../utils/visibleMessages';
+import {projectWorkspaceMessage} from '../../services/adapters/workspaceContent/projectWorkspaceMessage';
+
+/**
+ * One durable message, read only from the canonical Workspace Content record - never from a
+ * legacy Zustand mirror. A Shared-created conversation (Sync materialization, another Shared-owned
+ * surface) has no such mirror, so this is the only path that can ever render its transcript.
+ */
+export function toWorkspaceMessage(record: MessageRecord): Message {
+  return projectWorkspaceMessage(record);
+}
 export type ChatMessageItem = Message & {
   statusText?: string;
   suppressMessageBubble?: boolean;
@@ -39,6 +50,25 @@ function hasImageAttachment(message: Message): boolean {
   );
 }
 
+/** Prefer canonical tool-result rows when they exist; recovered artifacts fill only missing rows. */
+function withoutDuplicateToolArtifacts(messages: readonly Message[]): Message[] {
+  const completedCallIds = new Set(
+    messages
+      .filter(message => message.role === 'tool' && message.toolCallId)
+      .map(message => message.toolCallId as string),
+  );
+  if (completedCallIds.size === 0) return [...messages];
+  return messages.map(message => {
+    if (!message.toolArtifacts?.length) return message;
+    const toolArtifacts = message.toolArtifacts.filter(
+      artifact => !artifact.id || !completedCallIds.has(artifact.id),
+    );
+    return toolArtifacts.length === message.toolArtifacts.length
+      ? message
+      : {...message, toolArtifacts};
+  });
+}
+
 function isGeneratedImageResult(message: Message): boolean {
   return (
     message.role === 'assistant' &&
@@ -62,6 +92,20 @@ function withPendingGeneratedImage(message: Message): Message {
   };
 }
 
+function groupedImageItem(
+  message: Message | ChatMessageItem,
+  supportingContext: Message,
+): ChatMessageItem {
+  const cached = groupedImageCache.get(message);
+  if (cached?.supportingContext === supportingContext) return cached.item;
+  const item: ChatMessageItem = {
+    ...withPendingGeneratedImage(message),
+    supportingContext,
+  };
+  groupedImageCache.set(message, { supportingContext, item });
+  return item;
+}
+
 /**
  * Keep durable chat records unchanged, but present an image turn as one assistant result.
  *
@@ -81,18 +125,23 @@ function groupSupportingContextWithImage(
       isSupportingContextMessage(supportingContext)
     ) {
       grouped.pop();
-      const cached = groupedImageCache.get(message);
-      if (cached?.supportingContext === supportingContext) {
-        grouped.push(cached.item);
+      grouped.push(groupedImageItem(message, supportingContext));
+      continue;
+    }
+    // Workspace Content can commit the final chat turn before the queued enhancement-card update
+    // receives its position. Presentation must still converge on one image turn, independent of
+    // that I/O completion order: enhanced prompt, image, response.
+    if (isSupportingContextMessage(message)) {
+      const image = grouped.at(-1);
+      if (
+        image &&
+        (hasImageAttachment(image) || isGeneratedImageResult(image)) &&
+        !(image as ChatMessageItem).supportingContext
+      ) {
+        grouped.pop();
+        grouped.push(groupedImageItem(image, message));
         continue;
       }
-      const item: ChatMessageItem = {
-        ...withPendingGeneratedImage(message),
-        supportingContext,
-      };
-      groupedImageCache.set(message, { supportingContext, item });
-      grouped.push(item);
-      continue;
     }
     grouped.push(message);
   }
@@ -107,10 +156,13 @@ function groupSupportingContextWithImage(
  */
 export type RemoteStreamItem = ChatStreamPreviewRow;
 
+/** The synthetic row that stands for the reply being generated on THIS device. */
+export const STREAMING_MESSAGE_ID = 'streaming';
+
 export type StreamingState = {
-  isThinking: boolean;
   streamingMessage: string;
   streamingReasoningContent: string;
+  streamingMessageUuid?: string | null;
   isStreamingForThisConversation: boolean;
   isModelLoading?: boolean;
   loadingModelName?: string;
@@ -214,7 +266,9 @@ export function getDisplayMessages(
     groupSupportingContextWithImage(
       localDisplayMessages(
         // The same rule the list rows use, so the thread and its preview never disagree.
-        [...visibleMessages(allMessages, streaming.localDeviceId)],
+        withoutDuplicateToolArtifacts([
+          ...visibleMessages(allMessages, streaming.localDeviceId),
+        ]),
         streaming,
       ),
     ),
@@ -227,9 +281,9 @@ function localDisplayMessages(
   streaming: StreamingState,
 ): (Message | ChatMessageItem)[] {
   const {
-    isThinking,
     streamingMessage,
     streamingReasoningContent,
+    streamingMessageUuid,
     isStreamingForThisConversation,
   } = streaming;
   // Model still loading for the in-progress reply: show it in the bubble so the
@@ -242,7 +296,7 @@ function localDisplayMessages(
     return [
       ...allMessages,
       {
-        id: 'thinking',
+        id: streamingMessageUuid ?? STREAMING_MESSAGE_ID,
         role: 'assistant' as const,
         content: streaming.loadingModelName
           ? `Loading ${streaming.loadingModelName}...`
@@ -252,14 +306,18 @@ function localDisplayMessages(
       },
     ];
   }
-  if (isThinking && isStreamingForThisConversation) {
+  if (
+    !streamingMessage &&
+    !streamingReasoningContent &&
+    isStreamingForThisConversation
+  ) {
     if (_lastDisplayBranch !== 'thinking') {
       _lastDisplayBranch = 'thinking';
     }
     return [
       ...allMessages,
       {
-        id: 'thinking',
+        id: streamingMessageUuid ?? STREAMING_MESSAGE_ID,
         role: 'assistant' as const,
         content: '',
         timestamp: Date.now(),
@@ -277,7 +335,7 @@ function localDisplayMessages(
     return [
       ...allMessages,
       {
-        id: 'streaming',
+        id: streamingMessageUuid ?? STREAMING_MESSAGE_ID,
         role: 'assistant' as const,
         content: streamingMessage,
         reasoningContent: streamingReasoningContent || undefined,

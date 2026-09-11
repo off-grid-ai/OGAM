@@ -11,6 +11,13 @@
  */
 
 import { NativeModules, NativeEventEmitter, EmitterSubscription } from 'react-native';
+import {
+  estimateLiteRTTokens,
+  liteRTToolsWire,
+  normalizedLiteRTSampler,
+  planLiteRTConversation,
+} from '@offgrid/models';
+import { notReleased, RELEASED, type NativeRelease } from './nativeRelease';
 import logger from '../utils/logger';
 import { summarizeSession, runCompaction } from './liteRTCompaction';
 
@@ -151,10 +158,8 @@ class LiteRTService {
   ): Promise<void> {
     if (!this.isAvailable() || !this.loaded) throw new Error('No LiteRT model loaded');
     const { samplerConfig, tools, history } = opts ?? {};
-    const temperature = samplerConfig?.temperature ?? 0.8;
-    const topK = samplerConfig?.topK ?? 40;
-    const topP = samplerConfig?.topP ?? 0.95;
-    const toolsJson = tools && tools.length > 0 ? JSON.stringify(tools) : '';
+    const { temperature, topK, topP } = normalizedLiteRTSampler(samplerConfig);
+    const toolsJson = liteRTToolsWire(tools);
     const historyJson = history && history.length > 0 ? JSON.stringify(history) : '';
     await LiteRTModule.resetConversation(systemPrompt, temperature, topK, topP, toolsJson, historyJson);
     this.activeSystemPrompt = systemPrompt;
@@ -163,10 +168,11 @@ class LiteRTService {
     // Seed the counter with estimated tokens already in the KV cache from history + system prompt.
     // The SDK loads these silently via ConversationConfig.initialMessages so they never appear
     // in lastPrefillTokenCount, causing cumulativeTokens to undercount and auto-compact to fire too late.
-    const historyChars = (history ?? []).reduce((sum, m) => sum + m.content.length, 0);
-    const systemChars = systemPrompt.length;
-    const toolsChars = toolsJson.length;
-    this.cumulativeTokens = Math.ceil((historyChars + systemChars + toolsChars) / 4);
+    this.cumulativeTokens = estimateLiteRTTokens({
+      history,
+      systemPrompt,
+      toolsWire: toolsJson,
+    });
   }
 
   /**
@@ -190,22 +196,25 @@ class LiteRTService {
       history?: Array<{ role: 'user' | 'assistant'; content: string }>;
     },
   ): Promise<void> {
-    const toolsJson = opts?.tools && opts.tools.length > 0 ? JSON.stringify(opts.tools) : '';
-
     const maxTokens = this.configuredMaxTokens;
     const history = opts?.history;
-    const incomingEstimate = history ? Math.ceil((history.reduce((s, m) => s + m.content.length, 0) + systemPrompt.length + toolsJson.length) / 4) : 0;
+    const plan = planLiteRTConversation({
+      conversationId,
+      systemPrompt,
+      tools: opts?.tools,
+      samplerConfig: opts?.samplerConfig,
+      history,
+      maxTokens,
+      state: {
+        conversationId: this.activeConversationId,
+        systemPrompt: this.activeSystemPrompt,
+        toolsWire: this.activeToolsJson,
+        samplerWire: this.activeSamplerJson,
+        cumulativeTokens: this.cumulativeTokens,
+      },
+    });
 
-    const COMPACT_THRESHOLD = 0.65;
-    const threshold = maxTokens * COMPACT_THRESHOLD;
-    // For an active session cumulativeTokens tracks actual KV cache usage — use it directly.
-    // For a new/switched session cumulativeTokens is stale; use incomingEstimate instead.
-    const isActiveSession = this.activeConversationId === conversationId;
-    const tokenMeasure = isActiveSession ? this.cumulativeTokens : incomingEstimate;
-    const needsCompact = maxTokens > 0 && history != null && history.length > 2 &&
-      tokenMeasure > threshold;
-
-    if (needsCompact && history) {
+    if (plan.compact && history) {
       await runCompaction({
         history,
         systemPrompt,
@@ -219,24 +228,10 @@ class LiteRTService {
       });
       this.activeConversationId = conversationId;
       this.activeSystemPrompt = systemPrompt;
-      this.activeToolsJson = toolsJson;
+      this.activeToolsJson = plan.toolsWire;
       return;
     }
-
-    const sc = opts?.samplerConfig;
-    const incomingSamplerJson = JSON.stringify({
-      temperature: sc?.temperature ?? 0.8,
-      topK: sc?.topK ?? 40,
-      topP: sc?.topP ?? 0.95,
-    });
-    const idChanged = this.activeConversationId !== conversationId;
-    const sysChanged = this.activeSystemPrompt !== systemPrompt;
-    const toolsChanged = this.activeToolsJson !== toolsJson;
-    // Re-apply the sampler when it differs even if id/sys/tools are unchanged — a
-    // mid-conversation temperature/top-p change must take effect on the next send (Q18).
-    const samplerChanged = this.activeSamplerJson !== incomingSamplerJson;
-    const needsReset = idChanged || sysChanged || toolsChanged || samplerChanged;
-    if (needsReset) {
+    if (plan.reset) {
       await this.resetConversation(systemPrompt, { samplerConfig: opts?.samplerConfig, tools: opts?.tools, history: opts?.history });
       this.activeConversationId = conversationId;
     }
@@ -452,27 +447,6 @@ class LiteRTService {
   }
 
   // ---------------------------------------------------------------------------
-  // generateToolSelection — one-shot, tools-free routing pass for the LiteRT
-  // two-pass tool selector. Runs on a throwaway native session so it never
-  // pollutes a real chat's history/KV, then drops that session so pass 2 rebuilds
-  // the real conversation. Deterministic (temperature 0).
-  // ---------------------------------------------------------------------------
-
-  async generateToolSelection(systemPrompt: string, userText: string): Promise<string> {
-    await this.prepareConversation('__tool_select__', systemPrompt, {
-      samplerConfig: { temperature: 0, topK: 1, topP: 1 },
-      tools: [],
-      history: [],
-    });
-    try {
-      // No onToolCall handler -> pure text, the model cannot call tools here.
-      return await this.generateRaw(userText, undefined, {});
-    } finally {
-      this.invalidateConversation();
-    }
-  }
-
-  // ---------------------------------------------------------------------------
   // stopGeneration
   // ---------------------------------------------------------------------------
 
@@ -486,16 +460,21 @@ class LiteRTService {
     // back to incomingEstimate (which sums all JS history) and triggering an unnecessary
     // compaction. Caller can invalidate explicitly via invalidateConversation() if
     // the message rewind requires a fresh native conversation.
-    try { await LiteRTModule.stopGeneration(); }
-    catch (e) { logger.log(TAG, `stopGeneration — error (ignored): ${String(e)}`); }
+    await LiteRTModule.stopGeneration();
   }
 
   // ---------------------------------------------------------------------------
   // unloadModel — expensive: closes Conversation + Engine
   // ---------------------------------------------------------------------------
 
-  async unloadModel(): Promise<void> {
-    if (!this.isAvailable()) return;
+  /**
+   * Answers whether the ENGINE let go, because residency admits the next model into memory it
+   * believes was reclaimed. The native error used to be logged as "(ignored)" and `loaded` was
+   * cleared regardless, so a busy engine still holding its weights reported the same success as a
+   * clean teardown.
+   */
+  async unloadModel(): Promise<NativeRelease> {
+    if (!this.isAvailable()) return RELEASED;
     logger.log(TAG, 'unloadModel');
     this.clearSubscriptions();
     this.currentToolCallHandler = null;
@@ -507,9 +486,13 @@ class LiteRTService {
     this.configuredMaxTokens = 4096;
     try {
       await LiteRTModule.unloadModel();
+      return RELEASED;
     } catch (e) {
-      logger.log(TAG, `unloadModel — error (ignored): ${String(e)}`);
+      logger.warn(`${TAG} unloadModel — the engine did not release: ${String(e)}`);
+      return notReleased(e);
     } finally {
+      // Still cleared: this wrapper's own bookkeeping is invalid either way. What changed is that
+      // the CALLER is now told whether the memory went with it.
       this.loaded = false;
       this.modelSupportsAudio = false;
       this.activeBackend = null;

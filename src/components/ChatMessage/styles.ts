@@ -11,9 +11,9 @@ import { TYPOGRAPHY, SPACING, FONTS } from '../../constants';
  */
 const MESSAGE_MAX_WIDTH = '85%' as const;
 
-const createBubbleStyles = (colors: ThemeColors) => ({
+const createBubbleStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: {
-    marginVertical: 8,
+    marginVertical: 6,
     paddingHorizontal: 16,
   },
   userContainer: {
@@ -47,7 +47,7 @@ const createBubbleStyles = (colors: ThemeColors) => ({
    * ONE rhythm for every tool row, whatever produced it.
    *
    * A requested call, a synced artifact and a finished result are the same thing at three moments,
-   * so they get the same container: one row per container, the same 8px above and below, left
+   * so they get the same container: one row per container, the same 6px above and below, left
    * aligned in the assistant column. They used to disagree. A turn's requested calls were grouped
    * N-to-a-container at 2px apart, centred and inset 16px INSIDE the 85% assistant column, while a
    * result stood alone, centred and inset 16px from the SCREEN - two left edges and two gaps, which
@@ -76,8 +76,8 @@ const createBubbleStyles = (colors: ThemeColors) => ({
   },
   /**
    * The gutter a standalone tool-result message sits in: the same left edge as `container`, and
-   * deliberately NO vertical margin. `container` carries `marginVertical: 8`, which on top of the
-   * row's own 8px padding would space two results 32px apart while the requested calls inside one
+   * deliberately NO vertical margin. `container` carries `marginVertical: 6`, which on top of the
+   * row's own 8px padding would space two results 28px apart while the requested calls inside one
    * assistant turn sat at 16px - the same unequal rhythm, reintroduced from the other side.
    */
   toolMessageRow: {
@@ -118,6 +118,7 @@ const createBubbleStyles = (colors: ThemeColors) => ({
     borderRadius: 8,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
+    ...shadows.small,
   },
   bubbleWithAttachments: {
     paddingHorizontal: 8,
@@ -268,6 +269,11 @@ const createThinkingStyles = (colors: ThemeColors) => ({
     padding: 8,
     gap: 6,
   },
+  // A collapsed row is a control, not a label. One token step on each edge makes its
+  // minimum content height 44px (20px icon + 12px top + 12px bottom) without a magic number.
+  thinkingHeaderCollapsed: {
+    paddingVertical: SPACING.md,
+  },
   thinkingHeaderIconBox: {
     width: 20,
     height: 20,
@@ -381,28 +387,6 @@ const createActionStyles = (colors: ThemeColors) => ({
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.xl,
   },
-  selectTextContent: {
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xl,
-  },
-  selectTextHint: {
-    ...TYPOGRAPHY.meta,
-    color: colors.textMuted,
-    marginBottom: SPACING.sm,
-  },
-  selectTextScroll: {
-    maxHeight: 360,
-    backgroundColor: colors.surface,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: SPACING.md,
-  },
-  selectTextBody: {
-    ...TYPOGRAPHY.body,
-    fontFamily: FONTS.mono,
-    color: colors.text,
-  },
   editInput: {
     ...TYPOGRAPHY.body,
     fontFamily: FONTS.mono,
@@ -448,8 +432,8 @@ const createActionStyles = (colors: ThemeColors) => ({
   },
 });
 
-export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
-  ...createBubbleStyles(colors),
+export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+  ...createBubbleStyles(colors, shadows),
   ...createThinkingStyles(colors),
   ...createActionStyles(colors),
 });

@@ -17,6 +17,7 @@ import ai.offgridmobile.downloads.SyncDownloadsPackage
 import ai.offgridmobile.sync.BlobChannelPackage
 import ai.offgridmobile.screenshot.SyncScreenshotPackage
 import ai.offgridmobile.sync.MeshResidencyPackage
+import ai.offgridmobile.confinedfile.OffgridConfinedFilePackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -37,6 +38,7 @@ class MainApplication : Application(), ReactApplication {
           add(SyncScreenshotPackage())
           add(SyncDownloadsPackage())
           add(BlobChannelPackage())
+          add(OffgridConfinedFilePackage())
         },
     )
   }

@@ -174,7 +174,7 @@ describePro('the model transfer card', () => {
     );
 
     expect(ui.queryByText('In progress')).not.toBeNull();
-    expect(ui.queryByText('Rate unavailable')).not.toBeNull();
+    expect(ui.queryByText(/Rate unavailable/)).toBeNull();
     expect(ui.queryByText('NaN%')).toBeNull();
   });
 

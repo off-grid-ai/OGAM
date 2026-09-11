@@ -1,9 +1,17 @@
-import React from 'react';
-import { View, Text, TextInput, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TextInput } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../../theme';
 import { AppSheet } from '../../AppSheet';
 import { AnimatedPressable } from '../../AnimatedPressable';
+
+export interface ActionMenuExtraAction {
+  readonly label: string;
+  readonly icon: React.ComponentProps<typeof Icon>['name'];
+  readonly onPress: () => void;
+  readonly disabled?: boolean;
+  readonly testID: string;
+}
 
 interface ActionMenuSheetProps {
   visible: boolean;
@@ -19,8 +27,8 @@ interface ActionMenuSheetProps {
   onRetry: () => void;
   onGenerateImage: () => void;
   onSpeak: () => void;
-  /** When provided, shows a "Select text" item (chat mode) for partial copy. */
-  onSelectText?: () => void;
+  /** Optional host action rendered with the same interaction and visual contract. */
+  extraAction?: ActionMenuExtraAction;
 }
 
 export function ActionMenuSheet({
@@ -37,7 +45,7 @@ export function ActionMenuSheet({
   onRetry,
   onGenerateImage,
   onSpeak,
-  onSelectText,
+  extraAction,
 }: ActionMenuSheetProps) {
   const { colors } = useTheme();
 
@@ -59,19 +67,7 @@ export function ActionMenuSheet({
           <Text style={styles.actionSheetText}>Copy</Text>
         </AnimatedPressable>
 
-        {onSelectText && (
-          <AnimatedPressable
-            testID="action-select-text"
-            hapticType="selection"
-            style={styles.actionSheetItem}
-            onPress={onSelectText}
-          >
-            <Icon name="type" size={18} color={colors.textSecondary} />
-            <Text style={styles.actionSheetText}>Select text</Text>
-          </AnimatedPressable>
-        )}
-
-        {isUser && canEdit && (
+        {canEdit && (
           <AnimatedPressable
             testID="action-edit"
             hapticType="selection"
@@ -120,34 +116,25 @@ export function ActionMenuSheet({
             <Text style={styles.actionSheetText}>Speak</Text>
           </AnimatedPressable>
         )}
-      </View>
-    </AppSheet>
-  );
-}
 
-interface SelectTextSheetProps {
-  visible: boolean;
-  onClose: () => void;
-  content: string;
-  styles: any;
-}
-
-/**
- * Read-only sheet that presents the message text fully selectable, so the user
- * can select part of it and copy via the native selection toolbar. This avoids
- * the conflict where the bubble's long-press opens the action menu before the
- * OS text-selection gesture can start.
- */
-export function SelectTextSheet({ visible, onClose, content, styles }: SelectTextSheetProps) {
-  return (
-    <AppSheet visible={visible} onClose={onClose} title="SELECT TEXT" enableDynamicSizing>
-      <View style={styles.selectTextContent}>
-        <Text style={styles.selectTextHint}>Long-press to select, then copy.</Text>
-        <ScrollView style={styles.selectTextScroll} nestedScrollEnabled>
-          <Text selectable testID="select-text-body" style={styles.selectTextBody}>
-            {content}
-          </Text>
-        </ScrollView>
+        {extraAction && (
+          <AnimatedPressable
+            testID={extraAction.testID}
+            hapticType="selection"
+            style={styles.actionSheetItem}
+            onPress={extraAction.onPress}
+            disabled={extraAction.disabled}
+            accessibilityRole="button"
+            accessibilityLabel={extraAction.label}
+          >
+            <Icon
+              name={extraAction.icon}
+              size={18}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.actionSheetText}>{extraAction.label}</Text>
+          </AnimatedPressable>
+        )}
       </View>
     </AppSheet>
   );
@@ -157,23 +144,36 @@ interface EditSheetProps {
   visible: boolean;
   onClose: () => void;
   defaultValue: string;
-  onChangeText: (text: string) => void;
-  onSave: () => void;
+  /** Receives the text as typed. The draft never leaves this sheet before Save. */
+  onSave: (text: string) => void;
   onCancel: () => void;
+  resendsAfterSave: boolean;
   styles: any;
   colors: any;
 }
 
+/**
+ * The edit draft is LOCAL to this sheet. It used to be raised to ChatMessage on every
+ * character, which re-rendered the whole message - markdown parse, attachments, tool rows and
+ * every overlay - once per keystroke.
+ */
 export function EditSheet({
   visible,
   onClose,
   defaultValue,
-  onChangeText,
   onSave,
   onCancel,
+  resendsAfterSave,
   styles,
   colors,
 }: EditSheetProps) {
+  const [draft, setDraft] = useState(defaultValue);
+
+  // Reseed when the sheet opens, so an edit always starts from the current message text.
+  useEffect(() => {
+    if (visible) setDraft(defaultValue);
+  }, [visible, defaultValue]);
+
   return (
     <AppSheet
       visible={visible}
@@ -184,8 +184,8 @@ export function EditSheet({
       <View style={styles.editSheetContent}>
         <TextInput
           style={styles.editInput}
-          defaultValue={defaultValue}
-          onChangeText={onChangeText}
+          value={draft}
+          onChangeText={setDraft}
           multiline
           autoFocus
           placeholder="Enter message..."
@@ -203,9 +203,11 @@ export function EditSheet({
           <AnimatedPressable
             hapticType="impactMedium"
             style={[styles.editButton, styles.editButtonSave]}
-            onPress={onSave}
+            onPress={() => onSave(draft)}
           >
-            <Text style={[styles.editButtonText, styles.editButtonTextSave]}>SAVE & RESEND</Text>
+            <Text style={[styles.editButtonText, styles.editButtonTextSave]}>
+              {resendsAfterSave ? 'SAVE & RESEND' : 'SAVE'}
+            </Text>
           </AnimatedPressable>
         </View>
       </View>

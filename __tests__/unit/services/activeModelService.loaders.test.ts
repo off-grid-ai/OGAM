@@ -15,11 +15,14 @@ jest.mock('../../../src/services/llm', () => ({
 jest.mock('../../../src/services/litert', () => ({
   liteRTService: { loadModel: jest.fn(), unloadModel: jest.fn(), getActiveBackend: jest.fn(() => 'cpu') },
 }));
+jest.mock('../../../src/services/modelServices/mobileLLMService', () => ({
+  activeMobileRoute: jest.fn(() => ({ model: null })),
+}));
 jest.mock('../../../src/services/localDreamGenerator', () => ({
   localDreamGeneratorService: { loadModel: jest.fn(), unloadModel: jest.fn() },
 }));
-jest.mock('../../../src/services/modelManager', () => ({
-  modelManager: { saveModelWithMmproj: jest.fn(), clearMmProjLink: jest.fn() },
+jest.mock('../../../src/services/modelServices/bootstrap/modelLibraryBootstrap', () => ({
+  modelLibrary: { saveModelWithMmproj: jest.fn(), clearMmProjLink: jest.fn() },
 }));
 jest.mock('react-native-fs', () => ({
   exists: jest.fn(() => Promise.resolve(false)),
@@ -31,7 +34,7 @@ jest.mock('../../../src/utils/logger', () => ({
 }));
 
 import RNFS from 'react-native-fs';
-import { doLoadTextModel, resolveMmProjPath } from '../../../src/services/activeModelService/loaders';
+import { doLoadTextModel, resolveMmProjPath } from '../../../src/services/adapters/native/modelLoaders';
 import { liteRTService } from '../../../src/services/litert';
 import { llmService } from '../../../src/services/llm';
 import { useAppStore } from '../../../src/stores';
@@ -148,7 +151,7 @@ describe('doLoadTextModel — llama.cpp path', () => {
 
   it('unloads previous model when loadedTextModelId differs', async () => {
     mockedLlm.loadModel.mockResolvedValue(undefined);
-    mockedLlm.unloadModel.mockResolvedValue(undefined);
+    mockedLlm.unloadModel.mockResolvedValue({released: true});
     mockedRNFS.exists.mockResolvedValue(false);
     mockedRNFS.readDir.mockResolvedValue([]);
     const ctx = makeCtx({ loadedTextModelId: 'old-model' });
@@ -163,8 +166,8 @@ describe('doLoadTextModel — llama.cpp path', () => {
     // unloaded llmService — the LiteRT stayed resident → two heavy 'text' models → OOM. The
     // switch must unload BOTH engines regardless of which held the previous model.
     mockedLlm.loadModel.mockResolvedValue(undefined);
-    mockedLlm.unloadModel.mockResolvedValue(undefined);
-    mockedLiteRT.unloadModel.mockResolvedValue(undefined);
+    mockedLlm.unloadModel.mockResolvedValue({released: true});
+    mockedLiteRT.unloadModel.mockResolvedValue({released: true});
     mockedRNFS.exists.mockResolvedValue(false);
     mockedRNFS.readDir.mockResolvedValue([]);
     const ctx = makeCtx({ loadedTextModelId: 'old-litert-model' }); // previous model was on the OTHER engine
@@ -197,8 +200,8 @@ describe('doLoadTextModel — LiteRT path', () => {
   it('CROSS-ENGINE: loading a LiteRT model unloads a previously-resident llama GGUF (co-residence OOM fix)', async () => {
     mockedLiteRT.loadModel.mockResolvedValue(undefined);
     mockedLiteRT.getActiveBackend.mockReturnValue('cpu');
-    mockedLiteRT.unloadModel.mockResolvedValue(undefined);
-    mockedLlm.unloadModel.mockResolvedValue(undefined);
+    mockedLiteRT.unloadModel.mockResolvedValue({released: true});
+    mockedLlm.unloadModel.mockResolvedValue({released: true});
     const ctx = makeCtx({
       model: { id: 'model-1', fileName: 'model.litertlm', filePath: '/models/model.litertlm', engine: 'litert' },
       loadedTextModelId: 'old-llama-model', // previous model was on the OTHER engine

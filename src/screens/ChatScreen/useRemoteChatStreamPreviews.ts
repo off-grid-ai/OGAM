@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { chatStreamPreviewRows } from '@offgrid/sync';
+import { chatStreamPreviewRows } from '@offgrid/application';
 import { useRemoteChatStreamStore } from '../../stores/remoteChatStreamStore';
 import type { RemoteStreamItem } from './types';
 

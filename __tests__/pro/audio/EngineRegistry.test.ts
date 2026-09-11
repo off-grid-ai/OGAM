@@ -111,7 +111,7 @@ describe('EngineRegistry', () => {
       reg.register('kokoro', () => new StubEngine('kokoro'));
 
       expect(reg.has('kokoro')).toBe(true);
-      expect(reg.has('outetts')).toBe(false);
+      expect(reg.has('secondary')).toBe(false);
       expect(reg.getRegisteredIds()).toEqual(['kokoro']);
     });
 
@@ -169,22 +169,22 @@ describe('EngineRegistry', () => {
       const order = { n: 0 };
       const reg = new EngineRegistry<StubEngine>();
       const kokoro = new StubEngine('kokoro', order);
-      const oute = new StubEngine('outetts', order);
+      const secondary = new StubEngine('secondary', order);
       reg.register('kokoro', () => kokoro);
-      reg.register('outetts', () => oute);
+      reg.register('secondary', () => secondary);
 
       await reg.setActiveEngine('kokoro');
-      await reg.setActiveEngine('outetts');
+      await reg.setActiveEngine('secondary');
 
       // Previous (kokoro) got stopped then released.
       expect(kokoro.stopCalls).toBe(1);
       expect(kokoro.releaseCalls).toBe(1);
       expect(kokoro.lastStopOrder).toBeLessThan(kokoro.lastReleaseOrder);
-      // New active (outetts) untouched, and is the active one.
-      expect(oute.stopCalls).toBe(0);
-      expect(oute.releaseCalls).toBe(0);
-      expect(reg.getActiveEngineId()).toBe('outetts');
-      expect(reg.getActiveEngine()).toBe(oute);
+      // The new active engine is untouched.
+      expect(secondary.stopCalls).toBe(0);
+      expect(secondary.releaseCalls).toBe(0);
+      expect(reg.getActiveEngineId()).toBe('secondary');
+      expect(reg.getActiveEngine()).toBe(secondary);
     });
 
     it('does NOT release when re-selecting the SAME active engine', async () => {
@@ -309,16 +309,15 @@ describe('EngineRegistry', () => {
     it('does NOT clear active when unregistering a different (non-active) engine', async () => {
       const reg = new EngineRegistry<StubEngine>();
       const kokoro = new StubEngine('kokoro');
-      const oute = new StubEngine('outetts');
+      const secondary = new StubEngine('secondary');
       reg.register('kokoro', () => kokoro);
-      reg.register('outetts', () => oute);
+      reg.register('secondary', () => secondary);
       await reg.setActiveEngine('kokoro');
-      // Instantiate oute so it has an instance to release.
-      reg.getEngine('outetts');
+      reg.getEngine('secondary');
 
-      await reg.unregister('outetts');
+      await reg.unregister('secondary');
 
-      expect(oute.releaseCalls).toBe(1);
+      expect(secondary.releaseCalls).toBe(1);
       expect(reg.getActiveEngineId()).toBe('kokoro'); // active untouched
       expect(reg.has('kokoro')).toBe(true);
     });

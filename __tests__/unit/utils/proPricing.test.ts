@@ -18,8 +18,8 @@ describe('getPricingCopy', () => {
     expect(copy.label).toBe('FOUNDER RATE');
   });
 
-  it('states the founder-rate terms (locked in, only goes up) and the 5-device cap', () => {
+  it('states the founder-rate terms and applies the license to its licensed devices', () => {
     expect(copy.subtitle).toMatch(/only goes up/i);
-    expect(copy.subtitle).toMatch(/5 devices/);
+    expect(copy.subtitle).toMatch(/licensed devices/i);
   });
 });

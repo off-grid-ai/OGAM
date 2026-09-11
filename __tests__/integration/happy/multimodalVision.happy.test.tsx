@@ -25,12 +25,15 @@ describe('happy — attach a photo and a vision model answers about it (heavy en
     await h.attachImageViaUI();
     await h.send('what is in this image', { content: 'I see a tabby cat sitting on a windowsill.' });
 
-    // The model's answer about the image renders.
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/tabby cat sitting on a windowsill/)).not.toBeNull(); });
-
     // The attached image reached the native model (sendMessageWithImages / sendMessageWithMedia).
+    await h.rtl.waitFor(() => {
+      expect(h.boundary.litert.calls.sendMessageWithMedia.length
+        + h.boundary.litert.calls.sendMessageWithImages.length).toBeGreaterThan(0);
+    }, { timeout: 4000 });
     const mediaArgs = [...h.boundary.litert.calls.sendMessageWithMedia, ...h.boundary.litert.calls.sendMessageWithImages].flat(2);
     expect(JSON.stringify(mediaArgs)).toMatch(/mock\/image\.jpg/);
+    // The model's answer about the image renders.
+    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/tabby cat sitting on a windowsill/)).not.toBeNull(); });
     void ({} as Message);
   });
 });

@@ -1,5 +1,20 @@
-import { DEFAULT_SETTINGS } from '../stores/appStore';
-import { selectIsLiteRT, useAppStore } from '../stores';
+import { useRef, useState } from 'react';
+import { DEFAULT_SETTINGS, type AppSettings } from '../stores/appStore';
+import { useAppStore } from '../stores';
+import { useActiveMobileModel } from './useActiveMobileModel';
+import { useModelsProjection } from './useApplicationProjection';
+import {
+  MIN_TEXT_CONTEXT_TOKENS,
+  MIN_TEXT_OUTPUT_TOKENS,
+  TEXT_SETTING_CONSTRAINTS,
+  liteRTSettingLimits,
+  modelsFailureMessage,
+  textSettingLimits,
+  updateTextContextLength,
+  updateTextOutputTokens,
+  type ModelSettingsRecord,
+} from '@offgrid/application';
+import { applicationFacade } from '../services/applicationFacade';
 
 export interface NumericSettingModel {
   key: string;
@@ -12,7 +27,7 @@ export interface NumericSettingModel {
   decimals?: number;
   formatValue?: (value: number) => string;
   warning?: string | null;
-  onChange: (value: number) => void;
+  onChange: (value: number) => void | Promise<void>;
 }
 
 const formatContext = (value: number): string =>
@@ -21,59 +36,105 @@ const formatContext = (value: number): string =>
 const formatMaxTokens = (value: number): string =>
   value >= 1024 ? `${(value / 1024).toFixed(1)}K` : String(value);
 
-const MIN_MAX_TOKENS = 64;
-
-/**
- * The most the model may WRITE, which the context it writes into is the ceiling for.
- *
- * Both sliders used to stop at the model's trained limit independently, so output could be set
- * above the context that has to hold it - a setting the engine can never honour, and one that
- * squeezes the prompt out of its own window. One rule, asked by the slider's ceiling and again when
- * the context is lowered underneath a value already chosen.
- */
-const maxTokensCeiling = (contextLength: number): number =>
-  Math.max(MIN_MAX_TOKENS, contextLength);
-
 /**
  * One headless settings model for both text-generation settings surfaces.
- * The app store owns selected values. Loaded model metadata owns both maxima.
+ * Shared Models owns selected values. Loaded model metadata owns both maxima.
  * Each surface owns only its layout and presentation.
  */
 export function useTextGenerationSettings() {
-  const isLiteRT = useAppStore(selectIsLiteRT);
-  const settings = useAppStore(state => state.settings);
-  const updateSettings = useAppStore(state => state.updateSettings);
+  // The engine is a fact of the selected route's model, read from the one active route.
+  const activeTextId = useActiveMobileModel('text').model?.id ?? null;
+  const isLiteRT = useAppStore(
+    state =>
+      state.downloadedModels.find(m => m.id === activeTextId)?.engine ===
+      'litert',
+  );
+  const settings = useModelsProjection().settings;
   const modelMaxContext = useAppStore(state => state.modelMaxContext);
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [syncWarning, setSyncWarning] = useState<string | null>(null);
+  const pendingRef = useRef(false);
 
-  const temperature = settings.temperature ?? DEFAULT_SETTINGS.temperature;
-  const maxTokens = settings.maxTokens ?? DEFAULT_SETTINGS.maxTokens;
-  const maxToolCalls = settings.maxToolCalls ?? DEFAULT_SETTINGS.maxToolCalls;
-  const contextLength =
-    settings.contextLength ?? DEFAULT_SETTINGS.contextLength;
-  const topP = settings.topP ?? DEFAULT_SETTINGS.topP;
-  const repeatPenalty =
-    settings.repeatPenalty ?? DEFAULT_SETTINGS.repeatPenalty;
-  const llamaModelLimit =
-    modelMaxContext ?? Math.max(maxTokens, contextLength, 512);
+  const save = async (patch: ModelSettingsRecord): Promise<void> => {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    setPending(true);
+    setFailure(null);
+    setSyncWarning(null);
+    try {
+      const outcome = await applicationFacade().models.settings.save({
+        origin: 'local',
+        patch,
+      });
+      if (!outcome.ok) {
+        setFailure(modelsFailureMessage(outcome.failure));
+      } else if (outcome.value.syncFailure) {
+        setSyncWarning(
+          `Saved on this device. ${modelsFailureMessage(
+            outcome.value.syncFailure,
+          )}`,
+        );
+      }
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : String(error));
+    } finally {
+      pendingRef.current = false;
+      setPending(false);
+    }
+  };
 
-  const liteRTTemperature =
-    settings.liteRTTemperature ?? DEFAULT_SETTINGS.liteRTTemperature;
-  const liteRTMaxTokens =
-    settings.liteRTMaxTokens ?? DEFAULT_SETTINGS.liteRTMaxTokens;
-  const liteRTTopP = settings.liteRTTopP ?? DEFAULT_SETTINGS.liteRTTopP;
-  const liteRTModelLimit = modelMaxContext ?? Math.max(liteRTMaxTokens, 512);
+  const numberSetting = (key: keyof AppSettings, fallback: number): number => {
+    const value = settings[key];
+    return typeof value === 'number' ? value : fallback;
+  };
+
+  const temperature = numberSetting(
+    'temperature',
+    DEFAULT_SETTINGS.temperature,
+  );
+  const maxTokens = numberSetting('maxTokens', DEFAULT_SETTINGS.maxTokens);
+  const maxToolCalls = numberSetting(
+    'maxToolCalls',
+    DEFAULT_SETTINGS.maxToolCalls,
+  );
+  const contextLength = numberSetting(
+    'contextLength',
+    DEFAULT_SETTINGS.contextLength,
+  );
+  const topP = numberSetting('topP', DEFAULT_SETTINGS.topP);
+  const repeatPenalty = numberSetting(
+    'repeatPenalty',
+    DEFAULT_SETTINGS.repeatPenalty,
+  );
+  const llamaLimits = textSettingLimits({
+    contextLength,
+    maxTokens,
+    modelMaxContext,
+  });
+
+  const liteRTTemperature = numberSetting(
+    'liteRTTemperature',
+    DEFAULT_SETTINGS.liteRTTemperature,
+  );
+  const liteRTMaxTokens = numberSetting(
+    'liteRTMaxTokens',
+    DEFAULT_SETTINGS.liteRTMaxTokens,
+  );
+  const liteRTTopP = numberSetting('liteRTTopP', DEFAULT_SETTINGS.liteRTTopP);
+  const liteRTLimits = liteRTSettingLimits({
+    maxTokens: liteRTMaxTokens,
+    modelMaxContext,
+  });
 
   const toolCalls = {
     key: 'maxToolCalls',
     label: 'Maximum Tool Calls',
     description: 'Emergency limit for tool calls in one response',
     value: maxToolCalls,
-    min: 1,
-    max: 100,
-    step: 1,
+    ...TEXT_SETTING_CONSTRAINTS.maxToolCalls,
     decimals: 0,
-    onChange: (value: number) =>
-      updateSettings({ maxToolCalls: Math.round(value) }),
+    onChange: (value: number) => save({ maxToolCalls: Math.round(value) }),
   } satisfies NumericSettingModel;
 
   const llama = {
@@ -82,11 +143,9 @@ export function useTextGenerationSettings() {
       label: 'Temperature',
       description: 'Higher = more creative, Lower = more focused',
       value: temperature,
-      min: 0,
-      max: 2,
-      step: 0.05,
+      ...TEXT_SETTING_CONSTRAINTS.temperature,
       decimals: 2,
-      onChange: (value: number) => updateSettings({ temperature: value }),
+      onChange: (value: number) => save({ temperature: value }),
     },
     maxTokens: {
       key: 'maxTokens',
@@ -94,62 +153,48 @@ export function useTextGenerationSettings() {
       description: 'Maximum length of generated response',
       // Clamped for DISPLAY too: a value stored by an older build (or before the context came
       // down) must not render past the end of its own slider.
-      value: Math.min(maxTokens, maxTokensCeiling(contextLength)),
-      min: MIN_MAX_TOKENS,
-      max: Math.min(llamaModelLimit, maxTokensCeiling(contextLength)),
+      value: llamaLimits.outputValue,
+      min: MIN_TEXT_OUTPUT_TOKENS,
+      max: llamaLimits.outputMaximum,
       step: 64,
       formatValue: formatMaxTokens,
       // Clamped on WRITE as well as on display: the slider cannot reach an illegal value, but
       // nothing else should be able to store one either.
       onChange: (value: number) =>
-        updateSettings({
-          maxTokens: Math.min(value, maxTokensCeiling(contextLength)),
-        }),
+        save(updateTextOutputTokens(value, contextLength)),
     },
     contextLength: {
       key: 'contextLength',
       label: 'Context Length',
       description: 'KV cache size - larger uses more RAM (requires reload)',
       value: contextLength,
-      min: 512,
-      max: llamaModelLimit,
+      min: MIN_TEXT_CONTEXT_TOKENS,
+      max: llamaLimits.contextMaximum,
       step: 1024,
       formatValue: formatContext,
-      warning:
-        contextLength > 8192
-          ? 'High context uses significant RAM and may crash on some devices'
-          : null,
+      warning: llamaLimits.contextWarning,
       // Lowering the context lowers what can be written into it. Without this the stored output
       // length silently stays above its own ceiling.
       onChange: (value: number) =>
-        updateSettings({
-          contextLength: value,
-          ...(maxTokens > maxTokensCeiling(value)
-            ? { maxTokens: maxTokensCeiling(value) }
-            : {}),
-        }),
+        save(updateTextContextLength(value, maxTokens)),
     },
     topP: {
       key: 'topP',
       label: 'Top P',
       description: 'Nucleus sampling threshold',
       value: topP,
-      min: 0.1,
-      max: 1,
-      step: 0.05,
+      ...TEXT_SETTING_CONSTRAINTS.topP,
       decimals: 2,
-      onChange: (value: number) => updateSettings({ topP: value }),
+      onChange: (value: number) => save({ topP: value }),
     },
     repeatPenalty: {
       key: 'repeatPenalty',
       label: 'Repeat Penalty',
       description: 'Penalize repeated tokens',
       value: repeatPenalty,
-      min: 1,
-      max: 2,
-      step: 0.05,
+      ...TEXT_SETTING_CONSTRAINTS.repeatPenalty,
       decimals: 2,
-      onChange: (value: number) => updateSettings({ repeatPenalty: value }),
+      onChange: (value: number) => save({ repeatPenalty: value }),
     },
   } satisfies Record<string, NumericSettingModel>;
 
@@ -159,11 +204,9 @@ export function useTextGenerationSettings() {
       label: 'Temperature',
       description: 'Higher = more creative, Lower = more focused',
       value: liteRTTemperature,
-      min: 0,
-      max: 2,
-      step: 0.05,
+      ...TEXT_SETTING_CONSTRAINTS.temperature,
       decimals: 2,
-      onChange: (value: number) => updateSettings({ liteRTTemperature: value }),
+      onChange: (value: number) => save({ liteRTTemperature: value }),
     },
     maxTokens: {
       key: 'liteRTMaxTokens',
@@ -171,28 +214,23 @@ export function useTextGenerationSettings() {
       description:
         'Total token budget - input, history, and output combined (requires reload)',
       value: liteRTMaxTokens,
-      min: 512,
-      max: liteRTModelLimit,
+      min: MIN_TEXT_CONTEXT_TOKENS,
+      max: liteRTLimits.contextMaximum,
       step: 1024,
       formatValue: formatContext,
-      warning:
-        liteRTMaxTokens > 8192
-          ? 'High context uses significant RAM and may slow or crash on some devices'
-          : null,
-      onChange: (value: number) => updateSettings({ liteRTMaxTokens: value }),
+      warning: liteRTLimits.warning,
+      onChange: (value: number) => save({ liteRTMaxTokens: value }),
     },
     topP: {
       key: 'liteRTTopP',
       label: 'Top P',
       description: 'Nucleus sampling threshold',
       value: liteRTTopP,
-      min: 0.1,
-      max: 1,
-      step: 0.05,
+      ...TEXT_SETTING_CONSTRAINTS.topP,
       decimals: 2,
-      onChange: (value: number) => updateSettings({ liteRTTopP: value }),
+      onChange: (value: number) => save({ liteRTTopP: value }),
     },
   } satisfies Record<string, NumericSettingModel>;
 
-  return { isLiteRT, llama, liteRT, toolCalls };
+  return { isLiteRT, llama, liteRT, toolCalls, pending, failure, syncWarning };
 }

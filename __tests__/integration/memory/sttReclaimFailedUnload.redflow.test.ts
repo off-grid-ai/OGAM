@@ -1,26 +1,34 @@
 /**
  * RED-FLOW (integration) — NEW (found by the swallow-then-succeed pattern hunt, not in PR#452/453/454):
- * reclaimSttForGeneration over-commits when the whisper unload fails.
+ * generation-sidecar reclaim over-commits when the transcription unload fails.
  *
  * On a memory-tight device the generation hot path reclaims idle STT via
- * `await w.unload().catch(log); this.residents.delete('whisper')` (modelResidency/index.ts:482-485) —
- * the whisper resident is deleted from the budget map even if its native unload REJECTED (still holding
+ * the transcription resident must stay in the budget map if its native unload REJECTS (still holding
  * ~320MB). The subsequent LLM+TTS load then sizes against phantom-freed RAM → OOM. Same class as PR#454
- * but on the STT-reclaim path (PR#454 only fixed makeRoomFor). Real modelResidencyManager over the RAM
+ * but on the transcription-reclaim path. Real modelResidencyManager over the RAM
  * stub; only the native unload is faked (made to reject).
  */
-import { modelResidencyManager } from '../../../src/services/modelResidency';
-import { setDeviceMemory, resetDeviceMemory, makeResident, gbOf } from '../../harness/deviceMemory';
+import { modelResidencyManager } from '../../harness/activeModelLifecycle';
+import { setDeviceMemory, resetDeviceMemory, gbOf } from '../../harness/deviceMemory';
 
-afterEach(() => resetDeviceMemory());
+afterEach(async () => resetDeviceMemory());
 
 describe('STT reclaim — failed whisper unload over-commits (red-flow)', () => {
   it('keeps whisper resident when its unload rejects (does not count it as freed)', async () => {
-    setDeviceMemory({ platform: 'android', totalGB: 4, availGB: gbOf(500) }); // ≤6GB → reclaim path active
-    const unload = makeResident({ key: 'whisper', type: 'stt', modelId: 'base.en', sizeMB: 320, canEvict: () => true });
+    await setDeviceMemory({ platform: 'android', totalGB: 4, availGB: gbOf(500) }); // ≤6GB → reclaim path active
+    const unload = jest.fn().mockResolvedValue(undefined);
+    const lease = await modelResidencyManager.acquire(
+      { key: 'whisper', type: 'transcription', modelId: 'base.en', sizeMB: 320, canEvict: () => true },
+      { load: async () => undefined, unload },
+    );
+    await lease.release();
     unload.mockRejectedValue(new Error('native whisper unload failed'));
 
-    await modelResidencyManager.reclaimSttForGeneration();
+    await modelResidencyManager.reclaim({
+      id: 'generation-sidecar-reclaim',
+      maximumTotalMemoryMB: 6 * 1024,
+      modalities: ['transcription'],
+    });
 
     // Correct: the unload failed, so whisper still holds its RAM — it must stay counted resident, or the
     // next LLM+TTS load sizes against phantom-freed memory → OOM. Today it's deleted regardless → RED.

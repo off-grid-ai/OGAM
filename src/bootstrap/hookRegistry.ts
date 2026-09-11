@@ -11,9 +11,15 @@
 type HookFn = (...args: any[]) => any;
 
 const hooks: Record<string, HookFn> = {};
+const APPLICATION_STARTED_HOOK = 'application.started';
+const APPLICATION_STOPPING_HOOK = 'application.stopping';
+let applicationStarted = false;
 
 export function registerHook(name: string, fn: HookFn): () => void {
   hooks[name] = fn;
+  // Readiness is state, not an edge. A paid bundle can activate after the root has already started;
+  // replay only this lifecycle fact so its dependent workflows are not stranded until a restart.
+  if (name === APPLICATION_STARTED_HOOK && applicationStarted) fn();
   return () => {
     if (hooks[name] === fn) delete hooks[name];
   };
@@ -21,6 +27,10 @@ export function registerHook(name: string, fn: HookFn): () => void {
 
 /** Call a hook if registered; returns its result, or undefined when absent. */
 export function callHook<R = any>(name: string, ...args: any[]): R | undefined {
+  if (name === APPLICATION_STARTED_HOOK) applicationStarted = true;
+  // Clear readiness before the stop owner runs. A registration made during or after shutdown must
+  // not replay the previous lifetime and start work against domains that are already stopping.
+  if (name === APPLICATION_STOPPING_HOOK) applicationStarted = false;
   const fn = hooks[name];
   return fn ? (fn(...args) as R) : undefined;
 }
@@ -29,10 +39,19 @@ export function _clearHooksForTesting(): void {
   for (const key of Object.keys(hooks)) {
     delete hooks[key];
   }
+  applicationStarted = false;
 }
 
 /** Known hook names, centralised so core and pro stay in sync. */
 export const HOOKS = {
+  /** () => void | Promise<void> — the application root has started every composed domain. Optional
+   *  feature bundles may now start workflows that depend on those domains, but never their lifecycle. */
+  applicationStarted: APPLICATION_STARTED_HOOK,
+  /** () => void | Promise<void> — stop feature workflows before their application domains stop. */
+  applicationStopping: APPLICATION_STOPPING_HOOK,
+  /** () => Promise<void> — re-run adoption of paired devices as remote servers (Pro sync). Fired by
+   *  the Remote Servers "Scan network" action so one tap covers the LAN scan and the paired roster. */
+  remoteServersAdoptPaired: 'remoteServers.adoptPaired',
   /** () => readonly OnboardingSlide[] — optional feature-owned onboarding content. Core owns the
    *  renderer and navigation; feature packages contribute data only. */
   onboardingAdditionalSlides: 'onboarding.additionalSlides',
@@ -50,9 +69,10 @@ export const HOOKS = {
    *  protecting for a screen nobody is on, and a guard that reasons about flags is exactly how audio
    *  kept playing after the chat was closed. */
   audioStopForExit: 'audio.stopForExit',
-  /** (content: string) => void — fired as the assistant message streams; pro
+  /** (content: string, messageId: string | null) => void — fired as the assistant message streams; pro
    *  uses it to synthesize/play speech sentence-by-sentence while generation is
-   *  still in progress (no-op unless voice mode + engine ready). */
+   *  still in progress (no-op unless voice mode + engine ready). The durable message ID keeps the
+   *  playback control bound to the row that owns the reply. */
   audioOnStreamingToken: 'audio.onStreamingToken',
   /** (conversationId: string) => void — when streaming ends, speak the final
    *  assistant message if voice mode is active (pro checks mode/readiness). */
@@ -61,18 +81,8 @@ export const HOOKS = {
   audioOnAppBackground: 'audio.onAppBackground',
   /** () => void — app returned to foreground: resume paused speech. */
   audioOnAppForeground: 'audio.onAppForeground',
-  /** (basePrompt: string) => string — augment the prompt when in voice mode. */
-  audioAugmentPrompt: 'audio.augmentPrompt',
   /** (language: string) => void — keep the active speech voice aligned with STT. */
   audioSelectLanguage: 'audio.selectLanguage',
-  /** () => Promise<Array<{ engineId: string; name: string; sizeBytes: number }>>
-   *  — downloaded TTS (voice) models, surfaced in the Download Manager. */
-  downloadsListVoiceModels: 'downloads.listVoiceModels',
-  /** (engineId: string) => Promise<void> — delete a downloaded TTS voice model. */
-  downloadsDeleteVoiceModel: 'downloads.deleteVoiceModel',
-  /** () => Promise<void> — warm the active TTS engine at boot if its model is
-   *  downloaded and fits the residency budget (no-op otherwise). */
-  audioPreload: 'audio.preload',
   /** (mutation: SyncMutation) => void — a core data owner committed a record
    *  change. Pro records it in the state-sync op-log; free builds do nothing. */
   syncRecordLocalMutation: 'sync.recordLocalMutation',
@@ -80,9 +90,6 @@ export const HOOKS = {
    *  live previews it holds for the conversation; the durable tombstone is emitted by the caller. */
   chatStreamDiscardConversation: 'chatStream.discardConversation',
 
-  /** (mutation: KnowledgeDocumentMutation) => void — the RAG owner committed
-   *  a document lifecycle change. Pro transfers or reconciles it with peers. */
-  syncKnowledgeDocumentMutation: 'sync.knowledgeDocumentMutation',
   /** (text: string, timestamp: number) => void — core copied text locally. Pro records it through
    *  the shared clipboard owner instead of waiting for a delayed native clipboard notification. */
   clipboardRecordLocalText: 'clipboard.recordLocalText',

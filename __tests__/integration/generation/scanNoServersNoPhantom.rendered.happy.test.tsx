@@ -15,39 +15,65 @@
  * isEmulator()=true is the device-faithful "no scan possible" leaf → discoverLANServers returns []. Falsify:
  * a reachable server on the subnet (probe → 200) → a server row IS added and the empty state disappears.
  */
-import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { installNativeBoundary } from '../../harness/nativeBoundary';
+import type { MobileApplicationFixture } from '../../harness/mobileApplicationFixture';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
-  useIsFocused: () => true, useFocusEffect: () => {},
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
+  useIsFocused: () => true,
+  useFocusEffect: () => {},
 }));
 
-import { RemoteServersScreen } from '../../../src/screens/RemoteServersScreen';
-import { useRemoteServerStore } from '../../../src/stores';
-
 describe('T047 (rendered) — empty LAN scan shows the alert AND adds no phantom server (DEV-B8)', () => {
-  beforeEach(() => {
-    useRemoteServerStore.setState({ servers: [], serverHealth: {}, discoveredModels: {} });
+  let fixture: MobileApplicationFixture;
+  let React: typeof import('react');
+  let rtl: typeof import('@testing-library/react-native');
+  let RemoteServersScreen: typeof import('../../../src/screens/RemoteServersScreen').RemoteServersScreen;
+
+  beforeAll(async () => {
+    installNativeBoundary();
+    await require('@react-native-async-storage/async-storage').clear();
+    React = require('react') as typeof import('react');
+    const { requireRTL } =
+      require('../../harness/nativeBoundary') as typeof import('../../harness/nativeBoundary');
+    rtl = requireRTL();
+    ({ RemoteServersScreen } =
+      require('../../../src/screens/RemoteServersScreen') as typeof import('../../../src/screens/RemoteServersScreen'));
+    const { startMobileApplicationFixture } =
+      require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+    fixture = await startMobileApplicationFixture();
+  });
+
+  afterAll(async () => {
+    await fixture.dispose();
   });
 
   it('reports that nothing answered and leaves the list empty when nothing is discovered', async () => {
     // Device boundary: an emulator can't run the concurrent LAN scan → discoverLANServers returns [] (the
     // real "nothing found" outcome). This is a native leaf, not our discovery service.
-     
+
     const DeviceInfo = require('react-native-device-info');
     DeviceInfo.isEmulator = jest.fn(async () => true);
 
-    const ui = render(<RemoteServersScreen />);
+    const ui = rtl.render(React.createElement(RemoteServersScreen));
     // Precondition: the empty state is showing (no servers yet).
     expect(ui.queryByText('No servers yet')).not.toBeNull();
 
     // Real gesture: tap "Scan network".
-    fireEvent.press(ui.getByText('Scan network'));
+    rtl.fireEvent.press(ui.getByText('Scan network'));
 
     // The scan reports that nothing answered...
-    await waitFor(
-      () => { expect(ui.queryByText(/Nothing answered on this network/)).not.toBeNull(); },
+    await rtl.waitFor(
+      () => {
+        expect(
+          ui.queryByText(/Nothing answered on this network/),
+        ).not.toBeNull();
+      },
       { timeout: 4000 },
     );
     // ...and the list AGREES: the "No servers yet" empty state still renders (a phantom server would have

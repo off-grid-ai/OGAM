@@ -1,8 +1,8 @@
 import {
   fetchAvailableModels,
   getVariantLabel,
-  guessStyle,
 } from '../../../src/services/huggingFaceModelBrowser';
+import { imageCatalogStyle } from '@offgrid/models';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -346,26 +346,26 @@ describe('huggingFaceModelBrowser', () => {
   });
 
   // -----------------------------------------------------------------------
-  // guessStyle
+  // Canonical Shared catalog style policy
   // -----------------------------------------------------------------------
-  describe('guessStyle', () => {
+  describe('imageCatalogStyle', () => {
     it.each([
       ['AbsoluteReality', 'photorealistic'],
       ['realisticVision', 'photorealistic'],
       ['ChilloutMix', 'photorealistic'],
       ['Photon', 'photorealistic'],
       ['PHOTO_MODEL', 'photorealistic'],
+      ['DreamShaper', 'photorealistic'],
     ])('returns "photorealistic" for %s', (name, expected) => {
-      expect(guessStyle(name)).toBe(expected);
+      expect(imageCatalogStyle(name)).toBe(expected);
     });
 
     it.each([
       ['AnythingV5', 'anime'],
       ['MeinaMix', 'anime'],
       ['CounterfeitV3', 'anime'],
-      ['DreamShaper', 'anime'],
     ])('returns "anime" for %s', (name, expected) => {
-      expect(guessStyle(name)).toBe(expected);
+      expect(imageCatalogStyle(name)).toBe(expected);
     });
   });
 });

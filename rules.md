@@ -36,6 +36,17 @@ xcrun devicectl device copy from \
 
 Then `grep`/read `/tmp/offgrid-debug.log`. The file appends a `===== session start … =====` marker on each launch and is size-capped (rotates, keeping the tail). The in-app **Debug Logs** screen (Settings → Debug Logs) shows the same lines live for quick visual checks. **When diagnosing a device issue, pull this file rather than guessing.**
 
+### Metro keeps a stale copy of a rebuilt shared package
+
+Every `@offgrid/*` package is a `file:` symlink into `../shared`, and `tsup --clean` deletes and
+recreates `dist/` with new chunk names. Metro's per-client bundle graph (the phone's) often keeps the
+OLD dist after that, while a fresh `curl .../index.bundle` shows the new code - so a "reloaded" app
+still runs the previous shared build. After rebuilding a shared package: `touch` the files under its
+`dist/`, then reload the app (`curl -X POST localhost:8081/reload`); if it still lags, restart Metro
+with `--reset-cache`. Prove which code the phone runs before debugging the logic: Metro's Hermes
+inspector accepts `Runtime.evaluate` (`curl localhost:8081/json/list` for the socket, then
+`__r(<module id from the dev bundle>)` to reach a module's exports).
+
 ## Branch Policy
 
 **Never push directly to `main`.** All changes must go through a pull request:
@@ -45,6 +56,15 @@ Then `grep`/read `/tmp/offgrid-debug.log`. The file appends a `===== session sta
 2. If you find yourself on `main`, create a branch first: `git checkout -b <branch-name>`.
 
 **Merge strategy: ALWAYS a merge commit. NEVER squash (and never rebase-merge).** When merging a PR, use `gh pr merge --merge` (or the "Create a merge commit" button) so the full commit history is preserved on `main`. Do not squash under any circumstances - the small, meaningful per-concern commits are the record and must survive the merge. This applies to both the core repo and the `pro` submodule.
+
+## Hexagonal architecture (standing rule, 2026-09-02)
+
+For ALL packages in `shared`: every business rule lives in the shared `@offgrid/*` package. Desktop and
+mobile are dumb components or consumers - I/O adapters, composition roots, and UI. Nothing else. Before
+writing a rule in an app, ask "is this a decision or I/O?": a decision goes to shared with a node test,
+the app keeps only the port. A rule found in an app file is a defect to move, not a style choice.
+
+Every change follows FPT (first-principles thinking), SSOT, SOLID, DRY, SRP, and Clean architecture.
 
 ## Required Development Order
 
@@ -99,17 +119,15 @@ The emotional arc for all content: **Recognition -> Return -> Freedom**. Name wh
 
 ## Design Standards
 
-**Any change that touches UI (screens, components, styles) must comply with the design system.** Inherit the shared Off Grid design philosophy from **`../brand/DESIGN_PHILOSOPHY.md`** (the source of truth - brutalist/terminal, Menlo mono, emerald accent, tokens in `@offgrid/design`). Platform specifics: **`docs/design/DESIGN_PHILOSOPHY_SYSTEM.md`** + **`docs/design/VISUAL_HIERARCHY_STANDARD.md`**.
+**Any change that touches UI must follow `brand/DESIGN_PHILOSOPHY.md`, the only design source of truth. Apply its Mobile profile.**
 
-- Read `docs/design/VISUAL_HIERARCHY_STANDARD.md` before writing or modifying any UI code.
-- Check `docs/design/` for any other relevant design documents.
 - Use `TYPOGRAPHY` tokens - never hardcode font sizes or weights.
 - Use `COLORS` tokens - never hardcode color values.
 - Use `SPACING` tokens - never hardcode margin/padding values.
 - Weights must stay ≤ 400 (no bold).
 - Never use emojis or emoticons in UI text - always use `react-native-vector-icons` instead. Feather is the default; MaterialIcons is allowed only when Feather lacks a suitable icon (e.g. `whatshot` for trending).
 - Never use `lucide-react` or any other icon library - only `react-native-vector-icons`.
-- Follow the 5-category text hierarchy: TITLE → BODY → SUBTITLE/DESCRIPTION → META.
+- Follow the canonical Mobile text hierarchy in the brand guide.
 
 ## Reuse Before Building
 
@@ -121,7 +139,7 @@ The emotional arc for all content: **Recognition -> Return -> Freedom**. Name wh
 - Only build new when nothing fits - and say so in the PR description.
 
 <!-- BEGIN GENERATED: shared/CLAUDE.md#debugging-source-of-truth -->
-> **Generated from `shared/CLAUDE.md` - do not edit this section here.**
+> **Generated from `shared/rules.md` - do not edit this section here.**
 > Run `node scripts/mirror-doctrine.mjs` in `shared/` after changing the canonical copy.
 > `--check` fails the build when a mirror drifts, so these cannot silently disagree.
 
@@ -140,6 +158,30 @@ the simple thing directly.
 
 So, before any tooling: if the answer requires unusual measurement to explain, the implementation is
 probably wrong, and it is complicated where it should be plain. Simplify it and the symptom goes.
+
+**Before any fix: write the invariant and the smallest mechanism.** In one or two lines, state the
+invariant the system must hold and the smallest mechanism that gives it. Check that against what
+already exists in `shared` or in a library (lodash `throttle`, not a hand-rolled one) before writing
+new code. If the fix adds a concept (a cap, a gate, a ratio, a port, a helper) rather than removing
+one, that is the signal to stop and re-derive. A real example: "Context is full" on mobile grew a
+per-result character budget, a committed-partial gate, and a host-specific window port - when the
+invariant was "commit every round; when the window fills, compact what is committed and continue",
+which the existing compaction already supports.
+
+## Where the logs live (pull the file before guessing)
+
+Every surface writes one durable log. When a person reports "it did X on the device", read that
+file first; it beats reasoning from memory every time.
+
+| Surface | File | How to read it |
+|---|---|---|
+| Desktop (main process, incl. pro) | `<data dir>/logs/off-grid-ai-desktop.log` - data dir is `OFFGRID_DATA_DIR`, else Electron `userData` (`~/Library/Application Support/Off Grid AI Desktop` on macOS), else `<cwd>/.offgrid`; `OFFGRID_DIAGNOSTIC_LOG` overrides the path | `tail -f` it. Rotates at its size cap. |
+| Mobile, iOS (dev build `ai.offgridmobile.dev`) | `Documents/offgrid-debug.log` inside the app container | `xcrun devicectl device copy from --device <UDID> --domain-type appDataContainer --domain-identifier ai.offgridmobile.dev --source Documents/offgrid-debug.log --destination /tmp/offgrid-debug.log` |
+| Mobile, Android (dev build) | `files/offgrid-debug.log` inside the app's data dir | `adb shell run-as ai.offgridmobile.dev cat files/offgrid-debug.log > /tmp/offgrid-debug.log` |
+
+The mobile sink is dev-only (`__DEV__`), mirrors every `logger.*` line, appends a
+`===== session start … =====` marker per launch, and the in-app Debug Logs screen shows the same lines
+live. `mobile/rules.md` carries the full iOS recipe (reading the UDID from devicectl JSON).
 
 ## Debugging — start with the source of truth
 
@@ -182,6 +224,39 @@ UI last remembered. Failures were dropped on the floor (`if (status !== 'complet
 failed transfer stopped existing the moment the view reset, and the surface confidently showed success.
 When you fix durability, fix the READ at the same time: persisting a failure while the renderer still
 hardcodes `status: 'completed'` converts a lost record into a durable lie.
+
+## Hexagonal architecture (standing rule, 2026-09-02)
+
+For ALL packages in `shared`: every business rule lives in the shared `@offgrid/*` package. Desktop and
+mobile are dumb components or consumers - I/O adapters, composition roots, and UI. Nothing else. Before
+writing a rule in an app, ask "is this a decision or I/O?": a decision goes to shared with a node test,
+the app keeps only the port. A rule found in an app file is a defect to move, not a style choice.
+
+Every change follows FPT (first-principles thinking), SSOT, SOLID, DRY, SRP, and Clean architecture.
+
+## Shared owns model business logic (the apps never duplicate it)
+
+The point of the shared monorepo is that Desktop and Mobile never carry two copies of one rule.
+Every decision about models lives in a shared package and the apps only supply I/O adapters and
+render projections. That covers selection and routing, intent classification, admission and
+memory policy, download and registry rules, generation lifecycle and cancellation, remote
+discovery, tool orchestration, transfer manifests, and speech/transcription workflows.
+
+**Standing instruction (2026-09-02): for every package in `shared/`, all business logic lives in the
+shared package. First Principles Thinking (FPT) applies to every fix - see the debugging section above. Mobile and Desktop are dumb consumers - they supply ports (storage, native runtime,
+IPC, rendering) and nothing else. That is what "hexagonal architecture" means here. A host file
+should read as "wire port A to shared method B". If the other host would need the same function,
+copy string, mapping, or rule, it is business logic and it goes to shared. SSOT, SOLID, DRY, SRP,
+and Clean Architecture apply to everything we build; a `() => false` policy stub or a duplicated
+helper in a host is the tell that a rule leaked out of shared.**
+
+The shared packages are: `@offgrid/analytics`, `@offgrid/artifacts`, `@offgrid/automation`, `@offgrid/capture`, `@offgrid/clipboard`, `@offgrid/design`, `@offgrid/finops`, `@offgrid/memory`, `@offgrid/models`, `@offgrid/pipeline`, `@offgrid/policy`, `@offgrid/rag`, `@offgrid/speech`, `@offgrid/sync`, `@offgrid/ui`, `@offgrid/use`, `@offgrid/vectordb`. Before writing any
+model-related condition in `desktop/` or `mobile/`, look for the owner among them. If the rule
+exists there, call it. If it does not, add it there with its tests, then call it from both apps.
+A check duplicated in an app (a `kind === 'image'` branch, a readiness pre-check before the shared
+service has decided the operation, a copied regex, a second memory rule) is a defect even when it
+is correct today, because the two copies drift apart tomorrow. Apps keep: platform adapters
+(native modules, filesystem, sockets), store wiring, screens, and navigation.
 <!-- END GENERATED: shared/CLAUDE.md#debugging-source-of-truth -->
 ## Architecture & Abstractions (SOLID)
 
@@ -328,8 +403,7 @@ device** before its PR merges. "It's shared JS, so it works on both" is a DEFECT
 here: the vision fix worked on iOS yet needed separate Android verification. Full gate for every bug PR:
 1. Real-boundary integration test (below) — green.
 2. On-device e2e on **both** platforms — reproduce the real user flow, confirm via the device log/UI.
-3. `/hygiene` audit — pass.
-4. CI all green: lint, typecheck, test, architecture, android-build, SonarCloud, CodeRabbit.
+3. CI all green: lint, typecheck, test, architecture, android-build, SonarCloud, CodeRabbit.
 
 ## Driving the devices yourself (no journey engine)
 - **iOS (physical):** drive **WebDriverAgent (WDA) directly over HTTP**. Bring the WDA server up with

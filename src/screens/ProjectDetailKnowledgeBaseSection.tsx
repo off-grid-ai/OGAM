@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   Switch,
-  ScrollView,
+  FlatList,
   Platform,
 } from 'react-native';
 import { LoadingDots } from '../components/LoadingDots';
@@ -19,9 +19,14 @@ import { resolvePickedFileUri } from '../utils/resolvePickedFileUri';
 import { Button } from '../components/Button';
 import { showAlert, AlertState } from '../components/CustomAlert';
 import { PasteNoteSheet } from '../components/knowledge/PasteNoteSheet';
-import { ragService } from '../services/rag';
-import type { RagDocument } from '../services/rag';
+import type { RagDocument } from '@offgrid/application';
+import { applicationFacade } from '../services/applicationFacade';
+import { requireRagSuccess } from '../services/ragOutcome';
+import { writePastedNote } from '../services/adapters/rag/pastedNoteFileAdapter';
+import { useProjectRagDocuments } from '../hooks/useProjectRagDocuments';
 import { isPickerStuck } from '../utils/pickerErrorUtils';
+
+const documentKey = (doc: RagDocument): string => String(doc.id);
 
 const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
@@ -47,25 +52,25 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
   onNavigateToKb,
   onDocumentPress,
 }) => {
-  const [kbDocs, setKbDocs] = useState<RagDocument[]>([]);
+  const {
+    documents: kbDocs,
+    error: documentsError,
+    retry: retryDocuments,
+  } = useProjectRagDocuments(projectId);
   const [indexingFile, setIndexingFile] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
   const [pasting, setPasting] = useState(false);
   const isPickingRef = useRef(false);
 
-  const loadKbDocs = useCallback(async () => {
-    try {
-      setKbDocs(await ragService.getDocumentsByProject(projectId));
-    } catch (err: any) {
-      setAlertState(
-        showAlert('Error', err?.message || 'Failed to load documents'),
-      );
-    }
-  }, [projectId, setAlertState]);
-
   useEffect(() => {
-    loadKbDocs();
-  }, [loadKbDocs]);
+    if (!documentsError) return;
+    setAlertState(
+      showAlert('Knowledge Base Unavailable', documentsError, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Retry', onPress: retryDocuments },
+      ]),
+    );
+  }, [documentsError, retryDocuments, setAlertState]);
 
   const handleAddDocument = async () => {
     if (isPickingRef.current) return;
@@ -91,13 +96,14 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
 
         const pathForDb = await resolvePickedFileUri(file.uri, fileName);
 
-        await ragService.indexDocument({
-          projectId,
-          filePath: pathForDb,
-          fileName,
-          fileSize: file.size || 0,
-        });
-        await loadKbDocs();
+        requireRagSuccess(
+          await applicationFacade().rag.addDocument({
+            projectId,
+            path: pathForDb,
+            fileName,
+            size: file.size || 0,
+          }),
+        );
       }
     } catch (err: any) {
       if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED)
@@ -127,8 +133,15 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
   ): Promise<void> => {
     setIndexingFile(title.trim() || 'pasted text');
     try {
-      await ragService.indexPastedText({ projectId, title, text });
-      await loadKbDocs();
+      const note = await writePastedNote(title, text);
+      requireRagSuccess(
+        await applicationFacade().rag.addDocument({
+          projectId,
+          path: note.filePath,
+          fileName: note.fileName,
+          size: note.fileSize,
+        }),
+      );
     } finally {
       setIndexingFile(null);
     }
@@ -136,8 +149,9 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
 
   const handleToggleDocument = async (docId: number, enabled: boolean) => {
     try {
-      await ragService.toggleDocument(docId, enabled);
-      await loadKbDocs();
+      requireRagSuccess(
+        await applicationFacade().rag.setDocumentEnabled(docId, enabled),
+      );
     } catch (err: any) {
       setAlertState(
         showAlert('Error', err?.message || 'Failed to update document'),
@@ -155,18 +169,19 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
           {
             text: 'Remove',
             style: 'destructive',
-            onPress: () => {
-              ragService
-                .deleteDocument(doc.id)
-                .then(() => loadKbDocs())
-                .catch((err: any) =>
-                  setAlertState(
-                    showAlert(
-                      'Error',
-                      err?.message || 'Failed to remove document',
-                    ),
+            onPress: async () => {
+              try {
+                requireRagSuccess(
+                  await applicationFacade().rag.removeDocument(doc.id),
+                );
+              } catch (err: any) {
+                setAlertState(
+                  showAlert(
+                    'Error',
+                    err?.message || 'Failed to remove document',
                   ),
                 );
+              }
             },
           },
         ],
@@ -233,21 +248,25 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
         </View>
       )}
 
-      {kbDocs.length === 0 && !indexingFile ? (
+      {!documentsError && kbDocs.length === 0 && !indexingFile ? (
         <View style={styles.emptyState}>
           <Icon name="file-text" size={24} color={colors.textMuted} />
           <Text style={styles.emptyStateText}>No documents added</Text>
         </View>
-      ) : (
-        <ScrollView style={styles.sectionList} nestedScrollEnabled>
-          {kbDocs.map(doc => (
+      ) : !documentsError ? (
+        <FlatList
+          style={styles.sectionList}
+          data={kbDocs}
+          keyExtractor={documentKey}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={Platform.OS !== 'android'}
+          renderItem={({ item: doc }) => (
             <TouchableOpacity
-              key={doc.id}
               style={styles.kbDocRow}
               onPress={() => onDocumentPress(doc)}
               activeOpacity={0.7}
               accessibilityLabel={`Knowledge document ${doc.name}`}
-              testID={`kb-document-row-${doc.sync_id}`}
+              testID={`kb-document-row-${doc.syncId}`}
             >
               <View style={styles.kbDocInfo}>
                 <Text style={styles.kbDocName} numberOfLines={1}>
@@ -256,25 +275,25 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
                 <Text style={styles.kbDocSize}>{formatFileSize(doc.size)}</Text>
               </View>
               <Switch
-                value={doc.enabled === 1}
+                value={doc.enabled}
                 onValueChange={val => handleToggleDocument(doc.id, val)}
-                testID={`kb-document-toggle-${doc.sync_id}`}
-                accessibilityLabel={`Use ${doc.name}, ${doc.enabled === 1 ? 'ON' : 'OFF'}`}
+                testID={`kb-document-toggle-${doc.syncId}`}
+                accessibilityLabel={`Use ${doc.name}, ${doc.enabled ? 'ON' : 'OFF'}`}
                 trackColor={{ false: colors.border, true: colors.primary }}
               />
               <TouchableOpacity
                 style={styles.kbDocDelete}
                 onPress={() => handleDeleteDocument(doc)}
-                testID={`kb-document-remove-${doc.sync_id}`}
+                testID={`kb-document-remove-${doc.syncId}`}
                 accessibilityRole="button"
                 accessibilityLabel={`Remove ${doc.name}`}
               >
                 <Icon name="trash-2" size={14} color={colors.error} />
               </TouchableOpacity>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
+          )}
+        />
+      ) : null}
 
       <PasteNoteSheet
         visible={pasting}

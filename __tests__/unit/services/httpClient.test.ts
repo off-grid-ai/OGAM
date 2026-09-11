@@ -10,13 +10,71 @@ import {
   parseOpenAIMessage,
   parseAnthropicMessage,
   isPrivateNetworkEndpoint,
-  testEndpoint,
   fetchWithTimeout,
   imageToBase64DataUrl,
-  detectServerType,
   createStreamingRequest,
   createNDJSONStreamingRequest,
 } from '../../../src/services/httpClient';
+import {
+  RemoteProviderDiscoveryApplicationService,
+  REMOTE_DISCOVERY_TIMEOUT_MS,
+  type RemoteProviderProbe,
+  type RemoteProviderProbeEvidence,
+} from '@offgrid/models';
+
+async function executeDiscoveryProbe(
+  request: RemoteProviderProbe,
+): Promise<RemoteProviderProbeEvidence> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), request.timeoutMs);
+  try {
+    const response = await fetch(request.url, { signal: controller.signal });
+    return {
+      ok: response.ok,
+      status: response.status,
+      headers: { server: response.headers?.get?.('server') ?? '' },
+      payload: await response.json?.().catch(() => undefined),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function discoveryService() {
+  return new RemoteProviderDiscoveryApplicationService({
+    probe: executeDiscoveryProbe,
+    readDesktop: async () => null,
+    mapTextModels: async () => [],
+    authorizationHeaders: () => ({}),
+    now: Date.now,
+    timestamp: () => new Date().toISOString(),
+  });
+}
+
+/** Test the canonical Shared discovery boundary without restoring removed Mobile APIs. */
+async function testEndpoint(endpoint: string, _timeoutMs: number) {
+  const result = await discoveryService().discover({
+    serverId: 'test-server',
+    endpoint,
+  });
+  return { success: result.success, latency: result.latency, error: result.error };
+}
+
+/** Test the canonical Shared provider classification without mocking Off Grid code. */
+async function detectServerType(endpoint: string, _timeoutMs: number) {
+  const result = await discoveryService().discover({
+    serverId: 'test-server',
+    endpoint,
+  });
+  return result.success && result.provider && result.provider !== 'custom'
+    ? { type: result.provider }
+    : null;
+}
 
 // Mock React Native FS
 jest.mock('react-native-fs', () => ({
@@ -27,6 +85,10 @@ jest.mock('react-native-fs', () => ({
 }));
 
 describe('httpClient', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   // ─── SSE Parsing Tests ─────────────────────────────────────────────────────
 
   describe('parseSSEStream', () => {
@@ -522,9 +584,12 @@ describe('httpClient', () => {
               }),
           );
 
-        const pending = testEndpoint('http://192.168.1.50:11434', 50);
+        const pending = testEndpoint(
+          'http://192.168.1.50:11434',
+          REMOTE_DISCOVERY_TIMEOUT_MS,
+        );
         await Promise.resolve();
-        await jest.advanceTimersByTimeAsync(50);
+        await jest.advanceTimersByTimeAsync(REMOTE_DISCOVERY_TIMEOUT_MS);
 
         await expect(pending).resolves.toMatchObject({ success: false });
         expect(global.fetch).toHaveBeenCalledTimes(4);
@@ -733,25 +798,18 @@ describe('httpClient', () => {
     });
 
     it('should detect LM Studio from model list', async () => {
-      // First call to /v1/models fails (not OpenAI-compatible)
-      // Then /api/tags fails (not Ollama)
-      // Then LM Studio check succeeds with gguf models
+      // Shared classifies an OpenAI-shaped model list containing GGUF models as LM Studio.
       (global.fetch as jest.Mock)
         .mockResolvedValueOnce({
-          ok: false,
-          status: 404,
-        })
-        .mockResolvedValueOnce({
-          ok: false,
-          status: 404,
-        })
-        .mockResolvedValueOnce({
           ok: true,
+          status: 200,
+          headers: { get: () => null },
           json: () =>
             Promise.resolve({
               data: [{ id: 'model.gguf' }, { id: 'other.gguf' }],
             }),
-        });
+        })
+        .mockResolvedValue({ ok: false, status: 404 });
 
       const result = await detectServerType('http://localhost:1234', 5000);
 
@@ -903,10 +961,13 @@ describe('httpClient', () => {
     const TEST_ENDPOINT = 'http://localhost:11434/api/chat';
     let streamEvents: any[] = [];
 
-    function startStream(headers: Record<string, string> = {}): Promise<void> {
+    function startStream(
+      headers: Record<string, string> = {},
+      timeout = 0,
+    ): Promise<void> {
       return createStreamingRequest(
         TEST_ENDPOINT,
-        { body: { model: 'test' }, headers },
+        { body: { model: 'test' }, headers, timeout },
         e => streamEvents.push(e),
       );
     }
@@ -997,7 +1058,7 @@ describe('httpClient', () => {
       mockXHR.readyState = 4;
       if (onReadyStateChange) onReadyStateChange();
 
-      await expect(promise).rejects.toThrow('HTTP 500');
+      await expect(promise).rejects.toThrow('Internal Server Error');
     });
 
     it('should reject on network error', async () => {
@@ -1011,7 +1072,7 @@ describe('httpClient', () => {
     });
 
     it('should reject on timeout', async () => {
-      const promise = startStream();
+      const promise = startStream({}, 300000);
 
       // Advance timers past timeout
       jest.advanceTimersByTime(300000);
@@ -1103,7 +1164,7 @@ describe('httpClient', () => {
     });
 
     it('should handle XHR timeout via ontimeout', async () => {
-      const promise = startStream();
+      const promise = startStream({}, 300000);
 
       // Simulate XHR timeout
       jest.advanceTimersByTime(300000);
@@ -1339,7 +1400,7 @@ describe('httpClient', () => {
       mockXHR.readyState = 4;
       mockXHR.status = 500;
       mockXHR.onreadystatechange?.();
-      await expect(promise).rejects.toThrow('HTTP 500');
+      await expect(promise).rejects.toThrow('Internal Server Error');
     });
 
     it('rejects on network error', async () => {

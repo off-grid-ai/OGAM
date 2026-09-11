@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { modelsFailureMessage } from '@offgrid/application';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useAppStore } from '../stores';
+import { useActiveLocalModelId } from '../hooks/useActiveMobileModel';
+import { useModelsProjection } from '../hooks/useApplicationProjection';
 import { modelSupportsMtp } from '../services/mtpDetection';
+import { applicationFacade } from '../services/applicationFacade';
 
 /**
  * In-chat suggestion: this model can draft its own tokens, and you are not using it.
@@ -21,12 +25,17 @@ import { modelSupportsMtp } from '../services/mtpDetection';
  * graph. The card says so before you tap, since an unannounced reload in the middle of a
  * conversation reads as a hang.
  */
-export const MtpAdviceCard: React.FC<{ onEnable: () => void }> = ({ onEnable }) => {
+export const MtpAdviceCard: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const [dismissed, setDismissed] = useState(false);
   const [supported, setSupported] = useState(false);
-  const { settings, updateSettings, downloadedModels, activeModelId } = useAppStore();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const speculativeDecoding =
+    useModelsProjection().settings.speculativeDecoding === true;
+  const downloadedModels = useAppStore(s => s.downloadedModels);
+  const activeModelId = useActiveLocalModelId('text');
   const activeModel = downloadedModels.find(m => m.id === activeModelId);
   const modelPath = activeModel?.engine === 'litert' ? undefined : activeModel?.filePath;
 
@@ -36,11 +45,26 @@ export const MtpAdviceCard: React.FC<{ onEnable: () => void }> = ({ onEnable }) 
     return () => { cancelled = true; };
   }, [modelPath]);
 
-  if (!supported || settings.speculativeDecoding || dismissed) return null;
+  if (!supported || speculativeDecoding || dismissed) return null;
 
-  const enable = (): void => {
-    updateSettings({ speculativeDecoding: true });
-    onEnable(); // the reload the copy promised — the setting only takes effect on a fresh context
+  const enable = async (): Promise<void> => {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      const outcome = await applicationFacade().models.settings.save({
+        origin: 'local',
+        patch: { speculativeDecoding: true },
+      });
+      if (!outcome.ok) setError(modelsFailureMessage(outcome.failure));
+      else if (outcome.value.syncFailure) {
+        setError('The setting was saved on this device, but it could not sync yet.');
+      }
+    } catch {
+      setError('This setting could not be saved. Try again.');
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -56,9 +80,23 @@ export const MtpAdviceCard: React.FC<{ onEnable: () => void }> = ({ onEnable }) 
         {activeModel?.name ?? 'This model'} was built to draft several tokens at once and check them
         in one pass. Same answers, less waiting.
       </Text>
-      <AnimatedPressable style={styles.action} onPress={enable} testID="mtp-advice-enable">
+      {error ? (
+        <Text style={styles.errorText} accessibilityLiveRegion="polite" testID="mtp-advice-error">
+          {error}
+        </Text>
+      ) : null}
+      <AnimatedPressable
+        style={styles.action}
+        onPress={enable}
+        disabled={pending}
+        testID="mtp-advice-enable"
+      >
         <Icon name="check-circle" size={13} color={colors.primary} style={styles.tipIcon} />
-        <Text style={styles.actionText}>Turn on speculative decoding and reload the model</Text>
+        <Text style={styles.actionText}>
+          {pending
+            ? 'Turning on speculative decoding…'
+            : 'Turn on speculative decoding and reload the model'}
+        </Text>
       </AnimatedPressable>
     </View>
   );
@@ -73,6 +111,7 @@ const createStyles = (colors: ThemeColors) => ({
   leadIcon: { marginRight: SPACING.xs },
   title: { ...TYPOGRAPHY.h3, color: colors.text, flex: 1 },
   intro: { ...TYPOGRAPHY.meta, color: colors.textSecondary, marginBottom: SPACING.sm },
+  errorText: { ...TYPOGRAPHY.meta, color: colors.error, marginBottom: SPACING.sm },
   action: { flexDirection: 'row' as const, alignItems: 'center' as const },
   tipIcon: { marginRight: SPACING.xs },
   actionText: { ...TYPOGRAPHY.meta, color: colors.primary, flex: 1 },

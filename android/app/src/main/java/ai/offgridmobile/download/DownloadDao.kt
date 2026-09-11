@@ -26,4 +26,12 @@ interface DownloadDao {
 
     @Query("UPDATE downloads SET status = :status, error = :error WHERE id = :downloadId")
     suspend fun updateStatus(downloadId: String, status: DownloadStatus, error: String? = null)
+
+    /** Claim an active transfer for stopping without overwriting a completed or failed verdict. */
+    @Query(
+        """UPDATE downloads SET status = 'CANCELLED', error = :reason
+           WHERE id = :downloadId
+             AND status IN ('QUEUED', 'RUNNING', 'RETRYING', 'WAITING_FOR_NETWORK')""",
+    )
+    suspend fun markStopRequested(downloadId: String, reason: String): Int
 }

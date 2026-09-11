@@ -2,6 +2,9 @@ import React, { type ReactNode } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { SPACING, TYPOGRAPHY } from '../constants';
+
+/** A small Button (10px padding + one text line) plus the header's own padding. */
+const TAB_HEADER_MIN_HEIGHT = 52;
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 
@@ -74,10 +77,13 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...shadows.small,
     zIndex: 1,
   },
+  // One height for every tab header. Without a floor the row took the height of whatever sat on
+  // the right - a "New" button on Chats and Projects, nothing on Settings - so the same title read
+  // as two different sizes across tabs.
   tabHeader: {
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    minHeight: 0,
+    paddingVertical: SPACING.xs,
+    minHeight: TAB_HEADER_MIN_HEIGHT,
   },
   backButton: { padding: SPACING.xs },
   title: { ...TYPOGRAPHY.h2, color: colors.text, flex: 1 },

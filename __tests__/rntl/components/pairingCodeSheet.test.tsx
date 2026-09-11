@@ -3,7 +3,7 @@
  *
  * Guards the approved behavior change: a paired-code sheet can be filled by scanning
  * the other device's QR, not just by typing. A decoded QR carrying a valid pairing
- * code lands on the SAME onPair (syncService.pair) as the typed path, and a QR that
+ * code lands on the same normalized input as the typed path, and a QR that
  * is not a pairing code is ignored so the scanner keeps looking.
  *
  * Lives in the private pro/ submodule, loaded via a computed path so the suite skips
@@ -12,30 +12,11 @@
 
 import React from 'react';
 import { render, fireEvent, act } from '@testing-library/react-native';
+import { encodePairingQrPayload } from '@offgrid/sync';
 
 jest.mock('react-native-vector-icons/Feather', () => {
   const { Text } = require('react-native');
   return ({ name, ...props }: any) => <Text {...props}>{name}</Text>;
-});
-
-// The sheet is a modal wrapper; render its children inline (respecting `visible`, as
-// the real one does) so the test can drive the content and observe it hiding while
-// the scanner is open.
-jest.mock('@offgrid/core/components/AppSheet', () => ({
-  AppSheet: ({ visible, children }: { visible: boolean; children: React.ReactNode }) =>
-    visible ? children : null,
-}));
-
-jest.mock('../../../src/theme', () => {
-  const colors = {
-    text: '#000', textMuted: '#999', primary: '#1DB954', error: '#F00',
-    background: '#FFF', surface: '#F5F5F5', border: '#E0E0E0',
-  };
-  const shadows = { small: {}, medium: {}, large: {} };
-  return {
-    useTheme: () => ({ colors, shadows, isDark: false }),
-    useThemedStyles: (fn: any) => fn(colors, shadows),
-  };
 });
 
 // vision-camera is globally stubbed in jest.setup; capture the scan config here so
@@ -64,11 +45,11 @@ maybe('PairingCodeSheet scan-to-pair', () => {
 
   const baseProps = () => ({
     visible: true,
+    deviceId: 'device-studio-mac',
     deviceName: 'Studio Mac',
     confirmLabel: 'Pair',
     testIDPrefix: 'sync-test',
     onClose: jest.fn(),
-    onPair: jest.fn().mockResolvedValue(undefined),
   });
 
   beforeEach(() => {
@@ -98,14 +79,32 @@ maybe('PairingCodeSheet scan-to-pair', () => {
     expect(queryByTestId('sync-test-input')).toBeNull();
   });
 
-  it('pairs from a scanned QR via the same onPair as typing', async () => {
+  it('routes a scanned pairing code through the same normalized input as typing', async () => {
     const props = baseProps();
     const { getByTestId } = render(<PairingCodeSheet {...props} />);
     fireEvent.press(getByTestId('sync-test-scan'));
     await act(async () => {
       scanConfig!.onCodeScanned([{ value: VALID_QR }]);
     });
-    expect(props.onPair).toHaveBeenCalledWith(VALID_QR);
+    expect(getByTestId('sync-test-input').props.value).toBe('ABCD-2345');
+  });
+
+  it('pairs from the full pairing QR URL the other device shows, not just a bare code', async () => {
+    // The desktop/mobile pairing QR is an offgrid://pair/... URL carrying code=..., NOT a
+    // bare 8-char code. This sheet (opened from a device row) must read the code out of that
+    // URL - otherwise every real scan is rejected as "not a pairing code" (the shipped bug).
+    const url = encodePairingQrPayload({
+      device: { id: 'abc123def', name: 'Studio Mac', platform: 'macos', version: '0.0.107' },
+      pairingCode: VALID_QR,
+      routes: [{ kind: 'lan', host: '192.168.1.18', port: 37878 }],
+    });
+    const props = baseProps();
+    const { getByTestId } = render(<PairingCodeSheet {...props} />);
+    fireEvent.press(getByTestId('sync-test-scan'));
+    await act(async () => {
+      scanConfig!.onCodeScanned([{ value: url }]);
+    });
+    expect(getByTestId('sync-test-input').props.value).toBe('ABCD-2345');
   });
 
   it('ignores a QR that is not a pairing code', async () => {
@@ -115,6 +114,6 @@ maybe('PairingCodeSheet scan-to-pair', () => {
     await act(async () => {
       scanConfig!.onCodeScanned([{ value: 'https://example.com/not-a-code' }]);
     });
-    expect(props.onPair).not.toHaveBeenCalled();
+    expect(props.onClose).not.toHaveBeenCalled();
   });
 });

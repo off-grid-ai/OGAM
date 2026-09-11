@@ -3,6 +3,7 @@ import { NativeModules, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type {MobileApplicationFixture} from '../../harness/mobileApplicationFixture';
 
 jest.unmock('@react-navigation/native');
 
@@ -67,12 +68,9 @@ function installDownloadsBoundary(initial: { media: boolean; allFiles: boolean }
 // Installed before the screen is required, because the sharing service reads the boundary once when
 // it is constructed - exactly as it does on a device at launch.
 const boundary = installDownloadsBoundary({ media: false, allFiles: false });
-const {
-  SyncSharingSettingsScreen,
-} = require('../../../pro/ui/SyncScreen/SyncSharingSettingsScreen');
-const {
-  sharedFileSyncService,
-} = require('../../../pro/sync/sharedFileSyncService');
+let applicationFixture: MobileApplicationFixture;
+let SyncSharingSettingsScreen: typeof import('../../../pro/ui/SyncScreen/SyncSharingSettingsScreen')['SyncSharingSettingsScreen'];
+let sharedFileSyncService: typeof import('../../../pro/sync/sharedFileSyncService')['sharedFileSyncService'];
 
 function mountSharingScreen(): ReturnType<typeof render> {
   return render(
@@ -83,6 +81,17 @@ function mountSharingScreen(): ReturnType<typeof render> {
 }
 
 describe('Android downloads sharing', () => {
+  beforeAll(async () => {
+    const {startMobileApplicationFixture} = require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+    applicationFixture = await startMobileApplicationFixture({pro: true});
+    ({SyncSharingSettingsScreen} = require('../../../pro/ui/SyncScreen/SyncSharingSettingsScreen') as typeof import('../../../pro/ui/SyncScreen/SyncSharingSettingsScreen'));
+    ({sharedFileSyncService} = require('../../../pro/sync/sharedFileSyncService') as typeof import('../../../pro/sync/sharedFileSyncService'));
+  });
+
+  afterAll(async () => {
+    await applicationFixture.dispose();
+  });
+
   beforeEach(async () => {
     await AsyncStorage.clear();
     Object.defineProperty(Platform, 'OS', {

@@ -24,13 +24,31 @@ describe('keygenClient', () => {
       (global.fetch as jest.Mock).mockResolvedValueOnce(
         res({
           meta: { valid: true, code: 'VALID' },
-          data: { id: 'lic-1', attributes: { expiry: null, metadata: { email: 'a@b.co' }, name: 'n' } },
+          data: {
+            id: 'lic-1',
+            attributes: {
+              expiry: null,
+              metadata: { email: 'a@b.co' },
+              name: 'n',
+            },
+            relationships: {
+              policy: {data: {type: 'policies', id: 'policy-1'}},
+            },
+          },
+          included: [
+            {
+              type: 'policies',
+              id: 'policy-1',
+              attributes: {maxMachines: 5},
+            },
+          ],
         }),
       );
       const out = await validateKey('key/abc', 'fp-1');
 
       const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
       expect(url).toContain('/licenses/actions/validate-key');
+      expect(url).toContain('include=policy');
       const body = JSON.parse(init.body);
       expect(body.meta.key).toBe('key/abc');
       expect(body.meta.scope.product).toBe(KEYGEN_PRODUCT_ID);
@@ -39,12 +57,20 @@ describe('keygenClient', () => {
       expect(out).toEqual({
         valid: true,
         code: 'VALID',
-        license: { id: 'lic-1', expiry: null, metadata: { email: 'a@b.co' }, name: 'n' },
+        license: {
+          id: 'lic-1',
+          expiry: null,
+          maxMachines: 5,
+          metadata: { email: 'a@b.co' },
+          name: 'n',
+        },
       });
     });
 
     it('returns the code and null license when the key is not found', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce(res({ meta: { valid: false, code: 'NOT_FOUND' }, data: null }));
+      (global.fetch as jest.Mock).mockResolvedValueOnce(
+        res({ meta: { valid: false, code: 'NOT_FOUND' }, data: null }),
+      );
       const out = await validateKey('key/nope', 'fp-1');
       expect(out.valid).toBe(false);
       expect(out.code).toBe('NOT_FOUND');
@@ -53,14 +79,19 @@ describe('keygenClient', () => {
 
     it('throws KeygenNetworkError when fetch rejects', async () => {
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('offline'));
-      await expect(validateKey('key/abc', 'fp-1')).rejects.toBeInstanceOf(KeygenNetworkError);
+      await expect(validateKey('key/abc', 'fp-1')).rejects.toBeInstanceOf(
+        KeygenNetworkError,
+      );
     });
   });
 
   describe('activateMachine', () => {
     it('authenticates with the license key and succeeds on 201', async () => {
       (global.fetch as jest.Mock).mockResolvedValueOnce(res({}, 201));
-      const out = await activateMachine('key/abc', 'lic-1', { fingerprint: 'fp-1', platform: 'ios' });
+      const out = await activateMachine('key/abc', 'lic-1', {
+        fingerprint: 'fp-1',
+        platform: 'ios',
+      });
 
       const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
       expect(url).toContain('/machines');
@@ -75,21 +106,55 @@ describe('keygenClient', () => {
 
     it('flags limitReached on a 422 machine-limit error', async () => {
       (global.fetch as jest.Mock).mockResolvedValueOnce(
-        res({ errors: [{ code: 'MACHINE_LIMIT_EXCEEDED', detail: 'machine limit has been reached' }] }, 422),
+        res(
+          {
+            errors: [
+              {
+                code: 'MACHINE_LIMIT_EXCEEDED',
+                detail: 'machine limit has been reached',
+              },
+            ],
+          },
+          422,
+        ),
       );
-      expect(await activateMachine('key/abc', 'lic-1', { fingerprint: 'fp-1', platform: 'ios' })).toEqual({ ok: false, limitReached: true });
+      expect(
+        await activateMachine('key/abc', 'lic-1', {
+          fingerprint: 'fp-1',
+          platform: 'ios',
+        }),
+      ).toEqual({ ok: false, limitReached: true });
     });
 
     it('returns a plain failure on other errors', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce(res({ errors: [{ code: 'UNPROCESSABLE' }] }, 400));
-      expect(await activateMachine('key/abc', 'lic-1', { fingerprint: 'fp-1', platform: 'ios' })).toEqual({ ok: false, limitReached: false });
+      (global.fetch as jest.Mock).mockResolvedValueOnce(
+        res({ errors: [{ code: 'UNPROCESSABLE' }] }, 400),
+      );
+      expect(
+        await activateMachine('key/abc', 'lic-1', {
+          fingerprint: 'fp-1',
+          platform: 'ios',
+        }),
+      ).toEqual({ ok: false, limitReached: false });
     });
   });
 
   describe('listMachines / deactivateMachine', () => {
     it('maps machine records, keeping the times the eviction rule needs', async () => {
       (global.fetch as jest.Mock).mockResolvedValueOnce(
-        res({ data: [{ id: 'm1', attributes: { fingerprint: 'fp-1', platform: 'ios', name: 'Phone', created: 't' } }] }),
+        res({
+          data: [
+            {
+              id: 'm1',
+              attributes: {
+                fingerprint: 'fp-1',
+                platform: 'ios',
+                name: 'Phone',
+                created: 't',
+              },
+            },
+          ],
+        }),
       );
       const machines = await listMachines('key/abc', 'lic-1');
       // lastActiveAt and updatedAt are the fields the mesh reads to decide WHICH device gives up its

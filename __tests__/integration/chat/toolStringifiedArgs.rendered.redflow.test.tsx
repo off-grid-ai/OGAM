@@ -7,10 +7,15 @@
  * the real ChatScreen (llama). Only the native llama leaf is faked. Unlike Q2 (dropped call), here the tool
  * RUNS but with bad args → the rendered bubble shows a failure.
  */
-import { setupChatScreen } from '../../harness/chatHarness';
+import { startChatScreen, usingLlama } from '../../harness/chatHarness';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
   useRoute: () => require('../../harness/chatHarness').routeHolder,
   useFocusEffect: () => {},
   useIsFocused: () => true,
@@ -18,21 +23,22 @@ jest.mock('@react-navigation/native', () => ({
 
 describe('Q3 (behavioral) — stringified tool args surface an error bubble', () => {
   it('shows the computed answer in the tool bubble, not an internal error', async () => {
-    const h = await setupChatScreen({ engine: 'llama' });
-    h.enableToolViaUI('calculator');
-    h.render();
+    const h = await startChatScreen(usingLlama().withTools('built-in'));
 
     // `arguments` is a STRING ("{\"expression\":\"2+2\"}") rather than an object.
-    await h.send('what is 2 + 2', { text: 'Calculating. <tool_call>{"name": "calculator", "arguments": "{\\"expression\\": \\"2+2\\"}"}</tool_call>' });
+    await h.send('what is 2 + 2', {
+      text: 'Calculating. <tool_call>{"name": "calculator", "arguments": "{\\"expression\\": \\"2+2\\"}"}</tool_call>',
+    });
 
-    // Wait on the user-visible reply, then let the tool loop settle.
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Calculating\./)).not.toBeNull(); });
-    await h.settle();
-
-    // The tool ran and produced a result bubble...
-    expect(h.view!.queryByTestId('tool-result-label-calculator')).not.toBeNull();
+    // Wait for the user-visible tool outcome directly. The pre-tool text can
+    // appear in both the tool-call message and the final assistant message.
+    await h.rtl.waitFor(() => {
+      expect(h.assertions.isToolCallVisible('calculator')).toBe(true);
+    });
     // ...which must show the computed answer, NOT an internal failure. Today the stringified args break the
     // calculator so the bubble shows a failure → RED.
-    expect(h.view!.queryByText(/failed \(internal\)|Cannot read properties|error/i)).toBeNull();
+    expect(
+      h.view!.queryByText(/failed \(internal\)|Cannot read properties|error/i),
+    ).toBeNull();
   });
 });

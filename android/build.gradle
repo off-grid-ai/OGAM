@@ -34,6 +34,16 @@ apply plugin: "com.facebook.react.rootproject"
 // afterEvaluate — the latter threw "Cannot run afterEvaluate when the project is already
 // evaluated" for subprojects the React root plugin had already configured.
 subprojects { subproject ->
+    // Gradle 9 fails a Test task when a third-party React Native module ships test
+    // sources that its own configuration does not discover. Those dependency tests
+    // are not our test authority. Keep :app fail-closed, but let external modules
+    // report an empty test task instead of blocking the product build.
+    if (subproject.path != ":app") {
+        subproject.tasks.withType(Test).configureEach {
+            failOnNoDiscoveredTests = false
+        }
+    }
+
     ["com.android.application", "com.android.library"].each { pluginId ->
         subproject.plugins.withId(pluginId) {
             subproject.android {

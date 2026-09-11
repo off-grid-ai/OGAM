@@ -36,10 +36,11 @@ describe('T072 (rendered) — enhancement reasoning must not become the image pr
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
     h.render();
 
-    await h.placeImageModel({ backend: 'coreml' });
+    // 57ee10c1: the harness composes the real application root and the import adapter owns the model id.
+    const imageModel = await h.placeImageModel({ backend: 'coreml' });
      
-    const { activeModelService } = require('../../../src/services/activeModelService');
-    await activeModelService.loadImageModel('sd');
+    const { activeModelService } = require('../../harness/activeModelLifecycle');
+    await activeModelService.loadImageModel(imageModel.id);
     await h.cycleImageMode(); // auto → ON(force): "draw a cat" routes to IMAGE
     await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('image-mode-force-badge')).not.toBeNull(); });
 

@@ -1,19 +1,29 @@
-import { initLlama, LlamaContext } from 'llama.rn';
-import { REASONING_BUDGET_AUTO, thinkingBudgetPayload } from '@offgrid/models';
+import { LlamaContext } from 'llama.rn';
+import {
+  cumulativeTextDelta,
+  chatTemplateSupportsReasoning,
+  isCompletionTruncated,
+  llamaRnCompletionPayload,
+  llamaRnReasoningMetadata,
+  backendForcesF16Cache as sharedBackendForcesF16Cache,
+  effectiveTextCacheType,
+  llamaRnModelLoadPlan,
+  gpuFallbackNotice,
+  nativeBackendForLoad,
+  type ModelReasoningMetadata,
+} from '@offgrid/models';
+import { nativeTextLoad } from './composition/text-load';
 import RNFS from 'react-native-fs';
 import { Platform } from 'react-native';
 import { APP_CONFIG } from '../constants';
-import { Message, INFERENCE_BACKENDS } from '../types';
+import { Message } from '../types';
 import { MultimodalSupport, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
-import { templateEmitsReasoning } from '../utils/messageContent';
-import { ensureNativeLogCapture, resetNativeLogCapture, recentNativeLog } from './llmNativeLog';
+import { ensureNativeLogCapture, resetNativeLogCapture } from './llmNativeLog';
 
 import { HTP_ENABLED } from '../config/featureFlags';
 
-const RESPONSE_RESERVE = 512;
 /** Prompt compaction target. Output length is the user's model-aware maxTokens setting. */
-export const CONTEXT_PROMPT_BUDGET_RATIO = 0.55;
 const DEFAULT_THREADS = 4; // targets performance cores only; over-threading onto efficiency cores (A520) hurts
 const DEFAULT_BATCH = 512;
 const DEFAULT_GPU_LAYERS = Platform.OS === 'ios' ? 99 : 0;
@@ -66,181 +76,60 @@ export interface ModelLoadParams {
  * never shows one cache type while the model ran another.
  */
 export function backendForcesF16Cache(backend: string | undefined): boolean {
-  return backend === INFERENCE_BACKENDS.OPENCL || (HTP_ENABLED && backend === INFERENCE_BACKENDS.HTP);
+  return sharedBackendForcesF16Cache(backend);
 }
 
 /** The KV cache type that will ACTUALLY be used, after backend coercion to f16. */
 export function effectiveCacheType(backend: string | undefined, requested: string | undefined): string {
-  return backendForcesF16Cache(backend) ? 'f16' : (requested || 'q8_0');
+  return effectiveTextCacheType(backend, requested);
 }
 
 export function buildModelParams(
   modelPath: string,
   settings: { nThreads?: number; nBatch?: number; contextLength?: number; flashAttn?: boolean; enableGpu?: boolean; gpuLayers?: number; cacheType?: string; inferenceBackend?: string; speculativeDecoding?: boolean },
 ): ModelLoadParams {
-  const nThreads = settings.nThreads || getOptimalThreadCount();
-  const nBatch = settings.nBatch || getOptimalBatchSize();
-  const ctxLen = settings.contextLength || APP_CONFIG.maxContextLength;
-  // inferenceBackend takes precedence; fall back to legacy enableGpu flag
-  const backend = settings.inferenceBackend;
-  // Use flash_attn_type string API (replaces deprecated flash_attn boolean).
-  // OpenCL and HTP backends crash with flash attn on — disable for those.
-  // CPU (Android/iOS) and Metal both support it; use 'auto' to let llama.cpp decide.
-  const gpuBackendIncompatible = backendForcesF16Cache(backend);
-  const flash_attn_type = (settings.flashAttn === false || gpuBackendIncompatible) ? 'off' : 'auto';
-  const gpuEnabled = backend ? backend !== INFERENCE_BACKENDS.CPU : settings.enableGpu !== false;
-  const nGpuLayers = gpuEnabled ? (settings.gpuLayers ?? DEFAULT_GPU_LAYERS) : 0;
-  const isFlashAttnEffective = flash_attn_type !== 'off';
-  const requestedCache = settings.cacheType || (isFlashAttnEffective ? 'q8_0' : 'f16');
-  // OpenCL init on affected Adreno devices can fail when cache_type_k/v are passed.
-  // effectiveCacheType coerces OpenCL/HTP to f16 (single source shared with the UI).
-  const cacheType = effectiveCacheType(backend, requestedCache);
-  return {
-    baseParams: {
-      model: modelPath, use_mlock: false, n_batch: nBatch, n_ubatch: nBatch, n_threads: nThreads,
-      use_mmap: !shouldDisableMmap(modelPath), vocab_only: false, flash_attn_type,
-      // Do NOT force kv_unified — let llama.cpp pick it per architecture. Forcing
-      // `true` (a marginal single-seq perf tweak) hung gemma3n (gemma-4 E2B/E4B):
-      // its interleaved sliding-window + heterogeneous KV layers froze building the
-      // unified KV-cache reuse map ("kv_cache: reusing layers"). The engine's
-      // per-arch default (false) handles SWA models correctly and keeps GPU/Metal.
-      no_extra_bufts: false,
-      // MTP speculative decoding, enabled at CONTEXT CREATION (llama.rn's NativeContextParams) —
-      // it changes how the graph is built, so it cannot be toggled per completion. No draft model
-      // is named on purpose: MTP models carry their own draft layers, and llama.rn falls back to
-      // the target model's embedded ones when `draft` is omitted. A model without MTP weights
-      // simply never drafts, so the flag is safe to leave on for models that can't use it.
-      ...(settings.speculativeDecoding ? { speculative: { enabled: true, type: 'mtp' as const } } : {}),
-      ...(backend === INFERENCE_BACKENDS.OPENCL ? {} : { cache_type_k: cacheType, cache_type_v: cacheType }),
-    },
-    nThreads, nBatch, ctxLen, nGpuLayers,
-    // cacheType is already coerced to 'f16' above for OpenCL/HTP; OpenCL also omits the
-    // explicit cache params and llama.cpp defaults to f16 — both are captured here.
-    usesF16Cache: cacheType === 'f16',
-  };
+  return llamaRnModelLoadPlan({
+    modelPath,
+    settings,
+    defaultThreads: getOptimalThreadCount(),
+    defaultBatch: getOptimalBatchSize(),
+    defaultContextLength: APP_CONFIG.maxContextLength,
+    defaultGpuLayers: DEFAULT_GPU_LAYERS,
+    disableMmap: shouldDisableMmap(modelPath),
+  });
 }
 export interface ContextInitResult {
   context: LlamaContext;
   gpuAttemptFailed: boolean;
   actualLength: number;
 }
-/** Timeout for Adreno GPU context init on Android. 8s proved too tight on-device: Adreno 735
- *  first-load OpenCL kernel compilation exceeded it (2026-07-13 20:11 log: "timed out after
- *  8000ms" on a load that succeeded with 24 offloaded layers in an earlier session), silently
- *  downgrading every reload to CPU. The init runs on a native thread (no ANR exposure); 25s
- *  bounds a genuinely hung driver while letting a slow first compile finish. */
-const GPU_INIT_TIMEOUT_MS = 25000;
-/** Timeout for HTP/NPU context init -- DSP firmware load takes longer than Adreno. */
-const HTP_INIT_TIMEOUT_MS = 30000;
-/** iOS Metal init timeout. Larger than Android's because a legit large-model
- *  Metal setup takes longer — but bounded, so a Metal graph that HANGS (e.g.
- *  gemma3n froze indefinitely at kv-cache/graph construction) falls back to CPU
- *  instead of spinning the loader forever. */
-const GPU_INIT_TIMEOUT_MS_IOS = 45000;
-/** Race a promise against a timeout; rejects with descriptive error on expiry. */
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-/** Safely release a context, swallowing errors (used during fallback cleanup). */
-async function safeRelease(ctx: LlamaContext | null): Promise<void> {
-  if (!ctx) return;
-  try { await ctx.release(); } catch (e) { logger.warn('[LLM] Error releasing context during fallback:', e); }
-}
-/** The bounded time a GPU/HTP context init may take before we fall back to CPU.
- *  Platform/backend only changes the DURATION (data) — the timeout policy itself
- *  is uniform. */
-function gpuInitTimeoutMs(isHtp: boolean): number {
-  if (isHtp) return HTP_INIT_TIMEOUT_MS;            // Android HTP/NPU
-  return Platform.OS === 'ios' ? GPU_INIT_TIMEOUT_MS_IOS : GPU_INIT_TIMEOUT_MS;
-}
-/**
- * Race a GPU/HTP context init against a timeout so a HUNG backend (an iOS Metal
- * graph that never returns, an Android Adreno ANR) falls back to CPU instead of
- * spinning the loader forever. This applies on EVERY platform — the only
- * platform/backend difference is the timeout duration (see gpuInitTimeoutMs).
- * Previously it was gated to Android, which is exactly why a hung iOS Metal load
- * (e.g. gemma3n freezing at kv-cache/graph construction) had no escape hatch.
- */
-async function tryGpuInit(promise: Promise<LlamaContext>, nGpuLayers: number, isHtp: boolean = false): Promise<LlamaContext> {
-  if (nGpuLayers <= 0) return promise; // pure-CPU init — nothing to time out
-  const timeoutMs = gpuInitTimeoutMs(isHtp);
-  let timedOut = false;
-  promise.then(ctx => { if (timedOut) safeRelease(ctx); }).catch(() => {});
-  try { return await withTimeout(promise, timeoutMs, isHtp ? 'HTP context init' : 'GPU context init'); }
-  catch (e) { timedOut = true; throw e; }
-}
-
-/** Init llama with GPU/HTP, fall back to CPU, then retry with ctx=2048 on failure. */
+/** Native llama.rn port. Shared owns timeout and fallback policy/workflow. */
 export async function initContextWithFallback(
   params: object,
   contextLength: number,
   nGpuLayers: number,
 ): Promise<ContextInitResult> {
   const modelPath = (params as any).model || 'unknown';
-  const isHtp = HTP_ENABLED && Array.isArray((params as any).devices) && (params as any).devices.some((d: string) => d.startsWith('HTP'));
+  const backend = nativeBackendForLoad({
+    htpEnabled: HTP_ENABLED,
+    devices: Array.isArray((params as any).devices) ? (params as any).devices : undefined,
+    gpuLayers: nGpuLayers,
+  });
   // Capture llama.cpp's own log so a load failure surfaces its REAL reason
   // (missing tensor / unknown architecture / wrong size) instead of rnllama's
   // opaque "Failed to load model". Reset the buffer for this attempt.
   ensureNativeLogCapture();
   resetNativeLogCapture();
-  logger.log(`[LLM] initContextWithFallback: model=${modelPath}, ctx=${contextLength}, gpuLayers=${nGpuLayers}${isHtp ? ', backend=HTP' : ''}`);
-  logger.log(`[WIRE-LLAMA-LOAD] ${JSON.stringify({ modelPath, contextLength, nGpuLayers, isHtp, params: { ...(params as Record<string, unknown>), model: undefined } })}`); // [WIRE] settings→native model-load config
-  let gpuAttemptFailed = false;
-  try {
-    logger.log(`[LLM] Attempt 1/3: ${isHtp ? 'HTP' : 'GPU'} init (ctx=${contextLength}, gpu_layers=${nGpuLayers})`);
-    const gpuInitPromise = initLlama({ ...params, n_ctx: contextLength, n_gpu_layers: nGpuLayers } as any);
-    const context = await tryGpuInit(gpuInitPromise, nGpuLayers, isHtp);
-    logger.log('[LLM] GPU init succeeded');
-    return { context, gpuAttemptFailed, actualLength: contextLength };
-  } catch (gpuError: any) {
-    const gpuMsg = gpuError?.message || String(gpuError);
-    if (nGpuLayers > 0) {
-      logger.warn(`[LLM] Attempt 1/3 failed (GPU): ${gpuMsg}`);
-      gpuAttemptFailed = true;
-    } else {
-      logger.warn(`[LLM] Attempt 1/3 failed (no GPU requested): ${gpuMsg}`);
-    }
-    try {
-      logger.log(`[LLM] Attempt 2/3: CPU init (ctx=${contextLength}, gpu_layers=0)`);
-      // Strip devices — HTP requires n_gpu_layers > 0; CPU fallback must not request it
-      const cpuParams = { ...(params as Record<string, unknown>) };
-      delete cpuParams.devices;
-      const context = await initLlama({ ...cpuParams, n_ctx: contextLength, n_gpu_layers: 0 } as any);
-      logger.log('[LLM] CPU init succeeded');
-      return { context, gpuAttemptFailed, actualLength: contextLength };
-    } catch (cpuError: any) {
-      const cpuMsg = cpuError?.message || String(cpuError);
-      logger.warn(`[LLM] Attempt 2/3 failed (CPU, ctx=${contextLength}): ${cpuMsg}`);
-      try {
-        logger.log('[LLM] Attempt 3/3: CPU init (ctx=2048, gpu_layers=0)');
-        const cpuMinParams = { ...(params as Record<string, unknown>) };
-        delete cpuMinParams.devices;
-        const context = await initLlama({ ...cpuMinParams, n_ctx: 2048, n_gpu_layers: 0 } as any);
-        logger.log('[LLM] CPU init with ctx=2048 succeeded');
-        return { context, gpuAttemptFailed, actualLength: 2048 };
-      } catch (finalError: any) {
-        const finalMsg = finalError?.message || String(finalError);
-        logger.error(`[LLM] Attempt 3/3 failed (CPU, ctx=2048): ${finalMsg}`);
-        logger.error(`[LLM] All 3 init attempts failed for model: ${modelPath}`);
-        logger.error(`[LLM] Error chain — GPU: "${gpuMsg}" | CPU: "${cpuMsg}" | min-ctx: "${finalMsg}"`);
-        const errorParts = [
-          gpuMsg && gpuMsg !== finalMsg ? `GPU: ${gpuMsg}` : null,
-          cpuMsg && cpuMsg !== finalMsg ? `CPU: ${cpuMsg}` : null,
-          `min-ctx: ${finalMsg}`,
-        ].filter(Boolean).join(' | ');
-        // Surface llama.cpp's actual reason (rnllama only gives "Failed to load
-        // model"); the native log says e.g. "missing tensor" / "unknown arch".
-        const nativeReason = recentNativeLog();
-        logger.error(`[LLM] llama.cpp native log tail:\n${nativeReason}`);
-        const nativeSuffix = nativeReason ? `\n\nllama.cpp: ${nativeReason}` : '';
-        throw new Error(`Failed to load model even at minimum context (2048). This may indicate insufficient memory, a corrupted model file, or an unsupported model format.\n\nError chain: ${errorParts}${nativeSuffix}`);
-      }
-    }
-  }
+  logger.log(`[LLM] initContextWithFallback: model=${modelPath}, ctx=${contextLength}, gpuLayers=${nGpuLayers}, backend=${backend.toUpperCase()}`);
+  logger.log(`[WIRE-LLAMA-LOAD] ${JSON.stringify({ modelPath, contextLength, nGpuLayers, backend, params: { ...(params as Record<string, unknown>), model: undefined } })}`);
+  const service = nativeTextLoad();
+  return service.load({
+    platform: Platform.OS === 'android' ? 'android' : 'ios',
+    backend,
+    params: params as Record<string, unknown>,
+    contextLength,
+    gpuLayers: nGpuLayers,
+  });
 }
 export interface GpuInfo {
   gpuEnabled: boolean;
@@ -269,10 +158,7 @@ export function captureGpuInfo(
  * downgrade (device 2026-07-13 18:57: "Backend=GPU but ran on CPU at 3.4 tok/s").
  */
 export function describeGpuFallback(info: { requestedGpuLayers: number; activeGpuLayers: number; gpuAttemptFailed: boolean }): string | null {
-  if (info.requestedGpuLayers <= 0 || info.activeGpuLayers > 0) return null;
-  return info.gpuAttemptFailed
-    ? 'GPU unavailable - its initialization failed or timed out. Running on CPU.'
-    : 'GPU unavailable on this device - running on CPU.';
+  return gpuFallbackNotice(info);
 }
 export function supportsNativeThinking(context: LlamaContext | null): boolean {
   if (!context) return false;
@@ -286,30 +172,24 @@ export function supportsNativeThinking(context: LlamaContext | null): boolean {
     // both jinja-supported and OD7 jinja-unsupported reasoning models: both carry the template here.
     const metadata = (context as any)?.model?.metadata;
     const template = metadata?.['tokenizer.chat_template'] ?? metadata?.chat_template;
-    return templateEmitsReasoning(typeof template === 'string' ? template : undefined);
+    return chatTemplateSupportsReasoning(typeof template === 'string' ? template : undefined);
   } catch {
     return false;
   }
 }
-export function buildThinkingCompletionParams(enableThinking: boolean, isGemma4: boolean = false, reasoningBudget?: number): { enable_thinking: boolean; reasoning_format: 'none' | 'auto' | 'deepseek'; thinking_budget_tokens?: number } {
-  if (!enableThinking) return { enable_thinking: false, reasoning_format: 'none' };
-  // Native-first (parse-once at the runtime boundary): Gemma 4 uses its own
-  // <|channel>thought\n...<channel|> format, not DeepSeek's <think> tags. reasoning_format:'auto'
-  // lets llama.cpp detect the model's chat_format and parse reasoning + tool calls NATIVELY —
-  // populating reasoning_content/tool_calls and returning already-filtered content — instead of
-  // forcing 'none' and hand-parsing the raw channel tags ourselves. Safe by construction: finalize
-  // and resolveToolCalls only fall back to our hand-parser when the native fields are empty, so
-  // native wins when it works and the hand-parser is a pure fallback. (Non-Gemma reasoning models
-  // keep the known-good 'deepseek' path.)
-  // The thinking-budget rule (and the llama.rn wire fragment) is the shared @offgrid/models
-  // contract - desktop applies the same rule as reasoning_budget_tokens on llama-server. At the
-  // budget the engine closes the thinking block and the answer still streams.
-  return { enable_thinking: true, reasoning_format: isGemma4 ? 'auto' : 'deepseek', ...thinkingBudgetPayload(true, reasoningBudget ?? REASONING_BUDGET_AUTO) };
+
+/** Publish only reasoning controls proven by the loaded GGUF chat template. */
+export function llamaReasoningMetadata(
+  context: LlamaContext | null,
+): ModelReasoningMetadata | undefined {
+  if (!context) return undefined;
+  const metadata = (context as any)?.model?.metadata;
+  const template = metadata?.['tokenizer.chat_template'] ?? metadata?.chat_template;
+  if (typeof template !== 'string') return undefined;
+  return llamaRnReasoningMetadata(template);
 }
 export function getStreamingDelta(nextValue: string | undefined, previousValue: string): string | undefined {
-  if (!nextValue) return undefined;
-  if (!previousValue) return nextValue;
-  return nextValue.startsWith(previousValue) ? nextValue.slice(previousValue.length) || undefined : nextValue;
+  return cumulativeTextDelta(nextValue, previousValue);
 }
 
 /** Reads the model's trained context length from metadata, or null if unavailable. */
@@ -414,23 +294,19 @@ export async function fitMessagesInBudget(
 }
 // Pure GPU hardware rules live in their own module and need no engine.
 export { BYTES_PER_GB, getGpuLayersForDevice } from './llmDeviceLimits';
-export { validateModelFile, checkMemoryForModel, safeCompletion, resolveSafeContext } from './llmSafetyChecks';
-const STOP_TOKENS = ['</s>', '<|end|>', '<|eot_id|>'];
+export {  safeCompletion } from './llmSafetyChecks';
 export function buildCompletionParams(settings: {
   maxTokens?: number; temperature?: number; topP?: number; repeatPenalty?: number;
 }, options?: { disableCtxShift?: boolean }): Record<string, any> {
-  const requestedMaxTokens = Math.max(1, Math.floor(settings.maxTokens || RESPONSE_RESERVE));
-  return {
-    // Do not impose a second app-owned output ceiling. The setting surface already
-    // uses the model's context maximum; llama.rn owns the actual per-turn fit.
-    n_predict: requestedMaxTokens,
-    temperature: settings.temperature ?? 0.7,
-    top_k: 40,
-    top_p: settings.topP ?? 0.95,
-    penalty_repeat: settings.repeatPenalty ?? 1.1,
-    stop: STOP_TOKENS,
-    ctx_shift: options?.disableCtxShift ? false : true,
-  };
+  return llamaRnCompletionPayload(
+    {
+      maxTokens: settings.maxTokens,
+      temperature: settings.temperature,
+      topP: settings.topP,
+      repetitionPenalty: settings.repeatPenalty,
+    },
+    { disableContextShift: options?.disableCtxShift },
+  );
 }
 /**
  * Was a completion cut off at the n_predict cap (B15), vs finishing on EOS or being STOPPED? SINGLE
@@ -440,8 +316,7 @@ export function buildCompletionParams(settings: {
 export function isTruncatedResult(
   cr: { interrupted?: boolean; stopped_limit?: number | boolean; truncated?: boolean } | null | undefined,
 ): boolean {
-  if (!cr || cr.interrupted === true) return false;
-  return cr.stopped_limit === 1 || cr.stopped_limit === true || cr.truncated === true;
+  return isCompletionTruncated(cr);
 }
 export function recordGenerationStats(
   startTime: number,

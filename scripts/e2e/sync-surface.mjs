@@ -512,11 +512,30 @@ const electronSurface = async (spec) => {
     return result.result.value;
   };
 
+  // Data reaches the page as CDP arguments, never spliced into source. `fn` is a real function or a
+  // constant function-declaration string; nothing a test observed is ever turned into code.
+  let globalObjectId;
+  const call = async (fn, ...args) => {
+    if (!globalObjectId) {
+      const { result } = await send('Runtime.evaluate', { expression: 'globalThis' });
+      globalObjectId = result.objectId;
+    }
+    const result = await send('Runtime.callFunctionOn', {
+      objectId: globalObjectId,
+      functionDeclaration: typeof fn === 'function' ? fn.toString() : fn,
+      arguments: args.map((value) => ({ value })),
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (result.exceptionDetails) {
+      throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
+    }
+    return result.result.value;
+  };
+
   /** Click the smallest clickable whose text matches, optionally scoped to the CARD for `within`. */
   const click = (label, within) =>
-    evaluate(`
-      const wanted = ${JSON.stringify(label)}.toLowerCase();
-      const scope = ${within ? JSON.stringify(within) : 'null'};
+    call((wanted, scope) => {
       let root = document;
       if (scope) {
         // The <article> row, not the smallest node containing the name - that is the name span, which
@@ -538,7 +557,7 @@ const electronSurface = async (spec) => {
       if (!hit) return false;
       hit.click();
       return true;
-    `);
+    }, label.toLowerCase(), within ?? null);
 
   return {
     platform,
@@ -622,7 +641,7 @@ const electronSurface = async (spec) => {
             .filter((el) => /Enter the pairing code/i.test(el.innerText ?? '') && el.offsetParent !== null)
             .sort((a, b) => a.innerText.length - b.innerText.length)[0];
       `;
-      const filled = await evaluate(`
+      const filled = await call(`function (code) {
         ${dialogJs}
         if (!dialog) return 'no dialog';
         const field = [...dialog.querySelectorAll('input')].find((el) => el.offsetParent !== null);
@@ -630,10 +649,10 @@ const electronSurface = async (spec) => {
         // Through the native setter so React's onChange fires; assigning .value directly updates the
         // DOM and leaves React's state empty, so the confirm stays disabled.
         const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-        setter.call(field, ${JSON.stringify(code)});
+        setter.call(field, code);
         field.dispatchEvent(new Event('input', { bubbles: true }));
         return 'ok';
-      `);
+      }`, code);
       if (filled !== 'ok') throw new Error(`${platform}: could not fill the pairing code (${filled})`);
       await sleep(600);
       const confirmed = await evaluate(`
@@ -745,19 +764,17 @@ const electronSurface = async (spec) => {
     },
 
     async isConnectedTo(name) {
-      return evaluate(`
-        const wanted = ${JSON.stringify(name)};
+      return call((wanted) => {
         // The <article> ROW, not the smallest node mentioning the name - that is the name span, which
         // carries no status at all, so this reported false for a device the screen showed as connected.
         const card = [...document.querySelectorAll('article')]
           .filter((el) => (el.innerText ?? '').includes(wanted) && el.offsetParent !== null)
           .sort((a, b) => a.innerText.length - b.innerText.length)[0];
         if (!card) return false;
-        // Case-sensitive includes, NOT a regex: inside a template literal \\b is the backspace escape,
-        // not a word boundary, so the pattern silently matched nothing. Case matters because the summary
-        // chip says "N connected" - a loose match makes every device look connected at once.
+        // Case-sensitive includes, NOT a regex. Case matters because the summary chip says
+        // "N connected" - a loose match makes every device look connected at once.
         return card.innerText.includes('Connected');
-      `);
+      }, name);
     },
 
     /**

@@ -128,16 +128,3 @@ export async function fetchAvailableModels(forceRefresh = false, opts?: { skipQn
 export function getVariantLabel(variant?: string): string | undefined {
   return variant ? VARIANT_LABELS[variant] : undefined;
 }
-
-export function guessStyle(name: string): string {
-  const lower = name.toLowerCase();
-  if (
-    lower.includes('reality') ||
-    lower.includes('realistic') ||
-    lower.includes('chillout') ||
-    lower.includes('photo')
-  ) {
-    return 'photorealistic';
-  }
-  return 'anime';
-}

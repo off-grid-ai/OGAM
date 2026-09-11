@@ -1,3 +1,4 @@
+import { remoteErrorBodyMessage } from '@offgrid/models';
 /**
  * HTTP Client for Remote LLM Servers
  *
@@ -7,7 +8,7 @@
 
 import logger from '../utils/logger';
 import { createSSELineProcessor } from './httpClientSSE';
-import { isCredentialTransportDowngrade } from './remoteTransportPolicy';
+import { isCredentialTransportDowngrade } from '@offgrid/models';
 
 export {
   parseOpenAIMessage,
@@ -17,8 +18,6 @@ export {
 export {
   imageToBase64DataUrl,
   isPrivateNetworkEndpoint,
-  testEndpoint,
-  detectServerType,
 } from './httpClientUtils';
 // The stream-message types live in httpClientTypes so httpClientSSE can import them without
 // importing this file (which imports SSE) — that would be a cycle. Imported for internal use here
@@ -220,7 +219,7 @@ export async function createStreamingRequest(
           );
           reject(
             new Error(
-              `HTTP ${xhr.status}: ${xhr.responseText || 'Unknown error'}`,
+              remoteErrorBodyMessage(xhr.responseText ?? '', xhr.status),
             ),
           );
         }
@@ -441,6 +440,6 @@ function completeNDJSONRequest({
     }`,
   );
   reject(
-    new Error(`HTTP ${xhr.status}: ${xhr.responseText || 'Unknown error'}`),
+    new Error(remoteErrorBodyMessage(xhr.responseText ?? '', xhr.status)),
   );
 }

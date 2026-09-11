@@ -4,76 +4,35 @@
  * Types for managing remote LLM servers (Ollama, LM Studio, etc.)
  * that expose OpenAI-compatible or Anthropic-compatible APIs.
  */
-
-/** Provider types supported by the system */
-type RemoteProviderType = 'openai-compatible' | 'anthropic';
+import {
+  type ModelReasoningMetadata,
+  type RemoteModelCapabilities as SharedRemoteModelCapabilities,
+  type RemoteModelCatalog as SharedRemoteModelCatalog,
+  type RemoteModelModality,
+  type RemoteModelOption as SharedRemoteModelOption,
+  type RemoteModalitySelections,
+  type RemoteServerRecord,
+} from '@offgrid/models';
 
 /** Optional OpenAI-compatible media models served by this endpoint. */
-export interface RemoteMediaModelIds {
-  text?: string;
-  image?: string;
-  transcription?: string;
-  voice?: string;
-}
+export type RemoteMediaModelIds = RemoteModalitySelections;
 
-export type RemoteModelCategory = keyof RemoteMediaModelIds;
+export type RemoteModelCategory = RemoteModelModality;
 
 /** One user-selectable model reported by the remote server. */
-export interface RemoteModelOption {
-  id: string;
-  name: string;
-  /** Alternate active values returned by the Off Grid Desktop gateway, such as a primary filename. */
-  activeAliases?: string[];
-}
+export type RemoteModelOption = SharedRemoteModelOption;
 
 /** Models grouped by the OpenAI-compatible work they can perform. */
-export type RemoteModelCatalog = Partial<
-  Record<RemoteModelCategory, RemoteModelOption[]>
->;
-
-export interface RemoteServerCapabilities {
-  imageGeneration: boolean;
-  transcription: boolean;
-  voice: boolean;
-}
+export type RemoteModelCatalog = SharedRemoteModelCatalog;
 
 /** Remote server configuration */
-export interface RemoteServer {
-  /** Unique identifier for this server */
-  id: string;
-  /** User-friendly name (e.g., "Ollama Desktop", "LM Studio Server") */
-  name: string;
-  /** Base endpoint URL (e.g., "http://192.168.1.50:11434") */
-  endpoint: string;
+export interface RemoteServer extends RemoteServerRecord {
   /** API key for authentication (optional, stored securely) */
   apiKey?: string;
-  /** Provider type for message format handling */
-  providerType: RemoteProviderType;
   /** When this server was added */
   createdAt: string;
-  /** Last successful health check */
-  lastHealthCheck?: string;
-  /** Whether the server is currently reachable */
-  isHealthy?: boolean;
   /** User-defined notes or description */
   notes?: string;
-  /** Selected model IDs for each OpenAI-compatible endpoint. */
-  mediaModels?: RemoteMediaModelIds;
-  /** Available models reported by servers that declare a model kind. */
-  modelCatalog?: RemoteModelCatalog;
-  /** A detected model-management contract. Generic OpenAI-compatible servers leave this unset. */
-  modelManagement?: 'offgrid-desktop-v1';
-}
-
-/** Model presence is the one source of truth for available remote media work. */
-export function remoteServerCapabilities(
-  server: Pick<RemoteServer, 'mediaModels'>,
-): RemoteServerCapabilities {
-  return {
-    imageGeneration: !!server.mediaModels?.image?.trim(),
-    transcription: !!server.mediaModels?.transcription?.trim(),
-    voice: !!server.mediaModels?.voice?.trim(),
-  };
 }
 
 /** Model discovered from a remote server */
@@ -93,13 +52,16 @@ export interface RemoteModel {
 }
 
 /** Capabilities advertised by a remote model */
-interface RemoteModelCapabilities {
+interface RemoteModelCapabilities extends SharedRemoteModelCapabilities {
   /** Supports vision/image input */
   supportsVision: boolean;
   /** Supports function/tool calling */
-  supportsToolCalling: boolean;
-  /** Supports extended thinking (reasoning tokens) */
-  supportsThinking: boolean;
+  /** Absent means unknown: nothing has said either way. Unknown is not "no". */
+  supportsToolCalling?: boolean;
+  /** Supports extended thinking (reasoning tokens). Absent means unknown. */
+  supportsThinking?: boolean;
+  /** Provider-published reasoning control for this executable route. */
+  reasoning?: ModelReasoningMetadata;
   /**
    * Whether the server honors `chat_template_kwargs.enable_thinking` to toggle
    * reasoning per request (discovered from the server, e.g. llama.cpp /props).
@@ -122,9 +84,9 @@ export interface ServerTestResult {
   /** Available models discovered (if connection succeeded) */
   models?: RemoteModel[];
   /** Active media models declared by an Off Grid Desktop gateway */
-  mediaModels?: RemoteMediaModelIds;
+  selections?: RemoteMediaModelIds;
   /** Selectable models declared by an Off Grid Desktop gateway. */
-  modelCatalog?: RemoteModelCatalog;
+  catalog?: RemoteModelCatalog;
   /** Model-management contract detected during discovery. */
   modelManagement?: 'offgrid-desktop-v1';
   /** Server info (version, type, etc.) */

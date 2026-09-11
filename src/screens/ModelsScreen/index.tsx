@@ -5,7 +5,8 @@ import { useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import { MainTabParamList } from '../../navigation/types';
 import Icon from 'react-native-vector-icons/Feather';
 import { CustomAlert, hideAlert } from '../../components/CustomAlert';
-import { RECOMMENDED_MODELS, SPACING } from '../../constants';
+import { SPACING } from '../../constants';
+import { RECOMMENDED_MODELS } from '@offgrid/application';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useModelsScreen } from './useModelsScreen';
 import { createStyles } from './styles';
@@ -18,10 +19,10 @@ import type { ModelTab } from './types';
 import { ScreenHeader } from '../../components/ScreenHeader';
 
 const MODEL_TABS: ReadonlyArray<{ key: ModelTab; label: string; testID?: string }> = [
-  { key: 'text', label: 'Text Models' },
-  { key: 'image', label: 'Image Models' },
-  { key: 'transcription', label: 'Transcription Models', testID: 'transcription-models-tab' },
-  { key: 'voice', label: 'Voice Models', testID: 'voice-models-tab' },
+  { key: 'text', label: 'Text' },
+  { key: 'image', label: 'Image' },
+  { key: 'voice', label: 'Voice', testID: 'voice-models-tab' },
+  { key: 'transcription', label: 'Speech', testID: 'transcription-models-tab' },
 ];
 
 interface ModelsScreenProps {
@@ -114,35 +115,11 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
           />
         </HideWhenEmbedded>
 
-        {/* Import Local File */}
-        <HideWhenEmbedded embedded={embedded}><View>
-          {vm.isImporting && vm.importProgress ? (
-            <View style={styles.importProgressCard}>
-              <View style={styles.importProgressHeader}>
-                <Icon name="file" size={18} color={colors.primary} />
-                <Text style={styles.importProgressText} numberOfLines={1}>
-                  Importing {vm.importProgress.fileName}
-                </Text>
-              </View>
-              <View style={styles.imageProgressBar}>
-                <View style={[styles.imageProgressFill, { width: `${Math.round(vm.importProgress.fraction * 100)}%` }]} />
-              </View>
-              <Text style={styles.importProgressPercent}>
-                {Math.round(vm.importProgress.fraction * 100)}%
-              </Text>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.importButton} onPress={vm.handleImportLocalModel} testID="import-local-model" disabled={vm.isImporting}>
-              <Icon name="folder-plus" size={20} color={colors.primary} />
-              <Text style={styles.importButtonText}>Import Local File</Text>
-            </TouchableOpacity>
-          )}
-        </View></HideWhenEmbedded>
-
         {/* Tab Bar (horizontally scrollable — four tabs don't fit on a phone) */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.tabBarFrame}
           contentContainerStyle={styles.tabBar}
         >
           {MODEL_TABS.map(tab => (
@@ -204,6 +181,9 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
           isModelDownloaded={vm.isModelDownloaded}
           getDownloadedModel={vm.getDownloadedModel}
           isRepairingVisionModel={vm.isRepairingVisionModel}
+          isImporting={vm.isImporting}
+          importProgress={vm.importProgress}
+          handleImportLocalModel={vm.handleImportLocalModel}
         />
       )}
 
@@ -240,13 +220,15 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
           clearImageFilters={vm.clearImageFilters}
           setUserChangedBackendFilter={vm.setUserChangedBackendFilter}
           isRecommendedModel={vm.isRecommendedModel}
+          setAlertState={vm.setAlertState}
+          downloadedImageModels={vm.downloadedImageModels}
         />
       )}
 
       {/* Voice Models Tab: pro panel when registered, otherwise an upsell. */}
       {vm.activeTab === 'voice' && (
         VoiceModelsPanel
-          ? <VoiceModelsPanel showRemoteModels={!embedded} />
+          ? <VoiceModelsPanel />
           : <VoiceModelsUpsell onGetPro={() => vm.navigation.navigate('ProDetail')} />
       )}
 
@@ -254,7 +236,6 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
       {vm.activeTab === 'transcription' && (
         <TranscriptionModelsTab
           showLanguageSelector={!embedded}
-          showRemoteModels={!embedded}
         />
       )}
 

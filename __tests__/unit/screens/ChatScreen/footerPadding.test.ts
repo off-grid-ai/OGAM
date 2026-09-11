@@ -10,23 +10,27 @@ import { computeFooterPaddingBottom, shouldShowEvictedBar } from '../../../../sr
 
 describe('computeFooterPaddingBottom', () => {
   it('collapses to 0 while the keyboard is visible, regardless of inset', () => {
-    expect(computeFooterPaddingBottom(true, 0)).toBe(0);
-    expect(computeFooterPaddingBottom(true, 24)).toBe(0);
-    expect(computeFooterPaddingBottom(true, 48)).toBe(0);
+    expect(computeFooterPaddingBottom(true, 0, 'ios')).toBe(0);
+    expect(computeFooterPaddingBottom(true, 24, 'ios')).toBe(0);
+    expect(computeFooterPaddingBottom(true, 48, 'android')).toBe(0);
   });
 
-  it('caps a thin overlay inset (iOS home indicator / gesture nav) at 4', () => {
-    expect(computeFooterPaddingBottom(false, 0)).toBe(0);
-    expect(computeFooterPaddingBottom(false, 4)).toBe(4);
-    expect(computeFooterPaddingBottom(false, 24)).toBe(4); // at the overlay ceiling
+  it('lifts the iOS composer by one spacing step and caps the home-indicator inset', () => {
+    expect(computeFooterPaddingBottom(false, 0, 'ios')).toBe(8);
+    expect(computeFooterPaddingBottom(false, 4, 'ios')).toBe(12);
+    expect(computeFooterPaddingBottom(false, 34, 'ios')).toBe(12);
+  });
+
+  it('caps a thin Android gesture-navigation inset at 4', () => {
+    expect(computeFooterPaddingBottom(false, 24, 'android')).toBe(4);
   });
 
   it('honors the full inset for an opaque 3-button nav bar (tall inset)', () => {
     // Regression: OnePlus/Oppo 3-button nav bar. Must NOT cap to 4 or the input
     // controls sit under the nav buttons.
-    expect(computeFooterPaddingBottom(false, 48)).toBe(48);
-    expect(computeFooterPaddingBottom(false, 36)).toBe(36);
-    expect(computeFooterPaddingBottom(false, 25)).toBe(25); // just above the ceiling
+    expect(computeFooterPaddingBottom(false, 48, 'android')).toBe(48);
+    expect(computeFooterPaddingBottom(false, 36, 'android')).toBe(36);
+    expect(computeFooterPaddingBottom(false, 25, 'android')).toBe(25); // just above the ceiling
   });
 });
 
@@ -53,6 +57,13 @@ describe('shouldShowEvictedBar', () => {
     // Regression: an image turn evicts the text model, then completes. The last
     // message is the assistant image, so nothing text is pending — bar must hide.
     expect(make({ displayMessages: [{ role: 'user' }, { role: 'assistant' }] })).toBe(false);
+  });
+
+  it('hides after a stopped image turn — the user message is an image turn, no text reply is pending', () => {
+    // Regression: "Draw a dog" was routed to the image model, the person stopped it, and the bar
+    // announced "Model unloaded to free memory — tap to continue" for a text reply nobody asked for.
+    expect(make({ displayMessages: [{ role: 'user', turnKind: 'image' }] })).toBe(false);
+    expect(make({ displayMessages: [{ role: 'user', turnKind: 'text' }] })).toBe(true);
   });
 
   it('hides while an image is generating even if the last message is the user request', () => {

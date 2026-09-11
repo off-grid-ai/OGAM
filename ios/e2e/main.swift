@@ -19,9 +19,13 @@ func fail(_ message: String) -> Never {
 }
 
 func say(_ value: [String: Any]) {
-  let data = try! JSONSerialization.data(withJSONObject: value)
-  FileHandle.standardOutput.write(data)
-  FileHandle.standardOutput.write(Data("\n".utf8))
+  do {
+    let data = try JSONSerialization.data(withJSONObject: value)
+    FileHandle.standardOutput.write(data)
+    FileHandle.standardOutput.write(Data("\n".utf8))
+  } catch {
+    fail("could not encode harness result: \(error)")
+  }
 }
 
 guard arguments.count >= 7 else { fail("usage: serve | stream") }

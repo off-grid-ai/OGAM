@@ -1,11 +1,11 @@
 import {
-  PERSONAL_MESH_DEVICE_CAP,
   PersonalMeshEntitlementError,
   type PersonalMeshInstallation,
   type PersonalMeshMembershipReplacementAdapter,
   type PersonalMeshRegistrationInput,
 } from '@offgrid/sync';
 import { createDirectEntitlementActivationOwner } from '../../../pro/sync/directEntitlementActivation';
+import {validateKey} from '../../../pro/licensing/keygenClient';
 import {
   MESH_LICENCE_KEY,
   createLicensedMesh,
@@ -28,6 +28,7 @@ import {
  */
 describe('entering a licence key on this phone', () => {
   let mesh: LicensedMesh;
+  let maxMachines: number;
 
   /** The membership this phone would displace, as durable state a rollback must be able to undo. */
   class MembershipReplacements
@@ -79,6 +80,7 @@ describe('entering a licence key on this phone', () => {
     key: MESH_LICENCE_KEY,
     entitlementId: mesh.licenceId,
     expiresAt: null,
+    maxMachines,
     fingerprint,
   });
 
@@ -98,14 +100,14 @@ describe('entering a licence key on this phone', () => {
    * mesh allows - that is the state in which activating this phone has to displace something.
    */
   const fullLicence = (): void => {
-    mesh.reset(PERSONAL_MESH_DEVICE_CAP);
+    mesh.reset(maxMachines);
     installLicensedPhone(mesh);
     mesh.register({
       id: 'fp-the-old-phone',
       name: 'Old phone',
       platform: 'ios',
     });
-    for (let index = 1; index < PERSONAL_MESH_DEVICE_CAP; index += 1) {
+    for (let index = 1; index < maxMachines; index += 1) {
       mesh.register({
         id: `fp-device-${index}`,
         name: `Device ${index}`,
@@ -114,10 +116,15 @@ describe('entering a licence key on this phone', () => {
     }
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     mesh = createLicensedMesh();
-    mesh.reset(PERSONAL_MESH_DEVICE_CAP);
+    mesh.reset();
     installLicensedPhone(mesh);
+    const validation = await validateKey(MESH_LICENCE_KEY, await thisPhone());
+    if (!validation.license?.maxMachines) {
+      throw new Error('The licensed-mesh fixture returned no machine limit.');
+    }
+    maxMachines = validation.license.maxMachines;
   });
 
   afterEach(() => {

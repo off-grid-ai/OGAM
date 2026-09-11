@@ -1,5 +1,6 @@
-import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Modal, TouchableWithoutFeedback, Dimensions } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, TouchableOpacity, Text, StyleSheet, Modal, TouchableWithoutFeedback, Dimensions, Alert } from 'react-native';
+import { modelsFailureMessage } from '@offgrid/application';
 import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../theme';
@@ -8,6 +9,8 @@ import { useAppStore } from '../../stores';
 import { triggerHaptic } from '../../utils/haptics';
 import { FONTS } from '../../constants';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { applicationFacade } from '../../services/applicationFacade';
+import { useModelsProjection } from '../../hooks/useApplicationProjection';
 
 const TOOL_WARNING_COLOR = '#F59E0B';
 
@@ -117,7 +120,41 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
   mcpToolCount = 0, onMcpPress,
 }) => {
   const { colors } = useTheme();
-  const { settings, updateSettings, toolCountHintDismissed } = useAppStore();
+  const thinkingEnabled = useModelsProjection().settings.thinkingEnabled === true;
+  // This is popover presentation state, not a committed model setting.
+  const toolCountHintDismissed = useAppStore(
+    state => state.toolCountHintDismissed,
+  );
+  const [isSavingThinking, setIsSavingThinking] = useState(false);
+  const isSavingThinkingRef = useRef(false);
+
+  const toggleThinking = async (): Promise<void> => {
+    if (isSavingThinkingRef.current) return;
+    isSavingThinkingRef.current = true;
+    setIsSavingThinking(true);
+    triggerHaptic('impactLight');
+    try {
+      const outcome = await applicationFacade().models.settings.save({
+        origin: 'local',
+        patch: { thinkingEnabled: !thinkingEnabled },
+      });
+      if (!outcome.ok) {
+        Alert.alert('Error', modelsFailureMessage(outcome.failure));
+        return;
+      }
+      if (outcome.value.syncFailure) {
+        Alert.alert(
+          'Saved on this device',
+          modelsFailureMessage(outcome.value.syncFailure),
+        );
+      }
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : String(error));
+    } finally {
+      isSavingThinkingRef.current = false;
+      setIsSavingThinking(false);
+    }
+  };
 
   if (!visible) return null;
 
@@ -175,18 +212,20 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                 <TouchableOpacity
                   testID="quick-thinking-toggle"
                   style={popoverStyles.row}
-                  onPress={() => {
-                    triggerHaptic('impactLight');
-                    updateSettings({ thinkingEnabled: !settings.thinkingEnabled });
+                  disabled={isSavingThinking}
+                  accessibilityState={{
+                    busy: isSavingThinking,
+                    disabled: isSavingThinking,
                   }}
+                  onPress={toggleThinking}
                 >
-                  <Icon name="zap" size={16} color={settings.thinkingEnabled ? colors.primary : colors.textMuted} />
+                  <Icon name="zap" size={16} color={thinkingEnabled ? colors.primary : colors.textMuted} />
                   <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>Thinking</Text>
                   <View style={[popoverStyles.badge, {
-                    backgroundColor: settings.thinkingEnabled ? colors.primary : colors.textMuted,
+                    backgroundColor: thinkingEnabled ? colors.primary : colors.textMuted,
                   }]}>
                     <Text style={[popoverStyles.badgeText, { color: colors.background }]}>
-                      {settings.thinkingEnabled ? 'ON' : 'OFF'}
+                      {isSavingThinking ? '...' : thinkingEnabled ? 'ON' : 'OFF'}
                     </Text>
                   </View>
                 </TouchableOpacity>

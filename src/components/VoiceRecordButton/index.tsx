@@ -31,7 +31,13 @@ import {
   ButtonIcon,
 } from './states';
 import { deriveVoiceButtonState } from './derive';
-import { useWhisperStore } from '../../stores';
+import { modelsFailureMessage } from '@offgrid/application';
+import {
+  useSttDownloadState,
+  type SttDownloadEntry,
+} from '../../hooks/useSttDownloadState';
+import { downloadTranscriptionModel } from '../../services/transcriptionModelApplication';
+import { useTranscriptionModelsProjection } from '../../hooks/useTranscriptionModelsProjection';
 import logger from '../../utils/logger';
 import {
   buildVoiceRecordGesture,
@@ -60,6 +66,12 @@ interface VoiceRecordButtonProps {
 }
 
 type VoiceButtonStyles = ReturnType<typeof createStyles>;
+
+function activeDownloadProgress(
+  download: SttDownloadEntry | undefined,
+): Record<string, number> {
+  return download?.active ? { [DOWNLOAD_MODEL_ID]: download.progress } : {};
+}
 
 /** Chat-mode recording button style stack. Extracted to module scope to
  *  keep the component's cyclomatic complexity under the lint limit. */
@@ -120,8 +132,9 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const downloadModel = useWhisperStore(s => s.downloadModel);
-  const downloadProgressById = useWhisperStore(s => s.downloadProgressById);
+  const transcription = useTranscriptionModelsProjection();
+  const defaultDownload = useSttDownloadState(transcription).stateFor(DOWNLOAD_MODEL_ID);
+  const downloadProgressById = activeDownloadProgress(defaultDownload);
   // The ONE derivation of what the mic renders (see derive.ts): a background STT
   // download is never the busy spinner — that is reserved for a tap-triggered
   // model load and live transcription.
@@ -271,9 +284,12 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
             text: 'Download',
             onPress: () => {
               setAlertState(hideAlert());
-              downloadModel(DOWNLOAD_MODEL_ID).catch(err => {
-                logger.error('[VoiceRecordButton] Download failed:', err);
-              });
+              downloadTranscriptionModel(DOWNLOAD_MODEL_ID).then(outcome => {
+                if (!outcome.ok) logger.error(
+                  '[VoiceRecordButton] Download failed:',
+                  modelsFailureMessage(outcome.failure),
+                );
+              }, error => logger.error('[VoiceRecordButton] Download failed:', error));
             },
           },
         ],

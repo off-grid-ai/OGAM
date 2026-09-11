@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, Switch, Platform, TouchableOpacity } from 'react-native';
+import { modelsFailureMessage, type ModelSettingsRecord } from '@offgrid/application';
 import { AdvancedToggle, Card } from '../../components';
 import { SliderSetting } from '../../components/SliderSetting';
 import { Button } from '../../components/Button';
 import { useTheme, useThemedStyles } from '../../theme';
-import { useAppStore } from '../../stores';
+import { useModelsProjection } from '../../hooks/useApplicationProjection';
+import { useActiveTextModel } from '../../hooks/useActiveTextModel';
 import { useClearGpuCache } from '../../hooks/useImageGenerationSettings';
 import {
   defaultImageSteps,
@@ -12,22 +14,55 @@ import {
   SWEET_SPOT_SIZE,
 } from '../../utils/imageGenAdvice';
 import { createStyles } from './styles';
+import { applicationFacade } from '../../services/applicationFacade';
+
+type SaveSettings = (patch: ModelSettingsRecord) => Promise<void>;
+
+interface SaveState {
+  pending: boolean;
+  notice: { message: string; warning: boolean } | null;
+  save: SaveSettings;
+}
+
+function useImageSettingsSave(): SaveState {
+  const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState<SaveState['notice']>(null);
+  const pendingRef = useRef(false);
+  const save: SaveSettings = async patch => {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    setPending(true);
+    setNotice(null);
+    try {
+      const outcome = await applicationFacade().models.settings.save({ origin: 'local', patch });
+      if (!outcome.ok) setNotice({ message: modelsFailureMessage(outcome.failure), warning: false });
+      else if (outcome.value.syncFailure) {
+        setNotice({ message: `Saved on this device. ${modelsFailureMessage(outcome.value.syncFailure)}`, warning: true });
+      }
+    } catch (error) {
+      setNotice({ message: error instanceof Error ? error.message : String(error), warning: false });
+    } finally {
+      pendingRef.current = false;
+      setPending(false);
+    }
+  };
+  return { pending, notice, save };
+}
 
 // ─── Advanced Sub-Components ─────────────────────────────────────────────────
 
-const EnhanceImageToggle: React.FC = () => {
+const EnhanceImageToggle: React.FC<SaveState> = ({ save, pending }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const { settings, updateSettings, downloadedModels } = useAppStore();
+  const enhanceImagePrompts = useModelsProjection().settings.enhanceImagePrompts;
   const trackColor = { false: colors.surfaceLight, true: `${colors.primary}80` };
-  // Enhancement runs the prompt through a text model, so it needs one available.
-  const hasTextModel = downloadedModels.length > 0;
-  const enabled = (settings?.enhanceImagePrompts ?? false) && hasTextModel;
+  const hasTextModel = useActiveTextModel().modelId !== null;
+  const enabled = (enhanceImagePrompts ?? false) && hasTextModel;
 
   let description: string;
   if (!hasTextModel) {
     description = 'Download a text model to enable prompt enhancement';
-  } else if (settings?.enhanceImagePrompts) {
+  } else if (enhanceImagePrompts) {
     description = 'Text model refines your prompt before image generation (slower but better results)';
   } else {
     description = 'Use your prompt directly for image generation (faster)';
@@ -41,8 +76,8 @@ const EnhanceImageToggle: React.FC = () => {
       </View>
       <Switch
         value={enabled}
-        disabled={!hasTextModel}
-        onValueChange={(value) => updateSettings({ enhanceImagePrompts: value })}
+        disabled={!hasTextModel || pending}
+        onValueChange={(value) => save({ enhanceImagePrompts: value })}
         trackColor={trackColor}
         thumbColor={enabled ? colors.primary : colors.textMuted}
       />
@@ -50,13 +85,13 @@ const EnhanceImageToggle: React.FC = () => {
   );
 };
 
-const ImageGpuSection: React.FC = () => {
+const ImageGpuSection: React.FC<SaveState> = ({ save, pending }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const { settings, updateSettings } = useAppStore();
+  const imageUseOpenCL = useModelsProjection().settings.imageUseOpenCL;
   const { clearing, handleClearCache } = useClearGpuCache();
   const trackColor = { false: colors.surfaceLight, true: `${colors.primary}80` };
-  const isOpenCL = settings?.imageUseOpenCL ?? true;
+  const isOpenCL = imageUseOpenCL ?? true;
 
   return (
     <>
@@ -69,7 +104,8 @@ const ImageGpuSection: React.FC = () => {
         </View>
         <Switch
           value={isOpenCL}
-          onValueChange={(value) => updateSettings({ imageUseOpenCL: value })}
+          disabled={pending}
+          onValueChange={(value) => save({ imageUseOpenCL: value })}
           trackColor={trackColor}
           thumbColor={isOpenCL ? colors.primary : colors.textMuted}
         />
@@ -89,17 +125,17 @@ const ImageGpuSection: React.FC = () => {
   );
 };
 
-const DetectionMethodRow: React.FC = () => {
+const DetectionMethodRow: React.FC<SaveState> = ({ save, pending }) => {
   const styles = useThemedStyles(createStyles);
-  const { settings, updateSettings } = useAppStore();
+  const { imageGenerationMode, autoDetectMethod } = useModelsProjection().settings;
 
-  if (settings?.imageGenerationMode !== 'auto') return null;
+  if (imageGenerationMode !== 'auto') return null;
 
   return (
     <View style={styles.settingSection}>
       <Text style={styles.settingLabel}>Detection Method</Text>
       <Text style={styles.settingDesc}>
-        {settings?.autoDetectMethod === 'pattern'
+        {autoDetectMethod === 'pattern'
           ? 'Fast keyword matching'
           : 'Uses text model for classification'}
       </Text>
@@ -108,16 +144,18 @@ const DetectionMethodRow: React.FC = () => {
           title="Pattern"
           variant="secondary"
           size="medium"
-          active={settings?.autoDetectMethod === 'pattern'}
-          onPress={() => updateSettings({ autoDetectMethod: 'pattern' })}
+          active={autoDetectMethod === 'pattern'}
+          onPress={() => save({ autoDetectMethod: 'pattern' })}
+          disabled={pending}
           style={styles.flex1}
         />
         <Button
           title="LLM"
           variant="secondary"
           size="medium"
-          active={settings?.autoDetectMethod === 'llm'}
-          onPress={() => updateSettings({ autoDetectMethod: 'llm' })}
+          active={autoDetectMethod === 'llm'}
+          onPress={() => save({ autoDetectMethod: 'llm' })}
+          disabled={pending}
           style={styles.flex1}
         />
       </View>
@@ -127,8 +165,8 @@ const DetectionMethodRow: React.FC = () => {
 
 // ─── Advanced Section ────────────────────────────────────────────────────────
 
-const ImageAdvancedSection: React.FC = () => {
-  const { settings, updateSettings } = useAppStore();
+const ImageAdvancedSection: React.FC<SaveState> = props => {
+  const { imageGuidanceScale, imageThreads } = useModelsProjection().settings;
 
   return (
     <>
@@ -136,24 +174,24 @@ const ImageAdvancedSection: React.FC = () => {
         testID="image-guidance-scale"
         label="Guidance Scale"
         description="Higher = follows prompt more strictly"
-        value={settings?.imageGuidanceScale || 7.5}
+        value={imageGuidanceScale || 7.5}
         min={1} max={20} step={0.5} decimals={1}
-        onChange={(value) => updateSettings({ imageGuidanceScale: value })}
+        onChange={(value) => props.save({ imageGuidanceScale: value })}
       />
 
       <SliderSetting
         testID="image-threads"
         label="Image Threads"
         description="CPU threads used for image generation (applies on next image model load)"
-        value={settings?.imageThreads ?? 4}
+        value={imageThreads ?? 4}
         min={1} max={8} step={1}
-        onChange={(value) => updateSettings({ imageThreads: value })}
+        onChange={(value) => props.save({ imageThreads: value })}
       />
 
-      <DetectionMethodRow />
-      <EnhanceImageToggle />
+      <DetectionMethodRow {...props} />
+      <EnhanceImageToggle {...props} />
 
-      {Platform.OS === 'android' && <ImageGpuSection />}
+      {Platform.OS === 'android' && <ImageGpuSection {...props} />}
     </>
   );
 };
@@ -163,10 +201,11 @@ const ImageAdvancedSection: React.FC = () => {
 export const ImageGenerationSection: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const { settings, updateSettings } = useAppStore();
+  const { imageSteps, imageWidth, imageGenerationMode } = useModelsProjection().settings;
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const saveState = useImageSettingsSave();
 
-  const isAutoMode = settings?.imageGenerationMode === 'auto';
+  const isAutoMode = imageGenerationMode === 'auto';
   const trackColor = { false: colors.surfaceLight, true: `${colors.primary}80` };
 
   return (
@@ -174,6 +213,13 @@ export const ImageGenerationSection: React.FC = () => {
       <Text style={styles.settingHelp}>
         Control how image generation requests are handled in chat.
       </Text>
+      {saveState.pending ? (
+        <Text style={styles.draftWarning}>Saving settings...</Text>
+      ) : saveState.notice ? (
+        <Text style={saveState.notice.warning ? styles.draftWarning : styles.draftError} accessibilityLiveRegion="polite">
+          {saveState.notice.message}
+        </Text>
+      ) : null}
 
       {/* ── Basic Settings ── */}
 
@@ -188,9 +234,8 @@ export const ImageGenerationSection: React.FC = () => {
         </View>
         <Switch
           value={isAutoMode}
-          onValueChange={(value) =>
-            updateSettings({ imageGenerationMode: value ? 'auto' : 'manual' })
-          }
+          disabled={saveState.pending}
+          onValueChange={(value) => saveState.save({ imageGenerationMode: value ? 'auto' : 'manual' })}
           trackColor={trackColor}
           thumbColor={isAutoMode ? colors.primary : colors.textMuted}
         />
@@ -205,9 +250,9 @@ export const ImageGenerationSection: React.FC = () => {
         testID="image-steps"
         label="Image Steps"
         description="More steps = better quality but slower (4-8 fast, 20-50 high quality)"
-        value={settings?.imageSteps || defaultImageSteps(Platform.OS)}
+        value={imageSteps || defaultImageSteps(Platform.OS)}
         min={4} max={MAX_IMAGE_STEPS} step={1}
-        onChange={(value) => updateSettings({ imageSteps: value })}
+        onChange={(value) => saveState.save({ imageSteps: value })}
       />
 
       <SliderSetting
@@ -217,15 +262,15 @@ export const ImageGenerationSection: React.FC = () => {
         // Single source of truth for the floor: SD-class models render garbage below the
         // sweet spot (256), so both this screen and the chat modal (ImageQualitySliders) share
         // the SAME min/fallback — the surfaces can't diverge and a sub-256 value is unreachable.
-        value={Math.max(SWEET_SPOT_SIZE, settings?.imageWidth ?? SWEET_SPOT_SIZE)}
+        value={Math.max(SWEET_SPOT_SIZE, imageWidth ?? SWEET_SPOT_SIZE)}
         min={SWEET_SPOT_SIZE} max={512} step={64}
         formatValue={(v) => `${v}x${v}`}
-        onChange={(value) => updateSettings({ imageWidth: value, imageHeight: value })}
+        onChange={(value) => saveState.save({ imageWidth: value, imageHeight: value })}
       />
 
       <AdvancedToggle isExpanded={showAdvanced} onPress={() => setShowAdvanced(!showAdvanced)} testID="image-advanced-toggle" />
 
-      {showAdvanced && <ImageAdvancedSection />}
+      {showAdvanced && <ImageAdvancedSection {...saveState} />}
     </Card>
   );
 };

@@ -5,10 +5,14 @@ import { createImageStyles } from './stylesImage';
 const createLayoutStyles = (colors: ThemeColors) => ({
   container: { flex: 1, backgroundColor: colors.background },
   keyboardView: { flex: 1 },
+  voicePreparingRow: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
   messageList: { paddingVertical: 16 },
 });
 
-const createHeaderStyles = (colors: ThemeColors) => ({
+const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   header: {
     paddingHorizontal: 16,
     paddingTop: 16,
@@ -16,6 +20,7 @@ const createHeaderStyles = (colors: ThemeColors) => ({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     backgroundColor: colors.background,
+    ...shadows.bottom,
     zIndex: 10,
   },
   headerRow: {
@@ -231,7 +236,7 @@ const createIndicatorStyles = (colors: ThemeColors) => ({
 
 export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   ...createLayoutStyles(colors),
-  ...createHeaderStyles(colors),
+  ...createHeaderStyles(colors, shadows),
   ...createScrollStyles(colors),
   ...createEmptyChatStyles(colors),
   ...createStateScreenStyles(colors),

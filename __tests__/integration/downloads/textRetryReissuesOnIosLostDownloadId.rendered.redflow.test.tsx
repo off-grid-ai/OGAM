@@ -10,21 +10,19 @@
  * exact lost-downloadId case textProvider.retry() was already fixed for, bypassed because this caller
  * never routes through the provider. So retry is a silent no-op.
  *
- * The single owner is modelDownloadService.retry(uniformDownloadId('text', modelKey)) → textProvider.retry
- * (iOS re-issues from the entry's metadata; needs NO downloadId). This test drives the REAL Models screen
+ * The single owner is the Shared application facade's download coordinator. This test drives the REAL Models screen
  * → arrives at the model detail via a real search+tap → the failed card renders → tap Retry → assert the
  * REAL native download layer received a fresh start (the status leaves 'failed'; a new native row exists).
  *
  * Integration boundary: fakes ONLY at the device boundary — the native DownloadManagerModule + fs + RAM
  * (installNativeBoundary), and the HuggingFace NETWORK transport (searchModels/getModelFiles). Everything
- * we own runs REAL: ModelsScreen, TextModelsTab, ModelCard, useTextModels, modelDownloadService,
- * textProvider, modelManager, backgroundDownloadService, the download store. Platform pinned to iOS.
+ * we own runs REAL: ModelsScreen, TextModelsTab, ModelCard, useTextModels, the Shared application
+ * facade, model library, and native download adapter. Platform pinned to iOS.
  */
 import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
 
 const MODEL_ID = 'meta/llama-lost';
 const FILE_NAME = 'llama-q4.gguf';
-const MODEL_KEY = `${MODEL_ID}/${FILE_NAME}`;
 
 describe('iOS text retry re-issues a rehydrated failed download that lost its downloadId (red-flow)', () => {
   it('tapping Retry on a lost-downloadId failed card re-issues a fresh download (not a silent no-op)', async () => {
@@ -47,35 +45,44 @@ describe('iOS text retry re-issues a rehydrated failed download that lost its do
       },
     }));
 
+    // The model-control catalog reads Hugging Face's repository facts directly at its network port.
+    // Keep the complete application path real and fake only that external response.
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        siblings: [{ rfilename: FILE_NAME, lfs: { size: 3 * GB } }],
+      }),
+    } as Response);
+
      
     const React = require('react');
     const { render, fireEvent, waitFor, act } = requireRTL();
-    const { useDownloadStore } = require('../../../src/stores/downloadStore');
-    const { registerCoreDownloadProviders } = require('../../../src/services/modelDownloadService/registerProviders');
+    const { getMobileApplication } = require('../../../src/services/composition/application');
+    const { startModelDownload } = require('../../../src/services/startModelDownload');
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
-     
 
-    // Providers must be registered so modelDownloadService can route text retries to textProvider.
-    registerCoreDownloadProviders();
+    const application = getMobileApplication();
 
-    // Device-boundary residue of the app-kill: a hydrated FAILED text entry whose downloadId was LOST
-    // (empty string — the store's downloadId cleared while the native row was gone). This is the exact
-    // rehydrated state the bug occurs on; it is an outside-our-system leaf (persisted/rehydrated row).
-    useDownloadStore.getState().hydrate([{
-      modelKey: MODEL_KEY,
-      downloadId: '', // LOST on the app-kill
-      modelId: MODEL_ID,
-      fileName: FILE_NAME,
-      quantization: 'Q4_K_M',
-      modelType: 'text',
-      status: 'failed',
-      bytesDownloaded: 1 * GB,
-      totalBytes: 3 * GB,
-      combinedTotalBytes: 3 * GB,
-      progress: 0.33,
-      errorMessage: 'Download failed',
-      createdAt: Date.now(),
-    }]);
+    // Reach the failed state through the real public admission path. The device then reports failure
+    // and loses its native row, which is the app-kill residue this journey must recover from.
+    const admissionErrors: Error[] = [];
+    await startModelDownload(MODEL_ID, file, {
+      onError: (error: Error) => admissionErrors.push(error),
+    });
+    expect(admissionErrors).toEqual([]);
+    await waitFor(() => expect(boundary.download!.active()).toHaveLength(1));
+    const originalTransferId = boundary.download!.active()[0]!.downloadId;
+    boundary.download!.events.emit('DownloadError', {
+      downloadId: originalTransferId,
+      reason: 'Download failed',
+    });
+    await waitFor(() => {
+      expect(application.models.snapshot().control.downloads.find(
+        (entry: { repositoryId?: string; fileName: string }) =>
+          entry.repositoryId === MODEL_ID && entry.fileName === FILE_NAME,
+      )?.status).toBe('failed');
+    });
+    boundary.download!.simulateRelaunch();
 
     // Prime the synchronous RAM read (getTotalMemoryGB) from the seeded device-info boundary — the same
     // step Home does before handing the picker its memory numbers. Without it ramGB reads a stale default.
@@ -108,7 +115,10 @@ describe('iOS text retry re-issues a rehydrated failed download that lost its do
     // TERMINAL artifact: the retry re-issued a fresh download. The status leaves 'failed' (the failed
     // section + its Retry button disappear) AND a real native download row now exists.
     await waitFor(() => {
-      expect(useDownloadStore.getState().downloads[MODEL_KEY]?.status).not.toBe('failed');
+      expect(application.models.snapshot().control.downloads.find(
+        (entry: { repositoryId?: string; fileName: string }) =>
+          entry.repositoryId === MODEL_ID && entry.fileName === FILE_NAME,
+      )?.status).not.toBe('failed');
     }, { timeout: 4000 });
     await waitFor(() => {
       expect(boundary.download!.active().length).toBeGreaterThanOrEqual(1);

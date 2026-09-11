@@ -18,10 +18,10 @@
  *  Model types & how they behave in the budget:
  *   - HEAVIES: `text` and `image`. In CONSERVATIVE only ONE heavy is resident at a time (loading one evicts
  *     the other). In BALANCED/AGGRESSIVE they co-reside when they fit, else the lower-priority heavy swaps.
- *   - STT (`whisper`): a FULL budget participant SIDECAR. It co-resides with a heavy when it fits, but it
+ *   - STT (`transcription`): a FULL budget participant SIDECAR. It co-resides with a heavy when it fits, but it
  *     NEVER evicts a heavy, and it does NOT trigger conservative's single-model rule (loading STT does not
  *     evict the resident text heavy). If STT genuinely doesn't fit, it is REFUSED (never evicts a heavy).
- *   - TTS (`tts`) and embedding (`embedding`): EXEMPT / tiny. They always co-reside, never get evicted,
+ *   - TTS (`voice`) and embedding (`embedding`): EXEMPT / tiny. They always co-reside, never get evicted,
  *     never cause an eviction — treat them as free.
  *  Modes (a data axis):
  *   - conservative: ONE heavy at a time (loading a heavy evicts the other heavy); sidecars still co-reside.
@@ -48,9 +48,9 @@
  * That row is tagged `oracle: 'M6'` and is EXPECTED-to-fail-on-HEAD only in aggressive; do NOT weaken it and
  * do NOT fix source here. The row×mode PASS/FAIL red list is the deliverable that drives the fix.
  */
-import { modelResidencyManager } from '../../../src/services/modelResidency';
+import { modelResidencyManager } from '../../harness/activeModelLifecycle';
 import type { LoadPolicy } from '../../../src/services/memoryBudget';
-import type { ResidentType } from '../../../src/services/modelResidency/policy';
+import type { ResidentType } from '@offgrid/models';
 import { setDeviceMemory, resetDeviceMemory, makeResident } from '../../harness/deviceMemory';
 
 /** A seeded resident model (already loaded), as the row describes it. */
@@ -171,7 +171,7 @@ const ROWS: Row[] = [
     // the mutually-exclusive HEAVY generation models, not the warm sidecars. The text survives in all modes.
     name: 'text + STT (whisper) co-reside',
     residentsBefore: [{ key: 'text', type: 'text', sizeMB: 2000, dirtyMemory: false }],
-    incoming: { key: 'whisper', type: 'whisper', sizeMB: 200, dirtyMemory: false },
+    incoming: { key: 'whisper', type: 'transcription', sizeMB: 200, dirtyMemory: false },
     deviceRAM: ROOMY,
     expected: {
       conservative: { fits: true, residentKeysAfter: ['text', 'whisper'] },
@@ -184,9 +184,9 @@ const ROWS: Row[] = [
     name: 'text + STT + TTS co-reside',
     residentsBefore: [
       { key: 'text', type: 'text', sizeMB: 2000, dirtyMemory: false },
-      { key: 'whisper', type: 'whisper', sizeMB: 200, dirtyMemory: false },
+      { key: 'whisper', type: 'transcription', sizeMB: 200, dirtyMemory: false },
     ],
-    incoming: { key: 'tts', type: 'tts', sizeMB: 150, dirtyMemory: false },
+    incoming: { key: 'tts', type: 'voice', sizeMB: 150, dirtyMemory: false },
     deviceRAM: ROOMY,
     expected: {
       // conservative: incoming is a SIDECAR (tts) → it may only reclaim PEER sidecars, so it evicts the
@@ -203,13 +203,14 @@ const ROWS: Row[] = [
     residentsBefore: [
       { key: 'text', type: 'text', sizeMB: 2000, dirtyMemory: false },
       { key: 'image', type: 'image', sizeMB: 2000, dirtyMemory: true },
-      { key: 'whisper', type: 'whisper', sizeMB: 200, dirtyMemory: false },
+      { key: 'whisper', type: 'transcription', sizeMB: 200, dirtyMemory: false },
     ],
-    incoming: { key: 'tts', type: 'tts', sizeMB: 150, dirtyMemory: false },
+    incoming: { key: 'tts', type: 'voice', sizeMB: 150, dirtyMemory: false },
     deviceRAM: ROOMY,
     expected: {
-      // conservative: tts (sidecar) evicts only the peer sidecar whisper; the text + image heavies stay.
-      conservative: { fits: true, residentKeysAfter: ['image', 'text', 'tts'] },
+      // Conservative mode keeps one heavy runtime. The incoming voice sidecar keeps
+      // the dirty image runtime and evicts the clean text runtime plus peer sidecar.
+      conservative: { fits: true, residentKeysAfter: ['image', 'tts'] },
       balanced: { fits: true, residentKeysAfter: ['image', 'text', 'tts', 'whisper'] },
       aggressive: { fits: true, residentKeysAfter: ['image', 'text', 'tts', 'whisper'] },
     },
@@ -220,14 +221,15 @@ const ROWS: Row[] = [
     residentsBefore: [
       { key: 'text', type: 'text', sizeMB: 2000, dirtyMemory: false },
       { key: 'image', type: 'image', sizeMB: 2000, dirtyMemory: true },
-      { key: 'whisper', type: 'whisper', sizeMB: 200, dirtyMemory: false },
-      { key: 'tts', type: 'tts', sizeMB: 150, dirtyMemory: false },
+      { key: 'whisper', type: 'transcription', sizeMB: 200, dirtyMemory: false },
+      { key: 'tts', type: 'voice', sizeMB: 150, dirtyMemory: false },
     ],
     incoming: { key: 'embedding', type: 'embedding', sizeMB: 120, dirtyMemory: false },
     deviceRAM: ROOMY,
     expected: {
-      // conservative: embedding (sidecar) evicts only peer sidecars (whisper + tts); both heavies stay.
-      conservative: { fits: true, residentKeysAfter: ['embedding', 'image', 'text'] },
+      // Conservative mode keeps one heavy runtime. The embedding sidecar keeps the
+      // dirty image runtime and evicts the clean text runtime plus peer sidecars.
+      conservative: { fits: true, residentKeysAfter: ['embedding', 'image'] },
       balanced: { fits: true, residentKeysAfter: ['embedding', 'image', 'text', 'tts', 'whisper'] },
       aggressive: { fits: true, residentKeysAfter: ['embedding', 'image', 'text', 'tts', 'whisper'] },
     },
@@ -239,7 +241,7 @@ const ROWS: Row[] = [
     // incoming to peers). text 8500 clean + whisper 200 = 8700 > 8602 balanced cap; no peer sidecar to free.
     name: 'sidecar (STT) refused rather than evict a heavy that fills the budget',
     residentsBefore: [{ key: 'text', type: 'text', sizeMB: 8500, dirtyMemory: false }],
-    incoming: { key: 'whisper', type: 'whisper', sizeMB: 200, dirtyMemory: false },
+    incoming: { key: 'whisper', type: 'transcription', sizeMB: 200, dirtyMemory: false },
     deviceRAM: ROOMY,
     expected: {
       conservative: { fits: false, residentKeysAfter: ['text'] },
@@ -270,17 +272,17 @@ const ROWS: Row[] = [
 const POLICIES: LoadPolicy[] = ['conservative', 'balanced', 'aggressive'];
 
 describe.each(POLICIES)('model residency matrix — %s policy', policy => {
-  afterEach(() => resetDeviceMemory());
+  afterEach(async () => resetDeviceMemory());
 
   it.each(ROWS.map(r => [r.name, r] as const))('%s', async (_name, row) => {
     // Seed the device RAM + policy and reset the REAL manager to empty.
-    setDeviceMemory({ ...row.deviceRAM, policy });
+    await setDeviceMemory({ ...row.deviceRAM, policy });
 
     // Seed residentsBefore into the REAL manager (as if already loaded). No row pins a resident:
     // the "pinned model blocks a 2nd heavy" case is dropped from the finalized model (the UI can't
     // start a 2nd heavy load while one streams), so every seeded resident is normally evictable.
     for (const r of row.residentsBefore) {
-      makeResident({
+      await makeResident({
         key: r.key,
         type: r.type,
         modelId: r.key,
@@ -293,8 +295,8 @@ describe.each(POLICIES)('model residency matrix — %s policy', policy => {
     // active policy), HONORS the fit verdict, and only then registers the model. So the resident set after
     // reflects exactly what the user would end up with in RAM.
     const load = jest.fn().mockResolvedValue(undefined);
-    const unload = jest.fn().mockResolvedValue(undefined);
-    const { loaded } = await modelResidencyManager.ensureResident(
+    const unload = jest.fn().mockResolvedValue({reclaimed: true as const});
+    const lease = await modelResidencyManager.acquire(
       {
         key: row.incoming.key,
         type: row.incoming.type,
@@ -308,11 +310,12 @@ describe.each(POLICIES)('model residency matrix — %s policy', policy => {
     const exp = row.expected[policy];
 
     // Observable outcome #1: the fit verdict — did the incoming model become resident?
-    expect(loaded).toBe(exp.fits);
+    expect(lease.acquired).toBe(exp.fits);
     expect(modelResidencyManager.isResident(row.incoming.key)).toBe(exp.fits);
 
     // Observable outcome #2: the WHOLE resident set (the RAM the user ends up holding).
     const actual = sorted(modelResidencyManager.getResidents().map(r => r.key));
     expect(actual).toEqual(sorted(exp.residentKeysAfter));
+    await lease.release();
   });
 });

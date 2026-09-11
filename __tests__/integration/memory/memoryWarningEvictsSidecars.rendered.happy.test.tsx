@@ -34,6 +34,7 @@ describe('T117 (rendered) — OS memory warning reclaims idle sidecars (In Memor
 
     // Text model + whisper sidecar both resident (real load + real STT select).
     await h.setupWhisperModel();
+    await h.loadSelectedWhisperOnDemand();
     const before = openSelector();
     await h.rtl.waitFor(() => { expect(before.queryByTestId('models-row-speech-ram')).not.toBeNull(); }, { timeout: 4000 });
     expect(before.queryByTestId('models-row-text-ram')).not.toBeNull();

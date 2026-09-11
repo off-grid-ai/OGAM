@@ -1,9 +1,15 @@
-import { DownloadEntry } from '../../stores/downloadStore';
-import { hardwareService } from '../../services';
+// From its own module, not the `../../services` barrel: the barrel constructs ImageGenerationService
+// at import and throws without the facade, which made this pure projection unloadable in isolation.
+import { hardwareService } from '../../services/hardware';
 import { DownloadedModel, ONNXImageModel } from '../../types';
 import { DownloadItem } from './items';
-import { parseEntryMetadata } from './retryHandlers';
 import { imageBackendLabel } from '../../utils/imageBackend';
+import { downloadFileRoleLabel } from '../../utils/downloadStatus';
+import {
+  describeModelCredibility,
+  type ModelsSnapshot,
+} from '@offgrid/application';
+import { mobileImageDownloadMetadata } from '../../services/modelServices/modelDownloadRequests';
 
 /**
  * How a download store row, a queued start, or a finished model becomes one Download Manager row.
@@ -13,99 +19,64 @@ import { imageBackendLabel } from '../../utils/imageBackend';
  * (and read back) without a rendered screen.
  */
 
-function getActiveItemModelId(entry: DownloadEntry, isImage: boolean): string {
-  if (isImage && entry.modelId.startsWith('image:')) {
-    return entry.modelId.replace('image:', '');
-  }
-  // Text canonical id = the modelKey (repo/file), which is exactly what the finished
-  // model's id is (buildDownloadedModel: `${modelId}/${fileName}`). Keying the in-flight
-  // row by the bare repo produced a DIFFERENT uniform id than the completed model, so the
-  // dedup + reconcile never collapsed them → phantom "100%" rows and Active+Downloaded
-  // duplicates for one model. Image/STT already normalize to one id per model.
-  if (entry.modelType === 'text') return entry.modelKey;
-  return entry.modelId;
-}
-
-function getActiveItemFileName(
-  entry: DownloadEntry,
-  isImage: boolean,
-  metadata: Record<string, any> | null,
-): string {
-  return isImage && metadata?.imageModelName
-    ? metadata.imageModelName
-    : entry.fileName;
-}
-
 function getImageAuthor(backend?: string): string {
   return imageBackendLabel(backend, 'Image Generation');
 }
 
-function getActiveItemAuthor(
-  entry: DownloadEntry,
-  isImage: boolean,
-  metadata: Record<string, any> | null,
-): string {
-  if (isImage) return getImageAuthor(metadata?.imageModelBackend);
-  return entry.modelId.split('/')[0] ?? 'Unknown';
-}
-
-function getActiveItemQuantization(
-  entry: DownloadEntry,
-  isImage: boolean,
-  metadata: Record<string, any> | null,
-): string {
-  if (!isImage) return entry.quantization;
-  return metadata?.imageModelBackend === 'coreml' ? 'Core ML' : '';
-}
-
-/** A start waiting for a concurrency slot (no native downloadId yet) → a "Queued"
- *  active item. status 'pending' renders as "Queued" in the item row. */
-export function queuedToActiveItem(q: {
-  modelKey: string;
-  modelId: string;
-  fileName: string;
-  modelType: string;
-  totalBytes: number;
-}): DownloadItem {
+/** Facade projection row to presentation data. No registry or platform-store read. */
+export function facadeDownloadToActiveItem(
+  entry: ModelsSnapshot['control']['downloads'][number],
+): DownloadItem {
+  const modelType = entry.modelType;
+  if (modelType !== 'text' && modelType !== 'image' && modelType !== 'stt' && modelType !== 'tts') {
+    throw new Error(`Download has an invalid model type: ${String(modelType)}`);
+  }
+  const image = modelType === 'image'
+    ? mobileImageDownloadMetadata(entry.metadataJson)
+    : undefined;
+  const total = entry.totalBytes;
+  const author = image
+    ? getImageAuthor(image.imageModelBackend)
+    : entry.modelId.split('/')[0] ?? 'Unknown';
   return {
     type: 'active',
-    modelType: q.modelType as DownloadItem['modelType'],
-    modelKey: q.modelKey,
-    // Match getActiveItemModelId: text routes/dedups on the modelKey (repo/file), the
-    // same id the finished model carries; other types pass the modelId through.
-    modelId: q.modelType === 'text' ? q.modelKey : q.modelId,
-    fileName: q.fileName,
-    author: '',
-    quantization: '',
-    fileSize: q.totalBytes,
-    bytesDownloaded: 0,
-    progress: 0,
-    status: 'pending',
+    modelType,
+    downloadId: entry.downloadId,
+    modelKey: entry.modelKey,
+    modelId: entry.modelId,
+    // A multi-file model names the part it is fetching by its published ROLE, so a projector
+    // reads as "Vision support" rather than an opaque filename. Image models keep their own name.
+    fileName: image?.imageModelName ?? downloadFileRoleLabel(entry.currentFileRole, entry.fileName),
+    author,
+    credibility: modelType === 'text' ? describeModelCredibility(author) : undefined,
+    metadataJson: entry.metadataJson,
+    quantization: image?.imageModelBackend === 'coreml' ? 'Core ML' : '',
+    fileSize: total,
+    bytesDownloaded: entry.bytesDownloaded,
+    bytesPerSecond: entry.bytesPerSecond,
+    progress: total > 0 ? entry.bytesDownloaded / total : 0,
+    status: entry.status,
+    reason: entry.reason,
+    reasonCode: entry.reasonCode as DownloadItem['reasonCode'],
   };
 }
 
-export function entryToActiveItem(entry: DownloadEntry): DownloadItem {
-  const metadata = parseEntryMetadata(entry);
-  const isImage = entry.modelType === 'image';
-
+/** Present a Shared-owned projector repair with the same transfer facts as every download card. */
+export function projectorRepairToActiveItem(
+  operation: ModelsSnapshot['operations']['active'][number],
+  installed: DownloadItem,
+): DownloadItem {
+  const progress = operation.progress;
   return {
+    ...installed,
     type: 'active',
-    modelType: entry.modelType,
-    downloadId: entry.downloadId,
-    modelKey: entry.modelKey,
-    modelId: getActiveItemModelId(entry, isImage),
-    fileName: getActiveItemFileName(entry, isImage, metadata),
-    author: getActiveItemAuthor(entry, isImage, metadata),
-    quantization: getActiveItemQuantization(entry, isImage, metadata),
-    fileSize: entry.combinedTotalBytes || entry.totalBytes,
-    bytesDownloaded: entry.bytesDownloaded + (entry.mmProjBytesDownloaded ?? 0),
-    progress: entry.progress,
-    bytesPerSecond: entry.bytesPerSecond,
-    status: entry.status,
-    reason: entry.errorMessage,
-    reasonCode: entry.errorCode as
-      | import('../../types').BackgroundDownloadReasonCode
-      | undefined,
+    downloadId: operation.operationId,
+    fileName: 'Vision support',
+    fileSize: progress?.totalBytes ?? 0,
+    bytesDownloaded: progress?.bytesDownloaded ?? 0,
+    bytesPerSecond: progress?.bytesPerSecond,
+    progress: progress ? progress.percent / 100 : 0,
+    status: 'downloading',
   };
 }
 

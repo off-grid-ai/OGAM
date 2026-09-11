@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { PersonalMeshInstallation } from '@offgrid/sync';
 import { personalMeshRegistryCache } from '../../../pro/sync/personalMeshRegistryCache';
+import {createLicensedMesh} from '../../harness/licensedMesh';
 
 const STORAGE_KEY = '@offgrid/pro/sync/personal-mesh-registry-v1';
 
@@ -18,6 +19,17 @@ const STORAGE_KEY = '@offgrid/pro/sync/personal-mesh-registry-v1';
  * never a half-roster.
  */
 describe('the roster the phone remembers', () => {
+  const mesh = createLicensedMesh();
+
+  beforeAll(() => mesh.reset());
+  afterAll(() => mesh.restore());
+
+  const providerSnapshot = <T extends {
+    freshness: 'fresh' | 'cached';
+    checkedAt: number;
+    installations: readonly PersonalMeshInstallation[];
+  }>(value: T) => ({...value, maxDevices: mesh.maxMachines});
+
   const installation = (
     overrides: Partial<PersonalMeshInstallation> = {},
   ): PersonalMeshInstallation => ({
@@ -42,14 +54,14 @@ describe('the roster the phone remembers', () => {
   });
 
   it('gives back what the licence last said, marked as remembered rather than current', async () => {
-    await personalMeshRegistryCache.save({
+    await personalMeshRegistryCache.save(providerSnapshot({
       freshness: 'fresh',
       checkedAt: 1_700_000_000_000,
       installations: [
         installation(),
         installation({ installationId: 'install-2', platform: 'android' }),
       ],
-    });
+    }));
 
     const loaded = await personalMeshRegistryCache.load();
 
@@ -57,6 +69,7 @@ describe('the roster the phone remembers', () => {
     // much to trust the roster from exactly this field.
     expect(loaded?.freshness).toBe('cached');
     expect(loaded?.checkedAt).toBe(1_700_000_000_000);
+    expect(loaded?.maxDevices).toBe(mesh.maxMachines);
     expect(loaded?.installations).toEqual([
       installation(),
       installation({ installationId: 'install-2', platform: 'android' }),
@@ -64,32 +77,33 @@ describe('the roster the phone remembers', () => {
   });
 
   it('remembers an empty roster once the licence has actually said so', async () => {
-    await personalMeshRegistryCache.save({
+    await personalMeshRegistryCache.save(providerSnapshot({
       freshness: 'fresh',
       checkedAt: 5,
       installations: [],
-    });
+    }));
 
     // Distinct from never having asked: the licence answered, and its answer was none.
     await expect(personalMeshRegistryCache.load()).resolves.toEqual({
       freshness: 'cached',
       checkedAt: 5,
+      maxDevices: mesh.maxMachines,
       installations: [],
     });
   });
 
   it('replaces the whole roster, so a seat given up elsewhere stops being offered', async () => {
-    await personalMeshRegistryCache.save({
+    await personalMeshRegistryCache.save(providerSnapshot({
       freshness: 'fresh',
       checkedAt: 1,
       installations: [installation(), installation({ installationId: 'gone' })],
-    });
+    }));
 
-    await personalMeshRegistryCache.save({
+    await personalMeshRegistryCache.save(providerSnapshot({
       freshness: 'fresh',
       checkedAt: 2,
       installations: [installation()],
-    });
+    }));
 
     const loaded = await personalMeshRegistryCache.load();
     expect(
@@ -99,14 +113,14 @@ describe('the roster the phone remembers', () => {
   });
 
   it('keeps every device it is told about, including ones on the same platform', async () => {
-    await personalMeshRegistryCache.save({
+    await personalMeshRegistryCache.save(providerSnapshot({
       freshness: 'fresh',
       checkedAt: 1,
       installations: [
         installation({ installationId: 'phone-1', platform: 'ios' }),
         installation({ installationId: 'phone-2', platform: 'ios' }),
       ],
-    });
+    }));
 
     // Two iPhones are two seats. Anything that collapsed them by platform would under-count the mesh.
     await expect(personalMeshRegistryCache.load()).resolves.toMatchObject({
@@ -149,6 +163,7 @@ describe('the roster the phone remembers', () => {
   ])('discards the snapshot when %s', async (_label, overrides) => {
     await plant({
       freshness: 'fresh',
+      maxDevices: mesh.maxMachines,
       checkedAt: 10,
       installations: [installation()],
       ...overrides,
@@ -183,6 +198,7 @@ describe('the roster the phone remembers', () => {
     async (_label, broken) => {
       await plant({
         freshness: 'fresh',
+        maxDevices: mesh.maxMachines,
         checkedAt: 10,
         installations: [
           installation(),
@@ -200,13 +216,13 @@ describe('the roster the phone remembers', () => {
 
   it('accepts every platform the mesh actually runs on', async () => {
     const platforms = ['macos', 'windows', 'linux', 'android', 'ios'] as const;
-    await personalMeshRegistryCache.save({
+    await personalMeshRegistryCache.save(providerSnapshot({
       freshness: 'fresh',
       checkedAt: 1,
       installations: platforms.map(platform =>
         installation({ installationId: platform, platform }),
       ),
-    });
+    }));
 
     const loaded = await personalMeshRegistryCache.load();
 
@@ -218,11 +234,11 @@ describe('the roster the phone remembers', () => {
   });
 
   it('accepts a device that has only just been created', async () => {
-    await personalMeshRegistryCache.save({
+    await personalMeshRegistryCache.save(providerSnapshot({
       freshness: 'fresh',
       checkedAt: 0,
       installations: [installation({ lastActiveAt: 0, createdAt: 0 })],
-    });
+    }));
 
     // Zero is a real timestamp, not a missing one. Rejecting it would discard the roster of a device
     // whose clock had not been set yet.
@@ -233,11 +249,11 @@ describe('the roster the phone remembers', () => {
   });
 
   it('writes the roster as a current answer, so the next launch can tell it is remembered', async () => {
-    await personalMeshRegistryCache.save({
+    await personalMeshRegistryCache.save(providerSnapshot({
       freshness: 'cached',
       checkedAt: 42,
       installations: [installation()],
-    });
+    }));
 
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
 
@@ -247,6 +263,7 @@ describe('the roster the phone remembers', () => {
     expect(JSON.parse(raw ?? 'null')).toEqual({
       freshness: 'fresh',
       checkedAt: 42,
+      maxDevices: mesh.maxMachines,
       installations: [installation()],
     });
   });

@@ -12,7 +12,11 @@ jest.mock('../../../src/utils/logger', () =>
 );
 
 import { getIpAddress } from 'react-native-device-info';
-import { discoverLANServers } from '../../../src/services/networkDiscovery';
+import { RemoteLanDiscoveryApplicationService } from '@offgrid/models';
+import { mobileLanDiscoveryPorts } from '../../../src/services/networkDiscovery';
+
+const discoverLANServers = () =>
+  new RemoteLanDiscoveryApplicationService(mobileLanDiscoveryPorts()).discover();
 
 const mockGetIpAddress = getIpAddress as jest.Mock;
 

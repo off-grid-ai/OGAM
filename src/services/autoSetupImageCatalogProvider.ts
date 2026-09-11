@@ -1,8 +1,9 @@
 import { Platform } from 'react-native';
 import { fetchAvailableCoreMLModels } from './coreMLModelBrowser';
-import { fetchAvailableModels, guessStyle } from './huggingFaceModelBrowser';
+import { fetchAvailableModels } from './huggingFaceModelBrowser';
 import { hardwareService } from './hardware';
 import type { ImageModelDescriptor } from './imageModelDownloadTypes';
+import { imageCatalogStyle } from '@offgrid/models';
 
 interface AutoSetupImageCatalogProvider {
   load(): Promise<ImageModelDescriptor[]>;
@@ -23,7 +24,7 @@ const androidProvider: AutoSetupImageCatalogProvider = {
     const soc = await hardwareService.getSoCInfo();
     return (await fetchAvailableModels(false, { skipQnn: !soc.hasNPU })).map(model => ({
       id: model.id, name: model.displayName, description: model.name,
-      downloadUrl: model.downloadUrl, size: model.size, style: guessStyle(model.name),
+      downloadUrl: model.downloadUrl, size: model.size, style: imageCatalogStyle(model.name),
       backend: model.backend, variant: model.variant, repo: model.repo,
     }));
   },

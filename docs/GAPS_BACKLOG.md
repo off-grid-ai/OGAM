@@ -12,6 +12,445 @@ Verdict legend:
 
 ---
 
+## Manual-endpoint restart hydration needs a live device check - 2026-09-05
+
+**Verdict: complete live verification.**
+
+`mobile/pro/sync/mobileSyncPlatformPorts.ts`'s `persistence.load()` override now awaits
+`manualMeshEndpointStore.load()` alongside `persistence.load()`, before Shared's `startSyncRun`
+projects the initial `SyncSnapshot.manualEndpoints` from `manualEndpoints.current(deviceId)` (see
+`.codex/ownership-migration/reports/claude-mobile-sync-endpoint-store-removal-v5.md`). This closes
+the previously-logged gap in code: `manualMeshEndpointStore.load()` now has exactly one production
+caller, on the sync startup path, so a saved endpoint should survive an app restart.
+
+Not yet confirmed live: save a manual endpoint for a paired device, force-quit the app, relaunch, and
+check the endpoint still shows in `SyncScreen`'s manual-endpoint sheet and the `SyncHomeCard`
+route-privacy badge. Needs an on-device run before this is trusted as fixed, not merely wired.
+
+---
+
+## `connectedDeviceIds` is permanently empty for three UI/task consumers - 2026-09-05
+
+**Verdict: fix-the-guard.**
+
+`mobile/pro/sync/syncStore.ts`'s `connectedDeviceIds` field has exactly one setter,
+`setConnectedDeviceIds`, and it has zero production callers anywhere in the repo (confirmed by a
+whole-tree grep, tests included). `ui/SyncHomeCard.tsx` and `ui/SyncScreen/useSyncScreenState.ts`
+already bypass the dead field - both build their own `connectedDeviceIds` from
+`SyncSnapshot.connections` via `facadeConnectedDeviceIds` - but three files outside the Sync
+ownership vertical still read `useSyncStore(state => state.connectedDeviceIds)` /
+`sync.connectedDeviceIds` directly: `ui/TaskChatCard.tsx:84`, `tasks/companionTaskRouter.ts:128`,
+and `mcp/mcpToolGrantService.ts:129/132`. Every one of them always observes `[]`, i.e. "nothing is
+connected," even while devices are actually connected. `TaskChatCard`'s connected-badge check
+(`connectedDeviceIds.includes(run.executionDevice.id)`) can therefore never be true in production.
+
+Fix: point those three call sites at the same `SyncSnapshot.connections` /
+`facadeConnectedDeviceIds` pattern `SyncHomeCard.tsx` and `useSyncScreenState.ts` already use, then
+delete `connectedDeviceIds`/`setConnectedDeviceIds` from `syncStore.ts` entirely (see
+`.codex/ownership-migration/reports/claude-mobile-sync-roster-store-removal-v6.md`). None of those
+three files were in scope for the v6 milestone that found this.
+
+---
+
+## Shared model-control consolidation is not release-verified - 2026-09-01
+
+**Verdict: complete live verification.**
+
+The Shared and Desktop static architecture gates pass. The Shared package also builds with its type
+declarations, and the Desktop TypeScript gate passes. The Mobile static architecture gate also
+passes with no temporary allowlist items on the current combined working tree. During this sweep it
+first caught a screen-layer import of the raw image-generation engine. The concurrent consolidation
+work moved that call behind the Mobile image-generation port and strengthened the gate. This is code
+evidence, not release evidence.
+
+The static gates check known dependency and policy patterns. They do not prove that every model
+journey works on a real app or device. The combined consolidation is not complete until one release
+candidate head passes the full repository matrices and the following live journeys:
+
+- local and remote text, vision, image, speech-to-text, and Kokoro text-to-speech;
+- streaming, reasoning on/off, tool calls, cancellation, Stop, Resend, Edit, and Regenerate;
+- selected-model identity in the UI and the actual transport, with no silent fallback;
+- download, retry, repair, transfer, load, force-load, co-residency, eviction, unload, and eject;
+- project knowledge, RAG, embedding, context compaction, memory, Replay, and voice-mode handoff;
+- remote-server discovery, capability refresh, credentials, remote tools, and remote MCP;
+- Mobile restart and the earlier Resend freeze reproduction on physical iOS and Android;
+- Desktop packaged-app verification, including Pro surfaces and local/remote engine adapters.
+
+Do not mark the full migration complete from static gates or focused suites alone. Record exact app,
+device, model, route, and log evidence before closing this entry.
+
+### QA sweep evidence - 2026-09-01
+
+The follow-up platform sweep for the Shared image application, Desktop model library, and Mobile
+transcription and residency milestones has these results:
+
+- `@offgrid/models` built its ESM, CJS, and type-declaration outputs. Its architecture gate passed,
+  and all 371 package tests passed.
+- The Desktop model architecture gate passed with zero temporary items. Fourteen focused image and
+  model-library files passed 130 tests through the Electron test runner. Four focused database files
+  passed four tests through `scripts/test-db.sh`, which uses the Electron ABI. The first database
+  batch found port 8439 in use by another active Electron test process. The affected first-use test
+  passed alone after that process released the port.
+- Both Mobile model architecture gates passed. The focused transcription, download, and residency
+  batch passed 331 tests in 15 suites. One real-time recovery test exceeded its 30-second limit only
+  in the CPU-heavy 16-suite batch. It then passed alone in 2.8 seconds with
+  `--detectOpenHandles`, so this sweep found no repeatable product failure or leaked handle in that
+  journey.
+- A source scan found no `jest.mock`, `vi.mock`, or module-name replacement for
+  `@offgrid/models`. These checks therefore use the real local Shared package. Some older Mobile
+  unit files still replace Mobile services such as `llm`, `localDreamGenerator`, the download store,
+  and hardware. Those files are useful unit evidence, but they are not complete integration evidence
+  under the current testing standard. The rendered and cross-service journeys, plus final live-device
+  tests, remain the release evidence.
+
+The app boundaries in this sweep are wired as ports. Desktop image generation constructs the Shared
+`ImageGenerationApplicationService`; Desktop model management delegates download, removal,
+activation, transfer registration, and local import to Shared application services. Mobile
+transcription constructs the Shared `TranscriptionModelWorkflow`, while the Zustand store is a
+projection and Whisper remains a native/filesystem adapter. Mobile load, unload, force-load,
+co-residency, and eject decisions call Shared residency workflows. The static gates found no direct
+screen or component bypass for these milestones.
+
+The latest combined sweep passes these stable code gates and representative journeys:
+
+- Shared models TypeScript and architecture gates. The most recent full Shared package run in this
+  consolidation round passed 342 tests and built its type declarations.
+- Mobile TypeScript and both model-architecture gates, with zero temporary items.
+- Mobile dependency-cruiser: 556 modules and 2,962 dependencies, with zero violations.
+- 13 selected Mobile cross-service suites: 79 tests passed. They cover canonical local/remote model
+  selection and visible identity, remote discovery, parallel local and remote tools, MCP, bounded
+  project RAG, image settings and cancelled-image Resend, image-download relaunch recovery,
+  residency swaps, voice STT/tool/answer, and Pro model transfer. Jest reported an open-handle
+  warning after this larger batch; the focused Stop/Resend/tool/RAG batch below remains clean with
+  `--detectOpenHandles`.
+- 11 selected Desktop cross-service files: 115 tests passed. They cover model selection and switch
+  ownership, chat lifecycle and visible active-model identity, tool calls, MCP, download progress,
+  transcription, model control sync, and knowledge-document sync.
+
+The earlier Desktop image-generation TypeScript and cancellation findings are closed by the
+follow-up sweep above. The Shared image application is now wired through the Desktop application
+port, and its focused architecture and behavior gates pass. This does not replace packaged-app or
+real-engine verification.
+
+This is still not live or release evidence. No physical iOS or Android journey, remote image server,
+Kokoro runtime, native model load/force-load/eject, native download interruption, packaged Desktop,
+or cross-device replay was exercised in this sweep. The earlier iOS Resend freeze has rendered-test
+coverage for resend routing and cancellation, but it has not been reproduced and cleared on a
+physical iPhone with native inference and logs.
+
+The two focused checks from this sweep are closed. A 13-suite, 27-test follow-up passed with
+`--detectOpenHandles`. It covers Stop with empty, partial, and reasoning-only output; immediate Send;
+Resend; Edit and Resend; local and MCP tools; malformed tool JSON; bounded project RAG; orphan-project
+knowledge scope; and remote thinking capability detection. Jest reported no open handle in these
+follow-up runs. This is stable integration evidence, but it is not physical-device evidence.
+
+Kokoro is the only supported Mobile text-to-speech runtime. OuteTTS and Qwen3 TTS are removed and
+are not valid verification targets.
+
+## Application facade boundary needs its final six-domain static gate - 2026-09-03
+
+**Verdict: enforce after each domain cutover reaches zero bypasses.**
+
+Mobile already has strict ESLint, Dependency Cruiser, and custom Models gates. Do not add a generic
+hexagonal folder plugin during the active migration. Follow
+`shared/docs/APPLICATION_BOUNDARY_ENFORCEMENT_PLAN.md`: extend the existing rules so production UI,
+stores, hooks, and app workflows use Models, Sync, RAG, Speech, Automation, and Use only through
+`@offgrid/application`. Keep narrow exceptions for composition roots, platform adapters, and
+type-only imports. Close this gap when all six domain rules pass without a new permanent allowlist.
+
+### QA architecture closure sweep - 2026-09-01
+
+**Verdict: the package boundary is wired, but the strict zero-business-logic app boundary is still
+open.**
+
+This sweep inspected the combined working tree after the model selection, chat readiness, prompt
+enhancement, residency, library, configuration, and artifact-verification rounds. It did not change
+production code. The Shared, Mobile, and Desktop model-architecture gates pass with zero temporary
+allowlist items. Shared models, Mobile, and Desktop TypeScript gates also pass on this snapshot. A
+source scan found no `jest.mock`, `vi.mock`, or module replacement for `@offgrid/models`.
+The earlier recovery hang was fixed without weakening verification; the complete Shared package now
+builds its declarations and passes all 432 tests.
+
+The gates prove several intended boundaries:
+
+- Shared owns the canonical model catalog, including `computer_use`. Holo is absent from the text
+  rail and appears on Desktop's Computer Use tab in the rendered integration journey.
+- Mobile has one normal selection projection writer in
+  `src/services/modelServices/modelSelectionProjection.ts`; UI selection commands enter the Shared
+  selection service. Text configuration defaults are imported from Shared by both apps.
+- The app architecture checks reject known raw-engine imports and the named legacy policy files.
+- No production source refers to OuteTTS or Qwen3 TTS. Their only remaining mention is the Shared
+  README statement that they are unsupported.
+
+The following strict architecture gaps remain and prevent a **Verified** verdict:
+
+1. **Mobile model import policy still lives in screen code.** `src/screens/ModelsScreen/useModelsScreen.ts:32`
+   owns ZIP staging, unzip order, backend detection, package construction, registration, and
+   activation. `src/screens/ModelsScreen/importHelpers.ts:15` owns GGUF/projector classification and
+   size-based fallback, and `TextModelsTab.tsx:108` heals model vision metadata from the UI. These
+   decisions belong in Shared model-library/import commands; Mobile should provide picker,
+   filesystem, archive, and alert ports only.
+2. **Mobile prompt context policy is not fully shared.** `src/services/imageGenerationHelpers.ts:95`
+   chooses the last ten messages, removes runtime/image/enhancement messages, selects answer versus
+   reasoning, and truncates each message to 500 characters before invoking the Shared prompt
+   service. These are prompt-input rules, not native or presentation mechanics.
+3. **Mobile reload and loaded-settings policy remains app-owned.**
+   `src/screens/ChatScreen/pendingSettings.ts:7` branches on LiteRT and duplicates the 4,096-token
+   fallback while deciding whether a reload is required. `reloadTextModel.ts:28` decides local versus
+   remote eligibility and owns the unload-then-load transaction. Shared must own both decisions;
+   Mobile may render the result and execute native commands through ports.
+4. **Desktop model UI still owns admission and model-library sequencing.**
+   `src/renderer/src/components/ModelsScreen.tsx:493` performs a fit check, asks for the memory
+   override, and branches activation by `computer_use`. The renderer must send one activation intent
+   and render a typed Shared result. `pro/renderer/components/voice/TranscriptionModels.tsx:82`
+   sequences download, activation, refresh, and progress cleanup in the component instead of one
+   model-library application command.
+5. **Desktop capture readiness is derived in the renderer.**
+   `src/renderer/src/components/PermissionGate.tsx:56` joins capture state, active model, projector
+   state, repair choice, and download behavior. Main/Shared should return one typed capture-readiness
+   projection and accept one repair intent.
+6. **Selection has exceptional writers outside the normal application command.** Desktop
+   `src/main/model-services.ts:569` clears canonical and legacy selection files directly when a
+   remote server is removed instead of calling the Shared selection service. Mobile
+   `src/services/modelServices/remoteServerController.ts:429` calls a store-level clear that resets
+   selection projections directly. These exceptional paths can bypass the normal fallback and
+   reconciliation rules.
+7. **Residency still has two names for one lifecycle concept.** Shared exports
+   `RuntimeResidencyMode` (`resident` / `on-demand`) and `ResidencyLifecycleMode`
+   (`persistent` / `operation`), and Desktop continues to expose `getResidencyMode` /
+   `setResidencyMode`. If one is only a persisted/UI codec, it must be named and isolated as that
+   codec; domain and app orchestration must use one lifecycle vocabulary.
+8. **Image settings are not yet one complete configuration SSOT.** Mobile imports Shared text
+   defaults, but `src/stores/appStore.ts:241` and two image-settings surfaces still use the literal
+   guidance default `7.5` instead of `DEFAULT_IMAGE_GUIDANCE`. The Shared default must feed storage,
+   reset, and both controls.
+9. **The Shared download package exposes overlapping status vocabularies.**
+    `downloads/status-ledger.ts`, `download-orchestration.ts`, `downloads/registry.ts`, and
+    `types.ts` define related terminal states as both `failed` and `error` and maintain separate
+    lifecycle unions. Boundary aliases are valid only through one explicit codec; application code
+    must consume one canonical state model.
+10. **Mobile still owns the native text-load application state machine.**
+    `src/services/llm.ts:69-109` performs file admission, setting resolution, memory observation,
+    RAM correction, and context downgrade. `src/services/llm.ts:138-209` owns swap locking, unload,
+    GPU/HTP/OpenCL selection, and fallback. `src/services/llmHelpers.ts:24-35` defines runtime
+    defaults and mmap policy, while `src/services/llmHelpers.ts:86-218` defines load plans, platform
+    timeouts, and GPU-to-CPU retry. These are model-domain decisions and states. Shared needs one
+    native-text runtime application service with observation, native-init, release, and capability
+    ports. Mobile must only execute those ports and publish the result.
+11. **Mobile still owns model lifecycle transactions.**
+    `src/services/modelServices/modelLifecycleBootstrap.ts:37-97` constructs text, image, and
+    transcription resident identities and costs. `modelLifecycleBootstrap.ts:107-209` sequences
+    admission, native load/unload, force reload, route selection, observers, and inventory refresh.
+    The remaining unload and eject paths in the same module also clear selection and residency.
+    Shared helpers are used, but Mobile still composes the state machine. Move the transaction into
+    a Shared `ModelLifecycleApplicationService`; keep store, native engine, and inventory adapters in
+    Mobile.
+12. **Mobile chat routing, RAG augmentation, and compaction remain app-owned workflows.**
+    `src/screens/ChatScreen/mobileChatSession.ts:141-199` joins route availability, image-mode policy,
+    classifier provisioning, failure fallback, route repair, and vision detection.
+    `mobileChatSession.ts:201-243` selects system prompts, document scope, retrieval query, and
+    compaction context. `src/services/contextCompaction.ts:29-145` owns compaction state, token
+    fallback, KV clearing, summary generation, trim fallback, persistence, and result projection.
+    Shared pure helpers are not enough: Shared needs chat-operation, context/RAG, and compaction
+    application services with inventory, retrieval, generation, cache, and persistence ports.
+13. **Mobile download command ownership is incomplete.**
+    `src/services/modelServices/coordinatedDownloadBridge.ts:20-23` translates model kinds and
+    lifecycle states, while `coordinatedDownloadBridge.ts:58-121` constructs manifests, creates
+    operation identities, decides completed/active state, moves artifacts, and reconciles two
+    inventories. `src/services/whisperModelDownloads.ts:41-195` owns Whisper admission,
+    cancellation, publication, validation failure cleanup, and delete races.
+    `src/services/downloadEventProjection.ts:10-53` decides terminal and processing transitions by
+    modality. Shared needs one download application service and one public state codec. Mobile may
+    supply background-transfer, filesystem, backup-exclusion, notification, and UI projection
+    ports only.
+14. **Tool and MCP orchestration is split across the apps.**
+    Mobile `src/services/modelServices/toolPorts.ts:70-115` sets routing modes, schema budget,
+    selection limit, and fallback behavior. `pro/mcp/mcpService.ts:218-266` selects MCP owners and
+    constructs the remote-tool prompt, and its following parser path duplicates tool-call parsing.
+    Desktop `src/main/tools.ts:580-690` selects tools, sets routing and loop policy, and executes the
+    generation/tool loop. `src/main/tools/planner.ts:40-73` owns repair attempts and generation
+    limits, while `src/main/tools/planner-logic.ts` owns the plan contract. Shared needs one tool
+    orchestration and planning service. Apps may provide tool catalogs, connector execution, and
+    native or network generation ports.
+15. **RAG profiles are duplicated even though RAG has a Shared package.**
+    Mobile `src/services/modelServices/bootstrap/ragBootstrap.ts:78` and Desktop
+    `src/main/rag/index.ts:132` repeat the `600 / 120 / 20` chunk profile. Mobile
+    `src/services/adapters/rag/mobileRagPorts.ts:104` and Desktop `src/main/rag/index.ts:29` repeat
+    the 384-dimension embedding contract, and Mobile also repeats Shared's default retrieval count.
+    Export one named Shared RAG profile and embedding contract. App files should contain database,
+    filesystem, and embedding-engine adapters only.
+16. **Text-model sync uses different manifest policy on each app.**
+    Desktop model transfer uses Shared `projectTransferredModelManifest`, but Mobile
+    `pro/sync/textModelTransferAdapter.ts:19-63` constructs text/vision manifests and source metadata
+    locally. Mobile image transfer also owns a 256 MB archive-reserve policy in
+    `pro/sync/imageModelTransferAdapter.ts:18`. Both apps must use the same Shared manifest and disk
+    reserve policy; their adapters may read files, free disk space, and transfer bytes.
+17. **The architecture gates do not enforce the claimed boundary.**
+    Both app gates match a list of known filenames and symbols. They pass with zero allowlist items
+    while the load, lifecycle, compaction, routing, download, tool, RAG, and sync policy above still
+    exists in app code. Add a zone-based gate: UI, hooks, stores, Pro code, and services may import
+    Shared facade commands and DTOs, while pure decisions, domain defaults, timers, retry ladders,
+    and application state machines are forbidden outside explicit adapter directories.
+18. **Current integration tests do not prove the real app boundary.**
+    The scan found no mock of `@offgrid/models`, which is good. However, tests named integration
+    still replace app-owned model services, for example
+    `__tests__/integration/generation/remoteFailureClearsLoading.test.ts:27`,
+    `__tests__/hardening/batch6-model-lifecycle.test.ts:29-32`, and
+    `__tests__/integration/models/sttResidency.test.ts:28,48`. Desktop
+    `src/main/__tests__/mcp-remote-task.integration.test.ts:5-9` also replaces generation and RAG
+    services. Keep boundary fakes for native/network systems, but add real composition tests that use
+    Shared services and the actual app adapters. These tests do not replace physical-device and
+    packaged-app verification.
+19. **Mobile has a second memory advisory and configuration layer.**
+    `src/services/modelServices/modelMemoryAdvisory.ts:29-68` reads device memory and engine state to
+    recompute budgets and model costs. `modelMemoryAdvisory.ts:80-169` rebuilds residency from legacy
+    loaded IDs and produces another admission verdict. The Shared advisory functions are called,
+    but Mobile still prepares a parallel state projection instead of consuming the
+    `ModelResidencyManager` snapshot. `src/services/localDreamGenerator.ts:131-142` and
+    `localDreamGenerator.ts:248-257` also repeat image defaults, while `src/services/litert.ts:92`,
+    `litert.ts:107-110`, and `litert.ts:480` repeat the 4,096-token default. Move all defaults and
+    advisory input construction to Shared. Native adapters must receive complete explicit settings
+    and publish observed memory and loaded state.
+20. **Several Mobile UI and hook paths still compose model commands.**
+    `src/screens/ChatsListScreen.tsx:92-129` performs select-then-load and unload-then-clear
+    transactions. `src/components/ModelSelectorModal/index.tsx:200-236` repeats the same image
+    workflow. `src/screens/HomeScreen/hooks/useRemoteModelHandlers.ts:25-59` unloads a local model
+    before remote selection. `src/screens/ChatScreen/useChatModelActions.ts:93-221` owns readiness,
+    force-load, retry presentation, and resume sequencing, while
+    `useChatModelActions.ts:277-299` reconciles downloaded image inventory in a hook. These surfaces
+    must call one Shared select/prepare, unload, force-load, or reconcile command and render its typed
+    result. Presentation copy and loading animation remain in Mobile.
+21. **Remote-server application policy is still Mobile-owned.**
+    `src/services/modelServices/remoteServerController.ts:51-126` owns deduplication, credential
+    sequencing, provider registration, and deletion. `remoteServerController.ts:218-249` owns remote
+    activation and selection projection, while `remoteServerController.ts:270-424` owns discovery,
+    moved-endpoint reconciliation, health recovery, and reselection. Shared pure decisions are used,
+    but the application transaction is still in Mobile. Move this workflow into a Shared
+    `RemoteServerApplicationService`; Mobile supplies keychain, LAN discovery, transport registry,
+    persistence, and logging ports.
+22. **Classifier execution still contains portable prompt and result policy in a native adapter.**
+    `src/services/modelServices/sidecarGenerationAdapter.ts:25-53` constructs the image-intent prompt,
+    truncates input to 200 characters, parses `YES`, supplies label defaults, and maps confidence.
+    The adapter must execute an explicit Shared classifier request and return raw output. Shared must
+    own the prompt, parse, labels, and score projection.
+23. **Project chat creation can still record a different identity than generation uses.**
+    `src/screens/ProjectChatsScreen.tsx:160-180` reads legacy local selection and falls back to the
+    first downloaded model. A valid remote-only setup can be reported as no model, or the
+    conversation can record a local model while Shared generation uses a remote route. Create
+    project chats from the canonical active-route snapshot returned by Shared.
+24. **Shared still exposes duplicate and bypassable control planes.**
+    `shared/packages/models/src/types.ts:11-20` and
+    `shared/packages/models/src/runtime/metadata.ts:1-10` define the same modality union twice.
+    `runtime/residency-manager.ts:58-105` and `runtime/residency-manager.ts:162-165` publicly expose
+    deprecated manual locking, registration, release, and admission pieces beside atomic acquire.
+    `providers.ts:24-198` defines an unused provider execution and active-selection registry beside
+    `LLMService` and `GenerationService`, and `download.ts:7-87` defines an unused download owner
+    beside `ModelDownloadCoordinator`. Remove or make these migration surfaces internal. One
+    canonical modality, selection owner, residency transaction, generation port, and download owner
+    must be public.
+25. **Shared facades still mix independent responsibilities.**
+    `shared/packages/models/src/llm-service.ts:212-371` owns adapter registration, health,
+    mutable inventory, persisted selection, and fallback routing. `generation/service.ts:135-220`
+    owns adapter registration, queueing, timeout/abort fencing, lifecycle events, routing, and
+    recovery. Keep the public facades, but delegate those reasons to internal registry, inventory,
+    selection, route-resolution, execution-fence, and recovery services. This is an SRP and SOLID
+    cleanup inside Shared; it does not justify moving policy back into either app.
+26. **Desktop Computer Use still owns portable model routing, retry, and swap workflows.**
+    `desktop/src/main/vision/vision-task-model-strategy.ts:79-121` derives the active chat and
+    specialist projection, while `vision-task-model-strategy.ts:124-225` resolves role-specific
+    routes and chooses direct versus hybrid execution. `desktop/src/main/vision/grounder-loader.ts:97-165`
+    defines the specialist acquire, release, and chat-restore lifecycle, and
+    `grounder-loader.ts:218-270` supervises the swap transaction. Finally,
+    `desktop/src/main/vision/vision-policy-runner.ts:37-64` constructs retry turns and
+    `vision-policy-runner.ts:101-200` owns the bounded generation, reasoning fallback, response
+    validation, and corrective retry loop. Move this portable workflow into a Shared Computer Use
+    application service. Desktop may keep screen capture, raster conversion, llama-server I/O, and
+    model-family wire adapters behind Shared ports.
+27. **Desktop remote-server management is a second application control plane.**
+    `desktop/src/main/vision/remote-vision-server.ts:91-165` normalizes and migrates server state,
+    `remote-vision-server.ts:191-246` reconciles persisted server identity with canonical model
+    selection, `remote-vision-server.ts:249-328` validates, stores, refreshes, and selects every
+    configured modality, and `remote-vision-server.ts:331-379` removes or probes a server and derives
+    default selections. Move the transaction into the same Shared
+    `RemoteServerApplicationService` required by Mobile. Desktop may supply JSON/keychain
+    persistence, HTTP transport, and log ports.
+28. **The compact Desktop model picker still owns model commands and active-state reconciliation.**
+    `desktop/src/renderer/src/components/ModelPicker.tsx:65-85` builds another active-selection
+    projection. `ModelPicker.tsx:109-140` clears unload state, branches by modality, selects a model,
+    and refreshes active identities inside the component. `ModelPicker.tsx:220-230` also filters
+    model candidates in the renderer. It must send one typed Shared model-library command and render
+    the returned canonical projection. The component may keep open/close state and presentation.
+29. **Desktop model-library repair remains an app-owned transaction.**
+    `desktop/src/main/models-manager.ts:629-647` reclassifies a stale text selection and clears the
+    old selection. `models-manager.ts:658-697` reads the legacy active file, reconciles transferred
+    inventory, repairs the projector, writes the legacy projection, and reloads the engine. Shared
+    pure helpers are used, but the application transaction is still in Desktop. Put classification
+    and projector repair behind a Shared repair command; Desktop supplies catalog, filesystem,
+    legacy-projection, and engine-reload ports.
+30. **Desktop image generation still supplies portable generation defaults.**
+    `desktop/src/main/imagegen/application-service.ts:148-166` fixes enhancement temperature,
+    token limit, thinking behavior, and timeout in the app adapter, while
+    `imagegen/application-service.ts:187-193` fixes the local generation timeout. Shared owns the
+    image application service, so these must be named Shared configuration defaults or explicit
+    user settings. Desktop should only execute the enhancement and image-engine ports.
+31. **Desktop Pro still owns model-facing tool selection and request budgets.**
+    `desktop/pro/main/crm/agent.ts:39-64` ranks, caps, and selects MCP action tools per connector,
+    while `agent.ts:220-269` owns proposal and quality-gate generation parameters and parsing.
+    `desktop/pro/main/ingest-helpers.ts:46-94` derives connector arguments and ranks a read tool by
+    name. `desktop/pro/main/crm/capture-input-budget.ts:14-42` defines token and reserve constants,
+    and `capture-input-budget.ts:70-124` owns the vision-input reduction ladder. Move these portable
+    decisions into Shared tool-selection, generation-profile, and multimodal-budget services. Pro
+    may supply connector catalogs, capture material, and tool execution ports.
+32. **Desktop MCP owns a portable connector lifecycle and timeout policy.**
+    `desktop/src/main/mcp.ts:95-149` owns connector enablement, health-state transitions, and removal;
+    `mcp.ts:287-327` owns interactive discovery and cached-state transitions; and
+    `mcp.ts:329-364` owns the background discovery timeout and failure policy. Database, keychain,
+    OAuth, process, and network operations are Desktop adapters. The lifecycle states, discovery
+    transaction, timeout policy, and typed outcomes belong in a Shared MCP application service so
+    Mobile remote MCP and Desktop MCP cannot drift.
+
+Remediation priority for the numbered findings:
+
+| Severity | Findings | Reason |
+|---|---|---|
+| P0 blocker | 6, 10-12, 21, 23, 26-27 | These paths can select, load, route, restore, or report a different model outside one canonical application transaction. |
+| P1 high | 1-5, 7-9, 13-20, 22, 28-32 | These paths duplicate policy, defaults, budgets, model-library commands, tools, RAG, sync, MCP, or UI orchestration. |
+| P2 cleanup | 24-25 | These Shared public and internal seams weaken SRP and allow future bypasses, but the current normal paths can still use the canonical facades. |
+
+Focused Desktop route/UI evidence passed 10 of 11 tests. The only failure is a stale expectation in
+`ModelsScreen.computer-use.integration.test.tsx:90`: the current UI offers `< 1B`, while the test
+still asks for `Tiny (<2B)`. The rendered output itself confirms that Holo is on Computer Use and is
+not on Text. Update the test to the intended canonical size label, then rerun it; do not change the
+catalog to satisfy the old label.
+
+Status at this checkpoint:
+
+| Requirement | Code | Wired | Verified |
+|---|---|---|---|
+| Shared package purity and known architecture bans | yes | yes | static gates only |
+| Route identity and Holo Computer Use classification | yes | yes | Shared policy + rendered Desktop evidence |
+| One normal Mobile selection command | yes | yes | exceptional removal/clear paths remain |
+| One residency lifecycle vocabulary | no | partial | no |
+| Shared model configuration defaults | partial | partial | text defaults pass; image/reload defaults remain |
+| Shared model-library command ownership | partial | partial | Mobile import and Desktop Pro download/activate remain |
+| Shared native loading and lifecycle state machines | partial | partial | Mobile load/lifecycle workflows remain; Desktop remediation is in progress |
+| Shared chat routing, RAG, and compaction workflows | partial | partial | Mobile application workflows remain |
+| Shared download command and status ownership | partial | partial | coordinator exists; Mobile lifecycle/projection policy remains |
+| Shared tool and MCP orchestration | partial | partial | app-owned routing, planning, parsing, and loop policy remains |
+| Shared Computer Use route, retry, and swap orchestration | partial | partial | Desktop strategy, runner, and loader workflows remain |
+| One Shared remote-server application service | partial | partial | Mobile and Desktop still compose separate transactions |
+| Thin Desktop model UI | no | partial | ModelsScreen, ModelPicker, PermissionGate, and Pro transcription UI still compose commands |
+| Shared model repair command ownership | partial | partial | Desktop classification and projector repair transaction remains |
+| Shared multimodal budgets and generation profiles | partial | partial | Desktop image, Pro CRM, and capture defaults remain app-owned |
+| Shared model-transfer policy | partial | partial | Mobile text manifest and image reserve policy remain |
+| One Shared public model control plane | no | partial | duplicate provider/download APIs and residency bypasses remain public |
+| Shared internal SRP and SOLID separation | partial | yes | facades still combine inventory, selection, routing, fencing, and recovery |
+| Strict architecture gate coverage | no | no | current named-symbol gates miss confirmed violations |
+| No `@offgrid/models` mocks | yes | yes | source scan passed |
+| No stale OuteTTS/Qwen3 TTS production path | yes | yes | source scan passed |
+| Full Shared model suite | yes | yes | build, declarations, architecture, 432/432 tests pass |
+| Physical Mobile/Desktop model journeys | unknown | unknown | not run in this sweep |
+
 ## Active Kokoro voice-model download cannot stop at Pro expiry - 2026-08-26
 
 **Verdict: instrument-and-revisit.**
@@ -203,7 +642,7 @@ proper-threads is the path.
 
 ---
 
-## Repo-wide /hygiene audit — open items - 2026-07-09 (SOLID §A/§B + DRY §C)
+## Repo-wide engineering audit — open items - 2026-07-09 (SOLID §A/§B + DRY §C)
 
 Through-line: decision/capability logic derived ad-hoc at many call sites instead of owned once by a
 service.
@@ -214,7 +653,6 @@ service.
 | SO1 | src/screens/ModelsScreen/TextModelsTab.tsx:143 handleRetryDownload | BLOCKING | Renderer re-implements download retry (Platform.OS branch, store mutation, mmproj, polling) — CLAUDE.md says this moved to ModelDownloadService. Delete; delegate to modelDownloadService.retry() like useDownloadManager. |
 | SO5 | src/screens/ModelsScreen/ImageFilterBar.tsx | DEBT | Platform.OS chooses which filter DIMENSIONS exist. Data-driven filter descriptor from service. |
 | SO6 | src/services/remoteServerManagerUtils.ts:122 | DEBT | `provider instanceof OpenAICompatibleProvider` to call updateCapabilities. Put on the provider interface (ISP). |
-| SO7 | pro/audio/ttsStore.ts:377,385 | DEBT | `instanceof OuteTTSEngine` for cache ops. Optional getAudioCacheSizeMB?/clearAudioCache? on the TTS engine interface. |
 | SO8 | src/stores/remoteServerHelpers.ts:32,188 | DEBT-low | `kind==='vision'` capability branch; fold into shared deriveRemoteCapabilities. |
 
 ### DRY (§C)
@@ -223,7 +661,6 @@ service.
 | DR3 | src/screens/HomeScreen/components/ModelPickerSheet.tsx:63,201 (*1.8/*1.5, -1.5) | DRIFTED (live) | Third memory-fit verdict bypassing memoryBudget.ts. Can say "fits" when residency refuses — the Load-Anyway/selector bug family. Call modelMemoryBudgetMB. |
 | DR4 | CHARS_PER_TOKEN=4 bare literal in llmHelpers,liteRTCompaction,litert,llm,generationServiceHelpers,providers/*,documentService | DEBT | Export CHARS_PER_TOKEN_ESTIMATE + estimateTokens(); all import. |
 | DR5 | STOP_TOKENS (llmHelpers:427) + CONTROL_TOKEN_PATTERNS (messageContent:1) + tests re-hardcode | DEBT | One token registry; derive stop-list + strip-patterns; tests import. |
-| DR6 | pro/audio outetts:363 + ttsService:207 '<\|im_end\|>' | DEBT-low | Shared IM_END_TOKEN. |
 | DR8 | remoteModelCapabilities:202 deltaHasThinking vs openAICompatibleStream:155 | DEBT | Shared REASONING_DELTA_FIELDS + deltaHasReasoning(delta). |
 
 ### Test quality (§D)
@@ -479,7 +916,7 @@ target. The shared layer is largely complete; these are the app-side holes.
 | PM5 | ~~No license-key revocation or rotation.~~ **Out of scope by product decision (2026-07-30).** We do not support revoking or rotating a key: if a key is compromised, that is the user's loss. Device eviction remains the only removal mechanism. Do not re-open this as a gap. |
 | PM6 | ~~Two shared projections have zero callers.~~ **Wrong - both are rendered** (`KnownDevicesSection.tsx:78`, `DevicesScreen.tsx:2348`); the original grep excluded `shared/`. The real defect was the COPY: the confirmation said eviction "removes the pairing from both devices", omitting that the seat is freed and what happens to the target's saved licence. Fixed in shared: the copy now splits on reachability, so an offline device is told cleanup stays queued rather than claimed already clean. Closed. |
 | PM7 | **Devices UI never audited against the brief's state table.** Both platforms consume `projectSyncControlCenter`, but nobody has checked all six credential x registered x paired x connected rows render distinctly, that capacity reads "N of 5 registered", or that roster freshness is shown rather than stale data presented as authoritative. | audit. Matrix rows 39-42. |
-| PM8 | **The four riskiest areas have zero verified coverage.** The iOS/macOS manual gate (`desktop/outputs/ios-macos-sync-manual-gate-20260729`) is 8/108 verified: pairing 0/9, discovery 0/9, membership 0/7, persistence 0/5. It also has no Android axis at all, and defers the five-device cap as needing real multi-device hardware. | superseded by `docs/PERSONAL_MESH_TEST_MATRIX.csv` (42 rows, macOS/iOS/Android columns). |
+| PM8 | **The four riskiest areas have zero verified coverage.** The iOS/macOS manual gate (`desktop/outputs/ios-macos-sync-manual-gate-20260729`) is 8/108 verified: pairing 0/9, discovery 0/9, membership 0/7, persistence 0/5. It also has no Android axis at all, and defers the five-device cap as needing real multi-device hardware. | Open; physical macOS, iOS, and Android coverage is still required. |
 
 | PM9 | ~~No receive-side consent.~~ **Out of scope by product decision (2026-07-30).** Same-owner devices auto-accept, which is what AirDrop does between devices on one Apple ID; Personal Mesh is same-owner-only by definition, so a prompt would be friction with no threat model behind it. The `admitIncoming` gate exists in shared but stays unwired, so behaviour is accept-everything. Do not re-open as a gap; if a shared/family mesh ever ships, that is when the gate gets a policy behind it. |
 
@@ -662,7 +1099,7 @@ exactly the failure mode batch9's own header describes from its previous hand-ro
 Fix: batch9 requires `doMockRealSqlite` from the harness and deletes its private engine. Low risk (both
 already pass over real sqlite), and it makes the harness the single definition of that boundary.
 
-## Ejecting a model mid-reply unloads the engine WITHOUT stopping the generation
+## Ejecting a model mid-reply unloads the engine WITHOUT stopping the generation (RESOLVED 2026-09-03: `ModelEjectionService.ejectResident` stops running work, `evictWhenReleased` waits for the lease, then unloads; rendered test `ejectMidReplyStopsGeneration.rendered.redflow.test.tsx` proves stopCompletion lands before release)
 
 **Verdict: fix-the-guard (live bug, observed in a rendered test).**
 
@@ -1256,8 +1693,8 @@ separate. They also prove that Hidden is applied before startup, a failed advert
 last true runtime and stored state, overlapping show and hide requests finish in order, and a retry
 can complete the stop.
 
-The remaining boundary is a real iPhone and Mac. Use the exact release builds and complete rows
-43-48 in `docs/PERSONAL_MESH_TEST_MATRIX.csv`. Confirm that Hidden survives a cold start, that each
+The remaining boundary is a real iPhone and Mac. Use the exact installed apps. Confirm that Hidden
+survives a cold start, that each
 visibility control leaves the other function active, that an existing encrypted session stays active,
 and that a second device sees the correct advertisement. Also confirm one private IP or machine-name
 route and one non-default Sync port on every device.
@@ -1425,3 +1862,459 @@ Evidence:
 Close this gap only after the native manifest contract and rendered repeat-scan journey pass, the
 Android debug and release builds pass, the fixed debug app is installed without clearing data, and
 opening Scan QR shows the Android camera permission prompt once. Do not automate the camera scan.
+# Mobile model-control gaps
+
+- [x] **Resolved — Models manager sheet presents its four-row projection in a bounded viewport.**
+  Evidence (2026-09-01): `ModelsManagerSheet` now uses a 55% AppSheet snap point instead of
+  intrinsic animated-modal sizing, which collapsed to the header height on device. The generic
+  sheet exposes its rendered surface for boundary verification. A focused rendered regression
+  asserts that the presented surface has a non-zero fixed height and that Text, Image, Voice, and
+  Speech rows are all present. The exact Mobile TypeScript and lint gates pass. The focused
+  Jest process produced no output and did not finish within 50 seconds, so it was stopped and is
+  not reported as passing.
+
+- [x] **Resolved — Home shows the product-idea card before the Desktop announcement.**
+  Evidence (2026-09-01): `HomeScreen` renders `home-support-card` before
+  `desktop-promo-card`. The rendered regression records both test IDs and asserts their order.
+  The exact Mobile TypeScript, ESLint, Android lint, dependency-cruiser, and Knip gates pass. The
+  focused Jest runner remains blocked by the silent-runner condition described below, so this is
+  code and static-gate evidence, not installed-device evidence.
+
+## 2026-09-01 model-control architecture audit
+
+This milestone audited migration-touched model control only. It did not change production code and
+did not run a broad test or build. `shared/` has no equivalent gaps backlog, so Shared-owned defects
+that break Mobile are recorded here. Existing user-reported gaps are marked **known**. Findings that
+the code audit first isolated are marked **new**.
+
+- [x] **Resolved — Mobile uses Shared catalog artifacts for every curated model.**
+  `shared/packages/models/src/catalog/chat.ts:159-184` already owns the Gemma 4 E2B artifact names,
+  URLs, sizes, and roles. `mobile/src/screens/ModelsScreen/useTextModels.ts:42-68` projects a curated
+  entry without those canonical files, and `useTextModels.ts:290-315` then fetches the repository
+  again for every non-`offgrid/` entry. A failed or changed remote repository therefore produces an
+  empty file list and the generic `Failed to load model files` alert even when Shared has a complete
+  entry. This is the direct code path behind the reported Gemma 4 E2B `No compatible files` failure.
+  Shared is now the only source for curated primary/projector artifact names, URLs, sizes, hashes,
+  roles, and quantization. `modelCatalogFiles.ts` contains the pure Shared-to-Mobile projection and
+  a discovery port. That port calls Hugging Face only when the model ID is absent from Shared. The
+  Models screen and its onboarding direct-download path both use this resolver; the old
+  `offgrid/*` namespace exception is removed.
+
+  Evidence (2026-09-01): Mobile and Shared models TypeScript passed. Shared now publishes narrow
+  `catalog` and `quant` semantic entries, and Mobile injects the Hugging Face discovery adapter at
+  composition sites instead of importing it into the pure catalog resolver. The focused Jest suite
+  passed 4/4 within its 60-second external limit. It covers the exact Gemma 4 E2B
+  primary/projector projection, proves catalog resolution makes zero discovery calls, and proves
+  an uncatalogued model uses the discovery port. Focused ESLint has zero errors; two existing hook
+  dependency warnings remain in `useTextModels.ts` and are outside this repair.
+
+- [x] **Resolved — Shared catalog aliases now own remote model display names.**
+  Shared already owns alias-aware display resolution in
+  `shared/packages/models/src/remote/inventory.ts:133-142`. Mobile ignores that policy in
+  `mobile/src/components/RemoteServerEditor/RemoteModelField.tsx:37-41`,
+  `mobile/src/services/modelServices/modelSelectionProjection.ts:66-79`, and
+  `mobile/src/services/modelServices/inventoryAdapters.ts:235-242`; each path accepts only an exact
+  ID and then invents a fallback name. This is why a filename alias or internal route ID can appear
+  instead of the catalog model name. Replace the three derivations with one Shared alias-aware
+  resolver and keep the UI as a projection only.
+  Evidence (2026-09-01): the editor, persisted selection projection, and runtime inventory now use
+  Shared catalog names and `activeAliases`. `RemoteServerEditorApplicationService` projects all
+  four display names before React renders them. It also maps a `remote-vision:<server>:<model>`
+  transport identity back to the discovered catalog identity. `RemoteModelField` no longer parses
+  identities. Its loading value is exactly `...`. Focused application and rendered regressions
+  cover `Qwen 3.5 2B`, `DreamShaper XL Turbo`, the exact loading value, and absence of the raw
+  transport ID. The focused Jest process remained silent and was stopped within the bounded limit,
+  so these regressions are written but are not reported as passing.
+
+- [x] **Resolved — Shared API-base normalization owns every edited Mobile route.**
+  Shared persists non-Anthropic endpoints as API bases in
+  `shared/packages/models/src/remote/configuration-policy.ts:92-105`, using `remoteApiBase` from
+  `shared/packages/models/src/remote/identity.ts:19-23`. Mobile then treats that persisted API base
+  as an origin and appends `/v1` again in
+  `mobile/src/services/adapters/providers/openAICompatibleProvider.ts:125-127`,
+  `mobile/src/services/adapters/remote/offGridDesktopModels.ts:29-64`, and the error label in
+  `mobile/src/components/RemoteServerEditor/useRemoteServerForm.ts:191-211`. Shared must own one
+  route builder for models, chat, and Desktop-managed endpoints. Mobile transport adapters must only
+  execute the resulting URL.
+  Evidence (2026-09-01): chat and Desktop-managed adapters use Shared `remoteApiBase`; discovery
+  and the editor error state use Shared `remoteDiscoveryEndpoints`. A focused transport test covers
+  a saved `/v1` address and rejects every `/v1/v1/` request.
+
+- [x] **Resolved — Desktop capability evidence is preserved without invented defaults.**
+  Evidence (2026-09-01): `publishedCatalogRemoteCapabilities` now validates the canonical Shared
+  `ModelCapabilities` fields and preserves explicit true and false values in the remote projection.
+  Missing evidence stays absent. The focused Shared projection contract covers vision, tools,
+  thinking, explicit unsupported values, and unknown values. The real Desktop gateway integration
+  confirms `/v1/models/catalog` returns these catalog facts without changing them. Shared and
+  Desktop model architecture checks, both type checks, and the focused Desktop integration pass.
+
+- [x] **Resolved — Remote Server Editor failures remain typed, visible, and retryable.**
+  `mobile/src/components/RemoteServerEditor/useRemoteServerForm.ts:79-98` converts a Keychain read
+  failure into an empty key. Its automatic discovery at `useRemoteServerForm.ts:167-187` ignores a
+  typed unsuccessful result and suppresses thrown failures. Its post-save probe at
+  `useRemoteServerForm.ts:306-310` also suppresses every rejection before the editor closes. These
+  paths can show stale selections or report an apparently successful save with an unusable server.
+  Route each failure through one application-service result and render a retryable error. Do not
+  treat missing credentials, failed discovery, and cancellation as the same state.
+  Evidence (2026-09-01): the editor controller preserves distinct `credential-read`, `discovery`,
+  and `post-save-probe` failures. Keychain failure offers Retry, discovery failure stays visible,
+  and a failed post-save probe keeps the editor open. The exact Mobile TypeScript and lint gates
+  pass.
+
+- [x] **Resolved — Remote discovery failure is distinct from a successful empty catalog.**
+  Evidence (2026-09-01): the Mobile discovery adapter now throws a typed
+  `RemoteModelDiscoveryError` when Shared returns an unsuccessful discovery result. It returns an
+  empty model list only for successful discovery with no models. The application port therefore
+  cannot project an unavailable server as an authoritative empty catalog.
+
+- [x] **Resolved — Text and image registry read failures remain failures.**
+  Evidence (2026-09-01): the model-library bootstrap wraps rejected text and image persistence reads
+  as `ModelLibraryRegistryReadError`, including the registry kind and original cause. It no longer
+  maps either I/O failure to an empty installed-model inventory.
+
+- [x] **Resolved — Undiscovered remote capability evidence remains unknown.**
+  Evidence (2026-09-01): a selected remote text route that is absent from discovery keeps only the
+  known text-generation and streaming facts. Vision, tools, and thinking are absent until Shared
+  discovery supplies evidence; Mobile no longer invents three `false` capability values.
+
+  Focused ESLint and the full Mobile TypeScript check pass. Three focused Jest files were started
+  directly, but the runner produced no output for 60 seconds and was stopped. The regressions are
+  present, but their execution is not reported as passing.
+
+- [x] **Resolved in code — opening Chat no longer loads the selected text runtime.**
+  The obsolete `prepareSelectedModel` input and its `initiateModelLoad` screen-entry effect were
+  removed from `mobile/src/screens/ChatScreen/useChatScreen.ts` and
+  `mobile/src/screens/ChatScreen/useChatModelActions.ts`. `useChatModelStateSync` now projects only
+  selected-model capabilities. The existing send-time `ensureTextModelForChatFn` adapter remains the
+  only local acquisition path and delegates the decision to Shared `ChatModelReadinessService`.
+  Focused evidence is in `mobile/__tests__/unit/hooks/useChatModelStateSync.test.ts` (new and existing
+  Chat entry do not prepare a runtime) and `mobile/__tests__/unit/hooks/useChatModelActions.test.ts`
+  (first local readiness acquisition loads once; a remote route does not acquire a local runtime).
+  Focused ESLint and the exact Mobile type check pass. The focused Jest
+  runner was stopped after repeated bounded runs produced no output, so test execution remains a
+  verification blocker rather than being reported as passed.
+
+- [x] **Resolved — Mobile Pro loads the voice runtime only for explicit speech demand.**
+  The obsolete `audio.preload` hook and contract are removed. The app-root Kokoro bridge now starts
+  released even when its assets are downloaded. It mounts the ExecuTorch hook only when the Shared
+  `VoiceApplicationService` acquires residency for `synthesize()` or another explicit initialize
+  request. App boot, navigation, inventory, and download-status checks do not load the runtime.
+  Evidence (2026-09-01): the exact Mobile TypeScript and lint gates pass. The rendered bridge regression
+  asserts that a downloaded model stays idle and does not call `useTextToSpeech` until
+  `engine.initialize()` requests it. The focused Jest process produced no output and was stopped at
+  50 seconds, so this test is written but not reported as passing.
+
+- [x] **Resolved — Shared owns the canonical Kokoro model-to-runtime identity map.**
+  `EXECUTORCH_KOKORO_IDENTITY` defines the catalog model ID, native engine ID, and native asset ID
+  once. Mobile Pro imports that mapping for engine registration, runtime assets, inventory,
+  selection routes, residency routes, and download IDs. User-facing and control-plane projections
+  now use `software-mansion/executorch-kokoro`; only the native adapter persists `kokoro` as its
+  engine setting.
+  Evidence (2026-09-01): the focused Shared identity/catalog test passes 7/7. The Shared models
+  focused build, Mobile TypeScript, focused Mobile ESLint, and diff checks pass.
+
+- [x] **Resolved — user-visible Mobile loading labels end with three ASCII periods (`...`).**
+  The Remote Server Editor, Models manager, no-model Chat state, and Home loading overlay now use
+  ASCII `...`. The source audit finds no remaining ellipsis glyph or affected loading title without
+  the suffix. The exact Mobile TypeScript and lint gates pass.
+
+- [x] **Resolved — transcription selection is on demand and has one writer.**
+  Shared now records the canonical route without acquiring Whisper residency. Microphone demand owns
+  the first native load. The workflow projection contract cannot write `selectedModelId`, and Mobile
+  no longer sends a duplicate selection command after Shared selection or download.
+  Evidence (2026-09-01): Shared workflow tests pass 6/6; Shared and Mobile type-check and architecture
+  gates pass.
+
+- [x] **Resolved — generation abort failures remain visible.**
+  Text stop, image cancel, and transcription reset now preserve typed native failures, log them, and
+  publish them through the existing model-failure boundary. A native image cancellation refusal is
+  also a failure. Shared AbortSignal lifecycle ownership keeps the operation idempotent without a
+  Mobile-owned lifecycle flag.
+  Evidence (2026-09-01): Mobile type-check, focused lint, both architecture gates, and diff checks pass.
+
+### Boundary result
+
+The dependency direction is correct at the repository boundary: Mobile core does not import Pro,
+and the audited Pro audio control imports Shared policy through the core aliases. The audited
+identity, URL, artifact, capability, lifecycle, and editor-error defects are resolved in code.
+The exact Mobile TypeScript gate passes. The exact lint chain passes with zero ESLint errors,
+Android lint successful, and the configured iOS fallback reporting that SwiftLint is not installed.
+Dependency-cruiser reports zero violations across 595 modules and 3,071 dependencies; Knip reports
+no findings. Focused Jest execution and the exact final acceptance chains remain required before
+the migration is verified complete.
+
+## Unit test `__tests__/unit/hooks/useHomeScreen.test.ts` fails on every case (pre-existing, 2026-09-02)
+
+All 23 cases throw "Invalid attempt to spread non-iterable instance" inside the hook. Fails on
+the code from the start of the day (ea263c08), so it predates today's home changes. Likely a mock
+that returns undefined where the hook spreads a list. Fix the seam, then the test.
+
+## Silent fallback from a remote model to a tiny local one (RESOLVED in code 2026-09-02: shared `fallbackNoticeText` + a "Model changed" row on the shared `fallback` event; the meta line names `turn.result.model`; unit test `chatGenerationProjection.fallback.test.ts`; not yet verified on a device)
+
+Desktop's Qwen 3.5 2B returned 502 mid-turn; shared fell back to the only loaded local text model,
+SmolLM2 135M, which wrote a rambling answer. The turn kept the "Waiting for Qwen 3.5 2B" label and
+never said which model answered. A fallback that changes the model must be visible in the chat and
+in the turn's meta line. Still open from this entry: the streaming header label ("Waiting for ...")
+reads the active route and does not switch to the model that took over until the turn finishes.
+
+## Streaming speech gives up when the voice engine is still loading (RESOLVED 2026-09-02: held answer replays on ready; test streamingSpeechWaitsForEngine)
+
+`speakCompletedTurn ready=false streaming=false → speak full message`: a turn that started while
+Kokoro was still loading spoke the whole answer at the end instead of sentence by sentence. Streaming
+should wait for the engine, not fall back.
+
+## Cannot change Desktop's selected model from the phone (RESOLVED 2026-09-02: activations joined in shared; paired Mac adopted at its live address via the resume handshake; roster keeps dialable addresses)
+
+Selecting a Desktop model via OGAD returned "Desktop did not confirm the selected model." while
+Desktop was restarting its model server under a burst of activations. Activations are now joined in
+shared; verify the flow end to end. Follow-up: a device paired over sync should auto-register as a
+remote server, so the two connections are one.
+
+## Remote server scan: results appear only when the whole scan ends (RESOLVED 2026-09-02: shared settles each server as it answers; the screen adds it and shows found-so-far + percent)
+
+`RemoteLanDiscoveryApplicationService` returns one list at the end. The screen must show each
+server the moment it is found. Shared emits found servers as it goes (a callback or async iterable);
+the screen renders incrementally.
+
+## Remote server scan: choose which kinds to look for (RESOLVED 2026-09-02: `remoteLanScanKinds` in shared; toggles under Auto-discover; probe total shrinks with fewer kinds)
+
+A setting selects the server kinds to scan for: Off Grid AI Desktop (gateway), Ollama, LM Studio.
+Default all on. Shared owns the kind list and filters the probe plan; mobile stores the choice and
+renders the toggles in Remote Servers.
+
+## Remote image generation failure hid Desktop's reason (RESOLVED in code 2026-09-02: shared strips the `OFFGRID_IMAGE_MEMORY_LIMIT` marker; the turn shows the server's message; no "Free memory & Retry" for a remote refusal; not yet verified on a device)
+
+Desktop refused to load DreamShaper XL (its own memory guard, HTTP 500 with an OpenAI-style error
+body). Mobile threw the raw JSON body, the shared image application returned null, and the chat
+turn said "Image generation returned no image" while a red card offered "Free memory & Retry",
+which frees the PHONE. Root cause: the memory-guard wire contract lived in Desktop only, so no
+client could recognise it, and the chat session ignored the failure the application had recorded.
+Now `@offgrid/models` owns the contract and the OpenAI error-body parser; the failure builder marks a
+remote refusal as not recoverable on this device; the turn shows the recorded reason; the failure
+card appears only when it offers an action the turn cannot (eject or force load).
+
+## Remote image refusal: no "Run anyway" from the phone (RESOLVED in code 2026-09-02: a guard refusal from a remote server is overridable; the card's Run anyway resends with `allow_unsafe_memory_override`; Desktop's gateway honours it; not yet verified on a device)
+
+Desktop's admission message ends with "or use Run anyway", but the gateway's
+`/v1/images/generations` does not read `allowUnsafeMemoryOverride`, so a phone cannot force the load
+or free Desktop's memory. Fix in shared first: the remote image request carries the override flag,
+the gateway honours it, and the phone's turn offers "Run anyway on <Mac>" only for a remote refusal.
+
+## Mobile forgot the remote model choices after a relaunch (RESOLVED in code 2026-09-02: shared `planPairedDeviceAdoption` removes an adopted server only when the device is unpaired; device log showed `[PairedGateway] saved=- removed=paired:<mac>` at boot; test 'a paired desktop without a dialable address yet keeps its saved server')
+
+At boot the paired Mac had no dialable address yet (roster row `lan=0.0.0.0 private=- route=-`).
+The adoption plan treated "no address" as "not wanted" and removed the adopted server, which
+dropped the text, image, and speech selections pointing at it. Choices made before the fix are
+gone once; they stay after it.
+
+## Resend never re-classified a turn; a stale local text model ran beside the remote one (RESOLVED in code 2026-09-02: shared `ChatSessionService` resolves the kind on every run and carries only the user's explicit choice; `ensureTextModelForChat` reads the shared active route; a resend passes `allowFallback: false`; the 60 s remote media timeout is gone; remote HTTP errors show the server's message)
+
+Device log: "draw a dog" classified image once (20:27), later resends replayed the recorded text kind and never asked the classifier. After Desktop's llama-server was evicted for an image load, its 503 made the phone run SmolLM2 (a replayed turn from an older session carried no fallback flag). A remote DreamShaper run was cancelled at exactly 60 s by the media request timeout.
+
+## Remote model selection shows no loading (RESOLVED in code 2026-09-02: shared `ModelCommandApplicationService.pending(modality)` + `subscribe`; the sheet spins the remote row and disables the rest while the round trip runs; test model-command-service)
+
+## Mobile still keeps parallel selection fields beside the shared route (RESOLVED 2026-09-03: one selection store; `activeModelId`/`lastTextModelId` have no production readers, `activeRemoteMediaServerIds` deleted in 46b2ebca; see shared/docs/SHARED_OWNERSHIP_AUDIT_2026-09-02.md #7)
+
+`activeModelId` / `lastTextModelId` and `selectedTextModelId()` remain as a second owner of the text selection. The readiness path no longer reads them; the remaining readers must move to the shared active route and the fields be deleted.
+
+## OpenRouter models all classify as text (RESOLVED in code 2026-09-02: shared catalog reads `architecture.output_modalities`; `remoteImageRequest` draws through OpenRouter's chat-image modality and through `/images/generations` elsewhere; both apps call it; not yet verified live)
+
+OpenRouter lists image-output models via `output_modalities`, which shared's remote inventory does not read, so Desktop's remote server shows "No image models on this server". Reading the field is small; generating through OpenRouter's chat-completions image modality needs a second remote image transport in shared.
+
+## Model selection has two writers and three hand-kept copies (open, 2026-09-02)
+
+One fact, "which model answers each modality on this Mac", is held in: Desktop's canonical
+`model-selections.json` (authority), the phone's selection store (was a second WRITER: its store
+adapter activated the route on Desktop on every write; fixed 2026-09-02, mobile commit "selection: the
+phone's selection write is pure"), the saved remote server's per-modality `selections`, the legacy
+`active-modalities.json`, and the "Use remote server" toggle derived from the text selection. The last
+three must become read-only projections of the authority, owned by `@offgrid/models`; today two of
+them are written by hand. Symptoms today: Nano Banana saved on Desktop, phone re-activated DreamShaper
+(22:33Z), both surfaces then failed on the local model's memory guard.
+
+## Pre-existing failing test: remoteServer discovery 'keeps a reachable saved server when another discovered server uses the same port' (open, 2026-09-02)
+
+Fails on the branch head before today's selection change (verified with the change stashed). Not a
+mockist; needs a real fix of the seam or the expectation.
+
+## Mobile jest: 15 suites red after the model-facade test pass, none from the facade work (open, 2026-09-03)
+
+Full run 2026-09-03: 644 of 659 suites green (7699 tests pass, 20 fail). Each red suite is either
+pre-existing (fails at commit f476a1ad, before the facade work, verified in a worktree) or follows a
+production change made today by another session whose tests were not updated:
+- `unit/services/tools/handlers.test.ts`, `tools/handlers.branches.test.ts`, `unit/services/toolHandlers.test.ts`:
+  HTML entity decoding changed in 01788641 (decode once); tests expect the old double-decode.
+- `rntl/components/ModelCard.test.tsx`, `rntl/screens/DownloadManagerScreen.test.tsx`,
+  `rntl/components/VoiceModelsPanel.test.tsx`, `pro/audio/ui/TTSSection.test.tsx`: progress copy changed in
+  581ef412 (an unknown rate is not labelled); tests expect the old "Rate unavailable" text.
+- `integration/happy/imageOomCard.happy.test.tsx`, `integration/memory/loadAnywayCardRendered.redflow.test.tsx`:
+  the failure card's button reads "Run anyway" since 66223fe6; tests look for "Load Anyway".
+- `integration/generation/remoteFailureClearsLoading.test.ts`: remote errors are readable since 16b65e27
+  ("Bad Request"); the test expects "HTTP 400".
+- `integration/models/whisperPickerCanonicalDownloadProgress.rendered.test.tsx`: updated in 5ca27970 to expect
+  "Model storage is unavailable", which no source file renders.
+- Pre-existing: `integration/audio/streamingStateMachine.test.ts` (TTS store mock lacks `subscribe`),
+  `integration/chat/remoteEnhanceSkipped.redflow.test.ts` (remote image request still carries the enhanced
+  prompt), `integration/models/modelsManagerSheetPresentation.rendered.test.tsx` (sheet surface style has no
+  height), `unit/services/remoteServerReconnect.test.ts` (already logged above).
+Doctrine applies to the fixes: assert the new copy through the rendered surface, or fix the seam; never repair a mock.
+
+## `pro/sync/pairedGatewayAdoption.test.ts` mocks the workspace (open, 2026-09-03)
+
+Passes, but it fakes `mobileWorkspace` instead of driving the real facade with a fake transport. Rewrite through
+the real workspace at the next touch.
+
+## A test writes `downloads.json` into the repo root (open, 2026-09-03)
+
+An empty `downloads.json` appeared in the desktop repo root after a vitest run: `desktop-model-download-service`
+persists to `path.join(modelsDir(), 'downloads.json')`, so some test hands it an empty `modelsDir`. Pin the models
+directory to a temp dir in that test (see "Desktop CI hermeticity"). The stray file was removed by hand.
+
+## Insecure redirect must be refused natively (open, 2026-09-03, review thread on #635)
+
+`src/services/httpClient.ts` rejects an HTTPS to HTTP credential downgrade only after XMLHttpRequest has
+followed the redirect, so a 307 to an HTTP target can carry the JSON body and Authorization before the
+check runs. Fix: a native redirect policy (OkHttp interceptor on Android, URLSession delegate on iOS) that
+refuses HTTPS to HTTP before forwarding. Device test on both platforms: an HTTPS endpoint returning 307 to an
+HTTP recorder; the recorder receives neither the body nor Authorization.
+
+## CI: fail fast when shared cannot be provisioned (open, 2026-09-03, review thread on #635)
+
+Fork pull requests get no secrets, so the shared checkout is skipped and `npm ci` fails on the
+`file:../shared/...` dependencies with an unrelated-looking error. Decision: forks are not supported (shared
+is not published). Make the checkout step fail with an explicit message when `PRO_SUBMODULE_PAT` is empty.
+
+## Discovery must carry the Desktop's device identity so a moved server is adopted automatically again (open, 2026-09-03)
+
+Shared no longer remaps a saved server to a discovered endpoint on a unique port match alone (any LAN host on
+that port would receive the saved server's prompts, CWE-345; review thread on #635). A move now needs the
+discovered server to prove the identity the saved record carries. Discovery does not learn an identity yet,
+so a Mac that changes IP shows up as "found" for the person to adopt instead of moving silently. Fix: the
+Desktop gateway advertises its device id (mDNS TXT / `/v1/models` header), LAN discovery carries it as
+`DiscoveredRemoteServer.identity`, and `save` persists it on the record; then genuine moves auto-adopt.
+
+## Mobile Pro still owns four Sync application control planes (open, 2026-09-04)
+
+`pro/sync/stateSyncService.ts`, `clipboardSyncService.ts`,
+`knowledgeDocumentSyncService.ts`, and `sharedFileSyncService.ts` are not platform adapters. They
+own durable state, mutation admission, retry and startup policy, lifecycle state, forwarding rules,
+failure handling, and render-facing projections. Their composition modules construct these services
+beside `applicationFacade().sync`, so importing the facade has not completed the ownership cutover.
+
+Impact: Mobile can still diverge from Desktop and `@offgrid/application`; UI consumers can call an
+app-owned business service instead of typed application commands and structurally shared read-only
+projections. This keeps duplicate control planes alive and prevents architecture gates from proving
+the stated north star.
+
+Deletion condition: move the portable state-sync, clipboard-sync, knowledge-document, and
+shared-file workflows and state machines behind the Shared Sync/Application owner; leave Mobile Pro
+with React Native filesystem, clipboard, transport, database, and entitlement adapters only; expose
+typed Outcomes, correlated lifecycle events, bounded work, and narrow projections; migrate every
+production caller; delete the four app-owned service classes and their superseded stores; add gates
+that prevent their reconstruction; and verify the public journeys with real-boundary integration
+tests before live and packaged verification.
+
+## Mobile composes model application services outside `@offgrid/application` (open, 2026-09-04)
+
+`src/services/composition/model-commands.ts`, `model-library.ts`,
+`model-library-services.ts`, and `model-selection.ts` construct application services from
+`@offgrid/models`. These are Shared implementations, but Mobile still owns their construction and
+consumes them beside `ModelsFacade`. That leaves more than one public application interface for
+selection, lifecycle, library removal, repair, import, transfer registration, readiness, and image
+recovery.
+
+Deletion condition: expose the required typed commands, Outcomes, events, and narrow projections on
+`ModelsFacade`; compose each portable owner once inside Shared; leave only React Native filesystem,
+registry, native-engine, and persistence ports in Mobile; migrate all callers; delete the app-level
+service composition; and make the model architecture gate reject any reconstruction.
+
+
+## A `ModelsFacade` outbound port re-enters the application facade (open, 2026-09-04)
+
+**Verdict: fix-the-guard.** The rule is stated in the ejection port's own header
+(`src/services/modelServices/ejectModelsForUser.ts:18`): "no implementation of a `ModelsFacade`
+outbound port may call back into the facade." Two ports handed to `createOffGridApplication`
+(`src/services/composition/application.ts:89`) break it, so the call graph runs
+facade -> shared service -> app adapter -> facade, and the workflow is app-owned while appearing
+to be Shared's.
+
+The chat port, directly - `src/services/adapters/models/mobileChatHostPort.ts`:
+- `:211` `applicationFacade().rag.listDocuments(projectId)`
+- `:218` `applicationFacade().rag.buildContext(projectId, query)`
+- `:282` `applicationFacade().models.lookup(request.routeId)`
+
+The first two are CROSS-DOMAIN: a Models outbound port reaching the RAG domain, which makes the
+chat port the composition point for two domains instead of one. `:282` is same-domain and less
+severe - a read-only projection lookup - but it is the same back-edge.
+
+All three are reads, not commands, so none of them can deadlock the bounded model-control lane.
+That bounds the impact; it does not make the shape correct.
+
+Owner: the Mobile chat/RAG composition. The likely shape is for Shared's chat host contract to
+receive retrieval as an inbound dependency composed once at the root, rather than each port
+reaching sideways for it.
+
+Deletion condition: no module reachable as a `ModelsFacade` outbound port implementation calls
+`applicationFacade()`; retrieval reaches the chat host as a declared dependency; and the model
+architecture gate rejects the reconstruction of either back-edge.
+
+## Two gates disagree about the ejection back-edge - it needs a design ruling (open, 2026-09-04)
+
+**Verdict: instrument-and-revisit.** This is not debt to burn down; it is a contradiction between
+two rules, and one of them has to lose.
+
+`src/services/modelServices/ejectModelsForUser.ts` imports no facade, and its header calls that
+"the enforceable form" of the no-back-edge rule. The property does not survive one import hop:
+
+- the port's `localUnloads.textUnloaded` / `imageUnloaded` (`ejectModelsForUser.ts:27-28`)
+- -> `unloadTextModel` / `unloadImageModel` (`src/services/modelServices/modelLifecycleBootstrap.ts`)
+- -> `unloadThrough` -> `models().unload(...)`, where
+  `const models = () => applicationFacade().models` (`modelLifecycleBootstrap.ts:79`)
+
+So shared's `ModelEjectionService.ejectAllForUser`
+(`shared/packages/models/src/runtime/ejection-service.ts:69-79`) calls this port, which calls the
+facade back.
+
+The contradiction: `scripts/verify-model-architecture.mjs:857` REQUIRES that back-edge.
+`modelLifecycleBootstrap.ts` must match `applicationFacade` plus `.load(`/`.unload(` to satisfy
+`model-lifecycle-transaction-is-shared`, whose reasoning is that a typed facade command is MORE
+shared than a directly held service. By that rule the re-entry is the correct answer. By the
+ejection port's rule it is a violation. Both cannot hold.
+
+Not a deadlock, and this was checked rather than assumed: the facade's `eject`
+(`shared/packages/application/src/models/lifecycle-controller.ts:479-497`) only wraps `run()` in
+started/succeeded/failed events. It does not take the model-control lane, so the nested `unload`
+acquires the lane on its own and cannot wait on the eject that invoked it.
+
+Deletion condition: rule which principle governs an outbound port that needs a shared transaction -
+either the port receives the unload primitive as an inbound dependency (no facade reach), or the
+no-back-edge rule is narrowed to commands that share the control lane. Then make the two gates
+agree, and delete whichever rule loses.
+
+## Pre-M59 Workspace Content outbox schema ordering (code fixed, verification open, 2026-09-05)
+
+Code: M81 separates table creation, additive claim-column upgrade/backfill, and index creation.
+`claim_id`, `claimed_at`, `retry_at`, and `origin` now exist before the pending index references
+them. Existing rows are preserved and missing origins become `local`.
+
+Wired: `openWorkspaceContentDatabase()` runs this order on every normal repository open. The
+column checks and `CREATE INDEX IF NOT EXISTS` make a second open a schema no-op.
+
+Verified: open. The later verification phase must use real SQLite with a pre-M59 outbox table and
+existing rows, open it twice, and prove row equality, origin backfill, all four columns, one pending
+index, and no exception on either open.
+
+## Interrupted image extraction disappears after relaunch (open, 2026-09-09)
+
+The full Mobile JavaScript gate and the direct rerun of
+`imageExtractLostRelaunch.rendered.redflow.test.tsx` fail because the Download Manager does not show
+the durable image archive after the native completed row is pruned. The expected archive name,
+Interrupted state, Retry, and Remove actions are absent.
+
+This is separate from the Image-tab progress identity fix. That journey starts a new download and
+keeps `image:<catalog-id>` through preparation and measured progress. This recovery gap starts from a
+completed durable journal plus a partial extracted package after relaunch.
+
+Deletion condition: the real Mobile composition recovers that journal as an interrupted image
+download, and the Download Manager renders the archive name with Retry and Remove after the native
+row is gone.

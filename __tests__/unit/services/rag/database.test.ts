@@ -20,7 +20,7 @@ jest.mock('../../../../src/utils/logger', () => ({
 }));
 
 // Import after mocks
-import { ragDatabase } from '../../../../src/services/rag/database';
+import { ragDatabase } from '../../../../src/services/adapters/rag/ragDatabaseAdapter';
 
 function expectDeleteCascade() {
   const deleteCalls = mockExecuteSync.mock.calls.filter(
@@ -197,6 +197,7 @@ describe('RagDatabase', () => {
       const mockDocs = [
         {
           id: 1,
+          sync_id: 'doc-sync-1',
           project_id: 'proj1',
           name: 'doc1.txt',
           path: '/p',

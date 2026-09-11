@@ -37,12 +37,12 @@ export function formatClockTime(value: Date | number | string): string {
 }
 
 /** "Wed" in this device's timezone. */
-export function formatWeekday(value: Date | number | string): string {
+function formatWeekday(value: Date | number | string): string {
   return WEEKDAYS[asDate(value).getDay()] ?? '';
 }
 
 /** "Mar 4" in this device's timezone. */
-export function formatShortDate(value: Date | number | string): string {
+function formatShortDate(value: Date | number | string): string {
   const date = asDate(value);
   return `${MONTHS[date.getMonth()] ?? ''} ${date.getDate()}`;
 }

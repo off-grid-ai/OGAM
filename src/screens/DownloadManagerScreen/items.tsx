@@ -1,18 +1,18 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { LoadingDots } from '../../components/LoadingDots';
+import { ModelCard } from '../../components/ModelCard';
 import Icon from 'react-native-vector-icons/Feather';
-import { Card } from '../../components';
+import { Card } from '../../components/Card';
 import { useTheme, useThemedStyles } from '../../theme';
-import { useDownloadStore } from '../../stores/downloadStore';
 import { BackgroundDownloadReasonCode } from '../../types';
+import type { ModelCredibility } from '../../types';
 import { needsVisionRepair as checkNeedsVisionRepair } from '../../utils/visionRepair';
 import { getDownloadStatusLabel, isRetryable } from '../../utils/downloadErrors';
-import { downloadStatusIcon } from '../../utils/downloadStatusIcon';
 import { formatBytes } from '../../utils/formatBytes';
 import { createStyles } from './styles';
 import { presentProgress } from '../../utils/progressPresentation';
-import { SPACING } from '../../constants';
+import { isDownloadingStatus, isPausedStatus } from '../../utils/downloadStatus';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -38,6 +38,8 @@ export type DownloadItem = {
   reason?: string;
   reasonCode?: BackgroundDownloadReasonCode;
   name?: string;
+  credibility?: ModelCredibility;
+  metadataJson?: string;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -47,18 +49,22 @@ export type DownloadItem = {
 export { formatBytes } from '../../utils/formatBytes';
 
 export function getStatusText(status: string): string {
-  if (status === 'running') return 'Downloading...';
-  if (status === 'pending') return 'Queued';
+  if (status === 'preparing') return 'Preparing...';
+  if (status === 'running' || status === 'downloading') return 'Downloading...';
+  if (status === 'pending' || status === 'queued') return 'Queued';
   if (status === 'paused') return 'Paused';
+  if (status === 'verifying') return 'Verifying...';
+  if (status === 'processing') return 'Preparing...';
   if (status === 'retrying') return 'Retrying connection...';
   if (status === 'waiting_for_network') return 'Waiting for network';
   if (status === 'failed') return 'Needs attention';
   if (status === 'unknown') return 'Stuck - Remove & retry';
+  if (status === 'interrupted') return 'Interrupted';
   return status;
 }
 
 function getStatusLabel(item: DownloadItem): string {
-  if (item.status === 'running') return '';
+  if (isDownloadingStatus(item.status)) return '';
   if (item.status === 'failed' || item.status === 'retrying' || item.status === 'pending' || item.status === 'waiting_for_network') {
     return getDownloadStatusLabel(item.status, item.reasonCode, item.reason);
   }
@@ -72,107 +78,35 @@ interface ActiveDownloadCardProps {
   item: DownloadItem;
   onRemove: (item: DownloadItem) => void;
   onRetry: (item: DownloadItem) => void;
+  onPause: (item: DownloadItem) => void;
+  onResume: (item: DownloadItem) => void;
 }
 
-export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, onRemove, onRetry }) => {
-  const { colors } = useTheme();
-  const styles = useThemedStyles(createStyles);
-  const progressColor =
-    item.status === 'failed'
-      ? colors.error
-      : item.status === 'retrying' || item.status === 'waiting_for_network'
-        ? colors.warning
-        : colors.primary;
-  const presented = presentProgress({
-    progress: item.progress,
-    bytesDownloaded: item.bytesDownloaded,
-    totalBytes: item.fileSize,
-    bytesPerSecond: item.bytesPerSecond,
-    status: item.status,
-  });
-  const percentage = presented.progress.percentage ?? 0;
-
-  // Icon per status is owned by downloadStatusIcon() so this row and ModelCard match
-  // (queued -> clock, previously text-only here).
-  const getStatusIcon = () => downloadStatusIcon(item.status);
-
-  const getStatusIconColor = () => {
-    if (item.status === 'failed') return colors.error;
-    if (item.status === 'retrying') return colors.warning;
-    if (item.status === 'waiting_for_network') return colors.warning;
-    return colors.textMuted;
-  };
-
+export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, onRemove, onRetry, onPause, onResume }) => {
+  const needsAttention = item.status === 'failed' || item.status === 'interrupted';
   return (
-    <Card style={styles.downloadCard}>
-      <View style={styles.downloadHeader}>
-        <View style={styles.downloadInfo}>
-          <Text style={styles.fileName} numberOfLines={1}>{item.fileName}</Text>
-          <Text style={styles.modelId} numberOfLines={1}>{item.author}</Text>
-        </View>
-        {item.status === 'failed' ? (
-          <View style={styles.failedActionsRow}>
-            {isRetryable(item.reasonCode) && (
-              <TouchableOpacity
-                style={styles.retryButton}
-                hitSlop={SPACING.md}
-                testID="failed-retry-button"
-                onPress={() => onRetry(item)}
-              >
-                <Icon name="refresh-cw" size={14} color={colors.primary} />
-                <Text style={styles.retryButtonText}>Retry</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.removeButton}
-              hitSlop={SPACING.md}
-              testID="failed-remove-button"
-              onPress={() => onRemove(item)}
-            >
-              <Icon name="trash-2" size={14} color={colors.error} />
-              <Text style={styles.removeButtonText}>Remove</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.cancelButton}
-            testID="remove-download-button"
-            onPress={() => onRemove(item)}
-          >
-            <Icon name="x" size={20} color={colors.error} />
-          </TouchableOpacity>
-        )}
-      </View>
-      <View style={styles.progressContainer}>
-        <View style={styles.progressBarBackground}>
-          <View style={[styles.progressBarFill, { width: `${percentage}%` as const, backgroundColor: progressColor }]} />
-        </View>
-        <Text style={styles.progressText} testID="download-progress-detail">
-          {[presented.percentageText, presented.detailText].filter(Boolean).join(' · ')}
-        </Text>
-      </View>
-      <View style={styles.downloadMeta}>
-        {!!item.quantization && (
-          <View style={styles.quantBadge}>
-            <Text style={styles.quantText}>{item.quantization}</Text>
-          </View>
-        )}
-        {(!!getStatusLabel(item) || !!getStatusIcon()) && (
-          <View style={styles.statusIconRow}>
-            {getStatusIcon() && (
-              <Icon name={getStatusIcon()!} size={14} color={getStatusIconColor()} accessibilityLabel={getStatusText(item.status)} />
-            )}
-            {/* Queued is icon-only (clock) — the word is redundant next to it. Other states
-                (failed/retrying/network) keep their explanatory text. */}
-            {item.status !== 'pending' && !!getStatusLabel(item) && (
-              <Text style={[styles.statusText, item.status === 'failed' && { color: colors.error }]}>
-                {getStatusLabel(item)}
-              </Text>
-            )}
-          </View>
-        )}
-      </View>
-    </Card>
+    <ModelCard
+      compact
+      testID="active-download-card"
+      model={{ id: item.modelId, name: item.fileName, author: item.author, credibility: item.credibility }}
+      isDownloading={!needsAttention && !isPausedStatus(item.status) && item.status !== 'queued' && item.status !== 'pending'}
+      isQueued={item.status === 'queued' || item.status === 'pending'}
+      isPaused={isPausedStatus(item.status)}
+      downloadProgress={item.progress}
+      downloadBytes={{ downloaded: item.bytesDownloaded, total: item.fileSize, bytesPerSecond: item.bytesPerSecond }}
+      downloadStatus={item.status}
+      downloadStatusLabel={getStatusLabel(item)}
+      onPause={isDownloadingStatus(item.status) ? () => onPause(item) : undefined}
+      onResume={isPausedStatus(item.status) ? () => onResume(item) : undefined}
+      onCancel={!needsAttention ? () => onRemove(item) : undefined}
+      failedState={needsAttention ? {
+        errorMessage: getStatusLabel(item),
+        bytesDownloaded: item.bytesDownloaded,
+        totalBytes: item.fileSize,
+        onRetry: isRetryable(item.reasonCode) ? () => onRetry(item) : undefined,
+        onRemove: () => onRemove(item),
+      } : undefined}
+    />
   );
 };
 
@@ -180,7 +114,9 @@ interface CompletedDownloadCardProps {
   item: DownloadItem;
   onDelete: (item: DownloadItem) => void;
   onRepairVision?: (item: DownloadItem) => void;
+  onCancelRepair?: (item: DownloadItem) => void;
   isRepairingVision?: boolean;
+  repairDownload?: DownloadItem;
 }
 
 /** Feather icon for a completed model row. A vision model missing its projector reads as
@@ -201,23 +137,10 @@ function modelTypeIconColor(item: DownloadItem, needsVisionRepair: boolean, colo
   return colors.primary;
 }
 
-export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ item, onDelete, onRepairVision, isRepairingVision = false }) => {
+export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ item, onDelete, onRepairVision, onCancelRepair, isRepairingVision = false, repairDownload }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const needsVisionRepair = checkNeedsVisionRepair(item);
-  // A vision repair drives a live download-store row keyed on the completed
-  // model's modelKey (`repo/file` = item.modelId). Read it so the SAME
-  // determinate progress bar the normal download shows lights up during the
-  // ~900MB mmproj re-download, instead of a bare indeterminate spinner (OD2).
-  const repairEntry = useDownloadStore(s => s.downloads[item.modelId]);
-  const showRepairProgress = isRepairingVision && !!repairEntry;
-  const repairProgress = repairEntry ? presentProgress({
-    progress: repairEntry.progress,
-    bytesDownloaded: repairEntry.bytesDownloaded,
-    totalBytes: repairEntry.totalBytes,
-    bytesPerSecond: repairEntry.bytesPerSecond,
-    status: repairEntry.status,
-  }) : undefined;
   const completedMeta = [
     item.author,
     formatBytes(item.fileSize),
@@ -226,6 +149,15 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
       ? new Date(item.downloadedAt).toLocaleDateString()
       : undefined,
   ].filter(Boolean).join(' · ');
+  const repairProgress = isRepairingVision && repairDownload
+    ? presentProgress({
+        progress: repairDownload.progress,
+        bytesDownloaded: repairDownload.bytesDownloaded,
+        totalBytes: repairDownload.fileSize,
+        bytesPerSecond: repairDownload.bytesPerSecond,
+        status: repairDownload.status,
+      })
+    : undefined;
 
   return (
     <Card style={styles.downloadCard}>
@@ -250,28 +182,47 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
             <Icon name="tool" size={18} color={colors.warning} />
           </TouchableOpacity>
         )}
-        <TouchableOpacity
-          style={styles.deleteButton}
-          testID="delete-model-button"
-          onPress={() => onDelete(item)}
-        >
-          <Icon name="trash-2" size={18} color={colors.error} />
-        </TouchableOpacity>
+        {isRepairingVision && onCancelRepair ? (
+          <TouchableOpacity
+            style={styles.deleteButton}
+            testID="cancel-vision-repair-button"
+            accessibilityLabel="Cancel vision repair"
+            onPress={() => onCancelRepair(item)}
+          >
+            <Icon name="x" size={18} color={colors.error} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.deleteButton}
+            testID="delete-model-button"
+            onPress={() => onDelete(item)}
+          >
+            <Icon name="trash-2" size={18} color={colors.error} />
+          </TouchableOpacity>
+        )}
       </View>
-      {showRepairProgress && (
-        <View style={styles.progressContainer} testID="repair-vision-progress">
-          <View style={styles.progressBarBackground}>
-            <View style={[styles.progressBarFill, { width: `${Math.round(repairEntry.progress * 100)}%` as const, backgroundColor: colors.primary }]} />
-          </View>
-          <Text style={styles.progressText}>
-            {[repairProgress?.percentageText, repairProgress?.detailText].filter(Boolean).join(' · ')}
-          </Text>
-        </View>
-      )}
       {isRepairingVision && (
         <View style={styles.repairingBadge} testID="repairing-vision-badge">
           <LoadingDots color={colors.primary} />
           <Text style={styles.repairingBadgeText}>Repairing</Text>
+        </View>
+      )}
+      {repairProgress && (
+        <View style={styles.progressContainer} testID="repair-vision-progress">
+          <View style={styles.progressBarBackground}>
+            <View
+              style={[
+                styles.progressBarFill,
+                {
+                  width: `${repairProgress.progress.percentage ?? 0}%` as const,
+                  backgroundColor: colors.primary,
+                },
+              ]}
+            />
+          </View>
+          <Text style={styles.progressText}>
+            {[repairProgress.percentageText, repairProgress.detailText].filter(Boolean).join(' · ')}
+          </Text>
         </View>
       )}
     </Card>

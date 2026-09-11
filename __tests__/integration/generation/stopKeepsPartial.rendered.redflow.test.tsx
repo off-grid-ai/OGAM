@@ -1,8 +1,8 @@
 /**
  * DEVICE 2026-07-14 — pressing Stop mid-generation DISCARDED the partial that was already on screen: the
  * message disappeared. The keep-or-discard decision read generationService's internal state
- * (state.streamingContent / isGenerating), which can be empty/false (LiteRT, or after generationSession.end
- * reset the state before stopGeneration ran) even while the store's streamingMessage — what the user sees —
+ * (state.streamingContent / isGenerating), which can be empty/false (LiteRT, or after the Shared session
+ * reset state before stopGeneration ran) even while the store's streamingMessage — what the user sees —
  * was full. So shown output got thrown away.
  *
  * SPEC (the user's principle): once tokens are streamed and shown, they are NEVER discarded. Stopping keeps

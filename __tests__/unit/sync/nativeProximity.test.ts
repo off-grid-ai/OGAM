@@ -17,7 +17,7 @@ import {
   type ProximityNativeFake,
 } from '../../utils/proximityNativeBoundary';
 import { IosProximityAdapter } from '../../../src/services/sync/nativeProximity';
-import { buildSyncEngine } from '../../../src/services/sync/engine';
+import { buildSyncEngine } from '../../../src/services/composition/sync-engine';
 import { createNativeTcpBoundary } from '../../utils/nativeSyncBoundaries';
 
 jest.mock('react-native', () => {

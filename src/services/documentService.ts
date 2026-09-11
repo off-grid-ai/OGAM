@@ -8,50 +8,30 @@ import RNFS from 'react-native-fs';
 import { statFile } from '../utils/fileStat';
 import { MediaAttachment } from '../types';
 import { pdfExtractor } from './pdfExtractor';
-import { useAppStore } from '../stores/appStore';
-import { APP_CONFIG } from '../constants';
+import {MOBILE_TEXT_SETTINGS_DEFAULTS} from '@offgrid/models';
+import {applicationFacade} from './applicationFacade';
 import { generateId } from '../utils/generateId';
+import logger from '../utils/logger';
+import {
+  admitDocument,
+  documentAttachmentCharBudget,
+  documentDisplayName,
+  documentPreview,
+  formatDocumentForContext,
+  isPdfDocument,
+  isSupportedDocument,
+  supportedDocumentExtensions,
+  truncateDocumentText,
+  type DocumentCapabilities,
+} from '@offgrid/rag';
 
-// File extensions we can read as text
-const TEXT_EXTENSIONS = [
-  '.txt',
-  '.md',
-  '.csv',
-  '.json',
-  '.xml',
-  '.html',
-  '.log',
-  '.py',
-  '.js',
-  '.ts',
-  '.jsx',
-  '.tsx',
-  '.java',
-  '.c',
-  '.cpp',
-  '.h',
-  '.swift',
-  '.kt',
-  '.go',
-  '.rs',
-  '.rb',
-  '.php',
-  '.sql',
-  '.sh',
-  '.yaml',
-  '.yml',
-  '.toml',
-  '.ini',
-  '.cfg',
-  '.conf',
-];
+type PersistentCopyResult =
+  | { id: string; uri: string; storage: 'persistent' }
+  | { id: string; uri: string; storage: 'readable-source-fallback' };
 
-// PDF extension handled separately via native module
-const PDF_EXTENSION = '.pdf';
-
-// Max file size we'll read (5MB)
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
-
+// The attachment rules (which files, how large, how much of one the model sees, the truncation
+// marker, the context block, the preview) are @offgrid/rag's `document-attachment`; this service
+// keeps only the file system and the PDF extractor.
 // Persistent directory for attached documents
 const ATTACHMENTS_DIR = `${RNFS.DocumentDirectoryPath}/attachments`;
 
@@ -65,15 +45,24 @@ class DocumentService {
       await RNFS.mkdir(ATTACHMENTS_DIR);
     }
   }
+  /** What this device can open: PDFs only when the native extractor is present. */
+  private capabilities(): DocumentCapabilities {
+    return { pdf: pdfExtractor.isAvailable() };
+  }
+
+  /** The chat's context window as the model sees it, in tokens. */
+  private contextLength(): number {
+    const value = applicationFacade().models.settings.current().contextLength;
+    return typeof value === 'number' && Number.isFinite(value) && value > 0
+      ? value
+      : MOBILE_TEXT_SETTINGS_DEFAULTS.contextLength;
+  }
+
   /**
    * Check if a file extension is supported
    */
   isSupported(fileName: string): boolean {
-    const extension = `.${fileName.split('.').pop()?.toLowerCase()}`;
-    if (extension === PDF_EXTENSION && pdfExtractor.isAvailable()) {
-      return true;
-    }
-    return TEXT_EXTENSIONS.includes(extension);
+    return isSupportedDocument(fileName, this.capabilities());
   }
 
   /**
@@ -128,17 +117,25 @@ class DocumentService {
         await RNFS.copyFile(uri, tempPath);
         console.log(`[DocumentService] Copied iOS file:// URI to: ${tempPath}`);
         return tempPath;
-      } catch (_copyError) {
+      } catch (directCopyError: unknown) {
         // If direct copy fails, try stripping the file:// prefix
         const pathWithoutScheme = decodedUri.replace(/^file:\/\//, '');
         try {
           await RNFS.copyFile(pathWithoutScheme, tempPath);
           console.log(`[DocumentService] Copied (fallback) to: ${tempPath}`);
           return tempPath;
-        } catch {
+        } catch (strippedPathError: unknown) {
           console.error(`[DocumentService] Both copy attempts failed`);
+          const directMessage =
+            directCopyError instanceof Error
+              ? directCopyError.message
+              : String(directCopyError);
+          const strippedMessage =
+            strippedPathError instanceof Error
+              ? strippedPathError.message
+              : String(strippedPathError);
           throw new Error(
-            `Could not access file. Please try selecting the file again.`,
+            `Could not access file. Please try selecting the file again. Direct copy failed: ${directMessage}. Stripped-path copy failed: ${strippedMessage}.`,
           );
         }
       }
@@ -146,17 +143,6 @@ class DocumentService {
 
     console.log(`[DocumentService] Returning URI as-is: ${uri}`);
     return uri;
-  }
-
-  private validateFileType(extension: string, isPdf: boolean): void {
-    if (!isPdf && !TEXT_EXTENSIONS.includes(extension)) {
-      throw new Error(
-        `Unsupported file type: ${extension}. Supported: txt, md, csv, json, pdf, code files`,
-      );
-    }
-    if (isPdf && !pdfExtractor.isAvailable()) {
-      throw new Error('PDF extraction is not available on this device');
-    }
   }
 
   private async readContent(
@@ -174,13 +160,7 @@ class DocumentService {
       console.log(
         `[DocumentService] Successfully read ${raw.length} characters`,
       );
-      if (raw.length > maxChars) {
-        return `${raw.substring(
-          0,
-          maxChars,
-        )}\n\n... [Content truncated due to length]`;
-      }
-      return raw;
+      return truncateDocumentText(raw, maxChars);
     } catch (error: any) {
       console.error(
         `[DocumentService] Error reading content:`,
@@ -194,21 +174,50 @@ class DocumentService {
     resolvedPath: string,
     originalPath: string,
     name: string,
-  ): Promise<{ id: string; uri: string }> {
+  ): Promise<PersistentCopyResult> {
     await this.ensureAttachmentsDir();
     const id = generateId();
     const persistentPath = `${ATTACHMENTS_DIR}/${id}_${name}`;
-    let ok = false;
     try {
       await RNFS.copyFile(resolvedPath, persistentPath);
-      ok = await RNFS.exists(persistentPath);
-    } catch {
-      /* fall back to original path */
+      if (!(await RNFS.exists(persistentPath))) {
+        throw new Error('The persistent copy could not be verified.');
+      }
+    } catch (error: unknown) {
+      if (!(await RNFS.exists(resolvedPath))) {
+        const detail = error instanceof Error ? ` ${error.message}` : '';
+        throw new Error(
+          `Failed to save "${name}" and the source file is unavailable.${detail}`,
+        );
+      }
+      logger.warn(
+        `[DocumentService] Persistent copy failed for "${name}"; using the readable source path.`,
+        error,
+      );
+      return { id, uri: resolvedPath, storage: 'readable-source-fallback' };
     }
-    if (resolvedPath !== originalPath && ok) {
-      RNFS.unlink(resolvedPath).catch(() => {});
+
+    if (resolvedPath !== originalPath) {
+      try {
+        await RNFS.unlink(resolvedPath);
+      } catch (error: unknown) {
+        try {
+          if (await RNFS.exists(resolvedPath)) {
+            logger.error(
+              `[DocumentService] Failed to remove temporary source for "${name}".`,
+              error,
+            );
+          }
+        } catch (inspectionError: unknown) {
+          logger.error(
+            `[DocumentService] Failed to remove or inspect temporary source for "${name}".`,
+            error,
+            inspectionError,
+          );
+        }
+      }
     }
-    return { id, uri: ok ? persistentPath : resolvedPath };
+    return { id, uri: persistentPath, storage: 'persistent' };
   }
 
   /**
@@ -219,80 +228,67 @@ class DocumentService {
     fileName?: string,
     maxCharsOverride?: number,
   ): Promise<MediaAttachment | null> {
-    try {
-      console.log(
-        `[DocumentService] Processing document - filePath: ${filePath}, fileName: ${fileName}`,
-      );
-      const name = fileName || filePath.split('/').pop() || 'document';
-      const extension = `.${name.split('.').pop()?.toLowerCase()}`;
-      const isPdf = extension === PDF_EXTENSION;
-      console.log(
-        `[DocumentService] Detected extension: ${extension}, isPdf: ${isPdf}`,
-      );
-      this.validateFileType(extension, isPdf);
-
-      const resolvedPath = await this.resolveContentUri(filePath, name);
-      console.log(`[DocumentService] Resolved path: ${resolvedPath}`);
-
-      // Verify the file exists and is accessible
-      let fileExists = false;
-      try {
-        fileExists = await RNFS.exists(resolvedPath);
-        console.log(`[DocumentService] File exists check: ${fileExists}`);
-      } catch (existsError) {
-        // RNFS.exists can fail on security-scoped URLs
-        console.error(`[DocumentService] exists() threw error:`, existsError);
-        throw new Error(
-          'Could not access file. Please try selecting the file again.',
-        );
-      }
-
-      if (!fileExists) {
-        throw new Error(`File not found: ${name}`);
-      }
-
-      const facts = await statFile(resolvedPath);
-      if (!facts) {
-        throw new Error(
-          'Could not determine file size. Please try selecting the file again.',
-        );
-      }
-      const fileSize = facts.size;
-      console.log(`[DocumentService] File size: ${fileSize} bytes`);
-      if (fileSize > MAX_FILE_SIZE) {
-        throw new Error(
-          `File is too large. Maximum size is ${
-            MAX_FILE_SIZE / (1024 * 1024)
-          }MB`,
-        );
-      }
-
-      const maxChars =
-        maxCharsOverride ??
-        Math.floor(
-          (useAppStore.getState().settings.contextLength ||
-            APP_CONFIG.maxContextLength) *
-            4 *
-            0.5,
-        );
-      const textContent = await this.readContent(resolvedPath, isPdf, maxChars);
-      const { id, uri } = await this.savePersistentCopy(
-        resolvedPath,
-        filePath,
-        name,
-      );
-
-      return {
-        id,
-        type: 'document',
-        uri,
-        fileName: name,
-        textContent,
-        fileSize,
-      };
-    } catch (error: any) {
-      throw error;
+    console.log(
+      `[DocumentService] Processing document - filePath: ${filePath}, fileName: ${fileName}`,
+    );
+    const name = documentDisplayName(fileName || filePath);
+    const isPdf = isPdfDocument(name);
+    console.log(`[DocumentService] isPdf: ${isPdf}`);
+    const typeAdmission = admitDocument(name, undefined, this.capabilities());
+    if (!typeAdmission.admitted) {
+      throw new Error(typeAdmission.reason);
     }
+
+    const resolvedPath = await this.resolveContentUri(filePath, name);
+    console.log(`[DocumentService] Resolved path: ${resolvedPath}`);
+
+    // Verify the file exists and is accessible
+    let fileExists = false;
+    try {
+      fileExists = await RNFS.exists(resolvedPath);
+      console.log(`[DocumentService] File exists check: ${fileExists}`);
+    } catch (existsError) {
+      // RNFS.exists can fail on security-scoped URLs
+      console.error(`[DocumentService] exists() threw error:`, existsError);
+      throw new Error(
+        'Could not access file. Please try selecting the file again.',
+      );
+    }
+
+    if (!fileExists) {
+      throw new Error(`File not found: ${name}`);
+    }
+
+    const facts = await statFile(resolvedPath);
+    if (!facts) {
+      throw new Error(
+        'Could not determine file size. Please try selecting the file again.',
+      );
+    }
+    const fileSize = facts.size;
+    console.log(`[DocumentService] File size: ${fileSize} bytes`);
+    const admission = admitDocument(name, fileSize, this.capabilities());
+    if (!admission.admitted) {
+      throw new Error(admission.reason);
+    }
+
+    const maxChars =
+      maxCharsOverride ?? documentAttachmentCharBudget(this.contextLength());
+    const textContent = await this.readContent(resolvedPath, isPdf, maxChars);
+    const { id, uri } = await this.savePersistentCopy(
+      resolvedPath,
+      filePath,
+      name,
+    );
+
+    return {
+      id,
+      type: 'document',
+      uri,
+      fileName: name,
+      textContent,
+      fileSize,
+    };
   }
 
   /**
@@ -303,30 +299,16 @@ class DocumentService {
     text: string,
     fileName: string = 'pasted-text.txt',
   ): Promise<MediaAttachment> {
-    const contextLength =
-      useAppStore.getState().settings.contextLength ||
-      APP_CONFIG.maxContextLength;
-    const maxChars = Math.floor(contextLength * 4 * 0.5);
-    let textContent = text;
-    if (textContent.length > maxChars) {
-      textContent = `${textContent.substring(
-        0,
-        maxChars,
-      )}\n\n... [Content truncated due to length]`;
-    }
+    const textContent = truncateDocumentText(
+      text,
+      documentAttachmentCharBudget(this.contextLength()),
+    );
 
     const id = generateId();
 
-    // Write to persistent file so it can be opened from chat
-    let uri = '';
-    try {
-      await this.ensureAttachmentsDir();
-      const persistentPath = `${ATTACHMENTS_DIR}/${id}_${fileName}`;
-      await RNFS.writeFile(persistentPath, text, 'utf8');
-      uri = persistentPath;
-    } catch {
-      // Failed to write — uri stays empty, tap will be a no-op
-    }
+    await this.ensureAttachmentsDir();
+    const uri = `${ATTACHMENTS_DIR}/${id}_${fileName}`;
+    await RNFS.writeFile(uri, text, 'utf8');
 
     return {
       id,
@@ -342,39 +324,23 @@ class DocumentService {
    * Format document content for including in LLM context
    */
   formatForContext(attachment: MediaAttachment): string {
-    if (attachment.type !== 'document' || !attachment.textContent) {
-      return '';
-    }
-
-    const fileName = attachment.fileName || 'document';
-    return `\n\n---\n📄 **Attached Document: ${fileName}**\n\`\`\`\n${attachment.textContent}\n\`\`\`\n---\n`;
+    return attachment.type === 'document' ? formatDocumentForContext(attachment) : '';
   }
 
   /**
    * Get a short preview of document content
    */
-  getPreview(attachment: MediaAttachment, maxLength: number = 100): string {
-    if (attachment.type !== 'document' || !attachment.textContent) {
-      return attachment.fileName || 'Document';
-    }
-
-    const preview = attachment.textContent
-      .substring(0, maxLength)
-      .replaceAll('\n', ' ');
-    return preview.length < attachment.textContent.length
-      ? `${preview}...`
-      : preview;
+  getPreview(attachment: MediaAttachment, maxLength?: number): string {
+    return attachment.type === 'document'
+      ? documentPreview(attachment, maxLength)
+      : attachment.fileName || 'Document';
   }
 
   /**
    * Get list of supported file extensions
    */
   getSupportedExtensions(): string[] {
-    const exts = [...TEXT_EXTENSIONS];
-    if (pdfExtractor.isAvailable()) {
-      exts.push(PDF_EXTENSION);
-    }
-    return exts;
+    return supportedDocumentExtensions(this.capabilities());
   }
 }
 

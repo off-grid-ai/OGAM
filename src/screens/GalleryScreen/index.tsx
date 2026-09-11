@@ -1,9 +1,16 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, FlatList, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  FlatList,
+  Platform,
+} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { CustomAlert, hideAlert } from '../../components/CustomAlert';
+import { CustomAlert } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
 import { GeneratedImage } from '../../types';
 import { RootStackParamList } from '../../navigation/types';
@@ -30,10 +37,13 @@ export const GalleryScreen: React.FC = () => {
     showDetails,
     setShowDetails,
     alertState,
-    setAlertState,
+    isDeleting,
+    privacyRunning,
+    dismissAlert,
     imageGenState,
     displayImages,
     handleDelete,
+    handleDeleteAll,
     toggleSelectMode,
     toggleImageSelection,
     handleDeleteSelected,
@@ -45,7 +55,13 @@ export const GalleryScreen: React.FC = () => {
 
   const screenTitle = conversationId ? 'Chat Images' : 'Gallery';
 
-  const renderGridItem = ({ item, index }: { item: GeneratedImage; index: number }) => (
+  const renderGridItem = ({
+    item,
+    index,
+  }: {
+    item: GeneratedImage;
+    index: number;
+  }) => (
     <GalleryGridItem
       item={item}
       index={index}
@@ -68,21 +84,36 @@ export const GalleryScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView testID="gallery-screen" style={styles.container} edges={['top']}>
+    <SafeAreaView
+      testID="gallery-screen"
+      style={styles.container}
+      edges={['top']}
+    >
       <View style={styles.header}>
         {isSelectMode ? (
           <>
-            <TouchableOpacity style={styles.closeButton} onPress={toggleSelectMode}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={toggleSelectMode}
+              disabled={privacyRunning}
+            >
               <Icon name="x" size={24} color={colors.text} />
             </TouchableOpacity>
             <Text style={styles.title}>{selectedIds.size} selected</Text>
-            <TouchableOpacity style={styles.headerButton} onPress={selectAll}>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={selectAll}
+              disabled={privacyRunning}
+            >
               <Text style={styles.headerButtonText}>All</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.headerButton, selectedIds.size === 0 && styles.headerButtonDisabled]}
+              style={[
+                styles.headerButton,
+                selectedIds.size === 0 && styles.headerButtonDisabled,
+              ]}
               onPress={handleDeleteSelected}
-              disabled={selectedIds.size === 0}
+              disabled={selectedIds.size === 0 || privacyRunning}
             >
               <Icon
                 name="trash-2"
@@ -104,9 +135,28 @@ export const GalleryScreen: React.FC = () => {
             <Text style={styles.title}>{screenTitle}</Text>
             <Text style={styles.countBadge}>{displayImages.length}</Text>
             {displayImages.length > 0 && (
-              <TouchableOpacity style={styles.headerButton} onPress={toggleSelectMode}>
-                <Icon name="check-square" size={20} color={colors.text} />
-              </TouchableOpacity>
+              <>
+                {!conversationId && (
+                  <TouchableOpacity
+                    accessibilityLabel="Delete all images"
+                    accessibilityRole="button"
+                    style={styles.headerButton}
+                    onPress={handleDeleteAll}
+                    disabled={privacyRunning}
+                  >
+                    <Icon name="trash-2" size={20} color={colors.error} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  accessibilityLabel="Select images"
+                  accessibilityRole="button"
+                  style={styles.headerButton}
+                  onPress={toggleSelectMode}
+                  disabled={privacyRunning}
+                >
+                  <Icon name="check-square" size={20} color={colors.text} />
+                </TouchableOpacity>
+              </>
             )}
           </>
         )}
@@ -134,7 +184,13 @@ export const GalleryScreen: React.FC = () => {
                   <View
                     style={[
                       styles.genProgressFill,
-                      { width: `${(imageGenState.progress.step / imageGenState.progress.totalSteps) * 100}%` },
+                      {
+                        width: `${
+                          (imageGenState.progress.step /
+                            imageGenState.progress.totalSteps) *
+                          100
+                        }%`,
+                      },
                     ]}
                   />
                 </View>
@@ -142,10 +198,14 @@ export const GalleryScreen: React.FC = () => {
             </View>
             {imageGenState.progress && (
               <Text style={styles.genSteps}>
-                {imageGenState.progress.step}/{imageGenState.progress.totalSteps}
+                {imageGenState.progress.step}/
+                {imageGenState.progress.totalSteps}
               </Text>
             )}
-            <TouchableOpacity style={styles.genCancelButton} onPress={handleCancelGeneration}>
+            <TouchableOpacity
+              style={styles.genCancelButton}
+              onPress={handleCancelGeneration}
+            >
               <Icon name="x" size={16} color={colors.error} />
             </TouchableOpacity>
           </View>
@@ -156,15 +216,19 @@ export const GalleryScreen: React.FC = () => {
         <View style={styles.emptyContainer}>
           <Icon name="image" size={48} color={colors.textMuted} />
           <Text style={styles.emptyTitle}>
-            {conversationId ? 'No images in this chat' : 'No generated images yet'}
+            {conversationId
+              ? 'No images in this chat'
+              : 'No generated images yet'}
           </Text>
-          <Text style={styles.emptyText}>Generate images from any chat conversation.</Text>
+          <Text style={styles.emptyText}>
+            Generate images from any chat conversation.
+          </Text>
         </View>
       ) : (
         <FlatList
           data={displayImages}
           renderItem={renderGridItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={item => item.id}
           numColumns={COLUMN_COUNT}
           contentContainerStyle={styles.gridContainer}
           columnWrapperStyle={styles.gridRow}
@@ -186,7 +250,8 @@ export const GalleryScreen: React.FC = () => {
         title={alertState.title}
         message={alertState.message}
         buttons={alertState.buttons}
-        onClose={() => setAlertState(hideAlert())}
+        loading={isDeleting}
+        onClose={dismissAlert}
       />
     </SafeAreaView>
   );

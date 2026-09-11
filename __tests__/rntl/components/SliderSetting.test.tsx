@@ -45,6 +45,14 @@ describe('SliderSetting', () => {
     expect(getByTestId('temp-value').props.children).toBe('0.70x');
   });
 
+  it('can show a formatted discrete value without opening numeric entry', () => {
+    const { getByTestId, queryByTestId } = render(
+      <SliderSetting {...baseProps} editableValue={false} formatValue={() => 'Auto'} />,
+    );
+    expect(getByTestId('temp-value').props.children).toBe('Auto');
+    expect(queryByTestId('temp-value-button')).toBeNull();
+  });
+
   it('defaults to 2 decimals when step < 1', () => {
     const { getByTestId } = render(<SliderSetting {...baseProps} />);
     expect(getByTestId('temp-value').props.children).toBe('0.70');

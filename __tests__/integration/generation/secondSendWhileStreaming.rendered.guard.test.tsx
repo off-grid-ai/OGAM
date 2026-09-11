@@ -17,7 +17,12 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
   useRoute: () => require('../../harness/chatHarness').routeHolder,
   useFocusEffect: () => {},
   useIsFocused: () => true,
@@ -30,7 +35,10 @@ describe('tapping send again mid-stream', () => {
 
     // Hold the engine mid-stream: tokens have started arriving and the completion is still in flight, which is
     // exactly the window in which the user gets impatient.
-    await h.send('first question', { text: 'Half a thought and then more', pauseAfter: 'Half a thought' } as never);
+    await h.send('first question', {
+      text: 'Half a thought and then more',
+      pauseAfter: 'Half a thought',
+    } as never);
     await h.rtl.waitFor(() => {
       expect(h.view!.queryByText(/Half a thought/)).not.toBeNull();
     });
@@ -47,10 +55,19 @@ describe('tapping send again mid-stream', () => {
     // The tap REGISTERED - it is queued and the user is told so. Asserting this first is what stops the next
     // assertion being vacuous: without it, "no second completion" would also pass if the button were simply dead,
     // and a send silently swallowed is its own bug (the user retypes, or assumes the app is broken).
-    const queued = await h.rtl.waitFor(() => h.view!.getByTestId('queue-indicator'));
+    const queued = await h.rtl.waitFor(() =>
+      h.view!.getByTestId('queue-indicator'),
+    );
     expect(queued).toBeTruthy();
     expect(h.view!.queryByText(/1 queued/)).not.toBeNull();
-    expect(h.view!.queryByText(/and another thing/)).not.toBeNull();
+    // The compact queue indicator now shows the count only. The queued text remains visible
+    // in the message list, where the user can verify what will run next.
+    const userRows = h.view!.getAllByTestId('user-message');
+    expect(
+      h.rtl
+        .within(userRows[userRows.length - 1])
+        .getByText('and another thing'),
+    ).toBeTruthy();
 
     // Still one completion. A second one here is two token streams writing into one message.
     expect(h.boundary.llama!.calls.completion.length).toBe(1);
@@ -59,7 +76,9 @@ describe('tapping send again mid-stream', () => {
     // interleaved output for a reply that never finishes.
     h.boundary.llama!.releaseStream();
     await h.rtl.waitFor(() => {
-      expect(h.view!.queryByText(/Half a thought and then more/)).not.toBeNull();
+      expect(
+        h.view!.queryByText(/Half a thought and then more/),
+      ).not.toBeNull();
     });
 
     // And the queued message is then actually sent, rather than held forever. Deferred is the promise the queue

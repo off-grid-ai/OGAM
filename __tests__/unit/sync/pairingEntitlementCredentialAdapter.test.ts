@@ -1,9 +1,9 @@
 import {
-  PERSONAL_MESH_DEVICE_CAP,
   PersonalMeshEntitlementError,
   type PairingEntitlementCredential,
   type PersonalMeshReconciliationSnapshot,
   type PersonalMeshRegistrationInput,
+  type ProDeviceAdmission,
 } from '@offgrid/sync';
 import { createPairingEntitlementHostAdapter } from '../../../pro/sync/pairingEntitlementCredentialAdapter';
 import { mobileEntitlementCredentialStore } from '../../../pro/licensing/mobileEntitlementCredentialStore';
@@ -30,6 +30,8 @@ import { createKeygenFake, type KeygenFake } from '../../harness/keygenFake';
  * coordinators, the registry, the seat accounting and the reconciliation are all real.
  */
 describe('two devices agreeing about a shared licence', () => {
+  const DEFAULT_MAX_DEVICES = 3;
+  const FULL_MESH_MAX_DEVICES = 5;
   const LICENCE_KEY = 'OFFGRID-TEST-LICENCE';
   const OTHER_LICENCE_KEY = 'OFFGRID-OTHER-LICENCE';
   /** This phone's hardware identity, which is also its seat's identity on the licence. */
@@ -39,7 +41,7 @@ describe('two devices agreeing about a shared licence', () => {
   let licenceId = '';
   let vault: Map<string, string>;
   let registryChanges: number;
-  let admissions: boolean[];
+  let admissions: ProDeviceAdmission[];
   let snapshots: PersonalMeshReconciliationSnapshot[];
   let forgotten: Array<[string, string]>;
   let syncIsRunning: boolean;
@@ -94,7 +96,7 @@ describe('two devices agreeing about a shared licence', () => {
             }
           : null,
       onReconciliationChanged: snapshot => snapshots.push(snapshot),
-      onLocalAdmissionChanged: active => admissions.push(active),
+      onLocalAdmissionChanged: admission => admissions.push(admission),
       onRegistryChanged: () => {
         registryChanges += 1;
       },
@@ -119,12 +121,14 @@ describe('two devices agreeing about a shared licence', () => {
   function credentialFrom(
     key: string,
     entitlementId: string,
+    maxDevices = DEFAULT_MAX_DEVICES,
   ): PairingEntitlementCredential {
     return {
       version: 1,
       entitlementId,
       secret: key,
       expiresAt: null,
+      maxDevices,
       verifiedAt: 1_700_000_000_000,
     };
   }
@@ -141,7 +145,7 @@ describe('two devices agreeing about a shared licence', () => {
   async function meshIsFull(): Promise<void> {
     const fullLicenceId = keygen.addLicence({
       key: FULL_LICENCE_KEY,
-      seats: PERSONAL_MESH_DEVICE_CAP + 2,
+      seats: FULL_MESH_MAX_DEVICES + 2,
     });
     // Activated first, so it is the one that has been on the licence - and away - longest.
     keygen.activate({
@@ -150,7 +154,7 @@ describe('two devices agreeing about a shared licence', () => {
       name: 'Old MacBook',
       platform: 'macos',
     });
-    for (let index = 1; index < PERSONAL_MESH_DEVICE_CAP; index += 1) {
+    for (let index = 1; index < FULL_MESH_MAX_DEVICES; index += 1) {
       keygen.activate({
         key: FULL_LICENCE_KEY,
         fingerprint: `fp-device-${index}`,
@@ -163,6 +167,7 @@ describe('two devices agreeing about a shared licence', () => {
       key: FULL_LICENCE_KEY,
       entitlementId: fullLicenceId,
       expiry: null,
+      maxMachines: FULL_MESH_MAX_DEVICES,
       tier: null,
       verifiedAt: 1_700_000_000_000,
     });
@@ -213,6 +218,7 @@ describe('two devices agreeing about a shared licence', () => {
       key: LICENCE_KEY,
       entitlementId: licenceId,
       expiry: null,
+      maxMachines: DEFAULT_MAX_DEVICES,
       tier: null,
       verifiedAt: 1_700_000_000_000,
     });
@@ -307,7 +313,7 @@ describe('two devices agreeing about a shared licence', () => {
       // has been away longest, which is the only choice a person would accept without being asked.
       expect(fingerprintsOnFullLicence()).not.toContain('fp-away-longest');
       expect(fingerprintsOnFullLicence()).toHaveLength(
-        PERSONAL_MESH_DEVICE_CAP - 1,
+        FULL_MESH_MAX_DEVICES - 1,
       );
 
       await adapter.commitExport(prepared.id);
@@ -316,7 +322,7 @@ describe('two devices agreeing about a shared licence', () => {
       // Committing and finalizing make it permanent - they retire this device's local trust in the evicted
       // device - and take nothing further off the licence.
       expect(fingerprintsOnFullLicence()).toHaveLength(
-        PERSONAL_MESH_DEVICE_CAP - 1,
+        FULL_MESH_MAX_DEVICES - 1,
       );
     });
 
@@ -331,7 +337,7 @@ describe('two devices agreeing about a shared licence', () => {
       // The pairing failed after the place was given up, so the device evicted for it is put back. Left as
       // it was, the user would have lost a device and gained nothing for it.
       expect(fingerprintsOnFullLicence()).toContain('fp-away-longest');
-      expect(fingerprintsOnFullLicence()).toHaveLength(PERSONAL_MESH_DEVICE_CAP);
+      expect(fingerprintsOnFullLicence()).toHaveLength(FULL_MESH_MAX_DEVICES);
     });
 
     it('refuses when this phone has no licence to share', async () => {
@@ -540,7 +546,7 @@ describe('two devices agreeing about a shared licence', () => {
       // not Pro. Something has to be done, and what has to be done is entering a key or pairing.
       expect(snapshot?.state).toBe('action_required');
       expect(adapter.reconciliationSnapshot()?.state).toBe('action_required');
-      expect(admissions).toEqual([false]);
+      expect(admissions).toEqual(['unknown']);
     });
 
     it('reads the roster and confirms this phone is on it', async () => {
@@ -553,7 +559,7 @@ describe('two devices agreeing about a shared licence', () => {
       expect(snapshot).toMatchObject({ state: 'ready', installations: 1 });
       // Pro stays on because the provider says this seat exists, not because the keychain says so. The
       // keychain is what this device remembers; the roster is what is true.
-      expect(admissions).toEqual([true]);
+      expect(admissions).toEqual(['active']);
       // The Devices screen renders from the published snapshot, so it is published and not merely returned -
       // a screen that is already open has to change without being reopened.
       expect(snapshots.at(-1)).toEqual(snapshot);
@@ -568,7 +574,7 @@ describe('two devices agreeing about a shared licence', () => {
 
       await adapter.reconcile('launch');
 
-      expect(admissions).toEqual([false]);
+      expect(admissions).toEqual(['inactive']);
     });
 
     it('retires trust in a device the licence has dropped', async () => {
@@ -665,7 +671,7 @@ describe('two devices agreeing about a shared licence', () => {
       // A phone on a train is not a phone that lost its licence. The roster it last saw is explicitly stale,
       // never treated as an answer, and Pro is not revoked on the strength of a failed request.
       expect(snapshot?.state).toBe('offline');
-      expect(admissions).toEqual([true, true]);
+      expect(admissions).toEqual(['active', 'active']);
     });
 
     it('will not talk to the provider if the credential goes while it is asking', async () => {
@@ -690,7 +696,7 @@ describe('two devices agreeing about a shared licence', () => {
       // Not a crash and not a guess: reconciliation comes back saying something needs doing, and Pro is
       // withdrawn because there is no longer a credential saying otherwise. The roster was never asked for.
       expect(snapshot?.state).toBe('action_required');
-      expect(admissions.at(-1)).toBe(false);
+      expect(admissions.at(-1)).toBe('unknown');
     });
   });
 
@@ -762,7 +768,7 @@ describe('two devices agreeing about a shared licence', () => {
       let message = '';
       try {
         await host().prepareImport(
-          credentialFrom(FULL_LICENCE_KEY, fullLicenceId),
+          credentialFrom(FULL_LICENCE_KEY, fullLicenceId, FULL_MESH_MAX_DEVICES),
           thisPhone,
         );
       } catch (error) {
@@ -772,7 +778,7 @@ describe('two devices agreeing about a shared licence', () => {
         'The licensed peer must prepare capacity before this device can register.',
       );
       // Nothing was taken from anyone to make the attempt.
-      expect(fingerprintsOnFullLicence()).toHaveLength(PERSONAL_MESH_DEVICE_CAP);
+      expect(fingerprintsOnFullLicence()).toHaveLength(FULL_MESH_MAX_DEVICES);
     });
 
     it('refuses when the licence itself has no seat left to sell', async () => {

@@ -105,6 +105,8 @@ describe('TaskSessionPlayback full screen', () => {
     expect(screen.getByText('Step 2 of 2 · 0:01 / 0:01')).toBeTruthy();
     expect(screen.getByText('Selected Continue')).toBeTruthy();
     expect(screen.getByText('Play')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Close full screen' })).toBeTruthy();
+    expect(screen.getByText('Done')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('task-session-fullscreen-toggle'));
     expect(screen.getByText('Step 1 of 2 · 0:00 / 0:01')).toBeTruthy();
@@ -115,5 +117,20 @@ describe('TaskSessionPlayback full screen', () => {
     expect(screen.getByText('Pause')).toBeTruthy();
 
     act(() => screen.unmount());
+  });
+
+  it('turns a legacy raw action into readable replay copy', () => {
+    const rawSteps = [
+      steps[0]!,
+      { ...steps[1]!, actionLabel: '{"action":"click","index":5}' },
+    ];
+    const screen = render(
+      <TaskSessionPlayback run={run('done')} steps={rawSteps} />,
+    );
+
+    fireEvent(screen.getByTestId('task-session-scrubber'), 'valueChange', 1);
+
+    expect(screen.getByText('Clicked control 5')).toBeTruthy();
+    expect(screen.queryByText('{"action":"click","index":5}')).toBeNull();
   });
 });

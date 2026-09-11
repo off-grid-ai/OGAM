@@ -5,6 +5,7 @@ import type { ParsedContent } from '../types';
 
 interface ThinkingBlockProps {
   parsedContent: ParsedContent;
+  isStreaming?: boolean;
   showThinking: boolean;
   onToggle: () => void;
   styles: any;
@@ -12,31 +13,36 @@ interface ThinkingBlockProps {
 
 export function ThinkingBlock({
   parsedContent,
+  isStreaming = false,
   showThinking,
   onToggle,
   styles,
 }: Readonly<ThinkingBlockProps>) {
+  const thinkingInProgress = isStreaming || !parsedContent.isThinkingComplete;
   return (
     <View testID="thinking-block" style={styles.thinkingBlock}>
       <TouchableOpacity
         testID="thinking-block-toggle"
-        style={styles.thinkingHeader}
+        style={[
+          styles.thinkingHeader,
+          !showThinking && styles.thinkingHeaderCollapsed,
+        ]}
         onPress={onToggle}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: showThinking }}
       >
         <View style={styles.thinkingHeaderIconBox}>
           <Text style={styles.thinkingHeaderIconText}>
             {(() => {
               if (parsedContent.thinkingLabel?.includes('Enhanced')) return 'E';
-              return parsedContent.isThinkingComplete ? 'T' : '...';
+              return thinkingInProgress ? '...' : 'T';
             })()}
           </Text>
         </View>
         <View style={styles.thinkingHeaderTextContainer}>
           <Text testID="thinking-block-title" style={styles.thinkingHeaderText}>
             {parsedContent.thinkingLabel ||
-              (parsedContent.isThinkingComplete
-                ? 'Thought process'
-                : 'Thinking...')}
+              (thinkingInProgress ? 'Thinking...' : 'Thought process')}
           </Text>
           {!showThinking && !!parsedContent.thinking && (
             <View
@@ -44,7 +50,9 @@ export function ThinkingBlock({
               style={styles.thinkingPreview}
             >
               <MarkdownText dimmed compact>
-                {parsedContent.thinking}
+                {parsedContent.thinking.length > 80
+                  ? `${parsedContent.thinking.slice(0, 80)}...`
+                  : parsedContent.thinking}
               </MarkdownText>
             </View>
           )}

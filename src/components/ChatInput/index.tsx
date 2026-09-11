@@ -1,27 +1,44 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, TextInput, TouchableOpacity, Animated, Platform, ActionSheetIOS } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
+import { TextInput, Animated, Platform, ActionSheetIOS } from 'react-native';
+import { modelsFailureMessage } from '@offgrid/application';
 import { useTheme, useThemedStyles } from '../../theme';
 import { ImageModeState, MediaAttachment } from '../../types';
-import { VoiceRecordButton, type VoiceRecordInteractionMode } from '../VoiceRecordButton';
-import { RecordingHint } from './RecordingHint';
-import { ComposerIconsRow } from './ComposerIconsRow';
+import type { VoiceRecordInteractionMode } from '../VoiceRecordButton';
 import { triggerHaptic } from '../../utils/haptics';
 import logger from '../../utils/logger';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
-import { createStyles, PILL_ICON_SIZE, ANIM_DURATION_IN, ANIM_DURATION_OUT } from './styles';
-import { QueueRow } from './Toolbar';
-import { AttachmentPreview, useAttachments } from './Attachments';
+import {
+  showAlert,
+  hideAlert,
+  AlertState,
+  initialAlertState,
+} from '../CustomAlert';
+import {
+  createStyles,
+  PILL_ICON_SIZE,
+  ANIM_DURATION_IN,
+  ANIM_DURATION_OUT,
+} from './styles';
+import { useAttachments } from './Attachments';
 import { useVoiceInput } from './Voice';
 import { buildVoiceNoteHandlers } from './voiceNoteSend';
-import { QuickSettingsPopover, AttachPickerPopover } from './Popovers';
 import { useKeyboardAwarePopover } from './useKeyboardAwarePopover';
+import {
+  useModelsProjection,
+  useSpeechProjection,
+} from '../../hooks/useApplicationProjection';
 import { useAppStore } from '../../stores';
-import { useUiModeStore } from '../../stores';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { selectMobileModel } from '../../services/modelServices';
+import { applicationFacade } from '../../services/applicationFacade';
+import { ChatModeComposer } from './ChatModeComposer';
+import { deriveVoiceProcessingState } from './voiceProcessingState';
 
 interface ChatInputProps {
-  onSend: (message: string, attachments?: MediaAttachment[], imageMode?: ImageModeState) => void;
+  onSend: (
+    message: string,
+    attachments?: MediaAttachment[],
+    imageMode?: ImageModeState,
+  ) => void | Promise<void>;
   onStop?: () => void;
   disabled?: boolean;
   isGenerating?: boolean;
@@ -55,6 +72,22 @@ interface ChatInputProps {
 
 const IMAGE_MODE_CYCLE: ImageModeState[] = ['auto', 'force', 'disabled'];
 
+async function saveThinkingSetting(
+  enabled: boolean,
+): Promise<AlertState | null> {
+  const outcome = await applicationFacade().models.settings.save({
+    origin: 'local',
+    patch: { thinkingEnabled: enabled },
+  });
+  const failure = outcome.ok ? outcome.value.syncFailure : outcome.failure;
+  return failure
+    ? showAlert(
+        outcome.ok ? 'Saved on this device' : 'Error',
+        modelsFailureMessage(failure),
+      )
+    : null;
+}
+
 /**
  * Expanded width of the collapsing pill-icons row. '+' and the settings gear
  * are always present; the thinking toggle and the pro mode-toggle are
@@ -65,21 +98,17 @@ const IMAGE_MODE_CYCLE: ImageModeState[] = ['auto', 'force', 'disabled'];
 // (collapsing) row — it's rendered persistently above the input instead.
 const computePillIconsWidth = (): number => PILL_ICON_SIZE * 2;
 
-type VoiceProcessingState = 'loading' | 'starting' | 'transcribing' | undefined;
-
-/** Project the recorder lifecycle into one display state. */
-const deriveVoiceProcessingState = (input: {
-  isRecording: boolean;
-  isModelLoading: boolean;
-  isStartingRecording: boolean;
-  isTranscribing: boolean;
-}): VoiceProcessingState => {
-  if (input.isRecording) return undefined;
-  if (input.isModelLoading) return 'loading';
-  if (input.isStartingRecording) return 'starting';
-  if (input.isTranscribing) return 'transcribing';
-  return undefined;
-};
+function selectFirstDownloadedImageModel(): boolean {
+  const model = useAppStore.getState().downloadedImageModels[0];
+  if (!model) return false;
+  selectMobileModel({
+    source: 'local',
+    hostId: model.backend ?? 'image-runtime',
+    modality: 'image',
+    modelId: model.id,
+  }).catch(() => undefined);
+  return true;
+}
 
 /**
  * Alert shown when the user attaches an image to a model without vision support.
@@ -109,7 +138,15 @@ const buildNoVisionAlert = (opts: {
       [
         { text: 'Cancel', onPress: opts.dismiss },
         ...(opts.onRepairVision
-          ? [{ text: 'Go to Download Manager', onPress: () => { opts.dismiss(); opts.onRepairVision!(); } }]
+          ? [
+              {
+                text: 'Go to Download Manager',
+                onPress: () => {
+                  opts.dismiss();
+                  opts.onRepairVision!();
+                },
+              },
+            ]
           : [{ text: 'OK' }]),
       ],
     );
@@ -122,7 +159,6 @@ const buildNoVisionAlert = (opts: {
 };
 
 // ─── Main Component ─────────────────────────────────────────────────────────
-
 export const ChatInput: React.FC<ChatInputProps> = ({
   onSend,
   onStop,
@@ -152,14 +188,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [imageMode, setImageMode] = useState<ImageModeState>('auto');
-  const [voiceInteractionMode, setVoiceInteractionMode] = useState<VoiceRecordInteractionMode>('idle');
+  const [voiceInteractionMode, setVoiceInteractionMode] =
+    useState<VoiceRecordInteractionMode>('idle');
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const quickSettings = useKeyboardAwarePopover();
   const attachPicker = useKeyboardAwarePopover();
   const voicePicker = useKeyboardAwarePopover();
   const inputRef = useRef<TextInput>(null);
   const attachmentsRef = useRef<MediaAttachment[]>([]);
+  const isSavingThinkingRef = useRef(false);
   const hasText = message.length > 0;
   const iconsAnim = useRef(new Animated.Value(0)).current;
 
@@ -171,10 +210,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }).start();
   }, [hasText, iconsAnim]);
 
-  const { attachments, removeAttachment, clearAttachments, handlePickImage, handlePickDocument, addAudioAttachment } = useAttachments(setAlertState);
+  const {
+    attachments,
+    removeAttachment,
+    clearAttachments,
+    handlePickImage,
+    handlePickDocument,
+    addAudioAttachment,
+  } = useAttachments(setAlertState);
   attachmentsRef.current = attachments;
-  const interfaceMode = useUiModeStore((s) => s.interfaceMode);
-  const isAudioMode = interfaceMode === 'audio';
+  const isAudioMode = useSpeechProjection().preferences.voiceMode;
+  const interfaceMode = isAudioMode ? 'audio' : 'chat';
 
   // All voice-note send/attach decisions live in buildVoiceNoteHandlers (the
   // owning logic), not in this View. The View only supplies dependencies and
@@ -189,13 +235,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     addAudioAttachment,
     clearAttachments,
     onHaptic: () => triggerHaptic('impactMedium'),
-    appendTranscript: (text) => setMessage(prev => {
-      const prefix = prev.trim() ? `${prev.trim()} ` : '';
-      return prefix + text;
-    }),
+    appendTranscript: text =>
+      setMessage(prev => {
+        const prefix = prev.trim() ? `${prev.trim()} ` : '';
+        return prefix + text;
+      }),
   });
 
-  const { isRecording, isModelLoading, isStartingRecording, isTranscribing, partialResult, error, voiceAvailable, isAwaitingSpeech, startRecording, stopRecording, cancelRecording } = useVoiceInput({
+  const {
+    isRecording,
+    isModelLoading,
+    isStartingRecording,
+    isTranscribing,
+    partialResult,
+    error,
+    voiceAvailable,
+    isAwaitingSpeech,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+  } = useVoiceInput({
     conversationId,
     interfaceMode,
     onTranscript: voiceHandlers.onTranscript,
@@ -216,21 +275,54 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     isStartingRecording ||
     isTranscribing;
 
-  const { settings: appSettings, updateSettings: updateAppSettings } = useAppStore();
-  const thinkingEnabled = appSettings.thinkingEnabled;
-
-  const handleThinkingToggle = () => {
+  // Narrow selectors: the composer must not re-render when an unrelated app-store field
+  // changes (a settings edit, a generated image, a download counter) while a transcript is
+  // on screen.
+  const thinkingEnabled = useModelsProjection().settings.thinkingEnabled;
+  const handleThinkingToggle = async (): Promise<void> => {
+    if (isSavingThinkingRef.current) return;
+    isSavingThinkingRef.current = true;
     triggerHaptic('impactLight');
-    updateAppSettings({ thinkingEnabled: !thinkingEnabled });
+    try {
+      const alert = await saveThinkingSetting(!thinkingEnabled);
+      if (alert) setAlertState(alert);
+    } finally {
+      isSavingThinkingRef.current = false;
+    }
   };
+  const canSend =
+    (message.trim().length > 0 || attachments.length > 0) &&
+    !disabled &&
+    !isSubmitting;
 
-  const canSend = (message.trim().length > 0 || attachments.length > 0) && !disabled;
+  useEffect(() => {
+    if (isGenerating) setIsSubmitting(false);
+  }, [isGenerating]);
 
   const handleSend = () => {
-    logger.log(`[COMPOSER-SM] handleSend canSend=${canSend} disabled=${disabled} hasText=${message.trim().length > 0} attachments=${attachments.length} imageMode=${imageMode}`);
+    logger.log(
+      `[COMPOSER-SM] handleSend canSend=${canSend} disabled=${disabled} hasText=${
+        message.trim().length > 0
+      } attachments=${attachments.length} imageMode=${imageMode}`,
+    );
     if (!canSend) return;
+    setIsSubmitting(true);
     triggerHaptic('impactMedium');
-    onSend(message.trim(), attachments.length > 0 ? attachments : undefined, imageMode);
+    let submission: void | Promise<void>;
+    try {
+      submission = onSend(
+        message.trim(),
+        attachments.length > 0 ? attachments : undefined,
+        imageMode,
+      );
+    } catch (error) {
+      setIsSubmitting(false);
+      throw error;
+    }
+    void Promise.resolve(submission).then(
+      () => setIsSubmitting(false),
+      () => setIsSubmitting(false),
+    );
     setMessage('');
     clearAttachments();
     inputRef.current?.focus();
@@ -244,23 +336,35 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     // Gate on whether an image model is DOWNLOADED, not whether it was selected
     // on the Home screen. If one is downloaded but not yet selected, select it
     // here (it loads lazily on the next send). Only warn when none exist.
-    if (!imageModelLoaded) {
-      const { downloadedImageModels, setActiveImageModelId } = useAppStore.getState();
-      if (downloadedImageModels.length === 0) {
-        setAlertState(showAlert('No Image Model', 'Download an image generation model from the Models screen to enable this feature.', [{ text: 'OK' }]));
-        quickSettings.hide();
-        return;
-      }
-      setActiveImageModelId(downloadedImageModels[0].id);
+    if (!imageModelLoaded && !selectFirstDownloadedImageModel()) {
+      setAlertState(
+        showAlert(
+          'No Image Model',
+          'Download an image generation model from the Models screen to enable this feature.',
+          [{ text: 'OK' }],
+        ),
+      );
+      quickSettings.hide();
+      return;
     }
-    const newMode = IMAGE_MODE_CYCLE[(IMAGE_MODE_CYCLE.indexOf(imageMode) + 1) % IMAGE_MODE_CYCLE.length];
+    const newMode =
+      IMAGE_MODE_CYCLE[
+        (IMAGE_MODE_CYCLE.indexOf(imageMode) + 1) % IMAGE_MODE_CYCLE.length
+      ];
     setImageMode(newMode);
     onImageModeChange?.(newMode);
   };
 
   const handleVisionPress = () => {
     if (!supportsVision) {
-      setAlertState(buildNoVisionAlert({ isRemote, needsRepair: visionNeedsRepair, onRepairVision, dismiss: () => setAlertState(hideAlert()) }));
+      setAlertState(
+        buildNoVisionAlert({
+          isRemote,
+          needsRepair: visionNeedsRepair,
+          onRepairVision,
+          dismiss: () => setAlertState(hideAlert()),
+        }),
+      );
       return;
     }
     handlePickImage();
@@ -273,17 +377,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  const handleQuickSettingsPress = () => quickSettings.show();
-
   const handleAttachPress = () => {
-    logger.log(`[COMPOSER-SM] attach pressed platform=${Platform.OS} supportsVision=${supportsVision}`);
+    logger.log(
+      `[COMPOSER-SM] attach pressed platform=${Platform.OS} supportsVision=${supportsVision}`,
+    );
     if (Platform.OS === 'ios') {
       const options = supportsVision
         ? ['Photo', 'Document', 'Cancel']
         : ['Document', 'Cancel'];
       ActionSheetIOS.showActionSheetWithOptions(
         { options, cancelButtonIndex: options.length - 1 },
-        (index) => {
+        index => {
           if (supportsVision) {
             if (index === 0) handleVisionPress();
             else if (index === 1) handlePickDocument();
@@ -298,7 +402,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   // ─── Audio mode: pro renders the mic-only layout via a slot ─────────────────
-  // Free builds have no audio slot, so interfaceMode never becomes 'audio' and
+  // Free builds have no audio slot, so this branch remains unavailable even if a migrated
+  // preference requests Voice mode.
   // this branch is skipped entirely.
   const AudioInput = getSlot(SLOTS.chatInputAudioMode);
   if (isAudioMode && AudioInput) {
@@ -351,123 +456,62 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // Pro-only inline Chat↔Audio toggle (empty slot in free builds → null).
   const pillIconsExpandedWidth = computePillIconsWidth();
 
-  const actionButton = canSend ? (
-    <TouchableOpacity
-      testID="send-button"
-      style={styles.circleButton}
-      onPress={handleSend}
-    >
-      <Icon name="send" size={18} color={colors.background} />
-    </TouchableOpacity>
-  ) : isGenerating && onStop ? (
-    <TouchableOpacity
-      testID="stop-button"
-      style={[styles.circleButton, styles.circleButtonStop]}
-      onPress={handleStop}
-    >
-      <Icon name="square" size={18} color={colors.background} />
-    </TouchableOpacity>
-  ) : (
-    <VoiceRecordButton
+  return (
+    <ChatModeComposer
+      styles={styles}
+      colors={colors}
+      attachments={attachments}
+      removeAttachment={removeAttachment}
+      onImagePress={onImagePress}
+      queueCount={queueCount}
+      queuedTexts={queuedTexts}
+      onClearQueue={onClearQueue}
+      showVoiceStatus={showVoiceStatus}
+      isAwaitingSpeech={isAwaitingSpeech}
+      voiceInteractionMode={voiceInteractionMode}
+      voiceProcessingState={voiceProcessingState}
+      inputRef={inputRef}
+      message={message}
+      setMessage={setMessage}
+      placeholder={placeholder}
+      disabled={disabled}
+      hasText={hasText}
+      iconsAnim={iconsAnim}
+      pillIconsExpandedWidth={pillIconsExpandedWidth}
+      attachPicker={attachPicker}
+      handleAttachPress={handleAttachPress}
+      quickSettings={quickSettings}
+      showSettingsDot={showSettingsDot}
+      canSend={canSend}
+      handleSend={handleSend}
+      isSubmitting={isSubmitting}
+      isGenerating={isGenerating}
+      onStop={onStop}
+      handleStop={handleStop}
       isRecording={isRecording}
-      isAvailable={voiceAvailable}
+      voiceAvailable={voiceAvailable}
       isModelLoading={isModelLoading}
       isTranscribing={isTranscribing}
-      asSendButton
       partialResult={partialResult}
       error={error}
-      disabled={disabled}
-      onStartRecording={startRecording}
-      onStopRecording={stopRecording}
-      onCancelRecording={cancelRecording}
-      onInteractionModeChange={setVoiceInteractionMode}
+      startRecording={startRecording}
+      stopRecording={stopRecording}
+      cancelRecording={cancelRecording}
+      setVoiceInteractionMode={setVoiceInteractionMode}
+      supportsVision={supportsVision}
+      handleVisionPress={handleVisionPress}
+      handlePickDocument={handlePickDocument}
+      imageMode={imageMode}
+      handleImageModeToggle={handleImageModeToggle}
+      imageModelLoaded={imageModelLoaded}
+      supportsThinking={supportsThinking}
+      supportsToolCalling={supportsToolCalling}
+      enabledToolCount={enabledToolCount}
+      onToolsPress={onToolsPress}
+      mcpToolCount={mcpToolCount}
+      onMcpPress={onMcpPress}
+      alertState={alertState}
+      setAlertState={setAlertState}
     />
-  );
-
-  return (
-    <View style={styles.container}>
-      <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
-      <QueueRow
-        queueCount={queueCount}
-        queuedTexts={queuedTexts}
-        onClearQueue={onClearQueue}
-      />
-      <View style={styles.mainRow}>
-        <View style={styles.pill}>
-          {showVoiceStatus ? (
-            <RecordingHint
-              awaitingSpeech={isAwaitingSpeech}
-              interactionMode={voiceInteractionMode}
-              processing={voiceProcessingState}
-            />
-          ) : (
-            <>
-              <TextInput
-                ref={inputRef}
-                testID="chat-input"
-                style={styles.pillInput}
-                value={message}
-                onChangeText={setMessage}
-                placeholder={placeholder}
-                placeholderTextColor={colors.textMuted}
-                multiline
-                scrollEnabled
-                editable={!disabled}
-                blurOnSubmit={false}
-                returnKeyType="default"
-              />
-              <ComposerIconsRow
-                hasText={hasText}
-                iconsAnim={iconsAnim}
-                pillIconsExpandedWidth={pillIconsExpandedWidth}
-                attachTriggerRef={attachPicker.triggerRef}
-                onAttachPress={handleAttachPress}
-                quickSettingsTriggerRef={quickSettings.triggerRef}
-                onQuickSettingsPress={handleQuickSettingsPress}
-                showSettingsDot={showSettingsDot}
-                disabled={disabled}
-              />
-            </>
-          )}
-        </View>
-
-        {actionButton}
-      </View>
-
-      {Platform.OS !== 'ios' && (
-        <AttachPickerPopover
-          visible={attachPicker.visible}
-          onClose={attachPicker.hide}
-          anchorY={attachPicker.anchor.y}
-          anchorX={attachPicker.anchor.x}
-          supportsVision={supportsVision}
-          onPhoto={handleVisionPress}
-          onDocument={handlePickDocument}
-        />
-      )}
-
-      <QuickSettingsPopover
-        visible={quickSettings.visible}
-        onClose={quickSettings.hide}
-        anchorY={quickSettings.anchor.y}
-        anchorX={quickSettings.anchor.x}
-        imageMode={imageMode}
-        onImageModeToggle={handleImageModeToggle}
-        imageModelLoaded={imageModelLoaded}
-        supportsThinking={supportsThinking}
-        supportsToolCalling={supportsToolCalling}
-        enabledToolCount={enabledToolCount}
-        onToolsPress={onToolsPress}
-        mcpToolCount={mcpToolCount}
-        onMcpPress={onMcpPress}
-      />
-      <CustomAlert
-        visible={alertState.visible}
-        title={alertState.title}
-        message={alertState.message}
-        buttons={alertState.buttons}
-        onClose={() => setAlertState(hideAlert())}
-      />
-    </View>
   );
 };

@@ -2,7 +2,7 @@
  * llmHelpers — additional branch coverage.
  *
  * Targets: buildModelParams OpenCL backend (flash off + f16 coercion + omit
- * cache params), buildThinkingCompletionParams Gemma branch, initMultimodal
+ * cache params), initMultimodal
  * (false / support fallback / exception), checkContextMultimodal, all-3-attempts
  * failed error-chain assembly, buildCompletionParams defaults, and
  * recordGenerationStats decode/ttft branches.
@@ -10,7 +10,6 @@
 
 import {
   buildModelParams,
-  buildThinkingCompletionParams,
   buildCompletionParams,
   initMultimodal,
   checkContextMultimodal,
@@ -127,31 +126,6 @@ describe('buildModelParams — OpenCL backend branch', () => {
   it('uses f16 cache when flash attn explicitly off', () => {
     const params = buildModelParams('/model.gguf', { flashAttn: false });
     expect((params.baseParams as any).cache_type_k).toBe('f16');
-  });
-});
-
-describe('buildThinkingCompletionParams', () => {
-  it('uses deepseek reasoning_format when thinking on and not Gemma 4', () => {
-    expect(buildThinkingCompletionParams(true, false)).toEqual({
-      enable_thinking: true,
-      reasoning_format: 'deepseek',
-    });
-  });
-
-  it('uses auto format for Gemma 4 so llama.cpp parses its channel format natively (native-first)', () => {
-    // Previously forced 'none' + hand-parse; now 'auto' lets llama.cpp populate
-    // reasoning_content/tool_calls itself, with our hand-parser as a fallback only.
-    expect(buildThinkingCompletionParams(true, true)).toEqual({
-      enable_thinking: true,
-      reasoning_format: 'auto',
-    });
-  });
-
-  it('uses none format when thinking disabled', () => {
-    expect(buildThinkingCompletionParams(false)).toEqual({
-      enable_thinking: false,
-      reasoning_format: 'none',
-    });
   });
 });
 

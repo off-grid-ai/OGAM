@@ -50,7 +50,7 @@ Pro is an optional, additive tier. It gives the assistant a voice that talks bac
 - **Voice mode** - the free app transcribes your speech; Pro adds on-device Kokoro text-to-speech, so it talks back and you run the whole thing hands-free. The voice runs in your phone's RAM.
 - **Custom personas** - give each assistant its own system prompt, voice, and persistent memory, so it stays in character across conversations.
 - **Draft, then approve** - connect Calendar, email, and MCP servers like Linear, Notion, and GitHub. It drafts the reply or files the ticket and waits. Nothing sends without your tap.
-- **Personal Mesh sync** - your phone and your Mac share chats, files, and settings over your own network. There is no relay. See the [Personal Mesh guide](docs/PERSONAL_MESH.md).
+- **Personal Mesh sync** - your phone and your Mac share chats, files, and settings over your own network. There is no relay.
 
 **[→ Get Pro access](https://offgridmobileai.co/pay/)** - $69 once and it is yours forever (the price climbs as more people join, never down), or $49/year.
 
@@ -152,7 +152,7 @@ cd ios && pod install && cd ..
 npm run ios
 ```
 
-> Requires Node.js 20+, JDK 17 / Android SDK 36 (Android), Xcode 15+ (iOS). See [full build guide](docs/ARCHITECTURE.md#building-from-source).
+> Requires Node.js 20+, JDK 17 / Android SDK 36 (Android), and Xcode 15+ (iOS).
 
 ---
 
@@ -181,10 +181,7 @@ This project is tested with BrowserStack.
 
 | Document | Description |
 |----------|-------------|
-| [Architecture & Technical Reference](docs/ARCHITECTURE.md) | System architecture, design patterns, native modules, performance tuning |
-| [Codebase Guide](docs/standards/CODEBASE_GUIDE.md) | Comprehensive code walkthrough |
-| [Design System](docs/design/DESIGN_PHILOSOPHY_SYSTEM.md) | Brutalist design philosophy, theme system, tokens |
-| [Visual Hierarchy Standard](docs/design/VISUAL_HIERARCHY_STANDARD.md) | Visual hierarchy and layout standards |
+| [Design System](brand/DESIGN_PHILOSOPHY.md) | Canonical visual system and platform profiles |
 
 ---
 
@@ -196,7 +193,7 @@ Join the conversation on [**Slack**](https://join.slack.com/t/off-grid-mobile/sh
 
 ## Contributing
 
-Contributions welcome! Fork, branch, PR. See [development guidelines](docs/ARCHITECTURE.md#contributing) for code style and the [codebase guide](docs/standards/CODEBASE_GUIDE.md) for patterns.
+Contributions welcome! Fork, branch, and open a pull request.
 
 ---
 

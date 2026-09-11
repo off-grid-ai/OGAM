@@ -32,10 +32,17 @@ class AuthService {
   async setPassphrase(passphrase: string): Promise<boolean> {
     try {
       const hash = this.hashPassphrase(passphrase);
-      await Keychain.setGenericPassword(PASSPHRASE_KEY, hash, {
+      // The keystore can REFUSE a write without throwing: it resolves `false`. Discarding that
+      // value reports a save that never happened, the caller enables the lock, and the next
+      // launch finds no credential — the user is locked out of their own app with no recovery.
+      const saved = await Keychain.setGenericPassword(PASSPHRASE_KEY, hash, {
         service: SERVICE_NAME,
         accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
       });
+      if (saved === false) {
+        logger.error('Failed to set passphrase: keychain refused the write');
+        return false;
+      }
       return true;
     } catch (error) {
       logger.error('Failed to set passphrase:', error);
@@ -75,9 +82,14 @@ class AuthService {
 
   async removePassphrase(): Promise<boolean> {
     try {
-      await Keychain.resetGenericPassword({
+      // Same contract as the write: a refusal resolves `false` rather than throwing.
+      const removed = await Keychain.resetGenericPassword({
         service: SERVICE_NAME,
       });
+      if (removed === false) {
+        logger.error('Failed to remove passphrase: keychain refused the reset');
+        return false;
+      }
       return true;
     } catch (error) {
       logger.error('Failed to remove passphrase:', error);

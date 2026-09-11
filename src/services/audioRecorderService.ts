@@ -2,6 +2,7 @@ import { AudioRecorder, FileFormat, FileDirectory, BitDepth, IOSAudioQuality, Fl
 import { PermissionsAndroid, Platform } from 'react-native';
 import { audioSessionManager } from './audioSessionManager';
 import logger from '../utils/logger';
+import { logVoiceDiagnostic, voiceDiagnosticError } from '../utils/voiceDiagnostics';
 
 /** Supported formats for llama.rn audio input */
 type AudioInputFormat = 'wav' | 'mp3';
@@ -138,10 +139,15 @@ class AudioRecorderService {
   }
 
   async startRecording(): Promise<void> {
+    logVoiceDiagnostic('microphone_start_requested', {
+      alreadyRecording: this.isRecording,
+    });
     if (this.isRecording) {
-      await this.stopRecording().catch(() => {});
+      // Do not start a second recorder when the previous recorder could not stop truthfully.
+      await this.stopRecording();
     }
     const hasPermission = await this.requestPermissions();
+    logVoiceDiagnostic('microphone_permission_finished', { granted: hasPermission });
     if (!hasPermission) {
       throw new Error('Microphone permission denied');
     }
@@ -149,7 +155,15 @@ class AudioRecorderService {
     // owned by audioSessionManager (the single owner) — it uses playAndRecord so
     // TTS playback can share it, and restores a playback session when recording
     // ends so later playback isn't left on a record session (the silent-playback bug).
-    await audioSessionManager.ensureRecording();
+    try {
+      await audioSessionManager.ensureRecording();
+      logVoiceDiagnostic('microphone_audio_session_ready');
+    } catch (error) {
+      logVoiceDiagnostic('microphone_audio_session_failed', {
+        error: voiceDiagnosticError(error),
+      });
+      throw error;
+    }
     const rec = new AudioRecorder();
     // Whisper requires 16 kHz mono int16 PCM.
     // Set sampleRate via preset so the WAV header and data match what whisper.rn expects.
@@ -177,12 +191,21 @@ class AudioRecorderService {
       this.recorder = null;
       // Recording never started — hand the session back to playback so it isn't
       // left stranded in record mode.
-      audioSessionManager.restorePlaybackAfterRecording().catch(() => {});
+      audioSessionManager.restorePlaybackAfterRecording().catch(error => {
+        logger.error('[AudioRecorder] Audio session restore after failed start failed:', error);
+      });
       throw new Error(`Recording failed to start: ${startResult.errorMessage ?? startResult.error ?? startResult.status}`);
     }
+    logVoiceDiagnostic('microphone_started', {
+      nativeStatus: startResult?.status ?? 'no-status',
+    });
   }
 
   async stopRecording(): Promise<{ path: string; durationSeconds: number }> {
+    logVoiceDiagnostic('microphone_stop_requested', {
+      recording: this.isRecording,
+      recorderReady: Boolean(this.recorder),
+    });
     if (!this.isRecording || !this.recorder) {
       throw new Error('No active recording');
     }
@@ -196,6 +219,10 @@ class AudioRecorderService {
     }
     const path = result.path;
     const durationSeconds = (result as any).duration ?? 0;
+    logVoiceDiagnostic('microphone_stopped', {
+      nativeStatus: result.status,
+      durationSeconds,
+    });
     logger.log(`[WIRE-RECORDER] ${JSON.stringify({ platform: Platform.OS, path, durationSeconds, status: result.status })}`); // [WIRE] real recorder output (voice-note file/duration)
     return { path, durationSeconds };
   }
@@ -206,7 +233,9 @@ class AudioRecorderService {
     this.isRecording = false;
     this.recorder = null;
     // Best-effort session restore (fire-and-forget — keep this method sync).
-    audioSessionManager.restorePlaybackAfterRecording().catch(() => {});
+    audioSessionManager.restorePlaybackAfterRecording().catch(error => {
+      logger.error('[AudioRecorder] Audio session restore after cancellation failed:', error);
+    });
   }
 
   isCurrentlyRecording(): boolean {

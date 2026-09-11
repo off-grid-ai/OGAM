@@ -84,7 +84,7 @@ function fuzzyMatch(reason: string): string | undefined {
   return undefined;
 }
 
-export function toUserMessage(reason?: string, code?: string): string {
+function toUserMessage(reason?: string, code?: string): string {
   if (code && ERROR_MESSAGES[code]) return ERROR_MESSAGES[code];
   // Try fuzzy matching on whichever string we have. Some callers pass the
   // free-form reason in the `code` slot (e.g. legacy "HTTP 416" labels).

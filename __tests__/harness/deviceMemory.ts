@@ -11,8 +11,9 @@
  */
 import { Platform } from 'react-native';
 import { hardwareService } from '../../src/services/hardware';
-import { modelResidencyManager } from '../../src/services/modelResidency';
+import { modelResidencyManager, resetModelApplication } from './activeModelLifecycle';
 import type { LoadPolicy } from '../../src/services/memoryBudget';
+import type { ResidentSpec } from '@offgrid/models';
 
 const originalOS = Platform.OS;
 
@@ -25,30 +26,37 @@ export interface DeviceMemory {
 }
 
 /** Seed the device's RAM + platform + policy and reset the REAL residency manager to empty. */
-export function setDeviceMemory(d: DeviceMemory): void {
+export async function setDeviceMemory(d: DeviceMemory): Promise<void> {
   Object.defineProperty(Platform, 'OS', { value: d.platform, configurable: true });
   jest.spyOn(hardwareService, 'getTotalMemoryGB').mockReturnValue(d.totalGB);
   jest.spyOn(hardwareService, 'getAvailableMemoryGB').mockReturnValue(d.availGB);
   jest.spyOn(hardwareService, 'refreshMemoryInfo').mockResolvedValue(undefined as never);
-  modelResidencyManager._reset();
-  modelResidencyManager.setBudgetOverrideMB(null);
+  await resetModelApplication();
   modelResidencyManager.setLoadPolicy(d.policy ?? 'balanced');
 }
 
 /** Restore Platform.OS + spies after a test. */
-export function resetDeviceMemory(): void {
+export async function resetDeviceMemory(): Promise<void> {
   Object.defineProperty(Platform, 'OS', { value: originalOS, configurable: true });
   jest.restoreAllMocks();
-  modelResidencyManager._reset();
+  await resetModelApplication();
 }
 
 const MB = 1 / 1024; // GB per MB, for readable specs
 /** Register a resident model directly (as if already loaded), with a dumb unload spy. */
-export function makeResident(
-  spec: { key: string; type: any; modelId?: string; sizeMB: number; dirtyMemory?: boolean; canEvict?: () => boolean },
-): jest.Mock {
+export async function makeResident(
+  spec: ResidentSpec,
+): Promise<jest.Mock> {
   const unload = jest.fn().mockResolvedValue(undefined);
-  modelResidencyManager.register(spec, unload, 1);
+  const lease = await modelResidencyManager.acquire(
+    { ...spec, lifecycle: 'persistent' },
+    { load: async () => undefined, unload },
+    { now: 1 },
+  );
+  if (!lease.acquired) {
+    throw new Error(`Could not seed resident ${spec.key}`);
+  }
+  await lease.release();
   return unload;
 }
 

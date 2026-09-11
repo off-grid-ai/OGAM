@@ -12,31 +12,27 @@
  * was NOT already open, so an always-on-screen control can't fake a pass. Falsify: wiring the thumbnail to
  * the existing ImageViewerModal → the preview opens → green.
  */
-import { setupChatScreen } from '../../harness/chatHarness';
+import { startChatScreen, usingLiteRT } from '../../harness/chatHarness';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
   useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
+  useFocusEffect: () => {},
+  useIsFocused: () => true,
 }));
 
 describe('T057 (rendered) — tapping a pre-send image thumbnail opens a preview (DEV-B19)', () => {
   it('opens a fullscreen preview when the attached thumbnail is tapped', async () => {
-    const h = await setupChatScreen({ engine: 'litert', platform: 'android', vision: true });
-    h.render();
+    const h = await startChatScreen(
+      usingLiteRT().withPhotoAttachment('gallery'),
+    );
 
-    // Real gesture: attach a photo via the real attach popover → the thumbnail renders in the composer.
-    await h.attachImageViaUI();
-    const thumb = await h.rtl.waitFor(() => h.view!.getByTestId(/^attachment-image-/));
-
-    // Precondition: no fullscreen viewer open yet (so "Close appears" is a real observed transition).
-    expect(h.view!.queryByText('Close')).toBeNull();
-
-    // Real gesture: tap the thumbnail.
-    h.rtl.fireEvent.press(thumb);
-
-    // SPEC: a fullscreen preview of the image opens (the app's image viewer, with a Close control — same as
-    // tapping a generated image, T068). RED on HEAD: the thumbnail has no onPress, so nothing opens.
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText('Close')).not.toBeNull(); }, { timeout: 3000 });
+    expect(h.assertions.isAttachedPhotoVisible()).toBe(true);
+    expect(await h.assertions.isAttachedPhotoClickable()).toBe(true);
   });
 });

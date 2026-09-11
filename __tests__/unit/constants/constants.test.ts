@@ -6,16 +6,18 @@
  */
 
 import {
-  RECOMMENDED_MODELS,
-  MODEL_ORGS,
   VERIFIED_QUANTIZERS,
   OFFICIAL_MODEL_AUTHORS,
   LMSTUDIO_AUTHORS,
-  QUANTIZATION_INFO,
   CREDIBILITY_LABELS,
+} from '../../../src/constants';
+import {
+  RECOMMENDED_MODELS,
+  MODEL_ORGS,
+  QUANTIZATION_INFO,
   TRENDING_FAMILIES,
   TRENDING_MODEL_IDS,
-} from '../../../src/constants';
+} from '@offgrid/models';
 
 describe('RECOMMENDED_MODELS', () => {
   it('all entries have required fields', () => {

@@ -1,16 +1,20 @@
-import React from 'react';
-import { useAppStore } from '../../stores';
+import React, { useRef, useState } from 'react';
+import { Text } from 'react-native';
 import {
   VOICE_TURN_LABELS,
   VOICE_DELAY_LABELS,
   SILENCE_AFTER_SPEECH_CHOICES_MS,
   SPEAKER_DRAIN_CHOICES_MS,
-  DEFAULT_SILENCE_AFTER_SPEECH_MS,
-  DEFAULT_SPEAKER_DRAIN_MS,
+  VOICE_TURN_MODES,
+  speechFailureMessage,
   secondsLabel,
   type VoiceTurnMode,
-} from '@offgrid/speech';
+} from '@offgrid/application';
 import { SegmentedRow, type PillOption } from './segmentedRow';
+import { useSpeechProjection } from '../../hooks/useApplicationProjection';
+import { applicationFacade } from '../../services/applicationFacade';
+import { useThemedStyles } from '../../theme';
+import { createTextGenAdvancedStyles } from './textGenAdvancedStyles';
 
 /**
  * Voice-input settings.
@@ -31,8 +35,7 @@ import { SegmentedRow, type PillOption } from './segmentedRow';
 // Names, descriptions, choices and defaults come from @offgrid/speech, which owns them: desktop
 // renders the same rows, and two settings screens describing one setting differently is the drift
 // this prevents.
-const VOICE_TURN_ORDER: VoiceTurnMode[] = ['tap', 'silence', 'handsfree'];
-const VOICE_TURN_OPTIONS = VOICE_TURN_ORDER.map(id => ({
+const VOICE_TURN_OPTIONS = VOICE_TURN_MODES.map(id => ({
   id,
   label: VOICE_TURN_LABELS[id].label,
 }));
@@ -45,10 +48,33 @@ const SILENCE_OPTIONS = delayOptions(SILENCE_AFTER_SPEECH_CHOICES_MS);
 const DRAIN_OPTIONS = delayOptions(SPEAKER_DRAIN_CHOICES_MS);
 
 export const VoiceTurnSettings: React.FC = () => {
-  const { settings, updateSettings } = useAppStore();
-  const current = settings.voiceTurnMode ?? 'silence';
-  const silenceMs = settings.voiceSilenceAfterSpeechMs ?? DEFAULT_SILENCE_AFTER_SPEECH_MS;
-  const drainMs = settings.voiceSpeakerDrainMs ?? DEFAULT_SPEAKER_DRAIN_MS;
+  const preferences = useSpeechProjection().preferences;
+  const styles = useThemedStyles(createTextGenAdvancedStyles);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const saveOperation = useRef(0);
+  const current = preferences.turnMode;
+  const save = async (
+    patch: Parameters<
+      ReturnType<typeof applicationFacade>['speech']['savePreferences']
+    >[0],
+  ): Promise<void> => {
+    const operation = ++saveOperation.current;
+    setIsSaving(true);
+    setSaveMessage(null);
+    try {
+      const outcome = await applicationFacade().speech.savePreferences(patch);
+      if (operation === saveOperation.current && !outcome.ok) {
+        setSaveMessage(speechFailureMessage(outcome.failure));
+      }
+    } catch (error) {
+      if (operation === saveOperation.current) {
+        setSaveMessage(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      if (operation === saveOperation.current) setIsSaving(false);
+    }
+  };
   return (
     <>
       <SegmentedRow<VoiceTurnMode>
@@ -56,8 +82,9 @@ export const VoiceTurnSettings: React.FC = () => {
         description={VOICE_TURN_LABELS[current].description}
         options={VOICE_TURN_OPTIONS}
         current={current}
-        onSelect={(id) => updateSettings({ voiceTurnMode: id })}
-        testIdFor={(id) => `voice-turn-${id}-button`}
+        onSelect={turnMode => save({ turnMode })}
+        testIdFor={id => `voice-turn-${id}-button`}
+        isDisabled={() => isSaving}
       />
       {/* Each delay row appears only when it does something: the end-of-turn window never fires in
           tap mode, and the mic only reopens by itself in hands-free. */}
@@ -66,9 +93,10 @@ export const VoiceTurnSettings: React.FC = () => {
           label={VOICE_DELAY_LABELS.silenceAfterSpeech.label}
           description={VOICE_DELAY_LABELS.silenceAfterSpeech.description}
           options={SILENCE_OPTIONS}
-          current={String(silenceMs)}
-          onSelect={(id) => updateSettings({ voiceSilenceAfterSpeechMs: Number(id) })}
-          testIdFor={(id) => `voice-silence-${id}-button`}
+          current={String(preferences.silenceAfterSpeechMs)}
+          onSelect={id => save({ silenceAfterSpeechMs: Number(id) })}
+          testIdFor={id => `voice-silence-${id}-button`}
+          isDisabled={() => isSaving}
         />
       )}
       {current === 'handsfree' && (
@@ -76,11 +104,17 @@ export const VoiceTurnSettings: React.FC = () => {
           label={VOICE_DELAY_LABELS.speakerDrain.label}
           description={VOICE_DELAY_LABELS.speakerDrain.description}
           options={DRAIN_OPTIONS}
-          current={String(drainMs)}
-          onSelect={(id) => updateSettings({ voiceSpeakerDrainMs: Number(id) })}
-          testIdFor={(id) => `voice-drain-${id}-button`}
+          current={String(preferences.speakerDrainMs)}
+          onSelect={id => save({ speakerDrainMs: Number(id) })}
+          testIdFor={id => `voice-drain-${id}-button`}
+          isDisabled={() => isSaving}
         />
       )}
+      {saveMessage ? (
+        <Text style={styles.warning} accessibilityLiveRegion="polite">
+          {saveMessage}
+        </Text>
+      ) : null}
     </>
   );
 };

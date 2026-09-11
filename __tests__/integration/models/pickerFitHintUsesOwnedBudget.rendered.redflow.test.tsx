@@ -31,8 +31,8 @@ describe('Home picker fit hint — owned budget, not instantaneous free RAM (DR3
     const React = require('react');
     const rtl = requireRTL();
     const { hardwareService } = require('../../../src/services/hardware');
-    const { activeModelService } = require('../../../src/services/activeModelService');
-    const { ModelPickerSheet } = require('../../../src/screens/HomeScreen/components/ModelPickerSheet');
+    const { useAppStore } = require('../../../src/stores');
+    const { ModelSelectorModal } = require('../../../src/components/ModelSelectorModal');
      
 
     const docs = boundary.fs!.DocumentDirectoryPath;
@@ -43,23 +43,18 @@ describe('Home picker fit hint — owned budget, not instantaneous free RAM (DR3
     // The device report's model (2.89GB) + a genuinely-over-budget one (9.6GB > 12GB × 0.70 ≈ 8.4GB).
     const models = [seed('gemma-e2b-gguf', 'e2b.gguf', 2.89 * GB), seed('huge-model', 'huge.gguf', 9.6 * GB)];
     await hardwareService.refreshMemoryInfo();
-    // The REAL memory numbers Home hands the sheet, read through the real service over the boundary.
-    const memoryInfo = await activeModelService.getResourceUsage();
+    useAppStore.getState().setDownloadedModels(models);
 
-    const view = rtl.render(React.createElement(ModelPickerSheet, {
-      visible: true, pickerType: 'text', onClose: () => {},
-      downloadedModels: models, downloadedImageModels: [],
-      activeModelId: null, activeImageModelId: null,
-      activeRemoteTextModelId: null, activeRemoteImageModelId: null,
-      remoteTextModels: [], remoteImageModels: [],
-      memoryInfo, loadingState: { isLoading: false },
-      onSelectTextModel: () => {}, onSelectImageModel: () => {},
-      onUnloadTextModel: () => {}, onUnloadImageModel: () => {},
-      onSelectRemoteTextModel: () => {}, onUnloadRemoteTextModel: () => {},
-      onSelectRemoteImageModel: () => {}, onUnloadRemoteImageModel: () => {},
-      onBrowseModels: () => {}, onAddServer: () => {},
+    const view = rtl.render(React.createElement(ModelSelectorModal, {
+      visible: true,
+      initialTab: 'text',
+      onClose: () => {},
+      onSelectModel: () => {},
+      onUnloadModel: () => {},
+      isLoading: false,
     }));
-    await rtl.waitFor(() => { expect(view.queryAllByTestId('model-item').length).toBeGreaterThanOrEqual(2); }, { timeout: 4000 });
+    await rtl.waitFor(() => { expect(view.queryByTestId('text-model-row-gemma-e2b-gguf')).not.toBeNull(); }, { timeout: 4000 });
+    expect(view.queryByTestId('text-model-row-huge-model')).not.toBeNull();
     await rtl.waitFor(() => { expect(view.queryAllByText(/GB RAM/).length).toBeGreaterThanOrEqual(2); }, { timeout: 4000 });
 
     // Falsifier first: the genuinely-over-budget model KEEPS its warning (the tag still means something).

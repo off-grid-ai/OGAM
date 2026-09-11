@@ -1,24 +1,31 @@
-import { selectedRemoteModelName } from '../services/remoteModelSelection';
-import { useRemoteServerStore } from '../stores/remoteServerStore';
+import { useActiveMobileModel } from './useActiveMobileModel';
 
-/** Human labels for the active server's selected media models. */
-export function useActiveRemoteModelLabels(): {
+type RemoteLabels = {
   image: string | null;
   transcription: string | null;
   voice: string | null;
-} {
-  const servers = useRemoteServerStore(state => state.servers);
-  const activeServerIds = useRemoteServerStore(
-    state => state.activeRemoteMediaServerIds,
-  );
-  const serverFor = (category: 'image' | 'transcription' | 'voice') =>
-    servers.find(server => server.id === activeServerIds[category]);
+  imageReady: boolean | null;
+  transcriptionReady: boolean | null;
+  voiceReady: boolean | null;
+};
+
+/** Human labels for the active server's selected media models. */
+export function useActiveRemoteModelLabels(): RemoteLabels {
+  const imageSnapshot = useActiveMobileModel('image');
+  const transcriptionSnapshot = useActiveMobileModel('transcription');
+  const voiceSnapshot = useActiveMobileModel('voice');
+  const image = imageSnapshot.model;
+  const transcription = transcriptionSnapshot.model;
+  const voice = voiceSnapshot.model;
+  const remoteName = (model: typeof image) =>
+    model?.source === 'remote' ? model.name : null;
   return {
-    image: selectedRemoteModelName(serverFor('image'), 'image'),
-    transcription: selectedRemoteModelName(
-      serverFor('transcription'),
-      'transcription',
-    ),
-    voice: selectedRemoteModelName(serverFor('voice'), 'voice'),
+    image: remoteName(image),
+    transcription: remoteName(transcription),
+    voice: remoteName(voice),
+    imageReady: image?.source === 'remote' ? imageSnapshot.ready : null,
+    transcriptionReady:
+      transcription?.source === 'remote' ? transcriptionSnapshot.ready : null,
+    voiceReady: voice?.source === 'remote' ? voiceSnapshot.ready : null,
   };
 }

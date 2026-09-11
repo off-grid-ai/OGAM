@@ -28,10 +28,14 @@ const FINGERPRINT = 'fp-this-phone';
 jest.mock(
   '@offgrid/pro',
   () => {
-    const { proLicenseProvider } = require('../../../pro/licensing/proLicenseProvider');
+    const {
+      proLicenseProvider,
+    } = require('../../../pro/licensing/proLicenseProvider');
     return {
       activate: jest.fn(),
-      configureProEntitlementProvider: (register: (provider: unknown) => void) => {
+      configureProEntitlementProvider: (
+        register: (provider: unknown) => void,
+      ) => {
         register(proLicenseProvider);
       },
     };
@@ -66,8 +70,12 @@ describe('opening the app as a Pro user, and as a free one', () => {
    */
   function installBoundaries(): void {
     const fingerprint = require('../../../pro/licensing/deviceFingerprint');
-    jest.spyOn(fingerprint, 'getDeviceFingerprintStrict').mockResolvedValue(FINGERPRINT);
-    jest.spyOn(fingerprint, 'getDeviceFingerprint').mockResolvedValue(FINGERPRINT);
+    jest
+      .spyOn(fingerprint, 'getDeviceFingerprintStrict')
+      .mockResolvedValue(FINGERPRINT);
+    jest
+      .spyOn(fingerprint, 'getDeviceFingerprint')
+      .mockResolvedValue(FINGERPRINT);
 
     const secure = require('react-native-keychain');
     secure.getGenericPassword.mockImplementation(
@@ -77,7 +85,11 @@ describe('opening the app as a Pro user, and as a free one', () => {
       },
     );
     secure.setGenericPassword.mockImplementation(
-      async (_user: string, password: string, { service }: { service: string }) => {
+      async (
+        _user: string,
+        password: string,
+        { service }: { service: string },
+      ) => {
         vault.set(service, password);
         return true;
       },
@@ -120,7 +132,9 @@ describe('opening the app as a Pro user, and as a free one', () => {
     installBoundaries();
     activate = require('@offgrid/pro').activate as jest.Mock;
     activate.mockClear();
-    const { loadProFeatures } = require('../../../src/bootstrap/loadProFeatures');
+    const {
+      loadProFeatures,
+    } = require('../../../src/bootstrap/loadProFeatures');
     return loadProFeatures();
   }
 
@@ -135,13 +149,20 @@ describe('opening the app as a Pro user, and as a free one', () => {
   });
 
   it('does not boot Pro from an expired saved credential', async () => {
+    const expiry = new Date(Date.now() - 1).toISOString();
+    keygen.reset();
+    licenceId = keygen.addLicence({
+      key: LICENCE_KEY,
+      seats: 3,
+      expiry,
+    });
     vault.set(
       'off-grid-pro-license',
       JSON.stringify({
         isPro: true,
         key: LICENCE_KEY,
         licenseId: licenceId,
-        expiry: new Date(Date.now() - 1).toISOString(),
+        expiry,
         verifiedAt: Date.now() - 10_000,
       }),
     );

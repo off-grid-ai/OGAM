@@ -46,6 +46,19 @@ export function createStyles(colors: ThemeColors, _shadows: ThemeShadows) {
       alignItems: 'center' as const,
       gap: SPACING.md,
     },
+  /** The kind toggles under the auto-discover row: room between switches, and a rule above the group. */
+  kindRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingVertical: 8,
+  },
+  kindGroup: {
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
     cardTextCol: {
       flex: 1,
     },

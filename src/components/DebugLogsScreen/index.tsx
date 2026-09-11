@@ -27,7 +27,10 @@ interface DebugLogsScreenProps {
 export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClose }) => {
   const theme = useTheme();
   const styles = useThemedStyles(createStyles);
-  const { logs, clearLogs } = useDebugLogsStore();
+  // Kept narrow rather than whole-store, but the breadth here was CORRECT: this screen renders the
+  // log list, which is the store's only state. `clearLogs` is an action and is read at call time.
+  const logs = useDebugLogsStore(s => s.logs);
+  const { clearLogs } = useDebugLogsStore.getState();
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);

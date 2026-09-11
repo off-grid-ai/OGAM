@@ -8,6 +8,7 @@
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB } from '../../harness/nativeBoundary';
+import { isResidentType } from '../../harness/modelResidency';
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
@@ -29,8 +30,8 @@ describe('happy — a fittable image gen succeeds with no failure card (heavy en
     // The fittable load succeeded through the REAL gate: the native image generator ran...
     await h.rtl.waitFor(() => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); });
      
-    const { modelResidencyManager } = require('../../../src/services/modelResidency');
-    expect(modelResidencyManager.isResident('image')).toBe(true);
+    const { modelResidencyManager } = require('../../harness/activeModelLifecycle');
+    expect(isResidentType(modelResidencyManager, 'image')).toBe(true);
 
     // ...and the user sees NO "Not Enough Memory" card anywhere on the chat screen.
     expect(h.view!.queryByText(/Not Enough Memory/)).toBeNull();

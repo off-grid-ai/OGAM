@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { modelsFailureMessage } from '@offgrid/application';
 import { AppSheet } from '../AppSheet';
 import { useTheme, useThemedStyles } from '../../theme';
-import { useAppStore } from '../../stores';
+import { DEFAULT_SETTINGS } from '../../stores/appStore';
+import { applicationFacade } from '../../services/applicationFacade';
 import { llmService } from '../../services';
 import { createStyles } from './styles';
 import { VoiceTurnSettings } from '../settings/voiceSections';
@@ -11,7 +13,9 @@ import { ConversationActionsSection } from './ConversationActionsSection';
 import { ImageGenerationSection } from './ImageGenerationSection';
 import { TextGenerationSection } from './TextGenerationSection';
 import { WhisperPickerSheet } from '../models/WhisperPickerSheet';
+import { VoiceModelsSheet } from '../models/VoiceModelsSheet';
 import { TranscriptionLanguageSelect } from '../TranscriptionLanguageSelect';
+import { useActiveMobileModel } from '../../hooks/useActiveMobileModel';
 import {
   NO_TRANSCRIPTION_MODEL_LABEL,
   useTranscriptionModelSetting,
@@ -30,7 +34,9 @@ interface GenerationSettingsModalProps {
   isRemote?: boolean;
 }
 
-export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = ({
+export const GenerationSettingsModal: React.FC<
+  GenerationSettingsModalProps
+> = ({
   visible,
   onClose,
   onOpenProject,
@@ -43,14 +49,19 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const resetSettings = useAppStore((state) => state.resetSettings);
+  const [resetPending, setResetPending] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
   const { modelName: sttModelName } = useTranscriptionModelSetting();
+  const voiceModelName = useActiveMobileModel('voice').model?.name ?? 'None selected';
 
-  const [performanceStats, setPerformanceStats] = useState(llmService.getPerformanceStats());
+  const [performanceStats, setPerformanceStats] = useState(
+    llmService.getPerformanceStats(),
+  );
   const [imageSettingsOpen, setImageSettingsOpen] = useState(false);
   const [textSettingsOpen, setTextSettingsOpen] = useState(false);
   const [sttSettingsOpen, setSttSettingsOpen] = useState(false);
   const [whisperPickerOpen, setWhisperPickerOpen] = useState(false);
+  const [voicePickerOpen, setVoicePickerOpen] = useState(false);
   const [ttsSettingsOpen, setTtsSettingsOpen] = useState(false);
   // TTS settings come from the pro audio feature via a slot. Free builds have
   // no TTS section.
@@ -62,7 +73,23 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
     }
   }, [visible]);
 
-  const hasConversationActions = !!(onOpenProject || onOpenGallery || onDeleteConversation);
+  const hasConversationActions = !!(
+    onOpenProject ||
+    onOpenGallery ||
+    onDeleteConversation
+  );
+
+  const resetSettings = async (): Promise<void> => {
+    if (resetPending) return;
+    setResetPending(true);
+    setResetMessage(null);
+    const outcome = await applicationFacade().models.settings.restoreDefaults(
+      DEFAULT_SETTINGS,
+    );
+    setResetPending(false);
+    const failure = outcome.ok ? outcome.value.syncFailure : outcome.failure;
+    setResetMessage(failure ? modelsFailureMessage(failure) : null);
+  };
 
   return (
     <AppSheet
@@ -140,7 +167,8 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
               <View style={styles.remoteNotice}>
                 <Icon name="info" size={13} color={colors.textMuted} />
                 <Text style={styles.remoteNoticeText}>
-                  These settings only apply to local models and won't affect the current remote session.
+                  These settings only apply to local models and won't affect the
+                  current remote session.
                 </Text>
               </View>
             )}
@@ -200,13 +228,38 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
               />
             </TouchableOpacity>
             {ttsSettingsOpen && (
-              <TtsSection onNavigateToTTSSettings={onOpenTTSSettings} />
+              <>
+                <TouchableOpacity
+                  style={styles.modelPickerButton}
+                  onPress={() => setVoicePickerOpen(true)}
+                  activeOpacity={0.7}
+                  testID="modal-voice-open-picker"
+                >
+                  <View style={styles.modelPickerContent}>
+                    <Text style={styles.modelPickerLabel}>Voice model</Text>
+                    <Text style={styles.modelPickerValue}>
+                      {voiceModelName}
+                    </Text>
+                  </View>
+                  <Icon name="chevron-right" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+                <TtsSection onNavigateToTTSSettings={onOpenTTSSettings} />
+              </>
             )}
           </>
         )}
 
-        <TouchableOpacity style={styles.resetButton} onPress={resetSettings}>
-          <Text style={styles.resetButtonText}>Reset to Defaults</Text>
+        {resetMessage ? (
+          <Text style={styles.actionTextError}>{resetMessage}</Text>
+        ) : null}
+        <TouchableOpacity
+          style={styles.resetButton}
+          onPress={resetSettings}
+          disabled={resetPending}
+        >
+          <Text style={styles.resetButtonText}>
+            {resetPending ? 'Resetting…' : 'Reset to Defaults'}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.bottomPadding} />
@@ -215,6 +268,12 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
         <WhisperPickerSheet
           visible
           onClose={() => setWhisperPickerOpen(false)}
+        />
+      ) : null}
+      {voicePickerOpen ? (
+        <VoiceModelsSheet
+          visible
+          onClose={() => setVoicePickerOpen(false)}
         />
       ) : null}
     </AppSheet>

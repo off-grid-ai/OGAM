@@ -14,7 +14,10 @@ type Props = {
    *  carries information at a glance (replaces the separate stats row). */
   counts?: Partial<Record<ModelRowType, number>>;
   isLoading: boolean;
+  /** The header (label + chevron) opens the manager sheet. */
   onPress: () => void;
+  /** A type opens its own sheet directly; falls back to the manager when absent. */
+  onPressType?: (type: ModelRowType) => void;
 };
 
 const TYPE_ICONS: { type: ModelRowType; icon: string; caption: string }[] = [
@@ -27,9 +30,9 @@ const TYPE_ICONS: { type: ModelRowType; icon: string; caption: string }[] = [
 /**
  * Collapsed Models control. A labelled strip with one captioned icon per model
  * type — emerald + bright caption when that type has an active model, dimmed +
- * muted when not. Tap → manager sheet.
+ * muted when not. Tap the header → manager sheet; tap a type → that type's own sheet.
  */
-export const ModelsSummaryRow: React.FC<Props> = ({ labels, counts, isLoading, onPress }) => {
+export const ModelsSummaryRow: React.FC<Props> = ({ labels, counts, isLoading, onPress, onPressType }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
@@ -46,8 +49,13 @@ export const ModelsSummaryRow: React.FC<Props> = ({ labels, counts, isLoading, o
           const active = !!labels[type] && labels[type] !== '—';
           const count = counts?.[type];
           return (
-            <View
+            <AnimatedPressable
               key={type}
+              testID={`model-summary-${type}-open`}
+              hapticType="selection"
+              onPress={() => (onPressType ? onPressType(type) : onPress())}
+            >
+            <View
               testID={`model-summary-${type}`}
               // `selected` reflects "this model type has an active model" — the same signal the
               // caption/icon colour encodes visually. Exposed so a test can observe active-vs-dimmed
@@ -65,6 +73,7 @@ export const ModelsSummaryRow: React.FC<Props> = ({ labels, counts, isLoading, o
                 <Text testID={`model-summary-count-${type}`} style={[styles.count, count > 0 && styles.countActive]}>{count}</Text>
               )}
             </View>
+            </AnimatedPressable>
           );
         })}
       </View>

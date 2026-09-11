@@ -28,10 +28,8 @@ export const SecuritySettingsScreen: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
-  const {
-    isEnabled: authEnabled,
-    setEnabled: setAuthEnabled,
-  } = useAuthStore();
+  const authEnabled = useAuthStore(s => s.isEnabled);
+  const { setEnabled: setAuthEnabled } = useAuthStore.getState();
 
   const handleTogglePassphrase = async () => {
     if (authEnabled) {

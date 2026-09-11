@@ -27,6 +27,8 @@ export interface LicensedMesh {
    * provider for THIS licence's installations by id. Available only after `reset()`.
    */
   readonly licenceId: string;
+  /** The installation allowance issued with this fixture's current licence. */
+  readonly maxMachines: number;
   /** Installations currently on the licence, as the provider sees them - ids included. */
   installations(): ReturnType<KeygenFake['machines']>;
   /** Start fresh: a clean provider holding one licence with room for three devices. */
@@ -57,12 +59,17 @@ export interface LicensedMesh {
 export function createLicensedMesh(): LicensedMesh {
   const keygen = createKeygenFake();
   let licenceId = '';
+  let maxMachines = 0;
 
   return {
     keygen,
 
     get licenceId() {
       return licenceId;
+    },
+
+    get maxMachines() {
+      return maxMachines;
     },
 
     installations() {
@@ -72,6 +79,7 @@ export function createLicensedMesh(): LicensedMesh {
     reset(seats = 3) {
       keygen.reset();
       keygen.install();
+      maxMachines = seats;
       licenceId = keygen.addLicence({ key: MESH_LICENCE_KEY, seats });
     },
 
@@ -166,6 +174,8 @@ export function installLicensedPhone(
       licenseId: mesh.licenceId,
       entitlementId: mesh.licenceId,
       expiry: null,
+      maxMachines: mesh.maxMachines,
+      tier: 'lifetime',
       verifiedAt: 0,
     }),
   );

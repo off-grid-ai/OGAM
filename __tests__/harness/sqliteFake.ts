@@ -17,8 +17,10 @@ export function installRealSqlite(setupSql?: string): void {
  * already reset modules (e.g. installNativeBoundary for a mounted-screen RAG test). Call AFTER that installer,
  * before requiring the rag modules. installRealSqlite = resetModules + this.
  */
-export function doMockRealSqlite(setupSql?: string): void {
-  jest.doMock('@op-engineering/op-sqlite', () => {
+export function createRealSqliteModule(setupSql?: string) {
+  const databases: any[] = [];
+  const namedDatabases = new Map<string, any>();
+  return (() => {
     const { DatabaseSync } = require('node:sqlite');
 
     const wrap = (db: any) => ({
@@ -32,8 +34,12 @@ export function doMockRealSqlite(setupSql?: string): void {
             ? new Uint8Array(p as ArrayBuffer)
             : p,
         );
+        // Row-producing schema inspection is a query in the native driver. Keep it out of the DDL
+        // branch so production upgrade guards observe the columns the real SQLite table contains.
+        const readsRows = /^\s*(SELECT|PRAGMA\s+table_info\s*\()/i.test(sql);
         // Transaction / DDL control statements: no params, run via exec.
         if (
+          !readsRows &&
           /^\s*(BEGIN|COMMIT|ROLLBACK|CREATE|PRAGMA|DROP)/i.test(sql) &&
           bind.length === 0
         ) {
@@ -41,7 +47,7 @@ export function doMockRealSqlite(setupSql?: string): void {
           return { rows: [], insertId: undefined, rowsAffected: 0 };
         }
         const stmt = db.prepare(sql);
-        if (/^\s*SELECT/i.test(sql)) {
+        if (readsRows) {
           const rows = stmt.all(...bind);
           return { rows, insertId: undefined, rowsAffected: 0 };
         }
@@ -63,11 +69,27 @@ export function doMockRealSqlite(setupSql?: string): void {
     });
 
     return {
-      open: () => {
-        const db = new DatabaseSync(':memory:');
-        if (setupSql) db.exec(setupSql);
+      open: (options?: {name?: string}) => {
+        const name = options?.name ?? `anonymous-${databases.length}`;
+        let db = namedDatabases.get(name);
+        if (!db) {
+          db = new DatabaseSync(':memory:');
+          namedDatabases.set(name, db);
+          databases.push(db);
+          if (setupSql) db.exec(setupSql);
+        }
         return wrap(db);
       },
+      reset: () => {
+        for (const db of databases) {
+          const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all();
+          for (const {name} of tables) db.exec(`DELETE FROM "${name}"`);
+        }
+      },
     };
-  });
+  })();
+}
+
+export function doMockRealSqlite(setupSql?: string): void {
+  jest.doMock('@op-engineering/op-sqlite', () => createRealSqliteModule(setupSql));
 }

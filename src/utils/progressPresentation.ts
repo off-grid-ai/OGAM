@@ -9,18 +9,19 @@ export interface MobileProgressPresentation {
   progress: ProgressPresentation;
   percentageText?: string;
   bytesText?: string;
-  rateText: string;
+  /** Absent when the rate is not known. An unknown rate is not shown; it is not a fact to report. */
+  rateText?: string;
   detailText: string;
 }
 
-/** Mobile copy for a finite byte rate. Input is sanitized again for safe direct use. */
-export function formatByteRate(bytesPerSecond: number | undefined): string {
+/** Mobile copy for a finite byte rate; undefined when the rate is unknown. Input is sanitized again for safe direct use. */
+export function formatByteRate(bytesPerSecond: number | undefined): string | undefined {
   if (
     bytesPerSecond === undefined ||
     !Number.isFinite(bytesPerSecond) ||
     bytesPerSecond < 0
   ) {
-    return 'Rate unavailable';
+    return undefined;
   }
   if (bytesPerSecond >= 1024 ** 3) {
     return `${(bytesPerSecond / 1024 ** 3).toFixed(1)} GB/s`;

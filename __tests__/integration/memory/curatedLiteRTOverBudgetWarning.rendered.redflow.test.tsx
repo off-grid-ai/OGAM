@@ -61,16 +61,16 @@ describe('Curated LiteRT onboarding — an over-budget model that HAS a warning 
     // curated LiteRT list was empty (both files over budget). Assert on the LiteRT card specifically
     // (its testID + displayName) — the display name "Gemma 4 E2B/E4B" is also reused by a recommended
     // GGUF card, so match the LiteRT surface, not a bare display-name string.
-    const e4bCard = await rtl.waitFor(() => view.getByTestId('litert-model-0'), { timeout: 10000 });
+    const e4bCard = await rtl.waitFor(() => view.getByTestId('onboarding-litert-model-0'), { timeout: 10000 });
     expect(rtl.within(e4bCard).getByText('Gemma 4 E4B')).toBeTruthy();
 
     // The over-budget-with-NO-warning E2B (the OTHER curated LiteRT entry) stays hidden — no safe way
     // to offer it. So exactly ONE curated LiteRT card renders; there is no second one.
-    expect(view.queryByTestId('litert-model-1')).toBeNull();
+    expect(view.queryByTestId('onboarding-litert-model-1')).toBeNull();
 
     // The warning is REACHABLE: the E4B download button is enabled and tapping it surfaces the sheet.
     // (On HEAD isCompatible was false → the button was disabled → even a rendered card couldn't warn.)
-    const e4bDownload = await rtl.waitFor(() => view.getByTestId('litert-model-0-download'), { timeout: 10000 });
+    const e4bDownload = await rtl.waitFor(() => view.getByTestId('onboarding-litert-model-0-download'), { timeout: 10000 });
     await rtl.act(async () => { rtl.fireEvent.press(e4bDownload); });
 
     expect(await rtl.waitFor(() => view.getByText(/may exceed your device's memory/), { timeout: 10000 })).toBeTruthy();

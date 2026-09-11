@@ -6,6 +6,8 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { ONNXImageModel, RemoteModel } from '../../types';
 import { hardwareService } from '../../services';
 import { createAllStyles } from './styles';
+import { ModelRow } from '../ModelRow';
+import { fileExceedsBudget } from '../../services/memoryBudget';
 
 export interface ImageTabProps {
   downloadedImageModels: ONNXImageModel[];
@@ -21,6 +23,8 @@ export interface ImageTabProps {
   isLoadingImage: boolean;
   /** Id of the image model being loaded right now (the row just tapped) — drives the per-row spinner. */
   loadingModelId?: string | null;
+  /** The remote model the owner is switching to right now. */
+  loadingRemoteModelId?: string | null;
   onSelectImageModel: (model: ONNXImageModel) => void;
   onSelectRemoteVisionModel: (model: RemoteModel, serverId: string) => void;
   onUnloadImageModel: () => void;
@@ -36,6 +40,7 @@ export const ImageTab: React.FC<ImageTabProps> = ({
   isAnyLoading,
   isLoadingImage,
   loadingModelId = null,
+  loadingRemoteModelId = null,
   onSelectImageModel,
   onUnloadImageModel,
   onSelectRemoteVisionModel,
@@ -157,52 +162,33 @@ export const ImageTab: React.FC<ImageTabProps> = ({
           </View>
           {downloadedImageModels.map(model => {
             const isCurrent = activeImageModelId === model.id;
+            const estimatedMemory = hardwareService.estimateImageModelRam(model);
+            const memoryFits = !fileExceedsBudget(
+              model.size,
+              hardwareService.getTotalMemoryGB(),
+            );
             // While a load is in flight, the highlight + spinner follow the row being loaded, not the
             // model still resident — so tapping B moves the selection to B at once (device 2026-07-14).
             const isLoadingThis = loadingModelId === model.id;
             const loadInProgress = loadingModelId != null;
             const highlight = loadInProgress ? isLoadingThis : isCurrent;
             return (
-              <TouchableOpacity
+              <ModelRow
                 key={model.id}
                 testID={`image-model-row-${model.id}`}
-                style={[
-                  styles.modelItem,
-                  highlight && styles.modelItemSelectedImage,
-                ]}
+                name={model.name}
+                size={hardwareService.formatBytes(model.size)}
+                quant={model.style || 'Image'}
+                ramHint={`~${(
+                  estimatedMemory / (1024 * 1024 * 1024)
+                ).toFixed(1)} GB RAM${memoryFits ? '' : ' (may not fit)'}`}
+                isActive={highlight}
+                isLoaded={isCurrent && !loadInProgress}
+                loading={isLoadingThis}
+                variant="image"
                 onPress={() => onSelectImageModel(model)}
                 disabled={isAnyLoading || isCurrent}
-              >
-                <View style={styles.modelInfo}>
-                  <Text
-                    style={[
-                      styles.modelName,
-                      highlight && styles.modelNameSelectedImage,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {model.name}
-                  </Text>
-                  <View style={styles.modelMeta}>
-                    <Text style={styles.modelSize}>
-                      {hardwareService.formatBytes(model.size)}
-                    </Text>
-                    {!!model.style && (
-                      <>
-                        <Text style={styles.metaSeparator}>•</Text>
-                        <Text style={styles.modelStyle}>{model.style}</Text>
-                      </>
-                    )}
-                  </View>
-                </View>
-                {isLoadingThis ? (
-                  <LoadingDots color={colors.info} testID="model-row-loading" />
-                ) : isCurrent && !loadInProgress ? (
-                  <View style={[styles.checkmark, styles.checkmarkImage]}>
-                    <Icon name="check" size={16} color={colors.background} />
-                  </View>
-                ) : null}
-              </TouchableOpacity>
+              />
             );
           })}
         </>
@@ -248,6 +234,9 @@ export const ImageTab: React.FC<ImageTabProps> = ({
                     </View>
                   </View>
                 </View>
+                {loadingRemoteModelId === model.id ? (
+                  <LoadingDots color={colors.primary} testID="model-row-loading" />
+                ) : null}
                 {isCurrent && (
                   <View style={[styles.checkmark, styles.checkmarkImage]}>
                     <Icon name="check" size={16} color={colors.background} />

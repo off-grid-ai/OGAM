@@ -215,6 +215,9 @@ export const AppSheet: React.FC<AppSheetProps> = ({
 
   useEffect(() => {
     if (visible) {
+      // The sheet is already presented. In particular, do not run the opening
+      // keyboard-dismiss cycle again after an auto-focused input opens it.
+      if (modalVisible) return;
       pendingAnimateIn.current = true;
       // Dismiss keyboard first, then open — prevents animation conflict
       const keyboardVisible = Keyboard.isVisible?.() ?? false;
@@ -247,7 +250,7 @@ export const AppSheet: React.FC<AppSheetProps> = ({
         onClosedRef.current?.();
       });
     }
-  }, [visible]);
+  }, [animateOut, modalVisible, visible]);
 
   // Track keyboard height so the sheet lifts above the keyboard
   useEffect(() => {
@@ -308,7 +311,10 @@ export const AppSheet: React.FC<AppSheetProps> = ({
 
   return (
     <Modal
-      visible={modalVisible}
+      // The controlled prop owns native visibility. If an exit animation is
+      // interrupted, a stale internal flag must not keep an invisible iOS
+      // modal above the chat composer and consume its touches.
+      visible={visible && modalVisible}
       transparent
       animationType="none"
       onRequestClose={dismiss}
@@ -325,8 +331,25 @@ export const AppSheet: React.FC<AppSheetProps> = ({
           />
         </TouchableWithoutFeedback>
 
+        {/* iOS rounds the keyboard's top corners. Keep the sheet surface behind those corners so
+            the modal backdrop cannot show through while the sheet is keyboard-adjusted. */}
+        {keyboardHeight > 0 && (
+          <View
+            testID="app-sheet-keyboard-underlay"
+            pointerEvents="none"
+            style={[
+              styles.keyboardUnderlay,
+              {
+                height: keyboardHeight,
+                backgroundColor: levelTokens.backgroundColor,
+              },
+            ]}
+          />
+        )}
+
         {/* Sheet */}
         <Animated.View
+          testID="app-sheet-surface"
           style={[
             styles.sheet,
             {

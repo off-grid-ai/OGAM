@@ -1,15 +1,21 @@
-import { useState, useCallback, useEffect } from 'react';
-import { remoteServerManager } from '../../services/remoteServerManager';
-import { useRemoteServerStore } from '../../stores';
-import {
-  RemoteServer,
-  RemoteModel,
-  RemoteMediaModelIds,
-  RemoteModelCatalog,
-  ServerTestResult,
-} from '../../types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { isPrivateNetworkEndpoint } from '../../services/httpClient';
-import { AlertState, initialAlertState, showAlert } from '../CustomAlert';
+import {
+  RemoteServerEditorOperationError,
+  type RemoteServerConnectionProjection,
+  type RemoteServerEditorFailure,
+  type RemoteServerEditorModelIds,
+} from '../../services/modelServices/remoteServerEditorApplication';
+import { remoteServerEditorApplication } from '../../services/composition/remote-server-editor';
+import type {
+  RemoteMediaModelIds,
+  RemoteModel,
+  RemoteModelCatalog,
+  RemoteServer,
+} from '../../types';
+import { initialAlertState, showAlert, type AlertState } from '../CustomAlert';
+
+export type { RemoteServerEditorFailure };
 
 interface FormOptions {
   server?: RemoteServer;
@@ -18,33 +24,12 @@ interface FormOptions {
   onClose: () => void;
 }
 
-interface ModelIdSetters {
-  text: React.Dispatch<React.SetStateAction<string>>;
-  image: React.Dispatch<React.SetStateAction<string>>;
-  transcription: React.Dispatch<React.SetStateAction<string>>;
-  voice: React.Dispatch<React.SetStateAction<string>>;
-}
-
-function applyDiscoveredModelIds(
-  result: ServerTestResult,
-  setters: ModelIdSetters,
-): void {
-  if (result.modelManagement === 'offgrid-desktop-v1') {
-    setters.text(result.mediaModels?.text ?? '');
-    setters.image(result.mediaModels?.image ?? '');
-    setters.transcription(result.mediaModels?.transcription ?? '');
-    setters.voice(result.mediaModels?.voice ?? '');
-    return;
-  }
-  setters.text(
-    current => current || result.mediaModels?.text || result.models?.[0]?.id || '',
-  );
-  setters.image(current => current || result.mediaModels?.image || '');
-  setters.transcription(
-    current => current || result.mediaModels?.transcription || '',
-  );
-  setters.voice(current => current || result.mediaModels?.voice || '');
-}
+const idsForServer = (server?: RemoteServer): Required<RemoteServerEditorModelIds> => ({
+  text: server?.selections?.text ?? '',
+  image: server?.selections?.image ?? '',
+  transcription: server?.selections?.transcription ?? '',
+  voice: server?.selections?.voice ?? '',
+});
 
 export function useRemoteServerForm({
   server,
@@ -67,259 +52,166 @@ export function useRemoteServerForm({
     message: string;
   } | null>(null);
   const [discoveredModels, setDiscoveredModels] = useState<RemoteModel[]>([]);
-  const [modelCatalog, setModelCatalog] = useState<RemoteModelCatalog>({});
-  const [modelManagement, setModelManagement] = useState<
-    RemoteServer['modelManagement']
-  >(server?.modelManagement);
+  const [catalog, setCatalog] = useState<RemoteModelCatalog>({});
+  const [modelManagement, setModelManagement] =
+    useState<RemoteServer['modelManagement']>(server?.modelManagement);
   const [confirmedMediaModels, setConfirmedMediaModels] =
-    useState<RemoteMediaModelIds>(server?.mediaModels ?? {});
+    useState<RemoteMediaModelIds>(server?.selections ?? {});
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
+  const [operationFailure, setOperationFailure] =
+    useState<RemoteServerEditorFailure | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
-  // Initialize form when editing existing server
+  const currentModelIds = useCallback(
+    (): RemoteServerEditorModelIds => ({
+      text: textModelId,
+      image: imageModelId,
+      transcription: transcriptionModelId,
+      voice: voiceModelId,
+    }),
+    [imageModelId, textModelId, transcriptionModelId, voiceModelId],
+  );
+
+  const modelNames = useMemo(
+    () => remoteServerEditorApplication.projectModelNames(
+      {
+        text: textModelId,
+        image: imageModelId,
+        transcription: transcriptionModelId,
+        voice: voiceModelId,
+      },
+      discoveredModels,
+      catalog,
+    ),
+    [
+      catalog,
+      discoveredModels,
+      imageModelId,
+      textModelId,
+      transcriptionModelId,
+      voiceModelId,
+    ],
+  );
+
+  const applyConnection = useCallback((projection: RemoteServerConnectionProjection) => {
+    setTestResult(projection.result);
+    setOperationFailure(projection.failure);
+    setDiscoveredModels(projection.models);
+    setCatalog(projection.catalog);
+    setModelManagement(projection.modelManagement);
+    setConfirmedMediaModels(projection.confirmedSelections);
+    setTextModelId(projection.modelIds.text ?? '');
+    setImageModelId(projection.modelIds.image ?? '');
+    setTranscriptionModelId(projection.modelIds.transcription ?? '');
+    setVoiceModelId(projection.modelIds.voice ?? '');
+  }, []);
+
   useEffect(() => {
-    let cancelled = false;
-    if (server) {
-      setName(server.name);
-      setEndpoint(server.endpoint);
-      setNotes(server.notes || '');
-      setTextModelId(server.mediaModels?.text || '');
-      setImageModelId(server.mediaModels?.image || '');
-      setTranscriptionModelId(server.mediaModels?.transcription || '');
-      setVoiceModelId(server.mediaModels?.voice || '');
-      // Load existing API key from keychain so user can see it's set
-      remoteServerManager
-        .getApiKey(server.id)
-        .then(key => {
-        if (!cancelled) setApiKey(key || '');
-        })
-        .catch(() => {
-          if (!cancelled) setApiKey('');
-        });
-    } else {
-      // Reset form for new server
-      setName('');
-      setEndpoint('');
-      setApiKey('');
-      setNotes('');
-      setTextModelId('');
-      setImageModelId('');
-      setTranscriptionModelId('');
-      setVoiceModelId('');
-    }
+    setName(server?.name ?? '');
+    setEndpoint(server?.endpoint ?? '');
+    setApiKey('');
+    setNotes(server?.notes ?? '');
+    const ids = idsForServer(server);
+    setTextModelId(ids.text);
+    setImageModelId(ids.image);
+    setTranscriptionModelId(ids.transcription);
+    setVoiceModelId(ids.voice);
     setErrors({});
     setTestResult(null);
+    setOperationFailure(null);
     setDiscoveredModels([]);
-    setModelCatalog(server?.modelCatalog ?? {});
+    setCatalog(server?.catalog ?? {});
     setModelManagement(server?.modelManagement);
-    setConfirmedMediaModels(server?.mediaModels ?? {});
+    setConfirmedMediaModels(server?.selections ?? {});
+    if (!server || !visible) return;
+
+    let cancelled = false;
+    setIsTesting(true);
+    remoteServerEditorApplication
+      .loadExisting(server, ids)
+      .then(result => {
+        if (cancelled) return;
+        setApiKey(result.credential);
+        applyConnection(result.connection);
+      })
+      .catch(error => {
+        if (cancelled) return;
+        const failure =
+          error instanceof RemoteServerEditorOperationError
+            ? error.failure
+            : {
+                kind: 'discovery' as const,
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : 'Could not load models from this server.',
+              };
+        setOperationFailure(failure);
+        if (failure.kind === 'credential-read') {
+          setAlertState(showAlert('API key unavailable', failure.message, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Retry', onPress: () => setLoadAttempt(value => value + 1) },
+          ]));
+        } else {
+          setTestResult({ success: false, message: failure.message });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsTesting(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, [server, visible]);
+  }, [applyConnection, loadAttempt, server, visible]);
 
   const validateForm = useCallback((): boolean => {
-    const newErrors: Record<string, string> = {};
-    if (!name.trim()) {
-      newErrors.name = 'Server name is required';
-    }
-    if (endpoint.trim()) {
-      try {
-        // Validate URL format by parsing it - constructor throws on invalid URLs
-        new URL(endpoint); // eslint-disable-line no-new
-      } catch {
-        newErrors.endpoint = 'Invalid URL format';
-      }
-    } else {
-      newErrors.endpoint = 'Endpoint URL is required';
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  }, [name, endpoint]);
-
-  const applySuccessfulConnection = useCallback((result: ServerTestResult) => {
-    const modelCount =
-      (result.models?.length ?? 0) +
-      Object.values(result.modelCatalog ?? {}).reduce(
-        (count, models) => count + (models?.length ?? 0),
-        0,
-      );
-    setTestResult({
-      success: true,
-      message: `Connected (${result.latency}ms)${
-        modelCount > 0
-          ? `\n${modelCount} model${modelCount === 1 ? '' : 's'} available`
-          : ''
-      }`,
-    });
-    setDiscoveredModels(result.models ?? []);
-    setModelCatalog(result.modelCatalog ?? {});
-    setModelManagement(result.modelManagement);
-    setConfirmedMediaModels(result.mediaModels ?? {});
-    applyDiscoveredModelIds(result, {
-      text: setTextModelId,
-      image: setImageModelId,
-      transcription: setTranscriptionModelId,
-      voice: setVoiceModelId,
-    });
-  }, []);
-
-  // A saved Desktop server can predate the managed-model contract. Refresh it
-  // when the editor opens so the user sees canonical installed choices without
-  // having to delete, recreate, or manually retest the server first.
-  useEffect(() => {
-    if (!server || !visible) return;
-    let cancelled = false;
-    setIsTesting(true);
-    (async () => {
-      try {
-        const storedApiKey = await remoteServerManager.getApiKey(server.id);
-        const result = await remoteServerManager.testConnectionByEndpoint(
-          server.endpoint,
-          storedApiKey || undefined,
-        );
-        if (!cancelled && result.success) applySuccessfulConnection(result);
-      } finally {
-        if (!cancelled) setIsTesting(false);
-      }
-    })().catch(() => {
-      if (!cancelled) setIsTesting(false);
-    });
-    return () => { cancelled = true; };
-  }, [applySuccessfulConnection, server, visible]);
+    const next = remoteServerEditorApplication.validate({ name, endpoint });
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  }, [endpoint, name]);
 
   const handleTestConnection = useCallback(async () => {
     if (!validateForm()) return;
     setIsTesting(true);
     setTestResult(null);
     setDiscoveredModels([]);
-    setModelCatalog({});
+    setCatalog({});
     setModelManagement(undefined);
     setConfirmedMediaModels({});
     try {
-      const result = await remoteServerManager.testConnectionByEndpoint(
-        endpoint,
-        apiKey || undefined,
+      applyConnection(
+        await remoteServerEditorApplication.test({
+          endpoint,
+          apiKey,
+          current: currentModelIds(),
+        }),
       );
-      if (result.success) {
-        applySuccessfulConnection(result);
-      } else {
-        const triedUrl = `${endpoint.replace(/\/+$/, '')}/v1/models`;
-        setTestResult({
-          success: false,
-          message: `${result.error || 'Connection failed'}\nTried: ${triedUrl}`,
-        });
-      }
-    } catch (error) {
-      setTestResult({
-        success: false,
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
     } finally {
       setIsTesting(false);
     }
-  }, [endpoint, apiKey, applySuccessfulConnection, validateForm]);
+  }, [apiKey, applyConnection, currentModelIds, endpoint, validateForm]);
 
   const saveServer = useCallback(async () => {
     try {
-      const mediaModels = {
-        ...(textModelId.trim() ? { text: textModelId.trim() } : {}),
-        ...(imageModelId.trim() ? { image: imageModelId.trim() } : {}),
-        ...(transcriptionModelId.trim()
-          ? { transcription: transcriptionModelId.trim() }
-          : {}),
-        ...(voiceModelId.trim() ? { voice: voiceModelId.trim() } : {}),
-      };
-      const desktopManaged = modelManagement === 'offgrid-desktop-v1';
-      const activateDesktopSelections = async (
-        serverId: string,
-        current: RemoteMediaModelIds,
-      ) => {
-        if (!desktopManaged) return;
-        if (mediaModels.text && mediaModels.text !== current.text) {
-          await remoteServerManager.setActiveRemoteTextModel(
-            serverId,
-            mediaModels.text,
-          );
-        }
-        for (const category of [
-          'image',
-          'transcription',
-          'voice',
-        ] as const) {
-          const modelId = mediaModels[category];
-          if (modelId && modelId !== current[category]) {
-            await remoteServerManager.setActiveRemoteMediaModel(
-              serverId,
-              category,
-              modelId,
-            );
-          }
-        }
-      };
-      if (server) {
-        await remoteServerManager.updateServer(server.id, {
-          name,
-          endpoint,
-          notes,
-          apiKey,
-          mediaModels: desktopManaged ? server.mediaModels : mediaModels,
-          modelCatalog,
-          modelManagement,
-        });
-        if (discoveredModels.length > 0) {
-          useRemoteServerStore
-            .getState()
-            .setDiscoveredModels(
-              server.id,
-              discoveredModels.map(model => ({ ...model, serverId: server.id })),
-            );
-        }
-        await activateDesktopSelections(server.id, server.mediaModels ?? {});
-        if (
-          !desktopManaged &&
-          textModelId.trim() &&
-          useRemoteServerStore.getState().activeServerId === server.id
-        ) {
-          await remoteServerManager.setActiveRemoteTextModel(
-            server.id,
-            textModelId.trim(),
-          );
-        }
-        onSave?.(server);
-      } else {
-        const newServer = await remoteServerManager.addServer({
-          name,
-          endpoint,
-          providerType: 'openai-compatible',
-          notes: notes || undefined,
-          apiKey: apiKey || undefined,
-          mediaModels: desktopManaged ? confirmedMediaModels : mediaModels,
-          modelCatalog,
-          modelManagement,
-        });
-        if (discoveredModels.length > 0) {
-          useRemoteServerStore
-            .getState()
-            .setDiscoveredModels(
-              newServer.id,
-              discoveredModels.map(model => ({
-                ...model,
-                serverId: newServer.id,
-              })),
-            );
-        }
-        await activateDesktopSelections(
-          newServer.id,
-          desktopManaged ? confirmedMediaModels : {},
-        );
-        // Probe before closing so no network work outlives this editor session.
-        await remoteServerManager
-          .testConnection(newServer.id)
-          .catch(() => undefined);
-        onSave?.(newServer);
-      }
+      const saved = await remoteServerEditorApplication.save({
+        server,
+        name,
+        endpoint,
+        apiKey,
+        notes,
+        modelIds: currentModelIds(),
+        catalog,
+        modelManagement,
+        confirmedSelections: confirmedMediaModels,
+        discoveredModels,
+      });
+      setOperationFailure(null);
+      onSave?.(saved);
       onClose();
     } catch (error) {
+      const failure =
+        error instanceof RemoteServerEditorOperationError ? error.failure : null;
+      if (failure) setOperationFailure(failure);
       setAlertState(
         showAlert(
           'Error',
@@ -328,41 +220,35 @@ export function useRemoteServerForm({
       );
     }
   }, [
-    server,
-    name,
-    endpoint,
     apiKey,
-    notes,
-    textModelId,
-    imageModelId,
-    transcriptionModelId,
-    voiceModelId,
-    modelCatalog,
-    modelManagement,
+    catalog,
     confirmedMediaModels,
+    currentModelIds,
     discoveredModels,
-    onSave,
+    endpoint,
+    modelManagement,
+    name,
+    notes,
     onClose,
+    onSave,
+    server,
   ]);
 
   const handleSave = useCallback(async () => {
     if (!validateForm()) return;
-    // Warn if connecting to public internet
     if (endpoint && !isPrivateNetworkEndpoint(endpoint)) {
-      setAlertState(
-        showAlert(
+      setAlertState(showAlert(
         'Public Network Warning',
         'This endpoint appears to be on the public internet. Your data will be sent to a remote server. Continue?',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Continue', onPress: () => saveServer() },
-          ],
-        ),
-      );
-    } else {
-      saveServer();
+          { text: 'Continue', onPress: saveServer },
+        ],
+      ));
+      return;
     }
-  }, [validateForm, endpoint, saveServer]);
+    await saveServer();
+  }, [endpoint, saveServer, validateForm]);
 
   return {
     name,
@@ -381,15 +267,17 @@ export function useRemoteServerForm({
     setTranscriptionModelId,
     voiceModelId,
     setVoiceModelId,
+    modelNames,
     errors,
     isTesting,
     testResult,
+    operationFailure,
     discoveredModels,
-    modelCatalog,
+    catalog,
     modelManagement,
     handleTestConnection,
     handleSave,
-    isPublicNetwork: !!(endpoint && !isPrivateNetworkEndpoint(endpoint)),
+    isPublicNetwork: Boolean(endpoint && !isPrivateNetworkEndpoint(endpoint)),
     alertState,
     dismissAlert: () => setAlertState(initialAlertState),
   };

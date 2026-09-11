@@ -28,6 +28,7 @@ export interface AnimatedPressableProps {
   hitSlop?: TouchableOpacityProps['hitSlop'];
   accessibilityLabel?: string;
   accessibilityRole?: TouchableOpacityProps['accessibilityRole'];
+  accessibilityState?: TouchableOpacityProps['accessibilityState'];
   accessibilityHint?: string;
 }
 
@@ -45,6 +46,7 @@ export function AnimatedPressable({
   hitSlop,
   accessibilityLabel,
   accessibilityRole,
+  accessibilityState,
   accessibilityHint,
 }: AnimatedPressableProps) {
   const scale = useSharedValue(1);
@@ -89,6 +91,7 @@ export function AnimatedPressable({
       hitSlop={hitSlop}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={accessibilityRole}
+      accessibilityState={accessibilityState}
       accessibilityHint={accessibilityHint}
       style={[animatedStyle, styles.base, disabled && styles.disabled, style]}
     >

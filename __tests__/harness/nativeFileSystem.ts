@@ -15,9 +15,14 @@ export interface NativeFileSystemBoundary {
   DocumentDirectoryPath: string;
   reset(): void;
   seedFile(path: string, sizeBytes: number): void;
-  seedTextFile(path: string, contents: string, reportedSize?: number | string): void;
+  seedTextFile(
+    path: string,
+    contents: string,
+    reportedSize?: number | string,
+  ): void;
   seedDir(path: string): void;
   setReportedFileSize(path: string, size: number | string): void;
+  setReportedHash(path: string, algorithm: string, digest: string): void;
   readAscii(path: string, length: number, position?: number): Promise<string>;
   exists(path: string): Promise<boolean>;
 }
@@ -80,6 +85,8 @@ export function createNativeFileSystemBoundary(
   const MainBundlePath = options.mainBundlePath ?? '/bundle';
   let volume = Volume.fromJSON({});
   const reportedFileSizes = new Map<string, number | string>();
+  const logicalFileSizes = new Map<string, number>();
+  const reportedHashes = new Map<string, string>();
   let restoreModuleMocks = (): void => {};
 
   function normalize(path: string): string {
@@ -94,6 +101,8 @@ export function createNativeFileSystemBoundary(
   function reset(): void {
     volume = Volume.fromJSON({});
     reportedFileSizes.clear();
+    logicalFileSizes.clear();
+    reportedHashes.clear();
     for (const directory of [
       DocumentDirectoryPath,
       CachesDirectoryPath,
@@ -112,7 +121,9 @@ export function createNativeFileSystemBoundary(
     return {
       path: normalized,
       name: normalized.slice(normalized.lastIndexOf('/') + 1),
-      size: (reportedFileSizes.get(normalized) ?? Number(value.size)) as number,
+      size: (reportedFileSizes.get(normalized) ??
+        logicalFileSizes.get(normalized) ??
+        Number(value.size)) as number,
       isFile: () => value.isFile(),
       isDirectory: () => value.isDirectory(),
       mtime: value.mtime,
@@ -140,6 +151,7 @@ export function createNativeFileSystemBoundary(
       async (path: string, contents: string, encoding?: string) => {
         const normalized = normalize(path);
         reportedFileSizes.delete(normalized);
+        logicalFileSizes.delete(normalized);
         volume.mkdirSync(parent(normalized), { recursive: true });
         volume.writeFileSync(
           normalized,
@@ -160,16 +172,31 @@ export function createNativeFileSystemBoundary(
           contents,
           encoding === 'base64' ? 'base64' : 'utf8',
         );
-        const current = volume.existsSync(normalized)
-          ? (volume.readFileSync(normalized) as Buffer)
-          : Buffer.alloc(0);
-        const next = Buffer.alloc(
-          Math.max(current.length, position + incoming.length),
-        );
-        current.copy(next);
-        incoming.copy(next, position);
         volume.mkdirSync(parent(normalized), { recursive: true });
-        volume.writeFileSync(normalized, next);
+        const currentLength = volume.existsSync(normalized)
+          ? logicalFileSizes.get(normalized) ??
+            Number(volume.statSync(normalized).size)
+          : 0;
+        const requiredLength = Math.max(
+          currentLength,
+          position + incoming.length,
+        );
+        if (!volume.existsSync(normalized)) {
+          volume.writeFileSync(normalized, Buffer.alloc(0));
+        }
+        const capacity = Number(volume.statSync(normalized).size);
+        if (capacity < requiredLength) {
+          let nextCapacity = Math.max(capacity, 1024 * 1024);
+          while (nextCapacity < requiredLength) nextCapacity *= 2;
+          volume.truncateSync(normalized, nextCapacity);
+        }
+        const descriptor = volume.openSync(normalized, 'r+');
+        try {
+          volume.writeSync(descriptor, incoming, 0, incoming.length, position);
+        } finally {
+          volume.closeSync(descriptor);
+        }
+        logicalFileSizes.set(normalized, requiredLength);
       },
     ),
     read: jest.fn(
@@ -179,10 +206,15 @@ export function createNativeFileSystemBoundary(
         position = 0,
         encoding?: string,
       ) => {
-        const contents = volume.readFileSync(normalize(path)) as Buffer;
+        const normalized = normalize(path);
+        const contents = volume.readFileSync(normalized) as Buffer;
+        const logicalLength =
+          logicalFileSizes.get(normalized) ?? contents.length;
         const selected = contents.subarray(
           position,
-          length == null ? undefined : position + length,
+          length == null
+            ? logicalLength
+            : Math.min(position + length, logicalLength),
         );
         return selected.toString(
           encoding === 'base64'
@@ -193,17 +225,22 @@ export function createNativeFileSystemBoundary(
         );
       },
     ),
-    readFile: jest.fn(
-      async (path: string, encoding?: string) =>
-        volume.readFileSync(
-          normalize(path),
-          encoding === 'base64' ? 'base64' : 'utf8',
-        ) as string,
-    ),
+    readFile: jest.fn(async (path: string, encoding?: string) => {
+      const normalized = normalize(path);
+      const contents = volume.readFileSync(normalized) as Buffer;
+      return contents
+        .subarray(0, logicalFileSizes.get(normalized) ?? contents.length)
+        .toString(encoding === 'base64' ? 'base64' : 'utf8');
+    }),
     appendFile: jest.fn(
       async (path: string, contents: string, encoding?: string) => {
         const normalized = normalize(path);
         reportedFileSizes.delete(normalized);
+        const logicalLength = logicalFileSizes.get(normalized);
+        if (logicalLength !== undefined) {
+          volume.truncateSync(normalized, logicalLength);
+          logicalFileSizes.delete(normalized);
+        }
         volume.mkdirSync(parent(normalized), { recursive: true });
         volume.appendFileSync(
           normalized,
@@ -221,6 +258,22 @@ export function createNativeFileSystemBoundary(
           reportedFileSizes.delete(storedPath);
         }
       }
+      for (const storedPath of logicalFileSizes.keys()) {
+        if (
+          storedPath === normalized ||
+          storedPath.startsWith(`${normalized}/`)
+        ) {
+          logicalFileSizes.delete(storedPath);
+        }
+      }
+      for (const storedKey of reportedHashes.keys()) {
+        if (
+          storedKey.startsWith(`${normalized}:`) ||
+          storedKey.startsWith(`${normalized}/`)
+        ) {
+          reportedHashes.delete(storedKey);
+        }
+      }
       volume.rmSync(normalized, { recursive: true, force: true });
     }),
     moveFile: jest.fn(async (from: string, to: string) => {
@@ -233,6 +286,20 @@ export function createNativeFileSystemBoundary(
         reportedFileSizes.delete(source);
         reportedFileSizes.set(target, reportedSize);
       }
+      const logicalSize = logicalFileSizes.get(source);
+      logicalFileSizes.delete(target);
+      if (logicalSize !== undefined) {
+        logicalFileSizes.delete(source);
+        logicalFileSizes.set(target, logicalSize);
+      }
+      for (const [storedKey, digest] of reportedHashes) {
+        if (!storedKey.startsWith(`${source}:`)) continue;
+        reportedHashes.delete(storedKey);
+        reportedHashes.set(
+          `${target}${storedKey.slice(source.length)}`,
+          digest,
+        );
+      }
     }),
     copyFile: jest.fn(async (from: string, to: string) => {
       const source = normalize(from);
@@ -242,6 +309,16 @@ export function createNativeFileSystemBoundary(
       const reportedSize = reportedFileSizes.get(source);
       if (reportedSize !== undefined)
         reportedFileSizes.set(target, reportedSize);
+      const logicalSize = logicalFileSizes.get(source);
+      logicalFileSizes.delete(target);
+      if (logicalSize !== undefined) logicalFileSizes.set(target, logicalSize);
+      for (const [storedKey, digest] of reportedHashes) {
+        if (!storedKey.startsWith(`${source}:`)) continue;
+        reportedHashes.set(
+          `${target}${storedKey.slice(source.length)}`,
+          digest,
+        );
+      }
     }),
     copyFileAssets: jest.fn(async (from: string, to: string) => {
       const source = normalize(from);
@@ -251,11 +328,25 @@ export function createNativeFileSystemBoundary(
       const reportedSize = reportedFileSizes.get(source);
       if (reportedSize !== undefined)
         reportedFileSizes.set(target, reportedSize);
+      const logicalSize = logicalFileSizes.get(source);
+      logicalFileSizes.delete(target);
+      if (logicalSize !== undefined) logicalFileSizes.set(target, logicalSize);
     }),
-    hash: jest.fn(async (path: string, algorithm: string) =>
-      createHash(algorithm)
-        .update(volume.readFileSync(normalize(path)))
-        .digest('hex'),
+    hash: jest.fn(
+      async (path: string, algorithm: string) =>
+        reportedHashes.get(`${normalize(path)}:${algorithm}`) ??
+        createHash(algorithm)
+          .update(
+            (() => {
+              const normalized = normalize(path);
+              const contents = volume.readFileSync(normalized) as Buffer;
+              return contents.subarray(
+                0,
+                logicalFileSizes.get(normalized) ?? contents.length,
+              );
+            })(),
+          )
+          .digest('hex'),
     ),
     getFSInfo: jest.fn(async () => ({
       freeSpace: 100 * 1024 * 1024 * 1024,
@@ -297,6 +388,7 @@ export function createNativeFileSystemBoundary(
 
   const seedFile = (path: string, sizeBytes: number): void => {
     const normalized = normalize(path);
+    logicalFileSizes.delete(normalized);
     volume.mkdirSync(parent(normalized), { recursive: true });
     // Store only the bytes a reader can need for format sniffing. Metadata reports the device-size
     // value separately, so a 5 GB model test does not allocate 5 GB of process memory.
@@ -313,6 +405,7 @@ export function createNativeFileSystemBoundary(
     reportedSize?: number | string,
   ): void => {
     const normalized = normalize(path);
+    logicalFileSizes.delete(normalized);
     volume.mkdirSync(parent(normalized), { recursive: true });
     volume.writeFileSync(normalized, Buffer.from(contents, 'utf8'));
     if (reportedSize !== undefined) {
@@ -335,6 +428,9 @@ export function createNativeFileSystemBoundary(
     seedDir,
     setReportedFileSize: (path: string, size: number | string) => {
       reportedFileSizes.set(normalize(path), size);
+    },
+    setReportedHash: (path: string, algorithm: string, digest: string) => {
+      reportedHashes.set(`${normalize(path)}:${algorithm}`, digest);
     },
     readAscii: (path: string, length: number, position = 0) =>
       module.read(path, length, position, 'ascii'),

@@ -13,7 +13,7 @@
  *       even at the same quant) must be REFUSED → the E2B never gets mispaired to the wrong architecture.
  *
  * Real repo shapes: unsloth/gemma-4-E2B-it-GGUF and unsloth/gemma-4-E4B-it-GGUF (src/constants/models.ts);
- * ggml-org/gemma-3-*-GGUF ships a bare `mmproj-F16.gguf` (src/services/modelManager/download.ts comments).
+ * ggml-org/gemma-3-*-GGUF ships a bare `mmproj-F16.gguf` (src/services/adapters/models/library/downloadArtifactAdapter.ts comments).
  */
 import { huggingFaceService } from '../../../src/services/huggingface';
 

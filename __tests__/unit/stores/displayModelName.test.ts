@@ -3,7 +3,7 @@
  * the model id as a full file path; the picker must show a clean basename without
  * the extension, while the raw id is still used for loading.
  */
-import { displayModelName } from '../../../src/stores/remoteServerHelpers';
+import { displayModelName } from '../../../src/services/adapters/remote/serverDiscovery';
 
 describe('displayModelName', () => {
   it('strips a full file path down to the basename without extension', () => {

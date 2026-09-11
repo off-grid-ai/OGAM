@@ -36,11 +36,15 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   section: {
     marginBottom: SPACING.sm,
   },
+  activeCardContainer: {
+    marginHorizontal: SPACING.md,
+  },
   sectionHeader: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.md,
-    marginBottom: SPACING.xs,
+    paddingVertical: SPACING.xs,
+    marginBottom: SPACING.sm,
     gap: SPACING.sm,
   },
   sectionTitle: {
@@ -96,10 +100,14 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.meta,
     color: colors.textSecondary,
   },
-  cancelButton: {
-    padding: SPACING.sm,
+  downloadActionsRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
     marginRight: -SPACING.sm,
     marginTop: -SPACING.xs,
+  },
+  downloadActionButton: {
+    padding: SPACING.sm,
   },
   repairButton: {
     padding: SPACING.sm,
@@ -195,7 +203,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
+    paddingVertical: SPACING.sm,
     gap: SPACING.xs,
   },
   filterChip: {

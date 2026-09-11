@@ -1,11 +1,12 @@
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 
-const createImageModelsStylesPart1 = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+const createImageModelsStylesPart1 = (colors: ThemeColors, shadows: ThemeShadows) => ({
   recToggle: {
     padding: 12,
     borderRadius: 12,
     backgroundColor: colors.surface,
+    ...shadows.small,
   },
   recToggleActive: {
     backgroundColor: `${colors.primary}15`,

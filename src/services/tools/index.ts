@@ -1,3 +1,3 @@
 ;
-export { AVAILABLE_TOOLS, getToolsAsOpenAISchema, buildToolSystemPromptHint } from './registry';
+export { AVAILABLE_TOOLS, getToolsAsOpenAISchema } from './registry';
 export { executeToolCall } from './handlers';

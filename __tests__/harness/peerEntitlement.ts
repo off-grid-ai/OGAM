@@ -3,6 +3,7 @@ import type {
   PairingEntitlementHostAdapter,
   PersonalMeshRegistrationInput,
 } from '@offgrid/sync';
+import {admitPairingEntitlementCredential} from '@offgrid/sync';
 
 /**
  * The OTHER device's entitlement, for tests that need two paired devices.
@@ -32,6 +33,8 @@ export function createPeerEntitlement(
     licensed?: boolean;
     entitlementId?: string;
     secret?: string;
+    /** Provider-issued installation allowance carried by the peer credential. */
+    maxDevices?: number;
   } = {},
 ): PeerEntitlement {
   const entitlementId = options.entitlementId ?? 'peer-entitlement';
@@ -41,7 +44,14 @@ export function createPeerEntitlement(
   const preparedExports = new Map<string, PersonalMeshRegistrationInput>();
   const preparedImports = new Map<string, PairingEntitlementCredential>();
   let held: PairingEntitlementCredential | undefined = options.licensed
-    ? { version: 1, entitlementId, secret, expiresAt: null, verifiedAt: 0 }
+    ? admitPairingEntitlementCredential({
+        version: 1,
+        entitlementId,
+        secret,
+        expiresAt: null,
+        maxDevices: options.maxDevices ?? 3,
+        verifiedAt: 0,
+      })
     : undefined;
   let sequence = 0;
 

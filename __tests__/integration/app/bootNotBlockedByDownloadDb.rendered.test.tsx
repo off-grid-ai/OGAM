@@ -25,23 +25,18 @@ jest.mock(
 
 describe('app boot is not blocked by the download DB (rendered)', () => {
   it('clears the boot loader while getActiveDownloads remains wedged', async () => {
-    installNativeBoundary();
+    const boundary = installNativeBoundary({ download: true });
 
     const React = require('react');
     const rtl = requireRTL();
-    const { NativeModules } = require('react-native');
     const AsyncStorage = require('@react-native-async-storage/async-storage');
     await AsyncStorage.clear();
-    // WEDGE the download DB through first paint. The boundary is released only after the visible
-    // boot outcome is proved, so the test remains faithful without leaking an immortal Promise.
-    let releaseDownloadDb!: (rows: unknown[]) => void;
-    const pendingDownloadDb = new Promise<unknown[]>(resolve => {
-      releaseDownloadDb = resolve;
-    });
-    NativeModules.DownloadManagerModule = {
-      ...NativeModules.DownloadManagerModule,
-      getActiveDownloads: jest.fn(() => pendingDownloadDb),
-    };
+    // WEDGE the native DB. First paint must not call it: durable Shared recovery is independent of
+    // this platform projection, which is refreshed reactively after the app is usable.
+    const pendingDownloadDb = new Promise<unknown[]>(() => {});
+    boundary.download!.module.getActiveDownloads.mockImplementation(
+      () => pendingDownloadDb,
+    );
     const App = require('../../../App').default;
 
     const view = rtl.render(React.createElement(App));
@@ -60,15 +55,7 @@ describe('app boot is not blocked by the download DB (rendered)', () => {
       { timeout: process.env.CI === 'true' ? 45_000 : 8_000 },
     );
 
-    await rtl.act(async () => {
-      releaseDownloadDb([]);
-      await pendingDownloadDb;
-    });
-    await rtl.waitFor(() => {
-      expect(
-        NativeModules.DownloadManagerModule.getActiveDownloads,
-      ).toHaveBeenCalledTimes(2);
-    });
+    expect(boundary.download!.module.getActiveDownloads).not.toHaveBeenCalled();
 
     view.unmount();
   });

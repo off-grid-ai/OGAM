@@ -1,0 +1,11 @@
+# Lockfiles - generated, no semantic value
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+*.lock
+
+# Device e2e run artifacts (UI XML dumps + screenshots)
+.artifacts/**
+
+# Indexed separately as its own codebase
+pro/**

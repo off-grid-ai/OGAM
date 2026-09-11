@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import {
   NavigationProp,
   useNavigation,
@@ -6,46 +6,43 @@ import {
   RouteProp,
 } from '@react-navigation/native';
 import { AlertState, initialAlertState } from '../../components';
-import {
-  useAppStore,
-  useChatStore,
-  useProjectStore,
-  useRemoteServerStore,
-} from '../../stores';
+import { useAppStore, useChatStore } from '../../stores';
+import { useActiveTextCapabilities } from '../../hooks/useActiveTextCapabilities';
 import { useSyncIdentityStore } from '../../stores/syncIdentityStore';
 import { useRemoteChatStreamPreviews } from './useRemoteChatStreamPreviews';
 import { useActiveTextModel } from '../../hooks/useActiveTextModel';
+import { useActiveImageModel } from '../../hooks/useActiveImageModel';
+import {
+  useChatModelAccess,
+  useModelsProjection,
+  useWorkspaceContentProjection,
+} from '../../hooks/useApplicationProjection';
 import { hardwareService } from '../../services';
-import { useGeneratingConversationId } from '../../hooks/useGenerationSession';
 import {
   MediaAttachment,
   DownloadedModel,
   DebugInfo,
   RemoteModel,
+  Conversation,
 } from '../../types';
 import { RootStackParamList } from '../../navigation/types';
 import {
   ensureModelLoadedFn,
+  forceLoadModelFn,
   ensureTextModelForChatFn,
   useChatImageModelEffects,
-  useChatModelStateSync,
 } from './useChatModelActions';
 import type { GenerationDeps } from './useChatGenerationActions';
-import { getDisplayMessages } from './types';
+import { getDisplayMessages, toWorkspaceMessage } from './types';
 import { needsVisionRepair } from '../../utils/visionRepair';
 import {
-  isSuspiciousRecoveredImageModel,
-  isSuspiciousRecoveredTextModel,
-  isUnsupportedJetsamImageModel,
-} from '../../utils/modelSelectorFilters';
-import {
-  isStreamingActiveConversation,
   useChatAudioLifecycle,
   useChatConversationLifecycle,
   useChatPresentationLifecycle,
   useChatRuntimeSubscriptions,
 } from './useChatScreenLifecycle';
 import { useChatScreenActions } from './useChatScreenActions';
+import { useGeneratedImageGalleryProjection } from '../../services/adapters/generated-image-gallery/useGeneratedImageGalleryProjection';
 
 export type { AlertState };
 export type { ChatMessageItem } from './types';
@@ -54,25 +51,47 @@ export { computePendingSettings } from './pendingSettings';
 
 type ChatScreenRouteProp = RouteProp<RootStackParamList, 'Chat'>;
 
+/**
+ * The active conversation's durable facts and transcript, read only from the reactive Workspace
+ * Content projection - never from a legacy Zustand mirror.
+ *
+ * A conversation Workspace Content created (Sync, or another Shared-owned surface) has no Zustand
+ * mirror, so a legacy lookup would stay undefined for it - silently dropping its project/model
+ * facts and its transcript. Reading through the canonical projection is the only path that renders
+ * such a conversation correctly.
+ */
+function projectActiveConversation(
+  workspaceContent: ReturnType<typeof useWorkspaceContentProjection>,
+  activeConversationId: string | null,
+): Conversation | undefined {
+  if (!activeConversationId || workspaceContent.status !== 'ready')
+    return undefined;
+  const record = workspaceContent.conversations.find(
+    c => c.id === activeConversationId,
+  );
+  if (!record) return undefined;
+  return {
+    id: record.id,
+    title: record.title,
+    modelId: record.modelId ?? '',
+    messages: workspaceContent.messages
+      .filter(message => message.conversationId === activeConversationId)
+      .map(toWorkspaceMessage),
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    ...(record.projectId === null ? {} : { projectId: record.projectId }),
+    ...(record.compactionSummary === undefined
+      ? {}
+      : { compactionSummary: record.compactionSummary }),
+    ...(record.compactionCutoffMessageId === undefined
+      ? {}
+      : { compactionCutoffMessageId: record.compactionCutoffMessageId }),
+  };
+}
+
 export const useChatScreen = () => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const route = useRoute<ChatScreenRouteProp>();
-  // The store owns "the text model is loading", not this component. The live-stream service
-  // subscribes to that store, so a paired device learns about the wait by construction instead of
-  // sitting on "Preparing reply..." while this phone says "Loading Qwen3.5 2B".
-  const isModelLoading = useChatStore(state => state.isModelLoading);
-  const setIsModelLoading = useChatStore(state => state.setIsModelLoading);
-  const setLoadingModelName = useChatStore(state => state.setLoadingModelName);
-  const [loadingModel, setLoadingModelState] =
-    useState<DownloadedModel | null>(null);
-  const setLoadingModel = useCallback(
-    (model: DownloadedModel | null) => {
-      setLoadingModelState(model);
-      setLoadingModelName(model?.name ?? null);
-    },
-    [setLoadingModelName],
-  );
-  const [supportsVision, setSupportsVision] = useState(false);
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
@@ -82,77 +101,73 @@ export const useChatScreen = () => {
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [isClassifying, setIsClassifying] = useState(false);
   const [viewerImageUri, setViewerImageUri] = useState<string | null>(null);
-  const [supportsToolCalling, setSupportsToolCalling] = useState(false);
-  const [supportsThinking, setSupportsThinking] = useState(false);
+  // Capabilities are read from the shared route projection, never copied into state.
+  const {
+    vision: supportsVision,
+    tools: supportsToolCalling,
+    thinking: supportsThinking,
+  } = useActiveTextCapabilities();
   const [pendingProjectId, setPendingProjectId] = useState<string | undefined>(
     route.params?.projectId,
   );
-  // Owned by the generationSession service (single owner); observed reactively here.
-  const generatingConversationId = useGeneratingConversationId();
   // Stashed when the model selector opens with no text model; replayed on pick.
   const pendingMessageRef = useRef<{
     text: string;
     attachments?: MediaAttachment[];
   } | null>(null);
   const modelLoadStartTimeRef = useRef<number | null>(null);
-  const startGenerationRef = useRef<
-    (id: string, text: string) => Promise<void>
-  >(null);
   const genDepsRef = useRef<GenerationDeps | null>(null);
   useChatAudioLifecycle(navigation);
-  const { imageGenState, isCompacting, queueCount, queuedTexts } =
-    useChatRuntimeSubscriptions(genDepsRef, startGenerationRef);
-
   const {
-    activeModelId,
-    downloadedModels,
-    settings,
-    activeImageModelId,
-    downloadedImageModels,
-    setDownloadedImageModels,
-    setIsGeneratingImage: setAppIsGeneratingImage,
-    setImageGenerationStatus: setAppImageGenerationStatus,
-    removeImagesByConversationId,
-    loadedSettings,
-    textModelEvicted,
-  } = useAppStore();
+    imageGenState,
+    isCompacting,
+    queueCount,
+    queuedTexts,
+    generatingConversationIds,
+  } = useChatRuntimeSubscriptions();
 
-  // Remote model state - use proper selectors for reactivity
-  const activeServerId = useRemoteServerStore(s => s.activeServerId);
-  const activeRemoteTextModelId = useRemoteServerStore(
-    s => s.activeRemoteTextModelId,
+  // One selector per fact. Subscribing to the WHOLE app store re-ran this hook (and rebuilt the
+  // screen model) on every unrelated app-store write - a download progress tick, an image model
+  // list refresh, or another UI/device-state update.
+  const downloadedModels = useAppStore(s => s.downloadedModels);
+  const loadedSettings = useAppStore(s => s.loadedSettings);
+  // Actions are created once with the store, so each of these is a stable reference and never
+  // causes a render on its own. They are kept as separate selectors rather than bundled with the
+  // data above so nothing has to shallow-compare a mixed object of functions and live values.
+  const setDownloadedImageModels = useAppStore(s => s.setDownloadedImageModels);
+  // Model policy is committed and published by Shared Models. Keep the exact reactive record so
+  // reload comparison, generation details, and debug prompt cannot drift from another store copy.
+  const settings = useModelsProjection().settings;
+  const generatedImages = useGeneratedImageGalleryProjection();
+
+  // Selection only (which conversation is open) - ephemeral UI/navigation state, not durable
+  // content. The conversation's durable facts and transcript come only from Workspace Content below.
+  const activeConversationId = useChatStore(s => s.activeConversationId);
+  const streamingForConversationId = useChatStore(
+    s => s.streamingForConversationId,
   );
-  const discoveredModels = useRemoteServerStore(s => s.discoveredModels);
+  const streamingMessage = useChatStore(s => s.streamingMessage);
+  const streamingReasoningContent = useChatStore(
+    s => s.streamingReasoningContent,
+  );
+  const streamingMessageUuid = useChatStore(s => s.streamingMessageUuid);
+  const clearStreamingMessage = useChatStore(s => s.clearStreamingMessage);
+  const setActiveConversation = useChatStore(s => s.setActiveConversation);
 
-  const {
-    activeConversationId,
-    conversations,
-    createConversation,
-    addMessage,
-    updateMessageContent,
-    updateMessageTurnKind,
-    deleteMessagesAfter,
-    streamingMessage,
-    streamingReasoningContent,
-    streamingForConversationId,
-    isStreaming,
-    isThinking,
-    clearStreamingMessage,
-    deleteConversation,
-    setActiveConversation,
-    setConversationProject,
-  } = useChatStore();
-
-  const { projects, getProject } = useProjectStore();
-
-  const activeConversation = conversations.find(
-    c => c.id === activeConversationId,
+  const workspaceContent = useWorkspaceContentProjection();
+  const projects =
+    workspaceContent.status === 'ready' ? workspaceContent.projects : [];
+  const activeConversation = useMemo(
+    () => projectActiveConversation(workspaceContent, activeConversationId),
+    [workspaceContent, activeConversationId],
   );
 
   // Which text model is active, from the ONE hook that answers it (remote preferred over local, local
-  // resolved by activeModelService). This screen used to re-derive it with its own copy of the rule,
+  // resolved by the shared model state). This screen used to re-derive it with its own copy of the rule,
   // which is how it ended up refusing to send to a model the engine had loaded.
   const activeModelInfo = useActiveTextModel();
+  const activeImageModelInfo = useActiveImageModel();
+  const chatModelAccess = useChatModelAccess();
 
   // activeModel is for LOCAL models only (for file path, memory checks, etc.)
   const activeModel = activeModelInfo.isRemote
@@ -161,86 +176,76 @@ export const useChatScreen = () => {
   const activeRemoteModel = activeModelInfo.isRemote
     ? (activeModelInfo.model as RemoteModel | null)
     : null;
-  const hasTextModel = activeModelInfo.modelId !== null;
-  const hasActiveModel = hasTextModel || !!activeImageModelId;
+  const hasTextModel = chatModelAccess.hasText;
+  const hasImageModel = chatModelAccess.hasImage;
+  const hasActiveModel = chatModelAccess.hasSelected;
   const activeModelName = activeModelInfo.modelName;
-  const availableDownloadedTextModels = useMemo(
-    () =>
-      downloadedModels.filter(model => !isSuspiciousRecoveredTextModel(model)),
-    [downloadedModels],
-  );
-  const availableDownloadedImageModels = useMemo(
-    () =>
-      downloadedImageModels.filter(
-        model =>
-          !isSuspiciousRecoveredImageModel(model) &&
-          !isUnsupportedJetsamImageModel(model),
-      ),
-    [downloadedImageModels],
-  );
-  const hasAvailableModels =
-    availableDownloadedTextModels.length > 0 ||
-    availableDownloadedImageModels.length > 0 ||
-    discoveredModels[activeServerId || '']?.length > 0 ||
-    Object.values(discoveredModels).some(models => models.length > 0);
+  const hasAvailableModels = chatModelAccess.hasAvailable;
+  const isModelLoading =
+    activeModelInfo.loading || activeImageModelInfo.loading;
+  const loadingModelName = activeModelInfo.loading
+    ? activeModelInfo.modelName
+    : activeImageModelInfo.loading
+    ? activeImageModelInfo.modelName
+    : undefined;
+  const textModelEvicted =
+    activeModelInfo.selected &&
+    !activeModelInfo.isRemote &&
+    !activeModelInfo.ready &&
+    !activeModelInfo.loading;
 
   const effectiveProjectId = activeConversation
     ? activeConversation.projectId
     : pendingProjectId;
   const activeProject = effectiveProjectId
-    ? getProject(effectiveProjectId)
+    ? projects.find(project => project.id === effectiveProjectId) ?? null
     : null;
-  const activeImageModel = downloadedImageModels.find(
-    m => m.id === activeImageModelId,
-  );
-  const imageModelLoaded = !!activeImageModel;
+  const activeImageModel = activeImageModelInfo.model ?? undefined;
   const isGeneratingImage = imageGenState.isGenerating;
-  const isStreamingForThisConversation = isStreamingActiveConversation(
-    streamingForConversationId,
-    activeConversationId,
-  );
+  // Shared ChatSessionQueue is the only lifecycle owner. The mobile store below is only the
+  // throttled presentation buffer for partial text and reasoning events.
+  const isStreaming = generatingConversationIds.length > 0;
+  const isGeneratingForThisConversation =
+    activeConversationId != null &&
+    generatingConversationIds.includes(activeConversationId);
+  const isStreamingForThisConversation =
+    isGeneratingForThisConversation &&
+    streamingForConversationId === activeConversationId;
 
   const genDeps = {
     activeModelId: activeModelInfo.modelId,
     activeModel,
     activeModelInfo,
-    hasActiveModel,
+    conversationModelId: chatModelAccess.conversationModelId,
     hasTextModel,
     supportsToolCalling,
     activeConversationId,
     activeConversation,
     activeProject,
     activeImageModel,
-    imageModelLoaded,
+    imageModelLoaded: hasImageModel,
     isStreaming,
     isGeneratingImage,
     imageGenState,
-    settings,
     downloadedModels,
     setAlertState,
     setIsClassifying,
-    setAppImageGenerationStatus,
-    setAppIsGeneratingImage,
-    addMessage,
     clearStreamingMessage,
-    deleteConversation,
     setActiveConversation,
-    removeImagesByConversationId,
+    generatedImageIds: generatedImages
+      .filter(image => image.conversationId === activeConversationId)
+      .map(image => image.id),
     navigation,
     setShowSettingsPanel,
-    ensureModelLoaded: async (onLoadedResume?: () => void) =>
-      ensureModelLoadedFn(modelDeps, onLoadedResume),
+    ensureModelLoaded: () => ensureModelLoadedFn(modelDeps),
+    forceLoadModel: () => forceLoadModelFn(modelDeps),
     ensureTextModelForChat: () =>
       ensureTextModelForChatFn({
         setShowModelSelector,
-        setLoadingModel,
-        setIsModelLoading,
       }),
     setPendingMessage: (text: string, attachments?: MediaAttachment[]) => {
       pendingMessageRef.current = { text, attachments };
     },
-    updateMessageTurnKind,
-    createConversation,
     pendingProjectId,
   };
   genDepsRef.current = genDeps;
@@ -251,14 +256,10 @@ export const useChatScreen = () => {
     activeModelInfo,
     hasActiveModel,
     activeConversationId,
+    activeConversation,
     isStreaming,
     settings,
     clearStreamingMessage,
-    createConversation,
-    addMessage,
-    setIsModelLoading,
-    setLoadingModel,
-    setSupportsVision,
     setShowModelSelector,
     setAlertState,
     modelLoadStartTimeRef,
@@ -267,50 +268,44 @@ export const useChatScreen = () => {
   useChatConversationLifecycle({
     routeConversationId: route.params?.conversationId,
     routeProjectId: route.params?.projectId,
-    activeConversationId,
     setActiveConversation,
     setPendingProjectId,
   });
 
   useChatImageModelEffects({
     setDownloadedImageModels,
-    settings,
-    activeImageModelId,
-    downloadedModels,
-  });
-  useChatModelStateSync({
-    activeModelInfo,
-    activeModelId,
-    activeModel,
-    modelDeps,
-    activeRemoteModel,
-    activeRemoteTextModelId,
-    isModelLoading,
-    setSupportsVision,
-    setSupportsToolCalling,
-    setSupportsThinking,
-    prepareSelectedModel: route.params?.conversationId == null,
   });
 
-  const isGeneratingForThisConversation =
-    generatingConversationId != null &&
-    generatingConversationId === activeConversationId;
   // Replies generating on paired devices. Empty unless Pro's chat-stream service is running.
   const remotePreviews = useRemoteChatStreamPreviews(activeConversationId);
   const localDeviceId = useSyncIdentityStore(s => s.localDeviceId);
-  const displayMessages = getDisplayMessages(
-    activeConversation?.messages || [],
-    {
-      isThinking,
+  // The domain projection: WHICH rows exist. Memoized on its real inputs so a render caused by
+  // something else (a modal opening, the keyboard) hands FlatList the same array back.
+  const displayMessages = useMemo(
+    () =>
+      getDisplayMessages(activeConversation?.messages || [], {
+        streamingMessage,
+        streamingReasoningContent,
+        streamingMessageUuid,
+        isStreamingForThisConversation,
+        isModelLoading,
+        loadingModelName,
+        isGeneratingForThisConversation,
+        remotePreviews,
+        localDeviceId,
+      }),
+    [
+      activeConversation?.messages,
       streamingMessage,
       streamingReasoningContent,
+      streamingMessageUuid,
       isStreamingForThisConversation,
       isModelLoading,
-      loadingModelName: loadingModel?.name,
+      loadingModelName,
       isGeneratingForThisConversation,
       remotePreviews,
       localDeviceId,
-    },
+    ],
   );
 
   const animateLastN = useChatPresentationLifecycle(
@@ -323,20 +318,14 @@ export const useChatScreen = () => {
     generationDeps: genDeps,
     modelDeps,
     activeModelInfo,
-    supportsToolCalling,
     activeModel,
     settings,
     loadedSettings,
     pendingMessageRef,
-    startGenerationRef,
     setDebugInfo,
     setAlertState,
     activeConversationId,
     activeConversation,
-    hasActiveModel,
-    deleteMessagesAfter,
-    updateMessageContent,
-    setConversationProject,
     setPendingProjectId,
     setShowProjectSelector,
     activeImageModel,
@@ -346,7 +335,7 @@ export const useChatScreen = () => {
 
   return {
     isModelLoading,
-    loadingModel,
+    loadingModelName,
     supportsVision,
     showProjectSelector,
     setShowProjectSelector,
@@ -382,13 +371,14 @@ export const useChatScreen = () => {
     activeModelName,
     activeProject,
     activeImageModel,
-    imageModelLoaded,
+    imageModelLoaded: hasImageModel,
+    imageModelReady: activeImageModelInfo.ready,
+    modelError: activeModelInfo.error ?? activeImageModelInfo.error,
     isGeneratingImage,
     imageGenerationProgress: imageGenState.progress,
     imageGenerationStatus: imageGenState.status,
     imagePreviewPath: imageGenState.previewPath,
     isStreaming,
-    isThinking,
     isCompacting,
     isGeneratingForThisConversation,
     textModelEvicted,

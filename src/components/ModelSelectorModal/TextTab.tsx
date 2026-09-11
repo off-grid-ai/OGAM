@@ -2,13 +2,20 @@ import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
-import { DownloadedModel, RemoteModel } from '../../types';
+import { LoadingDots } from '../LoadingDots';
+import {
+  DownloadedModel,
+  RemoteModel,
+  INFERENCE_BACKENDS,
+} from '../../types';
 import { hardwareService } from '../../services';
-import { textOverheadMultiplier } from '../../services/activeModelService/types';
-import { useAppStore } from '../../stores';
+import { textOverheadMultiplier } from '../../services/modelServices/modelStateTypes';
 import { ModelRow } from '../ModelRow';
 import { createAllStyles } from './styles';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
+import { fileExceedsBudget } from '../../services/memoryBudget';
+import { useResidentRows } from '../models/useResidentRows';
+import { useModelsProjection } from '../../hooks/useApplicationProjection';
 
 export interface TextTabProps {
   downloadedModels: DownloadedModel[];
@@ -24,6 +31,8 @@ export interface TextTabProps {
   isAnyLoading: boolean;
   /** Id of the model being loaded right now (the row just tapped) — drives the per-row spinner. */
   loadingModelId?: string | null;
+  /** The remote model the owner is switching to right now. */
+  loadingRemoteModelId?: string | null;
   onSelectModel: (model: DownloadedModel) => void;
   onSelectRemoteModel: (model: RemoteModel, serverId: string) => void;
   onUnloadModel: () => void;
@@ -39,6 +48,7 @@ export const TextTab: React.FC<TextTabProps> = ({
   currentRemoteModelId,
   isAnyLoading,
   loadingModelId = null,
+  loadingRemoteModelId = null,
   onSelectModel,
   onUnloadModel,
   onSelectRemoteModel,
@@ -48,12 +58,16 @@ export const TextTab: React.FC<TextTabProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createAllStyles);
   // RAM label uses the SAME backend-aware overhead owner (textOverheadMultiplier) that
-  // activeModelService uses to register the resident's sizeMB, so this label and the residency
+  // shared residency uses to register the resident's sizeMB, so this label and the residency
   // chip on the manager sheet agree for the identical loaded model (they diverged: fixed 1.5×
   // here vs 2.2× on a GPU/NPU backend there — device 2026-07-14).
-  const ramMultiplier = textOverheadMultiplier(
-    useAppStore(s => s.settings?.inferenceBackend),
+  const projectedInferenceBackend =
+    useModelsProjection().settings.inferenceBackend;
+  const inferenceBackend = Object.values(INFERENCE_BACKENDS).find(
+    backend => backend === projectedInferenceBackend,
   );
+  const ramMultiplier = textOverheadMultiplier(inferenceBackend);
+  const textResident = useResidentRows(true).text;
   // "Loaded" drives the Currently-Loaded + Unload section (only meaningful once a model
   // is actually in memory). "Active" also counts the selected-but-not-yet-loaded model
   // so the switcher reads "Switch Model" and highlights the active choice under deferred
@@ -103,10 +117,12 @@ export const TextTab: React.FC<TextTabProps> = ({
                       activeLocalModel.quantization
                     } • ${hardwareService.formatModelSize(
                       activeLocalModel,
-                    )} • ${hardwareService.formatModelRam(
-                      activeLocalModel,
-                      ramMultiplier,
-                    )} RAM`
+                    )} • ${textResident
+                      ? `${(textResident.sizeMB / 1024).toFixed(1)} GB`
+                      : hardwareService.formatModelRam(
+                          activeLocalModel,
+                          ramMultiplier,
+                        )} RAM`
                   : `Remote • ${activeRemoteModelInfo?.serverName ?? 'Model'}`}
               </Text>
             </View>
@@ -181,6 +197,13 @@ export const TextTab: React.FC<TextTabProps> = ({
             <Text style={styles.sectionSubTitle}>Local Models</Text>
           </View>
           {downloadedModels.map(model => {
+            const totalSize = hardwareService.getModelTotalSize(model);
+            const estimatedMemoryGB =
+              (totalSize * ramMultiplier) / (1024 * 1024 * 1024);
+            const memoryFits = !fileExceedsBudget(
+              totalSize,
+              hardwareService.getTotalMemoryGB(),
+            );
             const isLoaded = currentModelPath === model.filePath;
             // The selected-but-not-loaded model is highlighted as active, but stays
             // tappable so tapping it actually loads it (load-on-tap).
@@ -205,6 +228,9 @@ export const TextTab: React.FC<TextTabProps> = ({
                 name={model.name}
                 size={hardwareService.formatModelSize(model)}
                 quant={model.quantization}
+                ramHint={`~${estimatedMemoryGB.toFixed(1)} GB RAM${
+                  memoryFits ? '' : ' (may not fit)'
+                }`}
                 isVision={
                   model.engine === 'llama' &&
                   predictGgufCapabilities(model).vision
@@ -232,6 +258,7 @@ export const TextTab: React.FC<TextTabProps> = ({
             return (
               <TouchableOpacity
                 key={model.id}
+                testID="remote-model-item"
                 style={[
                   styles.modelItem,
                   isCurrent && styles.modelItemSelectedRemote,
@@ -279,6 +306,9 @@ export const TextTab: React.FC<TextTabProps> = ({
                     )}
                   </View>
                 </View>
+                {loadingRemoteModelId === model.id ? (
+                  <LoadingDots color={colors.primary} testID="model-row-loading" />
+                ) : null}
                 {isCurrent && (
                   <View style={styles.checkmarkRemote}>
                     <Icon name="check" size={16} color={colors.background} />

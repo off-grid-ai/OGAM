@@ -8,6 +8,7 @@ interface ShadowStyle {
 
 export type ThemeShadows = {
   small: ShadowStyle;
+  bottom: ShadowStyle;
   medium: ShadowStyle;
   large: ShadowStyle;
   glow: ShadowStyle;
@@ -94,6 +95,9 @@ export const SHADOWS_LIGHT: ThemeShadows = {
   small: {
     boxShadow: '0px 1px 8px 0px rgba(0,0,0,0.18)',
   },
+  bottom: {
+    boxShadow: '0px 8px 8px -8px rgba(0,0,0,0.24)',
+  },
   medium: {
     boxShadow: '0px 2px 10px 0px rgba(0,0,0,0.22)',
   },
@@ -109,6 +113,9 @@ export const SHADOWS_LIGHT: ThemeShadows = {
 export const SHADOWS_DARK: ThemeShadows = {
   small: {
     boxShadow: '0px 0px 6px 0px rgba(255,255,255,0.18)',
+  },
+  bottom: {
+    boxShadow: '0px 8px 8px -8px rgba(255,255,255,0.18)',
   },
   medium: {
     boxShadow: '0px 0px 6px 0px rgba(255,255,255,0.20)',
