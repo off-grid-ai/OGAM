@@ -164,6 +164,7 @@ describe('Pro mobile model transfer journey', () => {
       version: '1',
       host: '127.0.0.1',
       port: 0,
+      capabilities: { modelTransfer: true },
     };
     // A licensed Mac holds an installation on the licence. The phone's saved-device list is built from
     // the licence roster, so without it the peer pairs successfully and then shows up nowhere.
@@ -239,6 +240,7 @@ describe('Pro mobile model transfer journey', () => {
     if (!mobile || !discovery?.publishedPort) {
       throw new Error('Sync did not publish the mobile device');
     }
+    expect(mobile.capabilities).toEqual({ modelTransfer: true });
     const pairing = remote.engine.pair(
       {
         ...mobile,
@@ -261,6 +263,12 @@ describe('Pro mobile model transfer journey', () => {
     await waitFor(() =>
       expect(ui!.getByTestId(`sync-paired-${remoteDevice.id}`)).toBeTruthy(),
     );
+    expect(
+      useSyncStore
+        .getState()
+        .knownDevices.find(device => device.id === remoteDevice.id)
+        ?.capabilities,
+    ).toEqual({ modelTransfer: true });
 
     const payload = Buffer.alloc(96 * 1024 + 4, 0x5a);
     payload.write('GGUF', 0, 'ascii');
@@ -579,5 +587,38 @@ describe('Pro mobile model transfer journey', () => {
     } finally {
       if (active) modelTransferJobs.dismiss(active.id);
     }
+  });
+
+  it('keeps the loaded model list when the same target is reprojected', async () => {
+    const target: DeviceInfo = {
+      id: 'paired-mac',
+      name: 'Mac',
+      platform: 'macos',
+      version: '1.0.0',
+      host: '192.168.1.10',
+      port: 51000,
+      capabilities: { modelTransfer: true },
+    };
+    const reads = jest.spyOn(modelManager, 'getDownloadedModels');
+
+    ui = render(
+      <NavigationContainer>
+        <ModelTransferSheet target={target} onClose={() => {}} />
+      </NavigationContainer>,
+    );
+    await waitFor(() =>
+      expect(ui!.queryByTestId('model-transfer-loading')).toBeNull(),
+    );
+    const readsAfterLoad = reads.mock.calls.length;
+
+    ui.rerender(
+      <NavigationContainer>
+        <ModelTransferSheet target={{ ...target }} onClose={() => {}} />
+      </NavigationContainer>,
+    );
+
+    expect(ui.queryByTestId('model-transfer-loading')).toBeNull();
+    expect(reads).toHaveBeenCalledTimes(readsAfterLoad);
+    reads.mockRestore();
   });
 });
