@@ -22,7 +22,35 @@ export function formatDuration(ms: number): string {
   return `${minutes}m ${remainingSeconds}s`;
 }
 
-export function buildMessageData(message: Message): { displayContent: string; parsedContent: ParsedContent } {
+export type MessageData = { displayContent: string; parsedContent: ParsedContent };
+
+const parsedMessages = new WeakMap<
+  Message,
+  {
+    content: string;
+    reasoningContent?: string;
+    data: MessageData;
+  }
+>();
+
+export function buildMessageData(message: Message): MessageData {
+  const cached = parsedMessages.get(message);
+  if (
+    cached?.content === message.content &&
+    cached.reasoningContent === message.reasoningContent
+  ) {
+    return cached.data;
+  }
+  const data = parseMessageData(message);
+  parsedMessages.set(message, {
+    content: message.content,
+    reasoningContent: message.reasoningContent,
+    data,
+  });
+  return data;
+}
+
+function parseMessageData(message: Message): MessageData {
   // Non-assistant messages carry no model markup — pass content straight through.
   if (message.role !== 'assistant') {
     return { displayContent: message.content, parsedContent: { thinking: null, response: message.content, isThinkingComplete: true } };

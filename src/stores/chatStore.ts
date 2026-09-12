@@ -1,9 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Message, Conversation, GenerationMeta } from '../types';
-import {
-  stripStreamingControlTokens,
-} from '../utils/messageContent';
+import { stripStreamingControlTokens } from '../utils/messageContent';
 import { generateId } from '../utils/generateId';
 import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
 import {
@@ -164,7 +162,6 @@ const MODEL_NOT_LOADING = {
   loadingModelName: null,
 };
 const NO_REPLY_ENDED = { lastReplyEnd: null };
-
 const NO_REPLY_FORMING: StreamingFields = {
   streamingMessage: '',
   streamingReasoningContent: '',
@@ -173,9 +170,9 @@ const NO_REPLY_FORMING: StreamingFields = {
   isStreaming: false,
   isThinking: false,
 };
-
-const chatStorage = createHydrationGatedStorage<PersistedChatState>();
-
+const chatStorage = createHydrationGatedStorage<PersistedChatState>(undefined, (previous, next) =>
+  previous.conversations === next.conversations &&
+  previous.activeConversationId === next.activeConversationId);
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
@@ -398,7 +395,10 @@ export const useChatStore = create<ChatState>()(
         // End the ephemeral reply before the durable mutation leaves this device. Both use the same
         // peer link. This order guarantees a receiver sees the final stream frame first and then the
         // record that replaces it, never the reverse order that could recreate a retired preview.
-        set({ ...NO_REPLY_FORMING, lastReplyEnd: { conversationId, persisted } });
+        set({
+          ...NO_REPLY_FORMING,
+          lastReplyEnd: { conversationId, persisted },
+        });
         if (persisted) {
           addMessage(conversationId, {
             role: 'assistant',

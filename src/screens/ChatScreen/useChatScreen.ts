@@ -14,6 +14,7 @@ import {
 } from '../../stores';
 import { useSyncIdentityStore } from '../../stores/syncIdentityStore';
 import { useRemoteChatStreamPreviews } from './useRemoteChatStreamPreviews';
+import { useHasActiveStreamText } from './useActiveStreamText';
 import { useActiveTextModel } from '../../hooks/useActiveTextModel';
 import { hardwareService } from '../../services';
 import { useGeneratingConversationId } from '../../hooks/useGenerationSession';
@@ -63,8 +64,7 @@ export const useChatScreen = () => {
   const isModelLoading = useChatStore(state => state.isModelLoading);
   const setIsModelLoading = useChatStore(state => state.setIsModelLoading);
   const setLoadingModelName = useChatStore(state => state.setLoadingModelName);
-  const [loadingModel, setLoadingModelState] =
-    useState<DownloadedModel | null>(null);
+  const [loadingModel, setLoadingModelState] = useState<DownloadedModel | null>(null);
   const setLoadingModel = useCallback(
     (model: DownloadedModel | null) => {
       setLoadingModelState(model);
@@ -84,9 +84,7 @@ export const useChatScreen = () => {
   const [viewerImageUri, setViewerImageUri] = useState<string | null>(null);
   const [supportsToolCalling, setSupportsToolCalling] = useState(false);
   const [supportsThinking, setSupportsThinking] = useState(false);
-  const [pendingProjectId, setPendingProjectId] = useState<string | undefined>(
-    route.params?.projectId,
-  );
+  const [pendingProjectId, setPendingProjectId] = useState<string | undefined>(route.params?.projectId);
   // Owned by the generationSession service (single owner); observed reactively here.
   const generatingConversationId = useGeneratingConversationId();
   // Stashed when the model selector opens with no text model; replayed on pick.
@@ -95,27 +93,22 @@ export const useChatScreen = () => {
     attachments?: MediaAttachment[];
   } | null>(null);
   const modelLoadStartTimeRef = useRef<number | null>(null);
-  const startGenerationRef = useRef<
-    (id: string, text: string) => Promise<void>
-  >(null);
+  const startGenerationRef = useRef<(id: string, text: string) => Promise<void>>(null);
   const genDepsRef = useRef<GenerationDeps | null>(null);
   useChatAudioLifecycle(navigation);
-  const { imageGenState, isCompacting, queueCount, queuedTexts } =
-    useChatRuntimeSubscriptions(genDepsRef, startGenerationRef);
+  const { imageGenState, isCompacting, queueCount, queuedTexts } = useChatRuntimeSubscriptions(genDepsRef, startGenerationRef);
 
-  const {
-    activeModelId,
-    downloadedModels,
-    settings,
-    activeImageModelId,
-    downloadedImageModels,
-    setDownloadedImageModels,
-    setIsGeneratingImage: setAppIsGeneratingImage,
-    setImageGenerationStatus: setAppImageGenerationStatus,
-    removeImagesByConversationId,
-    loadedSettings,
-    textModelEvicted,
-  } = useAppStore();
+  const activeModelId = useAppStore(state => state.activeModelId);
+  const downloadedModels = useAppStore(state => state.downloadedModels);
+  const settings = useAppStore(state => state.settings);
+  const activeImageModelId = useAppStore(state => state.activeImageModelId);
+  const downloadedImageModels = useAppStore(state => state.downloadedImageModels);
+  const setDownloadedImageModels = useAppStore(state => state.setDownloadedImageModels);
+  const setAppIsGeneratingImage = useAppStore(state => state.setIsGeneratingImage);
+  const setAppImageGenerationStatus = useAppStore(state => state.setImageGenerationStatus);
+  const removeImagesByConversationId = useAppStore(state => state.removeImagesByConversationId);
+  const loadedSettings = useAppStore(state => state.loadedSettings);
+  const textModelEvicted = useAppStore(state => state.textModelEvicted);
 
   // Remote model state - use proper selectors for reactivity
   const activeServerId = useRemoteServerStore(s => s.activeServerId);
@@ -124,26 +117,24 @@ export const useChatScreen = () => {
   );
   const discoveredModels = useRemoteServerStore(s => s.discoveredModels);
 
-  const {
-    activeConversationId,
-    conversations,
-    createConversation,
-    addMessage,
-    updateMessageContent,
-    updateMessageTurnKind,
-    deleteMessagesAfter,
-    streamingMessage,
-    streamingReasoningContent,
-    streamingForConversationId,
-    isStreaming,
-    isThinking,
-    clearStreamingMessage,
-    deleteConversation,
-    setActiveConversation,
-    setConversationProject,
-  } = useChatStore();
+  const activeConversationId = useChatStore(state => state.activeConversationId);
+  const conversations = useChatStore(state => state.conversations);
+  const createConversation = useChatStore(state => state.createConversation);
+  const addMessage = useChatStore(state => state.addMessage);
+  const updateMessageContent = useChatStore(state => state.updateMessageContent);
+  const updateMessageTurnKind = useChatStore(state => state.updateMessageTurnKind);
+  const deleteMessagesAfter = useChatStore(state => state.deleteMessagesAfter);
+  const streamingForConversationId = useChatStore(state => state.streamingForConversationId);
+  const isStreaming = useChatStore(state => state.isStreaming);
+  const isThinking = useChatStore(state => state.isThinking);
+  const hasStreamingText = useHasActiveStreamText();
+  const clearStreamingMessage = useChatStore(state => state.clearStreamingMessage);
+  const deleteConversation = useChatStore(state => state.deleteConversation);
+  const setActiveConversation = useChatStore(state => state.setActiveConversation);
+  const setConversationProject = useChatStore(state => state.setConversationProject);
 
-  const { projects, getProject } = useProjectStore();
+  const projects = useProjectStore(state => state.projects);
+  const getProject = useProjectStore(state => state.getProject);
 
   const activeConversation = conversations.find(
     c => c.id === activeConversationId,
@@ -298,19 +289,29 @@ export const useChatScreen = () => {
   // Replies generating on paired devices. Empty unless Pro's chat-stream service is running.
   const remotePreviews = useRemoteChatStreamPreviews(activeConversationId);
   const localDeviceId = useSyncIdentityStore(s => s.localDeviceId);
-  const displayMessages = getDisplayMessages(
-    activeConversation?.messages || [],
-    {
+  const displayMessages = useMemo(() => getDisplayMessages(activeConversation?.messages || [], {
+    isThinking,
+    streamingMessage: '',
+    streamingReasoningContent: '',
+    hasStreamingText,
+    isStreamingForThisConversation,
+    isModelLoading,
+    loadingModelName: loadingModel?.name,
+    isGeneratingForThisConversation,
+    remotePreviews,
+    localDeviceId,
+  }),
+    [
+      activeConversation?.messages,
       isThinking,
-      streamingMessage,
-      streamingReasoningContent,
+      hasStreamingText,
       isStreamingForThisConversation,
       isModelLoading,
-      loadingModelName: loadingModel?.name,
+      loadingModel?.name,
       isGeneratingForThisConversation,
       remotePreviews,
       localDeviceId,
-    },
+    ],
   );
 
   const animateLastN = useChatPresentationLifecycle(

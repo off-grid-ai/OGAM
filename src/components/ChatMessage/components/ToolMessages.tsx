@@ -284,39 +284,74 @@ export const SyncedToolArtifacts: React.FC<{
  * while every finished result sat 16px from its neighbour - the same tool, two rhythms, in one
  * transcript.
  */
+type ToolCallRow = {
+  key: string;
+  stableKey: string;
+  name: string;
+  icon: string;
+  label: string;
+};
+
+function toolArgumentsLabel(args: string | undefined): string {
+  let preview: string | undefined;
+  try {
+    preview = Object.values(JSON.parse(args as string)).join(', ');
+  } catch {
+    preview = args;
+  }
+  return preview ? `: ${preview}` : '';
+}
+
+const toolCallRowsByMessage = new WeakMap<
+  Message,
+  { calls: NonNullable<Message['toolCalls']>; rows: readonly ToolCallRow[] }
+>();
+const NO_TOOL_CALL_ROWS: readonly ToolCallRow[] = [];
+
+function toolCallRows(message: Message): readonly ToolCallRow[] {
+  const calls = message.toolCalls;
+  if (!calls?.length) return NO_TOOL_CALL_ROWS;
+  const cached = toolCallRowsByMessage.get(message);
+  if (cached?.calls === calls) return cached.rows;
+  const messageKey = message.uuid ?? message.id;
+  const rows = calls.map((call, index) => {
+    const callKey = `${call.id || index}`;
+    return {
+      key: callKey,
+      stableKey: `${messageKey}:call:${callKey}`,
+      name: call.name,
+      icon: getToolIcon(call.name),
+      label: `Using ${call.name}${toolArgumentsLabel(call.arguments)}`,
+    };
+  });
+  toolCallRowsByMessage.set(message, { calls, rows });
+  return rows;
+}
+
 export const ToolCallMessage: React.FC<{
   message: Message;
   styles: any;
   colors: any;
 }> = ({ message, styles, colors }) => (
   <View testID="tool-call-message">
-    {message.toolCalls?.map((tc, i) => {
-      let argsPreview = '';
-      try {
-        argsPreview = Object.values(JSON.parse(tc.arguments)).join(', ');
-      } catch {
-        argsPreview = tc.arguments;
-      }
-      const argsLabel = argsPreview ? `: ${argsPreview}` : '';
-      return (
+    {toolCallRows(message).map(row => (
         <ToolResultBubble
-          key={`${tc.id || i}`}
-          stableKey={`${message.uuid ?? message.id}:call:${tc.id || i}`}
-          toolIcon={getToolIcon(tc.name)}
-          toolLabel={`Using ${tc.name}${argsLabel}`}
-          toolName={tc.name}
+          key={row.key}
+          stableKey={row.stableKey}
+          toolIcon={row.icon}
+          toolLabel={row.label}
+          toolName={row.name}
           durationLabel=""
           content=""
           hasDetails={false}
           active
           paired
           rowTestID="tool-call-row"
-          labelTestID={`tool-call-label-${tc.name || 'unknown'}`}
+          labelTestID={`tool-call-label-${row.name || 'unknown'}`}
           styles={styles}
           colors={colors}
         />
-      );
-    })}
+      ))}
   </View>
 );
 
