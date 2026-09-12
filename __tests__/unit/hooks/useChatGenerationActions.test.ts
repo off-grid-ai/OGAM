@@ -144,7 +144,13 @@ const mockGetDocsByProject = ragService.getDocumentsByProject as jest.Mock;
 const mockFormatForPrompt = retrievalService.formatForPrompt as jest.Mock;
 
 
-const mockChatStoreGetState = jest.fn(() => ({ conversations: [] as any[], updateCompactionState: jest.fn() }));
+const mockChatStoreGetState = jest.fn(
+  (): {
+    conversations: any[];
+    updateCompactionState: jest.Mock;
+    addMessage?: jest.Mock;
+  } => ({ conversations: [], updateCompactionState: jest.fn() }),
+);
 jest.mock('../../../src/stores/chatStore', () => ({
   useChatStore: { getState: () => mockChatStoreGetState() },
 }));
