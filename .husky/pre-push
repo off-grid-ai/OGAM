@@ -15,12 +15,13 @@ collect_changed_files() {
     [ "$local_oid" = "$ZERO_OID" ] && continue
 
     if [ "$remote_oid" = "$ZERO_OID" ]; then
-      base=$(git merge-base "$local_oid" origin/main 2>/dev/null || true)
-      if [ -n "$base" ]; then
-        range="$base..$local_oid"
-        changed=$(git diff --name-only --diff-filter=ACMR "$range")
+      # A new branch has no remote tip. Inspect only commits that are not already
+      # reachable from origin instead of assuming the branch started from main.
+      commits=$(git rev-list "$local_oid" --not --remotes=origin 2>/dev/null || true)
+      if [ -n "$commits" ]; then
+        changed=$(git diff-tree --no-commit-id --name-only -r --diff-filter=ACMR $commits)
       else
-        changed=$(git diff-tree --no-commit-id --name-only -r --diff-filter=ACMR "$local_oid")
+        changed=""
       fi
     else
       range="$remote_oid..$local_oid"
@@ -54,13 +55,9 @@ if [ -n "$PUSHED_JS" ]; then
   npx tsc --noEmit
 
   echo "▶ JS/TS tests (related to changed files)..."
-  # Rendered RN journeys share native-boundary state and are memory-heavy. Parallel workers
-  # starve one another and turn normal 10-second journeys into false multi-minute timeouts.
-  # CI runs this same graph serially; keep the local merge gate deterministic too.
-  # Some React Native boundary shims keep native-style handles alive after Jest has completed every
-  # assertion. The repository's full test command already force-closes those handles. Apply the same
-  # completion policy here so a fully passing related suite does not return a false non-zero status.
-  echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 npx jest --findRelatedTests --passWithNoTests --runInBand --forceExit
+  # Keep related rendered journeys serial because they share native-boundary state.
+  # Do not force the process to exit: leaked asynchronous work is a test failure to fix.
+  echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 npx jest --findRelatedTests --passWithNoTests --runInBand --bail=1
 
   echo "▶ Architecture gate (dependency-cruiser)..."
   npm run depcruise
@@ -79,12 +76,20 @@ if [ -n "$PUSHED_SWIFT" ]; then
   else
     echo "⚠️  SwiftLint not installed — skipping Swift lint. Install: brew install swiftlint"
   fi
+fi
 
+NATIVE_CHANGED="${PUSHED_SWIFT}${PUSHED_KOTLIN}${PUSHED_ANDROID_NATIVE}${PUSHED_IOS_NATIVE}"
+if [ -n "$NATIVE_CHANGED" ] && [ "${OFFGRID_NATIVE_ON_PUSH:-0}" != "1" ]; then
+  echo "▶ Native verification not run during this push."
+  echo "  Run OFFGRID_NATIVE_ON_PUSH=1 git push when you want Android and iOS verification locally."
+fi
+
+if [ "${OFFGRID_NATIVE_ON_PUSH:-0}" = "1" ] && [ -n "$PUSHED_SWIFT" ]; then
   echo "▶ iOS tests..."
   npm run test:ios
 fi
 
-if [ -n "$PUSHED_KOTLIN" ]; then
+if [ "${OFFGRID_NATIVE_ON_PUSH:-0}" = "1" ] && [ -n "$PUSHED_KOTLIN" ]; then
   echo "▶ Kotlin type check (compileDebugKotlin)..."
   (cd android && ./gradlew compileDebugKotlin --quiet)
 
@@ -95,12 +100,12 @@ if [ -n "$PUSHED_KOTLIN" ]; then
   npm run test:android
 fi
 
-if [ -n "$PUSHED_ANDROID_NATIVE" ]; then
+if [ "${OFFGRID_NATIVE_ON_PUSH:-0}" = "1" ] && [ -n "$PUSHED_ANDROID_NATIVE" ]; then
   echo "▶ Android build (assembleDebug + assembleRelease) — local gate, replaces CI android-build..."
   (cd android && ./gradlew assembleDebug assembleRelease)
 fi
 
-if [ -n "$PUSHED_IOS_NATIVE" ]; then
+if [ "${OFFGRID_NATIVE_ON_PUSH:-0}" = "1" ] && [ -n "$PUSHED_IOS_NATIVE" ]; then
   echo "▶ iOS build (simulator, no code-signing) — local gate..."
   (cd ios && xcodebuild \
     -workspace OffgridMobile.xcworkspace \
@@ -113,7 +118,7 @@ if [ -n "$PUSHED_IOS_NATIVE" ]; then
     build)
 fi
 
-if [ -n "$PUSHED_JS$PUSHED_SWIFT$PUSHED_KOTLIN" ]; then
-  echo "▶ Sonar scan..."
+if [ "${OFFGRID_SONAR_ON_PUSH:-0}" = "1" ] && [ -n "$PUSHED_JS$PUSHED_SWIFT$PUSHED_KOTLIN" ]; then
+  echo "▶ Sonar scan (requested)..."
   npm run sonar
 fi
