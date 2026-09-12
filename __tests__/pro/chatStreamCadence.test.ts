@@ -21,7 +21,7 @@ test('token bursts are sampled while lifecycle changes are immediate', async () 
   const changed = {
     conversationId: 'chat-1',
     content: 'ab',
-    phase: 'using_tools' as const,
+    phase: 'thinking' as const,
   };
   cadence.submit(changed, chatStreamCadenceKey(changed, 0));
   expect(delivered).toEqual(['a', 'ab', 'ab']);
