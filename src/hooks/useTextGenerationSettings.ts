@@ -113,7 +113,7 @@ export function useTextGenerationSettings() {
     },
     contextLength: {
       key: 'contextLength',
-      label: 'Context Length',
+      label: 'Context Window',
       description: 'KV cache size - larger uses more RAM (requires reload)',
       value: contextLength,
       min: 512,

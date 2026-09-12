@@ -2,6 +2,18 @@
 
 ZERO_OID="0000000000000000000000000000000000000000"
 
+new_branch_base() {
+  local_oid=$1
+  for candidate in "${OFFGRID_PUSH_BASE:-}" origin/release/computer_use origin/main; do
+    [ -z "$candidate" ] && continue
+    if git rev-parse --verify --quiet "$candidate^{commit}" >/dev/null; then
+      git merge-base "$local_oid" "$candidate"
+      return
+    fi
+  done
+  git rev-list --max-parents=0 "$local_oid" | tail -1
+}
+
 collect_changed_files() {
   changed_files=""
 
@@ -15,14 +27,11 @@ collect_changed_files() {
     [ "$local_oid" = "$ZERO_OID" ] && continue
 
     if [ "$remote_oid" = "$ZERO_OID" ]; then
-      # A new branch has no remote tip. Inspect only commits that are not already
-      # reachable from origin instead of assuming the branch started from main.
-      commits=$(git rev-list "$local_oid" --not --remotes=origin 2>/dev/null || true)
-      if [ -n "$commits" ]; then
-        changed=$(git diff-tree --no-commit-id --name-only -r --diff-filter=ACMR $commits)
-      else
-        changed=""
-      fi
+      # A new branch has no remote tip. Diff its complete range from the release
+      # base. Passing several commits to diff-tree can silently compare trees and
+      # omit earlier commits in the push.
+      base=$(new_branch_base "$local_oid")
+      changed=$(git diff --name-only --diff-filter=ACMR "$base..$local_oid")
     else
       range="$remote_oid..$local_oid"
       changed=$(git diff --name-only --diff-filter=ACMR "$range")
@@ -57,7 +66,46 @@ if [ -n "$PUSHED_JS" ]; then
   echo "▶ JS/TS tests (related to changed files)..."
   # Keep related rendered journeys serial because they share native-boundary state.
   # Do not force the process to exit: leaked asynchronous work is a test failure to fix.
-  echo "$PUSHED_JS" | tr '\n' '\0' | xargs -0 npx jest --findRelatedTests --passWithNoTests --runInBand --bail=1
+  DIRECT_TESTS=""
+  MAPPED_TESTS=""
+  RELATED_JS=""
+  while IFS= read -r file; do
+    case "$file" in
+      __tests__/*|*/__tests__/*|*.test.ts|*.test.tsx|*.test.js|*.test.jsx)
+        DIRECT_TESTS="${DIRECT_TESTS}
+${file}"
+        ;;
+      src/services/generationRemoteHelpers.ts)
+        # This helper is imported through the central generation barrel. Jest's
+        # unrestricted reverse graph reaches most screens through the navigator,
+        # although those screens cannot execute this remote-generation contract.
+        MAPPED_TESTS="${MAPPED_TESTS}
+__tests__/unit/services/generationService.test.ts
+__tests__/integration/generation/errorKeepsPartial.rendered.redflow.test.tsx"
+        ;;
+      src/services/llmHelpers.ts)
+        MAPPED_TESTS="${MAPPED_TESTS}
+__tests__/unit/services/llmHelpers.test.ts
+__tests__/unit/services/llmHelpers.branches.test.ts"
+        ;;
+      *)
+        RELATED_JS="${RELATED_JS}
+${file}"
+        ;;
+    esac
+  done <<EOF
+$PUSHED_JS
+EOF
+  SELECTED_TESTS=$(printf '%s\n%s\n' "$DIRECT_TESTS" "$MAPPED_TESTS" | sed '/^$/d' | sort -u)
+  if [ -n "$SELECTED_TESTS" ]; then
+    printf '%s\n' "$SELECTED_TESTS" | tr '\n' '\0' | \
+      xargs -0 npx jest --passWithNoTests --runInBand --bail=1
+  fi
+  RELATED_JS=$(printf '%s\n' "$RELATED_JS" | sed '/^$/d' | sort -u)
+  if [ -n "$RELATED_JS" ]; then
+    printf '%s\n' "$RELATED_JS" | tr '\n' '\0' | \
+      xargs -0 npx jest --findRelatedTests --passWithNoTests --runInBand --bail=1
+  fi
 
   echo "▶ Architecture gate (dependency-cruiser)..."
   npm run depcruise

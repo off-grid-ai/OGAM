@@ -276,19 +276,19 @@ When the user says "push" (or any equivalent like "ship it", "send it", "push th
 
 ### Before pushing
 0. Write tests for any new or changed logic if they don't already exist.
-1. Run `npm run lint && npx tsc --noEmit && npm test` - fix any failures before continuing.
-2. Commit all staged changes with a descriptive message.
-3. Ensure you are NOT on `main`. If you are, create an appropriately named branch first: `git checkout -b feat/...` or `fix/...` or `chore/...` etc.
+1. Commit all staged changes with a descriptive message.
+2. Ensure you are NOT on `main`. If you are, create an appropriately named branch first: `git checkout -b feat/...` or `fix/...` or `chore/...` etc.
 
 ### Pushing & PR
-4. Push the branch: `git push -u origin <branch>`
+3. Push the branch normally: `git push -u origin <branch>`. The pre-push hook is the required local quality gate and owns lint, typecheck, and the applicable test suite. Never bypass it with `--no-verify`.
+4. If the pre-push hook fails, fix the reported failure, commit the fix, and push again. Run a full lint, typecheck, or test command separately only when it is needed to diagnose that hook failure.
 5. If no PR exists for this branch, create one with `gh pr create`. **Do NOT include "Generated with Codex" or any AI attribution in PR descriptions.**
 6. If a PR already exists, update its description to reflect **all commits in the PR** (not just the latest push). Read the full commit history with `git log main..HEAD` and write a coherent description that summarises the entire change set - what it does, why, and how.
 
 ### Review loop
 7. Wait for Gemini to review the PR (poll with `gh pr checks` and `gh api repos/{owner}/{repo}/pulls/{number}/reviews` until a review appears).
 8. Pull down review comments: `gh api repos/{owner}/{repo}/pulls/{number}/comments` and `gh api repos/{owner}/{repo}/pulls/{number}/reviews`.
-9. Address every review comment - fix the code, re-run quality gates (lint, tsc, test).
+9. Address every review comment - fix the code, commit it, and let the next normal push run the pre-push quality gate.
 10. Reply to **each** review comment individually using `gh api` (`/pulls/comments/{id}/replies`). Every comment gets its own reply - do not post a single summary comment.
 11. Push fixes, update the PR description again to stay coherent across all commits.
 12. Report what was changed in response to the review.
@@ -307,7 +307,7 @@ The repo has three automated reviewers on every PR. After pushing, loop until al
 1. Push code → wait for all three reviewers to report
 2. Pull down Gemini comments, Codecov report, and SonarCloud findings
 3. Fix issues: code changes for Gemini/SonarCloud, add tests for Codecov
-4. Re-run local quality gates (`npm run lint && npm test && npx tsc --noEmit`)
+4. Commit the fixes and push normally. The pre-push hook runs the local quality gates.
 5. Push fixes, comment `/gemini review` on the PR to re-trigger Gemini
 6. Repeat until all three reviewers pass with no blocking issues
 

@@ -518,17 +518,29 @@ async function generateWithCompactionRetry(
       .getState()
       .conversations.find(c => c.id === opts.id);
     const previousSummary = conversation?.compactionSummary;
+    const activeTurnStartMessageId = [...opts.messages]
+      .reverse()
+      .find(message => message.role === 'user')?.id;
+    const currentMessages = conversation?.messages?.length
+      ? conversation.messages
+      : opts.messages;
+    const beforeCount = currentMessages.filter(message => message.role !== 'system').length;
     const compacted = await contextCompactionService
       .compact({
         conversationId: opts.id,
         systemPrompt: opts.prompt,
-        allMessages: opts.messages,
+        allMessages: currentMessages,
         previousSummary,
+        activeTurnStartMessageId,
       })
       .catch(async () => {
         await llmService.clearKVCache(true).catch(() => {});
-        const recent = opts.messages
-          .filter(m => m.role !== 'system')
+        const nonSystem = currentMessages.filter(m => m.role !== 'system');
+        const activeStart = activeTurnStartMessageId
+          ? nonSystem.findIndex(message => message.id === activeTurnStartMessageId)
+          : -1;
+        const activeTurn = activeStart >= 0 ? nonSystem.slice(activeStart) : [];
+        const recentHistory = (activeStart >= 0 ? nonSystem.slice(0, activeStart) : nonSystem)
           .slice(-FALLBACK_RECENT_MESSAGE_COUNT);
         return [
           {
@@ -537,9 +549,17 @@ async function generateWithCompactionRetry(
             content: opts.prompt,
             timestamp: 0,
           } as Message,
-          ...recent,
+          ...recentHistory,
+          ...activeTurn,
         ];
       });
+    const afterCount = compacted.filter(message => message.role !== 'system').length;
+    if (afterCount >= beforeCount) throw error;
+    useChatStore.getState().addMessage(opts.id, {
+      role: 'assistant',
+      content: `Context compacted: ${beforeCount} → ${afterCount} messages`,
+      isSystemInfo: true,
+    });
     // Stop/Eject can arrive while the summary is running. Do not start a new
     // completion after the owner has cancelled this turn.
     if (generationService.wasAborted()) return true;

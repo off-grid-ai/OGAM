@@ -86,9 +86,21 @@ class ContextCompactionService {
    * Falls back to trim-only if summarization fails.
    */
   async compact(
-    opts: { conversationId: string; systemPrompt: string; allMessages: Message[]; previousSummary?: string },
+    opts: {
+      conversationId: string;
+      systemPrompt: string;
+      allMessages: Message[];
+      previousSummary?: string;
+      activeTurnStartMessageId?: string;
+    },
   ): Promise<Message[]> {
-    const { conversationId, systemPrompt, allMessages, previousSummary } = opts;
+    const {
+      conversationId,
+      systemPrompt,
+      allMessages,
+      previousSummary,
+      activeTurnStartMessageId,
+    } = opts;
     this.setCompacting(true);
     try {
       await llmService.clearKVCache(true);
@@ -99,13 +111,25 @@ class ContextCompactionService {
       const recentTokenBudget = Math.max(0, Math.floor(ctxLength * CONTEXT_PROMPT_BUDGET_RATIO) - summaryTokenBudget - systemTokens);
 
       const nonSystem = allMessages.filter(m => m.role !== 'system');
+      const activeTurnStart = activeTurnStartMessageId
+        ? nonSystem.findIndex(message => message.id === activeTurnStartMessageId)
+        : -1;
+      const protectedMessages = activeTurnStart >= 0
+        ? nonSystem.slice(activeTurnStart)
+        : [];
+      const compactableMessages = activeTurnStart >= 0
+        ? nonSystem.slice(0, activeTurnStart)
+        : nonSystem;
       logger.log(`[ContextCompaction] ${nonSystem.length} messages, ctx=${ctxLength}, summaryBudget=${summaryTokenBudget}, recentBudget=${recentTokenBudget}`);
 
       // Walk backwards — keep recent messages that fit in the recent budget
       const recentMessages: Message[] = [];
       let recentTokensUsed = 0;
-      for (let i = nonSystem.length - 1; i >= 0; i--) {
-        const msg = nonSystem[i];
+      for (const message of protectedMessages) {
+        recentTokensUsed += await this.countTokens(message.content);
+      }
+      for (let i = compactableMessages.length - 1; i >= 0; i--) {
+        const msg = compactableMessages[i];
         const tokens = await this.countTokens(msg.content);
         if (recentTokensUsed + tokens <= recentTokenBudget) {
           recentMessages.unshift(msg);
@@ -121,7 +145,10 @@ class ContextCompactionService {
       }
 
       // Everything before recent is "old"
-      const oldMessages = nonSystem.slice(0, nonSystem.length - recentMessages.length);
+      const oldMessages = compactableMessages.slice(
+        0,
+        compactableMessages.length - recentMessages.length,
+      );
 
       // If there are no old messages, no compaction needed
       if (oldMessages.length === 0) {
@@ -129,6 +156,7 @@ class ContextCompactionService {
         return [
           { id: 'system', role: 'system', content: systemPrompt, timestamp: 0 },
           ...recentMessages,
+          ...protectedMessages,
         ];
       }
 
@@ -162,9 +190,9 @@ class ContextCompactionService {
         });
       }
 
-      result.push(...recentMessages);
+      result.push(...recentMessages, ...protectedMessages);
 
-      logger.log(`[ContextCompaction] Compacted: ${nonSystem.length} → ${recentMessages.length} messages + summary (${summary ? summary.length : 0} chars)`);
+      logger.log(`[ContextCompaction] Compacted: ${nonSystem.length} → ${recentMessages.length + protectedMessages.length} messages + summary (${summary ? summary.length : 0} chars)`);
       return result;
     } finally {
       this.setCompacting(false);

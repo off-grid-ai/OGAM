@@ -28,12 +28,13 @@ import {
 } from '../utils/messageContent';
 import {
   callsWithinToolBudget,
-  finalResponseFromToolResults,
   normalizeMaxToolCalls,
   toolLimitFinalAnswerInstruction,
   toolPromptChars,
   toolResultCharBudget,
 } from '@offgrid/models';
+const toolResultsFinalAnswerInstruction = (): string =>
+  'The tool work is complete. Answer the user now using the completed tool results in the conversation. Do not call another tool, output tool-call syntax, or repeat raw tool output without explaining it.';
 const currentMaxToolSteps = (): number => {
   const configured = useAppStore.getState().settings.maxToolCalls;
   return normalizeMaxToolCalls(configured);
@@ -489,6 +490,7 @@ function remoteGenerateOnce(
     topP: settings.topP,
     tools,
     enableThinking: thinkingEnabled,
+    reasoningBudget: settings.reasoningBudget,
   };
   let _fullContent = '';
   let streamed = false;
@@ -773,6 +775,7 @@ async function callLiteRTForLoop(
   fullResponse: string;
   toolCalls: ToolCall[];
   toolStepLimitReached?: boolean;
+  toolFinalizationRequired?: boolean;
   completedToolMessages?: Message[];
   completedToolResults?: string[];
 }> {
@@ -837,12 +840,15 @@ async function callLiteRTForLoop(
       };
     }
     // Native SDK handles all tool→model cycles internally; toolCalls always empty here.
-    // If the model ran a tool but then produced NO final answer, surface the fetched
-    // data instead of discarding it (the user would otherwise see a blank / "(No
-    // response)" turn — Q5). The tool result is the honest answer the model failed to
-    // phrase; better a visible result than a dead end.
+    // Return completed tool context to the outer loop when the native cycle has no final answer.
     if (!fullResponse.trim() && outcome.results.length > 0) {
-      return { fullResponse: outcome.results.join('\n\n'), toolCalls: [] };
+      return {
+        fullResponse: '',
+        toolCalls: [],
+        toolFinalizationRequired: true,
+        completedToolMessages: outcome.messages,
+        completedToolResults: outcome.results,
+      };
     }
     return { fullResponse, toolCalls: [] };
   } catch (e: any) {
@@ -1036,6 +1042,7 @@ async function callLLMWithRetry(
   toolCalls: ToolCall[];
   interrupted?: boolean;
   toolStepLimitReached?: boolean;
+  toolFinalizationRequired?: boolean;
   completedToolMessages?: Message[];
   completedToolResults?: string[];
 }> {
@@ -1189,6 +1196,7 @@ function emitFinalResponse(
 }
 
 /** Run one final model pass with completed results and no available tool execution path. */
+// eslint-disable-next-line max-params -- context, stream state, history, limit, and completed native tool context are distinct inputs
 async function emitToolLimitFinalAnswer(
   ctx: ToolLoopContext,
   state: ToolLoopState,
@@ -1197,6 +1205,7 @@ async function emitToolLimitFinalAnswer(
   completed: {
     messages?: Message[];
     results?: string[];
+    instruction?: string;
   } = {},
 ): Promise<ToolLoopOutcome> {
   if (ctx.isAborted()) return { interrupted: true };
@@ -1212,7 +1221,7 @@ async function emitToolLimitFinalAnswer(
     {
       id: `tool-limit-final-${Date.now()}`,
       role: 'system',
-      content: toolLimitFinalAnswerInstruction(maximum),
+      content: completed.instruction ?? toolLimitFinalAnswerInstruction(maximum),
       timestamp: Date.now(),
     },
     ...loopMessages.filter(message => message.role !== 'system'),
@@ -1235,7 +1244,7 @@ async function emitToolLimitFinalAnswer(
   emitFinalResponse(
     ctx,
     state,
-    finalResponseFromToolResults(displayResponse, state.successfulToolResults),
+    displayResponse.trim(),
   );
   return { interrupted: false };
 }
@@ -1385,6 +1394,7 @@ export async function runToolLoop(
       toolCalls,
       interrupted,
       toolStepLimitReached,
+      toolFinalizationRequired,
       completedToolMessages,
       completedToolResults,
     } = await callLLMWithRetry(loopMessages, effectiveSchemas, {
@@ -1417,6 +1427,14 @@ export async function runToolLoop(
       });
     }
 
+    if (toolFinalizationRequired) {
+      return emitToolLimitFinalAnswer(ctx, state, loopMessages, maxToolSteps, {
+        messages: completedToolMessages,
+        results: completedToolResults,
+        instruction: toolResultsFinalAnswerInstruction(),
+      });
+    }
+
     const { effectiveToolCalls, displayResponse } = resolveToolCalls(
       fullResponse,
       toolCalls,
@@ -1439,27 +1457,9 @@ export async function runToolLoop(
         state.streamedContent = '';
         state.reasoningContent = '';
         state.firstTokenFired = false;
-        const fallbackOnStream = buildStreamHandler(ctx, state);
-        const { fullResponse: fallbackResp } = await callLLMWithRetry(
-          loopMessages,
-          [],
-          {
-            onStream: fallbackOnStream,
-            forceRemote: ctx.forceRemote,
-            disableThinking: true,
-            conversationId: ctx.conversationId,
-            ctx,
-          },
-        );
-        emitFinalResponse(
-          ctx,
-          state,
-          finalResponseFromToolResults(
-            fallbackResp,
-            state.successfulToolResults,
-          ),
-        );
-        return { interrupted: false };
+        return emitToolLimitFinalAnswer(ctx, state, loopMessages, maxToolSteps, {
+          instruction: toolResultsFinalAnswerInstruction(),
+        });
       }
       emitFinalResponse(ctx, state, displayResponse);
       return { interrupted: false };

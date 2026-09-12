@@ -215,6 +215,8 @@ export const AppSheet: React.FC<AppSheetProps> = ({
 
   useEffect(() => {
     if (visible) {
+      // The sheet is already open. Do not dismiss an input that just took focus.
+      if (modalVisible) return;
       pendingAnimateIn.current = true;
       // Dismiss keyboard first, then open — prevents animation conflict
       const keyboardVisible = Keyboard.isVisible?.() ?? false;
@@ -247,7 +249,7 @@ export const AppSheet: React.FC<AppSheetProps> = ({
         onClosedRef.current?.();
       });
     }
-  }, [visible]);
+  }, [animateOut, modalVisible, visible]);
 
   // Track keyboard height so the sheet lifts above the keyboard
   useEffect(() => {
