@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- one persisted store keeps chat mutations atomic */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Message, Conversation, GenerationMeta } from '../types';
@@ -174,7 +175,12 @@ const NO_REPLY_FORMING: StreamingFields = {
   isThinking: false,
 };
 
-const chatStorage = createHydrationGatedStorage<PersistedChatState>();
+const chatStorage = createHydrationGatedStorage<PersistedChatState>(
+  undefined,
+  (previous, next) =>
+    previous.conversations === next.conversations &&
+    previous.activeConversationId === next.activeConversationId,
+);
 
 export const useChatStore = create<ChatState>()(
   persist(
