@@ -73,7 +73,7 @@ function FailureRow({ failure, onDismiss }: { failure: ModelFailure; onDismiss: 
             <ActionButton
               icon="zap"
               color={colors.error}
-              label="Load Anyway"
+              label="Run anyway"
               testID={`model-failure-load-anyway-${failure.modelType}`}
               onPress={() => { onDismiss(); failure.onLoadAnyway?.(); }}
               styles={styles}

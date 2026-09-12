@@ -76,6 +76,8 @@ export interface GenerationOptions {
   stopSequences?: string[];
   /** Whether to enable thinking/reasoning mode (Ollama: sends "think" param; others: parsed from response) */
   enableThinking?: boolean;
+  /** Provider-neutral reasoning budget in tokens. */
+  reasoningBudget?: number;
 }
 
 /** Tool definition for function calling */
@@ -163,4 +165,3 @@ export interface LLMProvider {
   /** Clean up resources */
   dispose?(): Promise<void>;
 }
-

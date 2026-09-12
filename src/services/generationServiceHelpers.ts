@@ -103,12 +103,13 @@ function buildLiteRTMeta(
 
 export function buildGenerationMetaImpl(svc: any): GenerationMeta {
   const meta = buildBaseGenerationMeta(svc);
+  if (svc.answeringModelName) meta.modelName = svc.answeringModelName;
   const routed = svc.state?.routedToolNames;
   if (Array.isArray(routed) && routed.length > 0) meta.routedToolNames = routed;
   return meta;
 }
 function buildBaseGenerationMeta(svc: any): GenerationMeta {
-  if (svc.isUsingRemoteProvider()) {
+  if (svc.isUsingRemoteProvider() && !svc.answeringLocally) {
     const remoteStore = useRemoteServerStore.getState();
     const activeServer = remoteStore.getActiveServer();
     const contentLength =

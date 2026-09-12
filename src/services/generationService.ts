@@ -62,6 +62,8 @@ class GenerationService {
   private queueProcessor: QueueProcessor | null = null;
   private currentRemoteAbortController: AbortController | null = null;
   private remoteTimeToFirstToken: number | undefined;
+  private answeringModelName: string | undefined;
+  private answeringLocally = false;
 
   // Token batching — collect tokens and flush to UI at a controlled rate
   private tokenBuffer: string = '';
@@ -366,6 +368,8 @@ class GenerationService {
     this.reasoningBuffer = '';
     this.totalReasoningLength = 0;
     this.remoteTimeToFirstToken = undefined;
+    this.answeringModelName = undefined;
+    this.answeringLocally = false;
     this.updateState({
       isGenerating: false,
       isThinking: false,

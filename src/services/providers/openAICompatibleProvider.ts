@@ -23,6 +23,7 @@ import type {
   OpenAIStreamState,
 } from './openAICompatibleTypes';
 import { remoteAuthorizationHeaders } from '../remoteTransportPolicy';
+import { openRouterReasoningPayload, REASONING_BUDGET_AUTO } from '@offgrid/models';
 
 export type { OpenAIChatMessage, OpenAIConfig } from './openAICompatibleTypes';
 
@@ -91,6 +92,12 @@ export class OpenAICompatibleProvider implements LLMProvider {
     options: GenerationOptions,
     thinkingEnabled: boolean
   ): Record<string, unknown> {
+    const reasoning = this.config.endpoint.includes('openrouter.ai')
+      ? openRouterReasoningPayload(
+          thinkingEnabled,
+          options.reasoningBudget ?? REASONING_BUDGET_AUTO,
+        )
+      : {};
     return {
       model: this.config.modelId,
       messages: openaiMessages,
@@ -109,6 +116,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
       // discovered capability — not the endpoint's port — keeps the "which server
       // accepts this?" decision in one place and free of implementation coupling.
       ...(this.modelCapabilities.acceptsThinkingKwarg && { chat_template_kwargs: { enable_thinking: thinkingEnabled } }),
+      ...reasoning,
     };
   }
 

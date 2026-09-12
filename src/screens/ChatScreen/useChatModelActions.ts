@@ -2,7 +2,6 @@ import { Dispatch, SetStateAction, useEffect } from 'react';
 import {
   AlertState,
   showAlert,
-  hideAlert,
 } from '../../components';
 import { llmService, activeModelService, modelManager, generationService } from '../../services';
 import { isModelReady, activeLocalTextCapabilities, activeTextCapabilities, backendFallbackNotice } from '../../services/engines';
@@ -12,6 +11,10 @@ import logger from '../../utils/logger';
 import { ModelReadyOutcome, reasonFromLoadError } from './modelReadiness';
 import { isOverridableMemoryError } from '../../services/modelLoadErrors';
 import { loadModelWithOverride } from '../../services/loadModelWithOverride';
+import {
+  clearModelFailure,
+  reportModelFailure,
+} from '../../services/modelFailureHandler';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -84,26 +87,6 @@ function addBackendFallbackMsg(deps: Pick<ModelActionDeps, 'activeModel' | 'acti
   });
 }
 
-async function doLoadTextModel(deps: ModelActionDeps, opts?: { override?: boolean }): Promise<void> {
-  const { activeModel, activeModelId } = deps;
-  if (!activeModel || !activeModelId) return;
-  try {
-    await activeModelService.loadTextModel(activeModelId, undefined, opts);
-    deps.setSupportsVision(loadedModelVision(activeModel));
-    if (deps.modelLoadStartTimeRef.current && deps.settings.showGenerationDetails) {
-      const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
-      addSystemMsg(deps, `Model loaded: ${activeModel.name} (${loadTime}s)`);
-    }
-    addBackendFallbackMsg(deps);
-  } catch (error: any) {
-    deps.setAlertState(showAlert('Error', `Failed to load model: ${error?.message || 'Unknown error'}`));
-  } finally {
-    deps.setIsModelLoading(false);
-    deps.setLoadingModel(null);
-    deps.modelLoadStartTimeRef.current = null;
-  }
-}
-
 export async function initiateModelLoad(
   deps: ModelActionDeps,
   alreadyLoading: boolean,
@@ -148,27 +131,33 @@ export async function initiateModelLoad(
       // That is overridable — offer "Load Anyway" (force the load) rather than a
       // dead-end "Failed to load model" the user can only dismiss.
       if (isOverridableMemoryError(error)) {
-        deps.setAlertState(showAlert(
-          'Insufficient Memory',
-          `${detail}\n\nWould you like to override these safeguards and load it anyway?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Load Anyway', style: 'destructive', onPress: () => {
-                deps.setAlertState(hideAlert());
-                deps.setIsModelLoading(true);
-                deps.setLoadingModel(activeModel);
-                deps.modelLoadStartTimeRef.current = Date.now();
-                waitForRenderFrame()
-                  .then(() => doLoadTextModel(deps, { override: true }))
-                  // Resume once the load resolves — don't gate on isModelLoaded() (races
-                  // false after a multimodal load, dropping the resume). See the sibling path.
-                  .then(() => onLoadedResume?.())
-                  .catch((e) => logger.error('[ModelLoad] Load Anyway resume failed:', e));
-              },
-            },
-          ],
-        ));
+        reportModelFailure('text', error, {
+          id: 'chat-text-load',
+          onLoadAnyway: () => {
+            deps.setIsModelLoading(true);
+            deps.setLoadingModel(activeModel);
+            deps.modelLoadStartTimeRef.current = Date.now();
+            void waitForRenderFrame()
+              .then(() =>
+                activeModelService.loadTextModel(activeModelId, undefined, {
+                  override: true,
+                }),
+              )
+              .then(() => {
+                deps.setSupportsVision(loadedModelVision(activeModel));
+                clearModelFailure('text');
+                onLoadedResume?.();
+              })
+              .catch(cause =>
+                reportModelFailure('text', cause, { id: 'chat-text-load' }),
+              )
+              .finally(() => {
+                deps.setIsModelLoading(false);
+                deps.setLoadingModel(null);
+                deps.modelLoadStartTimeRef.current = null;
+              });
+          },
+        });
         return { ok: false, reason: 'insufficient-memory', detail, alerted: true };
       }
       deps.setAlertState(showAlert('Error', `Failed to load model: ${detail}`));
