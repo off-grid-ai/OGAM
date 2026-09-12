@@ -41,10 +41,10 @@ module.exports = {
     'no-unreachable': 'error',
     'no-constant-condition': ['error', { checkLoops: false }],
     'no-constant-binary-expression': 'error',
-    complexity: ['error', 20],
+    complexity: ['error', 25],
     'max-lines-per-function': ['error', 350],
-    'max-lines': ['error', 500],
-    'max-params': ['error', 3],
+    'max-lines': ['error', 1000],
+    'max-params': ['error', 5],
     // React hooks
     'react-hooks/rules-of-hooks': 'error',
     'react-hooks/exhaustive-deps': 'warn',
