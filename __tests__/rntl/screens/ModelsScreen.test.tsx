@@ -565,9 +565,9 @@ describe('ModelsScreen', () => {
       }
     });
 
-    it('recommended models have editorial ordering with Gemma 4 first', () => {
+    it('recommended models have editorial ordering with MiniCPM5 first', () => {
       const { RECOMMENDED_MODELS } = require('../../../src/constants');
-      expect(RECOMMENDED_MODELS[0].id).toContain('gemma-4');
+      expect(RECOMMENDED_MODELS[0].id).toBe('openbmb/MiniCPM5-2B-GGUF');
     });
 
     it('MODEL_ORGS contains expected organizations', () => {
