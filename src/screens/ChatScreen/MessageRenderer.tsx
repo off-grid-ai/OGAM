@@ -8,6 +8,8 @@ import { Message } from '../../types';
 import { useUiModeStore } from '../../stores';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { ChatMessageItem } from './useChatScreen';
+import { STREAMING_MESSAGE_ID } from './types';
+import { useActiveStreamText } from './useActiveStreamText';
 
 type MessageRendererProps = {
   item: Message | ChatMessageItem;
@@ -160,7 +162,32 @@ export function messageRendererPropsEqual(
   );
 }
 
-export const MessageRenderer = React.memo(
+const CommittedMessageRenderer = React.memo(
   MessageRendererInner,
+  messageRendererPropsEqual,
+);
+
+const LiveStreamMessageRenderer: React.FC<MessageRendererProps> = props => {
+  const live = useActiveStreamText();
+  const item = React.useMemo(
+    () => ({
+      ...props.item,
+      content: live.content,
+      reasoningContent: live.reasoningContent,
+    }),
+    [props.item, live],
+  );
+  return <CommittedMessageRenderer {...props} item={item} />;
+};
+
+const MessageRendererDispatch: React.FC<MessageRendererProps> = props =>
+  props.item.id === STREAMING_MESSAGE_ID ? (
+    <LiveStreamMessageRenderer {...props} />
+  ) : (
+    <CommittedMessageRenderer {...props} />
+  );
+
+export const MessageRenderer = React.memo(
+  MessageRendererDispatch,
   messageRendererPropsEqual,
 );
