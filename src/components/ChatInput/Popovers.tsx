@@ -117,7 +117,11 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
   mcpToolCount = 0, onMcpPress,
 }) => {
   const { colors } = useTheme();
-  const { settings, updateSettings, toolCountHintDismissed } = useAppStore();
+  const thinkingEnabled = useAppStore(state => state.settings.thinkingEnabled);
+  const updateSettings = useAppStore(state => state.updateSettings);
+  const toolCountHintDismissed = useAppStore(
+    state => state.toolCountHintDismissed,
+  );
 
   if (!visible) return null;
 
@@ -177,16 +181,16 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
                   style={popoverStyles.row}
                   onPress={() => {
                     triggerHaptic('impactLight');
-                    updateSettings({ thinkingEnabled: !settings.thinkingEnabled });
+                    updateSettings({ thinkingEnabled: !thinkingEnabled });
                   }}
                 >
-                  <Icon name="zap" size={16} color={settings.thinkingEnabled ? colors.primary : colors.textMuted} />
+                  <Icon name="zap" size={16} color={thinkingEnabled ? colors.primary : colors.textMuted} />
                   <Text style={[popoverStyles.rowLabel, { color: colors.text }]}>Thinking</Text>
                   <View style={[popoverStyles.badge, {
-                    backgroundColor: settings.thinkingEnabled ? colors.primary : colors.textMuted,
+                    backgroundColor: thinkingEnabled ? colors.primary : colors.textMuted,
                   }]}>
                     <Text style={[popoverStyles.badgeText, { color: colors.background }]}>
-                      {settings.thinkingEnabled ? 'ON' : 'OFF'}
+                      {thinkingEnabled ? 'ON' : 'OFF'}
                     </Text>
                   </View>
                 </TouchableOpacity>
