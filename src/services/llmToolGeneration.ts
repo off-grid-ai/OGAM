@@ -127,6 +127,7 @@ export interface ToolGenerationDeps {
   isThinkingEnabled: boolean;
   isGemma4Model: boolean;
   disableCtxShift: boolean;
+  contextLength: number;
   manageContextWindow: (messages: Message[], extraReserve?: number) => Promise<Message[]>;
   /** Async because it also drops images whose file is gone — see LLMService.convertToOAIMessages. */
   convertToOAIMessages: (messages: Message[]) => Promise<any[]>;
@@ -166,7 +167,10 @@ export async function generateWithToolsImpl(
 
     const completionParams = {
       messages: oaiMessages,
-      ...buildCompletionParams(settings, { disableCtxShift: deps.disableCtxShift }),
+      ...buildCompletionParams(settings, {
+        disableCtxShift: deps.disableCtxShift,
+        contextLength: deps.contextLength,
+      }),
       tools: options.tools,
       tool_choice: 'auto',
       ...buildThinkingCompletionParams(deps.isThinkingEnabled, deps.isGemma4Model, settings.reasoningBudget),

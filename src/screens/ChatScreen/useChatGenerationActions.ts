@@ -612,11 +612,32 @@ async function generateWithCompactionRetry(
     // Stop/Eject can arrive while the summary is running. Do not start a new
     // completion after the owner has cancelled this turn.
     if (generationService.wasAborted()) return true;
+    const beforeCompaction = exactMessages.filter(
+      message => message.role !== 'system',
+    );
+    const afterCompaction = compacted.filter(
+      message => message.role !== 'system',
+    );
+    const changed =
+      beforeCompaction.length !== afterCompaction.length ||
+      beforeCompaction.some((message, index) => {
+        const next = afterCompaction[index];
+        return (
+          !next ||
+          message.id !== next.id ||
+          message.role !== next.role ||
+          message.content !== next.content
+        );
+      });
+    // A fresh or already-minimal prompt has no older history to recover. Retrying the same
+    // request with a "continue" instruction only makes it larger and exposes that instruction
+    // as model reasoning.
+    if (!changed) throw error;
     useChatStore.getState().addMessage(opts.id, {
       role: 'assistant',
       content: contextCompactedNoticeText(
-        exactMessages.filter(message => message.role !== 'system').length,
-        compacted.filter(message => message.role !== 'system').length,
+        beforeCompaction.length,
+        afterCompaction.length,
       ),
       isSystemInfo: true,
     });

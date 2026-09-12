@@ -27,12 +27,16 @@ import {
   XML_TOOL_CALL_PARAMETER_MARKER,
 } from '../utils/messageContent';
 import {
+  budgetTools,
   callsWithinToolBudget,
-  finalResponseFromToolResults,
+  finalAnswerInstruction,
+  generationOutputTokenBudget,
+  isContextCapacityError,
   normalizeMaxToolCalls,
   toolLimitFinalAnswerInstruction,
   toolPromptChars,
   toolResultCharBudget,
+  toolSchemaTokenBudget,
 } from '@offgrid/models';
 const currentMaxToolSteps = (): number => {
   const configured = useAppStore.getState().settings.maxToolCalls;
@@ -418,10 +422,14 @@ async function executeToolCalls(
     const result = await executeToolCallSafely(tc);
     ctx.callbacks?.onToolCallComplete?.(tc.name, result);
     const settings = useAppStore.getState().settings;
+    const replyReserveTokens = generationOutputTokenBudget({
+      contextLength: settings.contextLength,
+      requestedMaxTokens: settings.maxTokens,
+    });
     const resultBudget = toolResultCharBudget({
       contextLength: settings.contextLength,
       promptChars: toolPromptChars(loopMessages, tools),
-      replyReserveTokens: settings.maxTokens,
+      replyReserveTokens,
     });
     const resultContent = toolResultModelContent(result, resultBudget);
     if (result.status === 'ok' && resultContent.trim()) {
@@ -447,6 +455,7 @@ const RETRY_BACKOFF_MS = 1000;
 const CONTEXT_RELEASE_PAUSE_MS = 500;
 function isNonRetryableError(msg: string): boolean {
   return (
+    isContextCapacityError(msg) ||
     msg.includes('No model loaded') ||
     msg.includes('aborted') ||
     msg.includes('Remote provider') ||
@@ -689,7 +698,7 @@ function buildLiteRTToolCallHandler(
 ) {
   const { conversationId, outcome, initialMessages = [], tools = [] } = input;
   const maxToolSteps = currentMaxToolSteps();
-  const finalAnswerInstruction = toolLimitFinalAnswerInstruction(maxToolSteps);
+  const limitInstruction = toolLimitFinalAnswerInstruction(maxToolSteps);
   // Per-turn counter: this closure is rebuilt once per generation, so it resets each new
   // message and the native loop reuses it for every tool call within the turn.
   let toolCallCount = 0;
@@ -702,7 +711,7 @@ function buildLiteRTToolCallHandler(
     toolCallCount++;
     if (toolCallCount > maxToolSteps) {
       if (outcome) outcome.limitReached = true;
-      return finalAnswerInstruction;
+      return limitInstruction;
     }
     ctx.callbacks?.onToolCallStart?.(name, args as Record<string, any>);
     const toolCall: ToolCall = {
@@ -722,10 +731,14 @@ function buildLiteRTToolCallHandler(
     const result = await executeToolCallSafely(toolCall);
     ctx.callbacks?.onToolCallComplete?.(name, result);
     const settings = useAppStore.getState().settings;
+    const replyReserveTokens = generationOutputTokenBudget({
+      contextLength: settings.contextLength,
+      requestedMaxTokens: settings.maxTokens,
+    });
     const resultBudget = toolResultCharBudget({
       contextLength: settings.contextLength,
       promptChars: toolPromptChars(promptMessages, tools),
-      replyReserveTokens: settings.maxTokens,
+      replyReserveTokens,
     });
     const resultContent = toolResultModelContent(result, resultBudget);
     const toolCallMsg: Message = {
@@ -1233,10 +1246,13 @@ async function emitToolLimitFinalAnswer(
     return { interrupted: true };
   }
   const { displayResponse } = resolveToolCalls(fullResponse, []);
+  if (!displayResponse.trim()) {
+    throw new Error('The model reached the tool limit but returned no final answer.');
+  }
   emitFinalResponse(
     ctx,
     state,
-    finalResponseFromToolResults(displayResponse, state.successfulToolResults),
+    displayResponse,
   );
   return { interrupted: false };
 }
@@ -1280,9 +1296,10 @@ async function selectEffectiveSchemas(
         extSchemas,
         MCP_TOOL_ROUTE_TOPK,
       );
-      const filteredExt = extSchemas.filter(s =>
-        selected.includes(s.function.name),
-      );
+      const byName = new Map(extSchemas.map(schema => [schema.function.name, schema]));
+      const filteredExt = selected
+        .map(name => byName.get(name))
+        .filter((schema): schema is any => !!schema);
       return [...builtInSchemas, ...filteredExt];
     } catch (e) {
       logger.warn(
@@ -1316,9 +1333,10 @@ async function selectEffectiveSchemas(
       // No MCP tool named (router said "none" OR just didn't name one) → built-in only.
       return builtInSchemas;
     }
-    const filteredExt = extSchemas.filter(s =>
-      selected.includes(s.function.name),
-    );
+    const byName = new Map(extSchemas.map(schema => [schema.function.name, schema]));
+    const filteredExt = selected
+      .map(name => byName.get(name))
+      .filter((schema): schema is any => !!schema);
     return [...builtInSchemas, ...filteredExt];
   } catch (e) {
     logger.warn(
@@ -1339,6 +1357,36 @@ export interface ToolLoopOutcome {
   interrupted: boolean;
 }
 
+function fitLocalToolSchemas(
+  ctx: ToolLoopContext,
+  builtInSchemas: any[],
+  selectedSchemas: any[],
+): any[] {
+  if (isUsingRemote() || isLiteRTActive()) return selectedSchemas;
+  const settings = useAppStore.getState().settings;
+  const replyReserveTokens = generationOutputTokenBudget({
+    contextLength: settings.contextLength,
+    requestedMaxTokens: settings.maxTokens,
+  });
+  const schemaBudget = toolSchemaTokenBudget({
+    contextLength: settings.contextLength,
+    promptChars: toolPromptChars(ctx.messages),
+    replyReserveTokens,
+  });
+  const budgeted = budgetTools(
+    selectedSchemas,
+    schemaBudget,
+    builtInSchemas.length,
+  );
+  if (budgeted.pruned || budgeted.droppedCount > 0) {
+    logger.log(
+      `[ToolLoop] schema budget=${schemaBudget} tokens; pruned=${budgeted.pruned} ` +
+        `dropped=${budgeted.droppedCount} finalEstimate=${budgeted.estTokens}`,
+    );
+  }
+  return budgeted.tools;
+}
+
 export async function runToolLoop(
   ctx: ToolLoopContext,
 ): Promise<ToolLoopOutcome> {
@@ -1348,10 +1396,15 @@ export async function runToolLoop(
     e => e.getOpenAISchemas?.() ?? [],
   );
 
-  const effectiveSchemas = await selectEffectiveSchemas(
+  const selectedSchemas = await selectEffectiveSchemas(
     ctx,
     builtInSchemas,
     extSchemas,
+  );
+  const effectiveSchemas = fitLocalToolSchemas(
+    ctx,
+    builtInSchemas,
+    selectedSchemas,
   );
   ctx.onToolsRouted?.(
     effectiveSchemas.map((s: any) => s?.function?.name).filter(Boolean),
@@ -1441,8 +1494,19 @@ export async function runToolLoop(
         state.reasoningContent = '';
         state.firstTokenFired = false;
         const fallbackOnStream = buildStreamHandler(ctx, state);
+        const finalMessages: Message[] = [
+          {
+            id: `tool-final-${Date.now()}`,
+            role: 'system',
+            content: finalAnswerInstruction(
+              state.successfulToolResults.some(result => result.trim()),
+            ),
+            timestamp: Date.now(),
+          },
+          ...loopMessages.filter(message => message.role !== 'system'),
+        ];
         const { fullResponse: fallbackResp } = await callLLMWithRetry(
-          loopMessages,
+          finalMessages,
           [],
           {
             onStream: fallbackOnStream,
@@ -1452,14 +1516,14 @@ export async function runToolLoop(
             ctx,
           },
         );
-        emitFinalResponse(
-          ctx,
-          state,
-          finalResponseFromToolResults(
-            fallbackResp,
-            state.successfulToolResults,
-          ),
+        const { displayResponse: finalResponse } = resolveToolCalls(
+          fallbackResp,
+          [],
         );
+        if (!finalResponse.trim()) {
+          throw new Error('The model completed its work but returned no final answer.');
+        }
+        emitFinalResponse(ctx, state, finalResponse);
         return { interrupted: false };
       }
       emitFinalResponse(ctx, state, displayResponse);

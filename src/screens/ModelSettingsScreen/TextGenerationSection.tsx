@@ -39,11 +39,11 @@ export const TextGenerationSection: React.FC = () => {
       ) : (
         <>
           <SliderSetting testID="llama-temperature" {...llama.temperature} />
-          <SliderSetting testID="llama-max-tokens" {...llama.maxTokens} />
           <SliderSetting
             testID="llama-context-length"
             {...llama.contextLength}
           />
+          <SliderSetting testID="llama-max-tokens" {...llama.maxTokens} />
           <ThinkingBudgetSelector />
         </>
       )}

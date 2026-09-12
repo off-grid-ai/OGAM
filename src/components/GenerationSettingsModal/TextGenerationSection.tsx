@@ -31,7 +31,7 @@ export const TextGenerationSection: React.FC = () => {
   const { isLiteRT, llama, liteRT, toolCalls } = useTextGenerationSettings();
   const basicSettings = isLiteRT
     ? [liteRT.temperature, liteRT.maxTokens]
-    : [llama.temperature, llama.maxTokens, llama.contextLength];
+    : [llama.temperature, llama.contextLength, llama.maxTokens];
   const advancedSettings = isLiteRT
     ? [liteRT.topP, toolCalls]
     : [llama.topP, llama.repeatPenalty, toolCalls];

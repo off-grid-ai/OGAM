@@ -1,5 +1,6 @@
 import { initLlama, LlamaContext } from 'llama.rn';
 import {
+  generationOutputTokenBudget,
   REASONING_BUDGET_AUTO,
   reasoningWireFragment,
   resolveReasoningPlan,
@@ -434,11 +435,14 @@ export { validateModelFile, checkMemoryForModel, safeCompletion, resolveSafeCont
 const STOP_TOKENS = ['</s>', '<|end|>', '<|eot_id|>'];
 export function buildCompletionParams(settings: {
   maxTokens?: number; temperature?: number; topP?: number; repeatPenalty?: number;
-}, options?: { disableCtxShift?: boolean }): Record<string, any> {
-  const requestedMaxTokens = Math.max(1, Math.floor(settings.maxTokens || RESPONSE_RESERVE));
+}, options?: { disableCtxShift?: boolean; contextLength?: number }): Record<string, any> {
+  const requestedMaxTokens = generationOutputTokenBudget({
+    contextLength: options?.contextLength,
+    requestedMaxTokens: settings.maxTokens,
+    autoMaxTokens: RESPONSE_RESERVE,
+  });
   return {
-    // Do not impose a second app-owned output ceiling. The setting surface already
-    // uses the model's context maximum; llama.rn owns the actual per-turn fit.
+    // A maximum output is still bounded by the loaded context. Thinking uses this same allowance.
     n_predict: requestedMaxTokens,
     temperature: settings.temperature ?? 0.7,
     top_k: 40,

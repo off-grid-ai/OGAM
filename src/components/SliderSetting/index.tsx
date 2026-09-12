@@ -17,6 +17,8 @@ interface SliderSettingProps {
   description?: string;
   warning?: string | null;
   warningColor?: string;
+  /** False for indexed sliders whose stored value is not the number shown to the user. */
+  editableValue?: boolean;
   onChange: (value: number) => void;
   testID?: string;
 }
@@ -38,6 +40,7 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
   description,
   warning,
   warningColor,
+  editableValue = true,
   onChange,
   testID,
 }) => {
@@ -93,7 +96,7 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
             selectTextOnFocus
             returnKeyType="done"
           />
-        ) : (
+        ) : editableValue ? (
           <TouchableOpacity
             testID={testID ? `${testID}-value-button` : undefined}
             onPress={startEdit}
@@ -106,6 +109,20 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
               {display}
             </Text>
           </TouchableOpacity>
+        ) : (
+          <Text
+            testID={testID ? `${testID}-value` : undefined}
+            style={[
+              styles.value,
+              {
+                color: colors.primary,
+                borderColor: colors.border,
+                backgroundColor: colors.surfaceLight,
+              },
+            ]}
+          >
+            {display}
+          </Text>
         )}
       </View>
 
