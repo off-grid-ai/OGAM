@@ -9,7 +9,7 @@ PODS:
   - hermes-engine (0.14.0):
     - hermes-engine/Pre-built (= 0.14.0)
   - hermes-engine/Pre-built (0.14.0)
-  - llama-rn (0.13.0-rc.0):
+  - llama-rn (0.13.0-rc.3):
     - boost
     - DoubleConversion
     - fast_float
@@ -3846,7 +3846,7 @@ SPEC CHECKSUMS:
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
   hermes-engine: 3de70ea2100f1780402cf146bb8110a0cdb2f34e
-  llama-rn: 889d119bdf886e4ffd8982fc6e4ee04e793c3a31
+  llama-rn: 97ecc9954febb4adc05f146f8086efb20eb1480c
   MMKV: 86859fdfa2b0b21db1fd6e48788474a6416a2c77
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
   op-sqlite: bafff369cecaee4fe65c89eec47deaba26f2db95
