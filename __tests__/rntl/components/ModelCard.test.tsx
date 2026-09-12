@@ -418,6 +418,28 @@ describe('ModelCard', () => {
       expect(queryByText('Verified')).toBeNull();
       expect(queryByText(/Unsloth/)).toBeTruthy();
     });
+
+    it('shows the verified icon instead of Official text for official models', () => {
+      const { getByLabelText, queryByText } = render(
+        <ModelCard
+          model={{
+            ...baseModel,
+            author: 'OpenBMB',
+            credibility: {
+              source: 'official',
+              isOfficial: true,
+              isVerifiedQuantizer: false,
+              verifiedBy: 'OpenBMB',
+            },
+          }}
+          compact={true}
+        />
+      );
+
+      expect(getByLabelText('Verified')).toBeTruthy();
+      expect(queryByText('Official')).toBeNull();
+      expect(queryByText(/OpenBMB/)).toBeTruthy();
+    });
   });
 
   // ============================================================================

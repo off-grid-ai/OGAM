@@ -73,10 +73,11 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
     supportsAcceleration ? 'NPU/GPU' : undefined,
     incompatibleReason,
   ].filter((value): value is string => !!value);
-  const isVerified = credibilitySource === 'verified-quantizer';
+  const hasVerifiedMark =
+    credibilitySource === 'verified-quantizer' || credibilitySource === 'official';
   const sourceLabels = [
     model.author,
-    isVerified ? undefined : credibilityLabel,
+    hasVerifiedMark ? undefined : credibilityLabel,
     recommended?.pillLabel ?? (isTrending ? 'Trending' : undefined),
   ].filter((value): value is string => !!value);
 
@@ -85,7 +86,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
       <View style={styles.denseTitleRow}>
         <Text style={styles.denseName} numberOfLines={1}>{model.name}</Text>
         <View style={styles.denseSourceGroup}>
-          {isVerified && (
+          {hasVerifiedMark && (
             <MaterialIcon
               name="verified"
               size={12}
