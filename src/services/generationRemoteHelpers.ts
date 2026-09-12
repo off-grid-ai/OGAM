@@ -111,7 +111,7 @@ export async function generateRemoteResponseImpl(
     if (failedServerId)
       useRemoteServerStore.getState().updateServerHealth(failedServerId, false);
     const local = providerRegistry.getProvider('local');
-    if (local?.isModelLoaded()) {
+    if (local?.isModelLoaded?.()) {
       svc.forceFlushTokens();
       chatStore.clearStreamingMessage();
       svc.state.streamingContent = '';
