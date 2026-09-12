@@ -16,8 +16,6 @@ import { ensureNativeLogCapture, resetNativeLogCapture, recentNativeLog } from '
 import { HTP_ENABLED } from '../config/featureFlags';
 
 const RESPONSE_RESERVE = 512;
-/** Prompt compaction target. Output length is the user's model-aware maxTokens setting. */
-export const CONTEXT_PROMPT_BUDGET_RATIO = 0.55;
 const DEFAULT_THREADS = 4; // targets performance cores only; over-threading onto efficiency cores (A520) hurts
 const DEFAULT_BATCH = 512;
 const DEFAULT_GPU_LAYERS = Platform.OS === 'ios' ? 99 : 0;
