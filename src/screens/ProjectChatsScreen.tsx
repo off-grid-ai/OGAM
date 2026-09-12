@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -21,11 +21,13 @@ import { useChatStore, useProjectStore, useAppStore } from '../stores';
 import { Conversation } from '../types';
 import { RootStackParamList } from '../navigation/types';
 import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
+import { conversationsForProject } from '../utils/projectConversations';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'ProjectChats'>;
 
 const formatDate = (dateString: string): string => formatWhen(dateString);
+const chatKey = (conversation: Conversation): string => conversation.id;
 
 const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: {
@@ -155,17 +157,23 @@ export const ProjectChatsScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  const { getProject } = useProjectStore();
-  const { conversations, deleteConversation, setActiveConversation, createConversation } = useChatStore();
-  const { downloadedModels, activeModelId } = useAppStore();
+  const project = useProjectStore(state =>
+    state.projects.find(candidate => candidate.id === projectId),
+  );
+  const conversations = useChatStore(state => state.conversations);
+  const deleteConversation = useChatStore(state => state.deleteConversation);
+  const setActiveConversation = useChatStore(state => state.setActiveConversation);
+  const createConversation = useChatStore(state => state.createConversation);
+  const downloadedModels = useAppStore(state => state.downloadedModels);
+  const activeModelId = useAppStore(state => state.activeModelId);
 
-  const project = getProject(projectId);
   const hasModels = downloadedModels.length > 0;
 
   // Get chats for this project
-  const projectChats = conversations
-    .filter((c) => c.projectId === projectId)
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  const projectChats = useMemo(
+    () => conversationsForProject(conversations, projectId),
+    [conversations, projectId],
+  );
 
   const handleChatPress = (conversation: Conversation) => {
     setActiveConversation(conversation.id);
@@ -283,7 +291,7 @@ export const ProjectChatsScreen: React.FC = () => {
         <FlatList
           data={projectChats}
           renderItem={renderChat}
-          keyExtractor={(item) => item.id}
+          keyExtractor={chatKey}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={Platform.OS !== 'android'}

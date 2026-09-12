@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { InteractionManager } from 'react-native';
 import {
   AlertState,
@@ -88,8 +88,11 @@ export const useHomeScreen = (navigation: HomeScreenNavigationProp) => {
     generatedImages,
   } = useAppStore();
 
-  const { conversations, setActiveConversation, deleteConversation } =
-    useChatStore();
+  const conversations = useChatStore(state => state.conversations);
+  const setActiveConversation = useChatStore(
+    state => state.setActiveConversation,
+  );
+  const deleteConversation = useChatStore(state => state.deleteConversation);
 
   // Remote server store for remote models
   const {
@@ -354,7 +357,10 @@ export const useHomeScreen = (navigation: HomeScreenNavigationProp) => {
     null;
   // Ordered, not just the store's first four - otherwise "Recent" can list older chats than
   // the ones just used, and disagrees with the Chats list and desktop.
-  const recentConversations = mostRecentConversations(conversations, 4);
+  const recentConversations = useMemo(
+    () => mostRecentConversations(conversations, 4),
+    [conversations],
+  );
 
   // Get all remote text models — includes vision-language models since they do text generation too
   const remoteTextModels: RemoteModel[] = remoteServers.flatMap(
