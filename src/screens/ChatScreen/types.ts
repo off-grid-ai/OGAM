@@ -107,10 +107,13 @@ function groupSupportingContextWithImage(
  */
 export type RemoteStreamItem = ChatStreamPreviewRow;
 
+export const STREAMING_MESSAGE_ID = 'streaming';
+
 export type StreamingState = {
   isThinking: boolean;
   streamingMessage: string;
   streamingReasoningContent: string;
+  hasStreamingText?: boolean;
   isStreamingForThisConversation: boolean;
   isModelLoading?: boolean;
   loadingModelName?: string;
@@ -268,7 +271,9 @@ function localDisplayMessages(
     ];
   }
   if (
-    (streamingMessage || streamingReasoningContent) &&
+    (streamingMessage ||
+      streamingReasoningContent ||
+      streaming.hasStreamingText) &&
     isStreamingForThisConversation
   ) {
     if (_lastDisplayBranch !== 'streaming') {
@@ -277,7 +282,7 @@ function localDisplayMessages(
     return [
       ...allMessages,
       {
-        id: 'streaming',
+        id: STREAMING_MESSAGE_ID,
         role: 'assistant' as const,
         content: streamingMessage,
         reasoningContent: streamingReasoningContent || undefined,

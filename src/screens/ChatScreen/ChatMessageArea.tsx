@@ -1,11 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import {
-  View,
-  FlatList,
-  Text,
-  Keyboard,
-  Platform,
-} from 'react-native';
+import { View, FlatList, Text, Platform } from 'react-native';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
@@ -71,6 +65,13 @@ export const computeFooterPaddingBottom = (
   // Thin overlay inset: keep the symmetric-with-top cap.
   return Math.min(insetBottom, FOOTER_SAFE_CAP);
 };
+
+const keyExtractor = (item: { id: string }) => item.id;
+const MAINTAIN_VISIBLE_CONTENT_POSITION = {
+  minIndexForVisible: 0,
+  autoscrollToTopThreshold: 100,
+};
+const REMOVE_CLIPPED_SUBVIEWS = Platform.OS !== 'android';
 
 // Show the "tap to continue" bar only when a text reply is genuinely PENDING — the
 // selected text model was evicted AND the last message is an unanswered user turn.
@@ -216,6 +217,31 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   const handleRepairVision = activeModelRepoId
     ? () => tabNav.navigate('DownloadManager')
     : undefined;
+  const handleContentSizeChange = React.useCallback(
+    (_width: number, height: number) => {
+      if (!hasScrolledRef.current && height > 0) {
+        flatListRef.current?.scrollToEnd({ animated: false });
+        hasScrolledRef.current = true;
+      } else if (isNearBottomRef.current) {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }
+    },
+    [flatListRef, isNearBottomRef],
+  );
+  const handleListLayout = React.useCallback(
+    (event: { nativeEvent: { layout: { height: number } } }) => {
+      const newHeight = event.nativeEvent.layout.height;
+      const previousHeight = flatListHeightRef.current;
+      flatListHeightRef.current = newHeight;
+      if (previousHeight > 0 && newHeight < previousHeight) {
+        setTimeout(
+          () => flatListRef.current?.scrollToEnd({ animated: true }),
+          50,
+        );
+      }
+    },
+    [flatListRef],
+  );
   const scrollToBottomStyle = useMemo(
     () => [styles.scrollToBottomContainer, { bottom: inputHeight + 8 }],
     [styles.scrollToBottomContainer, inputHeight],
@@ -246,39 +272,17 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           ref={flatListRef}
           data={chat.displayMessages}
           renderItem={renderItem}
-          keyExtractor={item => item.id}
+          keyExtractor={keyExtractor}
           extraData={interfaceMode}
           contentContainerStyle={styles.messageList}
           onScroll={handleScroll}
-          onContentSizeChange={(_w, h) => {
-            if (!hasScrolledRef.current && h > 0) {
-              // Initial layout: force scroll to bottom regardless of isNearBottom
-              flatListRef.current?.scrollToEnd({ animated: false });
-              hasScrolledRef.current = true;
-            } else if (isNearBottomRef.current) {
-              flatListRef.current?.scrollToEnd({ animated: false });
-            }
-          }}
-          onLayout={e => {
-            const newHeight = e.nativeEvent.layout.height;
-            const prevHeight = flatListHeightRef.current;
-            flatListHeightRef.current = newHeight;
-            if (prevHeight > 0 && newHeight < prevHeight) {
-              setTimeout(
-                () => flatListRef.current?.scrollToEnd({ animated: true }),
-                50,
-              );
-            }
-          }}
+          onContentSizeChange={handleContentSizeChange}
+          onLayout={handleListLayout}
           scrollEventThrottle={16}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
-          onTouchStart={() => Keyboard.dismiss()}
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
-            autoscrollToTopThreshold: 100,
-          }}
-          removeClippedSubviews={Platform.OS !== 'android'}
+          maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
+          removeClippedSubviews={REMOVE_CLIPPED_SUBVIEWS}
         />
       )}
       {chat.showScrollToBottom && chat.displayMessages.length > 0 && (

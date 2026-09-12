@@ -489,6 +489,7 @@ function remoteGenerateOnce(
     topP: settings.topP,
     tools,
     enableThinking: thinkingEnabled,
+    reasoningBudget: settings.reasoningBudget,
   };
   let _fullContent = '';
   let streamed = false;

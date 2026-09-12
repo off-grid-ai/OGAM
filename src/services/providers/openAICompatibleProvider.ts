@@ -23,6 +23,11 @@ import type {
   OpenAIStreamState,
 } from './openAICompatibleTypes';
 import { remoteAuthorizationHeaders } from '../remoteTransportPolicy';
+import {
+  reasoningWireFragment,
+  resolveReasoningPlan,
+  type ReasoningMetadata,
+} from '@offgrid/models';
 
 export type { OpenAIChatMessage, OpenAIConfig } from './openAICompatibleTypes';
 
@@ -91,6 +96,24 @@ export class OpenAICompatibleProvider implements LLMProvider {
     options: GenerationOptions,
     thinkingEnabled: boolean
   ): Record<string, unknown> {
+    const reasoningMetadata: ReasoningMetadata = this.config.endpoint.includes('openrouter.ai')
+      ? {
+          transport: 'openrouter',
+          control: 'provider-native',
+          supportsTokenBudget: true,
+          defaultEffort: 'medium',
+        }
+      : {
+          transport: 'openai-compatible',
+          control: this.modelCapabilities.acceptsThinkingKwarg
+            ? 'enable-thinking'
+            : 'no-control',
+        };
+    const reasoning = reasoningWireFragment(resolveReasoningPlan({
+      enabled: thinkingEnabled,
+      budgetTokens: options.reasoningBudget,
+      effort: 'medium',
+    }, reasoningMetadata));
     return {
       model: this.config.modelId,
       messages: openaiMessages,
@@ -108,7 +131,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
       // servers that advertised (at discovery) that they honor it. Gating on a
       // discovered capability — not the endpoint's port — keeps the "which server
       // accepts this?" decision in one place and free of implementation coupling.
-      ...(this.modelCapabilities.acceptsThinkingKwarg && { chat_template_kwargs: { enable_thinking: thinkingEnabled } }),
+      ...reasoning,
     };
   }
 

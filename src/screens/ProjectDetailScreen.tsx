@@ -35,14 +35,14 @@ export const ProjectDetailScreen: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
-  const { getProject, deleteProject } = useProjectStore();
-  const {
-    conversations,
-    deleteConversation,
-    setActiveConversation,
-    createConversation,
-  } = useChatStore();
-  const { downloadedModels, activeModelId } = useAppStore();
+  const getProject = useProjectStore(state => state.getProject);
+  const deleteProject = useProjectStore(state => state.deleteProject);
+  const conversations = useChatStore(state => state.conversations);
+  const deleteConversation = useChatStore(state => state.deleteConversation);
+  const setActiveConversation = useChatStore(state => state.setActiveConversation);
+  const createConversation = useChatStore(state => state.createConversation);
+  const downloadedModels = useAppStore(state => state.downloadedModels);
+  const activeModelId = useAppStore(state => state.activeModelId);
 
   const project = getProject(projectId);
   const hasModels = downloadedModels.length > 0;

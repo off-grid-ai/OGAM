@@ -7,6 +7,8 @@ import { useAppStore, useChatStore, useRemoteServerStore } from '../stores';
 import { runToolLoop } from './generationToolLoop';
 import type { GenerationOptions, CompletionResult } from './providers/types';
 import logger from '../utils/logger';
+import { providerRegistry } from './providers';
+import { fallbackNoticeText } from '@offgrid/models';
 import {
   FLUSH_INTERVAL_MS,
   buildGenerationMetaImpl,
@@ -38,7 +40,7 @@ export async function generateRemoteResponseImpl(
   // abortRequested is reset by the next generation's prepareGeneration().
   const { signal: generationSignal } = svc.currentRemoteAbortController;
 
-  const { temperature, maxTokens, topP, thinkingEnabled } =
+  const { temperature, maxTokens, topP, thinkingEnabled, reasoningBudget } =
     useAppStore.getState().settings;
   const options: GenerationOptions = {
     temperature,
@@ -46,61 +48,61 @@ export async function generateRemoteResponseImpl(
     topP,
     stopSequences: [],
     enableThinking: thinkingEnabled && provider.capabilities.supportsThinking,
+    reasoningBudget,
+  };
+
+  const callbacks = {
+    onToken: (token: string) => {
+      if (generationSignal.aborted) return;
+      if (!firstTokenReceived) {
+        firstTokenReceived = true;
+        svc.remoteTimeToFirstToken = svc.state.startTime
+          ? (Date.now() - svc.state.startTime) / 1000
+          : undefined;
+        svc.updateState({ isThinking: false });
+        onFirstToken?.();
+      }
+      svc.state.streamingContent += token;
+      svc.tokenBuffer += token;
+      if (!svc.flushTimer) {
+        svc.flushTimer = setTimeout(
+          () => svc.flushTokenBuffer(),
+          FLUSH_INTERVAL_MS,
+        );
+      }
+    },
+    onReasoning: (content: string) => {
+      if (generationSignal.aborted) return;
+      svc.reasoningBuffer += content;
+      svc.totalReasoningLength += content.length;
+      if (!svc.flushTimer) {
+        svc.flushTimer = setTimeout(
+          () => svc.flushTokenBuffer(),
+          FLUSH_INTERVAL_MS,
+        );
+      }
+    },
+    onComplete: (_result: CompletionResult) => {
+      if (generationSignal.aborted) return;
+      svc.forceFlushTokens();
+      const generationTime = svc.state.startTime
+        ? Date.now() - svc.state.startTime
+        : undefined;
+      chatStore.finalizeStreamingMessage(
+        conversationId,
+        generationTime,
+        buildGenerationMetaImpl(svc),
+      );
+      svc.checkSharePrompt();
+      svc.resetState();
+    },
+    onError: (error: Error) => {
+      throw error;
+    },
   };
 
   try {
-    await provider.generate(messages, options, {
-      onToken: (token: string) => {
-        if (generationSignal.aborted) return;
-        if (!firstTokenReceived) {
-          firstTokenReceived = true;
-          svc.remoteTimeToFirstToken = svc.state.startTime
-            ? (Date.now() - svc.state.startTime) / 1000
-            : undefined;
-          svc.updateState({ isThinking: false });
-          onFirstToken?.();
-        }
-        svc.state.streamingContent += token;
-        svc.tokenBuffer += token;
-        if (!svc.flushTimer) {
-          svc.flushTimer = setTimeout(
-            () => svc.flushTokenBuffer(),
-            FLUSH_INTERVAL_MS,
-          );
-        }
-      },
-      onReasoning: (content: string) => {
-        if (generationSignal.aborted) return;
-        svc.reasoningBuffer += content;
-        svc.totalReasoningLength += content.length;
-        if (!svc.flushTimer) {
-          svc.flushTimer = setTimeout(
-            () => svc.flushTokenBuffer(),
-            FLUSH_INTERVAL_MS,
-          );
-        }
-      },
-      onComplete: (_result: CompletionResult) => {
-        if (generationSignal.aborted) return;
-        svc.forceFlushTokens();
-        const generationTime = svc.state.startTime
-          ? Date.now() - svc.state.startTime
-          : undefined;
-        chatStore.finalizeStreamingMessage(
-          conversationId,
-          generationTime,
-          buildGenerationMetaImpl(svc),
-        );
-        svc.checkSharePrompt();
-        svc.resetState();
-      },
-      onError: (error: Error) => {
-        if (generationSignal.aborted) return;
-        logger.error('[GenerationService] Remote generation error:', error);
-        keepShownPartialOnError(svc, conversationId);
-        throw error;
-      },
-    });
+    await provider.generate(messages, options, callbacks);
   } catch (error) {
     if (generationSignal.aborted) return;
     logger.error('[GenerationService] Remote generation error:', error);
@@ -108,6 +110,43 @@ export async function generateRemoteResponseImpl(
     const failedServerId = useRemoteServerStore.getState().activeServerId;
     if (failedServerId)
       useRemoteServerStore.getState().updateServerHealth(failedServerId, false);
+    const local = providerRegistry.getProvider('local');
+    if (local?.isModelLoaded()) {
+      svc.forceFlushTokens();
+      chatStore.clearStreamingMessage();
+      svc.state.streamingContent = '';
+      svc.tokenBuffer = '';
+      svc.reasoningBuffer = '';
+      svc.remoteTimeToFirstToken = undefined;
+      firstTokenReceived = false;
+      chatStore.addMessage(conversationId, {
+        role: 'assistant',
+        content: fallbackNoticeText(
+          {
+            name:
+              useRemoteServerStore.getState().getActiveServer()?.name ??
+              'Remote model',
+          },
+          { name: local.getLoadedModelId() ?? 'Local model' },
+          error,
+        ),
+        isSystemInfo: true,
+      });
+      chatStore.startStreaming(conversationId);
+      svc.updateState({ isThinking: true, startTime: Date.now() });
+      svc.answeringModelName = local.getLoadedModelId() ?? 'Local model';
+      svc.answeringLocally = true;
+      await local.generate(
+        messages,
+        {
+          ...options,
+          enableThinking:
+            thinkingEnabled && local.capabilities.supportsThinking,
+        },
+        callbacks,
+      );
+      return;
+    }
     keepShownPartialOnError(svc, conversationId);
     throw error;
   } finally {

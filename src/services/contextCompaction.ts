@@ -14,26 +14,14 @@
  *   Native overhead 5%      (template, tools, and media)
  */
 import { llmService } from './llm';
-import { CONTEXT_PROMPT_BUDGET_RATIO } from './llmHelpers';
 import { useChatStore } from '../stores/chatStore';
 import { Message } from '../types';
 import logger from '../utils/logger';
-
-const CONTEXT_FULL_PATTERNS = [
-  'context is full',
-  'not enough context space',
-  'context window exceeded',
-  'context length exceeded',
-];
-
-/** Fraction of context allocated to the summary */
-const SUMMARY_BUDGET_RATIO = 0.12;
-
-/** Fallback chars-per-token when tokenizer is unavailable */
-const CHARS_PER_TOKEN_ESTIMATE = 4;
-
-/** Estimated token overhead for the summarization instruction prompt */
-const SUMMARIZER_INSTRUCTION_OVERHEAD_TOKENS = 100;
+import {
+  isContextCapacityError,
+  planContextCompaction,
+  CHARS_PER_TOKEN_ESTIMATE,
+} from '@offgrid/models';
 
 /** System prompt for the summarizer LLM call */
 const SUMMARIZER_SYSTEM_PROMPT =
@@ -43,7 +31,9 @@ class ContextCompactionService {
   private _isCompacting = false;
   private readonly compactingListeners = new Set<(v: boolean) => void>();
 
-  get isCompacting(): boolean { return this._isCompacting; }
+  get isCompacting(): boolean {
+    return this._isCompacting;
+  }
 
   subscribeCompacting(listener: (v: boolean) => void): () => void {
     this.compactingListeners.add(listener);
@@ -62,8 +52,7 @@ class ContextCompactionService {
   }
 
   isContextFullError(error: unknown): boolean {
-    const msg = (error instanceof Error ? error.message : `${error as string}`).toLowerCase();
-    return CONTEXT_FULL_PATTERNS.some(p => msg.includes(p));
+    return isContextCapacityError(error);
   }
 
   /** Count tokens for a string; falls back to char estimate if tokenizer unavailable */
@@ -85,43 +74,39 @@ class ContextCompactionService {
    *
    * Falls back to trim-only if summarization fails.
    */
-  async compact(
-    opts: { conversationId: string; systemPrompt: string; allMessages: Message[]; previousSummary?: string },
-  ): Promise<Message[]> {
-    const { conversationId, systemPrompt, allMessages, previousSummary } = opts;
+  async compact(opts: {
+    conversationId: string;
+    systemPrompt: string;
+    allMessages: Message[];
+    previousSummary?: string;
+    protectedTailCount?: number;
+  }): Promise<Message[]> {
+    const {
+      conversationId,
+      systemPrompt,
+      allMessages,
+      previousSummary,
+      protectedTailCount,
+    } = opts;
     this.setCompacting(true);
     try {
       await llmService.clearKVCache(true);
 
-      const ctxLength = llmService.getPerformanceSettings().contextLength || 2048;
-      const summaryTokenBudget = Math.floor(ctxLength * SUMMARY_BUDGET_RATIO);
-      const systemTokens = await this.countTokens(systemPrompt);
-      const recentTokenBudget = Math.max(0, Math.floor(ctxLength * CONTEXT_PROMPT_BUDGET_RATIO) - summaryTokenBudget - systemTokens);
-
-      const nonSystem = allMessages.filter(m => m.role !== 'system');
-      logger.log(`[ContextCompaction] ${nonSystem.length} messages, ctx=${ctxLength}, summaryBudget=${summaryTokenBudget}, recentBudget=${recentTokenBudget}`);
-
-      // Walk backwards — keep recent messages that fit in the recent budget
-      const recentMessages: Message[] = [];
-      let recentTokensUsed = 0;
-      for (let i = nonSystem.length - 1; i >= 0; i--) {
-        const msg = nonSystem[i];
-        const tokens = await this.countTokens(msg.content);
-        if (recentTokensUsed + tokens <= recentTokenBudget) {
-          recentMessages.unshift(msg);
-          recentTokensUsed += tokens;
-        } else if (recentMessages.length === 0) {
-          // Last message is too large — truncate to fit
-          const charBudget = recentTokenBudget * CHARS_PER_TOKEN_ESTIMATE;
-          recentMessages.unshift({ ...msg, content: msg.content.slice(-charBudget) });
-          break;
-        } else {
-          break;
-        }
-      }
-
-      // Everything before recent is "old"
-      const oldMessages = nonSystem.slice(0, nonSystem.length - recentMessages.length);
+      const ctxLength =
+        llmService.getPerformanceSettings().contextLength || 2048;
+      const plan = await planContextCompaction({
+        messages: allMessages,
+        systemPrompt,
+        contextLength: ctxLength,
+        protectedTailCount,
+        previousSummary,
+        countTokens: (text: string) => this.countTokens(text),
+      });
+      const { oldMessages, recentMessages, summaryTokenBudget, summaryInput } =
+        plan;
+      logger.log(
+        `[ContextCompaction] ${plan.beforeCount} messages, ctx=${ctxLength}, summaryBudget=${summaryTokenBudget}`,
+      );
 
       // If there are no old messages, no compaction needed
       if (oldMessages.length === 0) {
@@ -135,17 +120,25 @@ class ContextCompactionService {
       // Try to summarize old messages via LLM
       let summary: string | undefined;
       try {
-        summary = await this.summarizeMessages({ oldMessages, previousSummary, summaryTokenBudget });
+        summary = await this.summarizeMessages({
+          summaryInput,
+          summaryTokenBudget,
+        });
       } catch (e) {
-        logger.warn('[ContextCompaction] Summarization failed, falling back to trim-only:', e);
+        logger.warn(
+          '[ContextCompaction] Summarization failed, falling back to trim-only:',
+          e,
+        );
       }
 
       // Determine cutoff: the last old message ID
-      const cutoffMessageId = oldMessages[oldMessages.length - 1]?.id;
+      const cutoffMessageId = plan.cutoffMessageId;
 
       // Persist compaction state
       if (summary && cutoffMessageId) {
-        useChatStore.getState().updateCompactionState(conversationId, summary, cutoffMessageId);
+        useChatStore
+          .getState()
+          .updateCompactionState(conversationId, summary, cutoffMessageId);
       }
 
       // Build result
@@ -164,7 +157,11 @@ class ContextCompactionService {
 
       result.push(...recentMessages);
 
-      logger.log(`[ContextCompaction] Compacted: ${nonSystem.length} → ${recentMessages.length} messages + summary (${summary ? summary.length : 0} chars)`);
+      logger.log(
+        `[ContextCompaction] Compacted: ${plan.beforeCount} → ${
+          recentMessages.length
+        } messages + summary (${summary ? summary.length : 0} chars)`,
+      );
       return result;
     } finally {
       this.setCompacting(false);
@@ -172,29 +169,11 @@ class ContextCompactionService {
   }
 
   /** Summarize old messages using the LLM with a hard token cap. */
-  private async summarizeMessages(
-    opts: { oldMessages: Message[]; previousSummary?: string; summaryTokenBudget: number },
-  ): Promise<string> {
-    const { oldMessages, previousSummary, summaryTokenBudget } = opts;
-    // Format old messages as a transcript
-    const transcript = oldMessages
-      .map(m => `${m.role}: ${m.content.replaceAll(/^(\w+: )/gm, '>$1')}`)
-      .join('\n');
-
-    const preamble = previousSummary
-      ? `Previous summary:\n${previousSummary}\n\nNew messages to incorporate:\n`
-      : '';
-
-    // Cap transcript to fit within context alongside the summarize instruction
-    const ctxLength = llmService.getPerformanceSettings().contextLength || 2048;
-    const instructionOverhead = SUMMARIZER_INSTRUCTION_OVERHEAD_TOKENS;
-    const inputBudget = ctxLength - summaryTokenBudget - instructionOverhead;
-    const inputCharBudget = inputBudget * CHARS_PER_TOKEN_ESTIMATE;
-
-    let transcriptInput = preamble + transcript;
-    if (transcriptInput.length > inputCharBudget) {
-      transcriptInput = transcriptInput.slice(-inputCharBudget);
-    }
+  private async summarizeMessages(opts: {
+    summaryInput: string;
+    summaryTokenBudget: number;
+  }): Promise<string> {
+    const { summaryInput, summaryTokenBudget } = opts;
 
     const summaryMessages: Message[] = [
       {
@@ -206,17 +185,22 @@ class ContextCompactionService {
       {
         id: 'summarize-input',
         role: 'user',
-        content: transcriptInput,
+        content: summaryInput,
         timestamp: 0,
       },
     ];
 
-    return await llmService.generateWithMaxTokens(summaryMessages, summaryTokenBudget);
+    return await llmService.generateWithMaxTokens(
+      summaryMessages,
+      summaryTokenBudget,
+    );
   }
 
   /** Clear persisted compaction state when a conversation is deleted */
   clearSummary(conversationId: string): void {
-    useChatStore.getState().updateCompactionState(conversationId, undefined, undefined);
+    useChatStore
+      .getState()
+      .updateCompactionState(conversationId, undefined, undefined);
   }
 }
 

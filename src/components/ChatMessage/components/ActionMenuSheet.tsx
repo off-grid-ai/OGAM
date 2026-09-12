@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, ScrollView } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../../theme';
@@ -157,8 +157,7 @@ interface EditSheetProps {
   visible: boolean;
   onClose: () => void;
   defaultValue: string;
-  onChangeText: (text: string) => void;
-  onSave: () => void;
+  onSave: (text: string) => void;
   onCancel: () => void;
   styles: any;
   colors: any;
@@ -168,12 +167,17 @@ export function EditSheet({
   visible,
   onClose,
   defaultValue,
-  onChangeText,
   onSave,
   onCancel,
   styles,
   colors,
 }: EditSheetProps) {
+  const [draft, setDraft] = useState(defaultValue);
+
+  useEffect(() => {
+    if (visible) setDraft(defaultValue);
+  }, [defaultValue, visible]);
+
   return (
     <AppSheet
       visible={visible}
@@ -184,8 +188,8 @@ export function EditSheet({
       <View style={styles.editSheetContent}>
         <TextInput
           style={styles.editInput}
-          defaultValue={defaultValue}
-          onChangeText={onChangeText}
+          value={draft}
+          onChangeText={setDraft}
           multiline
           autoFocus
           placeholder="Enter message..."
@@ -203,7 +207,7 @@ export function EditSheet({
           <AnimatedPressable
             hapticType="impactMedium"
             style={[styles.editButton, styles.editButtonSave]}
-            onPress={onSave}
+            onPress={() => onSave(draft)}
           >
             <Text style={[styles.editButtonText, styles.editButtonTextSave]}>SAVE & RESEND</Text>
           </AnimatedPressable>
