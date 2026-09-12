@@ -171,6 +171,45 @@ describe('OpenAICompatibleProvider', () => {
   });
 
   describe('generate', () => {
+    it('sends the provider-native reasoning budget to OpenRouter', async () => {
+      const openRouter = new OpenAICompatibleProvider('openrouter', {
+        endpoint: 'https://openrouter.ai/api',
+        modelId: 'reasoning-model',
+      });
+      const request = httpClient.createStreamingRequest as jest.Mock;
+      request.mockImplementation((_url, _req, onEvent) => {
+        onEvent({ data: '[DONE]' });
+        return Promise.resolve();
+      });
+
+      await openRouter.generate(
+        [{ id: '1', role: 'user', content: 'Think', timestamp: 0 }],
+        { enableThinking: true, reasoningBudget: 2048 },
+        { onToken: jest.fn(), onComplete: jest.fn(), onError: jest.fn() },
+      );
+
+      expect(request.mock.calls[0][1].body.reasoning).toEqual({ max_tokens: 2048 });
+    });
+
+    it('sends enable_thinking only when a compatible server advertises it', async () => {
+      provider.updateCapabilities({ supportsThinking: true, acceptsThinkingKwarg: true });
+      const request = httpClient.createStreamingRequest as jest.Mock;
+      request.mockImplementation((_url, _req, onEvent) => {
+        onEvent({ data: '[DONE]' });
+        return Promise.resolve();
+      });
+
+      await provider.generate(
+        [{ id: '1', role: 'user', content: 'Answer directly', timestamp: 0 }],
+        { enableThinking: false },
+        { onToken: jest.fn(), onComplete: jest.fn(), onError: jest.fn() },
+      );
+
+      expect(request.mock.calls[0][1].body.chat_template_kwargs).toEqual({
+        enable_thinking: false,
+      });
+    });
+
     it('should call onError when no model is loaded', async () => {
       // Create a provider without initial model
       const emptyProvider = new OpenAICompatibleProvider('empty', {

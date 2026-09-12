@@ -4,7 +4,25 @@
  * Unit tests for parseThinkingContent, formatTime, formatDuration
  */
 
-import { parseThinkingContent, formatTime, formatDuration } from '../../../../src/components/ChatMessage/utils';
+import { buildMessageData, parseThinkingContent, formatTime, formatDuration } from '../../../../src/components/ChatMessage/utils';
+
+describe('buildMessageData', () => {
+  it('reuses a committed message projection until its content changes', () => {
+    const message = {
+      id: 'assistant-1',
+      role: 'assistant' as const,
+      content: '<think>Check</think>Answer',
+      timestamp: 1,
+    };
+    const first = buildMessageData(message);
+    expect(buildMessageData(message)).toBe(first);
+
+    message.content = '<think>Check again</think>New answer';
+    const changed = buildMessageData(message);
+    expect(changed).not.toBe(first);
+    expect(changed.displayContent).toBe('New answer');
+  });
+});
 
 describe('parseThinkingContent', () => {
   // ============================================================================

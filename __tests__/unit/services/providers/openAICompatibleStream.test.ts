@@ -251,6 +251,19 @@ describe('generateOllamaChatImpl', () => {
     jest.clearAllMocks();
   });
 
+  it('sends the reasoning toggle through Ollama native chat', async () => {
+    const req = makeOllamaReq({ options: { enableThinking: false } });
+    let body: any;
+    mockedNDJSON.mockImplementation(async (_url: string, request: any, handler: (line: any) => void) => {
+      body = request.body;
+      handler({ done: true });
+    });
+
+    await generateOllamaChatImpl([], req);
+
+    expect(body.think).toBe(false);
+  });
+
   it('calls onComplete with content when done=true line received', async () => {
     const req = makeOllamaReq();
     mockedNDJSON.mockImplementation(async (_url: string, _opts: any, handler: (line: any) => void) => {

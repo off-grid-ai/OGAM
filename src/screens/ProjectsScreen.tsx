@@ -36,8 +36,9 @@ export const ProjectsScreen: React.FC = () => {
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const { projects, deleteProject } = useProjectStore();
-  const { conversations } = useChatStore();
+  const projects = useProjectStore(state => state.projects);
+  const deleteProject = useProjectStore(state => state.deleteProject);
+  const conversations = useChatStore(state => state.conversations);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
   // Get chat count for a project

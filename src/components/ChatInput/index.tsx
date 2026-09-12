@@ -216,8 +216,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     isStartingRecording ||
     isTranscribing;
 
-  const { settings: appSettings, updateSettings: updateAppSettings } = useAppStore();
-  const thinkingEnabled = appSettings.thinkingEnabled;
+  const thinkingEnabled = useAppStore(state => state.settings.thinkingEnabled);
+  const updateAppSettings = useAppStore(state => state.updateSettings);
 
   const handleThinkingToggle = () => {
     triggerHaptic('impactLight');
