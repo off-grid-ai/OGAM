@@ -215,6 +215,7 @@ export const AppSheet: React.FC<AppSheetProps> = ({
 
   useEffect(() => {
     if (visible) {
+      if (modalVisible) return;
       pendingAnimateIn.current = true;
       // Dismiss keyboard first, then open — prevents animation conflict
       const keyboardVisible = Keyboard.isVisible?.() ?? false;
