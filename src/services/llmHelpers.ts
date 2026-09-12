@@ -1,5 +1,9 @@
 import { initLlama, LlamaContext } from 'llama.rn';
-import { REASONING_BUDGET_AUTO, thinkingBudgetPayload } from '@offgrid/models';
+import {
+  REASONING_BUDGET_AUTO,
+  reasoningWireFragment,
+  resolveReasoningPlan,
+} from '@offgrid/models';
 import RNFS from 'react-native-fs';
 import { Platform } from 'react-native';
 import { APP_CONFIG } from '../constants';
@@ -292,7 +296,6 @@ export function supportsNativeThinking(context: LlamaContext | null): boolean {
   }
 }
 export function buildThinkingCompletionParams(enableThinking: boolean, isGemma4: boolean = false, reasoningBudget?: number): { enable_thinking: boolean; reasoning_format: 'none' | 'auto' | 'deepseek'; thinking_budget_tokens?: number } {
-  if (!enableThinking) return { enable_thinking: false, reasoning_format: 'none' };
   // Native-first (parse-once at the runtime boundary): Gemma 4 uses its own
   // <|channel>thought\n...<channel|> format, not DeepSeek's <think> tags. reasoning_format:'auto'
   // lets llama.cpp detect the model's chat_format and parse reasoning + tool calls NATIVELY —
@@ -304,7 +307,22 @@ export function buildThinkingCompletionParams(enableThinking: boolean, isGemma4:
   // The thinking-budget rule (and the llama.rn wire fragment) is the shared @offgrid/models
   // contract - desktop applies the same rule as reasoning_budget_tokens on llama-server. At the
   // budget the engine closes the thinking block and the answer still streams.
-  return { enable_thinking: true, reasoning_format: isGemma4 ? 'auto' : 'deepseek', ...thinkingBudgetPayload(true, reasoningBudget ?? REASONING_BUDGET_AUTO) };
+  const wire = reasoningWireFragment(resolveReasoningPlan({
+    enabled: enableThinking,
+    budgetTokens: reasoningBudget ?? REASONING_BUDGET_AUTO,
+  }, {
+    transport: 'llama-rn',
+    control: 'enable-thinking',
+    supportsTokenBudget: true,
+    reasoningFormat: isGemma4 ? 'auto' : 'deepseek',
+  }));
+  return {
+    enable_thinking: wire.enable_thinking ?? false,
+    reasoning_format: wire.reasoning_format ?? 'none',
+    ...(wire.thinking_budget_tokens
+      ? { thinking_budget_tokens: wire.thinking_budget_tokens }
+      : {}),
+  };
 }
 export function getStreamingDelta(nextValue: string | undefined, previousValue: string): string | undefined {
   if (!nextValue) return undefined;

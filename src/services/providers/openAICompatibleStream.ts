@@ -12,6 +12,7 @@ import type {
   OpenAIStreamState,
   OllamaChatRequest,
 } from './openAICompatibleTypes';
+import { reasoningWireFragment, resolveReasoningPlan } from '@offgrid/models';
 
 /**
  * Streaming parser for <think>...</think> tags embedded in delta.content.
@@ -315,8 +316,16 @@ export async function generateOllamaChatImpl(
     };
   });
 
+  const reasoning = reasoningWireFragment(resolveReasoningPlan({
+    enabled: thinkingEnabled,
+    budgetTokens: options.reasoningBudget,
+    effort: 'medium',
+  }, {
+    transport: 'ollama',
+    control: 'boolean',
+  }));
   const requestBody: Record<string, unknown> = {
-    model: modelId, messages: ollamaMessages, stream: true, think: thinkingEnabled,
+    model: modelId, messages: ollamaMessages, stream: true, ...reasoning,
     ...(options.tools && options.tools.length > 0 && { tools: options.tools }),
     options: {
       ...(options.temperature !== undefined && { temperature: options.temperature }),

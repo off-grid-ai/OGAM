@@ -28,6 +28,7 @@ import { ensureDefaultClassifier } from '../../services/classifierProvisioning';
 import { abortPreload } from '../../services/modelPreloader';
 import { modelResidencyManager } from '../../services/modelResidency';
 import { reportModelFailure } from '../../services/modelFailureHandler';
+import { isOverridableMemoryError } from '../../services/modelLoadErrors';
 import { remoteToolCapabilityIssue } from '../../services/toolCapabilityPreflight';
 import { embeddingService } from '../../services/rag/embedding';
 import {
@@ -47,8 +48,29 @@ import {
 } from '../../types';
 import logger from '../../utils/logger';
 import { ModelReadyOutcome, ensureReadyOrAlert } from './modelReadiness';
+import {
+  CONTINUE_ACTIVE_TURN_INSTRUCTION,
+  contextCompactedNoticeText,
+} from '@offgrid/models';
 type SetState<T> = Dispatch<SetStateAction<T>>;
 const FALLBACK_RECENT_MESSAGE_COUNT = 2;
+
+function offerMemoryRefusalRetry(
+  deps: GenerationDeps,
+  request: { conversationId: string; error: unknown; retry: () => void },
+): boolean {
+  if (!isOverridableMemoryError(request.error)) return false;
+  reportModelFailure('text', request.error, {
+    id: `text-memory-${request.conversationId}`,
+    onLoadAnyway: () => {
+      modelResidencyManager.rememberSessionOverride(
+        deps.activeModelInfo?.modelId ?? undefined,
+      );
+      request.retry();
+    },
+  });
+  return true;
+}
 
 export type GenerationDeps = {
   activeModelId: string | null;
@@ -514,20 +536,67 @@ async function generateWithCompactionRetry(
     // generationService.stopGeneration(): this is mid-turn, and the owner's stop persists the partial and
     // resets state, which would end the turn the retry below is about to continue.
     await stopAllTextEngines().catch(() => {});
-    const conversation = useChatStore
-      .getState()
-      .conversations.find(c => c.id === opts.id);
+    const chatState = useChatStore.getState();
+    const conversation = chatState.conversations.find(c => c.id === opts.id);
     const previousSummary = conversation?.compactionSummary;
+    // Compact the prompt that actually failed. It can already start with a prior
+    // summary and omit rows before its cutoff, so rebuilding from the full stored
+    // conversation would reintroduce history the active prompt no longer contains.
+    const promptMessages = opts.messages.filter(
+      message => message.role !== 'system' && !message.isSystemInfo,
+    );
+    const promptIds = new Set(promptMessages.map(message => message.id));
+    const storedMessages = (conversation?.messages ?? []).filter(
+      message => !message.isSystemInfo,
+    );
+    const cutoffIndex = conversation?.compactionCutoffMessageId
+      ? storedMessages.findIndex(
+          message => message.id === conversation.compactionCutoffMessageId,
+        )
+      : -1;
+    const committedDuringAttempt = storedMessages
+      .slice(cutoffIndex + 1)
+      .filter(message => !promptIds.has(message.id));
+    const committedMessages = [...promptMessages, ...committedDuringAttempt];
+    const systemMessage = opts.messages.find(
+      message => message.role === 'system',
+    );
+    const exactMessages: Message[] = [
+      ...(systemMessage ? [systemMessage] : []),
+      ...committedMessages,
+    ];
+    const visiblePartial =
+      chatState.streamingForConversationId === opts.id
+        ? chatState.streamingMessage
+        : '';
+    if (
+      visiblePartial.trim() &&
+      committedMessages.at(-1)?.content !== visiblePartial
+    ) {
+      exactMessages.push({
+        id: chatState.streamingMessageUuid ?? 'active-partial',
+        role: 'assistant',
+        content: visiblePartial,
+        reasoningContent: chatState.streamingReasoningContent || undefined,
+        timestamp: Date.now(),
+      });
+    }
+    const lastUserIndex = exactMessages
+      .map(message => message.role)
+      .lastIndexOf('user');
+    const protectedTailCount =
+      lastUserIndex < 0 ? 1 : exactMessages.length - lastUserIndex;
     const compacted = await contextCompactionService
       .compact({
         conversationId: opts.id,
         systemPrompt: opts.prompt,
-        allMessages: opts.messages,
+        allMessages: exactMessages,
         previousSummary,
+        protectedTailCount,
       })
       .catch(async () => {
         await llmService.clearKVCache(true).catch(() => {});
-        const recent = opts.messages
+        const recent = exactMessages
           .filter(m => m.role !== 'system')
           .slice(-FALLBACK_RECENT_MESSAGE_COUNT);
         return [
@@ -543,7 +612,23 @@ async function generateWithCompactionRetry(
     // Stop/Eject can arrive while the summary is running. Do not start a new
     // completion after the owner has cancelled this turn.
     if (generationService.wasAborted()) return true;
-    const retryOutcome = await gen(compacted);
+    useChatStore.getState().addMessage(opts.id, {
+      role: 'assistant',
+      content: contextCompactedNoticeText(
+        exactMessages.filter(message => message.role !== 'system').length,
+        compacted.filter(message => message.role !== 'system').length,
+      ),
+      isSystemInfo: true,
+    });
+    const retryOutcome = await gen([
+      ...compacted,
+      {
+        id: 'continue-active-turn',
+        role: 'system',
+        content: CONTINUE_ACTIVE_TURN_INSTRUCTION,
+        timestamp: 0,
+      },
+    ]);
     turnInterrupted = !!(retryOutcome as { interrupted?: boolean } | void)
       ?.interrupted;
   }
@@ -708,6 +793,18 @@ export async function startGenerationFn(
       conversation?.projectId,
     );
   } catch (error: any) {
+    if (
+      offerMemoryRefusalRetry(deps, {
+        conversationId: targetConversationId,
+        error,
+        retry: () => {
+          void startGenerationFn(deps, call);
+        },
+      })
+    ) {
+      generationSession.end('error');
+      return;
+    }
     const msg =
       error?.message || error?.toString?.() || 'Failed to generate response';
     logger.error('[ChatGen] Generation failed:', msg, error);
@@ -1145,6 +1242,18 @@ export async function regenerateResponseFn(
       conversation?.projectId,
     );
   } catch (error: any) {
+    if (
+      offerMemoryRefusalRetry(deps, {
+        conversationId: targetConversationId,
+        error,
+        retry: () => {
+          void regenerateResponseFn(deps, call);
+        },
+      })
+    ) {
+      generationSession.end('error');
+      return;
+    }
     const msg = error?.message || 'Failed to generate response';
     const isContextOverflow =
       msg.includes('too long') ||
