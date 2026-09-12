@@ -55,16 +55,22 @@ let mockDownloadedModels: any[] = [{ id: 'model1', name: 'Test Model' }];
 let mockActiveModelId: string | null = 'model1';
 
 jest.mock('../../../src/stores', () => ({
-  useProjectStore: jest.fn(() => ({
-    getProject: jest.fn(() => mockProject),
-    deleteProject: mockDeleteProject,
-  })),
-  useChatStore: jest.fn(() => ({
-    conversations: mockConversations,
-    deleteConversation: mockDeleteConversation,
-    setActiveConversation: mockSetActiveConversation,
-    createConversation: mockCreateConversation,
-  })),
+  useProjectStore: jest.fn((selector?: any) => {
+    const state = {
+      getProject: jest.fn(() => mockProject),
+      deleteProject: mockDeleteProject,
+    };
+    return selector ? selector(state) : state;
+  }),
+  useChatStore: jest.fn((selector?: any) => {
+    const state = {
+      conversations: mockConversations,
+      deleteConversation: mockDeleteConversation,
+      setActiveConversation: mockSetActiveConversation,
+      createConversation: mockCreateConversation,
+    };
+    return selector ? selector(state) : state;
+  }),
   useAppStore: jest.fn((selector?: any) => {
     const state = {
       downloadedModels: mockDownloadedModels,

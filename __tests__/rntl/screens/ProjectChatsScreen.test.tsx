@@ -33,19 +33,26 @@ const mockSetActiveConversation = jest.fn();
 const mockCreateConversation = jest.fn(() => 'new-conv-id');
 
 jest.mock('../../../src/stores', () => ({
-  useProjectStore: jest.fn(() => ({
-    getProject: () => mockProject,
-  })),
-  useChatStore: jest.fn(() => ({
-    conversations: mockConversations,
-    deleteConversation: mockDeleteConversation,
-    setActiveConversation: mockSetActiveConversation,
-    createConversation: mockCreateConversation,
-  })),
-  useAppStore: jest.fn(() => ({
-    downloadedModels: mockDownloadedModels,
-    activeModelId: mockActiveModelId,
-  })),
+  useProjectStore: jest.fn((selector?: any) => {
+    const state = { getProject: () => mockProject };
+    return selector ? selector(state) : state;
+  }),
+  useChatStore: jest.fn((selector?: any) => {
+    const state = {
+      conversations: mockConversations,
+      deleteConversation: mockDeleteConversation,
+      setActiveConversation: mockSetActiveConversation,
+      createConversation: mockCreateConversation,
+    };
+    return selector ? selector(state) : state;
+  }),
+  useAppStore: jest.fn((selector?: any) => {
+    const state = {
+      downloadedModels: mockDownloadedModels,
+      activeModelId: mockActiveModelId,
+    };
+    return selector ? selector(state) : state;
+  }),
 }));
 
 jest.mock('../../../src/components/Button', () => ({
