@@ -1350,7 +1350,11 @@ describe('generateWithCompactionRetry — context full error path', () => {
     (llmService.stopGeneration as jest.Mock).mockResolvedValue(undefined);
 
     const conv = { id: 'conv-1', messages: [{ id: 'm1', role: 'user', content: 'hi', timestamp: 0 }] };
-    mockChatStoreGetState.mockReturnValue({ conversations: [conv], updateCompactionState: jest.fn() });
+    mockChatStoreGetState.mockReturnValue({
+      conversations: [conv],
+      updateCompactionState: jest.fn(),
+      addMessage: jest.fn(),
+    });
     const deps = makeGenerationDeps();
     await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hi' });
     // Second call should be with the compacted messages
@@ -1371,7 +1375,11 @@ describe('generateWithCompactionRetry — context full error path', () => {
       { id: 'm1', role: 'user', content: 'old', timestamp: 0 },
       { id: 'm2', role: 'assistant', content: 'reply', timestamp: 0 },
     ]};
-    mockChatStoreGetState.mockReturnValue({ conversations: [conv], updateCompactionState: jest.fn() });
+    mockChatStoreGetState.mockReturnValue({
+      conversations: [conv],
+      updateCompactionState: jest.fn(),
+      addMessage: jest.fn(),
+    });
     const deps = makeGenerationDeps();
     await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hi' });
     expect(mockClearKVCache).toHaveBeenCalledWith(true);

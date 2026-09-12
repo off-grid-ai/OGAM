@@ -105,12 +105,15 @@ jest.mock('../../../src/stores', () => {
   useRemoteServerStore.getState = () => remoteState;
   return {
     useAppStore,
-    useChatStore: jest.fn(() => ({
+    useChatStore: jest.fn((selector?: any) => {
+      const state = {
       conversations: [],
       createConversation: mockCreateConversation,
       setActiveConversation: mockSetActiveConversation,
       deleteConversation: mockDeleteConversation,
-    })),
+      };
+      return selector ? selector(state) : state;
+    }),
     useRemoteServerStore,
   };
 });
@@ -142,11 +145,14 @@ describe('useHomeScreen', () => {
       };
       return selector ? selector(state) : state;
     });
-    (useChatStore as unknown as jest.Mock).mockReturnValue({
-      conversations: [],
-      createConversation: mockCreateConversation,
-      setActiveConversation: mockSetActiveConversation,
-      deleteConversation: mockDeleteConversation,
+    (useChatStore as unknown as jest.Mock).mockImplementation((selector?: any) => {
+      const state = {
+        conversations: [],
+        createConversation: mockCreateConversation,
+        setActiveConversation: mockSetActiveConversation,
+        deleteConversation: mockDeleteConversation,
+      };
+      return selector ? selector(state) : state;
     });
     (useAppStore as unknown as jest.Mock).mockImplementation((sel?: any) => {
       const st = {
