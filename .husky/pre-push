@@ -2,6 +2,18 @@
 
 ZERO_OID="0000000000000000000000000000000000000000"
 
+new_branch_base() {
+  local_oid=$1
+  for candidate in "${OFFGRID_PUSH_BASE:-}" origin/release/computer_use origin/main; do
+    [ -z "$candidate" ] && continue
+    if git rev-parse --verify --quiet "$candidate^{commit}" >/dev/null; then
+      git merge-base "$local_oid" "$candidate"
+      return
+    fi
+  done
+  git rev-list --max-parents=0 "$local_oid" | tail -1
+}
+
 collect_changed_files() {
   changed_files=""
 
@@ -15,14 +27,11 @@ collect_changed_files() {
     [ "$local_oid" = "$ZERO_OID" ] && continue
 
     if [ "$remote_oid" = "$ZERO_OID" ]; then
-      # A new branch has no remote tip. Inspect only commits that are not already
-      # reachable from origin instead of assuming the branch started from main.
-      commits=$(git rev-list "$local_oid" --not --remotes=origin 2>/dev/null || true)
-      if [ -n "$commits" ]; then
-        changed=$(git diff-tree --no-commit-id --name-only -r --diff-filter=ACMR $commits)
-      else
-        changed=""
-      fi
+      # A new branch has no remote tip. Diff its complete range from the release
+      # base. Passing several commits to diff-tree can silently compare trees and
+      # omit earlier commits in the push.
+      base=$(new_branch_base "$local_oid")
+      changed=$(git diff --name-only --diff-filter=ACMR "$base..$local_oid")
     else
       range="$remote_oid..$local_oid"
       changed=$(git diff --name-only --diff-filter=ACMR "$range")
