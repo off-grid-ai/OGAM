@@ -83,6 +83,11 @@ ${file}"
 __tests__/unit/services/generationService.test.ts
 __tests__/integration/generation/errorKeepsPartial.rendered.redflow.test.tsx"
         ;;
+      src/services/llmHelpers.ts)
+        MAPPED_TESTS="${MAPPED_TESTS}
+__tests__/unit/services/llmHelpers.test.ts
+__tests__/unit/services/llmHelpers.branches.test.ts"
+        ;;
       *)
         RELATED_JS="${RELATED_JS}
 ${file}"
