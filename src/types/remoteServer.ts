@@ -59,6 +59,8 @@ export interface RemoteServer {
   notes?: string;
   /** Selected model IDs for each OpenAI-compatible endpoint. */
   mediaModels?: RemoteMediaModelIds;
+  /** Context window for the selected remote text model, if set by the user. */
+  textContextWindowTokens?: number;
   /** Available models reported by servers that declare a model kind. */
   modelCatalog?: RemoteModelCatalog;
   /** A detected model-management contract. Generic OpenAI-compatible servers leave this unset. */

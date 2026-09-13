@@ -50,6 +50,7 @@ export interface GenerationRequest {
   conversationId: string;
   messages: Message[];
   onFirstToken?: () => void;
+  contextUsage?: Pick<GenerationMeta, 'contextPromptTokens' | 'contextWindowTokens' | 'contextEstimate'>;
 }
 
 export interface GenerationWithToolsRequest {
@@ -61,6 +62,7 @@ export interface GenerationWithToolsRequest {
     onToolCallStart?: (name: string, args: Record<string, any>) => void;
     onToolCallComplete?: (name: string, result: ToolResult) => void;
     onFirstToken?: () => void;
+    contextUsage?: GenerationRequest['contextUsage'];
   };
 }
 
@@ -103,6 +105,7 @@ function buildLiteRTMeta(
 
 export function buildGenerationMetaImpl(svc: any): GenerationMeta {
   const meta = buildBaseGenerationMeta(svc);
+  if (svc.contextUsage) Object.assign(meta, svc.contextUsage);
   const routed = svc.state?.routedToolNames;
   if (Array.isArray(routed) && routed.length > 0) meta.routedToolNames = routed;
   return meta;
@@ -418,6 +421,7 @@ export async function generateResponseImpl(
 ): Promise<void> {
   const { conversationId, messages, onFirstToken } = req;
   if (!(await prepareGenerationImpl(svc, conversationId))) return;
+  svc.contextUsage = req.contextUsage;
 
   if (isLiteRTActive()) {
     return runLiteRTResponseImpl(svc, req);

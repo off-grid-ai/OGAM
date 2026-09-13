@@ -239,7 +239,7 @@ export const ShowGenerationDetailsToggle: React.FC = () => {
   return (
     <SegmentedRow<'off' | 'on'>
       label="Show Generation Details"
-      description="Display GPU, model, tok/s, and image settings below each message"
+      description="Show context use, model, speed, and image settings below each reply"
       options={BOOL_OPTIONS}
       current={on ? 'on' : 'off'}
       onSelect={(id) => updateSettings({ showGenerationDetails: id === 'on' })}

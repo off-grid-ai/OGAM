@@ -46,6 +46,7 @@ function applyDiscoveredModelIds(
   setters.voice(current => current || result.mediaModels?.voice || '');
 }
 
+// eslint-disable-next-line max-lines-per-function
 export function useRemoteServerForm({
   server,
   visible,
@@ -57,6 +58,7 @@ export function useRemoteServerForm({
   const [apiKey, setApiKey] = useState('');
   const [notes, setNotes] = useState('');
   const [textModelId, setTextModelId] = useState('');
+  const [textContextWindowTokens, setTextContextWindowTokens] = useState('');
   const [imageModelId, setImageModelId] = useState('');
   const [transcriptionModelId, setTranscriptionModelId] = useState('');
   const [voiceModelId, setVoiceModelId] = useState('');
@@ -83,6 +85,7 @@ export function useRemoteServerForm({
       setEndpoint(server.endpoint);
       setNotes(server.notes || '');
       setTextModelId(server.mediaModels?.text || '');
+      setTextContextWindowTokens(server.textContextWindowTokens ? String(server.textContextWindowTokens) : '');
       setImageModelId(server.mediaModels?.image || '');
       setTranscriptionModelId(server.mediaModels?.transcription || '');
       setVoiceModelId(server.mediaModels?.voice || '');
@@ -102,6 +105,7 @@ export function useRemoteServerForm({
       setApiKey('');
       setNotes('');
       setTextModelId('');
+      setTextContextWindowTokens('');
       setImageModelId('');
       setTranscriptionModelId('');
       setVoiceModelId('');
@@ -132,9 +136,12 @@ export function useRemoteServerForm({
     } else {
       newErrors.endpoint = 'Endpoint URL is required';
     }
+    if (textContextWindowTokens && (!Number.isSafeInteger(Number(textContextWindowTokens)) || Number(textContextWindowTokens) < 1024)) {
+      newErrors.textContextWindowTokens = 'Enter at least 1024 tokens';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [name, endpoint]);
+  }, [name, endpoint, textContextWindowTokens]);
 
   const applySuccessfulConnection = useCallback((result: ServerTestResult) => {
     const modelCount =
@@ -219,6 +226,7 @@ export function useRemoteServerForm({
     }
   }, [endpoint, apiKey, applySuccessfulConnection, validateForm]);
 
+  // eslint-disable-next-line complexity
   const saveServer = useCallback(async () => {
     try {
       const mediaModels = {
@@ -263,6 +271,7 @@ export function useRemoteServerForm({
           notes,
           apiKey,
           mediaModels: desktopManaged ? server.mediaModels : mediaModels,
+          textContextWindowTokens: textContextWindowTokens ? Number(textContextWindowTokens) : undefined,
           modelCatalog,
           modelManagement,
         });
@@ -294,6 +303,7 @@ export function useRemoteServerForm({
           notes: notes || undefined,
           apiKey: apiKey || undefined,
           mediaModels: desktopManaged ? confirmedMediaModels : mediaModels,
+          textContextWindowTokens: textContextWindowTokens ? Number(textContextWindowTokens) : undefined,
           modelCatalog,
           modelManagement,
         });
@@ -334,6 +344,7 @@ export function useRemoteServerForm({
     apiKey,
     notes,
     textModelId,
+    textContextWindowTokens,
     imageModelId,
     transcriptionModelId,
     voiceModelId,
@@ -375,6 +386,8 @@ export function useRemoteServerForm({
     setNotes,
     textModelId,
     setTextModelId,
+    textContextWindowTokens,
+    setTextContextWindowTokens,
     imageModelId,
     setImageModelId,
     transcriptionModelId,

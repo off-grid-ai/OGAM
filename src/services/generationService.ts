@@ -14,6 +14,7 @@ import {
   buildToolLoopHandlersImpl,
   prepareGenerationImpl,
   generateResponseImpl,
+  type GenerationRequest,
   type GenerationWithToolsRequest,
 } from './generationServiceHelpers';
 import {
@@ -62,6 +63,7 @@ class GenerationService {
   private queueProcessor: QueueProcessor | null = null;
   private currentRemoteAbortController: AbortController | null = null;
   private remoteTimeToFirstToken: number | undefined;
+  private contextUsage: Pick<GenerationMeta, 'contextPromptTokens' | 'contextWindowTokens' | 'contextEstimate'> | undefined;
 
   // Token batching — collect tokens and flush to UI at a controlled rate
   private tokenBuffer: string = '';
@@ -146,17 +148,20 @@ class GenerationService {
   }
 
   /** Generate a response for a conversation. Runs independently of UI lifecycle. */
+  // Keep the existing positional callback argument for callers outside ChatScreen.
+  // eslint-disable-next-line max-params
   async generateResponse(
     conversationId: string,
     messages: Message[],
     onFirstToken?: () => void,
+    contextUsage?: GenerationRequest['contextUsage'],
   ): Promise<void> {
     logger.log(`[REMOTE-SM] generateResponse entry conv=${conversationId} msgs=${messages.length}`);
     // Route to remote provider if active
     if (this.isUsingRemoteProvider()) {
-      return this.generateRemoteResponse(conversationId, messages, onFirstToken);
+      return this.generateRemoteResponse(conversationId, messages, onFirstToken, contextUsage);
     }
-    return generateResponseImpl(this, { conversationId, messages, onFirstToken });
+    return generateResponseImpl(this, { conversationId, messages, onFirstToken, contextUsage });
   }
 
   /** Generate a response with tool calling support (LLM → tools → repeat, max 5 iterations). */
@@ -169,6 +174,7 @@ class GenerationService {
       onToolCallStart?: (name: string, args: Record<string, any>) => void;
       onToolCallComplete?: (name: string, result: ToolResult) => void;
       onFirstToken?: () => void;
+      contextUsage?: GenerationRequest['contextUsage'];
     },
   ): Promise<import('./generationToolLoop').ToolLoopOutcome | void> {
     // Route to remote provider if active
@@ -176,8 +182,9 @@ class GenerationService {
       return this.generateRemoteWithTools(conversationId, messages, options);
     }
     // Local generation with tools
-    const { enabledToolIds, projectId, ...callbacks } = options;
+    const { enabledToolIds, projectId, contextUsage, ...callbacks } = options;
     if (!(await this.prepareGeneration(conversationId))) return;
+    this.contextUsage = contextUsage;
 
     try {
       const outcome = await runToolLoop({
@@ -297,12 +304,14 @@ class GenerationService {
   }
 
   /** Generate a response using a remote provider */
+  // eslint-disable-next-line max-params
   async generateRemoteResponse(
     conversationId: string,
     messages: Message[],
     onFirstToken?: () => void,
+    contextUsage?: GenerationRequest['contextUsage'],
   ): Promise<void> {
-    return generateRemoteResponseImpl(this, { conversationId, messages, onFirstToken });
+    return generateRemoteResponseImpl(this, { conversationId, messages, onFirstToken, contextUsage });
   }
 
   /** Generate a response with tools using a remote provider */
@@ -366,6 +375,7 @@ class GenerationService {
     this.reasoningBuffer = '';
     this.totalReasoningLength = 0;
     this.remoteTimeToFirstToken = undefined;
+    this.contextUsage = undefined;
     this.updateState({
       isGenerating: false,
       isThinking: false,

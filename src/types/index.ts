@@ -238,6 +238,10 @@ export interface GenerationMeta {
   timeToFirstToken?: number;
   /** Token count (text generation only) */
   tokenCount?: number;
+  contextPromptTokens?: number;
+  contextWindowTokens?: number;
+  /** Prompt count is estimated rather than provider-reported. */
+  contextEstimate?: boolean;
   /** Model load/init time in seconds */
   modelLoadTimeSeconds?: number;
   /** Image generation steps */
