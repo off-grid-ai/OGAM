@@ -58,7 +58,6 @@ export function useRemoteServerForm({
   const [apiKey, setApiKey] = useState('');
   const [notes, setNotes] = useState('');
   const [textModelId, setTextModelId] = useState('');
-  const [textContextWindowTokens, setTextContextWindowTokens] = useState('');
   const [imageModelId, setImageModelId] = useState('');
   const [transcriptionModelId, setTranscriptionModelId] = useState('');
   const [voiceModelId, setVoiceModelId] = useState('');
@@ -85,7 +84,6 @@ export function useRemoteServerForm({
       setEndpoint(server.endpoint);
       setNotes(server.notes || '');
       setTextModelId(server.mediaModels?.text || '');
-      setTextContextWindowTokens(server.textContextWindowTokens ? String(server.textContextWindowTokens) : '');
       setImageModelId(server.mediaModels?.image || '');
       setTranscriptionModelId(server.mediaModels?.transcription || '');
       setVoiceModelId(server.mediaModels?.voice || '');
@@ -105,7 +103,6 @@ export function useRemoteServerForm({
       setApiKey('');
       setNotes('');
       setTextModelId('');
-      setTextContextWindowTokens('');
       setImageModelId('');
       setTranscriptionModelId('');
       setVoiceModelId('');
@@ -268,7 +265,6 @@ export function useRemoteServerForm({
           notes,
           apiKey,
           mediaModels: desktopManaged ? server.mediaModels : mediaModels,
-          textContextWindowTokens: textContextWindowTokens ? Number(textContextWindowTokens) : undefined,
           modelCatalog,
           modelManagement,
         });
@@ -300,7 +296,6 @@ export function useRemoteServerForm({
           notes: notes || undefined,
           apiKey: apiKey || undefined,
           mediaModels: desktopManaged ? confirmedMediaModels : mediaModels,
-          textContextWindowTokens: textContextWindowTokens ? Number(textContextWindowTokens) : undefined,
           modelCatalog,
           modelManagement,
         });
@@ -341,7 +336,6 @@ export function useRemoteServerForm({
     apiKey,
     notes,
     textModelId,
-    textContextWindowTokens,
     imageModelId,
     transcriptionModelId,
     voiceModelId,
@@ -383,8 +377,6 @@ export function useRemoteServerForm({
     setNotes,
     textModelId,
     setTextModelId,
-    textContextWindowTokens,
-    setTextContextWindowTokens,
     imageModelId,
     setImageModelId,
     transcriptionModelId,

@@ -133,10 +133,7 @@ export const RemoteServerEditorScreen: React.FC = () => {
           label="Text model"
           value={form.textModelId}
           options={form.discoveredModels}
-          onChange={id => {
-            if (id !== form.textModelId) form.setTextContextWindowTokens('');
-            form.setTextModelId(id);
-          }}
+          onChange={form.setTextModelId}
           placeholder="llama3.2"
           testID="server-text-model"
           loading={form.isTesting}
