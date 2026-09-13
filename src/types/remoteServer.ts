@@ -105,6 +105,8 @@ interface RemoteModelCapabilities {
    * reasoning per request (discovered from the server, e.g. llama.cpp /props).
    */
   acceptsThinkingKwarg?: boolean;
+  /** Ollama model accepts only low/medium/high thinking levels. */
+  thinkingLevelsOnly?: boolean;
   /** Maximum context window length */
   maxContextLength?: number;
   /** Model family or type hint */

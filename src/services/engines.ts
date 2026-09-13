@@ -19,7 +19,7 @@ export interface EngineCapabilities {
 
 /** Runtime inputs for deriveEngineCapabilities — passed explicitly so the rule is pure/testable. */
 /** A remote model's declared capabilities (single named type so callers don't index CapabilityInputs). */
-export type RemoteCaps = { supportsVision?: boolean; supportsToolCalling?: boolean; supportsThinking?: boolean } | null;
+export type RemoteCaps = { supportsVision?: boolean; supportsToolCalling?: boolean; supportsThinking?: boolean; thinkingLevelsOnly?: boolean } | null;
 
 export interface CapabilityInputs {
   /** A remote (gateway) model is active — its declared capabilities win. */
@@ -51,7 +51,7 @@ export function deriveEngineCapabilities(i: CapabilityInputs): EngineCapabilitie
     return {
       vision: i.remoteCaps?.supportsVision ?? false,
       tools: i.remoteCaps?.supportsToolCalling ?? false,
-      thinking: i.remoteCaps?.supportsThinking ?? false,
+      thinking: !!i.remoteCaps?.supportsThinking && !i.remoteCaps?.thinkingLevelsOnly,
       audio: false, // remote audio capability is not tracked today
     };
   }

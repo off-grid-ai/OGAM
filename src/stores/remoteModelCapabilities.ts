@@ -16,6 +16,7 @@ export interface RemoteModelInfo {
   supportsThinking?: boolean;
   /** Server honors chat_template_kwargs.enable_thinking to toggle reasoning per request. */
   acceptsThinkingKwarg?: boolean;
+  thinkingLevelsOnly?: boolean;
 }
 
 function parseModelInfoKeys(modelInfo: Record<string, unknown>): { contextLength: number; supportsVision: boolean } {
@@ -78,10 +79,15 @@ function extractOllamaCapabilities(data: Record<string, unknown>): RemoteModelIn
   const template = typeof data.template === 'string' ? data.template : '';
   const modelfile = typeof data.modelfile === 'string' ? data.modelfile : '';
   const supportsThinking =
+    (Array.isArray(data.capabilities) && data.capabilities.includes('thinking')) ||
     /\.Think|\.Thinking|\.IsThinkSet/.test(template) ||
     /^RENDERER\s/m.test(modelfile);
 
-  return { contextLength, supportsVision, supportsToolCalling, supportsThinking };
+  // The server reports the model architecture; gptoss ignores boolean think values.
+  const details = data.details as Record<string, unknown> | undefined;
+  const thinkingLevelsOnly = supportsThinking && details?.family === 'gptoss';
+
+  return { contextLength, supportsVision, supportsToolCalling, supportsThinking, thinkingLevelsOnly };
 }
 
 /**

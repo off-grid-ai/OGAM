@@ -271,6 +271,11 @@ export async function generateOllamaChatImpl(
 ): Promise<void> {
   const { options, callbacks, signal, endpoint, modelId, abort } = req;
   const thinkingEnabled = options.enableThinking !== false;
+  const think = req.thinkingLevelsOnly
+    ? !options.reasoningBudget ? 'medium'
+      : options.reasoningBudget <= 1024 ? 'low'
+        : options.reasoningBudget <= 4096 ? 'medium' : 'high'
+    : thinkingEnabled;
 
   // Convert to Ollama message format
   // Convert tool_calls arguments from JSON strings to objects for Ollama's native format
@@ -316,7 +321,7 @@ export async function generateOllamaChatImpl(
   });
 
   const requestBody: Record<string, unknown> = {
-    model: modelId, messages: ollamaMessages, stream: true, think: thinkingEnabled,
+    model: modelId, messages: ollamaMessages, stream: true, think,
     ...(options.tools && options.tools.length > 0 && { tools: options.tools }),
     options: {
       ...(options.temperature !== undefined && { temperature: options.temperature }),

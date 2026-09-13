@@ -56,5 +56,6 @@ export interface OllamaChatRequest {
   signal: AbortSignal;
   endpoint: string;
   modelId: string;
+  thinkingLevelsOnly?: boolean;
   abort: () => void;
 }

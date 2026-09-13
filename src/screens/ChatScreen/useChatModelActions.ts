@@ -382,7 +382,7 @@ type ModelStateSyncDeps = {
   activeModelId: string | null;
   activeModel: DownloadedModel | undefined;
   modelDeps: any;
-  activeRemoteModel: { capabilities?: { supportsVision?: boolean; supportsToolCalling?: boolean; supportsThinking?: boolean } } | null;
+  activeRemoteModel: { capabilities?: { supportsVision?: boolean; supportsToolCalling?: boolean; supportsThinking?: boolean; thinkingLevelsOnly?: boolean } } | null;
   activeRemoteTextModelId: string | null;
   isModelLoading: boolean;
   setSupportsVision: (v: boolean) => void;
@@ -429,5 +429,5 @@ export function useChatModelStateSync(deps: ModelStateSyncDeps): void {
     });
     setSupportsToolCalling(caps.tools);
     setSupportsThinking(caps.thinking);
-  }, [activeModelId, activeModel?.engine, isModelLoading, activeRemoteTextModelId, activeRemoteModel?.capabilities?.supportsToolCalling, activeRemoteModel?.capabilities?.supportsThinking]);
+  }, [activeModelId, activeModel?.engine, isModelLoading, activeRemoteTextModelId, activeRemoteModel?.capabilities?.supportsToolCalling, activeRemoteModel?.capabilities?.supportsThinking, activeRemoteModel?.capabilities?.thinkingLevelsOnly]);
 }

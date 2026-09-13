@@ -6,6 +6,7 @@
  */
 
 import { Message } from '../../types';
+import { openRouterReasoningPayload, reasoningBudgetPayload, REASONING_BUDGET_AUTO } from '@offgrid/models';
 import type {
   LLMProvider,
   ProviderType,
@@ -91,6 +92,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     options: GenerationOptions,
     thinkingEnabled: boolean
   ): Record<string, unknown> {
+    const isOpenRouter = new URL(this.config.endpoint).hostname === 'openrouter.ai';
     return {
       model: this.config.modelId,
       messages: openaiMessages,
@@ -109,6 +111,14 @@ export class OpenAICompatibleProvider implements LLMProvider {
       // discovered capability — not the endpoint's port — keeps the "which server
       // accepts this?" decision in one place and free of implementation coupling.
       ...(this.modelCapabilities.acceptsThinkingKwarg && { chat_template_kwargs: { enable_thinking: thinkingEnabled } }),
+      ...(this.config.modelId.startsWith('remote-vision:') && this.modelCapabilities.acceptsThinkingKwarg
+        ? reasoningBudgetPayload(thinkingEnabled, options.reasoningBudget ?? REASONING_BUDGET_AUTO)
+        : {}),
+      ...(isOpenRouter && this.modelCapabilities.supportsThinking
+        ? thinkingEnabled
+          ? openRouterReasoningPayload(true, options.reasoningBudget ?? REASONING_BUDGET_AUTO)
+          : { reasoning: { effort: 'none' } }
+        : {}),
     };
   }
 
@@ -139,6 +149,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
           options, callbacks, signal,
           endpoint: this.config.endpoint,
           modelId: this.config.modelId,
+          thinkingLevelsOnly: this.modelCapabilities.thinkingLevelsOnly,
           abort: () => this.abortController?.abort(),
         });
       }

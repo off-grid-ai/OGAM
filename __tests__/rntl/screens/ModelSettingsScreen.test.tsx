@@ -179,7 +179,7 @@ describe('ModelSettingsScreen', () => {
       expect(getByText('Show Generation Details')).toBeTruthy();
       expect(
         getByText(
-          'Display GPU, model, tok/s, and image settings below each message',
+          'Show context use, model, speed, and image settings below each reply',
         ),
       ).toBeTruthy();
     });

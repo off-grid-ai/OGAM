@@ -75,7 +75,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     activeImageModelId,
     generatedImages,
     conversations,
-    activeTextModel,
+    activeTextModelId,
+    activeTextModelName,
     activeImageModel,
     recentConversations,
     // Remote model state
@@ -109,7 +110,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const remoteLabels = useActiveRemoteModelLabels();
 
   const modelLabels = homeModelLabels({
-    text: activeTextModel?.name,
+    text: activeTextModelId ? activeTextModelName : undefined,
     image: activeImageModel?.name,
     voice: remoteLabels.voice,
     transcription: remoteLabels.transcription,
@@ -198,7 +199,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </AnimatedEntry>
 
           {/* New Chat Button */}
-          {activeTextModel || activeImageModelId ? (
+          {activeTextModelId || activeImageModelId ? (
             <Button
               title="New Chat"
               onPress={startNewChat}
