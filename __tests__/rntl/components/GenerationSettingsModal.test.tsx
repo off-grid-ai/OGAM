@@ -663,7 +663,7 @@ describe('GenerationSettingsModal', () => {
     fireEvent.press(getByText('TEXT GENERATION'));
 
     expect(getByText('Show Generation Details')).toBeTruthy();
-    expect(getByText('Display GPU, model, tok/s, and image settings below each message')).toBeTruthy();
+    expect(getByText('Show context use, model, speed, and image settings below each reply')).toBeTruthy();
   });
 
   it('calls updateSettings to enable show generation details', () => {
