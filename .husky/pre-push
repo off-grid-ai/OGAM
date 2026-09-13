@@ -1,4 +1,7 @@
 #!/usr/bin/env sh
+set -e
+PATH="$(git rev-parse --show-toplevel)/node_modules/.bin:$PATH"
+export PATH
 
 ZERO_OID="0000000000000000000000000000000000000000"
 
