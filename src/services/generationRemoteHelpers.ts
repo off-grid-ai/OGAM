@@ -22,7 +22,7 @@ export async function generateRemoteResponseImpl(
   req: GenerationRequest,
 ): Promise<void> {
   const { conversationId, messages, onFirstToken } = req;
-  if (!(await prepareGenerationImpl(svc, conversationId))) return;
+  if (!req.prepared && !(await prepareGenerationImpl(svc, conversationId))) return;
   svc.contextUsage = req.contextUsage;
   const chatStore = useChatStore.getState();
   const provider = svc.getCurrentProvider();
@@ -98,7 +98,7 @@ export async function generateRemoteResponseImpl(
       onError: (error: Error) => {
         if (generationSignal.aborted) return;
         logger.error('[GenerationService] Remote generation error:', error);
-        keepShownPartialOnError(svc, conversationId);
+        if (req.preservePartialOnError !== false) keepShownPartialOnError(svc, conversationId);
         throw error;
       },
     });
@@ -109,7 +109,7 @@ export async function generateRemoteResponseImpl(
     const failedServerId = useRemoteServerStore.getState().activeServerId;
     if (failedServerId)
       useRemoteServerStore.getState().updateServerHealth(failedServerId, false);
-    keepShownPartialOnError(svc, conversationId);
+    if (req.preservePartialOnError !== false) keepShownPartialOnError(svc, conversationId);
     throw error;
   } finally {
     svc.currentRemoteAbortController = null;
@@ -121,13 +121,13 @@ export async function generateRemoteWithToolsImpl(
   req: GenerationWithToolsRequest,
 ): Promise<void> {
   const { conversationId, messages, options } = req;
-  const { enabledToolIds, projectId, contextUsage, ...callbacks } = options;
+  const { enabledToolIds, projectId, contextUsage, prepared, preservePartialOnError, ...callbacks } = options;
   logger.log(
     `[GenService][DEBUG] generateRemoteWithToolsImpl — conv=${conversationId}, messages=${
       messages.length
     }, enabledToolIds=[${options.enabledToolIds.join(', ')}]`,
   );
-  if (!(await prepareGenerationImpl(svc, conversationId))) {
+  if (!prepared && !(await prepareGenerationImpl(svc, conversationId))) {
     logger.log(
       `[GenService][DEBUG] prepareGeneration returned false, aborting`,
     );
@@ -186,7 +186,7 @@ export async function generateRemoteWithToolsImpl(
     if (svc.abortRequested) return;
     logger.error('[GenerationService] Remote tool generation error:', error);
     // Reset generating state on error, else isGenerating stays stuck → red stop, next send blocked (2026-07-14).
-    keepShownPartialOnError(svc, conversationId);
+    if (preservePartialOnError !== false) keepShownPartialOnError(svc, conversationId);
     throw error;
   }
 }

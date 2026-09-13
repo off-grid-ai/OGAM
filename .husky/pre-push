@@ -64,7 +64,6 @@ if [ -n "$PUSHED_JS" ]; then
   npx tsc --noEmit
 
   echo "▶ JS/TS tests (related to changed files)..."
-  # Keep related rendered journeys serial because they share native-boundary state.
   # Do not force the process to exit: leaked asynchronous work is a test failure to fix.
   DIRECT_TESTS=""
   MAPPED_TESTS=""
@@ -99,12 +98,12 @@ EOF
   SELECTED_TESTS=$(printf '%s\n%s\n' "$DIRECT_TESTS" "$MAPPED_TESTS" | sed '/^$/d' | sort -u)
   if [ -n "$SELECTED_TESTS" ]; then
     printf '%s\n' "$SELECTED_TESTS" | tr '\n' '\0' | \
-      xargs -0 npx jest --passWithNoTests --runInBand --bail=1
+      xargs -0 npx jest --passWithNoTests --bail=1
   fi
   RELATED_JS=$(printf '%s\n' "$RELATED_JS" | sed '/^$/d' | sort -u)
   if [ -n "$RELATED_JS" ]; then
     printf '%s\n' "$RELATED_JS" | tr '\n' '\0' | \
-      xargs -0 npx jest --findRelatedTests --passWithNoTests --runInBand --bail=1
+      xargs -0 npx jest --findRelatedTests --passWithNoTests --bail=1
   fi
 
   echo "▶ Architecture gate (dependency-cruiser)..."
