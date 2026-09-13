@@ -39,7 +39,7 @@ export async function generateRemoteResponseImpl(
   // abortRequested is reset by the next generation's prepareGeneration().
   const { signal: generationSignal } = svc.currentRemoteAbortController;
 
-  const { temperature, maxTokens, topP, thinkingEnabled } =
+  const { temperature, maxTokens, topP, thinkingEnabled, reasoningBudget } =
     useAppStore.getState().settings;
   const options: GenerationOptions = {
     temperature,
@@ -47,6 +47,7 @@ export async function generateRemoteResponseImpl(
     topP,
     stopSequences: [],
     enableThinking: thinkingEnabled && provider.capabilities.supportsThinking,
+    reasoningBudget,
   };
 
   try {

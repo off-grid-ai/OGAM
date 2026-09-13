@@ -388,6 +388,7 @@ export async function fetchModelsFromServer(
                 modelInfos[i].supportsToolCalling ??
                 detectToolCallingCapability(model.id),
             supportsThinking: modelInfos[i].supportsThinking ?? false,
+            thinkingLevelsOnly: modelInfos[i].thinkingLevelsOnly,
             acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
             maxContextLength: modelInfos[i].contextLength,
           },
@@ -420,6 +421,7 @@ export async function fetchModelsFromServer(
                 modelInfos[i].supportsToolCalling ??
                 detectToolCallingCapability(model.name),
               supportsThinking: modelInfos[i].supportsThinking ?? false,
+              thinkingLevelsOnly: modelInfos[i].thinkingLevelsOnly,
               acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
               maxContextLength: modelInfos[i].contextLength,
             },
@@ -471,6 +473,7 @@ export async function fetchModelsFromServer(
                 modelInfos[i].supportsToolCalling ??
                 detectToolCallingCapability(model.name),
               supportsThinking: modelInfos[i].supportsThinking ?? false,
+              thinkingLevelsOnly: modelInfos[i].thinkingLevelsOnly,
               acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
               maxContextLength: modelInfos[i].contextLength,
             },

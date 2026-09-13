@@ -173,6 +173,7 @@ export async function setActiveRemoteTextModelImpl(
         supportsVision: discoveredModel.capabilities.supportsVision,
         supportsToolCalling: discoveredModel.capabilities.supportsToolCalling,
         supportsThinking: discoveredModel.capabilities.supportsThinking,
+        thinkingLevelsOnly: discoveredModel.capabilities.thinkingLevelsOnly,
         acceptsThinkingKwarg: discoveredModel.capabilities.acceptsThinkingKwarg,
       });
       logger.log(
