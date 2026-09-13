@@ -504,7 +504,7 @@ async function prepareContext(
     };
   }
 }
-/** Run generation; if context is full, compact old messages and retry once. */
+/** Compact before the prompt budget is full; keep the context-full retry as a fallback. */
 async function generateWithCompactionRetry(
   opts: { id: string; prompt: string; messages: Message[]; setDebugInfo?: SetState<any> },
   enabledTools: string[],
@@ -534,9 +534,29 @@ async function generateWithCompactionRetry(
         })
       : generationService.generateResponse(opts.id, msgs, undefined, contextUsage);
   };
+  const contextWindowTokens = useRemoteServerStore.getState().activeServerId
+    ? useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength
+    : llmService.getPerformanceSettings().contextLength || APP_CONFIG.maxContextLength;
+  const estimatedPromptTokens = Math.ceil(
+    JSON.stringify(opts.messages.map(m => ({ role: m.role, content: m.content }))).length / 4,
+  );
+  let messagesForFirstAttempt = opts.messages;
+  if (
+    estimatedPromptTokens >= contextWindowTokens * 0.8 &&
+    opts.messages.filter(m => m.role !== 'system').length > 1
+  ) {
+    const conversation = useChatStore.getState().conversations.find(c => c.id === opts.id);
+    messagesForFirstAttempt = await contextCompactionService.compact({
+      conversationId: opts.id,
+      systemPrompt: opts.prompt,
+      allMessages: opts.messages,
+      previousSummary: conversation?.compactionSummary,
+    }).catch(() => opts.messages);
+    if (!generationSession.isGeneratingFor(opts.id)) return true;
+  }
   let turnInterrupted = false; // PER-TURN stop truth from the loop outcome (returned to the caller)
   try {
-    const outcome = await gen(opts.messages);
+    const outcome = await gen(messagesForFirstAttempt);
     turnInterrupted = !!(outcome as { interrupted?: boolean } | void)
       ?.interrupted;
   } catch (error: any) {
@@ -554,12 +574,12 @@ async function generateWithCompactionRetry(
       .compact({
         conversationId: opts.id,
         systemPrompt: opts.prompt,
-        allMessages: opts.messages,
+        allMessages: messagesForFirstAttempt,
         previousSummary,
       })
       .catch(async () => {
         await llmService.clearKVCache(true).catch(() => {});
-        const recent = opts.messages
+        const recent = messagesForFirstAttempt
           .filter(m => m.role !== 'system')
           .slice(-FALLBACK_RECENT_MESSAGE_COUNT);
         return [
