@@ -324,6 +324,7 @@ export async function fetchModelsFromServer(
   server: RemoteServer,
 ): Promise<RemoteModel[]> {
   const url = trimTrailingSlashes(server.endpoint);
+  const isOpenRouter = new URL(url).hostname === 'openrouter.ai';
 
   // Headers for authentication
   const headers: Record<string, string> = {
@@ -350,13 +351,26 @@ export async function fetchModelsFromServer(
       };
 
       // OpenAI format: { object: "list", data: [{ id, object, owned_by, ... }] }
-      if (data?.object === 'list' && Array.isArray(data.data)) {
+      if ((data?.object === 'list' || isOpenRouter) && Array.isArray(data.data)) {
         const generativeModels = data.data.filter(
           (model: { id: string; kind?: unknown }) => isTextModel(model),
         );
         const modelInfos = await Promise.all(
-          generativeModels.map((model: { id: string }) =>
-            fetchModelCapabilities(url, model.id, nameDetect),
+          generativeModels.map((model: {
+            id: string;
+            context_length?: number;
+            architecture?: { input_modalities?: string[] };
+            supported_parameters?: string[];
+            reasoning?: { mandatory?: boolean };
+          }) =>
+            isOpenRouter
+              ? {
+                  contextLength: model.context_length ?? 4096,
+                  supportsVision: model.architecture?.input_modalities?.includes('image') === true,
+                  supportsToolCalling: model.supported_parameters?.includes('tools') === true,
+                  supportsThinking: !!model.reasoning && model.reasoning.mandatory !== true,
+                }
+              : fetchModelCapabilities(url, model.id, nameDetect),
           ),
         );
         return generativeModels.map(
