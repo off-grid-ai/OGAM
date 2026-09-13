@@ -122,7 +122,7 @@ export async function runCompaction(params: {
     if (recentStart > 0 && compactedChars < previousChars) {
       useChatStore.getState().addMessage(conversationId, {
         role: 'assistant',
-        content: 'Compacted',
+        content: 'Compacted conversation to make room for more messages.',
         isSystemInfo: true,
       });
     }
