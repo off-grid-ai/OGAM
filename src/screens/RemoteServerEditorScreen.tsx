@@ -142,19 +142,6 @@ export const RemoteServerEditorScreen: React.FC = () => {
           loading={form.isTesting}
           allowManualEntry={form.modelManagement !== 'offgrid-desktop-v1'}
         />
-        <Text style={styles.label}>Text context window (tokens, optional)</Text>
-        <TextInput
-          testID="server-text-context-window"
-          style={[styles.input, form.errors.textContextWindowTokens && styles.inputError]}
-          value={form.textContextWindowTokens}
-          onChangeText={form.setTextContextWindowTokens}
-          placeholder="e.g., 131072"
-          placeholderTextColor={theme.colors.textMuted}
-          keyboardType="number-pad"
-        />
-        {form.errors.textContextWindowTokens ? (
-          <Text style={styles.errorText}>{form.errors.textContextWindowTokens}</Text>
-        ) : null}
         <RemoteModelField
           label="Image model"
           value={form.imageModelId}

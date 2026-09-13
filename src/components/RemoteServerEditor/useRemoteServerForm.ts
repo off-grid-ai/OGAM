@@ -136,12 +136,9 @@ export function useRemoteServerForm({
     } else {
       newErrors.endpoint = 'Endpoint URL is required';
     }
-    if (textContextWindowTokens && (!Number.isSafeInteger(Number(textContextWindowTokens)) || Number(textContextWindowTokens) < 1024)) {
-      newErrors.textContextWindowTokens = 'Enter at least 1024 tokens';
-    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [name, endpoint, textContextWindowTokens]);
+  }, [name, endpoint]);
 
   const applySuccessfulConnection = useCallback((result: ServerTestResult) => {
     const modelCount =

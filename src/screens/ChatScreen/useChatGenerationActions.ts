@@ -471,12 +471,8 @@ async function prepareContext(
   );
   const remoteStore = useRemoteServerStore.getState();
   if (remoteStore.activeServerId) {
-    const server = remoteStore.getActiveServer();
-    const model = remoteStore.getActiveRemoteTextModel();
     const contextWindowTokens =
-      (!remoteStore.activeRemoteTextModelId || server?.mediaModels?.text === remoteStore.activeRemoteTextModelId
-        ? server?.textContextWindowTokens
-        : undefined) ?? model?.capabilities.maxContextLength;
+      useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength;
     setDebugInfo(null);
     return {
       contextPromptTokens: estimatedPromptTokens,
