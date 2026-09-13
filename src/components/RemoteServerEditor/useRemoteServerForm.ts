@@ -46,6 +46,7 @@ function applyDiscoveredModelIds(
   setters.voice(current => current || result.mediaModels?.voice || '');
 }
 
+// eslint-disable-next-line max-lines-per-function
 export function useRemoteServerForm({
   server,
   visible,
@@ -219,6 +220,7 @@ export function useRemoteServerForm({
     }
   }, [endpoint, apiKey, applySuccessfulConnection, validateForm]);
 
+  // eslint-disable-next-line complexity
   const saveServer = useCallback(async () => {
     try {
       const mediaModels = {

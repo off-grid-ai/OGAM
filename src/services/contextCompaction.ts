@@ -16,6 +16,10 @@
 import { llmService } from './llm';
 import { CONTEXT_PROMPT_BUDGET_RATIO } from './llmHelpers';
 import { useChatStore } from '../stores/chatStore';
+import { useAppStore } from '../stores/appStore';
+import { useRemoteServerStore } from '../stores/remoteServerStore';
+import { providerRegistry } from './providers/registry';
+import { APP_CONFIG } from '../constants';
 import { Message } from '../types';
 import logger from '../utils/logger';
 
@@ -93,12 +97,14 @@ class ContextCompactionService {
     try {
       await llmService.clearKVCache(true);
 
-      const ctxLength = llmService.getPerformanceSettings().contextLength || 2048;
+      const ctxLength = useRemoteServerStore.getState().activeServerId
+        ? useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength
+        : llmService.getPerformanceSettings().contextLength || 2048;
       const summaryTokenBudget = Math.floor(ctxLength * SUMMARY_BUDGET_RATIO);
       const systemTokens = await this.countTokens(systemPrompt);
       const recentTokenBudget = Math.max(0, Math.floor(ctxLength * CONTEXT_PROMPT_BUDGET_RATIO) - summaryTokenBudget - systemTokens);
 
-      const nonSystem = allMessages.filter(m => m.role !== 'system');
+      const nonSystem = allMessages.filter(m => m.role !== 'system' && m.id !== 'compaction-summary');
       logger.log(`[ContextCompaction] ${nonSystem.length} messages, ctx=${ctxLength}, summaryBudget=${summaryTokenBudget}, recentBudget=${recentTokenBudget}`);
 
       // Walk backwards — keep recent messages that fit in the recent budget
@@ -111,9 +117,8 @@ class ContextCompactionService {
           recentMessages.unshift(msg);
           recentTokensUsed += tokens;
         } else if (recentMessages.length === 0) {
-          // Last message is too large — truncate to fit
-          const charBudget = recentTokenBudget * CHARS_PER_TOKEN_ESTIMATE;
-          recentMessages.unshift({ ...msg, content: msg.content.slice(-charBudget) });
+          // Keep the active turn intact, even if it alone exceeds the budget.
+          recentMessages.unshift(msg);
           break;
         } else {
           break;
@@ -128,6 +133,10 @@ class ContextCompactionService {
         logger.log('[ContextCompaction] No old messages to summarize');
         return [
           { id: 'system', role: 'system', content: systemPrompt, timestamp: 0 },
+          ...(previousSummary ? [{
+            id: 'compaction-summary', role: 'assistant' as const,
+            content: `[Previous conversation summary]\n${previousSummary}`, timestamp: 0,
+          }] : []),
           ...recentMessages,
         ];
       }
@@ -144,8 +153,14 @@ class ContextCompactionService {
       const cutoffMessageId = oldMessages[oldMessages.length - 1]?.id;
 
       // Persist compaction state
-      if (summary && cutoffMessageId) {
-        useChatStore.getState().updateCompactionState(conversationId, summary, cutoffMessageId);
+      if (summary && cutoffMessageId && cutoffMessageId !== 'compaction-summary') {
+        const chat = useChatStore.getState();
+        chat.updateCompactionState(conversationId, summary, cutoffMessageId);
+        chat.addMessage(conversationId, {
+          role: 'assistant',
+          content: 'Compacted conversation to make room for more messages.',
+          isSystemInfo: true,
+        });
       }
 
       // Build result
@@ -153,11 +168,11 @@ class ContextCompactionService {
         { id: 'system', role: 'system', content: systemPrompt, timestamp: 0 },
       ];
 
-      if (summary) {
+      if (summary || previousSummary) {
         result.push({
           id: 'compaction-summary',
           role: 'assistant',
-          content: `[Previous conversation summary]\n${summary}`,
+          content: `[Previous conversation summary]\n${summary || previousSummary}`,
           timestamp: 0,
         });
       }
@@ -186,7 +201,10 @@ class ContextCompactionService {
       : '';
 
     // Cap transcript to fit within context alongside the summarize instruction
-    const ctxLength = llmService.getPerformanceSettings().contextLength || 2048;
+    const remoteServerId = useRemoteServerStore.getState().activeServerId;
+    const ctxLength = remoteServerId
+      ? useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength
+      : llmService.getPerformanceSettings().contextLength || 2048;
     const instructionOverhead = SUMMARIZER_INSTRUCTION_OVERHEAD_TOKENS;
     const inputBudget = ctxLength - summaryTokenBudget - instructionOverhead;
     const inputCharBudget = inputBudget * CHARS_PER_TOKEN_ESTIMATE;
@@ -211,6 +229,23 @@ class ContextCompactionService {
       },
     ];
 
+    if (remoteServerId) {
+      const provider = providerRegistry.getProvider(remoteServerId);
+      if (!provider) throw new Error('Remote model unavailable for compaction');
+      let summary = '';
+      let failure: Error | undefined;
+      await provider.generate(summaryMessages, {
+        maxTokens: summaryTokenBudget,
+        temperature: 0.2,
+        enableThinking: false,
+      }, {
+        onToken: token => { summary += token; },
+        onComplete: result => { summary = result.content || summary; },
+        onError: error => { failure = error; },
+      });
+      if (failure) throw failure;
+      return summary.trim().slice(0, summaryTokenBudget * CHARS_PER_TOKEN_ESTIMATE);
+    }
     return await llmService.generateWithMaxTokens(summaryMessages, summaryTokenBudget);
   }
 

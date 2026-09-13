@@ -1,4 +1,5 @@
 import { contextCompactionService } from './contextCompaction';
+import { useChatStore } from '../stores/chatStore';
 
 type Turn = { role: 'user' | 'assistant'; content: string };
 type SamplerConfigOpts = { temperature?: number; topK?: number; topP?: number };
@@ -116,6 +117,15 @@ export async function runCompaction(params: {
       : recentHistory;
 
     await resetFn(systemPrompt, { samplerConfig: opts.samplerConfig, tools: opts.tools, history: compactedHistory });
+    const previousChars = history.reduce((total, turn) => total + turn.content.length, 0);
+    const compactedChars = compactedHistory.reduce((total, turn) => total + turn.content.length, 0);
+    if (recentStart > 0 && compactedChars < previousChars) {
+      useChatStore.getState().addMessage(conversationId, {
+        role: 'assistant',
+        content: 'Compacted conversation to make room for more messages.',
+        isSystemInfo: true,
+      });
+    }
   } finally {
     contextCompactionService.signalCompacting(false);
   }

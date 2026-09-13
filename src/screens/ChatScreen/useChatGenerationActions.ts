@@ -44,6 +44,7 @@ import {
   DownloadedModel,
   RemoteModel,
   CacheType,
+  GenerationMeta,
 } from '../../types';
 import logger from '../../utils/logger';
 import { ModelReadyOutcome, ensureReadyOrAlert } from './modelReadiness';
@@ -464,7 +465,21 @@ async function prepareContext(
   setDebugInfo: SetState<any>,
   systemPrompt: string,
   messages: Message[],
-): Promise<void> {
+): Promise<Pick<GenerationMeta, 'contextPromptTokens' | 'contextWindowTokens' | 'contextEstimate'> | undefined> {
+  const estimatedPromptTokens = Math.ceil(
+    JSON.stringify(messages.map(m => ({ role: m.role, content: m.content }))).length / 4,
+  );
+  const remoteStore = useRemoteServerStore.getState();
+  if (remoteStore.activeServerId) {
+    const contextWindowTokens =
+      useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength;
+    setDebugInfo(null);
+    return {
+      contextPromptTokens: estimatedPromptTokens,
+      ...(contextWindowTokens && contextWindowTokens > 0 ? { contextWindowTokens } : {}),
+      contextEstimate: true,
+    };
+  }
   try {
     const contextDebug = await llmService.getContextDebugInfo(messages);
     setDebugInfo({ systemPrompt, ...contextDebug });
@@ -474,16 +489,28 @@ async function prepareContext(
     ) {
       await llmService.clearKVCache(false).catch(() => {});
     }
+    const contextWindowTokens = contextDebug.maxContextLength || useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength;
+    return {
+      contextPromptTokens: contextDebug.estimatedTokens || estimatedPromptTokens,
+      contextWindowTokens,
+      contextEstimate: true,
+    };
   } catch {
-    /* ignore */
+    const contextWindowTokens = useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength;
+    return {
+      contextPromptTokens: estimatedPromptTokens,
+      contextWindowTokens,
+      contextEstimate: true,
+    };
   }
 }
-/** Run generation; if context is full, compact old messages and retry once. */
+/** Compact before the prompt budget is full; keep the context-full retry as a fallback. */
 async function generateWithCompactionRetry(
-  opts: { id: string; prompt: string; messages: Message[] },
+  opts: { id: string; prompt: string; messages: Message[]; setDebugInfo?: SetState<any> },
   enabledTools: string[],
   projectId?: string,
 ): Promise<boolean> {
+  const { setDebugInfo } = opts;
   const extCount = getToolExtensions().reduce(
     (n, e) => n + e.enabledToolCount(),
     0,
@@ -495,16 +522,41 @@ async function generateWithCompactionRetry(
     enabledTools.length + extCount,
   );
   if (capabilityIssue) throw new Error(capabilityIssue);
-  const gen = (msgs: Message[]) =>
-    enabledTools.length > 0 || extCount > 0
+  const gen = async (msgs: Message[]) => {
+    const contextUsage = setDebugInfo
+      ? await prepareContext(setDebugInfo, opts.prompt, msgs)
+      : undefined;
+    return enabledTools.length > 0 || extCount > 0
       ? generationService.generateWithTools(opts.id, msgs, {
           enabledToolIds: enabledTools,
           projectId,
+          contextUsage,
         })
-      : generationService.generateResponse(opts.id, msgs);
+      : generationService.generateResponse(opts.id, msgs, undefined, contextUsage);
+  };
+  const contextWindowTokens = useRemoteServerStore.getState().activeServerId
+    ? useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength
+    : llmService.getPerformanceSettings().contextLength || APP_CONFIG.maxContextLength;
+  const estimatedPromptTokens = Math.ceil(
+    JSON.stringify(opts.messages.map(m => ({ role: m.role, content: m.content }))).length / 4,
+  );
+  let messagesForFirstAttempt = opts.messages;
+  if (
+    estimatedPromptTokens >= contextWindowTokens * 0.8 &&
+    opts.messages.filter(m => m.role !== 'system').length > 1
+  ) {
+    const conversation = useChatStore.getState().conversations.find(c => c.id === opts.id);
+    messagesForFirstAttempt = await contextCompactionService.compact({
+      conversationId: opts.id,
+      systemPrompt: opts.prompt,
+      allMessages: opts.messages,
+      previousSummary: conversation?.compactionSummary,
+    }).catch(() => opts.messages);
+    if (!generationSession.isGeneratingFor(opts.id)) return true;
+  }
   let turnInterrupted = false; // PER-TURN stop truth from the loop outcome (returned to the caller)
   try {
-    const outcome = await gen(opts.messages);
+    const outcome = await gen(messagesForFirstAttempt);
     turnInterrupted = !!(outcome as { interrupted?: boolean } | void)
       ?.interrupted;
   } catch (error: any) {
@@ -522,12 +574,12 @@ async function generateWithCompactionRetry(
       .compact({
         conversationId: opts.id,
         systemPrompt: opts.prompt,
-        allMessages: opts.messages,
+        allMessages: messagesForFirstAttempt,
         previousSummary,
       })
       .catch(async () => {
         await llmService.clearKVCache(true).catch(() => {});
-        const recent = opts.messages
+        const recent = messagesForFirstAttempt
           .filter(m => m.role !== 'system')
           .slice(-FALLBACK_RECENT_MESSAGE_COUNT);
         return [
@@ -696,13 +748,13 @@ export async function startGenerationFn(
     messageText,
     systemPrompt,
   );
-  await prepareContext(setDebugInfo, systemPrompt, messagesForContext);
   try {
     turnStopped = await generateWithCompactionRetry(
       {
         id: targetConversationId,
         prompt: systemPrompt,
         messages: messagesForContext,
+        setDebugInfo,
       },
       activeTools,
       conversation?.projectId,
@@ -1037,7 +1089,7 @@ export async function regenerateResponseFn(
   deps: GenerationDeps,
   call: RegenerateCall,
 ): Promise<void> {
-  const { userMessage, recordedKind } = call;
+  const { setDebugInfo, userMessage, recordedKind } = call;
   logger.log(
     `[RESEND-SM] regenerate start userMsg=${userMessage.id} conv=${
       deps.activeConversationId
@@ -1140,6 +1192,7 @@ export async function regenerateResponseFn(
         id: targetConversationId,
         prompt: systemPrompt,
         messages: [...prefix, ...filtered],
+        setDebugInfo,
       },
       activeTools,
       conversation?.projectId,

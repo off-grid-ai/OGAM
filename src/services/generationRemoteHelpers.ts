@@ -23,6 +23,7 @@ export async function generateRemoteResponseImpl(
 ): Promise<void> {
   const { conversationId, messages, onFirstToken } = req;
   if (!(await prepareGenerationImpl(svc, conversationId))) return;
+  svc.contextUsage = req.contextUsage;
   const chatStore = useChatStore.getState();
   const provider = svc.getCurrentProvider();
 
@@ -120,6 +121,7 @@ export async function generateRemoteWithToolsImpl(
   req: GenerationWithToolsRequest,
 ): Promise<void> {
   const { conversationId, messages, options } = req;
+  const { enabledToolIds, projectId, contextUsage, ...callbacks } = options;
   logger.log(
     `[GenService][DEBUG] generateRemoteWithToolsImpl — conv=${conversationId}, messages=${
       messages.length
@@ -131,6 +133,7 @@ export async function generateRemoteWithToolsImpl(
     );
     return;
   }
+  svc.contextUsage = contextUsage;
   const provider = svc.getCurrentProvider();
 
   if (!provider) {
@@ -142,8 +145,6 @@ export async function generateRemoteWithToolsImpl(
       provider.type
     }, capabilities=${JSON.stringify(provider.capabilities)}`,
   );
-
-  const { enabledToolIds, projectId, ...callbacks } = options;
 
   try {
     // Use the same tool loop but with remote provider

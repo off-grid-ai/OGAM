@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import {
   NavigationProp,
   useNavigation,
@@ -142,6 +142,10 @@ export const useChatScreen = () => {
     setActiveConversation,
     setConversationProject,
   } = useChatStore();
+
+  useEffect(() => {
+    setDebugInfo(null);
+  }, [activeConversationId]);
 
   const { projects, getProject } = useProjectStore();
 

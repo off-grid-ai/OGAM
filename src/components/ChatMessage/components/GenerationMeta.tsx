@@ -12,7 +12,13 @@ type MetaItem = { key: string; label: string; maxLines?: number };
 
 function formatOptionalMeta(meta: NonNullable<Message['generationMeta']>, tps: number | null | undefined): MetaItem[] {
   const m = meta;
+  const contextLabel = m.contextPromptTokens
+    ? m.contextWindowTokens
+      ? `Context: ${m.contextEstimate ? '~' : ''}${Math.round((m.contextPromptTokens / m.contextWindowTokens) * 100)}% used`
+      : `Context: ${m.contextEstimate ? '~' : ''}${m.contextPromptTokens} tokens used (limit unknown)`
+    : undefined;
   const entries: Array<[string, string | undefined, number?]> = [
+    ['context', contextLabel],
     ['model', m.modelName, 1],
     ['load', m.modelLoadTimeSeconds != null && m.modelLoadTimeSeconds > 0 ? `load ${m.modelLoadTimeSeconds.toFixed(1)}s` : undefined],
     ['prefill', m.prefillTokensPerSecond != null && m.prefillTokensPerSecond > 0 ? `prefill ${m.prefillTokensPerSecond.toFixed(0)} tok/s` : undefined],

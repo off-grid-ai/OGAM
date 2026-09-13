@@ -210,22 +210,6 @@ describe('compact', () => {
     expect(mockedUpdateCompactionState).not.toHaveBeenCalled();
   });
 
-  it('truncates last user message when it alone exceeds recent budget', async () => {
-    mockTokenCounts(2000);
-
-    const longContent = 'x'.repeat(8000);
-    const messages = [
-      createMessage({ role: 'system', content: 'System' }),
-      createMessage({ role: 'user', content: longContent }),
-    ];
-
-    const result = await compactWith(messages);
-
-    const userMsg = result.find(m => m.role === 'user');
-    expect(userMsg).toBeDefined();
-    expect(userMsg!.content.length).toBeLessThan(longContent.length);
-  });
-
   it('uses actual context length from settings', async () => {
     mockedLlmService.getPerformanceSettings.mockReturnValue({ contextLength: 512 } as any);
     mockedLlmService.getTokenCount.mockImplementation((text: string) =>
