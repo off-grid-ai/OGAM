@@ -657,7 +657,7 @@ class LocalDreamModule(reactContext: ReactApplicationContext) :
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", "text/event-stream")
             connectTimeout = 10000
-            readTimeout = 600000
+            readTimeout = 0 // Wait for generation or explicit cancellation, however long it takes.
         }
     }
 
