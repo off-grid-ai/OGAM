@@ -49,6 +49,20 @@ export function serializeMessageContext(
     // Which tools this turn was GIVEN, not just the ones it called: a reply that had three tools and
     // used none is a different fact, and it is only known on the device that generated it.
     toolsOffered: message.generationMeta?.routedToolNames,
+    metrics: message.role === 'assistant' ? {
+      totalSeconds: message.generationTimeMs === undefined
+        ? undefined
+        : message.generationTimeMs / 1000,
+      timeToFirstTokenSeconds: message.generationMeta?.timeToFirstToken,
+      decodeTokensPerSecond:
+        message.generationMeta?.decodeTokensPerSecond ?? message.generationMeta?.tokensPerSecond,
+      prefillTokensPerSecond: message.generationMeta?.prefillTokensPerSecond,
+      completionTokens: message.generationMeta?.tokenCount,
+      contextWindowTokens: message.generationMeta?.contextWindowTokens,
+      ...(message.generationMeta?.contextEstimate === false
+        ? { promptTokens: message.generationMeta.contextPromptTokens }
+        : { estimatedPromptTokens: message.generationMeta?.contextPromptTokens }),
+    } : undefined,
     toolCalls: message.toolArtifacts?.filter(
       artifact => artifact.id !== RETRIEVAL_TOOL_ARTIFACT_ID,
     ),
