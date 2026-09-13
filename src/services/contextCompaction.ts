@@ -111,9 +111,8 @@ class ContextCompactionService {
           recentMessages.unshift(msg);
           recentTokensUsed += tokens;
         } else if (recentMessages.length === 0) {
-          // Last message is too large — truncate to fit
-          const charBudget = recentTokenBudget * CHARS_PER_TOKEN_ESTIMATE;
-          recentMessages.unshift({ ...msg, content: msg.content.slice(-charBudget) });
+          // Keep the active turn intact, even if it alone exceeds the budget.
+          recentMessages.unshift(msg);
           break;
         } else {
           break;
@@ -144,8 +143,14 @@ class ContextCompactionService {
       const cutoffMessageId = oldMessages[oldMessages.length - 1]?.id;
 
       // Persist compaction state
-      if (summary && cutoffMessageId) {
-        useChatStore.getState().updateCompactionState(conversationId, summary, cutoffMessageId);
+      if (summary && cutoffMessageId && cutoffMessageId !== 'compaction-summary') {
+        const chat = useChatStore.getState();
+        chat.updateCompactionState(conversationId, summary, cutoffMessageId);
+        chat.addMessage(conversationId, {
+          role: 'assistant',
+          content: 'Compacted',
+          isSystemInfo: true,
+        });
       }
 
       // Build result
