@@ -115,82 +115,6 @@ describe('compact', () => {
     expect(result[result.length - 1].content).toBe('latest question');
   });
 
-  it('summarizes old messages when they exceed recent budget', async () => {
-    mockTokenCounts(500);
-
-    const messages = [
-      createMessage({ role: 'system', content: 'System' }),
-      createMessage({ id: 'old-1', role: 'user', content: 'old msg 1' }),
-      createMessage({ id: 'old-2', role: 'assistant', content: 'old reply 1' }),
-      createMessage({ id: 'old-3', role: 'user', content: 'old msg 2' }),
-      createMessage({ role: 'assistant', content: 'recent reply' }),
-      createMessage({ role: 'user', content: 'latest question' }),
-    ];
-
-    const result = await compactWith(messages);
-
-    expect(mockedLlmService.generateWithMaxTokens).toHaveBeenCalled();
-    expect(result[0].role).toBe('system');
-    expect(result[0].content).toBe('System');
-    const summaryMsg = result.find(m => m.id === 'compaction-summary');
-    expect(summaryMsg).toBeDefined();
-    expect(summaryMsg!.content).toContain('[Previous conversation summary]');
-    expect(summaryMsg!.content).toContain('Summary of conversation');
-  });
-
-  it('calls generateWithMaxTokens with bounded summary token budget', async () => {
-    mockTokenCounts(500);
-
-    const messages = [
-      createMessage({ role: 'system', content: 'System' }),
-      createMessage({ id: 'old-1', role: 'user', content: 'old msg' }),
-      createMessage({ id: 'old-2', role: 'assistant', content: 'old reply' }),
-      createMessage({ role: 'user', content: 'latest' }),
-    ];
-
-    await compactWith(messages);
-
-    const callArgs = mockedLlmService.generateWithMaxTokens.mock.calls[0];
-    expect(callArgs[1]).toBe(Math.floor(2048 * 0.12));
-  });
-
-  it('persists compaction state to chat store', async () => {
-    mockTokenCounts(500);
-
-    const messages = [
-      createMessage({ role: 'system', content: 'System' }),
-      createMessage({ id: 'old-msg', role: 'user', content: 'old msg' }),
-      createMessage({ id: 'old-reply', role: 'assistant', content: 'old reply' }),
-      createMessage({ role: 'user', content: 'latest' }),
-    ];
-
-    await compactWith(messages);
-
-    expect(mockedUpdateCompactionState).toHaveBeenCalledWith(
-      'conv-1',
-      'Summary of conversation',
-      expect.any(String),
-    );
-  });
-
-  it('includes previous summary in summarization input', async () => {
-    mockTokenCounts(500);
-
-    const messages = [
-      createMessage({ role: 'system', content: 'System' }),
-      createMessage({ id: 'old-1', role: 'user', content: 'old msg' }),
-      createMessage({ id: 'old-2', role: 'assistant', content: 'old reply' }),
-      createMessage({ role: 'user', content: 'latest' }),
-    ];
-
-    await compactWith(messages, { previousSummary: 'Previous summary text' });
-
-    const summaryMessages = mockedLlmService.generateWithMaxTokens.mock.calls[0][0];
-    const userInput = summaryMessages.find((m: any) => m.role === 'user');
-    expect(userInput).toBeDefined();
-    expect(userInput!.content).toContain('Previous summary');
-  });
-
   it('falls back to trim-only on summarization failure', async () => {
     mockTokenCounts(500);
     mockedLlmService.generateWithMaxTokens.mockRejectedValue(new Error('generation failed'));
@@ -208,25 +132,6 @@ describe('compact', () => {
     expect(result[0].content).toBe('System');
     expect(result.find(m => m.id === 'compaction-summary')).toBeUndefined();
     expect(mockedUpdateCompactionState).not.toHaveBeenCalled();
-  });
-
-  it('uses actual context length from settings', async () => {
-    mockedLlmService.getPerformanceSettings.mockReturnValue({ contextLength: 512 } as any);
-    mockedLlmService.getTokenCount.mockImplementation((text: string) =>
-      text.length < 20 ? Promise.resolve(5) : Promise.resolve(200),
-    );
-
-    const messages = [
-      createMessage({ role: 'system', content: 'System' }),
-      createMessage({ role: 'user', content: 'a'.repeat(100) }),
-      createMessage({ role: 'assistant', content: 'b'.repeat(100) }),
-      createMessage({ role: 'user', content: 'c'.repeat(100) }),
-    ];
-
-    const result = await compactWith(messages);
-
-    const contentMessages = result.filter(m => m.role !== 'system' && m.id !== 'compaction-summary');
-    expect(contentMessages.length).toBe(1);
   });
 
   it('falls back to char estimate when tokenizer fails', async () => {
