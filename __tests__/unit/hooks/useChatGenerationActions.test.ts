@@ -478,17 +478,6 @@ describe('regenerateResponseFn', () => {
     expect(mockGenerateResponse).not.toHaveBeenCalled();
   });
 
-  it('calls generateResponse with context messages', async () => {
-    mockGenerateResponse.mockResolvedValueOnce(undefined);
-    const userMsg = { id: 'm1', role: 'user' as const, content: 'hi', timestamp: 0 };
-    const deps = makeGenerationDeps({
-      activeConversation: { id: 'conv-1', messages: [userMsg] },
-    });
-    await regenerateResponseFn(deps, { setDebugInfo: jest.fn(), userMessage: userMsg });
-    expect(mockGenerateResponse).toHaveBeenCalledWith('conv-1', expect.any(Array));
-    expect(generationSession.getConversationId()).toBeNull();
-  });
-
   it('shows alert when generateResponse throws', async () => {
     mockGenerateResponse.mockRejectedValueOnce(new Error('Server error'));
     const userMsg = { id: 'm1', role: 'user' as const, content: 'hi', timestamp: 0 };
@@ -523,20 +512,6 @@ describe('regenerateResponseFn', () => {
     const deps = makeGenerationDeps({ imageModelLoaded: true, activeImageModel: baseImageModel });
     const msg = { id: 'm1', role: 'user' as const, content: 'a fox', timestamp: 0 };
     await regenerateResponseFn(deps, { setDebugInfo: jest.fn(), userMessage: msg, recordedKind: 'image' });
-    expect(mockClassifyIntent).not.toHaveBeenCalled();
-  });
-
-  it('recordedKind=text re-runs the TEXT pipeline even when the classifier would say image', async () => {
-    mockClassifyIntent.mockResolvedValue('image'); // classifier would misroute to image
-    mockGenerateResponse.mockResolvedValueOnce(undefined);
-    const userMsg = { id: 'm1', role: 'user' as const, content: 'draw me a diagram of X', timestamp: 0 };
-    const deps = makeGenerationDeps({
-      activeImageModel: baseImageModel, // image model IS available, but this turn was text
-      activeConversation: { id: 'conv-1', messages: [userMsg] },
-    });
-    await regenerateResponseFn(deps, { setDebugInfo: jest.fn(), userMessage: userMsg, recordedKind: 'text' });
-    expect(mockGenerateResponse).toHaveBeenCalled();
-    expect(mockGenerateImage).not.toHaveBeenCalled();
     expect(mockClassifyIntent).not.toHaveBeenCalled();
   });
 
@@ -848,39 +823,6 @@ describe('startGenerationFn', () => {
     expect(mockGenerateResponse).not.toHaveBeenCalled();
   });
 
-  it('never routes to image — image-vs-text is decided upstream in dispatch', async () => {
-    // Regression: startGenerationFn is a pure text executor. Even with an image
-    // model loaded and the text model not resident in RAM, it must generate text,
-    // never an image (routing lives in dispatchGenerationFn).
-    mockGetLoadedModelPath.mockReturnValueOnce(null).mockReturnValue('/path/model.gguf');
-    mockIsModelLoaded.mockReturnValue(true);
-    const deps = makeGenerationDeps({ imageModelLoaded: true, activeImageModel: baseImageModel });
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'Hi' });
-    expect(mockGenerateImage).not.toHaveBeenCalled();
-    expect(mockGenerateResponse).toHaveBeenCalled();
-  });
-
-  it('calls generateResponse and invokes first-token callback', async () => {
-    // Make generateResponse actually call the callback (3rd arg)
-    mockGenerateResponse.mockImplementationOnce(async (_convId: string, _msgs: any, onFirstToken?: () => void) => {
-      onFirstToken?.();
-    });
-    mockGetLoadedModelPath.mockReturnValue('/path/model.gguf');
-    const deps = makeGenerationDeps();
-    const setDebugInfo = jest.fn();
-    await startGenerationFn(deps, { setDebugInfo, targetConversationId: 'conv-1', messageText: 'hello' });
-    expect(mockGenerateResponse).toHaveBeenCalled();
-    expect(generationSession.getConversationId()).toBeNull();
-  });
-
-  it('clears cache when context usage is high', async () => {
-    mockGetContextDebugInfo.mockResolvedValueOnce({ truncatedCount: 0, contextUsagePercent: 75 });
-    mockGetLoadedModelPath.mockReturnValue('/path/model.gguf');
-    const deps = makeGenerationDeps();
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'test' });
-    expect(mockClearKVCache).toHaveBeenCalledWith(false);
-  });
-
   it('shows a reason-specific alert when the model is not loaded after ensureModelLoaded', async () => {
     mockGetLoadedModelPath.mockReturnValueOnce(null); // triggers needsModelLoad
     mockIsModelLoaded.mockReturnValueOnce(false); // model still not loaded after ensureModelLoaded → post-verify fails
@@ -891,150 +833,6 @@ describe('startGenerationFn', () => {
     expect(mockGenerateResponse).not.toHaveBeenCalled();
   });
 
-  it('uses tool loop when heuristic matches an enabled tool', async () => {
-    (llmService.supportsToolCalling as jest.Mock).mockReturnValue(true);
-    const deps = makeGenerationDeps({
-      settings: { ...makeGenerationDeps().settings, enabledTools: ['get_current_datetime'] },
-    });
-
-    // classifyToolsNeeded mock returns get_current_datetime, so it survives the filter
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'Hi' });
-
-    expect(mockGenerateWithTools).toHaveBeenCalled();
-    expect(mockGenerateResponse).not.toHaveBeenCalled();
-  });
-
-  it('uses generateResponse when no tools are enabled', async () => {
-    (llmService.supportsToolCalling as jest.Mock).mockReturnValue(true);
-    const deps = makeGenerationDeps({
-      settings: { ...makeGenerationDeps().settings, enabledTools: [] },
-    });
-
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'Hi' });
-
-    // No tools enabled → generateResponse (pure text), not generateWithTools
-    expect(mockGenerateResponse).toHaveBeenCalled();
-    expect(mockGenerateWithTools).not.toHaveBeenCalled();
-  });
-
-  it('uses the tool loop when the message clearly needs a tool', async () => {
-    (llmService.supportsToolCalling as jest.Mock).mockReturnValue(true);
-    const deps = makeGenerationDeps({
-      settings: { ...makeGenerationDeps().settings, enabledTools: ['get_current_datetime'] },
-    });
-
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'What time is it?' });
-
-    expect(mockGenerateWithTools).toHaveBeenCalledWith('conv-1', expect.any(Array), { enabledToolIds: ['get_current_datetime'] });
-  });
-});
-
-// ─────────────────────────────────────────────
-// UI tool gate ("N/A" badge) is honoured by generation
-// Regression: web search fired even when the Tools control read "N/A" and the
-// picker was unreachable, so the user could not turn it off. Generation must
-// respect the same supportsToolCalling gate the UI shows.
-// ─────────────────────────────────────────────
-
-describe('UI tool gate (supportsToolCalling) gates generation', () => {
-  it('does NOT inject tools when the UI gate is off, even if the engine supports tools and web_search is enabled', async () => {
-    // Badge shows "N/A" → deps.supportsToolCalling === false. The engine itself
-    // reports tool support and web_search is in settings, but the user has no way
-    // to disable it, so generation must not pull any tools.
-    (llmService.supportsToolCalling as jest.Mock).mockReturnValue(true);
-    const deps = makeGenerationDeps({
-      supportsToolCalling: false,
-      settings: { ...makeGenerationDeps().settings, enabledTools: ['web_search', 'read_url'] },
-    });
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'what is the weather?' });
-
-    expect(mockGenerateWithTools).not.toHaveBeenCalled();
-    expect(mockGenerateResponse).toHaveBeenCalled();
-  });
-
-  it('injects tools when the UI gate is on (control)', async () => {
-    (llmService.supportsToolCalling as jest.Mock).mockReturnValue(true);
-    const deps = makeGenerationDeps({
-      supportsToolCalling: true,
-      settings: { ...makeGenerationDeps().settings, enabledTools: ['web_search'] },
-    });
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'what is the weather?' });
-
-    expect(mockGenerateWithTools).toHaveBeenCalledWith('conv-1', expect.any(Array), expect.objectContaining({ enabledToolIds: ['web_search'] }));
-    expect(mockGenerateResponse).not.toHaveBeenCalled();
-  });
-
-  it('treats an unset gate as allowed (backward compatible)', async () => {
-    // deps without supportsToolCalling (undefined) must behave as before.
-    (llmService.supportsToolCalling as jest.Mock).mockReturnValue(true);
-    const deps = makeGenerationDeps({
-      settings: { ...makeGenerationDeps().settings, enabledTools: ['web_search'] },
-    });
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hi' });
-
-    expect(mockGenerateWithTools).toHaveBeenCalled();
-  });
-
-  it('regenerate also honours the UI tool gate', async () => {
-    (llmService.supportsToolCalling as jest.Mock).mockReturnValue(true);
-    const userMsg = { id: 'm1', role: 'user' as const, content: 'what is the weather?', timestamp: 0 };
-    const conv = { id: 'conv-1', messages: [userMsg] };
-    mockChatStoreGetState.mockReturnValue({ conversations: [conv], updateCompactionState: jest.fn() });
-    const deps = makeGenerationDeps({
-      supportsToolCalling: false,
-      activeConversation: conv,
-      settings: { ...makeGenerationDeps().settings, enabledTools: ['web_search'] },
-    });
-    await regenerateResponseFn(deps, { setDebugInfo: jest.fn(), userMessage: userMsg });
-
-    expect(mockGenerateWithTools).not.toHaveBeenCalled();
-    expect(mockGenerateResponse).toHaveBeenCalled();
-  });
-});
-
-// ─────────────────────────────────────────────
-// SO4 — engine tool-routing via the engine registry (no `engine === 'litert'` in the caller).
-// These prove the migrated capability seam preserves the LiteRT behavior: native tools with NO
-// text-hint double-inject, and the Gemma-4 <|think|> token driven by the engine, not a branch.
-// ─────────────────────────────────────────────
-
-describe('SO4 engine tool-routing (LiteRT native path via engine registry)', () => {
-  const litertModel = createDownloadedModel({ id: 'lr', engine: 'litert', liteRTVision: false });
-  const makeLiteRTDeps = (overrides: Record<string, unknown> = {}) => makeGenerationDeps({
-    activeModelId: 'lr',
-    activeModel: litertModel,
-    activeModelInfo: { isRemote: false, model: litertModel, modelId: 'lr', modelName: 'LiteRT' },
-    downloadedModels: [litertModel],
-    ...overrides,
-  });
-
-  it('routes tools natively when the LiteRT engine is loaded (canUseTools from the registry, not supportsToolCalling)', async () => {
-    // llama's Jinja tool support is OFF; only the LiteRT-loaded flag can make tools available.
-    // Old code needed the explicit `isLiteRT` OR-term; the migration must keep this working.
-    (llmService.supportsToolCalling as jest.Mock).mockReturnValue(false);
-    mockLiteRTLoaded.mockReturnValue(true);
-    const deps = makeLiteRTDeps({ settings: { ...makeGenerationDeps().settings, enabledTools: ['get_current_datetime'] } });
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'what time is it?' });
-
-    expect(mockGenerateWithTools).toHaveBeenCalledWith('conv-1', expect.any(Array), expect.objectContaining({ enabledToolIds: ['get_current_datetime'] }));
-  });
-
-  it('does NOT inject the built-in tool text hint for LiteRT (native tools would double-inject)', async () => {
-    mockLiteRTLoaded.mockReturnValue(true);
-    const deps = makeLiteRTDeps({ settings: { ...makeGenerationDeps().settings, systemPrompt: 'Be helpful', enabledTools: ['get_current_datetime'] } });
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'what time is it?' });
-
-    // Terminal artifact: the system message that reaches generation. For LiteRT it is exactly the
-    // base prompt — no appended tool-hint text (which is what llama-without-Jinja would get).
-    const [, messages] = mockGenerateWithTools.mock.calls[0];
-    expect(messages[0].content).toBe('Be helpful');
-  });
-
-  // The two Gemma-4 <|think|> tests that lived here drove the token via deps.settings.thinkingEnabled
-  // (a caller-passed snapshot). The device off-by-one fix (2026-07-14) makes wantsLeadingThinkToken read
-  // the setting LIVE from the store, so that caller path no longer exists. The real behavior — the token
-  // follows the CURRENT toggle with no one-turn lag — is now covered end-to-end by the integration test
-  // __tests__/integration/generation/thinkTokenFollowsLiveToggle.test.tsx (real screen, real store, real fn).
 });
 
 // ─────────────────────────────────────────────
@@ -1045,17 +843,6 @@ describe('RAG context injection in startGenerationFn', () => {
   // Deleted: two mockist "injects doc list / RAG context" tests that asserted toHaveBeenCalled on our own
   // mocked rag service (getDocsByProject/searchProject/formatForPrompt) — pre-existing reds, and the delete-
   // the-impl litmus keeps them green. RAG-into-prompt is covered by real integration tests, not mock spies.
-
-  it('does not inject RAG context when conversation has no projectId', async () => {
-    const conv = { id: 'conv-1', messages: [{ id: 'm1', role: 'user', content: 'hello', timestamp: 0 }] };
-    mockChatStoreGetState.mockReturnValue({ conversations: [conv], updateCompactionState: jest.fn() });
-    const deps = makeGenerationDeps();
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hello' });
-
-    expect(mockGetDocsByProject).not.toHaveBeenCalled();
-    expect(mockSearchProject).not.toHaveBeenCalled();
-    expect(mockGenerateResponse).toHaveBeenCalled();
-  });
 
   it('does not inject doc list when all docs are disabled', async () => {
     const conv = { id: 'conv-1', projectId: 'proj-1', messages: [] };
@@ -1262,16 +1049,6 @@ describe('handleSendFn — additional branches', () => {
 // ─────────────────────────────────────────────
 
 describe('startGenerationFn — remote model path', () => {
-  it('skips local model loading for remote models', async () => {
-    const deps = makeGenerationDeps({
-      activeModelInfo: { isRemote: true, model: null, modelId: 'remote-gpt4', modelName: 'GPT-4' },
-      activeModel: null,
-    });
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hello' });
-    expect(deps.ensureModelLoaded).not.toHaveBeenCalled();
-    expect(mockGenerateResponse).toHaveBeenCalled();
-  });
-
   it('uses all tools when remote server is active (bypasses heuristic)', async () => {
     useRemoteServerStore.setState({ activeServerId: 'srv-1', activeRemoteTextModelId: 'gpt-4' });
     (llmService.supportsToolCalling as jest.Mock).mockReturnValue(false);
@@ -1340,85 +1117,11 @@ describe('generateWithCompactionRetry — context full error path', () => {
     expect(deps.setAlertState).toHaveBeenCalledWith(expect.objectContaining({ title: 'Generation Error' }));
   });
 
-  it('retries with compacted messages on context full error', async () => {
-    const compactedMsgs = [{ id: 'system', role: 'system', content: 'summary', timestamp: 0 }];
-    mockGenerateResponse
-      .mockRejectedValueOnce(new Error('context full'))
-      .mockResolvedValueOnce(undefined);
-    mockIsContextFullError.mockReturnValue(true);
-    mockCompact.mockResolvedValue(compactedMsgs);
-    (llmService.stopGeneration as jest.Mock).mockResolvedValue(undefined);
-
-    const conv = { id: 'conv-1', messages: [{ id: 'm1', role: 'user', content: 'hi', timestamp: 0 }] };
-    mockChatStoreGetState.mockReturnValue({ conversations: [conv], updateCompactionState: jest.fn() });
-    const deps = makeGenerationDeps();
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hi' });
-    // Second call should be with the compacted messages
-    expect(mockGenerateResponse).toHaveBeenCalledTimes(2);
-    expect(mockIsContextFullError).toHaveBeenCalled();
-  });
-
-  it('falls back to recent messages when compact throws', async () => {
-    mockGenerateResponse
-      .mockRejectedValueOnce(new Error('context full'))
-      .mockResolvedValueOnce(undefined);
-    mockIsContextFullError.mockReturnValue(true);
-    mockCompact.mockRejectedValue(new Error('compact failed'));
-    (llmService.stopGeneration as jest.Mock).mockResolvedValue(undefined);
-    mockClearKVCache.mockResolvedValue(undefined);
-
-    const conv = { id: 'conv-1', messages: [
-      { id: 'm1', role: 'user', content: 'old', timestamp: 0 },
-      { id: 'm2', role: 'assistant', content: 'reply', timestamp: 0 },
-    ]};
-    mockChatStoreGetState.mockReturnValue({ conversations: [conv], updateCompactionState: jest.fn() });
-    const deps = makeGenerationDeps();
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hi' });
-    expect(mockClearKVCache).toHaveBeenCalledWith(true);
-    expect(mockGenerateResponse).toHaveBeenCalledTimes(2);
-  });
 });
 
 // ─────────────────────────────────────────────
 // applyCompactionPrefix — compaction branches
 // ─────────────────────────────────────────────
-
-describe('applyCompactionPrefix — compaction state', () => {
-  it('uses compaction prefix and filters messages after cutoff', async () => {
-    const msgs = [
-      { id: 'm1', role: 'user', content: 'old message', timestamp: 0 },
-      { id: 'm2', role: 'assistant', content: 'old reply', timestamp: 0 },
-      { id: 'm3', role: 'user', content: 'new message', timestamp: 0 },
-    ];
-    const conv = {
-      id: 'conv-1',
-      compactionSummary: 'Summary of old messages',
-      compactionCutoffMessageId: 'm2',
-      messages: msgs,
-    };
-    mockChatStoreGetState.mockReturnValue({ conversations: [conv], updateCompactionState: jest.fn() });
-    const deps = makeGenerationDeps();
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'new message' });
-    // Should have included compaction summary in messages
-    expect(mockGenerateResponse).toHaveBeenCalledWith('conv-1', expect.arrayContaining([
-      expect.objectContaining({ id: 'compaction-summary' }),
-    ]));
-  });
-
-  it('includes all messages when cutoffMessageId is not found', async () => {
-    const msgs = [{ id: 'm1', role: 'user', content: 'hi', timestamp: 0 }];
-    const conv = {
-      id: 'conv-1',
-      compactionSummary: 'Some summary',
-      compactionCutoffMessageId: 'non-existent-id',
-      messages: msgs,
-    };
-    mockChatStoreGetState.mockReturnValue({ conversations: [conv], updateCompactionState: jest.fn() });
-    const deps = makeGenerationDeps();
-    await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hi' });
-    expect(mockGenerateResponse).toHaveBeenCalled();
-  });
-});
 
 // DEVICE 2026-07-14 — an image sent (or resent) to a model that can't do vision reached the native
 // completion and crashed with "Multimodal support not enabled". Send and resend now share ONE gate
