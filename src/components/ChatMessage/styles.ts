@@ -64,6 +64,8 @@ const createBubbleStyles = (colors: ThemeColors) => ({
   },
   messageFooterRow: {
     paddingVertical: 0,
+    width: MESSAGE_MAX_WIDTH,
+    alignSelf: 'flex-start' as const,
   },
   messageFooterHeader: {
     paddingVertical: 0,

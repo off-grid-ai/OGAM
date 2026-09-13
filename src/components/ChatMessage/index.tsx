@@ -168,6 +168,23 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       onLongPress={onLongPress}
       delayLongPress={300}
     >
+      {!isUser && !!message.toolArtifacts?.length && !!parsedContent.thinking && (
+        <View style={styles.toolCallReplyContent}>
+          <ThinkingBlock
+            parsedContent={parsedContent}
+            showThinking={showThinking}
+            onToggle={onToggleThinking}
+            styles={styles}
+          />
+        </View>
+      )}
+
+      {!isUser && !!message.toolArtifacts?.length && (
+        <View style={styles.toolCallReplyContent}>
+          <SyncedToolArtifacts message={message} styles={styles} colors={colors} />
+        </View>
+      )}
+
       <View
         testID={message.isThinking ? undefined : 'message-bubble'}
         style={message.isThinking ? undefined : bubbleStyle}
@@ -196,7 +213,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           isThinking={message.isThinking}
           content={message.content}
           isStreaming={isStreaming}
-          parsedContent={parsedContent}
+          parsedContent={message.toolArtifacts?.length ? { ...parsedContent, thinking: '' } : parsedContent}
           showThinking={showThinking}
           onToggleThinking={onToggleThinking}
           styles={styles}
@@ -213,8 +230,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           metaExtra={metaExtra}
         />
       )}
-
-      <SyncedToolArtifacts message={message} styles={styles} colors={colors} />
 
       <RoutedToolsRow
         message={message}

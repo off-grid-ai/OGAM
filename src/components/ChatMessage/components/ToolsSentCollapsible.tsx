@@ -34,7 +34,7 @@ const ToolsSentCollapsibleInner: React.FC<ToolsSentCollapsibleProps> = ({ names,
     <View testID="tools-sent-collapsible" style={[styles.toolRow, styles.messageFooterRow]}>
       <TouchableOpacity style={[styles.toolStatusRow, styles.messageFooterHeader]} onPress={toggle} activeOpacity={0.6}>
         <Icon name="tool" size={13} color={colors.textMuted} />
-        <Text style={styles.toolStatusText} numberOfLines={1}>
+        <Text style={[styles.toolStatusText, { flex: 0, flexShrink: 1 }]} numberOfLines={1}>
           Tools sent in request ({names.length})
         </Text>
         <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textMuted} />

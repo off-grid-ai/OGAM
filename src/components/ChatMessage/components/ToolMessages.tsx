@@ -129,7 +129,7 @@ const ToolResultBubbleInner: React.FC<ToolResultBubbleProps> = ({
       >
         <Icon name={toolIcon} size={13} color={tone} />
         <Text
-          style={[styles.toolStatusText, { color: tone }]}
+          style={[styles.toolStatusText, { color: tone, flex: 0, flexShrink: 1 }]}
           numberOfLines={expanded ? undefined : 2}
           testID={labelTestID ?? `tool-result-label-${toolName || 'unknown'}`}
         >

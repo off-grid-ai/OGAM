@@ -126,7 +126,7 @@ describe('ChatMessage', () => {
       expect(getByTestId('assistant-message')).toBeTruthy();
     });
 
-    it('renders synced tool results below the assistant bubble', () => {
+    it('renders synced tool results before the assistant bubble', () => {
       const message = createMessage({
         role: 'assistant',
         content: 'Here is what I found.',
@@ -137,12 +137,12 @@ describe('ChatMessage', () => {
       const view = render(<ChatMessage message={message} />);
       const tree = JSON.stringify(view.toJSON());
 
-      expect(tree.indexOf('message-bubble')).toBeLessThan(
-        tree.indexOf('tool-message'),
+      expect(tree.indexOf('tool-message')).toBeLessThan(
+        tree.indexOf('message-bubble'),
       );
     });
 
-    it('renders a running synced tool below the partial assistant bubble', () => {
+    it('renders a running synced tool before the partial assistant bubble', () => {
       const message = createMessage({
         role: 'assistant',
         content: 'I will make that image.',
@@ -155,8 +155,8 @@ describe('ChatMessage', () => {
       const tree = JSON.stringify(view.toJSON());
 
       expect(view.getByText('Using generate_image...')).toBeTruthy();
-      expect(tree.indexOf('message-bubble')).toBeLessThan(
-        tree.indexOf('tool-message'),
+      expect(tree.indexOf('tool-message')).toBeLessThan(
+        tree.indexOf('message-bubble'),
       );
     });
 
@@ -172,7 +172,7 @@ describe('ChatMessage', () => {
       const tree = JSON.stringify(view.toJSON());
 
       expect(view.getAllByText('Thinking...').length).toBeGreaterThan(0);
-      expect(tree.indexOf('message-bubble')).toBeLessThan(
+      expect(tree.indexOf('thinking-block')).toBeLessThan(
         tree.indexOf('tool-message'),
       );
     });
