@@ -478,13 +478,11 @@ async function prepareContext(
         ? server?.textContextWindowTokens
         : undefined) ?? model?.capabilities.maxContextLength;
     setDebugInfo(null);
-    return contextWindowTokens && contextWindowTokens > 0
-      ? {
-          contextPromptTokens: estimatedPromptTokens,
-          contextWindowTokens,
-          contextEstimate: true,
-        }
-      : undefined;
+    return {
+      contextPromptTokens: estimatedPromptTokens,
+      ...(contextWindowTokens && contextWindowTokens > 0 ? { contextWindowTokens } : {}),
+      contextEstimate: true,
+    };
   }
   try {
     const contextDebug = await llmService.getContextDebugInfo(messages);
