@@ -41,7 +41,6 @@ import {
   ToolsScreen,
   AmbientScreen,
   AmbientDayScreen,
-  AmbientOnboardingScreen,
   AmbientReflectScreen,
   AmbientSessionScreen,
   AmbientReplayScreen,
@@ -258,7 +257,6 @@ export const AppNavigator: React.FC = () => {
         />
         <RootStack.Screen name="Tools" component={ToolsScreen} />
         <RootStack.Screen name="Ambient" component={AmbientScreen} />
-        <RootStack.Screen name="AmbientOnboarding" component={AmbientOnboardingScreen} options={{ headerShown: false, gestureEnabled: false }} />
         <RootStack.Screen name="AmbientReflect" component={AmbientReflectScreen} />
         <RootStack.Screen name="AmbientSession" component={AmbientSessionScreen} />
         <RootStack.Screen name="AmbientReplay" component={AmbientReplayScreen} />

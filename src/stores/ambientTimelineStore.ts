@@ -8,6 +8,7 @@
  * without the screen changing. Dedupe on session id so re-saving a capture is idempotent.
  */
 
+import { Platform } from 'react-native'
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -93,8 +94,9 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       onDeviceOnly: false,
       useMacForTranscription: false,
       processingMode: DEFAULT_PROCESSING_MODE,
-      captureMode: DEFAULT_CAPTURE_MODE,
-      onboardingComplete: false,
+      // Preset per device so first run needs no setup: iPhone one-tap, Android always-on.
+      captureMode: Platform.OS === 'android' ? 'always-on' : DEFAULT_CAPTURE_MODE,
+      onboardingComplete: true,
       pendingCaptures: [],
       processingMinuteOfDay: DEFAULT_PROCESSING_MINUTE_OF_DAY,
       lastScheduledProcessAt: null,

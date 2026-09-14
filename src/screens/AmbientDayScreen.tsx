@@ -12,6 +12,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   AppState,
   Modal,
   ScrollView,
@@ -27,6 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
+import type { ThemeColors, ThemeShadows } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAmbientCapture } from '../hooks/useAmbientCapture';
 import { useAlwaysOnCapture } from '../hooks/useAlwaysOnCapture';
@@ -43,6 +45,9 @@ import { proposeActionsForDay } from '../services/ambient/actionsFactory';
 import { runAudioRetention } from '../services/ambient/retentionService';
 import { ProcessingSchedulePicker } from '../components/ambient/ProcessingSchedulePicker';
 import { shouldRunScheduled } from '../services/ambient/scheduleModel';
+import { useOpenSync } from '../hooks/useOpenSync';
+import { mobileSpeechInputPorts } from '../services/adapters/speech/mobileSpeechInputPorts';
+import { macOffloadReady } from '../services/ambient/macSttExecutorFactory';
 import { formatTodosForActions, formatCallsForActions } from '../services/ambient/actionsModel';
 import { askDayWithDeviceLLM } from '../services/ambient/askDayFactory';
 import type { AskResult } from '../services/ambient/askDay';
@@ -100,8 +105,19 @@ export function AmbientDayScreen(): React.ReactElement {
   const setAudioRetentionDays = useAmbientTimelineStore(s => s.setAudioRetentionDays);
   const captureMode = useAmbientTimelineStore(s => s.captureMode);
   const setCaptureMode = useAmbientTimelineStore(s => s.setCaptureMode);
+  const { openSync } = useOpenSync();
+  const [ready, setReady] = useState(() => ({
+    stt: mobileSpeechInputPorts.transcriber.ready(),
+    mac: macOffloadReady()
+  }));
+  const refreshReady = useCallback(() => {
+    setReady({ stt: mobileSpeechInputPorts.transcriber.ready(), mac: macOffloadReady() });
+  }, []);
+  const openModels = useCallback(
+    () => navigation.navigate('ModelsTab', { initialTab: 'transcription' }),
+    [navigation]
+  );
   useAlwaysOnCapture(capture, captureMode === 'always-on');
-  const onboardingComplete = useAmbientTimelineStore(s => s.onboardingComplete);
 
   const dayKeys = useMemo(() => dayKeysWithSessions(sessions, dateParts), [sessions]);
   const [dayIndex, setDayIndex] = useState(0);
@@ -185,14 +201,6 @@ export function AmbientDayScreen(): React.ReactElement {
     }
   }, [askQuery, asking, daySessions]);
 
-  // First run: send to onboarding.
-  const gated = useRef(false);
-  useEffect(() => {
-    if (gated.current || onboardingComplete) return;
-    gated.current = true;
-    navigation.replace('AmbientOnboarding');
-  }, [onboardingComplete, navigation]);
-
   // Prune capture audio past the retention window, once per screen open.
   const retentionRan = useRef(false);
   useEffect(() => {
@@ -227,7 +235,10 @@ export function AmbientDayScreen(): React.ReactElement {
     };
     tryScheduled();
     const sub = AppState.addEventListener('change', state => {
-      if (state === 'active') tryScheduled();
+      if (state === 'active') {
+        tryScheduled();
+        refreshReady();
+      }
     });
     return () => sub.remove();
   }, [capture]);
@@ -285,11 +296,74 @@ export function AmbientDayScreen(): React.ReactElement {
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
         {daySessions.length === 0 ? (
           <View style={styles.empty} testID="ambient-day-empty">
-            <Text style={styles.emptyTitle}>Nothing for this day yet</Text>
-            <Text style={styles.emptyBody}>
-              Record a conversation. It is transcribed and summarised on this device, then shows up here
-              as your journal, tasks, and timeline.
-            </Text>
+            <View style={styles.hero}>
+              <View style={styles.heroIcon}>
+                <Icon name="mic" size={26} color={colors.primary} />
+              </View>
+              <Text style={styles.heroTitle}>Start your first recording</Text>
+              <Text style={styles.heroBody}>
+                Tap the mic below. Off Grid turns the conversation into your journal, to-dos, and a
+                timeline — all on your terms.
+              </Text>
+            </View>
+
+            <View style={styles.presetCard}>
+              <Text style={styles.presetHead}>YOUR SETUP</Text>
+              <View style={styles.presetRow}>
+                <Text style={styles.presetKey}>Listening</Text>
+                <Text style={styles.presetVal}>
+                  {captureMode === 'always-on' ? 'Always-on' : 'One-tap'}
+                </Text>
+              </View>
+              <View style={styles.presetRow}>
+                <Text style={styles.presetKey}>Processing</Text>
+                <Text style={styles.presetVal}>
+                  {processingMode === 'nightly' ? 'Later' : 'Real-time'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.presetChange}
+                onPress={() => setShowSettings(true)}
+                testID="ambient-empty-settings"
+              >
+                <Icon name="sliders" size={13} color={colors.primary} />
+                <Text style={styles.presetChangeText}>Change in Settings</Text>
+              </TouchableOpacity>
+            </View>
+
+            {ready.stt || ready.mac ? (
+              <View style={styles.readyChip}>
+                <Icon name="check-circle" size={15} color={colors.primary} />
+                <Text style={styles.readyChipText}>
+                  Transcription ready{ready.stt ? ' · on-device' : ' · via your Mac'}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.nudge}>
+                <Text style={styles.nudgeTitle}>One step to transcribe</Text>
+                <Text style={styles.nudgeBody}>
+                  Turn talk into text by downloading a model, or pair your Mac and let it do the work.
+                </Text>
+                <View style={styles.nudgeBtns}>
+                  <TouchableOpacity
+                    style={styles.nudgePrimary}
+                    onPress={openModels}
+                    testID="ambient-empty-download-model"
+                  >
+                    <Icon name="download" size={14} color={colors.background} />
+                    <Text style={styles.nudgePrimaryText}>Download a model</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.nudgeGhost}
+                    onPress={openSync}
+                    testID="ambient-empty-sync"
+                  >
+                    <Icon name="airplay" size={14} color={colors.primary} />
+                    <Text style={styles.nudgeGhostText}>Sync your Mac</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         ) : (
           <>
@@ -649,6 +723,21 @@ function TaskRow({
   );
 }
 
+function PulseDot({ style }: { style: any }): React.ReactElement {
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.25, duration: 650, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 650, useNativeDriver: true })
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return <Animated.View style={[style, { opacity: pulse }]} />;
+}
+
 function CaptureStrip({
   styles,
   colors,
@@ -669,7 +758,7 @@ function CaptureStrip({
   if (!capture.recording) return null;
   return (
     <View style={[styles.capStrip, styles.capRecording]}>
-      <View style={styles.capDot} />
+      <PulseDot style={styles.capDot} />
       <Text style={styles.capText}>
         REC {mmss(capture.elapsedMs)} · {capture.liveCount} segment{capture.liveCount === 1 ? '' : 's'}
       </Text>
@@ -693,16 +782,7 @@ function progressLabel(progress: ReturnType<typeof useAmbientCapture>['progress'
   return `Summarising ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…`;
 }
 
-function createStyles(colors: {
-  background: string;
-  text: string;
-  textMuted: string;
-  textSecondary: string;
-  surface: string;
-  border: string;
-  error: string;
-  primary: string;
-}) {
+function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     error: { color: colors.error, fontSize: 13, paddingHorizontal: 16, paddingBottom: 8 },
@@ -722,9 +802,28 @@ function createStyles(colors: {
     // body
     body: { flex: 1 },
     bodyContent: { paddingBottom: 24 },
-    empty: { padding: 24, gap: 8 },
-    emptyTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
-    emptyBody: { color: colors.textMuted, fontSize: 13, lineHeight: 19 },
+    empty: { padding: 20, gap: 14 },
+    hero: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 18, gap: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.surface, ...shadows.medium },
+    heroIcon: { width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.background, ...shadows.glow },
+    heroTitle: { color: colors.text, fontSize: 18, fontWeight: '800', letterSpacing: -0.3, textAlign: 'center' },
+    heroBody: { color: colors.textSecondary, fontSize: 13.5, lineHeight: 20, textAlign: 'center', maxWidth: 300 },
+    presetCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, backgroundColor: colors.surfaceLight, padding: 14, gap: 10, ...shadows.small },
+    presetHead: { color: colors.textMuted, fontSize: 10.5, letterSpacing: 1.6, fontWeight: '700' },
+    presetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    presetKey: { color: colors.textSecondary, fontSize: 13 },
+    presetVal: { color: colors.text, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
+    presetChange: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+    presetChangeText: { color: colors.primary, fontSize: 12.5, fontWeight: '700' },
+    readyChip: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingHorizontal: 13, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.primary, backgroundColor: 'rgba(52,211,153,0.10)' },
+    readyChipText: { color: colors.primary, fontSize: 12.5, fontWeight: '700' },
+    nudge: { borderWidth: 1, borderColor: colors.primary, borderRadius: 14, backgroundColor: colors.surface, padding: 16, gap: 8, ...shadows.small },
+    nudgeTitle: { color: colors.text, fontSize: 14.5, fontWeight: '800' },
+    nudgeBody: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18 },
+    nudgeBtns: { flexDirection: 'row', gap: 10, marginTop: 6 },
+    nudgePrimary: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: colors.primary, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 10, ...shadows.glow },
+    nudgePrimaryText: { color: colors.background, fontSize: 12.5, fontWeight: '800' },
+    nudgeGhost: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: colors.border, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: colors.background },
+    nudgeGhostText: { color: colors.primary, fontSize: 12.5, fontWeight: '700' },
     muted: { color: colors.textMuted, fontSize: 13, paddingHorizontal: 18 },
     // section
     section: { paddingTop: 18 },
@@ -740,7 +839,7 @@ function createStyles(colors: {
     taskDone: { color: colors.textMuted, textDecorationLine: 'line-through' },
     taskSrc: { color: colors.textMuted, fontSize: 10.5, marginTop: 3 },
     // action
-    action: { marginHorizontal: 14, marginBottom: 8, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 9, backgroundColor: colors.surface },
+    action: { marginHorizontal: 14, marginBottom: 8, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 9, backgroundColor: colors.surface, ...shadows.small },
     actionConn: { color: colors.primary, fontSize: 9.5, letterSpacing: 1.4, fontWeight: '700', marginBottom: 5 },
     actionTitle: { color: colors.text, fontSize: 13.5, fontWeight: '600', lineHeight: 18 },
     actionWhy: { color: colors.textMuted, fontSize: 11.5, marginTop: 4, lineHeight: 16 },
@@ -759,11 +858,11 @@ function createStyles(colors: {
     // header icons
     headIcons: { flexDirection: 'row', alignItems: 'center', gap: 16 },
     // timeline chip
-    tlChip: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 18, marginTop: 4, padding: 13, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface },
+    tlChip: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 18, marginTop: 4, padding: 13, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface, ...shadows.small },
     tlChipLabel: { color: colors.text, fontSize: 12.5, fontWeight: '600' },
     tlChipN: { color: colors.textMuted, fontSize: 11, flex: 1, textAlign: 'right' },
     // docked ask + record
-    dock: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background },
+    dock: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, borderTopWidth: 1, borderTopColor: colors.borderLight, backgroundColor: colors.background, boxShadow: '0px -3px 14px 0px rgba(0,0,0,0.28)' },
     askbar: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 14, paddingVertical: 11, borderWidth: 1, borderColor: colors.border, borderRadius: 22, backgroundColor: colors.surface },
     askInput: { flex: 1, color: colors.text, fontSize: 13, padding: 0 },
     answer: { marginHorizontal: 14, marginBottom: 8, borderWidth: 1, borderLeftWidth: 2, borderColor: colors.border, borderLeftColor: colors.primary, borderRadius: 8, padding: 12, backgroundColor: colors.surface },
@@ -787,6 +886,6 @@ function createStyles(colors: {
     segText: { color: colors.textMuted, fontSize: 12 },
     segTextOn: { color: colors.primary, fontWeight: '700' },
     // record fab (docked)
-    fab: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }
+    fab: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', ...shadows.glow }
   });
 }
