@@ -307,30 +307,6 @@ export function AmbientDayScreen(): React.ReactElement {
               </Text>
             </View>
 
-            <View style={styles.presetCard}>
-              <Text style={styles.presetHead}>YOUR SETUP</Text>
-              <View style={styles.presetRow}>
-                <Text style={styles.presetKey}>Listening</Text>
-                <Text style={styles.presetVal}>
-                  {captureMode === 'always-on' ? 'Always-on' : 'One-tap'}
-                </Text>
-              </View>
-              <View style={styles.presetRow}>
-                <Text style={styles.presetKey}>Processing</Text>
-                <Text style={styles.presetVal}>
-                  {processingMode === 'nightly' ? 'Later' : 'Real-time'}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.presetChange}
-                onPress={() => setShowSettings(true)}
-                testID="ambient-empty-settings"
-              >
-                <Icon name="sliders" size={13} color={colors.primary} />
-                <Text style={styles.presetChangeText}>Change in Settings</Text>
-              </TouchableOpacity>
-            </View>
-
             {ready.stt || ready.mac ? (
               <View style={styles.readyChip}>
                 <Icon name="check-circle" size={15} color={colors.primary} />
@@ -364,6 +340,30 @@ export function AmbientDayScreen(): React.ReactElement {
                 </View>
               </View>
             )}
+
+            <View style={styles.presetCard}>
+              <Text style={styles.presetHead}>YOUR SETUP</Text>
+              <View style={styles.presetRow}>
+                <Text style={styles.presetKey}>Listening</Text>
+                <Text style={styles.presetVal}>
+                  {captureMode === 'always-on' ? 'Always-on' : 'One-tap'}
+                </Text>
+              </View>
+              <View style={styles.presetRow}>
+                <Text style={styles.presetKey}>Processing</Text>
+                <Text style={styles.presetVal}>
+                  {processingMode === 'nightly' ? 'Later' : 'Real-time'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.presetChange}
+                onPress={() => setShowSettings(true)}
+                testID="ambient-empty-settings"
+              >
+                <Icon name="sliders" size={13} color={colors.primary} />
+                <Text style={styles.presetChangeText}>Change in Settings</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : (
           <>
@@ -467,11 +467,19 @@ export function AmbientDayScreen(): React.ReactElement {
           />
           {asking ? <ActivityIndicator size="small" color={colors.primary} /> : null}
         </View>
-        {!capture.recording && !capture.processing ? (
+        {capture.processing ? (
+          <View style={[styles.fab, styles.fabBusy]}>
+            <ActivityIndicator size="small" color={colors.background} />
+          </View>
+        ) : capture.recording ? (
+          <TouchableOpacity style={[styles.fab, styles.fabRec]} onPress={capture.stop} testID="ambient-day-stop">
+            <Icon name="square" size={19} color={colors.background} />
+          </TouchableOpacity>
+        ) : (
           <TouchableOpacity style={styles.fab} onPress={capture.start} testID="ambient-day-record">
             <Icon name="mic" size={22} color={colors.background} />
           </TouchableOpacity>
-        ) : null}
+        )}
       </View>
 
       {/* Timeline — reference, off the main surface. */}
@@ -766,9 +774,6 @@ function CaptureStrip({
         <Icon name="flag" size={14} color={colors.primary} />
         <Text style={styles.capFlagText}>{capture.flagCount > 0 ? capture.flagCount : 'Flag'}</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={capture.stop} style={styles.capStop} testID="ambient-day-stop">
-        <Text style={styles.capStopText}>Stop</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -886,6 +891,8 @@ function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     segText: { color: colors.textMuted, fontSize: 12 },
     segTextOn: { color: colors.primary, fontWeight: '700' },
     // record fab (docked)
-    fab: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', ...shadows.glow }
+    fab: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', ...shadows.glow },
+    fabRec: { backgroundColor: colors.error, boxShadow: '0px 0px 14px 0px rgba(199,80,80,0.45)' },
+    fabBusy: { backgroundColor: colors.surfaceHover, ...shadows.small }
   });
 }
