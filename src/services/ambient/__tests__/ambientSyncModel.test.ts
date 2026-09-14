@@ -12,9 +12,10 @@ function session(id: string, startMs: number): TimelineSession {
     id,
     startMs,
     endMs: startMs + 1000,
-    transcript: 't',
-    summary: { title: id, headline: '', actionItems: [] } as TimelineSession['summary'],
+    speechMs: 500,
+    summary: { title: id, headline: '', decisions: [], actionItems: [], people: [] },
     summaryStatus: 'ok' as TimelineSession['summaryStatus'],
+    flaggedSegmentIds: [],
     segments: []
   }
 }
