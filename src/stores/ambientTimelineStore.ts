@@ -18,6 +18,14 @@ import type { ProcessingMode, CaptureMode, PendingCapture } from '../services/am
 import { DEFAULT_PROCESSING_MODE, DEFAULT_CAPTURE_MODE } from '../services/ambient/processingModel'
 import { DEFAULT_RETENTION_DAYS } from '../services/ambient/retentionModel'
 import { DEFAULT_PROCESSING_MINUTE_OF_DAY } from '../services/ambient/scheduleModel'
+import type { AmbientSyncPayload } from '../services/ambient/ambientSyncModel'
+import {
+  buildPayload,
+  applyRemote,
+  emptyStamps,
+  type AmbientSyncStamps
+} from '../services/ambient/ambientSyncBridge'
+import { useSyncIdentityStore } from './syncIdentityStore'
 
 interface AmbientTimelineState {
   sessions: TimelineSession[]
@@ -50,6 +58,8 @@ interface AmbientTimelineState {
   lastScheduledProcessAt: number | null
   /** How many days of raw capture audio to keep (for Replay). */
   audioRetentionDays: number
+  /** Per-entity change stamps, for cross-device last-writer-wins. Not user-facing. */
+  syncStamps: AmbientSyncStamps
   addSessions: (sessions: TimelineSession[]) => void
   removeSession: (id: string) => void
   clearAll: () => void
@@ -67,6 +77,10 @@ interface AmbientTimelineState {
   setAudioRetentionDays: (days: number) => void
   setCaptureMode: (mode: CaptureMode) => void
   setOnboardingComplete: (done: boolean) => void
+  /** Serialize the synced slice for the sync adapter to push. */
+  toSyncPayload: () => AmbientSyncPayload
+  /** Merge an inbound payload from another device into local state. */
+  applySyncPayload: (remote: AmbientSyncPayload) => void
 }
 
 /** Merge new sessions into existing, keeping one record per id (last write wins). Pure, exported for test. */
@@ -84,9 +98,12 @@ export function toggleId(list: string[], id: string): string[] {
   return list.includes(id) ? list.filter(x => x !== id) : [...list, id]
 }
 
+/** This device's sync identity for stamping writes; 'local' until pairing establishes one. */
+const localStampId = (): string => useSyncIdentityStore.getState().localDeviceId ?? 'local'
+
 export const useAmbientTimelineStore = create<AmbientTimelineState>()(
   persist(
-    set => ({
+    (set, get) => ({
       sessions: [],
       doneTaskIds: [],
       journalByDay: {},
@@ -101,21 +118,54 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       processingMinuteOfDay: DEFAULT_PROCESSING_MINUTE_OF_DAY,
       lastScheduledProcessAt: null,
       audioRetentionDays: DEFAULT_RETENTION_DAYS,
-      addSessions: incoming => set(state => ({ sessions: mergeSessions(state.sessions, incoming) })),
+      syncStamps: emptyStamps(),
+      addSessions: incoming =>
+        set(state => {
+          const stamp = { at: Date.now(), by: localStampId() }
+          const sessions = { ...state.syncStamps.sessions }
+          for (const s of incoming) sessions[s.id] = stamp
+          return {
+            sessions: mergeSessions(state.sessions, incoming),
+            syncStamps: { ...state.syncStamps, sessions }
+          }
+        }),
       removeSession: id => set(state => ({ sessions: state.sessions.filter(s => s.id !== id) })),
       clearAll: () => set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {} }),
       setOnDeviceOnly: value => set({ onDeviceOnly: value }),
       setUseMacForTranscription: value => set({ useMacForTranscription: value }),
-      toggleTask: id => set(state => ({ doneTaskIds: toggleId(state.doneTaskIds, id) })),
+      toggleTask: id =>
+        set(state => ({
+          doneTaskIds: toggleId(state.doneTaskIds, id),
+          syncStamps: {
+            ...state.syncStamps,
+            done: { ...state.syncStamps.done, [id]: { at: Date.now(), by: localStampId() } }
+          }
+        })),
       setDayJournal: (dayKey, text) =>
-        set(state => ({ journalByDay: { ...state.journalByDay, [dayKey]: text } })),
+        set(state => ({
+          journalByDay: { ...state.journalByDay, [dayKey]: text },
+          syncStamps: {
+            ...state.syncStamps,
+            journal: { ...state.syncStamps.journal, [dayKey]: { at: Date.now(), by: localStampId() } }
+          }
+        })),
       setDayActions: (dayKey, proposals) =>
-        set(state => ({ actionsByDay: { ...state.actionsByDay, [dayKey]: proposals } })),
+        set(state => ({
+          actionsByDay: { ...state.actionsByDay, [dayKey]: proposals },
+          syncStamps: {
+            ...state.syncStamps,
+            actions: { ...state.syncStamps.actions, [dayKey]: { at: Date.now(), by: localStampId() } }
+          }
+        })),
       resolveDayAction: (dayKey, index) =>
         set(state => ({
           actionsByDay: {
             ...state.actionsByDay,
             [dayKey]: (state.actionsByDay[dayKey] ?? []).filter((_, i) => i !== index)
+          },
+          syncStamps: {
+            ...state.syncStamps,
+            actions: { ...state.syncStamps.actions, [dayKey]: { at: Date.now(), by: localStampId() } }
           }
         })),
       setProcessingMode: mode => set({ processingMode: mode }),
@@ -126,7 +176,25 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       markScheduledProcess: atMs => set({ lastScheduledProcessAt: atMs }),
       setAudioRetentionDays: days => set({ audioRetentionDays: days }),
       setCaptureMode: mode => set({ captureMode: mode }),
-      setOnboardingComplete: done => set({ onboardingComplete: done })
+      setOnboardingComplete: done => set({ onboardingComplete: done }),
+      toSyncPayload: () => {
+        const s = get()
+        return buildPayload(
+          { sessions: s.sessions, doneTaskIds: s.doneTaskIds, journalByDay: s.journalByDay, actionsByDay: s.actionsByDay },
+          s.syncStamps,
+          localStampId()
+        )
+      },
+      applySyncPayload: remote =>
+        set(state => {
+          const applied = applyRemote(
+            { sessions: state.sessions, doneTaskIds: state.doneTaskIds, journalByDay: state.journalByDay, actionsByDay: state.actionsByDay },
+            state.syncStamps,
+            remote,
+            localStampId()
+          )
+          return { ...applied.state, syncStamps: applied.stamps }
+        })
     }),
     {
       name: 'ambient-timeline',
