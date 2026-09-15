@@ -30,7 +30,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { useAmbientCapture } from '../hooks/useAmbientCapture';
+import { useAmbientCapture, processPending as drainPending, currentCapturePhase } from '../hooks/useAmbientCapture';
 import { useAlwaysOnCapture } from '../hooks/useAlwaysOnCapture';
 import { useAmbientTimelineStore } from '../stores/ambientTimelineStore';
 import {
@@ -212,36 +212,58 @@ export function AmbientDayScreen(): React.ReactElement {
   // Deferred ("Later") queue: catch-up drain. If the background task never fired the scheduled run
   // (iOS gated it, or the app was closed), process the queue the next time we're open past today's
   // scheduled time. Runs at most once per scheduled day; marks the run only when the queue actually drained.
-  const scheduledInFlight = useRef(false);
+  const drainInFlight = useRef(false);
   useEffect(() => {
-    const tryScheduled = (): void => {
-      if (scheduledInFlight.current) return;
+    const readyNow = (): boolean => {
+      if (mobileSpeechInputPorts.transcriber.ready()) return true;
       const st = useAmbientTimelineStore.getState();
-      if (st.processingMode !== 'nightly') return;
+      return st.useMacForTranscription && !st.onDeviceOnly && macOffloadReady();
+    };
+    // Durable queue drain: process anything waiting the moment a transcriber is available. Failure-
+    // queued (live) captures drain as soon as ready; "Later"/nightly captures wait for their time.
+    const tryDrain = (): void => {
+      if (drainInFlight.current) return;
+      if (currentCapturePhase() !== 'idle') return; // never drain while recording/processing
+      const st = useAmbientTimelineStore.getState();
       if (st.pendingCaptures.length === 0) return;
-      if (!shouldRunScheduled(Date.now(), st.processingMinuteOfDay, st.lastScheduledProcessAt)) return;
-      scheduledInFlight.current = true;
-      capture
-        .processPending()
+      if (!readyNow()) return; // wait for the Mac to come back, or a local model
+      if (
+        st.processingMode === 'nightly' &&
+        !shouldRunScheduled(Date.now(), st.processingMinuteOfDay, st.lastScheduledProcessAt)
+      )
+        return;
+      drainInFlight.current = true;
+      drainPending()
         .then(() => {
-          if (useAmbientTimelineStore.getState().pendingCaptures.length === 0) {
+          const after = useAmbientTimelineStore.getState();
+          if (after.pendingCaptures.length === 0 && after.processingMode === 'nightly') {
             useAmbientTimelineStore.getState().markScheduledProcess(Date.now());
           }
         })
         .catch(() => undefined)
         .finally(() => {
-          scheduledInFlight.current = false;
+          drainInFlight.current = false;
         });
     };
-    tryScheduled();
+    tryDrain();
     const sub = AppState.addEventListener('change', state => {
       if (state === 'active') {
-        tryScheduled();
+        tryDrain();
         refreshReady();
       }
     });
-    return () => sub.remove();
-  }, [capture]);
+    // While captures are waiting, poll so an in-app network/Mac return auto-drains them.
+    const poll = setInterval(() => {
+      if (useAmbientTimelineStore.getState().pendingCaptures.length > 0) {
+        tryDrain();
+        refreshReady();
+      }
+    }, 15000);
+    return () => {
+      sub.remove();
+      clearInterval(poll);
+    };
+  }, [refreshReady]);
 
   const open = openTaskCount(tasks);
 

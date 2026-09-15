@@ -117,7 +117,7 @@ async function buildAndStore(
   useAmbientTimelineStore.getState().addSessions(built)
 }
 
-async function processPending(): Promise<void> {
+export async function processPending(): Promise<void> {
   const pending = useAmbientTimelineStore.getState().pendingCaptures
   if (pending.length === 0) return
   if (!captureTranscriptionReady()) {
@@ -165,6 +165,23 @@ async function start(): Promise<void> {
   }
 }
 
+/** Save a capture to the durable pending queue - it survives restarts and drains when a transcriber
+ *  is next available (Mac back in range, or a local model). The safety net for offload gaps. */
+function enqueuePending(
+  segs: SpeechSegment[],
+  recordingPath: string,
+  captureStartedAtMs: number,
+  anchorsMs: number[]
+): void {
+  useAmbientTimelineStore.getState().addPendingCapture({
+    id: String(captureStartedAtMs),
+    segments: segs,
+    recordingPath,
+    captureStartedAtMs,
+    anchorsMs
+  })
+}
+
 async function stop(): Promise<void> {
   stopElapsedTimer()
   let result: { path: string; durationSeconds: number } | null = null
@@ -193,8 +210,10 @@ async function stop(): Promise<void> {
     return
   }
   if (!captureTranscriptionReady()) {
+    // No transcriber right now (Mac out of range, no local model). Don't lose it - queue + retry later.
+    enqueuePending(captured, result.path, capturedStartedAt, capturedAnchors)
     setCapture({
-      error: 'Set up a transcription model in Models, or pair a Mac and grant its tools, then record.',
+      error: 'Saved — will transcribe when your Mac is back in range or a local model is set up.',
       phase: 'idle'
     })
     return
@@ -202,11 +221,21 @@ async function stop(): Promise<void> {
   setCapture({ phase: 'processing', progress: { phase: 'transcribing', done: 0, total: 1 } })
   try {
     await buildAndStore(captured, result.path, capturedStartedAt, capturedAnchors)
-  } catch (e) {
-    setCapture({ error: e instanceof Error ? e.message : 'Could not process the recording.' })
-  } finally {
     setCapture({ phase: 'idle', progress: null })
+  } catch (e) {
+    // Transcription failed mid-build (e.g. the Mac dropped). Requeue durably rather than lose it.
+    enqueuePending(captured, result.path, capturedStartedAt, capturedAnchors)
+    setCapture({
+      error: e instanceof Error ? e.message : 'Transcription failed — saved to retry when ready.',
+      phase: 'idle',
+      progress: null
+    })
   }
+}
+
+/** The current capture phase, read non-reactively (for effects that must not drain mid-recording). */
+export function currentCapturePhase(): CapturePhase {
+  return useCaptureStore.getState().phase
 }
 
 export function useAmbientCapture(): AmbientCapture {
