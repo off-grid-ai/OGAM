@@ -26,6 +26,7 @@ import {
   type AmbientSyncStamps
 } from '../services/ambient/ambientSyncBridge'
 import { useSyncIdentityStore } from './syncIdentityStore'
+import type { AmbientWireState } from '@offgrid/sync'
 
 interface AmbientTimelineState {
   sessions: TimelineSession[]
@@ -81,6 +82,17 @@ interface AmbientTimelineState {
   toSyncPayload: () => AmbientSyncPayload
   /** Merge an inbound payload from another device into local state. */
   applySyncPayload: (remote: AmbientSyncPayload) => void
+  // ── native sync-entity materialization (inbound; no re-stamp) ──
+  applySessionSynced: (session: TimelineSession) => void
+  removeSessionSynced: (id: string) => void
+  applyTodoSynced: (dayTaskId: string, done: boolean) => void
+  removeTodoSynced: (dayTaskId: string) => void
+  applyJournalSynced: (dayKey: string, text: string) => void
+  removeJournalSynced: (dayKey: string) => void
+  applyActionsSynced: (dayKey: string, proposals: ProactiveActionProposal[]) => void
+  removeActionsSynced: (dayKey: string) => void
+  /** The synced Day projected to the wire shape, for the sync adapter to diff + publish. */
+  toAmbientWireState: () => AmbientWireState
 }
 
 /** Merge new sessions into existing, keeping one record per id (last write wins). Pure, exported for test. */
@@ -195,6 +207,49 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
           )
           return { ...applied.state, syncStamps: applied.stamps }
         })
+      ,
+      applySessionSynced: session =>
+        set(state => ({ sessions: mergeSessions(state.sessions, [session]) })),
+      removeSessionSynced: id =>
+        set(state => ({ sessions: state.sessions.filter(s => s.id !== id) })),
+      applyTodoSynced: (dayTaskId, done) =>
+        set(state => ({
+          doneTaskIds: done
+            ? Array.from(new Set([...state.doneTaskIds, dayTaskId]))
+            : state.doneTaskIds.filter(x => x !== dayTaskId)
+        })),
+      removeTodoSynced: dayTaskId =>
+        set(state => ({ doneTaskIds: state.doneTaskIds.filter(x => x !== dayTaskId) })),
+      applyJournalSynced: (dayKey, text) =>
+        set(state => ({ journalByDay: { ...state.journalByDay, [dayKey]: text } })),
+      removeJournalSynced: dayKey =>
+        set(state => {
+          const journalByDay = { ...state.journalByDay }
+          delete journalByDay[dayKey]
+          return { journalByDay }
+        }),
+      applyActionsSynced: (dayKey, proposals) =>
+        set(state => ({ actionsByDay: { ...state.actionsByDay, [dayKey]: proposals } })),
+      removeActionsSynced: dayKey =>
+        set(state => {
+          const actionsByDay = { ...state.actionsByDay }
+          delete actionsByDay[dayKey]
+          return { actionsByDay }
+        }),
+      toAmbientWireState: () => {
+        const s = get()
+        const sessions: Record<string, string> = {}
+        for (const sess of s.sessions) sessions[sess.id] = JSON.stringify(sess)
+        const todos: Record<string, { sessionId: string; done: boolean }> = {}
+        for (const id of s.doneTaskIds) {
+          const hash = id.lastIndexOf('#')
+          todos[id] = { sessionId: hash > 0 ? id.slice(0, hash) : id, done: true }
+        }
+        const journal = { ...s.journalByDay }
+        const actions: Record<string, string> = {}
+        for (const [day, list] of Object.entries(s.actionsByDay)) actions[day] = JSON.stringify(list)
+        return { sessions, todos, journal, actions }
+      }
     }),
     {
       name: 'ambient-timeline',
