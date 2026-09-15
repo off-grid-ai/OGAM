@@ -51,7 +51,7 @@ export function AmbientOnboardingScreen(): React.ReactElement {
 
   const finish = useCallback(() => {
     setOnboardingComplete(true);
-    navigation.replace('Main', { screen: 'DayTab' });
+    navigation.replace('AmbientDay');
   }, [navigation, setOnboardingComplete]);
 
   return (

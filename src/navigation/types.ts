@@ -29,6 +29,7 @@ export type RootStackParamList = {
   About: undefined;
   Tools: undefined;
   Ambient: undefined;
+  AmbientDay: undefined;
   AmbientOnboarding: undefined;
   AmbientReflect: undefined;
   AmbientSession: { sessionId: string };
@@ -38,7 +39,6 @@ export type RootStackParamList = {
 // Tab navigator — simple, no sub-stacks
 export type MainTabParamList = {
   HomeTab: undefined;
-  DayTab: undefined;
   ChatsTab: undefined;
   ProjectsTab: undefined;
   ModelsTab:

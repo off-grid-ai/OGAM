@@ -272,6 +272,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </AnimatedEntry>
           )}
 
+          {/* Day */}
+          <AnimatedPressable
+            style={styles.galleryCard}
+            onPress={() => navigation.navigate('AmbientDay')}
+            hapticType="selection"
+            testID="home-day-card"
+          >
+            <Icon name="sunrise" size={18} color={colors.primary} />
+            <View style={styles.galleryCardInfo}>
+              <Text style={styles.galleryCardTitle}>Day</Text>
+              <Text style={styles.galleryCardMeta}>Journal · to-dos · timeline</Text>
+            </View>
+            <Icon name="chevron-right" size={16} color={colors.textMuted} />
+          </AnimatedPressable>
+
           {/* Image Gallery */}
           <AnimatedPressable
             style={styles.galleryCard}
