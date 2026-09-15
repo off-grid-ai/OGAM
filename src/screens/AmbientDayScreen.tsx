@@ -12,6 +12,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   AppState,
   Modal,
@@ -48,6 +49,7 @@ import { shouldRunScheduled } from '../services/ambient/scheduleModel';
 import { useOpenSync } from '../hooks/useOpenSync';
 import { mobileSpeechInputPorts } from '../services/adapters/speech/mobileSpeechInputPorts';
 import { macOffloadReady } from '../services/ambient/macSttExecutorFactory';
+import { mobileTextEngineControl } from '../services/modelServices/textEngineControl';
 import { formatTodosForActions, formatCallsForActions } from '../services/ambient/actionsModel';
 import { askDayWithDeviceLLM } from '../services/ambient/askDayFactory';
 import type { AskResult } from '../services/ambient/askDay';
@@ -117,6 +119,41 @@ export function AmbientDayScreen(): React.ReactElement {
     () => navigation.navigate('ModelsTab', { initialTab: 'transcription' }),
     [navigation]
   );
+
+  // Sanity check before recording: transcription and the summary/journal use DIFFERENT engines, so warn
+  // up front if either is missing instead of letting the user find out from an empty Day later.
+  const handleRecordPress = useCallback(() => {
+    const transcriptionReady =
+      mobileSpeechInputPorts.transcriber.ready() ||
+      (useMacForTranscription && !onDeviceOnly && macOffloadReady());
+    const summaryReady =
+      mobileTextEngineControl.isReady() ||
+      (!onDeviceOnly && mobileTextEngineControl.isRemoteActive());
+    if (transcriptionReady && summaryReady) {
+      void capture.start();
+      return;
+    }
+    const lines: string[] = [];
+    if (!transcriptionReady) {
+      lines.push('• No transcriber is ready — the recording will be saved and transcribed once your Mac is reachable or a model is set up.');
+    }
+    if (!summaryReady) {
+      lines.push('• No chat model is set up — you\'ll get the transcript, but no summary, to-dos, or journal until you add one in Models.');
+    }
+    Alert.alert(
+      'Before you record',
+      lines.join('\n\n'),
+      [
+        {
+          text: 'Set up',
+          onPress: () =>
+            navigation.navigate('ModelsTab', { initialTab: !summaryReady ? 'text' : 'transcription' })
+        },
+        { text: 'Record anyway', onPress: () => void capture.start() },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  }, [capture, navigation, useMacForTranscription, onDeviceOnly]);
   useAlwaysOnCapture(capture, captureMode === 'always-on');
 
   const dayKeys = useMemo(() => dayKeysWithSessions(sessions, dateParts), [sessions]);
@@ -499,7 +536,7 @@ export function AmbientDayScreen(): React.ReactElement {
             <Icon name="square" size={19} color={colors.background} />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.fab} onPress={capture.start} testID="ambient-day-record">
+          <TouchableOpacity style={styles.fab} onPress={handleRecordPress} testID="ambient-day-record">
             <Icon name="mic" size={22} color={colors.background} />
           </TouchableOpacity>
         )}
