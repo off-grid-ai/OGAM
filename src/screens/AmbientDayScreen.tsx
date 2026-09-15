@@ -308,7 +308,7 @@ export function AmbientDayScreen(): React.ReactElement {
               </Text>
             </View>
 
-            {ready.stt || ready.mac ? (
+            {ready.stt || (useMacForTranscription && !onDeviceOnly && ready.mac) ? (
               <View style={styles.readyChip}>
                 <Icon name="check-circle" size={15} color={colors.primary} />
                 <Text style={styles.readyChipText}>

@@ -121,7 +121,8 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
       journalByDay: {},
       actionsByDay: {},
       onDeviceOnly: false,
-      useMacForTranscription: false,
+      // Offload to a paired Mac by default; falls back to on-device when no Mac is reachable.
+      useMacForTranscription: true,
       processingMode: DEFAULT_PROCESSING_MODE,
       // Preset per device so first run needs no setup: iPhone one-tap, Android always-on.
       captureMode: Platform.OS === 'android' ? 'always-on' : DEFAULT_CAPTURE_MODE,
