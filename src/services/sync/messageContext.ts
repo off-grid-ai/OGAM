@@ -33,12 +33,14 @@ export function serializeMessageContext(
     | 'role'
     | 'reasoningContent'
     | 'timeline'
+    | 'toolCalls'
     | 'toolArtifacts'
     | 'toolCallId'
     | 'toolName'
     | 'generationTimeMs'
     | 'generationMeta'
     | 'isSystemInfo'
+    | 'turnStatus'
   >,
 ): string | null {
   return serializeSyncedMessageContext({
@@ -75,9 +77,16 @@ export function serializeMessageContext(
                 }),
           }
         : undefined,
-    toolCalls: message.toolArtifacts?.filter(
-      artifact => artifact.id !== RETRIEVAL_TOOL_ARTIFACT_ID,
-    ),
+    toolCalls: [
+      ...(message.toolCalls ?? []).map(call => ({
+        ...call,
+        result: '',
+        status: 'running' as const,
+      })),
+      ...(message.toolArtifacts?.filter(
+        artifact => artifact.id !== RETRIEVAL_TOOL_ARTIFACT_ID,
+      ) ?? []),
+    ],
     ...(message.role === 'tool'
       ? {
           tool: {
@@ -91,7 +100,7 @@ export function serializeMessageContext(
     ...(message.generationTimeMs !== undefined
       ? { durationMs: message.generationTimeMs }
       : {}),
-    status: 'completed',
+    status: message.turnStatus ?? 'completed',
   });
 }
 

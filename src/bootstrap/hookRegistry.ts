@@ -50,6 +50,8 @@ export const HOOKS = {
    *  protecting for a screen nobody is on, and a guard that reasons about flags is exactly how audio
    *  kept playing after the chat was closed. */
   audioStopForExit: 'audio.stopForExit',
+  /** () => Promise<void> — Pro stops the active Desktop task started by this chat. */
+  taskStopActive: 'task.stopActive',
   /** (content: string) => void — fired as the assistant message streams; pro
    *  uses it to synthesize/play speech sentence-by-sentence while generation is
    *  still in progress (no-op unless voice mode + engine ready). */

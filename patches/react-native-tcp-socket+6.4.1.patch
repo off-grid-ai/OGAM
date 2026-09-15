@@ -1,0 +1,28 @@
+diff --git a/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketModule.java b/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketModule.java
+index 121edb4..34cc84e 100644
+--- a/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketModule.java
++++ b/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketModule.java
+@@ -63,6 +63,23 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
+         tcpEvtListener = new TcpEventListener(mReactContext);
+     }
+ 
++    @Override
++    public void invalidate() {
++        // Android keeps the process alive across a React Native reload. Release native listeners
++        // that the old JS runtime can no longer close, or the new runtime cannot bind the port.
++        executorService.shutdownNow();
++        for (TcpSocket socket : socketMap.values()) {
++            if (socket instanceof TcpSocketServer) {
++                ((TcpSocketServer) socket).close();
++            } else if (socket instanceof TcpSocketClient) {
++                ((TcpSocketClient) socket).destroy();
++            }
++        }
++        socketMap.clear();
++        pendingTLS.clear();
++        super.invalidate();
++    }
++
+     @Override
+     public @NonNull
+     String getName() {

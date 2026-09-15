@@ -138,19 +138,16 @@ function parseBraveResults(html: string): SearchResult[] {
   return results;
 }
 
+const NAMED_HTML_ENTITIES: Readonly<Record<string, string>> = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+};
+
 function decodeHTMLEntities(text: string): string {
-  return text
-    .replaceAll('&amp;', '&')
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&quot;', '"')
-    .replaceAll('&#39;', "'")
-    .replaceAll('&#x27;', "'")
-    .replaceAll('&#x2F;', '/')
-    .replaceAll('&nbsp;', ' ')
-    .replaceAll('&apos;', "'")
-    .replaceAll(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replaceAll(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16)));
+  return text.replaceAll(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z]+);/g, (entity, body: string) => {
+    if (body.startsWith('#x')) return String.fromCodePoint(Number.parseInt(body.slice(2), 16));
+    if (body.startsWith('#')) return String.fromCodePoint(Number(body.slice(1)));
+    return NAMED_HTML_ENTITIES[body] ?? entity;
+  });
 }
 
 /**

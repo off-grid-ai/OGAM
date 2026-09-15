@@ -128,6 +128,7 @@ export interface ChatState extends ChatMessageMutationActions {
     conversationId: string,
     generationTimeMs?: number,
     generationMeta?: GenerationMeta,
+    turnStatus?: Message['turnStatus'],
   ) => void;
   clearStreamingMessage: () => void;
   getStreamingState: () => StreamingSnapshot;
@@ -385,6 +386,7 @@ export const useChatStore = create<ChatState>()(
         conversationId,
         generationTimeMs,
         generationMeta,
+        turnStatus,
       ) => {
         const {
           streamingMessage,
@@ -411,6 +413,7 @@ export const useChatStore = create<ChatState>()(
             reasoningContent,
             generationTimeMs,
             generationMeta,
+            turnStatus,
             // The SAME id the live frames carried. `createPersistedMessage` keeps a supplied uuid, so
             // the reply is stored under the identity its peers have already seen.
             ...(streamingMessageUuid ? { uuid: streamingMessageUuid } : {}),

@@ -62,6 +62,7 @@ describe('Models manager sheet — remote TEXT selection carries the cloud marke
     // Select the remote model the way a user does: browse → tap the discovered remote model.
     rtl.fireEvent.press(await rtl.waitFor(() => home.getByTestId('browse-models-button'), { timeout: 4000 }));
     rtl.fireEvent.press(await rtl.waitFor(() => home.getByText('llama-3-8b'), { timeout: 4000 }));
+    expect(home.queryByTestId('remote-text-model-loading')).not.toBeNull();
     await rtl.waitFor(() => { expect(useRemoteServerStore.getState().activeRemoteTextModelId).toBe('llama-3-8b'); }, { timeout: 4000 });
 
     // Real gesture: open the Models manager sheet from the Home summary card.
@@ -84,6 +85,15 @@ describe('Models manager sheet — remote TEXT selection carries the cloud marke
     await rtl.waitFor(() => { expect(home.queryByTestId('models-row-text')).not.toBeNull(); }, { timeout: 4000 });
     // …but with no remote selection there is no cloud marker.
     expect(home.queryByTestId('models-row-text-remote')).toBeNull();
+
+    // Open one modality, then return to the all-modalities manager from its header.
+    rtl.fireEvent.press(home.getByTestId('models-row-text'));
+    await rtl.waitFor(() => { expect(home.queryByText('TEXT MODEL')).not.toBeNull(); }, { timeout: 4000 });
+    rtl.fireEvent.press(home.getByTestId('app-sheet-back'));
+    await rtl.waitFor(() => { expect(home.queryByText('MODELS')).not.toBeNull(); }, { timeout: 4000 });
+    expect(home.queryByTestId('models-row-image')).not.toBeNull();
+    expect(home.queryByTestId('models-row-voice')).not.toBeNull();
+    expect(home.queryByTestId('models-row-speech')).not.toBeNull();
     home.unmount();
   });
 });

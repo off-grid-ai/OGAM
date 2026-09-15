@@ -16,10 +16,16 @@ describe('Speech model deletion from the Home picker', () => {
     const deleteButton = await rtl.waitFor(() => view.getByLabelText('Delete Base transcription model'));
     rtl.fireEvent.press(deleteButton);
     expect(view.getByText('Delete "Base"? This will free up about 142 MB.')).toBeTruthy();
+    await rtl.act(async () => { await new Promise(resolve => setTimeout(resolve, 350)); });
     rtl.fireEvent.press(view.getByText('Cancel'));
     expect(await boundary.fs!.exists(path)).toBe(true);
 
-    rtl.fireEvent.press(deleteButton);
+    rtl.fireEvent.press(
+      await rtl.waitFor(() =>
+        view.getByLabelText('Delete Base transcription model'),
+      ),
+    );
+    await rtl.act(async () => { await new Promise(resolve => setTimeout(resolve, 350)); });
     rtl.fireEvent.press(view.getByText('Remove'));
     await rtl.waitFor(async () => { expect(await boundary.fs!.exists(path)).toBe(false); });
   });

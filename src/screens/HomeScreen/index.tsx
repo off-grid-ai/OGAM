@@ -102,6 +102,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const pendingAfterCloseRef = React.useRef<(() => void) | null>(null);
   const [whisperOpen, setWhisperOpen] = React.useState(false);
   const [voiceOpen, setVoiceOpen] = React.useState(false);
+  const returnToModelsRef = React.useRef(false);
   const whisperModelId = useWhisperStore(s => s.downloadedModelId);
   const whisperPresentCount = useWhisperStore(
     s => s.presentModelIds?.length ?? 0,
@@ -148,6 +149,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     const action = pendingAfterCloseRef.current;
     pendingAfterCloseRef.current = null;
     action?.();
+  };
+
+  const reopenModelsAfterChildClose = () => {
+    if (!returnToModelsRef.current) return;
+    returnToModelsRef.current = false;
+    setModelsManagerOpen(true);
+  };
+  const closeChildForModels = (close: () => void) => {
+    returnToModelsRef.current = true;
+    close();
   };
 
   return (
@@ -325,6 +336,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         visible={pickerType !== null}
         initialTab={pickerType ?? 'text'}
         onClose={() => setPickerType(null)}
+        onClosed={reopenModelsAfterChildClose}
+        onBackToModels={() => closeChildForModels(() => setPickerType(null))}
         onSelectModel={handleSelectTextModel}
         onUnloadModel={handleUnloadTextModel}
         onSelectImageModel={handleSelectImageModel}
@@ -366,10 +379,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       <WhisperPickerSheet
         visible={whisperOpen}
         onClose={() => setWhisperOpen(false)}
+        onClosed={reopenModelsAfterChildClose}
+        onBackToModels={() => closeChildForModels(() => setWhisperOpen(false))}
       />
       <VoiceModelsSheet
         visible={voiceOpen}
         onClose={() => setVoiceOpen(false)}
+        onClosed={reopenModelsAfterChildClose}
+        onBackToModels={() => closeChildForModels(() => setVoiceOpen(false))}
       />
 
       {/* Full-screen model-loading overlay (animated progress + rotating tips). */}

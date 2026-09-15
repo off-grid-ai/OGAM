@@ -44,6 +44,14 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flex: 1,
     marginRight: SPACING.md,
   },
+  headerBack: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    marginRight: SPACING.md,
+  },
+  headerBackIcon: {
+    color: colors.primary,
+  },
   headerClose: {
     ...TYPOGRAPHY.body,
     color: colors.primary,

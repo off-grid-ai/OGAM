@@ -10,6 +10,8 @@ import type { ThemeColors } from '../../theme';
 type Props = {
   visible: boolean;
   onClose: () => void;
+  onClosed?: () => void;
+  onBackToModels?: () => void;
 };
 
 // The pro Voice panel is a ScrollView, which collapses to zero height inside a
@@ -21,7 +23,12 @@ const PANEL_HEIGHT = Math.round(Dimensions.get('window').height * 0.6);
  * link to voice options) rendered via the modelsScreen.voiceTab slot. Renders an
  * empty-state line in free builds where the slot isn't registered.
  */
-export const VoiceModelsSheet: React.FC<Props> = ({ visible, onClose }) => {
+export const VoiceModelsSheet: React.FC<Props> = ({
+  visible,
+  onClose,
+  onClosed,
+  onBackToModels,
+}) => {
   const styles = useThemedStyles(createStyles);
   const navigation = useNavigation();
   // Reactive: picks up the pro Voice panel live when Pro is activated at runtime
@@ -37,7 +44,14 @@ export const VoiceModelsSheet: React.FC<Props> = ({ visible, onClose }) => {
   };
 
   return (
-    <AppSheet visible={visible} onClose={onClose} title="VOICE MODEL" enableDynamicSizing>
+    <AppSheet
+      visible={visible}
+      onClose={onClose}
+      onClosed={onClosed}
+      onBackPress={onBackToModels}
+      title="VOICE MODEL"
+      enableDynamicSizing
+    >
       <View style={styles.content}>
         {VoicePanel ? <VoicePanel /> : <VoiceModelsUpsell onGetPro={handleGetPro} />}
       </View>

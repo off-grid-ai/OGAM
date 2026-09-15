@@ -23,6 +23,8 @@ export interface ImageTabProps {
   isLoadingImage: boolean;
   /** Id of the image model being loaded right now (the row just tapped) — drives the per-row spinner. */
   loadingModelId?: string | null;
+  /** Server and model key for the remote row being selected. */
+  loadingRemoteModelKey?: string | null;
   onSelectImageModel: (model: ONNXImageModel) => void;
   onSelectRemoteVisionModel: (model: RemoteModel, serverId: string) => void;
   onUnloadImageModel: () => void;
@@ -38,6 +40,7 @@ export const ImageTab: React.FC<ImageTabProps> = ({
   isAnyLoading,
   isLoadingImage,
   loadingModelId = null,
+  loadingRemoteModelKey = null,
   onSelectImageModel,
   onUnloadImageModel,
   onSelectRemoteVisionModel,
@@ -198,9 +201,12 @@ export const ImageTab: React.FC<ImageTabProps> = ({
             const isCurrent =
               activeRemoteImageServerId === serverId &&
               activeRemoteImageModelId === model.id;
+            const isLoadingThis =
+              loadingRemoteModelKey === `${serverId}:${model.id}`;
             return (
               <TouchableOpacity
                 key={model.id}
+                testID={`remote-image-model-${serverId}-${model.id}`}
                 style={[
                   styles.modelItem,
                   isCurrent && styles.modelItemSelectedImage,
@@ -230,11 +236,16 @@ export const ImageTab: React.FC<ImageTabProps> = ({
                     </View>
                   </View>
                 </View>
-                {isCurrent && (
+                {isLoadingThis ? (
+                  <LoadingDots
+                    color={colors.info}
+                    testID="remote-image-model-loading"
+                  />
+                ) : isCurrent ? (
                   <View style={[styles.checkmark, styles.checkmarkImage]}>
                     <Icon name="check" size={16} color={colors.background} />
                   </View>
-                )}
+                ) : null}
               </TouchableOpacity>
             );
           })}

@@ -44,6 +44,8 @@ export interface NativeSyncCallbacks {
   getPassphrase?: SyncEngineOptions['getPassphrase'];
   /** Stored shared secret for a device (for silent reconnect). */
   getSharedSecret?: (deviceId: string) => string | undefined;
+  /** Authenticated endpoints saved by the host for an immediate startup reconnect. */
+  listSavedDevices?: () => readonly DeviceInfo[];
   /** Resolve the preferred route for a stable device identity before every reconnect. */
   resolveEndpoint?: (device: DeviceInfo) => DeviceInfo | Promise<DeviceInfo>;
   /** Whether storage HOLDS a credential. Never a judgement about whether to use it. */
@@ -199,6 +201,7 @@ export function createNativeSync(
       : { discoverable: cbs.discoverable }),
     browsing: networkConfig.browsing,
     getSharedSecret: cbs.getSharedSecret ?? (() => undefined),
+    listSavedDevices: cbs.listSavedDevices,
     resolveEndpoint: cbs.resolveEndpoint,
     ...(cbs.hasCredential ? { hasCredential: cbs.hasCredential } : {}),
     getMembershipId: cbs.getMembershipId,

@@ -18,13 +18,20 @@ import { remoteServerManager } from '../../services/remoteServerManager';
 type Props = {
   visible: boolean;
   onClose: () => void;
+  onClosed?: () => void;
+  onBackToModels?: () => void;
 };
 
 /**
  * Transcription (Whisper) model picker. Whisper keeps a single active STT model,
  * so selecting a model downloads it (auto-loading) and replaces the previous one.
  */
-export const WhisperPickerSheet: React.FC<Props> = ({ visible, onClose }) => {
+export const WhisperPickerSheet: React.FC<Props> = ({
+  visible,
+  onClose,
+  onClosed,
+  onBackToModels,
+}) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
@@ -51,6 +58,8 @@ export const WhisperPickerSheet: React.FC<Props> = ({ visible, onClose }) => {
     <AppSheet
       visible={visible}
       onClose={onClose}
+      onClosed={onClosed}
+      onBackPress={onBackToModels}
       title="TRANSCRIPTION MODEL"
       enableDynamicSizing
     >

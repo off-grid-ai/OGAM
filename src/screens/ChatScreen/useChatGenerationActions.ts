@@ -1035,6 +1035,8 @@ export async function handleStopFn(
   // The image X is also the remote stop signal. Start both cancellations now; waiting for the text
   // engine first leaves every paired device showing image progress while that stop call drains.
   const stops: Promise<unknown>[] = [generationService.stopGeneration()];
+  const taskStop = callHook<Promise<void>>(HOOKS.taskStopActive);
+  if (taskStop !== undefined) stops.push(taskStop);
   if (deps.isGeneratingImage)
     stops.push(imageGenerationService.cancelGeneration());
   try {

@@ -51,4 +51,68 @@ describe('Stop mid-generation keeps the shown partial (never discards output) â€
     // RED on HEAD: stopGeneration called clearStreamingMessage â†’ this partial vanished.
     expect(view.queryByText(new RegExp(PARTIAL))).not.toBeNull();
   });
+
+  it('keeps earlier reasoning and tool results when a later tool-loop segment is stopped', async () => {
+    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+    h.enableToolViaUI('calculator');
+    h.render();
+    h.rtl.fireEvent.press(
+      await h.rtl.waitFor(() => h.view!.getByTestId('quick-settings-button')),
+    );
+    h.rtl.fireEvent.press(
+      await h.rtl.waitFor(() => h.view!.getByTestId('quick-thinking-toggle')),
+    );
+    h.boundary.llama!.scriptCompletions([
+      {
+        reasoning: 'First segment: calculate the value.',
+        text: '',
+        toolCalls: [
+          {
+            id: 'calculator-stop-call',
+            function: {
+              name: 'calculator',
+              arguments: JSON.stringify({ expression: '128*256' }),
+            },
+          },
+        ] as never,
+      },
+      {
+        text:
+          '<think>Second segment: explain the result.</think>The partial result is 32768 and',
+        pauseAfter: 'The partial result is 32768',
+      },
+    ]);
+
+    await h.tapSend('calculate 128*256 and explain it');
+    await h.rtl.waitFor(
+      () => {
+        expect(h.boundary.llama!.calls.completion).toHaveLength(2);
+      },
+      { timeout: 4000 },
+    );
+    await h.rtl.waitFor(
+      () => {
+        expect(h.view!.queryByText(/The partial result is 32768/)).not.toBeNull();
+        expect(h.view!.queryByTestId('stop-button')).not.toBeNull();
+      },
+      { timeout: 4000 },
+    );
+    await h.rtl.act(async () => {
+      h.rtl.fireEvent.press(h.view!.getByTestId('stop-button'));
+    });
+    await h.rtl.waitFor(
+      () => {
+        expect(h.view!.queryByTestId('stop-button')).toBeNull();
+        expect(
+          h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel,
+        ).toBe('Work stopped');
+      },
+      { timeout: 4000 },
+    );
+
+    h.rtl.fireEvent.press(h.view!.getByTestId('assistant-work-toggle'));
+    expect(h.view!.queryByText(/First segment: calculate the value/)).not.toBeNull();
+    expect(h.view!.queryByText(/Second segment: explain the result/)).not.toBeNull();
+    expect(h.view!.queryByTestId('tool-result-label-calculator')).not.toBeNull();
+  });
 });

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Platform } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, FlatList, TouchableOpacity, Platform, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -30,6 +30,8 @@ type NavigationProp = CompositeNavigationProp<
   NativeStackNavigationProp<RootStackParamList>
 >;
 
+// This screen keeps its list actions together so search, selection, and swipe deletion share one owner.
+// eslint-disable-next-line max-lines-per-function
 export const ChatsListScreen: React.FC = () => {
   const previewLine = useConversationPreviewLine();
   const navigation = useNavigation<NavigationProp>();
@@ -45,6 +47,9 @@ export const ChatsListScreen: React.FC = () => {
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [isModelLoading, setIsModelLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const hasModels = !!activeTextModelId || !!activeImageModelId;
 
@@ -130,6 +135,38 @@ export const ChatsListScreen: React.FC = () => {
     ));
   };
 
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    const selected = conversations.filter(conversation => selectedIds.has(conversation.id));
+    if (selected.length === 0) return;
+    setAlertState(showAlert(
+      'Delete Chats',
+      `Delete ${selected.length} chats? This will also delete all images generated in these chats.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setAlertState(hideAlert());
+            for (const conversation of selected) {
+              const imageIds = removeImagesByConversationId(conversation.id);
+              for (const imageId of imageIds) {
+                onnxImageGeneratorService.deleteGeneratedImage(imageId).catch(() => {});
+              }
+              deleteConversation(conversation.id);
+            }
+            stopSelecting();
+          },
+        },
+      ],
+    ));
+  };
+
   const formatDate = (dateString: string): string => formatWhen(dateString);
 
   const renderRightActions = (conversation: Conversation) => (
@@ -143,12 +180,14 @@ export const ChatsListScreen: React.FC = () => {
 
   const renderChat = ({ item, index }: { item: Conversation; index: number }) => {
     const project = item.projectId ? getProject(item.projectId) : null;
+    const selected = selectedIds.has(item.id);
     // The preview line comes from the shared rule, so this list and the Mac's read the same.
     const preview = previewLine(item.messages);
 
     return (
       <Swipeable
-        renderRightActions={() => renderRightActions(item)}
+        enabled={!selecting}
+        renderRightActions={selecting ? undefined : () => renderRightActions(item)}
         overshootRight={false}
         containerStyle={styles.swipeableContainer}
       >
@@ -156,7 +195,18 @@ export const ChatsListScreen: React.FC = () => {
           index={index}
           trigger={focusTrigger}
           style={styles.chatItem}
-          onPress={() => handleChatPress(item)}
+          onPress={() => {
+            if (!selecting) {
+              handleChatPress(item);
+              return;
+            }
+            setSelectedIds(current => {
+              const next = new Set(current);
+              if (next.has(item.id)) next.delete(item.id);
+              else next.add(item.id);
+              return next;
+            });
+          }}
           testID={`conversation-item-${index}`}
         >
           <View style={styles.chatContent}>
@@ -177,13 +227,28 @@ export const ChatsListScreen: React.FC = () => {
               </View>
             )}
           </View>
-          <Icon name="chevron-right" size={20} color={colors.textMuted} />
+          <Icon
+            name={selecting ? (selected ? 'check-square' : 'square') : 'chevron-right'}
+            size={20}
+            color={selected ? colors.primary : colors.textMuted}
+          />
         </AnimatedListItem>
       </Swipeable>
     );
   };
 
-  const sortedConversations = byRecentActivity(conversations);
+  const sortedConversations = useMemo(() => byRecentActivity(conversations), [conversations]);
+  const visibleConversations = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return sortedConversations;
+    return sortedConversations.filter(conversation =>
+      conversation.title.toLowerCase().includes(query) ||
+      conversation.messages.some(message => message.content.toLowerCase().includes(query)),
+    );
+  }, [searchQuery, sortedConversations]);
+  const allVisibleSelected =
+    visibleConversations.length > 0 &&
+    visibleConversations.every(conversation => selectedIds.has(conversation.id));
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -191,13 +256,27 @@ export const ChatsListScreen: React.FC = () => {
         title="Chats"
         variant="tab"
         right={
-          <Button
-            title="New"
-            variant="primary"
-            size="small"
-            onPress={handleNewChat}
-            icon={<Icon name="plus" size={16} color={colors.primary} />}
-          />
+          selecting ? (
+            <Button title="Cancel" variant="secondary" size="small" onPress={stopSelecting} />
+          ) : (
+            <View style={styles.headerActions}>
+              {conversations.length > 0 ? (
+                <Button
+                  title="Select"
+                  variant="secondary"
+                  size="small"
+                  onPress={() => setSelecting(true)}
+                />
+              ) : null}
+              <Button
+                title="New"
+                variant="primary"
+                size="small"
+                onPress={handleNewChat}
+                icon={<Icon name="plus" size={16} color={colors.primary} />}
+              />
+            </View>
+          )
         }
       />
 
@@ -226,15 +305,72 @@ export const ChatsListScreen: React.FC = () => {
           )}
         </View>
       ) : (
-        <FlatList
-          data={sortedConversations}
-          renderItem={renderChat}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-          removeClippedSubviews={Platform.OS !== 'android'}
-          testID="conversation-list"
-        />
+        <>
+          <View style={styles.searchRow}>
+            <Icon name="search" size={16} color={colors.textMuted} />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search chats"
+              placeholderTextColor={colors.textMuted}
+              style={styles.searchInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              testID="chat-search-input"
+            />
+            {searchQuery ? (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                accessibilityRole="button"
+                accessibilityLabel="Clear chat search"
+                hitSlop={SPACING.sm}
+              >
+                <Icon name="x" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          {selecting ? (
+            <View style={styles.selectionBar}>
+              <Text style={styles.selectionCount}>{selectedIds.size} selected</Text>
+              <Button
+                title={allVisibleSelected ? 'Clear' : 'Select all'}
+                variant="ghost"
+                size="small"
+                onPress={() => {
+                  setSelectedIds(current => {
+                    const next = new Set(current);
+                    for (const conversation of visibleConversations) {
+                      if (allVisibleSelected) next.delete(conversation.id);
+                      else next.add(conversation.id);
+                    }
+                    return next;
+                  });
+                }}
+              />
+              <Button
+                title="Delete"
+                variant="danger"
+                size="small"
+                disabled={selectedIds.size === 0}
+                onPress={handleBulkDelete}
+              />
+            </View>
+          ) : null}
+          <FlatList
+            data={visibleConversations}
+            renderItem={renderChat}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            removeClippedSubviews={Platform.OS !== 'android'}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              <Text style={styles.noMatches}>No chats match your search.</Text>
+            }
+            testID="conversation-list"
+          />
+        </>
       )}
       <CustomAlert
         visible={alertState.visible}
@@ -279,6 +415,47 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   list: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.lg,
+  },
+  headerActions: {
+    flexDirection: 'row' as const,
+    gap: SPACING.sm,
+  },
+  searchRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.sm,
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceLight,
+  },
+  searchInput: {
+    ...TYPOGRAPHY.body,
+    color: colors.text,
+    flex: 1,
+    paddingVertical: SPACING.sm,
+  },
+  selectionBar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
+  },
+  selectionCount: {
+    ...TYPOGRAPHY.meta,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  noMatches: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+    textAlign: 'center' as const,
+    paddingVertical: SPACING.xxl,
   },
   chatItem: {
     flexDirection: 'row' as const,

@@ -168,6 +168,7 @@ describe('MessageAudioMode', () => {
     const { getByTestId } = renderMode(msg);
     // hasThinking → the thinking block renders; hasAnswer → the audio bubble too.
     expect(getByTestId(`audio-bubble-${msg.id}`)).toBeTruthy();
+    fireEvent.press(getByTestId('assistant-work-toggle'));
     const toggle = getByTestId('thinking-block-toggle');
     fireEvent.press(toggle);
     // The toggle handler ran without throwing; block still present after toggle.

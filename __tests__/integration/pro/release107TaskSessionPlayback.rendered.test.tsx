@@ -252,6 +252,20 @@ describe('Release 107 task session playback', () => {
     },
   );
 
+  it('opens a replay with a visible close action and returns to the chat', () => {
+    const screen = renderSyncedTask(taskRun('computer_use', 'done'));
+
+    fireEvent.press(
+      screen.getByTestId('tool-result-accordion-computer_use'),
+    );
+    fireEvent.press(screen.getByTestId('task-session-open-fullscreen'));
+
+    expect(screen.getByText('Done')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Close full screen'));
+    expect(screen.queryByTestId('task-session-fullscreen')).toBeNull();
+    expect(screen.getByTestId('task-session-playback')).toBeTruthy();
+  });
+
   it.each(['web_use', 'computer_use'] as const)(
     'keeps the live %s frame while saved steps remain reviewable',
     kind => {
@@ -270,6 +284,83 @@ describe('Release 107 task session playback', () => {
       expect(screen.getByTestId('task-control-stop')).toBeTruthy();
     },
   );
+
+  it('shows the live Computer Use session from the active tool call', () => {
+    const run = taskRun('computer_use', 'running');
+    const olderRun = {
+      ...taskRun('computer_use', 'stopped'),
+      conversationId: run.conversationId,
+    };
+    materializer.put(
+      'conversation',
+      run.conversationId,
+      {
+        title: run.title,
+        created_at: new Date(run.startedAt).toISOString(),
+        updated_at: new Date(run.updatedAt).toISOString(),
+        project_id: null,
+      },
+      origin,
+    );
+    useChatStore.getState().setActiveConversation(run.conversationId);
+    materializer.put(
+      TASK_RUN_ENTITY,
+      olderRun.taskId,
+      olderRun as unknown as Record<string, unknown>,
+      origin,
+    );
+    materializer.put(
+      TASK_RUN_ENTITY,
+      run.taskId,
+      run as unknown as Record<string, unknown>,
+      origin,
+    );
+
+    const screen = render(
+      <ChatMessage
+        message={{
+          id: `call-${run.taskId}`,
+          role: 'assistant',
+          timestamp: run.updatedAt,
+          content: '',
+          toolCalls: [{
+            id: run.launchId,
+            name: 'computer_use',
+            arguments: JSON.stringify({ goal: run.title }),
+          }],
+        }}
+        showActions={false}
+      />,
+    );
+
+    expect(screen.getByText('Using computer_use: Review the desktop app')).toBeTruthy();
+    expect(screen.queryByTestId('task-chat-card')).toBeNull();
+    fireEvent.press(screen.getByTestId('tool-result-accordion-computer_use'));
+    expect(screen.getByTestId('task-chat-card')).toBeTruthy();
+    expect(screen.getByText('LIVE VIEW')).toBeTruthy();
+    measureTaskSessionFrame(screen);
+    expect(screen.getByLabelText('Live view from Studio Mac')).toBeTruthy();
+    expect(screen.getByTestId('task-control-stop')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('tool-result-accordion-computer_use'));
+    expect(screen.queryByTestId('task-chat-card')).toBeNull();
+    fireEvent.press(screen.getByTestId('tool-result-accordion-computer_use'));
+
+    act(() => {
+      materializer.put(
+        TASK_RUN_ENTITY,
+        run.taskId,
+        {
+          ...run,
+          status: 'done',
+          phase: 'complete',
+          finishedAt: run.updatedAt + 1,
+          updatedAt: run.updatedAt + 1,
+        },
+        origin,
+      );
+    });
+    expect(screen.queryByTestId('task-chat-card')).toBeNull();
+  });
 
   it.each(['web_use', 'computer_use'] as const)(
     'uses saved %s evidence while an active live frame is unavailable',

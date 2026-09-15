@@ -321,7 +321,9 @@ maybe('McpServerModal', () => {
 
   it('re-validates header fields live while an error is showing, then saves once both are filled', () => {
     const props = baseProps();
-    const { getByText, getByPlaceholderText } = render(<McpServerModal {...props} />);
+    const { getByText, getByPlaceholderText, queryByText } = render(
+      <McpServerModal {...props} />,
+    );
 
     fireEvent.press(getByText('None'));
     fireEvent.press(getByText('Request header'));
@@ -334,6 +336,7 @@ maybe('McpServerModal', () => {
     expect(getByText('Both header name and value are required.')).toBeTruthy();
     fireEvent.changeText(getByPlaceholderText('Authorization'), 'X-Api-Key');
     fireEvent.changeText(getByPlaceholderText('Bearer your-token-here'), 'tok');
+    expect(queryByText('Both header name and value are required.')).toBeNull();
 
     // Pressing Add now passes validation and writes the header-auth server.
     fireEvent.press(getByText('Add'));

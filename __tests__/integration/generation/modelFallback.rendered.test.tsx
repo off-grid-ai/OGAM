@@ -104,5 +104,6 @@ describe('remote model fallback in chat', () => {
     });
     expect(h.view!.queryByText('Test Model')).not.toBeNull();
     expect(h.view!.queryByText(/Failed route partial/)).toBeNull();
+    expect(useRemoteServerStore.getState().activeRemoteTextModelId).toBeNull();
   });
 });

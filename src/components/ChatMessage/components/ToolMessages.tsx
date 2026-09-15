@@ -353,28 +353,45 @@ export const ToolCallMessage: React.FC<{
   message: Message;
   styles: any;
   colors: any;
-}> = ({ message, styles, colors }) => (
-  <View testID="tool-call-message">
-    {toolCallRows(message).map(row => (
-      <ToolResultBubble
-        key={row.key}
-        stableKey={row.stableKey}
-        toolIcon={row.icon}
-        toolLabel={row.label}
-        toolName={row.name}
-        durationLabel=""
-        content=""
-        hasDetails={false}
-        active
-        paired
-        rowTestID="tool-call-row"
-        labelTestID={`tool-call-label-${row.name || 'unknown'}`}
-        styles={styles}
-        colors={colors}
-      />
-    ))}
-  </View>
-);
+}> = ({ message, styles, colors }) => {
+  const TaskToolDetail = useSlot(SLOTS.taskToolDetail);
+  return (
+    <View testID="tool-call-message">
+      {toolCallRows(message).map(row => {
+        const taskDetail =
+          isTaskToolName(row.name) && TaskToolDetail ? (
+            <TaskToolDetail
+              message={{
+                toolName: row.name,
+                toolCallId: row.key,
+                content: '',
+                liveOnly: true,
+              }}
+            />
+          ) : null;
+        return (
+          <ToolResultBubble
+            key={row.key}
+            stableKey={row.stableKey}
+            toolIcon={row.icon}
+            toolLabel={row.label}
+            toolName={row.name}
+            durationLabel=""
+            content=""
+            hasDetails={Boolean(taskDetail)}
+            active
+            paired
+            rowTestID="tool-call-row"
+            labelTestID={`tool-call-label-${row.name || 'unknown'}`}
+            styles={styles}
+            colors={colors}
+            detail={taskDetail}
+          />
+        );
+      })}
+    </View>
+  );
+};
 
 export const SystemInfoMessage: React.FC<{
   content: string;

@@ -12,6 +12,7 @@ import { createAllStyles } from './styles';
 import { fileExceedsBudget } from '../../services/memoryBudget';
 import { useResidentRows } from '../models/useResidentRows';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
+import { LoadingDots } from '../LoadingDots';
 
 export interface TextTabProps {
   downloadedModels: DownloadedModel[];
@@ -27,6 +28,8 @@ export interface TextTabProps {
   isAnyLoading: boolean;
   /** Id of the model being loaded right now (the row just tapped) — drives the per-row spinner. */
   loadingModelId?: string | null;
+  /** Server and model key for the remote row being selected. */
+  loadingRemoteModelKey?: string | null;
   onSelectModel: (model: DownloadedModel) => void;
   onSelectRemoteModel: (model: RemoteModel, serverId: string) => void;
   onUnloadModel: () => void;
@@ -42,6 +45,7 @@ export const TextTab: React.FC<TextTabProps> = ({
   currentRemoteModelId,
   isAnyLoading,
   loadingModelId = null,
+  loadingRemoteModelKey = null,
   onSelectModel,
   onUnloadModel,
   onSelectRemoteModel,
@@ -210,9 +214,9 @@ export const TextTab: React.FC<TextTabProps> = ({
             // B immediately, instead of leaving A highlighted until the load finishes (device 2026-07-14).
             const isLoadingThis = loadingModelId === model.id;
             const loadInProgress = loadingModelId != null;
-            const isActive = loadInProgress
-              ? isLoadingThis
-              : isLoaded || isSelected;
+            const isActive =
+              currentRemoteModelId === null &&
+              (loadInProgress ? isLoadingThis : isLoaded || isSelected);
             return (
               <ModelRow
                 key={model.id}
@@ -228,7 +232,9 @@ export const TextTab: React.FC<TextTabProps> = ({
                   predictGgufCapabilities(model).vision
                 }
                 isActive={isActive}
-                isLoaded={isLoaded && !loadInProgress}
+                isLoaded={
+                  isLoaded && !loadInProgress && currentRemoteModelId === null
+                }
                 loading={isLoadingThis}
                 disabled={isAnyLoading || isLoaded}
                 onPress={() => onSelectModel(model)}
@@ -247,9 +253,12 @@ export const TextTab: React.FC<TextTabProps> = ({
           </View>
           {models.map(model => {
             const isCurrent = currentRemoteModelId === model.id;
+            const isLoadingThis =
+              loadingRemoteModelKey === `${serverId}:${model.id}`;
             return (
               <TouchableOpacity
                 key={model.id}
+                testID={`remote-text-model-${serverId}-${model.id}`}
                 style={[
                   styles.modelItem,
                   isCurrent && styles.modelItemSelectedRemote,
@@ -297,11 +306,16 @@ export const TextTab: React.FC<TextTabProps> = ({
                     )}
                   </View>
                 </View>
-                {isCurrent && (
+                {isLoadingThis ? (
+                  <LoadingDots
+                    color={colors.primary}
+                    testID="remote-text-model-loading"
+                  />
+                ) : isCurrent ? (
                   <View style={styles.checkmarkRemote}>
                     <Icon name="check" size={16} color={colors.background} />
                   </View>
-                )}
+                ) : null}
               </TouchableOpacity>
             );
           })}

@@ -48,22 +48,6 @@ async function enableEnhanceViaUI(h: Awaited<ReturnType<typeof setupChatScreen>>
   s.unmount();
 }
 
-/** Tap the card's header to expand it. Resolved off the node like the harness resolves send: RNTL's press
- *  traversal does not reach this TouchableOpacity's onPress inside the message list, and invoking the bound
- *  handler is the same thing a tap does. */
-async function pressThinkingToggle(h: Awaited<ReturnType<typeof setupChatScreen>>) {
-  type PressNode = { props?: Record<string, unknown>; parent?: PressNode | null } | null;
-  await h.rtl.act(async () => {
-    let n: PressNode = h.view!.getByTestId('thinking-block-toggle') as unknown as PressNode;
-    for (let d = 0; n && d < 12; d++) {
-      const onPress = n.props?.onPress;
-      if (typeof onPress === 'function') { (onPress as () => void)(); return; }
-      n = n.parent ?? null;
-    }
-    throw new Error('the Enhanced prompt card header has no pressable ancestor — it cannot be expanded');
-  });
-}
-
 describe('the Enhanced prompt card renders as a card from the first token', () => {
   it('shows the labelled markdown card mid-stream, never the raw <think>/__LABEL: wrapper', async () => {
     const h = await setupChatScreen({ engine: 'llama' });
@@ -90,9 +74,7 @@ describe('the Enhanced prompt card renders as a card from the first token', () =
     expect(view.queryByText(/__LABEL:/)).toBeNull();
     expect(view.queryByText(/<\/?think>/)).toBeNull();
 
-    // Expand it (real gesture) — the body is MARKDOWN, so the bold markers are rendered, not printed.
-    // The card is collapsed until tapped, which is the same transition the assertions below observe.
-    await pressThinkingToggle(h);
+    // Live work is open by default. The body is MARKDOWN, so the bold markers are rendered, not printed.
     await h.rtl.waitFor(() => { expect(view.queryByTestId('thinking-block-content')).not.toBeNull(); });
     expect(view.queryByText(/\*\*/)).toBeNull();
     expect(view.queryByText(/an energetic dog running/)).not.toBeNull();
@@ -102,7 +84,16 @@ describe('the Enhanced prompt card renders as a card from the first token', () =
     await h.rtl.waitFor(() => { expect(view.queryByTestId('generated-image')).not.toBeNull(); }, { timeout: 8000 });
 
     // The card survives the finish clean — the same header, still no wrapper.
-    expect(view.getByTestId('thinking-block-title').props.children).toBe('Enhanced prompt');
+    expect(view.getAllByTestId('assistant-work-toggle')).toHaveLength(1);
+    await h.rtl.waitFor(() => {
+      const toggle = view.getByTestId('assistant-work-toggle');
+      expect(toggle.props.accessibilityLabel).toBe('Work done');
+      expect(toggle.props.accessibilityState.expanded).toBe(false);
+    });
+    h.rtl.fireEvent.press(view.getByLabelText('Work done'));
+    await h.rtl.waitFor(() => {
+      expect(view.getByTestId('thinking-block-title').props.children).toBe('Enhanced prompt');
+    });
     expect(view.queryByText(/__LABEL:/)).toBeNull();
   });
 });

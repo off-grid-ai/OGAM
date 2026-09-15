@@ -31,6 +31,15 @@ function isSupportingContextMessage(message: Message): boolean {
   });
 }
 
+function isReasoningOnlyMessage(message: Message): boolean {
+  if (message.role !== 'assistant' || message.attachments?.length) return false;
+  const inline = splitInlineReasoning(message.content);
+  return Boolean(
+    (message.reasoningContent || inline.reasoning || '').trim() &&
+      !inline.answer.trim(),
+  );
+}
+
 function hasImageAttachment(message: Message): boolean {
   return (
     message.role === 'assistant' &&
@@ -97,6 +106,146 @@ function groupSupportingContextWithImage(
     }
     grouped.push(message);
   }
+  return grouped;
+}
+
+const groupedWorkCache = new WeakMap<
+  Message,
+  { work: readonly Message[]; live: boolean; item: Message }
+>();
+
+/** Present the tool records between one user prompt and its answer as one assistant timeline. */
+function groupAssistantTurnWork(
+  messages: readonly (Message | ChatMessageItem)[],
+  live: boolean,
+): (Message | ChatMessageItem)[] {
+  const grouped: (Message | ChatMessageItem)[] = [];
+  let work: Message[] = [];
+  const flush = (final?: Message | ChatMessageItem) => {
+    if (!work.length) {
+      if (final) grouped.push(final);
+      return;
+    }
+    const response =
+      final ??
+      [...work]
+        .reverse()
+        .find(
+          message =>
+            message.role === 'assistant' &&
+            !isSupportingContextMessage(message) &&
+            Boolean(message.content.trim() || message.attachments?.length),
+        );
+    if (!response && !live) {
+      grouped.push(...work);
+      work = [];
+      return;
+    }
+    const owner = response ?? work.at(-1)!;
+    const supportingContext =
+      (response as ChatMessageItem | undefined)?.supportingContext ??
+      work.find(isSupportingContextMessage);
+    const cached = groupedWorkCache.get(owner);
+    if (
+      cached &&
+      cached.live === live &&
+      cached.work.length === work.length &&
+      cached.work.every((message, index) => message === work[index])
+    ) {
+      grouped.push(cached.item);
+      work = [];
+      return;
+    }
+    const artifacts: NonNullable<Message['toolArtifacts']> = [];
+    const timeline: NonNullable<Message['timeline']> = [];
+    const artifactByCallId = new Map<string, number>();
+    for (const message of work) {
+      if (message.role === 'assistant') {
+        const inline = splitInlineReasoning(message.content);
+        const reasoning = message.reasoningContent || inline.reasoning || '';
+        if (message !== supportingContext && reasoning.trim()) {
+          timeline.push({ kind: 'thinking', text: reasoning });
+        }
+        for (const call of message.toolCalls ?? []) {
+          const toolIndex = artifacts.length;
+          artifacts.push({
+            id: call.id,
+            name: call.name,
+            arguments: call.arguments,
+            result: '',
+            status: live ? 'running' : 'completed',
+          });
+          if (call.id) artifactByCallId.set(call.id, toolIndex);
+          timeline.push({ kind: 'tool', toolIndex });
+        }
+        continue;
+      }
+      const matchingIndex = message.toolCallId
+        ? artifactByCallId.get(message.toolCallId)
+        : undefined;
+      if (matchingIndex !== undefined) {
+        artifacts[matchingIndex] = {
+          ...artifacts[matchingIndex]!,
+          result: message.content,
+          status: 'completed',
+          durationMs: message.generationTimeMs,
+        };
+      } else {
+        timeline.push({ kind: 'tool', toolIndex: artifacts.length });
+        artifacts.push({
+          id: message.toolCallId,
+          name: message.toolName ?? 'unknown',
+          result: message.content,
+          status: 'completed',
+          durationMs: message.generationTimeMs,
+        });
+      }
+    }
+    const item: ChatMessageItem = {
+      ...owner,
+      ...(supportingContext ? { supportingContext } : {}),
+      content: response && (!live || owner.isStreaming) ? owner.content : '',
+      isStreaming: live || owner.isStreaming,
+      toolCalls: undefined,
+      toolArtifacts: [...artifacts, ...(owner.toolArtifacts ?? [])],
+      timeline: [
+        ...timeline,
+        ...(owner.timeline ?? []).map(entry =>
+          entry.kind === 'tool'
+            ? { ...entry, toolIndex: entry.toolIndex + artifacts.length }
+            : entry,
+        ),
+      ],
+    };
+    groupedWorkCache.set(owner, { work: [...work], live, item });
+    grouped.push(item);
+    work = [];
+  };
+
+  for (const message of messages) {
+    if (message.role === 'user') {
+      flush();
+      grouped.push(message);
+      continue;
+    }
+    if (work.length && message.role === 'assistant') {
+      work.push(message);
+      continue;
+    }
+    if (
+      message.role === 'tool' ||
+      (message.role === 'assistant' &&
+        (message.toolCalls?.length ||
+          isSupportingContextMessage(message) ||
+          isReasoningOnlyMessage(message)))
+    ) {
+      work.push(message);
+      continue;
+    }
+    flush();
+    grouped.push(message);
+  }
+  flush();
   return grouped;
 }
 
@@ -212,13 +361,21 @@ export function getDisplayMessages(
   allMessages: Message[],
   streaming: StreamingState,
 ): (Message | ChatMessageItem)[] {
+  const live = Boolean(
+    streaming.isThinking ||
+      streaming.isStreamingForThisConversation ||
+      streaming.isGeneratingForThisConversation,
+  );
   return withRemotePreviews(
-    groupSupportingContextWithImage(
-      localDisplayMessages(
+    groupAssistantTurnWork(
+      groupSupportingContextWithImage(
+        localDisplayMessages(
         // The same rule the list rows use, so the thread and its preview never disagree.
-        [...visibleMessages(allMessages, streaming.localDeviceId)],
-        streaming,
+          [...visibleMessages(allMessages, streaming.localDeviceId)],
+          streaming,
+        ),
       ),
+      live,
     ),
     streaming.remotePreviews,
   );

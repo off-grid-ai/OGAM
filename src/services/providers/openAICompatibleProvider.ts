@@ -169,6 +169,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
       const state: OpenAIStreamState = {
         fullContent: '', fullReasoningContent: '',
+        reasoningDetails: [],
         toolCalls: [], currentToolCall: null,
         completeCalled: false, streamErrorOccurred: false,
       };
@@ -207,6 +208,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
             callbacks.onComplete({
               content: state.fullContent,
               reasoningContent: state.fullReasoningContent || undefined,
+              reasoningDetails: state.reasoningDetails?.length ? state.reasoningDetails : undefined,
               meta: { gpu: false, gpuBackend: 'Remote' },
               toolCalls: completedCalls.length > 0 ? completedCalls.map(tc => ({
                 id: tc.id, name: tc.function.name, arguments: tc.function.arguments,
@@ -226,6 +228,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
         callbacks.onComplete({
           content: state.fullContent,
           reasoningContent: state.fullReasoningContent || undefined,
+          reasoningDetails: state.reasoningDetails?.length ? state.reasoningDetails : undefined,
           meta: { gpu: false, gpuBackend: 'Remote' },
           toolCalls: completedCalls.length > 0 ? completedCalls.map(tc => ({
             id: tc.id, name: tc.function.name, arguments: tc.function.arguments,

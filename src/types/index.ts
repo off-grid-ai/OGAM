@@ -2,6 +2,7 @@ import type {
   RecordProvenance,
   SyncedAssistantTimelineEntry,
   SyncedToolArtifact,
+  SyncedTurnStatus,
 } from '@offgrid/sync';
 // Model source and credibility types
 export type ModelSource =
@@ -275,6 +276,8 @@ export interface Message {
   content: string;
   /** Reasoning/thinking content parsed by llama.rn (separate from response content) */
   reasoningContent?: string;
+  /** Transient provider reasoning used to continue a remote tool-call round. */
+  reasoningDetails?: Array<Record<string, unknown>>;
   timestamp: number;
   isStreaming?: boolean;
   isThinking?: boolean;
@@ -299,6 +302,8 @@ export interface Message {
   toolArtifacts?: SyncedToolArtifact[];
   /** Ordered reasoning and tool events carried by a synced assistant turn. */
   timeline?: SyncedAssistantTimelineEntry[];
+  /** Terminal outcome for this turn, including a deliberate user stop. */
+  turnStatus?: SyncedTurnStatus;
   /** Tool name (for tool result messages) */
   toolName?: string;
   /** True when this assistant message was generated while interfaceMode === 'audio' */

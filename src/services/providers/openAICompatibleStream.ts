@@ -129,6 +129,7 @@ type DeltaShape = {
   reasoning_content?: string;
   reasoning?: string;
   thinking?: string;
+  reasoning_details?: Array<Record<string, unknown>>;
   tool_calls?: Array<{
     index?: number; id?: string; type?: string;
     function?: { name?: string; arguments?: string };
@@ -178,7 +179,16 @@ export function processDelta(
   // - delta.reasoning_content (LM Studio)
   // - delta.reasoning         (Ollama /v1/chat/completions)
   // - delta.thinking          (kept as fallback)
-  const reasoningDelta = delta.reasoning_content || delta.reasoning || delta.thinking;
+  if (delta.reasoning_details?.length) {
+    (state.reasoningDetails ??= []).push(...delta.reasoning_details);
+  }
+  const structuredReasoning = (delta.reasoning_details || [])
+    .map(detail => typeof detail.text === 'string'
+      ? detail.text
+      : typeof detail.summary === 'string' ? detail.summary : '')
+    .filter(Boolean)
+    .join('');
+  const reasoningDelta = delta.reasoning_content || delta.reasoning || delta.thinking || structuredReasoning;
   // A DEDICATED reasoning field means the remote model chose to emit reasoning — surface
   // it regardless of the local thinkingEnabled toggle. Remote has no thinking toggle, so
   // gating on it dropped reasoning LM Studio actually sent (B16); providers that CAN be

@@ -1,5 +1,11 @@
 import React, { useState, type ReactNode } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, TouchableOpacity } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  useReducedMotion,
+} from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import { useTheme, useThemedStyles } from '../theme';
@@ -41,9 +47,16 @@ export const Accordion: React.FC<AccordionProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [open, setOpen] = useState(defaultOpen);
+  const reducedMotion = useReducedMotion();
+  const layoutTransition = reducedMotion
+    ? undefined
+    : LinearTransition.duration(180);
 
   return (
-    <View style={[styles.card, variant === 'plain' && styles.plainCard]}>
+    <Animated.View
+      layout={layoutTransition}
+      style={[styles.card, variant === 'plain' && styles.plainCard]}
+    >
       <TouchableOpacity
         style={styles.header}
         activeOpacity={0.72}
@@ -68,8 +81,16 @@ export const Accordion: React.FC<AccordionProps> = ({
           color={colors.textMuted}
         />
       </TouchableOpacity>
-      {open ? <View style={styles.content}>{children}</View> : null}
-    </View>
+      {open ? (
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeIn.duration(180)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(140)}
+          style={styles.content}
+        >
+          {children}
+        </Animated.View>
+      ) : null}
+    </Animated.View>
   );
 };
 

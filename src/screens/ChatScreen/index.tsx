@@ -62,6 +62,12 @@ export const ChatScreen: React.FC = () => {
   );
   const [whisperOpen, setWhisperOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const returnToModelsRef = useRef(false);
+  const reopenModelsAfterChildClose = () => {
+    if (!returnToModelsRef.current) return;
+    returnToModelsRef.current = false;
+    setModelsManagerOpen(true);
+  };
   const voiceSummary = useUiModeStore(s => s.voiceSummary);
   const whisperModelId = useWhisperStore(s => s.downloadedModelId);
   const remoteLabels = useActiveRemoteModelLabels();
@@ -300,10 +306,20 @@ export const ChatScreen: React.FC = () => {
         <WhisperPickerSheet
           visible={whisperOpen}
           onClose={() => setWhisperOpen(false)}
+          onClosed={reopenModelsAfterChildClose}
+          onBackToModels={() => {
+            returnToModelsRef.current = true;
+            setWhisperOpen(false);
+          }}
         />
         <VoiceModelsSheet
           visible={voiceOpen}
           onClose={() => setVoiceOpen(false)}
+          onClosed={reopenModelsAfterChildClose}
+          onBackToModels={() => {
+            returnToModelsRef.current = true;
+            setVoiceOpen(false);
+          }}
         />
         <ChatMessageArea
           flatListRef={flatListRef}
@@ -323,6 +339,11 @@ export const ChatScreen: React.FC = () => {
           setShowDebugPanel={chat.setShowDebugPanel}
           showModelSelector={chat.showModelSelector}
           setShowModelSelector={chat.setShowModelSelector}
+          onModelSelectorClosed={reopenModelsAfterChildClose}
+          onBackToModels={() => {
+            returnToModelsRef.current = true;
+            chat.setShowModelSelector(false);
+          }}
           modelSelectorTab={modelSelectorTab}
           showSettingsPanel={chat.showSettingsPanel}
           setShowSettingsPanel={chat.setShowSettingsPanel}

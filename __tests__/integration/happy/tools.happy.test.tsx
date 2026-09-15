@@ -16,6 +16,121 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 describe('happy — a tool runs and its result renders (heavy entry point)', () => {
+  it('web search shows intentionally escaped entity text literally', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => ({
+      text: async () => `<html><body>
+        <div class="result-wrapper">
+          <a class="result-title" href="https://example.com/docs?label=&amp;lt;literal&amp;gt;">
+            Escaped &amp;lt;literal&amp;gt; URL
+          </a>
+          <p class="snippet">A result with intentionally escaped URL text.</p>
+        </div>
+      </body></html>`,
+    }) as Response;
+
+    try {
+      const h = await setupChatScreen({ engine: 'litert' });
+      h.enableToolViaUI('web_search');
+      h.render();
+
+      await h.send('find the escaped URL', {
+        toolCalls: [{ name: 'web_search', arguments: { query: 'escaped URL' } }],
+        content: 'I found the result.',
+      });
+
+      await h.rtl.waitFor(() => {
+        expect(h.view!.queryByText(/I found the result\./)).not.toBeNull();
+      });
+      const webResults = h.view!.getAllByTestId(
+        'tool-result-accordion-web_search',
+      );
+      h.rtl.fireEvent.press(
+        webResults[webResults.length - 1],
+      );
+      expect(
+        h.view!.getAllByText('Escaped <literal> URL').length,
+      ).toBeGreaterThan(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('uses built-in search when an MCP search tool shares its name', async () => {
+    const originalFetch = globalThis.fetch;
+    const {
+      registerToolExtension,
+      _clearExtensionsForTesting,
+    } = require('../../../src/services/tools/extensions');
+
+    globalThis.fetch = async () => ({
+      text: async () => `<html><body>
+        <div class="result-wrapper">
+          <a class="result-title" href="https://example.com/built-in-search">
+            Built-in search result
+          </a>
+          <p class="snippet">The mobile built-in handled this search.</p>
+        </div>
+      </body></html>`,
+    }) as Response;
+    _clearExtensionsForTesting();
+    const collidingSearchExtension = {
+      id: 'colliding-mcp-search',
+      getSystemPromptHint: () => '',
+      getOpenAISchemas: () => [{
+        type: 'function',
+        function: {
+          name: 'web_search',
+          description: 'External web search',
+          parameters: {
+            type: 'object',
+            properties: {
+              objective: { type: 'string' },
+              search_queries: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['objective', 'search_queries'],
+          },
+        },
+      }],
+      parseToolCalls: () => [],
+      stripFromVisibleText: (text: string) => text,
+      canHandle: (name: string) => name === 'web_search',
+      execute: async (call: { id: string; name: string }) => ({
+        toolCallId: call.id,
+        name: call.name,
+        content: 'External MCP search result',
+        durationMs: 1,
+      }),
+      enabledToolCount: () => 1,
+    };
+
+    try {
+      const h = await setupChatScreen({ engine: 'litert' });
+      registerToolExtension(collidingSearchExtension);
+      h.enableToolViaUI('web_search');
+      h.render();
+
+      await h.send('use the built-in search', {
+        toolCalls: [{ name: 'web_search', arguments: { query: 'built-in owner' } }],
+        content: 'The built-in search finished.',
+      });
+      await h.rtl.waitFor(() => {
+        expect(h.view!.queryByText(/The built-in search finished\./)).not.toBeNull();
+      });
+      const workToggles = h.view!.getAllByTestId('assistant-work-toggle');
+      h.rtl.fireEvent.press(workToggles[workToggles.length - 1]);
+      const searchResults = await h.rtl.waitFor(() =>
+        h.view!.getAllByTestId('tool-result-accordion-web_search'),
+      );
+      h.rtl.fireEvent.press(searchResults[searchResults.length - 1]);
+      expect(h.view!.getAllByText('Built-in search result').length).toBeGreaterThan(0);
+      expect(h.view!.queryByText('External MCP search result')).toBeNull();
+    } finally {
+      globalThis.fetch = originalFetch;
+      _clearExtensionsForTesting();
+    }
+  });
+
   it('calculator: tool call executes and the answer renders', async () => {
     const h = await setupChatScreen({ engine: 'litert' });
     // Arrive-via-UI: enable the calculator on the real Tools screen (flip its switch), then chat.

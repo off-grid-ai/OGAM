@@ -68,6 +68,8 @@ interface ModelSelectorModalProps {
   initialTab?: TabType;
   onAddServer?: () => void;
   onSelectionComplete?: () => void;
+  onClosed?: () => void;
+  onBackToModels?: () => void;
   onBrowseModels?: (tab: 'text' | 'image') => void;
 }
 
@@ -82,6 +84,8 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   initialTab = 'text',
   onAddServer,
   onSelectionComplete,
+  onClosed,
+  onBackToModels,
   onBrowseModels,
 }) => {
   const { colors } = useTheme();
@@ -115,6 +119,12 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
 
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
+  const [loadingRemoteTextModelKey, setLoadingRemoteTextModelKey] = useState<
+    string | null
+  >(null);
+  const [loadingRemoteImageModelKey, setLoadingRemoteImageModelKey] = useState<
+    string | null
+  >(null);
   // The image model currently being LOADED (the row the user just tapped) — distinct from
   // activeImageModelId, which only flips to the new model on success. The row spinner keys off THIS,
   // else it shows on the previously-active model instead of the one that's loading (device 2026-07-14).
@@ -229,6 +239,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
     model: RemoteModel,
     serverId: string,
   ) => {
+    setLoadingRemoteTextModelKey(`${serverId}:${model.id}`);
     try {
       // Always go through the owner. It also waits for an in-flight local load,
       // which is not yet visible as a loaded native model.
@@ -243,6 +254,8 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
       setAlertState(
         showAlert('Failed to Select Model', (error as Error).message),
       );
+    } finally {
+      setLoadingRemoteTextModelKey(null);
     }
   };
 
@@ -251,6 +264,8 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
     model: RemoteModel,
     serverId: string,
   ) => {
+    setIsLoadingImage(true);
+    setLoadingRemoteImageModelKey(`${serverId}:${model.id}`);
     try {
       await remoteServerManager.setActiveRemoteImageModel(serverId, model.id);
       try {
@@ -268,6 +283,9 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
       setAlertState(
         showAlert('Failed to Select Model', (error as Error).message),
       );
+    } finally {
+      setIsLoadingImage(false);
+      setLoadingRemoteImageModelKey(null);
     }
   };
 
@@ -284,11 +302,14 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
     onUnloadModel();
   };
 
-  const isAnyLoading = isLoading || isLoadingImage;
+  const isAnyLoading =
+    isLoading || isLoadingImage || loadingRemoteTextModelKey !== null;
   return (
     <AppSheet
       visible={visible}
       onClose={onClose}
+      onClosed={onClosed}
+      onBackPress={onBackToModels}
       snapPoints={['40%', '75%']}
       title={activeTab === 'image' ? 'IMAGE MODEL' : 'TEXT MODEL'}
     >
@@ -308,6 +329,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
               currentRemoteModelId={activeRemoteTextModelId}
               isAnyLoading={isAnyLoading}
               loadingModelId={effectiveLoadingTextModelId}
+              loadingRemoteModelKey={loadingRemoteTextModelKey}
               onSelectModel={handleSelectLocalModel}
               onSelectRemoteModel={handleSelectRemoteTextModel}
               onUnloadModel={handleUnloadModel}
@@ -329,6 +351,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
               isAnyLoading={isAnyLoading}
               isLoadingImage={isLoadingImage}
               loadingModelId={loadingImageModelId}
+              loadingRemoteModelKey={loadingRemoteImageModelKey}
               onSelectImageModel={handleSelectImageModel}
               onSelectRemoteVisionModel={handleSelectRemoteVisionModel}
               onUnloadImageModel={handleUnloadImageModel}

@@ -27,6 +27,8 @@ export interface BuildDiscoveryArgs {
     Partial<Pick<SyncEngine, 'retryMembershipRevocation'>>;
   localDevice: DeviceInfo;
   getSharedSecret: (deviceId: string) => string | undefined;
+  /** Authenticated endpoints saved by the host for an immediate startup reconnect. */
+  listSavedDevices?: () => readonly DeviceInfo[];
   /** Resolve the preferred route for a stable device identity before every reconnect. */
   resolveEndpoint?: (device: DeviceInfo) => DeviceInfo | Promise<DeviceInfo>;
   /** Whether storage HOLDS a credential, asked as a plain lookup. */
@@ -78,6 +80,7 @@ export function buildDiscovery(
       : { discoverable: args.discoverable }),
     ...(args.browsing === undefined ? {} : { browsing: args.browsing }),
     getSharedSecret: args.getSharedSecret,
+    listSavedDevices: args.listSavedDevices,
     resolveEndpoint: args.resolveEndpoint,
     hasCredential:
       args.hasCredential ??

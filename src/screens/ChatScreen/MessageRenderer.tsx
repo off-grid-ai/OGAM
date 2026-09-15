@@ -51,7 +51,12 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
   const msg = item as Message;
   const animateEntry =
     animateLastN > 0 && index >= displayMessagesLength - animateLastN;
-  const isStreamingThis = item.id === 'streaming' || item.isStreaming === true;
+  const isStreamingThis =
+    item.id === 'streaming' ||
+    item.isStreaming === true ||
+    (isGeneratingImage &&
+      item.role === 'assistant' &&
+      index === displayMessagesLength - 1);
   const statusText = (item as ChatMessageItem).statusText;
   const suppressMessageBubble = (item as ChatMessageItem).suppressMessageBubble;
   const supportingContext = (item as ChatMessageItem).supportingContext;

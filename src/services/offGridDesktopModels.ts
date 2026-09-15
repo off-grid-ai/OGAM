@@ -190,6 +190,7 @@ function textModels(
     if (!installed.has(model.id) || categoryForKind(model.kind) !== 'text') {
       return [];
     }
+    const desktopRemoteModel = model.id.startsWith('remote-vision:');
     return [
       {
         id: model.id,
@@ -198,7 +199,8 @@ function textModels(
         capabilities: {
           supportsVision: model.kind === 'vision',
           supportsToolCalling: true,
-          supportsThinking: false,
+          supportsThinking: desktopRemoteModel,
+          acceptsThinkingKwarg: desktopRemoteModel,
         },
         lastUpdated: new Date().toISOString(),
       },

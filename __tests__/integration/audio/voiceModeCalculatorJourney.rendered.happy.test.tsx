@@ -34,6 +34,10 @@ describe('T085 (rendered) — voice-mode calculator journey (STT → tool → an
     });
 
     // The calculator ran (its result bubble renders)...
+    await h.rtl.waitFor(() => {
+      expect(h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel).toBe('Work done');
+    });
+    h.rtl.fireEvent.press(h.view!.getByLabelText('Work done'));
     await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('tool-result-label-calculator')).not.toBeNull(); }, { timeout: 6000 });
     // ...and the reply reaches the user as an audio bubble (voice mode speaks it), carrying the answer.
     await h.rtl.waitFor(() => {

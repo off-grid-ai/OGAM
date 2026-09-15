@@ -45,6 +45,7 @@ import { SyncScreen } from '../../../pro/ui/SyncScreen';
 import { SyncHomeCard } from '../../../pro/ui/SyncHomeCard';
 import { ProRoot } from '../../../pro/ui/ProRoot';
 import {
+  ADVERTISED_LAN_ADDRESS,
   getDiscoveryBoundaries,
   getTcpDials,
   resetDiscoveryBoundaries,
@@ -932,6 +933,73 @@ describe('Pro mobile saved-device management journey', () => {
         persisted.tombstones as Record<string, { deviceId: string }>,
       ).map(tombstone => tombstone.deviceId),
     ).toEqual([remoteDevice.id]);
+  });
+
+  it('reconnects a saved desktop at startup before discovery reports it', async () => {
+    mesh.register({
+      id: 'desktop-startup-peer',
+      name: 'Startup Desktop',
+      platform: 'macos',
+    });
+    const remoteDevice: DeviceInfo = {
+      id: 'desktop-startup-peer',
+      name: 'Startup Desktop',
+      platform: 'macos',
+      version: '1',
+      host: ADVERTISED_LAN_ADDRESS,
+      port: 0,
+    };
+    const remotePersistence = new MembershipPersistenceBoundary();
+    remote = buildSyncEngine({
+      pairingEntitlement: mesh.peer(),
+      localDevice: remoteDevice,
+      tcpModule: nativeTcpBoundary,
+      getPassphrase: async () => TYPED_PAIRING_CODE,
+      getSharedSecret: deviceId =>
+        remotePersistence.getActive(deviceId)?.sharedSecret,
+      pairingPersistence: remotePersistence,
+      membershipPersistence: remotePersistence,
+    });
+    await remote.engine.start(0);
+    remoteDevice.port = remote.transport.boundPort ?? 0;
+    await syncService.start();
+    ui = render(
+      <>
+        <ProRoot />
+        <NavigationContainer>
+          <AppNavigator />
+        </NavigationContainer>
+      </>,
+    );
+    await waitFor(() => expect(ui!.getByTestId('sync-home-card')).toBeTruthy());
+    fireEvent.press(ui.getByTestId('open-sync-from-home'));
+
+    const mobile = useSyncStore.getState().thisDevice;
+    const discovery = getDiscoveryBoundaries().at(-1);
+    if (!mobile || !discovery?.publishedPort) {
+      throw new Error('Sync did not publish the mobile device');
+    }
+    await remote.engine.pair(
+      { ...mobile, host: ADVERTISED_LAN_ADDRESS, port: discovery.publishedPort },
+      await pairingCodeOnScreen(ui),
+    );
+    await waitFor(() =>
+      expect(useSyncStore.getState().connectedDeviceIds).toContain(remoteDevice.id),
+    );
+
+    await syncService.stop();
+    resetTcpDials();
+    await syncService.start();
+
+    await waitFor(() =>
+      expect(useSyncStore.getState().connectedDeviceIds).toContain(remoteDevice.id),
+    );
+    expect(getTcpDials()).toContainEqual({
+      host: ADVERTISED_LAN_ADDRESS,
+      port: remoteDevice.port,
+    });
+    // The discovery boundary never reports the desktop after restart. The rendered connection came
+    // from the authenticated endpoint that pairing saved, while ordinary startup scans still ran.
   });
 
   it('saves one private endpoint and reconnects only to that address after restart', async () => {

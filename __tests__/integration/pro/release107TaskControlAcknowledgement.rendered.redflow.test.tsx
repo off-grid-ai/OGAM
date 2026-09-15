@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { TASK_RUN_ENTITY, type SyncedTaskRun } from '@offgrid/sync';
 import { TaskChatCard } from '../../../pro/ui/TaskChatCard';
+import { requestActiveTaskStop } from '../../../pro/tasks/taskControlService';
 import { MobileStateMaterializer } from '../../../pro/sync/mobileStateMaterializer';
 import {
   TASK_CONTROL_ACK_TIMEOUT_MS,
@@ -9,6 +10,13 @@ import {
 } from '../../../pro/tasks/taskRunStore';
 import { useSyncStore } from '../../../pro/sync/syncStore';
 import { useChatStore } from '../../../src/stores/chatStore';
+import { ChatInput } from '../../../src/components/ChatInput';
+import { handleStopFn } from '../../../src/screens/ChatScreen/useChatGenerationActions';
+import {
+  HOOKS,
+  _clearHooksForTesting,
+  registerHook,
+} from '../../../src/bootstrap/hookRegistry';
 
 jest.mock('react-native-tcp-socket', () => {
   const {
@@ -55,7 +63,10 @@ function runningTask(kind: SyncedTaskRun['kind']): SyncedTaskRun {
   };
 }
 
-function renderTask(run: SyncedTaskRun): ReturnType<typeof render> {
+function renderTask(
+  run: SyncedTaskRun,
+  includeChatStop = false,
+): ReturnType<typeof render> {
   materializer.put(
     'conversation',
     run.conversationId,
@@ -75,19 +86,29 @@ function renderTask(run: SyncedTaskRun): ReturnType<typeof render> {
     origin,
   );
   return render(
-    <TaskChatCard
-      message={{
-        toolName: run.kind,
-        toolCallId: `call-${run.taskId}`,
-        content: `Task started. Task reference: ${run.taskId}.`,
-      }}
-    />,
+    <>
+      <TaskChatCard
+        message={{
+          toolName: run.kind,
+          toolCallId: `call-${run.taskId}`,
+          content: `Task started. Task reference: ${run.taskId}.`,
+        }}
+      />
+      {includeChatStop ? (
+        <ChatInput
+          onSend={async () => undefined}
+          onStop={() => handleStopFn({ isGeneratingImage: false })}
+          isGenerating
+        />
+      ) : null}
+    </>,
   );
 }
 
 describe('Release 107 rendered task-control acknowledgement', () => {
   beforeEach(() => {
     jest.useFakeTimers();
+    registerHook(HOOKS.taskStopActive, requestActiveTaskStop);
     useChatStore.getState().clearAllConversations();
     useSyncStore.getState().setThisDevice({
       id: 'mobile-release-107',
@@ -104,7 +125,22 @@ describe('Release 107 rendered task-control acknowledgement', () => {
     for (const kind of ['web_use', 'computer_use'] as const) {
       materializer.remove(TASK_RUN_ENTITY, runningTask(kind).taskId);
     }
+    _clearHooksForTesting();
     jest.useRealTimers();
+  });
+
+  it('stops the active Desktop task from the chat Stop button', async () => {
+    const run = {
+      ...runningTask('computer_use'),
+      requestingDeviceId: 'mobile-release-107',
+    };
+    const screen = renderTask(run, true);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('stop-button'));
+    });
+
+    expect(screen.getByText('Stop requested')).toBeTruthy();
   });
 
   it.each(['web_use', 'computer_use'] as const)(

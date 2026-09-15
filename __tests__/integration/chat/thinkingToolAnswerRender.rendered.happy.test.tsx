@@ -44,6 +44,8 @@ describe('T038 (rendered) — thinking + tool-result + answer all render in a re
       toolCalls: [{ name: 'calculator', arguments: { expression: '128*256' } }],
       content: 'The answer is 32768.',
     });
+    expect(h.view!.getAllByTestId('assistant-work-toggle')).toHaveLength(1);
+    h.rtl.fireEvent.press(h.view!.getByTestId('assistant-work-toggle'));
 
     // The user sees all three: the thinking block renders — tap it (real gesture) to expand and read the
     // reasoning it captured.
@@ -135,6 +137,8 @@ describe('T038 (rendered) — thinking + tool-result + answer all render in a re
       { timeout: 4000 },
     );
 
+    expect(h.view!.getAllByTestId('assistant-work-toggle')).toHaveLength(1);
+    h.rtl.fireEvent.press(h.view!.getByTestId('assistant-work-toggle'));
     const completedThinkingBlocks = h.view!.getAllByTestId('thinking-block');
     expect(completedThinkingBlocks).toHaveLength(2);
 

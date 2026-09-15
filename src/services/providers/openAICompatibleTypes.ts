@@ -10,6 +10,7 @@ export interface OpenAIChatMessage {
   name?: string;
   tool_calls?: OpenAIToolCall[];
   tool_call_id?: string;
+  reasoning_details?: Array<Record<string, unknown>>;
 }
 
 /** OpenAI content part */
@@ -43,6 +44,7 @@ export interface OpenAIConfig {
 export interface OpenAIStreamState {
   fullContent: string;
   fullReasoningContent: string;
+  reasoningDetails?: Array<Record<string, unknown>>;
   toolCalls: OpenAIToolCall[];
   currentToolCall: Partial<OpenAIToolCall> | null;
   completeCalled: boolean;

@@ -40,6 +40,8 @@ export interface CompletionResult {
   content: string;
   /** Reasoning/thinking content (if supported) */
   reasoningContent?: string;
+  /** Structured provider reasoning that must be replayed unchanged during tool use. */
+  reasoningDetails?: Array<Record<string, unknown>>;
   /** Generation metadata */
   meta?: GenerationMeta;
   /** Tool calls made (if any) */

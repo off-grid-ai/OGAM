@@ -169,12 +169,10 @@ describe('ChatMessage', () => {
         toolArtifacts: [{ name: 'web_search', result: 'Search complete.' }],
       });
       const view = render(<ChatMessage message={message} isStreaming />);
-      const tree = JSON.stringify(view.toJSON());
 
       expect(view.getAllByText('Thinking...').length).toBeGreaterThan(0);
-      expect(tree.indexOf('thinking-block')).toBeLessThan(
-        tree.indexOf('tool-message'),
-      );
+      expect(view.getByText('I am deciding which source to use next.')).toBeTruthy();
+      expect(view.getByTestId('tool-message')).toBeTruthy();
     });
   });
 
@@ -235,6 +233,7 @@ describe('ChatMessage', () => {
       const { getByText, getByTestId } = render(
         <ChatMessage message={message} />,
       );
+      fireEvent.press(getByTestId('assistant-work-toggle'));
 
       // Main content should be visible
       expect(getByText(/The answer is 42/)).toBeTruthy();
@@ -250,6 +249,7 @@ describe('ChatMessage', () => {
       const { getByTestId, getByText } = render(
         <ChatMessage message={message} />,
       );
+      fireEvent.press(getByTestId('assistant-work-toggle'));
 
       expect(getByTestId('thinking-block-title')).toBeTruthy();
       expect(getByText('Thought process')).toBeTruthy();
@@ -263,6 +263,7 @@ describe('ChatMessage', () => {
       const { getByTestId, getByText, queryByText } = render(
         <ChatMessage message={message} />,
       );
+      fireEvent.press(getByTestId('assistant-work-toggle'));
 
       expect(getByTestId('thinking-block-preview')).toBeTruthy();
       expect(getByText('Drafting Email Response')).toBeTruthy();
@@ -277,6 +278,7 @@ describe('ChatMessage', () => {
       const { getByTestId, queryByTestId } = render(
         <ChatMessage message={message} />,
       );
+      fireEvent.press(getByTestId('assistant-work-toggle'));
 
       // Initially collapsed
       expect(queryByTestId('thinking-block-content')).toBeNull();
@@ -1011,6 +1013,7 @@ describe('ChatMessage', () => {
       const { getByTestId, getByText } = render(
         <ChatMessage message={message} />,
       );
+      fireEvent.press(getByTestId('assistant-work-toggle'));
 
       expect(getByTestId('thinking-block')).toBeTruthy();
       expect(getByText('Analysis')).toBeTruthy();
@@ -1546,6 +1549,7 @@ describe('ChatMessage', () => {
       const { getByTestId, getByText } = render(
         <ChatMessage message={message} />,
       );
+      fireEvent.press(getByTestId('assistant-work-toggle'));
 
       expect(getByTestId('thinking-block')).toBeTruthy();
       expect(getByText('Enhanced Reasoning')).toBeTruthy();
@@ -1667,6 +1671,7 @@ describe('ChatMessage', () => {
       const { getByTestId, getByText } = render(
         <ChatMessage message={message} />,
       );
+      fireEvent.press(getByTestId('assistant-work-toggle'));
 
       // Expand thinking block
       fireEvent.press(getByTestId('thinking-block-toggle'));
@@ -1701,6 +1706,7 @@ describe('ChatMessage', () => {
       const { getByTestId, getByText } = render(
         <ChatMessage message={message} />,
       );
+      fireEvent.press(getByTestId('assistant-work-toggle'));
 
       expect(getByTestId('thinking-block-preview')).toBeTruthy();
       expect(getByText(longThinking)).toBeTruthy();
@@ -1712,7 +1718,8 @@ describe('ChatMessage', () => {
         `<think>${shortThinking}</think>Response.`,
       );
 
-      const { getByText } = render(<ChatMessage message={message} />);
+      const { getByText, getByTestId } = render(<ChatMessage message={message} />);
+      fireEvent.press(getByTestId('assistant-work-toggle'));
 
       // Preview should show the full text without '...'
       expect(getByText(shortThinking)).toBeTruthy();

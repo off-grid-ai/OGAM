@@ -126,6 +126,7 @@ function buildBaseGenerationMeta(svc: any): GenerationMeta {
   if (svc.isUsingRemoteProvider()) {
     const remoteStore = useRemoteServerStore.getState();
     const activeServer = remoteStore.getActiveServer();
+    const activeModel = remoteStore.getActiveRemoteTextModel?.();
     const contentLength =
       svc.state.streamingContent.length + svc.totalReasoningLength;
     const estimatedTokens = Math.ceil(contentLength / 4);
@@ -137,7 +138,7 @@ function buildBaseGenerationMeta(svc: any): GenerationMeta {
     return {
       gpu: false,
       gpuBackend: 'Remote',
-      modelName: remoteStore.activeRemoteTextModelId || activeServer?.name || 'Remote Model',
+      modelName: activeModel?.name || activeServer?.name || 'Remote Model',
       tokenCount: estimatedTokens,
       tokensPerSecond,
       timeToFirstToken: svc.remoteTimeToFirstToken,
