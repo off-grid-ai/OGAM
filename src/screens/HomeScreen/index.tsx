@@ -19,6 +19,7 @@ import { useHomeScreen, HomeScreenNavigationProp } from './hooks/useHomeScreen';
 import { RecentConversations } from './components/RecentConversations';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { DesktopPromoCard } from './components/DesktopPromoCard';
+import { useAmbientRecordingPhase, useAmbientRecordingElapsed } from '../../hooks/useAmbientCapture';
 import { ModelsSummaryRow } from '../../components/models/ModelsSummaryRow';
 import {
   ModelsManagerSheet,
@@ -54,11 +55,20 @@ function homeModelLabels(input: {
   };
 }
 
+function homeMmss(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60);
+  const sec = String(total % 60).padStart(2, '0');
+  return `${m}:${sec}`;
+}
+
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const focusTrigger = useFocusTrigger();
   const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   const SyncHomeCard = useSlot(SLOTS.homeSyncCard);
+  const recPhase = useAmbientRecordingPhase();
+  const recElapsed = useAmbientRecordingElapsed();
   const HomeNotificationsButton = useSlot(SLOTS.homeNotificationsButton);
   const { isSyncUnlocked, openSync, openSyncNotifications } = useOpenSync();
 
@@ -282,7 +292,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <Icon name="sunrise" size={18} color={colors.primary} />
             <View style={styles.galleryCardInfo}>
               <Text style={styles.galleryCardTitle}>Day</Text>
-              <Text style={styles.galleryCardMeta}>Journal · to-dos · timeline</Text>
+              {recPhase === 'recording' ? (
+                <View style={styles.dayRecRow}>
+                  <View style={styles.dayRecDot} />
+                  <Text style={styles.dayRecText}>Recording · {homeMmss(recElapsed)}</Text>
+                </View>
+              ) : recPhase === 'processing' ? (
+                <Text style={styles.galleryCardMeta}>Processing…</Text>
+              ) : (
+                <Text style={styles.galleryCardMeta}>Journal · to-dos · timeline</Text>
+              )}
             </View>
             <Icon name="chevron-right" size={16} color={colors.textMuted} />
           </AnimatedPressable>
