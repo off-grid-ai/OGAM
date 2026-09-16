@@ -270,25 +270,6 @@ export const SettingsScreen: React.FC = () => {
           onSendFeedback={handleSendFeedback}
         />
 
-        {/* Timeline (24/7 recorder) */}
-        <AnimatedEntry index={8} staggerMs={40} trigger={focusTrigger}>
-          <View style={styles.navSection}>
-            <TouchableOpacity
-              style={styles.navItem}
-              onPress={() => navigation.navigate('AmbientDay')}
-            >
-              <View style={styles.navItemIcon}>
-                <Icon name="mic" size={16} color={colors.textSecondary} />
-              </View>
-              <View style={styles.navItemContent}>
-                <Text style={styles.navItemTitle}>Day</Text>
-                <Text style={styles.navItemDesc}>24/7 recorder - journal, tasks and timeline, on-device</Text>
-              </View>
-              <Icon name="chevron-right" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-        </AnimatedEntry>
-
         {/* About */}
         <AnimatedEntry index={9} staggerMs={40} trigger={focusTrigger}>
           <View style={styles.navSection}>

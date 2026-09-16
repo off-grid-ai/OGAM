@@ -104,6 +104,8 @@ export function AmbientDayScreen(): React.ReactElement {
   const useMacForTranscription = useAmbientTimelineStore(s => s.useMacForTranscription);
   const setUseMacForTranscription = useAmbientTimelineStore(s => s.setUseMacForTranscription);
   const audioRetentionDays = useAmbientTimelineStore(s => s.audioRetentionDays);
+  const clearAll = useAmbientTimelineStore(s => s.clearAll);
+  const clearPendingCaptures = useAmbientTimelineStore(s => s.clearPendingCaptures);
   const setAudioRetentionDays = useAmbientTimelineStore(s => s.setAudioRetentionDays);
   const captureMode = useAmbientTimelineStore(s => s.captureMode);
   const setCaptureMode = useAmbientTimelineStore(s => s.setCaptureMode);
@@ -119,6 +121,26 @@ export function AmbientDayScreen(): React.ReactElement {
     () => navigation.navigate('ModelsTab', { initialTab: 'transcription' }),
     [navigation]
   );
+
+  // Wipe the Day back to a first-run state (recordings, journal, to-dos, timeline, queue).
+  const resetDay = useCallback(() => {
+    Alert.alert(
+      'Clear all Day data?',
+      'Removes every recording, journal, to-do and timeline entry from this device. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear all',
+          style: 'destructive',
+          onPress: () => {
+            clearAll();
+            clearPendingCaptures();
+            setShowSettings(false);
+          }
+        }
+      ]
+    );
+  }, [clearAll, clearPendingCaptures]);
 
   // Sanity check before recording: transcription and the summary/journal use DIFFERENT engines, so warn
   // up front if either is missing instead of letting the user find out from an empty Day later.
@@ -681,6 +703,10 @@ export function AmbientDayScreen(): React.ReactElement {
                 ))}
               </View>
             </View>
+            <TouchableOpacity style={styles.clearBtn} onPress={resetDay} testID="ambient-clear-all">
+              <Icon name="trash-2" size={14} color={colors.error} />
+              <Text style={styles.clearBtnText}>Clear all Day data</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -942,6 +968,8 @@ function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     sheetGrip: { width: 38, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 14 },
     sheetTitle: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', fontWeight: '700', marginBottom: 12 },
     settings: {},
+    clearBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.error },
+    clearBtnText: { color: colors.error, fontSize: 13, fontWeight: '700' },
     settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
     settingLabel: { color: colors.text, fontSize: 13, fontWeight: '600', flex: 1 },
     settingHint: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 6 },
