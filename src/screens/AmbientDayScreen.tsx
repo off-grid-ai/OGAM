@@ -804,7 +804,11 @@ function TaskRow({
 }): React.ReactElement {
   return (
     <View style={styles.task} testID="ambient-task">
-      <TouchableOpacity onPress={onToggle} style={styles.box} testID="ambient-task-box">
+      <TouchableOpacity
+        onPress={onToggle}
+        style={[styles.box, task.done && styles.boxDone]}
+        testID="ambient-task-box"
+      >
         {task.done ? <Icon name="check" size={13} color={colors.background} /> : null}
       </TouchableOpacity>
       <TouchableOpacity style={styles.taskTx} onPress={onOpen}>
@@ -924,7 +928,8 @@ function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     journal: { color: colors.text, fontSize: 14, lineHeight: 22, paddingHorizontal: 18 },
     // task
     task: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, paddingHorizontal: 18, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.border },
-    box: { width: 19, height: 19, borderRadius: 5, borderWidth: 1.5, borderColor: colors.textMuted, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+    box: { width: 19, height: 19, borderRadius: 999, borderWidth: 1.5, borderColor: colors.textMuted, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+    boxDone: { backgroundColor: colors.primary, borderColor: colors.primary },
     taskTx: { flex: 1 },
     taskLead: { color: colors.text, fontSize: 14, lineHeight: 19 },
     taskDone: { color: colors.textMuted, textDecorationLine: 'line-through' },
