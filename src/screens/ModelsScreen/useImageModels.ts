@@ -163,7 +163,6 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
       query: deferredImageSearchQuery,
       recommendedOnly: showRecommendedOnly,
       recommendation: imageRec,
-      downloadedIds: downloadedImageModelIds,
     });
   }, [
     availableHFModels,
