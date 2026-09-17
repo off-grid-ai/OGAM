@@ -50,6 +50,9 @@ import { useOpenSync } from '../hooks/useOpenSync';
 import { mobileSpeechInputPorts } from '../services/adapters/speech/mobileSpeechInputPorts';
 import { macOffloadReady } from '../services/ambient/macSttExecutorFactory';
 import { mobileTextEngineControl } from '../services/modelServices/textEngineControl';
+import { loadTranscriptionModel } from '../services/transcriptionModelApplication';
+import { activeMobileRoute } from '../services/modelServices/mobileLLMService';
+import { selectedTextModelId } from '../services/modelServices/modelState';
 import { formatTodosForActions, formatCallsForActions } from '../services/ambient/actionsModel';
 import { askDayWithDeviceLLM } from '../services/ambient/askDayFactory';
 import type { AskResult } from '../services/ambient/askDay';
@@ -114,6 +117,7 @@ export function AmbientDayScreen(): React.ReactElement {
     stt: mobileSpeechInputPorts.transcriber.ready(),
     mac: macOffloadReady()
   }));
+  const [loadingModel, setLoadingModel] = useState(false);
   const refreshReady = useCallback(() => {
     setReady({ stt: mobileSpeechInputPorts.transcriber.ready(), mac: macOffloadReady() });
   }, []);
@@ -144,12 +148,37 @@ export function AmbientDayScreen(): React.ReactElement {
 
   // Sanity check before recording: transcription and the summary/journal use DIFFERENT engines, so warn
   // up front if either is missing instead of letting the user find out from an empty Day later.
-  const handleRecordPress = useCallback(() => {
+  const handleRecordPress = useCallback(async () => {
+    let localReady = mobileSpeechInputPorts.transcriber.ready();
+    // A selected-but-unloaded local whisper model: load it on demand so "set in Models" is enough to
+    // record — selection is deliberately lazy (no eager native load), and Mac offload never loads it.
+    if (!localReady) {
+      const model = activeMobileRoute('transcription').model;
+      if (model && model.source !== 'remote') {
+        setLoadingModel(true);
+        try {
+          await loadTranscriptionModel();
+        } catch {
+          // Fall through to the warning below if the load fails.
+        }
+        // The native load can settle a beat after load() resolves — poll readiness briefly.
+        for (let i = 0; i < 20 && !mobileSpeechInputPorts.transcriber.ready(); i += 1) {
+          await new Promise(r => setTimeout(r, 400));
+        }
+        setLoadingModel(false);
+        localReady = mobileSpeechInputPorts.transcriber.ready();
+        refreshReady();
+      }
+    }
     const transcriptionReady =
-      mobileSpeechInputPorts.transcriber.ready() ||
-      (useMacForTranscription && !onDeviceOnly && macOffloadReady());
+      localReady || (useMacForTranscription && !onDeviceOnly && macOffloadReady());
+    // A summary/journal/to-dos happen iff there's a text model to make them: one loaded, one selected
+    // on-device (the build loads it on demand), or a reachable remote when offload is allowed. Checking
+    // only isReady() (loaded) is wrong on both ends — it warns when a downloaded model would load fine,
+    // and stays silent when there's genuinely no model to summarise with.
     const summaryReady =
       mobileTextEngineControl.isReady() ||
+      selectedTextModelId() != null ||
       (!onDeviceOnly && mobileTextEngineControl.isRemoteActive());
     if (transcriptionReady && summaryReady) {
       void capture.start();
@@ -175,7 +204,7 @@ export function AmbientDayScreen(): React.ReactElement {
         { text: 'Cancel', style: 'cancel' }
       ]
     );
-  }, [capture, navigation, useMacForTranscription, onDeviceOnly]);
+  }, [capture, navigation, useMacForTranscription, onDeviceOnly, refreshReady]);
   useAlwaysOnCapture(capture, captureMode === 'always-on');
 
   const dayKeys = useMemo(() => dayKeysWithSessions(sessions, dateParts), [sessions]);
@@ -528,6 +557,15 @@ export function AmbientDayScreen(): React.ReactElement {
         )}
       </ScrollView>
 
+      {/* Live streaming transcript — phrase-by-phrase as you speak, on-device or via the Mac. */}
+      {capture.recording ? (
+        <View style={styles.live} testID="ambient-live-transcript">
+          <Text style={styles.liveLabel}>● LIVE TRANSCRIPT</Text>
+          <Text style={styles.liveText} numberOfLines={3}>
+            {capture.liveTranscript || 'Listening…'}
+          </Text>
+        </View>
+      ) : null}
       {/* Docked: ask + record, always at the thumb. */}
       {askResult && !asking ? (
         <View style={styles.answer} testID="ambient-day-answer">
@@ -549,7 +587,7 @@ export function AmbientDayScreen(): React.ReactElement {
           />
           {asking ? <ActivityIndicator size="small" color={colors.primary} /> : null}
         </View>
-        {capture.processing ? (
+        {capture.processing || loadingModel ? (
           <View style={[styles.fab, styles.fabBusy]}>
             <ActivityIndicator size="small" color={colors.background} />
           </View>
@@ -558,7 +596,7 @@ export function AmbientDayScreen(): React.ReactElement {
             <Icon name="square" size={19} color={colors.background} />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.fab} onPress={handleRecordPress} testID="ambient-day-record">
+          <TouchableOpacity style={styles.fab} onPress={() => void handleRecordPress()} testID="ambient-day-record">
             <Icon name="mic" size={22} color={colors.background} />
           </TouchableOpacity>
         )}
@@ -963,6 +1001,9 @@ function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     askInput: { flex: 1, color: colors.text, fontSize: 13, padding: 0 },
     answer: { marginHorizontal: 14, marginBottom: 8, borderWidth: 1, borderLeftWidth: 2, borderColor: colors.border, borderLeftColor: colors.primary, borderRadius: 8, padding: 12, backgroundColor: colors.surface },
     answerText: { color: colors.text, fontSize: 13, lineHeight: 19 },
+    live: { marginHorizontal: 14, marginBottom: 8, borderWidth: 1, borderLeftWidth: 2, borderColor: colors.border, borderLeftColor: colors.primary, borderRadius: 8, padding: 12, backgroundColor: colors.surface },
+    liveLabel: { color: colors.primary, fontSize: 9.5, letterSpacing: 1.4, fontWeight: '700', marginBottom: 5 },
+    liveText: { color: colors.text, fontSize: 13, lineHeight: 18 },
     // pending
     pending: { flexDirection: 'row', alignItems: 'center', gap: 9, marginHorizontal: 12, marginTop: 8, padding: 11, borderWidth: 1, borderColor: colors.primary, borderRadius: 8, backgroundColor: colors.surface },
     pendingText: { color: colors.text, fontSize: 12.5, flex: 1 },

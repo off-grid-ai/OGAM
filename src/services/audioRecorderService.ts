@@ -8,11 +8,17 @@ type AudioInputFormat = 'wav' | 'mp3';
 
 /** How loud the microphone is right now, 0 upwards. RMS of one buffer of PCM samples. */
 type AudioLevelListener = (rms: number) => void;
+/** Raw mono PCM frames (Float32, one buffer at the capture sample rate). For live transcription. */
+type AudioFrameListener = (pcm: Float32Array, sampleRate: number) => void;
 
 class AudioRecorderService {
   private recorder: AudioRecorder | null = null;
   private isRecording = false;
   private readonly levelListeners = new Set<AudioLevelListener>();
+  private readonly frameListeners = new Set<AudioFrameListener>();
+  private readonly captureSampleRate = 16000;
+  /** Guards against registering the native onAudioReady tap twice (level + frame subscribers share it). */
+  private audioCallbackAttached = false;
 
   /**
    * Listen to how loud the microphone is, while something is recording.
@@ -59,13 +65,33 @@ class AudioRecorderService {
     if (this.recorder && this.isRecording) this.attachLevelCallback(this.recorder);
     return () => {
       this.levelListeners.delete(listener);
-      if (this.levelListeners.size === 0) {
-        (this.recorder as unknown as { clearOnAudioReady?: () => void })?.clearOnAudioReady?.();
-      }
+      this.maybeClearAudioCallback();
     };
   }
 
+  /**
+   * Subscribe to the raw mono PCM buffers the mic is producing, for live transcription. Shares the
+   * ONE `onAudioReady` tap with the RMS level path — no second mic session — so the recorder that VAD
+   * already drives also feeds the streaming transcript.
+   */
+  onAudioFrames(listener: AudioFrameListener): () => void {
+    this.frameListeners.add(listener);
+    if (this.recorder && this.isRecording) this.attachLevelCallback(this.recorder);
+    return () => {
+      this.frameListeners.delete(listener);
+      this.maybeClearAudioCallback();
+    };
+  }
+
+  private maybeClearAudioCallback(): void {
+    if (this.levelListeners.size === 0 && this.frameListeners.size === 0) {
+      (this.recorder as unknown as { clearOnAudioReady?: () => void })?.clearOnAudioReady?.();
+      this.audioCallbackAttached = false;
+    }
+  }
+
   private attachLevelCallback(rec: AudioRecorder): void {
+    if (this.audioCallbackAttached) return;
     const withCallback = rec as unknown as {
       onAudioReady?: (
         options: { sampleRate: number; bufferLength: number; channelCount: number },
@@ -101,8 +127,21 @@ class AudioRecorderService {
               // One bad listener must never take the recording down with it.
             }
           }
+          // Fan the raw PCM out to frame listeners (live transcription). Copy: the native buffer is
+          // reused after this callback returns, so a listener that keeps it must own its own bytes.
+          if (this.frameListeners.size > 0) {
+            const pcm = channel.slice(0, frames);
+            for (const listener of this.frameListeners) {
+              try {
+                listener(pcm, this.captureSampleRate);
+              } catch {
+                // One bad listener must never take the recording down with it.
+              }
+            }
+          }
         },
       );
+      this.audioCallbackAttached = true;
     } catch (error) {
       // No buffer callback on this platform build: callers keep their own timeout.
       logger.log(`[VAD] onAudioReady threw: ${error instanceof Error ? error.message : String(error)}`);
@@ -170,8 +209,9 @@ class AudioRecorderService {
     });
     this.recorder = rec;
     this.isRecording = true;
+    this.audioCallbackAttached = false; // fresh recorder — the previous tap does not carry over.
     // Before start, so the opening buffers are not missed.
-    if (this.levelListeners.size > 0) this.attachLevelCallback(rec);
+    if (this.levelListeners.size > 0 || this.frameListeners.size > 0) this.attachLevelCallback(rec);
     const startResult: any = rec.start();
     if (startResult && startResult.status && startResult.status !== 'success') {
       this.isRecording = false;
