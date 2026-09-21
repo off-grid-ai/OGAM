@@ -18,7 +18,7 @@ import { SPEAKER_EMBEDDING_MODELS } from '@offgrid/models';
 import { useSpeakerModelStore } from '../stores/speakerModelStore';
 import { useSpeakerProfilesStore } from '../stores/speakerProfilesStore';
 import { audioRecorderService } from '../services/audioRecorderService';
-import { createExecutorchSpeakerEmbedder } from '../services/ambient/executorchSpeakerEmbedderFactory';
+import { resolveSpeakerEngine } from '../services/ambient/speakerEngineFactory';
 import { dispatchSpeakerEmbed } from '../services/ambient/speakerEmbedder';
 import {
   enrollSpeaker,
@@ -62,13 +62,13 @@ export function SpeakerEnrollmentScreen(): React.ReactElement {
   const save = useCallback(async () => {
     setSaving(true);
     try {
-      const phone = createExecutorchSpeakerEmbedder(activeModel);
+      const engine = resolveSpeakerEngine();
       const embed = async (slicePath: string) => {
-        const r = await dispatchSpeakerEmbed({ slicePath }, { phone });
+        const r = await dispatchSpeakerEmbed({ slicePath }, { phone: engine.embedder });
         if (!r.ok) throw new Error(r.error);
         return r.embedding;
       };
-      const { usableSamples } = await enrollSpeaker(name, slices, { embed, enroll, modelId: activeModel.id });
+      const { usableSamples } = await enrollSpeaker(name, slices, { embed, enroll, modelId: engine.modelId });
       Alert.alert('Voice saved', `${name.trim()} enrolled from ${usableSamples} sample${usableSamples === 1 ? '' : 's'}.`);
       navigation.goBack();
     } catch (e) {

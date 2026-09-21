@@ -46,6 +46,16 @@ export function transcriptionEndpoint(baseUrl: string): string {
   return `${baseUrl.replace(/\/$/, '')}/v1/audio/transcriptions`
 }
 
+/** The speaker-diarization offload endpoint. */
+export function diarizeEndpoint(baseUrl: string): string {
+  return `${baseUrl.replace(/\/$/, '')}/v1/audio/diarize`
+}
+
+/** The single-clip voiceprint (enrollment) endpoint. */
+export function embedEndpoint(baseUrl: string): string {
+  return `${baseUrl.replace(/\/$/, '')}/v1/audio/embed`
+}
+
 // ─── Port: pro registers the concrete resolution; core reads through this ─────
 export type MacOffloadTargetProvider = () => MacOffloadTarget | null
 
