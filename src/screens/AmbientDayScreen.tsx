@@ -32,7 +32,6 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAmbientCapture, processPending as drainPending, currentCapturePhase } from '../hooks/useAmbientCapture';
-import { useAlwaysOnCapture } from '../hooks/useAlwaysOnCapture';
 import { useAmbientTimelineStore } from '../stores/ambientTimelineStore';
 import {
   collectDayTasks,
@@ -58,6 +57,7 @@ import { askDayWithDeviceLLM } from '../services/ambient/askDayFactory';
 import type { AskResult } from '../services/ambient/askDay';
 import type { TimelineSession } from '../services/ambient/timelineModel';
 import type { ProactiveActionProposal } from '@offgrid/models';
+import { TYPOGRAPHY, SPACING } from '../constants';
 
 function dateParts(epochMs: number): { y: number; m: number; d: number } {
   const date = new Date(epochMs);
@@ -205,7 +205,8 @@ export function AmbientDayScreen(): React.ReactElement {
       ]
     );
   }, [capture, navigation, useMacForTranscription, onDeviceOnly, refreshReady]);
-  useAlwaysOnCapture(capture, captureMode === 'always-on');
+  // Always-on orchestration is hoisted to AlwaysOnDaemon (app root) so Live mode records
+  // app-wide from launch, not only while this screen is mounted.
 
   const dayKeys = useMemo(() => dayKeysWithSessions(sessions, dateParts), [sessions]);
   const [dayIndex, setDayIndex] = useState(0);
@@ -741,6 +742,17 @@ export function AmbientDayScreen(): React.ReactElement {
                 ))}
               </View>
             </View>
+            <TouchableOpacity
+              style={[styles.settingRow, { marginTop: 14 }]}
+              onPress={() => navigation.navigate('ManageVoices')}
+              testID="ambient-add-voice"
+            >
+              <Text style={styles.settingLabel}>Voices</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm }}>
+                <Text style={styles.presetChangeText}>Manage</Text>
+                <Icon name="chevron-right" size={16} color={colors.primary} />
+              </View>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.clearBtn} onPress={resetDay} testID="ambient-clear-all">
               <Icon name="trash-2" size={14} color={colors.error} />
               <Text style={styles.clearBtnText}>Clear all Day data</Text>
@@ -916,117 +928,118 @@ function progressLabel(progress: ReturnType<typeof useAmbientCapture>['progress'
 }
 
 function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
+  const RADIUS = SPACING.sm; // 8 — the single brand radius; no pills
+  const RADIUS_XS = SPACING.xs; // 4 — checkbox/grip only
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    error: { color: colors.error, fontSize: 13, paddingHorizontal: 16, paddingBottom: 8 },
-    daynav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, paddingVertical: 6 },
-    arrow: { padding: 4 },
-    dayLabel: { color: colors.text, fontSize: 16, fontWeight: '700', letterSpacing: 1, minWidth: 130, textAlign: 'center' },
+    error: { ...TYPOGRAPHY.bodySmall, color: colors.error, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.sm },
+    daynav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.md, paddingVertical: SPACING.sm },
+    arrow: { padding: SPACING.xs },
+    dayLabel: { ...TYPOGRAPHY.h2, color: colors.text, letterSpacing: 1, minWidth: 130, textAlign: 'center' },
     // capture strip
-    capStrip: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1 },
+    capStrip: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm, borderTopWidth: 1, borderBottomWidth: 1 },
     capRecording: { borderColor: colors.error },
     capProcessing: { borderColor: colors.border },
-    capDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.error },
-    capText: { color: colors.textSecondary, fontSize: 12.5, flex: 1, fontVariant: ['tabular-nums'] },
-    capFlag: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: colors.primary, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6 },
-    capFlagText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
-    capStop: { borderWidth: 1, borderColor: colors.error, borderRadius: 6, paddingHorizontal: 14, paddingVertical: 6 },
-    capStopText: { color: colors.error, fontSize: 12, fontWeight: '700' },
+    capDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error },
+    capText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, flex: 1, fontVariant: ['tabular-nums'] },
+    capFlag: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, borderWidth: 1, borderColor: colors.primary, borderRadius: RADIUS, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.sm },
+    capFlagText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
+    capStop: { borderWidth: 1, borderColor: colors.error, borderRadius: RADIUS, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
+    capStopText: { ...TYPOGRAPHY.bodySmall, color: colors.error },
     // body
     body: { flex: 1 },
-    bodyContent: { paddingBottom: 24 },
-    empty: { padding: 20, gap: 14 },
-    hero: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 18, gap: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.surface, ...shadows.medium },
-    heroIcon: { width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.background, ...shadows.glow },
-    heroTitle: { color: colors.text, fontSize: 18, fontWeight: '800', letterSpacing: -0.3, textAlign: 'center' },
-    heroBody: { color: colors.textSecondary, fontSize: 13.5, lineHeight: 20, textAlign: 'center', maxWidth: 300 },
-    presetCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, backgroundColor: colors.surfaceLight, padding: 14, gap: 10, ...shadows.small },
-    presetHead: { color: colors.textMuted, fontSize: 10.5, letterSpacing: 1.6, fontWeight: '700' },
+    bodyContent: { paddingBottom: SPACING.xl },
+    empty: { padding: SPACING.lg, gap: SPACING.md },
+    hero: { alignItems: 'center', paddingVertical: SPACING.xl, paddingHorizontal: SPACING.lg, gap: SPACING.md, borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, backgroundColor: colors.surface, ...shadows.small },
+    heroIcon: { width: 56, height: 56, borderRadius: RADIUS, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.background },
+    heroTitle: { ...TYPOGRAPHY.h2, color: colors.text, textAlign: 'center' },
+    heroBody: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, lineHeight: 20, textAlign: 'center', maxWidth: 300 },
+    presetCard: { borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, backgroundColor: colors.surfaceLight, padding: SPACING.md, gap: SPACING.sm },
+    presetHead: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 1.6, textTransform: 'uppercase' },
     presetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    presetKey: { color: colors.textSecondary, fontSize: 13 },
-    presetVal: { color: colors.text, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
-    presetChange: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-    presetChangeText: { color: colors.primary, fontSize: 12.5, fontWeight: '700' },
-    readyChip: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingHorizontal: 13, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.primary, backgroundColor: 'rgba(52,211,153,0.10)' },
-    readyChipText: { color: colors.primary, fontSize: 12.5, fontWeight: '700' },
-    nudge: { borderWidth: 1, borderColor: colors.primary, borderRadius: 14, backgroundColor: colors.surface, padding: 16, gap: 8, ...shadows.small },
-    nudgeTitle: { color: colors.text, fontSize: 14.5, fontWeight: '800' },
-    nudgeBody: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18 },
-    nudgeBtns: { flexDirection: 'row', gap: 10, marginTop: 6 },
-    nudgePrimary: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: colors.primary, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 10, ...shadows.glow },
-    nudgePrimaryText: { color: colors.background, fontSize: 12.5, fontWeight: '800' },
-    nudgeGhost: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: colors.border, borderRadius: 9, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: colors.background },
-    nudgeGhostText: { color: colors.primary, fontSize: 12.5, fontWeight: '700' },
-    muted: { color: colors.textMuted, fontSize: 13, paddingHorizontal: 18 },
+    presetKey: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
+    presetVal: { ...TYPOGRAPHY.bodySmall, color: colors.text, fontVariant: ['tabular-nums'] },
+    presetChange: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginTop: SPACING.xs },
+    presetChangeText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
+    readyChip: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, alignSelf: 'flex-start', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: RADIUS, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.surface },
+    readyChipText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
+    nudge: { borderWidth: 1, borderColor: colors.primary, borderRadius: RADIUS, backgroundColor: colors.surface, padding: SPACING.lg, gap: SPACING.sm, ...shadows.small },
+    nudgeTitle: { ...TYPOGRAPHY.body, color: colors.text },
+    nudgeBody: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, lineHeight: 18 },
+    nudgeBtns: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.sm },
+    nudgePrimary: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, backgroundColor: colors.primary, borderRadius: RADIUS, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
+    nudgePrimaryText: { ...TYPOGRAPHY.bodySmall, color: colors.background },
+    nudgeGhost: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, backgroundColor: colors.background },
+    nudgeGhostText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
+    muted: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, paddingHorizontal: SPACING.lg },
     // section
-    section: { paddingTop: 18 },
-    sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingBottom: 10 },
-    sectionTitle: { color: colors.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 1.6, textTransform: 'uppercase' },
-    sectionCount: { color: colors.primary, fontSize: 11, marginLeft: 'auto' },
-    journal: { color: colors.text, fontSize: 14, lineHeight: 22, paddingHorizontal: 18 },
+    section: { paddingTop: SPACING.lg },
+    sectionHead: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.sm },
+    sectionTitle: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 1.6, textTransform: 'uppercase' },
+    sectionCount: { ...TYPOGRAPHY.label, color: colors.primary, marginLeft: 'auto', fontVariant: ['tabular-nums'] },
+    journal: { ...TYPOGRAPHY.body, color: colors.text, lineHeight: 22, paddingHorizontal: SPACING.lg },
     // task
-    task: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, paddingHorizontal: 18, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.border },
-    box: { width: 19, height: 19, borderRadius: 999, borderWidth: 1.5, borderColor: colors.textMuted, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+    task: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.md, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+    box: { width: 18, height: 18, borderRadius: RADIUS_XS, borderWidth: 1.5, borderColor: colors.textMuted, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
     boxDone: { backgroundColor: colors.primary, borderColor: colors.primary },
     taskTx: { flex: 1 },
-    taskLead: { color: colors.text, fontSize: 14, lineHeight: 19 },
+    taskLead: { ...TYPOGRAPHY.body, color: colors.text, lineHeight: 19 },
     taskDone: { color: colors.textMuted, textDecorationLine: 'line-through' },
-    taskSrc: { color: colors.textMuted, fontSize: 10.5, marginTop: 3 },
+    taskSrc: { ...TYPOGRAPHY.meta, color: colors.textMuted, marginTop: SPACING.xs },
     // action
-    action: { marginHorizontal: 14, marginBottom: 8, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 9, backgroundColor: colors.surface, ...shadows.small },
-    actionConn: { color: colors.primary, fontSize: 9.5, letterSpacing: 1.4, fontWeight: '700', marginBottom: 5 },
-    actionTitle: { color: colors.text, fontSize: 13.5, fontWeight: '600', lineHeight: 18 },
-    actionWhy: { color: colors.textMuted, fontSize: 11.5, marginTop: 4, lineHeight: 16 },
-    actionBtns: { flexDirection: 'row', gap: 8, marginTop: 11 },
-    actionApprove: { backgroundColor: colors.primary, borderRadius: 6, paddingHorizontal: 14, paddingVertical: 7 },
-    actionApproveText: { color: colors.background, fontSize: 12, fontWeight: '700' },
-    actionDismiss: { borderWidth: 1, borderColor: colors.border, borderRadius: 6, paddingHorizontal: 14, paddingVertical: 7 },
-    actionDismissText: { color: colors.textSecondary, fontSize: 12, fontWeight: '700' },
+    action: { marginHorizontal: SPACING.lg, marginBottom: SPACING.sm, padding: SPACING.md, borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, backgroundColor: colors.surface, ...shadows.small },
+    actionConn: { ...TYPOGRAPHY.labelSmall, color: colors.primary, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: SPACING.xs },
+    actionTitle: { ...TYPOGRAPHY.bodySmall, color: colors.text, lineHeight: 18 },
+    actionWhy: { ...TYPOGRAPHY.meta, color: colors.textMuted, marginTop: SPACING.xs, lineHeight: 16 },
+    actionBtns: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.md },
+    actionApprove: { backgroundColor: colors.primary, borderRadius: RADIUS, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
+    actionApproveText: { ...TYPOGRAPHY.bodySmall, color: colors.background },
+    actionDismiss: { borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
+    actionDismissText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
     // timeline
-    tcard: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 18, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.border },
-    tcardTime: { color: colors.primary, fontSize: 11, fontWeight: '700', width: 42, fontVariant: ['tabular-nums'] },
+    tcard: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+    tcardTime: { ...TYPOGRAPHY.label, color: colors.primary, width: 42, fontVariant: ['tabular-nums'] },
     tcardMid: { flex: 1 },
-    tcardTitle: { color: colors.text, fontSize: 13.5, fontWeight: '600' },
-    tcardHead: { color: colors.textMuted, fontSize: 11 },
-    // ask
+    tcardTitle: { ...TYPOGRAPHY.bodySmall, color: colors.text },
+    tcardHead: { ...TYPOGRAPHY.label, color: colors.textMuted },
     // header icons
-    headIcons: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+    headIcons: { flexDirection: 'row', alignItems: 'center', gap: SPACING.lg },
     // timeline chip
-    tlChip: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 18, marginTop: 4, padding: 13, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface, ...shadows.small },
-    tlChipLabel: { color: colors.text, fontSize: 12.5, fontWeight: '600' },
-    tlChipN: { color: colors.textMuted, fontSize: 11, flex: 1, textAlign: 'right' },
+    tlChip: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginHorizontal: SPACING.lg, marginTop: SPACING.xs, padding: SPACING.md, borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, backgroundColor: colors.surface, ...shadows.small },
+    tlChipLabel: { ...TYPOGRAPHY.bodySmall, color: colors.text },
+    tlChipN: { ...TYPOGRAPHY.label, color: colors.textMuted, flex: 1, textAlign: 'right' },
     // docked ask + record
-    dock: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, borderTopWidth: 1, borderTopColor: colors.borderLight, backgroundColor: colors.background, boxShadow: '0px -3px 14px 0px rgba(0,0,0,0.28)' },
-    askbar: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 14, paddingVertical: 11, borderWidth: 1, borderColor: colors.border, borderRadius: 22, backgroundColor: colors.surface },
-    askInput: { flex: 1, color: colors.text, fontSize: 13, padding: 0 },
-    answer: { marginHorizontal: 14, marginBottom: 8, borderWidth: 1, borderLeftWidth: 2, borderColor: colors.border, borderLeftColor: colors.primary, borderRadius: 8, padding: 12, backgroundColor: colors.surface },
-    answerText: { color: colors.text, fontSize: 13, lineHeight: 19 },
-    live: { marginHorizontal: 14, marginBottom: 8, borderWidth: 1, borderLeftWidth: 2, borderColor: colors.border, borderLeftColor: colors.primary, borderRadius: 8, padding: 12, backgroundColor: colors.surface },
-    liveLabel: { color: colors.primary, fontSize: 9.5, letterSpacing: 1.4, fontWeight: '700', marginBottom: 5 },
-    liveText: { color: colors.text, fontSize: 13, lineHeight: 18 },
+    dock: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm, paddingBottom: SPACING.sm, borderTopWidth: 1, borderTopColor: colors.borderLight, backgroundColor: colors.background },
+    askbar: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.md, paddingVertical: SPACING.md, borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, backgroundColor: colors.surface },
+    askInput: { ...TYPOGRAPHY.bodySmall, flex: 1, color: colors.text, padding: 0 },
+    answer: { marginHorizontal: SPACING.lg, marginBottom: SPACING.sm, borderWidth: 1, borderLeftWidth: 2, borderColor: colors.border, borderLeftColor: colors.primary, borderRadius: RADIUS, padding: SPACING.md, backgroundColor: colors.surface },
+    answerText: { ...TYPOGRAPHY.bodySmall, color: colors.text, lineHeight: 19 },
+    live: { marginHorizontal: SPACING.lg, marginBottom: SPACING.sm, borderWidth: 1, borderLeftWidth: 2, borderColor: colors.border, borderLeftColor: colors.primary, borderRadius: RADIUS, padding: SPACING.md, backgroundColor: colors.surface },
+    liveLabel: { ...TYPOGRAPHY.labelSmall, color: colors.primary, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: SPACING.xs },
+    liveText: { ...TYPOGRAPHY.bodySmall, color: colors.text, lineHeight: 18 },
     // pending
-    pending: { flexDirection: 'row', alignItems: 'center', gap: 9, marginHorizontal: 12, marginTop: 8, padding: 11, borderWidth: 1, borderColor: colors.primary, borderRadius: 8, backgroundColor: colors.surface },
-    pendingText: { color: colors.text, fontSize: 12.5, flex: 1 },
-    pendingCta: { color: colors.primary, fontSize: 12, fontWeight: '700' },
+    pending: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginHorizontal: SPACING.md, marginTop: SPACING.sm, padding: SPACING.md, borderWidth: 1, borderColor: colors.primary, borderRadius: RADIUS, backgroundColor: colors.surface },
+    pendingText: { ...TYPOGRAPHY.bodySmall, color: colors.text, flex: 1 },
+    pendingCta: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
     // settings sheet
     sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-    sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 22, borderTopRightRadius: 22, borderTopWidth: 1, borderColor: colors.border, paddingHorizontal: 20, paddingBottom: 34, paddingTop: 8 },
-    sheetGrip: { width: 38, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 14 },
-    sheetTitle: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', fontWeight: '700', marginBottom: 12 },
+    sheet: { backgroundColor: colors.surface, borderTopLeftRadius: SPACING.lg, borderTopRightRadius: SPACING.lg, borderTopWidth: 1, borderColor: colors.border, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl, paddingTop: SPACING.sm },
+    sheetGrip: { width: 36, height: 4, borderRadius: RADIUS_XS, backgroundColor: colors.border, alignSelf: 'center', marginBottom: SPACING.md },
+    sheetTitle: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: SPACING.md },
     settings: {},
-    clearBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.error },
-    clearBtnText: { color: colors.error, fontSize: 13, fontWeight: '700' },
-    settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-    settingLabel: { color: colors.text, fontSize: 13, fontWeight: '600', flex: 1 },
-    settingHint: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 6 },
-    seg: { flexDirection: 'row', borderWidth: 1, borderColor: colors.border, borderRadius: 6, overflow: 'hidden' },
-    segBtn: { paddingHorizontal: 13, paddingVertical: 6 },
-    segBtnOn: { backgroundColor: 'rgba(52,211,153,0.14)' },
-    segText: { color: colors.textMuted, fontSize: 12 },
-    segTextOn: { color: colors.primary, fontWeight: '700' },
+    clearBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm, marginTop: SPACING.lg, paddingVertical: SPACING.md, borderRadius: RADIUS, borderWidth: 1, borderColor: colors.error },
+    clearBtnText: { ...TYPOGRAPHY.bodySmall, color: colors.error },
+    settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.md },
+    settingLabel: { ...TYPOGRAPHY.bodySmall, color: colors.text, flex: 1 },
+    settingHint: { ...TYPOGRAPHY.meta, color: colors.textMuted, lineHeight: 16, marginTop: SPACING.sm },
+    seg: { flexDirection: 'row', borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, overflow: 'hidden' },
+    segBtn: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
+    segBtnOn: { backgroundColor: colors.surfaceHover },
+    segText: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
+    segTextOn: { color: colors.primary },
     // record fab (docked)
-    fab: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', ...shadows.glow },
-    fabRec: { backgroundColor: colors.error, boxShadow: '0px 0px 14px 0px rgba(199,80,80,0.45)' },
+    fab: { width: 52, height: 52, borderRadius: RADIUS, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', ...shadows.small },
+    fabRec: { backgroundColor: colors.error },
     fabBusy: { backgroundColor: colors.surfaceHover, ...shadows.small }
   });
 }
