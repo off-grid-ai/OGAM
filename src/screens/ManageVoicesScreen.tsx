@@ -14,7 +14,7 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { speakerEmbeddingModelById } from '@offgrid/models';
+import { speakerEmbeddingModelById, DIARIZATION_MODELS } from '@offgrid/models';
 import { useSpeakerProfilesStore } from '../stores/speakerProfilesStore';
 import { useSpeakerModelStore } from '../stores/speakerModelStore';
 
@@ -34,6 +34,8 @@ export function ManageVoicesScreen(): React.ReactElement {
   const remove = useSpeakerProfilesStore(s => s.remove);
   const threshold = useSpeakerModelStore(s => s.matchThreshold);
   const setThreshold = useSpeakerModelStore(s => s.setMatchThreshold);
+  const diarizationModelId = useSpeakerModelStore(s => s.diarizationModelId);
+  const setDiarizationModel = useSpeakerModelStore(s => s.setDiarizationModel);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -131,6 +133,25 @@ export function ManageVoicesScreen(): React.ReactElement {
           })}
         </View>
         <Text style={styles.hint}>{SENSITIVITY.find(o => Math.abs(threshold - o.value) < 0.001)?.hint ?? ''}</Text>
+
+        <Text style={[styles.label, styles.spacer]}>DIARIZATION MODEL</Text>
+        {DIARIZATION_MODELS.map(m => {
+          const on = m.id === diarizationModelId;
+          return (
+            <TouchableOpacity
+              key={m.id}
+              style={[styles.row, on && styles.rowOn]}
+              onPress={() => setDiarizationModel(m.id)}
+              activeOpacity={0.7}
+            >
+              <Icon name={on ? 'check-circle' : 'circle'} size={16} color={on ? colors.primary : colors.textMuted} />
+              <View style={styles.rowText}>
+                <Text style={styles.name}>{m.name}{m.recommended ? '  ·  recommended' : ''}</Text>
+                <Text style={styles.meta}>{m.description} · {m.sizeMb} MB</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
     </SafeAreaView>
   );
@@ -154,6 +175,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: RADIUS,
       backgroundColor: colors.surface,
     },
+    rowOn: { borderColor: colors.primary },
     rowText: { flex: 1 },
     name: { ...TYPOGRAPHY.body, color: colors.text },
     rename: {

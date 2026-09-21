@@ -11,6 +11,7 @@ import { createExecutorchSpeakerEmbedder } from './executorchSpeakerEmbedderFact
 import { createMacSpeakerEmbedder, MAC_EMBED_MODEL_ID } from './macSpeakerEmbedderFactory'
 import { createMacDiarizer } from './macDiarizerFactory'
 import { createSherpaDiarizer } from './sherpaDiarizerFactory'
+import { createSherpaSpeakerEmbedder } from './sherpaEmbedderFactory'
 import type { SpeakerEmbedder } from './speakerEmbedder'
 import type { Diarizer } from './speakerDiarizer'
 
@@ -27,10 +28,13 @@ export function resolveSpeakerEngine(): SpeakerEngine {
   if (macEmbedder) {
     return { modelId: MAC_EMBED_MODEL_ID, embedder: macEmbedder, diarizer: createMacDiarizer() }
   }
-  const model = useSpeakerModelStore.getState().activeModel()
-  return {
-    modelId: model.id,
-    embedder: createExecutorchSpeakerEmbedder(model),
-    diarizer: createSherpaDiarizer(useSpeakerModelStore.getState().activeDiarizationModel())
+  // On-device: prefer sherpa-onnx (offline diarize + embed in one vector space, both platforms).
+  const diarModel = useSpeakerModelStore.getState().activeDiarizationModel()
+  const sherpaEmbedder = createSherpaSpeakerEmbedder(diarModel)
+  if (sherpaEmbedder) {
+    return { modelId: `sherpa:${diarModel.id}`, embedder: sherpaEmbedder, diarizer: createSherpaDiarizer(diarModel) }
   }
+  // Last resort: ExecuTorch (.pte) embedder for the selected catalog model (no on-device diarizer).
+  const model = useSpeakerModelStore.getState().activeModel()
+  return { modelId: model.id, embedder: createExecutorchSpeakerEmbedder(model), diarizer: null }
 }
