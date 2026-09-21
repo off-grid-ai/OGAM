@@ -13,6 +13,7 @@
 		04B9D63F2F38E71E00F1A435 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 04B9D63E2F38E71E00F1A435 /* Images.xcassets */; };
 		04B9D6422F38EC7700F1A435 /* DownloadManagerModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B9D6412F38EC7700F1A435 /* DownloadManagerModule.swift */; };
 		04B9D6432F38EC7700F1A435 /* DownloadManagerModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 04B9D6402F38EC7700F1A435 /* DownloadManagerModule.m */; };
+		08671FAB8A664B2BABBCCA1C /* RecordingLiveActivityModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C876D04671C8D0E3CB383D37 /* RecordingLiveActivityModule.swift */; };
 		0A7B3D032F3A0B1200CC5FA1 /* PDFExtractorModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D012F3A0B1200CC5FA1 /* PDFExtractorModule.m */; };
 		0A7B3D042F3A0B1200CC5FA1 /* PDFExtractorModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D022F3A0B1200CC5FA1 /* PDFExtractorModule.swift */; };
 		0A7B3D062F3A0B1200CC5FA1 /* all-MiniLM-L6-v2-Q8_0.gguf in Resources */ = {isa = PBXBuildFile; fileRef = 0A7B3D052F3A0B1200CC5FA1 /* all-MiniLM-L6-v2-Q8_0.gguf */; };
@@ -40,13 +41,22 @@
 		117A00012F55000100C11A00 /* OffgridConfinedFile.m in Sources */ = {isa = PBXBuildFile; fileRef = 117A00032F55000100C11A00 /* OffgridConfinedFile.m */; };
 		117A00022F55000100C11A00 /* OffgridConfinedFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 117A00042F55000100C11A00 /* OffgridConfinedFile.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		296EA555B184524F00C0BC41 /* RecordWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 46CDF4EF38F1EEFEEE778595 /* RecordWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2E920269E2526F001C00283C /* StopRecordingIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE49037CC90D21829D45945 /* StopRecordingIntent.swift */; };
+		309E131DBC52DE158B5CDA5C /* RecordingActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C4253FB22D0E29F7922D1E1 /* RecordingActivity.swift */; };
 		553E18B7CCC207C0885499E4 /* libPods-OffgridMobileTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D1B1541769AADA563D6CC44E /* libPods-OffgridMobileTests.a */; };
+		5613A2FC19B869B62D82214F /* RecordingActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C4253FB22D0E29F7922D1E1 /* RecordingActivity.swift */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
+		76C511CE330473AD6ACD880C /* RecordingLiveActivityModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 2C1958FC7D2147171D130A5E /* RecordingLiveActivityModule.m */; };
 		80EE15520A374D84DFA0E523 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		A084C602C3B4A415DC74D43F /* libPods-OffgridMobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3A3BA1A946E10FA48AA4C0EB /* libPods-OffgridMobile.a */; };
+		A6C341A0819DC2574135EAF8 /* RecordWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B720A920BD7545F9486F8BCB /* RecordWidgetBundle.swift */; };
 		AABB000100000000000001AA /* OffgridMobileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB000200000000000002AA /* OffgridMobileTests.swift */; };
 		AABB001100000000000001AA /* SyncScreenshotAssetCursorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB001200000000000002AA /* SyncScreenshotAssetCursorTests.swift */; };
+		E6BF37B1DDD5424BB1441944 /* RecordLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3D13E7EC3632EECCFB823A /* RecordLiveActivity.swift */; };
+		F8724FD9D49762B238B840BA /* StopRecordingIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE49037CC90D21829D45945 /* StopRecordingIntent.swift */; };
+		FDD5467D43D5A3E4D7039E1F /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F5FCD56B161986BFE565F3D /* Foundation.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,7 +67,28 @@
 			remoteGlobalIDString = 13B07F861A680F5B00A75B9A;
 			remoteInfo = OffgridMobile;
 		};
+		B997D3F7B67BDD7679DC6A38 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 806D3ECB24F99BB5698BFF99;
+			remoteInfo = RecordWidget;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A219D30BE44C17AD49E7600D /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				296EA555B184524F00C0BC41 /* RecordWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		049521632F390D4500AA4EB4 /* CoreMLDiffusionModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CoreMLDiffusionModule.m; sourceTree = "<group>"; };
@@ -95,15 +126,23 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = OffgridMobile/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = OffgridMobile/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = OffgridMobile/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		1F5FCD56B161986BFE565F3D /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		2BD3167161334CCC189096E3 /* Pods-OffgridMobile.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OffgridMobile.debug.xcconfig"; path = "Target Support Files/Pods-OffgridMobile/Pods-OffgridMobile.debug.xcconfig"; sourceTree = "<group>"; };
+		2C1958FC7D2147171D130A5E /* RecordingLiveActivityModule.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = RecordingLiveActivityModule.m; path = OffgridMobile/RecordingLiveActivityModule.m; sourceTree = "<group>"; };
 		37BD4C6C3858A907C678B5B4 /* Pods-OffgridMobile.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OffgridMobile.release.xcconfig"; path = "Target Support Files/Pods-OffgridMobile/Pods-OffgridMobile.release.xcconfig"; sourceTree = "<group>"; };
 		3A3BA1A946E10FA48AA4C0EB /* libPods-OffgridMobile.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-OffgridMobile.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3EE49037CC90D21829D45945 /* StopRecordingIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StopRecordingIntent.swift; path = OffgridMobile/StopRecordingIntent.swift; sourceTree = "<group>"; };
+		46CDF4EF38F1EEFEEE778595 /* RecordWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RecordWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		6C4253FB22D0E29F7922D1E1 /* RecordingActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RecordingActivity.swift; path = OffgridMobile/RecordingActivity.swift; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = OffgridMobile/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = OffgridMobile/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		8F3D13E7EC3632EECCFB823A /* RecordLiveActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecordLiveActivity.swift; sourceTree = "<group>"; };
 		AABB000200000000000002AA /* OffgridMobileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffgridMobileTests.swift; sourceTree = "<group>"; };
 		AABB000400000000000004AA /* OffgridMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OffgridMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AABB001200000000000002AA /* SyncScreenshotAssetCursorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncScreenshotAssetCursorTests.swift; sourceTree = "<group>"; };
+		B720A920BD7545F9486F8BCB /* RecordWidgetBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecordWidgetBundle.swift; sourceTree = "<group>"; };
 		B9DE36A1FFE10AF8CD81DBD2 /* Pods-OffgridMobileTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OffgridMobileTests.release.xcconfig"; path = "Target Support Files/Pods-OffgridMobileTests/Pods-OffgridMobileTests.release.xcconfig"; sourceTree = "<group>"; };
+		C876D04671C8D0E3CB383D37 /* RecordingLiveActivityModule.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RecordingLiveActivityModule.swift; path = OffgridMobile/RecordingLiveActivityModule.swift; sourceTree = "<group>"; };
 		D0917E571600B3FFEDA59EF7 /* Pods-OffgridMobileTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OffgridMobileTests.debug.xcconfig"; path = "Target Support Files/Pods-OffgridMobileTests/Pods-OffgridMobileTests.debug.xcconfig"; sourceTree = "<group>"; };
 		D1B1541769AADA563D6CC44E /* libPods-OffgridMobileTests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-OffgridMobileTests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
@@ -124,6 +163,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				553E18B7CCC207C0885499E4 /* libPods-OffgridMobileTests.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F2A6436C27C28705FC3843DB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FDD5467D43D5A3E4D7039E1F /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -168,6 +215,10 @@
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
 				04B9D63E2F38E71E00F1A435 /* Images.xcassets */,
 				0A7B3D052F3A0B1200CC5FA1 /* all-MiniLM-L6-v2-Q8_0.gguf */,
+				6C4253FB22D0E29F7922D1E1 /* RecordingActivity.swift */,
+				3EE49037CC90D21829D45945 /* StopRecordingIntent.swift */,
+				C876D04671C8D0E3CB383D37 /* RecordingLiveActivityModule.swift */,
+				2C1958FC7D2147171D130A5E /* RecordingLiveActivityModule.m */,
 			);
 			name = OffgridMobile;
 			sourceTree = "<group>";
@@ -178,6 +229,7 @@
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				3A3BA1A946E10FA48AA4C0EB /* libPods-OffgridMobile.a */,
 				D1B1541769AADA563D6CC44E /* libPods-OffgridMobileTests.a */,
+				C15F7EF2D85A9E2EF2C821C8 /* iOS */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -198,6 +250,7 @@
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
+				ACCF854012FCC1158D7425CA /* RecordWidget */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -209,6 +262,7 @@
 			children = (
 				13B07F961A680F5B00A75B9A /* OffgridMobile.app */,
 				AABB000400000000000004AA /* OffgridMobileTests.xctest */,
+				46CDF4EF38F1EEFEEE778595 /* RecordWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -223,6 +277,16 @@
 			path = OffgridMobileTests;
 			sourceTree = "<group>";
 		};
+		ACCF854012FCC1158D7425CA /* RecordWidget */ = {
+			isa = PBXGroup;
+			children = (
+				8F3D13E7EC3632EECCFB823A /* RecordLiveActivity.swift */,
+				B720A920BD7545F9486F8BCB /* RecordWidgetBundle.swift */,
+			);
+			name = RecordWidget;
+			path = RecordWidget;
+			sourceTree = "<group>";
+		};
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
 			isa = PBXGroup;
 			children = (
@@ -232,6 +296,14 @@
 				B9DE36A1FFE10AF8CD81DBD2 /* Pods-OffgridMobileTests.release.xcconfig */,
 			);
 			path = Pods;
+			sourceTree = "<group>";
+		};
+		C15F7EF2D85A9E2EF2C821C8 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				1F5FCD56B161986BFE565F3D /* Foundation.framework */,
+			);
+			name = iOS;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -267,15 +339,34 @@
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				2D83A9C9D5ACE879F7072709 /* [CP] Embed Pods Frameworks */,
 				DADC570D62064073AFEE927B /* [CP] Copy Pods Resources */,
+				A219D30BE44C17AD49E7600D /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				4AD9010AA8C5F82452A72BDC /* PBXTargetDependency */,
 			);
 			name = OffgridMobile;
 			productName = OffgridMobile;
 			productReference = 13B07F961A680F5B00A75B9A /* OffgridMobile.app */;
 			productType = "com.apple.product-type.application";
+		};
+		806D3ECB24F99BB5698BFF99 /* RecordWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D8485026CB9F2A30292E00E9 /* Build configuration list for PBXNativeTarget "RecordWidget" */;
+			buildPhases = (
+				9B0A74374AFD180DC5DB958B /* Sources */,
+				F2A6436C27C28705FC3843DB /* Frameworks */,
+				D5E17622717FC2CDC1B88E46 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RecordWidget;
+			productName = RecordWidget;
+			productReference = 46CDF4EF38F1EEFEEE778595 /* RecordWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -311,6 +402,7 @@
 			targets = (
 				13B07F861A680F5B00A75B9A /* OffgridMobile */,
 				00E356ED1AD99517003FC87E /* OffgridMobileTests */,
+				806D3ECB24F99BB5698BFF99 /* RecordWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -329,6 +421,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		AABB000900000000000009AA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D5E17622717FC2CDC1B88E46 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -468,6 +567,21 @@
 				0F4D00012F47000100C11A00 /* SyncDirectorySourceModule.m in Sources */,
 				0F4D00022F47000100C11A00 /* SyncDirectorySourceModule.swift in Sources */,
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
+				08671FAB8A664B2BABBCCA1C /* RecordingLiveActivityModule.swift in Sources */,
+				76C511CE330473AD6ACD880C /* RecordingLiveActivityModule.m in Sources */,
+				5613A2FC19B869B62D82214F /* RecordingActivity.swift in Sources */,
+				2E920269E2526F001C00283C /* StopRecordingIntent.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9B0A74374AFD180DC5DB958B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E6BF37B1DDD5424BB1441944 /* RecordLiveActivity.swift in Sources */,
+				A6C341A0819DC2574135EAF8 /* RecordWidgetBundle.swift in Sources */,
+				309E131DBC52DE158B5CDA5C /* RecordingActivity.swift in Sources */,
+				F8724FD9D49762B238B840BA /* StopRecordingIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -484,6 +598,12 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		4AD9010AA8C5F82452A72BDC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = RecordWidget;
+			target = 806D3ECB24F99BB5698BFF99 /* RecordWidget */;
+			targetProxy = B997D3F7B67BDD7679DC6A38 /* PBXContainerItemProxy */;
+		};
 		AABB00010000000000001005 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 13B07F861A680F5B00A75B9A /* OffgridMobile */;
@@ -555,6 +675,33 @@
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
+		};
+		6ACDB2FCA5ACEB95D7A16973 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 84V6KCAC49;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RecordWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = RecordWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ai.offgridmobile.dev.RecordWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
 		};
 		83CBBA201A601CBA00E9B192 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -730,6 +877,34 @@
 			};
 			name = Release;
 		};
+		CC350E9B7D78BC8DD272ED19 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 84V6KCAC49;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RecordWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = RecordWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ai.offgridmobile.RecordWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -756,6 +931,15 @@
 			buildConfigurations = (
 				AABB00010000000000001001 /* Debug */,
 				AABB00010000000000001002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D8485026CB9F2A30292E00E9 /* Build configuration list for PBXNativeTarget "RecordWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CC350E9B7D78BC8DD272ED19 /* Release */,
+				6ACDB2FCA5ACEB95D7A16973 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
