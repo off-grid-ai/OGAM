@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useRef } from 'react'
+import { AppState } from 'react-native'
 import { ALWAYS_ON_ROTATE_MS } from '../services/ambient/processingModel'
 import type { AmbientCapture } from './useAmbientCapture'
 
@@ -21,6 +22,20 @@ export function useAlwaysOnCapture(
     if (enabled && capture.phase === 'idle') {
       void capture.start()
     }
+  }, [enabled, capture.phase, capture.start])
+
+  // Keep-alive: if the OS reclaimed the recorder while backgrounded, re-assert it the moment
+  // we return to the foreground. The idle guard makes this a no-op when it's still running.
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active' && capture.phase === 'idle') {
+        void capture.start()
+      }
+    })
+    return () => sub.remove()
   }, [enabled, capture.phase, capture.start])
 
   // Rotate: finalise the current capture on the interval; the auto-start effect starts the next one.

@@ -9,6 +9,7 @@ import { AppNavigator } from '../navigation';
 import { appNavigationRef } from '../navigation/navigationRef';
 import { LockScreen } from '../screens';
 import type { ThemeColors } from '../theme';
+import { AlwaysOnDaemon } from './AlwaysOnDaemon';
 
 interface SurfaceTheme {
   colors: ThemeColors;
@@ -72,6 +73,7 @@ export function MainSurface({
       <SafeAreaProvider>
         <SystemBars style={isDark ? 'light' : 'dark'} />
         {AppRoot ? <AppRoot /> : null}
+        <AlwaysOnDaemon />
         <NavigationContainer
           ref={appNavigationRef}
           theme={{
