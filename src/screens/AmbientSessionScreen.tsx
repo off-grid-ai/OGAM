@@ -7,14 +7,17 @@
  * task/message via our action tools) hangs off the action rows here in a later phase.
  */
 
-import React, { useCallback } from 'react';
-import { ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { Modal, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAmbientTimelineStore } from '../stores/ambientTimelineStore';
+import { useSpeakerProfilesStore } from '../stores/speakerProfilesStore';
+import { useSpeakerModelStore } from '../stores/speakerModelStore';
+import { TYPOGRAPHY, SPACING } from '../constants';
 import { summaryStatusHint } from '../services/ambient/summarizer';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -25,6 +28,18 @@ export function AmbientSessionScreen(): React.ReactElement {
   const route = useRoute<RouteProp<RootStackParamList, 'AmbientSession'>>();
   const sessionId = route.params?.sessionId;
   const session = useAmbientTimelineStore(s => s.sessions.find(item => item.id === sessionId));
+  const setSegmentSpeaker = useAmbientTimelineStore(s => s.setSegmentSpeaker);
+  const activeModelId = useSpeakerModelStore(s => s.selectedModelId);
+  const profiles = useSpeakerProfilesStore(s => s.profiles);
+  const enrolled = Object.values(profiles).filter(pr => pr.modelId === activeModelId);
+  const [assignId, setAssignId] = useState<string | null>(null);
+  const assign = useCallback(
+    (speakerId: string | null, speakerName: string | null) => {
+      if (sessionId && assignId) setSegmentSpeaker(sessionId, assignId, speakerId, speakerName);
+      setAssignId(null);
+    },
+    [sessionId, assignId, setSegmentSpeaker],
+  );
 
   if (!session) {
     return (
@@ -85,21 +100,58 @@ export function AmbientSessionScreen(): React.ReactElement {
           {spoken.length === 0 ? (
             <Text style={styles.emptyTranscript}>No speech was transcribed in this conversation.</Text>
           ) : (
-            spoken.map(segment =>
-              flagged.has(segment.id) ? (
-                <View key={segment.id} style={styles.flaggedLine} testID="ambient-transcript-line">
-                  <Text style={styles.flaggedMark}>▎</Text>
-                  <Text style={styles.flaggedText}>{segment.transcript}</Text>
-                </View>
-              ) : (
-                <Text key={segment.id} style={styles.transcriptLine} testID="ambient-transcript-line">
-                  {segment.transcript}
-                </Text>
-              )
-            )
+            spoken.map(segment => {
+              const isFlagged = flagged.has(segment.id);
+              const label =
+                segment.speakerName ??
+                (segment.speakerId === null && 'speakerId' in segment ? 'Unknown voice' : 'Tag speaker');
+              const known = !!segment.speakerName;
+              return (
+                <TouchableOpacity
+                  key={segment.id}
+                  style={styles.segRow}
+                  onPress={() => setAssignId(segment.id)}
+                  activeOpacity={0.7}
+                  testID="ambient-transcript-line"
+                >
+                  <Text style={[styles.speakerLabel, !known && styles.speakerLabelMuted]}>{label}</Text>
+                  <Text style={[styles.transcriptLine, isFlagged && styles.flaggedText]}>
+                    {isFlagged ? '▎ ' : ''}
+                    {segment.transcript}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })
           )}
         </Section>
       </ScrollView>
+      <Modal visible={assignId !== null} transparent animationType="fade" onRequestClose={() => setAssignId(null)}>
+        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setAssignId(null)}>
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle}>WHOSE VOICE IS THIS?</Text>
+            {enrolled.map(pr => (
+              <TouchableOpacity key={pr.id} style={styles.assignRow} onPress={() => assign(pr.id, pr.name)}>
+                <Icon name="user" size={16} color={colors.primary} />
+                <Text style={styles.assignName}>{pr.name}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={styles.assignRow}
+              onPress={() => {
+                setAssignId(null);
+                (navigation as any).navigate('SpeakerEnrollment');
+              }}
+            >
+              <Icon name="plus" size={16} color={colors.primary} />
+              <Text style={styles.assignName}>Add a new voice…</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.assignRow} onPress={() => assign(null, null)}>
+              <Icon name="x" size={16} color={colors.textMuted} />
+              <Text style={[styles.assignName, { color: colors.textMuted }]}>Clear / unknown</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -199,7 +251,15 @@ function createStyles(colors: {
     bulletDot: { color: colors.primary, fontSize: 13, lineHeight: 19 },
     bulletText: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, flex: 1 },
     people: { color: colors.textSecondary, fontSize: 13 },
+    segRow: { gap: 2, paddingVertical: SPACING.xs },
+    speakerLabel: { ...TYPOGRAPHY.labelSmall, color: colors.primary, letterSpacing: 1.2, textTransform: 'uppercase' },
+    speakerLabelMuted: { color: colors.textMuted },
     transcriptLine: { color: colors.textSecondary, fontSize: 13, lineHeight: 20 },
+    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    sheet: { backgroundColor: colors.surface, borderTopLeftRadius: SPACING.lg, borderTopRightRadius: SPACING.lg, borderTopWidth: 1, borderColor: colors.border, paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, paddingBottom: SPACING.xxl, gap: SPACING.xs },
+    sheetTitle: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: SPACING.sm },
+    assignRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+    assignName: { ...TYPOGRAPHY.body, color: colors.text },
     flaggedLine: { flexDirection: 'row', gap: 6, alignItems: 'flex-start' },
     flaggedMark: { color: colors.primary, fontSize: 15, lineHeight: 20 },
     flaggedText: { color: colors.text, fontSize: 13, lineHeight: 20, flex: 1, fontWeight: '500' },

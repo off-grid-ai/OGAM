@@ -24,6 +24,9 @@ export interface AmbientSegmentRecord {
   attempts: number
   /** Null until transcribed; the transcript text once whisper has run. */
   transcript: string | null
+  /** Identified speaker (voice fingerprinting). Absent = not run; null id = heard but unknown. */
+  speakerId?: string | null
+  speakerName?: string | null
   flagged?: boolean
 }
 

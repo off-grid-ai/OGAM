@@ -18,6 +18,9 @@ export interface TimelineSegment {
   startMs: number
   endMs: number
   transcript: string | null
+  /** Identified speaker (voice fingerprinting). Absent = not run; null id = heard but unknown. */
+  speakerId?: string | null
+  speakerName?: string | null
 }
 
 export interface TimelineSession {

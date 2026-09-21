@@ -29,9 +29,15 @@ import {
   type LocalRollingTranscriber
 } from '../services/ambient/localRollingStt'
 import { audioRecorderService } from '../services/audioRecorderService'
+import {
+  showRecordingNotification,
+  hideRecordingNotification,
+  onRecordingNotificationAction
+} from '../services/ambient/recordingNotification'
 import { mobileSpeechInputPorts } from '../services/adapters/speech/mobileSpeechInputPorts'
 import { macOffloadReady } from '../services/ambient/macSttExecutorFactory'
 import { processOnStop } from '../services/ambient/processingModel'
+import { annotateSessionsWithSpeakers } from '../services/ambient/speakerAnnotationFactory';
 import { useAmbientTimelineStore } from '../stores/ambientTimelineStore'
 import type { AmbientRecorder, SegmentAudioSink } from '../services/ambient/ambientRecorder'
 import type { SttExecutor } from '../services/ambient/sttExecutor'
@@ -98,6 +104,7 @@ let finalizedTranscript = ''
 let streamClient: StreamingSttClient | null = null
 let localRolling: LocalRollingTranscriber | null = null
 let unsubscribeStreamFrames: (() => void) | null = null
+let unsubscribeNotifAction: (() => void) | null = null
 const LIVE_SLICE_DIR = `${RNFS.CachesDirectoryPath}/ambient-live`
 
 function appendFinal(text: string): void {
@@ -189,6 +196,13 @@ async function buildAndStore(
     anchorsMs
   )
   useAmbientTimelineStore.getState().addSessions(built)
+  // Best-effort voice fingerprinting: label who spoke each segment. No-op until a voice is enrolled,
+  // and fully guarded so identification can never disturb capture or transcription.
+  try {
+    await annotateSessionsWithSpeakers(built)
+  } catch {
+    // identification is an enhancement, never a dependency
+  }
 }
 
 export async function processPending(): Promise<void> {
@@ -266,6 +280,12 @@ async function start(): Promise<void> {
     }, handleSegmentAudio)
     setCapture({ phase: 'recording' })
     startElapsedTimer()
+    // Ongoing notification with a Stop control (Android) so the recording can be driven from the
+    // shade and survives backgrounding. Tapping Stop stops the capture just like the in-app button.
+    showRecordingNotification(0)
+    unsubscribeNotifAction = onRecordingNotificationAction(() => {
+      void stop()
+    })
   } catch (e) {
     recorder = null
     liveExecutor = null
@@ -281,6 +301,9 @@ function teardownStream(): void {
   streamClient = null
   localRolling?.stop()
   localRolling = null
+  unsubscribeNotifAction?.()
+  unsubscribeNotifAction = null
+  hideRecordingNotification()
 }
 
 /** Save a capture to the durable pending queue - it survives restarts and drains when a transcriber

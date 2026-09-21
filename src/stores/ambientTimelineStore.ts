@@ -67,6 +67,8 @@ interface AmbientTimelineState {
   setOnDeviceOnly: (value: boolean) => void
   setUseMacForTranscription: (value: boolean) => void
   toggleTask: (id: string) => void
+  /** Label a segment with an identified/assigned speaker (voice fingerprinting). */
+  setSegmentSpeaker: (sessionId: string, segmentId: string, speakerId: string | null, speakerName: string | null) => void
   setDayJournal: (dayKey: string, text: string) => void
   setDayActions: (dayKey: string, proposals: ProactiveActionProposal[]) => void
   resolveDayAction: (dayKey: string, index: number) => void
@@ -153,6 +155,19 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
             ...state.syncStamps,
             done: { ...state.syncStamps.done, [id]: { at: Date.now(), by: localStampId() } }
           }
+        })),
+      setSegmentSpeaker: (sessionId, segmentId, speakerId, speakerName) =>
+        set(state => ({
+          sessions: state.sessions.map(session =>
+            session.id !== sessionId
+              ? session
+              : {
+                  ...session,
+                  segments: session.segments.map(seg =>
+                    seg.id !== segmentId ? seg : { ...seg, speakerId, speakerName }
+                  )
+                }
+          )
         })),
       setDayJournal: (dayKey, text) =>
         set(state => ({

@@ -28,6 +28,8 @@ export { ToolsScreen } from './ToolsScreen';
 export { AmbientScreen } from './AmbientScreen';
 export { AmbientSessionScreen } from './AmbientSessionScreen';
 export { AmbientDayScreen } from './AmbientDayScreen';
+export { SpeakerEnrollmentScreen } from './SpeakerEnrollmentScreen';
+export { ManageVoicesScreen } from './ManageVoicesScreen';
 export { AmbientReflectScreen } from './AmbientReflectScreen';
 export { AmbientReplayScreen } from './AmbientReplayScreen';
 export { AmbientOnboardingScreen } from './AmbientOnboardingScreen';

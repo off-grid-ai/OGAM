@@ -34,6 +34,8 @@ export type RootStackParamList = {
   AmbientReflect: undefined;
   AmbientSession: { sessionId: string };
   AmbientReplay: { sessionId: string };
+  SpeakerEnrollment: undefined;
+  ManageVoices: undefined;
 };
 
 // Tab navigator — simple, no sub-stacks

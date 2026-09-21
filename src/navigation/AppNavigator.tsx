@@ -44,6 +44,8 @@ import {
   AmbientReflectScreen,
   AmbientSessionScreen,
   AmbientReplayScreen,
+  SpeakerEnrollmentScreen,
+  ManageVoicesScreen,
 } from '../screens';
 import {
   RootStackParamList,
@@ -252,6 +254,8 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="AmbientReflect" component={AmbientReflectScreen} />
         <RootStack.Screen name="AmbientSession" component={AmbientSessionScreen} />
         <RootStack.Screen name="AmbientReplay" component={AmbientReplayScreen} />
+        <RootStack.Screen name="SpeakerEnrollment" component={SpeakerEnrollmentScreen} />
+        <RootStack.Screen name="ManageVoices" component={ManageVoicesScreen} />
         <RootStack.Screen
           name="DownloadManager"
           component={DownloadManagerScreen}
