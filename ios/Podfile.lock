@@ -3457,6 +3457,7 @@ PODS:
   - RNZipArchive/Core (7.1.0):
     - React-Core
     - SSZipArchive (~> 2.5.5)
+  - SherpaOnnxC (1.13.8)
   - SocketRocket (0.7.1)
   - SSZipArchive (2.5.5)
   - VisionCamera (4.7.3):
@@ -3604,6 +3605,7 @@ DEPENDENCIES:
   - RNVectorIcons (from `../node_modules/react-native-vector-icons`)
   - RNWorklets (from `../node_modules/react-native-worklets`)
   - RNZipArchive (from `../node_modules/react-native-zip-archive`)
+  - SherpaOnnxC (from `sherpa`)
   - SocketRocket (~> 0.7.1)
   - VisionCamera (from `../node_modules/react-native-vision-camera`)
   - whisper-rn (from `../node_modules/whisper.rn`)
@@ -3830,6 +3832,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-worklets"
   RNZipArchive:
     :path: "../node_modules/react-native-zip-archive"
+  SherpaOnnxC:
+    :path: sherpa
   VisionCamera:
     :path: "../node_modules/react-native-vision-camera"
   whisper-rn:
@@ -3947,12 +3951,13 @@ SPEC CHECKSUMS:
   RNVectorIcons: 791f13226ec4a3fd13062eda9e892159f0981fae
   RNWorklets: 944dddd0eef13006b658e653abbb3ee8365c3809
   RNZipArchive: f2806ba80e24cf1984d6a7cb361d8a07d734997d
+  SherpaOnnxC: 62b9f928be33ed245b4ad01b87444a4a042037eb
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   SSZipArchive: c69881e8ac5521f0e622291387add5f60f30f3c4
   VisionCamera: 7187b3dac1ff3071234ead959ce311875748e14f
   whisper-rn: 7566faf9b7d78e39ab9fc634cb90fdee81177793
   Yoga: 5456bb010373068fc92221140921b09d126b116e
 
-PODFILE CHECKSUM: f66f810a788ead15881075527443239e49b50db1
+PODFILE CHECKSUM: 6339ad874f9d6d7828e1d36d515ed2ccb81adf19
 
 COCOAPODS: 1.17.0

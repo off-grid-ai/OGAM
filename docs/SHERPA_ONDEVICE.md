@@ -14,12 +14,20 @@ NativeModules.SherpaOnnxDiarization
 Model bundle (from `@offgrid/models` DIARIZATION_MODELS): pyannote-segmentation-3.0 + a speaker
 embedding, both ready ONNX from sherpa-onnx releases — `prepare` downloads + unpacks them.
 
-## iOS
-1. Podfile: `pod 'sherpa-onnx'` (or add the prebuilt xcframework from k2-fsa releases). `pod install`.
-2. In `ios/OffgridMobile/SherpaDiarizationModule.swift`: `import SherpaOnnx`, replace the TODO blocks
-   with the real wrapper calls (OfflineSpeakerDiarization + SpeakerEmbeddingExtractor), and add the
-   WAV->[Float] reader (`SherpaAudio.readMono16k`) + downloader (`SherpaModelStore`).
-3. Add `SherpaDiarizationModule.swift` + `.m` to the app target. Build.
+## iOS — DONE (native, sherpa-onnx 1.13.8)
+Implemented. The C API is vendored as a local pod (`ios/sherpa/SherpaOnnxC.podspec` →
+`SherpaOnnxC.xcframework`), imported into Swift via the bridging header
+(`#import "sherpa-onnx/c-api/c-api.h"`, `HEADER_SEARCH_PATHS` → `ios/sherpa/include`). The module
+`ios/OffgridMobile/SherpaDiarizationModule.swift` (+`.m`) implements prepare/diarize/embed; the
+segmentation + CAM++ models are bundled as app resources.
+
+One manual step, like Android: the native blobs are NOT committed (gitignored) — place them under
+`ios/sherpa/`:
+- `SherpaOnnxC.xcframework` — the k2-fsa sherpa-onnx 1.13.8 iOS C-API xcframework.
+- `models/segmentation.onnx` + `models/embedding.onnx` — the same pyannote seg + CAM++ ONNX as
+  Android (`android/app/src/main/assets/sherpa/`), copy them across.
+
+Then `cd ios && pod install` and build.
 
 ## Android — DONE (native, sherpa-onnx 1.13.8)
 Implemented, mirroring iOS. One manual step: fetch the native blobs (not committed, like the iOS
