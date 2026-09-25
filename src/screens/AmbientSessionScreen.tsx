@@ -8,15 +8,17 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { Modal, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAmbientTimelineStore } from '../stores/ambientTimelineStore';
+import { sessionSpeakers } from '../services/ambient/timelineModel';
 import { useSpeakerProfilesStore } from '../stores/speakerProfilesStore';
-import { useSpeakerModelStore } from '../stores/speakerModelStore';
+import { applySpeakerCorrection } from '../services/ambient/speakerCorrection';
+import { embedSessionSegment, activeEngineModelId } from '../services/ambient/segmentVoiceprint';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { summaryStatusHint } from '../services/ambient/summarizer';
 import type { RootStackParamList } from '../navigation/types';
@@ -28,17 +30,66 @@ export function AmbientSessionScreen(): React.ReactElement {
   const route = useRoute<RouteProp<RootStackParamList, 'AmbientSession'>>();
   const sessionId = route.params?.sessionId;
   const session = useAmbientTimelineStore(s => s.sessions.find(item => item.id === sessionId));
-  const setSegmentSpeaker = useAmbientTimelineStore(s => s.setSegmentSpeaker);
-  const activeModelId = useSpeakerModelStore(s => s.selectedModelId);
+  const relabelSpeaker = useAmbientTimelineStore(s => s.relabelSpeaker);
   const profiles = useSpeakerProfilesStore(s => s.profiles);
-  const enrolled = Object.values(profiles).filter(pr => pr.modelId === activeModelId);
-  const [assignId, setAssignId] = useState<string | null>(null);
-  const assign = useCallback(
-    (speakerId: string | null, speakerName: string | null) => {
-      if (sessionId && assignId) setSegmentSpeaker(sessionId, assignId, speakerId, speakerName);
-      setAssignId(null);
+  const addSample = useSpeakerProfilesStore(s => s.addSample);
+  const enroll = useSpeakerProfilesStore(s => s.enroll);
+  // Enrolled voices in the ACTIVE ENGINE's space (what diarization used) — not the catalog default,
+  // so a Mac-enrolled voice actually shows up here.
+  const enrolled = Object.values(profiles).filter(pr => pr.modelId === activeEngineModelId());
+
+  type AssignTarget = { id: string; speakerId: string | null; startMs: number; endMs: number };
+  const [assignSeg, setAssignSeg] = useState<AssignTarget | null>(null);
+  const [addingNew, setAddingNew] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const closeSheet = useCallback(() => {
+    setAssignSeg(null);
+    setAddingNew(false);
+    setNewName('');
+  }, []);
+
+  // Assign a whole speaker/cluster from the segment's OWN audio — no re-recording. Embeds the slice,
+  // folds it into the chosen profile (or enrolls a new one), then relabels every segment of that cluster.
+  const applyAssign = useCallback(
+    async (answer: { kind: 'existing'; profileId: string; name: string } | { kind: 'new'; name: string } | { kind: 'clear' }) => {
+      if (!sessionId || !assignSeg) return;
+      setBusy(true);
+      try {
+        if (answer.kind === 'clear') {
+          relabelSpeaker(sessionId, assignSeg.speakerId ?? null, null, null);
+          return;
+        }
+        const rec = session?.recordingPath;
+        const captured = rec ? await embedSessionSegment(rec, assignSeg.startMs, assignSeg.endMs) : null;
+        const embedding = captured?.embedding ?? null;
+        const modelId = captured?.modelId ?? activeEngineModelId();
+
+        let targetId: string;
+        let targetName: string;
+        if (answer.kind === 'existing') {
+          applySpeakerCorrection({ kind: 'existing', profileId: answer.profileId }, { embedding, modelId, addSample, enroll });
+          targetId = answer.profileId;
+          targetName = answer.name;
+        } else {
+          const name = answer.name.trim();
+          if (!name) return;
+          if (embedding) {
+            const res = applySpeakerCorrection({ kind: 'new', name }, { embedding, modelId, addSample, enroll });
+            targetId = res.profileId;
+          } else {
+            targetId = `named:${name}`; // audio gone — label only, no voiceprint
+          }
+          targetName = name;
+        }
+        relabelSpeaker(sessionId, assignSeg.speakerId ?? null, targetId, targetName);
+      } finally {
+        setBusy(false);
+        closeSheet();
+      }
     },
-    [sessionId, assignId, setSegmentSpeaker],
+    [sessionId, assignSeg, session, addSample, enroll, relabelSpeaker, closeSheet],
   );
 
   if (!session) {
@@ -71,6 +122,12 @@ export function AmbientSessionScreen(): React.ReactElement {
         <Text style={styles.headline} testID="ambient-detail-headline">
           {summary.headline || summaryStatusHint(session.summaryStatus)}
         </Text>
+        {sessionSpeakers(session).length > 0 ? (
+          <View style={styles.voicesRow} testID="ambient-voices">
+            <Icon name="users" size={14} color={colors.primary} />
+            <Text style={styles.voicesText}>{sessionSpeakers(session).join('  ·  ')}</Text>
+          </View>
+        ) : null}
 
         {summary.decisions.length > 0 ? (
           <Section title="Decisions" styles={styles}>
@@ -110,7 +167,7 @@ export function AmbientSessionScreen(): React.ReactElement {
                 <TouchableOpacity
                   key={segment.id}
                   style={styles.segRow}
-                  onPress={() => setAssignId(segment.id)}
+                  onPress={() => setAssignSeg({ id: segment.id, speakerId: segment.speakerId ?? null, startMs: segment.startMs, endMs: segment.endMs })}
                   activeOpacity={0.7}
                   testID="ambient-transcript-line"
                 >
@@ -125,30 +182,55 @@ export function AmbientSessionScreen(): React.ReactElement {
           )}
         </Section>
       </ScrollView>
-      <Modal visible={assignId !== null} transparent animationType="fade" onRequestClose={() => setAssignId(null)}>
-        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setAssignId(null)}>
+      <Modal visible={assignSeg !== null} transparent animationType="fade" onRequestClose={closeSheet}>
+        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={busy ? undefined : closeSheet}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>WHOSE VOICE IS THIS?</Text>
-            {enrolled.map(pr => (
-              <TouchableOpacity key={pr.id} style={styles.assignRow} onPress={() => assign(pr.id, pr.name)}>
-                <Icon name="user" size={16} color={colors.primary} />
-                <Text style={styles.assignName}>{pr.name}</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity
-              style={styles.assignRow}
-              onPress={() => {
-                setAssignId(null);
-                (navigation as any).navigate('SpeakerEnrollment');
-              }}
-            >
-              <Icon name="plus" size={16} color={colors.primary} />
-              <Text style={styles.assignName}>Add a new voice…</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.assignRow} onPress={() => assign(null, null)}>
-              <Icon name="x" size={16} color={colors.textMuted} />
-              <Text style={[styles.assignName, { color: colors.textMuted }]}>Clear / unknown</Text>
-            </TouchableOpacity>
+            <Text style={styles.sheetHint}>Uses this conversation's audio — no re-recording. Assigns every line from this speaker.</Text>
+            {busy ? (
+              <View style={styles.sheetBusy}>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={styles.sheetBusyText}>Learning this voice…</Text>
+              </View>
+            ) : addingNew ? (
+              <View style={styles.newRow}>
+                <TextInput
+                  style={styles.newInput}
+                  value={newName}
+                  onChangeText={setNewName}
+                  placeholder="Name (e.g. Priya)"
+                  placeholderTextColor={colors.textMuted}
+                  autoFocus
+                  autoCapitalize="words"
+                  onSubmitEditing={() => applyAssign({ kind: 'new', name: newName })}
+                  returnKeyType="done"
+                />
+                <TouchableOpacity
+                  onPress={() => applyAssign({ kind: 'new', name: newName })}
+                  disabled={!newName.trim()}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Icon name="check" size={20} color={newName.trim() ? colors.primary : colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                {enrolled.map(pr => (
+                  <TouchableOpacity key={pr.id} style={styles.assignRow} onPress={() => applyAssign({ kind: 'existing', profileId: pr.id, name: pr.name })}>
+                    <Icon name="user" size={16} color={colors.primary} />
+                    <Text style={styles.assignName}>{pr.name}</Text>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity style={styles.assignRow} onPress={() => setAddingNew(true)}>
+                  <Icon name="plus" size={16} color={colors.primary} />
+                  <Text style={styles.assignName}>New person…</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.assignRow} onPress={() => applyAssign({ kind: 'clear' })}>
+                  <Icon name="x" size={16} color={colors.textMuted} />
+                  <Text style={[styles.assignName, { color: colors.textMuted }]}>Clear / unknown</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </TouchableOpacity>
       </Modal>
@@ -260,10 +342,17 @@ function createStyles(colors: {
     sheetTitle: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: SPACING.sm },
     assignRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: colors.border },
     assignName: { ...TYPOGRAPHY.body, color: colors.text },
+    sheetHint: { ...TYPOGRAPHY.meta, color: colors.textMuted, marginBottom: SPACING.sm },
+    sheetBusy: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.lg },
+    sheetBusyText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
+    newRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.md },
+    newInput: { ...TYPOGRAPHY.body, flex: 1, color: colors.text, borderBottomWidth: 1, borderBottomColor: colors.primary, padding: 0 },
     flaggedLine: { flexDirection: 'row', gap: 6, alignItems: 'flex-start' },
     flaggedMark: { color: colors.primary, fontSize: 15, lineHeight: 20 },
     flaggedText: { color: colors.text, fontSize: 13, lineHeight: 20, flex: 1, fontWeight: '500' },
     emptyTranscript: { color: colors.textMuted, fontSize: 13, fontStyle: 'italic' },
+    voicesRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+    voicesText: { color: colors.primary, fontSize: 13, flex: 1 },
     missing: { padding: 24 },
     missingText: { color: colors.textMuted, fontSize: 14 }
   });

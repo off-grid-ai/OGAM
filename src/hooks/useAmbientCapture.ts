@@ -209,7 +209,7 @@ export async function processPending(): Promise<void> {
   const pending = useAmbientTimelineStore.getState().pendingCaptures
   if (pending.length === 0) return
   if (!captureTranscriptionReady()) {
-    setCapture({ error: 'Set up a transcription model in Models (or pair a Mac) to process recordings.' })
+    setCapture({ error: 'Download a transcription model in Models, or connect your Mac under Remote Servers, to process recordings.' })
     return
   }
   setCapture({ phase: 'processing', progress: { phase: 'transcribing', done: 0, total: 1 } })

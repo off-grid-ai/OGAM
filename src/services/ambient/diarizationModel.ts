@@ -11,7 +11,7 @@
  * and enrolled people get their names — on top of everything we already built.
  */
 import {
-  matchSpeaker,
+  cosineSimilarity,
   averageEmbeddings,
   DEFAULT_MATCH_THRESHOLD,
   type SpeakerProfile,
@@ -28,7 +28,11 @@ export interface ClusterIdentity {
   known: boolean
 }
 
-/** Assign an identity to every anonymous cluster. Recognized → enrolled name; else → "Speaker N". */
+/**
+ * Assign an identity to every anonymous cluster with a ONE-TO-ONE rule: each enrolled person names at
+ * most one cluster (their best-matching one), so two speakers can't both collapse onto the same name.
+ * Recognized clusters get the person's name; the rest become stable "Speaker N".
+ */
 export function nameClusters(
   turns: DiarizedTurn[],
   profiles: SpeakerProfile[],
@@ -44,14 +48,35 @@ export function nameClusters(
     }
     if (t.embedding && t.embedding.length > 0) byCluster[t.cluster].push(t.embedding)
   }
+  const centroids: Record<string, number[]> = {}
+  for (const c of order) centroids[c] = averageEmbeddings(byCluster[c])
+
+  // Score every (cluster, profile) pair, then greedily assign highest-similarity pairs first, using
+  // each cluster and each profile at most once. This stops one person from claiming two clusters.
+  const pairs: { cluster: string; profileIdx: number; score: number }[] = []
+  order.forEach(cluster => {
+    if (centroids[cluster].length === 0) return
+    profiles.forEach((p, i) => {
+      const score = cosineSimilarity(centroids[cluster], p.centroid)
+      if (score >= threshold) pairs.push({ cluster, profileIdx: i, score })
+    })
+  })
+  pairs.sort((a, b) => b.score - a.score)
+
+  const named: Record<string, ClusterIdentity> = {}
+  const usedProfiles = new Set<number>()
+  for (const pair of pairs) {
+    if (named[pair.cluster] || usedProfiles.has(pair.profileIdx)) continue
+    const p = profiles[pair.profileIdx]
+    named[pair.cluster] = { speakerId: p.id, speakerName: p.name, known: true }
+    usedProfiles.add(pair.profileIdx)
+  }
 
   const out: Record<string, ClusterIdentity> = {}
   let anon = 0
   for (const cluster of order) {
-    const centroid = averageEmbeddings(byCluster[cluster])
-    const match = centroid.length > 0 ? matchSpeaker(centroid, profiles, threshold) : null
-    if (match && match.confident && match.speakerId && match.name) {
-      out[cluster] = { speakerId: match.speakerId, speakerName: match.name, known: true }
+    if (named[cluster]) {
+      out[cluster] = named[cluster]
     } else {
       anon += 1
       out[cluster] = { speakerId: `cluster:${cluster}`, speakerName: `Speaker ${anon}`, known: false }

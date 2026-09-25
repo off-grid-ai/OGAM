@@ -22,7 +22,7 @@ describe('nameClusters', () => {
   it('numbers multiple unknown clusters in first-seen order', () => {
     const turns: DiarizedTurn[] = [
       { startMs: 0, endMs: 500, cluster: 'a', embedding: [0, 0, 1] },
-      { startMs: 500, endMs: 1000, cluster: 'b', embedding: [0.5, 0.5, 0.5] },
+      { startMs: 500, endMs: 1000, cluster: 'b', embedding: [0, 0.05, 1] },
     ]
     const names = nameClusters(turns, [sidd, priya])
     expect(names.a.speakerName).toBe('Speaker 1')
@@ -36,6 +36,18 @@ describe('nameClusters', () => {
     ]
     const names = nameClusters(turns, [sidd, priya])
     expect(names.spk0.speakerName).toBe('Sidd')
+  })
+
+  it('a person names at most one cluster — the other becomes a Speaker N, not a duplicate', () => {
+    // Both clusters look like Sidd; spk0 is the stronger match. Only spk0 should be "Sidd".
+    const turns: DiarizedTurn[] = [
+      { startMs: 0, endMs: 1000, cluster: 'spk0', embedding: [1, 0, 0] },
+      { startMs: 1000, endMs: 2000, cluster: 'spk1', embedding: [0.8, 0.2, 0] },
+    ]
+    const names = nameClusters(turns, [sidd, priya], 0.5)
+    expect(names.spk0.speakerName).toBe('Sidd')
+    expect(names.spk1.known).toBe(false)
+    expect(names.spk1.speakerName).toBe('Speaker 1')
   })
 })
 

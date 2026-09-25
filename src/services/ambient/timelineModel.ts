@@ -86,3 +86,21 @@ export function groupSessionsByDay(
     })
     .sort((a, b) => (a.dayKey < b.dayKey ? 1 : a.dayKey > b.dayKey ? -1 : 0))
 }
+
+/**
+ * The distinct speakers voice-fingerprinting actually detected in a session — recognized names first,
+ * then anonymous "Speaker N". Empty when diarization hasn't run (segments carry no speaker). Lets the
+ * timeline show who was in each conversation, which is how you verify the feature is working.
+ */
+export function sessionSpeakers(session: TimelineSession): string[] {
+  const known: string[] = []
+  const anon: string[] = []
+  const seen = new Set<string>()
+  for (const seg of session.segments) {
+    const name = seg.speakerName
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    ;(name.startsWith('Speaker ') ? anon : known).push(name)
+  }
+  return [...known, ...anon]
+}

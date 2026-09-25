@@ -81,3 +81,12 @@ export function selectHasProAccess(state: ProAccessSlice): boolean {
     admission: state.proDeviceAdmission,
   });
 }
+
+/**
+ * Is the Day recorder's voice recognition (speaker separation + fingerprint identity) unlocked?
+ * It is a Pro feature — real entitlement in production — but dev/simulator builds unlock it for
+ * testing, matching the DEV_UNLOCK_PRO rule loadProFeatures uses to activate the Pro runtime.
+ */
+export function selectVoiceRecognitionUnlocked(state: ProAccessSlice): boolean {
+  return selectHasProAccess(state) || (__DEV__ && !state.devProDisabled);
+}

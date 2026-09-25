@@ -1,9 +1,11 @@
 /**
- * Mac-offload diarizer — POST a recording to the paired Mac's gateway, which runs pyannote + ECAPA and
- * returns speaker turns (each with a voiceprint). Reuses the same companion token as STT offload; works
- * for BOTH iPhone and Android (the phone just calls the Mac). Cross-platform diarization today, while
- * the on-device sherpa engine is the offline follow-up. Throws when no Mac is reachable → fallback.
+ * Mac-offload diarizer — POST a recording to the paired Mac's gateway, which runs pyannote segmentation
+ * + the phone-selected fingerprint model and returns speaker turns (each with a voiceprint). The phone
+ * is the single source of truth for which fingerprint to use, sent as `embeddingModel`, so the Mac's
+ * turns share the phone's vector space. Works for BOTH iPhone and Android. Throws when no Mac is
+ * reachable → dispatchDiarize falls back to on-device.
  */
+import type { DiarizationModel } from '@offgrid/models'
 import { currentMacOffloadTarget, diarizeEndpoint } from './macTranscriptionTarget'
 import { normalize } from './speakerModel'
 import type { Diarizer, DiarizationResult } from './speakerDiarizer'
@@ -15,8 +17,8 @@ interface MacTurn {
   embedding?: number[]
 }
 
-/** A diarizer backed by the paired Mac, or null when no Mac is granted/reachable. */
-export function createMacDiarizer(): Diarizer | null {
+/** A diarizer backed by the paired Mac running `model`'s fingerprint, or null when no Mac is reachable. */
+export function createMacDiarizer(model: DiarizationModel): Diarizer | null {
   if (!currentMacOffloadTarget()) return null
   return {
     diarize: async (recordingPath: string): Promise<DiarizationResult> => {
@@ -28,6 +30,7 @@ export function createMacDiarizer(): Diarizer | null {
         name: 'recording.wav',
         type: 'audio/wav'
       } as unknown as Blob)
+      body.append('embeddingModel', model.id)
       const res = await fetch(diarizeEndpoint(target.baseUrl), {
         method: 'POST',
         headers: { Authorization: `Bearer ${target.token}` },

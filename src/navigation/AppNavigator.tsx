@@ -46,6 +46,7 @@ import {
   AmbientReplayScreen,
   SpeakerEnrollmentScreen,
   ManageVoicesScreen,
+  DayRecorderModelsScreen,
 } from '../screens';
 import {
   RootStackParamList,
@@ -256,6 +257,7 @@ export const AppNavigator: React.FC = () => {
         <RootStack.Screen name="AmbientReplay" component={AmbientReplayScreen} />
         <RootStack.Screen name="SpeakerEnrollment" component={SpeakerEnrollmentScreen} />
         <RootStack.Screen name="ManageVoices" component={ManageVoicesScreen} />
+        <RootStack.Screen name="DayRecorderModels" component={DayRecorderModelsScreen} />
         <RootStack.Screen
           name="DownloadManager"
           component={DownloadManagerScreen}

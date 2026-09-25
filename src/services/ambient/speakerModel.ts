@@ -20,6 +20,13 @@ export interface SpeakerProfile {
   name: string
   /** Which embedding model produced this profile's vectors — only same-model profiles are comparable. */
   modelId: string
+  /** Stable identity for this person across embedding spaces. One enrollment can have several
+   *  profiles (one per modelId), all sharing this personId, so we can name the same person whether
+   *  we're matching on-device or on the Mac. */
+  personId: string
+  /** Persistent WAV paths of the enrollment reads, kept so the same voice can be re-embedded into a
+   *  new engine's space without asking the user to record again. */
+  enrollmentClips: string[]
   /** Running mean of the profile's voiceprints, re-normalized. */
   centroid: SpeakerEmbedding
   /** How many voiceprints have been folded in (enrollment + confirmed corrections). */
@@ -37,7 +44,7 @@ export interface SpeakerMatch {
 }
 
 /** Cosine threshold for calling a match confident. Tuned once the real model is in; conservative. */
-export const DEFAULT_MATCH_THRESHOLD = 0.7
+export const DEFAULT_MATCH_THRESHOLD = 0.5
 
 /** L2-normalize a vector. A zero (or empty) vector returns a zero vector of the same length. */
 export function normalize(v: SpeakerEmbedding): SpeakerEmbedding {
@@ -80,12 +87,15 @@ export function createProfile(
   id: string,
   name: string,
   modelId: string,
-  enrollmentEmbeddings: SpeakerEmbedding[]
+  enrollmentEmbeddings: SpeakerEmbedding[],
+  opts?: { personId?: string; enrollmentClips?: string[] }
 ): SpeakerProfile {
   return {
     id,
     name,
     modelId,
+    personId: opts?.personId ?? id,
+    enrollmentClips: opts?.enrollmentClips ?? [],
     centroid: averageEmbeddings(enrollmentEmbeddings),
     sampleCount: enrollmentEmbeddings.length
   }

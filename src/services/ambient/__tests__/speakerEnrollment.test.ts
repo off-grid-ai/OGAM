@@ -2,11 +2,21 @@ import { enrollSpeaker } from '../speakerEnrollment'
 import type { SpeakerEmbedding } from '../speakerModel'
 
 function deps(overrides: Partial<Parameters<typeof enrollSpeaker>[2]> = {}) {
-  const enrolled: { name: string; modelId: string; embeddings: SpeakerEmbedding[] }[] = []
+  const enrolled: {
+    name: string
+    modelId: string
+    embeddings: SpeakerEmbedding[]
+    opts?: { personId?: string; enrollmentClips?: string[] }
+  }[] = []
   const base = {
     embed: async (_p: string) => [1, 0],
-    enroll: (name: string, modelId: string, embeddings: SpeakerEmbedding[]) => {
-      enrolled.push({ name, modelId, embeddings })
+    enroll: (
+      name: string,
+      modelId: string,
+      embeddings: SpeakerEmbedding[],
+      opts?: { personId?: string; enrollmentClips?: string[] },
+    ) => {
+      enrolled.push({ name, modelId, embeddings, opts })
       return `spk_${enrolled.length}`
     },
     modelId: 'ecapa-tdnn-512',
@@ -23,6 +33,12 @@ describe('enrollSpeaker', () => {
     expect(enrolled[0].name).toBe('Priya')
     expect(enrolled[0].modelId).toBe('ecapa-tdnn-512')
     expect(enrolled[0].embeddings).toHaveLength(3)
+  })
+
+  it('keeps the enrollment clips on the profile so the voice can be re-embedded into another engine', async () => {
+    const { deps: d, enrolled } = deps()
+    await enrollSpeaker('Priya', ['a.wav', 'b.wav'], d)
+    expect(enrolled[0].opts?.enrollmentClips).toEqual(['a.wav', 'b.wav'])
   })
 
   it('skips failed reads but still enrolls from the usable ones', async () => {

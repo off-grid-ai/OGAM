@@ -13,19 +13,22 @@ import React, { useCallback, useState } from 'react';
 import { StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { useVoiceRecognitionUnlocked } from '../hooks/useVoiceRecognitionUnlocked';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import { useAmbientTimelineStore } from '../stores/ambientTimelineStore';
 import { audioRecorderService } from '../services/audioRecorderService';
 import { ProcessingSchedulePicker } from '../components/ambient/ProcessingSchedulePicker';
 import type { ProcessingMode, CaptureMode } from '../services/ambient/processingModel';
+import { TYPOGRAPHY, SPACING } from '../constants';
 
-const STEP_COUNT = 7;
+const STEP_COUNT = 8;
 
 export function AmbientOnboardingScreen(): React.ReactElement {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const navigation = useNavigation<any>();
+  const isPro = useVoiceRecognitionUnlocked();
 
   const processingMode = useAmbientTimelineStore(s => s.processingMode);
   const setProcessingMode = useAmbientTimelineStore(s => s.setProcessingMode);
@@ -143,6 +146,29 @@ export function AmbientOnboardingScreen(): React.ReactElement {
         ) : null}
 
         {step === 6 ? (
+          <Step
+            icon="user"
+            title={isPro ? 'Add your voice' : "Recognize who's speaking"}
+            styles={styles}
+            colors={colors}
+            extra={
+              <TouchableOpacity
+                style={styles.enrollBtn}
+                onPress={() => (navigation as any).navigate(isPro ? 'SpeakerEnrollment' : 'ProDetail')}
+                testID="ambient-onboard-enroll"
+              >
+                <Icon name={isPro ? 'mic' : 'lock'} size={16} color={colors.primary} />
+                <Text style={styles.enrollBtnText}>{isPro ? 'Record my voice' : 'Unlock with Pro'}</Text>
+              </TouchableOpacity>
+            }
+          >
+            {isPro
+              ? "Read two short lines so your recordings can tell when it's you speaking. It takes about twenty seconds and your voiceprint stays on this device. You can also do this later, or skip it."
+              : 'Let your Day tell people apart and see who said what. Voice recognition is part of Pro — your voiceprints always stay on this device. You can skip this for now.'}
+          </Step>
+        ) : null}
+
+        {step === 7 ? (
           <Step icon="check-circle" title="You're set" styles={styles} colors={colors}>
             Record a conversation and it shows up in your Day — journal, tasks, and timeline. Make sure a
             transcription and a chat model are set up in Models for the best results.
@@ -161,6 +187,10 @@ export function AmbientOnboardingScreen(): React.ReactElement {
         {step === 2 ? (
           <TouchableOpacity onPress={requestMic} style={styles.primary} testID="ambient-onboard-mic">
             <Text style={styles.primaryText}>Allow microphone</Text>
+          </TouchableOpacity>
+        ) : step === 6 ? (
+          <TouchableOpacity onPress={next} style={styles.primary} testID="ambient-onboard-voice-later">
+            <Text style={styles.primaryText}>Later</Text>
           </TouchableOpacity>
         ) : step === STEP_COUNT - 1 ? (
           <TouchableOpacity onPress={finish} style={styles.primary} testID="ambient-onboard-start">
@@ -279,6 +309,19 @@ function createStyles(colors: {
     back: { paddingHorizontal: 12, paddingVertical: 12, minWidth: 64 },
     backText: { color: colors.textMuted, fontSize: 14 },
     primary: { flex: 1, backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 15, alignItems: 'center' },
-    primaryText: { color: colors.background, fontSize: 15, fontWeight: '700' }
+    enrollBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderRadius: SPACING.sm,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  enrollBtnText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
+  primaryText: { color: colors.background, fontSize: 15, fontWeight: '700' }
   });
 }

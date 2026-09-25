@@ -69,6 +69,8 @@ interface AmbientTimelineState {
   toggleTask: (id: string) => void
   /** Label a segment with an identified/assigned speaker (voice fingerprinting). */
   setSegmentSpeaker: (sessionId: string, segmentId: string, speakerId: string | null, speakerName: string | null) => void
+  /** Relabel every segment currently under one speaker/cluster id at once (assign a whole speaker). */
+  relabelSpeaker: (sessionId: string, fromSpeakerId: string | null, toSpeakerId: string | null, toName: string | null) => void
   setDayJournal: (dayKey: string, text: string) => void
   setDayActions: (dayKey: string, proposals: ProactiveActionProposal[]) => void
   resolveDayAction: (dayKey: string, index: number) => void
@@ -165,6 +167,21 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
                   ...session,
                   segments: session.segments.map(seg =>
                     seg.id !== segmentId ? seg : { ...seg, speakerId, speakerName }
+                  )
+                }
+          )
+        })),
+      relabelSpeaker: (sessionId, fromSpeakerId, toSpeakerId, toName) =>
+        set(state => ({
+          sessions: state.sessions.map(session =>
+            session.id !== sessionId
+              ? session
+              : {
+                  ...session,
+                  segments: session.segments.map(seg =>
+                    (seg.speakerId ?? null) === fromSpeakerId
+                      ? { ...seg, speakerId: toSpeakerId, speakerName: toName }
+                      : seg
                   )
                 }
           )

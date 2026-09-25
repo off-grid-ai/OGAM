@@ -8,11 +8,12 @@
 import { NativeModules } from 'react-native'
 import type { DiarizationModel } from '@offgrid/models'
 import { normalize, type SpeakerEmbedding } from './speakerModel'
+import { resolveEmbeddingPath } from './sherpaModelDownload'
 import type { SpeakerEmbedder, SpeakerEmbedInput } from './speakerEmbedder'
 
 interface SherpaEmbedNative {
   prepare(model: { id: string; segmentationUrl: string; embeddingUrl: string }): Promise<{ ready: boolean }>
-  embed(input: { audioPath: string; modelId: string }): Promise<{ embedding: number[] }>
+  embed(input: { audioPath: string; modelId: string; embeddingPath?: string }): Promise<{ embedding: number[] }>
 }
 const native = NativeModules.SherpaOnnxDiarization as SherpaEmbedNative | undefined
 
@@ -22,8 +23,8 @@ export function createSherpaSpeakerEmbedder(model: DiarizationModel): SpeakerEmb
   return {
     dim: model.embeddingDim,
     async embed(input: SpeakerEmbedInput): Promise<SpeakerEmbedding> {
-      await native.prepare({ id: model.id, segmentationUrl: model.segmentationUrl, embeddingUrl: model.embeddingUrl })
-      const { embedding } = await native.embed({ audioPath: input.slicePath, modelId: model.id })
+      const embeddingPath = await resolveEmbeddingPath(model)
+      const { embedding } = await native.embed({ audioPath: input.slicePath, modelId: model.id, embeddingPath })
       if (!embedding || embedding.length === 0) throw new Error('sherpa returned no voiceprint')
       return normalize(embedding)
     }

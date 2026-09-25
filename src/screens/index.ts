@@ -30,6 +30,7 @@ export { AmbientSessionScreen } from './AmbientSessionScreen';
 export { AmbientDayScreen } from './AmbientDayScreen';
 export { SpeakerEnrollmentScreen } from './SpeakerEnrollmentScreen';
 export { ManageVoicesScreen } from './ManageVoicesScreen';
+export { DayRecorderModelsScreen } from './DayRecorderModelsScreen';
 export { AmbientReflectScreen } from './AmbientReflectScreen';
 export { AmbientReplayScreen } from './AmbientReplayScreen';
 export { AmbientOnboardingScreen } from './AmbientOnboardingScreen';

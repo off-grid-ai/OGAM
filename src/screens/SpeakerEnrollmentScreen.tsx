@@ -1,11 +1,11 @@
 /**
  * Voice enrollment — the user reads one sentence a few times so we can learn their voiceprint.
  *
- * Records ENROLLMENT_SAMPLE_COUNT short clips of ENROLLMENT_PROMPT, embeds each through the ACTIVE
+ * Records one clip of each ENROLLMENT_PROMPTS sentence, embeds each through the ACTIVE
  * (swappable) speaker-embedding model, and saves one averaged, model-tagged profile. Brand: Menlo,
  * light weights, 8px radius, emerald only on the active action — mirrors the Day recorder pass.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, Text, TextInput, TouchableOpacity, View, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -18,16 +18,23 @@ import { SPEAKER_EMBEDDING_MODELS } from '@offgrid/models';
 import { useSpeakerModelStore } from '../stores/speakerModelStore';
 import { useSpeakerProfilesStore } from '../stores/speakerProfilesStore';
 import { audioRecorderService } from '../services/audioRecorderService';
+import RNFS from 'react-native-fs';
 import { resolveSpeakerEngine } from '../services/ambient/speakerEngineFactory';
+import { useVoiceRecognitionUnlocked } from '../hooks/useVoiceRecognitionUnlocked';
 import { dispatchSpeakerEmbed } from '../services/ambient/speakerEmbedder';
 import {
   enrollSpeaker,
-  ENROLLMENT_PROMPT,
+  ENROLLMENT_PROMPTS,
   ENROLLMENT_SAMPLE_COUNT,
 } from '../services/ambient/speakerEnrollment';
 
 export function SpeakerEnrollmentScreen(): React.ReactElement {
   const navigation = useNavigation();
+  const isPro = useVoiceRecognitionUnlocked();
+  // Voice recognition is Pro. Entry points are gated, but guard here too so a deep-link can't enroll.
+  useEffect(() => {
+    if (!isPro) navigation.navigate('ProDetail' as never);
+  }, [isPro, navigation]);
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
@@ -42,6 +49,7 @@ export function SpeakerEnrollmentScreen(): React.ReactElement {
   const [saving, setSaving] = useState(false);
 
   const done = slices.length >= ENROLLMENT_SAMPLE_COUNT;
+  const currentPrompt = ENROLLMENT_PROMPTS[Math.min(slices.length, ENROLLMENT_PROMPTS.length - 1)];
 
   const toggleRecord = useCallback(async () => {
     try {
@@ -68,7 +76,22 @@ export function SpeakerEnrollmentScreen(): React.ReactElement {
         if (!r.ok) throw new Error(r.error);
         return r.embedding;
       };
-      const { usableSamples } = await enrollSpeaker(name, slices, { embed, enroll, modelId: engine.modelId });
+      // Copy the temporary recordings somewhere durable (Caches can be evicted) so the profile can
+      // keep them and re-embed this voice into another engine's space later — no re-recording.
+      const keepDir = `${RNFS.DocumentDirectoryPath}/speaker-enrollment/${name.trim().replace(/[^\w]+/g, '_')}-${slices.length}`;
+      if (!(await RNFS.exists(keepDir))) await RNFS.mkdir(keepDir);
+      const kept: string[] = [];
+      for (let i = 0; i < slices.length; i += 1) {
+        const dest = `${keepDir}/${i}.wav`;
+        try {
+          if (await RNFS.exists(dest)) await RNFS.unlink(dest);
+          await RNFS.copyFile(slices[i], dest);
+          kept.push(dest);
+        } catch {
+          kept.push(slices[i]); // fall back to the temp path; embedding still happens now
+        }
+      }
+      const { usableSamples } = await enrollSpeaker(name, kept, { embed, enroll, modelId: engine.modelId });
       Alert.alert('Voice saved', `${name.trim()} enrolled from ${usableSamples} sample${usableSamples === 1 ? '' : 's'}.`);
       navigation.goBack();
     } catch (e) {
@@ -126,11 +149,15 @@ export function SpeakerEnrollmentScreen(): React.ReactElement {
           );
         })}
 
-        {/* Prompt to read */}
-        <Text style={[styles.label, styles.spacer]}>READ THIS ALOUD</Text>
-        <View style={styles.promptCard}>
-          <Text style={styles.prompt}>{ENROLLMENT_PROMPT}</Text>
-        </View>
+        {/* Prompt to read — a different sentence for each take */}
+        <Text style={[styles.label, styles.spacer]}>
+          {done ? 'BOTH RECORDED' : `READ THIS ALOUD  ·  ${slices.length + 1} OF ${ENROLLMENT_SAMPLE_COUNT}`}
+        </Text>
+        {!done ? (
+          <View style={styles.promptCard}>
+            <Text style={styles.prompt}>{currentPrompt}</Text>
+          </View>
+        ) : null}
 
         {/* Progress dots */}
         <View style={styles.dots}>

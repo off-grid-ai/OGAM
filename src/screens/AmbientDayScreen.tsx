@@ -33,6 +33,7 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAmbientCapture, processPending as drainPending, currentCapturePhase } from '../hooks/useAmbientCapture';
 import { useAmbientTimelineStore } from '../stores/ambientTimelineStore';
+import { useSpeakerProfilesStore } from '../stores/speakerProfilesStore';
 import {
   collectDayTasks,
   openTaskCount,
@@ -46,6 +47,7 @@ import { runAudioRetention } from '../services/ambient/retentionService';
 import { ProcessingSchedulePicker } from '../components/ambient/ProcessingSchedulePicker';
 import { shouldRunScheduled } from '../services/ambient/scheduleModel';
 import { useOpenSync } from '../hooks/useOpenSync';
+import { useVoiceRecognitionUnlocked } from '../hooks/useVoiceRecognitionUnlocked';
 import { mobileSpeechInputPorts } from '../services/adapters/speech/mobileSpeechInputPorts';
 import { macOffloadReady } from '../services/ambient/macSttExecutorFactory';
 import { mobileTextEngineControl } from '../services/modelServices/textEngineControl';
@@ -56,6 +58,7 @@ import { formatTodosForActions, formatCallsForActions } from '../services/ambien
 import { askDayWithDeviceLLM } from '../services/ambient/askDayFactory';
 import type { AskResult } from '../services/ambient/askDay';
 import type { TimelineSession } from '../services/ambient/timelineModel';
+import { sessionSpeakers } from '../services/ambient/timelineModel';
 import type { ProactiveActionProposal } from '@offgrid/models';
 import { TYPOGRAPHY, SPACING } from '../constants';
 
@@ -111,8 +114,11 @@ export function AmbientDayScreen(): React.ReactElement {
   const clearPendingCaptures = useAmbientTimelineStore(s => s.clearPendingCaptures);
   const setAudioRetentionDays = useAmbientTimelineStore(s => s.setAudioRetentionDays);
   const captureMode = useAmbientTimelineStore(s => s.captureMode);
+  const clearVoices = useSpeakerProfilesStore(s => s.clear);
+  const voiceCount = useSpeakerProfilesStore(s => Object.keys(s.profiles).length);
   const setCaptureMode = useAmbientTimelineStore(s => s.setCaptureMode);
   const { openSync } = useOpenSync();
+  const isPro = useVoiceRecognitionUnlocked();
   const [ready, setReady] = useState(() => ({
     stt: mobileSpeechInputPorts.transcriber.ready(),
     mac: macOffloadReady()
@@ -122,29 +128,51 @@ export function AmbientDayScreen(): React.ReactElement {
     setReady({ stt: mobileSpeechInputPorts.transcriber.ready(), mac: macOffloadReady() });
   }, []);
   const openModels = useCallback(
-    () => navigation.navigate('ModelsTab', { initialTab: 'transcription' }),
+    () =>
+      navigation.navigate('Main', {
+        screen: 'ModelsTab',
+        params: { initialTab: 'transcription' }
+      }),
     [navigation]
   );
+  // The Day recorder considers transcription "set up" if a local model is loaded OR simply selected
+  // (local models load lazily on first record — a downloaded+selected model must not read as missing),
+  // or the Mac can do it. Mirrors the record-time gate so the empty-state nudge never lies.
+  const localTranscriptionModel = activeMobileRoute('transcription').model;
+  const transcriptionSetUp =
+    ready.stt ||
+    (!!localTranscriptionModel && localTranscriptionModel.source !== 'remote') ||
+    (useMacForTranscription && !onDeviceOnly && ready.mac);
 
   // Wipe the Day back to a first-run state (recordings, journal, to-dos, timeline, queue).
   const resetDay = useCallback(() => {
+    const wipeData = () => {
+      clearAll();
+      clearPendingCaptures();
+      setShowSettings(false);
+    };
+    const buttons: Parameters<typeof Alert.alert>[2] = [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Day data only', style: 'destructive', onPress: wipeData },
+    ];
+    if (voiceCount > 0) {
+      buttons.push({
+        text: `Data + ${voiceCount} voice${voiceCount === 1 ? '' : 's'}`,
+        style: 'destructive',
+        onPress: () => {
+          clearVoices();
+          wipeData();
+        },
+      });
+    }
     Alert.alert(
-      'Clear all Day data?',
-      'Removes every recording, journal, to-do and timeline entry from this device. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear all',
-          style: 'destructive',
-          onPress: () => {
-            clearAll();
-            clearPendingCaptures();
-            setShowSettings(false);
-          }
-        }
-      ]
+      'Clear Day data?',
+      voiceCount > 0
+        ? 'Removes recordings, journal, to-dos and the timeline. You can also delete your enrolled voices. This cannot be undone.'
+        : 'Removes every recording, journal, to-do and timeline entry from this device. This cannot be undone.',
+      buttons
     );
-  }, [clearAll, clearPendingCaptures]);
+  }, [clearAll, clearPendingCaptures, clearVoices, voiceCount]);
 
   // Sanity check before recording: transcription and the summary/journal use DIFFERENT engines, so warn
   // up front if either is missing instead of letting the user find out from an empty Day later.
@@ -198,7 +226,10 @@ export function AmbientDayScreen(): React.ReactElement {
         {
           text: 'Set up',
           onPress: () =>
-            navigation.navigate('ModelsTab', { initialTab: !summaryReady ? 'text' : 'transcription' })
+            navigation.navigate('Main', {
+              screen: 'ModelsTab',
+              params: { initialTab: !summaryReady ? 'text' : 'transcription' }
+            })
         },
         { text: 'Record anyway', onPress: () => void capture.start() },
         { text: 'Cancel', style: 'cancel' }
@@ -419,11 +450,14 @@ export function AmbientDayScreen(): React.ReactElement {
               </Text>
             </View>
 
-            {ready.stt || (useMacForTranscription && !onDeviceOnly && ready.mac) ? (
+            {transcriptionSetUp ? (
               <View style={styles.readyChip}>
                 <Icon name="check-circle" size={15} color={colors.primary} />
                 <Text style={styles.readyChipText}>
-                  Transcription ready{ready.stt ? ' · on-device' : ' · via your Mac'}
+                  Transcription ready
+                  {ready.stt || (localTranscriptionModel && localTranscriptionModel.source !== 'remote')
+                    ? ' · on-device'
+                    : ' · via your Mac'}
                 </Text>
               </View>
             ) : (
@@ -452,6 +486,45 @@ export function AmbientDayScreen(): React.ReactElement {
                 </View>
               </View>
             )}
+
+            {!isPro ? (
+              <TouchableOpacity
+                style={styles.nudge}
+                onPress={() => navigation.navigate('ProDetail')}
+                activeOpacity={0.7}
+                testID="ambient-voice-pro-upsell"
+              >
+                <Text style={styles.nudgeTitle}>Recognize who's speaking</Text>
+                <Text style={styles.nudgeBody}>
+                  Add your voice and let your Day tell people apart, so you can see who said what. Part
+                  of Pro — your voiceprints stay on this device.
+                </Text>
+                <View style={styles.nudgeBtns}>
+                  <View style={styles.nudgePrimary}>
+                    <Icon name="lock" size={14} color={colors.background} />
+                    <Text style={styles.nudgePrimaryText}>Unlock with Pro</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ) : voiceCount === 0 ? (
+              <View style={styles.nudge}>
+                <Text style={styles.nudgeTitle}>Add your voice</Text>
+                <Text style={styles.nudgeBody}>
+                  Record two short lines so your Day can tell when it's you speaking. Your voiceprint
+                  stays on this device.
+                </Text>
+                <View style={styles.nudgeBtns}>
+                  <TouchableOpacity
+                    style={styles.nudgePrimary}
+                    onPress={() => navigation.navigate('SpeakerEnrollment')}
+                    testID="ambient-empty-add-voice"
+                  >
+                    <Icon name="mic" size={14} color={colors.background} />
+                    <Text style={styles.nudgePrimaryText}>Record my voice</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
 
             <View style={styles.presetCard}>
               <Text style={styles.presetHead}>YOUR SETUP</Text>
@@ -631,6 +704,14 @@ export function AmbientDayScreen(): React.ReactElement {
                   <Text style={styles.tcardHead} numberOfLines={1}>
                     {session.summary.headline || 'No summary'}
                   </Text>
+                  {sessionSpeakers(session).length > 0 ? (
+                    <View style={styles.tcardPeople}>
+                      <Icon name="users" size={11} color={colors.primary} />
+                      <Text style={styles.tcardPeopleText} numberOfLines={1}>
+                        {sessionSpeakers(session).join(' · ')}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
                 <Icon name="chevron-right" size={16} color={colors.textMuted} />
               </TouchableOpacity>
@@ -655,7 +736,12 @@ export function AmbientDayScreen(): React.ReactElement {
         <View style={styles.sheet}>
           <View style={styles.sheetGrip} />
           <Text style={styles.sheetTitle}>Recorder settings</Text>
-          <View style={styles.settings} testID="ambient-day-settings">
+          <ScrollView
+            style={styles.settings}
+            contentContainerStyle={{ paddingBottom: SPACING.md }}
+            showsVerticalScrollIndicator={false}
+            testID="ambient-day-settings"
+          >
             <View style={styles.settingRow}>
               <Text style={styles.settingLabel}>Listening</Text>
               <View style={styles.seg}>
@@ -744,7 +830,18 @@ export function AmbientDayScreen(): React.ReactElement {
             </View>
             <TouchableOpacity
               style={[styles.settingRow, { marginTop: 14 }]}
-              onPress={() => navigation.navigate('ManageVoices')}
+              onPress={() => { setShowSettings(false); navigation.navigate('DayRecorderModels'); }}
+              testID="ambient-recorder-models"
+            >
+              <Text style={styles.settingLabel}>Recorder models</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm }}>
+                <Text style={styles.presetChangeText}>Manage</Text>
+                <Icon name="chevron-right" size={16} color={colors.primary} />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.settingRow, { marginTop: 14 }]}
+              onPress={() => { setShowSettings(false); navigation.navigate(isPro ? 'ManageVoices' : 'ProDetail'); }}
               testID="ambient-add-voice"
             >
               <Text style={styles.settingLabel}>Voices</Text>
@@ -757,7 +854,7 @@ export function AmbientDayScreen(): React.ReactElement {
               <Icon name="trash-2" size={14} color={colors.error} />
               <Text style={styles.clearBtnText}>Clear all Day data</Text>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
     </SafeAreaView>
@@ -1002,6 +1099,8 @@ function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     tcardMid: { flex: 1 },
     tcardTitle: { ...TYPOGRAPHY.bodySmall, color: colors.text },
     tcardHead: { ...TYPOGRAPHY.label, color: colors.textMuted },
+    tcardPeople: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginTop: 3 },
+    tcardPeopleText: { ...TYPOGRAPHY.label, color: colors.primary, flex: 1 },
     // header icons
     headIcons: { flexDirection: 'row', alignItems: 'center', gap: SPACING.lg },
     // timeline chip
@@ -1023,7 +1122,7 @@ function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     pendingCta: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
     // settings sheet
     sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-    sheet: { backgroundColor: colors.surface, borderTopLeftRadius: SPACING.lg, borderTopRightRadius: SPACING.lg, borderTopWidth: 1, borderColor: colors.border, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl, paddingTop: SPACING.sm },
+    sheet: { maxHeight: '85%', backgroundColor: colors.surface, borderTopLeftRadius: SPACING.lg, borderTopRightRadius: SPACING.lg, borderTopWidth: 1, borderColor: colors.border, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl, paddingTop: SPACING.sm },
     sheetGrip: { width: 36, height: 4, borderRadius: RADIUS_XS, backgroundColor: colors.border, alignSelf: 'center', marginBottom: SPACING.md },
     sheetTitle: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: SPACING.md },
     settings: {},

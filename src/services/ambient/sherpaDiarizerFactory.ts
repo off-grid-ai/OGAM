@@ -9,6 +9,7 @@
 import { NativeModules } from 'react-native'
 import type { DiarizationModel } from '@offgrid/models'
 import { normalize } from './speakerModel'
+import { resolveEmbeddingPath } from './sherpaModelDownload'
 import type { Diarizer, DiarizationResult } from './speakerDiarizer'
 
 interface SherpaNativeTurn {
@@ -20,7 +21,7 @@ interface SherpaNativeTurn {
 interface SherpaDiarizationNative {
   /** Ensure the bundle's model files are downloaded/extracted; returns local paths. */
   prepare(model: { id: string; segmentationUrl: string; embeddingUrl: string }): Promise<{ ready: boolean }>
-  diarize(input: { audioPath: string; modelId: string }): Promise<{ turns: SherpaNativeTurn[] }>
+  diarize(input: { audioPath: string; modelId: string; embeddingPath?: string }): Promise<{ turns: SherpaNativeTurn[] }>
 }
 
 const native = NativeModules.SherpaOnnxDiarization as SherpaDiarizationNative | undefined
@@ -35,8 +36,8 @@ export function createSherpaDiarizer(model: DiarizationModel): Diarizer | null {
   if (!native) return null
   return {
     diarize: async (recordingPath: string): Promise<DiarizationResult> => {
-      await native.prepare({ id: model.id, segmentationUrl: model.segmentationUrl, embeddingUrl: model.embeddingUrl })
-      const { turns } = await native.diarize({ audioPath: recordingPath, modelId: model.id })
+      const embeddingPath = await resolveEmbeddingPath(model)
+      const { turns } = await native.diarize({ audioPath: recordingPath, modelId: model.id, embeddingPath })
       return {
         turns: turns.map(t => ({
           startMs: t.startMs,
