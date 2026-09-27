@@ -44,7 +44,9 @@ function parseNumCtx(parameters: string): number {
 }
 
 function extractOllamaCapabilities(data: Record<string, unknown>): RemoteModelInfo {
-  let contextLength = 4096;
+  // null means model_info did not report a context length. 4096 is a real
+  // Llama context, so it cannot double as the "missing" signal.
+  let contextLength: number | null = null;
   let supportsVision = false;
 
   // Newer Ollama versions expose a top-level `capabilities` array (e.g. ["vision", "tools"]).
@@ -68,7 +70,7 @@ function extractOllamaCapabilities(data: Record<string, unknown>): RemoteModelIn
     supportsVision = projectorKeys.some(k => k.includes('vision') || k.includes('clip'));
   }
 
-  if (contextLength === 4096 && typeof data.parameters === 'string') {
+  if (contextLength === null && typeof data.parameters === 'string') {
     const numCtx = parseNumCtx(data.parameters);
     if (numCtx > 0) contextLength = numCtx;
   }
@@ -87,7 +89,13 @@ function extractOllamaCapabilities(data: Record<string, unknown>): RemoteModelIn
   const details = data.details as Record<string, unknown> | undefined;
   const thinkingLevelsOnly = supportsThinking && details?.family === 'gptoss';
 
-  return { contextLength, supportsVision, supportsToolCalling, supportsThinking, thinkingLevelsOnly };
+  return {
+    contextLength: contextLength ?? 4096,
+    supportsVision,
+    supportsToolCalling,
+    supportsThinking,
+    thinkingLevelsOnly,
+  };
 }
 
 /**
