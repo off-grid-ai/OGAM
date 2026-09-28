@@ -1,3 +1,4 @@
+import { VIDEO_SETTING_KEYS, acceptsVideoSetting } from '@offgrid/models';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import {
   KNOWLEDGE_DOCUMENT_ENTITY,
@@ -62,6 +63,15 @@ const integerInRange =
 const MODEL_SETTING_DESCRIPTORS: Readonly<
   Record<string, ModelSettingDescriptor>
 > = {
+  ...Object.fromEntries(
+    VIDEO_SETTING_KEYS.map(key => [
+      key,
+      {
+        localKey: key,
+        accepts: (value: unknown) => acceptsVideoSetting(key, value),
+      },
+    ]),
+  ),
   temperature: { localKey: 'temperature', accepts: finiteInRange(0, 2) },
   ctxSize: {
     localKey: 'contextLength',

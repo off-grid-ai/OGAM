@@ -26,7 +26,12 @@ import { Button } from '../Button';
 type AssistantAvailability = 'no-pro' | 'needs-sync' | 'unavailable' | 'ready';
 
 interface ChatInputProps {
-  onSend: (message: string, attachments?: MediaAttachment[], imageMode?: ImageModeState, assistantEnabled?: boolean) => void;
+  onSend: (
+    message: string,
+    attachments?: MediaAttachment[],
+    imageMode?: ImageModeState,
+    assistantEnabled?: boolean,
+  ) => void;
   onStop?: () => void;
   disabled?: boolean;
   isGenerating?: boolean;
@@ -120,7 +125,15 @@ const buildNoVisionAlert = (opts: {
       [
         { text: 'Cancel', onPress: opts.dismiss },
         ...(opts.onRepairVision
-          ? [{ text: 'Go to Download Manager', onPress: () => { opts.dismiss(); opts.onRepairVision!(); } }]
+          ? [
+              {
+                text: 'Go to Download Manager',
+                onPress: () => {
+                  opts.dismiss();
+                  opts.onRepairVision!();
+                },
+              },
+            ]
           : [{ text: 'OK' }]),
       ],
     );
@@ -223,13 +236,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     addAudioAttachment,
     clearAttachments,
     onHaptic: () => triggerHaptic('impactMedium'),
-    appendTranscript: (text) => setMessage(prev => {
-      const prefix = prev.trim() ? `${prev.trim()} ` : '';
-      return prefix + text;
-    }),
+    appendTranscript: text =>
+      setMessage(prev => {
+        const prefix = prev.trim() ? `${prev.trim()} ` : '';
+        return prefix + text;
+      }),
   });
 
-  const { isRecording, isModelLoading, isStartingRecording, isTranscribing, partialResult, error, voiceAvailable, isAwaitingSpeech, startRecording, stopRecording, cancelRecording } = useVoiceInput({
+  const {
+    isRecording,
+    isModelLoading,
+    isStartingRecording,
+    isTranscribing,
+    partialResult,
+    error,
+    voiceAvailable,
+    isAwaitingSpeech,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+  } = useVoiceInput({
     conversationId,
     interfaceMode,
     onTranscript: voiceHandlers.onTranscript,
@@ -279,7 +305,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setMessage('');
     clearAttachments();
     inputRef.current?.focus();
-    if (imageMode === 'force') {
+    if (imageMode === 'force' || imageMode === 'video') {
       setImageMode('auto');
       onImageModeChange?.('auto');
     }
@@ -341,26 +367,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }, ANIM_DURATION_IN);
   };
 
-  const assistantGate = assistantAvailability === 'no-pro'
-    ? {
-        title: 'Assistant requires Pro',
-        body: 'Assistant uses Web Use and Computer Use on a connected Desktop.',
-        action: 'View Pro',
-        onPress: onAssistantUpgrade,
-      }
-    : assistantAvailability === 'unavailable'
+  const assistantGate =
+    assistantAvailability === 'no-pro'
       ? {
-          title: 'Desktop tasks unavailable',
-          body: 'This Desktop is connected, but Web Use and Computer Use are not available. Allow remote tasks on the Desktop and try again.',
-          action: 'OK',
-          onPress: undefined,
+          title: 'Assistant requires Pro',
+          body: 'Assistant uses Web Use and Computer Use on a connected Desktop.',
+          action: 'View Pro',
+          onPress: onAssistantUpgrade,
         }
-    : {
-        title: 'Connect a Desktop',
-        body: 'Set up Sync and connect Off Grid AI Desktop to use Web Use and Computer Use.',
-        action: 'Set up Sync',
-        onPress: onAssistantSetupSync,
-      };
+      : assistantAvailability === 'unavailable'
+        ? {
+            title: 'Desktop tasks unavailable',
+            body: 'This Desktop is connected, but Web Use and Computer Use are not available. Allow remote tasks on the Desktop and try again.',
+            action: 'OK',
+            onPress: undefined,
+          }
+        : {
+            title: 'Connect a Desktop',
+            body: 'Set up Sync and connect Off Grid AI Desktop to use Web Use and Computer Use.',
+            action: 'Set up Sync',
+            onPress: onAssistantSetupSync,
+          };
 
   const handleAttachPress = () => {
     logger.log(`[COMPOSER-SM] attach pressed platform=${Platform.OS} supportsVision=${supportsVision}`);
@@ -370,7 +397,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         : ['Document', 'Cancel'];
       ActionSheetIOS.showActionSheetWithOptions(
         { options, cancelButtonIndex: options.length - 1 },
-        (index) => {
+        index => {
           if (supportsVision) {
             if (index === 0) handleVisionPress();
             else if (index === 1) handlePickDocument();
@@ -391,64 +418,70 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   if (isAudioMode && AudioInput) {
     return (
       <>
-      <AudioInput
-        styles={styles}
-        disabled={disabled}
-        onSend={onSend}
-        isGenerating={isGenerating}
-        imageMode={imageMode}
-        imageModelLoaded={imageModelLoaded}
-        supportsThinking={supportsThinking}
-        supportsToolCalling={supportsToolCalling}
-        enabledToolCount={enabledToolCount}
-        thinkingEnabled={thinkingEnabled}
-        attachments={attachments}
-        onRemoveAttachment={removeAttachment}
-        onClearAttachments={clearAttachments}
-        queueCount={queueCount}
-        queuedTexts={queuedTexts}
-        onClearQueue={onClearQueue}
-        isRecording={isRecording}
-        voiceAvailable={voiceAvailable}
-        isModelLoading={isModelLoading}
-        isTranscribing={isTranscribing}
-        partialResult={partialResult}
-        error={error}
-        onStartRecording={startRecording}
-        onStopRecording={stopRecording}
-        onCancelRecording={cancelRecording}
-        onStop={onStop}
-        onImageModeToggle={handleImageModeToggle}
-        onThinkingToggle={handleThinkingToggle}
-        onToolsPress={onToolsPress}
-        onMcpPress={onMcpPress}
-        mcpToolCount={mcpToolCount}
-        onVisionPress={handleVisionPress}
-        onPickDocument={handlePickDocument}
-        onAttachPress={handleAttachPress}
-        attachPicker={attachPicker}
-        voicePicker={voicePicker}
-        quickSettings={quickSettings}
-        supportsVision={supportsVision}
-        alertState={alertState}
-        setAlertState={setAlertState}
-        assistantSelected={assistantEnabled}
-        onAssistantPress={handleAssistantPress}
-      />
-      <AppSheet
-        visible={assistantGateOpen}
-        onClose={() => setAssistantGateOpen(false)}
-        title={assistantGate.title}
-        enableDynamicSizing
-      >
-        <View style={styles.assistantGateContent}>
-          <Text style={styles.assistantGateText}>{assistantGate.body}</Text>
-          <Button title={assistantGate.action} onPress={() => {
-            setAssistantGateOpen(false);
-            assistantGate.onPress?.();
-          }} />
-        </View>
-      </AppSheet>
+        <AudioInput
+          styles={styles}
+          disabled={disabled}
+          onSend={onSend}
+          isGenerating={isGenerating}
+          imageMode={imageMode}
+          imageModelLoaded={imageModelLoaded}
+          supportsThinking={supportsThinking}
+          supportsToolCalling={supportsToolCalling}
+          enabledToolCount={enabledToolCount}
+          thinkingEnabled={thinkingEnabled}
+          attachments={attachments}
+          onRemoveAttachment={removeAttachment}
+          onClearAttachments={clearAttachments}
+          queueCount={queueCount}
+          queuedTexts={queuedTexts}
+          onClearQueue={onClearQueue}
+          isRecording={isRecording}
+          voiceAvailable={voiceAvailable}
+          isModelLoading={isModelLoading}
+          isTranscribing={isTranscribing}
+          partialResult={partialResult}
+          error={error}
+          onStartRecording={startRecording}
+          onStopRecording={stopRecording}
+          onCancelRecording={cancelRecording}
+          onStop={onStop}
+          onImageModeToggle={handleImageModeToggle}
+          onVideoModeToggle={() =>
+            setImageMode(imageMode === 'video' ? 'auto' : 'video')
+          }
+          onThinkingToggle={handleThinkingToggle}
+          onToolsPress={onToolsPress}
+          onMcpPress={onMcpPress}
+          mcpToolCount={mcpToolCount}
+          onVisionPress={handleVisionPress}
+          onPickDocument={handlePickDocument}
+          onAttachPress={handleAttachPress}
+          attachPicker={attachPicker}
+          voicePicker={voicePicker}
+          quickSettings={quickSettings}
+          supportsVision={supportsVision}
+          alertState={alertState}
+          setAlertState={setAlertState}
+          assistantSelected={assistantEnabled}
+          onAssistantPress={handleAssistantPress}
+        />
+        <AppSheet
+          visible={assistantGateOpen}
+          onClose={() => setAssistantGateOpen(false)}
+          title={assistantGate.title}
+          enableDynamicSizing
+        >
+          <View style={styles.assistantGateContent}>
+            <Text style={styles.assistantGateText}>{assistantGate.body}</Text>
+            <Button
+              title={assistantGate.action}
+              onPress={() => {
+                setAssistantGateOpen(false);
+                assistantGate.onPress?.();
+              }}
+            />
+          </View>
+        </AppSheet>
       </>
     );
   }
@@ -513,16 +546,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 size="small"
                 testID="assistant-toggle"
                 accessibilityLabel="Assistant"
-                accessibilityState={{ selected: assistantEnabled, busy: assistantTransitioning }}
+                accessibilityState={{
+                  selected: assistantEnabled,
+                  busy: assistantTransitioning,
+                }}
                 onPress={handleAssistantPress}
                 active={assistantEnabled}
                 loading={assistantTransitioning}
                 style={styles.assistantButton}
-                icon={<IconMC
-                  name={assistantEnabled ? 'robot' : 'robot-outline'}
-                  size={16}
-                  color={assistantEnabled ? colors.primary : colors.textDisabled}
-                />}
+                icon={
+                  <IconMC
+                    name={assistantEnabled ? 'robot' : 'robot-outline'}
+                    size={16}
+                    color={
+                      assistantEnabled ? colors.primary : colors.textDisabled
+                    }
+                  />
+                }
               />
               <TextInput
                 ref={inputRef}
@@ -530,7 +570,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 style={styles.pillInput}
                 value={message}
                 onChangeText={setMessage}
-                placeholder={placeholder}
+                placeholder={
+                  imageMode === 'video' ? 'Describe a video' : placeholder
+                }
                 placeholderTextColor={colors.textMuted}
                 multiline
                 scrollEnabled
@@ -575,6 +617,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         anchorX={quickSettings.anchor.x}
         imageMode={imageMode}
         onImageModeToggle={handleImageModeToggle}
+        onVideoModeToggle={() =>
+          setImageMode(imageMode === 'video' ? 'auto' : 'video')
+        }
         imageModelLoaded={imageModelLoaded}
         supportsThinking={supportsThinking}
         supportsToolCalling={supportsToolCalling}

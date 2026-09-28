@@ -41,6 +41,7 @@ export function serializeMessageContext(
     | 'generationMeta'
     | 'isSystemInfo'
     | 'turnStatus'
+    | 'turnKind'
   >,
 ): string | null {
   return serializeSyncedMessageContext({
@@ -100,6 +101,7 @@ export function serializeMessageContext(
     ...(message.generationTimeMs !== undefined
       ? { durationMs: message.generationTimeMs }
       : {}),
+    turnKind: message.turnKind,
     status: message.turnStatus ?? 'completed',
   });
 }

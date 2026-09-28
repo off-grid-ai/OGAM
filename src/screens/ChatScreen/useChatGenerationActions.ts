@@ -1,3 +1,4 @@
+import { videoGenerationService } from '../../services/videoGenerationService';
 /* eslint-disable max-lines -- cohesive generation-action orchestrator (send/regenerate/dispatch/route share the same GenerationDeps + session state); splitting it would scatter tightly-coupled turn logic. */
 import { Dispatch, SetStateAction } from 'react';
 import RNFS from 'react-native-fs';
@@ -210,7 +211,7 @@ function buildMessagesForContext(
 /** The modality of a turn. Resolved ONCE from user intent when the turn is created, recorded on
  *  the turn's record, and READ on resend/edit so the same pipeline runs again (deterministic) —
  *  never re-classified from current settings. STT/TTS join this union as the pipeline grows. */
-export type TurnKind = 'text' | 'image';
+export type TurnKind = 'text' | 'image' | 'video';
 
 /** Did this assistant reply produce an image? An image turn's final assistant message carries an
  *  image attachment (imageGenerationService), so that message IS the owning record of the turn's
@@ -249,6 +250,7 @@ export function recordedTurnKind(
     if (m.role === 'user') break; // next turn begins — stop scanning
     if (m.role !== 'assistant') continue;
     sawReply = true;
+    if (m.attachments?.some(a => a.type === 'video')) return 'video';
     if (messageHasImageOutput(m)) return 'image';
   }
   return sawReply ? 'text' : undefined;
@@ -264,11 +266,13 @@ export async function resolveTurnKind(
   input: {
     text: string;
     recordedKind?: TurnKind;
+    forceVideoMode?: boolean;
     forceImageMode?: boolean;
     imageEnabled?: boolean;
   },
 ): Promise<TurnKind> {
   if (input.recordedKind) return input.recordedKind; // replay: the recorded fact wins
+  if (input.forceVideoMode) return 'video';
   if (input.imageEnabled === false) return 'text'; // image route explicitly disabled for this turn
   return (await shouldRouteToImageGenerationFn(
     deps,
@@ -456,9 +460,16 @@ async function prepareContext(
   setDebugInfo: SetState<any>,
   systemPrompt: string,
   messages: Message[],
-): Promise<Pick<GenerationMeta, 'contextPromptTokens' | 'contextWindowTokens' | 'contextEstimate'> | undefined> {
+): Promise<
+  | Pick<
+      GenerationMeta,
+      'contextPromptTokens' | 'contextWindowTokens' | 'contextEstimate'
+    >
+  | undefined
+> {
   const estimatedPromptTokens = Math.ceil(
-    JSON.stringify(messages.map(m => ({ role: m.role, content: m.content }))).length / 4,
+    JSON.stringify(messages.map(m => ({ role: m.role, content: m.content })))
+      .length / 4,
   );
   const remoteStore = useRemoteServerStore.getState();
   if (remoteStore.activeServerId) {
@@ -467,7 +478,9 @@ async function prepareContext(
     setDebugInfo(null);
     return {
       contextPromptTokens: estimatedPromptTokens,
-      ...(contextWindowTokens && contextWindowTokens > 0 ? { contextWindowTokens } : {}),
+      ...(contextWindowTokens && contextWindowTokens > 0
+        ? { contextWindowTokens }
+        : {}),
       contextEstimate: true,
     };
   }
@@ -482,7 +495,8 @@ async function prepareContext(
     }
     const contextWindowTokens = contextDebug.maxContextLength || useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength;
     return {
-      contextPromptTokens: contextDebug.estimatedTokens || estimatedPromptTokens,
+      contextPromptTokens:
+        contextDebug.estimatedTokens || estimatedPromptTokens,
       contextWindowTokens,
       contextEstimate: true,
     };
@@ -497,7 +511,13 @@ async function prepareContext(
 }
 /** Compact before the prompt budget is full; keep the context-full retry as a fallback. */
 async function generateWithCompactionRetry(
-  opts: { id: string; prompt: string; messages: Message[]; setDebugInfo?: SetState<any>; assistantEnabled?: boolean },
+  opts: {
+    id: string;
+    prompt: string;
+    messages: Message[];
+    setDebugInfo?: SetState<any>;
+    assistantEnabled?: boolean;
+  },
   enabledTools: string[],
   projectId?: string,
 ): Promise<boolean> {
@@ -524,13 +544,22 @@ async function generateWithCompactionRetry(
           contextUsage,
           assistantEnabled: opts.assistantEnabled,
         })
-      : generationService.generateResponse(opts.id, msgs, undefined, contextUsage);
+      : generationService.generateResponse(
+          opts.id,
+          msgs,
+          undefined,
+          contextUsage,
+        );
   };
   const contextWindowTokens = useRemoteServerStore.getState().activeServerId
-    ? useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength
-    : llmService.getPerformanceSettings().contextLength || APP_CONFIG.maxContextLength;
+    ? useAppStore.getState().settings.contextLength ||
+      APP_CONFIG.maxContextLength
+    : llmService.getPerformanceSettings().contextLength ||
+      APP_CONFIG.maxContextLength;
   const estimatedPromptTokens = Math.ceil(
-    JSON.stringify(opts.messages.map(m => ({ role: m.role, content: m.content }))).length / 4,
+    JSON.stringify(
+      opts.messages.map(m => ({ role: m.role, content: m.content })),
+    ).length / 4,
   );
   let messagesForFirstAttempt = opts.messages;
   if (
@@ -891,6 +920,33 @@ async function dispatchResolvedTurn(
     onTextModelUnavailable: () => void;
   },
 ): Promise<ResolvedDispatch> {
+  if (kind === 'video') {
+    if (
+      opts.attachments?.some(
+        attachment =>
+          attachment.type === 'image' || attachment.type === 'video',
+      )
+    )
+      throw new Error(
+        'This video model uses text prompts. Remove the image or video attachment to continue.',
+      );
+    if (!opts.imageSkipsUserMessage)
+      deps.addMessage(opts.conversationId, {
+        role: 'user',
+        content: opts.text,
+        attachments: opts.attachments,
+        turnKind: 'video',
+      });
+    try {
+      await videoGenerationService.generate({
+        prompt: opts.text,
+        conversationId: opts.conversationId,
+      });
+    } finally {
+      generationService.drainQueue();
+    }
+    return { handled: true };
+  }
   const shouldGenerateImage = kind === 'image';
   if (shouldGenerateImage && deps.activeImageModel) {
     logger.log('[ROUTE-SM] dispatch → IMAGE pipeline');
@@ -927,7 +983,7 @@ export type DispatchCall = {
   text: string;
   attachments?: MediaAttachment[];
   conversationId: string;
-  imageMode?: 'auto' | 'force' | 'disabled';
+  imageMode?: 'auto' | 'force' | 'disabled' | 'video';
   assistantEnabled?: boolean;
 };
 /**
@@ -939,7 +995,11 @@ export type DispatchCall = {
 export async function dispatchGenerationFn(
   deps: GenerationDeps,
   call: DispatchCall,
-  startTextGeneration: (convId: string, messageText: string, assistantEnabled?: boolean) => Promise<void>,
+  startTextGeneration: (
+    convId: string,
+    messageText: string,
+    assistantEnabled?: boolean,
+  ) => Promise<void>,
 ): Promise<void> {
   const { text, attachments, conversationId, imageMode = 'auto', assistantEnabled } = call;
   const messageTextForRoute = appendAttachmentText(text, attachments);
@@ -954,6 +1014,7 @@ export async function dispatchGenerationFn(
   // ONE decision seam (resolveTurnKind); a NEW turn has no recorded kind so the route rule decides.
   const kind = await resolveTurnKind(deps, {
     text: messageTextForRoute,
+    forceVideoMode: imageMode === 'video',
     forceImageMode: imageMode === 'force',
     imageEnabled: imageMode !== 'disabled',
   });
@@ -979,7 +1040,7 @@ export async function dispatchGenerationFn(
 export type SendCall = {
   text: string;
   attachments?: MediaAttachment[];
-  imageMode?: 'auto' | 'force' | 'disabled';
+  imageMode?: 'auto' | 'force' | 'disabled' | 'video';
   assistantEnabled?: boolean;
   startGeneration: (convId: string, text: string, assistantEnabled?: boolean) => Promise<void>;
   setDebugInfo: SetState<any>;
@@ -1003,7 +1064,10 @@ export async function handleSendFn(
   let targetConversationId = deps.activeConversationId;
   if (!targetConversationId) {
     const fallbackModelId =
-      deps.activeModelInfo?.modelId || deps.activeImageModel?.id;
+      deps.activeModelInfo?.modelId ||
+      deps.activeImageModel?.id ||
+      useAppStore.getState().activeVideoModelId ||
+      'video';
     targetConversationId = deps.createConversation(
       fallbackModelId!,
       undefined,
@@ -1014,6 +1078,7 @@ export async function handleSendFn(
   // Cross-modality serialization: queue if any generation is running (routed later).
   if (
     generationService.getState().isGenerating ||
+    videoGenerationService.getState().phase === 'running' ||
     imageGenerationService.getState().isGenerating
   ) {
     const messageText = appendAttachmentText(text, attachments);
@@ -1032,7 +1097,13 @@ export async function handleSendFn(
   }
   await dispatchGenerationFn(
     deps,
-    { text, attachments, conversationId: targetConversationId, imageMode, assistantEnabled },
+    {
+      text,
+      attachments,
+      conversationId: targetConversationId,
+      imageMode,
+      assistantEnabled,
+    },
     startGeneration,
   );
 }
@@ -1043,7 +1114,10 @@ export async function handleStopFn(
   callHook(HOOKS.audioStop); // abort must silence TTS too — buffered-ahead sentences keep playing otherwise
   // The image X is also the remote stop signal. Start both cancellations now; waiting for the text
   // engine first leaves every paired device showing image progress while that stop call drains.
-  const stops: Promise<unknown>[] = [generationService.stopGeneration()];
+  const stops: Promise<unknown>[] = [
+    generationService.stopGeneration(),
+    videoGenerationService.cancelGeneration(),
+  ];
   const taskStop = callHook<Promise<void>>(HOOKS.taskStopActive);
   if (taskStop !== undefined) stops.push(taskStop);
   if (deps.isGeneratingImage)

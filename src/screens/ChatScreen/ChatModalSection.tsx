@@ -1,7 +1,9 @@
 import React from 'react';
 import {
-  ModelSelectorModal, GenerationSettingsModal,
-  ProjectSelectorSheet, DebugSheet,
+  ModelSelectorModal,
+  GenerationSettingsModal,
+  ProjectSelectorSheet,
+  DebugSheet,
 } from '../../components';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
@@ -22,7 +24,7 @@ type ChatModalSectionProps = {
   setShowModelSelector: (v: boolean) => void;
   onModelSelectorClosed?: () => void;
   onBackToModels?: () => void;
-  modelSelectorTab?: 'text' | 'image';
+  modelSelectorTab?: 'text' | 'image' | 'video';
   showSettingsPanel: boolean;
   setShowSettingsPanel: (v: boolean) => void;
   debugInfo: any;
@@ -45,16 +47,35 @@ type ChatModalSectionProps = {
 };
 
 export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
-  styles, colors,
-  showProjectSelector, setShowProjectSelector,
-  showDebugPanel, setShowDebugPanel,
-  showModelSelector, setShowModelSelector, modelSelectorTab = 'text',
-  onModelSelectorClosed, onBackToModels,
-  showSettingsPanel, setShowSettingsPanel,
-  debugInfo, activeProject, activeConversation, settings, projects,
-  handleSelectProject, handleModelSelect, handleUnloadModel, handleDeleteConversation,
-  isModelLoading, imageCount, activeConversationId, navigation,
-  viewerImageUri, setViewerImageUri, handleSaveImage,
+  styles,
+  colors,
+  showProjectSelector,
+  setShowProjectSelector,
+  showDebugPanel,
+  setShowDebugPanel,
+  showModelSelector,
+  setShowModelSelector,
+  modelSelectorTab = 'text',
+  onModelSelectorClosed,
+  onBackToModels,
+  showSettingsPanel,
+  setShowSettingsPanel,
+  debugInfo,
+  activeProject,
+  activeConversation,
+  settings,
+  projects,
+  handleSelectProject,
+  handleModelSelect,
+  handleUnloadModel,
+  handleDeleteConversation,
+  isModelLoading,
+  imageCount,
+  activeConversationId,
+  navigation,
+  viewerImageUri,
+  setViewerImageUri,
+  handleSaveImage,
   isRemote,
 }) => {
   const videoCount = useAppStore(state => state.generatedVideos.filter(video => video.conversationId === activeConversationId).length);

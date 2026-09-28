@@ -1,3 +1,4 @@
+import { VideoGenerationStatus } from '../../components/VideoGenerationStatus';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
@@ -220,7 +221,10 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
     prevIsStreamingRef.current = isStreaming;
   }, [isStreaming]);
   useEffect(() => {
-    if (chat.isGeneratingForThisConversation && !generationWasActiveRef.current) {
+    if (
+      chat.isGeneratingForThisConversation &&
+      !generationWasActiveRef.current
+    ) {
       userScrolledDuringGenerationRef.current = false;
     }
     generationWasActiveRef.current = chat.isGeneratingForThisConversation;
@@ -319,6 +323,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           </AnimatedPressable>
         </Animated.View>
       )}
+      <VideoGenerationStatus conversationId={chat.activeConversationId} />
       {chat.isGeneratingImage && (
         <ImageProgressIndicator
           styles={styles}
@@ -361,7 +366,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
       <RequiredThinkingAdviceCard
         modelName={chat.activeModelName}
         required={Boolean(
-          chat.activeRemoteModel?.capabilities.thinkingLevelsOnly
+          chat.activeRemoteModel?.capabilities.thinkingLevelsOnly,
         )}
       />
       {/* A vision model missing its projector: repairable from here, because this is where the

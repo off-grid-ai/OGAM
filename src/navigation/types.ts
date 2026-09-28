@@ -37,7 +37,7 @@ export type MainTabParamList = {
   ProjectsTab: undefined;
   ModelsTab:
     | {
-        initialTab?: 'text' | 'image' | 'voice' | 'transcription';
+        initialTab?: 'text' | 'image' | 'video' | 'voice' | 'transcription';
         repairModelId?: string;
         initialSearchQuery?: string;
       }
