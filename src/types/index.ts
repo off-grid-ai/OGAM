@@ -286,7 +286,7 @@ export interface Message {
    *  a cancelled image turn leaves only the "Enhanced prompt" reply and no image, and inferring from
    *  that made the retry a TEXT turn (device-confirmed on Android and iOS). Absent on turns recorded
    *  before this field existed; those still fall back to the reply scan. */
-  turnKind?: 'text' | 'image';
+  turnKind?: 'text' | 'image' | 'video';
   /** Indicates this is a system info message (model loaded/unloaded, etc.) */
   isSystemInfo?: boolean;
   attachments?: MediaAttachment[];
@@ -403,7 +403,7 @@ export const INFERENCE_BACKENDS = {
   METAL: 'metal' as InferenceBackend,
 } as const;
 /** 'auto' = smart detect, 'force' = always generate image, 'disabled' = never */
-export type ImageModeState = 'auto' | 'force' | 'disabled';
+export type ImageModeState = 'auto' | 'force' | 'disabled' | 'video';
 
 export interface GeneratedVideo {
   id: string;
