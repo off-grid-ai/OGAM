@@ -1,3 +1,5 @@
+import { videoGenerationService } from './src/services/videoGenerationService';
+import { videoProvider } from './src/services/modelDownloadService/providers/videoProvider';
 /**
  * Off Grid - On-Device AI Chat Application
  * Private AI assistant that runs entirely on your device
@@ -234,6 +236,8 @@ function App() {
       // becomes the SINGLE owner only once the Download Manager consumes the service
       // and the old recovery paths are folded into the providers.
       registerCoreDownloadProviders();
+      await videoProvider.reconcile?.().catch(error => logger.error('[Video] Download recovery failed:', error));
+      await videoGenerationService.restore().catch(error => logger.error('[Video] Job recovery failed:', error));
 
       // Re-surface QUEUED downloads that never started before an app kill. A queued item (waiting for
       // one of the 3 concurrency slots) has no native row, so hydrateDownloadStore can't recover it —
