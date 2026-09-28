@@ -227,22 +227,30 @@ export function AmbientDayScreen(): React.ReactElement {
       // connected as a Remote Server (macOffloadReady), NOT from Sync alone. A toggle that's on but a
       // Mac that isn't connected silently falls back to the phone, so we call that out specifically.
       const wantsMac = useMacForTranscription && !onDeviceOnly;
-      const willUseMac = wantsMac && macOffloadReady();
-      if (!willUseMac) {
+      // Each model runs where it's routed: transcription on the Mac only when offload is live; the
+      // summary on the Mac only when a remote text model is active (auto-selected when you pair a Mac).
+      // Only warn about a model that will actually load on THIS phone.
+      const transcriptionOnMac = wantsMac && macOffloadReady();
+      const summaryOnMac = !onDeviceOnly && mobileTextEngineControl.isRemoteActive();
+      {
         const tight: string[] = [];
-        const textId = selectedTextModelId();
-        if (textId && !(await mobileResidencyIntents.canPreloadText(textId))) tight.push('summary');
-        const sttModel = activeMobileRoute('transcription').model;
-        if (
-          sttModel &&
-          sttModel.source !== 'remote' &&
-          !mobileResidencyIntents.canPreloadTranscription(sttModel.id)
-        ) {
-          tight.push('transcription');
+        if (!summaryOnMac) {
+          const textId = selectedTextModelId();
+          if (textId && !(await mobileResidencyIntents.canPreloadText(textId))) tight.push('summary');
+        }
+        if (!transcriptionOnMac) {
+          const sttModel = activeMobileRoute('transcription').model;
+          if (
+            sttModel &&
+            sttModel.source !== 'remote' &&
+            !mobileResidencyIntents.canPreloadTranscription(sttModel.id)
+          ) {
+            tight.push('transcription');
+          }
         }
         if (tight.length > 0) {
           const models = `${tight.join(' and ')} model${tight.length > 1 ? 's' : ''}`;
-          const macButOffline = wantsMac; // wanted the Mac, but it isn't connected (willUseMac was false)
+          const macButOffline = wantsMac; // wanted the Mac, but something still falls back to the phone
           const buttons: {
             text: string;
             style?: 'cancel';
