@@ -7,7 +7,7 @@ on:
     workflows: ['Build and Release Android']
     types: [completed]
     branches: [main]
-  workflow_dispatch: {}   # manual fallback
+  workflow_dispatch: {} # manual fallback
 
 permissions:
   contents: write
@@ -45,6 +45,11 @@ jobs:
         with:
           ruby-version: '3.2'
           bundler-cache: true
+
+      - name: Build video runtime
+        run: |
+          bash scripts/prepare-video-runtime.sh
+          bash scripts/build-video-ios.sh
 
       - name: Install CocoaPods
         run: |

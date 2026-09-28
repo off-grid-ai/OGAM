@@ -36,7 +36,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write   # uat.sh pushes the beta bump commit + tag and creates the GH release
+  contents: write # uat.sh pushes the beta bump commit + tag and creates the GH release
 
 jobs:
   beta:
@@ -49,8 +49,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: false         # pro/ is a private repo — fetch it below with a PAT
-          fetch-depth: 0            # uat.sh needs full tag history to compute the next beta N
+          submodules: false # pro/ is a private repo — fetch it below with a PAT
+          fetch-depth: 0 # uat.sh needs full tag history to compute the next beta N
       - name: Check out pro submodule (private)
         # pro/ lives in a separate private repo; the default GITHUB_TOKEN can't read it, so
         # authenticate with PRO_SUBMODULE_PAT (same mechanism as ci.yml). uat.sh's build needs
@@ -69,6 +69,11 @@ jobs:
         with: { distribution: temurin, java-version: '17' }
       - uses: ruby/setup-ruby@v1
         with: { ruby-version: '3.3', bundler-cache: true }
+      - name: Build video runtime
+        run: |
+          bash scripts/prepare-video-runtime.sh
+          bash scripts/build-video-ios.sh
+
       - name: pod install
         # Restore Podfile.lock afterward: a CI CocoaPods version can rewrite it, which would
         # dirty the tree and trip uat.sh's clean-tree pre-check. The pods are already installed,
