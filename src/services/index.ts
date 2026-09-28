@@ -2,7 +2,9 @@ export { hardwareService } from './hardware';
 export { huggingFaceService } from './huggingface';
 export { modelLibrary } from './modelServices/bootstrap/modelLibraryBootstrap';
 export { llmService } from './llm';
-export { authService } from './authService';
+export { mobileSecurityCredentialPort } from './adapters/security/mobileSecurityCredentialPort';
+export { mobileSecurity, useSecuritySnapshot } from './adapters/security/mobileSecurity';
+export { mobileSecurityStatePort } from './adapters/security/mobileSecurityStatePort';
 export {
   getResourceUsage,
   resolveSelectedTextModel,

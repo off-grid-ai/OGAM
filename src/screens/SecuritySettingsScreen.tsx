@@ -12,52 +12,33 @@ import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
 import { useNavigation } from '@react-navigation/native';
 import { Card } from '../components';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
+import { CustomAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { useAuthStore } from '../stores';
-import { authService } from '../services';
+import { useSecuritySnapshot } from '../services';
 import { PassphraseSetupScreen } from './PassphraseSetupScreen';
 
 export const SecuritySettingsScreen: React.FC = () => {
   const navigation = useNavigation();
   const [showPassphraseSetup, setShowPassphraseSetup] = useState(false);
-  const [isChangingPassphrase, setIsChangingPassphrase] = useState(false);
+  const [passphraseMode, setPassphraseMode] = useState<'enable' | 'change' | 'disable'>('enable');
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
-  const authEnabled = useAuthStore(s => s.isEnabled);
-  const { setEnabled: setAuthEnabled } = useAuthStore.getState();
+  const authEnabled = useSecuritySnapshot().enabled;
 
-  const handleTogglePassphrase = async () => {
-    if (authEnabled) {
-      setAlertState(showAlert(
-        'Disable Passphrase Lock',
-        'Are you sure you want to disable passphrase protection?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Disable',
-            style: 'destructive',
-            onPress: () => {
-              setAlertState(hideAlert());
-              authService.removePassphrase().then(() => {
-                setAuthEnabled(false);
-              }).catch(() => {});
-            },
-          },
-        ]
-      ));
-    } else {
-      setIsChangingPassphrase(false);
-      setShowPassphraseSetup(true);
-    }
+  const handleTogglePassphrase = (): void => {
+    // Turning the lock off removes the stored passphrase, so the person proves it is theirs
+    // first, on the same screen they used to set it. Shared removes the passphrase and clears
+    // the lock together, or leaves both alone.
+    setPassphraseMode(authEnabled ? 'disable' : 'enable');
+    setShowPassphraseSetup(true);
   };
 
-  const handleChangePassphrase = () => {
-    setIsChangingPassphrase(true);
+  const handleChangePassphrase = (): void => {
+    setPassphraseMode('change');
     setShowPassphraseSetup(true);
   };
 
@@ -115,7 +96,7 @@ export const SecuritySettingsScreen: React.FC = () => {
         onRequestClose={() => setShowPassphraseSetup(false)}
       >
         <PassphraseSetupScreen
-          isChanging={isChangingPassphrase}
+          mode={passphraseMode}
           onComplete={() => setShowPassphraseSetup(false)}
           onCancel={() => setShowPassphraseSetup(false)}
         />

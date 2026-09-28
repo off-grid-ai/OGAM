@@ -147,15 +147,34 @@ jest.mock('../src/utils/debugLogFile', () => ({
   stopDebugLogFile: jest.fn(),
 }));
 
+const unlockedSecuritySnapshot = {
+  status: 'disabled' as const,
+  enabled: false,
+  locked: false,
+  failedAttempts: 0,
+  remainingAttempts: 5,
+  lockedOut: false,
+  lockoutUntilMs: null,
+  lockoutRemainingSeconds: 0,
+  busy: false,
+};
+
 jest.mock('../src/services', () => ({
   hardwareService: {
     getDeviceInfo: jest.fn(() => Promise.resolve({ totalMemory: 8 * 1024 * 1024 * 1024 })),
     getModelRecommendation: jest.fn(() => ({ maxParameters: 7, recommendedQuantization: 'Q4_K_M' })),
   },
   modelLibrary: mockModelManager,
-  authService: {
-    hasPassphrase: jest.fn(() => Promise.resolve(false)),
+  // The lock has one owner now, so the fake is that owner. App starts it at boot and reads the
+  // snapshot to decide whether to draw the lock, and an unlocked snapshot is what "no passphrase
+  // set" looks like to a person.
+  mobileSecurity: {
+    start: jest.fn(() => Promise.resolve()),
+    lock: jest.fn(),
+    snapshot: jest.fn(() => unlockedSecuritySnapshot),
+    subscribe: jest.fn(() => () => undefined),
   },
+  useSecuritySnapshot: jest.fn(() => unlockedSecuritySnapshot),
   ragService: {
     ensureReady: jest.fn(() => Promise.resolve()),
   },

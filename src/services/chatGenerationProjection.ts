@@ -84,9 +84,15 @@ class MobileGenerationProjection {
       case 'completed':
         this.complete(event.turn);
         return;
+      case 'failed':
+        // A refused reply must SAY why. The chat rules already carry the reason on the turn; this
+        // used to end the turn silently, so a person asked a question and watched nothing happen -
+        // and nobody reading a test run could see it either, because the reason went nowhere.
+        this.terminal(event.turn);
+        void this.showRefusal(event.turn);
+        return;
       case 'stopped':
       case 'interrupted':
-      case 'failed':
         this.terminal(event.turn);
         return;
       default:
@@ -203,6 +209,25 @@ class MobileGenerationProjection {
     this.endEphemeralStream(turn);
     this.checkSharePrompt();
     this.reset();
+  }
+
+  /**
+   * Put the chat rules' own reason in the conversation, as a notice a person can read.
+   *
+   * The wording is NOT written here. It is the reason the turn already carries, so the screen and
+   * the rules can never disagree about why a question did not run.
+   */
+  private async showRefusal(turn: ChatTurn): Promise<void> {
+    const reason = turn.errorMessage;
+    if (!reason) return;
+    try {
+      await appendWorkspaceContentMessage({
+        conversationId: turn.conversationId,
+        portable: { role: 'assistant', content: reason, context: { notice: true } },
+      });
+    } catch {
+      /* The reason is best-effort: a failed write must not replace one refusal with another. */
+    }
   }
 
   private terminal(turn: ChatTurn): void {

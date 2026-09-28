@@ -11,7 +11,6 @@ import {
   imageGenerationService,
   ImageGenerationState,
 } from '../../services';
-import { generationSession } from '../../services/generationSession';
 import type { RootStackParamList } from '../../navigation/types';
 import { mobileChatSession } from './mobileChatSession';
 import { requireWorkspaceConversationMessages } from '../../hooks/useApplicationProjection';
@@ -111,12 +110,14 @@ interface ConversationLifecycleArgs {
 export function useChatConversationLifecycle({
   routeConversationId,
   routeProjectId,
-  activeConversationId,
   setActiveConversation,
   setPendingProjectId,
 }: ConversationLifecycleArgs): void {
   useEffect(() => {
     setActiveConversation(routeConversationId ?? null);
+    // Opening a chat asks the chat rules to repair anything the previous run left mid-flight. The
+    // screen must never read a saved reply and decide for itself that it was cut short.
+    if (routeConversationId) void mobileChatSession.restore(routeConversationId);
     // The route ID is the owner of this transition; store callbacks are stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeConversationId]);
@@ -125,17 +126,9 @@ export function useChatConversationLifecycle({
     setPendingProjectId(routeProjectId);
   }, [routeProjectId, setPendingProjectId]);
 
-  useEffect(() => {
-    if (
-      generationSession.getConversationId() &&
-      !generationSession.isGeneratingFor(activeConversationId)
-    ) {
-      generationSession.end('conversation-switch');
-    }
-    // Native conversation isolation is awaited by generationService immediately
-    // before a local turn starts. A navigation timer here raced the first Send and
-    // could clear too late (context leak) or during prefill (no-op).
-  }, [activeConversationId]);
+  // Switching conversations no longer clears anything here. The screen kept its own mark of which
+  // conversation was replying, and this effect existed to wipe it; the shared chat queue already
+  // records the conversation each running turn belongs to, so there is nothing left to reset.
 }
 
 export function useChatPresentationLifecycle(

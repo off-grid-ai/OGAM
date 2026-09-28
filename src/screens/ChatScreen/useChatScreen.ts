@@ -88,13 +88,29 @@ function projectActiveConversation(
     c => c.id === activeConversationId,
   );
   if (!record) return undefined;
+  // Which replies ended early. The shared chat rules already wrote that onto the saved turn when
+  // this conversation was recovered, so the screen reads their answer rather than deciding itself.
+  const stoppedEarlyMessageIds = new Set(
+    workspaceContent.chatTurns
+      .filter(
+        turn =>
+          turn.conversationId === activeConversationId &&
+          turn.status === 'interrupted',
+      )
+      .flatMap(turn => turn.responseMessageIds),
+  );
   return {
     id: record.id,
     title: record.title,
     modelId: record.modelId ?? '',
     messages: workspaceContent.messages
       .filter(message => message.conversationId === activeConversationId)
-      .map(toWorkspaceMessage),
+      .map(message => {
+        const row = toWorkspaceMessage(message);
+        return stoppedEarlyMessageIds.has(message.id)
+          ? { ...row, stoppedEarly: true }
+          : row;
+      }),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     ...(record.projectId === null ? {} : { projectId: record.projectId }),

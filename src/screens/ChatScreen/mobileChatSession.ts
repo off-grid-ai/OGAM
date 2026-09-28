@@ -165,4 +165,15 @@ export const mobileChatSession = {
 
   invalidate: (conversationId: string): void =>
     applicationFacade().models.chat.invalidate(conversationId),
+
+  /**
+   * Ask the chat rules to repair a conversation the previous run left mid-flight.
+   *
+   * Called when a person opens a chat. The screen never decides for itself whether a saved reply
+   * was cut short: only the chat rules own that, and they record the repaired state before this
+   * resolves.
+   */
+  restore: async (conversationId: string): Promise<void> => {
+    await applicationFacade().models.chat.restore(conversationId);
+  },
 };

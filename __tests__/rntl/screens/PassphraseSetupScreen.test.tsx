@@ -2,9 +2,9 @@
  * PassphraseSetupScreen — the screen as the user sees it.
  *
  * REAL composition: the real screen, the real `components` barrel (Button/Card/CustomAlert),
- * the real `authService` (real hashing) and the real `useAuthStore`. The ONLY fake is
+ * the real keychain port (real hashing) and the one shared lock owner. The ONLY fake is
  * `react-native-keychain` — the OS keystore, which is the true device boundary
- * (see src/services/authService.ts: Keychain + logger, nothing else).
+ * (see src/services/adapters/security/mobileSecurityCredentialPort.ts: Keychain + logger, nothing else).
  *
  * Every precondition is reached by gesture through the real screen. Nothing calls
  * store.setState, and nothing mocks Off Grid code.
@@ -73,7 +73,8 @@ jest.mock('react-native-keychain', () => {
 });
 
 import { PassphraseSetupScreen } from '../../../src/screens/PassphraseSetupScreen';
-import { useAuthStore } from '../../../src/stores/authStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { mobileSecurity } from '../../../src/services';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Keychain = require('react-native-keychain') as {
@@ -104,12 +105,20 @@ async function enableLockThroughSetupScreen(passphrase: string): Promise<void> {
   view.unmount();
 }
 
+/**
+ * Start each test from "no passphrase, lock off", reached through the one lock owner rather than
+ * by writing state: clear the stored lock facts, then have the owner read them again.
+ */
+async function resetLockThroughOwner(): Promise<void> {
+  await AsyncStorage.removeItem('offgrid.security.lock-state');
+  await mobileSecurity.start();
+}
+
 describe('PassphraseSetupScreen', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     Keychain.__reset();
     // Real store actions only — never a direct state write.
-    useAuthStore.getState().resetFailedAttempts();
-    useAuthStore.getState().setEnabled(false);
+    await resetLockThroughOwner();
   });
 
   // ---- What the screen puts on the glass ----
@@ -130,7 +139,7 @@ describe('PassphraseSetupScreen', () => {
   });
 
   it('shows current passphrase field when isChanging=true', () => {
-    render(<PassphraseSetupScreen onComplete={jest.fn()} onCancel={jest.fn()} isChanging />);
+    render(<PassphraseSetupScreen onComplete={jest.fn()} onCancel={jest.fn()} mode="change" />);
     expect(screen.getAllByText('Change Passphrase').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Current Passphrase')).toBeTruthy();
     expect(screen.getByPlaceholderText(CURRENT_FIELD)).toBeTruthy();
@@ -148,7 +157,7 @@ describe('PassphraseSetupScreen', () => {
   });
 
   it('shows "Change Passphrase" button text when isChanging', () => {
-    render(<PassphraseSetupScreen onComplete={jest.fn()} onCancel={jest.fn()} isChanging />);
+    render(<PassphraseSetupScreen onComplete={jest.fn()} onCancel={jest.fn()} mode="change" />);
     // Title and button both say "Change Passphrase".
     expect(screen.getAllByText('Change Passphrase').length).toBeGreaterThanOrEqual(2);
   });
@@ -167,7 +176,7 @@ describe('PassphraseSetupScreen', () => {
   });
 
   it('shows description for change mode', () => {
-    render(<PassphraseSetupScreen onComplete={jest.fn()} onCancel={jest.fn()} isChanging />);
+    render(<PassphraseSetupScreen onComplete={jest.fn()} onCancel={jest.fn()} mode="change" />);
     expect(screen.getByText(/Enter your current passphrase/)).toBeTruthy();
   });
 
@@ -178,7 +187,7 @@ describe('PassphraseSetupScreen', () => {
   });
 
   it('shows New Passphrase label for change mode', () => {
-    render(<PassphraseSetupScreen onComplete={jest.fn()} onCancel={jest.fn()} isChanging />);
+    render(<PassphraseSetupScreen onComplete={jest.fn()} onCancel={jest.fn()} mode="change" />);
     expect(screen.getByText('New Passphrase')).toBeTruthy();
   });
 
@@ -244,13 +253,13 @@ describe('PassphraseSetupScreen', () => {
     await waitFor(() => expect(screen.getByText('Passphrase lock enabled')).toBeTruthy());
     expect(onComplete).toHaveBeenCalled();
     expect(Keychain.__peek()).not.toBe(false);
-    expect(useAuthStore.getState().isEnabled).toBe(true);
+    expect(mobileSecurity.snapshot().enabled).toBe(true);
   });
 
   it('changes the passphrase when the current one is right', async () => {
     await enableLockThroughSetupScreen('oldpassword');
     const onComplete = jest.fn();
-    render(<PassphraseSetupScreen onComplete={onComplete} onCancel={jest.fn()} isChanging />);
+    render(<PassphraseSetupScreen onComplete={onComplete} onCancel={jest.fn()} mode="change" />);
 
     fireEvent.changeText(screen.getByPlaceholderText(CURRENT_FIELD), 'oldpassword');
     fireEvent.changeText(screen.getByPlaceholderText(NEW_FIELD), 'newpassword');
@@ -273,7 +282,7 @@ describe('PassphraseSetupScreen', () => {
   it('shows error when current passphrase is incorrect on change', async () => {
     await enableLockThroughSetupScreen('oldpassword');
     const onComplete = jest.fn();
-    render(<PassphraseSetupScreen onComplete={onComplete} onCancel={jest.fn()} isChanging />);
+    render(<PassphraseSetupScreen onComplete={onComplete} onCancel={jest.fn()} mode="change" />);
 
     fireEvent.changeText(screen.getByPlaceholderText(CURRENT_FIELD), 'wrongpassword');
     fireEvent.changeText(screen.getByPlaceholderText(NEW_FIELD), 'newpassword');
@@ -285,7 +294,7 @@ describe('PassphraseSetupScreen', () => {
   });
 
   it('shows error when the keystore refuses to store the passphrase', async () => {
-    // The only real failure path: authService reports `false`, it never throws.
+    // The only real failure path: the passphrase store reports `false`, it never throws.
     Keychain.__refuseWrites();
     const onComplete = jest.fn();
     render(<PassphraseSetupScreen onComplete={onComplete} onCancel={jest.fn()} />);
@@ -294,9 +303,9 @@ describe('PassphraseSetupScreen', () => {
     fireEvent.changeText(screen.getByPlaceholderText(CONFIRM_FIELD), 'validpass123');
     pressSubmit('Enable Lock');
 
-    await waitFor(() => expect(screen.getByText('Failed to set passphrase')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('The device keystore refused the change. Nothing was changed.')).toBeTruthy());
     expect(onComplete).not.toHaveBeenCalled();
-    expect(useAuthStore.getState().isEnabled).toBe(false);
+    expect(mobileSecurity.snapshot().enabled).toBe(false);
   });
 
   it('shows "Saving..." button text while submitting', async () => {
@@ -318,7 +327,7 @@ describe('PassphraseSetupScreen', () => {
     // The observable stand-in for "change mode does not run the enable branch": the screen
     // reports the change, and never the enable, no matter how the change ends.
     await enableLockThroughSetupScreen('oldpass1');
-    render(<PassphraseSetupScreen onComplete={jest.fn()} onCancel={jest.fn()} isChanging />);
+    render(<PassphraseSetupScreen onComplete={jest.fn()} onCancel={jest.fn()} mode="change" />);
 
     fireEvent.changeText(screen.getByPlaceholderText(CURRENT_FIELD), 'oldpass1');
     fireEvent.changeText(screen.getByPlaceholderText(NEW_FIELD), 'newpass123');

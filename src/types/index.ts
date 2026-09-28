@@ -240,6 +240,14 @@ export interface Message {
   /** Reasoning/thinking content parsed by llama.rn (separate from response content) */
   reasoningContent?: string;
   timestamp: number;
+  /**
+   * True when this reply ended before it finished, because the app closed while it was arriving.
+   *
+   * The shared chat rules decide it and write it onto the saved reply when they recover the
+   * conversation; the phone only carries it onto the row a person reads. Without it a half-written
+   * reply reads as a complete answer.
+   */
+  stoppedEarly?: boolean;
   isStreaming?: boolean;
   isThinking?: boolean;
   /** USER messages only: the modality this turn was DISPATCHED as, stamped when the router decides.

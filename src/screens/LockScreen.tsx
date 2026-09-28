@@ -18,8 +18,7 @@ import {
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { authService } from '../services/authService';
-import { useAuthStore } from '../stores/authStore';
+import { mobileSecurity, useSecuritySnapshot } from '../services';
 
 interface LockScreenProps {
   onUnlock: () => void;
@@ -33,75 +32,53 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
-  // The lock screen is a PASSPHRASE INPUT. It renders one number; the rest are actions and
-  // getters, read at call time, so a keystroke elsewhere in the auth state cannot re-render it.
-  const failedAttempts = useAuthStore(s => s.failedAttempts);
-  const {
-    recordFailedAttempt,
-    resetFailedAttempts,
-    checkLockout,
-    getLockoutRemaining,
-  } = useAuthStore.getState();
+  // The lock screen is a PASSPHRASE INPUT. Shared counts the attempts, decides when to lock the
+  // person out, and unlocks; this screen carries what was typed and renders the answer.
+  const security = useSecuritySnapshot();
 
-  // Check and update lockout timer
   useEffect(() => {
-    const updateLockout = () => {
-      if (checkLockout()) {
-        setLockoutSeconds(getLockoutRemaining());
-      } else {
-        setLockoutSeconds(0);
-      }
-    };
-
-    updateLockout();
-    const interval = setInterval(updateLockout, 1000);
+    setLockoutSeconds(mobileSecurity.snapshot().lockoutRemainingSeconds);
+    const interval = setInterval(
+      () => setLockoutSeconds(mobileSecurity.snapshot().lockoutRemainingSeconds),
+      1000,
+    );
     return () => clearInterval(interval);
-  }, [checkLockout, getLockoutRemaining]);
+  }, [security.lockoutUntilMs]);
 
   const handleUnlock = useCallback(async () => {
     if (!passphrase.trim()) {
       setAlertState(showAlert('Error', 'Please enter your passphrase'));
       return;
     }
-
-    if (checkLockout()) {
-      return;
-    }
-
     setIsVerifying(true);
-
-    // authService is the port to the keystore: an unreadable keystore comes back as `false`
-    // (a failed attempt), never as a throw. There is no separate error path to render.
     try {
-      const isValid = await authService.verifyPassphrase(passphrase);
-
-      if (isValid) {
-        resetFailedAttempts();
-        setPassphrase('');
+      const outcome = await mobileSecurity.unlock({ passphrase });
+      setPassphrase('');
+      if (outcome.ok) {
         onUnlock();
-      } else {
-        const isLockedOut = recordFailedAttempt();
-        setPassphrase('');
-
-        if (isLockedOut) {
-          setAlertState(
-            showAlert(
-              'Too Many Attempts',
-              'You have been locked out for 5 minutes due to too many failed attempts.'
-            )
-          );
-        } else {
-          const remaining = 5 - (failedAttempts + 1);
-          const alertMessage = remaining > 0
-            ? `${remaining} attempt${remaining === 1 ? '' : 's'} remaining before lockout.`
-            : 'Incorrect passphrase.';
-          setAlertState(showAlert('Incorrect Passphrase', alertMessage));
-        }
+        return;
       }
+      // The owner counts the attempts and decides when the wait starts; the screen reads its
+      // newest numbers and says them in the words the person already knows.
+      const after = mobileSecurity.snapshot();
+      if (outcome.reason === 'locked_out' || after.lockedOut) {
+        setAlertState(showAlert(
+          'Too Many Attempts',
+          'You have been locked out for 5 minutes due to too many failed attempts.',
+        ));
+        return;
+      }
+      const remaining = after.remainingAttempts;
+      setAlertState(showAlert(
+        'Incorrect Passphrase',
+        remaining > 0
+          ? `${remaining} attempt${remaining === 1 ? '' : 's'} remaining before lockout.`
+          : outcome.message,
+      ));
     } finally {
       setIsVerifying(false);
     }
-  }, [passphrase, checkLockout, failedAttempts, recordFailedAttempt, resetFailedAttempts, onUnlock]);
+  }, [passphrase, onUnlock]);
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -109,7 +86,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const isLockedOut = lockoutSeconds > 0;
+  const isLockedOut = security.lockedOut || lockoutSeconds > 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -155,9 +132,10 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
               style={styles.unlockButton}
             />
 
-            {failedAttempts > 0 && (
+            {security.failedAttempts > 0 && (
               <Text style={styles.attemptsText}>
-                {5 - failedAttempts} attempt{5 - failedAttempts === 1 ? '' : 's'} remaining
+                {security.remainingAttempts} attempt
+                {security.remainingAttempts === 1 ? '' : 's'} remaining
               </Text>
             )}
           </View>

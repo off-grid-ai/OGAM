@@ -1,3 +1,4 @@
+import { CHAT_RESPONSE_STOPPED_EARLY_LABEL } from '@offgrid/models';
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -209,6 +210,16 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         styles={styles}
         colors={colors}
       />
+
+      {/* The words come from the shared chat rules, so the screen keeps no wording of its own. */}
+      {!isUser && !isStreaming && message.stoppedEarly && (
+        <View testID="message-stopped-early" style={styles.toolStatusRow}>
+          <Icon name="alert-triangle" size={12} color={colors.textMuted} />
+          <Text style={styles.toolStatusText}>
+            {CHAT_RESPONSE_STOPPED_EARLY_LABEL}
+          </Text>
+        </View>
+      )}
 
       {!isUser && !isStreaming && message.generationMeta?.truncated && (
         <View testID="message-cutoff-indicator" style={styles.toolStatusRow}>

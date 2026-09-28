@@ -2,7 +2,7 @@
  * LockScreen — the real screen, as the user sees it.
  *
  * Real LockScreen + real PassphraseSetupScreen (to arrive at "a passphrase exists" by gesture)
- * + real authService (real hashing) + the real useAuthStore lockout state machine.
+ * + the real keychain port (real hashing) + the one shared lock owner.
  * The ONLY fakes are device-boundary ones: `react-native-keychain` (the OS keystore) and the
  * wall clock (Date.now), which the lockout countdown reads.
  *
@@ -13,7 +13,8 @@ import React from 'react';
 import { render, fireEvent, waitFor, screen } from '@testing-library/react-native';
 import { LockScreen } from '../../../src/screens/LockScreen';
 import { PassphraseSetupScreen } from '../../../src/screens/PassphraseSetupScreen';
-import { useAuthStore } from '../../../src/stores/authStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { mobileSecurity } from '../../../src/services';
 
 /** The OS keystore, faked at the native line: one in-memory credential entry. */
 jest.mock('react-native-keychain', () => {
@@ -72,13 +73,21 @@ async function failOneAttempt(attempt: number): Promise<void> {
   fireEvent.press(screen.getByText('OK'));
 }
 
+/**
+ * Start each test from "no passphrase, lock off", reached through the one lock owner rather than
+ * by writing state: clear the stored lock facts, then have the owner read them again.
+ */
+async function resetLockThroughOwner(): Promise<void> {
+  await AsyncStorage.removeItem('offgrid.security.lock-state');
+  await mobileSecurity.start();
+}
+
 describe('LockScreen', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     Keychain.__reset();
     clockOffsetMs = 0;
     // Real store actions only — never a direct state write.
-    useAuthStore.getState().resetFailedAttempts();
-    useAuthStore.getState().setEnabled(false);
+    await resetLockThroughOwner();
   });
 
   // ---- Rendering ----

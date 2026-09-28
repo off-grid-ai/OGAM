@@ -69,11 +69,12 @@ export interface MobileChatCommandOptions {
 }
 
 const commandOptions = new Map<string, MobileChatCommandOptions>();
-let queue: ChatQueueProjection = {
-  entries: [],
+const EMPTY_CHAT_QUEUE: ChatQueueProjection = Object.freeze({
+  entries: Object.freeze([]),
   runningCount: 0,
   queuedCount: 0,
-};
+}) as ChatQueueProjection;
+let queue: ChatQueueProjection = EMPTY_CHAT_QUEUE;
 const queueListeners = new Set<(projection: ChatQueueProjection) => void>();
 const sessionEventListeners = new Set<(event: ChatSessionEvent) => void>();
 
@@ -97,6 +98,17 @@ export async function withMobileChatCommandOptions<T>(
 }
 
 export const mobileChatQueueSnapshot = (): ChatQueueProjection => queue;
+/**
+ * Forget the last queue this module saw, and tell every reader.
+ *
+ * The projection is module state, so it outlives the application root that produced it. A root
+ * torn down mid-reply left a running entry here, and the next root read it as a reply still going.
+ * Only the shut-down sequence knows the app is stopping, so only it calls this.
+ */
+export function resetMobileChatQueue(): void {
+  queue = EMPTY_CHAT_QUEUE;
+  queueListeners.forEach(listener => listener(queue));
+}
 export function subscribeMobileChatQueue(
   listener: (projection: ChatQueueProjection) => void,
 ): () => void {

@@ -10,11 +10,12 @@ import { useTheme } from './src/theme';
 import {
   hardwareService,
   modelLibrary,
-  authService,
+  mobileSecurity,
+  useSecuritySnapshot,
   remoteServerManager,
 } from './src/services';
 import logger from './src/utils/logger';
-import { useAppStore, useAuthStore, useRemoteServerStore } from './src/stores';
+import { useAppStore, useRemoteServerStore } from './src/stores';
 import { useDebugLogsStore } from './src/stores/debugLogsStore';
 import { useWhisperStore } from './src/stores/whisperStore';
 import { useModelSelectionStore } from './src/stores/modelSelectionStore';
@@ -122,10 +123,23 @@ const ensureModelSelectionStoreHydrated = async () => {
   if (!persistApi.hasHydrated()) await persistApi.rehydrate();
 };
 
-function stopMobileRuntime(loadPolicySync: ReturnType<typeof createLoadPolicySync>): void {
+/**
+ * The previous teardown, so the next startup can wait for it.
+ *
+ * Stopping the application shuts chat down and waits for every accepted reply. Starting again
+ * before that settles would compose a new root while the old one was still writing.
+ */
+let runtimeStopped: Promise<void> = Promise.resolve();
+
+function stopMobileRuntime(
+  loadPolicySync: ReturnType<typeof createLoadPolicySync>,
+): Promise<void> {
   stopNetworkReconnectWatcher();
-  stopMobileApplication();
   loadPolicySync.dispose();
+  runtimeStopped = stopMobileApplication().catch(error => {
+    logger.error('[App] Error stopping app:', error);
+  });
+  return runtimeStopped;
 }
 
 function App() {
@@ -150,21 +164,16 @@ function App() {
   const setDownloadedImageModels = useAppStore(s => s.setDownloadedImageModels);
   const { colors, isDark } = useTheme();
 
-  const {
-    isEnabled: authEnabled,
-    isLocked,
-    setLocked,
-    setLastBackgroundTime,
-  } = useAuthStore();
+  // One owner decides whether the lock is on and whether it is closed right now.
+  const security = useSecuritySnapshot();
+  const authEnabled = security.enabled;
+  const isLocked = security.locked;
 
   // Handle app state changes for auto-lock
   useAppState({
     onBackground: useCallback(() => {
-      if (authEnabled) {
-        setLastBackgroundTime(Date.now());
-        setLocked(true);
-      }
-    }, [authEnabled, setLastBackgroundTime, setLocked]),
+      mobileSecurity.lock();
+    }, []),
     onForeground: useCallback(() => {
       applicationFacade().models.refresh().then(outcome => {
         if (!outcome.ok) logger.error('[App] Failed to refresh models on foreground', outcome.failure);
@@ -186,6 +195,8 @@ function App() {
       loadPolicySync: ReturnType<typeof createLoadPolicySync>,
     ) => {
       try {
+        // Nothing may start until the previous root has finished stopping.
+        await runtimeStopped;
         // Ensure persisted download metadata is loaded before restore logic reads it.
         logger.log('[BOOT] app store hydrate');
         await ensureAppStoreHydrated();
@@ -271,12 +282,10 @@ function App() {
             startNetworkReconnectWatcher();
           });
 
-        // Check if passphrase is set and lock app if needed
+        // Starting the security owner also repairs a passphrase change that a crash left
+        // half-written, so the lock and the stored passphrase always agree before the UI shows.
         logger.log('[BOOT] auth passphrase check');
-        const hasPassphrase = await authService.hasPassphrase();
-        if (hasPassphrase && authEnabled) {
-          setLocked(true);
-        }
+        await mobileSecurity.start();
 
         // Start the single application root, including RAG and any registered Pro domains.
         try {
@@ -301,12 +310,10 @@ function App() {
       }
     },
     [
-      authEnabled,
       ensureAppStoreHydrated,
       setDeviceInfo,
       setDownloadedImageModels,
       setDownloadedModels,
-      setLocked,
       setModelRecommendation,
     ],
   );
@@ -317,11 +324,11 @@ function App() {
     initializeApp(generation, loadPolicySync);
     return () => {
       startupGeneration.current += 1;
-      stopMobileRuntime(loadPolicySync);
+      stopMobileRuntime(loadPolicySync).catch(() => undefined);
     };
   }, [initializeApp]);
 
-  const handleUnlock = useCallback(() => setLocked(false), [setLocked]);
+  const handleUnlock = useCallback(() => undefined, []);
 
   if (shouldBlockForContentMigration(contentMigration)) {
     return <ContentMigrationSurface status={contentMigration} />;

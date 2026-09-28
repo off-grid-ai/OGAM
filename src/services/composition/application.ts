@@ -569,12 +569,18 @@ export function startMobileApplication(): ReturnType<
   const current = getMobileApplication();
   starting ??= (async () => {
     const modelServices = mobileModelServices();
-    modelServices.startMobileModelServices();
     try {
       const result = await current.start();
       if (result.status !== 'running') {
         throw new Error(result.message);
       }
+      // Registered AFTER the root is running, not before. A root that starts installs its own
+      // execution registry, so a runner registered first was dropped by the very start that
+      // followed it - and the next question was refused with nothing able to answer it.
+      modelServices.startMobileModelServices();
+      // The models this phone has are registered on the STARTED root, and the start waits for it.
+      //
+      await modelServices.refreshMobileModelServices();
       await getLocalResourcePrivacyWorkflow().start();
       await getMobileWorkspaceContentRepository().localResourceReleases.start();
       await admitGeneratedImageRecovery({

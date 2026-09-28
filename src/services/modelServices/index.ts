@@ -211,10 +211,40 @@ export function startMobileModelServices(): () => void {
   return stopMobileModelServices;
 }
 
+/**
+ * Release everything this module registered on the application root.
+ *
+ * The four adapter maps are released HERE, with the rest. They used to survive a stop, and because
+ * reconciliation treats a map entry as "already registered", the next application root got no
+ * generation adapter at all: a person who restarted the app asked a question and never saw an
+ * answer, because nothing could run it. A stop leaves no registration behind.
+ */
 export function stopMobileModelServices(): void {
+  // Releasing the registrations is NOT guarded by `started`. A stop that returned early here left
+  // adapter ids in the maps, and reconciliation reads a map entry as "already registered", so the
+  // next application root got no runner for the model: a person restarted, asked a question, and
+  // was told nothing could answer it. Releasing always keeps the invariant the comment promises.
+  releaseAdapterRegistrations();
   if (!started) return;
   started = false;
   for (const cleanup of cleanups.splice(0)) cleanup();
+  // The next start begins its own inventory rebuild. Leaving the previous chain in place made the
+  // new start's rebuild QUEUE BEHIND the stopped session's work, so it finished after the person
+  // had already asked their next question - and the question found no model to answer it.
+  refreshChain = Promise.resolve<RuntimeModel[]>([]);
+}
+
+/** Drop every adapter this module registered, so the next root registers its own. */
+function releaseAdapterRegistrations(): void {
+  for (const registrations of [
+    generationAdapterRegistrations,
+    transcriptionAdapterRegistrations,
+    voiceAdapterRegistrations,
+    sidecarAdapterRegistrations,
+  ]) {
+    for (const unregister of registrations.values()) unregister();
+    registrations.clear();
+  }
 }
 
 /** Presentation adapter: recover the rich Mobile record after shared routing selected it. */
