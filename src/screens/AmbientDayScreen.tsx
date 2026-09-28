@@ -151,6 +151,9 @@ export function AmbientDayScreen(): React.ReactElement {
     : hasLocalTranscription
       ? 'local'
       : 'none';
+  // The toggle is on but the Mac isn't actually connected as a Remote Server, so it silently falls back
+  // to the phone. Surface that directly — it's the single most common "why isn't my Mac used?" cause.
+  const macWantedButOffline = useMacForTranscription && !onDeviceOnly && !ready.mac;
 
   // Wipe the Day back to a first-run state (recordings, journal, to-dos, timeline, queue).
   const resetDay = useCallback(() => {
@@ -218,9 +221,13 @@ export function AmbientDayScreen(): React.ReactElement {
       (!onDeviceOnly && mobileTextEngineControl.isRemoteActive());
     if (transcriptionReady && summaryReady) {
       // Everything is "set up" — but a local model can still fail to LOAD at processing time if the
-      // phone is low on memory, which would waste the whole session. When we're not offloading to the
-      // Mac, check up front (this does NOT trigger a load) and warn so it can be avoided or accepted.
-      const willUseMac = useMacForTranscription && !onDeviceOnly && macOffloadReady();
+      // phone is low on memory, which would waste the whole session. When the Mac won't actually take
+      // it, check up front (this does NOT trigger a load) and warn so it can be avoided or accepted.
+      // NOTE: the "Transcribe on Mac" toggle is only a preference — offload runs only when the Mac is
+      // connected as a Remote Server (macOffloadReady), NOT from Sync alone. A toggle that's on but a
+      // Mac that isn't connected silently falls back to the phone, so we call that out specifically.
+      const wantsMac = useMacForTranscription && !onDeviceOnly;
+      const willUseMac = wantsMac && macOffloadReady();
       if (!willUseMac) {
         const tight: string[] = [];
         const textId = selectedTextModelId();
@@ -234,15 +241,25 @@ export function AmbientDayScreen(): React.ReactElement {
           tight.push('transcription');
         }
         if (tight.length > 0) {
-          const models = tight.join(' and ');
+          const models = `${tight.join(' and ')} model${tight.length > 1 ? 's' : ''}`;
+          const macButOffline = wantsMac; // wanted the Mac, but it isn't connected (willUseMac was false)
+          const buttons: {
+            text: string;
+            style?: 'cancel';
+            onPress?: () => void;
+          }[] = [];
+          if (!onDeviceOnly) {
+            // Where you actually connect the Mac for offload — not Sync.
+            buttons.push({ text: 'Connect Mac', onPress: () => navigation.navigate('RemoteServers') });
+          }
+          buttons.push({ text: 'Record anyway', onPress: () => void capture.start() });
+          buttons.push({ text: 'Cancel', style: 'cancel' });
           Alert.alert(
-            'Low on memory',
-            `This phone may not have enough free memory to load the ${models} model${tight.length > 1 ? 's' : ''} when it processes this recording. Your audio is always saved, but processing can fail until you free up memory (close other apps) or connect your Mac — you can retry any time from the Day screen.`,
-            [
-              { text: 'Connect Mac', onPress: () => openSync() },
-              { text: 'Record anyway', onPress: () => void capture.start() },
-              { text: 'Cancel', style: 'cancel' }
-            ]
+            macButOffline ? "Your Mac isn't connected" : 'Low on memory',
+            macButOffline
+              ? `Your Mac is set to handle recordings, but it isn't connected as a Remote Server right now — so this will run on this phone, which may not have enough memory to load the ${models}. Connect your Mac (Sync alone won't do it), free up memory, or record anyway. Audio is always saved and you can retry from the Day screen.`
+              : `This phone may not have enough free memory to load the ${models} when it processes this recording. Your audio is always saved, but processing can fail until you free up memory (close other apps) or connect your Mac — you can retry any time from the Day screen.`,
+            buttons
           );
           return;
         }
@@ -273,7 +290,7 @@ export function AmbientDayScreen(): React.ReactElement {
         { text: 'Cancel', style: 'cancel' }
       ]
     );
-  }, [capture, navigation, useMacForTranscription, onDeviceOnly, refreshReady, openSync]);
+  }, [capture, navigation, useMacForTranscription, onDeviceOnly, refreshReady]);
   // Always-on orchestration is hoisted to AlwaysOnDaemon (app root) so Live mode records
   // app-wide from launch, not only while this screen is mounted.
 
@@ -699,33 +716,53 @@ export function AmbientDayScreen(): React.ReactElement {
           <Text style={styles.answerText}>{answerText(askResult)}</Text>
         </View>
       ) : null}
-      {/* Always-visible: which engine will transcribe right now — the Mac, this phone, or nothing set up. */}
+      {/* Always-visible: which engine will transcribe right now — the Mac, this phone, or nothing set up.
+          When the Mac is wanted but offline, it says so and taps through to Remote Servers. */}
       <TouchableOpacity
         style={styles.sourceBar}
-        onPress={transcriptionSource === 'none' ? openModels : undefined}
-        disabled={transcriptionSource !== 'none'}
-        activeOpacity={transcriptionSource === 'none' ? 0.7 : 1}
+        onPress={
+          macWantedButOffline
+            ? () => navigation.navigate('RemoteServers')
+            : transcriptionSource === 'none'
+              ? openModels
+              : undefined
+        }
+        disabled={transcriptionSource !== 'none' && !macWantedButOffline}
+        activeOpacity={transcriptionSource !== 'none' || macWantedButOffline ? 0.7 : 1}
         testID="ambient-transcription-source"
       >
         <Icon
           name={
             transcriptionSource === 'mac'
               ? 'airplay'
-              : transcriptionSource === 'local'
-                ? 'smartphone'
-                : 'alert-circle'
+              : macWantedButOffline
+                ? 'alert-circle'
+                : transcriptionSource === 'local'
+                  ? 'smartphone'
+                  : 'alert-circle'
           }
           size={13}
-          color={transcriptionSource === 'none' ? colors.textMuted : colors.primary}
+          color={
+            transcriptionSource === 'mac' || (transcriptionSource === 'local' && !macWantedButOffline)
+              ? colors.primary
+              : colors.textMuted
+          }
         />
         <Text
-          style={[styles.sourceBarText, transcriptionSource === 'none' && styles.sourceBarTextMuted]}
+          style={[
+            styles.sourceBarText,
+            (transcriptionSource === 'none' || macWantedButOffline) && styles.sourceBarTextMuted
+          ]}
         >
           {transcriptionSource === 'mac'
             ? 'Transcribing on your Mac'
-            : transcriptionSource === 'local'
-              ? 'Transcribing on this phone'
-              : 'No transcription set up — tap to set up'}
+            : macWantedButOffline
+              ? transcriptionSource === 'local'
+                ? 'On this phone — your Mac isn’t connected, tap to fix'
+                : 'Your Mac isn’t connected — tap to connect'
+              : transcriptionSource === 'local'
+                ? 'Transcribing on this phone'
+                : 'No transcription set up — tap to set up'}
         </Text>
       </TouchableOpacity>
       <View style={styles.dock}>

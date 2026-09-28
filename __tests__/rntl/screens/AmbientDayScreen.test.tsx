@@ -227,6 +227,25 @@ describe('AmbientDayScreen', () => {
     }
   });
 
+  it('flags on the home screen when Mac offload is on but the Mac is offline', () => {
+    const rdy = jest.spyOn(mobileSpeechInputPorts.transcriber, 'ready').mockReturnValue(true);
+    const mac = jest.spyOn(macStt, 'macOffloadReady').mockReturnValue(false);
+    const route = jest
+      .spyOn(mobileLLMService, 'activeMobileRoute')
+      .mockReturnValue({ modality: 'transcription', model: null } as any);
+    store.__set({ useMacForTranscription: true, onDeviceOnly: false });
+    try {
+      const { getByTestId } = render(<AmbientDayScreen />);
+      // A local model is loaded, so it still works on the phone — but the indicator says the Mac isn't
+      // connected and offers to fix it, instead of silently pretending the Mac is handling things.
+      expect(getByTestId('ambient-transcription-source')).toHaveTextContent(/Mac isn.t connected/);
+    } finally {
+      rdy.mockRestore();
+      mac.mockRestore();
+      route.mockRestore();
+    }
+  });
+
   it('turns the pending banner into a Retry that shows why processing failed', () => {
     mockCaptureError = 'Not enough memory to load the model.';
     store.__set({ pendingCaptures: [{ id: '1' }] });
@@ -255,6 +274,34 @@ describe('AmbientDayScreen', () => {
       rdy.mockRestore();
       txt.mockRestore();
       textId.mockRestore();
+      alert.mockRestore();
+    }
+  });
+
+  it('explains when Mac offload is on but the Mac is not connected as a Remote Server', async () => {
+    const rdy = jest.spyOn(mobileSpeechInputPorts.transcriber, 'ready').mockReturnValue(true);
+    const txt = jest.spyOn(mobileTextEngineControl, 'isReady').mockReturnValue(true);
+    const textId = jest.spyOn(modelState, 'selectedTextModelId').mockReturnValue('text-model');
+    const mac = jest.spyOn(macStt, 'macOffloadReady').mockReturnValue(false); // toggle on, Mac offline
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    (mobileResidencyIntents.canPreloadText as jest.Mock).mockResolvedValueOnce(false);
+    store.__set({ useMacForTranscription: true, onDeviceOnly: false });
+    try {
+      const { getByTestId } = render(<AmbientDayScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('ambient-day-record'));
+      });
+      expect(alert).toHaveBeenCalledWith(
+        "Your Mac isn't connected",
+        expect.stringContaining('Remote Server'),
+        expect.any(Array)
+      );
+      expect(mockStart).not.toHaveBeenCalled();
+    } finally {
+      rdy.mockRestore();
+      txt.mockRestore();
+      textId.mockRestore();
+      mac.mockRestore();
       alert.mockRestore();
     }
   });
