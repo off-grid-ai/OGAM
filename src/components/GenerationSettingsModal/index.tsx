@@ -1,3 +1,4 @@
+import { VideoGenerationSection } from './VideoGenerationSection';
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -25,7 +26,9 @@ interface GenerationSettingsModalProps {
   isRemote?: boolean;
 }
 
-export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = ({
+export const GenerationSettingsModal: React.FC<
+  GenerationSettingsModalProps
+> = ({
   visible,
   onClose,
   onOpenProject,
@@ -113,6 +116,7 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
           />
         </TouchableOpacity>
         {imageSettingsOpen && <ImageGenerationSection />}
+        <VideoGenerationSection />
 
         {/* TEXT GENERATION SETTINGS */}
         <TouchableOpacity
@@ -133,7 +137,8 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
               <View style={styles.remoteNotice}>
                 <Icon name="info" size={13} color={colors.textMuted} />
                 <Text style={styles.remoteNoticeText}>
-                  These settings only apply to local models and won't affect the current remote session.
+                  These settings only apply to local models and won't affect the
+                  current remote session.
                 </Text>
               </View>
             )}

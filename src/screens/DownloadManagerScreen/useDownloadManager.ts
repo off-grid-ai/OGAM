@@ -48,8 +48,12 @@ export function useDownloadManager(): UseDownloadManagerResult {
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const repairingVisionIds = useDownloadStore(s => s.repairingVisionIds);
   const setRepairingVision = useDownloadStore(s => s.setRepairingVision);
-  const { downloadedModels, setDownloadedModels, downloadedImageModels } =
-    useAppStore();
+  const {
+    downloadedModels,
+    setDownloadedModels,
+    downloadedImageModels,
+    downloadedVideoModels,
+  } = useAppStore();
 
   const downloads = useDownloadStore(state => state.downloads);
   const removeDownloadEntry = useDownloadStore(state => state.remove);
@@ -149,6 +153,23 @@ export function useDownloadManager(): UseDownloadManagerResult {
   const completedItems: DownloadItem[] = [
     ...modelStoreCompletedItems(downloadedModels, downloadedImageModels),
     ...voiceCompleted,
+    ...downloadedVideoModels.map(model => ({
+      type: 'completed' as const,
+      modelType: 'video' as const,
+      modelId: model.id,
+      fileName: model.name,
+      name: model.name,
+      author: model.org ?? '',
+      quantization: model.quant ?? '',
+      fileSize: model.files.reduce(
+        (sum, file) => sum + (file.sizeBytes ?? 0),
+        0,
+      ),
+      bytesDownloaded: 0,
+      progress: 1,
+      status: 'completed',
+      downloadedAt: model.downloadedAt,
+    })),
   ];
 
   // One entry per model. A downloaded (registered, on-disk) model is authoritative, so
@@ -293,6 +314,34 @@ export function useDownloadManager(): UseDownloadManagerResult {
   };
 
   const handleDeleteItem = (item: DownloadItem) => {
+    if (item.modelType === 'video') {
+      setAlertState(
+        showAlert(
+          'Delete Video Model',
+          `Delete "${item.fileName}" and free ${formatBytes(item.fileSize)}?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: () => {
+                void modelDownloadService
+                  .remove(idOf(item))
+                  .catch(error =>
+                    setAlertState(
+                      showAlert(
+                        'Could not delete model',
+                        String(error.message),
+                      ),
+                    ),
+                  );
+              },
+            },
+          ],
+        ),
+      );
+      return;
+    }
     if (item.modelType === 'tts' || item.modelType === 'stt') {
       setAlertState(buildVoiceDeleteAlert(item));
       return;

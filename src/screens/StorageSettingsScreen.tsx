@@ -30,10 +30,8 @@ export const StorageSettingsScreen: React.FC = () => {
   const [availableStorage, setAvailableStorage] = useState(0);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  const {
-    downloadedModels,
-    downloadedImageModels,
-  } = useAppStore();
+  const { downloadedModels, downloadedImageModels, downloadedVideoModels } =
+    useAppStore();
   const { conversations } = useChatStore();
   const transcriptionModelCount = useWhisperStore(s => s.presentModelIds.length);
   const speechModelCount = useModelDownloads().filter(
@@ -42,7 +40,17 @@ export const StorageSettingsScreen: React.FC = () => {
   const downloads = useDownloadStore(s => s.downloads);
   const removeFromStore = useDownloadStore(s => s.remove);
 
-  const imageStorageUsed = downloadedImageModels.reduce((total, m) => total + (m.size || 0), 0);
+  const imageStorageUsed = downloadedImageModels.reduce(
+    (total, m) => total + (m.size || 0),
+    0,
+  );
+
+  const videoStorageUsed = downloadedVideoModels.reduce(
+    (total, model) =>
+      total +
+      model.files.reduce((size, file) => size + (file.sizeBytes ?? 0), 0),
+    0,
+  );
 
   // A "stale" entry is a store entry missing the basic fields needed to
   // display or finalize it. Now sourced from the unified download store.
@@ -53,9 +61,9 @@ export const StorageSettingsScreen: React.FC = () => {
   const loadStorageInfo = useCallback(async () => {
     const used = await modelManager.getStorageUsed();
     const available = await modelManager.getAvailableStorage();
-    setStorageUsed(used + imageStorageUsed);
+    setStorageUsed(used + imageStorageUsed + videoStorageUsed);
     setAvailableStorage(available);
-  }, [imageStorageUsed]);
+  }, [imageStorageUsed, videoStorageUsed]);
 
   useEffect(() => {
     loadStorageInfo();
@@ -105,7 +113,10 @@ export const StorageSettingsScreen: React.FC = () => {
         <Text style={styles.title}>Storage</Text>
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+      >
         <Card style={styles.section}>
           <Text style={styles.sectionTitle}>Storage Usage</Text>
           <View style={styles.storageBar}>
@@ -113,12 +124,23 @@ export const StorageSettingsScreen: React.FC = () => {
           </View>
           <View style={styles.storageLegend}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-              <Text style={styles.legendText}>Used: {hardwareService.formatBytes(storageUsed)}</Text>
+              <View
+                style={[styles.legendDot, { backgroundColor: colors.primary }]}
+              />
+              <Text style={styles.legendText}>
+                Used: {hardwareService.formatBytes(storageUsed)}
+              </Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.surfaceLight }]} />
-              <Text style={styles.legendText}>Free: {hardwareService.formatBytes(availableStorage)}</Text>
+              <View
+                style={[
+                  styles.legendDot,
+                  { backgroundColor: colors.surfaceLight },
+                ]}
+              />
+              <Text style={styles.legendText}>
+                Free: {hardwareService.formatBytes(availableStorage)}
+              </Text>
             </View>
           </View>
         </Card>
@@ -138,6 +160,13 @@ export const StorageSettingsScreen: React.FC = () => {
               <Text style={styles.infoLabel}>Image Models</Text>
             </View>
             <Text style={styles.infoValue}>{downloadedImageModels.length}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <View style={styles.infoRowLeft}>
+              <Icon name="video" size={18} color={colors.primary} />
+              <Text style={styles.infoLabel}>Video Models</Text>
+            </View>
+            <Text style={styles.infoValue}>{downloadedVideoModels.length}</Text>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
@@ -189,15 +218,22 @@ export const StorageSettingsScreen: React.FC = () => {
                 <Text style={styles.clearAllText}>Clear All</Text>
               </TouchableOpacity>
             </View>
-            <Text style={[styles.hint, { textAlign: 'left' as const, marginBottom: SPACING.md }]}>
-              These download entries have invalid or missing data and can be safely cleared.
+            <Text
+              style={[
+                styles.hint,
+                { textAlign: 'left' as const, marginBottom: SPACING.md },
+              ]}
+            >
+              These download entries have invalid or missing data and can be
+              safely cleared.
             </Text>
             {staleDownloads.map(entry => (
               <View key={entry.modelKey} style={styles.orphanedRow}>
                 <View style={styles.orphanedInfo}>
                   <Text style={styles.orphanedName}>Download #{entry.downloadId}</Text>
                   <Text style={styles.orphanedMeta}>
-                    {entry.fileName || 'Unknown file'} • {entry.modelId || 'Unknown model'}
+                    {entry.fileName || 'Unknown file'} •{' '}
+                    {entry.modelId || 'Unknown model'}
                   </Text>
                 </View>
                 <TouchableOpacity

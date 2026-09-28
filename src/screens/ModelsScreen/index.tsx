@@ -1,3 +1,4 @@
+import { VideoModelsTab } from './VideoModelsTab';
 import React, { useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,9 +18,14 @@ import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import type { ModelTab } from './types';
 import { ScreenHeader } from '../../components/ScreenHeader';
 
-const MODEL_TABS: ReadonlyArray<{ key: ModelTab; label: string; testID?: string }> = [
+const MODEL_TABS: ReadonlyArray<{
+  key: ModelTab;
+  label: string;
+  testID?: string;
+}> = [
   { key: 'text', label: 'Text' },
   { key: 'image', label: 'Image' },
+  { key: 'video', label: 'Video' },
   { key: 'voice', label: 'Voice', testID: 'voice-models-tab' },
   { key: 'transcription', label: 'Speech', testID: 'transcription-models-tab' },
 ];
@@ -39,11 +45,16 @@ const ScreenFrame: React.FC<{
     <SafeAreaView style={styles.container} edges={['top']} testID="models-screen">{children}</SafeAreaView>
   );
 
-const HideWhenEmbedded: React.FC<{ embedded: boolean; children: React.ReactNode }> = ({ embedded, children }) => (
+const HideWhenEmbedded: React.FC<{
+  embedded: boolean;
+  children: React.ReactNode;
+}> = ({ embedded, children }) => (
   <View style={embedded ? collapsedStyle.hidden : undefined}>{children}</View>
 );
 
-export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) => {
+export const ModelsScreen: React.FC<ModelsScreenProps> = ({
+  embedded = false,
+}) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const vm = useModelsScreen();
@@ -114,24 +125,33 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
           />
         </HideWhenEmbedded>
 
-        <HideWhenEmbedded embedded={embedded}><View>
-          {vm.activeTab === 'text' && vm.isImporting && vm.importProgress && (
-            <View style={styles.importProgressCard}>
-              <View style={styles.importProgressHeader}>
-                <Icon name="file" size={18} color={colors.primary} />
-                <Text style={styles.importProgressText} numberOfLines={1}>
-                  Importing {vm.importProgress.fileName}
+        <HideWhenEmbedded embedded={embedded}>
+          <View>
+            {vm.activeTab === 'text' && vm.isImporting && vm.importProgress && (
+              <View style={styles.importProgressCard}>
+                <View style={styles.importProgressHeader}>
+                  <Icon name="file" size={18} color={colors.primary} />
+                  <Text style={styles.importProgressText} numberOfLines={1}>
+                    Importing {vm.importProgress.fileName}
+                  </Text>
+                </View>
+                <View style={styles.imageProgressBar}>
+                  <View
+                    style={[
+                      styles.imageProgressFill,
+                      {
+                        width: `${Math.round(vm.importProgress.fraction * 100)}%`,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.importProgressPercent}>
+                  {Math.round(vm.importProgress.fraction * 100)}%
                 </Text>
               </View>
-              <View style={styles.imageProgressBar}>
-                <View style={[styles.imageProgressFill, { width: `${Math.round(vm.importProgress.fraction * 100)}%` }]} />
-              </View>
-              <Text style={styles.importProgressPercent}>
-                {Math.round(vm.importProgress.fraction * 100)}%
-              </Text>
-            </View>
-          )}
-        </View></HideWhenEmbedded>
+            )}
+          </View>
+        </HideWhenEmbedded>
 
         {/* Tab Bar (horizontally scrollable — four tabs don't fit on a phone) */}
         <ScrollView
@@ -205,6 +225,7 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
       )}
 
       {/* Image Models Tab */}
+      {vm.activeTab === 'video' && <VideoModelsTab />}
       {vm.activeTab === 'image' && (
         <ImageModelsTab
           imageSearchQuery={vm.imageSearchQuery}

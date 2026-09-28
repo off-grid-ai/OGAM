@@ -1,3 +1,4 @@
+import { VideoGenerationSection } from '../../components/GenerationSettingsModal/VideoGenerationSection';
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -47,19 +48,19 @@ export const ModelSettingsScreen: React.FC = () => {
   const handleReset = () => {
     setAlertState(
       showAlert(
-      'Reset All Settings',
-      'This will restore all model settings to their defaults. You may need to reload the model for changes to take effect.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
+        'Reset All Settings',
+        'This will restore all model settings to their defaults. You may need to reload the model for changes to take effect.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Reset',
+            style: 'destructive',
             onPress: () => {
               resetSettings();
               setAlertState(hideAlert());
             },
-        },
-      ],
+          },
+        ],
       ),
     );
   };
@@ -110,6 +111,7 @@ export const ModelSettingsScreen: React.FC = () => {
           />
         </TouchableOpacity>
         {imageOpen && <ImageGenerationSection />}
+        <VideoGenerationSection />
 
         <TouchableOpacity
           style={styles.accordionHeader}
