@@ -23,6 +23,7 @@ const sending = (overrides: Record<string, unknown> = {}) => ({
   bytesPerSecond: 100_000,
   status: 'transferring' as const,
   kind: 'file',
+  updatedAt: 1_725_000_000_000,
   ...overrides,
 });
 

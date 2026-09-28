@@ -502,7 +502,7 @@ let starting: ReturnType<OffGridApplication['start']> | null = null;
 
 function mobileModelServices(): Pick<
   typeof import('../modelServices'),
-  'startMobileModelServices' | 'stopMobileModelServices'
+  'startMobileModelServices' | 'stopMobileModelServices' | 'refreshMobileModelServices'
 > {
   // Deferred because modelServices resolves this composition root through applicationFacade().
   // getMobileApplication() has created the root before this function is called, so both sides use
