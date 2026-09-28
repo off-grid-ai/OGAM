@@ -61,8 +61,9 @@ describe('AmbientOnboardingScreen', () => {
     fireEvent.press(getByTestId('ambient-onboard-opt-always-on')); // 4 Capture
     expect(m.setCaptureMode).toHaveBeenCalledWith('always-on');
     await tapNext(getByTestId);
-    await tapNext(getByTestId); // 5 Privacy -> Next
-    await act(async () => fireEvent.press(getByTestId('ambient-onboard-start'))); // 6 Ready -> Start
+    await tapNext(getByTestId); // 5 Privacy -> Next (to step 6: voice enrollment)
+    await act(async () => fireEvent.press(getByTestId('ambient-onboard-voice-later'))); // 6 Voice -> skip
+    await act(async () => fireEvent.press(getByTestId('ambient-onboard-start'))); // 7 Ready -> Start
     expect(m.setOnboardingComplete).toHaveBeenCalledWith(true);
     expect(mockReplace).toHaveBeenCalledWith('AmbientDay');
   });

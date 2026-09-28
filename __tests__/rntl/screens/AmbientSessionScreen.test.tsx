@@ -69,9 +69,10 @@ describe('AmbientSessionScreen', () => {
     expect(queryAllByTestId('ambient-decision')).toHaveLength(1);
     expect(queryAllByTestId('ambient-action')).toHaveLength(1);
     expect(getByTestId('ambient-people')).toHaveTextContent('Priya, Sam');
-    // only the transcribed segment shows a line (the null one is skipped)
+    // only the transcribed segment shows a line (the null one is skipped). Segment 'a' is flagged,
+    // so its line carries a "▎" marker in the same Text node — match the transcript as a substring.
     expect(queryAllByTestId('ambient-transcript-line')).toHaveLength(1);
-    expect(getByText('Lets go with vendor B.')).toBeTruthy();
+    expect(getByText(/Lets go with vendor B\./)).toBeTruthy();
   });
 
   it('shares an action item to the OS when tapped (follow-through)', () => {

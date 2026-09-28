@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, act } from '@testing-library/react-native';
 import { Share } from 'react-native';
 
 jest.mock('@react-navigation/native', () => {
@@ -21,12 +21,14 @@ jest.mock('../../../src/theme', () => {
 });
 
 const mockStart = jest.fn();
-const mockProcessPending = jest.fn();
+const mockProcessPending = jest.fn(async () => {});
 jest.mock('../../../src/hooks/useAmbientCapture', () => ({
   useAmbientCapture: () => ({
     phase: 'idle', recording: false, processing: false, liveCount: 0, elapsedMs: 0,
     flagCount: 0, progress: null, error: null, start: mockStart, stop: jest.fn(), flag: jest.fn(), processPending: mockProcessPending
-  })
+  }),
+  processPending: mockProcessPending,
+  currentCapturePhase: () => 'idle'
 }));
 jest.mock('../../../src/services/ambient/journalFactory', () => ({
   journalForDay: jest.fn(async () => ({ text: '', status: 'no-speech' }))
@@ -66,6 +68,8 @@ jest.mock('../../../src/stores/ambientTimelineStore', () => {
 
 import { AmbientDayScreen } from '../../../src/screens/AmbientDayScreen';
 import { useAmbientTimelineStore } from '../../../src/stores/ambientTimelineStore';
+import { mobileSpeechInputPorts } from '../../../src/services/adapters/speech/mobileSpeechInputPorts';
+import { mobileTextEngineControl } from '../../../src/services/modelServices/textEngineControl';
 const store = useAmbientTimelineStore as any;
 
 const now = Date.now();
@@ -100,6 +104,9 @@ describe('AmbientDayScreen', () => {
     expect(getByTestId('ambient-journal')).toHaveTextContent('A build-focused day.');
     expect(queryAllByTestId('ambient-task')).toHaveLength(1);
     expect(getByText('Fix the build')).toBeTruthy();
+    // The timeline detail now lives behind the Timeline chip; open it to see the day's rows.
+    expect(getByText('1 conversation')).toBeTruthy();
+    fireEvent.press(getByTestId('ambient-open-timeline'));
     expect(queryAllByTestId('ambient-timeline-row')).toHaveLength(1);
   });
 
@@ -110,10 +117,21 @@ describe('AmbientDayScreen', () => {
     expect(mockToggle).toHaveBeenCalledWith('s1#0');
   });
 
-  it('starts recording from the mic button', () => {
-    const { getByTestId } = render(<AmbientDayScreen />);
-    fireEvent.press(getByTestId('ambient-day-record'));
-    expect(mockStart).toHaveBeenCalledTimes(1);
+  it('starts recording from the mic button', async () => {
+    // Recording now gates on the new-contract readiness ports: a ready transcriber + text engine
+    // let the FAB start directly instead of raising the "before you record" warning.
+    const rdy = jest.spyOn(mobileSpeechInputPorts.transcriber, 'ready').mockReturnValue(true);
+    const txt = jest.spyOn(mobileTextEngineControl, 'isReady').mockReturnValue(true);
+    try {
+      const { getByTestId } = render(<AmbientDayScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('ambient-day-record'));
+      });
+      expect(mockStart).toHaveBeenCalledTimes(1);
+    } finally {
+      rdy.mockRestore();
+      txt.mockRestore();
+    }
   });
 
   it('renders cached actions and approves one (shares + resolves)', () => {
@@ -143,12 +161,14 @@ describe('AmbientDayScreen', () => {
 
   it('switches the processing mode', () => {
     const { getByTestId } = render(<AmbientDayScreen />);
+    fireEvent.press(getByTestId('ambient-empty-settings')); // settings now live behind the gear
     fireEvent.press(getByTestId('ambient-mode-nightly'));
     expect(mockSetMode).toHaveBeenCalledWith('nightly');
   });
 
   it('changes the audio retention window', () => {
     const { getByTestId } = render(<AmbientDayScreen />);
+    fireEvent.press(getByTestId('ambient-empty-settings')); // settings now live behind the gear
     fireEvent.press(getByTestId('ambient-retention-30'));
     expect(mockSetRetention).toHaveBeenCalledWith(30);
   });
