@@ -22,13 +22,21 @@ jest.mock('../../../src/theme', () => {
 
 const mockStart = jest.fn();
 const mockProcessPending = jest.fn(async () => {});
+let mockCaptureError: string | null = null; // per-test override for the capture hook's error field
 jest.mock('../../../src/hooks/useAmbientCapture', () => ({
   useAmbientCapture: () => ({
     phase: 'idle', recording: false, processing: false, liveCount: 0, elapsedMs: 0,
-    flagCount: 0, progress: null, error: null, start: mockStart, stop: jest.fn(), flag: jest.fn(), processPending: mockProcessPending
+    flagCount: 0, progress: null, error: mockCaptureError, start: mockStart, stop: jest.fn(), flag: jest.fn(), processPending: mockProcessPending
   }),
   processPending: mockProcessPending,
   currentCapturePhase: () => 'idle'
+}));
+// Pre-record memory pre-check: default to "fits" so existing record tests don't trip the warning.
+jest.mock('../../../src/services/modelServices/residencyIntents', () => ({
+  mobileResidencyIntents: {
+    canPreloadText: jest.fn(async () => true),
+    canPreloadTranscription: jest.fn(() => true)
+  }
 }));
 jest.mock('../../../src/services/ambient/journalFactory', () => ({
   journalForDay: jest.fn(async () => ({ text: '', status: 'no-speech' }))
@@ -66,10 +74,15 @@ jest.mock('../../../src/stores/ambientTimelineStore', () => {
   return { useAmbientTimelineStore: hook };
 });
 
+import { Alert } from 'react-native';
 import { AmbientDayScreen } from '../../../src/screens/AmbientDayScreen';
 import { useAmbientTimelineStore } from '../../../src/stores/ambientTimelineStore';
 import { mobileSpeechInputPorts } from '../../../src/services/adapters/speech/mobileSpeechInputPorts';
 import { mobileTextEngineControl } from '../../../src/services/modelServices/textEngineControl';
+import { mobileResidencyIntents } from '../../../src/services/modelServices/residencyIntents';
+import * as mobileLLMService from '../../../src/services/modelServices/mobileLLMService';
+import * as macStt from '../../../src/services/ambient/macSttExecutorFactory';
+import * as modelState from '../../../src/services/modelServices/modelState';
 const store = useAmbientTimelineStore as any;
 
 const now = Date.now();
@@ -87,7 +100,8 @@ describe('AmbientDayScreen', () => {
     mockProcessPending.mockClear();
     mockSetMode.mockClear();
     mockSetRetention.mockClear();
-    store.__set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {}, pendingCaptures: [], processingMode: 'live', audioRetentionDays: 7, onboardingComplete: true });
+    mockCaptureError = null;
+    store.__set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {}, pendingCaptures: [], processingMode: 'live', audioRetentionDays: 7, onboardingComplete: true, useMacForTranscription: false, onDeviceOnly: false });
   });
 
   it('shows the empty state when the day has nothing', () => {
@@ -171,5 +185,77 @@ describe('AmbientDayScreen', () => {
     fireEvent.press(getByTestId('ambient-empty-settings')); // settings now live behind the gear
     fireEvent.press(getByTestId('ambient-retention-30'));
     expect(mockSetRetention).toHaveBeenCalledWith(30);
+  });
+
+  it('shows on the home screen whether the phone or the Mac will transcribe', () => {
+    const rdy = jest.spyOn(mobileSpeechInputPorts.transcriber, 'ready');
+    const mac = jest.spyOn(macStt, 'macOffloadReady');
+    const route = jest.spyOn(mobileLLMService, 'activeMobileRoute');
+    route.mockReturnValue({ modality: 'transcription', model: null } as any);
+    try {
+      // Local model loaded, Mac not reachable → on this phone.
+      rdy.mockReturnValue(true);
+      mac.mockReturnValue(false);
+      const phone = render(<AmbientDayScreen />);
+      expect(phone.getByTestId('ambient-transcription-source')).toHaveTextContent(
+        'Transcribing on this phone'
+      );
+      phone.unmount();
+
+      // No local model, Mac enabled + reachable → on your Mac.
+      rdy.mockReturnValue(false);
+      mac.mockReturnValue(true);
+      store.__set({ useMacForTranscription: true, onDeviceOnly: false });
+      const remote = render(<AmbientDayScreen />);
+      expect(remote.getByTestId('ambient-transcription-source')).toHaveTextContent(
+        'Transcribing on your Mac'
+      );
+      remote.unmount();
+
+      // Nothing available → not set up.
+      rdy.mockReturnValue(false);
+      mac.mockReturnValue(false);
+      store.__set({ useMacForTranscription: false });
+      const none = render(<AmbientDayScreen />);
+      expect(none.getByTestId('ambient-transcription-source')).toHaveTextContent(
+        /No transcription set up/
+      );
+    } finally {
+      rdy.mockRestore();
+      mac.mockRestore();
+      route.mockRestore();
+    }
+  });
+
+  it('turns the pending banner into a Retry that shows why processing failed', () => {
+    mockCaptureError = 'Not enough memory to load the model.';
+    store.__set({ pendingCaptures: [{ id: '1' }] });
+    const { getByTestId } = render(<AmbientDayScreen />);
+    const banner = getByTestId('ambient-process-pending');
+    expect(banner).toHaveTextContent(/Not enough memory to load the model\./);
+    expect(banner).toHaveTextContent(/Retry/);
+    fireEvent.press(banner);
+    expect(mockProcessPending).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns about memory before recording when relying on the phone and it is tight', async () => {
+    const rdy = jest.spyOn(mobileSpeechInputPorts.transcriber, 'ready').mockReturnValue(true);
+    const txt = jest.spyOn(mobileTextEngineControl, 'isReady').mockReturnValue(true);
+    const textId = jest.spyOn(modelState, 'selectedTextModelId').mockReturnValue('text-model');
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    (mobileResidencyIntents.canPreloadText as jest.Mock).mockResolvedValueOnce(false);
+    try {
+      const { getByTestId } = render(<AmbientDayScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('ambient-day-record'));
+      });
+      expect(alert).toHaveBeenCalledWith('Low on memory', expect.any(String), expect.any(Array));
+      expect(mockStart).not.toHaveBeenCalled(); // recording is gated behind the warning
+    } finally {
+      rdy.mockRestore();
+      txt.mockRestore();
+      textId.mockRestore();
+      alert.mockRestore();
+    }
   });
 });

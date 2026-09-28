@@ -54,6 +54,7 @@ import { mobileTextEngineControl } from '../services/modelServices/textEngineCon
 import { loadTranscriptionModel } from '../services/transcriptionModelApplication';
 import { activeMobileRoute } from '../services/modelServices/mobileLLMService';
 import { selectedTextModelId } from '../services/modelServices/modelState';
+import { mobileResidencyIntents } from '../services/modelServices/residencyIntents';
 import { formatTodosForActions, formatCallsForActions } from '../services/ambient/actionsModel';
 import { askDayWithDeviceLLM } from '../services/ambient/askDayFactory';
 import type { AskResult } from '../services/ambient/askDay';
@@ -139,10 +140,17 @@ export function AmbientDayScreen(): React.ReactElement {
   // (local models load lazily on first record — a downloaded+selected model must not read as missing),
   // or the Mac can do it. Mirrors the record-time gate so the empty-state nudge never lies.
   const localTranscriptionModel = activeMobileRoute('transcription').model;
-  const transcriptionSetUp =
-    ready.stt ||
-    (!!localTranscriptionModel && localTranscriptionModel.source !== 'remote') ||
-    (useMacForTranscription && !onDeviceOnly && ready.mac);
+  const hasLocalTranscription =
+    ready.stt || (!!localTranscriptionModel && localTranscriptionModel.source !== 'remote');
+  const macActiveForTranscription = useMacForTranscription && !onDeviceOnly && ready.mac;
+  const transcriptionSetUp = hasLocalTranscription || macActiveForTranscription;
+  // What will actually do the work right now. The record path prefers the Mac when it's enabled and
+  // reachable, otherwise the phone's local model. Surfaced on the home screen so it's never a surprise.
+  const transcriptionSource: 'mac' | 'local' | 'none' = macActiveForTranscription
+    ? 'mac'
+    : hasLocalTranscription
+      ? 'local'
+      : 'none';
 
   // Wipe the Day back to a first-run state (recordings, journal, to-dos, timeline, queue).
   const resetDay = useCallback(() => {
@@ -209,6 +217,36 @@ export function AmbientDayScreen(): React.ReactElement {
       selectedTextModelId() != null ||
       (!onDeviceOnly && mobileTextEngineControl.isRemoteActive());
     if (transcriptionReady && summaryReady) {
+      // Everything is "set up" — but a local model can still fail to LOAD at processing time if the
+      // phone is low on memory, which would waste the whole session. When we're not offloading to the
+      // Mac, check up front (this does NOT trigger a load) and warn so it can be avoided or accepted.
+      const willUseMac = useMacForTranscription && !onDeviceOnly && macOffloadReady();
+      if (!willUseMac) {
+        const tight: string[] = [];
+        const textId = selectedTextModelId();
+        if (textId && !(await mobileResidencyIntents.canPreloadText(textId))) tight.push('summary');
+        const sttModel = activeMobileRoute('transcription').model;
+        if (
+          sttModel &&
+          sttModel.source !== 'remote' &&
+          !mobileResidencyIntents.canPreloadTranscription(sttModel.id)
+        ) {
+          tight.push('transcription');
+        }
+        if (tight.length > 0) {
+          const models = tight.join(' and ');
+          Alert.alert(
+            'Low on memory',
+            `This phone may not have enough free memory to load the ${models} model${tight.length > 1 ? 's' : ''} when it processes this recording. Your audio is always saved, but processing can fail until you free up memory (close other apps) or connect your Mac — you can retry any time from the Day screen.`,
+            [
+              { text: 'Connect Mac', onPress: () => openSync() },
+              { text: 'Record anyway', onPress: () => void capture.start() },
+              { text: 'Cancel', style: 'cancel' }
+            ]
+          );
+          return;
+        }
+      }
       void capture.start();
       return;
     }
@@ -235,7 +273,7 @@ export function AmbientDayScreen(): React.ReactElement {
         { text: 'Cancel', style: 'cancel' }
       ]
     );
-  }, [capture, navigation, useMacForTranscription, onDeviceOnly, refreshReady]);
+  }, [capture, navigation, useMacForTranscription, onDeviceOnly, refreshReady, openSync]);
   // Always-on orchestration is hoisted to AlwaysOnDaemon (app root) so Live mode records
   // app-wide from launch, not only while this screen is mounted.
 
@@ -425,15 +463,30 @@ export function AmbientDayScreen(): React.ReactElement {
       </View>
 
       <CaptureStrip styles={styles} colors={colors} capture={capture} />
-      {capture.error ? <Text style={styles.error}>{capture.error}</Text> : null}
       {pendingCaptures.length > 0 && !capture.processing ? (
-        <TouchableOpacity style={styles.pending} onPress={capture.processPending} testID="ambient-process-pending">
-          <Icon name="clock" size={15} color={colors.primary} />
+        // A failed run keeps the recordings queued (audio is never dropped), so this doubles as the
+        // retry: on error it shows WHY and a Retry, otherwise the normal "process now" nudge.
+        <TouchableOpacity
+          style={[styles.pending, !!capture.error && styles.pendingError]}
+          onPress={capture.processPending}
+          testID="ambient-process-pending"
+        >
+          <Icon
+            name={capture.error ? 'alert-triangle' : 'clock'}
+            size={15}
+            color={capture.error ? colors.error : colors.primary}
+          />
           <Text style={styles.pendingText}>
-            {pendingCaptures.length} recording{pendingCaptures.length === 1 ? '' : 's'} waiting
+            {capture.error
+              ? capture.error
+              : `${pendingCaptures.length} recording${pendingCaptures.length === 1 ? '' : 's'} waiting`}
           </Text>
-          <Text style={styles.pendingCta}>Process now</Text>
+          <Text style={[styles.pendingCta, !!capture.error && styles.pendingCtaError]}>
+            {capture.error ? 'Retry' : 'Process now'}
+          </Text>
         </TouchableOpacity>
+      ) : capture.error ? (
+        <Text style={styles.error}>{capture.error}</Text>
       ) : null}
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
@@ -646,6 +699,35 @@ export function AmbientDayScreen(): React.ReactElement {
           <Text style={styles.answerText}>{answerText(askResult)}</Text>
         </View>
       ) : null}
+      {/* Always-visible: which engine will transcribe right now — the Mac, this phone, or nothing set up. */}
+      <TouchableOpacity
+        style={styles.sourceBar}
+        onPress={transcriptionSource === 'none' ? openModels : undefined}
+        disabled={transcriptionSource !== 'none'}
+        activeOpacity={transcriptionSource === 'none' ? 0.7 : 1}
+        testID="ambient-transcription-source"
+      >
+        <Icon
+          name={
+            transcriptionSource === 'mac'
+              ? 'airplay'
+              : transcriptionSource === 'local'
+                ? 'smartphone'
+                : 'alert-circle'
+          }
+          size={13}
+          color={transcriptionSource === 'none' ? colors.textMuted : colors.primary}
+        />
+        <Text
+          style={[styles.sourceBarText, transcriptionSource === 'none' && styles.sourceBarTextMuted]}
+        >
+          {transcriptionSource === 'mac'
+            ? 'Transcribing on your Mac'
+            : transcriptionSource === 'local'
+              ? 'Transcribing on this phone'
+              : 'No transcription set up — tap to set up'}
+        </Text>
+      </TouchableOpacity>
       <View style={styles.dock}>
         <View style={styles.askbar}>
           <Icon name="search" size={15} color={colors.textMuted} />
@@ -1118,8 +1200,14 @@ function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     liveText: { ...TYPOGRAPHY.bodySmall, color: colors.text, lineHeight: 18 },
     // pending
     pending: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginHorizontal: SPACING.md, marginTop: SPACING.sm, padding: SPACING.md, borderWidth: 1, borderColor: colors.primary, borderRadius: RADIUS, backgroundColor: colors.surface },
+    pendingError: { borderColor: colors.error },
     pendingText: { ...TYPOGRAPHY.bodySmall, color: colors.text, flex: 1 },
     pendingCta: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
+    pendingCtaError: { color: colors.error },
+    // Always-visible transcription-source bar above the dock
+    sourceBar: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm },
+    sourceBarText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
+    sourceBarTextMuted: { color: colors.textMuted },
     // settings sheet
     sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
     sheet: { maxHeight: '85%', backgroundColor: colors.surface, borderTopLeftRadius: SPACING.lg, borderTopRightRadius: SPACING.lg, borderTopWidth: 1, borderColor: colors.border, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl, paddingTop: SPACING.sm },
