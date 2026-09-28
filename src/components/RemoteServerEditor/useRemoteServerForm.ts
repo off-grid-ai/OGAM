@@ -20,6 +20,7 @@ interface FormOptions {
 
 interface ModelIdSetters {
   text: React.Dispatch<React.SetStateAction<string>>;
+  video: React.Dispatch<React.SetStateAction<string>>;
   image: React.Dispatch<React.SetStateAction<string>>;
   transcription: React.Dispatch<React.SetStateAction<string>>;
   voice: React.Dispatch<React.SetStateAction<string>>;
@@ -32,12 +33,14 @@ function applyDiscoveredModelIds(
   if (result.modelManagement === 'offgrid-desktop-v1') {
     setters.text(result.mediaModels?.text ?? '');
     setters.image(result.mediaModels?.image ?? '');
+    setters.video(result.mediaModels?.video ?? '');
     setters.transcription(result.mediaModels?.transcription ?? '');
     setters.voice(result.mediaModels?.voice ?? '');
     return;
   }
   setters.text(
-    current => current || result.mediaModels?.text || result.models?.[0]?.id || '',
+    current =>
+      current || result.mediaModels?.text || result.models?.[0]?.id || '',
   );
   setters.image(current => current || result.mediaModels?.image || '');
   setters.transcription(
@@ -59,6 +62,7 @@ export function useRemoteServerForm({
   const [notes, setNotes] = useState('');
   const [textModelId, setTextModelId] = useState('');
   const [imageModelId, setImageModelId] = useState('');
+  const [videoModelId, setVideoModelId] = useState('');
   const [transcriptionModelId, setTranscriptionModelId] = useState('');
   const [voiceModelId, setVoiceModelId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -85,6 +89,7 @@ export function useRemoteServerForm({
       setNotes(server.notes || '');
       setTextModelId(server.mediaModels?.text || '');
       setImageModelId(server.mediaModels?.image || '');
+      setVideoModelId(server.mediaModels?.video || '');
       setTranscriptionModelId(server.mediaModels?.transcription || '');
       setVoiceModelId(server.mediaModels?.voice || '');
       // Load existing API key from keychain so user can see it's set
@@ -104,6 +109,7 @@ export function useRemoteServerForm({
       setNotes('');
       setTextModelId('');
       setImageModelId('');
+      setVideoModelId('');
       setTranscriptionModelId('');
       setVoiceModelId('');
     }
@@ -159,6 +165,7 @@ export function useRemoteServerForm({
     applyDiscoveredModelIds(result, {
       text: setTextModelId,
       image: setImageModelId,
+      video: setVideoModelId,
       transcription: setTranscriptionModelId,
       voice: setVoiceModelId,
     });
@@ -226,6 +233,9 @@ export function useRemoteServerForm({
       const mediaModels = {
         ...(textModelId.trim() ? { text: textModelId.trim() } : {}),
         ...(imageModelId.trim() ? { image: imageModelId.trim() } : {}),
+        ...(modelManagement === 'offgrid-desktop-v1' && videoModelId.trim()
+          ? { video: videoModelId.trim() }
+          : {}),
         ...(transcriptionModelId.trim()
           ? { transcription: transcriptionModelId.trim() }
           : {}),
@@ -245,6 +255,7 @@ export function useRemoteServerForm({
         }
         for (const category of [
           'image',
+          'video',
           'transcription',
           'voice',
         ] as const) {
@@ -337,6 +348,7 @@ export function useRemoteServerForm({
     notes,
     textModelId,
     imageModelId,
+    videoModelId,
     transcriptionModelId,
     voiceModelId,
     modelCatalog,
@@ -353,11 +365,11 @@ export function useRemoteServerForm({
     if (endpoint && !isPrivateNetworkEndpoint(endpoint)) {
       setAlertState(
         showAlert(
-        'Public Network Warning',
-        'This endpoint appears to be on the public internet. Your data will be sent to a remote server. Continue?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Continue', onPress: () => saveServer() },
+          'Public Network Warning',
+          'This endpoint appears to be on the public internet. Your data will be sent to a remote server. Continue?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Continue', onPress: () => saveServer() },
           ],
         ),
       );
@@ -378,7 +390,9 @@ export function useRemoteServerForm({
     textModelId,
     setTextModelId,
     imageModelId,
+    videoModelId,
     setImageModelId,
+    setVideoModelId,
     transcriptionModelId,
     setTranscriptionModelId,
     voiceModelId,

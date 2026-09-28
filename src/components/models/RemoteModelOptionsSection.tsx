@@ -56,13 +56,30 @@ export const RemoteModelOptionsSection: React.FC<Props> = ({
             key={key}
             compact
             testID={`remote-${category}-model-${key}`}
-            model={{ id: option.id, name: option.name, author: option.serverName,
-              modelType: category === 'image' ? 'vision' : undefined }}
+            model={{
+              id: option.id,
+              name: option.name,
+              author: option.serverName,
+              modelType: category === 'image' ? 'vision' : undefined,
+            }}
             sourceBadge="Remote"
-            facts={[category === 'transcription' ? 'Transcription' : category === 'voice' ? 'Voice' : 'Image']}
+            facts={[
+              category === 'video'
+                ? 'Video'
+                : category === 'transcription'
+                  ? 'Transcription'
+                  : category === 'voice'
+                    ? 'Voice'
+                    : 'Image',
+            ]}
             isActive={active}
-            trailing={selecting === key ? <LoadingDots color={colors.primary} />
-              : active ? <Icon name="check" size={16} color={colors.primary} /> : null}
+            trailing={
+              selecting === key ? (
+                <LoadingDots color={colors.primary} />
+              ) : active ? (
+                <Icon name="check" size={16} color={colors.primary} />
+              ) : null
+            }
             disabled={selecting !== null}
             onPress={async () => {
               setSelecting(key);
@@ -81,8 +98,8 @@ export const RemoteModelOptionsSection: React.FC<Props> = ({
                   isTransportFailure(reason)
                     ? `Could not reach ${serverName}. Models on this phone still work. Check the server address and network.`
                     : reason instanceof Error
-                    ? reason.message
-                    : 'The remote model could not be selected.',
+                      ? reason.message
+                      : 'The remote model could not be selected.',
                 );
               } finally {
                 setSelecting(null);

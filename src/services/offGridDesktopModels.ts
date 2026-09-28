@@ -44,6 +44,7 @@ function record(value: unknown): Record<string, unknown> | null {
 
 function categoryForKind(kind: string): GatewayCategory {
   if (kind === 'text' || kind === 'vision' || kind === 'chat') return 'text';
+  if (kind === 'video') return 'video';
   if (kind === 'image') return 'image';
   if (kind === 'voice' || kind === 'speech') return 'voice';
   if (kind === 'transcription') return 'transcription';
@@ -63,7 +64,11 @@ function modelFiles(value: unknown): string[] {
 
 function parseCatalog(value: unknown): GatewayCatalogModel[] | null {
   const payload = record(value);
-  if (!payload || !Array.isArray(payload.models) || !Array.isArray(payload.kinds)) {
+  if (
+    !payload ||
+    !Array.isArray(payload.models) ||
+    !Array.isArray(payload.kinds)
+  ) {
     return null;
   }
   const models: GatewayCatalogModel[] = [];
@@ -191,6 +196,7 @@ function projectActive(
   active: Record<string, string | null>,
 ): RemoteMediaModelIds {
   const text = activeOptionId(catalog, 'text', active.text);
+  const video = activeOptionId(catalog, 'video', active.video);
   const image = activeOptionId(catalog, 'image', active.image);
   const transcription = activeOptionId(
     catalog,
@@ -205,6 +211,7 @@ function projectActive(
   return {
     ...(text ? { text } : {}),
     ...(image ? { image } : {}),
+    ...(video ? { video } : {}),
     ...(transcription ? { transcription } : {}),
     ...(voice ? { voice } : {}),
   };
@@ -224,7 +231,8 @@ function textModels(
     const predicted = predictGgufCapabilities(model);
     const hasLiveCapabilities = live?.capabilities !== undefined && live.capabilities !== null;
     const supportsThinking = hasLiveCapabilities
-      ? live?.capabilities?.includes('reasoning') === true || live?.reasoningMandatory === true
+      ? live?.capabilities?.includes('reasoning') === true ||
+        live?.reasoningMandatory === true
       : predicted.thinking;
     return [
       {
@@ -232,17 +240,18 @@ function textModels(
         name: model.name,
         serverId,
         capabilities: {
-          supportsVision: model.kind === 'vision' || live?.capabilities?.includes('vision') === true,
+          supportsVision:
+            model.kind === 'vision' ||
+            live?.capabilities?.includes('vision') === true,
           supportsToolCalling: hasLiveCapabilities
             ? live?.capabilities?.includes('tools') === true
-            // Desktop offloads idle models, so /v1/models can omit capabilities.
-            // Keep tools usable until the runtime makes an authoritative claim.
-            : true,
+            : // Desktop offloads idle models, so /v1/models can omit capabilities.
+              // Keep tools usable until the runtime makes an authoritative claim.
+              true,
           supportsThinking,
-          acceptsThinkingKwarg: model.id.startsWith('remote-vision:') && supportsThinking,
-          ...(live?.reasoningMandatory
-            ? { thinkingLevelsOnly: true }
-            : {}),
+          acceptsThinkingKwarg:
+            model.id.startsWith('remote-vision:') && supportsThinking,
+          ...(live?.reasoningMandatory ? { thinkingLevelsOnly: true } : {}),
         },
         lastUpdated: new Date().toISOString(),
       },
@@ -262,11 +271,7 @@ export async function readOffGridDesktopModelState(
         gatewayFetch(server, '/v1/models/active'),
         gatewayFetch(server, '/v1/models'),
       ]);
-    if (
-      !catalogResponse.ok ||
-      !installedResponse.ok ||
-      !activeResponse.ok
-    ) {
+    if (!catalogResponse.ok || !installedResponse.ok || !activeResponse.ok) {
       return null;
     }
     const [catalogPayload, installedPayload, activePayload] =

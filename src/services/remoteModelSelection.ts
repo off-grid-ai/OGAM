@@ -27,16 +27,21 @@ export function remoteServerModelOptions(
   servers: RemoteServer[],
   category: RemoteModelCategory,
 ): RemoteServerModelOption[] {
-  return servers.flatMap(server => {
-    const reported = server.modelCatalog?.[category] ?? [];
-    const options =
-      reported.length > 0 ? reported : configuredOption(server, category);
-    return options.map(option => ({
-      ...option,
-      serverId: server.id,
-      serverName: server.name,
-    }));
-  });
+  return servers
+    .filter(
+      server =>
+        category !== 'video' || server.modelManagement === 'offgrid-desktop-v1',
+    )
+    .flatMap(server => {
+      const reported = server.modelCatalog?.[category] ?? [];
+      const options =
+        reported.length > 0 ? reported : configuredOption(server, category);
+      return options.map(option => ({
+        ...option,
+        serverId: server.id,
+        serverName: server.name,
+      }));
+    });
 }
 
 export function selectedRemoteModelName(

@@ -250,6 +250,7 @@ class RemoteServerManager {
     store.setActiveServerId(null);
     store.setActiveRemoteTextModelId(null);
     store.setActiveRemoteImageModelId(null);
+    store.setActiveRemoteMediaServerId('video', null);
     store.setActiveRemoteMediaServerId('image', null);
     store.setActiveRemoteMediaServerId('transcription', null);
     store.setActiveRemoteMediaServerId('voice', null);
@@ -296,7 +297,9 @@ class RemoteServerManager {
   }> {
     let discovered: DiscoveredServer[];
     const savedEndpoints = new Set(
-      useRemoteServerStore.getState().servers.map(server => trimSlash(server.endpoint)),
+      useRemoteServerStore
+        .getState()
+        .servers.map(server => trimSlash(server.endpoint)),
     );
     try {
       discovered = await discoverLANServers(undefined, {
@@ -314,7 +317,9 @@ class RemoteServerManager {
     }
     return {
       moved: [],
-      found: discovered.filter(server => !savedEndpoints.has(trimSlash(server.endpoint))),
+      found: discovered.filter(
+        server => !savedEndpoints.has(trimSlash(server.endpoint)),
+      ),
     };
   }
 

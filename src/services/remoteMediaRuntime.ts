@@ -1,3 +1,10 @@
+import { isRecordProvenance, type RecordProvenance } from '@offgrid/sync';
+import { generateId } from '../utils/generateId';
+import RNFS from 'react-native-fs';
+import type {
+  ResolvedVideoRequest,
+  VideoGenerationResultContract,
+} from '@offgrid/models';
 import { remoteServerManager } from './remoteServerManager';
 import type { RemoteMediaModelIds, RemoteServer } from '../types';
 import { REMOTE_FETCH_REDIRECT_POLICY, remoteAuthorizationHeaders } from './remoteTransportPolicy';
@@ -41,6 +48,7 @@ async function request<T>(
   signal?.addEventListener('abort', abort, { once: true });
   try {
     const apiKey = await remoteServerManager.getApiKey(server.id);
+    if (signal?.aborted) controller.abort();
     if (controller.signal.aborted) throw new Error('Remote request cancelled');
     const response = await fetch(endpoint(server, path), {
       ...init,
@@ -58,8 +66,14 @@ async function request<T>(
       try {
         const body = JSON.parse(detail) as { error?: { code?: unknown }; code?: unknown };
         const marker = 'OFFGRID_IMAGE_MEMORY_LIMIT:';
-        if ((body.error?.code ?? body.code) === 'OFFGRID_IMAGE_MEMORY_LIMIT' || message.includes(marker)) {
-          throw Object.assign(new OverridableMemoryError(message.replace(marker, '').trim()), { remote: true });
+        if (
+          (body.error?.code ?? body.code) === 'OFFGRID_IMAGE_MEMORY_LIMIT' ||
+          message.includes(marker)
+        ) {
+          throw Object.assign(
+            new OverridableMemoryError(message.replace(marker, '').trim()),
+            { remote: true },
+          );
         }
       } catch (error) {
         if (error instanceof OverridableMemoryError) throw error;
@@ -88,6 +102,143 @@ function requiredModel(
 
 /** Thin OpenAI-compatible adapters. The server record owns every endpoint and model choice. */
 export const remoteMediaRuntime = {
+  async generateVideo(
+    server: RemoteServer,
+    input: ResolvedVideoRequest,
+    outputPath: string,
+    options: {
+      signal: AbortSignal;
+      model?: string;
+      jobId?: string;
+      onJobStarted: (id: string) => Promise<unknown>;
+      onProgress: (progress: { step: number; total: number }) => void;
+    },
+  ): Promise<
+    VideoGenerationResultContract & { provenance?: RecordProvenance }
+  > {
+    if (server.modelManagement !== 'offgrid-desktop-v1')
+      throw new Error('Remote video requires an OGAD server.');
+    const clientJobId = options.jobId ?? generateId();
+    await options.onJobStarted(clientJobId);
+    const job = await request(
+      {
+        server,
+        path: '/v1/videos',
+        signal: options.signal,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...input,
+            model: options.model ?? requiredModel(server, 'video'),
+            enhancePrompt: false,
+            client_job_id: clientJobId,
+          }),
+        },
+      },
+      response => response.json() as Promise<{ request_id: string }>,
+    );
+    if (!job.request_id) throw new Error('The server returned no video job.');
+    await options.onJobStarted(job.request_id);
+    const cancel = () => {
+      void request(
+        {
+          server,
+          path: `/v1/videos/${encodeURIComponent(job.request_id)}/cancel`,
+          init: { method: 'POST' },
+        },
+        async response => {
+          await response.text();
+        },
+      ).catch(() => {});
+    };
+    options.signal.addEventListener('abort', cancel, { once: true });
+    try {
+      if (options.signal.aborted) {
+        cancel();
+        throw new Error('Video generation stopped.');
+      }
+      while (true) {
+        const state = await request(
+          {
+            server,
+            path: `/v1/videos/${encodeURIComponent(job.request_id)}`,
+            signal: options.signal,
+            init: { method: 'GET' },
+          },
+          response =>
+            response.json() as Promise<{
+              status: string;
+              progress?: { step: number; total: number };
+              error?: { message: string };
+              result?: VideoGenerationResultContract & {
+                provenance?: RecordProvenance;
+              };
+            }>,
+        );
+        if (state.progress) options.onProgress(state.progress);
+        if (state.status === 'failed')
+          throw Object.assign(
+            new Error(
+              state.error?.message ?? 'Remote video generation failed.',
+            ),
+            { code: 'VIDEO_REMOTE_FAILED' },
+          );
+        if (state.status === 'completed') {
+          if (!state.result?.syncId)
+            throw new Error('The server returned an invalid video result.');
+          const apiKey = await remoteServerManager.getApiKey(server.id);
+          const transfer = RNFS.downloadFile({
+            fromUrl: endpoint(
+              server,
+              `/v1/videos/${encodeURIComponent(job.request_id)}/content`,
+            ),
+            toFile: outputPath,
+            headers: remoteAuthorizationHeaders(server.endpoint, apiKey),
+            connectionTimeout: 15000,
+            readTimeout: 60000,
+          });
+          const stopTransfer = () => RNFS.stopDownload(transfer.jobId);
+          options.signal.addEventListener('abort', stopTransfer, {
+            once: true,
+          });
+          try {
+            if (options.signal.aborted) {
+              stopTransfer();
+              throw new Error('Video generation stopped.');
+            }
+            const result = await transfer.promise;
+            if (result.statusCode !== 200 || result.bytesWritten <= 0)
+              throw new Error('Could not download the generated video.');
+          } finally {
+            options.signal.removeEventListener('abort', stopTransfer);
+          }
+          return {
+            ...state.result,
+            provenance: isRecordProvenance(state.result.provenance)
+              ? state.result.provenance
+              : undefined,
+            path: outputPath,
+          };
+        }
+        await new Promise<void>((resolve, reject) => {
+          const abort = () => {
+            clearTimeout(timer);
+            reject(new Error('Video generation stopped.'));
+          };
+          const timer = setTimeout(() => {
+            options.signal.removeEventListener('abort', abort);
+            resolve();
+          }, 1000);
+          options.signal.addEventListener('abort', abort, { once: true });
+          if (options.signal.aborted) abort();
+        });
+      }
+    } finally {
+      options.signal.removeEventListener('abort', cancel);
+    }
+  },
+
   async generateImage(
     server: RemoteServer,
     input: { prompt: string; size?: string },
@@ -97,32 +248,42 @@ export const remoteMediaRuntime = {
     const desktop = server.modelManagement === 'offgrid-desktop-v1';
     type ImagePayload = {
       data?: Array<{ b64_json?: string; url?: string }>;
-      choices?: Array<{ message?: { images?: Array<{ image_url?: { url?: string } }> } }>;
+      choices?: Array<{
+        message?: { images?: Array<{ image_url?: { url?: string } }> };
+      }>;
     };
-    const payload = await request({
-      server,
-      path: openRouter ? '/v1/chat/completions' : '/v1/images/generations',
-      init: {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(openRouter
-          ? {
-              model: requiredModel(server, 'image'),
-              messages: [{ role: 'user', content: input.prompt }],
-              modalities: ['image', 'text'],
-              stream: false,
-            }
-          : {
-              model: requiredModel(server, 'image'),
-              prompt: input.prompt,
-              size: input.size ?? '1024x1024',
-              response_format: 'b64_json',
-              ...(desktop ? { async: true } : {}),
-              ...(options.override ? { allow_unsafe_memory_override: true } : {}),
-            }),
+    const payload = await request(
+      {
+        server,
+        path: openRouter ? '/v1/chat/completions' : '/v1/images/generations',
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(
+            openRouter
+              ? {
+                  model: requiredModel(server, 'image'),
+                  messages: [{ role: 'user', content: input.prompt }],
+                  modalities: ['image', 'text'],
+                  stream: false,
+                }
+              : {
+                  model: requiredModel(server, 'image'),
+                  prompt: input.prompt,
+                  size: input.size ?? '1024x1024',
+                  response_format: 'b64_json',
+                  ...(desktop ? { async: true } : {}),
+                  ...(options.override
+                    ? { allow_unsafe_memory_override: true }
+                    : {}),
+                },
+          ),
+        },
+        signal: options.signal,
       },
-      signal: options.signal,
-    }, response => response.json() as Promise<ImagePayload & { request_id?: string }>);
+      response =>
+        response.json() as Promise<ImagePayload & { request_id?: string }>,
+    );
     let result: ImagePayload = payload;
     if (desktop && payload.request_id) {
       while (true) {
@@ -194,31 +355,40 @@ export const remoteMediaRuntime = {
     options: RemoteMediaRequestOptions = {},
   ): Promise<RemoteVoiceResult> {
     const openRouter = new URL(server.endpoint).hostname === 'openrouter.ai';
-    const voice = input.voice || (openRouter
-      ? (await remoteMediaRuntime.listVoices(server, options))[0]
-      : undefined);
-    if (openRouter && !voice) throw new Error('This remote model has no available speakers.');
-    return request({
-      server,
-      path: '/v1/audio/speech',
-      init: {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: requiredModel(server, 'voice'),
-          input: input.text,
-          ...(voice ? { voice } : {}),
-          ...(openRouter ? { response_format: 'mp3' } : {}),
-        }),
+    const voice =
+      input.voice ||
+      (openRouter
+        ? (await remoteMediaRuntime.listVoices(server, options))[0]
+        : undefined);
+    if (openRouter && !voice)
+      throw new Error('This remote model has no available speakers.');
+    return request(
+      {
+        server,
+        path: '/v1/audio/speech',
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: requiredModel(server, 'voice'),
+            input: input.text,
+            ...(voice ? { voice } : {}),
+            ...(openRouter ? { response_format: 'mp3' } : {}),
+          }),
+        },
+        signal: options.signal,
       },
-      signal: options.signal,
-    }, async response => ({
-      audio: await response.arrayBuffer(),
-      contentType: response.headers.get('content-type') ?? 'audio/mpeg',
-    }));
+      async response => ({
+        audio: await response.arrayBuffer(),
+        contentType: response.headers.get('content-type') ?? 'audio/mpeg',
+      }),
+    );
   },
 
-  async listVoices(server: RemoteServer, options: RemoteMediaRequestOptions = {}): Promise<string[]> {
+  async listVoices(
+    server: RemoteServer,
+    options: RemoteMediaRequestOptions = {},
+  ): Promise<string[]> {
     try {
       const modelId = requiredModel(server, 'voice');
       const catalog = await request({
@@ -244,7 +414,9 @@ export const remoteMediaRuntime = {
       signal: options.signal,
     }, response => response.json() as Promise<{ voices?: unknown }>);
     return Array.isArray(payload.voices)
-      ? payload.voices.filter((voice): voice is string => typeof voice === 'string')
+      ? payload.voices.filter(
+          (voice): voice is string => typeof voice === 'string',
+        )
       : [];
   },
 };
