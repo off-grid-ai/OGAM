@@ -11,6 +11,7 @@
  * when asked, always falls back to on-device, and returns null when neither can run — the caller then
  * degrades to per-VAD-segment identification (speakerAnnotation).
  */
+import RNFS from 'react-native-fs'
 import type { SpeakerEmbedding } from './speakerModel'
 
 export interface DiarizedTurn {
@@ -46,6 +47,11 @@ export async function dispatchDiarize(
   deps: DiarizerDispatchDeps,
   prefer: DiarizerName = 'phone'
 ): Promise<DiarizationResult | null> {
+  // No engine can diarize a recording whose file is gone (pruned by retention, cleared, or never
+  // finished writing). Bail before we hand a missing path to the Mac upload (which crashes React
+  // Native's multipart builder natively) or the on-device runtime.
+  const localPath = recordingPath.replace(/^file:\/\//, '')
+  if (!(await RNFS.exists(localPath).catch(() => false))) return null
   const order: DiarizerName[] = prefer === 'mac' ? ['mac', 'phone'] : ['phone', 'mac']
   for (const name of order) {
     const engine = name === 'mac' ? deps.mac : deps.phone

@@ -5,6 +5,7 @@
  * turns share the phone's vector space. Works for BOTH iPhone and Android. Throws when no Mac is
  * reachable → dispatchDiarize falls back to on-device.
  */
+import RNFS from 'react-native-fs'
 import type { DiarizationModel } from '@offgrid/models'
 import { currentMacOffloadTarget, diarizeEndpoint } from './macTranscriptionTarget'
 import { normalize } from './speakerModel'
@@ -24,6 +25,13 @@ export function createMacDiarizer(model: DiarizationModel): Diarizer | null {
     diarize: async (recordingPath: string): Promise<DiarizationResult> => {
       const target = currentMacOffloadTarget()
       if (!target) throw new Error('ambient: no Mac available for diarization offload')
+      // A pending recording's file can be gone (pruned by retention, cleared, or never finished). Uploading
+      // a missing file makes React Native's multipart builder throw a native, uncaught error that crashes
+      // the app — so fail here with a normal Error the caller can catch and fall back / drop the capture.
+      const localPath = recordingPath.replace(/^file:\/\//, '')
+      if (!(await RNFS.exists(localPath))) {
+        throw new Error(`ambient: recording file is missing, cannot offload diarization (${localPath})`)
+      }
       const body = new FormData()
       body.append('file', {
         uri: recordingPath.startsWith('file://') ? recordingPath : `file://${recordingPath}`,
