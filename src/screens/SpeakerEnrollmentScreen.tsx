@@ -14,7 +14,6 @@ import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { SPEAKER_EMBEDDING_MODELS } from '@offgrid/models';
 import { useSpeakerModelStore } from '../stores/speakerModelStore';
 import { useSpeakerProfilesStore } from '../stores/speakerProfilesStore';
 import { audioRecorderService } from '../services/audioRecorderService';
@@ -38,9 +37,17 @@ export function SpeakerEnrollmentScreen(): React.ReactElement {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
-  const selectedModelId = useSpeakerModelStore(s => s.selectedModelId);
-  const setSelectedModel = useSpeakerModelStore(s => s.setSelectedModel);
-  const activeModel = useSpeakerModelStore(s => s.activeModel)();
+  // The voiceprint (fingerprint) is defined by the active DIARIZATION model, not a separate pick —
+  // enrollment embeds with that model's embedding so a voice matches its diarized turns. We show it
+  // read-only here; it's changed in Models → voice recognition.
+  const activeDiarModel = useSpeakerModelStore(s => s.activeDiarizationModel)();
+  const fingerprintLabel = /campplus/i.test(activeDiarModel.embeddingUrl)
+    ? 'CAM++'
+    : /eres2net/i.test(activeDiarModel.embeddingUrl)
+      ? 'ERes2Net'
+      : /titanet/i.test(activeDiarModel.embeddingUrl)
+        ? 'TitaNet'
+        : 'Voiceprint';
   const enroll = useSpeakerProfilesStore(s => s.enroll);
 
   const [name, setName] = useState('');
@@ -99,7 +106,7 @@ export function SpeakerEnrollmentScreen(): React.ReactElement {
     } finally {
       setSaving(false);
     }
-  }, [name, slices, activeModel, enroll, navigation]);
+  }, [name, slices, enroll, navigation]);
 
   const progress = useMemo(
     () => Array.from({ length: ENROLLMENT_SAMPLE_COUNT }, (_, i) => i < slices.length),
@@ -122,32 +129,21 @@ export function SpeakerEnrollmentScreen(): React.ReactElement {
           returnKeyType="done"
         />
 
-        {/* Model picker — swappable embedding models */}
-        <Text style={[styles.label, styles.spacer]}>VOICE MODEL</Text>
-        {SPEAKER_EMBEDDING_MODELS.map(m => {
-          const on = m.id === selectedModelId;
-          return (
-            <TouchableOpacity
-              key={m.id}
-              style={[styles.modelRow, on && styles.modelRowOn]}
-              onPress={() => setSelectedModel(m.id)}
-              activeOpacity={0.7}
-            >
-              <Icon
-                name={on ? 'check-circle' : 'circle'}
-                size={16}
-                color={on ? colors.primary : colors.textMuted}
-              />
-              <View style={styles.modelText}>
-                <Text style={styles.modelName}>
-                  {m.name}
-                  {m.recommended ? '  ·  recommended' : ''}
-                </Text>
-                <Text style={styles.modelDesc}>{m.description} · {m.sizeMb} MB</Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
+        {/* Voiceprint — set by the diarization model, shown read-only so it can't drift out of the
+            speaker space that identifies turns. Change it in Models → voice recognition. */}
+        <Text style={[styles.label, styles.spacer]}>VOICEPRINT</Text>
+        <View style={styles.modelRow}>
+          <Icon name="shield" size={16} color={colors.primary} />
+          <View style={styles.modelText}>
+            <Text style={styles.modelName}>
+              {fingerprintLabel} · {activeDiarModel.embeddingDim}-dim
+            </Text>
+            <Text style={styles.modelDesc}>
+              Set by your diarization model ({activeDiarModel.name}) so enrollment matches its
+              speakers. Change it in Models → voice recognition.
+            </Text>
+          </View>
+        </View>
 
         {/* Prompt to read — a different sentence for each take */}
         <Text style={[styles.label, styles.spacer]}>
