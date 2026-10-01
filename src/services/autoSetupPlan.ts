@@ -1,8 +1,18 @@
+import type { ModelEntry } from '@offgrid/models';
 import type { ModelFile } from '../types';
 import type { ImageModelDescriptor } from './imageModelDownloadTypes';
 
 export type AutoSetupTier = 'lean' | 'balanced' | 'extreme';
-type AutoSetupModelKind = 'text' | 'image' | 'stt';
+export type AutoSetupModelKind = 'text' | 'image' | 'stt' | 'video' | 'embedding';
+
+export interface AutoSetupEmbeddingModel {
+  id: string;
+  name: string;
+  size: number;
+  downloadUrl?: string;
+  sha256?: string;
+  description?: string;
+}
 
 interface AutoSetupCandidate<T = unknown> {
   id: string;
@@ -22,11 +32,19 @@ export interface AutoSetupPlan {
     AutoSetupCandidate<{ modelId: string; file: ModelFile }>,
     AutoSetupCandidate<ImageModelDescriptor>,
     AutoSetupCandidate<{ modelId: string }>,
+    ...AutoSetupCandidate<ModelEntry>[],
   ];
   totalBytes: number;
+  videoExclusionReason?: string;
+  embedding?: AutoSetupCandidate<AutoSetupEmbeddingModel>;
 }
 
+export type AutoSetupItem = AutoSetupPlan['items'][number] | NonNullable<AutoSetupPlan['embedding']>;
+
 export interface AutoSetupCompatibleCatalog {
+  video?: AutoSetupCandidate<ModelEntry>[];
+  videoExclusionReason?: string;
+  embedding?: AutoSetupCandidate<AutoSetupEmbeddingModel>[];
   text: AutoSetupCandidate<{ modelId: string; file: ModelFile }>[];
   image: AutoSetupCandidate<ImageModelDescriptor>[];
   stt: AutoSetupCandidate<{ modelId: string }>[];
@@ -36,11 +54,11 @@ const PLAN_COPY: Record<
   AutoSetupTier,
   Pick<AutoSetupPlan, 'title' | 'summary'>
 > = {
-  lean: { title: 'Lean', summary: 'Small downloads with lower memory use.' },
-  balanced: { title: 'Balanced', summary: 'The best balance for this device.' },
+  lean: { title: 'Lean', summary: 'Smaller model downloads.' },
+  balanced: { title: 'Balanced', summary: 'Models near the middle of each list.' },
   extreme: {
     title: 'Extreme',
-    summary: 'The largest safe models for this device.',
+    summary: 'Largest model downloads.',
   },
 };
 
@@ -111,12 +129,16 @@ function selectAutoSetupPlan(
       : selectedImage);
   const stt = choose(tier, catalog.stt);
   if (!text || !image || !stt) return null;
-  const items: AutoSetupPlan['items'] = [text, image, stt];
+  const video = choose(tier, catalog.video ?? []);
+  const embedding = choose(tier, catalog.embedding ?? []);
+  const items: AutoSetupPlan['items'] = [text, image, stt, ...(video ? [video] : [])];
   return {
     tier,
     ...PLAN_COPY[tier],
     items,
-    totalBytes: items.reduce((total, item) => total + item.sizeBytes, 0),
+    totalBytes: items.reduce((total, item) => total + item.sizeBytes, embedding?.sizeBytes ?? 0),
+    ...(embedding ? { embedding } : {}),
+    ...(video ? {} : { videoExclusionReason: catalog.videoExclusionReason }),
   };
 }
 

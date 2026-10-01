@@ -1,3 +1,4 @@
+import { getSDImageModels, getSDImagePackFiles, isSDImageWeight } from '../huggingFaceModelBrowser';
 import RNFS from 'react-native-fs';
 import { statFile } from '../../utils/fileStat';
 import { unzip } from 'react-native-zip-archive';
@@ -5,7 +6,7 @@ import { DownloadedModel, LlamaDownloadedModel, ONNXImageModel } from '../../typ
 import { loadDownloadedModels, saveModelsList } from './storage';
 import { basenameOf } from './reconcileStoredPaths';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
-import { ensureImageExtractionComplete } from '../../utils/imageModelIntegrity';
+import { ensureImageExtractionComplete, validateMultifileComplete, validateImageModelDir } from '../../utils/imageModelIntegrity';
 // Single source of truth for projector detection + model↔projector matching (see src/services/mmproj.ts).
 import { isMMProjFile, pickMmProjForModel } from '../mmproj';
 
@@ -84,7 +85,8 @@ export async function cleanupMMProjEntries(modelsDir: string): Promise<number> {
   return removedCount;
 }
 
-function detectBackend(dirName: string): 'mnn' | 'qnn' | 'coreml' {
+function detectBackend(dirName: string): 'mnn' | 'qnn' | 'coreml' | 'sd' {
+  if (dirName.startsWith('sd-')) return 'sd';
   if (dirName.includes('qnn') || dirName.includes('8gen') || dirName.includes('npu')) return 'qnn';
   if (dirName.includes('coreml')) return 'coreml';
   return 'mnn';
@@ -138,14 +140,15 @@ async function isValidZip(zipPath: string): Promise<boolean> {
 /** Build the ONNXImageModel record for a recovered on-disk dir (coreml resolves its inner model dir). */
 async function buildRecoveredImageModel(
   item: { name: string; path: string },
-  backend: 'mnn' | 'qnn' | 'coreml',
+  backend: 'mnn' | 'qnn' | 'coreml' | 'sd',
 ): Promise<ONNXImageModel> {
   let modelPath = item.path;
   if (backend === 'coreml') modelPath = await resolveCoreMLModelDir(item.path).catch(() => item.path);
   const totalSize = await getDirSize(item.path);
+  const sdWeight = backend === 'sd' ? (await RNFS.readDir(item.path)).find(file => file.isFile() && isSDImageWeight(file.name))?.name : undefined;
   return {
     id: item.name,
-    name: item.name.replaceAll('_', ' '),
+    name: getSDImageModels().find(model => model.id === item.name)?.displayName ?? (sdWeight ? sdWeight.replace(/\.(gguf|safetensors)$/i, '') : item.name.replaceAll('_', ' ')),
     description: '',
     modelPath,
     size: totalSize,
@@ -240,10 +243,33 @@ export async function reconcileFinishedImageDownloads(opts: ReconcileImageModels
       const hasReady = await RNFS.exists(readyPath);
 
       if (hasReady) {
+        if (detectBackend(item.name) === 'sd' && !(await validateImageModelDir(item.path, 'sd')).complete) continue;
         // Unzip completed but registerAndNotify was killed — register now.
         const newModel = await buildRecoveredImageModel(item, detectBackend(item.name));
         await addImageModel(newModel);
         recovered.push(newModel);
+        continue;
+      }
+
+      // A complete SD pack can survive a stop between its last file and _ready.
+      // Keep partial known packs so the normal download can reuse valid parts.
+      const sdFiles = item.name.startsWith('sd-') ? getSDImagePackFiles((await RNFS.readDir(item.path)).filter(file => file.isFile()).map(file => file.name), item.name) : null;
+      if (item.name.startsWith('sd-')) {
+        try {
+          // A remote variant's expected weight bytes/hash live in its download
+          // metadata, not the catalog. Let Resume validate that descriptor; a
+          // nonempty partial GGUF alone cannot prove this pack is complete.
+          if (!sdFiles || sdFiles.some(file => !file.sha256)) continue;
+          await validateMultifileComplete(item.path, sdFiles.map(file => ({
+            relativePath: file.path, sha256: file.sha256,
+          })));
+          await RNFS.writeFile(readyPath, '', 'utf8');
+          const model = await buildRecoveredImageModel(item, 'sd');
+          await addImageModel(model);
+          recovered.push(model);
+        } catch {
+          // Incomplete or damaged parts stay unregistered until Download repairs them.
+        }
         continue;
       }
 

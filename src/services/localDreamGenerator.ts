@@ -5,11 +5,13 @@ import {
   ImageGenerationProgress,
   GeneratedImage,
 } from '../types';
-import { generateRandomSeed } from '../utils/generateId';
+import { resolveSDImagePack } from './huggingFaceModelBrowser';
+import { validateImageModelDir } from '../utils/imageModelIntegrity';
+import { generateId, generateRandomSeed } from '../utils/generateId';
 import logger from '../utils/logger';
 import { resolveOwnedDocumentPath } from '../utils/resolveDocumentPath';
 
-const { LocalDreamModule, CoreMLDiffusionModule } = NativeModules;
+const { LocalDreamModule, CoreMLDiffusionModule, VideoGenerationModule: SDModule } = NativeModules;
 const PROGRESS_LOG_SAMPLE_STEPS = 5;
 
 // Pick the right native module per platform
@@ -34,25 +36,27 @@ type PreviewCallback = (preview: { previewPath: string; step: number; totalSteps
  * Progress events are emitted via NativeEventEmitter from the native side.
  */
 class LocalDreamGeneratorService {
+  private usingSD = false;
   private loadedThreads: number | null = null;
   private generating = false;
   private eventEmitter: NativeEventEmitter | null = null;
 
   private getEmitter(): NativeEventEmitter {
     if (!this.eventEmitter) {
-      this.eventEmitter = new NativeEventEmitter(DiffusionModule);
+      this.eventEmitter = new NativeEventEmitter(this.usingSD ? SDModule : DiffusionModule);
     }
     return this.eventEmitter;
   }
 
   isAvailable(): boolean {
-    return DiffusionModule != null;
+    return DiffusionModule != null || SDModule?.generateImage != null;
   }
 
   async isModelLoaded(): Promise<boolean> {
     if (!this.isAvailable()) return false;
     try {
-      return await DiffusionModule.isModelLoaded();
+      if (SDModule?.getLoadedImagePath && await SDModule.getLoadedImagePath()) { this.usingSD = true; return true; }
+      return await DiffusionModule?.isModelLoaded() ?? false;
     } catch {
       return false;
     }
@@ -61,18 +65,38 @@ class LocalDreamGeneratorService {
   async getLoadedModelPath(): Promise<string | null> {
     if (!this.isAvailable()) return null;
     try {
-      return await DiffusionModule.getLoadedModelPath();
+      const sdPath = await SDModule?.getLoadedImagePath?.();
+      if (sdPath) { this.usingSD = true; return sdPath; }
+      return await DiffusionModule?.getLoadedModelPath() ?? null;
     } catch {
       return null;
     }
   }
 
-  async loadModel(modelPath: string, threads?: number, opts: { backend?: 'mnn' | 'qnn' | 'auto'; cpuOnly?: boolean; attentionVariant?: 'split_einsum' | 'original'; preferGpu?: boolean } = {}): Promise<boolean> {
+  async loadModel(modelPath: string, threads?: number, opts: { backend?: 'mnn' | 'qnn' | 'auto' | 'sd'; modelId?: string; cpuOnly?: boolean; attentionVariant?: 'split_einsum' | 'original'; preferGpu?: boolean } = {}): Promise<boolean> {
     if (!this.isAvailable()) {
       throw new Error('LocalDream image generation is not available on this platform');
     }
 
     const backend = opts.backend ?? 'auto';
+    if (this.generating) throw new Error('Image generation is running.');
+    if (backend === 'sd') {
+      if (!SDModule?.loadImageModel) throw new Error('This build does not include the SD image runtime.');
+      const integrity = await validateImageModelDir(modelPath, 'sd');
+      if (!integrity.complete) throw new Error(`The image model pack is incomplete: ${integrity.missing.join(', ')}`);
+      const pack = await resolveSDImagePack(opts.modelId ?? modelPath.split('/').pop() ?? '', modelPath);
+      if (await DiffusionModule?.isModelLoaded()) await DiffusionModule.unloadModel();
+      const diagnostics = new NativeEventEmitter(SDModule).addListener('SDImageProgress', (event: { diagnostic?: string }) => {
+        if (event.diagnostic) logger.log(`[SD-IMAGE-NATIVE] ${event.diagnostic}`);
+      });
+      try {
+        await SDModule.loadImageModel({ modelPath, ...pack, threads: threads ?? 4, cpuOnly: opts.cpuOnly ?? false });
+      } finally { diagnostics.remove(); }
+      this.usingSD = true; this.eventEmitter = null; this.loadedThreads = threads ?? 4;
+      return true;
+    }
+    if (SDModule?.getLoadedImagePath && await SDModule.getLoadedImagePath()) await SDModule.unloadImageModel();
+    this.usingSD = false; this.eventEmitter = null;
     const params: { modelPath: string; threads?: number; backend: string; cpuOnly?: boolean; attentionVariant?: string; preferGpu?: boolean } = {
       modelPath,
       backend,
@@ -104,7 +128,9 @@ class LocalDreamGeneratorService {
   async unloadModel(): Promise<boolean> {
     if (!this.isAvailable()) return true;
     try {
-      const result = await DiffusionModule.unloadModel();
+      if (SDModule?.getLoadedImagePath && await SDModule.getLoadedImagePath()) await SDModule.unloadImageModel();
+      const result = await DiffusionModule?.unloadModel() ?? true;
+      this.usingSD = false; this.eventEmitter = null;
       this.loadedThreads = null;
       return result;
     } catch (e) {
@@ -116,8 +142,12 @@ class LocalDreamGeneratorService {
 
   private subscribeToProgress(onProgress?: ProgressCallback, onPreview?: PreviewCallback): any {
     return this.getEmitter().addListener(
-      'LocalDreamProgress',
-      (event: { step: number; totalSteps: number; progress: number; previewPath?: string }) => {
+      this.usingSD ? 'SDImageProgress' : 'LocalDreamProgress',
+      (event: { step: number; totalSteps: number; progress: number; previewPath?: string; diagnostic?: string }) => {
+        if (event.diagnostic) {
+          logger.log(`[SD-IMAGE-NATIVE] ${event.diagnostic}`);
+          return;
+        }
         if (
           !Number.isInteger(event.step) ||
           event.step < 1 ||
@@ -191,13 +221,29 @@ class LocalDreamGeneratorService {
     }
 
     this.generating = true;
-    const progressSubscription = this.subscribeToProgress(onProgress, onPreview);
+    let lastStep = -1;
+    const progressSubscription = this.subscribeToProgress(progress => {
+      if (this.usingSD) {
+        if (progress.totalSteps !== (params.steps || 8) || progress.step <= lastStep || progress.step > progress.totalSteps) return;
+        lastStep = progress.step;
+      }
+      onProgress?.(progress);
+    }, onPreview);
 
     try {
-      const result = await DiffusionModule.generateImage(this.buildNativeParams(params, trimmedPrompt));
+      const nativeParams = this.buildNativeParams(params, trimmedPrompt);
+      let result;
+      if (this.usingSD) {
+        const id = generateId();
+        const directory = `${RNFS.DocumentDirectoryPath}/generated_images`;
+        await RNFS.mkdir(directory);
+        result = await SDModule.generateImage({ ...nativeParams, id, outputPath: `${directory}/${id}.png` });
+      } else {
+        result = await DiffusionModule.generateImage(nativeParams);
+      }
       // Native side releases the CoreML pipeline after generation to free
       // memory, so clear TS-side state so the next request triggers a reload.
-      this.loadedThreads = null;
+      if (!this.usingSD) this.loadedThreads = null;
       return this.buildResult(params, result);
     } catch (error: any) {
       const msg = error?.message || '';
@@ -213,11 +259,11 @@ class LocalDreamGeneratorService {
 
   async cancelGeneration(): Promise<boolean> {
     if (!this.isAvailable()) return true;
-    this.generating = false;
+    if (this.usingSD) { await SDModule.cancel(); return true; }
     return await DiffusionModule.cancelGeneration();
   }
 
-  async isGenerating(): Promise<boolean> {
+  isGenerating(): boolean {
     return this.generating;
   }
 
@@ -272,12 +318,12 @@ class LocalDreamGeneratorService {
   }
 
   async clearOpenCLCache(modelPath: string): Promise<number> {
-    if (Platform.OS !== 'android' || !this.isAvailable()) return 0;
+    if (this.usingSD || Platform.OS !== 'android' || !this.isAvailable()) return 0;
     return await DiffusionModule.clearOpenCLCache(modelPath);
   }
 
   async hasKernelCache(modelPath: string): Promise<boolean> {
-    if (Platform.OS !== 'android' || !this.isAvailable()) return true;
+    if (this.usingSD || Platform.OS !== 'android' || !this.isAvailable()) return true;
     return await DiffusionModule.hasOpenCLCache(modelPath);
   }
 

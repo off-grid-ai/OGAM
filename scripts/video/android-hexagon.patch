@@ -1,0 +1,32 @@
+diff --git a/src/ggml-hexagon/CMakeLists.txt b/src/ggml-hexagon/CMakeLists.txt
+index 845b922..0a9f237 100644
+--- a/src/ggml-hexagon/CMakeLists.txt
++++ b/src/ggml-hexagon/CMakeLists.txt
+@@ -1,3 +1,9 @@
++# Off Grid builds DSP libraries separately so Android hosts can use macOS.
++if(OFFGRID_VIDEO_HEXAGON_CMAKE)
++    include("${OFFGRID_VIDEO_HEXAGON_CMAKE}")
++    return()
++endif()
++
+ file(TO_CMAKE_PATH "${HEXAGON_SDK_ROOT}"   HEXAGON_SDK_ROOT)
+ file(TO_CMAKE_PATH "${HEXAGON_TOOLS_ROOT}" HEXAGON_TOOLS_ROOT)
+ 
+diff --git a/src/ggml-hexagon/ggml-hexagon.cpp b/src/ggml-hexagon/ggml-hexagon.cpp
+index 9a35002..0ca4222 100644
+--- a/src/ggml-hexagon/ggml-hexagon.cpp
++++ b/src/ggml-hexagon/ggml-hexagon.cpp
+@@ -3887,7 +3887,12 @@ void ggml_hexagon_session::allocate(const ggml_hexagon_device_config & config) n
+     char session_uri[256];
+     {
+         char htp_uri[256];
+-        snprintf(htp_uri, sizeof(htp_uri), "file:///libggml-htp-v%u.so?htp_iface_skel_handle_invoke&_modver=1.0", opt_arch);
++        const char * video_htp_dir = getenv("OFFGRID_VIDEO_HTP_DIR");
++        if (video_htp_dir && *video_htp_dir) {
++            snprintf(htp_uri, sizeof(htp_uri), "file:///liboffgrid-video-htp-v%u.so?htp_iface_skel_handle_invoke&_modver=1.0", opt_arch);
++        } else {
++            throw std::runtime_error("Video Hexagon runtime directory is not configured");
++        }
+ 
+         struct remote_rpc_get_uri u = {};
+         u.session_id      = this->session_id;

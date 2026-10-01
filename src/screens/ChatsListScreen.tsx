@@ -16,7 +16,7 @@ import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { useChatStore, useProjectStore, useAppStore } from '../stores';
+import { useChatStore, useProjectStore, useAppStore, useRemoteServerStore } from '../stores';
 import { useActiveTextModel } from '../hooks/useActiveTextModel';
 import { onnxImageGeneratorService, activeModelService, llmService, remoteServerManager } from '../services';
 import { Conversation } from '../types';
@@ -50,7 +50,9 @@ export const ChatsListScreen: React.FC = () => {
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const hasModels = !!activeTextModelId || !!activeImageModelId;
+  const activeVideoModelId = useAppStore(s => s.activeVideoModelId);
+  const remoteVideoServerId = useRemoteServerStore(s => s.activeRemoteMediaServerIds.video);
+  const hasModels = !!activeTextModelId || !!activeImageModelId || !!activeVideoModelId || !!remoteVideoServerId;
 
   const handleChatPress = (conversation: Conversation) => {
     setActiveConversation(conversation.id);

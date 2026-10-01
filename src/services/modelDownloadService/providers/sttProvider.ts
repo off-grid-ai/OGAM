@@ -47,19 +47,24 @@ export const sttProvider: DownloadProvider = {
 
   async list(): Promise<ModelDownload[]> {
     const out: ModelDownload[] = [];
+    const downloaded = await whisperService.listDownloadedModels();
+    const downloadedIds = new Set(downloaded.map(model => uniformDownloadId('stt', model.modelId)));
     // In-flight (downloadStore).
     for (const e of Object.values(useDownloadStore.getState().downloads)) {
       if (e.modelType !== 'stt') continue;
       const bare = bareId(e.modelId);
+      const id = uniformDownloadId('stt', e.modelId);
+      // A stale failed native row can survive a successful retry. The valid file
+      // on disk wins once the transfer is no longer active.
+      if (downloadedIds.has(id) && !isActiveStatus(e.status)) continue;
       out.push({
-        id: uniformDownloadId('stt', e.modelId), modelType: 'stt', name: e.fileName || bare,
+        id, modelType: 'stt', name: e.fileName || bare,
         sizeBytes: e.totalBytes, bytesDownloaded: e.bytesDownloaded, progress: e.progress,
         status: mapStoreStatus(e.status), capabilities: { ...STT_CAPABILITIES, pause: isActiveStatus(e.status), resume: e.status === 'paused' }, error: e.errorMessage,
       });
     }
     // Completed (on disk) — skip ones that also have a live in-flight entry.
     const inflight = new Set(out.map(d => d.id));
-    const downloaded = await whisperService.listDownloadedModels();
     for (const m of downloaded) {
       const id = uniformDownloadId('stt', m.modelId);
       if (inflight.has(id)) continue;

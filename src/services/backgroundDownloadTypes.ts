@@ -5,7 +5,7 @@ export interface DownloadParams {
   fileName: string;
   modelId: string;
   modelKey?: string;
-  modelType?: 'text' | 'image' | 'stt' | 'tts';
+  modelType?: 'text' | 'image' | 'video' | 'stt' | 'tts';
   quantization?: string;
   combinedTotalBytes?: number;
   mmProjDownloadId?: string;

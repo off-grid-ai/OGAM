@@ -5,7 +5,7 @@ import { useAppStore } from '../../stores';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { makeImageModelKey } from '../../utils/modelKey';
 import { modelManager, hardwareService, backgroundDownloadService } from '../../services';
-import { fetchAvailableModels, HFImageModel, guessStyle } from '../../services/huggingFaceModelBrowser';
+import { fetchAvailableModels, getSDImageModels, searchSDImageModels, HFImageModel, guessStyle } from '../../services/huggingFaceModelBrowser';
 import { fetchAvailableCoreMLModels } from '../../services/coreMLModelBrowser';
 import { ImageModelRecommendation } from '../../types';
 import { BackendFilter, ImageFilterDimension, ImageModelDescriptor } from './types';
@@ -24,6 +24,27 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
   const [imageFilterExpanded, setImageFilterExpanded] = useState<ImageFilterDimension>(null);
   const [imageSearchQuery, setImageSearchQuery] = useState('');
   const [imageFiltersVisible, setImageFiltersVisible] = useState(false);
+  const [sdSearchModels, setSDSearchModels] = useState<HFImageModel[]>([]);
+  const [sdSearchLoading, setSDSearchLoading] = useState(false);
+  const [sdSearchError, setSDSearchError] = useState<string | null>(null);
+  const [sdSearchRevision, setSDSearchRevision] = useState(0);
+  useEffect(() => {
+    let current = true;
+    const controller = new AbortController();
+    setSDSearchModels([]);
+    setSDSearchError(null);
+    const query = imageSearchQuery.trim();
+    if (!query) { setSDSearchLoading(false); return; }
+    setSDSearchLoading(true);
+    const timer = setTimeout(() => {
+      searchSDImageModels(query, controller.signal)
+        .then(models => { if (current) setSDSearchModels(models); })
+        .catch(error => { if (current) setSDSearchError(error.message ?? 'Image search failed. Try again.'); })
+        .finally(() => { if (current) setSDSearchLoading(false); });
+    }, 300);
+    return () => { current = false; controller.abort(); clearTimeout(timer); };
+  }, [imageSearchQuery, sdSearchRevision]);
+
   const [imageRec, setImageRec] = useState<ImageModelRecommendation | null>(null);
   const [userChangedBackendFilter, setUserChangedBackendFilter] = useState(false);
   const [showRecommendedOnly, setShowRecommendedOnly] = useState(true);
@@ -51,19 +72,20 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
   }, [setDownloadedImageModels]);
 
   const loadHFModels = useCallback(async (forceRefresh = false) => {
+    if (forceRefresh) setSDSearchRevision(value => value + 1);
     setHfModelsLoading(true); setHfModelsError(null);
     try {
       if (Platform.OS === 'ios') {
         const coremlModels = await fetchAvailableCoreMLModels(forceRefresh);
-        setAvailableHFModels(coremlModels.map(m => ({
+        setAvailableHFModels([...getSDImageModels(), ...coremlModels.map(m => ({
           id: m.id, name: m.name, displayName: m.displayName, backend: 'coreml' as any,
           fileName: m.fileName, downloadUrl: m.downloadUrl, size: m.size, repo: m.repo,
           _coreml: true, _coremlFiles: m.files,
           _coremlAttentionVariant: m.attentionVariant,
-        })));
+        }))]);
       } else {
         const socInfo = await hardwareService.getSoCInfo();
-        setAvailableHFModels(await fetchAvailableModels(forceRefresh, { skipQnn: !socInfo.hasNPU }));
+        setAvailableHFModels([...getSDImageModels(), ...await fetchAvailableModels(forceRefresh, { skipQnn: !socInfo.hasNPU })]);
       }
     } catch (error: any) {
       setHfModelsError(error?.message || 'Failed to fetch models');
@@ -158,20 +180,22 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
     return true;
   }, [imageRec]);
 
+  const allHFModels = useMemo(() => [...new Map([...availableHFModels, ...sdSearchModels].map(model => [model.id, model])).values()], [availableHFModels, sdSearchModels]);
   const filteredHFModels = useMemo(() => {
     const query = imageSearchQuery.toLowerCase().trim();
-    const filtered = availableHFModels.filter(m => {
-      if (showRecommendedOnly && imageRec && !isRecommendedModel(m)) return false;
-      if (backendFilter !== 'all' && m.backend !== backendFilter) return false;
+    const searchedIds = new Set(sdSearchModels.map(model => model.id));
+    const filtered = allHFModels.filter(m => {
+      if (!query && showRecommendedOnly && imageRec && !isRecommendedModel(m)) return false;
+      if ((!query || userChangedBackendFilter) && backendFilter !== 'all' && m.backend !== backendFilter) return false;
       if (styleFilter !== 'all' && guessStyle(m.name) !== styleFilter) return false;
       if (!matchesSdVersionFilter(m.name, sdVersionFilter)) return false;
       if (downloadedImageModels.some(d => d.id === m.id)) return false;
-      if (query && !m.displayName.toLowerCase().includes(query) && !m.name.toLowerCase().includes(query)) return false;
+      if (query && !searchedIds.has(m.id) && !m.displayName.toLowerCase().includes(query) && !m.name.toLowerCase().includes(query)) return false;
       return true;
     });
     if (!showRecommendedOnly) filtered.sort((a, b) => a.displayName.localeCompare(b.displayName));
     return filtered;
-  }, [availableHFModels, backendFilter, styleFilter, sdVersionFilter, downloadedImageModels, imageSearchQuery, imageRec, isRecommendedModel, showRecommendedOnly]);
+  }, [allHFModels, sdSearchModels, userChangedBackendFilter, backendFilter, styleFilter, sdVersionFilter, downloadedImageModels, imageSearchQuery, imageRec, isRecommendedModel, showRecommendedOnly]);
 
   const hasActiveImageFilters = backendFilter !== 'all' || styleFilter !== 'all' || sdVersionFilter !== 'all';
   const imageRecommendation = imageRec?.bannerText ?? 'Loading recommendation...';
@@ -196,7 +220,7 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
   };
 
   return {
-    availableHFModels, hfModelsLoading, hfModelsError,
+    availableHFModels: allHFModels, hfModelsLoading: hfModelsLoading || sdSearchLoading, hfModelsError: imageSearchQuery.trim() ? sdSearchError : hfModelsError,
     backendFilter, setBackendFilter,
     styleFilter, setStyleFilter,
     sdVersionFilter, setSdVersionFilter,

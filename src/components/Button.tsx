@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, ViewStyle, TextStyle } from 'react-native';
-import type { AccessibilityState } from 'react-native';
+import type { AccessibilityRole, AccessibilityState } from 'react-native';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { SPACING, TYPOGRAPHY } from '../constants';
@@ -24,6 +24,7 @@ interface ButtonProps {
   testID?: string;
   accessibilityLabel?: string;
   accessibilityState?: AccessibilityState;
+  accessibilityRole?: AccessibilityRole;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -40,6 +41,7 @@ export const Button: React.FC<ButtonProps> = ({
   testID,
   accessibilityLabel,
   accessibilityState,
+  accessibilityRole = 'button',
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -69,7 +71,7 @@ export const Button: React.FC<ButtonProps> = ({
       disabled={disabled || loading}
       activeOpacity={0.7}
       testID={testID}
-      accessibilityRole="button"
+      accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel ?? title}
       accessibilityState={accessibilityState}
     >

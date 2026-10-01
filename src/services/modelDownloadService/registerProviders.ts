@@ -1,3 +1,4 @@
+import { videoProvider } from './providers/videoProvider';
 /**
  * Register the core download providers (text / image / stt) with the single
  * ModelDownloadService. Called once at app boot. The tts provider lives in pro and
@@ -15,5 +16,6 @@ export function registerCoreDownloadProviders(): void {
   registered = true;
   modelDownloadService.register(textProvider);
   modelDownloadService.register(imageProvider);
+  modelDownloadService.register(videoProvider);
   modelDownloadService.register(sttProvider);
 }

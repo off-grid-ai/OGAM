@@ -20,6 +20,10 @@ end
 
 target 'OffgridMobile' do
   config = use_native_modules!
+  # The script reuses a framework only when its pinned revision and headers match.
+  video_builder = File.expand_path('../scripts/build-video-ios.sh', __dir__)
+  raise 'Video runtime build failed' unless system('bash', video_builder)
+  pod 'OffgridVideo', :path => '../native/video'
   
   use_react_native!(
     :path => config[:reactNativePath],

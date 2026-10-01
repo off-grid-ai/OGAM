@@ -142,11 +142,9 @@ function discoveryBoost(tool: RoutableTool): number {
 
 async function embedTool(tool: RoutableTool, expectedDim?: number): Promise<number[]> {
   const text = `${tool.function.name}: ${firstLine(tool.function.description)}`;
-  const hash = hashText(text);
+  const hash = `${embeddingService.getModelId()}:${hashText(text)}`;
   const cached = toolEmbeddingCache.get(tool.function.name);
-  // A cache hit needs BOTH the text hash AND the current embedding dimension to match.
-  // After an embedding-model swap the dimension changes while the text is identical, so
-  // the dimension check stops a stale-dim vector from poisoning cosineSimilarity with NaN.
+  // Include model identity even when two models have the same vector size.
   if (cached && cached.h === hash && (expectedDim == null || cached.v.length === expectedDim)) {
     return cached.v;
   }
@@ -169,21 +167,23 @@ export async function selectToolsByEmbedding(
   if (tools.length <= topK || !query.trim()) {
     return tools.map(t => t.function.name);
   }
-  await hydrateCache();
-  await embeddingService.load();
-  const queryVec = await embeddingService.embed(query);
-  const tokens = queryTokens(query);
-  const scored: Array<{ name: string; score: number }> = [];
-  for (const tool of tools) {
-    const vec = await embedTool(tool, queryVec.length);
-    // Hybrid: semantic similarity + lexical (provider/verb word) + discovery boost.
-    const score = cosineSimilarity(queryVec, vec) + lexicalBoost(tokens, tool) + discoveryBoost(tool);
-    scored.push({ name: tool.function.name, score });
-  }
-  scored.sort((a, b) => b.score - a.score);
-  const selected = scored.slice(0, topK).map(s => s.name);
-  logger.log(`[ToolRouter] hybrid-routed ${tools.length} → ${selected.length}: [${selected.join(', ')}]`);
-  return selected;
+  return embeddingService.runExclusive(async () => {
+    await hydrateCache();
+    await embeddingService.load();
+    const queryVec = await embeddingService.embed(query);
+    const tokens = queryTokens(query);
+    const scored: Array<{ name: string; score: number }> = [];
+    for (const tool of tools) {
+      const vec = await embedTool(tool, queryVec.length);
+      // Hybrid: semantic similarity + lexical (provider/verb word) + discovery boost.
+      const score = cosineSimilarity(queryVec, vec) + lexicalBoost(tokens, tool) + discoveryBoost(tool);
+      scored.push({ name: tool.function.name, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    const selected = scored.slice(0, topK).map(s => s.name);
+    logger.log(`[ToolRouter] hybrid-routed ${tools.length} → ${selected.length}: [${selected.join(', ')}]`);
+    return selected;
+  });
 }
 
 /** Test helper: clear the in-memory cache and re-arm hydration. */

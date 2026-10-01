@@ -1,0 +1,24 @@
+--- a/src/ggml-vulkan/ggml-vulkan.cpp
++++ b/src/ggml-vulkan/ggml-vulkan.cpp
+@@ -586,6 +586,21 @@
+     GGML_ASSERT(parameter_count > 0);
+     GGML_ASSERT(parameter_count <= MAX_PARAMETER_COUNT);
+     GGML_ASSERT(wg_denoms[0] > 0 && wg_denoms[1] > 0 && wg_denoms[2] > 0); // NOLINT
++
++#ifdef __ANDROID__
++    // The Adreno compiler can terminate the process inside pipeline creation,
++    // before Vulkan can return an error. Record the lazy shader variant first.
++    if (device->vendor_id == VK_VENDOR_ID_QUALCOMM) {
++        std::string constants;
++        for (const auto value : specialization_constants) {
++            if (!constants.empty()) constants += ",";
++            constants += std::to_string(value);
++        }
++        GGML_LOG_INFO("ggml_vulkan: Adreno compiling %s (specialization=[%s], subgroup=%u, full_subgroups=%d, spirv_bytes=%zu)\n",
++                      pipeline->name.c_str(), constants.c_str(), required_subgroup_size,
++                      require_full_subgroups ? 1 : 0, spv_size);
++    }
++#endif
+ 
+     vk::ShaderModuleCreateInfo shader_module_create_info({}, spv_size, reinterpret_cast<const uint32_t *>(spv_data));
+ 

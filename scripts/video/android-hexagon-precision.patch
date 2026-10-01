@@ -1,0 +1,30 @@
+--- a/src/ggml-hexagon/ggml-hexagon.cpp
++++ b/src/ggml-hexagon/ggml-hexagon.cpp
+@@ -4287,6 +4287,8 @@
+ }
+ 
+ static bool ggml_hexagon_supported_flash_attn_ext(const struct ggml_hexagon_session * sess, const struct ggml_tensor * op) {
++    // HMX keeps attention scores and recurrent output in F16 tiles.
++    if (ggml_get_op_params_i32(op, 3) == GGML_PREC_F32) return false;
+     const struct ggml_tensor * src0 = op->src[0];
+     const struct ggml_tensor * src1 = op->src[1];
+     const struct ggml_tensor * src2 = op->src[2];
+@@ -5391,6 +5393,9 @@
+ }
+ 
+ static bool ggml_hexagon_supported_mul_mat(const struct ggml_hexagon_session * sess, const struct ggml_tensor * dst) {
++    // HMX can lower activations to F16. Honor explicit F32 accumulation
++    // requests (for example video attention) through another backend.
++    if (ggml_get_op_params_i32(dst, 0) == GGML_PREC_F32) return false;
+     const struct ggml_tensor * src0 = dst->src[0];
+     const struct ggml_tensor * src1 = dst->src[1];
+ 
+@@ -5481,7 +5486,7 @@
+         return false;
+     }
+ 
+-    if (ggml_get_op_params_i32(op, 3) == GGML_PREC_F32) {
++    if (ggml_get_op_params_i32(op, 0) == GGML_PREC_F32) {
+         return false;
+     }
+ 

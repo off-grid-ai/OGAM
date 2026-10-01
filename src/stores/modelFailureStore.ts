@@ -8,7 +8,7 @@ import { create } from 'zustand';
  * the look: 'error' (a load/generation was blocked) vs 'warning' (a soft, non-
  * blocking degradation like enhancement skipped).
  */
-export type ModelFailureType = 'text' | 'image' | 'tts' | 'stt' | 'embedding';
+export type ModelFailureType = 'text' | 'image' | 'video' | 'tts' | 'stt' | 'embedding';
 export type ModelFailureSeverity = 'error' | 'warning';
 
 export interface ModelFailure {

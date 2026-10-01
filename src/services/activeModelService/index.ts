@@ -333,7 +333,7 @@ class ActiveModelService {
           // os_proc RAM (budgetForSpec dirty-pressure), or a sidecar stacks onto its
           // generation spike and jetsams the app. Without this flag the resident-dirty
           // arm of the gate is a no-op.
-          { key: 'image', type: 'image', dirtyMemory: true, sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)) },
+          { key: 'image', type: 'image', dirtyMemory: true, canEvict: () => !onnxImageGeneratorService.isGenerating(), sizeMB: Math.round((hardwareService.estimateImageModelRam(model) || 0) / (1024 * 1024)) },
           () => this.doUnloadImageModelLocked(true), // eviction keeps the selection
         );
       },
@@ -376,7 +376,9 @@ class ActiveModelService {
     this.notifyListeners();
     try {
       if (isNativeLoaded) {
-        await onnxImageGeneratorService.unloadModel();
+        if (!(await onnxImageGeneratorService.unloadModel())) {
+          throw new Error('The image model is still in use and could not be unloaded.');
+        }
       }
       this.loadedImageModelId = null;
       this.loadedImageModelThreads = null;

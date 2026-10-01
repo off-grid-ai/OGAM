@@ -1,3 +1,4 @@
+import { resolveSDImagePack, resolveSDImageDownloadFiles } from './huggingFaceModelBrowser';
 /** Standalone async image download handlers - no hooks. All download state flows through
  *  useDownloadStore via the stable image:<id> modelKey (single source of truth). */
 import { Platform } from 'react-native';
@@ -13,7 +14,8 @@ import { useDownloadStore, isActiveStatus } from '../stores/downloadStore';
 import { makeImageModelKey } from '../utils/modelKey';
 import { ImageModelDescriptor, ImageDownloadDeps } from './imageModelDownloadTypes';
 import { getQnnWarningMessage, showQnnWarningAlert } from './imageDownloadQnn';
-import { ensureImageExtractionComplete } from '../utils/imageModelIntegrity';
+import { ensureImageExtractionComplete, validateMultifileComplete } from '../utils/imageModelIntegrity';
+export { validateMultifileComplete } from '../utils/imageModelIntegrity';
 import logger from '../utils/logger';
 
 // ImageDownloadDeps now lives in ./types (so imageDownloadQnn can import it without cycling back
@@ -26,11 +28,11 @@ interface ImageMetadata {
   imageModelDescription: string;
   imageModelSize: number;
   imageModelStyle?: string;
-  imageModelBackend?: 'mnn' | 'qnn' | 'coreml';
+  imageModelBackend?: 'mnn' | 'qnn' | 'coreml' | 'sd';
   imageModelRepo?: string;
   imageModelAttentionVariant?: string;
   imageModelDownloadUrl?: string;
-  imageModelHuggingFaceFiles?: { path: string; size: number }[];
+  imageModelHuggingFaceFiles?: ImageModelDescriptor['huggingFaceFiles'];
   imageModelCoremlFiles?: { path: string; relativePath: string; size: number; downloadUrl: string }[];
 }
 
@@ -43,6 +45,10 @@ type MultifileRuntime = {
 
 const activeMultifileDownloads = new Map<string, MultifileRuntime>();
 const USER_CANCELLED_ERROR = 'user_cancelled';
+
+export function isMultifileImageDownloadActive(modelId: string): boolean {
+  return activeMultifileDownloads.has(modelId);
+}
 
 /** Build a synthetic downloadId for multi-file flows that don't go through WorkManager. */
 function makeMultifileId(modelId: string): string {
@@ -157,6 +163,7 @@ type MultifileDownloadSpec = {
   relativePath: string;
   size: number;
   url: string;
+  sha256?: string;
 };
 
 async function downloadSequentialFiles(opts: {
@@ -176,6 +183,15 @@ async function downloadSequentialFiles(opts: {
     const filePath = `${modelDir}/${file.relativePath}`;
     const fileDir = filePath.substring(0, filePath.lastIndexOf('/'));
     await ensureDirectory(fileDir);
+    // Reuse a complete pinned part after a restart or device-to-device copy.
+    // Size alone cannot distinguish a valid model from corrupted bytes.
+    if (file.sha256 && (await statFile(filePath))?.size === file.size &&
+        (await RNFS.hash(filePath, 'sha256')).toLowerCase() === file.sha256.toLowerCase()) {
+      assertNotCancelled(modelInfo.id, runtime);
+      downloadedSize += file.size;
+      useDownloadStore.getState().updateProgress(syntheticId, downloadedSize, totalSize);
+      continue;
+    }
 
     const tempFileName = `${modelInfo.id}_${file.relativePath.replaceAll('/', '_')}`;
     const capturedDownloadedSize = downloadedSize;
@@ -195,18 +211,6 @@ async function downloadSequentialFiles(opts: {
     assertNotCancelled(modelInfo.id, runtime);
     downloadedSize += file.size;
     useDownloadStore.getState().updateProgress(syntheticId, downloadedSize, totalSize);
-  }
-}
-
-/** Verify every part is present and non-empty before registering — a download can
- *  resolve "successfully" yet write a 0-byte file (200 with no body). Existence +
- *  non-empty only (NOT exact size: descriptor sizes drift from real bytes). Throws so
- *  the caller's catch fails it (retry-able) instead of registering garbage. */
-async function validateMultifileComplete(modelDir: string, files: MultifileDownloadSpec[]): Promise<void> {
-  for (const file of files) {
-    const filePath = `${modelDir}/${file.relativePath}`;
-    const size = (await statFile(filePath))?.size ?? -1;
-    if (size <= 0) throw new Error(`Downloaded file missing or empty: ${file.relativePath} — tap retry`);
   }
 }
 
@@ -305,6 +309,15 @@ export async function downloadHuggingFaceModel(
     deps.setAlertState(showAlert('Error', 'Invalid HuggingFace model configuration'));
     return;
   }
+  if (modelInfo.backend === 'sd') {
+    try {
+      const files = await resolveSDImageDownloadFiles(modelInfo.huggingFaceRepo, modelInfo.huggingFaceFiles);
+      modelInfo = { ...modelInfo, huggingFaceFiles: files, size: files.reduce((sum, file) => sum + file.size, 0) };
+    } catch (error) {
+      deps.setAlertState(showAlert('Download unavailable', error instanceof Error ? error.message : 'Could not verify the image files.'));
+      return;
+    }
+  }
   const syntheticId = makeMultifileId(modelInfo.id);
   const created = addImageEntry({
     modelId: modelInfo.id,
@@ -330,14 +343,17 @@ export async function downloadHuggingFaceModel(
     await ensureDirectory(imageModelsDir);
     await ensureDirectory(modelDir);
 
-    const files = modelInfo.huggingFaceFiles.map((file) => ({
+    const files = modelInfo.huggingFaceFiles!.map((file) => ({
       relativePath: file.path,
       size: file.size,
-      url: `https://huggingface.co/${modelInfo.huggingFaceRepo}/resolve/main/${file.path}`,
+      expectedSize: modelInfo.backend === 'sd' ? file.size : undefined,
+      url: file.downloadUrl ?? `https://huggingface.co/${modelInfo.huggingFaceRepo}/resolve/main/${file.path}`,
+      sha256: file.sha256,
     }));
     await downloadSequentialFiles({ modelInfo, runtime, syntheticId, modelDir, files });
     assertNotCancelled(modelInfo.id, runtime);
     await validateMultifileComplete(modelDir, files); // reject a silently-truncated part before registering
+    if (modelInfo.backend === 'sd') await resolveSDImagePack(modelInfo.id, modelDir);
     useDownloadStore.getState().setProcessing(syntheticId);
     assertNotCancelled(modelInfo.id, runtime);
     await RNFS.writeFile(`${modelDir}/_ready`, '', 'utf8').catch(() => {});

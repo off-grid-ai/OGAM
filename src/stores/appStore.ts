@@ -1,3 +1,9 @@
+import { videoModelDisplayName } from '../utils/modelHelpers';
+import type {
+  ModelEntry,
+  VideoGenerationRequestContract,
+} from '@offgrid/models';
+import type { VideoModel } from '../services/videoModelFiles';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Platform } from 'react-native';
@@ -24,6 +30,7 @@ import {
   INFERENCE_BACKENDS,
   LiteRTBackend,
   GeneratedImage,
+  GeneratedVideo,
 } from '../types';
 import {
   emitChangedModelSettings,
@@ -60,6 +67,10 @@ export type AppSettings = {
   imageGenerationMode: ImageGenerationMode;
   autoDetectMethod: AutoDetectMethod;
   classifierModelId: string | null;
+  videoParams: Record<string, Partial<VideoGenerationRequestContract>>;
+  videoSeed: number;
+  videoNegative: string;
+  enhanceVideoPrompts: boolean;
   imageSteps: number;
   imageGuidanceScale: number;
   imageThreads: number;
@@ -128,6 +139,8 @@ export type AppSettings = {
 type ThemeMode = 'system' | 'light' | 'dark';
 
 export interface AppState extends ProAccessSlice {
+  showSyncStatusBar: boolean;
+  setShowSyncStatusBar: (visible: boolean) => void;
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
   hasCompletedOnboarding: boolean;
@@ -178,6 +191,13 @@ export interface AppState extends ProAccessSlice {
     provenance?: RecordProvenance,
   ) => void;
   resetSettings: () => void;
+  downloadedVideoModels: VideoModel[];
+  videoDownloads: Record<string, ModelEntry>;
+  activeVideoModelId: string | null;
+  setActiveVideoModelId: (id: string | null) => void;
+  addDownloadedVideoModel: (model: VideoModel) => void;
+  removeDownloadedVideoModel: (id: string) => void;
+  setVideoDownload: (id: string, model: ModelEntry | null) => void;
   downloadedImageModels: ONNXImageModel[];
   activeImageModelId: string | null;
   setDownloadedImageModels: (models: ONNXImageModel[]) => void;
@@ -195,6 +215,10 @@ export interface AppState extends ProAccessSlice {
   setImageGenerationStatus: (status: string | null) => void;
   setImagePreviewPath: (path: string | null) => void;
   generatedImages: GeneratedImage[];
+  generatedVideos: GeneratedVideo[];
+  addGeneratedVideo: (video: GeneratedVideo) => void;
+  removeGeneratedVideo: (videoId: string) => void;
+  removeVideosByConversationId: (conversationId: string) => string[];
   addGeneratedImage: (image: GeneratedImage) => void;
   removeGeneratedImage: (imageId: string) => void;
   removeImagesByConversationId: (conversationId: string) => string[];
@@ -243,6 +267,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   imageGenerationMode: 'auto' as ImageGenerationMode,
   autoDetectMethod: 'pattern' as AutoDetectMethod,
   classifierModelId: null,
+  videoParams: {},
+  videoSeed: -1,
+  videoNegative: '',
+  enhanceVideoPrompts: false,
   imageSteps: defaultImageSteps(Platform.OS),
   imageGuidanceScale: 7.5,
   imageThreads: 4,
@@ -290,6 +318,8 @@ const appStorage = createHydrationGatedStorage<PersistedAppState>(
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
+      showSyncStatusBar: true,
+      setShowSyncStatusBar: visible => set({ showSyncStatusBar: visible }),
       themeMode: 'system' as ThemeMode,
       setThemeMode: mode => set({ themeMode: mode }),
       hasCompletedOnboarding: false,
@@ -374,6 +404,36 @@ export const useAppStore = create<AppState>()(
         emitChangedModelSettings(before, after);
       },
       // Image models (ONNX-based)
+      downloadedVideoModels: [],
+      videoDownloads: {},
+      activeVideoModelId: null,
+      setActiveVideoModelId: id => set({ activeVideoModelId: id }),
+      addDownloadedVideoModel: model =>
+        set(state => ({
+          downloadedVideoModels: [
+            ...state.downloadedVideoModels.filter(m => m.id !== model.id),
+            { ...model, name: videoModelDisplayName(model.id, model.name) },
+          ],
+        })),
+      removeDownloadedVideoModel: id =>
+        set(state => ({
+          downloadedVideoModels: state.downloadedVideoModels.filter(
+            m => m.id !== id,
+          ),
+          activeVideoModelId:
+            state.activeVideoModelId === id ? null : state.activeVideoModelId,
+        })),
+      setVideoDownload: (id, model) =>
+        set(state => {
+          const videoDownloads = { ...state.videoDownloads };
+          if (model) {
+            videoDownloads[id] = {
+              ...model,
+              name: videoModelDisplayName(model.id, model.name),
+            };
+          } else delete videoDownloads[id];
+          return { videoDownloads };
+        }),
       downloadedImageModels: [],
       activeImageModelId: null,
       setDownloadedImageModels: models =>
@@ -417,6 +477,25 @@ export const useAppStore = create<AppState>()(
       setImagePreviewPath: path => set({ imagePreviewPath: path }),
       // Gallery
       generatedImages: [],
+      generatedVideos: [],
+      addGeneratedVideo: video =>
+        set(state => ({
+          generatedVideos: [
+            video,
+            ...state.generatedVideos.filter(item => item.id !== video.id),
+          ],
+        })),
+      removeGeneratedVideo: videoId =>
+        set(state => ({
+          generatedVideos: state.generatedVideos.filter(
+            video => video.id !== videoId,
+          ),
+        })),
+      removeVideosByConversationId: conversationId => {
+        const videos = get().generatedVideos.filter(video => video.conversationId === conversationId);
+        set(state => ({ generatedVideos: state.generatedVideos.filter(video => video.conversationId !== conversationId) }));
+        return videos.map(video => video.id);
+      },
       addGeneratedImage: image =>
         set(state => ({
           generatedImages: [image, ...state.generatedImages],
@@ -484,27 +563,32 @@ export const useAppStore = create<AppState>()(
 
 function persistedAppState(state: AppState) {
   return {
-        themeMode: state.themeMode,
-        hasCompletedOnboarding: state.hasCompletedOnboarding,
-        onboardingChecklist: state.onboardingChecklist,
-        checklistDismissed: state.checklistDismissed,
-        activeModelId: state.activeModelId,
-        lastTextModelId: state.lastTextModelId,
-        settings: state.settings,
-        modelSettingProvenance: state.modelSettingProvenance,
-        activeImageModelId: state.activeImageModelId,
-        generatedImages: state.generatedImages,
-        warmedImageModels: state.warmedImageModels,
-        textGenerationCount: state.textGenerationCount,
-        imageGenerationCount: state.imageGenerationCount,
-        hasEngagedSharePrompt: state.hasEngagedSharePrompt,
-        hasRegisteredPro: state.hasRegisteredPro,
-        // Persist eviction so a relaunch cannot grant Pro while the roster is offline.
-        proDeviceAdmission: state.proDeviceAdmission,
-        devProDisabled: state.devProDisabled,
-        proBannerDismissed: state.proBannerDismissed,
-        desktopPromoDismissed: state.desktopPromoDismissed,
-        proAhaTriggeredBy: state.proAhaTriggeredBy,
-        loadedSettings: state.loadedSettings,
+    showSyncStatusBar: state.showSyncStatusBar,
+    themeMode: state.themeMode,
+    hasCompletedOnboarding: state.hasCompletedOnboarding,
+    onboardingChecklist: state.onboardingChecklist,
+    checklistDismissed: state.checklistDismissed,
+    activeModelId: state.activeModelId,
+    lastTextModelId: state.lastTextModelId,
+    settings: state.settings,
+    modelSettingProvenance: state.modelSettingProvenance,
+    activeVideoModelId: state.activeVideoModelId,
+    downloadedVideoModels: state.downloadedVideoModels,
+    videoDownloads: state.videoDownloads,
+    activeImageModelId: state.activeImageModelId,
+    generatedImages: state.generatedImages,
+    generatedVideos: state.generatedVideos,
+    warmedImageModels: state.warmedImageModels,
+    textGenerationCount: state.textGenerationCount,
+    imageGenerationCount: state.imageGenerationCount,
+    hasEngagedSharePrompt: state.hasEngagedSharePrompt,
+    hasRegisteredPro: state.hasRegisteredPro,
+    // Persist eviction so a relaunch cannot grant Pro while the roster is offline.
+    proDeviceAdmission: state.proDeviceAdmission,
+    devProDisabled: state.devProDisabled,
+    proBannerDismissed: state.proBannerDismissed,
+    desktopPromoDismissed: state.desktopPromoDismissed,
+    proAhaTriggeredBy: state.proAhaTriggeredBy,
+    loadedSettings: state.loadedSettings,
   };
 }

@@ -16,6 +16,8 @@ export const SystemPromptSection: React.FC = () => {
         Instructions given to the model before each conversation. Used when chatting without a project selected.
       </Text>
       <TextInput
+        testID="default-system-prompt-input"
+        accessibilityLabel="Default system prompt"
         style={styles.textArea}
         value={systemPrompt}
         onChangeText={(text) => updateSettings({ systemPrompt: text })}

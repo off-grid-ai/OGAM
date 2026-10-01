@@ -149,6 +149,18 @@ export const RemoteServerEditorScreen: React.FC = () => {
           loading={form.isTesting}
           allowManualEntry={form.modelManagement !== 'offgrid-desktop-v1'}
         />
+        {form.modelManagement === 'offgrid-desktop-v1' && (
+          <RemoteModelField
+            label="Video model"
+            value={form.videoModelId}
+            options={form.modelCatalog.video ?? []}
+            onChange={form.setVideoModelId}
+            placeholder="Select an OGAD video model"
+            testID="server-video-model"
+            loading={form.isTesting}
+            allowManualEntry={false}
+          />
+        )}
         <RemoteModelField
           label="Transcription model"
           value={form.transcriptionModelId}

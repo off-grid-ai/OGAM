@@ -17,13 +17,15 @@
  * coreml (iOS) uses a different layout validated elsewhere, so it's not checked here.
  */
 import RNFS from 'react-native-fs';
+import { statFile } from './fileStat';
+import { getSDImagePackFiles, isSDImageWeight, validateSDCheckpointFile } from '../services/huggingFaceModelBrowser';
 import { unzip } from 'react-native-zip-archive';
 import { ImageModelIncompleteError } from './modelLoadErrors';
 import logger from './logger';
 
 type ReadDirItem = Awaited<ReturnType<typeof RNFS.readDir>>[number];
 
-export type ImageBackend = 'mnn' | 'qnn' | 'coreml';
+export type ImageBackend = 'mnn' | 'qnn' | 'coreml' | 'sd';
 
 export interface ImageDirEntry {
   name: string;
@@ -53,6 +55,13 @@ export function checkImageModelFiles(files: ImageDirEntry[], backend: ImageBacke
 
   const sizeByName = new Map<string, number>();
   for (const f of files) if (f.isFile) sizeByName.set(f.name, f.size);
+
+  if (backend === 'sd') {
+    const files = getSDImagePackFiles([...sizeByName.keys()]);
+    if (!files) return { complete: false, missing: ['image model pack'] };
+    const missing = files.filter(file => (sizeByName.get(file.path) ?? 0) <= 0).map(file => file.path);
+    return { complete: missing.length === 0, missing };
+  }
 
   const missing: string[] = [];
   const requirePresent = (name: string): void => {
@@ -115,7 +124,12 @@ export async function resolveImageModelDir(modelPath: string, backend: ImageBack
   const marker = backend === 'mnn' ? 'unet.mnn' : 'unet.bin';
   const hasMarker = async (dir: string): Promise<boolean> => {
     // qnn models also ship a clip_v2.mnn; the marker that disambiguates is the unet.
-    try { return await RNFS.exists(`${dir}/${marker}`); } catch { return false; }
+    try {
+      if (backend === 'sd') {
+        return (await RNFS.readDir(dir)).some(file => file.isFile() && isSDImageWeight(file.name));
+      }
+      return await RNFS.exists(`${dir}/${marker}`);
+    } catch { return false; }
   };
   if (await hasMarker(modelPath)) return modelPath;
   let items: ReadDirItem[];
@@ -141,11 +155,18 @@ export async function resolveImageModelDir(modelPath: string, backend: ImageBack
 export async function validateImageModelDir(modelPath: string, backend: ImageBackend): Promise<IntegrityResult> {
   if (backend === 'coreml') return { complete: true, missing: [] };
   const dir = await resolveImageModelDir(modelPath, backend);
-  if (!dir) return { complete: false, missing: [backend === 'mnn' ? 'unet.mnn' : 'unet.bin'] };
+  if (!dir) return { complete: false, missing: [backend === 'sd' ? 'image model pack' : backend === 'mnn' ? 'unet.mnn' : 'unet.bin'] };
   let items: ReadDirItem[];
   try { items = await RNFS.readDir(dir); } catch { return { complete: false, missing: ['<unreadable model dir>'] }; }
   const files: ImageDirEntry[] = items.map(i => ({ name: i.name, size: Number(i.size) || 0, isFile: i.isFile() }));
-  return checkImageModelFiles(files, backend);
+  const result = checkImageModelFiles(files, backend);
+  if (backend === 'sd' && result.complete) {
+    const pack = getSDImagePackFiles(files.filter(file => file.isFile).map(file => file.name));
+    if (pack?.length === 1 && !await validateSDCheckpointFile(`${dir}/${pack[0].path}`)) {
+      return { complete: false, missing: ['complete SD checkpoint with image model, text encoder, and VAE'] };
+    }
+  }
+  return result;
 }
 
 /**
@@ -161,7 +182,7 @@ export async function ensureImageExtractionComplete(opts: {
   modelId: string;
 }): Promise<void> {
   const { backend, modelDir, zipPath, modelId } = opts;
-  if (backend !== 'mnn' && backend !== 'qnn') return;
+  if (backend !== 'mnn' && backend !== 'qnn' && backend !== 'sd') return;
   let result = await validateImageModelDir(modelDir, backend);
   if (!result.complete) {
     logger.warn(`[ImageDownload] incomplete extraction ${modelId} missing=[${result.missing.join(',')}] — re-unzipping once`);
@@ -171,5 +192,25 @@ export async function ensureImageExtractionComplete(opts: {
   if (!result.complete) {
     logger.warn(`[ImageDownload] extraction STILL incomplete ${modelId} missing=[${result.missing.join(',')}] — failing`);
     throw new ImageModelIncompleteError(result.missing);
+  }
+}
+
+/** Check all parts before registration. Pinned packs also supply a content hash;
+ * legacy descriptors retain their non-empty check because their sizes can drift. */
+export async function validateMultifileComplete(
+  modelDir: string,
+  files: { relativePath: string; sha256?: string; expectedSize?: number }[],
+): Promise<void> {
+  if (files.length === 0) throw new Error('Download file list missing. Please retry.');
+  for (const file of files) {
+    const filePath = `${modelDir}/${file.relativePath}`;
+    const size = (await statFile(filePath))?.size ?? -1;
+    if (size <= 0) throw new Error(`Downloaded file missing or empty: ${file.relativePath} — tap retry`);
+    if (file.expectedSize && size !== file.expectedSize) {
+      throw new Error(`Downloaded file is incomplete: ${file.relativePath} — tap retry`);
+    }
+    if (file.sha256 && (await RNFS.hash(filePath, 'sha256')).toLowerCase() !== file.sha256.toLowerCase()) {
+      throw new Error(`Downloaded file is damaged: ${file.relativePath} — tap retry`);
+    }
   }
 }

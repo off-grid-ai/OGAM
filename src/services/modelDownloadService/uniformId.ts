@@ -15,13 +15,17 @@ import type { ModelType } from '../../stores/downloadStore';
  * (`[DL-SM] … REFUSED: not found`). Every other type passes the modelId through
  * unchanged; only STT normalizes, and it normalizes HERE, once.
  */
-export function uniformDownloadId(modelType: ModelType, modelId: string): string {
+export function uniformDownloadId(
+  modelType: ModelType,
+  modelId: string,
+): string {
   // Per-type canonicalization, owned HERE so the providers' list() and the View's
   // dispatch can't drift. Both are idempotent (safe whether given the bare id or the
   // prefixed store id): STT store rows are `whisper-<id>` but whisperService keys by
   // the bare id; image store rows carry an `image:` prefix the provider strips.
   let canonical = modelId;
   if (modelType === 'stt') canonical = modelId.replace(/^whisper-/, '');
+  else if (modelType === 'video') canonical = modelId.replace(/^video:/, '');
   else if (modelType === 'image') canonical = modelId.replace(/^image:/, '');
   return `${modelType}:${canonical}`;
 }

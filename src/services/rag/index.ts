@@ -1,4 +1,4 @@
-import { ragDatabase } from './database';
+import { ragDatabase, type EmbeddingModelSelection } from './database';
 import { chunkDocument } from './chunking';
 import { retrievalService } from './retrieval';
 import { embeddingService } from './embedding';
@@ -30,11 +30,53 @@ interface IndexDocumentParams {
 }
 
 class RagService {
+  private embeddingChange = { busy: false, message: '', error: '' };
+  private embeddingListeners = new Set<() => void>();
+  private embeddingAbort: AbortController | null = null;
+  getEmbeddingChange = () => this.embeddingChange;
+  subscribeEmbeddingChange = (listener: () => void) => {
+    this.embeddingListeners.add(listener);
+    return () => { this.embeddingListeners.delete(listener); };
+  };
+  private reportEmbeddingChange(busy: boolean, message: string, error = '') {
+    this.embeddingChange = { busy, message, error };
+    this.embeddingListeners.forEach(listener => listener());
+  }
+  cancelEmbeddingChange = () => { this.embeddingAbort?.abort(); };
+
+  async installEmbeddingModel(candidate: {
+    id: string; name: string; size: number; downloadUrl: string; sha256?: string;
+  } | null): Promise<void> {
+    if (this.embeddingChange.busy) throw new Error('An embedding model change is already in progress.');
+    const controller = new AbortController();
+    this.embeddingAbort = controller;
+    const progress = (message: string) => this.reportEmbeddingChange(true, message);
+    progress('Preparing model change...');
+    let model: EmbeddingModelSelection | null = null;
+    try {
+      await this.ensureReady();
+      model = candidate ? await embeddingService.downloadModel(candidate, progress, controller.signal) : null;
+      await this.switchEmbeddingModel(model, progress, controller.signal);
+      this.reportEmbeddingChange(false, 'Indexing complete');
+    } catch (error) {
+      this.reportEmbeddingChange(false, '', controller.signal.aborted
+        ? 'Model change cancelled. The previous model and indexes are still active.'
+        : `${error instanceof Error ? error.message : String(error)} The previous model and indexes are still active.`);
+      throw error;
+    } finally {
+      this.embeddingAbort = null;
+    }
+  }
+
   async ensureReady(): Promise<void> {
     await ragDatabase.ensureReady();
   }
 
   async indexDocument(params: IndexDocumentParams): Promise<number> {
+    return embeddingService.runExclusive(() => this.indexDocumentUnlocked(params));
+  }
+
+  private async indexDocumentUnlocked(params: IndexDocumentParams): Promise<number> {
     const { projectId, filePath, fileName, fileSize, onProgress } = params;
     await this.ensureReady();
 
@@ -90,7 +132,11 @@ class RagService {
     try {
       await embeddingService.load();
       const texts = chunks.map(c => c.content);
-      const embeddings = await embeddingService.embedBatch(texts);
+      const embeddings: number[][] = [];
+      for (const text of texts) {
+        embeddings.push(await embeddingService.embed(text));
+        onProgress?.({ stage: 'embedding', message: `Indexing ${embeddings.length} of ${texts.length} chunks...` });
+      }
       const entries = rowIds.map((rowId, i) => ({
         chunkRowid: rowId,
         docId,
@@ -152,6 +198,10 @@ class RagService {
   }
 
   async backfillEmbeddings(projectId: string): Promise<number> {
+    return embeddingService.runExclusive(() => this.backfillEmbeddingsUnlocked(projectId));
+  }
+
+  private async backfillEmbeddingsUnlocked(projectId: string): Promise<number> {
     await this.ensureReady();
     const docs = ragDatabase.getDocumentsByProject(projectId);
     let total = 0;
@@ -184,7 +234,46 @@ class RagService {
     return total;
   }
 
+  async switchEmbeddingModel(
+    model: EmbeddingModelSelection | null,
+    onProgress: (message: string) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return embeddingService.runExclusive(async () => {
+      await this.ensureReady();
+      if (signal?.aborted) throw new Error('Model change cancelled');
+      onProgress('Checking model compatibility...');
+      await embeddingService.withRebuildModel(model, async () => {
+        const documents = ragDatabase.getAllDocuments();
+        const total = documents.reduce((count, doc) => count + ragDatabase.getChunksByDocument(doc.id).length, 0);
+        let completed = 0;
+        ragDatabase.beginEmbeddingRebuild();
+        try {
+          for (const doc of documents) {
+            for (const chunk of ragDatabase.getChunksByDocument(doc.id)) {
+              if (signal?.aborted) throw new Error('Model change cancelled');
+              onProgress(`Rebuilding search and project knowledge: ${completed} of ${total} chunks`);
+              ragDatabase.stageEmbedding({ chunkRowid: chunk.id, docId: doc.id, embedding: await embeddingService.embed(chunk.content) });
+              completed += 1;
+            }
+          }
+          onProgress(`Saving ${completed} chunks...`);
+          if (signal?.aborted) throw new Error('Model change cancelled');
+          ragDatabase.commitEmbeddingRebuild(model);
+        } finally {
+          // Cleanup must not turn a committed switch into an apparent failed switch.
+          try { ragDatabase.discardEmbeddingRebuild(); } catch (error) { logger.warn('Could not clear temporary embedding index', error); }
+        }
+      });
+      onProgress('Indexing complete');
+    });
+  }
+
   async deleteDocument(docId: number): Promise<void> {
+    return embeddingService.runExclusive(() => this.deleteDocumentUnlocked(docId));
+  }
+
+  private async deleteDocumentUnlocked(docId: number): Promise<void> {
     await this.ensureReady();
     const document = ragDatabase.getDocument(docId);
     ragDatabase.deleteDocument(docId);
@@ -231,6 +320,10 @@ class RagService {
   }
 
   async deleteProjectDocuments(projectId: string): Promise<void> {
+    return embeddingService.runExclusive(() => this.deleteProjectDocumentsUnlocked(projectId));
+  }
+
+  private async deleteProjectDocumentsUnlocked(projectId: string): Promise<void> {
     await this.ensureReady();
     const documents = ragDatabase.getDocumentsByProject(projectId);
     ragDatabase.deleteDocumentsByProject(projectId);
@@ -283,6 +376,10 @@ class RagService {
   }
 
   async deleteSyncedDocument(syncId: string): Promise<void> {
+    return embeddingService.runExclusive(() => this.deleteSyncedDocumentUnlocked(syncId));
+  }
+
+  private async deleteSyncedDocumentUnlocked(syncId: string): Promise<void> {
     await this.ensureReady();
     const document = ragDatabase.getDocumentBySyncId(syncId);
     if (document) ragDatabase.deleteDocument(document.id);

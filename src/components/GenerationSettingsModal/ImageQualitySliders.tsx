@@ -1,12 +1,11 @@
 import React from 'react';
 import { View, Text, Switch, Platform, TouchableOpacity } from 'react-native';
+import { Button } from '../Button';
 import { SliderSetting } from '../SliderSetting';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
-import { DEFAULT_SETTINGS } from '../../stores/appStore';
-import { useClearGpuCache } from '../../hooks/useImageGenerationSettings';
+import { useClearGpuCache, useImageParameterSettings } from '../../hooks/useImageGenerationSettings';
 import {
-  defaultImageSteps,
   MAX_IMAGE_STEPS,
   SWEET_SPOT_SIZE,
 } from '../../utils/imageGenAdvice';
@@ -32,6 +31,7 @@ const ClearGPUCacheButton: React.FC = () => {
 
 /** Basic controls: Image Steps + Image Size */
 export const ImageQualityBasicSliders: React.FC = () => {
+  const { parameters, defaults, maxSize, applyDefaults } = useImageParameterSettings();
   const { settings, updateSettings } = useAppStore();
 
   return (
@@ -41,7 +41,7 @@ export const ImageQualityBasicSliders: React.FC = () => {
         compact
         label="Image Steps"
         description="4-8 steps for speed, 20-50 for quality"
-        value={settings.imageSteps || defaultImageSteps(Platform.OS)}
+        value={parameters.steps}
         min={4} max={MAX_IMAGE_STEPS} step={1}
         onChange={(value) => updateSettings({ imageSteps: value })}
       />
@@ -50,18 +50,20 @@ export const ImageQualityBasicSliders: React.FC = () => {
         testID="image-size"
         compact
         label="Image Size"
-        description="Output resolution. Default: 512x512."
-        value={Math.max(SWEET_SPOT_SIZE, settings.imageWidth ?? DEFAULT_SETTINGS.imageWidth)}
-        min={SWEET_SPOT_SIZE} max={512} step={64}
+        description={`Output resolution. Recommended: ${defaults.size}x${defaults.size}.`}
+        value={parameters.size}
+        min={SWEET_SPOT_SIZE} max={maxSize} step={64}
         formatValue={(v) => `${v}x${v}`}
         onChange={(value) => updateSettings({ imageWidth: value, imageHeight: value })}
       />
+      <Button title="Use model defaults" variant="secondary" size="small" onPress={applyDefaults} testID="image-model-defaults" />
     </>
   );
 };
 
 /** Advanced controls: Guidance Scale, Image Threads, GPU Acceleration */
 export const ImageQualityAdvancedSliders: React.FC = () => {
+  const { parameters } = useImageParameterSettings();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
@@ -73,7 +75,7 @@ export const ImageQualityAdvancedSliders: React.FC = () => {
         compact
         label="Guidance Scale"
         description="Higher = follows prompt more strictly (5-15 range)"
-        value={settings.imageGuidanceScale || 7.5}
+        value={parameters.guidanceScale}
         min={1} max={20} step={0.5} decimals={1}
         onChange={(value) => updateSettings({ imageGuidanceScale: value })}
       />

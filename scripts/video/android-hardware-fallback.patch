@@ -1,0 +1,111 @@
+diff --git a/src/core/compute_workspace.cpp b/src/core/compute_workspace.cpp
+index 54f0538..9f20b7e 100644
+--- a/src/core/compute_workspace.cpp
++++ b/src/core/compute_workspace.cpp
+@@ -18,6 +18,7 @@ namespace sd {
+         segment_end();
+         release();
+         ggml_backend_free(cpu_backend_);
++        ggml_backend_free(gpu_fallback_);
+     }
+ 
+     void ComputeWorkspace::set_extra_backends(const std::vector<ggml_backend_t>& backends) {
+@@ -43,6 +44,19 @@ namespace sd {
+     ggml_backend_sched_t ComputeWorkspace::make_scheduler(size_t graph_size) {
+         std::vector<ggml_backend_t> backends{backend_};
+         backends.insert(backends.end(), extra_backends_.begin(), extra_backends_.end());
++#ifdef __ANDROID__
++        // Hexagon is preferred; unsupported operations go to Vulkan, then CPU.
++        if (sd_backend_is(backend_, "HTP")) {
++            if (gpu_fallback_ == nullptr) {
++                auto device = ggml_backend_dev_by_name("Vulkan0");
++                if (device) gpu_fallback_ = ggml_backend_dev_init(device, nullptr);
++            }
++            if (gpu_fallback_ != nullptr &&
++                std::find(backends.begin(), backends.end(), gpu_fallback_) == backends.end()) {
++                backends.push_back(gpu_fallback_);
++            }
++        }
++#endif
+         if (!sd_backend_is_cpu(backend_)) {
+             if (cpu_backend_ == nullptr) {
+                 cpu_backend_ = sd_backend_cpu_init();
+@@ -207,11 +221,12 @@ namespace sd {
+         auto scheduler   = make_scheduler(graph_size);
+         if (scheduler != nullptr) {
+             assign_nodes(scheduler, copy_graph);
+-            std::vector<size_t> sizes(extra_backends_.size() + 2);
++            const int count = ggml_backend_sched_get_n_backends(scheduler);
++            std::vector<size_t> sizes(count);
+             ggml_backend_sched_reserve_size(scheduler, copy_graph, sizes.data());
+-            result.buffers.push_back({backend_, sizes[0]});
+-            for (size_t i = 0; i < extra_backends_.size(); ++i) {
+-                result.buffers.push_back({extra_backends_[i], sizes[i + 1]});
++            for (int i = 0; i < count; ++i) {
++                auto backend = ggml_backend_sched_get_backend(scheduler, i);
++                if (backend != cpu_backend_) result.buffers.push_back({backend, sizes[i]});
+             }
+             ggml_backend_sched_free(scheduler);
+         }
+diff --git a/src/core/compute_workspace.h b/src/core/compute_workspace.h
+index fcf14b8..203d62c 100644
+--- a/src/core/compute_workspace.h
++++ b/src/core/compute_workspace.h
+@@ -17,6 +17,7 @@ namespace sd {
+         ggml_backend_t backend_;
+         std::vector<ggml_backend_t> extra_backends_;
+         ggml_backend_t cpu_backend_     = nullptr;
++        ggml_backend_t gpu_fallback_    = nullptr;
+         ggml_gallocr_t allocator_       = nullptr;
+         ggml_backend_sched_t scheduler_ = nullptr;
+         size_t scheduler_capacity_      = 0;
+diff --git a/src/core/ggml_extend.cpp b/src/core/ggml_extend.cpp
+index d87353d..e491eff 100644
+--- a/src/core/ggml_extend.cpp
++++ b/src/core/ggml_extend.cpp
+@@ -517,7 +517,11 @@ ggml_tensor* ggml_ext_conv_3d(ggml_context* ctx,
+     }
+     if (b != nullptr) {
+         b = ggml_reshape_4d(ctx, b, 1, 1, 1, b->ne[0]);  // [OC, 1, 1, 1]
+-        x = ggml_add_inplace(ctx, x, b);
++        // The convolution may fall back to CPU while ADD runs on an accelerator.
++        // Give ADD its own output so the scheduler can transfer the input.
++        x = backend != nullptr && !ggml_backend_supports_op(backend, x)
++                ? ggml_add(ctx, x, b)
++                : ggml_add_inplace(ctx, x, b);
+     }
+     return x;
+ }
+diff --git a/src/core/ggml_runner.cpp b/src/core/ggml_runner.cpp
+index 4c156ed..c01c8d0 100644
+--- a/src/core/ggml_runner.cpp
++++ b/src/core/ggml_runner.cpp
+@@ -230,7 +230,12 @@ void GGMLRunner::pin_multi_device_nodes(ggml_backend_sched_t sched, ggml_cgraph*
+             node->op == GGML_OP_PERMUTE || node->op == GGML_OP_TRANSPOSE) {
+             continue;
+         }
+-        if (ggml_backend_supports_op(current, node)) {
++        // In-place operations must follow the device chosen for their source.
++        // Its buffer may not exist yet when this graph is assigned.
++        if (node->view_src != nullptr) continue;
++        auto buffer = node->buffer;
++        if (ggml_backend_supports_op(current, node) &&
++            (buffer == nullptr || ggml_backend_supports_buft(current, ggml_backend_buffer_get_type(buffer)))) {
+             ggml_backend_sched_set_tensor_backend(sched, node, current);
+         }
+     }
+@@ -728,8 +733,12 @@ std::vector<DeviceMemoryRequest> GGMLRunner::memory_requests(
+         const size_t reusable    = workspace_.bytes(size.backend);
+         const size_t cache_bytes = size.backend == runtime_backend ? pending_cache_bytes : 0;
+         const size_t pending     = add_bytes(size.bytes > reusable ? size.bytes - reusable : 0, cache_bytes);
+-        size_t limit             = max_graph_vram_bytes;
+-        if (is_multi_device()) {
++        // A fallback device has its own physical memory checks. Do not apply
++        // the primary device's address-space cap (for example Hexagon's) to it.
++        const bool configured_backend = size.backend == runtime_backend ||
++            std::find(extra_runtime_backends.begin(), extra_runtime_backends.end(), size.backend) != extra_runtime_backends.end();
++        size_t limit = configured_backend ? max_graph_vram_bytes : 0;
++        if (configured_backend && is_multi_device()) {
+             size_t index = 0;
+             if (size.backend != runtime_backend) {
+                 auto position = std::find(extra_runtime_backends.begin(), extra_runtime_backends.end(), size.backend);

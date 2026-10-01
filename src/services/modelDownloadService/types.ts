@@ -16,18 +16,26 @@
  * See docs/design/MODEL_DOWNLOAD_SERVICE.md.
  */
 
-export type ModelDownloadType = 'text' | 'image' | 'stt' | 'tts';
+export type ModelDownloadType = 'text' | 'image' | 'video' | 'stt' | 'tts';
 
 export type ModelDownloadStatus =
-  | 'queued'        // accepted, not yet transferring
-  | 'downloading'   // bytes moving
-  | 'paused'        // interrupted (e.g. waiting for network / app was killed) — resumable
-  | 'completed'     // on disk + registered in its domain store
-  | 'error';        // failed; retryable
+  | 'queued' // accepted, not yet transferring
+  | 'downloading' // bytes moving
+  | 'paused' // interrupted (e.g. waiting for network / app was killed) — resumable
+  | 'completed' // on disk + registered in its domain store
+  | 'error'; // failed; retryable
 
 export type ModelDownloadStartRequest =
-  | { modelType: 'text'; modelId: string; file: import('../../types').ModelFile }
-  | { modelType: 'image'; model: import('../imageModelDownloadTypes').ImageModelDescriptor }
+  | { modelType: 'video'; model: import('@offgrid/models').ModelEntry }
+  | {
+      modelType: 'text';
+      modelId: string;
+      file: import('../../types').ModelFile;
+    }
+  | {
+      modelType: 'image';
+      model: import('../imageModelDownloadTypes').ImageModelDescriptor;
+    }
   | { modelType: 'stt'; modelId: string };
 
 /**
@@ -46,12 +54,12 @@ export type ModelDownloadStartRequest =
  *    download surfaces as needing a manual retry, not a phantom "resuming".
  */
 interface DownloadCapabilities {
-  pause?: boolean;     // can an in-progress transfer stop without removing its bytes?
-  resume?: boolean;    // can the paused transfer continue?
-  cancel: boolean;     // can an in-progress transfer be aborted + cleaned up?
-  retry: boolean;      // can a failed/stuck download be restarted?
-  remove: boolean;     // can the on-disk model be deleted?
-  resumable: boolean;  // does it survive an app kill and continue on its own?
+  pause?: boolean; // can an in-progress transfer stop without removing its bytes?
+  resume?: boolean; // can the paused transfer continue?
+  cancel: boolean; // can an in-progress transfer be aborted + cleaned up?
+  retry: boolean; // can a failed/stuck download be restarted?
+  remove: boolean; // can the on-disk model be deleted?
+  resumable: boolean; // does it survive an app kill and continue on its own?
   determinateProgress: boolean; // are byteDownloaded/sizeBytes real (vs fraction-only)?
 }
 
@@ -136,5 +144,7 @@ export interface DownloadProvider {
    * never admission-controlled/queued can omit it. `params` is passed as the shared shape so the
    * service never branches on the concrete type.
    */
-  reissue?(params: import('../backgroundDownloadTypes').DownloadParams): Promise<void>;
+  reissue?(
+    params: import('../backgroundDownloadTypes').DownloadParams,
+  ): Promise<void>;
 }

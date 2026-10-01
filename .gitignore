@@ -98,3 +98,7 @@ docs/wire-captures/
 
 # Scratch renders derived from scripts/e2e/fixtures (regenerable, not versioned)
 /tmp/
+
+# Generated native video runtime
+.video-build/
+native/video/*.xcframework/

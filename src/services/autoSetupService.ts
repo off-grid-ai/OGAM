@@ -3,12 +3,16 @@ import type { ModelDownload, ModelDownloadStartRequest } from './modelDownloadSe
 import { useAppStore } from '../stores';
 import { activeModelService } from './activeModelService';
 import { uniformDownloadId } from './modelDownloadService/uniformId';
+import { embeddingService } from './rag/embedding';
 import {
   loadAutoSetupCompatibleCatalog,
   type AutoSetupCatalogBoundaries,
 } from './autoSetupCatalog';
 import {
   selectAutoSetupPlans,
+  type AutoSetupEmbeddingModel,
+  type AutoSetupItem,
+  type AutoSetupModelKind,
   type AutoSetupPlan,
   type AutoSetupTier,
 } from './autoSetupPlan';
@@ -20,11 +24,31 @@ export interface AutoSetupDownloadBoundaries {
   subscribe: (listener: () => void) => () => void;
 }
 
+export interface AutoSetupEmbeddingBoundaries {
+  isDownloaded: (model: AutoSetupEmbeddingModel) => Promise<boolean>;
+  start: (model: AutoSetupEmbeddingModel, progress: (fraction: number) => void, signal: AbortSignal) => Promise<void>;
+}
+
 const productionDownloadBoundaries: AutoSetupDownloadBoundaries = {
   start: request => modelDownloadService.start(request),
   list: () => modelDownloadService.list(),
   cancel: id => modelDownloadService.cancel(id),
   subscribe: listener => modelDownloadService.subscribe(listener),
+};
+
+const productionEmbeddingBoundaries: AutoSetupEmbeddingBoundaries = {
+  isDownloaded: model => model.size === 0
+    ? Promise.resolve(true)
+    : embeddingService.isModelDownloaded(model),
+  async start(model, progress, signal) {
+    if (!model.downloadUrl) throw new Error('This embedding model has no download file.');
+    await embeddingService.downloadModel(
+      { ...model, downloadUrl: model.downloadUrl },
+      () => undefined,
+      signal,
+      progress,
+    );
+  },
 };
 
 type AutoSetupItemPhase =
@@ -46,6 +70,8 @@ interface AutoSetupSnapshot {
   phase: 'loading_catalog' | 'ready' | 'downloading' | 'completed' | 'failed';
   plans: AutoSetupPlan[];
   selectedTier: AutoSetupTier;
+  selectedKinds: AutoSetupModelKind[];
+  installedIds: string[];
   outcomes: Record<string, AutoSetupItemOutcome>;
   error: string | null;
 }
@@ -55,7 +81,9 @@ export interface AutoSetupSession {
   subscribe(listener: () => void): () => void;
   load(): Promise<void>;
   selectTier(tier: AutoSetupTier): void;
+  toggleKind(kind: AutoSetupModelKind): void;
   start(): Promise<void>;
+  cancel(): Promise<void>;
   complete(): void;
   dispose(): void;
 }
@@ -63,16 +91,11 @@ export interface AutoSetupSession {
 export interface AutoSetupSessionBoundaries {
   catalog?: AutoSetupCatalogBoundaries;
   downloads?: AutoSetupDownloadBoundaries;
+  embedding?: AutoSetupEmbeddingBoundaries;
   catalogDeadlineMs?: number;
 }
 
 const DEFAULT_CATALOG_DEADLINE_MS = 15_000;
-const TIER_POLICY = {
-  lean: 'conservative',
-  balanced: 'balanced',
-  extreme: 'aggressive',
-} as const;
-
 function tierFromPersistedIntent(): AutoSetupTier {
   const mode = useAppStore.getState().settings.modelLoadingMode;
   if (mode === 'conservative') return 'lean';
@@ -80,16 +103,20 @@ function tierFromPersistedIntent(): AutoSetupTier {
   return 'balanced';
 }
 
-function persistTierIntent(tier: AutoSetupTier): void {
-  useAppStore
-    .getState()
-    .updateSettings({ modelLoadingMode: TIER_POLICY[tier] });
+export function autoSetupDownloadId(
+  item: AutoSetupItem,
+): string {
+  if (item.kind === 'embedding') return `embedding:${item.id}`;
+  return uniformDownloadId(item.kind, item.id);
 }
 
-export function autoSetupDownloadId(
-  item: AutoSetupPlan['items'][number],
-): string {
-  return uniformDownloadId(item.kind, item.id);
+export function autoSetupItemNeedsAction(
+  item: AutoSetupItem,
+  installedIds: readonly string[],
+): boolean {
+  return item.kind !== 'embedding' || (
+    item.sizeBytes > 0 && !installedIds.includes(autoSetupDownloadId(item))
+  );
 }
 
 function message(error: unknown): string {
@@ -107,10 +134,10 @@ function message(error: unknown): string {
 }
 
 function initialOutcomes(
-  plan: AutoSetupPlan,
+  items: AutoSetupItem[],
 ): Record<string, AutoSetupItemOutcome> {
   return Object.fromEntries(
-    plan.items.map(item => {
+    items.map(item => {
       const id = autoSetupDownloadId(item);
       return [id, { id, phase: 'waiting', progress: 0 }];
     }),
@@ -164,8 +191,11 @@ export function createAutoSetupSession(
   boundaries: AutoSetupSessionBoundaries = {},
 ): AutoSetupSession {
   const downloads = boundaries.downloads ?? productionDownloadBoundaries;
+  const embedding = boundaries.embedding ?? productionEmbeddingBoundaries;
   const listeners = new Set<() => void>();
   const activeIds = new Set<string>();
+  let pendingEmbeddingId: string | null = null;
+  let embeddingAbort: AbortController | null = null;
   let disposed = false;
   let operation = 0;
   let refreshInFlight = false;
@@ -173,6 +203,8 @@ export function createAutoSetupSession(
     phase: 'loading_catalog',
     plans: [],
     selectedTier: tierFromPersistedIntent(),
+    selectedKinds: ['text'],
+    installedIds: [],
     outcomes: {},
     error: null,
   };
@@ -186,16 +218,23 @@ export function createAutoSetupSession(
   const selectedPlan = (): AutoSetupPlan | undefined =>
     state.plans.find(plan => plan.tier === state.selectedTier) ??
     state.plans[0];
+  const selectedItems = (plan: AutoSetupPlan) =>
+    [...plan.items, ...(plan.embedding ? [plan.embedding] : [])]
+      .filter(item => state.selectedKinds.includes(item.kind) &&
+        autoSetupItemNeedsAction(item, state.installedIds));
 
   const stopActive = async (cancelled: boolean): Promise<void> => {
-    const ids = [...activeIds];
+    const ids = [...activeIds, ...(pendingEmbeddingId ? [pendingEmbeddingId] : [])];
     activeIds.clear();
-    await Promise.allSettled(ids.map(id => downloads.cancel(id)));
+    pendingEmbeddingId = null;
+    embeddingAbort?.abort();
+    embeddingAbort = null;
+    await Promise.allSettled(ids.filter(id => !id.startsWith('embedding:')).map(id => downloads.cancel(id)));
     if (cancelled && !disposed) {
       const outcomes = { ...state.outcomes };
       for (const id of ids) {
         const current = outcomes[id];
-        if (current && current.phase !== 'completed') {
+        if (current && current.phase !== 'completed' && current.phase !== 'failed') {
           outcomes[id] = { ...current, phase: 'cancelled' };
         }
       }
@@ -205,26 +244,39 @@ export function createAutoSetupSession(
 
   const refreshDownloads = async (): Promise<void> => {
     if (disposed || refreshInFlight || activeIds.size === 0) return;
+    const token = operation;
     refreshInFlight = true;
     try {
       const listed = await downloads.list();
-      if (disposed) return;
+      if (disposed || token !== operation) return;
       const { outcomes, failure, allCompleted } = projectActiveDownloads(
         activeIds,
         listed,
         state.outcomes,
       );
-      publish({ outcomes });
+      publish({
+        outcomes,
+        installedIds: [
+          ...state.installedIds.filter(id => id.startsWith('embedding:')),
+          ...listed.filter(download => download.status === 'completed').map(download => download.id),
+        ],
+      });
       if (failure) {
         operation += 1;
-        await stopActive(false);
+        await stopActive(true);
         publish({
           phase: 'failed',
           error: failure.error ?? 'A model download failed. Try again.',
         });
       } else if (allCompleted) {
         activeIds.clear();
-        publish({ phase: 'completed', error: null });
+        if (!pendingEmbeddingId) publish({ phase: 'completed', error: null });
+      }
+    } catch (error) {
+      if (!disposed && token === operation) {
+        operation += 1;
+        await stopActive(true);
+        publish({ phase: 'failed', error: message(error) });
       }
     } finally {
       refreshInFlight = false;
@@ -251,9 +303,23 @@ export function createAutoSetupSession(
         }),
       ]);
       if (disposed || token !== operation) return;
+      const plans = selectAutoSetupPlans(catalog);
+      const installed = await downloads.list().catch(() => []);
+      const embeddingItems = [...new Map(plans.flatMap(plan =>
+        plan.embedding ? [[plan.embedding.id, plan.embedding] as const] : [],
+      )).values()];
+      const installedEmbedding = await Promise.all(embeddingItems.map(async item =>
+        await embedding.isDownloaded(item.payload).catch(() => false)
+          ? autoSetupDownloadId(item) : null,
+      ));
+      if (disposed || token !== operation) return;
       publish({
         phase: 'ready',
-        plans: selectAutoSetupPlans(catalog),
+        plans,
+        installedIds: [
+          ...installed.filter(download => download.status === 'completed').map(download => download.id),
+          ...installedEmbedding.filter((id): id is string => id !== null),
+        ],
         error: null,
       });
     } catch (error) {
@@ -267,36 +333,106 @@ export function createAutoSetupSession(
     }
   };
 
-  const start = async (): Promise<void> => {
-    const plan = selectedPlan();
-    if (!plan || disposed) return;
-    const token = ++operation;
-    await stopActive(false);
-    const existing = await downloads.list();
-    if (disposed || token !== operation) return;
+  const startEmbeddingDownload = (
+    item: NonNullable<AutoSetupPlan['embedding']>,
+    token: number,
+  ): void => {
+    const id = autoSetupDownloadId(item);
+    const controller = new AbortController();
+    embeddingAbort = controller;
+    embedding.start(item.payload, fraction => {
+      if (disposed || token !== operation) return;
+      publish({ outcomes: {
+        ...state.outcomes,
+        [id]: { id, phase: 'downloading', progress: Math.max(0, Math.min(1, fraction)) },
+      } });
+    }, controller.signal).then(() => {
+      if (disposed || token !== operation) return;
+      pendingEmbeddingId = null;
+      embeddingAbort = null;
+      publish({
+        outcomes: { ...state.outcomes, [id]: { id, phase: 'completed', progress: 1 } },
+        installedIds: [...new Set([...state.installedIds, id])],
+        ...(activeIds.size === 0 ? { phase: 'completed' as const } : {}),
+      });
+    }).catch(async error => {
+      if (disposed || token !== operation) return;
+      operation += 1;
+      await stopActive(true);
+      publish({
+        phase: 'failed',
+        outcomes: { ...state.outcomes, [id]: { id, phase: 'failed', progress: 0, error: message(error) } },
+        error: message(error),
+      });
+    });
+  };
+
+  const prepareSelectedDownloads = async (
+    plan: AutoSetupPlan,
+    items: AutoSetupItem[],
+    token: number,
+  ): Promise<boolean> => {
+    let existing: ModelDownload[];
+    try {
+      existing = await downloads.list();
+    } catch (error) {
+      if (!disposed && token === operation)
+        publish({ phase: 'failed', error: message(error) });
+      return false;
+    }
+    if (disposed || token !== operation) return false;
     const completedIds = new Set(
       existing
         .filter(download => download.status === 'completed')
         .map(download => download.id),
     );
-    const outcomes = initialOutcomes(plan);
-    for (const item of plan.items) {
+    const embeddingItem = plan.embedding && state.selectedKinds.includes('embedding')
+      ? plan.embedding : undefined;
+    const selectedEmbeddingId = embeddingItem ? autoSetupDownloadId(embeddingItem) : null;
+    if (embeddingItem && await embedding.isDownloaded(embeddingItem.payload).catch(() => false))
+      completedIds.add(autoSetupDownloadId(embeddingItem));
+    if (disposed || token !== operation) return false;
+    publish({ installedIds: [
+      ...state.installedIds.filter(id => id.startsWith('embedding:') && id !== selectedEmbeddingId),
+      ...completedIds,
+    ] });
+    const outcomes = initialOutcomes(items);
+    for (const item of items) {
       const id = autoSetupDownloadId(item);
       if (completedIds.has(id))
         outcomes[id] = { id, phase: 'completed', progress: 1 };
       else {
         outcomes[id] = { id, phase: 'starting', progress: 0 };
-        activeIds.add(id);
+        if (item.kind === 'embedding') pendingEmbeddingId = id;
+        else activeIds.add(id);
       }
     }
     publish({
-      phase: activeIds.size ? 'downloading' : 'completed',
+      phase: activeIds.size || pendingEmbeddingId ? 'downloading' : 'completed',
       outcomes,
       error: null,
     });
+    return true;
+  };
+
+  const start = async (): Promise<void> => {
+    const plan = selectedPlan();
+    if (!plan || disposed) return;
+    const items = selectedItems(plan);
+    if (items.length === 0) return;
+    const token = ++operation;
+    publish({ phase: 'downloading', error: null });
+    await stopActive(false);
+    if (!await prepareSelectedDownloads(plan, items, token)) return;
+    if (!activeIds.size && !pendingEmbeddingId) return;
+
+    const embeddingItem = plan.embedding && state.selectedKinds.includes('embedding')
+      ? plan.embedding : undefined;
+    if (pendingEmbeddingId && embeddingItem) startEmbeddingDownload(embeddingItem, token);
+
     if (activeIds.size === 0) return;
 
-    const [text, image, stt] = plan.items;
+    const [text, image, stt, video] = plan.items;
     const jobs = [
       {
         id: autoSetupDownloadId(text),
@@ -310,6 +446,10 @@ export function createAutoSetupSession(
         id: autoSetupDownloadId(stt),
         run: () => downloads.start({ modelType: 'stt', modelId: stt.payload.modelId }),
       },
+      ...(video ? [{
+        id: autoSetupDownloadId(video),
+        run: () => downloads.start({ modelType: 'video', model: video.payload }),
+      }] : []),
     ].filter(job => activeIds.has(job.id));
     const starts = await Promise.allSettled(jobs.map(job => job.run()));
     if (disposed || token !== operation) return;
@@ -319,19 +459,13 @@ export function createAutoSetupSession(
     if (failedIndex >= 0) {
       const id = jobs[failedIndex].id;
       const failure = starts[failedIndex] as PromiseRejectedResult;
-      const next = {
-        ...state.outcomes,
-        [id]: {
-          id,
-          phase: 'failed' as const,
-          progress: 0,
-          error: message(failure.reason),
-        },
-      };
-      await stopActive(false);
+      await stopActive(true);
       publish({
         phase: 'failed',
-        outcomes: next,
+        outcomes: {
+          ...state.outcomes,
+          [id]: { id, phase: 'failed', progress: 0, error: message(failure.reason) },
+        },
         error: message(failure.reason),
       });
       return;
@@ -347,11 +481,9 @@ export function createAutoSetupSession(
     },
     load,
     selectTier(tier) {
-      // The selected plan is immutable once its download session starts. If a
-      // completed or active session could switch tiers, its outcomes would
-      // describe the old plan while complete() activated the new plan.
-      if (state.phase === 'downloading' || state.phase === 'completed') return;
-      persistTierIntent(tier);
+      // These tiers only preview download choices. They never change the live
+      // model loading policy or the user's saved active model selections.
+      if (state.phase === 'downloading') return;
       publish({
         phase: 'ready',
         selectedTier: tier,
@@ -359,16 +491,36 @@ export function createAutoSetupSession(
         error: null,
       });
     },
+    toggleKind(kind) {
+      if (state.phase === 'downloading') return;
+      const plan = selectedPlan();
+      const item = plan && [...plan.items, ...(plan.embedding ? [plan.embedding] : [])]
+        .find(candidate => candidate.kind === kind);
+      if (!item || !autoSetupItemNeedsAction(item, state.installedIds)) return;
+      const selectedKinds = state.selectedKinds.includes(kind)
+        ? state.selectedKinds.filter(selected => selected !== kind)
+        : [...state.selectedKinds, kind];
+      publish({ selectedKinds, outcomes: {}, error: null, phase: 'ready' });
+    },
     start,
+    async cancel() {
+      if (state.phase !== 'downloading') return;
+      operation += 1;
+      await stopActive(true);
+      publish({ phase: 'ready', error: null });
+    },
     complete() {
       const plan = selectedPlan();
       if (plan && state.phase === 'completed') {
         const app = useAppStore.getState();
-        if (app.activeModelId === null) {
+        if (state.selectedKinds.includes('text') && app.activeModelId === null) {
           activeModelService.selectTextModel(plan.items[0].id);
         }
-        if (app.activeImageModelId === null) {
+        if (state.selectedKinds.includes('image') && app.activeImageModelId === null) {
           app.setActiveImageModelId(plan.items[1].id);
+        }
+        if (state.selectedKinds.includes('video') && app.activeVideoModelId === null && plan.items[3]) {
+          app.setActiveVideoModelId(plan.items[3].id);
         }
       }
     },

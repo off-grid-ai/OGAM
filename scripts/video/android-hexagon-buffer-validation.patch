@@ -1,0 +1,29 @@
+--- a/src/ggml-hexagon/ggml-hexagon.cpp
++++ b/src/ggml-hexagon/ggml-hexagon.cpp
+@@ -6474,6 +6474,26 @@
+         }
+     }
+ 
++    // Mixed-backend graphs can retain tensors backed by another device.
++    // Validate the full split before queuing any DSP work: buffer contexts
++    // from CPU/Vulkan are not ggml_hexagon_shared_buffer objects.
++    for (const auto & node : *nodes_ptr) {
++        auto valid_buffer = [&](const ggml_tensor * tensor) {
++            if (!tensor) return true;
++            if (tensor->buffer && ggml_backend_buffer_is_hexagon(tensor->buffer)) return true;
++            GGML_LOG_ERROR("ggml-hex: %s cannot execute %s: tensor %s uses %s buffer\n",
++                           sess->c_name(), node.op_name().c_str(), tensor->name,
++                           tensor->buffer ? ggml_backend_buffer_name(tensor->buffer) : "missing");
++            return false;
++        };
++        for (const auto * tensor : node.get_inputs()) {
++            if (!valid_buffer(tensor)) return GGML_STATUS_FAILED;
++        }
++        for (const auto * tensor : node.get_outputs()) {
++            if (!valid_buffer(tensor)) return GGML_STATUS_FAILED;
++        }
++    }
++
+     // Queue and execute
+     for (const auto & node : *nodes_ptr) {
+         sess->enqueue_op(node);

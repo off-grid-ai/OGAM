@@ -15,7 +15,7 @@ import {
 } from '../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../theme';
 import { createStyles } from './ProjectDetailScreen.styles';
-import { useChatStore, useProjectStore, useAppStore } from '../stores';
+import { useChatStore, useProjectStore, useAppStore, useRemoteServerStore } from '../stores';
 import { Conversation } from '../types';
 import { RootStackParamList } from '../navigation/types';
 import { KnowledgeBaseSection } from './ProjectDetailKnowledgeBaseSection';
@@ -45,7 +45,10 @@ export const ProjectDetailScreen: React.FC = () => {
   const downloadedModels = useAppStore(state => state.downloadedModels);
   const activeModelId = useAppStore(state => state.activeModelId);
 
-  const hasModels = downloadedModels.length > 0;
+  const activeVideoModelId = useAppStore(s => s.activeVideoModelId);
+  const remoteVideoServerId = useRemoteServerStore(s => s.activeRemoteMediaServerIds.video);
+  const hasVideoModel = !!activeVideoModelId || !!remoteVideoServerId;
+  const hasModels = downloadedModels.length > 0 || hasVideoModel;
 
   // Get chats for this project
   const projectChats = useMemo(
@@ -59,6 +62,10 @@ export const ProjectDetailScreen: React.FC = () => {
   };
 
   const handleNewChat = () => {
+    if (hasVideoModel && downloadedModels.length === 0) {
+      navigation.navigate('Chat', { projectId });
+      return;
+    }
     if (!hasModels) {
       setAlertState(
         showAlert(

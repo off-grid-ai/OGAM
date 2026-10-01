@@ -1,0 +1,71 @@
+--- a/src/core/ggml_runner.cpp
++++ b/src/core/ggml_runner.cpp
+@@ -210,6 +210,29 @@
+     if (sched == nullptr || gf == nullptr) {
+         return;
+     }
++#ifdef __ANDROID__
++    ggml_backend_t attention_backend = nullptr;
++    int attention_nodes_pinned = 0;
++    const int backend_count = ggml_backend_sched_get_n_backends(sched);
++    for (int index = 0; index < backend_count; ++index) {
++        auto candidate = ggml_backend_sched_get_backend(sched, index);
++        auto device = candidate ? ggml_backend_get_device(candidate) : nullptr;
++        const char* description = device ? ggml_backend_dev_description(device) : nullptr;
++        if (sd_backend_is(candidate, "Vulkan") && description &&
++            std::string(description).find("Adreno") != std::string::npos) {
++            attention_backend = candidate;
++            break;
++        }
++    }
++    auto is_query_chunk = [](const ggml_tensor* node) {
++        if (!node || node->op != GGML_OP_FLASH_ATTN_EXT || node->src[3] ||
++            node->op_params[3] != GGML_PREC_F32) return false;
++        auto query = node->src[0];
++        auto view = query && query->op == GGML_OP_CONT ? query->src[0] : nullptr;
++        return view && view->op == GGML_OP_VIEW && view->src[0] &&
++            query->ne[1] <= 128 && view->ne[1] < view->src[0]->ne[1];
++    };
++#endif
+     ggml_backend_t current = runtime_backend;
+     const int n_nodes      = ggml_graph_n_nodes(gf);
+     for (int i = 0; i < n_nodes; i++) {
+@@ -230,6 +253,28 @@
+             node->op == GGML_OP_PERMUTE || node->op == GGML_OP_TRANSPOSE) {
+             continue;
+         }
++#ifdef __ANDROID__
++        // Keep query copies and their joined attention output on the same GPU.
++        // Pinning these to HTP would copy each chunk across both devices.
++        if (attention_backend && (is_query_chunk(node) ||
++            (node->op == GGML_OP_CONCAT && is_query_chunk(node->src[1]))) &&
++            ggml_backend_supports_op(attention_backend, node)) {
++            ggml_backend_sched_set_tensor_backend(sched, node, attention_backend);
++            ++attention_nodes_pinned;
++            if (is_query_chunk(node) && ggml_backend_supports_op(attention_backend, node->src[0])) {
++                ggml_backend_sched_set_tensor_backend(sched, node->src[0], attention_backend);
++                // Query views share this full-Q contiguous producer. Keep it
++                // on GPU too, so the scheduler does not recopy it for each view.
++                auto query_view = node->src[0]->src[0];
++                auto query_storage = query_view ? query_view->view_src : nullptr;
++                if (query_storage && query_storage->op == GGML_OP_CONT &&
++                    ggml_backend_supports_op(attention_backend, query_storage)) {
++                    ggml_backend_sched_set_tensor_backend(sched, query_storage, attention_backend);
++                }
++            }
++            continue;
++        }
++#endif
+         // In-place operations must follow the device chosen for their source.
+         // Its buffer may not exist yet when this graph is assigned.
+         if (node->view_src != nullptr) continue;
+@@ -239,6 +284,9 @@
+             ggml_backend_sched_set_tensor_backend(sched, node, current);
+         }
+     }
++#ifdef __ANDROID__
++    if (attention_backend) LOG_DEBUG("Adreno query-chunk GPU nodes pinned: %d", attention_nodes_pinned);
++#endif
+ }
+ 
+ size_t GGMLRunner::retained_runtime_buffer_bytes(ggml_backend_t backend) const {

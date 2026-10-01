@@ -33,6 +33,9 @@ function formatOptionalMeta(meta: NonNullable<Message['generationMeta']>, tps: n
     ['steps', m.steps == null ? undefined : `${m.steps} steps`],
     ['cfg', m.guidanceScale == null ? undefined : `cfg ${m.guidanceScale}`],
     ['res', m.resolution],
+    ['frames', m.frames == null ? undefined : `${m.frames} frames`],
+    ['fps', m.fps == null ? undefined : `${m.fps} fps`],
+    ['seed', m.seed == null ? undefined : `Seed: ${m.seed}`],
     ['cache', m.cacheType ? `KV ${m.cacheType}` : undefined],
   ];
   return entries

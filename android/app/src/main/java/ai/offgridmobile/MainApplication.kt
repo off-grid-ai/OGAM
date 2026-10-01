@@ -28,6 +28,7 @@ class MainApplication : Application(), ReactApplication {
           // Packages that cannot be autolinked yet can be added manually here, for example:
           add(DownloadManagerPackage())
           add(LocalDreamPackage())
+          add(ai.offgridmobile.video.VideoGenerationPackage())
           add(PDFExtractorPackage())
           add(LiteRTPackage())
           add(DeviceMemoryPackage())

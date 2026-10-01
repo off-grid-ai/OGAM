@@ -10,8 +10,14 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
+import VideoPlayer, { type VideoPlayerRef } from 'react-native-video-player';
+import { ResizeMode } from 'react-native-video';
+import { useTheme } from '../../../theme';
+import { SPACING, TYPOGRAPHY } from '../../../constants';
+import { Button } from '../../Button';
 // Imported directly, not through the barrel: a component that reaches its sibling via the index
 // resolves undefined at render time.
 import { LoadingDots } from '../../LoadingDots';
@@ -26,13 +32,14 @@ interface FadeInImageProps {
   testID?: string;
   wrapperTestID?: string;
   onPress?: () => void;
+  accessibilityLabel?: string;
 }
 
 function resolveMediaUri(uri: string): string {
   return uri.includes('/Documents/') ? `file://${resolveDocumentPath(uri)}` : uri;
 }
 
-function FadeInImage({ uri, imageStyle, testID, wrapperTestID, onPress }: FadeInImageProps) {
+export function FadeInImage({ uri, imageStyle, testID, wrapperTestID, onPress, accessibilityLabel }: FadeInImageProps) {
   const displayUri = resolveMediaUri(uri);
   const opacity = useSharedValue(0);
   const [loaded, setLoaded] = React.useState(false);
@@ -44,10 +51,11 @@ function FadeInImage({ uri, imageStyle, testID, wrapperTestID, onPress }: FadeIn
         testID={wrapperTestID}
         style={fadeInImageStyles.wrapper}
         onPress={onPress}
+        disabled={!onPress}
         activeOpacity={0.8}
-        accessibilityRole="button"
+        accessibilityRole={onPress ? 'button' : 'image'}
         accessibilityLabel={
-          isGeneratedImage ? `Generated image ${loaded ? 'loaded' : 'loading'}` : undefined
+          accessibilityLabel ?? (isGeneratedImage ? `Generated image ${loaded ? 'loaded' : 'loading'}` : undefined)
         }
       >
         <Image
@@ -96,6 +104,84 @@ interface MessageAttachmentsProps {
   styles: any;
   colors: any;
   onImagePress?: (uri: string) => void;
+}
+
+/** The library owns playback and controls; this adapter supplies attachment data and theme. */
+function VideoAttachment({ attachment }: { attachment: MediaAttachment }) {
+  const { colors } = useTheme();
+  const player = React.useRef<VideoPlayerRef>(null);
+  const reducedMotion = useReducedMotion();
+  const [size, setSize] = React.useState({
+    width: attachment.width || 16,
+    height: attachment.height || 9,
+  });
+  const [loaded, setLoaded] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  return (
+    <View style={{ width: '100%', gap: SPACING.xs }}>
+      <VideoPlayer
+        ref={player}
+        preload
+        source={{ uri: resolveMediaUri(attachment.uri) }}
+        videoWidth={size.width}
+        videoHeight={size.height}
+        resizeMode={ResizeMode.CONTAIN}
+        showDuration
+        disableControlsAutoHide
+        disableMute
+        additionalControl={
+          <Button
+            title=""
+            accessibilityLabel="Picture in picture"
+            variant="ghost"
+            size="small"
+            disabled={!loaded}
+            icon={<Icon name="minimize-2" size={SPACING.lg} color={colors.text} />}
+            style={{ width: SPACING.xl * 2, height: SPACING.xl * 2, paddingHorizontal: 0 }}
+            onPress={async () => {
+              try {
+                await player.current?.enterPictureInPicture();
+              } catch {
+                setError('Picture in picture is not available on this device.');
+              }
+            }}
+          />
+        }
+        pauseOnPress
+        animationDuration={reducedMotion ? 0 : 150}
+        playInBackground
+        playWhenInactive
+        ignoreSilentSwitch="ignore"
+        enterPictureInPictureOnLeave
+        onRestoreUserInterfaceForPictureInPictureStop={() => {
+          player.current?.restoreUserInterfaceForPictureInPictureStopCompleted(true);
+        }}
+        onLoad={({ naturalSize }) => {
+          setLoaded(true);
+          setError(null);
+          if (naturalSize.width > 0 && naturalSize.height > 0) {
+            setSize({ width: naturalSize.width, height: naturalSize.height });
+          }
+        }}
+        onError={() => setError('This video could not be played.')}
+        customStyles={{
+          wrapper: { width: '100%', borderRadius: SPACING.sm, overflow: 'hidden' },
+          controls: { backgroundColor: colors.surface, height: SPACING.xl * 2, marginTop: 0 },
+          controlButton: { width: SPACING.xl * 2, height: SPACING.xl * 2, padding: SPACING.sm, alignItems: 'center', justifyContent: 'center' },
+          controlIcon: { tintColor: colors.text, width: SPACING.lg, height: SPACING.lg },
+          playArrow: { tintColor: colors.text, width: SPACING.lg, height: SPACING.lg, marginLeft: 0 },
+          playButton: { backgroundColor: colors.surface, width: SPACING.xl * 2, height: SPACING.xl * 2, borderRadius: SPACING.sm },
+          seekBar: { flex: 1, minWidth: 0, paddingHorizontal: SPACING.xs, marginLeft: 0, marginRight: SPACING.sm },
+          seekBarProgress: { backgroundColor: colors.primary },
+          seekBarKnob: { backgroundColor: colors.primary, width: SPACING.sm, height: SPACING.sm, marginHorizontal: -SPACING.xs, marginVertical: 0 },
+          seekBarBackground: { backgroundColor: colors.border },
+          durationText: { ...TYPOGRAPHY.meta, color: colors.textSecondary, flexShrink: 0 },
+        }}
+      />
+      {error && <Text accessibilityRole="alert" style={{ ...TYPOGRAPHY.bodySmall, color: colors.error }}>{error}</Text>}
+
+    </View>
+  );
 }
 
 function AudioAttachment({
@@ -197,6 +283,8 @@ export function MessageAttachments({
             styles={styles}
             colors={colors}
           />
+        ) : attachment.type === 'video' ? (
+          <VideoAttachment key={attachment.id} attachment={attachment} />
         ) : attachment.type === 'audio' ? (
           <AudioAttachment
             key={attachment.id}

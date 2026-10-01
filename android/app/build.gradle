@@ -89,6 +89,8 @@ android {
         coreLibraryDesugaringEnabled true
     }
 
+    externalNativeBuild { cmake { path "src/main/cpp/CMakeLists.txt"; version "3.22.1" } }
+    sourceSets.main.assets.srcDir("../../.video-build/hexagon-assets")
     defaultConfig {
         applicationId "ai.offgridmobile"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -194,4 +196,19 @@ dependencies {
     testImplementation("org.mockito:mockito-core:5.11.0")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
     testImplementation("androidx.test:core:1.6.1")
+}
+
+// Native video setup is shared by command-line, IDE, and CI builds.
+// Configure tasks need the source tree before CMake evaluates it.
+def videoRoot = rootProject.projectDir.parentFile
+def prepareVideoRuntime = tasks.register("prepareVideoRuntime", Exec) {
+    workingDir videoRoot
+    commandLine "bash", new File(videoRoot, "scripts/prepare-video-runtime.sh").absolutePath, "--android"
+    inputs.files(fileTree(new File(videoRoot, "scripts/video")), new File(videoRoot, "scripts/prepare-video-runtime.sh"))
+    outputs.files(new File(videoRoot, ".video-build/runtime-ready"), new File(videoRoot, ".video-build/shaderc/bin/glslc"),
+        new File(videoRoot, ".video-build/hexagon-runtime/htp_iface_stub.c"), new File(videoRoot, ".video-build/hexagon-runtime/htp_iface.h"))
+    outputs.dir(new File(videoRoot, ".video-build/hexagon-assets/video-hexagon"))
+}
+tasks.configureEach { task ->
+    if (task.name.startsWith("configureCMake") || (task.name.startsWith("merge") && task.name.endsWith("Assets"))) task.dependsOn(prepareVideoRuntime)
 }

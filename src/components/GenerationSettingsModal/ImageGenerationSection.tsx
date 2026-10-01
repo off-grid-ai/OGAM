@@ -208,7 +208,9 @@ export const ImageGenerationSection: React.FC = () => {
         </View>
       </View>
 
-      <ImageQualityBasicSliders />
+      <View style={styles.settingGroup}>
+        <ImageQualityBasicSliders />
+      </View>
 
       <View style={[styles.modeToggleContainer, !hasTextModel && styles.dimmed]}>
         <View style={styles.modeToggleInfo}>

@@ -296,8 +296,8 @@ class HardwareService {
    * so the gate doesn't refuse an ANE load that fits (nor admit a GPU load that
    * OOMs). Android (ONNX/QNN reserves accelerator memory up front) keeps 2.5×.
    */
-  estimateImageModelRam(model: { fileSize?: number; size?: number; mmProjFileSize?: number }): number {
-    const multiplier = Platform.OS === 'ios' && !this.preferGpuForImageGen() ? 1.8 : 2.5;
+  estimateImageModelRam(model: { fileSize?: number; size?: number; mmProjFileSize?: number; backend?: string }): number {
+    const multiplier = model.backend !== 'sd' && Platform.OS === 'ios' && !this.preferGpuForImageGen() ? 1.8 : 2.5;
     return this.estimateModelRam(model, multiplier);
   }
   formatModelRam(model: { fileSize?: number; size?: number; mmProjFileSize?: number }, multiplier = 1.5): string {

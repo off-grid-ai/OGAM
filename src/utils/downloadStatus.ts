@@ -17,9 +17,9 @@ export type DownloadStatus =
   | 'processing'
   | 'completed'
   | 'failed'
-  | 'cancelled'
+  | 'cancelled';
 
-export type ModelType = 'text' | 'image' | 'stt' | 'tts'
+export type ModelType = 'text' | 'image' | 'video' | 'stt' | 'tts';
 
 export interface DownloadEntry {
   modelKey: ModelKey
@@ -34,18 +34,18 @@ export interface DownloadEntry {
   combinedTotalBytes: number
   progress: number
   /** Last valid byte observation. The canonical store owns rate sampling, not each view. */
-  rateSample?: ProgressRateSample
+  rateSample?: ProgressRateSample;
   /** Live byte rate measured between canonical progress events. */
-  bytesPerSecond?: number
-  mmProjDownloadId?: string
-  mmProjBytesDownloaded?: number
-  mmProjStatus?: DownloadStatus
-  mmProjFileName?: string
-  mmProjFileSize?: number
-  errorMessage?: string
-  errorCode?: string
-  createdAt: number
-  metadataJson?: string
+  bytesPerSecond?: number;
+  mmProjDownloadId?: string;
+  mmProjBytesDownloaded?: number;
+  mmProjStatus?: DownloadStatus;
+  mmProjFileName?: string;
+  mmProjFileSize?: number;
+  errorMessage?: string;
+  errorCode?: string;
+  createdAt: number;
+  metadataJson?: string;
 }
 
 /**
@@ -54,7 +54,11 @@ export interface DownloadEntry {
  * have two parallel native downloads racing on the same logical file.
  */
 const ACTIVE_STATUSES = new Set<DownloadStatus>([
-  'pending', 'running', 'retrying', 'waiting_for_network', 'processing',
+  'pending',
+  'running',
+  'retrying',
+  'waiting_for_network',
+  'processing',
 ]);
 
 export function isActiveStatus(status: DownloadStatus): boolean {

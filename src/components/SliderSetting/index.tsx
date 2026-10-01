@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useTheme } from '../../theme';
@@ -53,6 +53,7 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
   // While dragging, track the value locally so the label updates live without
   // writing to the store on every gesture frame (commit happens on release).
   const [dragValue, setDragValue] = useState<number | null>(null);
+  const dragging = useRef(false);
   const shown = dragValue ?? value;
 
   // Tap-to-edit: tap the value to type an exact number.
@@ -136,8 +137,16 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
         maximumValue={max}
         step={step}
         value={value}
-        onValueChange={setDragValue}
+        onSlidingStart={() => {
+          dragging.current = true;
+        }}
+        onValueChange={(v) => {
+          // Native value updates can emit after typed input commits. Only a
+          // user drag may override the value supplied by the settings store.
+          if (dragging.current) setDragValue(v);
+        }}
         onSlidingComplete={(v) => {
+          dragging.current = false;
           setDragValue(null);
           commitFromSlider(v);
         }}

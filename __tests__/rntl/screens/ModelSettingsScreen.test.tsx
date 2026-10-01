@@ -59,6 +59,9 @@ const renderWithSections = (...sections: ('prompt' | 'image' | 'text')[]) => {
     text: 'text-advanced-toggle',
   };
   for (const section of sections) {
+    if (section === 'text') {
+      fireEvent.press(result.getByTestId('general-generation-accordion'));
+    }
     fireEvent.press(result.getByTestId(testIDMap[section]));
     if (advancedMap[section]) {
       fireEvent.press(result.getByTestId(advancedMap[section]));

@@ -32,6 +32,7 @@ import logger from '../utils/logger';
 const TYPE_LABEL: Record<ModelFailureType, string> = {
   text: 'Text model',
   image: 'Image model',
+  video: 'Video model',
   tts: 'Voice',
   stt: 'Transcription',
   embedding: 'Memory',

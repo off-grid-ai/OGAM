@@ -52,6 +52,9 @@ class ImageGenerationService {
 
   private readonly listeners: Set<ImageGenerationListener> = new Set();
   private cancelRequested: boolean = false;
+  // UI cancellation can precede native load/enhancement completion. This promise
+  // owns admission until that work settles; it is not another UI phase.
+  private pendingGeneration: Promise<GeneratedImage | null> | null = null;
   private remoteRequest: AbortController | null = null;
   /** Last generate request, so a failure card's Retry button can re-run it. */
   private _lastParams: GenerateImageParams | null = null;
@@ -195,6 +198,10 @@ class ImageGenerationService {
       );
       return true;
     } catch (error: any) {
+      if (this.cancelRequested) {
+        this.resetState();
+        return false;
+      }
       // Pass the TYPED error as `cause` — an OverridableMemoryError here is what lets
       // the failure card offer "Load Anyway". Stringifying it (as before) hid it.
       this._fail(
@@ -225,10 +232,10 @@ class ImageGenerationService {
     // the single cross-platform signal (so the notice shows once on every device);
     // the OpenCL kernel-cache check is an extra Android signal in case the cache was
     // cleared after the flag was set.
-    let isFirstRun = !useAppStore
+    let isFirstRun = activeImageModel.backend !== 'sd' && !useAppStore
       .getState()
       .warmedImageModels.includes(activeImageModel.id);
-    if (useOpenCL) {
+    if (useOpenCL && activeImageModel.backend !== 'sd') {
       try {
         const hasCache = await onnxImageGeneratorService.hasKernelCache(
           activeImageModel.modelPath,
@@ -242,7 +249,7 @@ class ImageGenerationService {
 
     this.updateState({
       phase: 'generating',
-      status: isFirstRun
+      status: activeImageModel.backend === 'sd' ? 'Processing image prompt...' : isFirstRun
         ? 'Optimizing GPU for your device (~120s, one-time)...'
         : 'Starting image generation...',
     });
@@ -301,7 +308,7 @@ class ImageGenerationService {
       });
     } catch (error: any) {
       const errorMsg = error?.message || 'Image generation failed';
-      if (errorMsg.includes('cancelled')) {
+      if (this.cancelRequested || errorMsg.includes('cancelled')) {
         this.resetState();
       } else {
         logger.error('[ImageGenerationService] Generation error:', error);
@@ -327,16 +334,28 @@ class ImageGenerationService {
    * Generate an image. Runs independently of UI lifecycle.
    * If conversationId is provided, the result will be added as a chat message.
    */
-  async generateImage(
+  generateImage(
     params: GenerateImageParams,
     opts?: { override?: boolean },
   ): Promise<GeneratedImage | null> {
-    if (isInFlight(this.state.phase)) {
+    // Native cancellation can finish after the UI has cleared its progress.
+    // Keep admission closed until the engine's generation promise settles.
+    if (this.pendingGeneration || isInFlight(this.state.phase) || onnxImageGeneratorService.isGenerating()) {
       logger.log(
         '[ImageGenerationService] Already generating, ignoring request',
       );
-      return null;
+      return Promise.resolve(null);
     }
+    this.pendingGeneration = this.runImageGeneration(params, opts).finally(() => {
+      this.pendingGeneration = null;
+    });
+    return this.pendingGeneration;
+  }
+
+  private async runImageGeneration(
+    params: GenerateImageParams,
+    opts?: { override?: boolean },
+  ): Promise<GeneratedImage | null> {
     this.cancelRequested = false;
     this._lastParams = params; // so a failure card's Retry can re-run this exact request
     const remoteServer = useRemoteServerStore

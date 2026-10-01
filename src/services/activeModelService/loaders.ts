@@ -281,27 +281,45 @@ export async function doLoadImageModel(ctx: ImageLoadContext): Promise<void> {
     }
 
     let imgTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let loadTimedOut = false;
     const timeoutPromise = new Promise<never>((_, reject) => {
       imgTimeoutId = setTimeout(
-        () => reject(new Error('Image model loading timed out')),
+        () => {
+          loadTimedOut = true;
+          reject(new Error('Image model loading timed out'));
+        },
         ctx.timeoutMs,
       );
     });
-
+    const nativeLoad = onnxImageGeneratorService.loadModel(
+      ctx.model.modelPath,
+      ctx.imageThreads,
+      {
+        backend: ctx.model.backend === 'sd' ? 'sd' : 'auto',
+        modelId: ctx.model.id,
+        cpuOnly: ctx.cpuOnly,
+        attentionVariant: ctx.model.attentionVariant,
+        preferGpu: ctx.preferGpu,
+      },
+    );
     try {
-      await Promise.race([
-        onnxImageGeneratorService.loadModel(
-          ctx.model.modelPath,
-          ctx.imageThreads,
-          {
-            backend: 'auto',
-            cpuOnly: ctx.cpuOnly,
-            attentionVariant: ctx.model.attentionVariant,
-            preferGpu: ctx.preferGpu,
-          },
-        ),
-        timeoutPromise,
-      ]);
+      await Promise.race([nativeLoad, timeoutPromise]);
+    } catch (error) {
+      if (loadTimedOut && ctx.model.backend === 'sd') {
+        // A JS timeout cannot stop native model allocation. Retain the residency
+        // lock until it settles, then remove any late context before admitting
+        // another modality. Otherwise that context is resident but unregistered.
+        logger.warn('[Image] SD load timed out; waiting for native cleanup');
+        await nativeLoad.catch(() => {});
+        if (!(await onnxImageGeneratorService.unloadModel())) {
+          // Cleanup failure is not proof that native memory was released. Keep
+          // the existing residency registration/eviction path responsible for it.
+          ctx.onLoaded(ctx.modelId, ctx.imageThreads);
+          throw new Error('The timed-out image model could not be unloaded.');
+        }
+        modelResidencyManager.release('image');
+      }
+      throw error;
     } finally {
       if (imgTimeoutId !== null) clearTimeout(imgTimeoutId);
     }

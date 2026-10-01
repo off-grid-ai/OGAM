@@ -10,7 +10,8 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { Button } from '../../components';
+import { Button, Card } from '../../components';
+import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import {
@@ -106,7 +107,10 @@ export const ProDetailScreen: React.FC = () => {
           entitlement state where a screen's actions go. */}
       <ScreenHeader
         title="Off Grid AI Pro"
-        onBack={() => navigation.goBack()}
+        onBack={() => {
+          if (navigation.canGoBack()) navigation.goBack();
+          else navigation.replace('Main', { screen: 'HomeTab' });
+        }}
         right={
 <View style={styles.headerActions}>
             {deviceStatus ? (
@@ -190,6 +194,26 @@ export const ProDetailScreen: React.FC = () => {
               <Text style={styles.pricingSubtitle}>{pricing.subtitle}</Text>
             </View>
 
+            <Card style={styles.partnerCard}>
+              <Text style={styles.sectionLabel}>SMALL BUSINESS DESIGN PARTNERS</Text>
+              <Text style={styles.partnerTitle} accessibilityRole="header">
+                Free lifetime Pro for design partners
+              </Text>
+              <Text style={styles.partnerDescription}>
+                Have fewer than 50 people? If your business idea fits, Pro is free
+                for life, even if we do not build the full solution together.
+              </Text>
+              <AnimatedPressable
+                style={styles.partnerLink}
+                accessibilityRole="button"
+                accessibilityLabel="See the partner offer"
+                onPress={() => navigation.navigate('DesignPartners')}
+              >
+                <Text style={styles.partnerLinkText}>See the partner offer</Text>
+                <Icon name="chevron-right" size={16} color={colors.primary} />
+              </AnimatedPressable>
+            </Card>
+
             {/* Ambient pillars */}
             <View style={styles.pillarsSection}>
               <Text style={styles.sectionLabel}>ONE PRIVATE LAYER</Text>
@@ -238,7 +262,7 @@ export const ProDetailScreen: React.FC = () => {
             <Text style={styles.desktopTitle}>Get Off Grid AI Desktop</Text>
             <Text style={styles.desktopDesc}>{OFF_GRID_DESKTOP_BENEFIT}</Text>
           </View>
-          <Icon name="external-link" size={16} color={colors.textMuted} />
+          <Icon name="external-link" size={16} color={colors.primary} />
         </TouchableOpacity>
       </ScrollView>
 
@@ -378,6 +402,27 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
 
   // Pillars
+  partnerCard: { marginHorizontal: SPACING.xl, marginBottom: SPACING.xl },
+  partnerTitle: { ...TYPOGRAPHY.h3, color: colors.text, marginBottom: SPACING.sm },
+  partnerDescription: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+    marginBottom: SPACING.xs,
+  },
+  partnerLink: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: SPACING.sm,
+    minHeight: 44,
+    paddingVertical: SPACING.sm,
+  },
+  partnerLinkText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.primary,
+    textDecorationLine: 'underline' as const,
+    flex: 1,
+  },
   pillarsSection: { paddingHorizontal: SPACING.xl, marginBottom: SPACING.lg },
   sectionLabel: {
     ...TYPOGRAPHY.label,
@@ -433,7 +478,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     justifyContent: 'center' as const,
   },
   desktopText: { flex: 1, gap: 3 as number },
-  desktopTitle: { ...TYPOGRAPHY.body, color: colors.text },
+  desktopTitle: { ...TYPOGRAPHY.body, color: colors.primary, textDecorationLine: 'underline' as const },
   desktopDesc: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,

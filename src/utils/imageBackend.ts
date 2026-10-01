@@ -15,6 +15,8 @@ export function imageBackendLabel(
   fallback: string = 'GPU',
 ): string {
   switch (backend) {
+    case 'sd':
+      return 'Stable Diffusion';
     case 'coreml':
       return 'Core ML';
     case 'qnn':

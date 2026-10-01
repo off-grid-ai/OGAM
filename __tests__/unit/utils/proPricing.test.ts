@@ -3,14 +3,13 @@ import { getPricingCopy } from '../../../src/utils/proPricing';
 describe('getPricingCopy', () => {
   const copy = getPricingCopy();
 
-  it('offers the two current plans - $49/yr and $69 lifetime - and no monthly', () => {
-    expect(copy.title).toBe('$49/yr or $69 lifetime');
-    expect(copy.sheetSubheadline).toMatch(/\$49 a year/);
+  it('offers the two current plans - $4.99/month and $69 lifetime - and no yearly', () => {
+    expect(copy.title).toBe('$4.99/month or $69 lifetime');
+    expect(copy.sheetSubheadline).toMatch(/\$4\.99 a month/);
     expect(copy.sheetSubheadline).toMatch(/\$69 once/);
-    // The retired monthly plan must not resurface anywhere in the copy.
+    // The retired yearly plan must not resurface anywhere in the copy.
     const all = Object.values(copy).join(' ');
-    expect(all).not.toMatch(/month/i);
-    expect(all).not.toMatch(/\$39/);
+    expect(all).not.toMatch(/year|annual|\$49/i);
   });
 
   it('keeps the Get Pro CTA (the web pay-page trigger the Pro surfaces assert)', () => {

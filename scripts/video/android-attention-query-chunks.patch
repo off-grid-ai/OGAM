@@ -1,0 +1,78 @@
+--- a/src/core/ggml_extend.cpp
++++ b/src/core/ggml_extend.cpp
+@@ -721,6 +721,46 @@
+             mask_in = ggml_cast(ctx, mask_in, GGML_TYPE_F16);
+         }
+ 
++#ifdef __ANDROID__
++        // Adreno can lose the device on a single long video attention dispatch.
++        // Split only queries: each query still attends to every original key/value.
++        auto is_adreno = [](ggml_backend_dev_t device) {
++            const char* name = device ? ggml_backend_dev_name(device) : nullptr;
++            const char* description = device ? ggml_backend_dev_description(device) : nullptr;
++            return name && description && std::string(name).find("Vulkan") != std::string::npos &&
++                std::string(description).find("Adreno") != std::string::npos;
++        };
++        bool adreno_attention = backend && is_adreno(ggml_backend_get_device(backend));
++        // HTP may accept the initial default-precision node, then delegate its
++        // FP32 execution to Vulkan through the scheduler's fallback backend.
++        if (!adreno_attention && sd_backend_is(backend, "HTP")) {
++            for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
++                if (is_adreno(ggml_backend_dev_get(i))) { adreno_attention = true; break; }
++            }
++        }
++        if (mask_in == nullptr && adreno_attention && q_in->ne[1] > 128) {
++            // One owned full-Q buffer lets all query views stay on the GPU.
++            // RoPE may otherwise leave Q aliased to an in-place HTP result.
++            q_in = ggml_cont(ctx, q_in);
++            const int64_t work_per_query = 2 * k_in->ne[1] *
++                (q_in->ne[0] + v_in->ne[0]) * q_in->ne[2] * q_in->ne[3];
++            const int64_t chunk_rows = std::max<int64_t>(8, std::min<int64_t>(128,
++                (4000000000LL / std::max<int64_t>(1, work_per_query) / 8) * 8));
++            ggml_tensor* joined = nullptr;
++            for (int64_t start = 0; start < q_in->ne[1]; start += chunk_rows) {
++                const int64_t rows = std::min(chunk_rows, q_in->ne[1] - start);
++                auto query = ggml_cont(ctx, ggml_view_4d(ctx, q_in,
++                    q_in->ne[0], rows, q_in->ne[2], q_in->ne[3],
++                    q_in->nb[1], q_in->nb[2], q_in->nb[3], start * q_in->nb[1]));
++                auto part = ggml_flash_attn_ext(ctx, query, k_in, v_in, nullptr, scale / kv_scale, 0, 0);
++                if (!ggml_backend_supports_op(backend, part)) return nullptr;
++                ggml_flash_attn_ext_set_prec(part, GGML_PREC_F32);
++                joined = joined ? ggml_concat(ctx, joined, part, 2) : part;
++            }
++            if (kv_scale != 1.0f) joined = ggml_ext_scale(ctx, joined, 1.0f / kv_scale);
++            return joined;
++        }
++#endif
+         auto out = ggml_flash_attn_ext(ctx, q_in, k_in, v_in, mask_in, scale / kv_scale, 0, 0);
+         if (!ggml_backend_supports_op(backend, out)) {
+             return nullptr;
+--- a/src/model/diffusion/wan.hpp
++++ b/src/model/diffusion/wan.hpp
+@@ -988,7 +988,25 @@
+                                  float vace_strength                             = 1.f,
+                                  const sd::Tensor<float>& audio_embed_tensor     = {},
+                                  const sd::Tensor<float>& ref_latent_tensor      = {}) {
+-            ggml_cgraph* gf = new_graph_custom(WAN_GRAPH_SIZE);
++            size_t graph_size = WAN_GRAPH_SIZE;
++#ifdef __ANDROID__
++            // Query chunks keep full attention but add view/copy/concat nodes.
++            // Reserve graph metadata for that path inside the existing 327680-node arena.
++            if (sd_backend_is(runtime_backend, "Vulkan") || sd_backend_is(runtime_backend, "HTP")) {
++                for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
++                    auto device = ggml_backend_dev_get(i);
++                    const char* name = ggml_backend_dev_name(device);
++                    const char* description = ggml_backend_dev_description(device);
++                    if (name && description && std::string(name).find("Vulkan") != std::string::npos &&
++                        std::string(description).find("Adreno") != std::string::npos) {
++                        graph_size = 131072;
++                        LOG_DEBUG("Adreno chunked Wan graph capacity: %zu", graph_size);
++                        break;
++                    }
++                }
++            }
++#endif
++            ggml_cgraph* gf = new_graph_custom(graph_size);
+ 
+             ggml_tensor* x               = make_input(x_tensor);
+             ggml_tensor* timesteps       = make_input(timesteps_tensor);

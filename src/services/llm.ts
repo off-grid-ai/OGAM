@@ -168,11 +168,14 @@ class LLMService {
       availableBytes: deviceInfo.availableMemory,
     });
     if (safeGpuLayers !== params.nGpuLayers) logger.log(`[LLM] GPU layers capped (${(deviceInfo.totalMemory / BYTES_PER_GB).toFixed(1)}GB RAM, ${Platform.OS}): ${params.nGpuLayers} → ${safeGpuLayers}`);
+    let fallbackGpuLayers = 0;
     let resolvedBaseParams: object = params.baseParams;
     if (Platform.OS === 'android') {
       const settings = useAppStore.getState().settings;
       const backend = settings?.inferenceBackend ?? INFERENCE_BACKENDS.CPU;
       if (backend === INFERENCE_BACKENDS.HTP) {
+        const gpuCapability = await hardwareService.getOpenCLCapability();
+        fallbackGpuLayers = gpuCapability.supported ? safeGpuLayers : 0;
         // HTP routes to the Hexagon NPU — not subject to Adreno GPU layer caps,
         // but we still respect the RAM-based safeGpuLayers floor (0 on ≤4GB devices).
         safeGpuLayers = safeGpuLayers > 0 ? (settings?.gpuLayers ?? 99) : 0;
@@ -196,10 +199,7 @@ class LLMService {
     // The model metadata and the user's setting own context length. Do not impose a
     // second RAM-tier ceiling here. validateAndPrepareModel checks this exact
     // model + cache + selected context against live memory without changing it.
-    return {
-      ...await initContextWithFallback(resolvedBaseParams, params.ctxLen, safeGpuLayers),
-      attemptedGpuLayers: safeGpuLayers,
-    };
+    return initContextWithFallback(resolvedBaseParams, params.ctxLen, safeGpuLayers, fallbackGpuLayers);
   }
   /** Multimodal init on a NOT-YET-PUBLISHED context (the load pipeline) — no instance-state writes. */
   private async deriveMultimodalFromProjector(context: LlamaContext, modelPath: string, mmProjPath: string): Promise<{ initialized: boolean; support: MultimodalSupport }> {

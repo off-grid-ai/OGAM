@@ -1,3 +1,4 @@
+import { resolveSDImagePack } from '../../services/huggingFaceModelBrowser';
 import RNFS from 'react-native-fs';
 import { statFile } from '../../utils/fileStat';
 import { unzip } from 'react-native-zip-archive';
@@ -5,7 +6,8 @@ import { modelManager, backgroundDownloadService } from '../../services';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
 import { ONNXImageModel } from '../../types';
 import { useDownloadStore, DownloadEntry } from '../../stores/downloadStore';
-import { ImageDownloadDeps, registerAndNotify, proceedWithDownload } from '../../services/imageDownloadActions';
+import { ImageDownloadDeps, registerAndNotify, proceedWithDownload, validateMultifileComplete, isMultifileImageDownloadActive } from '../../services/imageDownloadActions';
+import type { ImageModelDescriptor } from '../../services/imageModelDownloadTypes';
 import { imageDescriptorFromMetadata } from './imageDescriptor';
 import { validateImageModelDir, ensureImageExtractionComplete } from '../../utils/imageModelIntegrity';
 import { makeImageModelKey } from '../../utils/modelKey';
@@ -188,6 +190,7 @@ async function resumeZipDownload(ctx: ResumeCtx): Promise<void> {
 
 async function resumeMultifileDownload(ctx: ResumeCtx): Promise<void> {
   const { entry, modelId, metadata, deps } = ctx;
+  if (isMultifileImageDownloadActive(modelId)) return;
   const modelDir = `${modelManager.getImageModelsDirectory()}/${modelId}`;
   const modelDirExists = await RNFS.exists(modelDir);
   if (!modelDirExists) {
@@ -195,11 +198,19 @@ async function resumeMultifileDownload(ctx: ResumeCtx): Promise<void> {
     useDownloadStore.getState().setStatus(entry.downloadId, 'failed', { message: 'Download files missing. Please retry.' });
     return;
   }
+  const hfFiles = metadata.imageModelHuggingFaceFiles as ImageModelDescriptor['huggingFaceFiles'];
+  const coremlFiles = metadata.imageModelCoremlFiles as ImageModelDescriptor['coremlFiles'];
+  await validateMultifileComplete(modelDir, hfFiles
+    ? hfFiles.map(file => ({ relativePath: file.path, sha256: file.sha256, expectedSize: metadata.imageModelBackend === 'sd' ? file.size : undefined }))
+    : (coremlFiles ?? []).map(file => ({ relativePath: file.relativePath })));
+  if (metadata.imageModelBackend === 'sd') await resolveSDImagePack(modelId, modelDir);
+  await RNFS.writeFile(`${modelDir}/_ready`, '', 'utf8');
   const imageModel: ONNXImageModel = {
     id: modelId, name: metadata.imageModelName, description: metadata.imageModelDescription,
     modelPath: modelDir, downloadedAt: new Date().toISOString(),
     size: metadata.imageModelSize, style: metadata.imageModelStyle,
     backend: metadata.imageModelBackend,
+    attentionVariant: metadata.imageModelAttentionVariant,
   };
   logger.log(`[ImageDownload] resumeImageDownload multifile - registering ${modelId}`);
   await registerAndNotify(deps, { imageModel, modelName: metadata.imageModelName });

@@ -123,6 +123,7 @@ export interface ContextInitResult {
   context: LlamaContext;
   gpuAttemptFailed: boolean;
   actualLength: number;
+  attemptedGpuLayers: number;
 }
 /** Timeout for Adreno GPU context init on Android. 8s proved too tight on-device: Adreno 735
  *  first-load OpenCL kernel compilation exceeded it (2026-07-13 20:11 log: "timed out after
@@ -174,11 +175,12 @@ async function tryGpuInit(promise: Promise<LlamaContext>, nGpuLayers: number, is
   catch (e) { timedOut = true; throw e; }
 }
 
-/** Init llama with GPU/HTP, then retry on CPU at the selected context. */
+/** Try the selected accelerator, a supported GPU fallback, then CPU. */
 export async function initContextWithFallback(
   params: object,
   contextLength: number,
   nGpuLayers: number,
+  fallbackGpuLayers: number = 0,
 ): Promise<ContextInitResult> {
   const modelPath = (params as any).model || 'unknown';
   const isHtp = HTP_ENABLED && Array.isArray((params as any).devices) && (params as any).devices.some((d: string) => d.startsWith('HTP'));
@@ -195,7 +197,7 @@ export async function initContextWithFallback(
     const gpuInitPromise = initLlama({ ...params, n_ctx: contextLength, n_gpu_layers: nGpuLayers } as any);
     const context = await tryGpuInit(gpuInitPromise, nGpuLayers, isHtp);
     logger.log('[LLM] GPU init succeeded');
-    return { context, gpuAttemptFailed, actualLength: contextLength };
+    return { context, gpuAttemptFailed, actualLength: contextLength, attemptedGpuLayers: nGpuLayers };
   } catch (gpuError: any) {
     const gpuMsg = gpuError?.message || String(gpuError);
     if (nGpuLayers > 0) {
@@ -204,6 +206,19 @@ export async function initContextWithFallback(
     } else {
       logger.warn(`[LLM] Attempt 1/2 failed (no GPU requested): ${gpuMsg}`);
     }
+    if (isHtp && nGpuLayers > 0 && fallbackGpuLayers > 0) {
+      const gpuParams = { ...(params as Record<string, unknown>) };
+      delete gpuParams.devices;
+      delete gpuParams.cache_type_k;
+      delete gpuParams.cache_type_v;
+      try {
+        logger.warn('[LLM] NPU initialization failed; trying the supported GPU backend');
+        const context = await tryGpuInit(initLlama({ ...gpuParams, n_ctx: contextLength, n_gpu_layers: fallbackGpuLayers } as any), fallbackGpuLayers);
+        return { context, gpuAttemptFailed: false, actualLength: contextLength, attemptedGpuLayers: fallbackGpuLayers };
+      } catch (fallbackError) {
+        logger.warn('[LLM] GPU fallback failed:', fallbackError);
+      }
+    }
     try {
       logger.log(`[LLM] Attempt 2/2: CPU init (ctx=${contextLength}, gpu_layers=0)`);
       // Strip devices — HTP requires n_gpu_layers > 0; CPU fallback must not request it
@@ -211,7 +226,7 @@ export async function initContextWithFallback(
       delete cpuParams.devices;
       const context = await initLlama({ ...cpuParams, n_ctx: contextLength, n_gpu_layers: 0 } as any);
       logger.log('[LLM] CPU init succeeded');
-      return { context, gpuAttemptFailed, actualLength: contextLength };
+      return { context, gpuAttemptFailed, actualLength: contextLength, attemptedGpuLayers: 0 };
     } catch (cpuError: any) {
       const cpuMsg = cpuError?.message || String(cpuError);
       logger.warn(`[LLM] Attempt 2/2 failed (CPU, ctx=${contextLength}): ${cpuMsg}`);

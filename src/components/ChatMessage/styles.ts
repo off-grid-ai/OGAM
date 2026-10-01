@@ -38,6 +38,10 @@ const createBubbleStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     width: MESSAGE_MAX_WIDTH,
     alignSelf: 'flex-start' as const,
   },
+  videoMessage: {
+    width: MESSAGE_MAX_WIDTH,
+    alignSelf: 'flex-start' as const,
+  },
   toolCallPreText: {
     alignSelf: 'flex-start' as const,
     paddingBottom: 6,

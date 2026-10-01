@@ -1,11 +1,22 @@
+import { videoGenerationService } from '../videoGenerationService';
 import { Platform } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import { ToolCall, ToolResult } from './types';
 import type { RagSearchResult } from '../rag';
 import logger from '../../utils/logger';
 
-function makeResult(call: ToolCall, start: number, opts: { content: string; error?: string }): ToolResult {
-  return { toolCallId: call.id, name: call.name, content: opts.content, error: opts.error, durationMs: Date.now() - start };
+function makeResult(
+  call: ToolCall,
+  start: number,
+  opts: { content: string; error?: string },
+): ToolResult {
+  return {
+    toolCallId: call.id,
+    name: call.name,
+    content: opts.content,
+    error: opts.error,
+    durationMs: Date.now() - start,
+  };
 }
 function requireString(call: ToolCall, param: string): string | null {
   const val = call.arguments[param];
@@ -25,6 +36,13 @@ export async function executeToolCall(call: ToolCall): Promise<ToolResult> {
 
 async function dispatchTool(call: ToolCall): Promise<string> {
   switch (call.name) {
+    case 'generate_video': {
+      const prompt = requireString(call, 'prompt');
+      if (!prompt || !call.context?.conversationId)
+        throw new Error('A video prompt and chat are required.');
+      videoGenerationService.defer(call.context.conversationId, { prompt });
+      return 'Video generation is queued after this reply. The video will appear in this chat when complete.';
+    }
     case 'web_search': {
       const q = requireString(call, 'query');
       if (!q) throw new Error('Missing required parameter: query');
@@ -60,8 +78,9 @@ async function handleWebSearch(query: string): Promise<string> {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-        'Accept': 'text/html',
+        'User-Agent':
+          'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        Accept: 'text/html',
       },
     });
     const html = await response.text();
@@ -139,7 +158,12 @@ function parseBraveResults(html: string): SearchResult[] {
 }
 
 const NAMED_HTML_ENTITIES: Readonly<Record<string, string>> = {
-  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
 };
 
 function decodeHTMLEntities(text: string): string {
@@ -171,7 +195,10 @@ function evaluateExpression(expr: string): number {
 
   function parseTerm(): number {
     let left = parsePower();
-    while (pos < str.length && (str[pos] === '*' || str[pos] === '/' || str[pos] === '%')) {
+    while (
+      pos < str.length &&
+      (str[pos] === '*' || str[pos] === '/' || str[pos] === '%')
+    ) {
       const op = str[pos++];
       const right = parsePower();
       if (op === '*') left *= right;
@@ -234,8 +261,14 @@ function handleCalculator(expression: string): string {
 function handleGetDatetime(timezone?: string): string {
   const now = new Date();
   const options: Intl.DateTimeFormatOptions = {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'long',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'long',
     ...(timezone ? { timeZone: timezone } : {}),
   };
   try {
@@ -250,7 +283,8 @@ function handleGetDatetime(timezone?: string): string {
 }
 
 async function collectDeviceSection(
-  label: string, fetcher: () => Promise<string>,
+  label: string,
+  fetcher: () => Promise<string>,
 ): Promise<string> {
   try { return await fetcher(); } catch { return `${label}: unavailable`; }
 }
@@ -323,8 +357,19 @@ function htmlToMarkdown(html: string): string {
   const root = parse(html);
 
   // strip boilerplate
-  ['script','style','nav','header','footer','aside','noscript','iframe','form','button'].forEach(
-    tag => root.querySelectorAll(tag).forEach((el: any) => el.remove()),
+  [
+    'script',
+    'style',
+    'nav',
+    'header',
+    'footer',
+    'aside',
+    'noscript',
+    'iframe',
+    'form',
+    'button',
+  ].forEach(tag =>
+    root.querySelectorAll(tag).forEach((el: any) => el.remove()),
   );
 
   // prefer semantic content containers
@@ -356,8 +401,9 @@ async function handleReadUrl(rawUrl: string): Promise<string> {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-        'Accept': 'text/html, text/plain, */*',
+        'User-Agent':
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        Accept: 'text/html, text/plain, */*',
       },
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -370,16 +416,25 @@ async function handleReadUrl(rawUrl: string): Promise<string> {
   } catch (e: any) {
     logger.error(`[Tools] read_url FAILED for "${url}": ${e?.message || e}`);
     throw e;
-  } finally { clearTimeout(timeout); }
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
-async function handleSearchKnowledgeBase(query: string, projectId?: string): Promise<string> {
-  if (!projectId) return 'No project context. Knowledge base requires an active project.';
+async function handleSearchKnowledgeBase(
+  query: string,
+  projectId?: string,
+): Promise<string> {
+  if (!projectId)
+    return 'No project context. Knowledge base requires an active project.';
   const { ragService } = require('../rag'); // NOSONAR
   const result = await ragService.searchProject(projectId, query);
   if (result.chunks.length === 0) return `No results found for "${query}" in the knowledge base.`;
   return result.chunks
-    .map((c: RagSearchResult, i: number) => `[${i + 1}] ${c.name} (part ${c.position + 1}):\n${c.content}`)
+    .map(
+      (c: RagSearchResult, i: number) =>
+        `[${i + 1}] ${c.name} (part ${c.position + 1}):\n${c.content}`,
+    )
     .join('\n\n---\n\n');
 }
 
