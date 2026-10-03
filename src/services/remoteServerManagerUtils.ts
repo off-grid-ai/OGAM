@@ -167,7 +167,7 @@ export async function setActiveRemoteTextModelImpl(
         '— re-discovering',
       );
       try {
-        await store.discoverModels(serverId);
+        await store.discoverModels(serverId, (await getApiKeyImpl(serverId)) ?? undefined);
         discoveredModel = store.getModelById(serverId, modelId);
       } catch (e) {
         logger.warn(
@@ -291,7 +291,9 @@ export async function initializeProvidersImpl(
       // Re-discover models on startup to refresh capability data from the server
       // (persisted data may be stale if models were added/removed while offline)
       try {
-        const models = await store.discoverModels(server.id);
+        // Read after the migration above, so a key that just moved into Keychain is used.
+        const apiKey = (await getApiKeyImpl(server.id)) ?? undefined;
+        const models = await store.discoverModels(server.id, apiKey);
         logger.log(
           '[RemoteServerManager] Discovered',
           models.length,
