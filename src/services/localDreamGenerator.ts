@@ -250,7 +250,9 @@ class LocalDreamGeneratorService {
         storedImagePath,
         generatedImageDirectory,
       );
-      const expectedPath = `${generatedImageDirectory}/${imageId}.png`;
+      // Local generation writes <id>.png; remote generation can also save .jpg or .webp.
+      const extension = /\.(png|jpe?g|webp)$/i.exec(resolvedPath ?? '')?.[1]?.toLowerCase();
+      const expectedPath = extension ? `${generatedImageDirectory}/${imageId}.${extension}` : null;
       if (
         !resolvedPath ||
         resolvedPath !== expectedPath ||
@@ -265,6 +267,13 @@ class LocalDreamGeneratorService {
         if (!(await RNFS.exists(resolvedPath))) return true;
       } catch {
         // Let the native store decide when the filesystem check is unavailable.
+      }
+
+      // The native store only knows <id>.png. A remote image in another format is removed here,
+      // after the checks above proved the path is this image's file inside generated_images.
+      if (extension !== 'png') {
+        await RNFS.unlink(resolvedPath);
+        return true;
       }
     }
 

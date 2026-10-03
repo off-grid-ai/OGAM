@@ -4,6 +4,8 @@
 
 import { isTailscaleIPv4 } from '../utils/network';
 import {
+  HTTP_API_KEY_ERROR,
+  keyedHttpEndpoint,
   REMOTE_FETCH_REDIRECT_POLICY,
   remoteAuthorizationHeaders,
 } from './remoteTransportPolicy';
@@ -149,13 +151,25 @@ export async function testEndpoint(
     const controller = new AbortController();
     timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    const response = await fetch(`${url}/v1/models`, {
+    const response = await fetch(`${url}${url.endsWith('/v1') ? '' : '/v1'}/models`, {
       method: 'GET',
       signal: controller.signal,
       headers: authHeaders,
       redirect: REMOTE_FETCH_REDIRECT_POLICY,
     });
     const latency = Date.now() - startTime;
+
+    // A refused key is the answer. A health page that answers 200 must not hide it.
+    if (response.status === 401 || response.status === 403) {
+      return {
+        success: false,
+        // On private HTTP the key is never sent, so the refusal is explained by the HTTPS rule.
+        error: keyedHttpEndpoint(url, apiKey)
+          ? HTTP_API_KEY_ERROR
+          : `The server rejected the API key (HTTP ${response.status}). Check the key for this server.`,
+        latency,
+      };
+    }
 
     if (!response.ok) {
       // Try alternate health endpoints

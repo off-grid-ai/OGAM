@@ -18,12 +18,15 @@ import logger from '../utils/logger';
 import {
   fetchModelCapabilities,
   isGenerativeModel,
+  RemoteAuthenticationError,
 } from './remoteModelCapabilities';
 import {
   detectVisionCapability,
   detectToolCallingCapability,
 } from '../utils/remoteCapabilityDetect';
 import {
+  HTTP_API_KEY_ERROR,
+  keyedHttpEndpoint,
   REMOTE_FETCH_REDIRECT_POLICY,
   remoteAuthorizationHeaders,
 } from '../services/remoteTransportPolicy';
@@ -349,6 +352,9 @@ export async function fetchModelsFromServer(
 ): Promise<RemoteModel[]> {
   const url = trimTrailingSlashes(server.endpoint);
   const isOpenRouter = new URL(url).hostname === 'openrouter.ai';
+  // Capability probes (/props, /api/show, /api/v1/models) live beside /v1, not under it, so an
+  // address saved with a /v1 suffix probes from the base it was given. A proxy prefix stays.
+  const probeBase = url.endsWith('/v1') ? url.slice(0, -'/v1'.length) : url;
 
   // Headers for authentication
   const headers: Record<string, string> = {
@@ -366,6 +372,12 @@ export async function fetchModelsFromServer(
       headers,
     });
 
+    // A refused key is an authentication failure, not "this server has no models". On private
+    // HTTP the key is never sent, so the refusal is explained by the HTTPS rule.
+    if (response.status === 401 || response.status === 403) {
+      if (keyedHttpEndpoint(server.endpoint, server.apiKey)) throw new Error(HTTP_API_KEY_ERROR);
+      throw new RemoteAuthenticationError(response.status);
+    }
     if (response.ok) {
       const data = await response.json();
 
@@ -395,7 +407,7 @@ export async function fetchModelsFromServer(
                   supportsThinking: !!model.reasoning,
                   thinkingLevelsOnly: model.reasoning?.mandatory === true,
                 }
-              : fetchModelCapabilities(url, model.id, nameDetect),
+              : fetchModelCapabilities(probeBase, model.id, nameDetect, server.apiKey),
           ),
         );
         return generativeModels.map(
@@ -443,7 +455,7 @@ export async function fetchModelsFromServer(
         );
         const modelInfos = await Promise.all(
           generativeModels.map((model: { name: string }) =>
-            fetchModelCapabilities(url, model.name, nameDetect),
+            fetchModelCapabilities(probeBase, model.name, nameDetect, server.apiKey),
           ),
         );
         return generativeModels.map(
@@ -471,6 +483,7 @@ export async function fetchModelsFromServer(
       }
     }
   } catch (error) {
+    if (error instanceof RemoteAuthenticationError) throw error;
     logger.warn('[RemoteServer] Failed to fetch from /v1/models:', error);
   }
 
@@ -482,6 +495,9 @@ export async function fetchModelsFromServer(
       headers,
     });
 
+    if (response.status === 401 || response.status === 403) {
+      throw new RemoteAuthenticationError(response.status);
+    }
     if (response.ok) {
       const data = await response.json();
 
@@ -495,7 +511,7 @@ export async function fetchModelsFromServer(
         );
         const modelInfos = await Promise.all(
           generativeModels.map((model: { name: string }) =>
-            fetchModelCapabilities(url, model.name, nameDetect),
+            fetchModelCapabilities(probeBase, model.name, nameDetect, server.apiKey),
           ),
         );
         return generativeModels.map(
@@ -523,6 +539,7 @@ export async function fetchModelsFromServer(
       }
     }
   } catch (error) {
+    if (error instanceof RemoteAuthenticationError) throw error;
     logger.warn('[RemoteServer] Failed to fetch from /api/tags:', error);
   }
 
