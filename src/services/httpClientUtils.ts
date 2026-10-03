@@ -155,7 +155,7 @@ export async function testEndpoint(
     const controller = new AbortController();
     timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    const response = await fetch(`${url}/v1/models`, {
+    const response = await fetch(`${url}${url.endsWith('/v1') ? '' : '/v1'}/models`, {
       method: 'GET',
       signal: controller.signal,
       headers: authHeaders,
