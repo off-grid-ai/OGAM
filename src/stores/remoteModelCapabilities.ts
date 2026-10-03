@@ -278,6 +278,7 @@ async function probeLmStudioThinking(
     });
 
     clearTimeout(timeoutId);
+    if (isAuthRejection(response.status)) throw new RemoteAuthenticationError(response.status);
     if (!response.ok) return false;
 
     // response.text() collects the full SSE stream as a string
@@ -295,6 +296,7 @@ async function probeLmStudioThinking(
 
     return false;
   } catch (error) {
+    if (error instanceof RemoteAuthenticationError) throw error;
     // Timeout, network error, model not loaded
     logger.warn('[probeLmStudioThinking] Failed to probe for thinking support:', error);
   }
