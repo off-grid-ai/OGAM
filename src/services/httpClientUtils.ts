@@ -142,10 +142,6 @@ export async function testEndpoint(
     let url = endpoint;
     while (url.endsWith('/')) url = url.slice(0, -1);
 
-    if (keyedHttpEndpoint(url, apiKey)) {
-      return { success: false, error: HTTP_API_KEY_ERROR };
-    }
-
     const authHeaders: Record<string, string> = {
       Accept: 'application/json',
       ...remoteAuthorizationHeaders(url, apiKey),
@@ -167,7 +163,10 @@ export async function testEndpoint(
     if (response.status === 401 || response.status === 403) {
       return {
         success: false,
-        error: `The server rejected the API key (HTTP ${response.status}). Check the key for this server.`,
+        // On private HTTP the key is never sent, so the refusal is explained by the HTTPS rule.
+        error: keyedHttpEndpoint(url, apiKey)
+          ? HTTP_API_KEY_ERROR
+          : `The server rejected the API key (HTTP ${response.status}). Check the key for this server.`,
         latency,
       };
     }

@@ -352,7 +352,6 @@ export async function fetchModelsFromServer(
 ): Promise<RemoteModel[]> {
   const url = trimTrailingSlashes(server.endpoint);
   const isOpenRouter = new URL(url).hostname === 'openrouter.ai';
-  if (keyedHttpEndpoint(server.endpoint, server.apiKey)) throw new Error(HTTP_API_KEY_ERROR);
   // Capability probes (/props, /api/show, /api/v1/models) live beside /v1, not under it, so an
   // address saved with a /v1 suffix probes from the base it was given. A proxy prefix stays.
   const probeBase = url.endsWith('/v1') ? url.slice(0, -'/v1'.length) : url;
@@ -373,8 +372,10 @@ export async function fetchModelsFromServer(
       headers,
     });
 
-    // A refused key is an authentication failure, not "this server has no models".
+    // A refused key is an authentication failure, not "this server has no models". On private
+    // HTTP the key is never sent, so the refusal is explained by the HTTPS rule.
     if (response.status === 401 || response.status === 403) {
+      if (keyedHttpEndpoint(server.endpoint, server.apiKey)) throw new Error(HTTP_API_KEY_ERROR);
       throw new RemoteAuthenticationError(response.status);
     }
     if (response.ok) {
