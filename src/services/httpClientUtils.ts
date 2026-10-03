@@ -4,6 +4,8 @@
 
 import { isTailscaleIPv4 } from '../utils/network';
 import {
+  HTTP_API_KEY_ERROR,
+  keyedHttpEndpoint,
   REMOTE_FETCH_REDIRECT_POLICY,
   remoteAuthorizationHeaders,
 } from './remoteTransportPolicy';
@@ -140,6 +142,10 @@ export async function testEndpoint(
     let url = endpoint;
     while (url.endsWith('/')) url = url.slice(0, -1);
 
+    if (keyedHttpEndpoint(url, apiKey)) {
+      return { success: false, error: HTTP_API_KEY_ERROR };
+    }
+
     const authHeaders: Record<string, string> = {
       Accept: 'application/json',
       ...remoteAuthorizationHeaders(url, apiKey),
@@ -156,6 +162,15 @@ export async function testEndpoint(
       redirect: REMOTE_FETCH_REDIRECT_POLICY,
     });
     const latency = Date.now() - startTime;
+
+    // A refused key is the answer. A health page that answers 200 must not hide it.
+    if (response.status === 401 || response.status === 403) {
+      return {
+        success: false,
+        error: `The server rejected the API key (HTTP ${response.status}). Check the key for this server.`,
+        latency,
+      };
+    }
 
     if (!response.ok) {
       // Try alternate health endpoints
