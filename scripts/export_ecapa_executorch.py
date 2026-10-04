@@ -16,7 +16,7 @@ Then bundle/download the .pte and point createExecutorchSpeakerEmbedder() at it.
 import argparse
 import torch
 from speechbrain.inference.speaker import EncoderClassifier
-from executorch.exir import to_edge
+from executorch.exir import to_edge, EdgeCompileConfig
 from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPartitioner
 
 
@@ -45,8 +45,14 @@ def main() -> None:
     model = EcapaWaveform().eval()
     example = (torch.randn(1, args.sample_len),)
 
-    exported = torch.export.export(model, example)
-    edge = to_edge(exported)
+    with torch.no_grad():
+        exported = torch.export.export(model, example)
+    edge = to_edge(
+        exported,
+        compile_config=EdgeCompileConfig(
+            _core_aten_ops_exception_list=[torch.ops.aten.unfold.default],
+        ),
+    )
     edge = edge.to_backend(XnnpackPartitioner())
     program = edge.to_executorch()
 

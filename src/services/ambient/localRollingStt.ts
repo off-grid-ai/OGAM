@@ -21,6 +21,12 @@ export interface LocalRollingTranscriber {
   pushFrame(pcm: Float32Array, sampleRate: number): void
   /** Phrase boundary: finalize what's buffered, then start the next phrase fresh. */
   flush(): void
+  /**
+   * Awaitable final decode of everything still buffered — call at STOP before discarding. For a
+   * continuous take with no VAD phrase-closes this is the ONLY place the full transcript is committed
+   * (otherwise the whole accumulated buffer is thrown away by stop()). Resolves once onFinal has fired.
+   */
+  finalize(): Promise<void>
   stop(): void
 }
 
@@ -98,6 +104,17 @@ export function createLocalRollingTranscriber(opts: {
         samples = 0
         dirty = false
       })
+    },
+    async finalize(): Promise<void> {
+      // Let any in-flight partial decode settle (decode() no-ops while busy), then decode the FULL
+      // buffer one last time so the complete transcript is committed before stop() discards it.
+      for (let i = 0; i < 60 && busy; i += 1) {
+        await new Promise(r => setTimeout(r, 50))
+      }
+      if (!closed) await decode(true)
+      chunks = []
+      samples = 0
+      dirty = false
     },
     stop(): void {
       closed = true

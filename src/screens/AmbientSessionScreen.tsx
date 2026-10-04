@@ -8,12 +8,14 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Modal, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { LoadingDots } from '../components/LoadingDots';
+import { reprocessSession } from '../hooks/useAmbientCapture';
 import { useAmbientTimelineStore } from '../stores/ambientTimelineStore';
 import { sessionSpeakers } from '../services/ambient/timelineModel';
 import { useSpeakerProfilesStore } from '../stores/speakerProfilesStore';
@@ -43,6 +45,7 @@ export function AmbientSessionScreen(): React.ReactElement {
   const [addingNew, setAddingNew] = useState(false);
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reBusy, setReBusy] = useState(false);
 
   const closeSheet = useCallback(() => {
     setAssignSeg(null);
@@ -107,18 +110,50 @@ export function AmbientSessionScreen(): React.ReactElement {
   const spoken = segments.filter(s => s.transcript);
   const flagged = new Set(session.flaggedSegmentIds);
 
+  const onReprocess = () => {
+    Alert.alert(
+      'Re-transcribe this conversation?',
+      'Re-runs transcription and the summary on the saved audio using your CURRENT transcription model — switch to a bigger model or connect your Mac first for a better result. This replaces the existing transcript and summary.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Re-transcribe',
+          onPress: async () => {
+            setReBusy(true);
+            try {
+              await reprocessSession(session.id);
+            } finally {
+              setReBusy(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title={summary.title} onBack={() => navigation.goBack()} />
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
-        <TouchableOpacity
-          style={styles.replayStrip}
-          onPress={() => (navigation as any).navigate('AmbientReplay', { sessionId: session.id })}
-          testID="ambient-open-replay"
-        >
-          <Icon name="play" size={16} color={colors.primary} />
-          <Text style={styles.replayText}>Replay this conversation</Text>
-        </TouchableOpacity>
+        <View style={styles.actionStrips}>
+          <TouchableOpacity
+            style={styles.replayStrip}
+            onPress={() => (navigation as any).navigate('AmbientReplay', { sessionId: session.id })}
+            testID="ambient-open-replay"
+          >
+            <Icon name="play" size={16} color={colors.primary} />
+            <Text style={styles.replayText}>Replay</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.replayStrip}
+            onPress={onReprocess}
+            disabled={reBusy}
+            testID="ambient-reprocess"
+          >
+            {reBusy ? <LoadingDots size={6} /> : <Icon name="refresh-cw" size={15} color={colors.primary} />}
+            <Text style={styles.replayText}>{reBusy ? 'Re-transcribing…' : 'Re-transcribe'}</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={styles.headline} testID="ambient-detail-headline">
           {summary.headline || summaryStatusHint(session.summaryStatus)}
         </Text>
@@ -140,7 +175,7 @@ export function AmbientSessionScreen(): React.ReactElement {
         {summary.actionItems.length > 0 ? (
           <Section title="Action items" styles={styles}>
             {summary.actionItems.map((action, i) => (
-              <ActionItem key={i} text={action} styles={styles} colors={colors} />
+              <ActionItem key={i} text={action} styles={styles} />
             ))}
           </Section>
         ) : null}
@@ -279,27 +314,16 @@ function Bullet({
  */
 function ActionItem({
   text,
-  styles,
-  colors
+  styles
 }: {
   text: string;
   styles: any;
-  colors: any;
 }): React.ReactElement {
-  const onShare = useCallback(() => {
-    Share.share({ message: text }).catch(() => undefined);
-  }, [text]);
   return (
-    <TouchableOpacity
-      style={styles.actionRow}
-      onPress={onShare}
-      testID="ambient-action"
-      activeOpacity={0.7}
-    >
+    <View style={styles.actionRow} testID="ambient-action">
       <Text style={styles.bulletDot}>—</Text>
       <Text style={styles.bulletText}>{text}</Text>
-      <Icon name="share" size={14} color={colors.primary} />
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -317,8 +341,9 @@ function createStyles(colors: {
     body: { flex: 1 },
     bodyContent: { padding: 16, gap: 20, paddingBottom: 40 },
     headline: { color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' },
-    replayStrip: { flexDirection: 'row', alignItems: 'center', gap: 9, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: colors.border, borderRadius: 8, backgroundColor: colors.surface },
-    replayText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
+    actionStrips: { flexDirection: 'row', gap: SPACING.sm, marginBottom: 16 },
+    replayStrip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 8, backgroundColor: colors.surface },
+    replayText: { color: colors.primary, fontSize: 13, fontWeight: '400' },
     section: { gap: 8 },
     sectionTitle: {
       color: colors.textMuted,

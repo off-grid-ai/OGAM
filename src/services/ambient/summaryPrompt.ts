@@ -43,7 +43,9 @@ const SYSTEM_PROMPT = [
   '- decisions: things that were decided. Empty array if none.',
   '- actionItems: concrete things someone agreed to do, phrased as short imperatives. Empty if none.',
   '- people: names of participants you can identify from the text. Empty if none.',
-  '- Never invent facts that are not in the transcript.'
+  '- Never invent facts that are not in the transcript.',
+  '- The transcript may be labeled by speaker as "Name: what they said". Use those names for `people`,',
+  '  and attribute decisions and action items to the right person when the labels make it clear.'
 ].join('\n')
 
 export function buildSummaryMessages(transcript: string, flaggedSnippets: string[] = []): Message[] {

@@ -32,6 +32,8 @@ export function ManageVoicesScreen(): React.ReactElement {
   const profiles = useSpeakerProfilesStore(s => s.profiles);
   const rename = useSpeakerProfilesStore(s => s.rename);
   const remove = useSpeakerProfilesStore(s => s.remove);
+  const ownerPersonId = useSpeakerProfilesStore(s => s.ownerPersonId);
+  const setOwner = useSpeakerProfilesStore(s => s.setOwner);
   const threshold = useSpeakerModelStore(s => s.matchThreshold);
   const setThreshold = useSpeakerModelStore(s => s.setMatchThreshold);
 
@@ -58,14 +60,21 @@ export function ManageVoicesScreen(): React.ReactElement {
       <ScreenHeader title="Voices" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.label}>ENROLLED VOICES</Text>
+        {list.length > 0 ? (
+          <Text style={styles.ownerHint}>
+            The voice marked ★ is you. It's how the recorder keeps your Day to conversations you're
+            actually in — tap the star on your own voice to set it.
+          </Text>
+        ) : null}
         {list.length === 0 ? (
           <Text style={styles.empty}>No voices yet. Add one so the recorder can tell who's speaking.</Text>
         ) : (
           list.map(p => {
             const model = speakerEmbeddingModelById(p.modelId);
             const editing = editingId === p.id;
+            const isOwner = !!ownerPersonId && p.personId === ownerPersonId;
             return (
-              <View key={p.id} style={styles.row}>
+              <View key={p.id} style={[styles.row, isOwner && styles.rowOn]}>
                 <Icon name="user" size={16} color={colors.primary} />
                 <View style={styles.rowText}>
                   {editing ? (
@@ -80,12 +89,22 @@ export function ManageVoicesScreen(): React.ReactElement {
                       placeholderTextColor={colors.textMuted}
                     />
                   ) : (
-                    <Text style={styles.name}>{p.name}</Text>
+                    <View style={styles.nameRow}>
+                      <Text style={styles.name}>{p.name}</Text>
+                      {isOwner ? <Text style={styles.youBadge}>YOU</Text> : null}
+                    </View>
                   )}
                   <Text style={styles.meta}>
                     {p.sampleCount} sample{p.sampleCount === 1 ? '' : 's'} · {model?.name ?? p.modelId}
                   </Text>
                 </View>
+                <TouchableOpacity
+                  onPress={() => setOwner(isOwner ? null : p.personId)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel={isOwner ? `${p.name} is you` : `Set ${p.name} as you`}
+                >
+                  <Icon name="star" size={15} color={isOwner ? colors.primary : colors.textMuted} />
+                </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
                     setEditingId(p.id);
@@ -157,7 +176,19 @@ function createStyles(colors: ThemeColors) {
     },
     rowOn: { borderColor: colors.primary },
     rowText: { flex: 1 },
+    nameRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
     name: { ...TYPOGRAPHY.body, color: colors.text },
+    youBadge: {
+      ...TYPOGRAPHY.label,
+      color: colors.primary,
+      letterSpacing: 1,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      borderRadius: SPACING.xs,
+      paddingHorizontal: SPACING.xs,
+      paddingVertical: 1,
+    },
+    ownerHint: { ...TYPOGRAPHY.meta, color: colors.textMuted, lineHeight: 17, marginBottom: SPACING.xs },
     rename: {
       ...TYPOGRAPHY.body,
       color: colors.text,

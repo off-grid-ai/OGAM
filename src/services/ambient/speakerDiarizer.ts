@@ -21,6 +21,11 @@ export interface DiarizedTurn {
   cluster: string
   /** Voiceprint for the turn, when the engine emits one (enables identity naming). */
   embedding?: SpeakerEmbedding
+  /**
+   * Near-field score in [0,1] (1 = in-scene, close mic), when the engine computes it. Feeds the
+   * conversation-relevance gate; absent → that factor is simply excluded from the relevance score.
+   */
+  nearField?: number
 }
 
 export interface DiarizationResult {

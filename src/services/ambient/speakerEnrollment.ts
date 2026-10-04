@@ -2,17 +2,18 @@
  * Enrollment orchestration for voice fingerprinting — the "read a sentence → embed → save" flow,
  * kept free of UI and native code so it's unit-testable with a fake embedder.
  *
- * The screen records the user reading the two ENROLLMENT_PROMPTS, hands the resulting WAV slices
- * here; this embeds each through the active model's embedder, averages them into one profile centroid
+ * The screen records the user reading the two ENROLLMENT_PROMPTS paragraphs, hands the resulting WAV
+ * slices here; this embeds each through the active model's embedder, averages them into one centroid
  * (via the pure createProfile → store.enroll), and tags it with the model id so it stays comparable.
  */
 import type { SpeakerEmbedding } from './speakerModel'
 
-/** Two short, distinct lines — different phonemes across the two makes a robust voiceprint, and two
- *  quick reads keeps enrollment fast (especially at onboarding). */
+/** Two distinct paragraphs — a few sentences each so every read carries several seconds of continuous
+ *  speech, which makes a far more reliable voiceprint than a single line. Two passes with different
+ *  phonemes still guards against a fluke read. Copy stays on-brand: plain, privacy-first, no em dashes. */
 export const ENROLLMENT_PROMPTS = [
-  'The quick brown fox jumps over the lazy dog.',
-  'My notes and my voice stay here, on my own device.'
+  'Everything I record and everything I say stays here, on my own device, and never leaves for a server I do not control. A calm morning, a busy afternoon, or a long quiet evening all belong to me alone, and that is exactly how I want it.',
+  'I can talk about my work, my weekend plans, a few old stories, and the small things that fill an ordinary day. When you hear me speak for a little while, the shape and sound of my voice is enough to tell that this is really me.'
 ]
 
 /** How many reads to collect — one per prompt. */

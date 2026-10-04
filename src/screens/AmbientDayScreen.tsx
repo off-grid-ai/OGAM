@@ -11,13 +11,13 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Alert,
   Animated,
   AppState,
   Modal,
   ScrollView,
-  Share,
   StyleSheet,
   Switch,
   Text,
@@ -31,11 +31,15 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { useAmbientCapture, processPending as drainPending, currentCapturePhase } from '../hooks/useAmbientCapture';
+import { requestSyncResync } from '../services/syncResync';
+import { LoadingDots } from '../components/LoadingDots';
+import { VoiceSpectrum } from '../components/VoiceSpectrum';
+import { useAmbientCapture, processPending as drainPending, currentCapturePhase, reprocessDay, devReplayLastTranscript } from '../hooks/useAmbientCapture';
 import { useAmbientTimelineStore } from '../stores/ambientTimelineStore';
 import { useSpeakerProfilesStore } from '../stores/speakerProfilesStore';
 import {
   collectDayTasks,
+  collectStandaloneTasks,
   openTaskCount,
   sessionsForDay,
   dayKeysWithSessions,
@@ -59,7 +63,7 @@ import { formatTodosForActions, formatCallsForActions } from '../services/ambien
 import { askDayWithDeviceLLM } from '../services/ambient/askDayFactory';
 import type { AskResult } from '../services/ambient/askDay';
 import type { TimelineSession } from '../services/ambient/timelineModel';
-import { sessionSpeakers } from '../services/ambient/timelineModel';
+import { sessionSpeakers, isIncludedSession } from '../services/ambient/timelineModel';
 import type { ProactiveActionProposal } from '@offgrid/models';
 import { TYPOGRAPHY, SPACING } from '../constants';
 
@@ -88,18 +92,44 @@ function mmss(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
+// A day-task id is `${sessionId}#${index}`; the action-item index is after the last '#'.
+function taskIndexOf(id: string): number {
+  return Number(id.slice(id.lastIndexOf('#') + 1));
+}
+// Big recording clock: H:MM:SS once past an hour, MM:SS before.
+function hms(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
 
 export function AmbientDayScreen(): React.ReactElement {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const navigation = useNavigation<any>();
   const capture = useAmbientCapture();
+  // Manual "catch up now": ask every connected peer to re-sync, so the Day converges on demand without
+  // waiting for the next change/reconnect. Brief spinner; the catch-up itself is async over the channel.
+  const [syncing, setSyncing] = useState(false);
+  const onSyncNow = useCallback(() => {
+    setSyncing(true);
+    requestSyncResync();
+    setTimeout(() => setSyncing(false), 1500);
+  }, []);
 
   const sessions = useAmbientTimelineStore(s => s.sessions);
   const doneTaskIds = useAmbientTimelineStore(s => s.doneTaskIds);
   const journalByDay = useAmbientTimelineStore(s => s.journalByDay);
   const actionsByDay = useAmbientTimelineStore(s => s.actionsByDay);
   const toggleTask = useAmbientTimelineStore(s => s.toggleTask);
+  const standaloneTodos = useAmbientTimelineStore(s => s.standaloneTodos);
+  const toggleStandaloneTodo = useAmbientTimelineStore(s => s.toggleStandaloneTodo);
+  const editTaskText = useAmbientTimelineStore(s => s.editTaskText);
+  const deleteTask = useAmbientTimelineStore(s => s.deleteTask);
+  const setSessionInclusion = useAmbientTimelineStore(s => s.setSessionInclusion);
   const resolveDayAction = useAmbientTimelineStore(s => s.resolveDayAction);
   const pendingCaptures = useAmbientTimelineStore(s => s.pendingCaptures);
   const processingMode = useAmbientTimelineStore(s => s.processingMode);
@@ -125,6 +155,13 @@ export function AmbientDayScreen(): React.ReactElement {
     mac: macOffloadReady()
   }));
   const [loadingModel, setLoadingModel] = useState(false);
+  // The recording + processing states take over the whole screen (focused capture, then a staged
+  // pipeline). "Keep in background" on the processing screen minimizes it back to the Day; cleared
+  // automatically once processing ends so the next run opens the full screen again.
+  const [processingMinimized, setProcessingMinimized] = useState(false);
+  useEffect(() => {
+    if (!capture.processing) setProcessingMinimized(false);
+  }, [capture.processing]);
   const refreshReady = useCallback(() => {
     setReady({ stt: mobileSpeechInputPorts.transcriber.ready(), mac: macOffloadReady() });
   }, []);
@@ -310,19 +347,49 @@ export function AmbientDayScreen(): React.ReactElement {
     [sessions, dayKey]
   );
   const doneSet = useMemo(() => new Set(doneTaskIds), [doneTaskIds]);
-  const tasks = useMemo(() => collectDayTasks(daySessions, doneSet), [daySessions, doneSet]);
+  // Relevance split: the owner's conversations drive the Day's intelligence (journal, to-dos, actions);
+  // "ambient" ones (overheard talk, traffic, a TV) are kept + searchable but tucked into a collapsed
+  // section so they don't clutter the Day or seed to-dos. An unassessed session (no verdict) counts as
+  // relevant, so nothing regresses before the relevance gate has run.
+  // The Day is a projection over INCLUDED conversations (relevance verdict, overridable by the user's
+  // select/deselect). To-dos are a pure projection over them, so removing a conversation drops its
+  // to-dos automatically; the journal + actions regenerate over the included set (cache cleared on toggle).
+  const includedDaySessions = useMemo(() => daySessions.filter(isIncludedSession), [daySessions]);
+  const excludedDaySessions = useMemo(() => daySessions.filter(s => !isIncludedSession(s)), [daySessions]);
+  const sessionTasks = useMemo(
+    () => collectDayTasks(includedDaySessions, doneSet),
+    [includedDaySessions, doneSet]
+  );
+  // Peer-authored standalone to-dos (e.g. desktop CRM to-dos) are undated, so they live under Today —
+  // shown first, above the day's recorder tasks. On any other day the list is just that day's sessions'.
+  const standaloneTasks = useMemo(
+    () => (dayKey === todayKey() ? collectStandaloneTasks(standaloneTodos) : []),
+    [standaloneTodos, dayKey]
+  );
+  const tasks = useMemo(
+    () => [...standaloneTasks, ...sessionTasks],
+    [standaloneTasks, sessionTasks]
+  );
   const journal = journalByDay[dayKey];
 
-  // Generate the day's journal once, when the day has conversations but no cached narrative.
+  // Signature of the day's INCLUDED set — the journal + actions are stitched over exactly these, so a
+  // change (select/deselect) must re-generate. Keying the once-only request guard by this signature (not
+  // just dayKey) lets a re-projection re-run after the cache is cleared, while still de-duping within a set.
+  const includedSignature = useMemo(
+    () => `${dayKey}|${includedDaySessions.map(s => s.id).join(',')}`,
+    [dayKey, includedDaySessions],
+  );
+
+  // Generate the day's journal once per included-set, when the day has conversations but no cached narrative.
   const journalRequested = useRef<Set<string>>(new Set());
   const [journalBusy, setJournalBusy] = useState(false);
   useEffect(() => {
-    if (daySessions.length === 0 || journalByDay[dayKey] !== undefined) return;
-    if (journalRequested.current.has(dayKey)) return;
-    journalRequested.current.add(dayKey);
+    if (includedDaySessions.length === 0 || journalByDay[dayKey] !== undefined) return;
+    if (journalRequested.current.has(includedSignature)) return;
+    journalRequested.current.add(includedSignature);
     setJournalBusy(true);
     journalForDay(
-      daySessions.map(s => ({
+      includedDaySessions.map(s => ({
         title: s.summary.title,
         headline: s.summary.headline,
         people: s.summary.people
@@ -335,54 +402,118 @@ export function AmbientDayScreen(): React.ReactElement {
         }
       })
       .finally(() => setJournalBusy(false));
-  }, [dayKey, daySessions, journalByDay]);
+  }, [dayKey, includedDaySessions, journalByDay, includedSignature]);
 
-  // Propose the day's actions once, when it has conversations but no cached proposals.
+  // Propose the day's actions once per included-set, when it has conversations but no cached proposals.
   const actionsRequested = useRef<Set<string>>(new Set());
   const [actionsBusy, setActionsBusy] = useState(false);
   const actions = actionsByDay[dayKey];
-  useEffect(() => {
-    if (daySessions.length === 0 || actionsByDay[dayKey] !== undefined) return;
-    if (actionsRequested.current.has(dayKey)) return;
-    actionsRequested.current.add(dayKey);
-    setActionsBusy(true);
-    proposeActionsForDay(
-      {
-        todos: formatTodosForActions(tasks),
-        calls: formatCallsForActions(daySessions)
-      },
-      useAmbientTimelineStore.getState().onDeviceOnly
-    )
-      .then(res => useAmbientTimelineStore.getState().setDayActions(dayKey, res.proposals))
-      .finally(() => setActionsBusy(false));
-  }, [dayKey, daySessions, actionsByDay, tasks]);
+  // Actions are hidden for now — the proposal generation runs, but mobile has no verified connector
+  // execution behind Approve, so we don't surface it (or waste the text model on it) until it's tested.
+  // To re-enable: restore this effect body and the "Actions" Section in the render below.
+  // useEffect(() => {
+  //   if (includedDaySessions.length === 0 || actionsByDay[dayKey] !== undefined) return;
+  //   if (actionsRequested.current.has(includedSignature)) return;
+  //   actionsRequested.current.add(includedSignature);
+  //   setActionsBusy(true);
+  //   proposeActionsForDay(
+  //     {
+  //       todos: formatTodosForActions(tasks),
+  //       calls: formatCallsForActions(includedDaySessions)
+  //     },
+  //     useAmbientTimelineStore.getState().onDeviceOnly
+  //   )
+  //     .then(res => useAmbientTimelineStore.getState().setDayActions(dayKey, res.proposals))
+  //     .finally(() => setActionsBusy(false));
+  // }, [dayKey, includedDaySessions, actionsByDay, tasks, includedSignature]);
 
   // Ask-your-day, scoped to the current day.
   const [askQuery, setAskQuery] = useState('');
   const [asking, setAsking] = useState(false);
-  const [askResult, setAskResult] = useState<AskResult | null>(null);
+  // Ask-your-day runs as a short Q&A thread inside a slide-up sheet (not a floating card), so the answer
+  // has room to read, cites its source conversations, and supports follow-ups.
+  const [askThread, setAskThread] = useState<{ q: string; result: AskResult | null }[]>([]);
+  const [showAsk, setShowAsk] = useState(false);
 
   // Reference + config live off the main surface, one tap away.
   const [showTimeline, setShowTimeline] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const ask = useCallback(async () => {
-    const question = askQuery.trim();
-    if (!question || asking) return;
-    setAsking(true);
-    setAskResult(null);
-    try {
-      setAskResult(
-        await askDayWithDeviceLLM(
+  // Ambient (overheard) conversations stay collapsed in the timeline until the owner asks to see them.
+  const [ambientExpanded, setAmbientExpanded] = useState(false);
+  const runAsk = useCallback(
+    async (raw: string) => {
+      const question = raw.trim();
+      if (!question || asking) return;
+      setAskQuery('');
+      setShowAsk(true);
+      setAskThread(t => [...t, { q: question, result: null }]);
+      setAsking(true);
+      try {
+        const onDeviceOnly = useAmbientTimelineStore.getState().onDeviceOnly;
+        // The text model may have been evicted by the recorder's residency juggling even though it's
+        // selected/downloaded — load it on demand so Ask doesn't falsely report "no chat model".
+        const textId = selectedTextModelId();
+        const remoteText = !onDeviceOnly && mobileTextEngineControl.isRemoteActive();
+        if (textId && !remoteText && !mobileTextEngineControl.isReady()) {
+          await mobileResidencyIntents.ensureText(textId).catch(() => undefined);
+        }
+        const result = await askDayWithDeviceLLM(
           question,
           daySessions,
           clock,
-          useAmbientTimelineStore.getState().onDeviceOnly
-        )
-      );
-    } finally {
-      setAsking(false);
-    }
-  }, [askQuery, asking, daySessions]);
+          onDeviceOnly
+        );
+        setAskThread(t => t.map((e, i) => (i === t.length - 1 ? { ...e, result } : e)));
+      } finally {
+        setAsking(false);
+      }
+    },
+    [asking, daySessions]
+  );
+
+  // One timeline row, shared by the day list and the collapsed Set-aside group. `excluded` dims it and
+  // flips the toggle: an included row shows "remove from day", a set-aside row shows "add to day". The
+  // toggle sets the user override and clears the day's journal/actions cache so everything re-projects.
+  const renderTimelineRow = useCallback(
+    (session: TimelineSession, excluded = false, first = false) => (
+      <TouchableOpacity
+        key={session.id}
+        style={[styles.tcard, !first && styles.taskDivider, excluded && styles.tcardAmbient]}
+        onPress={() => {
+          setShowTimeline(false);
+          navigation.navigate('AmbientSession', { sessionId: session.id });
+        }}
+        testID={excluded ? 'ambient-timeline-row-ambient' : 'ambient-timeline-row'}
+      >
+        <Text style={styles.tcardTime}>{clock(session.startMs)}</Text>
+        <View style={styles.tcardMid}>
+          <Text style={styles.tcardTitle} numberOfLines={1}>
+            {session.summary.title}
+          </Text>
+          <Text style={styles.tcardHead} numberOfLines={1}>
+            {session.summary.headline || 'No summary'}
+          </Text>
+          {sessionSpeakers(session).length > 0 ? (
+            <View style={styles.tcardPeople}>
+              <Icon name="users" size={11} color={colors.primary} />
+              <Text style={styles.tcardPeopleText} numberOfLines={1}>
+                {sessionSpeakers(session).join(' · ')}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <TouchableOpacity
+          onPress={() => setSessionInclusion(session.id, excluded ? true : false, dayKey)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          testID={excluded ? 'session-add-to-day' : 'session-remove-from-day'}
+          accessibilityLabel={excluded ? 'Add to your day' : 'Remove from your day'}
+        >
+          <Icon name={excluded ? 'plus-circle' : 'minus-circle'} size={18} color={excluded ? colors.primary : colors.textMuted} />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    ),
+    [navigation, styles, colors, setSessionInclusion, dayKey],
+  );
 
   // Prune capture audio past the retention window, once per screen open.
   const retentionRan = useRef(false);
@@ -450,6 +581,21 @@ export function AmbientDayScreen(): React.ReactElement {
 
   const open = openTaskCount(tasks);
 
+  // Recording now stays on the Day screen (pulsing button + a fixed live caption in the dock), so the
+  // full-screen recording takeover is retired. (RecordingView kept below but unused for now.)
+  // After Pause, the pipeline runs: transcribe → find speakers → summarise → journal & to-dos, streamed
+  // so it's never a frozen wall. "Keep in background" drops back to the Day while it finishes. (Concept: Processing.)
+  if (capture.processing && !processingMinimized) {
+    return (
+      <ProcessingView
+        styles={styles}
+        colors={colors}
+        capture={capture}
+        onBackground={() => setProcessingMinimized(true)}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader
@@ -457,6 +603,13 @@ export function AmbientDayScreen(): React.ReactElement {
         onBack={() => navigation.goBack()}
         right={
           <View style={styles.headIcons}>
+            <TouchableOpacity onPress={onSyncNow} disabled={syncing} testID="ambient-sync-now">
+              {syncing ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Icon name="refresh-cw" size={18} color={colors.textSecondary} />
+              )}
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => navigation.navigate('AmbientReflect')} testID="ambient-open-reflect">
               <Icon name="bar-chart-2" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
@@ -487,7 +640,7 @@ export function AmbientDayScreen(): React.ReactElement {
         </TouchableOpacity>
       </View>
 
-      <CaptureStrip styles={styles} colors={colors} capture={capture} />
+      <CaptureStrip styles={styles} colors={colors} capture={capture} onReopen={() => setProcessingMinimized(false)} />
       {pendingCaptures.length > 0 && !capture.processing ? (
         // A failed run keeps the recordings queued (audio is never dropped), so this doubles as the
         // retry: on error it shows WHY and a Retry, otherwise the normal "process now" nudge.
@@ -533,9 +686,8 @@ export function AmbientDayScreen(): React.ReactElement {
                 <Icon name="check-circle" size={15} color={colors.primary} />
                 <Text style={styles.readyChipText}>
                   Transcription ready
-                  {ready.stt || (localTranscriptionModel && localTranscriptionModel.source !== 'remote')
-                    ? ' · on-device'
-                    : ' · via your Mac'}
+                  {/* Match the active source shown in the bottom bar: the Mac wins when offload is live. */}
+                  {transcriptionSource === 'mac' ? ' · on your Mac' : ' · on-device'}
                 </Text>
               </View>
             ) : (
@@ -631,15 +783,20 @@ export function AmbientDayScreen(): React.ReactElement {
         ) : (
           <>
             <Section title="Journal" styles={styles} colors={colors} icon="book-open">
-              {journal ? (
-                <Text style={styles.journal} testID="ambient-journal">
-                  {journal}
-                </Text>
-              ) : journalBusy ? (
-                <Text style={styles.muted}>Writing your journal…</Text>
-              ) : (
-                <Text style={styles.muted}>No journal yet.</Text>
-              )}
+              <View style={[styles.card, styles.cardPad]}>
+                {journal ? (
+                  <Text style={styles.journal} testID="ambient-journal">
+                    {journal}
+                  </Text>
+                ) : journalBusy ? (
+                  <View style={styles.cardBusy}>
+                    <LoadingDots size={6} />
+                    <Text style={styles.muted}>Writing your journal…</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.muted}>No journal yet.</Text>
+                )}
+              </View>
             </Section>
 
             <Section
@@ -649,23 +806,45 @@ export function AmbientDayScreen(): React.ReactElement {
               colors={colors}
               icon="check-circle"
             >
-              {tasks.length === 0 ? (
-                <Text style={styles.muted}>No tasks came up.</Text>
-              ) : (
-                tasks.map(task => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    styles={styles}
-                    colors={colors}
-                    onToggle={() => toggleTask(task.id)}
-                    onOpen={() => navigation.navigate('AmbientSession', { sessionId: task.sessionId })}
-                  />
-                ))
-              )}
+              <View style={styles.card}>
+                {tasks.length === 0 ? (
+                  <View style={styles.cardPad}>
+                    <Text style={styles.muted}>No tasks came up.</Text>
+                  </View>
+                ) : (
+                  tasks.map((task, i) => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      first={i === 0}
+                      styles={styles}
+                      colors={colors}
+                      onToggle={() =>
+                        task.standaloneSource
+                          ? toggleStandaloneTodo(task.id)
+                          : toggleTask(task.id)
+                      }
+                      onOpen={() => navigation.navigate('AmbientSession', { sessionId: task.sessionId })}
+                      onEdit={text => editTaskText(task.sessionId, taskIndexOf(task.id), text)}
+                      onDelete={() =>
+                        Alert.alert('Delete to-do?', task.text, [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Delete',
+                            style: 'destructive',
+                            onPress: () => deleteTask(task.sessionId, taskIndexOf(task.id))
+                          }
+                        ])
+                      }
+                    />
+                  ))
+                )}
+              </View>
             </Section>
 
-            {actionsBusy || (actions && actions.length > 0) ? (
+            {/* Actions hidden for now — proposals generate but mobile has no verified connector execution
+                behind Approve yet. Re-enable with the generation effect above when it's testable. */}
+            {/* {actionsBusy || (actions && actions.length > 0) ? (
               <Section
                 title="Actions"
                 count={actions && actions.length > 0 ? `${actions.length} to approve` : undefined}
@@ -674,23 +853,23 @@ export function AmbientDayScreen(): React.ReactElement {
                 icon="zap"
               >
                 {actionsBusy && !actions ? (
-                  <Text style={styles.muted}>Looking for things it can do…</Text>
+                  <View style={[styles.card, styles.cardPad, styles.cardBusy]}>
+                    <LoadingDots size={6} />
+                    <Text style={styles.muted}>Looking for things it can do…</Text>
+                  </View>
                 ) : (
                   (actions ?? []).map((proposal, index) => (
                     <ActionCard
                       key={`${proposal.title ?? 'action'}-${index}`}
                       proposal={proposal}
                       styles={styles}
-                      onApprove={() => {
-                        Share.share({ message: actionShareText(proposal) }).catch(() => undefined);
-                        resolveDayAction(dayKey, index);
-                      }}
+                      onApprove={() => resolveDayAction(dayKey, index)}
                       onDismiss={() => resolveDayAction(dayKey, index)}
                     />
                   ))
                 )}
               </Section>
-            ) : null}
+            ) : null} */}
 
             <TouchableOpacity
               style={styles.tlChip}
@@ -700,7 +879,8 @@ export function AmbientDayScreen(): React.ReactElement {
               <Icon name="clock" size={15} color={colors.textMuted} />
               <Text style={styles.tlChipLabel}>Timeline</Text>
               <Text style={styles.tlChipN}>
-                {daySessions.length} conversation{daySessions.length === 1 ? '' : 's'}
+                {includedDaySessions.length} conversation{includedDaySessions.length === 1 ? '' : 's'}
+                {excludedDaySessions.length > 0 ? ` · ${excludedDaySessions.length} ambient` : ''}
               </Text>
               <Icon name="chevron-right" size={16} color={colors.primary} />
             </TouchableOpacity>
@@ -709,23 +889,68 @@ export function AmbientDayScreen(): React.ReactElement {
         )}
       </ScrollView>
 
-      {/* Live streaming transcript — phrase-by-phrase as you speak, on-device or via the Mac. */}
-      {capture.recording ? (
-        <View style={styles.live} testID="ambient-live-transcript">
-          <Text style={styles.liveLabel}>● LIVE TRANSCRIPT</Text>
-          <Text style={styles.liveText} numberOfLines={3}>
+      {/* Docked, top → bottom: the record control, then ask, then the transcription-source line pinned last. */}
+      <View style={styles.dock}>
+        {/* The one primary action, centered FIRST: record → pause, with the shared 3-dot loader while busy. */}
+        <View style={styles.recordRow}>
+          {capture.processing || loadingModel ? (
+            <View style={[styles.recBtn, styles.recBtnBusy]} testID="ambient-day-busy">
+              <LoadingDots color={colors.background} size={7} />
+            </View>
+          ) : capture.recording ? (
+            <PulsingPauseButton styles={styles} colors={colors} onPress={capture.stop} />
+          ) : (
+            <TouchableOpacity style={styles.recBtn} onPress={() => void handleRecordPress()} testID="ambient-day-record" accessibilityLabel="Start recording">
+              <Icon name="mic" size={24} color={colors.background} />
+            </TouchableOpacity>
+          )}
+          {capture.recording ? (
+            <Text style={styles.recHint}>Recording · tap to stop</Text>
+          ) : !capture.processing && !loadingModel ? (
+            <Text style={styles.recHint}>Hold the day</Text>
+          ) : null}
+        </View>
+        {__DEV__ && !capture.recording && !capture.processing ? (
+          <TouchableOpacity
+            style={styles.devReplay}
+            onPress={() => void devReplayLastTranscript()}
+            testID="ambient-dev-replay"
+          >
+            <Icon name="repeat" size={13} color={colors.textMuted} />
+            <Text style={styles.devReplayText}>DEV · replay last transcript</Text>
+          </TouchableOpacity>
+        ) : null}
+        {/* Below the button: ask this day, or a fixed 1–2 line live caption while recording (constant
+            height so streaming words never shove the button around). */}
+        {capture.recording ? (
+          <Text style={styles.liveCaption} numberOfLines={2} testID="ambient-live-transcript">
             {capture.liveTranscript || 'Listening…'}
           </Text>
-        </View>
-      ) : null}
-      {/* Docked: ask + record, always at the thumb. */}
-      {askResult && !asking ? (
-        <View style={styles.answer} testID="ambient-day-answer">
-          <Text style={styles.answerText}>{answerText(askResult)}</Text>
-        </View>
-      ) : null}
-      {/* Always-visible: which engine will transcribe right now — the Mac, this phone, or nothing set up.
-          When the Mac is wanted but offline, it says so and taps through to Remote Servers. */}
+        ) : (
+          <TouchableOpacity
+            style={styles.askbar}
+            activeOpacity={0.7}
+            onPress={() => setShowAsk(true)}
+            testID="ambient-day-ask-open"
+          >
+            <Icon name="search" size={15} color={colors.textMuted} />
+            <TextInput
+              style={styles.askInput}
+              placeholder="Ask this day…"
+              placeholderTextColor={colors.textMuted}
+              value={askQuery}
+              onChangeText={setAskQuery}
+              onFocus={() => setShowAsk(true)}
+              onSubmitEditing={() => void runAsk(askQuery)}
+              returnKeyType="search"
+              testID="ambient-day-ask"
+            />
+            {asking ? <LoadingDots size={6} /> : null}
+          </TouchableOpacity>
+        )}
+      </View>
+      {/* Transcription source — pinned to the very bottom. Who transcribes now (Mac / this phone / nothing),
+          and taps through to fix it when the Mac is wanted but offline. */}
       <TouchableOpacity
         style={styles.sourceBar}
         onPress={
@@ -773,35 +998,79 @@ export function AmbientDayScreen(): React.ReactElement {
                 : 'No transcription set up — tap to set up'}
         </Text>
       </TouchableOpacity>
-      <View style={styles.dock}>
-        <View style={styles.askbar}>
-          <Icon name="search" size={15} color={colors.textMuted} />
-          <TextInput
-            style={styles.askInput}
-            placeholder="Ask this day…"
-            placeholderTextColor={colors.textMuted}
-            value={askQuery}
-            onChangeText={setAskQuery}
-            onSubmitEditing={ask}
-            returnKeyType="search"
-            testID="ambient-day-ask"
-          />
-          {asking ? <ActivityIndicator size="small" color={colors.primary} /> : null}
-        </View>
-        {capture.processing || loadingModel ? (
-          <View style={[styles.fab, styles.fabBusy]}>
-            <ActivityIndicator size="small" color={colors.background} />
+
+      {/* Ask your day — a slide-up Q&A thread (not a floating card), with source conversations + follow-ups. */}
+      <Modal
+        visible={showAsk}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowAsk(false)}
+      >
+        <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={() => setShowAsk(false)} />
+        <View style={styles.askSheet}>
+          <View style={styles.sheetGrip} />
+          <Text style={styles.sheetTitle}>Ask · {dayLabel(dayKey)}</Text>
+          <ScrollView
+            style={styles.askThread}
+            contentContainerStyle={{ paddingBottom: SPACING.md }}
+            showsVerticalScrollIndicator={false}
+          >
+            {askThread.length === 0 ? (
+              <Text style={styles.muted}>Ask anything about this day — decisions, to-dos, who said what.</Text>
+            ) : (
+              askThread.map((turn, i) => (
+                <View key={i} style={styles.askTurn}>
+                  <Text style={styles.askQ}>{turn.q}</Text>
+                  {turn.result ? (
+                    <>
+                      <Text style={styles.askA}>{answerText(turn.result)}</Text>
+                      {turn.result.sources.length > 0 ? (
+                        <View style={styles.askSources}>
+                          {turn.result.sources.map(s => (
+                            <TouchableOpacity
+                              key={s.id}
+                              style={styles.askSourceChip}
+                              onPress={() => {
+                                setShowAsk(false);
+                                navigation.navigate('AmbientSession', { sessionId: s.id });
+                              }}
+                            >
+                              <Icon name="corner-down-right" size={11} color={colors.primary} />
+                              <Text style={styles.askSourceText} numberOfLines={1}>
+                                {clock(s.startMs)} · {s.summary.title}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      ) : null}
+                    </>
+                  ) : (
+                    <View style={styles.cardBusy}>
+                      <LoadingDots size={6} />
+                      <Text style={styles.muted}>Thinking…</Text>
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
+          </ScrollView>
+          <View style={styles.askbar}>
+            <Icon name="search" size={15} color={colors.textMuted} />
+            <TextInput
+              style={styles.askInput}
+              placeholder={askThread.length > 0 ? 'Ask a follow-up…' : 'Ask this day…'}
+              placeholderTextColor={colors.textMuted}
+              value={askQuery}
+              onChangeText={setAskQuery}
+              onSubmitEditing={() => void runAsk(askQuery)}
+              returnKeyType="search"
+              autoFocus
+              testID="ambient-ask-input"
+            />
+            {asking ? <LoadingDots size={6} /> : null}
           </View>
-        ) : capture.recording ? (
-          <TouchableOpacity style={[styles.fab, styles.fabRec]} onPress={capture.stop} testID="ambient-day-stop">
-            <Icon name="square" size={19} color={colors.background} />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.fab} onPress={() => void handleRecordPress()} testID="ambient-day-record">
-            <Icon name="mic" size={22} color={colors.background} />
-          </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      </Modal>
 
       {/* Timeline — reference, off the main surface. */}
       <Modal
@@ -813,36 +1082,42 @@ export function AmbientDayScreen(): React.ReactElement {
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
           <ScreenHeader title={`Timeline · ${dayLabel(dayKey)}`} onBack={() => setShowTimeline(false)} />
           <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
-            {daySessions.map(session => (
-              <TouchableOpacity
-                key={session.id}
-                style={styles.tcard}
-                onPress={() => {
-                  setShowTimeline(false);
-                  navigation.navigate('AmbientSession', { sessionId: session.id });
-                }}
-                testID="ambient-timeline-row"
-              >
-                <Text style={styles.tcardTime}>{clock(session.startMs)}</Text>
-                <View style={styles.tcardMid}>
-                  <Text style={styles.tcardTitle} numberOfLines={1}>
-                    {session.summary.title}
+            {includedDaySessions.length > 0 ? (
+              <View style={[styles.card, styles.tlCardSpace]}>
+                {includedDaySessions.map((session, i) => renderTimelineRow(session, false, i === 0))}
+              </View>
+            ) : null}
+
+            {/* Set-aside conversations — overheard (ambient) or ones you removed. Kept + searchable,
+                collapsed so they don't clutter the day, and their to-dos/journal/actions are excluded.
+                Tap the + on any to add it back to your day (its derived items reappear). */}
+            {excludedDaySessions.length > 0 ? (
+              <>
+                <TouchableOpacity
+                  style={styles.ambientHeader}
+                  onPress={() => setAmbientExpanded(v => !v)}
+                  testID="ambient-bucket-toggle"
+                >
+                  <Icon name="volume-1" size={15} color={colors.textMuted} />
+                  <Text style={styles.ambientHeaderLabel}>
+                    Set aside · {excludedDaySessions.length}
                   </Text>
-                  <Text style={styles.tcardHead} numberOfLines={1}>
-                    {session.summary.headline || 'No summary'}
+                  <Text style={styles.ambientHeaderHint} numberOfLines={1}>
+                    overheard or removed — not in your day
                   </Text>
-                  {sessionSpeakers(session).length > 0 ? (
-                    <View style={styles.tcardPeople}>
-                      <Icon name="users" size={11} color={colors.primary} />
-                      <Text style={styles.tcardPeopleText} numberOfLines={1}>
-                        {sessionSpeakers(session).join(' · ')}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-                <Icon name="chevron-right" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-            ))}
+                  <Icon
+                    name={ambientExpanded ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color={colors.textMuted}
+                  />
+                </TouchableOpacity>
+                {ambientExpanded ? (
+                  <View style={[styles.card, styles.tlCardSpace]}>
+                    {excludedDaySessions.map((session, i) => renderTimelineRow(session, true, i === 0))}
+                  </View>
+                ) : null}
+              </>
+            ) : null}
             <View style={{ height: 20 }} />
           </ScrollView>
         </SafeAreaView>
@@ -968,6 +1243,28 @@ export function AmbientDayScreen(): React.ReactElement {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.settingRow, { marginTop: 14 }]}
+              disabled={daySessions.length === 0 || capture.processing}
+              onPress={() => {
+                setShowSettings(false);
+                Alert.alert(
+                  'Re-transcribe this day?',
+                  `Re-runs transcription and summaries for all ${daySessions.length} conversation${daySessions.length === 1 ? '' : 's'} on ${dayLabel(dayKey)}, using your CURRENT transcription model — switch to a bigger model or connect your Mac first for a better result. This replaces the existing transcripts and summaries.`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Re-transcribe', onPress: () => void reprocessDay(daySessions.map(s => s.id)) }
+                  ]
+                );
+              }}
+              testID="ambient-reprocess-day"
+            >
+              <Text style={[styles.settingLabel, daySessions.length === 0 && { color: colors.textMuted }]}>Re-transcribe this day</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm }}>
+                <Text style={styles.presetChangeText}>{daySessions.length} conv{daySessions.length === 1 ? '' : 's'}</Text>
+                <Icon name="refresh-cw" size={15} color={colors.primary} />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.settingRow, { marginTop: 14 }]}
               onPress={() => { setShowSettings(false); navigation.navigate(isPro ? 'ManageVoices' : 'ProDetail'); }}
               testID="ambient-add-voice"
             >
@@ -1028,11 +1325,6 @@ function Section({
   );
 }
 
-function actionShareText(proposal: ProactiveActionProposal): string {
-  const title = proposal.title ?? 'Action';
-  return proposal.why ? `${title} — ${proposal.why}` : title;
-}
-
 function ActionCard({
   proposal,
   styles,
@@ -1063,35 +1355,195 @@ function ActionCard({
   );
 }
 
+const TASK_HIT = { top: 8, bottom: 8, left: 8, right: 8 };
+
 function TaskRow({
   task,
+  first,
   styles,
   colors,
   onToggle,
-  onOpen
+  onOpen,
+  onEdit,
+  onDelete
 }: {
   task: DayTask;
+  first?: boolean;
   styles: any;
   colors: any;
   onToggle: () => void;
   onOpen: () => void;
+  onEdit: (text: string) => void;
+  onDelete: () => void;
 }): React.ReactElement {
+  const [editing, setEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [draft, setDraft] = useState(task.text);
+  const save = (): void => {
+    const next = draft.trim();
+    if (next && next !== task.text) onEdit(next);
+    setEditing(false);
+  };
+  // A standalone to-do (e.g. a desktop CRM to-do) has no local session: it opens nothing, shows its
+  // origin instead of a conversation, and is edited/deleted on the device that owns it — the phone only
+  // ticks it. Its subtitle names where it came from.
+  const isStandalone = Boolean(task.standaloneSource);
+  const standaloneLabel =
+    task.standaloneSource === 'desktop' ? 'From desktop' : 'Synced';
+  // Expand to cite provenance: a recorder to-do shows its conversation (headline + a way into it); a
+  // standalone to-do (e.g. a desktop CRM to-do) shows the detail blurb its authoring device sent. Both
+  // ride in `sessionHeadline`; only a recorder one has a local session to open.
+  const hasDetail = !!task.sessionHeadline;
   return (
-    <View style={styles.task} testID="ambient-task">
-      <TouchableOpacity
-        onPress={onToggle}
-        style={[styles.box, task.done && styles.boxDone]}
-        testID="ambient-task-box"
-      >
-        {task.done ? <Icon name="check" size={13} color={colors.background} /> : null}
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.taskTx} onPress={onOpen}>
-        <Text style={[styles.taskLead, task.done && styles.taskDone]}>{task.text}</Text>
-        <Text style={styles.taskSrc}>
-          {clock(task.sessionStartMs)} · {task.sessionTitle}
-        </Text>
-      </TouchableOpacity>
+    <View style={!first && styles.taskDivider} testID="ambient-task">
+      <View style={styles.task}>
+        <TouchableOpacity
+          onPress={onToggle}
+          style={[styles.box, task.done && styles.boxDone]}
+          testID="ambient-task-box"
+        >
+          {task.done ? <Icon name="check" size={13} color={colors.background} /> : null}
+        </TouchableOpacity>
+        {editing ? (
+          <TextInput
+            style={styles.taskEditInput}
+            value={draft}
+            onChangeText={setDraft}
+            autoFocus
+            multiline
+            onBlur={save}
+            onSubmitEditing={save}
+            blurOnSubmit
+            returnKeyType="done"
+            testID="ambient-task-edit-input"
+          />
+        ) : isStandalone ? (
+          <TouchableOpacity
+            style={styles.taskTx}
+            onPress={() => hasDetail && setExpanded((e) => !e)}
+            disabled={!hasDetail}
+            testID="ambient-task-expand"
+          >
+            <View style={styles.taskLeadRow}>
+              {hasDetail ? (
+                <Icon
+                  name={expanded ? 'chevron-down' : 'chevron-right'}
+                  size={14}
+                  color={colors.textMuted}
+                  style={styles.taskChevron}
+                />
+              ) : null}
+              <Text style={[styles.taskLead, task.done && styles.taskDone, styles.taskLeadFlex]}>
+                {task.text}
+              </Text>
+            </View>
+            <Text style={styles.taskSrc}>{standaloneLabel}</Text>
+          </TouchableOpacity>
+        ) : (
+          // Tap toggles the inline detail when there's a conversation to cite; otherwise it opens the
+          // session directly (nothing to expand). A chevron signals the expandable ones.
+          <TouchableOpacity
+            style={styles.taskTx}
+            onPress={() => (hasDetail ? setExpanded((e) => !e) : onOpen())}
+            testID="ambient-task-expand"
+          >
+            <View style={styles.taskLeadRow}>
+              {hasDetail ? (
+                <Icon
+                  name={expanded ? 'chevron-down' : 'chevron-right'}
+                  size={14}
+                  color={colors.textMuted}
+                  style={styles.taskChevron}
+                />
+              ) : null}
+              <Text style={[styles.taskLead, task.done && styles.taskDone, styles.taskLeadFlex]}>
+                {task.text}
+              </Text>
+            </View>
+            <Text style={styles.taskSrc}>
+              {clock(task.sessionStartMs)} · {task.sessionTitle}
+            </Text>
+          </TouchableOpacity>
+        )}
+        <View style={styles.taskActions}>
+          {isStandalone ? null : editing ? (
+            <TouchableOpacity onPress={save} hitSlop={TASK_HIT} testID="ambient-task-save">
+              <Icon name="check" size={17} color={colors.primary} />
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity
+                onPress={() => {
+                  setDraft(task.text);
+                  setEditing(true);
+                }}
+                hitSlop={TASK_HIT}
+                testID="ambient-task-edit"
+              >
+                <Icon name="edit-2" size={15} color={colors.textMuted} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onDelete} hitSlop={TASK_HIT} testID="ambient-task-delete">
+                <Icon name="trash-2" size={15} color={colors.textMuted} />
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </View>
+      {expanded && hasDetail ? (
+        <View style={styles.taskDetail} testID="ambient-task-detail">
+          <Text style={styles.taskDetailBody}>{task.sessionHeadline}</Text>
+          {!isStandalone ? (
+            <TouchableOpacity style={styles.taskDetailOpen} onPress={onOpen}>
+              <Text style={styles.taskDetailOpenText}>Open conversation</Text>
+              <Icon name="arrow-up-right" size={13} color={colors.primary} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
     </View>
+  );
+}
+
+// The record button while recording: an emerald pause button that gently pulses to signify live capture.
+// Honors reduce-motion (static when the OS asks). Tap to stop.
+function PulsingPauseButton({
+  styles,
+  colors,
+  onPress
+}: {
+  styles: any;
+  colors: any;
+  onPress: () => void;
+}): React.ReactElement {
+  const scale = useRef(new Animated.Value(1)).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let live = true;
+    AccessibilityInfo.isReduceMotionEnabled().then(v => live && setReduceMotion(v));
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scale, { toValue: 1.12, duration: 700, useNativeDriver: true }),
+        Animated.timing(scale, { toValue: 1, duration: 700, useNativeDriver: true })
+      ])
+    );
+    loop.start();
+    return () => {
+      live = false;
+      loop.stop();
+    };
+  }, [scale, reduceMotion]);
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        style={[styles.recBtn, styles.recBtnRec]}
+        onPress={onPress}
+        testID="ambient-day-stop"
+        accessibilityLabel="Stop recording"
+      >
+        <Icon name="pause" size={24} color={colors.background} />
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -1113,18 +1565,26 @@ function PulseDot({ style }: { style: any }): React.ReactElement {
 function CaptureStrip({
   styles,
   colors,
-  capture
+  capture,
+  onReopen
 }: {
   styles: any;
   colors: any;
   capture: ReturnType<typeof useAmbientCapture>;
+  onReopen?: () => void;
 }): React.ReactElement | null {
   if (capture.processing) {
+    // Minimized ("Keep in background") processing — a live banner on the Day that reopens the full screen.
     return (
-      <View style={[styles.capStrip, styles.capProcessing]}>
-        <ActivityIndicator size="small" color={colors.primary} />
+      <TouchableOpacity
+        style={[styles.capStrip, styles.capProcessing]}
+        onPress={onReopen}
+        testID="ambient-processing-banner"
+      >
+        <LoadingDots size={6} />
         <Text style={styles.capText}>{progressLabel(capture.progress)}</Text>
-      </View>
+        <Text style={styles.capReopen}>View</Text>
+      </TouchableOpacity>
     );
   }
   if (!capture.recording) return null;
@@ -1148,7 +1608,138 @@ function progressLabel(progress: ReturnType<typeof useAmbientCapture>['progress'
   if (progress.phase === 'transcribing') {
     return `Transcribing ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…`;
   }
+  if (progress.phase === 'diarizing') {
+    return `Recognizing speakers ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…`;
+  }
   return `Summarising ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…`;
+}
+
+// Concept A — the recording takeover. Big clock, the transcript streaming phrase-by-phrase, the live
+// level meter, and one emerald Pause. Emerald goes solid only on Pause (the one action in this state).
+function RecordingView({
+  styles,
+  colors,
+  capture,
+  sourceLabel
+}: {
+  styles: any;
+  colors: any;
+  capture: ReturnType<typeof useAmbientCapture>;
+  sourceLabel: string;
+}): React.ReactElement {
+  const scroll = useRef<ScrollView>(null);
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <View style={styles.recScreen}>
+        <View style={styles.recStatusRow}>
+          <View style={styles.recStatusLeft}>
+            <PulseDot style={styles.recDot} />
+            <Text style={styles.recStatusLabel}>RECORDING</Text>
+          </View>
+          <TouchableOpacity style={styles.recFlag} onPress={capture.flag} testID="ambient-day-flag">
+            <Icon name="flag" size={13} color={colors.primary} />
+            <Text style={styles.recFlagText}>{capture.flagCount > 0 ? String(capture.flagCount) : 'Flag'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.recTimer}>{hms(capture.elapsedMs)}</Text>
+        <View style={styles.recDivider} />
+
+        <Text style={styles.recSectionLabel}>LIVE TRANSCRIPT</Text>
+        <ScrollView
+          ref={scroll}
+          style={styles.recTranscript}
+          contentContainerStyle={styles.recTranscriptPad}
+          onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}
+          testID="ambient-live-transcript"
+        >
+          <Text style={styles.recTranscriptText}>{capture.liveTranscript || 'Listening…'}</Text>
+        </ScrollView>
+
+        <View style={styles.recSpectrum}>
+          <VoiceSpectrum active bars={21} height={34} />
+        </View>
+
+        <TouchableOpacity
+          style={styles.recPause}
+          onPress={capture.stop}
+          testID="ambient-day-stop"
+          accessibilityLabel="Pause recording"
+        >
+          <View style={styles.recPauseIcon}>
+            <View style={styles.recPauseBar} />
+            <View style={styles.recPauseBar} />
+          </View>
+          <Text style={styles.recPauseText}>Pause</Text>
+        </TouchableOpacity>
+        <Text style={styles.recSource}>{sourceLabel.toUpperCase()}</Text>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+// Concept: Processing. The pipeline we run after Pause, stated as staged work so it reads as honest
+// on-device progress, not a spinner. The active stage carries the one 3-dot loader.
+function stageStates(
+  progress: ReturnType<typeof useAmbientCapture>['progress']
+): { label: string; state: 'done' | 'now' | 'queued' }[] {
+  let active = 0;
+  if (progress) {
+    if (progress.phase === 'transcribing') active = 0;
+    else if (progress.phase === 'diarizing') active = 1;
+    else if (progress.phase === 'loading-model' || progress.phase === 'summarizing') active = 2;
+  }
+  return ['Transcribing', 'Finding speakers', 'Summarising', 'Journal & to-dos'].map((label, i) => ({
+    label,
+    state: i < active ? 'done' : i === active ? 'now' : 'queued'
+  }));
+}
+
+function ProcessingView({
+  styles,
+  colors,
+  capture,
+  onBackground
+}: {
+  styles: any;
+  colors: any;
+  capture: ReturnType<typeof useAmbientCapture>;
+  onBackground: () => void;
+}): React.ReactElement {
+  const stages = stageStates(capture.progress);
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <View style={styles.procScreen}>
+        <Text style={styles.procTitle}>Processing</Text>
+        <View style={styles.recDivider} />
+        <View style={styles.procStages}>
+          {stages.map((st, i) => (
+            <View key={st.label} style={[styles.procRow, i > 0 && styles.taskDivider]}>
+              <View style={styles.procGlyph}>
+                {st.state === 'done' ? (
+                  <Icon name="check" size={14} color={colors.primary} />
+                ) : st.state === 'now' ? (
+                  <LoadingDots size={5} />
+                ) : (
+                  <View style={styles.procPending} />
+                )}
+              </View>
+              <Text style={[styles.procLabel, st.state === 'queued' && styles.procLabelMuted]}>
+                {st.label}
+              </Text>
+              <Text style={[styles.procState, st.state === 'now' && styles.procStateNow]}>
+                {st.state}
+              </Text>
+            </View>
+          ))}
+        </View>
+        <Text style={styles.procNote}>STAYS ON DEVICE</Text>
+        <TouchableOpacity style={styles.procBg} onPress={onBackground} testID="ambient-processing-background">
+          <Text style={styles.procBgText}>Keep in background</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
 }
 
 function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
@@ -1166,6 +1757,7 @@ function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     capProcessing: { borderColor: colors.border },
     capDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error },
     capText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, flex: 1, fontVariant: ['tabular-nums'] },
+    capReopen: { ...TYPOGRAPHY.label, color: colors.primary, letterSpacing: 1, textTransform: 'uppercase' },
     capFlag: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, borderWidth: 1, borderColor: colors.primary, borderRadius: RADIUS, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.sm },
     capFlagText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
     capStop: { borderWidth: 1, borderColor: colors.error, borderRadius: RADIUS, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
@@ -1195,21 +1787,36 @@ function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     nudgePrimaryText: { ...TYPOGRAPHY.bodySmall, color: colors.background },
     nudgeGhost: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, backgroundColor: colors.background },
     nudgeGhostText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
-    muted: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, paddingHorizontal: SPACING.lg },
+    muted: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
     // section
     section: { paddingTop: SPACING.lg },
     sectionHead: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.sm },
+    // The shared brief card: surface tier on the background for depth (brand: tiered surfaces, not heavy
+    // shadow), subtle border, minimal radius, one small theme shadow. Journal + To-do share it with Actions.
+    card: { marginHorizontal: SPACING.lg, borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, backgroundColor: colors.surface, ...shadows.small, overflow: 'hidden' },
+    cardPad: { padding: SPACING.md },
     sectionTitle: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 1.6, textTransform: 'uppercase' },
     sectionCount: { ...TYPOGRAPHY.label, color: colors.primary, marginLeft: 'auto', fontVariant: ['tabular-nums'] },
-    journal: { ...TYPOGRAPHY.body, color: colors.text, lineHeight: 22, paddingHorizontal: SPACING.lg },
+    journal: { ...TYPOGRAPHY.body, color: colors.text, lineHeight: 22 },
+    cardBusy: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
     // task
-    task: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.md, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+    task: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.md, padding: SPACING.md },
+    taskDivider: { borderTopWidth: 1, borderTopColor: colors.border },
     box: { width: 18, height: 18, borderRadius: RADIUS_XS, borderWidth: 1.5, borderColor: colors.textMuted, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
     boxDone: { backgroundColor: colors.primary, borderColor: colors.primary },
     taskTx: { flex: 1 },
+    taskActions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, marginLeft: SPACING.sm },
+    taskEditInput: { ...TYPOGRAPHY.body, color: colors.text, lineHeight: 19, flex: 1, padding: 0, borderBottomWidth: 1, borderBottomColor: colors.primary },
     taskLead: { ...TYPOGRAPHY.body, color: colors.text, lineHeight: 19 },
     taskDone: { color: colors.textMuted, textDecorationLine: 'line-through' },
     taskSrc: { ...TYPOGRAPHY.meta, color: colors.textMuted, marginTop: SPACING.xs },
+    taskLeadRow: { flexDirection: 'row', alignItems: 'flex-start' },
+    taskChevron: { marginTop: 2, marginRight: SPACING.xs },
+    taskLeadFlex: { flex: 1 },
+    taskDetail: { paddingLeft: SPACING.md + 18 + SPACING.md, paddingRight: SPACING.md, paddingBottom: SPACING.md, gap: SPACING.sm },
+    taskDetailBody: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted, lineHeight: 18 },
+    taskDetailOpen: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
+    taskDetailOpenText: { ...TYPOGRAPHY.label, color: colors.primary, textTransform: 'uppercase', letterSpacing: 1 },
     // action
     action: { marginHorizontal: SPACING.lg, marginBottom: SPACING.sm, padding: SPACING.md, borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, backgroundColor: colors.surface, ...shadows.small },
     actionConn: { ...TYPOGRAPHY.labelSmall, color: colors.primary, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: SPACING.xs },
@@ -1221,28 +1828,50 @@ function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     actionDismiss: { borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
     actionDismissText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
     // timeline
-    tcard: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+    tlCardSpace: { marginTop: SPACING.md },
+    tcard: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, padding: SPACING.md },
     tcardTime: { ...TYPOGRAPHY.label, color: colors.primary, width: 42, fontVariant: ['tabular-nums'] },
     tcardMid: { flex: 1 },
     tcardTitle: { ...TYPOGRAPHY.bodySmall, color: colors.text },
     tcardHead: { ...TYPOGRAPHY.label, color: colors.textMuted },
     tcardPeople: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, marginTop: 3 },
     tcardPeopleText: { ...TYPOGRAPHY.label, color: colors.primary, flex: 1 },
+    tcardAmbient: { opacity: 0.6 },
+    // ambient (overheard) collapsible group
+    ambientHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface },
+    ambientHeaderLabel: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 1.2, textTransform: 'uppercase' },
+    ambientHeaderHint: { ...TYPOGRAPHY.label, color: colors.textMuted, flex: 1, opacity: 0.8 },
     // header icons
     headIcons: { flexDirection: 'row', alignItems: 'center', gap: SPACING.lg },
     // timeline chip
-    tlChip: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginHorizontal: SPACING.lg, marginTop: SPACING.xs, padding: SPACING.md, borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, backgroundColor: colors.surface, ...shadows.small },
+    tlChip: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginHorizontal: SPACING.lg, marginTop: SPACING.lg, padding: SPACING.md, borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, backgroundColor: colors.surface, ...shadows.small },
     tlChipLabel: { ...TYPOGRAPHY.bodySmall, color: colors.text },
     tlChipN: { ...TYPOGRAPHY.label, color: colors.textMuted, flex: 1, textAlign: 'right' },
     // docked ask + record
-    dock: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm, paddingBottom: SPACING.sm, borderTopWidth: 1, borderTopColor: colors.borderLight, backgroundColor: colors.background },
-    askbar: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.md, paddingVertical: SPACING.md, borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, backgroundColor: colors.surface },
+    dock: { flexDirection: 'column', gap: SPACING.sm, paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm, paddingBottom: SPACING.sm, borderTopWidth: 1, borderTopColor: colors.borderLight, backgroundColor: colors.background },
+    askbar: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.md, paddingVertical: SPACING.md, borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, backgroundColor: colors.surface },
     askInput: { ...TYPOGRAPHY.bodySmall, flex: 1, color: colors.text, padding: 0 },
     answer: { marginHorizontal: SPACING.lg, marginBottom: SPACING.sm, borderWidth: 1, borderLeftWidth: 2, borderColor: colors.border, borderLeftColor: colors.primary, borderRadius: RADIUS, padding: SPACING.md, backgroundColor: colors.surface },
     answerText: { ...TYPOGRAPHY.bodySmall, color: colors.text, lineHeight: 19 },
-    live: { marginHorizontal: SPACING.lg, marginBottom: SPACING.sm, borderWidth: 1, borderLeftWidth: 2, borderColor: colors.border, borderLeftColor: colors.primary, borderRadius: RADIUS, padding: SPACING.md, backgroundColor: colors.surface },
-    liveLabel: { ...TYPOGRAPHY.labelSmall, color: colors.primary, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: SPACING.xs },
-    liveText: { ...TYPOGRAPHY.bodySmall, color: colors.text, lineHeight: 18 },
+    // Ask-your-day slide-up sheet
+    askSheet: { maxHeight: '80%', backgroundColor: colors.surface, borderTopLeftRadius: SPACING.lg, borderTopRightRadius: SPACING.lg, borderTopWidth: 1, borderColor: colors.border, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl, paddingTop: SPACING.sm },
+    askThread: { marginBottom: SPACING.md },
+    askTurn: { marginBottom: SPACING.lg },
+    askQ: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: SPACING.sm },
+    askA: { ...TYPOGRAPHY.body, color: colors.text, lineHeight: 22 },
+    askSources: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginTop: SPACING.md },
+    askSourceChip: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs, backgroundColor: colors.background, maxWidth: '100%' },
+    askSourceText: { ...TYPOGRAPHY.label, color: colors.primary, flexShrink: 1 },
+    // Floating transcript card while recording: surface tier for depth (not shadow), quiet emerald meter.
+    liveCard: { borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, padding: SPACING.md, backgroundColor: colors.surface, gap: SPACING.xs },
+    liveHead: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+    liveLabel: { ...TYPOGRAPHY.labelSmall, color: colors.primary, letterSpacing: 1.4, textTransform: 'uppercase' },
+    // Reserve a constant 3-line height so the card never resizes as words stream in — otherwise the dock
+    // (anchored at the bottom) grows upward and shoves the record button around. Stable height = stable button.
+    liveText: { ...TYPOGRAPHY.bodySmall, color: colors.text, lineHeight: 18, height: 54 },
+    // Fixed 1–2 line live caption under the record button. Constant height so streaming words never move
+    // the button; centered + muted so it reads as a quiet caption, not a card.
+    liveCaption: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, lineHeight: 18, height: 40, textAlign: 'center', paddingHorizontal: SPACING.sm },
     // pending
     pending: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginHorizontal: SPACING.md, marginTop: SPACING.sm, padding: SPACING.md, borderWidth: 1, borderColor: colors.primary, borderRadius: RADIUS, backgroundColor: colors.surface },
     pendingError: { borderColor: colors.error },
@@ -1250,7 +1879,7 @@ function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     pendingCta: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
     pendingCtaError: { color: colors.error },
     // Always-visible transcription-source bar above the dock
-    sourceBar: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm },
+    sourceBar: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm, borderTopWidth: 1, borderTopColor: colors.borderLight },
     sourceBarText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
     sourceBarTextMuted: { color: colors.textMuted },
     // settings sheet
@@ -1270,8 +1899,48 @@ function createStyles(colors: ThemeColors, shadows: ThemeShadows) {
     segText: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
     segTextOn: { color: colors.primary },
     // record fab (docked)
-    fab: { width: 52, height: 52, borderRadius: RADIUS, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', ...shadows.small },
-    fabRec: { backgroundColor: colors.error },
-    fabBusy: { backgroundColor: colors.surfaceHover, ...shadows.small }
+    // The one primary action, centered. Minimal 8px radius (no pill/circle), emerald = the single accent
+    // for both record and pause (red is reserved for errors); the icon + the live card carry the state.
+    recordRow: { alignItems: 'center', justifyContent: 'center', paddingTop: SPACING.xs },
+    recBtn: { width: 56, height: 56, borderRadius: RADIUS, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', ...shadows.small },
+    recBtnRec: { backgroundColor: colors.primary },
+    recBtnBusy: { backgroundColor: colors.surfaceHover },
+    recHint: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase', marginTop: SPACING.sm },
+    devReplay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm, marginTop: SPACING.sm, paddingVertical: SPACING.sm, borderWidth: 1, borderColor: colors.border, borderRadius: SPACING.sm, borderStyle: 'dashed' },
+    devReplayText: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 0.5 },
+    // Recording takeover (concept A)
+    recScreen: { flex: 1, paddingHorizontal: SPACING.lg, paddingTop: SPACING.lg, paddingBottom: SPACING.lg },
+    recStatusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    recStatusLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+    recDot: { width: 8, height: 8, borderRadius: RADIUS_XS / 2, backgroundColor: colors.primary },
+    recStatusLabel: { ...TYPOGRAPHY.label, color: colors.primary, letterSpacing: 1.4, textTransform: 'uppercase' },
+    recFlag: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, borderWidth: 1, borderColor: colors.primary, borderRadius: RADIUS, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs },
+    recFlagText: { ...TYPOGRAPHY.label, color: colors.primary },
+    recTimer: { ...TYPOGRAPHY.display, fontSize: 44, lineHeight: 52, color: colors.text, fontVariant: ['tabular-nums'], marginTop: SPACING.lg },
+    recDivider: { height: 1, backgroundColor: colors.border, marginVertical: SPACING.lg },
+    recSectionLabel: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: SPACING.md },
+    recTranscript: { flex: 1 },
+    recTranscriptPad: { paddingBottom: SPACING.md },
+    recTranscriptText: { ...TYPOGRAPHY.body, color: colors.text, lineHeight: 22 },
+    recSpectrum: { alignItems: 'flex-start', marginVertical: SPACING.lg, height: 34, justifyContent: 'flex-end' },
+    recPause: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm, height: 54, borderRadius: RADIUS, backgroundColor: colors.primary },
+    recPauseIcon: { flexDirection: 'row', gap: 4 },
+    recPauseBar: { width: 4, height: 14, backgroundColor: colors.background },
+    recPauseText: { ...TYPOGRAPHY.body, color: colors.background, letterSpacing: 0.3 },
+    recSource: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase', textAlign: 'center', marginTop: SPACING.md },
+    // Processing takeover (staged pipeline)
+    procScreen: { flex: 1, paddingHorizontal: SPACING.lg, paddingTop: SPACING.lg, paddingBottom: SPACING.lg },
+    procTitle: { ...TYPOGRAPHY.h2, color: colors.text },
+    procStages: { marginTop: SPACING.xl },
+    procRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.md },
+    procGlyph: { width: 18, alignItems: 'center', justifyContent: 'center' },
+    procPending: { width: 6, height: 6, borderRadius: 1, borderWidth: 1, borderColor: colors.textMuted },
+    procLabel: { ...TYPOGRAPHY.body, color: colors.text, flex: 1 },
+    procLabelMuted: { color: colors.textMuted },
+    procState: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' },
+    procStateNow: { color: colors.primary },
+    procNote: { ...TYPOGRAPHY.label, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase', textAlign: 'center', marginTop: 'auto', marginBottom: SPACING.md },
+    procBg: { height: 48, borderRadius: RADIUS, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+    procBgText: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary }
   });
 }

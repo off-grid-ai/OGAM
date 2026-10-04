@@ -284,6 +284,24 @@ const mockKokoroConfig = (voice: string, language: string) => ({
     neuralModelSource: `https://example.test/kokoro/${language}/phonemizer.pte`,
   },
 });
+// onnxruntime-react-native's index imports a native binding at module load (undefined in jest → throws
+// "Cannot read properties of undefined (reading 'install')"). The on-device Nemotron diarizer imports it
+// at module top, so any test that transitively loads the ambient/speaker graph needs this. Inference is
+// never exercised in-process (diarization is covered by the shared pure post-processing tests).
+jest.mock('onnxruntime-react-native', () => ({
+  InferenceSession: { create: jest.fn(async () => ({ run: jest.fn(async () => ({})) })) },
+  Tensor: class {
+    type: string;
+    data: unknown;
+    dims: number[];
+    constructor(type: string, data: unknown, dims: number[]) {
+      this.type = type;
+      this.data = data;
+      this.dims = dims;
+    }
+  },
+}));
+
 jest.mock('react-native-executorch', () => ({
   // Faithful init leaf for the executorch native runtime (a genuine external native boundary):
   // initExecutorch registers the resource fetcher so the runtime is ready to load models through

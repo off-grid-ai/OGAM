@@ -7,7 +7,10 @@
 import {
   groupSessionsByDay,
   dayKeyOf,
-  type TimelineSession
+  isIncludedSession,
+  isAmbientSession,
+  type TimelineSession,
+  type SessionRelevance
 } from '../../../../src/services/ambient/timelineModel'
 import { mergeSessions } from '../../../../src/stores/ambientTimelineStore'
 import { EMPTY_SUMMARY } from '../../../../src/services/ambient/summaryPrompt'
@@ -69,5 +72,32 @@ describe('mergeSessions', () => {
     const merged = mergeSessions([session('a', 1000)], [updated])
     expect(merged).toHaveLength(1)
     expect(merged[0].summary.title).toBe('Updated')
+  })
+})
+
+describe('isIncludedSession — the Day projection predicate', () => {
+  const ambient: SessionRelevance = { ambient: true, score: 0.2, reason: 'x' }
+  const kept: SessionRelevance = { ambient: false, score: 0.9, reason: 'x' }
+
+  it('includes a session with no relevance verdict (unassessed = kept)', () => {
+    expect(isIncludedSession(session('a', 1000))).toBe(true)
+  })
+
+  it('excludes an ambient session, includes a kept one', () => {
+    expect(isIncludedSession({ ...session('a', 1000), relevance: ambient })).toBe(false)
+    expect(isIncludedSession({ ...session('a', 1000), relevance: kept })).toBe(true)
+  })
+
+  it('user override wins over relevance in both directions', () => {
+    // Ambient conversation the user chose to add back → included.
+    expect(isIncludedSession({ ...session('a', 1000), relevance: ambient, userOverride: true })).toBe(true)
+    // A relevant conversation the user removed → excluded (so its to-dos/journal/actions drop).
+    expect(isIncludedSession({ ...session('a', 1000), relevance: kept, userOverride: false })).toBe(false)
+  })
+
+  it('ambient classification is independent of the include decision', () => {
+    const s = { ...session('a', 1000), relevance: ambient, userOverride: true }
+    expect(isAmbientSession(s)).toBe(true) // still overheard by relevance
+    expect(isIncludedSession(s)).toBe(true) // but the user pulled it into the day
   })
 })

@@ -100,6 +100,20 @@ export function buildAskMessages(
   ]
 }
 
+/**
+ * Strip a reasoning model's chain-of-thought so the UI shows only the final answer. Handles a complete
+ * <think>…</think> block, a dangling </think> (opening tag lost/truncated), and an unclosed <think>
+ * (generation ended mid-thought), plus any stray tags.
+ */
+export function stripThinking(text: string): string {
+  let out = text.replace(/<think>[\s\S]*?<\/think>/gi, '')
+  const close = out.lastIndexOf('</think>')
+  if (close !== -1) out = out.slice(close + '</think>'.length)
+  const open = out.indexOf('<think>')
+  if (open !== -1) out = out.slice(0, open)
+  return out.replace(/<\/?think>/gi, '').trim()
+}
+
 export type AskStatus = 'ok' | 'empty-question' | 'no-model' | 'no-matches' | 'error'
 
 export interface AskResult {
@@ -128,7 +142,7 @@ export async function askDay(
   if (ranked.length === 0) return { answer: '', sources: [], status: 'no-matches' }
   try {
     const answer = await deps.generate(buildAskMessages(question, ranked, clockOf))
-    return { answer: answer.trim(), sources: ranked.map(r => r.session), status: 'ok' }
+    return { answer: stripThinking(answer), sources: ranked.map(r => r.session), status: 'ok' }
   } catch {
     return { answer: '', sources: [], status: 'error' }
   }

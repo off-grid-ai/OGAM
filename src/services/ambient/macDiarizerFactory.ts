@@ -16,6 +16,8 @@ interface MacTurn {
   endMs: number
   cluster: string
   embedding?: number[]
+  /** Near-field score in [0,1] the Mac computed for the turn, when available. */
+  nearField?: number
 }
 
 /** A diarizer backed by the paired Mac running `model`'s fingerprint, or null when no Mac is reachable. */
@@ -50,7 +52,8 @@ export function createMacDiarizer(model: DiarizationModel): Diarizer | null {
         startMs: t.startMs,
         endMs: t.endMs,
         cluster: t.cluster,
-        embedding: t.embedding && t.embedding.length > 0 ? normalize(t.embedding) : undefined
+        embedding: t.embedding && t.embedding.length > 0 ? normalize(t.embedding) : undefined,
+        nearField: typeof t.nearField === 'number' ? t.nearField : undefined
       }))
       return { turns }
     }

@@ -9,6 +9,7 @@ import { executeMobileText } from '../mobileSidecarGeneration'
 import { mobileTextEngineControl } from '../modelServices/textEngineControl'
 import { summarizeTranscript, type SummarizeDeps, type SummarizeResult } from './summarizer'
 import type { GenerationMessage } from '@offgrid/models'
+import logger from '../../utils/logger'
 
 export function createDefaultSummarizeDeps(onDeviceOnly = false): SummarizeDeps {
   const localReady = (): boolean => mobileTextEngineControl.isReady()
@@ -21,10 +22,21 @@ export function createDefaultSummarizeDeps(onDeviceOnly = false): SummarizeDeps 
   }
 }
 
-export function summarizeWithDeviceLLM(
+export async function summarizeWithDeviceLLM(
   transcript: string,
   flaggedSnippets: string[] = [],
   onDeviceOnly = false
 ): Promise<SummarizeResult> {
-  return summarizeTranscript(transcript, createDefaultSummarizeDeps(onDeviceOnly), flaggedSnippets)
+  const deps = createDefaultSummarizeDeps(onDeviceOnly);
+  logger.log(
+    `[ambient] summarize start len=${transcript.trim().length} ready=${deps.isReady()} onDeviceOnly=${onDeviceOnly}`
+  );
+  try {
+    const res = await summarizeTranscript(transcript, deps, flaggedSnippets);
+    logger.log(`[ambient] summarize done status=${res.status} title="${res.summary.title}"`);
+    return res;
+  } catch (e) {
+    logger.warn('[ambient] summarize threw', e);
+    throw e;
+  }
 }

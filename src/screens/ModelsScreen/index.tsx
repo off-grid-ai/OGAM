@@ -14,6 +14,7 @@ import { TextModelsTab } from './TextModelsTab';
 import { ImageModelsTab } from './ImageModelsTab';
 import { VoiceModelsUpsell } from '../../components/models/VoiceModelsUpsell';
 import { TranscriptionModelsTab } from './TranscriptionModelsTab';
+import { DiarizationModelPicker } from '../../components/models/DiarizationModelPicker';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import type { ModelTab } from './types';
 import { ScreenHeader } from '../../components/ScreenHeader';
@@ -22,6 +23,7 @@ const MODEL_TABS: ReadonlyArray<{ key: ModelTab; label: string; testID?: string 
   { key: 'text', label: 'Text Models' },
   { key: 'image', label: 'Image Models' },
   { key: 'transcription', label: 'Transcription Models', testID: 'transcription-models-tab' },
+  { key: 'recorder', label: 'Recorder Models', testID: 'recorder-models-tab' },
   { key: 'voice', label: 'Voice Models', testID: 'voice-models-tab' },
 ];
 
@@ -257,6 +259,13 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
           showLanguageSelector={!embedded}
           showRemoteModels={!embedded}
         />
+      )}
+
+      {/* Recorder Models Tab: the Day recorder's voice-recognition (diarization) model. */}
+      {vm.activeTab === 'recorder' && (
+        <View style={{ padding: SPACING.md }}>
+          <DiarizationModelPicker />
+        </View>
       )}
 
       <CustomAlert {...vm.alertState} onClose={() => vm.setAlertState(hideAlert())} />

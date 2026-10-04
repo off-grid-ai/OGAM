@@ -38,5 +38,12 @@ export function buildJournalMessages(sources: JournalSource[]): Message[] {
 
 /** Strip any leaked thinking block and surrounding whitespace; the journal is plain prose. */
 export function cleanJournal(raw: string): string {
-  return raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+  // Strip a reasoning model's chain-of-thought: a complete <think>…</think> block, a dangling </think>
+  // (opening lost/truncated), and an unclosed <think> (generation ended mid-thought), plus stray tags.
+  let out = raw.replace(/<think>[\s\S]*?<\/think>/gi, '')
+  const close = out.lastIndexOf('</think>')
+  if (close !== -1) out = out.slice(close + '</think>'.length)
+  const open = out.indexOf('<think>')
+  if (open !== -1) out = out.slice(0, open)
+  return out.replace(/<\/?think>/gi, '').trim()
 }

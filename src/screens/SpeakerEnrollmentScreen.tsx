@@ -1,7 +1,7 @@
 /**
- * Voice enrollment — the user reads one sentence a few times so we can learn their voiceprint.
+ * Voice enrollment — the user reads a couple of short paragraphs so we can learn their voiceprint.
  *
- * Records one clip of each ENROLLMENT_PROMPTS sentence, embeds each through the ACTIVE
+ * Records one clip of each ENROLLMENT_PROMPTS paragraph, embeds each through the ACTIVE
  * (swappable) speaker-embedding model, and saves one averaged, model-tagged profile. Brand: Menlo,
  * light weights, 8px radius, emerald only on the active action — mirrors the Day recorder pass.
  */
@@ -37,17 +37,11 @@ export function SpeakerEnrollmentScreen(): React.ReactElement {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
-  // The voiceprint (fingerprint) is defined by the active DIARIZATION model, not a separate pick —
-  // enrollment embeds with that model's embedding so a voice matches its diarized turns. We show it
-  // read-only here; it's changed in Models → voice recognition.
+  // The voiceprint is defined by the active DIARIZATION model, not a separate pick — enrollment embeds
+  // with that model's companion embedding so a voice matches its diarized turns. We show the model's
+  // NAME (e.g. "NVIDIA Nemotron 3") read-only here; it's changed in Models → voice recognition.
   const activeDiarModel = useSpeakerModelStore(s => s.activeDiarizationModel)();
-  const fingerprintLabel = /campplus/i.test(activeDiarModel.embeddingUrl)
-    ? 'CAM++'
-    : /eres2net/i.test(activeDiarModel.embeddingUrl)
-      ? 'ERes2Net'
-      : /titanet/i.test(activeDiarModel.embeddingUrl)
-        ? 'TitaNet'
-        : 'Voiceprint';
+  const fingerprintLabel = activeDiarModel.name;
   const enroll = useSpeakerProfilesStore(s => s.enroll);
 
   const [name, setName] = useState('');

@@ -8,7 +8,9 @@ import {
   advanceVad,
   flushVad,
   initialVadState,
+  effectiveThreshold,
   DEFAULT_VAD_CONFIG,
+  DEFAULT_ADAPTIVE_VAD_CONFIG,
   type EnergyFrame,
   type SpeechSegment,
   type VadConfig,
@@ -120,5 +122,55 @@ describe('vadSegmenter', () => {
   it('ships defaults tuned for 16 kHz room speech', () => {
     expect(DEFAULT_VAD_CONFIG.energyThreshold).toBeGreaterThan(0);
     expect(DEFAULT_VAD_CONFIG.minSilenceMs).toBeGreaterThan(DEFAULT_VAD_CONFIG.minSpeechMs);
+  });
+});
+
+describe('vadSegmenter — adaptive noise floor', () => {
+  const ADAPTIVE: VadConfig = {
+    ...CONFIG,
+    adaptive: { marginFactor: 3.5, floorRisePerSec: 1.5, minFloor: 0.005 }
+  };
+
+  it('effectiveThreshold tracks floor × margin (never below minFloor)', () => {
+    const loud: VadState = { ...initialVadState(), noiseFloor: 0.03 };
+    expect(effectiveThreshold(loud, ADAPTIVE)).toBeCloseTo(0.105, 6); // 0.03 × 3.5
+    const quiet: VadState = { ...initialVadState(), noiseFloor: 0.0001 };
+    expect(effectiveThreshold(quiet, ADAPTIVE)).toBe(0.005); // clamped to minFloor
+    // Non-adaptive config ignores the floor and uses the fixed threshold.
+    expect(effectiveThreshold(loud, CONFIG)).toBe(CONFIG.energyThreshold);
+  });
+
+  it('ignores steady café hum that a fixed threshold would mislabel as speech', () => {
+    // Background hum at 0.03 — above the FIXED 0.02 threshold (so fixed mode fires), but the adaptive
+    // floor rises to it so its threshold (0.03×3.5=0.105) leaves it as silence.
+    const hum = frames(Array(20).fill(0.03));
+    expect(run(hum, ADAPTIVE)).toEqual([]);
+    // Prove the contrast: the same hum under the fixed threshold opens a (bogus) segment.
+    expect(run(hum, CONFIG).length).toBeGreaterThan(0);
+  });
+
+  it('detects real speech that rises well above the café floor', () => {
+    // 2s of 0.03 hum, then 600ms of 0.4 speech, then hum again (silence relative to the raised floor).
+    const series = [...Array(20).fill(0.03), ...Array(6).fill(0.4), ...Array(10).fill(0.03)];
+    const segments = run(frames(series), ADAPTIVE);
+    expect(segments).toHaveLength(1);
+    expect(segments[0].startMs).toBe(2000);
+    expect(segments[0].endMs).toBe(2500);
+  });
+
+  it('catches faint speech in a quiet room that a fixed threshold would miss', () => {
+    // Quiet room floor ~0.002; speech at 0.012 is below the fixed 0.02 threshold but above the adaptive
+    // floor-relative one (max(0.005, 0.002×3.5)=0.007).
+    const series = [...Array(10).fill(0.002), ...Array(6).fill(0.012), ...Array(10).fill(0.002)];
+    const segments = run(frames(series), ADAPTIVE);
+    expect(segments).toHaveLength(1);
+    expect(segments[0]).toEqual({ startMs: 1000, endMs: 1500 });
+    // Fixed threshold misses it entirely.
+    expect(run(series.map((rms, i) => ({ tMs: i * 100, rms })), CONFIG)).toEqual([]);
+  });
+
+  it('provides an adaptive preset with the standard timing', () => {
+    expect(DEFAULT_ADAPTIVE_VAD_CONFIG.adaptive?.marginFactor).toBeGreaterThan(1);
+    expect(DEFAULT_ADAPTIVE_VAD_CONFIG.minSilenceMs).toBe(DEFAULT_VAD_CONFIG.minSilenceMs);
   });
 });

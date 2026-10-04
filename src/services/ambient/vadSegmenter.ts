@@ -26,8 +26,24 @@ export interface SpeechSegment {
   endMs: number
 }
 
+/**
+ * Adaptive-threshold config. A FIXED energy threshold either misses quiet speech in a silent room or
+ * fires constantly in a loud café. Instead, track the room's own noise floor with slow-rise/fast-fall
+ * (rising energy is attributed to speech, so the floor creeps up slowly; a genuine lull drops it at
+ * once) and gate on floor × margin. This is the plan's "adaptive noise floor" front-gate win, and it's
+ * cheap — one running number per frame. Off by default; `energyThreshold` remains the fixed fallback.
+ */
+export interface AdaptiveVadConfig {
+  /** Speech when rms >= noiseFloor × this (and >= minFloor). ~3–4 gives clear speech-over-room. */
+  marginFactor: number
+  /** Max fractional RISE of the floor per second (slow — so speech can't inflate it). e.g. 1.5 = +150%/s. */
+  floorRisePerSec: number
+  /** Floor never drops below this absolute RMS, so true silence can't make the gate hair-trigger. */
+  minFloor: number
+}
+
 export interface VadConfig {
-  /** RMS at or above this counts as speech. Below is silence. */
+  /** RMS at or above this counts as speech. Below is silence. Used when `adaptive` is unset. */
   energyThreshold: number
   /** Silence this long (ms) after the last speech frame closes the open segment. */
   minSilenceMs: number
@@ -36,6 +52,8 @@ export interface VadConfig {
   /** A single segment is force-split once it reaches this length (ms), so a long
    *  monologue still yields transcribable chunks instead of one unbounded file. */
   maxSegmentMs: number
+  /** When set, the speech threshold adapts to the tracked noise floor instead of `energyThreshold`. */
+  adaptive?: AdaptiveVadConfig
 }
 
 /** Defaults tuned for room speech at 16 kHz mono. Callers may override per device/mic. */
@@ -46,16 +64,58 @@ export const DEFAULT_VAD_CONFIG: VadConfig = {
   maxSegmentMs: 30_000
 }
 
+/** Adaptive preset — same timing as the default, with a noise-floor-relative threshold. */
+export const DEFAULT_ADAPTIVE_VAD_CONFIG: VadConfig = {
+  ...DEFAULT_VAD_CONFIG,
+  adaptive: { marginFactor: 3.5, floorRisePerSec: 1.5, minFloor: 0.005 }
+}
+
 export interface VadState {
   phase: 'silence' | 'speech'
   /** Start of the open segment (valid only while phase === 'speech'). */
   segmentStartMs: number
   /** Time of the most recent speech frame in the open segment. */
   lastSpeechMs: number
+  /** Tracked noise floor (RMS) for adaptive mode. Absent until the first frame seeds it. */
+  noiseFloor?: number
+  /** Time of the previous frame, to size the floor's rise per elapsed second. */
+  lastFrameMs?: number
 }
 
 export function initialVadState(): VadState {
   return { phase: 'silence', segmentStartMs: 0, lastSpeechMs: 0 }
+}
+
+/**
+ * Effective speech threshold for a frame: the fixed `energyThreshold`, or in adaptive mode the tracked
+ * floor × margin (never below `minFloor`). Pure — exported so callers/tests can inspect the live gate.
+ */
+export function effectiveThreshold(state: VadState, config: VadConfig): number {
+  if (!config.adaptive) return config.energyThreshold
+  const floor = state.noiseFloor ?? config.adaptive.minFloor
+  return Math.max(config.adaptive.minFloor, floor * config.adaptive.marginFactor)
+}
+
+/**
+ * Next noise floor with slow-rise / fast-fall. The floor estimates NON-speech energy, so:
+ *   - it snaps DOWN to any quieter frame at once (a genuine lull re-baselines immediately), and
+ *   - it only creeps UP on non-speech frames (`speaking` false) — a speech burst must never drag the
+ *     floor up to itself, or the threshold would climb and swallow (drop) the very speech it should keep.
+ * Undefined adaptive config → floor unused (fixed mode).
+ */
+function nextNoiseFloor(
+  state: VadState,
+  frame: EnergyFrame,
+  config: VadConfig,
+  speaking: boolean
+): number | undefined {
+  if (!config.adaptive) return undefined
+  const prev = state.noiseFloor ?? frame.rms // seed at the first observed level
+  if (frame.rms < prev) return frame.rms // fast fall — snap to the quieter level
+  if (speaking) return prev // hold: speech energy must not inflate the noise floor
+  const dtSec = state.lastFrameMs != null ? Math.max(0, (frame.tMs - state.lastFrameMs) / 1000) : 0
+  const maxRise = prev * config.adaptive.floorRisePerSec * dtSec
+  return Math.min(frame.rms, prev + maxRise) // slow rise on ambient only, never past the actual level
 }
 
 export interface VadStep {
@@ -66,13 +126,19 @@ export interface VadStep {
 
 /** Advance the machine by one frame. Pure: same (state, frame, config) → same result. */
 export function advanceVad(state: VadState, frame: EnergyFrame, config: VadConfig): VadStep {
-  const speaking = frame.rms >= config.energyThreshold
+  // Decide speech against the CURRENT (pre-update) floor, then advance the floor — so a loud speech
+  // frame is judged against the room, not against itself.
+  const speaking = frame.rms >= effectiveThreshold(state, config)
+  const noiseFloor = nextNoiseFloor(state, frame, config, speaking)
+  // Stamp the adaptive tracking onto whatever state the phase machine returns (incl. a reset to silence).
+  const withFloor = (s: VadState): VadState =>
+    config.adaptive ? { ...s, noiseFloor, lastFrameMs: frame.tMs } : s
 
   if (state.phase === 'silence') {
-    if (!speaking) return { state, segment: null }
+    if (!speaking) return { state: withFloor(state), segment: null }
     // Speech begins.
     return {
-      state: { phase: 'speech', segmentStartMs: frame.tMs, lastSpeechMs: frame.tMs },
+      state: withFloor({ phase: 'speech', segmentStartMs: frame.tMs, lastSpeechMs: frame.tMs }),
       segment: null
     }
   }
@@ -83,19 +149,19 @@ export function advanceVad(state: VadState, frame: EnergyFrame, config: VadConfi
     // Force-split a segment that has run too long, re-opening a new one at this frame.
     if (frame.tMs - state.segmentStartMs >= config.maxSegmentMs) {
       return {
-        state: { phase: 'speech', segmentStartMs: frame.tMs, lastSpeechMs: frame.tMs },
+        state: withFloor({ phase: 'speech', segmentStartMs: frame.tMs, lastSpeechMs: frame.tMs }),
         segment: { startMs: state.segmentStartMs, endMs: frame.tMs }
       }
     }
-    return { state: advanced, segment: null }
+    return { state: withFloor(advanced), segment: null }
   }
 
   // Silent frame while in a segment: close it once the silence gap is long enough.
   if (frame.tMs - state.lastSpeechMs < config.minSilenceMs) {
-    return { state, segment: null }
+    return { state: withFloor(state), segment: null }
   }
   const closed = closeSegment(state, config)
-  return { state: initialVadState(), segment: closed }
+  return { state: withFloor(initialVadState()), segment: closed }
 }
 
 /** Close any open segment at end-of-stream (e.g. recording stopped). */

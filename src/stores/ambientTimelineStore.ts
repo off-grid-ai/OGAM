@@ -12,7 +12,7 @@ import { Platform } from 'react-native'
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type { TimelineSession } from '../services/ambient/timelineModel'
+import type { TimelineSession, SessionRelevance } from '../services/ambient/timelineModel'
 import type { ProactiveActionProposal } from '@offgrid/models'
 import type { ProcessingMode, CaptureMode, PendingCapture } from '../services/ambient/processingModel'
 import { DEFAULT_PROCESSING_MODE, DEFAULT_CAPTURE_MODE } from '../services/ambient/processingModel'
@@ -28,10 +28,24 @@ import {
 import { useSyncIdentityStore } from './syncIdentityStore'
 import type { AmbientWireState } from '@offgrid/sync'
 
+/** A to-do synced FROM a peer that carries its own text and has no local recorder session — e.g. a
+ *  desktop CRM to-do (id `crm:<n>`, source 'desktop'). Keyed by its sync id. The phone displays these
+ *  alongside its own recorder to-dos and can toggle them (write-back). */
+export interface StandaloneTodo {
+  text: string
+  done: boolean
+  source: string | null
+  /** Optional provenance blurb from the authoring device (e.g. a desktop CRM to-do's source), shown
+   *  when the to-do is expanded on this device. */
+  detail?: string | null
+}
+
 interface AmbientTimelineState {
   sessions: TimelineSession[]
   /** Day-view tasks the user has checked off (day-task ids). */
   doneTaskIds: string[]
+  /** Peer-authored, text-bearing to-dos (no local session), keyed by sync id. */
+  standaloneTodos: Record<string, StandaloneTodo>
   /** The generated journal narrative per day key ('YYYY-MM-DD'), cached so it is written once. */
   journalByDay: Record<string, string>
   /** Proposed actions per day, cached; resolving one (approve/dismiss) removes it. */
@@ -67,10 +81,25 @@ interface AmbientTimelineState {
   setOnDeviceOnly: (value: boolean) => void
   setUseMacForTranscription: (value: boolean) => void
   toggleTask: (id: string) => void
+  /** Tick / untick a peer-authored standalone to-do; writes back as an ambient_todo op (keeps text). */
+  toggleStandaloneTodo: (id: string) => void
+  /** Correct an extracted to-do's text (edits the source conversation's action item). */
+  editTaskText: (sessionId: string, index: number, text: string) => void
+  /** Delete an extracted to-do (removes it from the source conversation's action items). */
+  deleteTask: (sessionId: string, index: number) => void
   /** Label a segment with an identified/assigned speaker (voice fingerprinting). */
   setSegmentSpeaker: (sessionId: string, segmentId: string, speakerId: string | null, speakerName: string | null) => void
   /** Relabel every segment currently under one speaker/cluster id at once (assign a whole speaker). */
   relabelSpeaker: (sessionId: string, fromSpeakerId: string | null, toSpeakerId: string | null, toName: string | null) => void
+  /** Record the relevance verdict for a conversation (owner-in vs ambient/overheard). */
+  setSessionRelevance: (sessionId: string, relevance: SessionRelevance) => void
+  /**
+   * Include or exclude a conversation from the Day (the user's manual select/deselect). `override` of
+   * true/false pins it; null clears the override (follow relevance again). Clears that day's stitched
+   * journal + actions cache so they regenerate over the new included set — the to-do list is a pure
+   * projection and updates on its own.
+   */
+  setSessionInclusion: (sessionId: string, override: boolean | null, dayKey?: string) => void
   setDayJournal: (dayKey: string, text: string) => void
   setDayActions: (dayKey: string, proposals: ProactiveActionProposal[]) => void
   resolveDayAction: (dayKey: string, index: number) => void
@@ -90,6 +119,8 @@ interface AmbientTimelineState {
   applySessionSynced: (session: TimelineSession) => void
   removeSessionSynced: (id: string) => void
   applyTodoSynced: (dayTaskId: string, done: boolean) => void
+  /** Inbound: a peer's standalone (text-bearing) to-do landed — store it so the Day can render it. */
+  applyStandaloneTodoSynced: (id: string, todo: StandaloneTodo) => void
   removeTodoSynced: (dayTaskId: string) => void
   applyJournalSynced: (dayKey: string, text: string) => void
   removeJournalSynced: (dayKey: string) => void
@@ -114,14 +145,44 @@ export function toggleId(list: string[], id: string): string[] {
   return list.includes(id) ? list.filter(x => x !== id) : [...list, id]
 }
 
+/**
+ * Done-task ids are `${sessionId}#${index}` into a conversation's action list. When one action item is
+ * deleted, every later index shifts down by one — so drop the deleted id and renumber the ones after it,
+ * leaving other sessions' ids untouched. Keeps checked state aligned with the trimmed list.
+ */
+export function remapDoneAfterDelete(ids: string[], sessionId: string, index: number): string[] {
+  const prefix = `${sessionId}#`
+  const out: string[] = []
+  for (const id of ids) {
+    if (!id.startsWith(prefix)) {
+      out.push(id)
+      continue
+    }
+    const i = Number(id.slice(prefix.length))
+    if (!Number.isInteger(i) || i === index) continue // drop the deleted one (and any malformed id)
+    out.push(i > index ? `${prefix}${i - 1}` : id)
+  }
+  return out
+}
+
 /** This device's sync identity for stamping writes; 'local' until pairing establishes one. */
 const localStampId = (): string => useSyncIdentityStore.getState().localDeviceId ?? 'local'
+
+/**
+ * Standalone to-dos THIS device actually toggled — so the wire state re-emits only our own edits, never
+ * a mere echo of a to-do we received from the authoring device (e.g. a desktop CRM to-do). Without this,
+ * every received standalone to-do would be re-put with a fresh Lamport, making this device wrongly "win"
+ * last-writer over the author and, in a race, revert the author's change. Module-scoped (not persisted):
+ * after a restart nothing is pending re-emit, which is correct — any toggle was already synced.
+ */
+const locallyToggledStandalone = new Set<string>()
 
 export const useAmbientTimelineStore = create<AmbientTimelineState>()(
   persist(
     (set, get) => ({
       sessions: [],
       doneTaskIds: [],
+      standaloneTodos: {},
       journalByDay: {},
       actionsByDay: {},
       onDeviceOnly: false,
@@ -147,7 +208,8 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
           }
         }),
       removeSession: id => set(state => ({ sessions: state.sessions.filter(s => s.id !== id) })),
-      clearAll: () => set({ sessions: [], doneTaskIds: [], journalByDay: {}, actionsByDay: {} }),
+      clearAll: () =>
+        set({ sessions: [], doneTaskIds: [], standaloneTodos: {}, journalByDay: {}, actionsByDay: {} }),
       setOnDeviceOnly: value => set({ onDeviceOnly: value }),
       setUseMacForTranscription: value => set({ useMacForTranscription: value }),
       toggleTask: id =>
@@ -156,6 +218,56 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
           syncStamps: {
             ...state.syncStamps,
             done: { ...state.syncStamps.done, [id]: { at: Date.now(), by: localStampId() } }
+          }
+        })),
+      toggleStandaloneTodo: id =>
+        set(state => {
+          const cur = state.standaloneTodos[id]
+          if (!cur) return {}
+          // Mark as locally edited so the wire state will carry this toggle back to the author; then flip
+          // done in place, keeping text/source/detail (a sessionless to-do has no session to rebuild from).
+          locallyToggledStandalone.add(id)
+          return { standaloneTodos: { ...state.standaloneTodos, [id]: { ...cur, done: !cur.done } } }
+        }),
+      editTaskText: (sessionId, index, text) =>
+        set(state => ({
+          sessions: state.sessions.map(s =>
+            s.id !== sessionId
+              ? s
+              : {
+                  ...s,
+                  summary: {
+                    ...s.summary,
+                    actionItems: s.summary.actionItems.map((t, i) => (i === index ? text : t))
+                  }
+                }
+          ),
+          // Bump the session's sync stamp so the edit wins last-writer and propagates to paired devices
+          // (otherwise a re-sync from the Mac would overwrite it).
+          syncStamps: {
+            ...state.syncStamps,
+            sessions: { ...state.syncStamps.sessions, [sessionId]: { at: Date.now(), by: localStampId() } }
+          }
+        })),
+      deleteTask: (sessionId, index) =>
+        set(state => ({
+          sessions: state.sessions.map(s =>
+            s.id !== sessionId
+              ? s
+              : {
+                  ...s,
+                  summary: {
+                    ...s.summary,
+                    actionItems: s.summary.actionItems.filter((_, i) => i !== index)
+                  }
+                }
+          ),
+          // Action-item indices shift after a delete; remap the done-task ids so done state follows.
+          doneTaskIds: remapDoneAfterDelete(state.doneTaskIds, sessionId, index),
+          // Stamp the session so the deletion syncs (and isn't reverted by the Mac's copy).
+          syncStamps: {
+            ...state.syncStamps,
+            sessions: { ...state.syncStamps.sessions, [sessionId]: { at: Date.now(), by: localStampId() } }
           }
         })),
       setSegmentSpeaker: (sessionId, segmentId, speakerId, speakerName) =>
@@ -186,6 +298,31 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
                 }
           )
         })),
+      setSessionRelevance: (sessionId, relevance) =>
+        set(state => ({
+          sessions: state.sessions.map(session =>
+            session.id !== sessionId ? session : { ...session, relevance }
+          )
+        })),
+      setSessionInclusion: (sessionId, override, dayKey) =>
+        set(state => {
+          const journalByDay = { ...state.journalByDay }
+          const actionsByDay = { ...state.actionsByDay }
+          // Drop the day's aggregate artifacts so they re-generate over the new included set.
+          if (dayKey) {
+            delete journalByDay[dayKey]
+            delete actionsByDay[dayKey]
+          }
+          return {
+            journalByDay,
+            actionsByDay,
+            sessions: state.sessions.map(session =>
+              session.id !== sessionId
+                ? session
+                : { ...session, userOverride: override === null ? undefined : override }
+            )
+          }
+        }),
       setDayJournal: (dayKey, text) =>
         set(state => ({
           journalByDay: { ...state.journalByDay, [dayKey]: text },
@@ -251,8 +388,18 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
             ? Array.from(new Set([...state.doneTaskIds, dayTaskId]))
             : state.doneTaskIds.filter(x => x !== dayTaskId)
         })),
+      applyStandaloneTodoSynced: (id, todo) =>
+        set(state => ({ standaloneTodos: { ...state.standaloneTodos, [id]: todo } })),
       removeTodoSynced: dayTaskId =>
-        set(state => ({ doneTaskIds: state.doneTaskIds.filter(x => x !== dayTaskId) })),
+        set(state => {
+          const standaloneTodos = { ...state.standaloneTodos }
+          delete standaloneTodos[dayTaskId]
+          locallyToggledStandalone.delete(dayTaskId)
+          return {
+            doneTaskIds: state.doneTaskIds.filter(x => x !== dayTaskId),
+            standaloneTodos
+          }
+        }),
       applyJournalSynced: (dayKey, text) =>
         set(state => ({ journalByDay: { ...state.journalByDay, [dayKey]: text } })),
       removeJournalSynced: dayKey =>
@@ -273,10 +420,24 @@ export const useAmbientTimelineStore = create<AmbientTimelineState>()(
         const s = get()
         const sessions: Record<string, string> = {}
         for (const sess of s.sessions) sessions[sess.id] = JSON.stringify(sess)
-        const todos: Record<string, { sessionId: string; done: boolean }> = {}
+        const todos: AmbientWireState['todos'] = {}
         for (const id of s.doneTaskIds) {
           const hash = id.lastIndexOf('#')
           todos[id] = { sessionId: hash > 0 ? id.slice(0, hash) : id, done: true }
+        }
+        // Standalone (peer-authored) to-dos ride the wire with their own text + source + detail. Only emit
+        // the ones THIS device toggled — never a plain echo of a received to-do, which would re-stamp a
+        // fresh Lamport and let this device wrongly override the author. A locally-toggled one emits its
+        // done either way (unlike recorder to-dos, which only appear here when done).
+        for (const [id, t] of Object.entries(s.standaloneTodos)) {
+          if (!locallyToggledStandalone.has(id)) continue
+          todos[id] = {
+            sessionId: '',
+            done: t.done,
+            text: t.text,
+            source: t.source ?? undefined,
+            detail: t.detail ?? undefined
+          }
         }
         const journal = { ...s.journalByDay }
         const actions: Record<string, string> = {}

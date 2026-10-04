@@ -82,4 +82,21 @@ describe('assignSpeakersToSegments', () => {
     const out = assignSpeakersToSegments(segs, turns, names)
     expect(out[0]).toEqual({ segmentId: 's1', speakerId: null, speakerName: null })
   })
+
+  // Regression: timeline segments are stamped ABSOLUTE (captureStartedAtMs + offset) while a diarizer
+  // runs on the 0-based recording and returns recording-relative turns. If the caller forgets to align
+  // the two time bases, overlap is always zero and even a perfect voiceprint match reads "Unknown".
+  it('needs turns aligned to the segments’ absolute time base to overlap at all', () => {
+    const captureStartedAtMs = 1_759_000_000_000
+    const absSegs = [{ id: 's1', startMs: captureStartedAtMs + 200, endMs: captureStartedAtMs + 900 }]
+
+    // Unaligned recording-relative turns (the bug): no overlap → null.
+    const bug = assignSpeakersToSegments(absSegs, turns, names)
+    expect(bug[0]).toEqual({ segmentId: 's1', speakerId: null, speakerName: null })
+
+    // Aligned (turn.startMs + captureStartedAtMs): the named cluster lands on the segment.
+    const shifted = turns.map(t => ({ ...t, startMs: t.startMs + captureStartedAtMs, endMs: t.endMs + captureStartedAtMs }))
+    const fixed = assignSpeakersToSegments(absSegs, shifted, names)
+    expect(fixed[0].speakerName).toBe('Sidd')
+  })
 })

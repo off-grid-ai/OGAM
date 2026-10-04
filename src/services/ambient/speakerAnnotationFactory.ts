@@ -12,12 +12,85 @@ import { extractWavSegment } from '../wavSlicer'
 import { annotateSessions, type AnnotatableSession } from './speakerAnnotation'
 import { dispatchDiarize } from './speakerDiarizer'
 import { nameClusters, assignSpeakersToSegments } from './diarizationModel'
+import { assessConversation } from './conversationRelevance'
+import { meanNearField } from '@offgrid/models'
 import { resolveSpeakerEngine } from './speakerEngineFactory'
 import { useSpeakerProfilesStore } from '../../stores/speakerProfilesStore'
 import { useSpeakerModelStore } from '../../stores/speakerModelStore'
 import { useAmbientTimelineStore } from '../../stores/ambientTimelineStore'
 import { useAppStore } from '../../stores/appStore'
 import { selectVoiceRecognitionUnlocked } from '../../stores/proAccessSlice'
+import type { TimelineSegment, SessionRelevance } from './timelineModel'
+import type { SpeakerAnnotation } from './timelineBuilder'
+
+/**
+ * A per-conversation speaker annotator, resolved ONCE per capture (engine + profiles + owner), that the
+ * timeline builder calls between transcription and summary. Diarizes one recording, names the clusters
+ * against enrolled voiceprints, labels the conversation's segments, and computes the relevance verdict —
+ * WITHOUT touching the store (the builder folds the result into the session it's constructing).
+ *
+ * Relevance here uses only near-field + owner participation; importance (from the summary) isn't
+ * available yet at this point in the pipeline, so it's left out of the gate — the conservative stance
+ * (owner-present ⇒ keep) carries it. Returns null when voice recognition is off or no diarizer is ready.
+ */
+export function createSpeakerAnnotator():
+  | { annotate: (input: { id: string; recordingPath: string; captureStartedAtMs: number; segments: TimelineSegment[] }) => Promise<SpeakerAnnotation | null> }
+  | null {
+  if (!selectVoiceRecognitionUnlocked(useAppStore.getState())) return null
+  const engine = resolveSpeakerEngine()
+  if (!engine.diarizer) return null
+  const diarizer = engine.diarizer
+
+  let profilesReady = false
+  const ensureReady = async () => {
+    if (profilesReady) return
+    profilesReady = true
+    try {
+      await ensureEngineProfiles(engine)
+    } catch {
+      // best-effort — never block labelling
+    }
+  }
+
+  return {
+    annotate: async input => {
+      if (!input.recordingPath) return null
+      await ensureReady()
+      const profilesStore = useSpeakerProfilesStore.getState()
+      const profiles = profilesStore.profilesForModel(engine.modelId)
+      const threshold = useSpeakerModelStore.getState().matchThreshold
+
+      const result = await dispatchDiarize(input.recordingPath, { phone: diarizer })
+      if (!result) return null
+
+      // Turns are recording-relative; segment times are absolute → shift before overlap (the time-base fix).
+      const offset = input.captureStartedAtMs ?? 0
+      const shiftedTurns = result.turns.map(t => ({ ...t, startMs: t.startMs + offset, endMs: t.endMs + offset }))
+      const names = nameClusters(result.turns, profiles, threshold)
+      const labels = assignSpeakersToSegments(input.segments, shiftedTurns, names)
+      const byId = new Map(labels.map(l => [l.segmentId, l]))
+      const segments = input.segments.map(seg => {
+        const l = byId.get(seg.id)
+        return l ? { ...seg, speakerId: l.speakerId, speakerName: l.speakerName } : seg
+      })
+
+      // Relevance from near-field + participation (no summary yet → importance excluded from the gate).
+      let relevance: SessionRelevance | null = null
+      const ownerSpeakerId = profilesStore.ownerSpeakerId(engine.modelId)
+      if (ownerSpeakerId) {
+        const nearField = meanNearField(
+          result.turns.map(t => t.nearField).filter((n): n is number => typeof n === 'number')
+        )
+        const verdict = assessConversation(
+          { turns: result.turns, names, ownerSpeakerId, nearField },
+          { stance: 'conservative' }
+        )
+        relevance = { ambient: !verdict.keep, score: verdict.score, reason: verdict.reason }
+      }
+      return { segments, relevance }
+    }
+  }
+}
 
 const DIR = `${RNFS.CachesDirectoryPath}/ambient-voiceprint`
 
@@ -84,9 +157,45 @@ export async function annotateSessionsWithSpeakers(sessions: AnnotatableSession[
       try {
         const result = await dispatchDiarize(session.recordingPath, { phone: engine.diarizer })
         if (!result) continue
+        // Segment times are ABSOLUTE (captureStartedAtMs + offset); the diarizer ran on the 0-based
+        // recording, so its turns are recording-relative. Shift turns into the segments' base or the
+        // overlap is always zero and every segment reads "Unknown" even on a perfect voiceprint match.
+        const offset = session.captureStartedAtMs ?? 0
+        const shiftedTurns = result.turns.map(t => ({
+          ...t,
+          startMs: t.startMs + offset,
+          endMs: t.endMs + offset
+        }))
         const names = nameClusters(result.turns, profiles, threshold)
-        for (const label of assignSpeakersToSegments(session.segments, result.turns, names)) {
+        for (const label of assignSpeakersToSegments(session.segments, shiftedTurns, names)) {
           timeline.setSegmentSpeaker(session.id, label.segmentId, label.speakerId, label.speakerName)
+        }
+        // Relevance gate: is this a conversation the owner is actually in, or overheard/ambient? Only
+        // meaningful once the owner is enrolled (else we can't tell) — conservative stance keeps
+        // everything the owner took part in, demotes only clear absent-owner talk to the Ambient bucket.
+        // near-field is null until Phase-3 adaptive VAD; the scorer excludes it and leans on the rest.
+        const profilesStore = useSpeakerProfilesStore.getState()
+        const ownerSpeakerId = profilesStore.ownerSpeakerId(engine.modelId)
+        if (ownerSpeakerId) {
+          const transcript = session.segments.map(s => s.transcript).filter(Boolean).join(' ')
+          // The owner's display name lets importance-from-summary notice them in the participant list.
+          const ownerName = Object.values(profilesStore.profiles).find(
+            p => p.personId === profilesStore.ownerPersonId
+          )?.name
+          // Near-field: mean of the per-turn scores the engine supplied (Mac offload). Absent on engines
+          // that don't compute it → meanNearField is null → relevance excludes the factor (graceful).
+          const nearField = meanNearField(
+            result.turns.map(t => t.nearField).filter((n): n is number => typeof n === 'number')
+          )
+          const verdict = assessConversation(
+            { turns: result.turns, names, ownerSpeakerId, transcript, summary: session.summary, ownerName, nearField },
+            { stance: 'conservative' }
+          )
+          timeline.setSessionRelevance(session.id, {
+            ambient: !verdict.keep,
+            score: verdict.score,
+            reason: verdict.reason
+          })
         }
         diarizedAny = true
       } catch {

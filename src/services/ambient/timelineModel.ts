@@ -23,6 +23,20 @@ export interface TimelineSegment {
   speakerName?: string | null
 }
 
+/**
+ * Relevance verdict for a conversation — is this one the OWNER is actually in, or overheard/ambient
+ * (traffic, a TV, the baristas across the counter). Set by the relevance gate after diarization; absent
+ * means "not assessed" (older records, owner not enrolled, or the gate didn't run) → treated as kept.
+ */
+export interface SessionRelevance {
+  /** true → demoted to the Ambient bucket: kept + searchable, but out of journal/to-dos and the main Day. */
+  ambient: boolean
+  /** Combined relevance score in [0,1]. */
+  score: number
+  /** Human-readable explanation of the verdict, for a "why is this ambient?" affordance. */
+  reason: string
+}
+
 export interface TimelineSession {
   id: string
   /** Absolute epoch ms. */
@@ -40,6 +54,33 @@ export interface TimelineSession {
   /** Epoch ms the capture started, so a segment's offset within the file = its time - this. */
   captureStartedAtMs?: number
   segments: TimelineSegment[]
+  /** Relevance verdict (owner-in vs ambient/overheard). Absent = not assessed → treated as kept. */
+  relevance?: SessionRelevance
+  /**
+   * The user's explicit include/exclude override for this conversation. Wins over `relevance`: a Day is
+   * a projection over INCLUDED conversations, so toggling this adds/removes the conversation and — since
+   * to-dos/journal/actions are derived from the included set — cascades to everything derived from it.
+   * Absent = follow the relevance verdict.
+   */
+  userOverride?: boolean
+  /** Per-conversation journal snippet — the source of truth the day's stitched narrative is built from. */
+  journalSnippet?: string
+}
+
+/** A session counts as ambient only when the relevance gate said so — absent verdict = a normal one. */
+export function isAmbientSession(session: TimelineSession): boolean {
+  return session.relevance?.ambient === true
+}
+
+/**
+ * Is this conversation part of the Day? The user's explicit override wins; otherwise it follows
+ * relevance (ambient → excluded, everything else → included). This single predicate drives the whole
+ * projection: the day's to-dos, journal, and actions are computed from the sessions it returns true for,
+ * so include/exclude (manual or from relevance) automatically adds or removes their derived items.
+ */
+export function isIncludedSession(session: TimelineSession): boolean {
+  if (typeof session.userOverride === 'boolean') return session.userOverride
+  return !isAmbientSession(session)
 }
 
 export interface DayGroup {

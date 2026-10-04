@@ -18,8 +18,13 @@ export interface DayTask {
   text: string
   sessionId: string
   sessionTitle: string
+  /** One-line summary of the conversation this came from — shown when the task is expanded. */
+  sessionHeadline?: string
   sessionStartMs: number
   done: boolean
+  /** Set for a peer-authored standalone to-do (no local session): its origin tag, e.g. 'desktop'.
+   *  Undefined for a recorder to-do. The Day UI uses it to route toggle + hide edit/delete. */
+  standaloneSource?: string | null
 }
 
 /** `sessionId#index` - stable as long as a conversation's action list is stable. */
@@ -35,7 +40,9 @@ export function collectDayTasks(
   sessions: TimelineSession[],
   doneIds: ReadonlySet<string> = new Set()
 ): DayTask[] {
-  const ordered = [...sessions].sort((a, b) => a.startMs - b.startMs)
+  // Newest conversation first, matching the desktop Day — the most recent tasks sit at the top of the
+  // list. Action items keep their in-conversation order within each session.
+  const ordered = [...sessions].sort((a, b) => b.startMs - a.startMs)
   const tasks: DayTask[] = []
   for (const session of ordered) {
     session.summary.actionItems.forEach((text, index) => {
@@ -45,12 +52,41 @@ export function collectDayTasks(
         text,
         sessionId: session.id,
         sessionTitle: session.summary.title,
+        sessionHeadline: session.summary.headline,
         sessionStartMs: session.startMs,
         done: doneIds.has(id)
       })
     })
   }
   return tasks
+}
+
+/**
+ * Peer-authored standalone to-dos (e.g. desktop CRM to-dos) as checkable tasks. They have no local
+ * session, so they carry no title/start and sort by id for a stable order. The Day view shows these
+ * above the day's recorder tasks (they belong to "now", not a recorded conversation).
+ */
+export function collectStandaloneTasks(
+  standaloneTodos: Record<
+    string,
+    { text: string; done: boolean; source: string | null; detail?: string | null }
+  >
+): DayTask[] {
+  // Newest first (higher crm:<id> = more recently created), matching the day's newest-first ordering.
+  // The authoring device's provenance blurb (`detail`) rides in `sessionHeadline` so the same expand
+  // path that cites a recorder session also cites a desktop to-do's origin.
+  return Object.entries(standaloneTodos)
+    .sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0))
+    .map(([id, t]) => ({
+      id,
+      text: t.text,
+      sessionId: '',
+      sessionTitle: '',
+      sessionHeadline: t.detail ?? undefined,
+      sessionStartMs: 0,
+      done: t.done,
+      standaloneSource: t.source ?? 'peer'
+    }))
 }
 
 /** Count of tasks still to do - the number the Day view header shows. */

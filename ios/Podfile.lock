@@ -42,6 +42,36 @@ PODS:
   - MMKV (2.4.0):
     - MMKVCore (~> 2.4.0)
   - MMKVCore (2.4.0)
+  - onnxruntime-c (1.30.0)
+  - onnxruntime-react-native (1.24.3):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - onnxruntime-c
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - op-sqlite (15.2.5):
     - boost
     - DoubleConversion
@@ -3507,6 +3537,7 @@ DEPENDENCIES:
   - glog (from `../node_modules/react-native/third-party-podspecs/glog.podspec`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
   - llama-rn (from `../node_modules/llama.rn`)
+  - onnxruntime-react-native (from `../node_modules/onnxruntime-react-native`)
   - "op-sqlite (from `../node_modules/@op-engineering/op-sqlite`)"
   - RCT-Folly (from `../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
@@ -3616,6 +3647,7 @@ SPEC REPOS:
     - CocoaAsyncSocket
     - MMKV
     - MMKVCore
+    - onnxruntime-c
     - opencv-rne
     - SocketRocket
     - SSZipArchive
@@ -3638,6 +3670,8 @@ EXTERNAL SOURCES:
     :tag: hermes-v0.14.0
   llama-rn:
     :path: "../node_modules/llama.rn"
+  onnxruntime-react-native:
+    :path: "../node_modules/onnxruntime-react-native"
   op-sqlite:
     :path: "../node_modules/@op-engineering/op-sqlite"
   RCT-Folly:
@@ -3853,6 +3887,8 @@ SPEC CHECKSUMS:
   llama-rn: 889d119bdf886e4ffd8982fc6e4ee04e793c3a31
   MMKV: 86859fdfa2b0b21db1fd6e48788474a6416a2c77
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
+  onnxruntime-c: 36ca0f2cdbc89c6b330ec5287c3faf5ca6ed394d
+  onnxruntime-react-native: c5bc754d2502418bd52dab3a4fcc59bb33ee9737
   op-sqlite: bafff369cecaee4fe65c89eec47deaba26f2db95
   opencv-rne: 2305807573b6e29c8c87e3416ab096d09047a7a0
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669

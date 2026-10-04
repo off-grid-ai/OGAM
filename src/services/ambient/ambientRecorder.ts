@@ -13,9 +13,9 @@
 
 import {
   advanceVad,
+  DEFAULT_ADAPTIVE_VAD_CONFIG,
   flushVad,
   initialVadState,
-  DEFAULT_VAD_CONFIG,
   type SpeechSegment,
   type VadConfig,
   type VadState
@@ -70,7 +70,10 @@ export class AmbientRecorder {
   private sampleRate = 16000
 
   constructor(private readonly deps: AmbientRecorderDeps) {
-    this.config = deps.config ?? DEFAULT_VAD_CONFIG
+    // Default to the ADAPTIVE gate: the front gate now tracks the room's own noise floor, so a loud
+    // café doesn't fire constantly and a quiet room doesn't miss faint speech. Callers may still pin a
+    // fixed VadConfig. (Silero VAD v6 is the planned upgrade to the base speech/no-speech decision.)
+    this.config = deps.config ?? DEFAULT_ADAPTIVE_VAD_CONFIG
   }
 
   phaseNow(): AmbientPhase {

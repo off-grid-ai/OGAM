@@ -17,6 +17,7 @@ import { createExecutorchSpeakerEmbedder } from './executorchSpeakerEmbedderFact
 import { createMacSpeakerEmbedder } from './macSpeakerEmbedderFactory'
 import { createMacDiarizer } from './macDiarizerFactory'
 import { createSherpaDiarizer } from './sherpaDiarizerFactory'
+import { createNemotronDiarizer } from './nemotronDiarizerFactory'
 import { createSherpaSpeakerEmbedder } from './sherpaEmbedderFactory'
 import type { SpeakerEmbedder } from './speakerEmbedder'
 import type { Diarizer } from './speakerDiarizer'
@@ -52,14 +53,14 @@ function fingerprintKey(model: DiarizationModel): string {
 }
 
 /**
- * A phone-capable diarization model sharing `model`'s voiceprint space, for the on-device fallback when
- * the selected model can't run on the phone (desktop-only Nemotron with the Mac unreachable). Prefers a
- * mobile model with the same embedding; otherwise the default sherpa bundle.
+ * The on-device SHERPA bundle to use for the embedder and the fallback diarizer — always a real
+ * sherpa-onnx mobile model (pyannote seg + the matching embedding), never a nemotron-runtime model
+ * (which has no sherpa segmentation). Picks the sherpa bundle sharing `model`'s embedding so the
+ * voiceprint space matches whether Nemotron or sherpa ends up running; else the default bundle.
  */
-function onDeviceFallback(model: DiarizationModel): DiarizationModel {
-  if (model.tiers.includes('mobile')) return model
+function sherpaBundleFor(model: DiarizationModel): DiarizationModel {
   const shared = DIARIZATION_MODELS.find(
-    m => m.tiers.includes('mobile') && m.embeddingUrl === model.embeddingUrl,
+    m => m.runtime === 'sherpa-onnx' && m.tiers.includes('mobile') && m.embeddingUrl === model.embeddingUrl,
   )
   return shared ?? resolveDiarizationModel(DEFAULT_DIARIZATION_MODEL_ID)
 }
@@ -75,12 +76,31 @@ export function resolveSpeakerEngine(): SpeakerEngine {
   if (macEmbedder) {
     return { modelId, embedder: macEmbedder, diarizer: createMacDiarizer(diarModel) }
   }
-  // On-device sherpa-onnx — fall back to a phone-capable model in the SAME space if the selected one is
-  // desktop-only (Nemotron). Same space id as the Mac path so enrollment carries over.
-  const onDevice = onDeviceFallback(diarModel)
-  const sherpaEmbedder = createSherpaSpeakerEmbedder(onDevice)
+  // On-device. The embedder + fallback diarizer are always a real sherpa bundle in the SAME voiceprint
+  // space (so enrollment carries over), and when Nemotron is selected AND onnxruntime is linked we run
+  // it on-device, falling back to sherpa if the model isn't downloaded yet.
+  const bundle = sherpaBundleFor(diarModel)
+  const sherpaEmbedder = createSherpaSpeakerEmbedder(bundle)
   if (sherpaEmbedder) {
-    return { modelId, embedder: sherpaEmbedder, diarizer: createSherpaDiarizer(onDevice) }
+    const sherpaDiarizer = createSherpaDiarizer(bundle)
+    const nemotron =
+      diarModel.runtime === 'nemotron-onnx'
+        ? createNemotronDiarizer(diarModel, sherpaEmbedder)
+        : null
+    const diarizer: Diarizer | null = nemotron
+      ? {
+          diarize: async recordingPath => {
+            try {
+              return await nemotron.diarize(recordingPath)
+            } catch {
+              // Not downloaded / runtime hiccup → the sherpa bundle still diarizes on-device.
+              if (sherpaDiarizer) return sherpaDiarizer.diarize(recordingPath)
+              throw new Error('on-device diarization unavailable')
+            }
+          },
+        }
+      : sherpaDiarizer
+    return { modelId, embedder: sherpaEmbedder, diarizer }
   }
   // Last resort: ExecuTorch (.pte) embedder for the selected catalog model (no on-device diarizer).
   const model = useSpeakerModelStore.getState().activeModel()

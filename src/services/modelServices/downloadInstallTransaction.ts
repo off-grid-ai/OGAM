@@ -103,13 +103,13 @@ function validEngineFields(model: Record<string, unknown>): boolean {
   return false;
 }
 
-function validDownloadedModel(value: unknown): value is DownloadedModel {
+export function validDownloadedModel(value: unknown): value is DownloadedModel {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const model = value as Record<string, unknown>;
   return validDownloadedModelBase(model) && validEngineFields(model);
 }
 
-function validImageModel(value: unknown): value is ONNXImageModel {
+export function validImageModel(value: unknown): value is ONNXImageModel {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const model = value as Record<string, unknown>;
   return shortString(model.id) && shortString(model.name) && typeof model.description === 'string'
@@ -123,7 +123,18 @@ function validImageModel(value: unknown): value is ONNXImageModel {
       || model.attentionVariant === 'original');
 }
 
-export function parseInstallRecoveryState(value: string): InstallRecoveryState {
+/**
+ * `trustModels`: when the state was just built from THIS app's own downloaded-models list (the
+ * transaction's own self-check), the prior-model snapshot is trusted local data — validate it
+ * structurally (array + bounded length + no dup ids) but don't reject the whole install because one
+ * already-installed model has an incomplete/legacy record. On the RECOVER path the state is untrusted
+ * persisted input, so it stays fully strict (rejects hostile path-traversal records wholesale). The
+ * file MOVES are always validated strictly — that's the security-critical part.
+ */
+export function parseInstallRecoveryState(
+  value: string,
+  opts: { trustModels?: boolean } = {},
+): InstallRecoveryState {
   if (value.length > MAX_RECOVERY_BYTES) throw new Error('The model install recovery state is too large.');
   const parsed = JSON.parse(value) as Partial<InstallRecoveryState>;
   if (parsed.version !== 1 || !Array.isArray(parsed.moves) || parsed.moves.length > MAX_MOVES
@@ -138,7 +149,7 @@ export function parseInstallRecoveryState(value: string): InstallRecoveryState {
   if (parsed.priorTextModels !== undefined && (
     !Array.isArray(parsed.priorTextModels)
     || parsed.priorTextModels.length > MAX_MODELS
-    || !parsed.priorTextModels.every(validDownloadedModel)
+    || (!opts.trustModels && !parsed.priorTextModels.every(validDownloadedModel))
   )) throw new Error('The model install recovery state has invalid model records.');
   const modelIds = parsed.priorTextModels?.map(model => model.id) ?? [];
   if (new Set(modelIds).size !== modelIds.length) {
@@ -147,7 +158,7 @@ export function parseInstallRecoveryState(value: string): InstallRecoveryState {
   if (parsed.priorImageModels !== undefined && (
     !Array.isArray(parsed.priorImageModels)
     || parsed.priorImageModels.length > MAX_MODELS
-    || !parsed.priorImageModels.every(validImageModel)
+    || (!opts.trustModels && !parsed.priorImageModels.every(validImageModel))
   )) throw new Error('The model install recovery state has invalid image records.');
   const imageIds = parsed.priorImageModels?.map(model => model.id) ?? [];
   if (new Set(imageIds).size !== imageIds.length) {
@@ -166,7 +177,10 @@ export class DownloadInstallTransaction {
     private readonly restoreImageRegistry?: (models: readonly ONNXImageModel[]) => Promise<void>,
   ) {
     this.recoveryState = JSON.stringify(state);
-    parseInstallRecoveryState(this.recoveryState);
+    // Self-check the state we just built from our OWN models list: validate structure + moves strictly,
+    // but trust the prior-model snapshot so one already-installed legacy/incomplete record can't wedge
+    // the install. The recover path (untrusted persisted input) parses without trustModels — fully strict.
+    parseInstallRecoveryState(this.recoveryState, { trustModels: true });
   }
 
   async move(index: number): Promise<void> {

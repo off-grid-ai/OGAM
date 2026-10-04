@@ -9,6 +9,7 @@
  * the user to correct (Phase 5).
  */
 import { matchSpeaker, DEFAULT_MATCH_THRESHOLD, type SpeakerEmbedding, type SpeakerProfile } from './speakerModel'
+import type { AmbientSummary } from './summaryPrompt'
 
 export interface AnnotatableSegment {
   id: string
@@ -22,6 +23,14 @@ export interface AnnotatableSession {
   id: string
   recordingPath?: string
   segments: AnnotatableSegment[]
+  /**
+   * Epoch ms the capture started. Segment times are stamped ABSOLUTE (captureStartedAtMs + offset),
+   * but a diarizer works on the 0-based recording and returns recording-relative turns — so callers
+   * must add this to align turns onto segments before overlap. Absent → treat as 0 (already relative).
+   */
+  captureStartedAtMs?: number
+  /** The conversation's structured summary — the relevance gate's preferred importance signal. */
+  summary?: AmbientSummary
 }
 
 export interface AnnotationDeps {

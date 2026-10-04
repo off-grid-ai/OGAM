@@ -139,16 +139,76 @@ We cannot tell if a model swap or VAD tweak helps without ground truth. Before s
 ## Phased roadmap
 
 - **Phase 0 — Eval harness + labeled set.** Metrics script + 3–5 labeled day recordings. (Unblocks all.)
+  - *Harness BUILT (2026-09-30):* `OGAD/scripts/eval/` — pure `metrics.cjs` (DER via frame-based greedy
+    speaker mapping; relevance precision/recall/F1; VAD false-accept) + `run-eval.cjs` scoring runner,
+    both `--selftest` green; `labels.example.json`/`predictions.example.json` + `README.md`. Decoupled by
+    design: it scores the REAL runtime's predictions vs hand labels (no re-implementation). Still needs a
+    hand-LABELLED set (~3–5 clips) to produce actual numbers + tune the relevance threshold/weights.
 - **Phase 1 — Catalog + Models-screen selection.** New diarization models in the shared catalog, HF pull,
   user selection UX. No behavior change yet; just selectable.
 - **Phase 2 — Nemotron 3 on the Mac gateway.** Wire `/v1/audio/diarize` to run it; A/B DER vs current on
   the eval set. Expected the big accuracy win.
 - **Phase 3 — Adaptive VAD front gate.** Silero v6 + noise-floor tracker + near-field gate; measure noise
   false-accepts drop.
+  - *Near-field factor BUILT (2026-09-29):* pure DSP in shared `@offgrid/models` `audio/near-field.ts` —
+    slow-rise/fast-fall adaptive noise floor (`trackNoiseFloor`) + SNR-gated, HF-ratio-modulated score
+    (`nearFieldForSpan`/`nearFieldForTurns`, `meanNearField`). SNR is the GATE (floor-level noise never
+    near-field); HF (one-pole HP, ~2 kHz) only modulates audible turns (near vs far/reverberant).
+    Relative to the recording's own floor → no mic calibration. 6 tests (shared, node:test).
+  - *Wired:* desktop `diarization-native.ts` `nemotronDiarize` computes `nearField` per turn from the PCM
+    it already has → returned in `/v1/audio/diarize` turns (whole-result serialize, no handler change).
+    Mobile: `DiarizedTurn.nearField` + `macDiarizerFactory` passthrough → `speakerAnnotationFactory` feeds
+    `meanNearField` into `assessConversation`. Absent (engine didn't compute) → factor excluded, no
+    regression. **Two-line tax:** near-field lives on shared@v108 (mobile); ACTIVATING it on desktop needs
+    the same files mirrored to shared@feat/ambient-107-main + a desktop rebuild (index export + flip).
+  - *Still open:* the Silero-VAD front GATE itself (drop non-speech before diarize) — only the near-field
+    FACTOR is built so far; adaptive-threshold VAD tuning; measure noise false-accepts on the eval set.
 - **Phase 4 — Relevance/FVAD v1 (heuristic).** Owner + near-field + turn-interleave gate; measure
   conversation precision/recall; tune. Journal/to-dos consume only relevant conversations.
+  - *Scoring core BUILT (2026-09-29):* `services/ambient/conversationRelevance.ts` — pure, tunable,
+    weighted 3-factor `scoreRelevance` (null factors excluded + weights renormalized so it degrades
+    gracefully before near-field exists; fails OPEN), `ownerParticipation` (presence + interleave, not
+    talk-time — handles owner-listening), `importanceHeuristic` (stopgap until the summary LLM judge),
+    and `assessConversation` glue. 15 tests. Explainable score+reason on every verdict.
+  - *Owner/self designation BUILT (2026-09-29):* `speakerProfilesStore.ownerPersonId` + `setOwner` +
+    `ownerSpeakerId(modelId)`; first human enrollment auto-owns; re-embed backfills never hijack; per
+    model-space resolution. 8 tests. This is the "who is the owner" stage-3 input relevance needs.
+  - *WIRED (2026-09-29, lead/Sidd sign-off): Ambient bucket + Conservative stance.* Disposition =
+    "ambient bucket" (kept + searchable, out of journal/to-dos, collapsed in the timeline). Stance =
+    conservative (`keepIfOwnerPresent`: owner-present conversations are NEVER demoted; only clear
+    absent-owner talk with weak content goes ambient; threshold 0.35; near-field still null).
+    - `speakerAnnotationFactory` computes `assessConversation({stance:'conservative'})` after diarize+name
+      and calls `setSessionRelevance`. Runs only when the owner is enrolled (else keep-all).
+    - `TimelineSession.relevance?: {ambient,score,reason}` (absent = kept); `isAmbientSession` helper;
+      `ambientTimelineStore.setSessionRelevance`. Carries over sync (full-session serialize).
+    - `AmbientDayScreen`: journal + to-dos + actions + count now use `relevantDaySessions` (ambient
+      excluded); timeline shows a collapsed "Ambient · N" group (dimmed rows, still openable to correct).
+  - *Importance = summary-derived (2026-09-29):* `importanceFromSummary` reuses the summary LLM's own
+    output (decisions + action items + owner-in-people) instead of a second LLM pass — this IS "the
+    summary LLM judges the transcript." `assessConversation` prefers it, falls back to the keyword
+    `importanceHeuristic` only when no summary. Wired via `AnnotatableSession.summary` + owner name.
+  - *"This is me" owner UI (2026-09-29):* ManageVoicesScreen now shows a ★ on the owner's voice + a YOU
+    badge, tap-to-set (`setOwner`), with explanatory copy. Closes the "auto-owner might be wrong" gap.
+  - *Still open:* tune threshold/weights against the eval set (Phase 0).
 - **Phase 5 — On-device upgrade + polish.** Best on-device export we can run under sherpa; battery/latency
   pass; (optional) FVAD v2 if the eval says v1 isn't enough.
+  - *Groundwork BUILT + tested (2026-09-30, shared):* log-mel frontend `audio/mel.ts` (matches
+    onnx-community `preprocessor_config.json` incl. preemphasis 0.97; 9 tests) + `audio/speaker-clustering.ts`
+    (`assignGlobalClusters`/`cosineSim`, extracted from the desktop; 6 tests). Near-field + `nemotronTurnsFromProbs`
+    already shared. So the whole post-inference pipeline is reusable + tested.
+  - *Model interface EMPIRICALLY MAPPED (2026-09-30):* two ONNX exports, neither small+simple.
+    **diarizeapp** (desktop's): stateless, raw-PCM-in, built-in mel — but 401 MB fp32, no quant variant.
+    **onnx-community**: 73 MB q4f16, but STREAMING — inputs `input_features`[1,F,128] + `cached_embeds`[1,C,512]
+    + `attention_mask`[1,F] → `logits`/`chunk_embeds`/`silence_embeds`; a whole-recording feed FAILS (proved),
+    needs the chunk/cache protocol (khawjaahmad/nemotron-diarization-web ported it, verified vs Python).
+  - *BUILT (2026-09-30) — the "Mac way", no hosting:* phone downloads the SAME public fp32 diarizeapp model
+    and runs it via **onnxruntime-react-native** (added; `pod install` links it on RN 0.83). `nemotronDiarizerFactory`
+    mirrors the desktop, reusing shared `nemotronTurnsFromProbs`+`assignGlobalClusters`+near-field; `nemotronModelDownload`
+    fetches the model; catalog Nemotron is now `['desktop','mobile']`; `speakerEngineFactory` runs on-device Nemotron
+    with a sherpa fallback; Models screen downloads it runtime-aware. Typecheck clean, 55 tests green. REMAINING:
+    device build + on-device run (download 404MB, record, verify). Optional later: host the int8 (~107MB, verified
+    2x faster / 0% speaker confusion via scripts/eval/quantize-diarizer.py) to shrink the download.
+  - *Alt (onnx-community streaming, 73MB)* = port the arrival-order speaker-cache/FIFO state machine — deferred.
 
 ## Risks / open questions
 

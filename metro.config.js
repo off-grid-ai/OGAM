@@ -12,19 +12,21 @@ const proExists = fs.existsSync(path.resolve(proPackagePath, 'package.json'));
 // resolve the package + its subpath adapters. We map the subpaths to concrete built files rather
 // than enabling `unstable_enablePackageExports` globally (that flag changes resolution for every
 // dep and breaks libraries with malformed exports maps). The package ships prebuilt CJS in dist/.
-const syncPackagePath = path.resolve(__dirname, '../shared/packages/sync');
-const applicationPackagePath = path.resolve(__dirname, '../shared/packages/application');
-const automationPackagePath = path.resolve(__dirname, '../shared/packages/automation');
-const ragPackagePath = path.resolve(__dirname, '../shared/packages/rag');
+// Base dir for the sibling shared monorepo (CI checks it out next to the app at the matching branch).
+const SHARED_ROOT = '../shared';
+const syncPackagePath = path.resolve(__dirname, `${SHARED_ROOT}/packages/sync`);
+const applicationPackagePath = path.resolve(__dirname, `${SHARED_ROOT}/packages/application`);
+const automationPackagePath = path.resolve(__dirname, `${SHARED_ROOT}/packages/automation`);
+const ragPackagePath = path.resolve(__dirname, `${SHARED_ROOT}/packages/rag`);
 // @offgrid/models: cross-platform model contracts (catalog, reasoning-budget rule) shared
 // with desktop. Out-of-root like rag, prebuilt CJS in dist/.
-const modelsPackagePath = path.resolve(__dirname, '../shared/packages/models');
-const uiPackagePath = path.resolve(__dirname, '../shared/packages/ui');
-const usePackagePath = path.resolve(__dirname, '../shared/packages/use');
+const modelsPackagePath = path.resolve(__dirname, `${SHARED_ROOT}/packages/models`);
+const uiPackagePath = path.resolve(__dirname, `${SHARED_ROOT}/packages/ui`);
+const usePackagePath = path.resolve(__dirname, `${SHARED_ROOT}/packages/use`);
 // @offgrid/speech: voice-turn decisions (when a spoken turn begins and ends) shared with desktop.
 // Out-of-root like sync, so Metro must watch it and be pointed at its built entry.
-const speechPackagePath = path.resolve(__dirname, '../shared/packages/speech');
-const sharedNodeModulesPath = path.resolve(__dirname, '../shared/node_modules');
+const speechPackagePath = path.resolve(__dirname, `${SHARED_ROOT}/packages/speech`);
+const sharedNodeModulesPath = path.resolve(__dirname, `${SHARED_ROOT}/node_modules`);
 const syncRuntimeModules = {
   '@noble/hashes/hkdf': path.resolve(sharedNodeModulesPath, '@noble/hashes/hkdf.js'),
   '@noble/hashes/hmac': path.resolve(sharedNodeModulesPath, '@noble/hashes/hmac.js'),

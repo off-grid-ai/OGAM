@@ -25,13 +25,51 @@ import { flagSegmentsForAnchors } from './anchors'
 import type { SttExecutor } from './sttExecutor'
 import type { SpeechSegment } from './vadSegmenter'
 import type { SummarizeResult } from './summarizer'
-import type { TimelineSession, TimelineSegment } from './timelineModel'
+import { EMPTY_SUMMARY, type AmbientSummary } from './summaryPrompt'
+
+// Cap for a single on-device summary generation before we give up and save transcript-only.
+const SUMMARY_TIMEOUT_MS = 120_000
+import type { TimelineSession, TimelineSegment, SessionRelevance } from './timelineModel'
 
 /** Coarse progress for the UI, so a long capture is not an opaque wait. */
 export type BuildProgress =
   | { phase: 'transcribing'; done: number; total: number }
+  | { phase: 'diarizing'; done: number; total: number }
   | { phase: 'loading-model' }
   | { phase: 'summarizing'; done: number; total: number }
+
+/** One conversation's speaker result: its segments labeled with who spoke, + the relevance verdict. */
+export interface SpeakerAnnotation {
+  segments: TimelineSegment[]
+  relevance: SessionRelevance | null
+}
+
+/**
+ * Build a speaker-attributed transcript from labeled segments: consecutive segments by the same speaker
+ * become one "Name: …" line. This is what we feed the summary so it can attribute decisions/actions to
+ * people and extract participants from real identity, not guesses. Unlabeled speech has no prefix.
+ */
+export function speakerAttributedTranscript(segments: TimelineSegment[]): string {
+  const lines: string[] = []
+  let speaker: string | null = null
+  let buffer: string[] = []
+  const flush = () => {
+    if (buffer.length === 0) return
+    lines.push((speaker ? `${speaker}: ` : '') + buffer.join(' '))
+    buffer = []
+  }
+  for (const s of segments) {
+    if (!s.transcript) continue
+    const name = s.speakerName ?? null
+    if (name !== speaker) {
+      flush()
+      speaker = name
+    }
+    buffer.push(s.transcript)
+  }
+  flush()
+  return lines.join('\n')
+}
 
 export interface TimelineBuildDeps {
   executor: SttExecutor
@@ -44,6 +82,33 @@ export interface TimelineBuildDeps {
   /** Progress ticks for the UI (transcribing -> loading-model -> summarizing). Optional. */
   onProgress?: (progress: BuildProgress) => void
   sessionizerConfig?: SessionizerConfig
+  /**
+   * Diarize + identify ONE conversation, between transcription and summary, so the summary sees
+   * speaker-attributed text and we know which conversations the owner is in. Runs as its own residency
+   * phase (diarizer model resident, whisper evicted, before the text model loads). Best-effort — a null
+   * return or a throw just means an unlabeled transcript + no relevance verdict (today's behaviour).
+   */
+  annotate?: (input: {
+    id: string
+    recordingPath: string
+    captureStartedAtMs: number
+    segments: TimelineSegment[]
+  }) => Promise<SpeakerAnnotation | null>
+  /**
+   * Residency handoff BEFORE diarization: evict the transcription model so the diarizer loads alone
+   * (the phone holds one model at a time). Only called when there's diarization work to do.
+   */
+  prepareForDiarize?: () => Promise<void>
+  /** Residency handoff AFTER diarization: free the diarizer model so the text model has room to load. */
+  releaseDiarizer?: () => Promise<void>
+  /**
+   * The live (real-time) transcript captured during recording. Used ONLY as a safety net for the
+   * whole-take fallback: when the batch re-transcription of the recording file comes back empty (the
+   * file reads as blank audio on some devices though the live frame tap heard real speech), a single
+   * whole-take session adopts this text instead of being saved empty. Ignored when real segments
+   * transcribe normally.
+   */
+  fallbackTranscript?: string
 }
 
 interface TranscribedSession {
@@ -105,15 +170,109 @@ export async function buildTimelineSessions(
     })
   }
 
-  // Hand-off: bring the text model into residency now that whisper's work is done.
-  deps.onProgress?.({ phase: 'loading-model' })
-  await deps.prepareForSummaries?.()
+  // Whole-take safety net: when the ONLY session came back with no transcript — the recording file read
+  // as blank audio on this device even though the live frame tap heard real speech — adopt the live
+  // transcript so the take is saved with its words instead of as an empty "Conversation".
+  if (transcribed.length === 1 && !transcribed[0].transcript.trim() && deps.fallbackTranscript?.trim()) {
+    const text = deps.fallbackTranscript.trim()
+    transcribed[0].transcript = text
+    if (transcribed[0].segments.length > 0) {
+      transcribed[0].segments[0] = { ...transcribed[0].segments[0], transcript: text }
+    }
+  }
 
-  // Phase 2 - text LLM resident: summarise every session, prioritising flagged moments.
+  // Phase 1.5 - diarizer resident: who spoke when + who. Runs after whisper, before the text model, so
+  // the summary gets speaker-attributed text and each conversation gets a relevance verdict. Best-effort:
+  // any failure leaves that session's plain transcript + no verdict, exactly like before this existed.
+  const annotations = new Map<string, SpeakerAnnotation>()
+  if (deps.annotate) {
+    // Evict whisper first so the diarizer loads alone — the phone holds ONE model at a time. The whole
+    // speaker pass is best-effort: if the diarizer can't be made resident (its model isn't present, or
+    // voice recognition is unavailable because Pro didn't load), skip it and keep every session's plain
+    // transcript rather than losing the recording. A throw HERE used to abort the whole build.
+    let diarizerResident = true
+    try {
+      await deps.prepareForDiarize?.()
+    } catch (e) {
+      diarizerResident = false
+      console.warn('[ambient] diarizer prepare failed — skipping speaker labels', e)
+    }
+    if (diarizerResident) {
+      for (let i = 0; i < transcribed.length; i += 1) {
+        deps.onProgress?.({ phase: 'diarizing', done: i, total: transcribed.length })
+        const item = transcribed[i]
+        try {
+          const ann = await deps.annotate({
+            id: item.sessionId,
+            recordingPath,
+            captureStartedAtMs,
+            segments: item.segments
+          })
+          if (ann) {
+            annotations.set(item.sessionId, ann)
+            item.segments = ann.segments // labeled segments carry into the built session
+          }
+        } catch {
+          // keep the plain transcript for this session
+        }
+      }
+      // Free the diarizer before the text model loads for summaries.
+      try {
+        await deps.releaseDiarizer?.()
+      } catch (e) {
+        console.warn('[ambient] diarizer release failed', e)
+      }
+    }
+  }
+
+  // Hand-off: bring the text model into residency now that whisper + the diarizer are done. Best-effort:
+  // a text model that can't load (no model set, Pro didn't load, out of memory) leaves transcript-only
+  // sessions instead of dropping the whole take — the conversation + its transcript are still saved.
+  deps.onProgress?.({ phase: 'loading-model' })
+  let summariesAvailable = true
+  try {
+    await deps.prepareForSummaries?.()
+  } catch (e) {
+    summariesAvailable = false
+    console.warn('[ambient] summary model prepare failed — saving transcript-only', e)
+  }
+
+  // Phase 2 - text LLM resident: summarise every session, prioritising flagged moments. When we have
+  // speaker labels, the summary is fed a "Name: …" transcript so it can attribute decisions/actions and
+  // extract participants from real identity. Each summary is best-effort: a failure saves the session
+  // with a transcript-derived fallback summary rather than throwing away the whole recording.
   const built: TimelineSession[] = []
   for (const item of transcribed) {
     deps.onProgress?.({ phase: 'summarizing', done: built.length, total: transcribed.length })
-    const { summary, status } = await deps.summarize(item.transcript, item.flaggedSnippets)
+    const ann = annotations.get(item.sessionId)
+    const transcriptForSummary = ann ? speakerAttributedTranscript(item.segments) : item.transcript
+    let summary: AmbientSummary
+    let status: SummarizeResult['status']
+    if (summariesAvailable) {
+      // Bound the on-device summary: a stuck generation must not trap the user on the Processing screen
+      // forever. On timeout we fall back to the transcript-only session, same as a throw. The timer is
+      // always cleared so it never leaks past a fast summary.
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        const res = await Promise.race([
+          deps.summarize(transcriptForSummary, item.flaggedSnippets),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('summary timed out')), SUMMARY_TIMEOUT_MS)
+          })
+        ])
+        summary = res.summary
+        status = res.status
+      } catch (e) {
+        console.warn('[ambient] summarize failed — saving transcript-only', e)
+        summary = fallbackSummary(item.transcript)
+        status = 'error'
+      } finally {
+        if (timer) clearTimeout(timer)
+      }
+    } else {
+      summary = fallbackSummary(item.transcript)
+      status = 'error'
+    }
     built.push({
       id: `${captureStartedAtMs}_${item.sessionId}`,
       startMs: captureStartedAtMs + item.sessionStartMs,
@@ -124,8 +283,20 @@ export async function buildTimelineSessions(
       flaggedSegmentIds: item.flaggedSegmentIds,
       recordingPath,
       captureStartedAtMs,
-      segments: item.segments
+      segments: item.segments,
+      relevance: ann?.relevance ?? undefined
     })
   }
   return built
+}
+
+// A minimal summary when the text model is unavailable or summarising throws: name the conversation from
+// the first words and use the first sentence as the headline, so a transcript-only session still reads as
+// a real conversation in the timeline instead of being dropped.
+function fallbackSummary(transcript: string): AmbientSummary {
+  const text = transcript.trim()
+  if (!text) return { ...EMPTY_SUMMARY }
+  const title = text.split(/\s+/).slice(0, 6).join(' ')
+  const sentence = text.split(/(?<=[.!?])\s/)[0] ?? text
+  return { ...EMPTY_SUMMARY, title, headline: sentence.slice(0, 160) }
 }

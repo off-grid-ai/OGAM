@@ -5,8 +5,12 @@
  * the session.
  */
 
-import { buildTimelineSessions } from '../../../../src/services/ambient/timelineBuilder'
+import {
+  buildTimelineSessions,
+  speakerAttributedTranscript
+} from '../../../../src/services/ambient/timelineBuilder'
 import type { SttExecutor } from '../../../../src/services/ambient/sttExecutor'
+import type { TimelineSegment } from '../../../../src/services/ambient/timelineModel'
 
 const CAPTURE_AT = 1_000_000
 
@@ -178,5 +182,81 @@ describe('buildTimelineSessions', () => {
       summarize: summarizeEcho
     })
     expect(sessions).toEqual([])
+  })
+
+  it('feeds a SPEAKER-ATTRIBUTED transcript to the summary and carries relevance when annotate runs', async () => {
+    // annotate labels both segments (Sidd, then Priya) and marks the conversation kept.
+    const annotate = jest.fn(async (input: { segments: TimelineSegment[] }) => ({
+      segments: input.segments.map((s, i) => ({
+        ...s,
+        speakerId: i === 0 ? 'u1' : 'u2',
+        speakerName: i === 0 ? 'Sidd' : 'Priya'
+      })),
+      relevance: { ambient: false, score: 0.9, reason: 'owner present' }
+    }))
+    const captured: string[] = []
+    const capturingSummarize = async (transcript: string) => {
+      captured.push(transcript)
+      return summarizeEcho(transcript)
+    }
+    const [session] = await buildTimelineSessions(
+      [
+        { startMs: 0, endMs: 2_000 },
+        { startMs: 3_000, endMs: 5_000 }
+      ],
+      '/rec.wav',
+      CAPTURE_AT,
+      { executor: spanExecutor, summarize: capturingSummarize, annotate }
+    )
+    expect(annotate).toHaveBeenCalledTimes(1)
+    // The summary saw "Name: text" lines, not the plain space-joined transcript.
+    expect(captured[0]).toBe('Sidd: [0-2000]\nPriya: [3000-5000]')
+    // Relevance from annotate is folded onto the session; segments carry speaker labels.
+    expect(session.relevance).toEqual({ ambient: false, score: 0.9, reason: 'owner present' })
+    expect(session.segments[0].speakerName).toBe('Sidd')
+  })
+
+  it('falls back to the plain transcript when annotate returns null (graceful)', async () => {
+    const captured: string[] = []
+    const capturingSummarize = async (transcript: string) => {
+      captured.push(transcript)
+      return summarizeEcho(transcript)
+    }
+    const [session] = await buildTimelineSessions(
+      [{ startMs: 0, endMs: 2_000 }],
+      '/rec.wav',
+      CAPTURE_AT,
+      { executor: spanExecutor, summarize: capturingSummarize, annotate: async () => null }
+    )
+    expect(captured[0]).toBe('[0-2000]') // plain, no speaker prefix
+    expect(session.relevance).toBeUndefined()
+  })
+})
+
+describe('speakerAttributedTranscript', () => {
+  const seg = (id: string, transcript: string | null, speakerName?: string | null): TimelineSegment => ({
+    id,
+    startMs: 0,
+    endMs: 0,
+    transcript,
+    speakerName: speakerName ?? undefined
+  })
+
+  it('groups consecutive same-speaker segments into one "Name: …" line', () => {
+    const out = speakerAttributedTranscript([
+      seg('a', 'hi there', 'Sidd'),
+      seg('b', 'how are you', 'Sidd'),
+      seg('c', 'good thanks', 'Priya')
+    ])
+    expect(out).toBe('Sidd: hi there how are you\nPriya: good thanks')
+  })
+
+  it('omits a prefix for unlabeled speech and skips empty transcripts', () => {
+    const out = speakerAttributedTranscript([
+      seg('a', 'unknown speaker line', null),
+      seg('b', null, 'Sidd'),
+      seg('c', 'named line', 'Sidd')
+    ])
+    expect(out).toBe('unknown speaker line\nSidd: named line')
   })
 })
