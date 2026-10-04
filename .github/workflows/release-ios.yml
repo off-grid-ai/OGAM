@@ -23,7 +23,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: main
+          # Release-branch build: a manual dispatch from this branch builds THIS branch
+          # (its integrated feature + main), not main. The workflow_run chain still targets
+          # main (branches: [main] above), so the normal main cadence is unaffected.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || 'main' }}
           fetch-depth: 0
 
       - name: Get version from package.json
