@@ -89,13 +89,27 @@ describe('mic during a background STT download — a download affordance, never 
   it('falsifier: a genuine tap-triggered whisper load DOES show the voice-loading spinner', async () => {
     const h = await setupChatScreen({ engine: 'llama', whisper: true });
     await h.setupWhisperModel('tiny.en'); // downloaded + selected + resident, via the real select gesture
-    h.render();
-    const { useWhisperStore } = require('../../../src/stores/whisperStore');
+    const { applicationFacade } = require('../../../src/services/applicationFacade') as typeof import('../../../src/services/applicationFacade');
+    const { whisperService } = require('../../../src/services/whisperService') as typeof import('../../../src/services/whisperService');
+    const { createTranscriptionModelsSelector } = require('@offgrid/application') as typeof import('@offgrid/application');
+    const selectTranscriptionModels = createTranscriptionModelsSelector();
 
-    // BOUNDARY: the OS fires a memory warning → residency reclaims the idle STT sidecar. The model is
-    // now downloaded-but-not-resident — the normal post-launch state a mic tap loads from.
-    await h.rtl.act(async () => { h.boundary.emitMemoryWarning(); });
-    await h.rtl.waitFor(() => { expect(useWhisperStore.getState().isModelLoaded).toBe(false); }, { timeout: 4000 });
+    // Put the selected model into the normal downloaded-but-not-resident state through the real
+    // application command. Memory-pressure recovery has its own journey; this falsifier only owns the
+    // user-triggered cold-load transition.
+    const unloaded = await applicationFacade().models.unload({
+      modality: 'transcription',
+      keepSelection: true,
+    });
+    expect(unloaded.ok).toBe(true);
+    await h.rtl.waitFor(() => {
+      const selected = selectTranscriptionModels(
+        applicationFacade().models.snapshot(),
+      ).models.find(row => row.selected);
+      expect(selected?.loaded).toBe(false);
+    }, { timeout: 4000 });
+    expect(whisperService.isModelLoaded()).toBe(false);
+    h.render();
 
     // PRE-CONDITION: idle mic — no spinner anywhere before the tap.
     expect(h.view!.queryByTestId('voice-loading')).toBeNull();
@@ -103,15 +117,19 @@ describe('mic during a background STT download — a download affordance, never 
     // Hold the next whisper load open at the initWhisper boundary (a real ggml load takes seconds on
     // device), then do the REAL hold-to-talk gesture on the real mic.
     h.boundary.whisper!.holdNextLoad();
-    await h.tapMic();
+    try {
+      await h.tapMic();
 
-    // The TAP-TRIGGERED load shows the spinner — the state a background download must never mimic.
-    await h.rtl.waitFor(() => { expect(h.view!.getByTestId('voice-loading')).toBeTruthy(); }, { timeout: 4000 });
-    expect(h.view!.queryByTestId('voice-mic-download-progress')).toBeNull();
+      // The TAP-TRIGGERED load shows the spinner — the state a background download must never mimic.
+      await h.rtl.waitFor(() => { expect(h.view!.getByTestId('voice-loading')).toBeTruthy(); }, { timeout: 4000 });
+      expect(h.view!.queryByTestId('voice-mic-download-progress')).toBeNull();
 
-    // Release the load: the spinner clears into the LIVE recording UI (an observed transition, not a no-op).
-    await h.rtl.act(async () => { h.boundary.whisper!.releaseLoad(); });
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText('Slide to cancel')).not.toBeNull(); }, { timeout: 4000 });
-    expect(h.view!.queryByTestId('voice-loading')).toBeNull();
+      // Release the load: the spinner clears into the LIVE recording UI (an observed transition, not a no-op).
+      await h.rtl.act(async () => { h.boundary.whisper!.releaseLoad(); });
+      await h.rtl.waitFor(() => { expect(h.view!.queryByText('Slide to cancel')).not.toBeNull(); }, { timeout: 4000 });
+      expect(h.view!.queryByTestId('voice-loading')).toBeNull();
+    } finally {
+      h.boundary.whisper!.releaseLoad();
+    }
   }, 30000);
 });

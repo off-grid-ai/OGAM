@@ -1,8 +1,5 @@
+import { isSuspiciousRecoveredImageModel } from '@offgrid/models';
 import { ONNXImageModel } from '../../../../src/types';
-
-function isSuspiciousRecoveredImageModel(model: ONNXImageModel): boolean {
-  return model.id.startsWith('recovered_');
-}
 
 describe('isSuspiciousRecoveredImageModel', () => {
   it('should filter recovered image models', () => {

@@ -109,7 +109,6 @@ export interface LiteRTFake {
   events: FakeEmitterHandle;
   /** Records of every generateRaw / sendMessage* call for arg assertions. */
   calls: {
-    loadModel: unknown[][];
     generateRaw: unknown[][];
     resetConversation: unknown[][];
     sendMessage: unknown[][];
@@ -123,6 +122,8 @@ export interface LiteRTFake {
    * Honest: the fake only emits device-shaped events; OUR loop decides what the user sees.
    */
   scriptTurn(turn: LiteRTTurn): void;
+  /** Make the next native reply depend on the sampler temperature that Mobile supplied. */
+  scriptTurnFromTemperature(reply: (temperature: number) => LiteRTTurn): void;
   /**
    * Script a QUEUE of turns consumed one-per-generateRaw — for flows with more than one native round
    * trip (e.g. the LiteRT tool-router does a separate generateToolSelection pass, THEN the main turn).
@@ -160,7 +161,6 @@ const defer = (fn: () => void) => {
 
 function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
   const calls: LiteRTFake['calls'] = {
-    loadModel: [],
     generateRaw: [],
     resetConversation: [],
     sendMessage: [],
@@ -170,6 +170,10 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
 
   // Scripted turn state — set by scriptTurn()/scriptTurns(), consumed by the send/respond methods below.
   let pending: LiteRTTurn | null = null;
+  let pendingTemperatureReply: ((temperature: number) => LiteRTTurn) | null =
+    null;
+  let temperature = 0.7;
+  let warmupPending = false;
   const queue: LiteRTTurn[] = [];
   let currentTurn: LiteRTTurn | null = null; // the turn onSend picked (for respondToToolCall completion)
   let toolCallsRemaining = 0;
@@ -184,7 +188,12 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
     handle.emit('litert_complete', '{}');
   };
 
-  const onSend = () => {
+  const onSend = (text?: unknown) => {
+    if (warmupPending && text === 'Hi') {
+      warmupPending = false;
+      defer(() => handle.emit('litert_complete', '{}'));
+      return;
+    }
     if (pendingPartialHang !== null) {
       const p = pendingPartialHang;
       pendingPartialHang = null;
@@ -204,7 +213,12 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
       defer(() => handle.emit('litert_error', m));
       return;
     }
-    const turn = queue.length ? queue.shift()! : pending;
+    const turn = queue.length
+      ? queue.shift()!
+      : pendingTemperatureReply
+      ? pendingTemperatureReply(temperature)
+      : pending;
+    pendingTemperatureReply = null;
     currentTurn = turn;
     if (!turn) {
       defer(() => handle.emit('litert_complete', '{}'));
@@ -232,31 +246,32 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
   };
 
   const module: Record<string, jest.Mock> = {
-    loadModel: jest.fn((...args: unknown[]) => {
-      calls.loadModel.push(args);
-      return Promise.resolve({ backend: 'gpu', maxNumTokens: 4096 });
+    loadModel: jest.fn(async () => {
+      warmupPending = true;
+      return { backend: 'gpu', maxNumTokens: 4096 };
     }),
     resetConversation: jest.fn((...args: unknown[]) => {
       calls.resetConversation.push(args);
+      temperature = Number(args[1] ?? 0.7);
       return Promise.resolve();
     }),
     sendMessage: jest.fn((...args: unknown[]) => {
       calls.sendMessage.push(args);
-      onSend();
+      onSend(args[0]);
       return Promise.resolve();
     }),
     sendMessageWithImages: jest.fn((...args: unknown[]) => {
       calls.sendMessageWithImages.push(args);
-      onSend();
+      onSend(args[0]);
       return Promise.resolve();
     }),
-    sendMessageWithAudio: jest.fn(() => {
-      onSend();
+    sendMessageWithAudio: jest.fn((...args: unknown[]) => {
+      onSend(args[0]);
       return Promise.resolve();
     }),
     sendMessageWithMedia: jest.fn((...args: unknown[]) => {
       calls.sendMessageWithMedia.push(args);
-      onSend();
+      onSend(args[0]);
       return Promise.resolve();
     }),
     respondToToolCall: jest.fn(() => {
@@ -292,6 +307,9 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
     scriptTurn: (turn: LiteRTTurn) => {
       pending = turn;
     },
+    scriptTurnFromTemperature: reply => {
+      pendingTemperatureReply = reply;
+    },
     scriptTurns: (turns: LiteRTTurn[]) => {
       queue.length = 0;
       queue.push(...turns);
@@ -322,12 +340,10 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
  *  llama.rn types). Lets a test script a TRUNCATED turn (hit the n_predict cap without EOS) so the
  *  cutoff is device-shaped, not hand-asserted. Defaults model a normal complete turn. */
 export interface CompletionMeta {
-  context_full?: boolean; // native completed with no room for this request
   stopped_eos?: boolean; // false = did NOT stop on an end-of-sequence token
   stopped_limit?: number; // 1 = hit the n_predict cap (B15's condition)
   truncated?: boolean; // llama.rn's own truncation flag
   tokens_predicted?: number; // == n_predict at the cap (device saw 1024)
-  tokens_evaluated?: number; // native prompt tokens, including offered tools
 }
 
 export interface LlamaCompletionScript {
@@ -360,6 +376,8 @@ export interface LlamaFake {
   scriptGpuInitFailure(fail?: boolean): void;
   /** Make EVERY init attempt fail (a model that can't load on any backend) — the real load path throws. */
   scriptInitFailure(fail?: boolean): void;
+  /** Set the GGUF header facts returned by llama.rn's metadata-only file probe. */
+  scriptModelInfo(metadata: Record<string, unknown>): void;
   /** HOLD the next post-init multimodal-support check (context.getMultimodalSupport) open until
    *  releaseMultimodalHold() — the device-shaped load window between context init and capability
    *  detection (the 2026-07-13 18:50 device log shows ~3.4s there for gemma-4-E2B: init succeeded
@@ -369,6 +387,18 @@ export interface LlamaFake {
   releaseMultimodalHold(): void;
   /** True while a held load is parked INSIDE the multimodal check (the window is open). */
   multimodalHoldActive(): boolean;
+  /** Make context.release() AND releaseContext() REJECT, as a native unload that genuinely fails does
+   *  (llama.rn surfaces the native error; the context stays resident and its memory is NOT reclaimed).
+   *  Persistent until cleared. */
+  scriptReleaseFailure(fail?: boolean): void;
+  /** HOLD the next context.release() open until releaseUnload() — a native unload is not instant on a
+   *  device (freeing a multi-GB context takes real time), so the in-flight unload window is observable.
+   *  One-shot; the usual deferred free still runs once released. */
+  holdNextUnload(): void;
+  /** Release an unload held via holdNextUnload(). No-op if nothing is held. */
+  releaseUnload(): void;
+  /** True while an unload is parked INSIDE native context.release(). */
+  unloadHeld(): boolean;
   /** react-native module object to inject for 'llama.rn'. */
   module: Record<string, jest.Mock>;
   calls: { completion: unknown[][]; clearCache: boolean[] };
@@ -377,9 +407,9 @@ export interface LlamaFake {
 function makeLlamaFake(
   onRelease?: () => void,
   chatTemplate?: string,
-  modelInfo?: Record<string, unknown>,
 ): LlamaFake {
   const calls: LlamaFake['calls'] = { completion: [], clearCache: [] };
+  let modelInfo: Record<string, unknown> = {};
   type PreparedCompletion = Omit<LlamaCompletionScript, 'text'> & {
     text: string;
   };
@@ -403,6 +433,11 @@ function makeLlamaFake(
   let mmHoldPending = false;
   let mmHoldEngaged = false;
   let mmHoldRelease: (() => void) | null = null;
+  // Unload boundary: a native release can take real time (hold) and can genuinely fail (script).
+  let releaseFails = false;
+  let unloadHoldPending = false;
+  let unloadHoldEngaged = false;
+  let unloadHoldRelease: (() => void) | null = null;
 
   const context: Record<string, jest.Mock> = {
     // Faithful to llama.rn: completion(params, onToken) STREAMS token-by-token through the callback
@@ -421,6 +456,14 @@ function makeLlamaFake(
       ) => {
         calls.completion.push([params]);
         const scripted = completionQueue.shift() ?? pending;
+        const nativeToolCalls = scripted.toolCalls?.map((call, index) => ({
+          id: `call-${index}`,
+          type: 'function',
+          function: {
+            name: call.name,
+            arguments: JSON.stringify(call.arguments),
+          },
+        }));
         if (completionQueue.length === 0) pending = { text: '' };
         stopRequested = false; // per-completion abort flag — a fresh completion starts un-stopped
         if (scripted.throwMessage) throw new Error(scripted.throwMessage);
@@ -462,13 +505,12 @@ function makeLlamaFake(
               text: `<|channel>thought\n${scripted.reasoning}<channel|>${scripted.text}`,
               content: scripted.text,
               reasoning_content: scripted.reasoning,
-              tool_calls: scripted.toolCalls,
+              tool_calls: nativeToolCalls,
               tokens_predicted: metaR.tokens_predicted ?? 8,
-              tokens_evaluated: metaR.tokens_evaluated ?? 4,
+              tokens_evaluated: 4,
               stopped_eos: metaR.stopped_eos ?? true,
               stopped_limit: metaR.stopped_limit ?? 0,
               truncated: metaR.truncated ?? false,
-              context_full: metaR.context_full ?? false,
               timings: { predicted_per_token_ms: 50, predicted_per_second: 20 },
             };
           }
@@ -528,13 +570,12 @@ function makeLlamaFake(
         return {
           text: outText,
           content: outText,
-          tool_calls: scripted.toolCalls,
+          tool_calls: nativeToolCalls,
           tokens_predicted: meta.tokens_predicted ?? 8,
-          tokens_evaluated: meta.tokens_evaluated ?? 4,
+          tokens_evaluated: 4,
           stopped_eos: meta.stopped_eos ?? true,
           stopped_limit: meta.stopped_limit ?? 0,
           truncated: meta.truncated ?? false,
-          context_full: meta.context_full ?? false,
           timings: { predicted_per_token_ms: 50, predicted_per_second: 20 },
         };
       },
@@ -552,6 +593,17 @@ function makeLlamaFake(
     // returns (device-faithful), not synchronously. Defer the free so the reclaim barrier captures the
     // still-high footprint as its baseline and then observes the drop on a later poll (as on device).
     release: jest.fn(async () => {
+      if (unloadHoldPending) {
+        unloadHoldPending = false;
+        unloadHoldEngaged = true;
+        await new Promise<void>(res => {
+          unloadHoldRelease = res;
+        });
+        unloadHoldEngaged = false;
+      }
+      if (releaseFails) {
+        throw new Error('Failed to release context');
+      }
       setTimeout(() => onRelease?.(), 50);
     }),
     tokenize: jest.fn().mockResolvedValue({ tokens: [1, 2, 3] }),
@@ -594,12 +646,12 @@ function makeLlamaFake(
     // no markers) to assert the Thinking toggle stays hidden.
     metadata: {
       'tokenizer.chat_template':
-        chatTemplate ?? '{{bos}}<think>\n{{reasoning}}\n</think>{{content}}',
+        chatTemplate ??
+        '{% if enable_thinking %}<think>\n{{reasoning}}\n</think>{% endif %}{{content}}',
     },
   };
 
   const module: Record<string, jest.Mock> = {
-    loadLlamaModelInfo: jest.fn(async () => modelInfo ?? {}),
     // Faithful to llama.rn/llama.cpp: the native loader reports gpu=true (+ the offload device
     // list) when it actually offloaded layers (n_gpu_layers > 0), and gpu=false for a pure-CPU
     // init. Echo that from the requested load params so the REAL captureGpuInfo → GenerationMeta
@@ -622,7 +674,12 @@ function makeLlamaFake(
         n > 0 ? '' : 'gpu layers not requested';
       return context;
     }),
-    releaseContext: jest.fn().mockResolvedValue(undefined),
+    loadLlamaModelInfo: jest.fn(async () => modelInfo),
+    releaseContext: jest.fn(async () => {
+      if (releaseFails) {
+        throw new Error('Failed to release context');
+      }
+    }),
     completion: jest.fn().mockResolvedValue({ text: '' }),
     stopCompletion: jest.fn().mockResolvedValue(undefined),
     tokenize: jest.fn().mockResolvedValue({ tokens: [1, 2, 3] }),
@@ -652,6 +709,9 @@ function makeLlamaFake(
     scriptInitFailure: (fail = true) => {
       initFails = fail;
     },
+    scriptModelInfo: metadata => {
+      modelInfo = metadata;
+    },
     scriptMultimodalHold: () => {
       mmHoldPending = true;
     },
@@ -661,6 +721,18 @@ function makeLlamaFake(
       f?.();
     },
     multimodalHoldActive: () => mmHoldEngaged,
+    scriptReleaseFailure: (fail = true) => {
+      releaseFails = fail;
+    },
+    holdNextUnload: () => {
+      unloadHoldPending = true;
+    },
+    releaseUnload: () => {
+      const f = unloadHoldRelease;
+      unloadHoldRelease = null;
+      f?.();
+    },
+    unloadHeld: () => unloadHoldEngaged,
   };
 }
 
@@ -685,24 +757,53 @@ export interface DiffusionFake {
   generationHeld(): boolean;
   /** How many times native cancelGeneration was asked for — the far side of the user's STOP. */
   cancelCount(): number;
-  /** Images returned by the native gallery scan. Their stored path may name an older iOS container. */
-  seedGeneratedImages(images: Array<Record<string, unknown>>): void;
+  /** HOLD the next unloadModel open until releaseUnload() — freeing a diffusion model on a device takes
+   *  real time, so the in-flight unload window is observable rather than closing in the same tick.
+   *  One-shot. */
+  holdNextUnload(): void;
+  /** Release an unload held via holdNextUnload(). No-op if nothing is held. */
+  releaseUnload(): void;
+  /** True while an unload is parked inside native unloadModel. */
+  unloadHeld(): boolean;
+  /** Hold the next native generated-image byte deletion until releaseDelete(). One-shot. */
+  holdNextDelete(): void;
+  /** Release a deletion held via holdNextDelete(). No-op if nothing is held. */
+  releaseDelete(): void;
+  /** True while generated-image deletion is parked inside the native boundary. */
+  deleteHeld(): boolean;
 }
 
 function makeDiffusionFake(
-  fs?: NativeFileSystemBoundary,
+  fileSystem?: NativeFileSystemBoundary,
 ): DiffusionFake {
   const calls: DiffusionFake['calls'] = { generateImage: [] };
   let seedCounter = 0;
   let holdNext = false;
   let held: (() => void) | null = null;
   let cancels = 0;
-  let generatedImages: Array<Record<string, unknown>> = [];
+  let unloadHoldPending = false;
+  let unloadHoldEngaged = false;
+  let unloadHoldRelease: (() => void) | null = null;
+  let deleteHoldPending = false;
+  let deleteHoldEngaged = false;
+  let deleteHoldRelease: (() => void) | null = null;
   const module: Record<string, jest.Mock> = {
     isModelLoaded: jest.fn().mockResolvedValue(true),
     getLoadedModelPath: jest.fn().mockResolvedValue(null),
     loadModel: jest.fn().mockResolvedValue(true),
-    unloadModel: jest.fn().mockResolvedValue(true),
+    // Freeing a diffusion model is not instant on a device. A scripted hold parks the caller inside
+    // native unloadModel until releaseUnload(), so the in-flight unload is observable.
+    unloadModel: jest.fn(async () => {
+      if (unloadHoldPending) {
+        unloadHoldPending = false;
+        unloadHoldEngaged = true;
+        await new Promise<void>(res => {
+          unloadHoldRelease = res;
+        });
+        unloadHoldEngaged = false;
+      }
+      return true;
+    }),
     // Faithful to native: cancel RELEASES an in-flight generation rather than rejecting it. The held
     // promise then settles, which is how the app's own cancel path unwinds on a device.
     cancelGeneration: jest.fn(() => {
@@ -711,14 +812,21 @@ function makeDiffusionFake(
       held = null;
       return Promise.resolve(true);
     }),
-    getGeneratedImages: jest.fn(async () => generatedImages),
-    deleteGeneratedImage: jest.fn(async (imageId: string) => {
-      if (!fs) return true;
-      const path = `${fs.DocumentDirectoryPath}/generated_images/${imageId}.png`;
-      if (!(await fs.exists(path))) return false;
-      await fs.module.unlink(path);
-      generatedImages = generatedImages.filter(image => image.id !== imageId);
-      return true;
+    getGeneratedImages: jest.fn().mockResolvedValue([]),
+    deleteGeneratedImage: jest.fn(async (path: string) => {
+      if (deleteHoldPending) {
+        deleteHoldPending = false;
+        deleteHoldEngaged = true;
+        await new Promise<void>(resolve => {
+          deleteHoldRelease = resolve;
+        });
+        deleteHoldEngaged = false;
+      }
+      if (!fileSystem || !(await fileSystem.exists(path))) {
+        return { status: 'already_missing' };
+      }
+      await fileSystem.module.unlink(path);
+      return { status: 'deleted' };
     }),
     hasOpenCLCache: jest.fn().mockResolvedValue(true),
     clearOpenCLCache: jest.fn().mockResolvedValue(0),
@@ -742,7 +850,7 @@ function makeDiffusionFake(
       const imagePath = `/generated/img-${seedCounter}.png`;
       // The real native module writes the rendered PNG to disk — mirror that so the app's
       // downstream file reads (save-to-gallery, thumbnails) find a real file.
-      fs?.seedFile(imagePath, 1024);
+      fileSystem?.seedFile(imagePath, 1024);
       // Native renders at exactly the requested size — echo it back so the meta reflects reality.
       return Promise.resolve({
         id: `img-${seedCounter}`,
@@ -767,9 +875,24 @@ function makeDiffusionFake(
     },
     generationHeld: () => held !== null,
     cancelCount: () => cancels,
-    seedGeneratedImages: images => {
-      generatedImages = [...images];
+    holdNextUnload: () => {
+      unloadHoldPending = true;
     },
+    releaseUnload: () => {
+      const f = unloadHoldRelease;
+      unloadHoldRelease = null;
+      f?.();
+    },
+    unloadHeld: () => unloadHoldEngaged,
+    holdNextDelete: () => {
+      deleteHoldPending = true;
+    },
+    releaseDelete: () => {
+      const release = deleteHoldRelease;
+      deleteHoldRelease = null;
+      release?.();
+    },
+    deleteHeld: () => deleteHoldEngaged,
   };
 }
 
@@ -788,7 +911,7 @@ export interface DownloadRow {
   status?: string;
   bytesDownloaded?: number;
   totalBytes?: number;
-  reason?: string;
+  sha256?: string;
 }
 
 export interface DownloadFake {
@@ -796,14 +919,51 @@ export interface DownloadFake {
   events: FakeEmitterHandle;
   /** Put a row into the native active set (as if a download were in flight). */
   seedActive(row: DownloadRow): void;
+  /** Emit measured native progress for one active transfer. */
+  progress(
+    downloadId: string,
+    bytesDownloaded: number,
+    totalBytes: number,
+  ): void;
+  /** Complete one active transfer through the native event channel. */
+  complete(downloadId: string, facts?: { sha256?: string }): void;
+  /** Fail one active transfer through the native event channel. */
+  fail(downloadId: string, reason: string): void;
   /** Currently-active native rows. */
   active(): DownloadRow[];
   /** Model an app-kill: iOS URLSession loses its rows; pass {survive} for Android WorkManager rows. */
   simulateRelaunch(opts?: { survive?: string[] }): void;
 }
 
-function makeDownloadFake(handle: FakeEmitterHandle): DownloadFake {
+function makeDownloadFake(
+  handle: FakeEmitterHandle,
+  seedCompletedFile?: (
+    path: string,
+    sizeBytes: number,
+    sha256?: string,
+  ) => void,
+): DownloadFake {
   const rows = new Map<string, DownloadRow>();
+  const events: FakeEmitterHandle = {
+    emit(event, payload) {
+      if (event === 'DownloadComplete' && payload && typeof payload === 'object') {
+        const completion = payload as DownloadRow;
+        const downloadId = String(completion.downloadId ?? '');
+        const row = rows.get(downloadId);
+        if (row) {
+          rows.set(downloadId, {
+            ...row,
+            status: 'completed',
+            bytesDownloaded: completion.bytesDownloaded ?? row.bytesDownloaded,
+            totalBytes: completion.totalBytes ?? row.totalBytes,
+            sha256: completion.sha256 ?? row.sha256,
+          });
+        }
+      }
+      handle.emit(event, payload);
+    },
+    listenerCount: event => handle.listenerCount(event),
+  };
   const module: Record<string, jest.Mock> = {
     startDownload: jest.fn(async (params: DownloadRow) => {
       const row: DownloadRow = {
@@ -816,24 +976,23 @@ function makeDownloadFake(handle: FakeEmitterHandle): DownloadFake {
       rows.set(row.downloadId, row);
       return row;
     }),
-    cancelDownload: jest.fn(async (id: string) => {
+    stopDownload: jest.fn(async (id: string, _retainPartial: boolean) => {
+      if (!rows.has(id)) return 'not-found';
+      if (rows.get(id)?.status === 'completed') return 'completed';
       rows.delete(id);
-    }),
-    pauseDownload: jest.fn(async (id: string) => {
-      const row = rows.get(id);
-      if (!row) throw new Error('Download not found');
-      rows.set(id, { ...row, status: 'paused' });
-    }),
-    resumeDownload: jest.fn(async (id: string) => {
-      const row = rows.get(id);
-      if (!row || row.status !== 'paused') throw new Error('Download is not paused');
-      rows.set(id, { ...row, status: 'running' });
+      return 'stopped';
     }),
     retryDownload: jest.fn(async () => {}),
     getActiveDownloads: jest.fn(async () => [...rows.values()]),
-    moveCompletedDownload: jest.fn(
-      async (_id: string, target: string) => target,
-    ),
+    moveCompletedDownload: jest.fn(async (id: string, target: string) => {
+      const row = rows.get(id);
+      seedCompletedFile?.(
+        target,
+        row?.totalBytes ?? row?.bytesDownloaded ?? 0,
+        row?.sha256,
+      );
+      return target;
+    }),
     startProgressPolling: jest.fn(),
     stopProgressPolling: jest.fn(),
     requestNotificationPermission: jest.fn(),
@@ -845,8 +1004,40 @@ function makeDownloadFake(handle: FakeEmitterHandle): DownloadFake {
   };
   return {
     module,
-    events: handle,
+    events,
     seedActive: row => rows.set(row.downloadId, { status: 'running', ...row }),
+    progress: (downloadId, bytesDownloaded, totalBytes) => {
+      const row = rows.get(downloadId);
+      if (!row) throw new Error(`Native download is not active: ${downloadId}`);
+      rows.set(downloadId, {
+        ...row,
+        status: 'running',
+        bytesDownloaded,
+        totalBytes,
+      });
+      events.emit('DownloadProgress', {
+        downloadId,
+        bytesDownloaded,
+        totalBytes,
+      });
+    },
+    complete: (downloadId, facts) => {
+      const row = rows.get(downloadId);
+      if (!row) throw new Error(`Native download is not active: ${downloadId}`);
+      rows.set(downloadId, {
+        ...row,
+        status: 'completed',
+        bytesDownloaded: row.totalBytes ?? row.bytesDownloaded ?? 0,
+        ...facts,
+      });
+      events.emit('DownloadComplete', { downloadId });
+    },
+    fail: (downloadId, reason) => {
+      const row = rows.get(downloadId);
+      if (!row) throw new Error(`Native download is not active: ${downloadId}`);
+      rows.set(downloadId, { ...row, status: 'failed' });
+      events.emit('DownloadError', { downloadId, reason });
+    },
     active: () => [...rows.values()],
     simulateRelaunch: opts => {
       const survive = new Set(opts?.survive ?? []);
@@ -993,6 +1184,54 @@ export interface RamProfile {
 export const GB = 1024 * 1024 * 1024;
 export const MB = 1024 * 1024;
 
+/** Seed only the native RAM leaf without replacing the current React module graph. */
+export function seedNativeRamBoundary(profile: RamProfile): void {
+  const RN = require('react-native');
+  const DeviceInfo = require('react-native-device-info');
+  RN.NativeModules.DeviceMemoryModule = {
+    getMemoryInfo: jest.fn(async () => ({
+      processAvailableBytes: profile.availBytes,
+      footprintBytes: profile.totalBytes - profile.availBytes,
+    })),
+  };
+  (DeviceInfo.getTotalMemory as jest.Mock).mockResolvedValue(
+    profile.totalBytes,
+  );
+  (DeviceInfo.getUsedMemory as jest.Mock).mockResolvedValue(
+    profile.totalBytes - profile.availBytes,
+  );
+  Object.defineProperty(RN.Platform, 'OS', {
+    value: profile.platform,
+    configurable: true,
+  });
+  Object.defineProperty(RN.Platform, 'Version', {
+    value: profile.platform === 'android' ? 34 : '17.0',
+    configurable: true,
+  });
+}
+
+/** Seed one file on the Jest-native RNFS leaf without replacing the React module graph. */
+export function seedNativeFileBoundary(
+  path: string,
+  sizeBytes: number,
+): () => void {
+  const RNFS = require('react-native-fs');
+  const previousExists = RNFS.exists.getMockImplementation();
+  const previousStat = RNFS.stat.getMockImplementation();
+  RNFS.exists.mockImplementation(async (candidate: string) =>
+    candidate === path ? true : (await previousExists?.(candidate)) ?? false,
+  );
+  RNFS.stat.mockImplementation(async (candidate: string) =>
+    candidate === path
+      ? { size: sizeBytes, isFile: () => true, isDirectory: () => false }
+      : previousStat(candidate),
+  );
+  return () => {
+    if (previousExists) RNFS.exists.mockImplementation(previousExists);
+    if (previousStat) RNFS.stat.mockImplementation(previousStat);
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Fake: react-native-fs — a stateful in-memory filesystem (the REAL device leaf we can't run in node).
 // Replaces the dumb global jest.setup stub (exists→false / readDir→[]) so the real listing/scan/
@@ -1017,8 +1256,6 @@ export interface InstallOpts {
    *  supportsNativeThinking (reasoning-delimiter detection). Omit for the reasoning-capable default;
    *  pass a marker-free template (e.g. Mistral's) to model a non-thinking model. */
   llamaChatTemplate?: string;
-  /** GGUF header fields returned by the native metadata reader. */
-  llamaModelInfo?: Record<string, unknown>;
   /** Seed a stateful background-download native module (boundary.download). */
   download?: boolean;
   /** Replace the global whisper.rn stub with a driveable STT context (boundary.whisper). */
@@ -1076,11 +1313,15 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     memState.availBytes += freed;
   };
 
-  const litert = makeLiteRTFake(handle);
-  const downloadFake = opts.download ? makeDownloadFake(handle) : undefined;
-
   // Stateful FS: override the dumb global react-native-fs stub BEFORE any service requires it.
   const fsFake = opts.fs ? createNativeFileSystemBoundary() : undefined;
+  const litert = makeLiteRTFake(handle);
+  const downloadFake = opts.download
+    ? makeDownloadFake(handle, (path, sizeBytes, sha256) => {
+        fsFake?.seedFile(path, sizeBytes);
+        if (sha256) fsFake?.setReportedHash(path, 'sha256', sha256);
+      })
+    : undefined;
   if (fsFake) jest.doMock('react-native-fs', () => fsFake.module);
 
   // Diffusion writes its rendered PNG to the (memfs) disk when fs is present, like the native module.
@@ -1088,7 +1329,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
 
   // Scriptable llama.rn: override the global stub so completion output is under test control.
   const llamaFake = opts.llama
-    ? makeLlamaFake(freeModelMemory, opts.llamaChatTemplate, opts.llamaModelInfo)
+    ? makeLlamaFake(freeModelMemory, opts.llamaChatTemplate)
     : undefined;
   if (llamaFake) jest.doMock('llama.rn', () => llamaFake.module);
 
@@ -1097,6 +1338,12 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   if (whisperFake) jest.doMock('whisper.rn', () => whisperFake.module);
 
   const RN = require('react-native');
+  // resetModules() creates a fresh React Native View class after jest.setup installed the
+  // host-measurement boundary. Restore the native layout callback on this module graph so anchored
+  // controls open through their real measureInWindow path.
+  RN.View.prototype.measureInWindow = (
+    callback: (...values: number[]) => void,
+  ): void => callback(0, 0, 100, 40);
   RN.NativeModules.LiteRTModule = litert.module;
   // Both platform names point at the same fake; localDreamGenerator's Platform.select picks one.
   RN.NativeModules.LocalDreamModule = diffusion.module;

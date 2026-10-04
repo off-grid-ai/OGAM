@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import { InteractionManager } from 'react-native';
 import { showAlert, AlertState } from '../../../components';
-import { activeModelService } from '../../../services';
-import { useAppStore } from '../../../stores';
-import { DownloadedModel, ONNXImageModel } from '../../../types';
+import { selectMobileModel } from '../../../services';
+import { unloadAndClearModel } from '../../../services/modelServices/modelFacadeCommands';
+import { DownloadedModel } from '../../../types';
 import { LoadingState, ModelPickerType } from './types';
 
 type Setters = {
@@ -14,10 +14,12 @@ type Setters = {
 
 const idle: LoadingState = { isLoading: false, type: null, modelName: null };
 
-/** Yield one interaction cycle so the inline "Loading…" card paints before the
+/** Yield one interaction cycle so the inline "Loading..." card paints before the
  *  (potentially bridge-blocking) native unload starts. */
 const waitForOverlay = () =>
-  new Promise<void>(resolve => InteractionManager.runAfterInteractions(() => resolve()));
+  new Promise<void>(resolve =>
+    InteractionManager.runAfterInteractions(() => resolve()),
+  );
 
 export const useModelLoading = ({
   setLoadingState,
@@ -30,12 +32,14 @@ export const useModelLoading = ({
   // modality out. Loading eagerly here used to race that path and leave both a
   // text and an image model resident at the same time.
   const handleSelectTextModel = useCallback(
-    (model: DownloadedModel) => {
+    async (model: DownloadedModel) => {
       setPickerType(null);
-      // Dispatch the SELECT intent to the owning service — the View no longer writes activeModelId
-      // directly (presentation holds no authoritative state). The service is the one writer, so the
-      // selection, load-success, and load-failure states can never drift apart.
-      activeModelService.selectTextModel(model.id);
+      await selectMobileModel({
+        source: 'local',
+        hostId: model.engine,
+        modality: 'text',
+        modelId: model.id,
+      });
     },
     [setPickerType],
   );
@@ -45,7 +49,7 @@ export const useModelLoading = ({
     setLoadingState({ isLoading: true, type: 'text', modelName: null });
     await waitForOverlay();
     try {
-      await activeModelService.unloadTextModel();
+      await unloadAndClearModel('text');
     } catch (_error) {
       setAlertState(showAlert('Error', 'Failed to unload model'));
     } finally {
@@ -53,20 +57,12 @@ export const useModelLoading = ({
     }
   }, [setLoadingState, setPickerType, setAlertState]);
 
-  const handleSelectImageModel = useCallback(
-    (model: ONNXImageModel) => {
-      setPickerType(null);
-      useAppStore.getState().setActiveImageModelId(model.id);
-    },
-    [setPickerType],
-  );
-
   const handleUnloadImageModel = useCallback(async () => {
     setPickerType(null);
     setLoadingState({ isLoading: true, type: 'image', modelName: null });
     await waitForOverlay();
     try {
-      await activeModelService.unloadImageModel();
+      await unloadAndClearModel('image');
     } catch (_error) {
       setAlertState(showAlert('Error', 'Failed to unload model'));
     } finally {
@@ -77,7 +73,6 @@ export const useModelLoading = ({
   return {
     handleSelectTextModel,
     handleUnloadTextModel,
-    handleSelectImageModel,
     handleUnloadImageModel,
   };
 };

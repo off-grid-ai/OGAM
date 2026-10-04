@@ -1,15 +1,19 @@
 /**
  * useResidentRows — the manager sheet's per-row residency projection, read from the OWNING service
- * (modelResidencyManager: the accounting of what is actually in RAM). One place maps the sheet's
+ * (the Models application facade). One place maps the sheet's
  * modality rows onto residency types — no engine branching in the view, and both callers (Home,
  * Chat) inherit the projection with zero wiring.
  *
- * The manager holds a plain (non-reactive) Map with no subscription, so this polls getResidents()
- * while the sheet is visible — the same approach the In-Memory list used.
+ * The facade owns the structurally shared snapshot. The UI only projects its resident list into
+ * the four model rows shown by this sheet.
  */
-import { useEffect, useState } from 'react';
-import { modelResidencyManager } from '../../services/modelResidency';
-import type { Resident, ResidentType } from '../../services/modelResidency/policy';
+import { useSyncExternalStore } from 'react';
+import { applicationFacade } from '../../services/applicationFacade';
+import {
+  modelsFailureMessage,
+  type Resident,
+  type ResidentType,
+} from '@offgrid/application';
 
 /** The manager sheet's modality rows. Defined HERE (the lower-level projection) rather than in
  *  ModelsManagerSheet so the hook doesn't import the component — that was a dependency cycle
@@ -20,12 +24,14 @@ export type ModelRowType = 'text' | 'image' | 'voice' | 'speech';
 const ROW_RESIDENT_TYPE: Record<ModelRowType, ResidentType> = {
   text: 'text',
   image: 'image',
-  voice: 'tts',
-  speech: 'whisper',
+  voice: 'voice',
+  speech: 'transcription',
 };
 
 /** Pure: pick the resident (if any) backing each sheet row. */
-function residentsByRow(residents: Resident[]): Partial<Record<ModelRowType, Resident>> {
+function residentsByRow(
+  residents: readonly Resident[],
+): Partial<Record<ModelRowType, Resident>> {
   const out: Partial<Record<ModelRowType, Resident>> = {};
   (Object.keys(ROW_RESIDENT_TYPE) as ModelRowType[]).forEach((row) => {
     const match = residents.find((r) => r.type === ROW_RESIDENT_TYPE[row]);
@@ -35,20 +41,20 @@ function residentsByRow(residents: Resident[]): Partial<Record<ModelRowType, Res
 }
 
 export function useResidentRows(active: boolean): Partial<Record<ModelRowType, Resident>> {
-  const [byRow, setByRow] = useState<Partial<Record<ModelRowType, Resident>>>(
-    () => residentsByRow(modelResidencyManager.getResidents()),
+  const models = applicationFacade().models;
+  const snapshot = useSyncExternalStore(
+    active ? models.subscribe : () => () => {},
+    models.snapshot,
+    models.snapshot,
   );
-  useEffect(() => {
-    if (!active) return;
-    const tick = () => setByRow(residentsByRow(modelResidencyManager.getResidents()));
-    tick();
-    const id = setInterval(tick, 300);
-    return () => clearInterval(id);
-  }, [active]);
-  return byRow;
+  return residentsByRow(snapshot.residents);
 }
 
-/** Eject one row's resident via the owning service (its registered unload runs; lazy-reload on next use). */
-export function ejectResident(resident: Resident): Promise<boolean> {
-  return modelResidencyManager.evictByKey(resident.key);
+/** Eject one row's resident via the owning service: running work stops first, then its registered unload runs. */
+export async function ejectResident(resident: Resident): Promise<boolean> {
+  const outcome = await applicationFacade().models.ejectResident({
+    key: resident.key,
+  });
+  if (!outcome.ok) throw new Error(modelsFailureMessage(outcome.failure));
+  return outcome.value;
 }

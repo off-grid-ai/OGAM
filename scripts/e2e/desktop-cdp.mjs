@@ -111,6 +111,28 @@ export const connectDesktop = async ({ relaunch = false } = {}) => {
       socket.send(JSON.stringify({ id, method, params }));
     });
 
+  // Data reaches the page as CDP arguments, never spliced into source.
+  let globalObjectId;
+  const call = async (fn, ...args) => {
+    if (!globalObjectId) {
+      const { result } = await send('Runtime.evaluate', { expression: 'globalThis' });
+      globalObjectId = result.objectId;
+    }
+    const result = await send('Runtime.callFunctionOn', {
+      objectId: globalObjectId,
+      functionDeclaration: fn.toString(),
+      arguments: args.map((value) => ({ value })),
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (result.exceptionDetails) {
+      throw new Error(
+        `the page threw: ${result.exceptionDetails.exception?.description ?? result.exceptionDetails.text}`,
+      );
+    }
+    return result.result.value;
+  };
+
   const desktop = {
     platform: 'macos',
 
@@ -139,8 +161,7 @@ export const connectDesktop = async ({ relaunch = false } = {}) => {
      * Prefers the smallest matching element so a match on a container does not click the whole sidebar.
      */
     clickText(needle) {
-      return desktop.evaluate(`
-        const wanted = ${JSON.stringify(needle)}.toLowerCase();
+      return call((wanted) => {
         const hits = [...document.querySelectorAll('button, a, [role="button"], [role="tab"], li, div, span')]
           .filter((el) => (el.innerText ?? '').trim().toLowerCase() === wanted && el.offsetParent !== null);
         const target = hits.sort((a, b) => a.innerText.length - b.innerText.length)[0]
@@ -150,7 +171,7 @@ export const connectDesktop = async ({ relaunch = false } = {}) => {
         if (!target) return false;
         target.click();
         return true;
-      `);
+      }, needle.toLowerCase());
     },
 
     /** Poll the page until `check` (an expression returning truthy) passes, and name what was awaited. */

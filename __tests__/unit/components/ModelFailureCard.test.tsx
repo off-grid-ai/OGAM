@@ -1,6 +1,6 @@
 /**
  * ModelFailureCard — the single dismissible surface for every model failure.
- * These lock in the "Load Anyway" affordance: it must appear for an OVERRIDABLE
+ * These lock in the "Run anyway" affordance: it must appear for an OVERRIDABLE
  * memory-gate failure (any model type) and must NOT appear otherwise. This is the
  * UI half of the fix that gave image models the same override the text path had.
  */
@@ -28,10 +28,10 @@ const push = (f: Partial<ModelFailure> & Pick<ModelFailure, 'modelType'>) =>
     ...f,
   } as ModelFailure);
 
-describe('ModelFailureCard — Load Anyway affordance', () => {
+describe('ModelFailureCard — Run anyway affordance', () => {
   beforeEach(() => useModelFailureStore.getState().clear());
 
-  it('shows "Load Anyway" for an overridable memory-gate failure and runs the handler', () => {
+  it('shows "Run anyway" for an overridable memory-gate failure and runs the handler', () => {
     const onLoadAnyway = jest.fn();
     push({ modelType: 'image', overridable: true, onLoadAnyway, memoryPressure: true });
 
@@ -42,7 +42,7 @@ describe('ModelFailureCard — Load Anyway affordance', () => {
     expect(onLoadAnyway).toHaveBeenCalledTimes(1);
   });
 
-  it('does NOT show "Load Anyway" when the failure is not overridable (false branch)', () => {
+  it('does NOT show "Run anyway" when the failure is not overridable (false branch)', () => {
     const onLoadAnyway = jest.fn();
     // overridable:false — even with a handler present, no button (a plain crash, say).
     push({ modelType: 'image', overridable: false, onLoadAnyway, onRetry: jest.fn() });
@@ -53,13 +53,13 @@ describe('ModelFailureCard — Load Anyway affordance', () => {
     expect(queryByTestId('model-failure-retry-image')).not.toBeNull();
   });
 
-  it('does NOT show "Load Anyway" when overridable but no handler was supplied', () => {
+  it('does NOT show "Run anyway" when overridable but no handler was supplied', () => {
     push({ modelType: 'image', overridable: true, onRetry: jest.fn() });
     const { queryByTestId } = render(<ModelFailureCard />);
     expect(queryByTestId('model-failure-load-anyway-image')).toBeNull();
   });
 
-  it('offers Load Anyway for a NON-image model type too (uniform across surfaces)', () => {
+  it('offers Run anyway for a NON-image model type too (uniform across surfaces)', () => {
     const onLoadAnyway = jest.fn();
     push({ modelType: 'tts', overridable: true, onLoadAnyway });
     const { getByTestId } = render(<ModelFailureCard />);

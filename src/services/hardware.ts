@@ -13,8 +13,25 @@ import {
   SoCVendor,
   ImageModelRecommendation,
 } from '../types';
-import { MODEL_RECOMMENDATIONS, RECOMMENDED_MODELS } from '../constants';
+import { MODEL_RECOMMENDATIONS, RECOMMENDED_MODELS,
+  formatFileSize,
+} from '@offgrid/models';
 import { HTP_ENABLED } from '../config/featureFlags';
+import {
+  appleChipForDevice,
+  canRunParameterizedModel,
+  classifyQnnVariant,
+  detectAndroidSoCVendor,
+  deviceTier,
+  estimateParameterMemoryGB,
+  estimateModelArtifactMemoryBytes,
+  modelArtifactBytes,
+  mobileImageRuntimeMemoryMultiplier,
+  preferGpuForMobileImage,
+  recommendMobileImage,
+  recommendTextModels,
+  recommendedInferenceThreadCount,
+} from '@offgrid/models';
 /**
  * QNN variant tiers — mirrors local-dream's chipsetModelSuffixes map exactly.
  * Source: https://github.com/xororz/local-dream — Model.kt getChipsetSuffix()
@@ -23,8 +40,6 @@ import { HTP_ENABLED } from '../config/featureFlags';
  * - 8gen1: SM8450, SM8475
  * - min:   any other SM-prefixed chip (fallback, same as local-dream)
  */
-const FLAGSHIP_8GEN2 = new Set([8550, 8650, 8735, 8750, 8845, 8850]);
-const FLAGSHIP_8GEN1 = new Set([8450, 8475]);
 class HardwareService {
   private cachedDeviceInfo: DeviceInfoType | null = null;
   private cachedSoCInfo: SoCInfo | null = null;
@@ -205,70 +220,41 @@ class HardwareService {
   }
   getModelRecommendation(): ModelRecommendation {
     const totalRamGB = this.getTotalMemoryGB();
-    // Find the appropriate recommendation tier
-    const tier =
-      MODEL_RECOMMENDATIONS.memoryToParams.find(
-        t => totalRamGB >= t.minRam && totalRamGB < t.maxRam,
-      ) || MODEL_RECOMMENDATIONS.memoryToParams[0];
-    // Filter recommended models based on device capability
-    const compatibleModels = RECOMMENDED_MODELS.filter(
-      m => m.minRam <= totalRamGB,
-    ).map(m => m.id);
-    let warning: string | undefined;
-    if (totalRamGB < 4) {
-      warning =
-        'Your device has limited memory. Only the smallest models will work well.';
-    } else if (this.cachedDeviceInfo?.isEmulator) {
-      warning = 'Running in emulator. Performance may be significantly slower.';
-    }
-    return {
-      maxParameters: tier.maxParams,
-      recommendedQuantization: tier.quantization,
-      recommendedModels: compatibleModels,
-      warning,
-    };
+    return recommendTextModels({
+      totalRamGB,
+      isEmulator: this.cachedDeviceInfo?.isEmulator,
+      tiers: MODEL_RECOMMENDATIONS.memoryToParams,
+      models: RECOMMENDED_MODELS,
+    });
   }
   canRunModel(
     parametersBillions: number,
     quantization: string = 'Q4_K_M',
   ): boolean {
-    const availableMemoryGB = this.getAvailableMemoryGB();
-    // Estimate model memory requirement
-    // Q4_K_M uses ~0.5 bytes per parameter + overhead
-    const bitsPerWeight = this.getQuantizationBits(quantization);
-    const modelSizeGB = (parametersBillions * bitsPerWeight) / 8;
-    // Need at least 1.5x the model size for safe operation
-    const requiredMemory = modelSizeGB * 1.5;
-    return availableMemoryGB >= requiredMemory;
+    return canRunParameterizedModel({
+      availableMemoryGB: this.getAvailableMemoryGB(),
+      parametersBillions,
+      quantization,
+    });
   }
   estimateModelMemoryGB(
     parametersBillions: number,
     quantization: string = 'Q4_K_M',
   ): number {
-    const bitsPerWeight = this.getQuantizationBits(quantization);
-    return (parametersBillions * bitsPerWeight) / 8;
+    return estimateParameterMemoryGB(parametersBillions, quantization);
   }
-  private getQuantizationBits(quantization: string): number {
-    const bits: Record<string, number> = { Q2_K: 2.625, Q3_K_S: 3.4375, Q3_K_M: 3.4375, Q4_0: 4, Q4_K_S: 4.5, Q4_K_M: 4.5, Q5_K_S: 5.5, Q5_K_M: 5.5, Q6_K: 6.5, Q8_0: 8, F16: 16 };
-    for (const [key, value] of Object.entries(bits)) {
-      if (quantization.toUpperCase().includes(key)) return value;
-    }
-    return 4.5;
-  }
+  /** One byte formatter for every surface (shared). */
   formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+    return formatFileSize(bytes);
   }
   getModelTotalSize(model: { fileSize?: number; size?: number; mmProjFileSize?: number }): number {
-    return (model.fileSize || model.size || 0) + (model.mmProjFileSize || 0);
+    return modelArtifactBytes(model);
   }
   formatModelSize(model: { fileSize?: number; size?: number; mmProjFileSize?: number }): string {
     return this.formatBytes(this.getModelTotalSize(model));
   }
   estimateModelRam(model: { fileSize?: number; size?: number; mmProjFileSize?: number }, multiplier = 1.5): number {
-    return this.getModelTotalSize(model) * multiplier;
+    return estimateModelArtifactMemoryBytes(model, multiplier);
   }
   /**
    * Whether iOS Core ML image generation should run on the GPU (vs the Neural
@@ -280,10 +266,11 @@ class HardwareService {
    * the ANE (fast + low memory there). Android uses a different backend entirely.
    */
   preferGpuForImageGen(): boolean {
-    if (Platform.OS !== 'ios') return false;
-    const iosMajor = parseInt(String(Platform.Version), 10);
-    if (Number.isNaN(iosMajor) || iosMajor < 26) return false;
-    return this.getTotalMemoryGB() >= 7; // 8GB-class devices report ~7.4GB
+    return preferGpuForMobileImage({
+      platform: Platform.OS === 'ios' ? 'ios' : 'android',
+      platformVersion: Platform.Version,
+      totalRamGB: this.getTotalMemoryGB(),
+    });
   }
 
   /**
@@ -297,42 +284,32 @@ class HardwareService {
    * OOMs). Android (ONNX/QNN reserves accelerator memory up front) keeps 2.5×.
    */
   estimateImageModelRam(model: { fileSize?: number; size?: number; mmProjFileSize?: number }): number {
-    const multiplier = Platform.OS === 'ios' && !this.preferGpuForImageGen() ? 1.8 : 2.5;
+    const multiplier = mobileImageRuntimeMemoryMultiplier({
+      platform: Platform.OS === 'ios' ? 'ios' : 'android',
+      preferGpu: this.preferGpuForImageGen(),
+    });
     return this.estimateModelRam(model, multiplier);
   }
   formatModelRam(model: { fileSize?: number; size?: number; mmProjFileSize?: number }, multiplier = 1.5): string {
     return `~${(this.estimateModelRam(model, multiplier) / (1024 * 1024 * 1024)).toFixed(1)} GB`;
   }
-  private detectAppleChip(deviceId: string): SoCInfo['appleChip'] {
-    const match = /iPhone(\d+)/.exec(deviceId);
-    if (!match) return undefined;
-    const major = Number.parseInt(match[1], 10);
-    if (major >= 17) return 'A18';
-    if (major >= 16) return 'A17Pro';
-    if (major >= 15) return 'A16';
-    if (major >= 14) return 'A15';
-    if (major >= 13) return 'A14';
-    return undefined;
-  }
   async getSoCInfo(): Promise<SoCInfo> {
     if (this.cachedSoCInfo) return this.cachedSoCInfo;
     if (Platform.OS === 'ios') {
       const ramGB = this.getTotalMemoryGB();
-      const appleChip =
-        this.detectAppleChip(DeviceInfo.getDeviceId()) ??
-        (ramGB >= 6 ? 'A15' : 'A14');
+      const appleChip = appleChipForDevice({
+        deviceId: DeviceInfo.getDeviceId(),
+        totalRamGB: ramGB,
+      });
       this.cachedSoCInfo = { vendor: 'apple', hasNPU: true, appleChip };
       return this.cachedSoCInfo;
     }
     const hardware = await DeviceInfo.getHardware();
     const model = DeviceInfo.getModel();
-    const hw = hardware.toLowerCase();
-    let vendor: SoCVendor = 'unknown';
-    if (hw.includes('qcom')) vendor = 'qualcomm';
-    else if (model.startsWith('Pixel')) vendor = 'tensor';
-    else if (hw.includes('mt') || hw.includes('mediatek')) vendor = 'mediatek';
-    else if (hw.includes('exynos') || hw.includes('samsungexynos'))
-      vendor = 'exynos';
+    const vendor: SoCVendor = detectAndroidSoCVendor({
+      hardware,
+      deviceModel: model,
+    });
     const qnnVariant =
       vendor === 'qualcomm' ? await this.getQnnVariantFromSoC() : undefined;
     this.cachedSoCInfo = {
@@ -362,77 +339,21 @@ class HardwareService {
   private classifySmNumber(
     socModel: string,
   ): '8gen2' | '8gen1' | 'min' | undefined {
-    const base = socModel.split('-')[0].toUpperCase();
-    // Must start with SM — matches local-dream's getChipsetSuffix fallback
-    if (!base.startsWith('SM')) return undefined;
-    const smMatch = /^SM(\d+)/.exec(base);
-    if (!smMatch) return undefined;
-    const num = Number.parseInt(smMatch[1], 10);
-    if (FLAGSHIP_8GEN2.has(num)) return '8gen2';
-    if (FLAGSHIP_8GEN1.has(num)) return '8gen1';
-    return 'min';
-  }
-  private getIosImageRec(chip: SoCInfo['appleChip'], ramGB: number): ImageModelRecommendation {
-    const coreml = 'coreml';
-    if ((chip === 'A17Pro' || chip === 'A18') && ramGB >= 6)
-      // SDXL is NOT recommended (nor offered) on iOS \u2014 its ~7 GB dirty Core ML footprint jetsams
-      // even top-tier devices (see coreMLModelBrowser). SD 2.1 Palettized (6-bit, ANE) is the
-      // best-quality model that loads safely, so big devices get it as the top pick.
-      return { recommendedBackend: coreml, recommendedModels: ['2-1-base-palettized', 'v1-5-palettized'], bannerText: 'SD 2.1 Palettized recommended \u2014 best quality for your device', compatibleBackends: [coreml] };
-    if ((chip === 'A15' || chip === 'A16') && ramGB >= 6)
-      return { recommendedBackend: coreml, recommendedModels: ['v1-5-palettized', '2-1-base-palettized'], bannerText: 'SD 1.5 or SD 2.1 Palettized recommended', compatibleBackends: [coreml] };
-    if (ramGB < 4)
-      return { recommendedBackend: coreml, recommendedModels: ['low ram'], bannerText: 'Low RAM models recommended for your device', compatibleBackends: [coreml] };
-    return { recommendedBackend: coreml, recommendedModels: ['v1-5-palettized', '2-1-base-palettized'], bannerText: 'SD 1.5 or SD 2.1 Palettized recommended for your device', compatibleBackends: [coreml] };
-  }
-  private getQualcommImageRec(socInfo: SoCInfo): ImageModelRecommendation {
-    let label: string;
-    if (socInfo.qnnVariant === '8gen2') label = 'flagship';
-    else if (socInfo.qnnVariant === '8gen1') label = '';
-    else label = 'lightweight ';
-
-    let suffix: string;
-    if (socInfo.qnnVariant === '8gen2') suffix = 'NPU models for fastest inference';
-    else if (socInfo.qnnVariant === '8gen1') suffix = 'NPU models supported';
-    else suffix = 'lightweight NPU models recommended';
-    return { recommendedBackend: 'qnn', qnnVariant: socInfo.qnnVariant, bannerText: `Snapdragon ${label}\u2014 ${suffix}`, compatibleBackends: ['qnn', 'mnn'] };
+    return classifyQnnVariant(socModel);
   }
   async getImageModelRecommendation(): Promise<ImageModelRecommendation> {
     if (this.cachedImageRecommendation) return this.cachedImageRecommendation;
     const socInfo = await this.getSoCInfo();
     const ramGB = this.getTotalMemoryGB();
-    let rec: ImageModelRecommendation;
-    if (Platform.OS === 'ios') {
-      rec = this.getIosImageRec(socInfo.appleChip, ramGB);
-    } else if (socInfo.vendor === 'qualcomm' && socInfo.hasNPU) {
-      rec = this.getQualcommImageRec(socInfo);
-    } else if (socInfo.vendor === 'qualcomm') {
-      rec = {
-        recommendedBackend: 'mnn',
-        bannerText:
-          'GPU models recommended \u2014 your Snapdragon doesn\u2019t support NPU acceleration',
-        compatibleBackends: ['mnn'],
-      };
-    } else {
-      rec = {
-        recommendedBackend: 'mnn',
-        bannerText:
-          'GPU models recommended \u2014 NPU requires Snapdragon 888+',
-        compatibleBackends: ['mnn'],
-      };
-    }
-    if (ramGB < 4) {
-      rec.warning = 'Low RAM \u2014 expect slower performance';
-    }
-    this.cachedImageRecommendation = rec;
-    return rec;
+    this.cachedImageRecommendation = recommendMobileImage({
+      platform: Platform.OS === 'ios' ? 'ios' : 'android',
+      totalRamGB: ramGB,
+      soc: socInfo,
+    });
+    return this.cachedImageRecommendation;
   }
   getDeviceTier(): 'low' | 'medium' | 'high' | 'flagship' {
-    const ramGB = this.getTotalMemoryGB();
-    if (ramGB < 4) return 'low';
-    if (ramGB < 6) return 'medium';
-    if (ramGB < 8) return 'high';
-    return 'flagship';
+    return deviceTier(this.getTotalMemoryGB());
   }
   async getCpuCoreCount(): Promise<number> {
     if (Platform.OS !== 'android') return 4;
@@ -460,11 +381,14 @@ class HardwareService {
     // which on an 8-core phone spilled two threads onto efficiency cores and ran slower than using
     // four — the case this replaces. Below two the topology read told us nothing useful, so fall
     // through to the generic rule rather than crippling the engine on a single thread.
-    if (Platform.OS === 'android') {
-      const fast = await this.getPerformanceCoreCount();
-      if (fast >= 2) return Math.min(fast, cores);
-    }
-    return cores <= 4 ? cores : Math.floor(cores * 0.8);
+    const fast = Platform.OS === 'android'
+      ? await this.getPerformanceCoreCount()
+      : undefined;
+    return recommendedInferenceThreadCount({
+      platform: Platform.OS === 'ios' ? 'ios' : 'android',
+      cpuCoreCount: cores,
+      performanceCoreCount: fast,
+    });
   }
   /**
    * The device's llama.rn hardware-acceleration options, composed ONCE from the same

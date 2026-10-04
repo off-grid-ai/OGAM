@@ -1,18 +1,18 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
+import { LoadingDots } from '../../components/LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
-import { ModelCard } from '../../components/ModelCard';
+import { Card } from '../../components/Card';
 import { useTheme, useThemedStyles } from '../../theme';
-import { useDownloadStore } from '../../stores/downloadStore';
 import { BackgroundDownloadReasonCode } from '../../types';
 import { needsVisionRepair as checkNeedsVisionRepair } from '../../utils/visionRepair';
 import { getDownloadStatusLabel, isRetryable } from '../../utils/downloadErrors';
 import { downloadStatusIcon } from '../../utils/downloadStatusIcon';
+import { formatBytes } from '../../utils/formatBytes';
 import { createStyles } from './styles';
 import { presentProgress } from '../../utils/progressPresentation';
 import { SPACING } from '../../constants';
-import { isMMProjFile } from '../../services/mmproj';
-import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
+import { isDownloadingStatus, isPausedStatus } from '../../utils/downloadStatus';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -30,8 +30,6 @@ export type DownloadItem = {
   progress: number;
   bytesPerSecond?: number;
   status: string;
-  canPause?: boolean;
-  canResume?: boolean;
   downloadedAt?: string;
   filePath?: string;
   isVisionModel?: boolean;
@@ -49,24 +47,18 @@ export type DownloadItem = {
 export { formatBytes } from '../../utils/formatBytes';
 
 export function getStatusText(status: string): string {
-  if (status === 'running') return 'Downloading...';
-  if (status === 'pending') return 'Queued';
+  if (status === 'preparing') return 'Preparing...';
+  if (status === 'running' || status === 'downloading') return 'Downloading...';
+  if (status === 'pending' || status === 'queued') return 'Queued';
   if (status === 'paused') return 'Paused';
+  if (status === 'verifying') return 'Verifying...';
+  if (status === 'processing') return 'Preparing...';
   if (status === 'retrying') return 'Retrying connection...';
   if (status === 'waiting_for_network') return 'Waiting for network';
   if (status === 'failed') return 'Needs attention';
   if (status === 'unknown') return 'Stuck - Remove & retry';
+  if (status === 'interrupted') return 'Interrupted';
   return status;
-}
-
-function textCapabilities(item: DownloadItem) {
-  if (item.modelType !== 'text' || !item.fileName.toLowerCase().endsWith('.gguf')) return undefined;
-  const predicted = predictGgufCapabilities({
-    id: item.modelId,
-    name: item.name,
-    fileName: item.fileName,
-  });
-  return { ...predicted, vision: !!item.isVisionModel, predicted: true };
 }
 
 function getStatusLabel(item: DownloadItem): string {
@@ -88,11 +80,48 @@ interface ActiveDownloadCardProps {
   onResume: (item: DownloadItem) => void;
 }
 
+const DownloadControlActions: React.FC<ActiveDownloadCardProps> = ({
+  item,
+  onRemove,
+  onPause,
+  onResume,
+}) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const paused = isPausedStatus(item.status);
+  const canPauseOrResume = isDownloadingStatus(item.status) || paused;
+  return (
+    <View style={styles.downloadActionsRow}>
+      {canPauseOrResume && (
+        <TouchableOpacity
+          style={styles.downloadActionButton}
+          hitSlop={SPACING.md}
+          accessibilityLabel={paused ? 'Resume download' : 'Pause download'}
+          testID={paused ? 'resume-download-button' : 'pause-download-button'}
+          onPress={() => paused ? onResume(item) : onPause(item)}
+        >
+          <Icon name={paused ? 'play' : 'pause'} size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
+      )}
+      <TouchableOpacity
+        style={styles.downloadActionButton}
+        hitSlop={SPACING.md}
+        accessibilityLabel="Cancel download"
+        testID="remove-download-button"
+        onPress={() => onRemove(item)}
+      >
+        <Icon name="x" size={20} color={colors.error} />
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, onRemove, onRetry, onPause, onResume }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const needsAttention = item.status === 'failed' || item.status === 'interrupted';
   const progressColor =
-    item.status === 'failed'
+    needsAttention
       ? colors.error
       : item.status === 'retrying' || item.status === 'waiting_for_network'
         ? colors.warning
@@ -111,71 +140,66 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, on
   const getStatusIcon = () => downloadStatusIcon(item.status);
 
   const getStatusIconColor = () => {
-    if (item.status === 'failed') return colors.error;
+    if (needsAttention) return colors.error;
     if (item.status === 'retrying') return colors.warning;
     if (item.status === 'waiting_for_network') return colors.warning;
     return colors.textMuted;
   };
 
   return (
-    <ModelCard
-      compact
-      model={{ id: item.modelId, name: item.fileName, author: item.author,
-        modelType: item.isVisionModel ? 'vision' : item.modelType === 'text' ? 'text' : undefined }}
-      file={{ name: item.fileName, size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
-      capabilities={textCapabilities(item)}
-      facts={[item.modelType === 'tts' ? 'Voice' : item.modelType === 'stt' ? 'Transcription' : item.modelType === 'image' ? 'Image' : 'Text']}
-      footer={<>
-      <View style={styles.progressContainer}>
-        <View style={styles.transferRow}>
-          <View style={[styles.progressBarBackground, styles.transferProgressBar]}>
-            <View style={[styles.progressBarFill, { width: `${percentage}%` as const, backgroundColor: progressColor }]} />
-          </View>
-          <View style={styles.transferActions}>
-            {item.status === 'failed' ? (
-              <>
-                {isRetryable(item.reasonCode) && !item.modelKey?.startsWith('model-download:') && (
-                  <TouchableOpacity style={styles.transferIconButton} hitSlop={SPACING.md} testID="failed-retry-button" accessibilityRole="button" accessibilityLabel={`Retry ${item.fileName}`} onPress={() => onRetry(item)}>
-                    <Icon name="refresh-cw" size={14} color={colors.primary} />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity style={styles.transferIconButton} hitSlop={SPACING.md} testID="failed-remove-button" accessibilityRole="button" accessibilityLabel={`Remove ${item.fileName}`} onPress={() => onRemove(item)}>
-                  <Icon name="trash-2" size={14} color={colors.error} />
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-              {(item.canPause || item.canResume) && (
-                <TouchableOpacity
-                  style={styles.transferIconButton}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${item.canResume ? 'Resume' : 'Pause'} ${item.fileName}`}
-                  hitSlop={6}
-                  onPress={() => item.canResume ? onResume(item) : onPause(item)}
-                >
-                  <Icon name={item.canResume ? 'play' : 'pause'} size={14} color={colors.primary} />
-                </TouchableOpacity>
-              )}
-                <TouchableOpacity
-                  style={styles.transferIconButton}
-                  testID="remove-download-button"
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove ${item.fileName}`}
-                  hitSlop={6}
-                  onPress={() => onRemove(item)}
-                >
-                  <Icon name="x" size={16} color={colors.error} />
-                </TouchableOpacity>
-              </>
+    <Card style={styles.downloadCard}>
+      <View style={styles.downloadHeader}>
+        <View style={styles.downloadInfo}>
+          <Text style={styles.fileName} numberOfLines={1}>{item.fileName}</Text>
+          <Text style={styles.modelId} numberOfLines={1}>{item.author}</Text>
+        </View>
+        {needsAttention ? (
+          <View style={styles.failedActionsRow}>
+            {isRetryable(item.reasonCode) && (
+              <TouchableOpacity
+                style={styles.retryButton}
+                hitSlop={SPACING.md}
+                testID="failed-retry-button"
+                onPress={() => onRetry(item)}
+              >
+                <Icon name="refresh-cw" size={14} color={colors.primary} />
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
             )}
+            <TouchableOpacity
+              style={styles.removeButton}
+              hitSlop={SPACING.md}
+              testID="failed-remove-button"
+              onPress={() => onRemove(item)}
+            >
+              <Icon name="trash-2" size={14} color={colors.error} />
+              <Text style={styles.removeButtonText}>Remove</Text>
+            </TouchableOpacity>
           </View>
+        ) : (
+          <DownloadControlActions
+            item={item}
+            onRemove={onRemove}
+            onRetry={onRetry}
+            onPause={onPause}
+            onResume={onResume}
+          />
+        )}
+      </View>
+      <View style={styles.progressContainer}>
+        <View style={styles.progressBarBackground}>
+          <View style={[styles.progressBarFill, { width: `${percentage}%` as const, backgroundColor: progressColor }]} />
         </View>
-        <View style={styles.transferCaptionRow}>
-          <Text style={styles.progressText} testID="download-progress-detail">{presented.detailText}</Text>
-          <Text style={styles.progressText}>{presented.percentageText}</Text>
-        </View>
+        <Text style={styles.progressText} testID="download-progress-detail">
+          {[presented.percentageText, presented.detailText].filter(Boolean).join(' · ')}
+        </Text>
       </View>
       <View style={styles.downloadMeta}>
+        {!!item.quantization && (
+          <View style={styles.quantBadge}>
+            <Text style={styles.quantText}>{item.quantization}</Text>
+          </View>
+        )}
         {(!!getStatusLabel(item) || !!getStatusIcon()) && (
           <View style={styles.statusIconRow}>
             {getStatusIcon() && (
@@ -183,16 +207,15 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, on
             )}
             {/* Queued is icon-only (clock) — the word is redundant next to it. Other states
                 (failed/retrying/network) keep their explanatory text. */}
-            {item.status !== 'pending' && !!getStatusLabel(item) && (
-              <Text style={[styles.statusText, item.status === 'failed' && { color: colors.error }]}>
+            {item.status !== 'pending' && item.status !== 'queued' && !!getStatusLabel(item) && (
+              <Text style={[styles.statusText, needsAttention && { color: colors.error }]}>
                 {getStatusLabel(item)}
               </Text>
             )}
           </View>
         )}
       </View>
-      </>}
-    />
+    </Card>
   );
 };
 
@@ -200,46 +223,105 @@ interface CompletedDownloadCardProps {
   item: DownloadItem;
   onDelete: (item: DownloadItem) => void;
   onRepairVision?: (item: DownloadItem) => void;
-  onPauseRepair?: (item: DownloadItem) => void;
-  onResumeRepair?: (item: DownloadItem) => void;
-  onCancelRepair?: (item: DownloadItem) => void;
   isRepairingVision?: boolean;
+  repairDownload?: DownloadItem;
 }
 
-export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ item, onDelete, onRepairVision, onPauseRepair, onResumeRepair, onCancelRepair, isRepairingVision = false }) => {
+/** Feather icon for a completed model row. A vision model missing its projector reads as
+ *  "needs repair" (wrench), not "has vision" (eye) — actionable-broken, not a working capability. */
+function modelTypeIconName(item: DownloadItem, needsVisionRepair: boolean): string {
+  if (item.modelType === 'image') return 'image';
+  if (item.modelType === 'tts') return 'volume-2';
+  if (item.modelType === 'stt') return 'mic';
+  if (needsVisionRepair) return 'tool';
+  if (item.isVisionModel) return 'eye';
+  return 'message-square';
+}
+
+function modelTypeIconColor(item: DownloadItem, needsVisionRepair: boolean, colors: ReturnType<typeof useTheme>['colors']): string {
+  if (item.modelType === 'image') return colors.info;
+  if (item.modelType === 'tts' || item.modelType === 'stt') return colors.success;
+  if (needsVisionRepair || item.isVisionModel) return colors.warning;
+  return colors.primary;
+}
+
+export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ item, onDelete, onRepairVision, isRepairingVision = false, repairDownload }) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const needsVisionRepair = checkNeedsVisionRepair(item);
-  // A vision repair drives a live download-store row keyed on the completed
-  // model's modelKey (`repo/file` = item.modelId). Read it so the SAME
-  // determinate progress bar the normal download shows lights up during the
-  // ~900MB mmproj re-download, instead of a bare indeterminate spinner (OD2).
-  const repairEntry = useDownloadStore(s => s.downloads[item.modelId]);
-  const repairActive = isRepairingVision || !!repairEntry && isMMProjFile(repairEntry.fileName);
-  const showRepairProgress = repairActive && !!repairEntry;
+  const completedMeta = [
+    item.author,
+    formatBytes(item.fileSize),
+    item.quantization,
+    item.downloadedAt
+      ? new Date(item.downloadedAt).toLocaleDateString()
+      : undefined,
+  ].filter(Boolean).join(' · ');
+  const repairProgress = isRepairingVision && repairDownload
+    ? presentProgress({
+        progress: repairDownload.progress,
+        bytesDownloaded: repairDownload.bytesDownloaded,
+        totalBytes: repairDownload.fileSize,
+        bytesPerSecond: repairDownload.bytesPerSecond,
+        status: repairDownload.status,
+      })
+    : undefined;
+
   return (
-    <View style={{ marginHorizontal: SPACING.md }}>
-      <ModelCard
-        compact
-        model={{
-          id: item.modelId,
-          name: item.fileName,
-          author: item.author,
-          modelType: item.isVisionModel ? 'vision' : item.modelType === 'text' ? 'text' : undefined,
-          description: item.downloadedAt ? new Date(item.downloadedAt).toLocaleDateString() : undefined,
-        }}
-        file={{ name: item.fileName, size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
-        capabilities={textCapabilities(item)}
-        isDownloaded
-        isDownloading={showRepairProgress && repairEntry.status !== 'paused'}
-        isPaused={showRepairProgress && repairEntry.status === 'paused'}
-        isRepairingVision={repairActive}
-        downloadProgress={repairEntry?.progress}
-        downloadBytes={repairEntry ? { downloaded: repairEntry.bytesDownloaded, total: repairEntry.totalBytes, bytesPerSecond: repairEntry.bytesPerSecond } : undefined}
-        onRepairVision={needsVisionRepair && onRepairVision ? () => onRepairVision(item) : undefined}
-        onPause={showRepairProgress && repairEntry.status === 'running' && onPauseRepair ? () => onPauseRepair(item) : undefined}
-        onResume={showRepairProgress && repairEntry.status === 'paused' && onResumeRepair ? () => onResumeRepair(item) : undefined}
-        onCancel={showRepairProgress && onCancelRepair ? () => onCancelRepair(item) : undefined}
-        onDelete={() => onDelete(item)}
-      />
-    </View>
+    <Card style={styles.downloadCard}>
+      <View style={[styles.downloadHeader, styles.completedHeader]}>
+        <View style={styles.modelTypeIcon}>
+          <Icon
+            name={modelTypeIconName(item, needsVisionRepair)}
+            size={16}
+            color={modelTypeIconColor(item, needsVisionRepair, colors)}
+          />
+        </View>
+        <View style={styles.downloadInfo}>
+          <Text style={styles.fileName} numberOfLines={1}>{item.fileName}</Text>
+          <Text style={styles.modelId} numberOfLines={1}>{completedMeta}</Text>
+        </View>
+        {needsVisionRepair && !isRepairingVision && onRepairVision && (
+          <TouchableOpacity
+            style={styles.repairButton}
+            testID="repair-vision-button"
+            onPress={() => onRepairVision(item)}
+          >
+            <Icon name="tool" size={18} color={colors.warning} />
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={styles.deleteButton}
+          testID="delete-model-button"
+          onPress={() => onDelete(item)}
+        >
+          <Icon name="trash-2" size={18} color={colors.error} />
+        </TouchableOpacity>
+      </View>
+      {isRepairingVision && (
+        <View style={styles.repairingBadge} testID="repairing-vision-badge">
+          <LoadingDots color={colors.primary} />
+          <Text style={styles.repairingBadgeText}>Repairing</Text>
+        </View>
+      )}
+      {repairProgress && (
+        <View style={styles.progressContainer} testID="repair-vision-progress">
+          <View style={styles.progressBarBackground}>
+            <View
+              style={[
+                styles.progressBarFill,
+                {
+                  width: `${repairProgress.progress.percentage ?? 0}%` as const,
+                  backgroundColor: colors.primary,
+                },
+              ]}
+            />
+          </View>
+          <Text style={styles.progressText}>
+            {[repairProgress.percentageText, repairProgress.detailText].filter(Boolean).join(' · ')}
+          </Text>
+        </View>
+      )}
+    </Card>
   );
 };

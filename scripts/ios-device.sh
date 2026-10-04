@@ -16,7 +16,13 @@
 #   IOS_DEVICE_ID  — target a specific device UDID
 #   IOS_TEAM       — development team id
 #   IOS_PROFILE    — set to force MANUAL signing with a named profile (fallback)
-#   IOS_METRO_HOST (or METRO_HOST) — address the phone uses to reach Metro
+#   FORCE_NATIVE_BUILD=1 — ignore the native-input cache and rebuild
+#
+# Metro reachability. A device build probes Metro at launch; AppDelegate bounds that probe to 2 s and
+# falls back to the bundle shipped in the app, so on a network where the phone cannot reach the Mac:
+#   FORCE_BUNDLING=1          — ship main.jsbundle in the Debug app (the fallback needs it)
+#   SKIP_BUNDLING_METRO_IP=1  — do not bake the Mac's Wi-Fi address into the app
+#   METRO_HOST=100.x.y.z      — bake a reachable address instead (a Tailscale IP, say)
 set -euo pipefail
 
 # Pick a target device, then make sure it is actually reachable. These are two
@@ -135,7 +141,44 @@ TEAM="${IOS_TEAM:-84V6KCAC49}"
 # `.dev` suffix (ai.offgridmobile.dev) while Release is ai.offgridmobile, and hardcoding it
 # meant we installed the .dev build but launched the old ai.offgridmobile app.
 
-cd "$(dirname "$0")/../ios"
+MOBILE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$MOBILE_ROOT/ios"
+
+APP="build/device/Build/Products/Debug-iphoneos/OffgridMobile.app"
+NATIVE_STAMP="build/device/.offgrid-native-inputs.sha256"
+
+native_input_hash() {
+  {
+    printf '%s\n' "team=$TEAM" "profile=${IOS_PROFILE:-}" \
+      "forceBundle=${FORCE_BUNDLING:-}" \
+      "skipMetroIp=${SKIP_BUNDLING_METRO_IP:-}"
+    # Hash repository inputs, not Xcode's mutable user state. Files such as
+    # xcuserdata and .xcode.env.local change during a build and would make every
+    # later run look stale even when no native source changed.
+    {
+      git -C "$MOBILE_ROOT" ls-files -z -- ios patches package.json package-lock.json
+      git -C "$MOBILE_ROOT" ls-files -z --others --exclude-standard -- \
+        ios patches package.json package-lock.json
+    } | while IFS= read -r -d '' path; do
+      printf 'path=%s\n' "$path"
+      shasum -a 256 "$MOBILE_ROOT/$path"
+    done
+  } | shasum -a 256 | awk '{print $1}'
+}
+
+NATIVE_HASH="$(native_input_hash)"
+if [ "${FORCE_NATIVE_BUILD:-0}" != "1" ] && [ -d "$APP" ] && \
+   [ -f "$NATIVE_STAMP" ] && [ "$(cat "$NATIVE_STAMP")" = "$NATIVE_HASH" ]; then
+  BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" 2>/dev/null || echo 'ai.offgridmobile.dev')"
+  echo "Native inputs are unchanged. Reusing the installed $BUNDLE_ID app."
+  if xcrun devicectl device process launch --device "$DEVICE_ID" --terminate-existing "$BUNDLE_ID"; then
+    exit 0
+  fi
+  echo "The cached app is not installed. Installing it without rebuilding ..."
+  xcrun devicectl device install app --device "$DEVICE_ID" "$APP"
+  xcrun devicectl device process launch --device "$DEVICE_ID" --terminate-existing "$BUNDLE_ID"
+  exit 0
+fi
 
 # Build against a GENERIC iOS destination, not `id=$DEVICE_ID`. Targeting the
 # live device makes xcodebuild block until the device is fully "available",
@@ -151,7 +194,6 @@ if [ -n "${IOS_PROFILE:-}" ]; then
   xcodebuild -workspace OffgridMobile.xcworkspace -scheme OffgridMobile -configuration Debug \
     -destination "generic/platform=iOS" \
     -derivedDataPath build/device \
-    FORCE_BUNDLING=1 \
     CODE_SIGN_STYLE=Manual \
     DEVELOPMENT_TEAM="$TEAM" \
     PROVISIONING_PROFILE_SPECIFIER="$IOS_PROFILE" \
@@ -163,20 +205,17 @@ else
     -destination "generic/platform=iOS" \
     -derivedDataPath build/device \
     -allowProvisioningUpdates \
-    FORCE_BUNDLING=1 \
     CODE_SIGN_STYLE=Automatic \
     DEVELOPMENT_TEAM="$TEAM" \
     build
 fi
-
-APP="build/device/Build/Products/Debug-iphoneos/OffgridMobile.app"
 
 # A physical iPhone cannot use the Mac's localhost. The React Native build phase
 # writes the first Wi-Fi address it finds to ip.txt, but some networks isolate
 # clients even when both devices are on the same subnet. Prefer an explicit host;
 # otherwise use this Mac's Tailscale address when Metro is reachable there. The
 # Debug builds load from this Metro address so Fast Refresh remains available after installation.
-METRO_HOST="${IOS_METRO_HOST:-${METRO_HOST:-}}"
+METRO_HOST="${IOS_METRO_HOST:-}"
 if [ -z "$METRO_HOST" ] && command -v tailscale >/dev/null 2>&1; then
   TAILSCALE_HOST="$(tailscale ip -4 2>/dev/null | head -1 || true)"
   if [ -n "$TAILSCALE_HOST" ] && [ "$(curl -fsS --max-time 2 "http://$TAILSCALE_HOST:8081/status" 2>/dev/null || true)" = "packager-status:running" ]; then
@@ -190,6 +229,7 @@ fi
 
 echo "Installing $APP ..."
 xcrun devicectl device install app --device "$DEVICE_ID" "$APP"
+printf '%s\n' "$NATIVE_HASH" > "$NATIVE_STAMP"
 
 # Launch the SAME bundle we just built/installed — read its real CFBundleIdentifier from the
 # built Info.plist (Debug = ai.offgridmobile.dev). Fall back to the .dev id if the read fails.

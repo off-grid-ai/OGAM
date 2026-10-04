@@ -25,15 +25,11 @@ describe('Q3 (behavioral) — stringified tool args surface an error bubble', ()
     // `arguments` is a STRING ("{\"expression\":\"2+2\"}") rather than an object.
     await h.send('what is 2 + 2', { text: 'Calculating. <tool_call>{"name": "calculator", "arguments": "{\\"expression\\": \\"2+2\\"}"}</tool_call>' });
 
-    // Wait on the completed work control, then inspect the tool result it contains.
+    // Wait for the user-visible tool outcome directly. The pre-tool text can
+    // appear in both the tool-call message and the final assistant message.
     await h.rtl.waitFor(() => {
-      expect(h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel).toBe('Work done');
+      expect(h.view!.queryByTestId('tool-result-label-calculator')).not.toBeNull();
     });
-    await h.settle();
-    h.rtl.fireEvent.press(h.view!.getByTestId('assistant-work-toggle'));
-
-    // The tool ran and produced a result bubble...
-    expect(h.view!.queryByTestId('tool-result-label-calculator')).not.toBeNull();
     // ...which must show the computed answer, NOT an internal failure. Today the stringified args break the
     // calculator so the bubble shows a failure → RED.
     expect(h.view!.queryByText(/failed \(internal\)|Cannot read properties|error/i)).toBeNull();

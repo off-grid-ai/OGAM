@@ -36,14 +36,12 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   section: {
     marginBottom: SPACING.sm,
   },
-  downloadCardInset: {
-    marginHorizontal: SPACING.md,
-  },
   sectionHeader: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.md,
-    marginBottom: SPACING.xs,
+    paddingVertical: SPACING.xs,
+    marginBottom: SPACING.sm,
     gap: SPACING.sm,
   },
   sectionTitle: {
@@ -99,10 +97,14 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.meta,
     color: colors.textSecondary,
   },
-  cancelButton: {
-    padding: SPACING.sm,
+  downloadActionsRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
     marginRight: -SPACING.sm,
     marginTop: -SPACING.xs,
+  },
+  downloadActionButton: {
+    padding: SPACING.sm,
   },
   repairButton: {
     padding: SPACING.sm,
@@ -115,24 +117,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   progressContainer: {
     marginBottom: SPACING.sm,
-  },
-  transferRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.sm,
-  },
-  transferProgressBar: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  transferActions: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-  },
-  transferCaptionRow: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    marginTop: SPACING.xs,
   },
   progressBarBackground: {
     height: 6,
@@ -216,7 +200,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
+    paddingVertical: SPACING.sm,
     gap: SPACING.xs,
   },
   filterChip: {
@@ -261,11 +245,33 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     gap: SPACING.sm,
     marginLeft: SPACING.sm,
   },
-  transferIconButton: {
-    width: 32,
-    height: 32,
+  retryButton: {
+    backgroundColor: `${colors.primary}15`,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 6,
+    flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    justifyContent: 'center' as const,
+    gap: SPACING.xs,
+  },
+  retryButtonText: {
+    ...TYPOGRAPHY.meta,
+    color: colors.primary,
+    fontWeight: '400' as const,
+  },
+  removeButton: {
+    backgroundColor: `${colors.error}15`,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 6,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.xs,
+  },
+  removeButtonText: {
+    ...TYPOGRAPHY.meta,
+    color: colors.error,
+    fontWeight: '400' as const,
   },
   statusIconRow: {
     flexDirection: 'row' as const,

@@ -23,7 +23,9 @@ export interface RecommendedConfig {
    *  faster than CPU via GPU"). Rendered as part of the SAME common description
    *  line as every other card — not a separately coloured/positioned highlight. */
   highlightText?: string;
-  // Additional curated facts shown with the model facts in compact mode.
+  // When provided, replaces the default modelType/paramCount/RAM chips in
+  // compact mode. Lets curated entries surface custom badges (e.g. "Vision",
+  // "GPU") instead of the auto-derived ones.
   chips?: string[];
 }
 
@@ -46,11 +48,6 @@ interface DenseModelCardContentProps {
   credibilitySource?: ModelCredibility['source'];
   credibilityLabel?: string;
   incompatibleReason?: string;
-  facts?: string[];
-  capabilities?: { tools?: boolean; thinking?: boolean; vision?: boolean; predicted?: boolean };
-  sourceBadge?: string;
-  nameTestID?: string;
-  factsTestID?: string;
 }
 
 /**
@@ -68,56 +65,58 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
   credibilitySource,
   credibilityLabel,
   incompatibleReason,
-  facts: additionalFacts = [],
-  capabilities,
-  sourceBadge,
-  nameTestID,
-  factsTestID,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const description = cardDescription(model.description, recommended?.highlightText);
-  const modelType = isVisionModel || model.modelType === 'vision' ? 'Vision'
-    : model.modelType === 'code' ? 'Code' : model.modelType === 'text' ? 'Text' : undefined;
-  const facts = [...new Set([
+  const customFacts = recommended?.chips;
+  const modelType = isVisionModel || model.modelType === 'vision'
+    ? 'Vision'
+    : model.modelType === 'code'
+      ? 'Code'
+      : model.modelType === 'text'
+        ? 'Text'
+        : undefined;
+  const facts = customFacts ?? [
     fileSize > 0 ? huggingFaceService.formatFileSize(fileSize) : undefined,
-    quantization && quantization !== 'Unknown' ? quantization : undefined,
-    capabilities?.vision || isVisionModel ? undefined : modelType,
+    quantization,
+    modelType,
     model.paramCount ? `${model.paramCount}B params` : undefined,
     model.minRamGB ? `${model.minRamGB}GB+ RAM` : undefined,
     supportsAcceleration ? 'NPU/GPU' : undefined,
-    ...(recommended?.chips ?? []),
-    ...additionalFacts,
     model.downloads ? `${formatCompactNumber(model.downloads)} dl` : undefined,
     incompatibleReason,
-  ].filter((value): value is string => !!value))];
-  const hasVerifiedMark =
-    credibilitySource === 'verified-quantizer' || credibilitySource === 'official';
+  ].filter((value): value is string => !!value);
+  const isVerified = credibilitySource === 'verified-quantizer';
   const sourceLabels = [
-    model.author && model.author !== 'Unknown' ? model.author : undefined,
-    credibilitySource && credibilitySource !== 'community' && !hasVerifiedMark ? credibilityLabel : undefined,
+    model.author,
+    isVerified ? undefined : credibilityLabel,
+    recommended ? (recommended.pillLabel ?? 'Recommended') : undefined,
   ].filter((value): value is string => !!value);
 
   return (
     <>
       <View style={styles.denseTitleRow}>
-        <Text style={styles.denseName} numberOfLines={1} testID={nameTestID}>{model.name}</Text>
+        <Text style={styles.denseName} numberOfLines={1}>{model.name}</Text>
         <View style={styles.denseSourceGroup}>
-          {sourceBadge === 'Remote' ? <Icon name="cloud" size={14} color={colors.textMuted} accessibilityLabel="Remote model" />
-            : sourceBadge ? <Text style={styles.denseSource}>{sourceBadge}</Text> : null}
-          {hasVerifiedMark && (
+          {isVerified && (
             <MaterialIcon
               name="verified"
               size={12}
               color={colors.primary}
-              accessibilityLabel={credibilitySource === 'official' ? 'Official' : 'Verified'}
+              accessibilityLabel="Verified"
             />
           )}
-          {sourceLabels.length > 0 && <Text style={styles.denseSource} numberOfLines={1}>
+          <Text style={styles.denseSource} numberOfLines={1}>
             {sourceLabels.join(' · ')}
-          </Text>}
+          </Text>
           {(recommended || isTrending) && (
-            <MaterialIcon name="whatshot" size={14} color={colors.trending} accessibilityLabel={isTrending ? 'Trending' : 'Recommended'} />
+            <MaterialIcon
+              name="whatshot"
+              size={14}
+              color={colors.trending}
+              accessibilityLabel={isTrending ? 'Trending' : 'Recommended'}
+            />
           )}
         </View>
       </View>
@@ -125,20 +124,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
         <Text style={styles.denseDescription} numberOfLines={1}>{description}</Text>
       )}
       {facts.length > 0 && (
-        <Text style={styles.denseMeta} numberOfLines={2} testID={factsTestID}>{facts.join(' · ')}</Text>
-      )}
-      {(capabilities?.vision || isVisionModel || capabilities?.tools || capabilities?.thinking) && (
-        <View style={styles.capabilityRow}>
-          {(capabilities?.vision || isVisionModel) && <View style={styles.capabilityBadge} accessibilityLabel="Vision">
-            <Icon name="eye" size={13} color={colors.info} />
-          </View>}
-          {capabilities?.tools && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Tool calling likely' : 'Tool calling'}>
-            <Icon name="tool" size={13} color={colors.warning} />
-          </View>}
-          {capabilities?.thinking && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Thinking likely' : 'Thinking'}>
-            <Icon name="zap" size={13} color={colors.primary} />
-          </View>}
-        </View>
+        <Text style={styles.denseMeta} numberOfLines={1}>{facts.join(' · ')}</Text>
       )}
     </>
   );
@@ -194,16 +180,19 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
     <>
       <Text style={styles.name}>{model.name}</Text>
       <View style={styles.authorRow}>
-        {model.author && model.author !== 'Unknown' && <View style={styles.authorTag}>
+        <View style={styles.authorTag}>
           <Text style={styles.authorTagText}>{model.author}</Text>
-        </View>}
-        {credibilityInfo && (credibility?.source === 'official' || credibility?.source === 'verified-quantizer') && (
-          <MaterialIcon name="verified" size={14} color={colors.primary} accessibilityLabel={credibilityInfo.label} />
-        )}
-        {credibilityInfo && credibility?.source === 'lmstudio' && (
+        </View>
+        {credibilityInfo && (
           <View style={[styles.credibilityBadge, { backgroundColor: `${credibilityInfo.color}25` }]}>
             {credibility?.source === 'lmstudio' && (
               <Text style={[styles.credibilityIcon, { color: credibilityInfo.color }]}>★</Text>
+            )}
+            {credibility?.source === 'official' && (
+              <Text style={[styles.credibilityIcon, { color: credibilityInfo.color }]}>✓</Text>
+            )}
+            {credibility?.source === 'verified-quantizer' && (
+              <Text style={[styles.credibilityIcon, { color: credibilityInfo.color }]}>◆</Text>
             )}
             <Text style={[styles.credibilityText, { color: credibilityInfo.color }]}>
               {credibilityInfo.label}
@@ -215,7 +204,14 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
             <Text style={styles.activeBadgeText}>Active</Text>
           </View>
         )}
-        {recommended && <MaterialIcon name="whatshot" size={14} color={colors.trending} accessibilityLabel="Recommended" />}
+        {recommended && (
+          <>
+            <MaterialIcon name="whatshot" size={14} color={colors.trending} />
+            <View style={styles.recommendedPill}>
+              <Text style={styles.recommendedPillText}>{recommended.pillLabel ?? 'Recommended'}</Text>
+            </View>
+          </>
+        )}
         {/* GPU/NPU capability badge — a LiteRT or Q4_0/Q8_0 quant this device can accelerate. */}
         {supportsAcceleration && (
           <View style={styles.accelBadge} testID="npu-gpu-badge">
@@ -324,8 +320,8 @@ export const ModelInfoBadges: React.FC<ModelInfoBadgesProps> = ({
 interface ModelCardActionsProps {
   isDownloaded: boolean | undefined;
   isDownloading: boolean | undefined;
-  isQueued?: boolean;
-  isPaused?: boolean;
+  isQueued: boolean | undefined;
+  isPaused: boolean | undefined;
   isActive: boolean | undefined;
   isCompatible: boolean;
   incompatibleReason: string | undefined;
@@ -336,8 +332,6 @@ interface ModelCardActionsProps {
   onRepairVision: (() => void) | undefined;
   isRepairingVision?: boolean;
   onCancel: (() => void) | undefined;
-  onPause?: () => void;
-  onResume?: () => void;
 }
 
 const HIT_SLOP = { top: 14, bottom: 14, left: 14, right: 14 };
@@ -353,7 +347,6 @@ function ActionButton({ icon, color, haptic, onPress, disabled, testID, accessib
       disabled={disabled}
       hitSlop={HIT_SLOP}
       testID={testID}
-      accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
     >
       <Icon name={icon} size={16} color={color} />
@@ -376,26 +369,22 @@ function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelet
       ) : (
         onRepairVision && <ActionButton icon="tool" color={colors.warning} haptic="impactLight" onPress={onRepairVision} testID={tid('repair-vision')} styles={styles} />
       )}
-      {!isActive && onSelect && <ActionButton icon="check-circle" color={colors.primary} haptic="selection" onPress={onSelect} styles={styles} />}
-      {onDelete && <ActionButton icon="trash-2" color={colors.error} haptic="notificationWarning" onPress={onDelete} testID={tid('delete') ?? 'delete-model-button'} accessibilityLabel="Delete model" styles={styles} />}
+      {!isActive && onSelect && <ActionButton icon="check-circle" color={colors.primary} haptic="selection" onPress={onSelect} testID={tid('select')} accessibilityLabel="Use this model" styles={styles} />}
+      {onDelete && <ActionButton icon="trash-2" color={colors.error} haptic="notificationWarning" onPress={onDelete} testID={tid('delete')} accessibilityLabel="Delete this model" styles={styles} />}
     </>
   );
 }
 
 export const ModelCardActions: React.FC<ModelCardActionsProps> = ({
   isDownloaded, isDownloading, isQueued, isPaused, isActive, isCompatible,
-  testID, onDownload, onSelect, onDelete, onRepairVision, isRepairingVision, onCancel, onPause, onResume,
+  testID, onDownload, onSelect, onDelete, onRepairVision, isRepairingVision, onCancel,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const tid = (suffix: string) => testID ? `${testID}-${suffix}` : undefined;
 
-  if (isDownloading || isQueued || isPaused) {
-    return <>
-      {isPaused && onResume && <ActionButton icon="play" color={colors.primary} haptic="impactLight" onPress={onResume} testID={tid('resume')} accessibilityLabel="Resume download" styles={styles} />}
-      {isDownloading && onPause && <ActionButton icon="pause" color={colors.primary} haptic="impactLight" onPress={onPause} testID={tid('pause')} accessibilityLabel="Pause download" styles={styles} />}
-      {onCancel && <ActionButton icon="x" color={colors.error} haptic="notificationWarning" onPress={onCancel} testID={tid('cancel')} accessibilityLabel="Cancel download" styles={styles} />}
-    </>;
+  if ((isDownloading || isQueued || isPaused) && onCancel) {
+    return <ActionButton icon="x" color={colors.error} haptic="notificationWarning" onPress={onCancel} testID={tid('cancel')} styles={styles} />;
   }
   if (!isDownloaded && onDownload) {
     return <ActionButton icon="download" color={colors.primary} haptic="impactLight" onPress={onDownload} disabled={!isCompatible} testID={tid('download')} styles={styles} />;

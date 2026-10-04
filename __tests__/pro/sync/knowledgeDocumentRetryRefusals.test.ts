@@ -16,6 +16,8 @@
  * that is the point.
  */
 import { installRealSqlite } from '../../harness/sqliteFake';
+import { installNativeBoundary } from '../../harness/nativeBoundary';
+import type { MobileApplicationFixture } from '../../harness/mobileApplicationFixture';
 
 jest.mock('react-native-tcp-socket', () => {
   const { createNativeTcpBoundary } = require('../../utils/nativeSyncBoundaries');
@@ -43,6 +45,8 @@ const describePro = proIsPresent() ? describe : describe.skip;
 const THE_MAC = 'the-mac';
 const DOC_PATH = '/docs/contract.txt';
 const CONTENTS = 'the indexed contents of a contract';
+let applicationFixture: MobileApplicationFixture;
+let projectSequence = 0;
 
 type Harness = {
   service: {
@@ -55,45 +59,43 @@ type Harness = {
   };
   fs: { module: Record<string, jest.Mock> };
   syncId: string;
+  sourcePath: string;
 };
 
 /** Index a real document into a real knowledge base, and return the handles the cases need. */
 async function indexedDocument(): Promise<Harness> {
-  installRealSqlite();
-  const { ragService } = require('../../../src/services/rag');
-  const { documentService } = require('../../../src/services/documentService');
-  const { embeddingService } = require('../../../src/services/rag/embedding');
   const {
     knowledgeDocumentSyncService,
   } = require('../../../pro/sync/knowledgeDocumentSyncService');
   const { modelTransferFsBoundary } = require('../../utils/modelTransferFsBoundary');
 
   modelTransferFsBoundary.reset();
-  modelTransferFsBoundary.module.writeFile(DOC_PATH, CONTENTS, 'utf8');
+  await modelTransferFsBoundary.module.writeFile(
+    '/docs/all-MiniLM-L6-v2-Q8_0.gguf',
+    'GGUF',
+    'utf8',
+  );
+  await modelTransferFsBoundary.module.writeFile(DOC_PATH, CONTENTS, 'utf8');
 
-  // The embedding MODEL is native; deterministic vectors keep indexing real without it.
-  jest.spyOn(embeddingService, 'load').mockResolvedValue(undefined as never);
-  jest.spyOn(embeddingService, 'getDimension').mockReturnValue(3);
-  jest.spyOn(embeddingService, 'embed').mockResolvedValue([1, 0, 0] as never);
-  jest.spyOn(embeddingService, 'embedBatch').mockResolvedValue([[1, 0, 0]] as never);
-  // Native document extraction.
-  jest
-    .spyOn(documentService, 'processDocumentFromPath')
-    .mockResolvedValue({ type: 'document', textContent: CONTENTS } as never);
-
-  await ragService.indexDocument({
-    projectId: 'p1',
-    filePath: DOC_PATH,
+  const indexed = await applicationFixture.application.rag.addDocument({
+    projectId: `p${++projectSequence}`,
+    path: DOC_PATH,
     fileName: 'contract.txt',
-    fileSize: CONTENTS.length,
+    size: CONTENTS.length,
   });
-  const [document] = await ragService.getAllDocumentsForSync();
+  if (!indexed.ok) throw new Error(indexed.failure.message);
+  const documents = [];
+  for await (const document of applicationFixture.application.rag.sync.allDocuments()) {
+    documents.push(document);
+  }
+  const document = documents.at(-1);
   if (!document) throw new Error('the document was not indexed');
 
   return {
     service: knowledgeDocumentSyncService,
     fs: modelTransferFsBoundary,
     syncId: document.syncId,
+    sourcePath: document.filePath,
   };
 }
 
@@ -101,9 +103,27 @@ const failureFor = (h: Harness): { status: string; error?: string } | undefined 
   h.service.getTransferActivitySnapshot().find(entry => entry.syncId === h.syncId);
 
 describePro('retrying a knowledge document that no longer matches what was indexed', () => {
+  beforeAll(async () => {
+    installNativeBoundary({ llama: true });
+    installRealSqlite();
+    const ReactNative = require('react-native');
+    const { ProximityAir } = require('../../utils/proximityNativeBoundary') as typeof import('../../utils/proximityNativeBoundary');
+    ReactNative.NativeModules.SyncProximityModule = new ProximityAir().device({
+      id: 'knowledge-retry-phone',
+      name: 'This phone',
+      platform: 'ios',
+    });
+    const { startMobileApplicationFixture } = require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+    applicationFixture = await startMobileApplicationFixture({ pro: true });
+  });
+
+  afterAll(async () => {
+    await applicationFixture.dispose();
+  });
+
   it('refuses when the file has been deleted, and says so', async () => {
     const h = await indexedDocument();
-    h.fs.module.unlink(DOC_PATH);
+    await h.fs.module.unlink(h.sourcePath);
 
     await expect(h.service.retry(THE_MAC, h.syncId)).rejects.toThrow(
       'knowledge document source is no longer available',
@@ -119,7 +139,7 @@ describePro('retrying a knowledge document that no longer matches what was index
   it('refuses when the file changed after it was indexed, and says so', async () => {
     const h = await indexedDocument();
     // The user edited the contract after adding it. The index still describes the OLD text.
-    h.fs.module.writeFile(DOC_PATH, `${CONTENTS} plus a clause added later`, 'utf8');
+    await h.fs.module.writeFile(h.sourcePath, `${CONTENTS} plus a clause added later`, 'utf8');
 
     await expect(h.service.retry(THE_MAC, h.syncId)).rejects.toThrow(
       'knowledge document source changed after it was indexed',
@@ -134,8 +154,8 @@ describePro('retrying a knowledge document that no longer matches what was index
 
   it('refuses when the path now points at a folder', async () => {
     const h = await indexedDocument();
-    h.fs.module.unlink(DOC_PATH);
-    h.fs.module.mkdir(DOC_PATH);
+    await h.fs.module.unlink(h.sourcePath);
+    await h.fs.module.mkdir(h.sourcePath);
 
     await expect(h.service.retry(THE_MAC, h.syncId)).rejects.toThrow(
       'knowledge document source is not a file',

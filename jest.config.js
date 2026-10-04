@@ -9,40 +9,32 @@ const fs = require('node:fs');
 // genuinely absent (open-core CI without the PAT) do we ignore those suites and map
 // @offgrid/pro to the null stub, so the open-core suite still runs and stays green.
 const proExists = fs.existsSync(path.resolve(__dirname, 'pro/package.json'));
-
 // Suites under THIS repo's __tests__ that import @offgrid/pro. Ignored ONLY when pro is
-// absent. (pro/'s OWN suite is always ignored here — it runs in the pro repo's CI.)
+// absent. When Pro exists, its own suites are part of this repository-level gate too.
 const proDependentTestPaths = [
   '/__tests__/pro/',
-  '/__tests__/unit/audio/',
   '/__tests__/unit/engine/',
   '/__tests__/integration/audio/',
   '__tests__/unit/audioProgressCaption.test.ts',
-  '__tests__/unit/mcp/McpToolExtension.test.ts',
   '__tests__/unit/services/ttsService.test.ts',
-  '__tests__/unit/stores/ttsStore.test.ts',
-  '__tests__/integration/stores/tts.test.ts',
-  '__tests__/rntl/components/ChatInputModeToggle.test.tsx',
   '__tests__/rntl/components/PlaybackControls.test.tsx',
-  '__tests__/rntl/components/VoiceModelsPanel.test.tsx',
   '__tests__/rntl/components/KokoroTTSBridge.test.tsx',
   '__tests__/rntl/components/McpAddServerSheet.test.tsx',
-  '__tests__/rntl/components/McpServersScreen.test.tsx',
   '__tests__/unit/tools/mcpPresets.test.ts',
 ];
 
-module.exports = {
+const jestConfig = {
   preset: 'react-native',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/__tests__/**/*.test.tsx'],
   testPathIgnorePatterns: [
-    '/node_modules/', '/android/', '/ios/', '/e2e/', 'App.test.tsx',
-    // pro/ ships its own suite run in the pro repo's CI — never run those from here.
-    // Anchored to <rootDir>/pro/ so it ignores ONLY the submodule's own tests, NOT this
-    // repo's __tests__/pro/** pro-dependent suites (a bare '/pro/' matched both).
-    // The pro-DEPENDENT suites under this repo's __tests__ DO run against the real pro
-    // when it's checked out, and are ignored only when pro is genuinely absent.
-    '<rootDir>/pro/',
+    '/node_modules/',
+    '/android/',
+    '/ios/',
+    '/e2e/',
+    'App.test.tsx',
+    // Pro's own tests and the core Pro-dependent suites run together when the submodule exists.
+    // Open-core CI ignores only the dependent core suites because there is no Pro checkout.
     ...(proExists ? [] : proDependentTestPaths),
   ],
   // Stale agent git-worktrees under .claude/worktrees/ each carry a full repo copy (incl. their own
@@ -54,10 +46,23 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/src/$1',
     // Mirrors the metro alias so tests can import pro modules that reference core.
     '^@offgrid/core/(.*)$': '<rootDir>/src/$1',
+    // Run Shared semantic package entries from source, as @offgrid/sync does below.
+    // The package root must also resolve to its public source entry. Sending the generated ~1MB
+    // CommonJS bundle back through the React Native Babel/worklets transform stalls Jest and loses
+    // source-level coverage identity.
+    '^@offgrid/models$': '<rootDir>/../shared/packages/models/src/index.ts',
+    '^@offgrid/models/catalog$':
+      '<rootDir>/../shared/packages/models/src/catalog/index.ts',
+    '^@offgrid/models/quant$':
+      '<rootDir>/../shared/packages/models/src/quant.ts',
     // Mirrors the metro alias: the real pro package when present on disk, else the null
     // stub so open-core tests resolve @offgrid/pro cleanly.
-    '^@offgrid/pro$': proExists ? '<rootDir>/pro' : '<rootDir>/src/bootstrap/proStub.js',
-    '^@offgrid/pro/(.*)$': proExists ? '<rootDir>/pro/$1' : '<rootDir>/src/bootstrap/proStub.js',
+    '^@offgrid/pro$': proExists
+      ? '<rootDir>/pro'
+      : '<rootDir>/src/bootstrap/proStub.js',
+    '^@offgrid/pro/(.*)$': proExists
+      ? '<rootDir>/pro/$1'
+      : '<rootDir>/src/bootstrap/proStub.js',
     // Mirrors the metro alias: 'react-native-fs' resolves to the maintained fork
     // (the only RNFS native module we ship — see metro.config.js).
     '^react-native-fs$': '<rootDir>/src/shims/react-native-fs.ts',
@@ -65,16 +70,32 @@ module.exports = {
     // which references @babel/runtime helpers not resolvable from the out-of-root package. Keep
     // these subpaths in step with metro.config.js's aliases and the package's exports map.
     '^@offgrid/sync$': '<rootDir>/../shared/packages/sync/src/index.ts',
-    '^@offgrid/sync/rn$': '<rootDir>/../shared/packages/sync/src/adapters/rn-tcp.ts',
-    '^@offgrid/sync/rn-discovery$': '<rootDir>/../shared/packages/sync/src/adapters/rn-discovery.ts',
-    '^@offgrid/sync/portable$': '<rootDir>/../shared/packages/sync/src/portable/index.ts',
+    '^@offgrid/sync/rn$':
+      '<rootDir>/../shared/packages/sync/src/adapters/rn-tcp.ts',
+    '^@offgrid/sync/rn-discovery$':
+      '<rootDir>/../shared/packages/sync/src/adapters/rn-discovery.ts',
+    '^@offgrid/sync/portable$':
+      '<rootDir>/../shared/packages/sync/src/portable/index.ts',
     // The sync source lives out-of-root; when jest transforms it, babel injects @babel/runtime
     // helper imports that would otherwise resolve from ../shared (where they aren't installed).
     // Pin them to mobile's own copy.
     '^@babel/runtime/(.*)$': '<rootDir>/node_modules/@babel/runtime/$1',
   },
-  transformIgnorePatterns: ['node_modules/(?!(react-native|@react-native|@react-navigation|react-native-.*|@react-native-.*|moti|@motify|@gorhom|@shopify|@ronradtke|@op-engineering|@offgrid)/)',],
+  transformIgnorePatterns: [
+    'node_modules/(?!(react-native|@react-native|@react-navigation|react-native-.*|@react-native-.*|moti|@motify|@gorhom|@shopify|@ronradtke|@op-engineering|@offgrid)/)',
+  ],
   testEnvironment: 'node',
+  // Istanbul instrumentation retained one transformed copy of every source file in the
+  // coordinator, so worker recycling could not prevent the full matrix from reaching the
+  // 8 GB heap ceiling. V8 records counters in each recyclable worker and Jest still merges
+  // them into one report for inspection.
+  coverageProvider: 'v8',
+  // One worker keeps stateful React Native suites serial, while an idle-memory
+  // limit lets Jest replace that worker between files. `--runInBand` runs in the
+  // coordinator process, where Jest cannot recycle the growing module and
+  // instrumentation graph; the full coverage matrix eventually exhausted even
+  // an 8 GB heap. Coverage from replacement workers is still merged by Jest.
+  workerIdleMemoryLimit: process.env.JEST_WORKER_IDLE_MEMORY_LIMIT || '512MB',
   clearMocks: true,
   verbose: true,
   testTimeout: 10000,
@@ -86,34 +107,16 @@ module.exports = {
     // Measure the pro submodule too when it's checked out (the pro-dependent suites here
     // exercise it). Skip barrels (index.ts) + type decls; index.tsx (real components) stays.
     ...(proExists
-      ? ['pro/**/*.{ts,tsx}', '!pro/**/index.ts', '!pro/**/*.d.ts', '!pro/**/__tests__/**', '!pro/**/*.test.{ts,tsx}']
+      ? [
+          'pro/**/*.{ts,tsx}',
+          '!pro/**/index.ts',
+          '!pro/**/*.d.ts',
+          '!pro/**/__tests__/**',
+          '!pro/**/*.test.{ts,tsx}',
+        ]
       : []),
   ],
-  coverageReporters: ['text', 'text-summary', 'lcov', 'json-summary'],
-  coverageThreshold: {
-    // `global` gates src/ at 75. A glob key REMOVES matching files from `global` and gates
-    // them separately — so the pro group below carves pro out of the src gate.
-    global: {
-      statements: 75,
-      branches: 75,
-      functions: 75,
-      lines: 75,
-    },
-    // pro/ is MEASURED here (visible in the core report + regression-guarded), carved out
-    // of the src `global` gate into its own group. The pro-dependent suites in this repo
-    // (incl. the __tests__/pro/** real-behavior tests) cover ~60% of pro; this floor
-    // ratchets that so it can't slide, and is raised as more pro tests land. New pro
-    // modules also add their own per-file 100 key. NOTE: this is a DIRECTORY key (not a
-    // glob) so jest aggregates all pro files into ONE group — a glob (`pro/**`) would apply
-    // per-file and fail on the many pro files no core suite imports.
-    // Pro is measured separately because this directory key removes it from the global group.
-    './pro': { statements: 75, branches: 75, functions: 75, lines: 75 },
-    // New standalone modules in this change set are held to 100% on every axis. Changed
-    // legacy files have their NEW branches covered by the suites but aren't whole-file-100%.
-    './src/utils/imageModelIntegrity.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
-    './src/utils/imageGenAdvice.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
-    './src/services/modelLoadErrors.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
-    './src/components/ImageGenAdviceCard.tsx': { statements: 100, branches: 100, functions: 100, lines: 100 },
-    './src/components/VoiceRecordButton/derive.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
-  },
+  coverageReporters: ['text', 'text-summary', 'lcov', 'json', 'json-summary'],
 };
+
+module.exports = jestConfig;

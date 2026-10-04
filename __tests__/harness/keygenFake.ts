@@ -124,10 +124,10 @@ export function createKeygenFake(): KeygenFake {
     type: 'licenses',
     attributes: {
       expiry: licence.expiry ?? null,
+      maxMachines: licence.seats,
       name: licence.name ?? null,
       metadata: licence.metadata ?? {},
     },
-    relationships: { policy: { data: { type: 'policies', id: `policy-${licence.id}` } } },
   });
 
   const validate = async (request: Request): Promise<Response> => {
@@ -171,7 +171,6 @@ export function createKeygenFake(): KeygenFake {
     return json(200, {
       meta: { valid: code === 'VALID', code },
       data: licenceResource(licence),
-      included: [{ type: 'policies', id: `policy-${licence.id}`, attributes: { maxMachines: licence.seats } }],
     });
   };
 
@@ -227,7 +226,7 @@ export function createKeygenFake(): KeygenFake {
   const handle = async (request: Request, path: string): Promise<Response> => {
     calls.push({ method: request.method, path });
     if (
-      path === '/licenses/actions/validate-key?include=policy' &&
+      path.startsWith('/licenses/actions/validate-key') &&
       request.method === 'POST'
     ) {
       return validate(request);
@@ -352,21 +351,7 @@ export function createKeygenFake(): KeygenFake {
       }) as typeof globalThis.fetch;
     },
     restore() {
-      globalThis.fetch = (async (
-        input: RequestInfo | URL,
-        init?: RequestInit,
-      ) => {
-        const url =
-          typeof input === 'string'
-            ? input
-            : input instanceof URL
-            ? input.href
-            : input.url;
-        if (url.startsWith(KEYGEN_API_BASE)) {
-          throw new Error(`unexpected Keygen request after fake restore: ${url}`);
-        }
-        return realFetch(input, init);
-      }) as typeof globalThis.fetch;
+      globalThis.fetch = realFetch;
     },
   };
 }

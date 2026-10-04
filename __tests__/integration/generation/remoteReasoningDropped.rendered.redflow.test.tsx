@@ -34,7 +34,7 @@ describe('T049 (rendered) — remote LM Studio reasoning is shown (DEV-B16)', ()
   it('renders the answer and the reasoning the remote model streamed', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
     // LM Studio (like Ollama) does NOT advertise a thinking capability → no thinking toggle for remote.
-    await installRemoteModel({ name: 'LM Studio', caps: { supportsThinking: false } });
+    await installRemoteModel({ name: 'LM Studio', caps: { supportsThinking: false, supportsToolCalling: true } });
     installRemoteStream(LM_STUDIO_SSE);
     h.render();
 

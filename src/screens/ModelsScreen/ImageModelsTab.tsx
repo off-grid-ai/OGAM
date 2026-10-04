@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { View, Text, TextInput, TouchableOpacity, FlatList, type ListRenderItemInfo } from 'react-native';
 import { LoadingDots } from '../../components/LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
@@ -7,17 +7,15 @@ import { ModelCard } from '../../components';
 import { useTheme, useThemedStyles } from '../../theme';
 import { HFImageModel, getVariantLabel } from '../../services/huggingFaceModelBrowser';
 import { ImageModelRecommendation } from '../../types';
-import { useDownloadStore, isActiveStatus, isQueuedStatus, isDownloadingStatus } from '../../stores/downloadStore';
-import { makeImageModelKey } from '../../utils/modelKey';
+import { isModelDownloadInProgress } from '@offgrid/application';
+import { useModelDownloadEntry } from '../../hooks/useModelDownloadsProjection';
+import { isDownloadingStatus, isPausedStatus, isQueuedStatus } from '../../utils/downloadStatus';
 import { imageBackendLabel } from '../../utils/imageBackend';
 import { createStyles } from './styles';
 import { ModelsScreenViewModel } from './useModelsScreen';
 import { ImageFilterBar } from './ImageFilterBar';
 import { BackendFilter, ImageFilterDimension } from './types';
 import { formatBytes, getImageModelCompatibility, hfModelToDescriptor } from './utils';
-import { modelDownloadService } from '../../services/modelDownloadService';
-import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
-import logger from '../../utils/logger';
 
 type Props = Pick<ModelsScreenViewModel,
   | 'imageSearchQuery' | 'setImageSearchQuery'
@@ -46,37 +44,32 @@ interface ImageModelCardProps {
   handleCancelImageDownload: Props['handleCancelImageDownload'];
 }
 
-export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
+const ImageModelCard: React.FC<ImageModelCardProps> = ({
   model, index, imageRec,
   isRecommendedModel, handleDownloadImageModel, handleCancelImageDownload,
 }) => {
+  const styles = useThemedStyles(createStyles);
   const recommended = isRecommendedModel(model);
   const { isCompatible, incompatibleReason } = getImageModelCompatibility(model, imageRec);
-  // Single source of truth: live download status read from useDownloadStore
-  // via the stable image:<id> modelKey. Replaces drilled imageModelDownloading
-  // and imageModelProgress props.
-  const entry = useDownloadStore(s => s.downloads[makeImageModelKey(model.id)]);
-  // Classify with the SAME shared predicate the Download Manager uses (isActiveStatus).
-  // The old `status !== 'completed' && status !== 'cancelled'` bucketed a *failed* row
-  // as "downloading", so a kill-orphaned download showed a fake "downloading 0%" here
-  // while the Download Manager (correctly) showed it failed → Retry/Remove. One rule,
-  // one source of truth: a failed/interrupted row is NOT active, so the card offers a
-  // fresh download (which routes through retryEntry) instead of lying about progress.
-  // Active = queued OR transferring (gates the download/cancel affordance). Split
-  // queued vs downloading via the shared classifier so a queued image renders the
-  // clock — same rule as every other tab, no per-surface re-derivation.
-  const isActive = !!entry && isActiveStatus(entry.status);
-  const isQueued = !!entry && isQueuedStatus(entry.status);
-  const isDownloading = !!entry && isDownloadingStatus(entry.status);
-  const isPaused = entry?.status === 'paused';
-  const progressValue = entry?.progress ?? 0;
+  const entry = useModelDownloadEntry('image', model.id);
+  const isActive = !!entry && isModelDownloadInProgress(entry.status);
+  const isQueued = isQueuedStatus(entry?.status);
+  const isDownloading = isDownloadingStatus(entry?.status);
+  const isPaused = isPausedStatus(entry?.status);
+  const progressValue = entry && entry.totalBytes > 0
+    ? entry.bytesDownloaded / entry.totalBytes
+    : 0;
   const authorLabel = model._coreml ? 'Core ML' : imageBackendLabel(model.backend);
   const variantSuffix = model.variant ? ` \u00B7 ${getVariantLabel(model.variant)}` : '';
   return (
     <View>
+      {recommended && (
+        <View style={styles.recommendedBadge}>
+          <Text style={styles.recommendedBadgeText}>RECOMMENDED</Text>
+        </View>
+      )}
       <ModelCard
         compact
-        recommended={recommended ? {} : undefined}
         model={{
           id: model.id,
           name: model.displayName,
@@ -84,35 +77,40 @@ export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
           description: `${formatBytes(model.size)}${variantSuffix}`,
         }}
         isDownloading={isDownloading}
-        isPaused={isPaused}
         isQueued={isQueued}
+        isPaused={isPaused}
         downloadProgress={progressValue}
         downloadBytes={entry ? {
-          downloaded: entry.bytesDownloaded + (entry.mmProjBytesDownloaded ?? 0),
-          total: entry.combinedTotalBytes || entry.totalBytes || model.size,
-          bytesPerSecond: entry.bytesPerSecond,
+          downloaded: entry.bytesDownloaded,
+          total: entry.totalBytes || model.size,
+          bytesPerSecond: undefined,
         } : undefined}
         isCompatible={isCompatible}
         incompatibleReason={incompatibleReason}
         testID={`image-model-card-${index}`}
-        onDownload={isActive || isPaused ? undefined : () => handleDownloadImageModel(hfModelToDescriptor(model))}
-        onCancel={isActive || isPaused ? () => handleCancelImageDownload(model.id) : undefined}
-        onPause={isDownloading && entry?.downloadId ? () => {
-          modelDownloadService.pause(uniformDownloadId('image', model.id)).catch(error => logger.error('Failed to pause image download:', error));
-        } : undefined}
-        onResume={isPaused && entry?.downloadId ? () => {
-          modelDownloadService.resume(uniformDownloadId('image', model.id)).catch(error => logger.error('Failed to resume image download:', error));
-        } : undefined}
+        onDownload={isActive ? undefined : () => handleDownloadImageModel(hfModelToDescriptor(model))}
+        onCancel={isActive ? () => handleCancelImageDownload(model.id) : undefined}
       />
     </View>
   );
 };
 
+/**
+ * Memoized: the catalogue re-renders on every filter and query change, and each card owns a
+ * download-store subscription. Without this, one character re-ran that subscription for every
+ * row on screen.
+ */
+const ImageModelCardItem = React.memo(ImageModelCard);
+ImageModelCardItem.displayName = 'ImageModelCardItem';
+
+/** Stable identity so the list does not remount while the catalogue is loading or errored. */
+const EMPTY_CATALOGUE: (HFImageModel & { _coreml?: boolean; _coremlFiles?: any[] })[] = [];
+
 function shouldShowEmptyMessage({ loading, error, filtered, available }: { loading: boolean; error: string | null; filtered: any[]; available: any[] }): boolean {
   return !loading && !error && filtered.length === 0 && available.length > 0;
 }
 
-interface ScrollContentProps {
+interface ImageModelsListProps {
   showRecHint: boolean;
   showRecommendedOnly: boolean;
   setShowRecHint: (v: boolean) => void;
@@ -142,7 +140,7 @@ interface ScrollContentProps {
   imageSearchQuery: string;
 }
 
-const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
+const ImageModelsList: React.FC<ImageModelsListProps> = ({
   showRecHint, showRecommendedOnly, setShowRecHint,
   imageRec, ramGB, imageRecommendation,
   imageFiltersVisible, backendFilter, setBackendFilter,
@@ -166,9 +164,9 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
     emptyMessage = 'All available models are downloaded';
   }
 
-  return (
-    <ScrollView keyboardShouldPersistTaps="handled">
-      <View style={styles.imageModelsList}>
+  const header = useMemo(
+    () => (
+      <>
         {showRecHint && showRecommendedOnly && (
           <TouchableOpacity style={styles.recHint} onPress={() => setShowRecHint(false)} activeOpacity={0.7}>
             <Icon name="info" size={11} color={colors.primary} />
@@ -216,32 +214,56 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
             </TouchableOpacity>
           </View>
         )}
+      </>
+    ),
+    [
+      backendFilter, clearImageFilters, colors.primary, hasActiveImageFilters,
+      hfModelsError, hfModelsLoading, imageFilterExpanded, imageFiltersVisible,
+      imageRec, imageRecommendation, loadHFModels, ramGB, sdVersionFilter,
+      setBackendFilter, setImageFilterExpanded, setSdVersionFilter, setShowRecHint,
+      setStyleFilter, setUserChangedBackendFilter, showRecHint, showRecommendedOnly,
+      styles, styleFilter,
+    ],
+  );
 
-        {!hfModelsLoading && !hfModelsError && filteredHFModels.map(
-          (model, index) => {
-            const card = (
-              <ImageModelCardItem
-                key={model.id}
-                model={model}
-                index={index}
-                imageRec={imageRec}
-                isRecommendedModel={isRecommendedModel}
-                handleDownloadImageModel={handleDownloadImageModel}
-                handleCancelImageDownload={handleCancelImageDownload}
-              />
-            );
-            if (index === 0) {
-              return card;
-            }
-            return card;
-          }
-        )}
+  const footer = useMemo(
+    () =>
+      shouldShowEmptyMessage({ loading: hfModelsLoading, error: hfModelsError, filtered: filteredHFModels, available: availableHFModels })
+        ? <Text style={styles.allDownloadedText}>{emptyMessage}</Text>
+        : null,
+    [availableHFModels, emptyMessage, filteredHFModels, hfModelsError, hfModelsLoading, styles],
+  );
 
-        {shouldShowEmptyMessage({ loading: hfModelsLoading, error: hfModelsError, filtered: filteredHFModels, available: availableHFModels }) && (
-          <Text style={styles.allDownloadedText}>{emptyMessage}</Text>
-        )}
-      </View>
-    </ScrollView>
+  const renderItem = useCallback(
+    ({ item, index }: ListRenderItemInfo<HFImageModel & { _coreml?: boolean; _coremlFiles?: any[] }>) => (
+      <ImageModelCardItem
+        model={item}
+        index={index}
+        imageRec={imageRec}
+        isRecommendedModel={isRecommendedModel}
+        handleDownloadImageModel={handleDownloadImageModel}
+        handleCancelImageDownload={handleCancelImageDownload}
+      />
+    ),
+    [handleCancelImageDownload, handleDownloadImageModel, imageRec, isRecommendedModel],
+  );
+
+  const keyExtractor = useCallback(
+    (item: HFImageModel) => item.id,
+    [],
+  );
+
+  return (
+    <FlatList
+      data={hfModelsLoading || hfModelsError ? EMPTY_CATALOGUE : filteredHFModels}
+      renderItem={renderItem}
+      keyExtractor={keyExtractor}
+      ListHeaderComponent={header}
+      ListFooterComponent={footer}
+      contentContainerStyle={styles.imageModelsList}
+      keyboardShouldPersistTaps="handled"
+      removeClippedSubviews
+    />
   );
 };
 
@@ -292,6 +314,8 @@ export const ImageModelsTab: React.FC<Props> = ({
             style={[styles.filterToggle, (imageFiltersVisible || hasActiveImageFilters) && styles.filterToggleActive]}
             onPress={() => setImageFiltersVisible(v => !v)}
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel="Filter image models"
           >
             <Icon name="sliders" size={14} color={(imageFiltersVisible || hasActiveImageFilters) ? colors.primary : colors.textMuted} />
             {hasActiveImageFilters && <View style={styles.filterDot} />}
@@ -299,7 +323,7 @@ export const ImageModelsTab: React.FC<Props> = ({
         </View>
       </View>
 
-      <ImageModelsScrollContent
+      <ImageModelsList
         showRecHint={showRecHint}
         showRecommendedOnly={showRecommendedOnly}
         setShowRecHint={setShowRecHint}

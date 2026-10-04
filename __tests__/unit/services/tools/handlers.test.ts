@@ -20,13 +20,6 @@ jest.mock('../../../../src/utils/logger', () => ({
   log: jest.fn(),
 }));
 
-const mockRagSearchProject = jest.fn();
-jest.mock('../../../../src/services/rag', () => ({
-  ragService: {
-    searchProject: (...args: any[]) => mockRagSearchProject(...args),
-  },
-}));
-
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -280,6 +273,22 @@ describe('Tool Handlers', () => {
       expect(result.content).toContain('Title & More');
     });
 
+    it('decodes each entity exactly once, so an escaped entity stays literal', async () => {
+      const html = buildBraveSearchHTML([{
+        title: 'Shows &amp;lt;tag&amp;gt; verbatim',
+        url: 'https://example.com',
+        snippet: 'Keeps &amp;amp; as one ampersand entity',
+      }]);
+      (globalThis as any).fetch = jest.fn().mockResolvedValue({
+        text: jest.fn().mockResolvedValue(html),
+      });
+
+      const result = await runTool('web_search', { query: 'entities' });
+      expect(result.content).toContain('Shows &lt;tag&gt; verbatim');
+      expect(result.content).not.toContain('<tag>');
+      expect(result.content).toContain('Keeps &amp; as one ampersand entity');
+    });
+
     it('handles fetch timeout/error gracefully', async () => {
       (globalThis as any).fetch = jest.fn().mockRejectedValue(new Error('Network request failed'));
 
@@ -382,48 +391,6 @@ describe('Tool Handlers', () => {
 
     it('returns error when url param is missing', async () => {
       const result = await runTool('read_url', {});
-      expect(result.error).toContain('Missing required parameter');
-    });
-  });
-
-  // ==========================================================================
-  // search_knowledge_base
-  // ==========================================================================
-  describe('search_knowledge_base', () => {
-    beforeEach(() => {
-      mockRagSearchProject.mockReset();
-    });
-
-    it('returns no-project message when no projectId', async () => {
-      const result = await runTool('search_knowledge_base', { query: 'test' });
-      expect(result.content).toContain('No project context');
-    });
-
-    it('returns no-results message when search returns empty', async () => {
-      mockRagSearchProject.mockResolvedValue({ chunks: [] });
-
-      const call = { id: 'c1', name: 'search_knowledge_base', arguments: { query: 'nothing' }, context: { projectId: 'proj-1' } };
-      const result = await executeToolCall(call as any);
-      expect(result.content).toContain('No results found');
-    });
-
-    it('returns formatted chunks when results found', async () => {
-      mockRagSearchProject.mockResolvedValue({
-        chunks: [
-          { name: 'doc1.txt', position: 0, content: 'Important information here' },
-          { name: 'doc2.txt', position: 1, content: 'More details' },
-        ],
-      });
-
-      const call = { id: 'c1', name: 'search_knowledge_base', arguments: { query: 'info' }, context: { projectId: 'proj-1' } };
-      const result = await executeToolCall(call as any);
-      expect(result.content).toContain('doc1.txt');
-      expect(result.content).toContain('Important information here');
-      expect(result.content).toContain('doc2.txt');
-    });
-
-    it('returns error when query param is missing', async () => {
-      const result = await runTool('search_knowledge_base', {});
       expect(result.error).toContain('Missing required parameter');
     });
   });

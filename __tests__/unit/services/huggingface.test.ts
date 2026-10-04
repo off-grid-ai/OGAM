@@ -434,13 +434,15 @@ describe('HuggingFaceService', () => {
         json: () => Promise.resolve([
           { type: 'file', path: 'model-Q4_K_M.gguf', size: 4000000000 },
           { type: 'file', path: 'mmproj-f16.gguf', size: 800000000 },
+          { type: 'file', path: 'MTP/mtp-model-Q8_0.gguf', size: 100000000 },
+          { type: 'file', path: 'mtp-model.gguf', size: 100000000 },
           { type: 'file', path: 'README.md', size: 1000 },
         ]),
       });
 
       const files = await huggingFaceService.getModelFiles('org/model');
 
-      // Only model files (not mmproj, not README)
+      // Only standalone model files (not mmproj, MTP draft weights, or README)
       expect(files).toHaveLength(1);
       expect(files[0].name).toBe('model-Q4_K_M.gguf');
       // mmproj should be paired

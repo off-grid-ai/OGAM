@@ -5,7 +5,8 @@ import { useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import { MainTabParamList } from '../../navigation/types';
 import Icon from 'react-native-vector-icons/Feather';
 import { CustomAlert, hideAlert } from '../../components/CustomAlert';
-import { RECOMMENDED_MODELS, SPACING } from '../../constants';
+import { SPACING } from '../../constants';
+import { RECOMMENDED_MODELS } from '@offgrid/application';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useModelsScreen } from './useModelsScreen';
 import { createStyles } from './styles';
@@ -13,15 +14,17 @@ import { TextModelsTab } from './TextModelsTab';
 import { ImageModelsTab } from './ImageModelsTab';
 import { VoiceModelsUpsell } from '../../components/models/VoiceModelsUpsell';
 import { TranscriptionModelsTab } from './TranscriptionModelsTab';
+import { DiarizationModelPicker } from '../../components/models/DiarizationModelPicker';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import type { ModelTab } from './types';
 import { ScreenHeader } from '../../components/ScreenHeader';
 
 const MODEL_TABS: ReadonlyArray<{ key: ModelTab; label: string; testID?: string }> = [
-  { key: 'text', label: 'Text' },
-  { key: 'image', label: 'Image' },
-  { key: 'voice', label: 'Voice', testID: 'voice-models-tab' },
-  { key: 'transcription', label: 'Speech', testID: 'transcription-models-tab' },
+  { key: 'text', label: 'Text Models' },
+  { key: 'image', label: 'Image Models' },
+  { key: 'transcription', label: 'Transcription Models', testID: 'transcription-models-tab' },
+  { key: 'recorder', label: 'Recorder Models', testID: 'recorder-models-tab' },
+  { key: 'voice', label: 'Voice Models', testID: 'voice-models-tab' },
 ];
 
 interface ModelsScreenProps {
@@ -98,24 +101,25 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
             variant="tab"
             right={
               <TouchableOpacity
-                style={styles.downloadManagerButton}
-                hitSlop={SPACING.md}
-                onPress={() => vm.navigation.navigate('DownloadManager')}
-                testID="downloads-icon"
-              >
-                <Icon name="download" size={20} color={colors.text} />
-                {vm.downloadBadgeCount > 0 && (
-                  <View style={styles.downloadBadge}>
-                    <Text testID="downloads-badge-count" style={styles.downloadBadgeText}>{vm.downloadBadgeCount}</Text>
-                  </View>
-                )}
+              style={styles.downloadManagerButton}
+              hitSlop={SPACING.md}
+              onPress={() => vm.navigation.navigate('DownloadManager')}
+              testID="downloads-icon"
+            >
+              <Icon name="download" size={20} color={colors.text} />
+              {vm.downloadBadgeCount > 0 && (
+                <View style={styles.downloadBadge}>
+                  <Text testID="downloads-badge-count" style={styles.downloadBadgeText}>{vm.downloadBadgeCount}</Text>
+                </View>
+              )}
               </TouchableOpacity>
             }
           />
         </HideWhenEmbedded>
 
+        {/* Import Local File */}
         <HideWhenEmbedded embedded={embedded}><View>
-          {vm.activeTab === 'text' && vm.isImporting && vm.importProgress && (
+          {vm.isImporting && vm.importProgress ? (
             <View style={styles.importProgressCard}>
               <View style={styles.importProgressHeader}>
                 <Icon name="file" size={18} color={colors.primary} />
@@ -130,6 +134,11 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
                 {Math.round(vm.importProgress.fraction * 100)}%
               </Text>
             </View>
+          ) : (
+            <TouchableOpacity style={styles.importButton} onPress={vm.handleImportLocalModel} testID="import-local-model" disabled={vm.isImporting}>
+              <Icon name="folder-plus" size={20} color={colors.primary} />
+              <Text style={styles.importButtonText}>Import Local File</Text>
+            </TouchableOpacity>
           )}
         </View></HideWhenEmbedded>
 
@@ -137,7 +146,6 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.tabScroller}
           contentContainerStyle={styles.tabBar}
         >
           {MODEL_TABS.map(tab => (
@@ -183,8 +191,6 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
           focusTrigger={vm.focusTrigger}
           handleSearch={vm.handleSearch}
           handleRefresh={vm.handleRefresh}
-          handleImportLocalModel={vm.handleImportLocalModel}
-          isImporting={vm.isImporting}
           handleSelectModel={vm.handleSelectModel}
           handleDownload={vm.handleDownload}
           handleRepairMmProj={vm.handleRepairMmProj}
@@ -243,15 +249,23 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
       {/* Voice Models Tab: pro panel when registered, otherwise an upsell. */}
       {vm.activeTab === 'voice' && (
         VoiceModelsPanel
-          ? <VoiceModelsPanel showRemoteModels={false} />
+          ? <VoiceModelsPanel showRemoteModels={!embedded} />
           : <VoiceModelsUpsell onGetPro={() => vm.navigation.navigate('ProDetail')} />
       )}
 
       {/* Transcription Models Tab (speech-to-text, core). */}
       {vm.activeTab === 'transcription' && (
         <TranscriptionModelsTab
-          showRemoteModels={false}
+          showLanguageSelector={!embedded}
+          showRemoteModels={!embedded}
         />
+      )}
+
+      {/* Recorder Models Tab: the Day recorder's voice-recognition (diarization) model. */}
+      {vm.activeTab === 'recorder' && (
+        <View style={{ padding: SPACING.md }}>
+          <DiarizationModelPicker />
+        </View>
       )}
 
       <CustomAlert {...vm.alertState} onClose={() => vm.setAlertState(hideAlert())} />

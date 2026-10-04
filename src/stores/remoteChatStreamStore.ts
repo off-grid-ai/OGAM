@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ChatStreamPreview } from '@offgrid/sync';
+import type { ChatStreamPreview } from '@offgrid/application';
 
 /**
  * A reply currently generating on another device in the mesh.

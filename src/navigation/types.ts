@@ -28,6 +28,15 @@ export type RootStackParamList = {
   ProDetail: undefined;
   About: undefined;
   Tools: undefined;
+  Ambient: undefined;
+  AmbientDay: undefined;
+  AmbientOnboarding: undefined;
+  AmbientReflect: undefined;
+  AmbientSession: { sessionId: string };
+  AmbientReplay: { sessionId: string };
+  SpeakerEnrollment: undefined;
+  ManageVoices: undefined;
+  DayRecorderModels: undefined;
 };
 
 // Tab navigator — simple, no sub-stacks
@@ -37,7 +46,7 @@ export type MainTabParamList = {
   ProjectsTab: undefined;
   ModelsTab:
     | {
-        initialTab?: 'text' | 'image' | 'voice' | 'transcription';
+        initialTab?: 'text' | 'image' | 'voice' | 'transcription' | 'recorder';
         repairModelId?: string;
         initialSearchQuery?: string;
       }

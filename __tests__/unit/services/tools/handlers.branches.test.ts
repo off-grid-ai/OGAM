@@ -16,11 +16,6 @@ jest.mock('../../../../src/utils/logger', () => ({
   info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(), log: jest.fn(),
 }));
 
-const mockRagSearchProject = jest.fn();
-jest.mock('../../../../src/services/rag', () => ({
-  ragService: { searchProject: (...args: any[]) => mockRagSearchProject(...args) },
-}));
-
 function makeToolCall(name: string, args: Record<string, any> = {}): ToolCall {
   return { id: 'b-call', name, arguments: args };
 }
@@ -29,23 +24,6 @@ async function runTool(name: string, args: Record<string, any> = {}) {
 }
 
 describe('Tool Handlers — branch coverage', () => {
-  // ── executeToolCall: error without a .message (line 21 fallback) ──────────
-  describe('executeToolCall error fallback', () => {
-    it('uses "Tool execution failed" when the thrown error has no message', async () => {
-      // calculator throws a TypeError with a message normally; force a string throw
-      // via a tool whose handler throws a plain object lacking `.message`.
-      mockRagSearchProject.mockReset();
-      mockRagSearchProject.mockRejectedValue({ notAMessage: true });
-      const call: any = {
-        id: 'x', name: 'search_knowledge_base',
-        arguments: { query: 'hi' }, context: { projectId: 'p1' },
-      };
-      const result = await executeToolCall(call);
-      expect(result.error).toBe('Tool execution failed');
-      expect(result.content).toBe('');
-    });
-  });
-
   // ── parseResultBlock alternate regexes (lines 102-113) ────────────────────
   describe('Web Search — alternate result block parsing', () => {
     const originalFetch = (globalThis as any).fetch;

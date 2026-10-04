@@ -13,7 +13,7 @@ import {
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { hardwareService, modelManager } from '../services';
+import { hardwareService, modelLibrary } from '../services';
 
 interface OrphanedFile {
   name: string;
@@ -36,7 +36,7 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
   const scanForOrphanedFiles = useCallback(async () => {
     setIsScanning(true);
     try {
-      const orphaned = await modelManager.getOrphanedFiles();
+      const orphaned = await modelLibrary.getOrphanedFiles();
       setOrphanedFiles(orphaned);
     } catch (_error) {
       // Silently fail — non-critical background scan
@@ -52,7 +52,7 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
   const performDelete = useCallback(async (file: OrphanedFile) => {
     setIsDeleting(file.path);
     try {
-      await modelManager.deleteOrphanedFile(file.path);
+      await modelLibrary.deleteOrphanedFile(file.path);
       setOrphanedFiles(prev => prev.filter(f => f.path !== file.path));
       onStorageChange();
     } catch (_err) {
@@ -103,7 +103,7 @@ export const OrphanedFilesSection: React.FC<Props> = ({ onStorageChange }) => {
                 setIsScanning(true);
                 for (const file of orphanedFiles) {
                   try {
-                    await modelManager.deleteOrphanedFile(file.path);
+                    await modelLibrary.deleteOrphanedFile(file.path);
                   } catch (_err) {
                     // continue with remaining files
                   }

@@ -43,7 +43,7 @@ describe('selected-but-not-loaded GGUF shows its real capability settings (rende
     expect(view.queryByText('N/A')).toBeNull();
   });
 
-  it('falsifier — an unknown-named GGUF in the same unloaded state promises nothing (no Thinking toggle, Tools N/A)', async () => {
+  it('falsifier — an unknown GGUF promises no thinking but keeps portable tools available', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android', deferInitialLoad: true });
     h.render();
     const { rtl } = h; const view = h.view!;
@@ -53,8 +53,9 @@ describe('selected-but-not-loaded GGUF shows its real capability settings (rende
 
     // The popover is open (Tools row renders)…
     await rtl.waitFor(() => { expect(view.queryByTestId('quick-tools')).not.toBeNull(); }, { timeout: 4000 });
-    // …but an unrecognized model gets no predicted promise: Thinking hidden, Tools reads N/A.
+    // An unrecognized model gets no predicted thinking promise. Portable Mobile tools
+    // remain available because they are provided by the application loop, not the model template.
     expect(view.queryByTestId('quick-thinking-toggle')).toBeNull();
-    expect(view.queryByText('N/A')).not.toBeNull();
+    expect(view.queryByText('N/A')).toBeNull();
   });
 });

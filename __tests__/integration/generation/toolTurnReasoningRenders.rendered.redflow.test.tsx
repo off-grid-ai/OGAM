@@ -32,10 +32,11 @@ describe('tool turn reasoning renders (rendered) — device log 21:11', () => {
   it('shows gemma reasoning in the thinking block, with NO <|channel> leak into the answer', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
     h.enableToolViaUI('calculator');                              // real toggle → the turn runs the TOOL loop
-    h.useAppStore.getState().updateSettings({ thinkingEnabled: true });
     h.render();
     const { rtl } = h;
     const view = h.view!;
+    rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('quick-settings-button')));
+    rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('quick-thinking-toggle')));
 
     // Device-shaped: the model reasons (reasoning_content) then answers (content); raw markers only in text.
     await h.send('Hi', { text: ANSWER, reasoning: REASONING });

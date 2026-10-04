@@ -10,7 +10,7 @@
 import {
   curatedLiteRTDownloadWarning,
   CURATED_LITERT_ENTRIES,
-} from '../../../src/services/curatedLiteRTRegistry';
+} from '@offgrid/models';
 
 // Ground the fixture in the REAL registry entry that carries a confirmDownload warning
 // (Gemma 4 E4B), not a hand-authored guess — so the test can't encode a wrong assumption.

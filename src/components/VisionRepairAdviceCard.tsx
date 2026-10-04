@@ -7,9 +7,10 @@ import { TYPOGRAPHY, SPACING } from '../constants';
 import { AnimatedPressable } from './AnimatedPressable';
 import { LoadingDots } from './LoadingDots';
 import { useAppStore } from '../stores';
-import { modelManager } from '../services';
+import { useActiveLocalModelId } from '../hooks/useActiveMobileModel';
+import { modelLibrary } from '../services';
 import { needsVisionRepair } from '../utils/visionRepair';
-import { visionRepairMessage } from '../services/modelManager/visionRepairMessage';
+import { visionRepairMessage } from '@offgrid/application';
 
 /**
  * In-chat notice: the model you are talking to was built to read images and cannot right now.
@@ -32,8 +33,8 @@ export const VisionRepairAdviceCard: React.FC<{ onRepaired?: () => void }> = ({
   const [dismissed, setDismissed] = useState(false);
   const [repairing, setRepairing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
-  const { downloadedModels, activeModelId, setDownloadedModels } =
-    useAppStore();
+  const downloadedModels = useAppStore(s => s.downloadedModels);
+  const activeModelId = useActiveLocalModelId('text');
 
   const activeModel = downloadedModels.find(m => m.id === activeModelId);
   const broken =
@@ -51,8 +52,17 @@ export const VisionRepairAdviceCard: React.FC<{ onRepaired?: () => void }> = ({
   const repair = async (): Promise<void> => {
     setRepairing(true);
     try {
-      const outcome = await modelManager.repairVision(activeModel);
-      setDownloadedModels(await modelManager.getDownloadedModels());
+      const repairResult = await modelLibrary.executeVisionRepair({
+        type: 'repair-model',
+        model: activeModel,
+      });
+      if (repairResult.status === 'failed') throw new Error(repairResult.error);
+      if (repairResult.status === 'installed-reconciliation-pending') {
+        setResult(repairResult.message);
+        onRepaired?.();
+        return;
+      }
+      const outcome = repairResult.outcome;
       const [, body] = visionRepairMessage(outcome, activeModel.name);
       setResult(body);
       // Only a repair that actually landed is worth reloading for; the other outcomes leave the

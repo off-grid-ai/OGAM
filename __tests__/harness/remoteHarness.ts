@@ -1,7 +1,8 @@
 /**
  * remoteHarness — makes a REMOTE (OpenAI-compatible / Ollama) model ACTIVE and replays a CAPTURED device
  * SSE response at the real network boundary (XMLHttpRequest, which createStreamingRequest uses), so the
- * REAL provider + processDelta + chat render run on top. Fake ONLY the transport; everything we own runs.
+ * REAL transport adapter + Shared GenerationService + processDelta + chat render run on top. Fake ONLY
+ * the external transport; everything we own runs.
  *
  * Ground the SSE in a real captured response (docs/wire-captures/*lmstudio* / *ollama*), never a guess.
  */
@@ -59,50 +60,49 @@ export function installRemoteStream(sseBody: string | string[]): { release: () =
 }
 
 /** Make a remote OpenAI-compatible model the ACTIVE model — the real connect flow's end state (server
- *  added, its models discovered, the provider registered + made active). Discovery/connection is the
+ *  added, its models discovered, the transport registered, and its canonical route selected). Discovery is the
  *  network boundary; we pre-place its result, then mount + gesture as the user. `caps` mirrors what a
  *  server actually advertises (LM Studio/Ollama do NOT advertise supportsThinking → no thinking toggle). */
 export async function installRemoteModel(opts: {
   name?: string;
   endpoint?: string;
-  providerType?: 'openai-compatible' | 'anthropic';
+  provider?: 'openai-compatible' | 'anthropic';
   caps?: Partial<{ supportsVision: boolean; supportsToolCalling: boolean; supportsThinking: boolean }>;
 } = {}): Promise<{ serverId: string; modelId: string }> {
    
   const { useRemoteServerStore } = require('../../src/stores');
-  const { providerRegistry } = require('../../src/services/providers');
-  const { createProviderForServerImpl } = require('../../src/services/remoteServerManagerUtils');
+  const { remoteServerManager } = require('../../src/services/modelServices/remoteServerController');
   const { llmService } = require('../../src/services/llm');
+  const { clearMobileModel, selectMobileModel } = require('../../src/services/modelServices');
    
   // A remote model is only USED when no local model is loaded/selected: generationService prefers a loaded
   // local model, and the dispatch keys off appStore.activeModelId. On device, selecting a remote model
   // clears the local selection and no local model is loaded — mirror that so the send routes remote.
   await llmService.unloadModel();
-  const { useAppStore } = require('../../src/stores');
-  useAppStore.getState().setActiveModelId(null);
+  await clearMobileModel('text');
   const name = opts.name ?? 'LM Studio';
   const endpoint = opts.endpoint ?? 'http://localhost:1234';
-  const providerType = opts.providerType ?? 'openai-compatible';
+  const provider = opts.provider ?? 'openai-compatible';
   const modelId = 'remote-model';
 
-  const serverId = useRemoteServerStore.getState().addServer({ name, endpoint, providerType });
+  const server = await remoteServerManager.addServer({ name, endpoint, provider });
+  const serverId = server.id;
   const model = {
     id: modelId, name: 'Remote Model', serverId, lastUpdated: 't',
-    capabilities: { supportsVision: false, supportsToolCalling: false, supportsThinking: false, ...opts.caps },
+    capabilities: {
+      supportsVision: false,
+      supportsToolCalling: false,
+      supportsThinking: false,
+      acceptsThinkingKwarg: !!opts.caps?.supportsThinking,
+      maxContextLength: 4096,
+      ...opts.caps,
+    },
   };
   const store = useRemoteServerStore.getState();
   store.setDiscoveredModels(serverId, [model]);
-  store.setActiveServerId(serverId);
-  store.setActiveRemoteTextModelId(modelId);
 
-  // Register the provider the SAME way the connect flow does (build from the server + register), then set
-  // the selected model on it (what picking a remote model does). generationService.getCurrentProvider reads
-  // the active server from the store, so this is what a real remote generation runs against.
-  const server = useRemoteServerStore.getState().getServerById(serverId);
-  await createProviderForServerImpl(server);
-  const provider = providerRegistry.getProvider(serverId);
-  provider.updateConfig?.({ modelId });
-  provider.modelCapabilities = { ...provider.modelCapabilities, ...model.capabilities, acceptsThinkingKwarg: !!opts.caps?.supportsThinking };
-  providerRegistry.setActiveProvider(serverId);
+  // The application service registers the transport as part of the atomic save transaction.
+  // Select through the shared route owner after projecting the discovered catalog.
+  await selectMobileModel({ source: 'remote', hostId: serverId, modality: 'text', modelId });
   return { serverId, modelId };
 }

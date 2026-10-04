@@ -297,6 +297,24 @@ const mockKokoroConfig = (voice: string, language: string) => ({
     neuralModelSource: `https://example.test/kokoro/${language}/phonemizer.pte`,
   },
 });
+// onnxruntime-react-native's index imports a native binding at module load (undefined in jest → throws
+// "Cannot read properties of undefined (reading 'install')"). The on-device Nemotron diarizer imports it
+// at module top, so any test that transitively loads the ambient/speaker graph needs this. Inference is
+// never exercised in-process (diarization is covered by the shared pure post-processing tests).
+jest.mock('onnxruntime-react-native', () => ({
+  InferenceSession: { create: jest.fn(async () => ({ run: jest.fn(async () => ({})) })) },
+  Tensor: class {
+    type: string;
+    data: unknown;
+    dims: number[];
+    constructor(type: string, data: unknown, dims: number[]) {
+      this.type = type;
+      this.data = data;
+      this.dims = dims;
+    }
+  },
+}));
+
 jest.mock('react-native-executorch', () => ({
   // Faithful init leaf for the executorch native runtime (a genuine external native boundary):
   // initExecutorch registers the resource fetcher so the runtime is ready to load models through
@@ -645,19 +663,13 @@ jest.mock('react-native-haptic-feedback', () => ({
 
 
 
-// @op-engineering/op-sqlite mock
-jest.mock('@op-engineering/op-sqlite', () => {
-  const mockResults = { rows: [], insertId: 0, rowsAffected: 0 };
-  const mockDb = {
-    executeSync: jest.fn(() => mockResults),
-    execute: jest.fn(() => Promise.resolve(mockResults)),
-    close: jest.fn(),
-    delete: jest.fn(),
-  };
-  return {
-    open: jest.fn(() => mockDb),
-  };
-});
+// @op-engineering/op-sqlite is a native boundary, but application tests still need its real SQL
+// semantics. In particular, schema migrations inspect PRAGMA output and verify copied row counts
+// before any rendered screen can mount. Use Node's in-memory SQLite adapter by default so a product
+// module imported before a per-test fixture never captures the old empty-row stub.
+jest.mock('@op-engineering/op-sqlite', () =>
+  require('./__tests__/harness/sqliteFake').createRealSqliteModule(),
+);
 
 // react-native-zip-archive mock
 jest.mock('react-native-zip-archive', () => ({
@@ -765,6 +777,7 @@ afterEach(async () => {
   const g = globalThis as unknown as {
     __RTL_CLEANUP__?: () => void;
     __GEN_CLEANUP__?: () => Promise<void>;
+    __PRO_CLEANUP__?: () => Promise<void>;
   };
   if (g.__RTL_CLEANUP__) { try { g.__RTL_CLEANUP__(); } catch { /* already torn down */ } g.__RTL_CLEANUP__ = undefined; }
   // A generation left IN FLIGHT outlives its test. generationServiceHelpers schedules a 50ms token-buffer
@@ -774,6 +787,11 @@ afterEach(async () => {
   // running. That is why exactly one rendered suite failed per run, with a different name each time, and why
   // it always passed in isolation. Whoever started a generation registers the stop here.
   if (g.__GEN_CLEANUP__) { try { await g.__GEN_CLEANUP__(); } catch { /* already torn down */ } g.__GEN_CLEANUP__ = undefined; }
+  // Whoever activates the real Pro runtime owns its teardown. Clear the
+  // registration first, then expose any cleanup failure to the test runner.
+  const cleanupPro = g.__PRO_CLEANUP__;
+  g.__PRO_CLEANUP__ = undefined;
+  if (cleanupPro) await cleanupPro();
 });
 
 // Global timeout for async operations

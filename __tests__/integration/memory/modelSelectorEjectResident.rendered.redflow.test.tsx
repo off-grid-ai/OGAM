@@ -7,8 +7,8 @@
  * sidecar that ejectAll leaks (T023b).
  *
  * State reached through REAL interactions (no register() shortcut): setupChatScreen loads a text model via the
- * Home picker; loadImageModel loads an image model (which evicts the text model — one heavy at a time); a real
- * whisper download+select makes whisper co-resident. So getResidents() ends at image + whisper.
+ * Home picker; loadImageModel loads an imported image model; a real whisper download+select makes whisper
+ * co-resident. So getResidents() contains text + image + whisper.
  *
  * These assertions FAIL today (the section + evict-by-key don't exist). They are the spec the feature satisfies.
  */
@@ -22,24 +22,25 @@ jest.mock('@react-navigation/native', () => ({
 
 describe('per-model eject (TDD) — model selector In Memory section', () => {
   it('lists every resident with RAM and ejects one individually, leaving the others', async () => {
-    // Heavy (4GB) text model so the image load EVICTS it (one heavy at a time) → residents = image +
-    // whisper. The harness default is a lighter 2GB model (fits chat-flow budgets) which would co-reside.
+    // Keep a substantial text model resident so the test proves that ejecting one sidecar does not
+    // disturb either of the other real runtimes.
     const h = await setupChatScreen({ engine: 'litert', platform: 'android', whisper: true, modelFileSizeBytes: 4 * 1024 * 1024 * 1024 });
     h.render();
-    // Real interactions to reach image + whisper resident.
-    await h.placeImageModel({ backend: 'mnn' });
+    // Real interactions to reach text + image + whisper resident.
+    const imageModel = await h.placeImageModel({ backend: 'mnn' });
      
-    const { activeModelService } = require('../../../src/services/activeModelService');
-    const { modelResidencyManager } = require('../../../src/services/modelResidency');
+    const { activeModelService } = require('../../harness/activeModelLifecycle');
+    const { modelResidencyManager } = require('../../harness/activeModelLifecycle');
     const React = require('react');
     const { ModelsManagerSheet } = require('../../../src/components/models/ModelsManagerSheet');
      
-    await activeModelService.loadImageModel('sd');
+    await activeModelService.loadImageModel(imageModel.id);
     await h.setupWhisperModel();
+    await h.loadSelectedWhisperOnDemand();
 
-    // Precondition (real): image + whisper are in memory.
+    // Precondition (real): text + image + whisper are in memory.
     const types = () => (modelResidencyManager.getResidents() as Array<{ type: string }>).map(r => r.type).sort();
-    expect(types()).toEqual(['image', 'whisper']);
+    expect(types()).toEqual(['image', 'text', 'transcription']);
 
     const v = h.rtl.render(React.createElement(ModelsManagerSheet, {
       visible: true, onClose: () => {}, labels: { text: '—', image: '—', voice: '—', speech: '—' },
@@ -47,19 +48,19 @@ describe('per-model eject (TDD) — model selector In Memory section', () => {
       onOpenRow: () => {}, onEject: () => {},
     }));
 
-    // The manager sheet marks each RESIDENT row with a RAM chip: image + whisper(→speech) are resident,
-    // text is not (it was evicted by the image load — one heavy at a time).
+    // The manager sheet marks each resident row with a RAM chip.
     await h.rtl.waitFor(() => { expect(v.queryByTestId('models-row-image-ram')).not.toBeNull(); }, { timeout: 4000 });
     expect(v.queryByTestId('models-row-speech-ram')).not.toBeNull();
-    expect(v.queryByTestId('models-row-text-ram')).toBeNull(); // text not resident → no chip
+    expect(v.queryByTestId('models-row-text-ram')).not.toBeNull();
     // Each resident shows its RAM footprint.
     expect(h.rtl.within(v.getByTestId('models-row-speech-ram')).queryByText(/GB/)).not.toBeNull();
 
-    // SPEC: ejecting whisper frees ONLY whisper (its real unload runs); image stays resident.
+    // SPEC: ejecting whisper frees ONLY whisper (its real unload runs); text and image stay resident.
     h.rtl.fireEvent.press(v.getByTestId('models-row-speech-eject'));
-    await h.rtl.waitFor(() => { expect(types()).toEqual(['image']); }, { timeout: 4000 });
-    // The sheet re-projects residency on its poll — wait for the speech chip to clear; image stays.
+    await h.rtl.waitFor(() => { expect(types()).toEqual(['image', 'text']); }, { timeout: 4000 });
+    // The sheet re-projects residency on its poll — wait for the speech chip to clear; both other runtimes stay.
     await h.rtl.waitFor(() => { expect(v.queryByTestId('models-row-speech-ram')).toBeNull(); }, { timeout: 4000 });
     expect(v.queryByTestId('models-row-image-ram')).not.toBeNull();
+    expect(v.queryByTestId('models-row-text-ram')).not.toBeNull();
   });
 });

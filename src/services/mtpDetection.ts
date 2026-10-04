@@ -1,6 +1,6 @@
 import { loadLlamaModelInfo } from 'llama.rn';
 import logger from '../utils/logger';
-import { modelDeclaresMtp } from '../utils/mtpSupport';
+import { modelDeclaresMtp, speculativeDecodingAllowed } from '@offgrid/models';
 
 /**
  * The I/O half of "can this model draft its own tokens": read the GGUF's self-declared metadata and
@@ -40,7 +40,7 @@ export async function modelSupportsMtp(modelPath: string | undefined): Promise<b
  */
 export async function resolveSpeculative(modelPath: string, requested: boolean | undefined): Promise<boolean> {
   if (!requested) return false;
-  const supported = await modelSupportsMtp(modelPath);
-  if (!supported) logger.log('[MTP-SM] speculative requested but this model declares no draft layers — not enabling');
-  return supported;
+  const allowed = speculativeDecodingAllowed({ requested, declaresMtp: await modelSupportsMtp(modelPath) });
+  if (!allowed) logger.log('[MTP-SM] speculative requested but this model declares no draft layers — not enabling');
+  return allowed;
 }

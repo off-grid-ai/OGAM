@@ -13,7 +13,7 @@ export interface ParsedContent {
 
 /**
  * THE single source of truth for the Gemma-native tool-call delimiter grammar. Both the
- * live streaming suppressor (ToolCallTokenFilter in llmToolGeneration) and the stored-content
+ * Shared live streaming suppressor and the stored-content
  * stripper (below) derive from THIS set, so a format the parser accepts cannot be one the
  * stripper/filter miss. DR7 was exactly that drift: the parser accepted `<tool_call:` but the
  * filter/stripper only knew `<|tool_call>`, so the colon form leaked as visible text. A block
@@ -30,14 +30,13 @@ export const TOOL_CALL_CLOSERS: string[] = [...SHARED_TOOL_CALL_CLOSERS];
  * stripper misses — the DR7 promise applied to this second grammar. `\w+` after the `=` is the
  * tool/param name; the block closes with `</function>`.
  */
-export const XML_TOOL_CALL_FUNCTION_MARKER =
+const XML_TOOL_CALL_FUNCTION_MARKER =
   SHARED_XML_TOOL_CALL_FUNCTION_MARKER;
-export { XML_TOOL_CALL_PARAMETER_MARKER } from '@offgrid/sync';
 const XML_TOOL_CALL_FUNCTION_CLOSER = '</function>';
 
-const escapeRegExp = (s: string): string =>
-  s.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-const CLOSERS_ALT = TOOL_CALL_CLOSERS.map(escapeRegExp).join('|');
+const CLOSERS_ALT = TOOL_CALL_CLOSERS.map(closer => escapeRegExp(closer)).join(
+  '|',
+);
 // One closed-block pattern per opener, built from the grammar so parser and stripper cannot drift.
 const TOOL_CALL_BLOCK_PATTERNS: RegExp[] = TOOL_CALL_OPENERS.map(
   open =>
@@ -61,14 +60,6 @@ const XML_TOOL_CALL_BLOCK_PATTERN = new RegExp(
  * back until the next chunk. Single source shared by ThinkTagParser and ToolCallTokenFilter (both
  * had a verbatim copy).
  */
-export function partialTagSuffix(text: string, tag: string): number {
-  return sharedPartialTagSuffix(text, tag);
-}
-/** Longest suffix of `text` that is a prefix of ANY tag — hold back a partial opener/closer of any form. */
-export function maxPartialTagSuffix(text: string, tags: string[]): number {
-  return sharedMaxPartialTagSuffix(text, tags);
-}
-
 const CONTROL_TOKEN_PATTERNS: RegExp[] = [
   /<\|im_start\|>\s*(?:system|assistant|user|tool)?\s*\n?/gi,
   /<\|im_end\|>\s*\n?/gi,
@@ -115,13 +106,6 @@ export const REASONING_DELIMITERS: ReasoningDelimiter[] =
 // shared by BOTH local model load (llmHelpers.detectThinkingSupport) and remote
 // capability probing (remoteModelCapabilities) so on-device and gateway detection
 // cannot diverge - the OD7 divergence was this list omitting enable_thinking.
-const REASONING_TEMPLATE_MARKERS: RegExp[] = [
-  /<think>/i,
-  /<\|channel>thought/i,
-  /<\|channel\|>analysis/i,
-  /enable_thinking/i,
-];
-
 /**
  * Whether a chat_template indicates the model can produce reasoning - either it
  * embeds a reasoning output delimiter or exposes the enable_thinking kwarg switch.
@@ -131,8 +115,7 @@ const REASONING_TEMPLATE_MARKERS: RegExp[] = [
 export function templateEmitsReasoning(
   template: string | null | undefined,
 ): boolean {
-  if (!template) return false;
-  return REASONING_TEMPLATE_MARKERS.some(pattern => pattern.test(template));
+  return chatTemplateSupportsReasoning(template);
 }
 
 /**
@@ -246,10 +229,10 @@ import {
   TOOL_CALL_CLOSERS as SHARED_TOOL_CALL_CLOSERS,
   TOOL_CALL_OPENERS as SHARED_TOOL_CALL_OPENERS,
   XML_TOOL_CALL_FUNCTION_MARKER as SHARED_XML_TOOL_CALL_FUNCTION_MARKER,
-  maxPartialTagSuffix as sharedMaxPartialTagSuffix,
+  escapeRegExp,
   parseChatModelOutput,
   parseChatThinkingContent,
-  partialTagSuffix as sharedPartialTagSuffix,
   stripChatControlTokens,
   type ReasoningDelimiter as SharedReasoningDelimiter,
 } from '@offgrid/sync';
+import { chatTemplateSupportsReasoning } from '@offgrid/models';

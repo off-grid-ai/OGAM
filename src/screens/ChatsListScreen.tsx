@@ -1,14 +1,29 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Platform, TextInput } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import {
+  chatListPreviewLine,
+  workflowFailureMessage,
+  type ConversationRecord,
+} from '@offgrid/application';
+import { View, Text, FlatList, TouchableOpacity, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
+import {
+  useNavigation,
+  CompositeNavigationProp,
+} from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { portableMessageText } from '../utils/portableMessageText';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
 import { ModelSelectorModal } from '../components';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
+import {
+  CustomAlert,
+  showAlert,
+  hideAlert,
+  AlertState,
+  initialAlertState,
+} from '../components/CustomAlert';
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -16,43 +31,55 @@ import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { useChatStore, useProjectStore, useAppStore } from '../stores';
+import { useChatStore } from '../stores';
+import { useActiveMobileModel } from '../hooks/useActiveMobileModel';
 import { useActiveTextModel } from '../hooks/useActiveTextModel';
-import { onnxImageGeneratorService, activeModelService, llmService, remoteServerManager } from '../services';
-import { Conversation } from '../types';
+import { applicationFacade } from '../services/applicationFacade';
+import {
+  selectModelRoute,
+  unloadAndClearModel,
+} from '../services/modelServices/modelFacadeCommands';
+import { DownloadedModel } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
-import { byRecentActivity } from '../utils/conversationOrdering';
 import { formatWhen } from '../utils/localTime';
-import { useConversationPreviewLine } from '../hooks/useConversationPreviewLine';
+import { useWorkspaceContentProjection } from '../hooks/useApplicationProjection';
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ChatsTab'>,
   NativeStackNavigationProp<RootStackParamList>
 >;
 
-// This screen keeps its list actions together so search, selection, and swipe deletion share one owner.
-// eslint-disable-next-line max-lines-per-function
 export const ChatsListScreen: React.FC = () => {
-  const previewLine = useConversationPreviewLine();
   const navigation = useNavigation<NavigationProp>();
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const conversations = useChatStore(s => s.conversations);
-  const { deleteConversation, setActiveConversation } = useChatStore.getState();
-  const { getProject } = useProjectStore();
-  const activeImageModelId = useAppStore(s => s.activeImageModelId);
-  const { removeImagesByConversationId } = useAppStore.getState();
+  const { conversations, projects, messages } = useWorkspaceContentProjection();
+  const { setActiveConversation } = useChatStore.getState();
   const { modelId: activeTextModelId } = useActiveTextModel();
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [isModelLoading, setIsModelLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selecting, setSelecting] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const deleteInFlight = useRef(false);
 
-  const hasModels = !!activeTextModelId || !!activeImageModelId;
+  const hasImageModel = !!useActiveMobileModel('image').model;
+  const hasModels = !!activeTextModelId || hasImageModel;
 
-  const handleChatPress = (conversation: Conversation) => {
+  const projectsById = useMemo(
+    () => new Map(projects.map(project => [project.id, project])),
+    [projects],
+  );
+  const lastMessageByConversation = useMemo(() => {
+    const latest = new Map<string, (typeof messages)[number]>();
+    for (const message of messages) {
+      const current = latest.get(message.conversationId);
+      if (!current || message.position > current.position) {
+        latest.set(message.conversationId, message);
+      }
+    }
+    return latest;
+  }, [messages]);
+
+  const handleChatPress = (conversation: ConversationRecord) => {
     setActiveConversation(conversation.id);
     navigation.navigate('Chat', { conversationId: conversation.id });
   };
@@ -65,19 +92,27 @@ export const ChatsListScreen: React.FC = () => {
     setShowModelSelector(true);
   };
 
-  const handleSelectTextModel = (model: any) => {
-    activeModelService.selectTextModel(model.id);
-    setShowModelSelector(false);
-    navigation.navigate('Chat', {});
+  const handleSelectTextModel = async (model: DownloadedModel) => {
+    try {
+      await selectModelRoute({
+        source: 'local',
+        hostId: model.engine,
+        modality: 'text',
+        modelId: model.id,
+      });
+      setShowModelSelector(false);
+      navigation.navigate('Chat', {});
+    } catch (error) {
+      setAlertState(
+        showAlert('Failed to Select Model', (error as Error).message),
+      );
+    }
   };
 
   const handleUnloadTextModel = async () => {
     setIsModelLoading(true);
     try {
-      remoteServerManager.clearActiveRemoteModel();
-      if (llmService.isModelLoaded()) {
-        await activeModelService.unloadTextModel();
-      }
+      await unloadAndClearModel('text');
     } finally {
       setIsModelLoading(false);
     }
@@ -86,89 +121,85 @@ export const ChatsListScreen: React.FC = () => {
   const handleUnloadImageModel = async () => {
     setIsModelLoading(true);
     try {
-      await activeModelService.unloadImageModel();
+      await unloadAndClearModel('image');
     } finally {
       setIsModelLoading(false);
     }
   };
 
-  const handleDeleteChat = (conversation: Conversation) => {
-    setAlertState(showAlert(
-      'Delete Chat',
-      `Delete "${conversation.title}"? This will also delete all images generated in this chat.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setAlertState(hideAlert());
-            const imageIds = removeImagesByConversationId(conversation.id);
-            for (const imageId of imageIds) {
-              onnxImageGeneratorService.deleteGeneratedImage(imageId).catch(() => {});
-            }
-            deleteConversation(conversation.id);
-          },
-        },
-      ]
-    ));
-  };
-
-  const stopSelecting = () => {
-    setSelecting(false);
-    setSelectedIds(new Set());
-  };
-
-  const handleBulkDelete = () => {
-    const selected = conversations.filter(conversation => selectedIds.has(conversation.id));
-    if (selected.length === 0) return;
-    setAlertState(showAlert(
-      'Delete Chats',
-      `Delete ${selected.length} chats? This will also delete all images generated in these chats.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setAlertState(hideAlert());
-            for (const conversation of selected) {
-              const imageIds = removeImagesByConversationId(conversation.id);
-              for (const imageId of imageIds) {
-                onnxImageGeneratorService.deleteGeneratedImage(imageId).catch(() => {});
+  const handleDeleteChat = (conversation: ConversationRecord) => {
+    setAlertState(
+      showAlert(
+        'Delete Chat',
+        `Delete "${conversation.title}"? This will also delete all images generated in this chat.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              if (deleteInFlight.current) return;
+              deleteInFlight.current = true;
+              setAlertState(hideAlert());
+              try {
+                const outcome =
+                  await applicationFacade().workflows.deleteConversation(
+                    conversation.id,
+                  );
+                if (!outcome.ok) {
+                  setAlertState(
+                    showAlert(
+                      'Chat Not Deleted',
+                      workflowFailureMessage(outcome.failure),
+                    ),
+                  );
+                  return;
+                }
+              } catch (error) {
+                setAlertState(
+                  showAlert(
+                    'Chat Not Deleted',
+                    error instanceof Error ? error.message : String(error),
+                  ),
+                );
+              } finally {
+                deleteInFlight.current = false;
               }
-              deleteConversation(conversation.id);
-            }
-            stopSelecting();
+            },
           },
-        },
-      ],
-    ));
+        ],
+      ),
+    );
   };
 
   const formatDate = (dateString: string): string => formatWhen(dateString);
 
-  const renderRightActions = (conversation: Conversation) => (
+  const renderRightActions = (conversation: ConversationRecord) => (
     <TouchableOpacity
       style={styles.deleteAction}
       onPress={() => handleDeleteChat(conversation)}
-      accessibilityRole="button"
-      accessibilityLabel={`Delete ${conversation.title}`}
     >
       <Icon name="trash-2" size={16} color={colors.error} />
     </TouchableOpacity>
   );
 
-  const renderChat = ({ item, index }: { item: Conversation; index: number }) => {
-    const project = item.projectId ? getProject(item.projectId) : null;
-    const selected = selectedIds.has(item.id);
-    // The preview line comes from the shared rule, so this list and the Mac's read the same.
-    const preview = previewLine(item.messages);
+  const renderChat = ({
+    item,
+    index,
+  }: {
+    item: ConversationRecord;
+    index: number;
+  }) => {
+    const project = item.projectId ? projectsById.get(item.projectId) : null;
+    const lastMessage = lastMessageByConversation.get(item.id);
+    const preview = chatListPreviewLine(
+      lastMessage?.portable.role,
+      portableMessageText(lastMessage?.portable.content),
+    );
 
     return (
       <Swipeable
-        enabled={!selecting}
-        renderRightActions={selecting ? undefined : () => renderRightActions(item)}
+        renderRightActions={() => renderRightActions(item)}
         overshootRight={false}
         containerStyle={styles.swipeableContainer}
       >
@@ -176,18 +207,7 @@ export const ChatsListScreen: React.FC = () => {
           index={index}
           trigger={focusTrigger}
           style={styles.chatItem}
-          onPress={() => {
-            if (!selecting) {
-              handleChatPress(item);
-              return;
-            }
-            setSelectedIds(current => {
-              const next = new Set(current);
-              if (next.has(item.id)) next.delete(item.id);
-              else next.add(item.id);
-              return next;
-            });
-          }}
+          onPress={() => handleChatPress(item)}
           testID={`conversation-item-${index}`}
         >
           <View style={styles.chatContent}>
@@ -208,29 +228,14 @@ export const ChatsListScreen: React.FC = () => {
               </View>
             )}
           </View>
-          <Icon
-            name={selecting ? (selected ? 'check-square' : 'square') : 'chevron-right'}
-            size={20}
-            color={selected ? colors.primary : colors.textMuted}
-            style={selecting ? styles.selectionIcon : undefined}
-          />
+          <Icon name="chevron-right" size={20} color={colors.textMuted} />
         </AnimatedListItem>
       </Swipeable>
     );
   };
 
-  const sortedConversations = useMemo(() => byRecentActivity(conversations), [conversations]);
-  const visibleConversations = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return sortedConversations;
-    return sortedConversations.filter(conversation =>
-      conversation.title.toLowerCase().includes(query) ||
-      conversation.messages.some(message => message.content.toLowerCase().includes(query)),
-    );
-  }, [searchQuery, sortedConversations]);
-  const allVisibleSelected =
-    visibleConversations.length > 0 &&
-    visibleConversations.every(conversation => selectedIds.has(conversation.id));
+  // Shared owns the canonical recent-activity order, including the stable ID tie-breaker.
+  const sortedConversations = conversations;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -238,36 +243,13 @@ export const ChatsListScreen: React.FC = () => {
         title="Chats"
         variant="tab"
         right={
-          selecting ? (
-            <Button
-              title=""
-              accessibilityLabel="Cancel selection"
-              variant="ghost"
-              size="small"
-              onPress={stopSelecting}
-              icon={<Icon name="x" size={16} color={colors.text} />}
-            />
-          ) : (
-            <View style={styles.headerActions}>
-              {conversations.length > 0 ? (
-                <Button
-                  title=""
-                  accessibilityLabel="Select chats"
-                  variant="ghost"
-                  size="small"
-                  onPress={() => setSelecting(true)}
-                  icon={<Icon name="check-square" size={16} color={colors.text} />}
-                />
-              ) : null}
-              <Button
-                title="New"
-                variant="primary"
-                size="small"
-                onPress={handleNewChat}
-                icon={<Icon name="plus" size={16} color={colors.primary} />}
-              />
-            </View>
-          )
+          <Button
+            title="New"
+            variant="primary"
+            size="small"
+            onPress={handleNewChat}
+            icon={<Icon name="plus" size={16} color={colors.primary} />}
+          />
         }
       />
 
@@ -289,78 +271,29 @@ export const ChatsListScreen: React.FC = () => {
             </Text>
           </AnimatedEntry>
           {hasModels && (
-            <AnimatedListItem index={3} staggerMs={60} trigger={focusTrigger} hapticType="impactLight" style={styles.emptyButton} onPress={handleNewChat}>
+            <AnimatedListItem
+              index={3}
+              staggerMs={60}
+              trigger={focusTrigger}
+              hapticType="impactLight"
+              style={styles.emptyButton}
+              onPress={handleNewChat}
+            >
               <Icon name="plus" size={18} color={colors.primary} />
               <Text style={styles.emptyButtonText}>New Chat</Text>
             </AnimatedListItem>
           )}
         </View>
       ) : (
-        <>
-          <View style={styles.searchRow}>
-            <Icon name="search" size={16} color={colors.textMuted} />
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search chats"
-              placeholderTextColor={colors.textMuted}
-              style={styles.searchInput}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
-              testID="chat-search-input"
-            />
-            {searchQuery ? (
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                accessibilityRole="button"
-                accessibilityLabel="Clear chat search"
-                hitSlop={SPACING.sm}
-              >
-                <Icon name="x" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
-          {selecting ? (
-            <View style={styles.selectionBar}>
-              <Text style={styles.selectionCount}>{selectedIds.size} selected</Text>
-              <Button
-                title={allVisibleSelected ? 'Clear' : 'Select all'}
-                variant="ghost"
-                size="small"
-                onPress={() => {
-                  setSelectedIds(
-                    allVisibleSelected
-                      ? new Set()
-                      : new Set(visibleConversations.map(conversation => conversation.id)),
-                  );
-                }}
-              />
-              <Button
-                title=""
-                accessibilityLabel="Delete selected chats"
-                variant="ghost"
-                size="small"
-                disabled={selectedIds.size === 0}
-                onPress={handleBulkDelete}
-                icon={<Icon name="trash-2" size={16} color={colors.error} />}
-              />
-            </View>
-          ) : null}
-          <FlatList
-            data={visibleConversations}
-            renderItem={renderChat}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.list}
-            showsVerticalScrollIndicator={false}
-            removeClippedSubviews={Platform.OS !== 'android'}
-            keyboardShouldPersistTaps="handled"
-            ListEmptyComponent={
-              <Text style={styles.noMatches}>No chats match your search.</Text>
-            }
-            testID="conversation-list"
-          />
-        </>
+        <FlatList
+          data={sortedConversations}
+          renderItem={renderChat}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={Platform.OS !== 'android'}
+          testID="conversation-list"
+        />
       )}
       <CustomAlert
         visible={alertState.visible}
@@ -380,7 +313,7 @@ export const ChatsListScreen: React.FC = () => {
           setShowModelSelector(false);
           navigation.navigate('RemoteServers');
         }}
-        onBrowseModels={(tab) => {
+        onBrowseModels={tab => {
           setShowModelSelector(false);
           navigation.navigate('ModelsTab', { initialTab: tab });
         }}
@@ -404,50 +337,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   list: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.lg,
-  },
-  headerActions: {
-    flexDirection: 'row' as const,
-    gap: SPACING.sm,
-  },
-  searchRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.sm,
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    backgroundColor: colors.surfaceLight,
-  },
-  searchInput: {
-    ...TYPOGRAPHY.body,
-    color: colors.text,
-    flex: 1,
-    paddingVertical: SPACING.sm,
-  },
-  selectionBar: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.sm,
-  },
-  selectionCount: {
-    ...TYPOGRAPHY.meta,
-    color: colors.textSecondary,
-    flex: 1,
-  },
-  selectionIcon: {
-    marginLeft: SPACING.sm,
-  },
-  noMatches: {
-    ...TYPOGRAPHY.bodySmall,
-    color: colors.textSecondary,
-    textAlign: 'center' as const,
-    paddingVertical: SPACING.xxl,
   },
   chatItem: {
     flexDirection: 'row' as const,

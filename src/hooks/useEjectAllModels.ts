@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ejectAllModelsForUser } from '../services/userModelEjection';
-import { useAppStore, useRemoteServerStore } from '../stores';
+import { modelsFailureMessage } from '@offgrid/application';
+import { applicationFacade } from '../services/applicationFacade';
+import { useActiveMobileModel } from './useActiveMobileModel';
 
 /**
  * Thin View-side projection for the "Eject All" control, shared by Home + Chat.
@@ -16,18 +17,18 @@ export function useEjectAllModels(): {
   ejectAll: () => Promise<number>;
 } {
   const [isEjecting, setIsEjecting] = useState(false);
-  const activeModelId = useAppStore((s) => s.activeModelId);
-  const activeImageModelId = useAppStore((s) => s.activeImageModelId);
-  const activeRemoteTextModelId = useRemoteServerStore((s) => s.activeRemoteTextModelId);
-  const activeRemoteImageModelId = useRemoteServerStore((s) => s.activeRemoteImageModelId);
-
-  const hasActiveModel = !!(activeModelId || activeImageModelId || activeRemoteTextModelId || activeRemoteImageModelId);
+  const text = useActiveMobileModel('text').model;
+  const image = useActiveMobileModel('image').model;
+  const transcription = useActiveMobileModel('transcription').model;
+  const voice = useActiveMobileModel('voice').model;
+  const hasActiveModel = !!text || !!image || !!transcription || !!voice;
 
   const ejectAll = async (): Promise<number> => {
     setIsEjecting(true);
     try {
-      const { count } = await ejectAllModelsForUser();
-      return count;
+      const outcome = await applicationFacade().workflows.ejectModels();
+      if (!outcome.ok) throw new Error(modelsFailureMessage(outcome.failure));
+      return outcome.value.count;
     } finally {
       setIsEjecting(false);
     }

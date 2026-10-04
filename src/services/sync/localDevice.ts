@@ -7,9 +7,9 @@
 // licensed-installation roster are keyed to the fingerprint, so the same physical device appears
 // twice and its records are attributed to a device that is not in any roster.
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import type { DeviceInfo as SyncDeviceInfo } from '@offgrid/sync';
-import { currentPlatform } from './nativeSync';
 
 /**
  * Random per-install id minted by builds that predate canonical fingerprint identity.
@@ -49,7 +49,7 @@ export async function getLocalDeviceProfile(): Promise<LocalDeviceProfile> {
   }
   return {
     name,
-    platform: currentPlatform(),
+    platform: Platform.OS === 'ios' ? 'ios' : 'android',
     version: '1',
     host: '',
     port: 0,

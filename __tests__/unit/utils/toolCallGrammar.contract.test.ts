@@ -3,7 +3,13 @@ import {
   TOOL_CALL_CLOSERS,
   stripControlTokens,
 } from '@offgrid/core/utils/messageContent';
-import { ToolCallTokenFilter } from '../../../src/services/llmToolGeneration';
+import { IncrementalTaggedBlockFilter } from '@offgrid/models';
+
+class ToolCallTokenFilter extends IncrementalTaggedBlockFilter {
+  constructor() {
+    super(TOOL_CALL_OPENERS, TOOL_CALL_CLOSERS);
+  }
+}
 
 /**
  * Contract: the Gemma-native tool-call grammar (TOOL_CALL_OPENERS/CLOSERS) is the SINGLE source,

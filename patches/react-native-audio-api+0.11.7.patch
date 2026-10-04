@@ -1,0 +1,21 @@
+diff --git a/node_modules/react-native-audio-api/android/src/main/java/com/swmansion/audioapi/system/MediaSessionManager.kt b/node_modules/react-native-audio-api/android/src/main/java/com/swmansion/audioapi/system/MediaSessionManager.kt
+--- a/node_modules/react-native-audio-api/android/src/main/java/com/swmansion/audioapi/system/MediaSessionManager.kt
++++ b/node_modules/react-native-audio-api/android/src/main/java/com/swmansion/audioapi/system/MediaSessionManager.kt
+@@ -200,7 +200,7 @@ object MediaSessionManager {
+     notificationManager.createNotificationChannel(mChannel)
+   }
+ 
+-  @RequiresApi(Build.VERSION_CODES.O)
++  @RequiresApi(Build.VERSION_CODES.M)
+   fun getDevicesInfo(): ReadableMap {
+     val availableInputs = Arguments.createArray()
+     val availableOutputs = Arguments.createArray()
+@@ -232,7 +232,7 @@ object MediaSessionManager {
+     return devicesInfo
+   }
+ 
+-  @RequiresApi(Build.VERSION_CODES.O)
++  @RequiresApi(Build.VERSION_CODES.M)
+   fun parseDeviceType(device: AudioDeviceInfo): String =
+     when (device.type) {
+       AudioDeviceInfo.TYPE_BUILTIN_MIC -> "Built-in Mic"

@@ -4,7 +4,7 @@
  * a copy downloaded before that must never be OFFERED as selectable (tapping it = guaranteed jetsam).
  * isUnsupportedJetsamImageModel is the guard the model selectors filter on.
  */
-import { isUnsupportedJetsamImageModel } from '../../../src/utils/modelSelectorFilters';
+import { isUnsupportedJetsamImageModel } from '@offgrid/models';
 import { ONNXImageModel } from '../../../src/types';
 
 const model = (over: Partial<ONNXImageModel>): ONNXImageModel => ({

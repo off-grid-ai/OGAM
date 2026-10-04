@@ -19,6 +19,14 @@
  * CONSISTENTLY (it is the failed row that diverges, not the mmproj).
  */
 import { installNativeBoundary, requireRTL, MB } from '../../harness/nativeBoundary';
+import type {MobileApplicationFixture} from '../../harness/mobileApplicationFixture';
+import type {PersistedModelDownload} from '@offgrid/models';
+
+let applicationFixture: MobileApplicationFixture | null = null;
+afterEach(async () => {
+  await applicationFixture?.dispose();
+  applicationFixture = null;
+});
 
 describe('T001 (rendered) — download badge vs Download Manager active count', () => {
   it('shows the SAME active-download count on the badge and the Download Manager', async () => {
@@ -26,7 +34,7 @@ describe('T001 (rendered) — download badge vs Download Manager active count', 
      
     const React = require('react');
     const { render, waitFor } = requireRTL();
-    const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
+    const {seedMobileDownloadJournal, startMobileApplicationFixture} = require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
     const { DownloadManagerScreen } = require('../../../src/screens/DownloadManagerScreen');
      
@@ -39,7 +47,20 @@ describe('T001 (rendered) — download badge vs Download Manager active count', 
     boundary.download!.seedActive({ downloadId: 'dl-v', fileName: 'SmolVLM-Instruct-Q4_K_M.gguf', modelId: 'HuggingFaceTB/SmolVLM', modelType: 'text', status: 'running', bytesDownloaded: 200 * MB, totalBytes: 1500 * MB, ...( { mmProjDownloadId: 'dl-v-mm' } as Record<string, unknown>) });
     boundary.download!.seedActive({ downloadId: 'dl-v-mm', fileName: 'SmolVLM-Instruct-mmproj.gguf', modelId: 'HuggingFaceTB/SmolVLM', modelType: 'text', status: 'running', bytesDownloaded: 90 * MB, totalBytes: 190 * MB });
     boundary.download!.seedActive({ downloadId: 'dl-c', fileName: 'qwen-q4.gguf', modelId: 'Qwen/Qwen', modelType: 'text', status: 'failed', bytesDownloaded: 10 * MB, totalBytes: 2000 * MB });
-    await hydrateDownloadStore();
+    const record = (id: string, modelId: string, fileName: string, bytes: number, total: number, phase = 'downloading'): PersistedModelDownload => ({
+      manifest: {id, modelId, kind: 'text' as const, revision: 'main', artifacts: [{id: 'primary', name: fileName, role: 'primary' as const, required: true, localName: fileName, url: `https://example.test/${fileName}`}]},
+      phase: phase as 'downloading' | 'failed',
+      artifacts: [{artifactId: 'primary', phase: phase as 'downloading' | 'failed', bytesDownloaded: bytes, totalBytes: total, ...(phase === 'downloading' ? {transferId: id} : {})}],
+      createdAt: 1, updatedAt: 1, attempt: 1,
+    });
+    await seedMobileDownloadJournal([
+      record('dl-a', 'meta/llama', 'llama-q4.gguf', 100 * MB, 3000 * MB),
+      record('dl-b', 'mistral/mistral', 'mistral-q4.gguf', 50 * MB, 4000 * MB),
+      record('dl-v', 'HuggingFaceTB/SmolVLM', 'SmolVLM-Instruct-Q4_K_M.gguf', 200 * MB, 1500 * MB),
+      record('dl-c', 'Qwen/Qwen', 'qwen-q4.gguf', 10 * MB, 2000 * MB, 'failed'),
+    ]);
+    applicationFixture = await startMobileApplicationFixture();
+    await applicationFixture.refreshModels();
 
     // BADGE — the number a user sees on the real ModelsScreen (renders only when count > 0).
     const models = render(React.createElement(ModelsScreen, {}));

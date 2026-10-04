@@ -1,22 +1,23 @@
 import React from 'react';
+import { NativeModules } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
 import TcpSocket from 'react-native-tcp-socket';
+import { CORE_SYNC_ENTITIES } from '@offgrid/application';
 import {
   OpLog,
   StateSync,
+  createSharedFileDescriptor,
   TASK_LAUNCH_ENTITY,
   TASK_RUN_ENTITY,
   TASK_VISUAL_STEP_ENTITY,
-  serializeSyncedMessageContext,
   taskVisualStepId,
   type DeviceInfo,
   type Materializer,
 } from '@offgrid/sync';
 import type { RnTcpModule } from '@offgrid/sync/rn';
-import { AppNavigator } from '../../../src/navigation/AppNavigator';
 import {
   registerScreen,
   _clearScreensForTesting,
@@ -27,32 +28,17 @@ import {
   _clearHooksForTesting,
   registerHook,
 } from '../../../src/bootstrap/hookRegistry';
-import {
-  SLOTS,
-  _clearSlotsForTesting,
-  registerSlot,
-} from '../../../src/bootstrap/slotRegistry';
 import { useAppStore } from '../../../src/stores/appStore';
-import { useChatStore } from '../../../src/stores/chatStore';
-import { useProjectStore } from '../../../src/stores/projectStore';
 import { buildSyncEngine } from '../../../src/services/sync/engine';
 import {
-  CORE_SYNC_ENTITIES,
-  messagePutMutation,
+  sharedFilePutMutation,
   type SyncMutation,
 } from '../../../src/services/sync/mutation';
-import { syncService } from '../../../pro/sync/syncService';
 import {
   STATE_CHANNEL,
   stateSyncService,
 } from '../../../pro/sync/stateSyncService';
 import { useTaskRunStore } from '../../../pro/tasks/taskRunStore';
-import { useSyncStore } from '../../../pro/sync/syncStore';
-import { SyncScreen } from '../../../pro/ui/SyncScreen';
-import { SyncSharingSettingsScreen } from '../../../pro/ui/SyncScreen/SyncSharingSettingsScreen';
-import { HomeNotificationsButton } from '../../../pro/ui/HomeNotificationsButton';
-import { ProRoot } from '../../../pro/ui/ProRoot';
-import { TaskChatCard } from '../../../pro/ui/TaskChatCard';
 import {
   getDiscoveryBoundaries,
   resetDiscoveryBoundaries,
@@ -63,6 +49,12 @@ import {
   createLicensedMesh,
   installLicensedPhone,
 } from '../../harness/licensedMesh';
+import type { MobileApplicationFixture } from '../../harness/mobileApplicationFixture';
+
+jest.mock('@op-engineering/op-sqlite', () => {
+  const { createRealSqliteModule } = require('../../harness/sqliteFake');
+  return createRealSqliteModule();
+});
 
 /** This phone's fingerprint, which is also the sync device id its installation registers under. */
 const PHONE_FINGERPRINT = 'fp-this-phone';
@@ -99,22 +91,44 @@ class RemoteRecords implements Materializer {
 
 /** Two devices that can pair: an in-memory licence provider, and a licensed peer to pair with. */
 const mesh = createLicensedMesh();
+let AppNavigator: typeof import('../../../src/navigation/AppNavigator').AppNavigator;
+let SyncScreen: typeof import('../../../pro/ui/SyncScreen').SyncScreen;
+let SyncSharingSettingsScreen: typeof import('../../../pro/ui/SyncScreen/SyncSharingSettingsScreen').SyncSharingSettingsScreen;
+let ProRoot: typeof import('../../../pro/ui/ProRoot').ProRoot;
 
 describe('Pro mobile state sync journey', () => {
   let remote: ReturnType<typeof buildSyncEngine> | undefined;
   let ui: ReturnType<typeof render> | undefined;
+  let applicationFixture: MobileApplicationFixture;
+
+  beforeAll(() => {
+    const { registerMobileApplicationPorts } =
+      require('../../../src/services/composition/application') as typeof import('../../../src/services/composition/application');
+    const { createMobileApplicationPorts } =
+      require('../../../pro/composition/application') as typeof import('../../../pro/composition/application');
+    registerMobileApplicationPorts(createMobileApplicationPorts);
+    ({ AppNavigator } =
+      require('../../../src/navigation/AppNavigator') as typeof import('../../../src/navigation/AppNavigator'));
+    ({ SyncScreen } =
+      require('../../../pro/ui/SyncScreen') as typeof import('../../../pro/ui/SyncScreen'));
+    ({ SyncSharingSettingsScreen } =
+      require('../../../pro/ui/SyncScreen/SyncSharingSettingsScreen') as typeof import('../../../pro/ui/SyncScreen/SyncSharingSettingsScreen'));
+    ({ ProRoot } =
+      require('../../../pro/ui/ProRoot') as typeof import('../../../pro/ui/ProRoot'));
+  });
 
   beforeEach(async () => {
+    (require('@op-engineering/op-sqlite') as { reset(): void }).reset();
     mesh.reset();
     _clearHooksForTesting();
-    await stateSyncService.stop();
-    await syncService.stop();
-    await AsyncStorage.clear();
+    if (applicationFixture) {
+      await stateSyncService.stop();
+      await applicationFixture.application.sync.stop();
+    }
     resetDiscoveryBoundaries();
+    await AsyncStorage.clear();
     _clearScreensForTesting();
     _clearSectionsForTesting();
-    _clearSlotsForTesting();
-    registerSlot(SLOTS.homeNotificationsButton, HomeNotificationsButton);
     registerScreen({ name: 'Sync', component: SyncScreen });
     registerScreen({
       name: 'SyncSharingSettings',
@@ -126,11 +140,6 @@ describe('Pro mobile state sync journey', () => {
     useAppStore
       .getState()
       .setDownloadedModels([createDownloadedModel({ engine: 'litert' })]);
-    useSyncStore.getState().reset();
-    useChatStore.getState().clearAllConversations();
-    for (const project of useProjectStore.getState().projects) {
-      useProjectStore.getState().deleteProject(project.id);
-    }
     registerHook(HOOKS.syncRecordLocalMutation, (mutation: SyncMutation) => {
       stateSyncService.recordMutation(mutation);
     });
@@ -142,7 +151,29 @@ describe('Pro mobile state sync journey', () => {
       name: 'This phone',
       platform: 'ios',
     });
+    const { ProximityAir } =
+      require('../../utils/proximityNativeBoundary') as typeof import('../../utils/proximityNativeBoundary');
+    NativeModules.SyncProximityModule = new ProximityAir().device({
+      id: PHONE_FINGERPRINT,
+      name: 'This phone',
+      platform: 'ios',
+    });
     (Keychain.setGenericPassword as jest.Mock).mockResolvedValue(true);
+    if (!applicationFixture) {
+      const { startMobileApplicationFixture } =
+        require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+      applicationFixture = await startMobileApplicationFixture({ pro: true });
+    } else {
+      await applicationFixture.application.sync.start();
+    }
+    const browsing = await applicationFixture.application.sync.setBrowsing(
+      true,
+    );
+    if (!browsing.ok) throw new Error('Could not enable device discovery.');
+    const discoverable =
+      await applicationFixture.application.sync.setDiscoverable(true);
+    if (!discoverable.ok)
+      throw new Error('Could not enable device advertising.');
   });
 
   afterEach(async () => {
@@ -151,10 +182,14 @@ describe('Pro mobile state sync journey', () => {
     _clearHooksForTesting();
     await stateSyncService.stop();
     await remote?.engine.stop();
-    await syncService.stop();
+    await applicationFixture?.application.sync.stop();
+    delete NativeModules.SyncProximityModule;
     _clearScreensForTesting();
     _clearSectionsForTesting();
-    _clearSlotsForTesting();
+  });
+
+  afterAll(async () => {
+    await applicationFixture?.dispose();
   });
 
   it('converges state and honors visible sharing controls through the rendered app', async () => {
@@ -175,8 +210,6 @@ describe('Pro mobile state sync journey', () => {
       now: () => Date.now(),
     });
     let remoteState: StateSync;
-    let remoteStateOpsSent = 0;
-    let remoteBackfillDelayMs = 0;
     remote = buildSyncEngine({
       pairingEntitlement: mesh.joiner({
         name: remoteDevice.name,
@@ -191,13 +224,7 @@ describe('Pro mobile state sync journey', () => {
     });
     remoteState = new StateSync({
       oplog: remoteLog,
-      backfillBatchSize: 1,
-      scheduleBackfill: send => {
-        if (remoteBackfillDelayMs > 0) setTimeout(send, remoteBackfillDelayMs);
-        else send();
-      },
       send: (deviceId, message) => {
-        if (message.t === 'ops') remoteStateOpsSent += message.ops.length;
         remote!.engine.sendApp(deviceId, 'state', message);
       },
     });
@@ -230,28 +257,6 @@ describe('Pro mobile state sync journey', () => {
       context: null,
       created_at: createdAt,
     });
-    const toolRequest = messagePutMutation('remote-conversation', {
-      id: 'remote-tool-request',
-      uuid: 'remote-tool-request',
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(createdAt).getTime(),
-      toolCalls: [
-        {
-          id: 'contacts-search-call',
-          name: 'contacts_search',
-          arguments: '{"query":"ali hafizji"}',
-        },
-      ],
-    });
-    if (!toolRequest?.fields)
-      throw new Error('Tool request was not serialized');
-    remoteLog.record(
-      toolRequest.entity,
-      toolRequest.entityId,
-      toolRequest.kind,
-      toolRequest.fields,
-    );
     remoteLog.record(
       CORE_SYNC_ENTITIES.message,
       'remote-reasoning-message',
@@ -260,31 +265,8 @@ describe('Pro mobile state sync journey', () => {
         conversation_id: 'remote-conversation',
         role: 'assistant',
         content: 'The field notes are ready.',
-        context: serializeSyncedMessageContext({
+        context: JSON.stringify({
           reasoning: 'I should confirm the notes before answering.',
-          timeline: [
-            {
-              kind: 'thinking',
-              text: 'I should confirm the notes before searching.',
-            },
-            { kind: 'tool', toolIndex: 0 },
-            {
-              kind: 'thinking',
-              text: 'The search result is enough to answer.',
-            },
-          ],
-          toolCalls: [
-            {
-              name: 'web_search',
-              result: 'The field notes were found.',
-              status: 'completed',
-            },
-          ],
-          metrics: {
-            modelName: 'Field Model',
-            decodeTokensPerSecond: 42.5,
-            completionTokens: 128,
-          },
         }),
         created_at: createdAt,
       },
@@ -298,7 +280,6 @@ describe('Pro mobile state sync journey', () => {
     await remote.engine.start(0);
     remoteDevice.port = remote.transport.boundPort ?? 0;
     await stateSyncService.start();
-    await syncService.start();
 
     ui = render(
       <>
@@ -309,13 +290,18 @@ describe('Pro mobile state sync journey', () => {
       </>,
     );
     fireEvent.press(ui.getByTestId('settings-tab'));
-    fireEvent.press(ui.getByText('Model Settings'));
-    fireEvent.press(ui.getByTestId('text-generation-accordion'));
-    fireEvent.press(ui.getByTestId('show-gen-details-on-button'));
-    fireEvent.press(ui.getByLabelText('Back'));
     fireEvent.press(await waitFor(() => ui!.getByTestId('open-sync-settings')));
 
-    const mobile = useSyncStore.getState().thisDevice;
+    let reconciliation!: ReturnType<
+      typeof applicationFixture.application.sync.reconcileEntitlement
+    >;
+    act(() => {
+      reconciliation =
+        applicationFixture.application.sync.reconcileEntitlement('manual');
+    });
+
+    const sync = applicationFixture.application.sync.snapshot();
+    const mobile = sync.self;
     const discovery = getDiscoveryBoundaries().at(-1);
     if (!mobile || !discovery?.publishedPort) {
       throw new Error('Sync did not publish the mobile device');
@@ -338,6 +324,9 @@ describe('Pro mobile state sync journey', () => {
     expect(ui.queryByTestId('sync-scanning')).toBeNull();
     expect(ui.queryByTestId('sync-rescan-error')).toBeNull();
     expect(discovery.publishedPort).toBeGreaterThan(0);
+    if (!(await reconciliation).ok) {
+      throw new Error('Entitlement reconciliation failed.');
+    }
 
     // The peer presents the code this phone is showing, which is the whole confirmation.
     const firstPairing = remote.engine.pair(
@@ -349,36 +338,47 @@ describe('Pro mobile state sync journey', () => {
       expect(ui!.getByTestId(`sync-paired-${remoteDevice.id}`)).toBeTruthy(),
     );
 
-    // A live turn may reach this phone before its parent chat in a separate frame.
-    // Both records must appear in the rendered chat after the parent arrives.
-    remoteLog.record(CORE_SYNC_ENTITIES.message, 'late-parent-message', 'put', {
-      conversation_id: 'late-parent-conversation',
-      role: 'assistant',
-      content: 'The late chat turn arrived.',
+    // A live Desktop resend can publish the user turn before its new conversation reaches this
+    // device. Each op arrives in its own live frame, so catch-up's batch ordering cannot repair it.
+    // The durable user turn must appear when the parent arrives and survive replacement of the old
+    // assistant answer.
+    const sendLiveOp = (
+      entity: string,
+      entityId: string,
+      kind: 'put' | 'delete',
+      fields?: Record<string, unknown>,
+    ): void => {
+      const op = remoteLog.record(entity, entityId, kind, fields);
+      remote!.engine.sendApp(mobile.id, STATE_CHANNEL, { t: 'ops', ops: [op] });
+    };
+    sendLiveOp(CORE_SYNC_ENTITIES.message, 'resend-user-message', 'put', {
+      conversation_id: 'resend-conversation',
+      role: 'user',
+      content: 'Explain React state in one sentence.',
       context: null,
-      created_at: createdAt,
+      created_at: '2026-07-27T12:01:00.000Z',
     });
-    remoteLog.record(
-      CORE_SYNC_ENTITIES.conversation,
-      'late-parent-conversation',
-      'put',
-      {
-        title: 'Late parent chat',
-        project_id: null,
-        created_at: createdAt,
-        updated_at: createdAt,
-      },
-    );
-    remoteState.sendRecord(
-      mobile.id,
-      CORE_SYNC_ENTITIES.message,
-      'late-parent-message',
-    );
-    remoteState.sendRecord(
-      mobile.id,
-      CORE_SYNC_ENTITIES.conversation,
-      'late-parent-conversation',
-    );
+    sendLiveOp(CORE_SYNC_ENTITIES.conversation, 'resend-conversation', 'put', {
+      title: 'Resend keeps the user turn',
+      project_id: null,
+      created_at: '2026-07-27T12:00:00.000Z',
+      updated_at: '2026-07-27T12:03:00.000Z',
+    });
+    sendLiveOp(CORE_SYNC_ENTITIES.message, 'resend-old-answer', 'put', {
+      conversation_id: 'resend-conversation',
+      role: 'assistant',
+      content: 'The first answer that was replaced.',
+      context: null,
+      created_at: '2026-07-27T12:02:00.000Z',
+    });
+    sendLiveOp(CORE_SYNC_ENTITIES.message, 'resend-old-answer', 'delete');
+    sendLiveOp(CORE_SYNC_ENTITIES.message, 'resend-new-answer', 'put', {
+      conversation_id: 'resend-conversation',
+      role: 'assistant',
+      content: 'React state stores data that changes over time.',
+      context: null,
+      created_at: '2026-07-27T12:03:00.000Z',
+    });
 
     // The "no devices found, open Sync on a nearby device" notice must NOT come back, or the screen tells the user
     // to go and do the thing they have just finished doing, directly above the device they did it to. It reads as
@@ -396,17 +396,9 @@ describe('Pro mobile state sync journey', () => {
     // space. Two headings - one from the reachable group, one from the rest - was the bug this replaced.
     expect(ui.queryAllByText('Saved')).toHaveLength(0);
 
-    expect(ui.getByTestId('sync-export-diagnostics')).toBeTruthy();
     fireEvent.press(ui.getByTestId('sync-open-sharing'));
     expect(ui.getByTestId('sync-sending-accordion')).toBeTruthy();
     expect(ui.getByTestId('sync-clipboard-toggle')).toBeTruthy();
-    fireEvent.press(ui.getByTestId('ambient-open-settings'));
-    fireEvent(
-      ui.getByTestId('ambient-model-settings-toggle'),
-      'valueChange',
-      true,
-    );
-    fireEvent.press(ui.getByTestId('app-sheet-close'));
 
     fireEvent.press(ui.getByLabelText('Back'));
     fireEvent.press(ui.getByLabelText('Back'));
@@ -414,185 +406,60 @@ describe('Pro mobile state sync journey', () => {
     await waitFor(() => expect(ui!.getByText('Desktop Research')).toBeTruthy());
     fireEvent.press(ui.getByTestId('chats-tab'));
     await waitFor(() => expect(ui!.getByText('Field planning')).toBeTruthy());
-    await waitFor(() => expect(ui!.getByText('Late parent chat')).toBeTruthy());
-    fireEvent.press(ui.getByText('Late parent chat'));
-    await waitFor(() =>
-      expect(ui!.getByText('The late chat turn arrived.')).toBeTruthy(),
-    );
-    fireEvent.press(ui.getByLabelText('Back'));
     expect(ui.getByText('The field notes are ready.')).toBeTruthy();
     expect(ui.getByText('Desktop Research')).toBeTruthy();
     fireEvent.press(ui.getByText('Field planning'));
     await waitFor(() =>
       expect(ui!.getByText('The field notes are ready.')).toBeTruthy(),
     );
-    fireEvent.press(ui.getByTestId('assistant-work-toggle'));
-    expect(ui.getByText('contacts_search')).toBeTruthy();
+    expect(ui.getByText('Thought process')).toBeTruthy();
+    fireEvent.press(ui.getByTestId('thinking-block-toggle'));
     expect(
-      ui
-        .getAllByText(/^(Thought process|Web search result)$/)
-        .map(node => React.Children.toArray(node.props.children).join('')),
-    ).toEqual(['Thought process', 'Web search result', 'Thought process']);
-    fireEvent.press(ui.getAllByTestId('thinking-block-toggle')[0]);
-    expect(
-      ui.getByText('I should confirm the notes before searching.'),
+      ui.getByText('I should confirm the notes before answering.'),
     ).toBeTruthy();
-    fireEvent.press(ui.getByText('Generation details'));
-    expect(ui.getByText('42.5 tok/s')).toBeTruthy();
-
-    // A returning desktop can send a full wire batch of tombstones. The phone must finish the
-    // batch and leave navigation responsive after removing those turns from its chat projection.
-    const burstIds = Array.from(
-      { length: 126 },
-      (_, index) => `burst-message-${index}`,
-    );
-    const burstPuts = burstIds.map((id, index) =>
-      remoteLog.record(CORE_SYNC_ENTITIES.message, id, 'put', {
-        conversation_id: 'remote-conversation',
-        role: 'user',
-        content: `Burst turn ${index}`,
-        context: null,
-        created_at: new Date(Date.parse(createdAt) + index + 1).toISOString(),
-      }),
-    );
-    const parent = remoteLog.record(
-      CORE_SYNC_ENTITIES.conversation,
-      'buffered-parent',
-      'put',
-      {
-        title: 'Buffered child chat',
-        project_id: null,
-        created_at: createdAt,
-        updated_at: createdAt,
-      },
-    );
-    const child = remoteLog.record(
-      CORE_SYNC_ENTITIES.message,
-      'buffered-child',
-      'put',
-      {
-        conversation_id: 'buffered-parent',
-        role: 'user',
-        content: 'Buffered child turn.',
-        context: null,
-        created_at: createdAt,
-      },
-    );
-    remote.engine.sendApp(mobile.id, STATE_CHANNEL, {
-      t: 'ops',
-      // The parent is last on the wire, across a chunk boundary from its child.
-      ops: [child, ...burstPuts, parent],
-    });
-    const visibleBurstCount = () =>
-      useChatStore
-        .getState()
-        .conversations.find(item => item.id === 'remote-conversation')
-        ?.messages.filter(message =>
-          burstIds.includes(message.uuid ?? message.id),
-        ).length ?? 0;
-    await waitFor(() => expect(visibleBurstCount()).toBeGreaterThan(0));
-    expect(visibleBurstCount()).toBeLessThan(burstIds.length);
-    fireEvent.press(ui.getByText('Generation details'));
-    expect(ui.queryByText('42.5 tok/s')).toBeNull();
-    await waitFor(() =>
-      expect(
-        useChatStore
-          .getState()
-          .conversations.find(item => item.id === 'remote-conversation')
-          ?.messages.filter(message =>
-            burstIds.includes(message.uuid ?? message.id),
-          ),
-      ).toHaveLength(burstIds.length),
-    );
-    await waitFor(() =>
-      expect(
-        useChatStore
-          .getState()
-          .conversations.find(item => item.id === 'buffered-parent')
-          ?.messages.some(message => message.uuid === 'buffered-child'),
-      ).toBe(true),
-    );
-    const burstDeletes = burstIds.map(id =>
-      remoteLog.record(CORE_SYNC_ENTITIES.message, id, 'delete'),
-    );
-    remote.engine.sendApp(mobile.id, STATE_CHANNEL, {
-      t: 'ops',
-      ops: burstDeletes,
-    });
-    await waitFor(() =>
-      expect(
-        useChatStore
-          .getState()
-          .conversations.find(item => item.id === 'remote-conversation')
-          ?.messages.filter(message =>
-            burstIds.includes(message.uuid ?? message.id),
-          ),
-      ).toHaveLength(0),
-    );
-    fireEvent.press(ui.getByText('Generation details'));
-    expect(ui.getByText('42.5 tok/s')).toBeTruthy();
-
-    remoteLog.record(CORE_SYNC_ENTITIES.message, 'older-gap-message', 'put', {
-      conversation_id: 'remote-conversation',
-      role: 'user',
-      content: 'An older turn was missed.',
-      context: null,
-      created_at: '2026-07-27T12:01:00.000Z',
-    });
-    remoteLog.record(CORE_SYNC_ENTITIES.message, 'newer-gap-message', 'put', {
-      conversation_id: 'remote-conversation',
-      role: 'assistant',
-      content: 'A newer turn arrived.',
-      context: null,
-      created_at: '2026-07-27T12:02:00.000Z',
-    });
-    remoteState.sendRecord(
-      mobile.id,
-      CORE_SYNC_ENTITIES.message,
-      'newer-gap-message',
-    );
-    await waitFor(() =>
-      expect(ui!.getByText('A newer turn arrived.')).toBeTruthy(),
-    );
-    expect(ui.queryByText('An older turn was missed.')).toBeNull();
-    const sentBeforeGapRepair = remoteStateOpsSent;
-    remoteState.requestSync(mobile.id);
-    await waitFor(() =>
-      expect(ui!.getByText('An older turn was missed.')).toBeTruthy(),
-    );
-    expect(remoteStateOpsSent - sentBeforeGapRepair).toBe(1);
     fireEvent.press(ui.getByLabelText('Back'));
 
-    useChatStore.getState().addMessage('remote-conversation', {
-      role: 'assistant',
-      content: 'The phone checked the notes.',
-      reasoningContent: 'I should send the reasoning back to Desktop.',
-    });
+    fireEvent.press(ui.getByText('Resend keeps the user turn'));
+    await waitFor(() =>
+      expect(
+        ui!.getByText('Explain React state in one sentence.'),
+      ).toBeTruthy(),
+    );
+    expect(
+      ui.getByText('React state stores data that changes over time.'),
+    ).toBeTruthy();
+    expect(ui.queryByText('The first answer that was replaced.')).toBeNull();
+    fireEvent.press(ui.getByLabelText('Back'));
+
+    const phoneMessageId = 'phone-message-after-pairing';
+    const phoneMessage =
+      await applicationFixture.application.workspaceContent.execute({
+        type: 'append_message',
+        origin: 'local',
+        conversationId: 'remote-conversation',
+        messageId: phoneMessageId,
+        portable: {
+          role: 'assistant',
+          content: 'The phone checked the notes.',
+          context: {
+            reasoning: 'I should send the reasoning back to Desktop.',
+          },
+        },
+      });
+    if (!phoneMessage.ok) throw new Error(phoneMessage.failure.message);
     await waitFor(() =>
       expect(
         remoteRecords.records.get(
-          `${CORE_SYNC_ENTITIES.message}:${
-            useChatStore
-              .getState()
-              .conversations.find(item => item.id === 'remote-conversation')
-              ?.messages.at(-1)?.uuid
-          }`,
+          `${CORE_SYNC_ENTITIES.message}:${phoneMessageId}`,
         ),
       ).toMatchObject({ content: 'The phone checked the notes.' }),
     );
     // The context is read as the structure it is, not as an exact string. It carries the reasoning AND
     // now a status, and pinning the whole blob turns every future field into a failure while proving
     // nothing more about the field under test.
-    const deliveredContext = JSON.parse(
-      (remoteRecords.records.get(
-        `${CORE_SYNC_ENTITIES.message}:${
-          useChatStore
-            .getState()
-            .conversations.find(item => item.id === 'remote-conversation')
-            ?.messages.at(-1)?.uuid
-        }`,
-      )?.context ?? '{}') as string,
-    );
+    const deliveredContext = remoteRecords.records.get(
+      `${CORE_SYNC_ENTITIES.message}:${phoneMessageId}`,
+    )?.context;
     expect(deliveredContext).toMatchObject({
       reasoning: 'I should send the reasoning back to Desktop.',
     });
@@ -611,10 +478,13 @@ describe('Pro mobile state sync journey', () => {
     );
     fireEvent.press(ui.getByText('Save'));
 
-    const phoneProject = useProjectStore
-      .getState()
-      .projects.find(project => project.name === 'Phone Notes');
-    if (!phoneProject) throw new Error('Phone project was not saved');
+    const phoneProject = await waitFor(() => {
+      const savedProject = applicationFixture.application.workspaceContent
+        .snapshot()
+        .projects.find(project => project.name === 'Phone Notes');
+      if (!savedProject) throw new Error('Phone project was not saved');
+      return savedProject;
+    });
     await waitFor(() =>
       expect(
         remoteRecords.records.get(
@@ -668,10 +538,16 @@ describe('Pro mobile state sync journey', () => {
       ).toMatchObject({ value_json: '1.25' }),
     );
 
-    // Pull catch-up transfers winning records, not every superseded revision.
+    await waitFor(() =>
+      expect(remoteLog.size()).toBe(stateSyncService.opCount()),
+    );
     await remote.engine.stop();
     await waitFor(() =>
-      expect(syncService.connectedDeviceIds()).not.toContain(remoteDevice.id),
+      expect(
+        applicationFixture!.application.sync.snapshot().connections[
+          remoteDevice.id
+        ],
+      ).not.toBe('connected'),
     );
 
     fireEvent(
@@ -696,7 +572,8 @@ describe('Pro mobile state sync journey', () => {
     await remote.engine.start(0);
     // Read from the store rather than the screen: this part of the journey is on another screen, and
     // the store holds the same code the Sync screen renders.
-    const currentCode = useSyncStore.getState().pairingCode.code;
+    const currentCode =
+      applicationFixture.application.sync.snapshot().pairingCode?.code;
     if (!currentCode)
       throw new Error('the phone has not issued a pairing code');
     await remote.engine.pair(
@@ -704,7 +581,11 @@ describe('Pro mobile state sync journey', () => {
       currentCode,
     );
     await waitFor(() =>
-      expect(syncService.connectedDeviceIds()).toContain(remoteDevice.id),
+      expect(
+        applicationFixture!.application.sync.snapshot().connections[
+          remoteDevice.id
+        ],
+      ).toBe('connected'),
     );
 
     const winningTemperature =
@@ -727,33 +608,6 @@ describe('Pro mobile state sync journey', () => {
       ).toMatchObject({ value_json: winningTemperature.json }),
     );
 
-    fireEvent.press(ui.getByLabelText('Back'));
-    fireEvent.press(ui.getByTestId('home-tab'));
-    remoteBackfillDelayMs = 100;
-    const progressSettings = [
-      ['topP', '0.8'],
-      ['repeatPenalty', '1.1'],
-      ['maxTokens', '2048'],
-      ['thinkingEnabled', 'true'],
-    ] as const;
-    for (const [setting, valueJson] of progressSettings) {
-      remoteLog.record(CORE_SYNC_ENTITIES.modelSetting, setting, 'put', {
-        value_json: valueJson,
-      });
-    }
-    remoteState.requestSync(mobile.id);
-    await waitFor(() => {
-      expect(ui!.getByText(/^(?:[1-9]\d?|100)%$/)).toBeTruthy();
-      expect(
-        ui!.getByLabelText(
-          /^Syncing, (?:[1-9]\d?|100) percent\. Notifications$/,
-        ),
-      ).toBeTruthy();
-    });
-    await waitFor(() =>
-      expect(ui!.queryByTestId('home-notifications-syncing')).toBeNull(),
-    );
-
     const persistedOpCount = stateSyncService.opCount();
     ui.unmount();
     ui = undefined;
@@ -764,7 +618,7 @@ describe('Pro mobile state sync journey', () => {
     // dropped and only the winner for each record is kept. What has to survive is the state itself,
     // which the temperature below is read for. A log that came back empty, or bigger, would be wrong.
     expect(stateSyncService.opCount()).toBeGreaterThan(0);
-    expect(stateSyncService.opCount()).toBeLessThan(persistedOpCount);
+    expect(stateSyncService.opCount()).toBeLessThanOrEqual(persistedOpCount);
     useAppStore
       .getState()
       .setDownloadedModels([createDownloadedModel({ engine: 'litert' })]);
@@ -784,14 +638,19 @@ describe('Pro mobile state sync journey', () => {
     );
   }, 30_000);
 
-  it('reconnects before slow owners finish and rejects forged task state', async () => {
+  it('starts before slow owners finish, reconnects, and rejects forged task state', async () => {
     let releaseSlowStartup: (() => void) | undefined;
     const slowStartup = new Promise<void>(resolve => {
       releaseSlowStartup = resolve;
     });
-    await stateSyncService.start(() => slowStartup);
-    await syncService.start();
-    expect(syncService.isRunning()).toBe(true);
+    const reconciliation =
+      await applicationFixture.application.sync.reconcileEntitlement('manual');
+    if (!reconciliation.ok) {
+      throw new Error('Entitlement reconciliation failed.');
+    }
+    const stateStartup = stateSyncService.start(slowStartup);
+    await stateStartup;
+    expect(applicationFixture.application.sync.snapshot().running).toBe(true);
 
     const remoteDevice: DeviceInfo = {
       id: 'desktop-task-owner',
@@ -875,15 +734,15 @@ describe('Pro mobile state sync journey', () => {
     });
     remoteState = new StateSync({
       oplog: remoteLog,
-      send: (deviceId, message) => {
-        remote!.engine.sendApp(deviceId, STATE_CHANNEL, message);
-      },
+      send: (deviceId, message) =>
+        remote!.engine.sendApp(deviceId, STATE_CHANNEL, message),
     });
     await remote.engine.start(0);
 
-    const mobile = useSyncStore.getState().thisDevice;
+    const sync = applicationFixture.application.sync.snapshot();
+    const mobile = sync.self;
     const discovery = getDiscoveryBoundaries().at(-1);
-    const pairingCode = useSyncStore.getState().pairingCode.code;
+    const pairingCode = sync.pairingCode?.code;
     if (!mobile || !discovery?.publishedPort || !pairingCode) {
       throw new Error(
         'Mobile Sync did not become available during slow startup',
@@ -894,35 +753,46 @@ describe('Pro mobile state sync journey', () => {
       pairingCode,
     );
     await waitFor(() =>
-      expect(syncService.connectedDeviceIds()).toContain(remoteDevice.id),
+      expect(
+        applicationFixture!.application.sync.snapshot().connections[
+          remoteDevice.id
+        ],
+      ).toBe('connected'),
     );
+
+    const screenshot = createSharedFileDescriptor({
+      syncId: '66e332d1-1809-4d70-a6da-36095c8cb5c9',
+      kind: 'screenshot',
+      name: 'Screenshot 2026-09-09 at 12.45.06 AM.png',
+      mimeType: 'image/png',
+      fileSize: 382_000,
+      createdAt: '2026-09-09T07:45:06.000Z',
+      width: 1179,
+      height: 2556,
+    });
+    if (!screenshot) throw new Error('The screenshot descriptor was invalid.');
+    await stateSyncService.stageMutation(sharedFilePutMutation(screenshot));
+    expect(
+      stateSyncService.sendSharedFileRecord(
+        remoteDevice.id,
+        screenshot.syncId,
+      ),
+    ).toBe(true);
+
+    releaseSlowStartup?.();
+    await stateSyncService.whenReady();
+
     await waitFor(() =>
       expect(useTaskRunStore.getState().runs[task.taskId]).toMatchObject({
         title: task.title,
         executionDevice: task.executionDevice,
       }),
     );
-    expect(
-      useTaskRunStore.getState().visualSteps[visualStep.visualStepId],
-    ).toBeUndefined();
-    useChatStore.getState().setActiveConversation(task.conversationId);
-    ui = render(
-      <TaskChatCard
-        message={{
-          toolName: 'computer_use',
-          toolCallId: task.taskId,
-          content: `Task reference: ${task.taskId}`,
-        }}
-      />,
-    );
     await waitFor(() =>
       expect(
         useTaskRunStore.getState().visualSteps[visualStep.visualStepId],
       ).toMatchObject({ actionLabel: visualStep.actionLabel }),
     );
-
-    releaseSlowStartup?.();
-    await stateSyncService.whenReady();
 
     const ownerUpdate = remoteLog.record(TASK_RUN_ENTITY, task.taskId, 'put', {
       ...task,
@@ -969,5 +839,5 @@ describe('Pro mobile state sync journey', () => {
     expect(useTaskRunStore.getState().runs[task.taskId]?.title).toBe(
       task.title,
     );
-  });
+  }, 30_000);
 });

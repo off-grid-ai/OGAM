@@ -15,21 +15,32 @@ import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
-import { authService } from '../services/authService';
-import { useAuthStore } from '../stores/authStore';
-import logger from '../utils/logger';
+import { mobileSecurity } from '../services';
+
+/** The words the person already knows for each refusal. Shared decides; this only names it. */
+const FAILURE_TITLES: Readonly<Record<string, string>> = {
+  too_short: 'Invalid Passphrase',
+  too_long: 'Invalid Passphrase',
+  mismatch: 'Mismatch',
+  wrong_passphrase: 'Incorrect Passphrase',
+  locked_out: 'Too Many Attempts',
+};
+
+export type PassphraseScreenMode = 'enable' | 'change' | 'disable';
 
 interface PassphraseSetupScreenProps {
-  isChanging?: boolean;
+  mode?: PassphraseScreenMode;
   onComplete: () => void;
   onCancel: () => void;
 }
 
 export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
-  isChanging = false,
+  mode = 'enable',
   onComplete,
   onCancel,
 }) => {
+  const isChanging = mode === 'change';
+  const isDisabling = mode === 'disable';
   const [currentPassphrase, setCurrentPassphrase] = useState('');
   const [newPassphrase, setNewPassphrase] = useState('');
   const [confirmPassphrase, setConfirmPassphrase] = useState('');
@@ -38,60 +49,36 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
-  const { setEnabled } = useAuthStore();
-
-  const validatePassphrase = (passphrase: string): string | null => {
-    if (passphrase.length < 6) {
-      return 'Passphrase must be at least 6 characters';
-    }
-    if (passphrase.length > 50) {
-      return 'Passphrase must be 50 characters or less';
-    }
-    return null;
-  };
-
   const handleSubmit = async () => {
-    // Validate new passphrase
-    const error = validatePassphrase(newPassphrase);
-    if (error) {
-      setAlertState(showAlert('Invalid Passphrase', error));
-      return;
-    }
-
-    // Check confirmation matches
-    if (newPassphrase !== confirmPassphrase) {
-      setAlertState(showAlert('Mismatch', 'Passphrases do not match'));
-      return;
-    }
-
     setIsSubmitting(true);
-
+    // Shared decides whether the passphrase is acceptable and commits the stored passphrase and
+    // the lock together. This screen only carries what the person typed and shows the answer.
     try {
-      if (isChanging) {
-        // Verify current passphrase and change
-        const success = await authService.changePassphrase(currentPassphrase, newPassphrase);
-        if (!success) {
-          setAlertState(showAlert('Error', 'Current passphrase is incorrect'));
-          setIsSubmitting(false);
-          return;
-        }
-        setAlertState(showAlert('Success', 'Passphrase changed successfully'));
-      } else {
-        // Set new passphrase
-        const success = await authService.setPassphrase(newPassphrase);
-        if (!success) {
-          setAlertState(showAlert('Error', 'Failed to set passphrase'));
-          setIsSubmitting(false);
-          return;
-        }
-        setEnabled(true);
-        setAlertState(showAlert('Success', 'Passphrase lock enabled'));
+      const outcome = isDisabling
+        ? await mobileSecurity.disable({ passphrase: currentPassphrase })
+        : isChanging
+        ? await mobileSecurity.change({
+            currentPassphrase,
+            passphrase: newPassphrase,
+            confirmation: confirmPassphrase,
+          })
+        : await mobileSecurity.enable({
+            passphrase: newPassphrase,
+            confirmation: confirmPassphrase,
+          });
+      if (!outcome.ok) {
+        setAlertState(showAlert(FAILURE_TITLES[outcome.reason] ?? 'Error', outcome.message));
+        return;
       }
-
+      setAlertState(showAlert(
+        'Success',
+        isDisabling
+          ? 'Passphrase lock turned off'
+          : isChanging
+            ? 'Passphrase changed successfully'
+            : 'Passphrase lock enabled',
+      ));
       onComplete();
-    } catch (err) {
-      logger.warn('[PassphraseSetup] Operation failed:', err);
-      setAlertState(showAlert('Error', 'An error occurred. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -108,7 +95,11 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
             <Text style={styles.cancelButton}>Cancel</Text>
           </TouchableOpacity>
           <Text style={styles.title}>
-            {isChanging ? 'Change Passphrase' : 'Set Up Passphrase'}
+            {isDisabling
+              ? 'Turn Off Lock'
+              : isChanging
+                ? 'Change Passphrase'
+                : 'Set Up Passphrase'}
           </Text>
           <View style={styles.headerSpacer} />
         </View>
@@ -121,13 +112,15 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
           </View>
 
           <Text style={styles.description}>
-            {isChanging
-              ? 'Enter your current passphrase and then set a new one.'
-              : 'Create a passphrase to lock the app. You will need to enter it each time you open the app.'}
+            {isDisabling
+              ? 'Enter your passphrase to turn the lock off. Your saved passphrase is removed with it.'
+              : isChanging
+                ? 'Enter your current passphrase and then set a new one.'
+                : 'Create a passphrase to lock the app. You will need to enter it each time you open the app.'}
           </Text>
 
           <Card style={styles.inputCard}>
-            {isChanging && (
+            {(isChanging || isDisabling) && (
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Current Passphrase</Text>
                 <TextInput
@@ -143,6 +136,7 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
               </View>
             )}
 
+            {!isDisabling && (
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>
                 {isChanging ? 'New Passphrase' : 'Passphrase'}
@@ -158,7 +152,9 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
                 autoCorrect={false}
               />
             </View>
+            )}
 
+            {!isDisabling && (
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Confirm Passphrase</Text>
               <TextInput
@@ -172,18 +168,22 @@ export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
                 autoCorrect={false}
               />
             </View>
+            )}
           </Card>
 
+          {!isDisabling && (
           <View style={styles.tips}>
             <Text style={styles.tipsTitle}>Tips for a good passphrase:</Text>
             <Text style={styles.tipItem}>• Use a mix of words and numbers</Text>
             <Text style={styles.tipItem}>• Make it memorable but not obvious</Text>
             <Text style={styles.tipItem}>• Avoid personal information</Text>
           </View>
+          )}
 
           <Button
             title={(() => {
               if (isSubmitting) return 'Saving...';
+              if (isDisabling) return 'Turn Off Lock';
               return isChanging ? 'Change Passphrase' : 'Enable Lock';
             })()}
             onPress={handleSubmit}

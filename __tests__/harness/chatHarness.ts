@@ -28,6 +28,7 @@ import {
   type CompletionMeta,
 } from './nativeBoundary';
 import { createDownloadedModel } from '../utils/factories';
+import {doMockRealSqlite} from './sqliteFake';
 
 /** Shared route params the test's navigation mock reads (set by setupChatScreen). */
 export const routeHolder: { params: Record<string, unknown> } = { params: {} };
@@ -61,8 +62,6 @@ export interface ChatHarnessOptions {
   /** Override the test model's declared fileSize (drives the residency budget). Default 2GB — a
    *  realistic small model that fits the default 8GB-avail profile. Memory tests set this explicitly. */
   modelFileSizeBytes?: number;
-  /** Place a second downloaded model at the native storage boundary for fallback journeys. */
-  backupModel?: boolean;
   /** (llama) GGUF chat_template on the model context's metadata — drives the REAL Thinking-capability
    *  detection. Omit for the reasoning-capable default; pass a marker-free template (Mistral's tool-use
    *  template) to model a model that does NOT support thinking so the Thinking toggle stays hidden. */
@@ -80,6 +79,10 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     whisper: opts.whisper,
     download: opts.download,
   });
+  // The application root now starts Workspace Content and the generated-image gallery before Home
+  // renders. Give both real repositories a real SQLite boundary; the global empty-row stub cannot
+  // report schema columns and therefore cannot represent their additive migrations.
+  doMockRealSqlite();
 
   // Global boundary polyfill: React 19's error reporter calls window.dispatchEvent; in the node test
   // env there is no window, so an unrelated crash would mask real errors. This is a jsdom/global shim,
@@ -94,8 +97,6 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
 
   const React = require('react');
   const rtl = requireRTL();
-  const { hardwareService } = require('../../src/services/hardware');
-  const { useAppStore, useChatStore } = require('../../src/stores');
 
   // BOUNDARY (not a gesture): a downloaded model = a persisted record (@local_llm/downloaded_models) + the
   // file on disk — exactly what a real download leaves. Downloading is native and can't be gestured in jest,
@@ -104,10 +105,6 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
   const AsyncStorage =
     require('@react-native-async-storage/async-storage').default ??
     require('@react-native-async-storage/async-storage');
-  const {
-    activeModelService,
-  } = require('../../src/services/activeModelService');
-  const { HomeScreen } = require('../../src/screens/HomeScreen');
 
   const docs = boundary.fs!.DocumentDirectoryPath;
   const fileName =
@@ -131,34 +128,40 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     liteRTVision: opts.vision,
     liteRTAudio: opts.audio,
   });
-  const downloadedModels = [model];
-  if (opts.backupModel) {
-    const backupFileName = opts.engine === 'llama' ? 'backup.gguf' : 'backup.litertlm';
-    const backupPath = `${docs}/models/${backupFileName}`;
-    boundary.fs!.seedFile(backupPath, 500 * 1024 * 1024);
-    downloadedModels.push(createDownloadedModel({
-      id: 'backup', name: 'Backup Model', engine: opts.engine,
-      filePath: backupPath, fileName: backupFileName, fileSize: fileSize / 2,
-    }));
-  }
   await AsyncStorage.setItem(
     '@local_llm/downloaded_models',
-    JSON.stringify(downloadedModels),
+    JSON.stringify([model]),
   );
+  await AsyncStorage.setItem(
+    'local-llm-app-storage',
+    JSON.stringify({
+      state: {
+        hasCompletedOnboarding: true,
+        checklistDismissed: true,
+        onboardingChecklist: {
+          downloadedModel: true,
+          loadedModel: true,
+          sentMessage: true,
+          triedImageGen: true,
+          exploredSettings: true,
+          createdProject: true,
+        },
+      },
+      version: 0,
+    }),
+  );
+
+  const { hardwareService } = require('../../src/services/hardware');
+  const { useAppStore, useChatStore } = require('../../src/stores');
   await hardwareService.refreshMemoryInfo();
 
-  // Boundary: dismiss the onboarding spotlight tour. When a whisper model is present the voice-hint
-  // spotlight (step 12) fires and wraps the send button in an AttachStep, which intercepts the composer
-  // gesture in tests. The tour is unrelated to any behavior under test, so mark it done up front.
+  // This fixture represents a returning user. The completed checklist is seeded at the durable
+  // profile boundary before the real store hydrates, so spotlight steps cannot intercept chat
+  // gestures and the journey never manufactures application state with a direct store write.
 
-  useAppStore.setState({ checklistDismissed: true });
-
-  // Activate PRO (audio/voice mode header toggle, audio layout, TTS, MCP) via the real bootstrap BEFORE any
-  // screen mounts, so pro slots render in Home + ChatScreen. Reusable seam (proHarness.installPro).
-  if (opts.pro) {
-    const { installPro } = require('./proHarness');
-    await installPro();
-  }
+  const {startMobileApplicationFixture} = require('./mobileApplicationFixture') as typeof import('./mobileApplicationFixture');
+  const applicationFixture = await startMobileApplicationFixture({pro: opts.pro});
+  const {HomeScreen} = require('../../src/screens/HomeScreen');
 
   // GESTURE: mount the real Home screen — its REAL hydration loads the record — then open the picker and TAP
   // the model row. The real handleSelectTextModel sets it active (no setState activeModelId shortcut).
@@ -192,7 +195,8 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
   rtl.fireEvent.press(rows[0]);
   await rtl.waitFor(
     () => {
-      expect(useAppStore.getState().activeModelId).toBe('m');
+      // The selection is the shared active route; the store carries no selection field any more.
+      expect(applicationFixture.application.models.snapshot().active.text?.model?.id).toBe('m');
     },
     { timeout: 4000 },
   );
@@ -208,7 +212,19 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
   // readiness gate passes deterministically). This is the real native-faked load, not a state shortcut.
   // deferInitialLoad leaves the model selected-but-not-loaded (the real lazy-on-select state) so a test
   // can assert nothing is eager-warmed; the first send then triggers the real lazy load.
-  if (!opts.deferInitialLoad) await activeModelService.loadTextModel('m');
+  if (!opts.deferInitialLoad) {
+    const {modelsFailureMessage} = require('@offgrid/application') as typeof import('@offgrid/application');
+    const outcome = await applicationFixture.application.models.load({
+      modality: 'text',
+      modelId: applicationFixture.selectedModelId('text'),
+    });
+    if (!outcome.ok) {
+      throw new Error(
+        `Model load failed: ${outcome.failure.kind}: ${modelsFailureMessage(outcome.failure)}`,
+      );
+    }
+    await applicationFixture.refreshModels();
+  }
 
   // Stop any generation this suite leaves in flight, on THIS module graph, before the next suite resets
   // modules. Registered the same way requireRTL registers its unmount (a global jest.setup's afterEach
@@ -217,10 +233,13 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
   // token-flush timer that fires inside the NEXT suite and fails it, which is why exactly one rendered
   // suite failed per run with a different name every time.
   {
-    const { generationService } = require('../../src/services');
+    const { mobileChatSession } = require('../../src/screens/ChatScreen/mobileChatSession');
     (
       globalThis as unknown as { __GEN_CLEANUP__?: () => Promise<void> }
-    ).__GEN_CLEANUP__ = () => generationService.stopGeneration();
+    ).__GEN_CLEANUP__ = async () => {
+      mobileChatSession.stop();
+      await applicationFixture.dispose();
+    };
   }
 
   routeHolder.params = {}; // new chat — the first send() creates the conversation
@@ -266,9 +285,6 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
         TextGenerationSection,
       } = require('../../src/components/GenerationSettingsModal/TextGenerationSection');
       const s = rtl.render(React.createElement(TextGenerationSection, {}));
-      if (!s.queryByTestId(`setting-${key}-value-button`)) {
-        rtl.fireEvent.press(s.getByTestId('modal-text-advanced-toggle'));
-      }
       rtl.fireEvent.press(s.getByTestId(`setting-${key}-value-button`));
       const input = s.getByTestId(`setting-${key}-input`);
       rtl.fireEvent.changeText(input, String(value));
@@ -297,9 +313,9 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     },
 
     /**
-     * Place a DOWNLOADED image model (the native/disk boundary — downloading can't be gestured in jest). It
-     * is NOT activated here: activation is a real gesture (cycleImageMode's toggle sets activeImageModelId
-     * when an image model is downloaded). Settles first so the mount's hydration has cleared the empty disk.
+     * Import an image-model archive through the real Mobile adapter and Shared transaction. The harness
+     * controls only the picked archive, extracted files, and native unzip boundary; registry, selection,
+     * refresh, and application projection remain production behavior.
      */
     async placeImageModel(
       imgOpts: {
@@ -311,42 +327,49 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     ) {
       const {
         id = 'sd',
-        modelPath: imgModelPath = '/models/sd',
         backend = 'coreml',
         size,
       } = imgOpts;
 
-      const { createONNXImageModel } = require('../utils/factories');
-      const imgModel = createONNXImageModel({
-        id,
-        name: 'SD',
-        modelPath: imgModelPath,
-        backend,
-        ...(size != null ? { size } : {}),
+      const archiveName = `${id}-${backend}.zip`;
+      const sourceUri = `/external/${archiveName}`;
+      boundary.fs!.seedTextFile(sourceUri, 'PK', 1024);
+      const zip = require('react-native-zip-archive') as {unzip: jest.Mock};
+      zip.unzip.mockImplementation(async (_archive: string, destination: string) => {
+        const seedFile = (name: string, bytes = 8 * 1024 * 1024) =>
+          boundary.fs!.seedFile(`${destination}/${name}`, bytes);
+        if (backend === 'mnn' || backend === 'qnn') {
+          ['pos_emb.bin', 'token_emb.bin', 'tokenizer.json'].forEach(name => seedFile(name));
+          if (backend === 'mnn') {
+            [
+              'unet.mnn',
+              'unet.mnn.weight',
+              'vae_decoder.mnn',
+              'vae_decoder.mnn.weight',
+              'clip_v2.mnn',
+              'clip_v2.mnn.weight',
+            ].forEach(name => seedFile(name));
+          } else {
+            ['unet.bin', 'vae_decoder.bin', 'clip_v2.mnn'].forEach(name => seedFile(name));
+          }
+        } else {
+          boundary.fs!.seedDir(`${destination}/model.mlmodelc`);
+          seedFile('model.mlmodelc/model.bin', size ?? 8 * 1024 * 1024);
+        }
+        return destination;
       });
-      // A downloaded+extracted image model IS its file set on disk (the boundary) — seed the exact files the
-      // real integrity gate + native load require, so the REAL load path runs (mnn/qnn validate the dir;
-      // coreml doesn't). No pre-marking-loaded shortcut.
-      const seedFile = (name: string) =>
-        boundary.fs!.seedFile(`${imgModelPath}/${name}`, 8 * 1024 * 1024);
-      if (backend === 'mnn' || backend === 'qnn') {
-        ['pos_emb.bin', 'token_emb.bin', 'tokenizer.json'].forEach(seedFile);
-        if (backend === 'mnn')
-          [
-            'unet.mnn',
-            'unet.mnn.weight',
-            'vae_decoder.mnn',
-            'vae_decoder.mnn.weight',
-            'clip_v2.mnn',
-            'clip_v2.mnn.weight',
-          ].forEach(seedFile);
-        else ['unet.bin', 'vae_decoder.bin', 'clip_v2.mnn'].forEach(seedFile);
-      } else {
-        seedFile('model.mlmodelc'); // coreml: a non-empty dir
+
+      const {importMobileImageArchive} = require('../../src/services/adapters/models/library/imageArchiveImportAdapter') as typeof import('../../src/services/adapters/models/library/imageArchiveImportAdapter');
+      const imported = await importMobileImageArchive({sourceUri, fileName: archiveName});
+      if (imported.status !== 'imported') {
+        throw new Error(`Image model import failed during ${imported.stage}: ${imported.error}`);
       }
-      await this.settle(50); // let the mount's hydration finish clearing the (empty) disk list
-      this.useAppStore.setState({ downloadedImageModels: [imgModel] }); // downloaded (boundary), NOT active
-      return imgModel;
+      await applicationFixture.refreshModels();
+      const projected = applicationFixture.application.models
+        .snapshot()
+        .inventory.find(candidate => candidate.id === imported.model.id);
+      if (!projected) throw new Error('Imported image model was not published to the application inventory.');
+      return imported.model;
     },
 
     /**
@@ -535,17 +558,23 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       const {
         TranscriptionModelsTab,
       } = require('../../src/screens/ModelsScreen/TranscriptionModelsTab');
-      const { useWhisperStore } = require('../../src/stores/whisperStore');
+      const { createTranscriptionModelsSelector } = require('@offgrid/application') as typeof import('@offgrid/application');
+      const { refreshTranscriptionModels } = require('../../src/services/transcriptionModelApplication') as typeof import('../../src/services/transcriptionModelApplication');
+      const selectTranscriptionModels = createTranscriptionModelsSelector();
 
       boundary.fs!.seedFile(
         `${docs}/whisper-models/ggml-${modelId}.bin`,
         75 * 1024 * 1024,
       );
-      await useWhisperStore.getState().refreshPresentModels(); // real disk scan → present
+      const refreshed = await refreshTranscriptionModels();
+      expect(refreshed.ok).toBe(true); // real disk scan → Shared inventory projection
       const t = rtl.render(React.createElement(TranscriptionModelsTab, {}));
       await rtl.waitFor(
         () => {
-          expect(useWhisperStore.getState().presentModelIds).toContain(modelId);
+          const row = selectTranscriptionModels(
+            applicationFixture.application.models.snapshot(),
+          ).models.find(candidate => candidate.catalog.id === modelId);
+          expect(row?.installed).toBe(true);
         },
         { timeout: 4000 },
       );
@@ -554,11 +583,22 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       );
       await rtl.waitFor(
         () => {
-          expect(useWhisperStore.getState().downloadedModelId).toBe(modelId);
+          expect(
+            selectTranscriptionModels(
+              applicationFixture.application.models.snapshot(),
+            ).selectedModelId,
+          ).toBe(modelId);
         },
         { timeout: 4000 },
       );
       t.unmount();
+    },
+
+    /** Acquire the selected Whisper runtime through the same residency intent used by microphone demand. */
+    async loadSelectedWhisperOnDemand(modelId = 'tiny.en') {
+      const { mobileResidencyIntents } = require('../../src/services/modelServices/residencyIntents');
+      const result = await mobileResidencyIntents.ensureTranscription(modelId);
+      expect(result).toBe('loaded');
     },
 
     /** Start a real chat-mode mic gesture. Tests can release it as a hold or keep it pressed. */
@@ -659,23 +699,17 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       // BOUNDARY: the persisted artifact a completed voice-model download leaves — drives shouldLoad in the
       // REAL KokoroTTSBridge. Set via the real store action (like the LLM's @local_llm/downloaded_models
       // record). NOT a phase/isReady poke: readiness below is EMERGENT from the real engine + executorch fake.
-      await useTTSStore.getState().updateSettings({
-        modelDownloaded: {
-          ...(useTTSStore.getState().settings.modelDownloaded ?? {}),
-          [engineId]: true,
-        },
-      });
-      // The real EngineBridge (mounted in render()) now mounts KokoroTTSBridge → the executorch fake reports
-      // isReady → KokoroEngine._setBridge → phase 'ready'. Wait for that emergent readiness (the same signal
-      // the real Voice toggle gates on) — never set by the test.
-      await rtl.waitFor(
-        () => {
-          expect(useTTSStore.getState().isReady).toBe(true);
-        },
-        { timeout: 4000 },
-      );
+      await useTTSStore
+        .getState()
+        .updateSettings({
+          modelDownloaded: {
+            ...(useTTSStore.getState().settings.modelDownloaded ?? {}),
+            [engineId]: true,
+          },
+        });
       // GESTURE: open the chat-input quick-settings popover and tap the Voice row (the alternate real entry
-      // to voice mode, per the header dropdown). initializeEngine + interfaceMode='audio' run for real.
+      // to voice mode, per the header dropdown). This intent owns on-demand engine
+      // initialization; the harness must not wait for eager readiness first.
       rtl.fireEvent.press(
         await rtl.waitFor(() => view.getByTestId('quick-settings-button')),
       );
@@ -832,18 +866,11 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       if (via === 'longpress') {
         rtl.fireEvent(target, 'longPress');
       } else {
-        // Generation can replace the final assistant row while this wait runs. Re-read the last
-        // row so the gesture reaches the current message instead of a detached render node.
-        const dots = await rtl.waitFor(() => {
-          const currentBubbles = view.queryAllByTestId(testId);
-          const currentTarget = currentBubbles[currentBubbles.length - 1];
-          const scopedDots = rtl.within(currentTarget).queryByText('•••');
-          if (scopedDots) return scopedDots;
-          // Audio mode owns its full message bubble outside the core role wrapper. Its latest
-          // visible action control still belongs to the last rendered message in this journey.
-          const visibleDots = view.getAllByText('•••');
-          return visibleDots[visibleDots.length - 1];
-        });
+        // The 3-dots '•••' lives inside THIS message's element — scope to it (not the global-last dots,
+        // which would be a different message's button).
+        const dots = await rtl.waitFor(() =>
+          rtl.within(target).getByText('•••'),
+        );
         rtl.fireEvent.press(dots);
       }
       await rtl.waitFor(() => {

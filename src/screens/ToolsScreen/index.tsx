@@ -9,6 +9,7 @@ import { FONTS, TYPOGRAPHY, SPACING } from '../../constants';
 import { AVAILABLE_TOOLS } from '../../services/tools';
 import { useAppStore } from '../../stores';
 import { useOpenProTools } from '../../hooks/useOpenProTools';
+import { useEnabledToolsSetting } from '../../hooks/useEnabledToolsSetting';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 
 const TOOL_WARNING_COLOR = '#F59E0B';
@@ -26,17 +27,10 @@ export const ToolsScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const openProTools = useOpenProTools();
 
-  const enabledTools = useAppStore(st => st.settings.enabledTools) || [];
-  const updateSettings = useAppStore(st => st.updateSettings);
+  const { enabledTools, pending: savingTools, failure: toolSaveFailure, toggleTool } =
+    useEnabledToolsSetting();
   const toolCountHintDismissed = useAppStore(st => st.toolCountHintDismissed);
   const setToolCountHintDismissed = useAppStore(st => st.setToolCountHintDismissed);
-
-  const handleToggleTool = (toolId: string) => {
-    const cur = useAppStore.getState().settings.enabledTools || [];
-    updateSettings({
-      enabledTools: cur.includes(toolId) ? cur.filter(id => id !== toolId) : [...cur, toolId],
-    });
-  };
 
   const showHint = enabledTools.length > 3 && !toolCountHintDismissed;
 
@@ -104,7 +98,8 @@ export const ToolsScreen: React.FC = () => {
               </View>
               <Switch
                 value={isEnabled}
-                onValueChange={() => handleToggleTool(tool.id)}
+                onValueChange={() => { toggleTool(tool.id); }}
+                disabled={savingTools}
                 trackColor={{ false: colors.border, true: `${colors.primary}80` }}
                 thumbColor={isEnabled ? colors.primary : colors.textMuted}
                 accessibilityLabel={`${tool.displayName}, ${isEnabled ? 'ON' : 'OFF'}`}
@@ -113,6 +108,15 @@ export const ToolsScreen: React.FC = () => {
             </View>
           );
         })}
+        {Boolean(toolSaveFailure) && (
+          <Text
+            style={[styles.hint, { color: TOOL_WARNING_COLOR }]}
+            accessibilityLiveRegion="polite"
+            testID="tool-picker-save-failure"
+          >
+            {toolSaveFailure}
+          </Text>
+        )}
         <Text style={styles.hint}>
           Enabling more tools can confuse the model and increases latency on first response.
         </Text>

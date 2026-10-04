@@ -1,5 +1,5 @@
 /**
- * AuthService Unit Tests
+ * Phone passphrase store unit tests
  *
  * Tests for passphrase management: set, verify, check, remove, and change.
  * Uses react-native-keychain for secure storage (mocked in jest.setup.ts).
@@ -17,10 +17,26 @@ jest.mock('react-native-keychain', () => ({
   },
 }));
 
-import { authService } from '../../../src/services/authService';
+import { mobileSecurityCredentialPort as credentials } from '../../../src/services/adapters/security/mobileSecurityCredentialPort';
+import {
+  createSecurityFacade,
+  EMPTY_SECURITY_STATE,
+  type PersistedSecurityState,
+} from '@offgrid/application';
+
+/** The lock facts, kept in memory. The passphrase itself still goes through the real keychain. */
+function memoryStatePort() {
+  let state: PersistedSecurityState | null = EMPTY_SECURITY_STATE;
+  return {
+    read: async () => state,
+    write: async (next: PersistedSecurityState) => {
+      state = next;
+    },
+  };
+}
 import * as Keychain from 'react-native-keychain';
 
-describe('AuthService', () => {
+describe('mobileSecurityCredentialPort', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -32,7 +48,7 @@ describe('AuthService', () => {
     it('stores hashed passphrase in keychain and returns true', async () => {
       (Keychain.setGenericPassword as jest.Mock).mockResolvedValue(true);
 
-      const result = await authService.setPassphrase('mySecret123');
+      const result = await credentials.setCredential('mySecret123');
 
       expect(result).toBe(true);
       expect(Keychain.setGenericPassword).toHaveBeenCalledTimes(1);
@@ -50,7 +66,7 @@ describe('AuthService', () => {
         new Error('Keychain unavailable'),
       );
 
-      const result = await authService.setPassphrase('mySecret123');
+      const result = await credentials.setCredential('mySecret123');
 
       expect(result).toBe(false);
     });
@@ -70,7 +86,7 @@ describe('AuthService', () => {
         },
       );
 
-      await authService.setPassphrase('correctPassphrase');
+      await credentials.setCredential('correctPassphrase');
 
       // Mock getGenericPassword to return the stored hash
       (Keychain.getGenericPassword as jest.Mock).mockResolvedValue({
@@ -79,7 +95,7 @@ describe('AuthService', () => {
         service: 'ai.offgridmobile.auth',
       });
 
-      const result = await authService.verifyPassphrase('correctPassphrase');
+      const result = await credentials.verifyCredential('correctPassphrase');
 
       expect(result).toBe(true);
     });
@@ -93,7 +109,7 @@ describe('AuthService', () => {
         },
       );
 
-      await authService.setPassphrase('correctPassphrase');
+      await credentials.setCredential('correctPassphrase');
 
       (Keychain.getGenericPassword as jest.Mock).mockResolvedValue({
         username: 'passphrase_hash',
@@ -101,7 +117,7 @@ describe('AuthService', () => {
         service: 'ai.offgridmobile.auth',
       });
 
-      const result = await authService.verifyPassphrase('wrongPassphrase');
+      const result = await credentials.verifyCredential('wrongPassphrase');
 
       expect(result).toBe(false);
     });
@@ -109,7 +125,7 @@ describe('AuthService', () => {
     it('returns false when no credentials are stored', async () => {
       (Keychain.getGenericPassword as jest.Mock).mockResolvedValue(false);
 
-      const result = await authService.verifyPassphrase('anyPassphrase');
+      const result = await credentials.verifyCredential('anyPassphrase');
 
       expect(result).toBe(false);
     });
@@ -119,7 +135,7 @@ describe('AuthService', () => {
         new Error('Keychain error'),
       );
 
-      const result = await authService.verifyPassphrase('anyPassphrase');
+      const result = await credentials.verifyCredential('anyPassphrase');
 
       expect(result).toBe(false);
     });
@@ -136,7 +152,7 @@ describe('AuthService', () => {
         service: 'ai.offgridmobile.auth',
       });
 
-      const result = await authService.hasPassphrase();
+      const result = await credentials.hasCredential();
 
       expect(result).toBe(true);
       expect(Keychain.getGenericPassword).toHaveBeenCalledWith({
@@ -147,7 +163,7 @@ describe('AuthService', () => {
     it('returns false when no credentials exist', async () => {
       (Keychain.getGenericPassword as jest.Mock).mockResolvedValue(false);
 
-      const result = await authService.hasPassphrase();
+      const result = await credentials.hasCredential();
 
       expect(result).toBe(false);
     });
@@ -157,7 +173,7 @@ describe('AuthService', () => {
         new Error('Keychain error'),
       );
 
-      const result = await authService.hasPassphrase();
+      const result = await credentials.hasCredential();
 
       expect(result).toBe(false);
     });
@@ -170,7 +186,7 @@ describe('AuthService', () => {
     it('resets keychain credentials and returns true', async () => {
       (Keychain.resetGenericPassword as jest.Mock).mockResolvedValue(true);
 
-      const result = await authService.removePassphrase();
+      const result = await credentials.removeCredential();
 
       expect(result).toBe(true);
       expect(Keychain.resetGenericPassword).toHaveBeenCalledWith({
@@ -183,7 +199,7 @@ describe('AuthService', () => {
         new Error('Keychain error'),
       );
 
-      const result = await authService.removePassphrase();
+      const result = await credentials.removeCredential();
 
       expect(result).toBe(false);
     });
@@ -203,7 +219,7 @@ describe('AuthService', () => {
         },
       );
 
-      await authService.setPassphrase('oldPass');
+      await credentials.setCredential('oldPass');
 
       // Mock getGenericPassword to return the stored hash for verification
       (Keychain.getGenericPassword as jest.Mock).mockResolvedValue({
@@ -212,11 +228,18 @@ describe('AuthService', () => {
         service: 'ai.offgridmobile.auth',
       });
 
-      const result = await authService.changePassphrase('oldPass', 'newPass');
+      const security = createSecurityFacade({ credentials, state: memoryStatePort() });
+      await security.start();
+      await security.enable({ passphrase: 'oldPass', confirmation: 'oldPass' });
+      const result = await security.change({
+        currentPassphrase: 'oldPass',
+        passphrase: 'newPass',
+        confirmation: 'newPass',
+      });
 
-      expect(result).toBe(true);
-      // setGenericPassword called twice: once for initial set, once for change
-      expect(Keychain.setGenericPassword).toHaveBeenCalledTimes(2);
+      expect(result.ok).toBe(true);
+      // Three writes: the direct set, the owner's enable, and the change itself.
+      expect(Keychain.setGenericPassword).toHaveBeenCalledTimes(3);
     });
 
     it('returns false when old passphrase is incorrect', async () => {
@@ -228,7 +251,7 @@ describe('AuthService', () => {
         },
       );
 
-      await authService.setPassphrase('oldPass');
+      await credentials.setCredential('oldPass');
 
       (Keychain.getGenericPassword as jest.Mock).mockResolvedValue({
         username: 'passphrase_hash',
@@ -236,14 +259,18 @@ describe('AuthService', () => {
         service: 'ai.offgridmobile.auth',
       });
 
-      const result = await authService.changePassphrase(
-        'wrongOldPass',
-        'newPass',
-      );
+      const security = createSecurityFacade({ credentials, state: memoryStatePort() });
+      await security.start();
+      await security.enable({ passphrase: 'oldPass', confirmation: 'oldPass' });
+      const result = await security.change({
+        currentPassphrase: 'wrongOldPass',
+        passphrase: 'newPass',
+        confirmation: 'newPass',
+      });
 
-      expect(result).toBe(false);
-      // setGenericPassword called only once for the initial set, not for change
-      expect(Keychain.setGenericPassword).toHaveBeenCalledTimes(1);
+      expect(result.ok).toBe(false);
+      // Two writes: the direct set and the owner's enable. A refused change writes nothing.
+      expect(Keychain.setGenericPassword).toHaveBeenCalledTimes(2);
     });
   });
 });

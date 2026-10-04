@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,51 +8,58 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button, Card } from '../components';
+import { Card } from '../components';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../theme';
 import { SPACING } from '../constants';
-import { useAppStore, useChatStore } from '../stores';
+import { useAppStore } from '../stores';
 import { useDownloadStore } from '../stores/downloadStore';
-import { hardwareService, modelManager } from '../services';
+import { useWorkspaceContentProjection } from '../hooks/useApplicationProjection';
+import { hardwareService, modelLibrary } from '../services';
 import { OrphanedFilesSection } from './OrphanedFilesSection';
+import { imageBackendLabel } from '../utils/imageBackend';
 import { createStyles } from './StorageSettingsScreen.styles';
-import { useWhisperStore } from '../stores/whisperStore';
-import { useModelDownloads } from '../services/modelDownloadService/useModelDownloads';
-import type { RootStackParamList } from '../navigation/types';
 
 export const StorageSettingsScreen: React.FC = () => {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [storageUsed, setStorageUsed] = useState(0);
   const [availableStorage, setAvailableStorage] = useState(0);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  const {
-    downloadedModels,
-    downloadedImageModels,
-  } = useAppStore();
-  const { conversations } = useChatStore();
-  const transcriptionModelCount = useWhisperStore(s => s.presentModelIds.length);
-  const speechModelCount = useModelDownloads().filter(
-    model => model.modelType === 'tts' && model.status === 'completed',
-  ).length;
+  const downloadedModels = useAppStore(state => state.downloadedModels);
+  const downloadedImageModels = useAppStore(
+    state => state.downloadedImageModels,
+  );
+  const workspaceContent = useWorkspaceContentProjection();
+  const conversationCount = workspaceContent.status === 'ready'
+    ? workspaceContent.conversations.length
+    : null;
+  const conversationCountLabel = conversationCount ?? (
+    workspaceContent.status === 'stopped' ? 'Unavailable' : 'Loading…'
+  );
   const downloads = useDownloadStore(s => s.downloads);
   const removeFromStore = useDownloadStore(s => s.remove);
 
-  const imageStorageUsed = downloadedImageModels.reduce((total, m) => total + (m.size || 0), 0);
+  const imageStorageUsed = useMemo(
+    () => downloadedImageModels.reduce((total, m) => total + (m.size || 0), 0),
+    [downloadedImageModels],
+  );
 
   // A "stale" entry is a store entry missing the basic fields needed to
   // display or finalize it. Now sourced from the unified download store.
-  const staleDownloads = Object.values(downloads).filter(entry => {
-    return !entry.modelId || !entry.fileName || !entry.combinedTotalBytes;
-  });
+  const staleDownloads = useMemo(
+    () =>
+      Object.values(downloads).filter(
+        entry => !entry.modelId || !entry.fileName || !entry.combinedTotalBytes,
+      ),
+    [downloads],
+  );
 
   const loadStorageInfo = useCallback(async () => {
-    const used = await modelManager.getStorageUsed();
-    const available = await modelManager.getAvailableStorage();
+    const used = await modelLibrary.getStorageUsed();
+    const available = await modelLibrary.getAvailableStorage();
     setStorageUsed(used + imageStorageUsed);
     setAvailableStorage(available);
   }, [imageStorageUsed]);
@@ -141,20 +148,6 @@ export const StorageSettingsScreen: React.FC = () => {
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
-              <Icon name="mic" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Transcription Models</Text>
-            </View>
-            <Text style={styles.infoValue}>{transcriptionModelCount}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
-              <Icon name="volume-2" size={18} color={colors.primary} />
-              <Text style={styles.infoLabel}>Speech Models</Text>
-            </View>
-            <Text style={styles.infoValue}>{speechModelCount}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <View style={styles.infoRowLeft}>
               <Icon name="hard-drive" size={18} color={colors.primary} />
               <Text style={styles.infoLabel}>Model Storage</Text>
             </View>
@@ -165,18 +158,48 @@ export const StorageSettingsScreen: React.FC = () => {
               <Icon name="message-circle" size={18} color={colors.primary} />
               <Text style={styles.infoLabel}>Conversations</Text>
             </View>
-            <Text style={styles.infoValue}>{conversations.length}</Text>
+            <Text style={styles.infoValue}>{conversationCountLabel}</Text>
           </View>
         </Card>
 
-        <View style={styles.section}>
-          <Button
-            title="Auto Setup"
-            variant="outline"
-            onPress={() => navigation.navigate('AutoSetup')}
-            testID="storage-auto-setup"
-          />
-        </View>
+        {downloadedModels.length > 0 && (
+          <Card style={styles.section}>
+            <Text style={styles.sectionTitle}>LLM Models</Text>
+            {downloadedModels.map((model, index) => (
+              <View
+                key={model.id}
+                style={[styles.modelRow, index === downloadedModels.length - 1 && styles.lastRow]}
+              >
+                <View style={styles.modelInfo}>
+                  <Text style={styles.modelName} numberOfLines={1}>{model.name}</Text>
+                  <Text style={styles.modelMeta}>{model.quantization}</Text>
+                </View>
+                <Text style={styles.modelSize}>{hardwareService.formatModelSize(model)}</Text>
+              </View>
+            ))}
+          </Card>
+        )}
+
+        {downloadedImageModels.length > 0 && (
+          <Card style={styles.section}>
+            <Text style={styles.sectionTitle}>Image Models</Text>
+            {downloadedImageModels.map((model, index) => (
+              <View
+                key={model.id}
+                style={[styles.modelRow, index === downloadedImageModels.length - 1 && styles.lastRow]}
+              >
+                <View style={styles.modelInfo}>
+                  <Text style={styles.modelName} numberOfLines={1}>{model.name}</Text>
+                  <Text style={styles.modelMeta}>
+                    {imageBackendLabel(model.backend, 'GPU')}
+                    {model.style ? ` • ${model.style}` : ''}
+                  </Text>
+                </View>
+                <Text style={styles.modelSize}>{hardwareService.formatBytes(model.size)}</Text>
+              </View>
+            ))}
+          </Card>
+        )}
 
         {staleDownloads.length > 0 && (
           <Card style={styles.section}>

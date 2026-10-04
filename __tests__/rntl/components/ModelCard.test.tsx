@@ -77,7 +77,7 @@ describe('ModelCard', () => {
         />
       );
       // Both the size caption and the percent render (full-width bar + left/right row).
-      expect(getByText('2.0 GB / 4.0 GB · Rate unavailable')).toBeTruthy();
+      expect(getByText('2.0 GB / 4.0 GB')).toBeTruthy();
       expect(getByText('50%')).toBeTruthy();
     });
 
@@ -114,6 +114,51 @@ describe('ModelCard', () => {
   // ============================================================================
   // Basic Rendering
   // ============================================================================
+  // ============================================================================
+  // Paused — its own state. The Text tab now feeds isPaused from the same aggregate
+  // as isDownloading/isQueued; without it a paused card read as idle (no section)
+  // while bytes sat on disk.
+  // ============================================================================
+  describe('paused state', () => {
+    const bytes = { downloaded: 1024 * 1024 * 1024, total: 4 * 1024 * 1024 * 1024 };
+
+    it('renders the Paused label (and glyph) when isPaused, with neither downloading nor queued set', () => {
+      const { getByText, getByLabelText, queryByLabelText } = render(
+        <ModelCard model={baseModel} isPaused downloadProgress={0.25} downloadBytes={bytes} />
+      );
+      expect(getByText('Paused')).toBeTruthy();
+      expect(getByLabelText('Paused')).toBeTruthy();
+      expect(queryByLabelText('Queued')).toBeNull();
+    });
+
+    it('keeps showing the bytes already on disk while paused, without a transfer rate', () => {
+      const { getByText, queryByText } = render(
+        <ModelCard
+          model={baseModel}
+          isPaused
+          downloadProgress={0.25}
+          downloadBytes={{ ...bytes, bytesPerSecond: 5 * 1024 * 1024 }}
+        />
+      );
+      expect(getByText('1.0 GB / 4.0 GB')).toBeTruthy();
+      // Nothing is moving, so no "/s" rate may be claimed.
+      expect(queryByText(/\/s/)).toBeNull();
+    });
+
+    it('does not show Paused for a running or a queued download', () => {
+      const running = render(<ModelCard model={baseModel} isDownloading downloadProgress={0.25} />);
+      expect(running.queryByText('Paused')).toBeNull();
+      const queued = render(<ModelCard model={baseModel} isQueued downloadProgress={0} />);
+      expect(queued.queryByText('Paused')).toBeNull();
+    });
+
+    it('shows nothing download-related when idle (no flags)', () => {
+      const { queryByText, queryByLabelText } = render(<ModelCard model={baseModel} />);
+      expect(queryByText('Paused')).toBeNull();
+      expect(queryByLabelText('Queued')).toBeNull();
+    });
+  });
+
   describe('basic rendering', () => {
     it('renders model name', () => {
       const { getByText } = render(
@@ -250,14 +295,62 @@ describe('ModelCard', () => {
       expect(getByText('A great model for testing')).toBeTruthy();
     });
 
+    it('shows download count in compact mode', () => {
+      const { getByText } = render(
+        <ModelCard
+          model={{ ...baseModel, downloads: 15000 }}
+          compact={true}
+        />
+      );
+      expect(getByText(/15\.0K dl/)).toBeTruthy();
+    });
+
     it('shows model type badge in compact mode for vision', () => {
-      const { getByLabelText } = render(
+      const { getByText } = render(
         <ModelCard
           model={{ ...baseModel, modelType: 'vision' }}
           compact={true}
         />
       );
-      expect(getByLabelText('Vision')).toBeTruthy();
+      expect(getByText('Vision')).toBeTruthy();
+    });
+
+    it('shows model type badge in compact mode for code', () => {
+      const { getByText } = render(
+        <ModelCard
+          model={{ ...baseModel, modelType: 'code' }}
+          compact={true}
+        />
+      );
+      expect(getByText(/Code/)).toBeTruthy();
+    });
+
+    it('shows model type badge in compact mode for text', () => {
+      const { getByText } = render(
+        <ModelCard
+          model={{ ...baseModel, modelType: 'text' }}
+          compact={true}
+        />
+      );
+      expect(getByText(/Text/)).toBeTruthy();
+    });
+
+    it('shows param count badge in compact mode', () => {
+      const { getByText } = render(
+        <ModelCard
+          model={{ ...baseModel, paramCount: 7 }}
+          compact={true}
+        />
+      );
+      expect(getByText(/7B params/)).toBeTruthy();
+    });
+
+    it('shows the NPU/GPU badge when supportsAcceleration is set', () => {
+      const { getByText, queryByTestId } = render(
+        <ModelCard model={{ ...baseModel, paramCount: 7 }} compact={true} supportsAcceleration />
+      );
+      expect(getByText(/NPU\/GPU/)).toBeTruthy();
+      expect(queryByTestId('npu-gpu-badge')).toBeNull();
     });
 
     it('hides the NPU/GPU badge when the model is not accelerable', () => {
@@ -286,7 +379,7 @@ describe('ModelCard', () => {
           downloadCount={2}
         />
       );
-      expect(getByText('1.5 GB / 10.0 GB · Rate unavailable · 2 downloads')).toBeTruthy();
+      expect(getByText('1.5 GB / 10.0 GB · 2 downloads')).toBeTruthy();
     });
 
     it('omits the "N downloads" note for a single download', () => {
@@ -300,18 +393,18 @@ describe('ModelCard', () => {
           downloadCount={1}
         />
       );
-      expect(getByText('2.0 GB / 4.0 GB · Rate unavailable')).toBeTruthy();
+      expect(getByText('2.0 GB / 4.0 GB')).toBeTruthy();
       expect(queryByText(/downloads/)).toBeNull();
     });
 
-    it('omits catalogue RAM guidance from the dense facts line', () => {
-      const { queryByText } = render(
+    it('shows min RAM badge in compact mode', () => {
+      const { getByText } = render(
         <ModelCard
           model={{ ...baseModel, modelType: 'text', minRamGB: 4 }}
           compact={true}
         />
       );
-      expect(queryByText('4GB+ RAM')).toBeNull();
+      expect(getByText(/4GB\+ RAM/)).toBeTruthy();
     });
 
     it('does not show download count when 0 in compact mode', () => {
@@ -343,10 +436,11 @@ describe('ModelCard', () => {
     });
 
     it('shows trending icon in compact mode', () => {
-      const { getByText } = render(
+      const { getByLabelText, queryByText } = render(
         <ModelCard model={baseModel} compact={true} isTrending={true} />
       );
-      expect(getByText('')).toBeTruthy();
+      expect(getByLabelText('Trending')).toBeTruthy();
+      expect(queryByText('Trending')).toBeNull();
     });
 
     it('shows an accessible verified icon without visible Verified text', () => {
@@ -369,28 +463,6 @@ describe('ModelCard', () => {
       expect(getByLabelText('Verified')).toBeTruthy();
       expect(queryByText('Verified')).toBeNull();
       expect(queryByText(/Unsloth/)).toBeTruthy();
-    });
-
-    it('shows the verified icon instead of Official text for official models', () => {
-      const { getByLabelText, queryByText } = render(
-        <ModelCard
-          model={{
-            ...baseModel,
-            author: 'OpenBMB',
-            credibility: {
-              source: 'official',
-              isOfficial: true,
-              isVerifiedQuantizer: false,
-              verifiedBy: 'OpenBMB',
-            },
-          }}
-          compact={true}
-        />
-      );
-
-      expect(getByLabelText('Official')).toBeTruthy();
-      expect(queryByText('Official')).toBeNull();
-      expect(queryByText(/OpenBMB/)).toBeTruthy();
     });
   });
 
@@ -416,8 +488,8 @@ describe('ModelCard', () => {
       expect(getByText('LM Studio')).toBeTruthy();
     });
 
-    it('shows an icon for official authors', () => {
-      const { getByLabelText, queryByText } = render(
+    it('shows checkmark for official authors', () => {
+      const { getByText } = render(
         <ModelCard
           model={{
             ...baseModel,
@@ -430,12 +502,12 @@ describe('ModelCard', () => {
           }}
         />
       );
-      expect(getByLabelText('Official')).toBeTruthy();
-      expect(queryByText('Official')).toBeNull();
+      expect(getByText('✓')).toBeTruthy();
+      expect(getByText('Official')).toBeTruthy();
     });
 
-    it('shows an icon for verified quantizers', () => {
-      const { getByLabelText, queryByText } = render(
+    it('shows diamond for verified quantizers', () => {
+      const { getByText } = render(
         <ModelCard
           model={{
             ...baseModel,
@@ -448,12 +520,12 @@ describe('ModelCard', () => {
           }}
         />
       );
-      expect(getByLabelText('Verified')).toBeTruthy();
-      expect(queryByText('Verified')).toBeNull();
+      expect(getByText('◆')).toBeTruthy();
+      expect(getByText('Verified')).toBeTruthy();
     });
 
     it('shows no badge icon for community models', () => {
-      const { queryByText } = render(
+      const { queryByText, getByText } = render(
         <ModelCard
           model={{
             ...baseModel,
@@ -465,7 +537,7 @@ describe('ModelCard', () => {
           }}
         />
       );
-      expect(queryByText('Community')).toBeNull();
+      expect(getByText('Community')).toBeTruthy();
       expect(queryByText('★')).toBeNull();
       expect(queryByText('✓')).toBeNull();
       expect(queryByText('◆')).toBeNull();
@@ -480,11 +552,10 @@ describe('ModelCard', () => {
           verifiedBy: 'Meta',
         },
       });
-      const { getByLabelText, queryByText } = render(
+      const { getByText } = render(
         <ModelCard model={baseModel} downloadedModel={downloadedModel} />
       );
-      expect(getByLabelText('Official')).toBeTruthy();
-      expect(queryByText('Official')).toBeNull();
+      expect(getByText('Official')).toBeTruthy();
     });
   });
 
@@ -756,6 +827,27 @@ describe('ModelCard', () => {
       expect(getByTestId('card-cancel')).toBeTruthy();
     });
 
+    it.each([
+      ['queued', { isQueued: true }],
+      ['paused', { isPaused: true }],
+    ])('keeps the cancel action available while %s', (_label, state) => {
+      const onDownload = jest.fn();
+      const onCancel = jest.fn();
+      const { queryByTestId, getByTestId } = render(
+        <ModelCard
+          model={baseModel}
+          isDownloaded={false}
+          {...state}
+          onDownload={onDownload}
+          onCancel={onCancel}
+          testID="card"
+        />
+      );
+
+      expect(queryByTestId('card-download')).toBeNull();
+      expect(getByTestId('card-cancel')).toBeTruthy();
+    });
+
     it('does not show select button when model is active', () => {
       const onSelect = jest.fn();
       const { toJSON } = render(
@@ -908,19 +1000,32 @@ describe('ModelCard', () => {
   // Recommended config (curated entries like the LiteRT parent card)
   // ============================================================================
   describe('recommended config', () => {
-    it('does not add a default label when no recommendation label is supplied', () => {
-      const { queryByText } = render(
+    it('renders the pill with the default "Recommended" label when no pillLabel given', () => {
+      const { getByText } = render(
         <ModelCard model={baseModel} compact={true} recommended={{}} />,
       );
-      expect(queryByText('Recommended')).toBeNull();
+      expect(getByText(/test-author · Recommended/)).toBeTruthy();
     });
 
-    it('uses the fire icon without a visible label', () => {
-      const { getByLabelText, queryByText } = render(
+    it('renders the pill with a custom pillLabel', () => {
+      const { getByText } = render(
         <ModelCard model={baseModel} compact={true} recommended={{ pillLabel: 'Featured' }} />,
       );
-      expect(getByLabelText('Recommended')).toBeTruthy();
-      expect(queryByText('Featured')).toBeNull();
+      expect(getByText(/test-author · Featured/)).toBeTruthy();
+    });
+
+    it('renders custom chips in place of the modelType chip row (compact)', () => {
+      const { getByText, queryAllByText } = render(
+        <ModelCard
+          model={{ ...baseModel, modelType: 'vision' }}
+          compact={true}
+          recommended={{ chips: ['Vision', 'GPU'] }}
+        />,
+      );
+      expect(getByText(/Vision · GPU/)).toBeTruthy();
+      // Both "Vision" (custom chip) and the auto-derived modelType "Vision" would
+      // collide on text — assert only one matching node renders (custom chip path).
+      expect(queryAllByText(/Vision/)).toHaveLength(1);
     });
 
     it('renders the highlight as part of the common description (compact)', () => {
@@ -968,15 +1073,14 @@ describe('ModelCard', () => {
       expect(getByText('Visible description')).toBeTruthy();
     });
 
-    it('renders the fire icon and combined description in standard mode', () => {
-      const { getByLabelText, getByText, queryByText } = render(
+    it('renders pill + combined description/highlight in standard (non-compact) mode', () => {
+      const { getByText } = render(
         <ModelCard
           model={{ ...baseModel, description: 'Detail description' }}
           recommended={{ pillLabel: 'Recommended', highlightText: 'Up to 2x faster via GPU' }}
         />,
       );
-      expect(getByLabelText('Recommended')).toBeTruthy();
-      expect(queryByText('Recommended')).toBeNull();
+      expect(getByText('Recommended')).toBeTruthy();
       // Description + highlight render as one common line (not a separate colour/slot).
       expect(getByText('Detail description Up to 2x faster via GPU')).toBeTruthy();
     });
@@ -1010,28 +1114,28 @@ describe('ModelCard', () => {
     });
 
     it('renders Retry and Remove buttons when failedState is provided', () => {
-      const { getByLabelText } = render(
+      const { getByText } = render(
         <ModelCard model={baseModel} failedState={baseFailedState} />,
       );
-      expect(getByLabelText('Retry download')).toBeTruthy();
-      expect(getByLabelText('Remove download')).toBeTruthy();
+      expect(getByText('Retry')).toBeTruthy();
+      expect(getByText('Remove')).toBeTruthy();
     });
 
     it('calls onRetry when Retry is pressed', () => {
       const onRetry = jest.fn();
-      const { getByLabelText } = render(
+      const { getByText } = render(
         <ModelCard model={baseModel} failedState={{ ...baseFailedState, onRetry }} />,
       );
-      fireEvent.press(getByLabelText('Retry download'));
+      fireEvent.press(getByText('Retry'));
       expect(onRetry).toHaveBeenCalled();
     });
 
     it('calls onRemove when Remove is pressed', () => {
       const onRemove = jest.fn();
-      const { getByLabelText } = render(
+      const { getByText } = render(
         <ModelCard model={baseModel} failedState={{ ...baseFailedState, onRemove }} />,
       );
-      fireEvent.press(getByLabelText('Remove download'));
+      fireEvent.press(getByText('Remove'));
       expect(onRemove).toHaveBeenCalled();
     });
 
@@ -1042,7 +1146,7 @@ describe('ModelCard', () => {
           failedState={{ ...baseFailedState, bytesDownloaded: 193_000_000, totalBytes: 386_000_000 }}
         />,
       );
-      expect(getByText('50% · 184 MB / 368 MB')).toBeTruthy();
+      expect(getByText('50%')).toBeTruthy();
     });
 
     it('does not invent a percentage when the failed download size is unknown', () => {

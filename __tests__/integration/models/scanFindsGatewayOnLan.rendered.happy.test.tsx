@@ -19,18 +19,21 @@
  * pool, the provider table, the aggregation, remoteServerManager, the store and the screen all run
  * for real. Delete discoverLANServers and this test fails.
  */
-import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { installNativeBoundary } from '../../harness/nativeBoundary';
+import type { MobileApplicationFixture } from '../../harness/mobileApplicationFixture';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
   useIsFocused: () => true,
   useFocusEffect: () => {},
 }));
 
-import { RemoteServersScreen } from '../../../src/screens/RemoteServersScreen';
-import { useRemoteServerStore } from '../../../src/stores';
-import { installLanProbe, gatewayModelList, type LanProbeHandle } from '../../harness/lanProbe';
+import type { LanProbeHandle } from '../../harness/lanProbe';
 
 /** The addresses the device session actually used. */
 const PHONE_IP = '192.168.1.10';
@@ -39,28 +42,58 @@ const GATEWAY_PORT = 7878;
 
 describe('scanning a network that has an Off Grid AI Desktop on it', () => {
   let lan: LanProbeHandle;
+  let fixture: MobileApplicationFixture;
+  let React: typeof import('react');
+  let rtl: typeof import('@testing-library/react-native');
+  let RemoteServersScreen: typeof import('../../../src/screens/RemoteServersScreen').RemoteServersScreen;
+  let installLanProbe: typeof import('../../harness/lanProbe').installLanProbe;
+  let gatewayModelList: typeof import('../../harness/lanProbe').gatewayModelList;
+
+  beforeAll(async () => {
+    installNativeBoundary();
+    await require('@react-native-async-storage/async-storage').clear();
+    React = require('react') as typeof import('react');
+    const { requireRTL } =
+      require('../../harness/nativeBoundary') as typeof import('../../harness/nativeBoundary');
+    rtl = requireRTL();
+    ({ RemoteServersScreen } =
+      require('../../../src/screens/RemoteServersScreen') as typeof import('../../../src/screens/RemoteServersScreen'));
+    ({ installLanProbe, gatewayModelList } =
+      require('../../harness/lanProbe') as typeof import('../../harness/lanProbe'));
+    const { startMobileApplicationFixture } =
+      require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+    fixture = await startMobileApplicationFixture();
+  });
+
+  afterAll(async () => {
+    await fixture.dispose();
+  });
 
   beforeEach(() => {
-    useRemoteServerStore.setState({ servers: [], serverHealth: {}, discoveredModels: {} });
-
     // Device boundary: this phone's own address, and that it is a real handset so the scan runs.
-     
+
     const DeviceInfo = require('react-native-device-info');
     DeviceInfo.isEmulator = jest.fn(async () => false);
     DeviceInfo.getIpAddress = jest.fn(async () => PHONE_IP);
 
     // Network boundary: one Mac listening on the gateway port. Every other address refuses.
     lan = installLanProbe({
-      [`${MAC_IP}:${GATEWAY_PORT}`]: { paths: ['/v1/'], body: gatewayModelList },
+      [`${MAC_IP}:${GATEWAY_PORT}`]: {
+        paths: ['/v1/'],
+        body: gatewayModelList,
+      },
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     lan.uninstall();
+    for (const server of fixture.application.models.snapshot().servers) {
+      await fixture.application.models.removeRemoteServer(server.id);
+    }
   });
 
   it('adds the server it found, shows its address, and says how many it added', async () => {
-    const ui = render(<RemoteServersScreen />);
+    const ui = rtl.render(React.createElement(RemoteServersScreen));
 
     // BEFORE — the list is genuinely empty, so a row appearing later cannot be something that was
     // always on screen.
@@ -68,11 +101,15 @@ describe('scanning a network that has an Off Grid AI Desktop on it', () => {
     expect(ui.queryByText(`http://${MAC_IP}:${GATEWAY_PORT}`)).toBeNull();
 
     // The real gesture.
-    fireEvent.press(ui.getByText('Scan network'));
+    rtl.fireEvent.press(ui.getByText('Scan network'));
 
     // AFTER — the server the user actually has is in the list, at the address they can check.
-    await waitFor(
-      () => { expect(ui.queryByText(`http://${MAC_IP}:${GATEWAY_PORT}`)).not.toBeNull(); },
+    await rtl.waitFor(
+      () => {
+        expect(
+          ui.queryByText(`http://${MAC_IP}:${GATEWAY_PORT}/v1`),
+        ).not.toBeNull();
+      },
       { timeout: 8000 },
     );
 
@@ -82,14 +119,19 @@ describe('scanning a network that has an Off Grid AI Desktop on it', () => {
     // ...and the empty state is gone. A render change has two sides: the row must appear AND the
     // "nothing here" message must stop claiming the opposite.
     expect(ui.queryByText('No servers yet')).toBeNull();
+    ui.unmount();
   }, 20000);
 
   it('asks the gateway port on every address, so a Mac anywhere on the subnet is found', async () => {
-    const ui = render(<RemoteServersScreen />);
-    fireEvent.press(ui.getByText('Scan network'));
+    const ui = rtl.render(React.createElement(RemoteServersScreen));
+    rtl.fireEvent.press(ui.getByText('Scan network'));
 
-    await waitFor(
-      () => { expect(ui.queryByText(`http://${MAC_IP}:${GATEWAY_PORT}`)).not.toBeNull(); },
+    await rtl.waitFor(
+      () => {
+        expect(
+          ui.queryByText(`http://${MAC_IP}:${GATEWAY_PORT}/v1`),
+        ).not.toBeNull();
+      },
       { timeout: 8000 },
     );
 
@@ -107,5 +149,6 @@ describe('scanning a network that has an Off Grid AI Desktop on it', () => {
     expect(gatewayHosts).toContain(`${MAC_IP}:${GATEWAY_PORT}`);
     expect(gatewayHosts).toContain(`192.168.1.1:${GATEWAY_PORT}`);
     expect(gatewayHosts).toContain(`192.168.1.254:${GATEWAY_PORT}`);
+    ui.unmount();
   }, 20000);
 });

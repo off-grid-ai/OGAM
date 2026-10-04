@@ -5,10 +5,14 @@ import { createImageStyles } from './stylesImage';
 const createLayoutStyles = (colors: ThemeColors) => ({
   container: { flex: 1, backgroundColor: colors.background },
   keyboardView: { flex: 1 },
+  voicePreparingRow: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
   messageList: { paddingVertical: 16 },
 });
 
-const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+const createHeaderStyles = (colors: ThemeColors) => ({
   header: {
     paddingHorizontal: 16,
     paddingTop: 16,
@@ -16,7 +20,6 @@ const createHeaderStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     backgroundColor: colors.background,
-    ...shadows.small,
     zIndex: 10,
   },
   headerRow: {
@@ -148,6 +151,7 @@ const createStateScreenStyles = (colors: ThemeColors) => ({
     marginBottom: SPACING.lg,
   },
   noModelTitle: { ...TYPOGRAPHY.h2, color: colors.text, marginBottom: SPACING.sm },
+  noModelLoadingTitle: { marginTop: SPACING.lg },
   noModelText: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'center' as const },
   selectModelButton: {
     marginTop: SPACING.xl,
@@ -231,7 +235,7 @@ const createIndicatorStyles = (colors: ThemeColors) => ({
 
 export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   ...createLayoutStyles(colors),
-  ...createHeaderStyles(colors, shadows),
+  ...createHeaderStyles(colors),
   ...createScrollStyles(colors),
   ...createEmptyChatStyles(colors),
   ...createStateScreenStyles(colors),

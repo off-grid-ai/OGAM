@@ -8,6 +8,7 @@
  * back and render the answer, and it is resident again.
  */
 import { setupChatScreen } from '../../harness/chatHarness';
+import { evictResidentType } from '../../harness/modelResidency';
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -28,7 +29,7 @@ describe('per-model eject — lazy reload on next use', () => {
 
     const {
       modelResidencyManager,
-    } = require('../../../src/services/modelResidency');
+    } = require('../../harness/activeModelLifecycle');
     const textResident = () =>
       (modelResidencyManager.getResidents() as Array<{ type: string }>).some(
         r => r.type === 'text',
@@ -38,7 +39,7 @@ describe('per-model eject — lazy reload on next use', () => {
     expect(textResident()).toBe(true);
 
     // The user ejects it (what the In Memory "Eject" button calls) — freed from RAM.
-    await modelResidencyManager.evictByKey('text');
+    await evictResidentType(modelResidencyManager, 'text');
     expect(textResident()).toBe(false);
 
     // When needed again, sending a message lazy-reloads it and the answer renders.

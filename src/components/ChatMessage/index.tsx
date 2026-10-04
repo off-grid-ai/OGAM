@@ -1,7 +1,9 @@
+import { CHAT_RESPONSE_STOPPED_EARLY_LABEL } from '@offgrid/models';
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
+import { useSpeechProjection } from '../../hooks/useApplicationProjection';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import Icon from 'react-native-vector-icons/Feather';
 import {
@@ -11,8 +13,6 @@ import {
   initialAlertState,
 } from '../CustomAlert';
 import { AnimatedEntry } from '../AnimatedEntry';
-import { Accordion } from '../Accordion';
-import { ThinkingIndicator } from '../ThinkingIndicator';
 import { triggerHaptic } from '../../utils/haptics';
 import { createStyles } from './styles';
 import { MessageAttachments } from './components/MessageAttachments';
@@ -31,7 +31,7 @@ import {
 } from './components/ToolMessages';
 import type { ChatMessageProps } from './types';
 import type { Message } from '../../types';
-import { isSupportingChatContext } from '@offgrid/sync';
+import { isSupportingChatContext } from '@offgrid/application';
 
 type MetaRowProps = {
   message: Message;
@@ -50,7 +50,7 @@ const MessageMetaRow: React.FC<MetaRowProps> = ({
   onMenuOpen,
   metaExtra,
 }) => (
-  <View testID="message-meta-row" style={styles.metaRow}>
+  <View style={styles.metaRow}>
     <Text style={styles.timestamp}>{formatTime(message.timestamp)}</Text>
     {message.generationTimeMs != null && message.role === 'assistant' && (
       <Text style={styles.generationTime}>
@@ -111,57 +111,6 @@ const ToolCallWithThinking: React.FC<{
   );
 };
 
-const TimelineThinkingBlock: React.FC<{
-  text: string;
-  styles: ReturnType<typeof createStyles>;
-  isStreaming: boolean;
-}> = ({ text, styles, isStreaming }) => {
-  const [expanded, setExpanded] = useState(isStreaming);
-  return (
-    <ThinkingBlock
-      parsedContent={{
-        thinking: text,
-        response: '',
-        isThinkingComplete: true,
-      }}
-      showThinking={expanded}
-      onToggle={() => setExpanded(value => !value)}
-      styles={styles}
-    />
-  );
-};
-
-const SyncedAssistantTimeline: React.FC<{
-  message: Message;
-  styles: ReturnType<typeof createStyles>;
-  colors: ReturnType<typeof useTheme>['colors'];
-  isStreaming: boolean;
-}> = ({ message, styles, colors, isStreaming }) => (
-  <>
-    {message.timeline?.map((entry, index) => {
-      if (entry.kind === 'thinking') {
-        return (
-          <TimelineThinkingBlock
-            key={`thinking:${index}`}
-            text={entry.text}
-            styles={styles}
-            isStreaming={isStreaming}
-          />
-        );
-      }
-      return message.toolArtifacts?.[entry.toolIndex] ? (
-        <SyncedToolArtifacts
-          key={`tool:${entry.toolIndex}`}
-          message={message}
-          indexes={[entry.toolIndex]}
-          styles={styles}
-          colors={colors}
-        />
-      ) : null;
-    })}
-  </>
-);
-
 // The rendered message bubble (attachments + content + tool row + meta). Split out of
 // ChatMessage so its per-section conditionals don't inflate ChatMessage's complexity.
 interface MessageBubbleProps {
@@ -180,7 +129,6 @@ interface MessageBubbleProps {
   showSupportingContext: boolean;
   showActions: boolean;
   showGenerationDetails: boolean;
-  hideProse?: boolean;
   metaExtra?: React.ReactNode;
   onImagePress?: (uri: string) => void;
   onToggleThinking: () => void;
@@ -203,7 +151,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   showSupportingContext,
   showActions,
   showGenerationDetails,
-  hideProse,
   metaExtra,
   onImagePress,
   onToggleThinking,
@@ -211,34 +158,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   onLongPress,
   onMenuOpen,
 }) => {
-  const timelineHasThinking = Boolean(
-    message.timeline?.some(entry => entry.kind === 'thinking'),
-  );
-  const timelineHasTools = Boolean(
-    message.timeline?.some(entry => entry.kind === 'tool'),
-  );
-  const hasAssistantWork = Boolean(
-    !isUser &&
-      (message.timeline?.length ||
-        message.toolArtifacts?.length ||
-        parsedContent.thinking ||
-        supportingContextParsedContent?.thinking),
-  );
-  const answerParsedContent = hasAssistantWork
-    ? { ...parsedContent, thinking: '' }
-    : parsedContent;
-  const hasVisibleAnswer = Boolean(
-    hasAttachments || answerParsedContent.response.trim(),
-  );
-  const showAnswerBubble =
-    hasVisibleAnswer ||
-    (message.isThinking && !hasAssistantWork) ||
-    (isStreaming && !hasAssistantWork);
-  // Tools offered, cutoff state, and generation details describe the response above them. Failed
-  // attempts can persist request metadata without producing an answer; those are not turns with a
-  // footer, and retries must not leave one metadata block per empty attempt.
-  const showTurnFooter =
-    !hideProse && !isUser && !isStreaming && hasVisibleAnswer;
   return (
     <TouchableOpacity
       testID={isUser ? 'user-message' : 'assistant-message'}
@@ -250,116 +169,59 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       onLongPress={onLongPress}
       delayLongPress={300}
     >
-      {hasAssistantWork && (
-        <View style={styles.toolCallReplyContent}>
-          <Accordion
-            key={isStreaming ? 'live' : 'done'}
-            title={
-              isStreaming
-                ? 'Working'
-                : message.turnStatus === 'failed'
-                  ? 'Work failed'
-                : message.turnStatus === 'cancelled'
-                  ? 'Work stopped'
-                  : 'Work done'
-            }
-            defaultOpen={Boolean(isStreaming)}
-            variant="plain"
-            testID="assistant-work-toggle"
-          >
-            {!!message.timeline?.length && (
-              <SyncedAssistantTimeline
-                message={message}
-                styles={styles}
-                colors={colors}
-                isStreaming={Boolean(isStreaming)}
-              />
-            )}
-            {!!message.toolArtifacts?.length && !timelineHasTools && (
-              <SyncedToolArtifacts
-                message={message}
-                styles={styles}
-                colors={colors}
-              />
-            )}
-            {!!parsedContent.thinking &&
-              (!timelineHasThinking || parsedContent.thinkingLabel) && (
-                <ThinkingBlock
-                  parsedContent={parsedContent}
-                  showThinking={showThinking}
-                  onToggle={onToggleThinking}
-                  styles={styles}
-                />
-              )}
-            {!!supportingContextParsedContent?.thinking && (
-              <ThinkingBlock
-                parsedContent={supportingContextParsedContent}
-                showThinking={showSupportingContext}
-                onToggle={onToggleSupportingContext}
-                styles={styles}
-              />
-            )}
-          </Accordion>
-          {isStreaming && !hideProse && !hasVisibleAnswer && (
-            <View testID="streaming-thinking-hint" style={styles.streamingThinkingHint}>
-              <View testID="thinking-indicator">
-                <ThinkingIndicator />
-              </View>
-            </View>
-          )}
-        </View>
-      )}
-
-      {(!hideProse || hasAttachments) && showAnswerBubble && (
-        <View
-          testID={message.isThinking ? undefined : 'message-bubble'}
-          style={message.isThinking ? undefined : bubbleStyle}
-        >
-          {hasAttachments && (
-            <MessageAttachments
-              attachments={message.attachments!}
-              isUser={isUser}
-              styles={styles}
-              colors={colors}
-              onImagePress={onImagePress}
-            />
-          )}
-
-          <MessageContent
-            isUser={isUser}
-            isThinking={message.isThinking}
-            content={message.content}
-            isStreaming={isStreaming}
-            parsedContent={answerParsedContent}
-            showThinking={showThinking}
-            onToggleThinking={onToggleThinking}
+      <View testID="message-bubble" style={bubbleStyle}>
+        {!!supportingContextParsedContent?.thinking && (
+          <ThinkingBlock
+            parsedContent={supportingContextParsedContent}
+            showThinking={showSupportingContext}
+            onToggle={onToggleSupportingContext}
             styles={styles}
           />
+        )}
+
+        {hasAttachments && (
+          <MessageAttachments
+            attachments={message.attachments!}
+            isUser={isUser}
+            styles={styles}
+            colors={colors}
+            onImagePress={onImagePress}
+          />
+        )}
+
+        <MessageContent
+          isUser={isUser}
+          isThinking={message.isThinking}
+          content={message.content}
+          isStreaming={isStreaming}
+          parsedContent={parsedContent}
+          showThinking={showThinking}
+          onToggleThinking={onToggleThinking}
+          styles={styles}
+        />
+      </View>
+
+      <SyncedToolArtifacts message={message} styles={styles} colors={colors} />
+
+      <RoutedToolsRow
+        message={message}
+        isUser={isUser}
+        isStreaming={isStreaming}
+        styles={styles}
+        colors={colors}
+      />
+
+      {/* The words come from the shared chat rules, so the screen keeps no wording of its own. */}
+      {!isUser && !isStreaming && message.stoppedEarly && (
+        <View testID="message-stopped-early" style={styles.toolStatusRow}>
+          <Icon name="alert-triangle" size={12} color={colors.textMuted} />
+          <Text style={styles.toolStatusText}>
+            {CHAT_RESPONSE_STOPPED_EARLY_LABEL}
+          </Text>
         </View>
       )}
 
-      {!message.isThinking && !isStreaming && !hideProse && hasVisibleAnswer && (
-        <MessageMetaRow
-          message={message}
-          styles={styles}
-          isStreaming={isStreaming}
-          showActions={showActions}
-          onMenuOpen={onMenuOpen}
-          metaExtra={metaExtra}
-        />
-      )}
-
-      {showTurnFooter && (
-        <RoutedToolsRow
-          message={message}
-          isUser={isUser}
-          isStreaming={isStreaming}
-          styles={styles}
-          colors={colors}
-        />
-      )}
-
-      {showTurnFooter && message.generationMeta?.truncated && (
+      {!isUser && !isStreaming && message.generationMeta?.truncated && (
         <View testID="message-cutoff-indicator" style={styles.toolStatusRow}>
           <Icon name="alert-triangle" size={12} color={colors.textMuted} />
           <Text style={styles.toolStatusText}>
@@ -368,12 +230,19 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </View>
       )}
 
-      {showTurnFooter && showGenerationDetails && message.generationMeta && (
+      <MessageMetaRow
+        message={message}
+        styles={styles}
+        isStreaming={isStreaming}
+        showActions={showActions}
+        onMenuOpen={onMenuOpen}
+        metaExtra={metaExtra}
+      />
+
+      {showGenerationDetails && !isUser && message.generationMeta && (
         <GenerationMeta
-          messageId={message.id}
           generationMeta={message.generationMeta}
           styles={styles}
-          colors={colors}
         />
       )}
     </TouchableOpacity>
@@ -383,7 +252,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 export const ChatMessage: React.FC<ChatMessageProps> = ({
   message,
   supportingContext,
-  isStreaming: isStreamingProp,
+  isStreaming,
   onImagePress,
   onCopy,
   onRetry,
@@ -401,8 +270,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const ttsCanSpeak = callHook<boolean>(HOOKS.audioCanSpeak) ?? false;
-  const isStreaming = Boolean(isStreamingProp || message.isStreaming);
+  const voiceMode = useSpeechProjection().preferences.voiceMode;
   const [showActionMenu, setShowActionMenu] = useState(false);
+  const [showSelectText, setShowSelectText] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showThinking, setShowThinking] = useState(!!isStreaming);
   const [showSupportingContext, setShowSupportingContext] = useState(false);
@@ -417,8 +287,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const isSupportingContext =
     !isStreaming &&
     !hasAttachments &&
-    !message.timeline?.length &&
-    !message.toolArtifacts?.length &&
     isSupportingChatContext({
       answer: parsedContent.response,
       reasoning: parsedContent.thinking,
@@ -448,10 +316,17 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     setTimeout(() => setIsEditing(true), 350);
   };
 
+  const handleSelectText = () => {
+    setShowActionMenu(false);
+    // Let the action sheet finish closing before opening the select-text sheet.
+    setTimeout(() => setShowSelectText(true), 350);
+  };
+
+  // The candidate comes from the sheet that owns the draft, so this can never judge a stale
+  // value from an earlier render.
   const handleSaveEdit = (text: string) => {
     const trimmed = text.trim();
-    if (trimmed !== (isUser ? message.content : displayContent))
-      onEdit?.(message, trimmed);
+    if (trimmed !== message.content) onEdit?.(message, trimmed);
     setIsEditing(false);
   };
 
@@ -482,6 +357,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     callHook(HOOKS.audioSpeak, displayContent, message.id);
   };
 
+  // A tool row can also be system info (kept out of the prompt): render it as the tool row.
+  if (message.role === 'tool')
+    return (
+      <ToolResultMessage message={message} styles={styles} colors={colors} />
+    );
   if (message.isSystemInfo) {
     return (
       <SystemInfoMessage
@@ -492,10 +372,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       />
     );
   }
-  if (message.role === 'tool')
-    return (
-      <ToolResultMessage message={message} styles={styles} colors={colors} />
-    );
   if (message.role === 'assistant' && message.toolCalls?.length) {
     return (
       <ToolCallWithThinking
@@ -514,25 +390,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         testID="assistant-message"
         style={[styles.container, styles.assistantContainer]}
       >
-        <View style={styles.toolCallReplyContent}>
-          <Accordion
-            title={
-              message.turnStatus === 'cancelled'
-                ? 'Work stopped'
-                : message.turnStatus === 'failed'
-                  ? 'Work failed'
-                  : 'Work done'
-            }
-            variant="plain"
-            testID="assistant-work-toggle"
-          >
-            <ThinkingBlock
-              parsedContent={parsedContent}
-              showThinking={showThinking}
-              onToggle={() => setShowThinking(!showThinking)}
-              styles={styles}
-            />
-          </Accordion>
+        <View testID="message-bubble" style={bubbleStyle}>
+          <ThinkingBlock
+            parsedContent={parsedContent}
+            showThinking={showThinking}
+            onToggle={() => setShowThinking(!showThinking)}
+            styles={styles}
+          />
         </View>
       </View>
     );
@@ -557,7 +421,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       showSupportingContext={showSupportingContext}
       showActions={showActions}
       showGenerationDetails={showGenerationDetails}
-      hideProse={hideProse}
       metaExtra={metaExtra}
       onImagePress={onImagePress}
       onToggleThinking={() => setShowThinking(!showThinking)}
@@ -582,20 +445,24 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         styles={styles}
         colors={colors}
         showActionMenu={showActionMenu}
+        showSelectText={showSelectText}
         isEditing={isEditing}
         isUser={isUser}
         canEdit={!!onEdit}
         canRetry={!!onRetry}
         canGenerateImage={canGenerateImage && !!onGenerateImage}
         canSpeak={canSpeak}
+        showSelectTextAction={!voiceMode}
         displayContent={displayContent}
         alertState={alertState}
         onCloseActionMenu={() => setShowActionMenu(false)}
+        onCloseSelectText={() => setShowSelectText(false)}
         onCopy={handleCopy}
         onEdit={handleEdit}
         onRetry={handleRetry}
         onGenerateImage={handleGenerateImage}
         onSpeak={handleSpeak}
+        onSelectText={handleSelectText}
         onSaveEdit={handleSaveEdit}
         onCancelEdit={handleCancelEdit}
         onCloseAlert={() => setAlertState(hideAlert())}

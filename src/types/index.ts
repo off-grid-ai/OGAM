@@ -1,9 +1,5 @@
-import type {
-  RecordProvenance,
-  SyncedAssistantTimelineEntry,
-  SyncedToolArtifact,
-  SyncedTurnStatus,
-} from '@offgrid/sync';
+import type { RecordProvenance, SyncedToolArtifact } from '@offgrid/sync';
+import type { ModelArtifactOrigin } from '@offgrid/models';
 // Model source and credibility types
 export type ModelSource =
   | 'lmstudio'
@@ -71,20 +67,12 @@ export type ModelEngine = 'llama' | 'litert';
  *
  * Provenance is a fact we are told at download time. Record it then; never re-derive it later.
  */
-export interface ModelOrigin {
-  /** Hugging Face repo id, e.g. "ggml-org/SmolVLM-500M-Instruct-GGUF". */
-  repoId: string;
-  /**
-   * The commit the files came from. A projector fetched from `main` months after the weights can be
-   * a different build than the weights it must match, so repair pins the same revision.
-   */
-  revision: string;
-  /** Path of the primary file inside the repo. */
-  path: string;
-}
+export type ModelOrigin = ModelArtifactOrigin;
 
 interface DownloadedModelBase {
   id: string;
+  /** Shared installation identity for a downloaded external model family. */
+  registryFamilyId?: string;
   name: string;
   author: string;
   filePath: string;
@@ -117,27 +105,6 @@ export type DownloadedModel = LlamaDownloadedModel | LiteRTDownloadedModel;
 
 export function isLiteRTModel(m: DownloadedModel): m is LiteRTDownloadedModel {
   return m.engine === 'litert';
-}
-
-export interface PersistedDownloadInfo {
-  modelId: string;
-  fileName: string;
-  quantization: string;
-  author: string;
-  totalBytes: number;
-  mainFileSize?: number;
-  mmProjFileName?: string;
-  mmProjFileSize?: number;
-  mmProjLocalPath?: string | null;
-  mmProjDownloadId?: string;
-  // Image model metadata (for restoring downloads after app kill)
-  imageModelName?: string;
-  imageModelDescription?: string;
-  imageModelSize?: number;
-  imageModelStyle?: string;
-  imageModelBackend?: string;
-  imageModelRepo?: string;
-  imageDownloadType?: 'zip' | 'multifile';
 }
 
 export interface DownloadProgress {
@@ -243,10 +210,6 @@ export interface GenerationMeta {
   timeToFirstToken?: number;
   /** Token count (text generation only) */
   tokenCount?: number;
-  contextPromptTokens?: number;
-  contextWindowTokens?: number;
-  /** Prompt count is estimated rather than provider-reported. */
-  contextEstimate?: boolean;
   /** Model load/init time in seconds */
   modelLoadTimeSeconds?: number;
   /** Image generation steps */
@@ -276,9 +239,15 @@ export interface Message {
   content: string;
   /** Reasoning/thinking content parsed by llama.rn (separate from response content) */
   reasoningContent?: string;
-  /** Transient provider reasoning used to continue a remote tool-call round. */
-  reasoningDetails?: Array<Record<string, unknown>>;
   timestamp: number;
+  /**
+   * True when this reply ended before it finished, because the app closed while it was arriving.
+   *
+   * The shared chat rules decide it and write it onto the saved reply when they recover the
+   * conversation; the phone only carries it onto the row a person reads. Without it a half-written
+   * reply reads as a complete answer.
+   */
+  stoppedEarly?: boolean;
   isStreaming?: boolean;
   isThinking?: boolean;
   /** USER messages only: the modality this turn was DISPATCHED as, stamped when the router decides.
@@ -300,10 +269,6 @@ export interface Message {
   toolCalls?: Array<{ id?: string; name: string; arguments: string }>;
   /** Completed, display-only tool artifacts admitted from synced message context. */
   toolArtifacts?: SyncedToolArtifact[];
-  /** Ordered reasoning and tool events carried by a synced assistant turn. */
-  timeline?: SyncedAssistantTimelineEntry[];
-  /** Terminal outcome for this turn, including a deliberate user stop. */
-  turnStatus?: SyncedTurnStatus;
   /** Tool name (for tool result messages) */
   toolName?: string;
   /** True when this assistant message was generated while interfaceMode === 'audio' */
@@ -457,15 +422,6 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
 }
-export type BackgroundDownloadStatus =
-  | 'pending'
-  | 'running'
-  | 'retrying'
-  | 'paused'
-  | 'waiting_for_network'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
 export type BackgroundDownloadReasonCode =
   | 'none'
   | 'network_lost'
@@ -483,20 +439,6 @@ export type BackgroundDownloadReasonCode =
   | 'http_429'
   | 'client_error'
   | 'unknown_error';
-export interface BackgroundDownloadInfo {
-  downloadId: string;
-  fileName: string;
-  modelId: string;
-  status: BackgroundDownloadStatus;
-  bytesDownloaded: number;
-  totalBytes: number;
-  localUri?: string;
-  startedAt: number;
-  reason?: string;
-  reasonCode?: BackgroundDownloadReasonCode;
-  /** Raw JSON persisted with the download row by the JS layer at start time. */
-  metadataJson?: string;
-}
 export interface DebugInfo {
   systemPrompt: string;
   originalMessageCount: number;
@@ -508,5 +450,12 @@ export interface DebugInfo {
   contextUsagePercent: number;
 }
 // Remote server types
-export type { RemoteServer, RemoteModel, ServerTestResult, RemoteMediaModelIds, RemoteModelCategory, RemoteModelOption, RemoteModelCatalog } from './remoteServer';
-export { remoteServerCapabilities } from './remoteServer';
+export type {
+  RemoteServer,
+  RemoteModel,
+  ServerTestResult,
+  RemoteMediaModelIds,
+  RemoteModelCategory,
+  RemoteModelOption,
+  RemoteModelCatalog,
+} from './remoteServer';

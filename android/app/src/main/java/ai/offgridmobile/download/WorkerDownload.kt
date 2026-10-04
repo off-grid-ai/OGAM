@@ -101,16 +101,7 @@ class WorkerDownload(
 
     private suspend fun handleDownloadException(downloadId: String, download: DownloadEntity, e: Exception): Result {
         if (isStopped) return handleStoppedState(downloadId, download, download.downloadedBytes)
-        val reason = DownloadReason.fromThrowable(e)
-        // The partial file is retained, so WorkManager can retry from its byte offset
-        // after a transient connection failure. Bound the retries so a persistently
-        // broken endpoint still becomes a visible, manually retryable failure.
-        if (DownloadReason.isRetryable(reason) && runAttemptCount < MAX_TRANSIENT_RETRIES) {
-            Log.w(TAG, "Transient download failure id=$downloadId attempt=$runAttemptCount reason=$reason; retrying")
-            downloadDao.updateStatus(downloadId, DownloadStatus.QUEUED)
-            return Result.retry()
-        }
-        return failDownload(downloadId, download, reason)
+        return failDownload(downloadId, download, DownloadReason.fromThrowable(e))
     }
 
     private data class StreamParams(
@@ -282,11 +273,9 @@ class WorkerDownload(
 
     private suspend fun handleStoppedState(downloadId: String, download: DownloadEntity, bytesWritten: Long): Result {
         val current = downloadDao.getDownload(downloadId) ?: download
-        return if (current.status == DownloadStatus.PAUSED) {
-            Result.failure() // Keep the partial file; resume uses HTTP Range.
-        } else if (current.status == DownloadStatus.CANCELLED) {
-            val partialFile = File(current.destination)
-            if (partialFile.exists()) partialFile.delete()
+        return if (current.status == DownloadStatus.CANCELLED) {
+            // The native stop boundary has already applied Shared's explicit retain/delete policy.
+            // A retained partial stays at `destination`; a deleted partial is already absent.
             Result.failure()
         } else {
             // System stopped the worker — retry silently, no JS state change.
@@ -297,7 +286,6 @@ class WorkerDownload(
 
     companion object {
         private const val TAG = "WorkerDownload"
-        private const val MAX_TRANSIENT_RETRIES = 5
 
         val httpClient: OkHttpClient = OkHttpClient.Builder()
             .retryOnConnectionFailure(true)
@@ -423,10 +411,6 @@ class WorkerDownload(
                 request,
             )
             return request
-        }
-
-        fun cancel(context: Context, downloadId: String) {
-            WorkManager.getInstance(context).cancelUniqueWork(workName(downloadId))
         }
 
         fun workName(downloadId: String) = "download_$downloadId"

@@ -5,9 +5,20 @@ import {
   isSupportingChatContext,
   splitInlineReasoning,
   type ChatStreamPreviewRow,
-} from '@offgrid/sync';
+  type MessageRecord,
+} from '@offgrid/application';
 import { Message } from '../../types';
 import { visibleMessages } from '../../utils/visibleMessages';
+import {projectWorkspaceMessage} from '../../services/adapters/workspaceContent/projectWorkspaceMessage';
+
+/**
+ * One durable message, read only from the canonical Workspace Content record - never from a
+ * legacy Zustand mirror. A Shared-created conversation (Sync materialization, another Shared-owned
+ * surface) has no such mirror, so this is the only path that can ever render its transcript.
+ */
+export function toWorkspaceMessage(record: MessageRecord): Message {
+  return projectWorkspaceMessage(record);
+}
 export type ChatMessageItem = Message & {
   statusText?: string;
   suppressMessageBubble?: boolean;
@@ -23,21 +34,11 @@ const groupedImageCache = new WeakMap<
 function isSupportingContextMessage(message: Message): boolean {
   if (message.role !== 'assistant' || message.attachments?.length) return false;
   const inline = splitInlineReasoning(message.content);
-  if (!inline.reasoningLabel) return false;
   return isSupportingChatContext({
     answer: inline.answer,
     reasoning: message.reasoningContent || inline.reasoning,
     reasoningLabel: inline.reasoningLabel,
   });
-}
-
-function isReasoningOnlyMessage(message: Message): boolean {
-  if (message.role !== 'assistant' || message.attachments?.length) return false;
-  const inline = splitInlineReasoning(message.content);
-  return Boolean(
-    (message.reasoningContent || inline.reasoning || '').trim() &&
-      !inline.answer.trim(),
-  );
 }
 
 function hasImageAttachment(message: Message): boolean {
@@ -47,6 +48,25 @@ function hasImageAttachment(message: Message): boolean {
       message.attachments?.some(attachment => attachment.type === 'image'),
     )
   );
+}
+
+/** Prefer canonical tool-result rows when they exist; recovered artifacts fill only missing rows. */
+function withoutDuplicateToolArtifacts(messages: readonly Message[]): Message[] {
+  const completedCallIds = new Set(
+    messages
+      .filter(message => message.role === 'tool' && message.toolCallId)
+      .map(message => message.toolCallId as string),
+  );
+  if (completedCallIds.size === 0) return [...messages];
+  return messages.map(message => {
+    if (!message.toolArtifacts?.length) return message;
+    const toolArtifacts = message.toolArtifacts.filter(
+      artifact => !artifact.id || !completedCallIds.has(artifact.id),
+    );
+    return toolArtifacts.length === message.toolArtifacts.length
+      ? message
+      : {...message, toolArtifacts};
+  });
 }
 
 function isGeneratedImageResult(message: Message): boolean {
@@ -109,185 +129,6 @@ function groupSupportingContextWithImage(
   return grouped;
 }
 
-const groupedWorkCache = new WeakMap<
-  Message,
-  { work: readonly Message[]; live: boolean; item: Message }
->();
-
-/** Present the tool records between one user prompt and its answer as one assistant timeline. */
-function groupAssistantTurnWork(
-  messages: readonly (Message | ChatMessageItem)[],
-  live: boolean,
-): (Message | ChatMessageItem)[] {
-  const grouped: (Message | ChatMessageItem)[] = [];
-  let work: Message[] = [];
-  const flush = (final?: Message | ChatMessageItem, groupLive = false) => {
-    if (!work.length) {
-      if (final) grouped.push(final);
-      return;
-    }
-    const response =
-      final ??
-      [...work]
-        .reverse()
-        .find(
-          message =>
-            message.role === 'assistant' &&
-            !isSupportingContextMessage(message) &&
-            !message.toolCalls?.length &&
-            Boolean(message.content.trim() || message.attachments?.length),
-        );
-    const terminal = [...work]
-      .reverse()
-      .find(
-        message =>
-          message.role === 'assistant' &&
-          (message.turnStatus === 'failed' ||
-            message.turnStatus === 'cancelled'),
-      );
-    if (!response && !terminal && !groupLive) {
-      grouped.push(...work);
-      work = [];
-      return;
-    }
-    const owner = response ?? terminal ?? {
-      ...work.at(-1)!,
-      role: 'assistant' as const,
-      content: '',
-    };
-    const supportingContext =
-      (response as ChatMessageItem | undefined)?.supportingContext ??
-      work.find(isSupportingContextMessage);
-    const cached = groupedWorkCache.get(owner);
-    if (
-      cached &&
-      cached.live === groupLive &&
-      cached.work.length === work.length &&
-      cached.work.every((message, index) => message === work[index])
-    ) {
-      grouped.push(cached.item);
-      work = [];
-      return;
-    }
-    const artifacts: NonNullable<Message['toolArtifacts']> = [];
-    const timeline: NonNullable<Message['timeline']> = [];
-    const artifactByCallId = new Map<string, number>();
-    for (const message of work) {
-      if (message.role === 'assistant') {
-        const inline = splitInlineReasoning(message.content);
-        const reasoning = message.reasoningContent || inline.reasoning || '';
-        if (
-          message !== supportingContext &&
-          reasoning.trim() &&
-          !message.timeline?.some(entry => entry.kind === 'thinking')
-        ) {
-          timeline.push({ kind: 'thinking', text: reasoning });
-        }
-        for (const call of message.toolCalls ?? []) {
-          const toolIndex = artifacts.length;
-          artifacts.push({
-            id: call.id,
-            name: call.name,
-            arguments: call.arguments,
-            result: '',
-            status: groupLive ? 'running' : 'completed',
-          });
-          if (call.id) artifactByCallId.set(call.id, toolIndex);
-          timeline.push({ kind: 'tool', toolIndex });
-        }
-        continue;
-      }
-      const matchingIndex = message.toolCallId
-        ? artifactByCallId.get(message.toolCallId)
-        : undefined;
-      if (matchingIndex !== undefined) {
-        artifacts[matchingIndex] = {
-          ...artifacts[matchingIndex]!,
-          result: message.content,
-          status: 'completed',
-          durationMs: message.generationTimeMs,
-        };
-      } else {
-        timeline.push({ kind: 'tool', toolIndex: artifacts.length });
-        artifacts.push({
-          id: message.toolCallId,
-          name: message.toolName ?? 'unknown',
-          result: message.content,
-          status: 'completed',
-          durationMs: message.generationTimeMs,
-        });
-      }
-    }
-    const ownerArtifacts = owner.toolArtifacts ?? [];
-    let replacedOwnerArtifactCount = 0;
-    while (
-      replacedOwnerArtifactCount < artifacts.length &&
-      replacedOwnerArtifactCount < ownerArtifacts.length &&
-      artifacts[replacedOwnerArtifactCount]?.name ===
-        ownerArtifacts[replacedOwnerArtifactCount]?.name
-    ) {
-      replacedOwnerArtifactCount += 1;
-    }
-    const ownerTimeline: NonNullable<Message['timeline']> = [];
-    for (const entry of owner.timeline ?? []) {
-      if (entry.kind !== 'tool') {
-        ownerTimeline.push(entry);
-      } else if (entry.toolIndex >= replacedOwnerArtifactCount) {
-        ownerTimeline.push({
-          ...entry,
-          toolIndex:
-            entry.toolIndex - replacedOwnerArtifactCount + artifacts.length,
-        });
-      }
-    }
-    const item: ChatMessageItem = {
-      ...owner,
-      ...(supportingContext ? { supportingContext } : {}),
-      content: response && (!groupLive || owner.isStreaming) ? owner.content : '',
-      isStreaming: groupLive || owner.isStreaming,
-      turnStatus: terminal?.turnStatus ?? owner.turnStatus,
-      toolCalls: undefined,
-      toolArtifacts: [
-        ...artifacts,
-        ...ownerArtifacts.slice(replacedOwnerArtifactCount),
-      ],
-      timeline: [
-        ...timeline,
-        ...ownerTimeline,
-      ],
-    };
-    groupedWorkCache.set(owner, { work: [...work], live: groupLive, item });
-    grouped.push(item);
-    work = [];
-  };
-
-  for (const message of messages) {
-    if (message.role === 'user') {
-      flush();
-      grouped.push(message);
-      continue;
-    }
-    if (work.length && message.role === 'assistant') {
-      work.push(message);
-      continue;
-    }
-    if (
-      message.role === 'tool' ||
-      (message.role === 'assistant' &&
-        (message.toolCalls?.length ||
-          isSupportingContextMessage(message) ||
-          isReasoningOnlyMessage(message)))
-    ) {
-      work.push(message);
-      continue;
-    }
-    flush();
-    grouped.push(message);
-  }
-  flush(undefined, live);
-  return grouped;
-}
-
 /**
  * A reply generating on another device, mirrored into this conversation while it happens.
  *
@@ -296,10 +137,21 @@ function groupAssistantTurnWork(
  */
 export type RemoteStreamItem = ChatStreamPreviewRow;
 
+/** The synthetic row that stands for the reply being generated on THIS device. */
+export const STREAMING_MESSAGE_ID = 'streaming';
+
 export type StreamingState = {
   isThinking: boolean;
   streamingMessage: string;
   streamingReasoningContent: string;
+  /**
+   * The live reply has produced text, even though `streamingMessage` above is empty.
+   *
+   * The screen model passes this instead of the text so a token never reaches it: the row it asks
+   * for is drawn by one leaf that reads the text itself (`useActiveStreamText`). A caller that
+   * already holds the text (a test, a projection over a finished turn) can keep passing it and this
+   * stays undefined.
+   */
   hasStreamingText?: boolean;
   isStreamingForThisConversation: boolean;
   isModelLoading?: boolean;
@@ -369,12 +221,11 @@ function remotePreviewMessage(preview: RemoteStreamItem): ChatMessageItem {
     preview.phase === 'waiting' ||
     (isStatusPhase && !hasMessageBody && !preview.reasoning) ||
     (preview.phase === 'thinking' && !preview.reasoning && !preview.content);
-  const visibleStatus = preview.phase === 'thinking' ? '' : phaseLabel ?? '';
   return {
     // The id comes from the shared projection, so it is stable across frames.
     id: preview.id,
     role: 'assistant',
-    content: isStatusOnly ? visibleStatus : preview.content,
+    content: isStatusOnly ? phaseLabel ?? '' : preview.content,
     reasoningContent: preview.reasoning || undefined,
     timestamp: Date.now(),
     isThinking: isStatusOnly,
@@ -392,7 +243,7 @@ function remotePreviewMessage(preview: RemoteStreamItem): ChatMessageItem {
           })),
         }
       : {}),
-    ...(isStatusPhase && visibleStatus ? { statusText: visibleStatus } : {}),
+    ...(isStatusPhase && phaseLabel ? { statusText: phaseLabel } : {}),
   };
 }
 
@@ -401,24 +252,17 @@ export function getDisplayMessages(
   allMessages: Message[],
   streaming: StreamingState,
 ): (Message | ChatMessageItem)[] {
-  const live = Boolean(
-    streaming.isThinking ||
-      streaming.isStreamingForThisConversation ||
-      streaming.isGeneratingForThisConversation ||
-      streaming.remotePreviews?.length,
-  );
-  return groupAssistantTurnWork(
-    withRemotePreviews(
-      groupSupportingContextWithImage(
-        localDisplayMessages(
+  return withRemotePreviews(
+    groupSupportingContextWithImage(
+      localDisplayMessages(
         // The same rule the list rows use, so the thread and its preview never disagree.
-          [...visibleMessages(allMessages, streaming.localDeviceId)],
-          streaming,
-        ),
+        withoutDuplicateToolArtifacts([
+          ...visibleMessages(allMessages, streaming.localDeviceId),
+        ]),
+        streaming,
       ),
-      streaming.remotePreviews,
     ),
-    live,
+    streaming.remotePreviews,
   );
 }
 
@@ -437,8 +281,7 @@ function localDisplayMessages(
   if (
     streaming.isModelLoading &&
     streaming.isGeneratingForThisConversation &&
-    !streamingMessage &&
-    !streaming.hasStreamingText
+    !streamingMessage
   ) {
     return [
       ...allMessages,
@@ -453,15 +296,7 @@ function localDisplayMessages(
       },
     ];
   }
-  // The tool loop stays in the thinking phase until prose begins. Once reasoning
-  // arrives, render that live stream instead of keeping the empty loader on top.
-  if (
-    isThinking &&
-    isStreamingForThisConversation &&
-    !streamingMessage &&
-    !streamingReasoningContent &&
-    !streaming.hasStreamingText
-  ) {
+  if (isThinking && isStreamingForThisConversation) {
     if (_lastDisplayBranch !== 'thinking') {
       _lastDisplayBranch = 'thinking';
     }
@@ -477,9 +312,7 @@ function localDisplayMessages(
     ];
   }
   if (
-    (streamingMessage ||
-      streamingReasoningContent ||
-      streaming.hasStreamingText) &&
+    (streamingMessage || streamingReasoningContent || streaming.hasStreamingText) &&
     isStreamingForThisConversation
   ) {
     if (_lastDisplayBranch !== 'streaming') {
@@ -488,33 +321,12 @@ function localDisplayMessages(
     return [
       ...allMessages,
       {
-        id: 'streaming',
+        id: STREAMING_MESSAGE_ID,
         role: 'assistant' as const,
         content: streamingMessage,
         reasoningContent: streamingReasoningContent || undefined,
         timestamp: Date.now(),
         isStreaming: true,
-      },
-    ];
-  }
-  // A remote tool-capable model can clear its initial thinking phase before it has emitted text,
-  // reasoning, or a durable tool row. The generation session still owns this conversation, so keep
-  // one local loader row until one of those displayable records replaces it.
-  if (
-    isStreamingForThisConversation ||
-    streaming.isGeneratingForThisConversation
-  ) {
-    if (_lastDisplayBranch !== 'thinking') {
-      _lastDisplayBranch = 'thinking';
-    }
-    return [
-      ...allMessages,
-      {
-        id: 'thinking',
-        role: 'assistant' as const,
-        content: '',
-        timestamp: Date.now(),
-        isThinking: true,
       },
     ];
   }

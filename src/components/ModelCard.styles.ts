@@ -51,21 +51,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textMuted,
     marginTop: SPACING.xs,
   },
-  capabilityRow: {
-    flexDirection: 'row' as const,
-    flexWrap: 'wrap' as const,
-    gap: SPACING.xs,
-    marginTop: SPACING.xs,
-  },
-  capabilityBadge: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 4,
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
   authorTag: {
     backgroundColor: colors.surfaceLight,
     paddingHorizontal: 6,
@@ -239,18 +224,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     marginTop: 10,
     marginBottom: 12,
   },
-  progressTransferRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.sm,
-  },
-  progressDetails: {
-    flex: 1,
-  },
-  progressActions: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-  },
   progressContainer: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -289,6 +262,9 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   queuedText: {
     color: colors.textMuted,
   },
+  pausedText: {
+    color: colors.textSecondary,
+  },
   progressBytesText: {
     ...TYPOGRAPHY.meta,
     color: colors.textMuted,
@@ -303,21 +279,11 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-  },
-  failedDetails: {
-    flex: 1,
   },
   failedProgressFill: {
     height: '100%' as const,
     backgroundColor: colors.error,
     borderRadius: 4,
-  },
-  failedProgressCaption: {
-    ...TYPOGRAPHY.meta,
-    color: colors.textMuted,
-    marginTop: SPACING.xs,
   },
   failedMessageRow: {
     flexDirection: 'row' as const,
@@ -334,6 +300,35 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   failedActionsRow: {
     flexDirection: 'row' as const,
     gap: 8,
+  },
+  retryButton: {
+    flexDirection: 'row' as const,
     alignItems: 'center' as const,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: `${colors.primary}15` as const,
+    borderWidth: 1,
+    borderColor: `${colors.primary}40` as const,
+  },
+  retryButtonText: {
+    ...TYPOGRAPHY.meta,
+    color: colors.primary,
+  },
+  removeButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: `${colors.error}12` as const,
+    borderWidth: 1,
+    borderColor: `${colors.error}30` as const,
+  },
+  removeButtonText: {
+    ...TYPOGRAPHY.meta,
+    color: colors.error,
   },
 });

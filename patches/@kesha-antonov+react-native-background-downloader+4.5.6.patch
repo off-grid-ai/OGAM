@@ -1,3 +1,35 @@
+diff --git a/node_modules/@kesha-antonov/react-native-background-downloader/android/src/main/AndroidManifest.xml b/node_modules/@kesha-antonov/react-native-background-downloader/android/src/main/AndroidManifest.xml
+--- a/node_modules/@kesha-antonov/react-native-background-downloader/android/src/main/AndroidManifest.xml
++++ b/node_modules/@kesha-antonov/react-native-background-downloader/android/src/main/AndroidManifest.xml
+@@ -1,2 +1,3 @@
+ <manifest xmlns:android="http://schemas.android.com/apk/res/android"
++          xmlns:tools="http://schemas.android.com/tools"
+           package="com.eko">
+@@ -24,5 +25,6 @@
+     <service
+       android:name=".UIDTDownloadJobService"
+       android:permission="android.permission.BIND_JOB_SERVICE"
+-      android:exported="false" />
++      android:exported="false"
++      tools:targetApi="34" />
+   </application>
+diff --git a/node_modules/@kesha-antonov/react-native-background-downloader/android/src/main/java/com/eko/RNBackgroundDownloaderModuleImpl.kt b/node_modules/@kesha-antonov/react-native-background-downloader/android/src/main/java/com/eko/RNBackgroundDownloaderModuleImpl.kt
+--- a/node_modules/@kesha-antonov/react-native-background-downloader/android/src/main/java/com/eko/RNBackgroundDownloaderModuleImpl.kt
++++ b/node_modules/@kesha-antonov/react-native-background-downloader/android/src/main/java/com/eko/RNBackgroundDownloaderModuleImpl.kt
+@@ -3,4 +3,5 @@
++import android.annotation.SuppressLint
+ import android.app.DownloadManager
+ import android.content.BroadcastReceiver
+ import android.content.Context
+ import android.content.Intent
+@@ -710,4 +711,7 @@ class RNBackgroundDownloaderModuleImpl(private val reactContext: ReactApplicatio
+       storageManager.getBooleanSync("allowsCellularAccess", true)
+     }
+     // Use global notification setting instead of per-task setting
++    // This companion accessor only reads library configuration. The service itself
++    // is Android 14-only, but this accessor does not call an Android 14 API.
++    @SuppressLint("NewApi")
+     val isNotificationVisible = UIDTDownloadJobService.isNotificationsEnabled()
 diff --git a/node_modules/@kesha-antonov/react-native-background-downloader/ios/RNBackgroundDownloader.mm b/node_modules/@kesha-antonov/react-native-background-downloader/ios/RNBackgroundDownloader.mm
 index cd26a05..bc75c1d 100644
 --- a/node_modules/@kesha-antonov/react-native-background-downloader/ios/RNBackgroundDownloader.mm

@@ -134,7 +134,7 @@ function startWdaServer(udid) {
       const found = buf.toString().match(/ServerURLHere->(.*?)<-ServerURLHere/);
       if (found) {
         log('WDA serving at', found[1]);
-        resolve({ url: found[1].trim() });
+        resolve({ url: found[1].trim(), proc });
       }
     };
     proc.stdout.on('data', onData);
@@ -150,8 +150,16 @@ const udid = resolveUdid();
 neutraliseIconScript();
 buildWda();
 installWda(udid);
-const { url } = await startWdaServer(udid);
+const { url, proc } = await startWdaServer(udid);
 console.log(`\nWDA_URL=${url}`);
 console.log('WDA is up. Leave this process running; point scripts/ios/wda-client.mjs at the URL above.');
-// Fact 7's corollary: this process IS the server, so it has to stay alive.
-await new Promise(() => {});
+// Fact 7's corollary: this process IS the server, so its lifetime is the xcodebuild child's. The
+// child's pipes keep the event loop alive and the await settles when the server exits. A
+// never-settling top-level await is not an option: Node 22+ treats it as a bug and exits 13, which
+// took WDA down seconds after it printed its URL.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => proc.kill(signal));
+}
+const exitCode = await new Promise((resolve) => proc.on('exit', (code) => resolve(code ?? 1)));
+log(`WDA stopped: xcodebuild exited (${exitCode})`);
+process.exit(exitCode === 0 ? 0 : 1);

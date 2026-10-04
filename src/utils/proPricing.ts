@@ -25,9 +25,11 @@ export function getPricingCopy(): ProPricingCopy {
   return {
     label: 'FOUNDER RATE',
     title: '$49/yr or $69 lifetime',
-    subtitle: "Lock in today's rate - it only goes up, never down. One license covers up to 5 devices, laptop and phone.",
+    subtitle:
+      "Lock in today's rate - it only goes up, never down. One license covers your licensed devices.",
     cta: 'Get Pro',
     sheetSubheadline: 'Off Grid AI Pro - $49 a year, or $69 once for life.',
-    sheetFooter: 'Founder rate, locked in when you join. Yearly renews; lifetime is a one-time payment.',
+    sheetFooter:
+      'Founder rate, locked in when you join. Yearly renews; lifetime is a one-time payment.',
   };
 }

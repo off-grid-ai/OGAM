@@ -1,0 +1,20 @@
+diff --git a/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlamaModule.java b/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlamaModule.java
+--- a/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlamaModule.java
++++ b/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlamaModule.java
+@@ -1,7 +1,9 @@
+ package com.rnllama;
+ 
+ import androidx.annotation.NonNull;
++import androidx.annotation.OptIn;
+ 
++import com.facebook.react.common.annotations.FrameworkAPI;
+ import com.facebook.react.bridge.Promise;
+ import com.facebook.react.bridge.ReactApplicationContext;
+ import com.facebook.react.module.annotations.ReactModule;
+@@ -9,5 +11,6 @@ import com.facebook.react.turbomodule.core.CallInvokerHolderImpl;
+ 
+ @ReactModule(name = RNLlama.NAME)
++@OptIn(markerClass = FrameworkAPI.class)
+ public class RNLlamaModule extends NativeRNLlamaSpec {
+   public static final String NAME = RNLlama.NAME;
+ 

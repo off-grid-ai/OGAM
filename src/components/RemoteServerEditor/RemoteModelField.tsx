@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../AppSheet';
@@ -7,11 +7,11 @@ import { SPACING, TYPOGRAPHY } from '../../constants';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import type { RemoteModelOption } from '../../types';
-import { displayModelName } from '../../stores/remoteServerHelpers';
 
 interface Props {
   label: string;
   value: string;
+  displayValue: string | null;
   options: RemoteModelOption[];
   onChange: (modelId: string) => void;
   placeholder: string;
@@ -24,6 +24,7 @@ interface Props {
 export const RemoteModelField: React.FC<Props> = ({
   label,
   value,
+  displayValue,
   options,
   onChange,
   placeholder,
@@ -34,19 +35,13 @@ export const RemoteModelField: React.FC<Props> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [open, setOpen] = useState(false);
-  const selectedName = useMemo(
-    () =>
-      options.find(option => option.id === value)?.name ??
-      (value ? displayModelName(value) : null),
-    [options, value],
-  );
 
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       {loading ? (
         <View style={styles.select} testID={`${testID}-loading`}>
-          <Text style={[styles.value, styles.placeholder]}>Loading models</Text>
+          <Text style={[styles.value, styles.placeholder]}>...</Text>
         </View>
       ) : options.length > 0 ? (
         <>
@@ -56,13 +51,13 @@ export const RemoteModelField: React.FC<Props> = ({
             hapticType="selection"
             onPress={() => setOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel={`${label}: ${selectedName ?? 'Choose a model'}`}
+            accessibilityLabel={`${label}: ${displayValue ?? 'Choose a model'}`}
           >
             <Text
-              style={[styles.value, !selectedName && styles.placeholder]}
+              style={[styles.value, !displayValue && styles.placeholder]}
               numberOfLines={1}
             >
-              {selectedName ?? 'Choose a model'}
+              {displayValue ?? 'Choose a model'}
             </Text>
             <Icon name="chevron-right" size={16} color={colors.textMuted} />
           </AnimatedPressable>

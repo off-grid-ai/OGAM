@@ -1,5 +1,3 @@
-import { BackgroundDownloadReasonCode, BackgroundDownloadStatus } from '../types';
-
 export interface DownloadParams {
   url: string;
   fileName: string;
@@ -20,37 +18,3 @@ export interface DownloadParams {
    *  one file could download at a time. */
   isSidecar?: boolean;
 }
-
-export interface DownloadProgressEvent {
-  downloadId: string;
-  fileName: string;
-  modelId: string;
-  bytesDownloaded: number;
-  totalBytes: number;
-  status: BackgroundDownloadStatus;
-  reason?: string;
-  reasonCode?: BackgroundDownloadReasonCode;
-}
-
-export interface DownloadCompleteEvent {
-  downloadId: string;
-  fileName: string;
-  modelId: string;
-  bytesDownloaded: number;
-  totalBytes: number;
-  status: 'completed';
-  localUri: string;
-}
-
-export interface DownloadErrorEvent {
-  downloadId: string;
-  fileName: string;
-  modelId: string;
-  status: 'failed';
-  reason: string;
-  reasonCode?: BackgroundDownloadReasonCode;
-}
-
-export type DownloadProgressCallback = (event: DownloadProgressEvent) => void;
-export type DownloadCompleteCallback = (event: DownloadCompleteEvent) => void;
-export type DownloadErrorCallback = (event: DownloadErrorEvent) => void;

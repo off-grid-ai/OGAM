@@ -39,6 +39,14 @@ import {
   ProDetailScreen,
   AboutScreen,
   ToolsScreen,
+  AmbientScreen,
+  AmbientDayScreen,
+  AmbientReflectScreen,
+  AmbientSessionScreen,
+  AmbientReplayScreen,
+  SpeakerEnrollmentScreen,
+  ManageVoicesScreen,
+  DayRecorderModelsScreen,
 } from '../screens';
 import {
   RootStackParamList,
@@ -242,6 +250,14 @@ export const AppNavigator: React.FC = () => {
           options={{ headerShown: false }}
         />
         <RootStack.Screen name="Tools" component={ToolsScreen} />
+        <RootStack.Screen name="AmbientDay" component={AmbientDayScreen} />
+        <RootStack.Screen name="Ambient" component={AmbientScreen} />
+        <RootStack.Screen name="AmbientReflect" component={AmbientReflectScreen} />
+        <RootStack.Screen name="AmbientSession" component={AmbientSessionScreen} />
+        <RootStack.Screen name="AmbientReplay" component={AmbientReplayScreen} />
+        <RootStack.Screen name="SpeakerEnrollment" component={SpeakerEnrollmentScreen} />
+        <RootStack.Screen name="ManageVoices" component={ManageVoicesScreen} />
+        <RootStack.Screen name="DayRecorderModels" component={DayRecorderModelsScreen} />
         <RootStack.Screen
           name="DownloadManager"
           component={DownloadManagerScreen}

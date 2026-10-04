@@ -10,7 +10,7 @@ import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../../theme';
-import { useAccordionExpanded, useAccordionStore } from '../../../stores';
+import { useAccordionExpanded } from '../../../stores';
 import { SLOTS, useSlot } from '../../../bootstrap/slotRegistry';
 import { CustomAlert, type AlertState } from '../../CustomAlert';
 import { MarkdownText } from '../../MarkdownText';
@@ -31,10 +31,10 @@ function getToolIcon(toolName?: string): string {
       return 'clock';
     case 'get_device_info':
       return 'smartphone';
+    case 'context_compaction':
+      return 'archive';
     case 'model_fallback':
       return 'shuffle';
-    case 'generate_image':
-      return 'image';
     default:
       return 'tool';
   }
@@ -59,10 +59,10 @@ function getToolLabel(toolName?: string, content?: string): string {
       return 'Web Use';
     case 'computer_use':
       return 'Computer Use';
+    case 'context_compaction':
+      return 'Context compacted';
     case 'model_fallback':
       return 'Model changed';
-    case 'generate_image':
-      return 'Generated image';
     default:
       return toolName || 'Tool result';
   }
@@ -87,8 +87,6 @@ type ToolResultBubbleProps = {
   hasDetails: boolean;
   /** A call still in flight reads in the accent colour; a finished one is muted. */
   active?: boolean;
-  /** Open a live task once. A user collapse writes an explicit false and is final. */
-  openByDefault?: boolean;
   /**
    * What this row IS, named by whoever renders it. The layout is shared; the identity is not - a
    * call the model asked for and the result that came back are different facts, and a surface that
@@ -112,7 +110,6 @@ const ToolResultBubbleInner: React.FC<ToolResultBubbleProps> = ({
   content,
   hasDetails,
   active = false,
-  openByDefault = false,
   rowTestID = 'tool-message',
   labelTestID,
   paired = false,
@@ -120,16 +117,7 @@ const ToolResultBubbleInner: React.FC<ToolResultBubbleProps> = ({
   colors,
   detail,
 }) => {
-  const accordionKey = `tool-result:${stableKey}`;
-  const [expanded, toggle] = useAccordionExpanded(accordionKey);
-  const hasUserChoice = useAccordionStore(state =>
-    Object.prototype.hasOwnProperty.call(state.expanded, accordionKey),
-  );
-  React.useEffect(() => {
-    if (openByDefault && !hasUserChoice) {
-      useAccordionStore.getState().setExpanded(accordionKey, true);
-    }
-  }, [accordionKey, hasUserChoice, openByDefault]);
+  const [expanded, toggle] = useAccordionExpanded(`tool-result:${stableKey}`);
   const tone = active ? colors.primary : colors.textMuted;
   return (
     <View
@@ -145,7 +133,7 @@ const ToolResultBubbleInner: React.FC<ToolResultBubbleProps> = ({
       >
         <Icon name={toolIcon} size={13} color={tone} />
         <Text
-          style={[styles.toolStatusText, styles.toolStatusTextCompact, { color: tone }]}
+          style={[styles.toolStatusText, { color: tone }]}
           numberOfLines={expanded ? undefined : 2}
           testID={labelTestID ?? `tool-result-label-${toolName || 'unknown'}`}
         >
@@ -213,13 +201,11 @@ export const ToolResultMessage: React.FC<{
   const isTaskTool = isTaskToolName(message.toolName);
   const taskDetail =
     isTaskTool && TaskToolDetail ? <TaskToolDetail message={message} /> : null;
-  const hasDetails = isTaskTool
-    ? Boolean(TaskToolDetail)
-    : !!(
-        message.content &&
-        message.content.length > 0 &&
-        !message.content.startsWith('No results')
-      );
+  const hasDetails = Boolean(taskDetail) || !!(
+    message.content &&
+    message.content.length > 0 &&
+    !message.content.startsWith('No results')
+  );
   // Prefer toolCallId (carried on every tool-result message and stable across the
   // streaming→finalized remount); fall back to the message id.
   const stableKey = message.toolCallId || message.id;
@@ -248,15 +234,13 @@ export const ToolResultMessage: React.FC<{
 
 export const SyncedToolArtifacts: React.FC<{
   message: Message;
-  indexes?: readonly number[];
   styles: ReturnType<typeof createStyles>;
   colors: ReturnType<typeof useTheme>['colors'];
-}> = ({ message, indexes, styles, colors }) => {
+}> = ({ message, styles, colors }) => {
   const TaskToolDetail = useSlot(SLOTS.taskToolDetail);
   return (
     <>
       {message.toolArtifacts?.map((artifact, index) => {
-        if (indexes && !indexes.includes(index)) return null;
         const running = artifact.status === 'running';
         const isTaskTool = isTaskToolName(artifact.name);
         const taskDetail =
@@ -283,12 +267,9 @@ export const SyncedToolArtifacts: React.FC<{
             durationLabel=""
             content={artifact.result}
             hasDetails={
-              isTaskTool
-                ? Boolean(TaskToolDetail)
-                : !running && artifact.result.length > 0
+              Boolean(taskDetail) || (!running && artifact.result.length > 0)
             }
             active={running}
-            openByDefault={running && isTaskTool}
             styles={styles}
             colors={colors}
             detail={taskDetail}
@@ -366,46 +347,28 @@ export const ToolCallMessage: React.FC<{
   message: Message;
   styles: any;
   colors: any;
-}> = ({ message, styles, colors }) => {
-  const TaskToolDetail = useSlot(SLOTS.taskToolDetail);
-  return (
-    <View testID="tool-call-message">
-      {toolCallRows(message).map(row => {
-        const taskDetail =
-          isTaskToolName(row.name) && TaskToolDetail ? (
-            <TaskToolDetail
-              message={{
-                toolName: row.name,
-                toolCallId: row.key,
-                content: '',
-                liveOnly: true,
-              }}
-            />
-          ) : null;
-        return (
-          <ToolResultBubble
-            key={row.key}
-            stableKey={row.stableKey}
-            toolIcon={row.icon}
-            toolLabel={row.label}
-            toolName={row.name}
-            durationLabel=""
-            content=""
-            hasDetails={Boolean(taskDetail)}
-            active
-            openByDefault={isTaskToolName(row.name)}
-            paired
-            rowTestID="tool-call-row"
-            labelTestID={`tool-call-label-${row.name || 'unknown'}`}
-            styles={styles}
-            colors={colors}
-            detail={taskDetail}
-          />
-        );
-      })}
-    </View>
-  );
-};
+}> = ({ message, styles, colors }) => (
+  <View testID="tool-call-message">
+    {toolCallRows(message).map(row => (
+      <ToolResultBubble
+        key={row.key}
+        stableKey={row.stableKey}
+        toolIcon={row.icon}
+        toolLabel={row.label}
+        toolName={row.name}
+        durationLabel=""
+        content=""
+        hasDetails={false}
+        active
+        paired
+        rowTestID="tool-call-row"
+        labelTestID={`tool-call-label-${row.name || 'unknown'}`}
+        styles={styles}
+        colors={colors}
+      />
+    ))}
+  </View>
+);
 
 export const SystemInfoMessage: React.FC<{
   content: string;

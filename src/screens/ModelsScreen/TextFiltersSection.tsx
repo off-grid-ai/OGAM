@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useThemedStyles } from '../../theme';
-import { MODEL_ORGS } from '../../constants';
+import { MODEL_ORGS } from '@offgrid/application';
 import { createStyles } from './styles';
 import { FilterState, FilterDimension, ModelTypeFilter, CredibilityFilter, SizeFilter } from './types';
 import { CREDIBILITY_OPTIONS, MODEL_TYPE_OPTIONS, SIZE_OPTIONS, QUANT_OPTIONS } from './constants';

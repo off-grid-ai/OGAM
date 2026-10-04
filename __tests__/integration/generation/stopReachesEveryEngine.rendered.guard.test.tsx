@@ -18,9 +18,7 @@
  * LiteRT reply that path calls native unloadModel and NEVER stopGeneration, which is a live bug recorded in
  * docs/GAPS_BACKLOG.md rather than papered over with a test written around it.
  *
- * (The third site, the context-full compaction retry, is mid-turn rather than a user action. It now calls
- * `stopAllTextEngines()` - engine-level across the registry - because the owner's stop would persist the
- * partial and reset state, ending the very turn the retry is about to continue.)
+ * Mid-turn cleanup now reaches every native conversation through the Shared text-engine control plane.
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 

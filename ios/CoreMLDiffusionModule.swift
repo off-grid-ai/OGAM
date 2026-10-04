@@ -23,32 +23,10 @@ class CoreMLDiffusionModule: RCTEventEmitter {
   // Serial queue for all pipeline operations
   private let pipelineQueue = DispatchQueue(label: "ai.offgridmobile.coreml.diffusion", qos: .userInitiated)
 
-  override init() {
-    super.init()
-    NotificationCenter.default.addObserver(
-      self,
-      selector: #selector(handleMemoryWarning),
-      name: UIApplication.didReceiveMemoryWarningNotification,
-      object: nil
-    )
-  }
-
-  deinit {
-    NotificationCenter.default.removeObserver(self)
-  }
-
-  @objc private func handleMemoryWarning() {
-    // If we're not actively generating, release the pipeline to free memory
-    guard !generating else { return }
-    if pipeline != nil {
-      NSLog("[CoreMLDiffusion] Memory warning received — unloading pipeline to prevent crash")
-      pipeline = nil
-      loadedModelPath = nil
-      sendEvent(withName: "LocalDreamError", body: [
-        "error": "Model unloaded due to low memory. Please try a smaller model."
-      ])
-    }
-  }
+  // Low memory is handled in ONE place: the shared ModelResidencyManager, which receives the same
+  // warning through AppState and decides what to evict. This module used to drop its pipeline on
+  // its own; the JavaScript record then still said "loaded", ensure skipped the load, and the next
+  // generate failed with ERR_NO_MODEL. The engine only loads and unloads when asked.
 
   // MARK: - RCTEventEmitter
 
@@ -446,22 +424,53 @@ class CoreMLDiffusionModule: RCTEventEmitter {
 
   // MARK: - deleteGeneratedImage
 
-  @objc func deleteGeneratedImage(_ imageId: String,
+  @objc func deleteGeneratedImage(_ persistedPath: String,
                                   resolver resolve: @escaping RCTPromiseResolveBlock,
                                   rejecter reject: @escaping RCTPromiseRejectBlock) {
     guard let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
       reject("ERR_NO_DOCS_DIR", "Could not locate documents directory", nil)
       return
     }
-    let imagePath = docsDir
+    let generatedImagesDir = docsDir
       .appendingPathComponent("generated_images")
-      .appendingPathComponent("\(imageId).png")
+      .standardizedFileURL
+      .resolvingSymlinksInPath()
+    let imagePath = URL(fileURLWithPath: persistedPath)
+      .standardizedFileURL
+      .resolvingSymlinksInPath()
+    guard imagePath.deletingLastPathComponent().path == generatedImagesDir.path else {
+      resolve([
+        "status": "failure",
+        "code": "UNSAFE_DELETE_PATH",
+        "message": "The generated-image deletion path is outside the generated-image directory.",
+      ])
+      return
+    }
 
+    // Three outcomes, never a boolean. The caller is settling a DURABLE deletion intent, so it has
+    // to tell "the bytes are gone" apart from "the bytes may still be there". A retry that arrives
+    // after a previous attempt unlinked the file but died before the journal acknowledged it must
+    // settle as `already_missing`, and a permission / busy / I/O error must keep the intent.
     do {
       try FileManager.default.removeItem(at: imagePath)
-      resolve(true)
-    } catch {
-      resolve(false)
+      resolve(["status": "deleted"])
+    } catch let error as NSError {
+      // Only a genuinely absent file is a success. Every other error names itself so the JS owner
+      // can log the real reason instead of retrying an anonymous `false` forever.
+      if error.domain == NSCocoaErrorDomain,
+         error.code == NSFileNoSuchFileError || error.code == NSFileReadNoSuchFileError {
+        resolve(["status": "already_missing"])
+        return
+      }
+      if !FileManager.default.fileExists(atPath: imagePath.path) {
+        resolve(["status": "already_missing"])
+        return
+      }
+      resolve([
+        "status": "failure",
+        "code": "\(error.domain):\(error.code)",
+        "message": error.localizedDescription,
+      ])
     }
   }
 }

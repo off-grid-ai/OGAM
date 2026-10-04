@@ -13,10 +13,13 @@ import ai.offgridmobile.litert.LiteRTPackage
 import ai.offgridmobile.devicememory.DeviceMemoryPackage
 import ai.offgridmobile.clipboard.SyncClipboardPackage
 import ai.offgridmobile.directory.SyncDirectorySourcePackage
+import ai.offgridmobile.sherpa.SherpaDiarizationPackage
 import ai.offgridmobile.downloads.SyncDownloadsPackage
 import ai.offgridmobile.sync.BlobChannelPackage
 import ai.offgridmobile.screenshot.SyncScreenshotPackage
 import ai.offgridmobile.sync.MeshResidencyPackage
+import ai.offgridmobile.confinedfile.OffgridConfinedFilePackage
+import ai.offgridmobile.recording.RecordingControlPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -37,6 +40,9 @@ class MainApplication : Application(), ReactApplication {
           add(SyncScreenshotPackage())
           add(SyncDownloadsPackage())
           add(BlobChannelPackage())
+          add(OffgridConfinedFilePackage())
+          add(RecordingControlPackage())
+          add(SherpaDiarizationPackage())
         },
     )
   }

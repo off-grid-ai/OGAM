@@ -82,7 +82,7 @@ describe('T103 / M6 (rendered) — aggressive policy over-commits a 9GB dirty im
     const toggle = h.rtl.render(React.createElement(ModelLoadingModeSelector, {}));
     h.rtl.fireEvent.press(toggle.getByTestId('model-loading-mode-aggressive-button'));
     toggle.unmount();
-    expect(require('../../../src/services/modelResidency').modelResidencyManager.getLoadPolicy()).toBe('aggressive');
+    expect(require('../../harness/activeModelLifecycle').modelResidencyManager.getLoadPolicy()).toBe('aggressive');
 
     // PRECONDITION via the SAME real In Memory UI: no image model resident yet (so a later "present" is a
     // real transition, not a pre-existing artifact). The text model is resident from setup.

@@ -1,6 +1,17 @@
 /**
  * Streaming token shape emitted by the llama engine. Lives in its own module so consumers
- * (llmToolGeneration, generationToolLoop) import it WITHOUT importing llm.ts — llm.ts imports
- * llmToolGeneration back, forming a cycle. llm.ts re-exports it for existing importers.
+ * Native generation adapters import it without importing llm.ts, which keeps
+ * the engine boundary free of circular dependencies.
  */
-export type StreamToken = { content?: string; reasoningContent?: string };
+type StreamToken = { content?: string; reasoningContent?: string };
+export type StreamCallback = (data: StreamToken) => void;
+type NativeToolCall = {
+  id?: string;
+  name: string;
+  arguments: string;
+};
+export type CompleteCallback = (result: {
+  content: string;
+  reasoningContent: string;
+  toolCalls?: NativeToolCall[];
+}) => void;

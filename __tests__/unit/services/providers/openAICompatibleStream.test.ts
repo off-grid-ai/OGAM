@@ -12,11 +12,11 @@ jest.mock('../../../../src/utils/logger', () => ({
   default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-import { ThinkTagParser, processDelta, generateOllamaChatImpl } from '../../../../src/services/providers/openAICompatibleStream';
+import { ThinkTagParser, processDelta, generateOllamaChatImpl } from '../../../../src/services/adapters/providers/openAICompatibleStream';
 import { createNDJSONStreamingRequest } from '../../../../src/services/httpClient';
 
 const mockedNDJSON = createNDJSONStreamingRequest as jest.Mock;
-import type { OpenAIStreamState } from '../../../../src/services/providers/openAICompatibleTypes';
+import type { OpenAIStreamState } from '../../../../src/services/adapters/providers/openAICompatibleTypes';
 
 function makeState(overrides: Partial<OpenAIStreamState> = {}): OpenAIStreamState {
   return {

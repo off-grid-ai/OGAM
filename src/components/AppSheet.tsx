@@ -19,7 +19,6 @@ import {
   Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import { createStyles } from './AppSheet.styles';
 
@@ -35,7 +34,6 @@ export interface AppSheetProps {
    */
   onClosed?: () => void;
   onHeaderClosePress?: () => void;
-  onBackPress?: () => void;
   snapPoints?: (string | number)[];
   enableDynamicSizing?: boolean;
   title?: string;
@@ -121,7 +119,6 @@ export const AppSheet: React.FC<AppSheetProps> = ({
   onClose,
   onClosed,
   onHeaderClosePress,
-  onBackPress,
   snapPoints,
   enableDynamicSizing = false,
   title,
@@ -215,41 +212,9 @@ export const AppSheet: React.FC<AppSheetProps> = ({
 
   // Track whether we should animate on next onShow
   const pendingAnimateIn = useRef(false);
-  const pendingAnimationFrame = useRef<ReturnType<
-    typeof requestAnimationFrame
-  > | null>(null);
-
-  const animateInIfPending = useCallback(() => {
-    if (!pendingAnimateIn.current) return;
-    pendingAnimateIn.current = false;
-    animateIn();
-  }, [animateIn]);
-
-  const showModal = useCallback(() => {
-    setModalVisible(true);
-    // Modal.onShow is not guaranteed when a transparent modal is reused.
-    if (pendingAnimationFrame.current !== null) {
-      cancelAnimationFrame(pendingAnimationFrame.current);
-    }
-    pendingAnimationFrame.current = requestAnimationFrame(() => {
-      pendingAnimationFrame.current = null;
-      animateInIfPending();
-    });
-  }, [animateInIfPending]);
-
-  useEffect(
-    () => () => {
-      if (pendingAnimationFrame.current !== null) {
-        cancelAnimationFrame(pendingAnimationFrame.current);
-      }
-    },
-    [],
-  );
 
   useEffect(() => {
     if (visible) {
-      // A presented sheet must not dismiss the keyboard after its input takes focus.
-      if (modalVisible) return;
       pendingAnimateIn.current = true;
       // Dismiss keyboard first, then open — prevents animation conflict
       const keyboardVisible = Keyboard.isVisible?.() ?? false;
@@ -259,7 +224,7 @@ export const AppSheet: React.FC<AppSheetProps> = ({
         const openOnce = () => {
           if (opened) return;
           opened = true;
-          showModal();
+          setModalVisible(true);
         };
         const sub = Keyboard.addListener('keyboardDidHide', () => {
           sub.remove();
@@ -275,14 +240,14 @@ export const AppSheet: React.FC<AppSheetProps> = ({
           sub.remove();
         };
       }
-      showModal();
+      setModalVisible(true);
     } else if (modalVisible) {
       animateOut(() => {
         setModalVisible(false);
         onClosedRef.current?.();
       });
     }
-  }, [animateOut, modalVisible, showModal, visible]);
+  }, [animateOut, modalVisible, visible]);
 
   // Track keyboard height so the sheet lifts above the keyboard
   useEffect(() => {
@@ -302,8 +267,11 @@ export const AppSheet: React.FC<AppSheetProps> = ({
 
   // Called by Modal when the Dialog is fully rendered and ready for touch
   const handleModalShow = useCallback(() => {
-    animateInIfPending();
-  }, [animateInIfPending]);
+    if (pendingAnimateIn.current) {
+      pendingAnimateIn.current = false;
+      animateIn();
+    }
+  }, [animateIn]);
 
   // User-initiated dismiss (backdrop tap, Done button, swipe).
   // Backdrop taps are gated by backdropEnabled to prevent the long-press
@@ -340,10 +308,7 @@ export const AppSheet: React.FC<AppSheetProps> = ({
 
   return (
     <Modal
-      // The controlled prop owns native visibility. If an exit animation is
-      // interrupted, a stale internal flag must not keep an invisible native
-      // modal above the current screen and consume its touches.
-      visible={visible && modalVisible}
+      visible={modalVisible}
       transparent
       animationType="none"
       onRequestClose={dismiss}
@@ -360,19 +325,25 @@ export const AppSheet: React.FC<AppSheetProps> = ({
           />
         </TouchableWithoutFeedback>
 
+        {/* iOS rounds the keyboard's top corners. Keep the sheet surface behind those corners so
+            the modal backdrop cannot show through while the sheet is keyboard-adjusted. */}
         {keyboardHeight > 0 && (
           <View
             testID="app-sheet-keyboard-underlay"
             pointerEvents="none"
             style={[
               styles.keyboardUnderlay,
-              { height: keyboardHeight, backgroundColor: levelTokens.backgroundColor },
+              {
+                height: keyboardHeight,
+                backgroundColor: levelTokens.backgroundColor,
+              },
             ]}
           />
         )}
 
         {/* Sheet */}
         <Animated.View
+          testID="app-sheet-surface"
           style={[
             styles.sheet,
             {
@@ -409,18 +380,6 @@ export const AppSheet: React.FC<AppSheetProps> = ({
           {/* Header */}
           {showHeader && title ? (
             <View style={styles.header}>
-              {onBackPress ? (
-                <TouchableOpacity
-                  testID="app-sheet-back"
-                  onPress={onBackPress}
-                  style={styles.headerBack}
-                  accessibilityRole="button"
-                  accessibilityLabel="Back to all models"
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Icon name="chevron-left" size={18} style={styles.headerBackIcon} />
-                </TouchableOpacity>
-              ) : null}
               <Text style={styles.headerTitle} numberOfLines={1}>
                 {title}
               </Text>

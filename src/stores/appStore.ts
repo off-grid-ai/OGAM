@@ -3,14 +3,18 @@ import { persist } from 'zustand/middleware';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
-import type { RecordProvenance } from '@offgrid/sync';
 import {
   DEFAULT_SILENCE_AFTER_SPEECH_MS,
   DEFAULT_SPEAKER_DRAIN_MS,
-} from '@offgrid/speech';
-import { DEFAULT_MAX_TOOL_CALLS, REASONING_BUDGET_AUTO } from '@offgrid/models';
+  DEFAULT_IMAGE_GUIDANCE,
+  MOBILE_LITERT_SETTINGS_DEFAULTS,
+  MOBILE_TEXT_SETTINGS_DEFAULTS,
+  REASONING_BUDGET_AUTO,
+  isExcludedTextModel,
+  isSuspiciousRecoveredImageModel,
+  type RemoteLanProviderKind,
+} from '@offgrid/application';
 import { APP_CONFIG } from '../constants';
-import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
 import {
   VoiceTurnMode,
   DeviceInfo,
@@ -25,17 +29,11 @@ import {
   LiteRTBackend,
   GeneratedImage,
 } from '../types';
-import {
-  emitChangedModelSettings,
-  mobileModelSettingPatch,
-} from '../services/sync/mutation';
+import { emitChangedModelSettings } from '../services/sync/mutation';
 import { createProAccessSlice, type ProAccessSlice } from './proAccessSlice';
-import {
-  isExcludedTextModel,
-  isSuspiciousRecoveredImageModel,
-} from '../utils/modelSelectorFilters';
 import { migratePersistedState } from './appStoreMigrations';
-import { defaultImageSteps } from '../utils/imageGenAdvice';
+import { changedSliceStorage } from './persistence/changedSliceStorage';
+import { defaultImageSteps, SWEET_SPOT_SIZE } from '../utils/imageGenAdvice';
 
 type OnboardingChecklist = {
   downloadedModel: boolean;
@@ -59,7 +57,6 @@ export type AppSettings = {
   nBatch: number;
   imageGenerationMode: ImageGenerationMode;
   autoDetectMethod: AutoDetectMethod;
-  classifierModelId: string | null;
   imageSteps: number;
   imageGuidanceScale: number;
   imageThreads: number;
@@ -121,8 +118,8 @@ export type AppSettings = {
    *  migration turns it ON for users who already had a gateway. `undefined` = never set (reads OFF).
    *  Optional so the migration can distinguish "never set" from an explicit choice. */
   autoDiscoverRemoteModels?: boolean;
-  /** LAN server types to probe when Scan network is used. */
-  remoteScanKinds?: Array<'gateway' | 'ollama' | 'lmstudio'>;
+  /** Which server kinds a network scan looks for. Absent means all. */
+  remoteScanKinds?: RemoteLanProviderKind[];
 };
 
 type ThemeMode = 'system' | 'light' | 'dark';
@@ -145,45 +142,28 @@ export interface AppState extends ProAccessSlice {
   setDownloadedModels: (models: DownloadedModel[]) => void;
   addDownloadedModel: (model: DownloadedModel) => void;
   removeDownloadedModel: (modelId: string) => void;
-  activeModelId: string | null;
-  setActiveModelId: (modelId: string | null) => void;
-  /** The text model that is ACTUALLY loaded in native memory right now (engine-agnostic — llama OR litert),
-   *  as opposed to activeModelId (the SELECTED model, which may be selected-but-not-yet-loaded or evicted).
-   *  A reactive projection of ActiveModelService's authoritative loaded state — the SINGLE source every
-   *  surface reads for "currently loaded", so the model sheet and the overview can't disagree (device
-   *  2026-07-14: sheet read llmService.getLoadedModelPath() — llama-only + stale — while the overview read
-   *  activeModelId). Not persisted (a relaunch has nothing loaded). */
-  loadedTextModelId: string | null;
-  setLoadedTextModelId: (modelId: string | null) => void;
-  /** The active text model was EVICTED to free RAM (e.g. an image/TTS load in voice mode)
-   *  while still selected. Drives the chat "tap to continue" reload affordance so a big
-   *  model that got unloaded can be brought back on demand. Set by the service, cleared
-   *  when a text model loads. Not persisted (a relaunch has nothing loaded to evict). */
-  textModelEvicted: boolean;
-  setTextModelEvicted: (evicted: boolean) => void;
-  /** Last text model the user explicitly selected. Persists across residency
-   *  eviction so routing can reload it on demand. */
-  lastTextModelId: string | null;
-  setLastTextModelId: (modelId: string | null) => void;
+  /** @deprecated Legacy persistence read once by the selection migration. Selection lives in modelSelectionStore. */
+  activeModelId?: string | null;
+  /** @deprecated Legacy persistence read once by the selection migration. */
+  lastTextModelId?: string | null;
   isLoadingModel: boolean;
   setIsLoadingModel: (loading: boolean) => void;
   modelMaxContext: number | null;
   setModelMaxContext: (ctx: number | null) => void;
   settings: AppSettings;
-  modelSettingProvenance: Record<string, RecordProvenance>;
   updateSettings: (settings: Partial<AppSettings>) => void;
-  applySyncedModelSetting: (
-    wireKey: string,
-    fields: Record<string, unknown>,
-    provenance?: RecordProvenance,
-  ) => void;
-  resetSettings: () => void;
+  /**
+   * Persist one COMMITTED settings record, whole, in a single write. The shared settings command has
+   * already normalized, validated, diffed and published it, so this must not run the portable-setting
+   * scan `updateSettings` runs - that would publish the same change a second time.
+   */
+  replaceCommittedSettings: (settings: AppSettings) => void;
   downloadedImageModels: ONNXImageModel[];
-  activeImageModelId: string | null;
+  /** @deprecated Legacy persistence read once by the selection migration. */
+  activeImageModelId?: string | null;
   setDownloadedImageModels: (models: ONNXImageModel[]) => void;
   addDownloadedImageModel: (model: ONNXImageModel) => void;
   removeDownloadedImageModel: (modelId: string) => void;
-  setActiveImageModelId: (modelId: string | null) => void;
   isGeneratingImage: boolean;
   imageGenerationProgress: { step: number; totalSteps: number } | null;
   imageGenerationStatus: string | null;
@@ -199,12 +179,6 @@ export interface AppState extends ProAccessSlice {
   removeGeneratedImage: (imageId: string) => void;
   removeImagesByConversationId: (conversationId: string) => string[];
   clearGeneratedImages: () => void;
-  /** Image models that have completed at least one generation. The FIRST run for a
-   *  model compiles/warms the backend (OpenCL kernels on Android, the CoreML model
-   *  on iOS) and takes ~120s — this drives the one-time warm-up notice on BOTH
-   *  platforms, persisted so it only shows once per model. */
-  warmedImageModels: string[];
-  markImageModelWarmed: (modelId: string) => void;
   textGenerationCount: number;
   imageGenerationCount: number;
   incrementTextGenerationCount: () => number;
@@ -227,27 +201,22 @@ const DEFAULT_CHECKLIST: OnboardingChecklist = {
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  // ONE owner for the default persona. This was its own copy, and `projectStore` a third - three texts for
-  // one idea, all opening with the same sentence. That matters beyond tidiness: `systemPrompt` is a SYNCED
-  // model setting, so whichever copy a device happens to hold is the one that travels to its peers.
+  // ONE owner for the default persona. This was its own copy, and the retired legacy project store a
+  // third - three texts for one idea, all opening with the same sentence. That matters beyond tidiness:
+  // `systemPrompt` is a SYNCED model setting, so whichever copy a device happens to hold is the one
+  // that travels to its peers.
   systemPrompt: APP_CONFIG.defaultSystemPrompt,
-  temperature: 0.7,
-  maxTokens: 1024,
-  maxToolCalls: DEFAULT_MAX_TOOL_CALLS,
-  topP: 0.9,
-  repeatPenalty: 1.1,
-  contextLength: 4096,
+  ...MOBILE_TEXT_SETTINGS_DEFAULTS,
   nThreads: 0,
   nBatch: 512,
   speculativeDecoding: false,
   imageGenerationMode: 'auto' as ImageGenerationMode,
   autoDetectMethod: 'pattern' as AutoDetectMethod,
-  classifierModelId: null,
   imageSteps: defaultImageSteps(Platform.OS),
-  imageGuidanceScale: 7.5,
+  imageGuidanceScale: DEFAULT_IMAGE_GUIDANCE,
   imageThreads: 4,
-  imageWidth: 512,
-  imageHeight: 512,
+  imageWidth: SWEET_SPOT_SIZE,
+  imageHeight: SWEET_SPOT_SIZE,
   imageUseOpenCL: true,
   enhanceImagePrompts: false,
   enableGpu: Platform.OS === 'ios',
@@ -268,21 +237,52 @@ export const DEFAULT_SETTINGS: AppSettings = {
   thinkingEnabled: false,
   reasoningBudget: REASONING_BUDGET_AUTO,
   liteRTBackend: 'gpu',
-  liteRTTemperature: 0.7,
-  liteRTTopP: 0.9,
-  liteRTMaxTokens: 4096,
+  liteRTTemperature: MOBILE_LITERT_SETTINGS_DEFAULTS.temperature,
+  liteRTTopP: MOBILE_LITERT_SETTINGS_DEFAULTS.topP,
+  liteRTMaxTokens: MOBILE_LITERT_SETTINGS_DEFAULTS.maxTokens,
 };
 
-export const selectIsLiteRT = (state: AppState): boolean =>
-  state.downloadedModels.find(m => m.id === state.activeModelId)?.engine ===
-  'litert';
+/**
+ * The durable slice of the app store: settings, onboarding, counters, Pro admission and the
+ * generated-image gallery.
+ *
+ * Everything else the store holds is ephemeral projection state - the model load flag, the image
+ * generation flag/progress/status/preview - and is never reloaded.
+ */
+const persistedAppSlice = (state: AppState) => ({
+  themeMode: state.themeMode,
+  hasCompletedOnboarding: state.hasCompletedOnboarding,
+  onboardingChecklist: state.onboardingChecklist,
+  checklistDismissed: state.checklistDismissed,
+  settings: state.settings,
+  generatedImages: state.generatedImages,
+  textGenerationCount: state.textGenerationCount,
+  imageGenerationCount: state.imageGenerationCount,
+  hasEngagedSharePrompt: state.hasEngagedSharePrompt,
+  hasRegisteredPro: state.hasRegisteredPro,
+  // Persisted so an eviction STICKS. Without it every relaunch starts at 'unknown', which grants
+  // access, and a device the owner removed is Pro again for as long as the roster takes to answer -
+  // or forever, if it never does because the app is offline.
+  proDeviceAdmission: state.proDeviceAdmission,
+  devProDisabled: state.devProDisabled,
+  proBannerDismissed: state.proBannerDismissed,
+  desktopPromoDismissed: state.desktopPromoDismissed,
+  proAhaTriggeredBy: state.proAhaTriggeredBy,
+  loadedSettings: state.loadedSettings,
+});
 
-type PersistedAppState = ReturnType<typeof persistedAppState>;
+type PersistedAppSlice = ReturnType<typeof persistedAppSlice>;
 
-const appStorage = createHydrationGatedStorage<PersistedAppState>(
-  AsyncStorage,
+/**
+ * Ephemeral state shares this store with the gallery, so a plain JSON storage re-serialised every
+ * generated image on every transient `set`. Every durable update above replaces its field with a
+ * new value, so a reference compare writes exactly when durable state moves and never for a
+ * progress tick, a model load flag, or a status line.
+ */
+const appPersistStorage = changedSliceStorage<PersistedAppSlice>(
+  () => AsyncStorage,
   (previous, next) =>
-    (Object.keys(next) as (keyof PersistedAppState)[]).every(
+    (Object.keys(next) as (keyof PersistedAppSlice)[]).every(
       key => previous[key] === next[key],
     ),
 );
@@ -329,53 +329,21 @@ export const useAppStore = create<AppState>()(
           downloadedModels: state.downloadedModels.filter(
             m => m.id !== modelId,
           ),
-          activeModelId:
-            state.activeModelId === modelId ? null : state.activeModelId,
         })),
-      activeModelId: null,
-      setActiveModelId: modelId => set({ activeModelId: modelId }),
-      loadedTextModelId: null,
-      setLoadedTextModelId: modelId => set({ loadedTextModelId: modelId }),
-      textModelEvicted: false,
-      setTextModelEvicted: evicted => set({ textModelEvicted: evicted }),
-      lastTextModelId: null,
-      setLastTextModelId: modelId => set({ lastTextModelId: modelId }),
       isLoadingModel: false,
       setIsLoadingModel: loading => set({ isLoadingModel: loading }),
       modelMaxContext: null,
       setModelMaxContext: ctx => set({ modelMaxContext: ctx }),
       settings: { ...DEFAULT_SETTINGS },
-      modelSettingProvenance: {},
       updateSettings: newSettings => {
         const before = get().settings;
         const after = { ...before, ...newSettings };
         set({ settings: after });
         emitChangedModelSettings(before, after);
       },
-      applySyncedModelSetting: (wireKey, fields, provenance) => {
-        const patch = mobileModelSettingPatch(wireKey, fields);
-        if (patch) {
-          set(state => ({
-            settings: { ...state.settings, ...(patch as Partial<AppSettings>) },
-            modelSettingProvenance: provenance
-              ? {
-                  ...state.modelSettingProvenance,
-                  [wireKey]:
-                    state.modelSettingProvenance[wireKey] ?? provenance,
-                }
-              : state.modelSettingProvenance,
-          }));
-        }
-      },
-      resetSettings: () => {
-        const before = get().settings;
-        const after = { ...DEFAULT_SETTINGS };
-        set({ settings: after });
-        emitChangedModelSettings(before, after);
-      },
+      replaceCommittedSettings: settings => set({ settings }),
       // Image models (ONNX-based)
       downloadedImageModels: [],
-      activeImageModelId: null,
       setDownloadedImageModels: models =>
         set({
           downloadedImageModels: models.filter(
@@ -397,12 +365,7 @@ export const useAppStore = create<AppState>()(
           downloadedImageModels: state.downloadedImageModels.filter(
             m => m.id !== modelId,
           ),
-          activeImageModelId:
-            state.activeImageModelId === modelId
-              ? null
-              : state.activeImageModelId,
         })),
-      setActiveImageModelId: modelId => set({ activeImageModelId: modelId }),
       // Image generation state
       isGeneratingImage: false,
       imageGenerationProgress: null,
@@ -441,13 +404,6 @@ export const useAppStore = create<AppState>()(
         return imageIds;
       },
       clearGeneratedImages: () => set({ generatedImages: [] }),
-      warmedImageModels: [],
-      markImageModelWarmed: modelId =>
-        set(state =>
-          state.warmedImageModels.includes(modelId)
-            ? state
-            : { warmedImageModels: [...state.warmedImageModels, modelId] },
-        ),
       textGenerationCount: 0,
       imageGenerationCount: 0,
       incrementTextGenerationCount: () => {
@@ -470,41 +426,13 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'local-llm-app-storage',
-      storage: appStorage.storage,
-      onRehydrateStorage: () => () => appStorage.markHydrated(),
+      storage: appPersistStorage,
       merge: (persisted, current) =>
         migratePersistedState(persisted, current, {
           defaultSettings: DEFAULT_SETTINGS,
           documentsPath: RNFS.DocumentDirectoryPath,
         }),
-      partialize: persistedAppState,
+      partialize: persistedAppSlice,
     },
   ),
 );
-
-function persistedAppState(state: AppState) {
-  return {
-        themeMode: state.themeMode,
-        hasCompletedOnboarding: state.hasCompletedOnboarding,
-        onboardingChecklist: state.onboardingChecklist,
-        checklistDismissed: state.checklistDismissed,
-        activeModelId: state.activeModelId,
-        lastTextModelId: state.lastTextModelId,
-        settings: state.settings,
-        modelSettingProvenance: state.modelSettingProvenance,
-        activeImageModelId: state.activeImageModelId,
-        generatedImages: state.generatedImages,
-        warmedImageModels: state.warmedImageModels,
-        textGenerationCount: state.textGenerationCount,
-        imageGenerationCount: state.imageGenerationCount,
-        hasEngagedSharePrompt: state.hasEngagedSharePrompt,
-        hasRegisteredPro: state.hasRegisteredPro,
-        // Persist eviction so a relaunch cannot grant Pro while the roster is offline.
-        proDeviceAdmission: state.proDeviceAdmission,
-        devProDisabled: state.devProDisabled,
-        proBannerDismissed: state.proBannerDismissed,
-        desktopPromoDismissed: state.desktopPromoDismissed,
-        proAhaTriggeredBy: state.proAhaTriggeredBy,
-        loadedSettings: state.loadedSettings,
-  };
-}

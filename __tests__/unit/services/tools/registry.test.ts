@@ -65,6 +65,7 @@ describe('Tool Registry', () => {
           description: 'Evaluate math expressions',
           parameters: {
             type: 'object',
+            additionalProperties: false,
             properties: {
               expression: {
                 type: 'string',

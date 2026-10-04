@@ -15,10 +15,12 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING, OFF_GRID_DESKTOP_URL } from '../constants';
 import { withUtm } from '../utils/utm';
 import { useAppStore } from '../stores';
-import { isActiveStatus } from '../stores/downloadStore';
-import { useRemoteServerStore } from '../stores/remoteServerStore';
-import { hardwareService, remoteServerManager } from '../services';
-import { discoverLANServers } from '../services/networkDiscovery';
+import { useDiscoveredRemoteModels } from '../hooks/useDiscoveredRemoteModels';
+import { serverDiscoveredModels } from '../stores/remoteServerProjection';
+import { hardwareService } from '../services';
+import { applicationFacade } from '../services/applicationFacade';
+import { useModelsProjection } from '../hooks/useApplicationProjection';
+import { modelsFailureMessage } from '@offgrid/application';
 import { RemoteServer } from '../types';
 import { RootStackParamList } from '../navigation/types';
 import { NetworkSection } from './ModelDownloadHelpers';
@@ -26,23 +28,6 @@ import logger from '../utils/logger';
 import { ModelsScreen } from './ModelsScreen';
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'AdvancedSetup'> };
-
-/** Active-download progress for a card, or null when the model isn't downloading.
- *  `queued` (store status 'pending') drives the "Queued" label vs a live progress bar.
- *  `bytes` feeds the shared card's "X MB / Y MB" line so onboarding matches the
- *  Text/Image/STT tabs (same ModelCard, same props) instead of showing % only. */
-export function downloadProgressFor(
-  entry: { status: string; progress: number; bytesDownloaded?: number; totalBytes?: number; combinedTotalBytes?: number; mmProjBytesDownloaded?: number; bytesPerSecond?: number } | undefined,
-): { progress: number; queued: boolean; bytes?: { downloaded: number; total: number; bytesPerSecond?: number } } | null {
-  if (!entry || !isActiveStatus(entry.status as any)) return null;
-  const total = entry.combinedTotalBytes ?? entry.totalBytes ?? 0;
-  const downloaded = (entry.bytesDownloaded ?? 0) + (entry.mmProjBytesDownloaded ?? 0);
-  return {
-    progress: entry.progress,
-    queued: entry.status === 'pending',
-    bytes: total > 0 ? { downloaded, total, bytesPerSecond: entry.bytesPerSecond } : undefined,
-  };
-}
 
 export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
@@ -57,9 +42,10 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
-  const { deviceInfo, setDeviceInfo, setModelRecommendation } = useAppStore();
-  const servers = useRemoteServerStore((s) => s.servers);
-  const discoveredModels = useRemoteServerStore((s) => s.discoveredModels);
+  const deviceInfo = useAppStore(s => s.deviceInfo);
+  const { setDeviceInfo, setModelRecommendation } = useAppStore.getState();
+  const servers = [...useModelsProjection().servers] as RemoteServer[];
+  const discoveredModels = useDiscoveredRemoteModels();
 
   // Init hardware + model recommendations
   useEffect(() => {
@@ -90,12 +76,11 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
     if (healthCheckInFlight.current) return { ran: false, reachable: new Set<string>() };
     healthCheckInFlight.current = true;
     setIsCheckingNetwork(true);
-    const store = useRemoteServerStore.getState();
     const reachable = new Set<string>();
     await Promise.all(
-      store.servers.map(async (server) => {
+      applicationFacade().models.snapshot().servers.map(async (server) => {
         try {
-          const result = await remoteServerManager.testConnection(server.id);
+          const result = await applicationFacade().models.checkRemoteServer(server.id);
           if (result.success) reachable.add(server.id);
         } catch { /* offline */ }
       }),
@@ -112,13 +97,16 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
   const handleScanNetwork = useCallback(async () => {
     setIsScanning(true);
     try {
-      const discovered = await discoverLANServers();
-      const store = useRemoteServerStore.getState();
-      const existing = new Set(store.servers.map(s => s.endpoint.replace(/\/$/, '')));
+      const reconciled = await applicationFacade().models.reconcileRemoteServers();
+      if (!reconciled.ok) throw new Error(modelsFailureMessage(reconciled.failure));
       let added = 0;
-      for (const d of discovered) {
-        if (existing.has(d.endpoint.replace(/\/$/, ''))) continue;
-        await remoteServerManager.addServer({ name: d.name, endpoint: d.endpoint, providerType: 'openai-compatible' });
+      for (const d of reconciled.value.found) {
+        const saved = await applicationFacade().models.saveRemoteServer({
+          name: d.name,
+          endpoint: d.endpoint,
+          provider: 'openai-compatible',
+        });
+        if (!saved.ok) throw new Error(modelsFailureMessage(saved.failure));
         added += 1;
       }
       const { ran, reachable } = await refreshServerHealth();
@@ -127,7 +115,8 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
       // server discovered/added, none already listed, AND a real check ran (not short-circuited by the
       // in-flight auto-check) that found nothing reachable. If the check was skipped by the in-flight
       // guard, the auto-check that owns it will settle the reachable list, so we do not alert.
-      const noServersPresent = added === 0 && useRemoteServerStore.getState().servers.length === 0;
+      const noServersPresent =
+        added === 0 && applicationFacade().models.snapshot().servers.length === 0;
       if (noServersPresent && ran && reachable.size === 0) {
         setAlertState(showAlert(
           'No Servers Found',
@@ -149,19 +138,38 @@ export const AdvancedSetupScreen: React.FC<Props> = ({ navigation }) => {
   const handleConnectServer = async (server: RemoteServer) => {
     setConnectingServerId(server.id);
     try {
-      const result = await remoteServerManager.testConnection(server.id);
+      const result = await applicationFacade().models.checkRemoteServer(server.id);
       if (!result.success) {
         setAlertState(showAlert('Connection Failed', result.error || 'Could not connect to server.'));
         return;
       }
       setConnectedServerId(server.id);
-      const models = discoveredModels[server.id] || result.models || [];
+      let models = discoveredModels[server.id] ?? [];
+      if (models.length === 0) {
+        const discovered = await applicationFacade().models.discoverRemoteServers(
+          server.id,
+        );
+        if (!discovered.ok) {
+          throw new Error(modelsFailureMessage(discovered.failure));
+        }
+        const refreshed = applicationFacade().models.remoteServer(server.id);
+        models = refreshed
+          ? serverDiscoveredModels(refreshed as RemoteServer)
+          : [];
+      }
       if (models.length === 0) {
         setAlertState(showAlert('Connected — No Models Found', `${server.name} is reachable but has no models loaded. Start a model in Off Grid AI Desktop, Ollama, or LM Studio, then reconnect.`));
         return;
       }
       const textModel = models.find(m => !m.capabilities.supportsVision) || models[0];
-      if (textModel) await remoteServerManager.setActiveRemoteTextModel(server.id, textModel.id);
+      if (textModel) {
+        const selected = await applicationFacade().models.activateOnServer(
+          server.id,
+          'text',
+          textModel.id,
+        );
+        if (!selected.ok) throw new Error(modelsFailureMessage(selected.failure));
+      }
       setAlertState(showAlert('Connected!', `${server.name} is ready with ${models.length} model${models.length === 1 ? '' : 's'}. You can start chatting now.`,
         [{ text: 'Continue', onPress: () => { setAlertState(hideAlert()); navigation.replace('Main'); } }]));
     } catch (e) { setAlertState(showAlert('Connection Failed', (e as Error).message)); }

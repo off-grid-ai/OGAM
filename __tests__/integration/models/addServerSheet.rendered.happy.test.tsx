@@ -7,6 +7,11 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { RemoteServerEditorScreen } from '../../../src/screens/RemoteServerEditorScreen';
 import { RemoteServersScreen } from '../../../src/screens/RemoteServersScreen';
 import { useRemoteServerStore } from '../../../src/stores';
+import { remoteServerManager } from '../../../src/services/remoteServerManager';
+// Registers the real model-selection command port (module scope of modelServices/index.ts).
+// Removing a server clears its canonical selections through that port, so the production wiring
+// must be present exactly as the app composes it.
+import '../../../src/services/modelServices';
 import {
   gatewayModelList,
   installLanProbe,
@@ -28,10 +33,10 @@ const MAC = '192.168.1.30:7878';
 describe('full-screen remote server editor', () => {
   let lan: LanProbeHandle;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     mockRoute.params = undefined;
     mockGoBack.mockClear();
-    useRemoteServerStore.getState().clearAllServers();
+    await remoteServerManager.clearAllServers();
     const DeviceInfo = require('react-native-device-info');
     DeviceInfo.isEmulator = jest.fn(async () => false);
     DeviceInfo.getIpAddress = jest.fn(async () => '192.168.1.10');
@@ -102,7 +107,7 @@ describe('full-screen remote server editor', () => {
     await waitFor(() =>
       expect(useRemoteServerStore.getState().servers).toHaveLength(1),
     );
-    expect(useRemoteServerStore.getState().servers[0]?.mediaModels).toEqual({
+    expect(useRemoteServerStore.getState().servers[0]?.selections).toEqual({
       text: 'Qwen3.5-0.8B-GGUF',
       image: 'flux-schnell',
       transcription: 'whisper-large-v3',
@@ -184,7 +189,7 @@ describe('full-screen remote server editor', () => {
     await waitFor(() =>
       expect(useRemoteServerStore.getState().servers).toHaveLength(1),
     );
-    expect(useRemoteServerStore.getState().servers[0]?.mediaModels).toEqual({
+    expect(useRemoteServerStore.getState().servers[0]?.selections).toEqual({
       text: '/srv/models/Llama-3.2-3B.gguf',
       image: '/srv/models/sdxl.safetensors',
       transcription: '/srv/models/whisper-large-v3.bin',

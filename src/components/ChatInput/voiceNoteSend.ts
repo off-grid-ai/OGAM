@@ -1,5 +1,10 @@
 import { ImageModeState, MediaAttachment } from '../../types';
 import { generateId } from '../../utils/generateId';
+import { shouldAutoSendVoiceNote } from '@offgrid/application';
+
+// Temporary compatibility export for callers that still import this Mobile path. The policy owner
+// is @offgrid/application; delete this export when those imports move with the test migration.
+export { shouldAutoSendVoiceNote } from '@offgrid/application';
 
 /**
  * Decides how a freshly recorded voice note is handled in Chat mode.
@@ -11,15 +16,6 @@ import { generateId } from '../../utils/generateId';
  *
  * Single source of truth for the branch — callers must not re-derive it.
  */
-export function shouldAutoSendVoiceNote(opts: {
-  composerText: string;
-  pendingAttachments: MediaAttachment[];
-}): boolean {
-  const hasText = opts.composerText.trim().length > 0;
-  const hasOtherAttachments = opts.pendingAttachments.length > 0;
-  return !hasText && !hasOtherAttachments;
-}
-
 /**
  * Builds the audio MediaAttachment for a voice note, carrying the whisper
  * transcription as `textContent` (display-only for audio — llmMessages sends the

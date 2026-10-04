@@ -9,7 +9,7 @@
  * transport end-to-end — the on-device handshake is then just the same code over real sockets.
  */
 import { Buffer } from 'buffer';
-import { buildSyncEngine } from '../../../src/services/sync/engine';
+import { buildSyncEngine } from '../../../src/services/composition/sync-engine';
 import { createLicensedMesh } from '../../harness/licensedMesh';
 import { TYPED_PAIRING_CODE } from '../../utils/pairFromPeer';
 

@@ -22,7 +22,7 @@ describe('happy — image-gen OOM surfaces the graceful "Not Enough Memory" card
   it('refuses the over-budget image load and shows the card with Run anyway (no crash, no image)', async () => {
     const h = await setupChatScreen({ engine: 'litert', platform: 'ios' }); // generous RAM for text-model setup
     h.render();
-    await h.placeImageModel({ backend: 'coreml' }); // Core ML — no integrity-file gate; ~2GB model (~3.7GB est on iOS)
+    await h.placeImageModel({ backend: 'coreml', size: 2 * GB }); // Core ML — no integrity-file gate; ~2GB model (~3.7GB est on iOS)
 
     await h.cycleImageMode(); // auto → ON(force); also activates the downloaded image model
     await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('image-mode-force-badge')).not.toBeNull(); });

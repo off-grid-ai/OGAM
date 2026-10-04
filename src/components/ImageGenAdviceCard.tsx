@@ -6,7 +6,12 @@ import type { ThemeColors } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useAppStore } from '../stores';
+import { useActiveLocalModelId } from '../hooks/useActiveMobileModel';
+import { useModelsProjection } from '../hooks/useApplicationProjection';
 import { getImageGenAdvice } from '../utils/imageGenAdvice';
+
+const finiteNumber = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
 
 /**
  * In-chat advisory for the GPU (mnn) image path — where the device has no compatible NPU,
@@ -21,15 +26,17 @@ export const ImageGenAdviceCard: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const [dismissed, setDismissed] = useState(false);
-  const { settings, downloadedImageModels, activeImageModelId } = useAppStore();
+  const settings = useModelsProjection().settings;
+  const downloadedImageModels = useAppStore(s => s.downloadedImageModels);
+  const activeImageModelId = useActiveLocalModelId('image');
   const backend = downloadedImageModels.find(m => m.id === activeImageModelId)?.backend;
+  const steps = finiteNumber(settings.imageSteps);
+  const width = finiteNumber(settings.imageWidth);
 
-  const advice = getImageGenAdvice({
-    backend,
-    steps: settings.imageSteps ?? 0,
-    width: settings.imageWidth ?? 0,
-  });
-  if (!advice.show || dismissed) return null;
+  const advice = steps === null || width === null
+    ? null
+    : getImageGenAdvice({ backend, steps, width });
+  if (!advice?.show || dismissed) return null;
 
   return (
     <View style={styles.card} testID="image-gen-advice">

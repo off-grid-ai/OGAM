@@ -29,8 +29,8 @@ describe('Mobile progress presentation', () => {
 
     expect(result.percentageText).toBeUndefined();
     expect(result.bytesText).toBe('64 B');
-    expect(result.rateText).toBe('Rate unavailable');
-    expect(result.detailText).toBe('64 B · Rate unavailable');
+    expect(result.rateText).toBeUndefined();
+    expect(result.detailText).toBe('64 B');
     expect(JSON.stringify(result)).not.toContain('NaN');
     expect(JSON.stringify(result)).not.toContain('Infinity');
   });
@@ -50,8 +50,8 @@ describe('Mobile progress presentation', () => {
   });
 
   it('never formats an invalid rate', () => {
-    expect(formatByteRate(Number.NaN)).toBe('Rate unavailable');
-    expect(formatByteRate(Number.POSITIVE_INFINITY)).toBe('Rate unavailable');
-    expect(formatByteRate(-1)).toBe('Rate unavailable');
+    expect(formatByteRate(Number.NaN)).toBeUndefined();
+    expect(formatByteRate(Number.POSITIVE_INFINITY)).toBeUndefined();
+    expect(formatByteRate(-1)).toBeUndefined();
   });
 });

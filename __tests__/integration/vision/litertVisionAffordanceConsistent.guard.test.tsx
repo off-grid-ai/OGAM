@@ -8,15 +8,15 @@
  * open the attach popover, tap Photo, pick from the library, and see the image attach. No "Vision Not
  * Supported" wall.
  *
- * This is a GREEN-GUARD: the single capability rule (services/engines.ts deriveEngineCapabilities) now
- * derives LiteRT vision from the model's liteRTVision flag — the same flag that mirrors the native
+ * This is a GREEN-GUARD: Mobile projects the native LiteRT flag into Shared's canonical capability
+ * model — the same flag that mirrors the native
  * supportsVision:true B20 observed — so the affordance IS exposed. The guard locks the fix: inverting the
  * LiteRT branch (vision:false) reproduces B20 and flips this red (see the falsification transcript in the
  * task report). To prove the affordance is genuinely GATED (not always-on / vacuously green), the second
  * case drives a LiteRT model WITHOUT vision through the identical gesture and asserts the app walls it with
  * the "Vision Not Supported" alert instead of attaching.
  *
- * Real ChatScreen + real useChatScreen/useChatModelStateSync + real activeTextCapabilities +
+ * Real ChatScreen + real useChatScreen/useChatModelStateSync + real Shared capability control +
  * real useAttachments; only the native leaves are faked (image picker returns a mock image; LiteRT native).
  * The model is selected via the real Home picker; the attach is the real attach-photo gesture.
  *

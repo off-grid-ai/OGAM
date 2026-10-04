@@ -34,7 +34,7 @@ const OLLAMA_PAUSED =
 describe('T035 (rendered) — thinking-box header while reasoning still streams (Q6)', () => {
   it('reads "Thinking..." while the reasoning is still streaming (RED: reads the DONE label)', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
-    await installRemoteModel({ name: 'Ollama', endpoint: 'http://localhost:11434', caps: { supportsThinking: false } });
+    await installRemoteModel({ name: 'Ollama', endpoint: 'http://localhost:11434', caps: { supportsThinking: false, supportsToolCalling: true } });
     const stream = installRemoteStream(OLLAMA_PAUSED);
     h.render();
 

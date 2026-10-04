@@ -9,7 +9,7 @@ jest.mock('react-native', () => ({
   Platform: { OS: 'android' },
   ToastAndroid: { showWithGravity: jest.fn(), LONG: 1, BOTTOM: 2 },
 }));
-jest.mock('../../../src/stores', () => ({
+jest.mock('../../../src/stores/appStore', () => ({
   useAppStore: { getState: jest.fn() },
 }));
 jest.mock('../../../src/stores/debugLogsStore', () => ({
@@ -24,11 +24,14 @@ jest.mock('../../../src/services/litert', () => ({
     getActiveBackend: jest.fn(() => 'cpu'), warmup: jest.fn(),
   },
 }));
+jest.mock('../../../src/services/modelServices/mobileLLMService', () => ({
+  activeMobileRoute: jest.fn(() => ({ model: null })),
+}));
 jest.mock('../../../src/services/localDreamGenerator', () => ({
   localDreamGeneratorService: { loadModel: jest.fn(), unloadModel: jest.fn() },
 }));
-jest.mock('../../../src/services/modelManager', () => ({
-  modelManager: { saveModelWithMmproj: jest.fn(), clearMmProjLink: jest.fn() },
+jest.mock('../../../src/services/modelServices/bootstrap/modelLibraryBootstrap', () => ({
+  modelLibrary: { saveModelWithMmproj: jest.fn(), clearMmProjLink: jest.fn() },
 }));
 jest.mock('react-native-fs', () => ({
   exists: jest.fn(() => Promise.resolve(false)),
@@ -45,12 +48,12 @@ import {
   doLoadTextModel,
   doLoadImageModel,
   resolveMmProjPath,
-} from '../../../src/services/activeModelService/loaders';
+} from '../../../src/services/adapters/native/modelLoaders';
 import { liteRTService } from '../../../src/services/litert';
 import { llmService } from '../../../src/services/llm';
 import { localDreamGeneratorService } from '../../../src/services/localDreamGenerator';
-import { modelManager } from '../../../src/services/modelManager';
-import { useAppStore } from '../../../src/stores';
+import { modelLibrary } from '../../../src/services/modelServices/bootstrap/modelLibraryBootstrap';
+import { useAppStore } from '../../../src/stores/appStore';
 import logger from '../../../src/utils/logger';
 
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
@@ -103,7 +106,7 @@ describe('resolveMmProjPath — store map update + persistence', () => {
       { name: 'model-mmproj-f16.gguf', path: '/p/model-mmproj-f16.gguf', isFile: () => true, size: 10 } as any,
     ]);
     mockedGetState.mockReturnValue({ downloadedModels: [{ id: 'model-1' }], setDownloadedModels: jest.fn() });
-    (modelManager.saveModelWithMmproj as jest.Mock).mockRejectedValue(new Error('save failed'));
+    (modelLibrary.saveModelWithMmproj as jest.Mock).mockRejectedValue(new Error('save failed'));
     const model = { filePath: '/models/m.gguf', isVisionModel: true } as any;
     expect(await resolveMmProjPath(model, 'model-1')).toBeUndefined();
   });
@@ -119,7 +122,7 @@ describe('doLoadTextModel — mmproj clear branch', () => {
 
     await doLoadTextModel(ctx);
 
-    expect(modelManager.clearMmProjLink).toHaveBeenCalledWith('model-1');
+    expect(modelLibrary.clearMmProjLink).toHaveBeenCalledWith('model-1');
     expect(ctx.onLoaded).toHaveBeenCalledWith('model-1');
   });
 
@@ -148,7 +151,7 @@ describe('doLoadTextModel — mmproj clear branch', () => {
 
     await doLoadTextModel(ctx);
 
-    expect(logger.warn).toHaveBeenCalledWith('[engines] text engine unload during switch failed, continuing:', expect.any(Error));
+    expect(logger.warn).toHaveBeenCalledWith('[modelLoaders] text engine unload during switch failed, continuing:', expect.any(Error));
     expect(ctx.onError).toHaveBeenCalled(); // reset before reassignment
     expect(ctx.onLoaded).toHaveBeenCalled();
   });
@@ -185,7 +188,7 @@ describe('doLoadLiteRTModel branches', () => {
 
     await doLoadTextModel(ctx);
 
-    expect(logger.warn).toHaveBeenCalledWith('[engines] text engine unload during switch failed, continuing:', expect.any(Error));
+    expect(logger.warn).toHaveBeenCalledWith('[modelLoaders] text engine unload during switch failed, continuing:', expect.any(Error));
     expect(ctx.onError).toHaveBeenCalled();
     expect(ToastAndroid.showWithGravity).toHaveBeenCalled();
   });
@@ -240,7 +243,7 @@ describe('doLoadImageModel branches', () => {
     expect(mockedImage.unloadModel).toHaveBeenCalled();
     expect(ctx.onError).toHaveBeenCalled(); // reset path
     expect(ctx.onLoaded).toHaveBeenCalledWith('img-1', 4);
-    expect(ctx.store.setActiveImageModelId).toHaveBeenCalledWith('img-1');
+    expect(ctx.store.setActiveImageModelId).not.toHaveBeenCalled();
   });
 
   it('unloads when needsThreadReload even if same id', async () => {

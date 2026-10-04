@@ -1,18 +1,21 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
-import { DownloadedModel, RemoteModel } from '../../types';
+import { LoadingDots } from '../LoadingDots';
+import {
+  DownloadedModel,
+  RemoteModel,
+  INFERENCE_BACKENDS,
+} from '../../types';
 import { hardwareService } from '../../services';
-import { textOverheadMultiplier } from '../../services/activeModelService/types';
-import { estimateTextModelMemoryMB } from '../../services/activeModelService/memory';
-import { useAppStore } from '../../stores';
-import { ModelCard } from '../ModelCard';
+import { textOverheadMultiplier } from '../../services/modelServices/modelStateTypes';
+import { ModelRow } from '../ModelRow';
 import { createAllStyles } from './styles';
+import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 import { fileExceedsBudget } from '../../services/memoryBudget';
 import { useResidentRows } from '../models/useResidentRows';
-import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
-import { LoadingDots } from '../LoadingDots';
+import { useModelsProjection } from '../../hooks/useApplicationProjection';
 
 export interface TextTabProps {
   downloadedModels: DownloadedModel[];
@@ -28,8 +31,8 @@ export interface TextTabProps {
   isAnyLoading: boolean;
   /** Id of the model being loaded right now (the row just tapped) — drives the per-row spinner. */
   loadingModelId?: string | null;
-  /** Server and model key for the remote row being selected. */
-  loadingRemoteModelKey?: string | null;
+  /** The remote model the owner is switching to right now. */
+  loadingRemoteModelId?: string | null;
   onSelectModel: (model: DownloadedModel) => void;
   onSelectRemoteModel: (model: RemoteModel, serverId: string) => void;
   onUnloadModel: () => void;
@@ -45,7 +48,7 @@ export const TextTab: React.FC<TextTabProps> = ({
   currentRemoteModelId,
   isAnyLoading,
   loadingModelId = null,
-  loadingRemoteModelKey = null,
+  loadingRemoteModelId = null,
   onSelectModel,
   onUnloadModel,
   onSelectRemoteModel,
@@ -55,22 +58,15 @@ export const TextTab: React.FC<TextTabProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createAllStyles);
   // RAM label uses the SAME backend-aware overhead owner (textOverheadMultiplier) that
-  // activeModelService uses to register the resident's sizeMB, so this label and the residency
+  // shared residency uses to register the resident's sizeMB, so this label and the residency
   // chip on the manager sheet agree for the identical loaded model (they diverged: fixed 1.5×
   // here vs 2.2× on a GPU/NPU backend there — device 2026-07-14).
-  const inferenceBackend = useAppStore(s => s.settings?.inferenceBackend);
+  const projectedInferenceBackend =
+    useModelsProjection().settings.inferenceBackend;
+  const inferenceBackend = Object.values(INFERENCE_BACKENDS).find(
+    backend => backend === projectedInferenceBackend,
+  );
   const ramMultiplier = textOverheadMultiplier(inferenceBackend);
-  const [estimatedRamMB, setEstimatedRamMB] = useState<Record<string, number>>({});
-  useEffect(() => {
-    let current = true;
-    Promise.all(downloadedModels.map(async model => [
-      model.id,
-      await estimateTextModelMemoryMB(model),
-    ] as const)).then(estimates => {
-      if (current) setEstimatedRamMB(Object.fromEntries(estimates));
-    });
-    return () => { current = false; };
-  }, [downloadedModels, inferenceBackend]);
   const textResident = useResidentRows(true).text;
   // "Loaded" drives the Currently-Loaded + Unload section (only meaningful once a model
   // is actually in memory). "Active" also counts the selected-but-not-yet-loaded model
@@ -82,8 +78,6 @@ export const TextTab: React.FC<TextTabProps> = ({
   const activeLocalModel = downloadedModels.find(
     m => m.filePath === currentModelPath,
   );
-  const activeLocalCapabilities = activeLocalModel?.engine === 'llama'
-    ? predictGgufCapabilities(activeLocalModel) : null;
 
   // Find active remote model info
   const activeRemoteModelInfo = useMemo(() => {
@@ -98,42 +92,49 @@ export const TextTab: React.FC<TextTabProps> = ({
   return (
     <>
       {hasLoaded && (
-        <View>
+        <View style={styles.loadedSection}>
           <View style={styles.loadedHeader}>
             <Icon name="check-circle" size={14} color={colors.success} />
             <Text style={styles.loadedLabel}>Currently Loaded</Text>
           </View>
-          <ModelCard
-            compact
-            testID="currently-loaded-model"
-            nameTestID="currently-loaded-model-name"
-            factsTestID="currently-loaded-model-ram"
-            model={{
-              id: activeLocalModel?.id ?? activeRemoteModelInfo?.model.id ?? 'selected',
-              name: activeLocalModel?.name ?? activeRemoteModelInfo?.model.name ?? 'Unknown',
-              author: activeLocalModel?.author ?? activeRemoteModelInfo?.serverName ?? '',
-              modelType: activeRemoteModelInfo?.model.capabilities.supportsVision ? 'vision' : 'text',
-              quantization: typeof activeRemoteModelInfo?.model.details?.quantization === 'string'
-                ? activeRemoteModelInfo.model.details.quantization : undefined,
-            }}
-            downloadedModel={activeLocalModel}
-            sourceBadge={activeRemoteModelInfo ? 'Remote' : undefined}
-            capabilities={activeRemoteModelInfo ? {
-              vision: activeRemoteModelInfo.model.capabilities.supportsVision,
-              tools: activeRemoteModelInfo.model.capabilities.supportsToolCalling,
-              thinking: activeRemoteModelInfo.model.capabilities.supportsThinking,
-            } : { ...activeLocalCapabilities, predicted: true }}
-            facts={activeLocalModel
-              ? [`${textResident
-                  ? `${(textResident.sizeMB / 1024).toFixed(1)} GB`
-                  : hardwareService.formatModelRam(activeLocalModel, ramMultiplier)} RAM`]
-              : []}
-            isActive
-            trailing={<TouchableOpacity style={styles.unloadButton} onPress={onUnloadModel} disabled={isAnyLoading}>
+          <View style={styles.loadedModelItem} testID="currently-loaded-model">
+            <View style={styles.loadedModelInfo}>
+              <Text
+                style={styles.loadedModelName}
+                numberOfLines={1}
+                testID="currently-loaded-model-name"
+              >
+                {activeLocalModel?.name ||
+                  activeRemoteModelInfo?.model?.name ||
+                  'Unknown'}
+              </Text>
+              <Text
+                style={styles.loadedModelMeta}
+                testID="currently-loaded-model-ram"
+              >
+                {activeLocalModel
+                  ? `${
+                      activeLocalModel.quantization
+                    } • ${hardwareService.formatModelSize(
+                      activeLocalModel,
+                    )} • ${textResident
+                      ? `${(textResident.sizeMB / 1024).toFixed(1)} GB`
+                      : hardwareService.formatModelRam(
+                          activeLocalModel,
+                          ramMultiplier,
+                        )} RAM`
+                  : `Remote • ${activeRemoteModelInfo?.serverName ?? 'Model'}`}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.unloadButton}
+              onPress={onUnloadModel}
+              disabled={isAnyLoading}
+            >
               <Icon name="power" size={16} color={colors.error} />
               <Text style={styles.unloadButtonText}>Unload</Text>
-            </TouchableOpacity>}
-          />
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -196,11 +197,16 @@ export const TextTab: React.FC<TextTabProps> = ({
             <Text style={styles.sectionSubTitle}>Local Models</Text>
           </View>
           {downloadedModels.map(model => {
-            const fileSize = (model.fileSize || 0) + ('mmProjFileSize' in model ? (model.mmProjFileSize || 0) : 0);
-            const memoryFits = !fileExceedsBudget(fileSize, hardwareService.getTotalMemoryGB());
+            const totalSize = hardwareService.getModelTotalSize(model);
+            const estimatedMemoryGB =
+              (totalSize * ramMultiplier) / (1024 * 1024 * 1024);
+            const memoryFits = !fileExceedsBudget(
+              totalSize,
+              hardwareService.getTotalMemoryGB(),
+            );
             const isLoaded = currentModelPath === model.filePath;
-            // A selected-but-not-loaded model stays highlighted. A tap confirms the
-            // selection; the first chat message starts the load.
+            // The selected-but-not-loaded model is highlighted as active, but stays
+            // tappable so tapping it actually loads it (load-on-tap).
             // Don't highlight a deferred-local selection while a remote model is
             // current — otherwise both rows render active after a local→remote switch.
             const isSelected =
@@ -212,27 +218,26 @@ export const TextTab: React.FC<TextTabProps> = ({
             // B immediately, instead of leaving A highlighted until the load finishes (device 2026-07-14).
             const isLoadingThis = loadingModelId === model.id;
             const loadInProgress = loadingModelId != null;
-            const isActive =
-              currentRemoteModelId === null &&
-              (loadInProgress ? isLoadingThis : isLoaded || isSelected);
-            const predictedCapabilities = model.engine === 'llama' ? predictGgufCapabilities(model) : null;
+            const isActive = loadInProgress
+              ? isLoadingThis
+              : isLoaded || isSelected;
             return (
-              <ModelCard
+              <ModelRow
                 key={model.id}
-                compact
                 testID={`text-model-row-${model.id}`}
-                model={{ id: model.id, name: model.name, author: model.author || 'On device',
-                  modelType: predictedCapabilities?.vision ? 'vision' : 'text' }}
-                downloadedModel={model}
-                capabilities={{ ...predictedCapabilities, predicted: true }}
-                facts={[`${estimatedRamMB[model.id] != null
-                  ? `~${(estimatedRamMB[model.id] / 1024).toFixed(1)} GB`
-                  : hardwareService.formatModelRam(model, ramMultiplier)} RAM${memoryFits ? '' : ' (may not fit)'}`]}
+                name={model.name}
+                size={hardwareService.formatModelSize(model)}
+                quant={model.quantization}
+                ramHint={`~${estimatedMemoryGB.toFixed(1)} GB RAM${
+                  memoryFits ? '' : ' (may not fit)'
+                }`}
+                isVision={
+                  model.engine === 'llama' &&
+                  predictGgufCapabilities(model).vision
+                }
                 isActive={isActive}
-                trailing={isLoadingThis ? <LoadingDots color={colors.primary} testID="model-row-loading" />
-                  : isLoaded && !loadInProgress && currentRemoteModelId === null
-                    ? <View style={styles.checkmark}><Icon name="check" size={16} color={colors.background} /></View>
-                    : null}
+                isLoaded={isLoaded && !loadInProgress}
+                loading={isLoadingThis}
                 disabled={isAnyLoading || isLoaded}
                 onPress={() => onSelectModel(model)}
               />
@@ -250,29 +255,66 @@ export const TextTab: React.FC<TextTabProps> = ({
           </View>
           {models.map(model => {
             const isCurrent = currentRemoteModelId === model.id;
-            const isLoadingThis =
-              loadingRemoteModelKey === `${serverId}:${model.id}`;
             return (
-              <ModelCard
+              <TouchableOpacity
                 key={model.id}
-                compact
-                testID={`remote-text-model-${serverId}-${model.id}`}
-                model={{ id: model.id, name: model.name, author: '',
-                  modelType: model.capabilities.supportsVision ? 'vision' : 'text',
-                  quantization: typeof model.details?.quantization === 'string' ? model.details.quantization : undefined }}
-                sourceBadge="Remote"
-                capabilities={{
-                  vision: model.capabilities.supportsVision,
-                  tools: model.capabilities.supportsToolCalling,
-                  thinking: model.capabilities.supportsThinking,
-                }}
-                isActive={isCurrent || isLoadingThis}
+                testID="remote-model-item"
+                style={[
+                  styles.modelItem,
+                  isCurrent && styles.modelItemSelectedRemote,
+                ]}
                 onPress={() => onSelectRemoteModel(model, serverId)}
                 disabled={isAnyLoading || isCurrent}
-                trailing={isLoadingThis ? <LoadingDots color={colors.primary} testID="remote-text-model-loading" />
-                  : isCurrent ? <View style={styles.checkmarkRemote}><Icon name="check" size={16} color={colors.background} /></View>
-                  : null}
-              />
+              >
+                <View style={styles.modelInfo}>
+                  <Text
+                    style={[
+                      styles.modelName,
+                      isCurrent && styles.modelNameSelectedRemote,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {model.name}
+                  </Text>
+                  <View style={styles.modelMeta}>
+                    <Text style={styles.remoteBadge}>Remote</Text>
+                    {model.capabilities.supportsVision && (
+                      <>
+                        <Text style={styles.metaSeparator}>•</Text>
+                        <View style={styles.visionBadge}>
+                          <Icon name="eye" size={10} color={colors.info} />
+                          <Text style={styles.visionBadgeText}>Vision</Text>
+                        </View>
+                      </>
+                    )}
+                    {model.capabilities.supportsToolCalling && (
+                      <>
+                        <Text style={styles.metaSeparator}>•</Text>
+                        <View style={styles.toolBadge}>
+                          <Icon name="tool" size={10} color={colors.warning} />
+                        </View>
+                      </>
+                    )}
+                    {model.capabilities.supportsThinking && (
+                      <>
+                        <Text style={styles.metaSeparator}>•</Text>
+                        <View style={styles.thinkingBadge}>
+                          <Icon name="zap" size={10} color="#8B5CF6" />
+                          <Text style={styles.thinkingBadgeText}>Thinking</Text>
+                        </View>
+                      </>
+                    )}
+                  </View>
+                </View>
+                {loadingRemoteModelId === model.id ? (
+                  <LoadingDots color={colors.primary} testID="model-row-loading" />
+                ) : null}
+                {isCurrent && (
+                  <View style={styles.checkmarkRemote}>
+                    <Icon name="check" size={16} color={colors.background} />
+                  </View>
+                )}
+              </TouchableOpacity>
             );
           })}
         </View>

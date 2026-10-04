@@ -68,7 +68,7 @@ describe('text pre-load gate reads reclaim-aware available (rendered, red-flow)'
     // GESTURE: turn on Aggressive via the real segmented control (the device was in Aggressive).
     const toggle = h.rtl.render(React.createElement(ModelLoadingModeSelector, {}));
     h.rtl.fireEvent.press(toggle.getByTestId('model-loading-mode-aggressive-button'));
-    await h.rtl.waitFor(() => { expect(require('../../../src/services/modelResidency').modelResidencyManager.getLoadPolicy()).toBe('aggressive'); });
+    await h.rtl.waitFor(() => { expect(require('../../harness/activeModelLifecycle').modelResidencyManager.getLoadPolicy()).toBe('aggressive'); });
     toggle.unmount();
 
     // Precondition: no reply and no refusal surface yet.
@@ -115,7 +115,7 @@ describe('text pre-load gate reads reclaim-aware available (rendered, red-flow)'
     // GESTURE: Aggressive (matches the Android case) — but on iOS aggressive gives NO reclaim credit.
     const toggle = h.rtl.render(React.createElement(ModelLoadingModeSelector, {}));
     h.rtl.fireEvent.press(toggle.getByTestId('model-loading-mode-aggressive-button'));
-    await h.rtl.waitFor(() => { expect(require('../../../src/services/modelResidency').modelResidencyManager.getLoadPolicy()).toBe('aggressive'); });
+    await h.rtl.waitFor(() => { expect(require('../../harness/activeModelLifecycle').modelResidencyManager.getLoadPolicy()).toBe('aggressive'); });
     toggle.unmount();
 
     expect(h.view!.queryByText(/it needs ~/)).toBeNull();

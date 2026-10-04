@@ -1,3 +1,4 @@
+import { remoteErrorBodyMessage } from '@offgrid/models';
 /**
  * HTTP Client for Remote LLM Servers
  *
@@ -7,7 +8,7 @@
 
 import logger from '../utils/logger';
 import { createSSELineProcessor } from './httpClientSSE';
-import { isCredentialTransportDowngrade } from './remoteTransportPolicy';
+import { isCredentialTransportDowngrade } from '@offgrid/models';
 
 export {
   parseOpenAIMessage,
@@ -17,8 +18,6 @@ export {
 export {
   imageToBase64DataUrl,
   isPrivateNetworkEndpoint,
-  testEndpoint,
-  detectServerType,
 } from './httpClientUtils';
 // The stream-message types live in httpClientTypes so httpClientSSE can import them without
 // importing this file (which imports SSE) — that would be a cycle. Imported for internal use here
@@ -50,24 +49,6 @@ export interface StreamRequestConfig extends StreamRequestOptions {
 
 const INSECURE_CREDENTIAL_REDIRECT =
   'Remote server redirected credentials to an insecure endpoint';
-
-/** Keep a provider's useful refusal without rendering a JSON envelope or an unbounded body. */
-export function remoteHttpErrorMessage(body: string, status: number): string {
-  let message = '';
-  try {
-    const parsed = JSON.parse(body) as {
-      error?: string | { message?: unknown };
-      message?: unknown;
-    };
-    const candidate = typeof parsed.error === 'string'
-      ? parsed.error
-      : parsed.error?.message ?? parsed.message;
-    if (typeof candidate === 'string') message = candidate.trim();
-  } catch {
-    message = body.trim();
-  }
-  return (message || `Remote server returned HTTP ${status}`).slice(0, 500);
-}
 
 function rejectCredentialDowngrade(input: {
   xhr: XMLHttpRequest;
@@ -124,8 +105,8 @@ export async function fetchWithTimeout<T = unknown>(
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => '');
-        throw new Error(remoteHttpErrorMessage(errorText, response.status));
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
       // Try to parse as JSON, fall back to text
@@ -231,10 +212,15 @@ export async function createStreamingRequest(
         } else {
           // Log the full server error body — a bare "HTTP 400" is undiagnosable; the body
           // (e.g. llama.cpp's "failed to parse grammar") is what tells you what to fix.
-          const detail = remoteHttpErrorMessage(xhr.responseText, xhr.status);
-          logger.error(`[HttpClient] HTTP ${xhr.status}: ${detail}`);
+          logger.error(
+            `[HttpClient] HTTP ${xhr.status} error body: ${
+              xhr.responseText || '(empty)'
+            }`,
+          );
           reject(
-            new Error(detail),
+            new Error(
+              remoteErrorBodyMessage(xhr.responseText ?? '', xhr.status),
+            ),
           );
         }
       }
@@ -448,9 +434,12 @@ function completeNDJSONRequest({
     resolve();
     return;
   }
-  const detail = remoteHttpErrorMessage(xhr.responseText, xhr.status);
-  logger.error(`[HttpClient] HTTP ${xhr.status}: ${detail}`);
+  logger.error(
+    `[HttpClient] HTTP ${xhr.status} error body: ${
+      xhr.responseText || '(empty)'
+    }`,
+  );
   reject(
-    new Error(detail),
+    new Error(remoteErrorBodyMessage(xhr.responseText ?? '', xhr.status)),
   );
 }

@@ -42,6 +42,7 @@ export function MessageContent({
       <View>
         <ThinkingBlock
           parsedContent={parsedContent}
+          isStreaming={isStreaming}
           showThinking={showThinking}
           onToggle={onToggleThinking}
           styles={styles}
@@ -66,6 +67,7 @@ export function MessageContent({
       return (
         <ThinkingBlock
           parsedContent={parsedContent}
+          isStreaming={isStreaming}
           showThinking={showThinking}
           onToggle={onToggleThinking}
           styles={styles}
@@ -80,6 +82,7 @@ export function MessageContent({
       {!!parsedContent.thinking && (
         <ThinkingBlock
           parsedContent={parsedContent}
+          isStreaming={isStreaming}
           showThinking={showThinking}
           onToggle={onToggleThinking}
           styles={styles}

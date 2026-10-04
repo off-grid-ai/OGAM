@@ -16,46 +16,37 @@ export function activeModelSelectionStub(): {
   resolveSelectedTextModel: () => unknown;
   selectedTextModelId: () => string | null;
 } {
-  // The store the SUITE is using, mocked or real - not requireActual. A suite that mocks the store
-  // and then sets up an active model must see that model here, or the stub contradicts its own
-  // fixtures. Defensive because a partial store mock may not expose getState at all.
-  const store = (): {
-    downloadedModels: Array<{ id: string }>;
-    activeModelId: string | null;
-    lastTextModelId: string | null;
-  } => {
+  // Selection is the shared active route, persisted in the one selection store. A suite that mocks the
+  // app store still shares that store, so the stub answers what the app would answer.
+  const selectedId = (): string | null => {
     try {
-       
-      const hook = require('../../src/stores').useAppStore as any;
-      // A suite may drive the store through getState, or by mocking the hook itself with a selector
-      // implementation. Read whichever it actually uses, or the stub contradicts the fixtures the
-      // test just set up - which is how "returns local model when active" got null.
-      const fromSelector =
-        typeof hook === 'function' && hook.mock
-          ? hook((value: unknown) => value)
-          : undefined;
-      const state = fromSelector ?? hook?.getState?.();
-      return {
-        downloadedModels: state?.downloadedModels ?? [],
-        activeModelId: state?.activeModelId ?? null,
-        lastTextModelId: state?.lastTextModelId ?? null,
-      };
+      const { readMobileModelSelection, rememberedLocalTextModelId } =
+        require('../../src/services/modelServices/modelSelectionProjection');
+      const { decodeModelRouteId } = require('@offgrid/models');
+      const route = readMobileModelSelection('text');
+      const decoded = route ? decodeModelRouteId(route) : null;
+      return (decoded && !decoded.serverId ? decoded.modelId : null) ?? rememberedLocalTextModelId();
     } catch {
-      return { downloadedModels: [], activeModelId: null, lastTextModelId: null };
+      return null;
+    }
+  };
+  const downloadedModels = (): Array<{ id: string }> => {
+    try {
+      const hook = require('../../src/stores').useAppStore as any;
+      const fromSelector =
+        typeof hook === 'function' && hook.mock ? hook((value: unknown) => value) : undefined;
+      const state = fromSelector ?? hook?.getState?.();
+      return state?.downloadedModels ?? [];
+    } catch {
+      return [];
     }
   };
 
   return {
     resolveSelectedTextModel: () => {
-      const state = store();
-      return (
-        state.downloadedModels.find(model => model.id === state.activeModelId) ??
-        null
-      );
+      const id = selectedId();
+      return downloadedModels().find(model => model.id === id) ?? null;
     },
-    selectedTextModelId: () => {
-      const state = store();
-      return state.activeModelId ?? state.lastTextModelId ?? null;
-    },
+    selectedTextModelId: () => selectedId(),
   };
 }

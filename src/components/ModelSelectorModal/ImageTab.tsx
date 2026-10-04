@@ -5,9 +5,9 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import { ONNXImageModel, RemoteModel } from '../../types';
 import { hardwareService } from '../../services';
-import { ModelCard } from '../ModelCard';
-import { fileExceedsBudget } from '../../services/memoryBudget';
 import { createAllStyles } from './styles';
+import { ModelRow } from '../ModelRow';
+import { fileExceedsBudget } from '../../services/memoryBudget';
 
 export interface ImageTabProps {
   downloadedImageModels: ONNXImageModel[];
@@ -17,13 +17,14 @@ export interface ImageTabProps {
     models: RemoteModel[];
   }>;
   activeImageModelId: string | null;
-  loadedImageModelId: string | null;
   activeRemoteImageModelId: string | null;
   activeRemoteImageServerId: string | null;
   isAnyLoading: boolean;
   isLoadingImage: boolean;
-  /** Server and model key for the remote row being selected. */
-  loadingRemoteModelKey?: string | null;
+  /** Id of the image model being loaded right now (the row just tapped) — drives the per-row spinner. */
+  loadingModelId?: string | null;
+  /** The remote model the owner is switching to right now. */
+  loadingRemoteModelId?: string | null;
   onSelectImageModel: (model: ONNXImageModel) => void;
   onSelectRemoteVisionModel: (model: RemoteModel, serverId: string) => void;
   onUnloadImageModel: () => void;
@@ -34,12 +35,12 @@ export const ImageTab: React.FC<ImageTabProps> = ({
   downloadedImageModels,
   remoteVisionModels,
   activeImageModelId,
-  loadedImageModelId,
   activeRemoteImageModelId,
   activeRemoteImageServerId,
   isAnyLoading,
   isLoadingImage,
-  loadingRemoteModelKey = null,
+  loadingModelId = null,
+  loadingRemoteModelId = null,
   onSelectImageModel,
   onUnloadImageModel,
   onSelectRemoteVisionModel,
@@ -47,12 +48,10 @@ export const ImageTab: React.FC<ImageTabProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createAllStyles);
-  const hasRemoteSelection = !!activeRemoteImageModelId && !!activeRemoteImageServerId;
-  const hasSelection = !!activeImageModelId || !!activeRemoteImageModelId;
-  const isCurrentLoaded = !hasRemoteSelection && loadedImageModelId === activeImageModelId;
-  const activeModel = hasRemoteSelection
-    ? undefined
-    : downloadedImageModels.find(m => m.id === activeImageModelId);
+  const hasLoaded = !!activeImageModelId || !!activeRemoteImageModelId;
+  const activeModel = downloadedImageModels.find(
+    m => m.id === activeImageModelId,
+  );
 
   // Find active remote vision model info
   const activeRemoteModelInfo = useMemo(() => {
@@ -67,37 +66,61 @@ export const ImageTab: React.FC<ImageTabProps> = ({
 
   return (
     <>
-      {hasSelection && (
-        <View>
+      {hasLoaded && (
+        <View style={[styles.loadedSection, styles.loadedSectionImage]}>
           <View style={styles.loadedHeader}>
             <Icon name="check-circle" size={14} color={colors.success} />
-            <Text style={styles.loadedLabel}>{isCurrentLoaded ? 'Currently Loaded' : 'Selected Model'}</Text>
+            <Text style={styles.loadedLabel}>Currently Loaded</Text>
           </View>
-          <ModelCard
-            compact
+          <View
+            style={styles.loadedModelItem}
             testID="currently-loaded-image-model"
-            nameTestID="currently-loaded-image-model-name"
-            factsTestID="currently-loaded-image-model-ram"
-            model={{ id: activeModel?.id ?? activeRemoteModelInfo?.model.id ?? 'selected-image',
-              name: activeModel?.name ?? activeRemoteModelInfo?.model.name ?? 'Unknown',
-              author: activeRemoteModelInfo?.serverName ?? 'On device', modelType: 'vision' }}
-            file={activeModel ? { name: activeModel.name, size: activeModel.size, quantization: '', downloadUrl: '' } : undefined}
-            sourceBadge={activeRemoteModelInfo ? 'Remote' : undefined}
-            facts={activeModel ? [activeModel.style || 'Image',
-              `${hardwareService.formatBytes(hardwareService.estimateImageModelRam(activeModel))} RAM`] : []}
-            isActive
-            trailing={<TouchableOpacity style={styles.unloadButton} onPress={onUnloadImageModel} disabled={isAnyLoading}>
-              {isLoadingImage ? <LoadingDots color={colors.error} /> : <>
-                <Icon name="power" size={16} color={colors.error} />
-                <Text style={styles.unloadButtonText}>{isCurrentLoaded ? 'Unload' : 'Deselect'}</Text>
-              </>}
-            </TouchableOpacity>}
-          />
+          >
+            <View style={styles.loadedModelInfo}>
+              <Text
+                style={styles.loadedModelName}
+                numberOfLines={1}
+                testID="currently-loaded-image-model-name"
+              >
+                {activeModel?.name ||
+                  activeRemoteModelInfo?.model?.name ||
+                  'Unknown'}
+              </Text>
+              <Text
+                style={styles.loadedModelMeta}
+                testID="currently-loaded-image-model-ram"
+              >
+                {activeModel
+                  ? `${
+                      activeModel.style || 'Image'
+                    } • ${hardwareService.formatBytes(
+                      activeModel.size ?? 0,
+                    )} • ${hardwareService.formatBytes(
+                      hardwareService.estimateImageModelRam(activeModel),
+                    )} RAM`
+                  : `Remote • ${activeRemoteModelInfo?.serverName ?? 'Model'}`}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.unloadButton}
+              onPress={onUnloadImageModel}
+              disabled={isAnyLoading}
+            >
+              {isLoadingImage ? (
+                <LoadingDots color={colors.error} />
+              ) : (
+                <>
+                  <Icon name="power" size={16} color={colors.error} />
+                  <Text style={styles.unloadButtonText}>Unload</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
       <Text style={styles.sectionTitle}>
-        {hasSelection ? 'Switch Model' : 'Available Models'}
+        {hasLoaded ? 'Switch Model' : 'Available Models'}
       </Text>
 
       {/* Local Image Models */}
@@ -138,24 +161,31 @@ export const ImageTab: React.FC<ImageTabProps> = ({
             <Text style={styles.sectionSubTitle}>Local Models</Text>
           </View>
           {downloadedImageModels.map(model => {
+            const isCurrent = activeImageModelId === model.id;
             const estimatedMemory = hardwareService.estimateImageModelRam(model);
-            const memoryFits = !fileExceedsBudget(model.size, hardwareService.getTotalMemoryGB());
-            const isCurrent = !hasRemoteSelection && activeImageModelId === model.id;
+            const memoryFits = !fileExceedsBudget(
+              model.size,
+              hardwareService.getTotalMemoryGB(),
+            );
+            // While a load is in flight, the highlight + spinner follow the row being loaded, not the
+            // model still resident — so tapping B moves the selection to B at once (device 2026-07-14).
+            const isLoadingThis = loadingModelId === model.id;
+            const loadInProgress = loadingModelId != null;
+            const highlight = loadInProgress ? isLoadingThis : isCurrent;
             return (
-              <ModelCard
+              <ModelRow
                 key={model.id}
-                compact
                 testID={`image-model-row-${model.id}`}
-                model={{ id: model.id, name: model.name, author: 'On device', modelType: 'vision' }}
-                file={{ name: model.name, size: model.size, quantization: '', downloadUrl: '' }}
-                facts={[
-                  model.style || 'Image',
-                  `~${(estimatedMemory / (1024 * 1024 * 1024)).toFixed(1)} GB RAM${memoryFits ? '' : ' (may not fit)'}`,
-                ]}
-                isActive={isCurrent}
-                trailing={isCurrent
-                  ? <View style={styles.checkmark}><Icon name="check" size={16} color={colors.background} /></View>
-                  : null}
+                name={model.name}
+                size={hardwareService.formatBytes(model.size)}
+                quant={model.style || 'Image'}
+                ramHint={`~${(
+                  estimatedMemory / (1024 * 1024 * 1024)
+                ).toFixed(1)} GB RAM${memoryFits ? '' : ' (may not fit)'}`}
+                isActive={highlight}
+                isLoaded={isCurrent && !loadInProgress}
+                loading={isLoadingThis}
+                variant="image"
                 onPress={() => onSelectImageModel(model)}
                 disabled={isAnyLoading || isCurrent}
               />
@@ -175,22 +205,44 @@ export const ImageTab: React.FC<ImageTabProps> = ({
             const isCurrent =
               activeRemoteImageServerId === serverId &&
               activeRemoteImageModelId === model.id;
-            const isLoadingThis =
-              loadingRemoteModelKey === `${serverId}:${model.id}`;
             return (
-              <ModelCard
+              <TouchableOpacity
                 key={model.id}
-                compact
-                testID={`remote-image-model-${serverId}-${model.id}`}
-                model={{ id: model.id, name: model.name, author: '', modelType: 'vision' }}
-                sourceBadge="Remote"
-                isActive={isCurrent || isLoadingThis}
+                style={[
+                  styles.modelItem,
+                  isCurrent && styles.modelItemSelectedImage,
+                ]}
                 onPress={() => onSelectRemoteVisionModel(model, serverId)}
                 disabled={isAnyLoading || isCurrent}
-                trailing={isLoadingThis ? <LoadingDots color={colors.primary} testID="remote-image-model-loading" />
-                  : isCurrent ? <View style={styles.checkmark}><Icon name="check" size={16} color={colors.background} /></View>
-                  : null}
-              />
+              >
+                <View style={styles.modelInfo}>
+                  <Text
+                    style={[
+                      styles.modelName,
+                      isCurrent && styles.modelNameSelectedImage,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {model.name}
+                  </Text>
+                  <View style={styles.modelMeta}>
+                    <Text style={styles.remoteBadge}>Remote</Text>
+                    <Text style={styles.metaSeparator}>•</Text>
+                    <View style={styles.visionBadge}>
+                      <Icon name="eye" size={10} color={colors.info} />
+                      <Text style={styles.visionBadgeText}>Vision</Text>
+                    </View>
+                  </View>
+                </View>
+                {loadingRemoteModelId === model.id ? (
+                  <LoadingDots color={colors.primary} testID="model-row-loading" />
+                ) : null}
+                {isCurrent && (
+                  <View style={[styles.checkmark, styles.checkmarkImage]}>
+                    <Icon name="check" size={16} color={colors.background} />
+                  </View>
+                )}
+              </TouchableOpacity>
             );
           })}
         </View>

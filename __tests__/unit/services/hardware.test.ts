@@ -403,31 +403,27 @@ describe('HardwareService', () => {
   // ========================================================================
   describe('formatBytes', () => {
     it('formats 0 as "0 B"', () => {
-      expect(hardwareService.formatBytes(0)).toBe('0 B');
+      expect(hardwareService.formatBytes(0)).toBe('Unknown');
     });
 
     it('formats bytes correctly', () => {
-      expect(hardwareService.formatBytes(500)).toBe('500.00 B');
+      expect(hardwareService.formatBytes(500)).toBe('500 B');
     });
 
     it('formats kilobytes correctly', () => {
-      expect(hardwareService.formatBytes(2048)).toBe('2.00 KB');
+      expect(hardwareService.formatBytes(2048)).toBe('2.0 KB');
     });
 
     it('formats megabytes correctly', () => {
-      expect(hardwareService.formatBytes(5 * 1024 * 1024)).toBe('5.00 MB');
+      expect(hardwareService.formatBytes(5 * 1024 * 1024)).toBe('5.0 MB');
     });
 
     it('formats gigabytes correctly', () => {
-      expect(hardwareService.formatBytes(4 * 1024 * 1024 * 1024)).toBe(
-        '4.00 GB',
-      );
+      expect(hardwareService.formatBytes(4 * 1024 * 1024 * 1024)).toBe('4.0 GB');
     });
 
     it('formats terabytes correctly', () => {
-      expect(hardwareService.formatBytes(2 * 1024 * 1024 * 1024 * 1024)).toBe(
-        '2.00 TB',
-      );
+      expect(hardwareService.formatBytes(2 * 1024 * 1024 * 1024 * 1024)).toBe('2.0 TB');
     });
   });
 
@@ -487,11 +483,11 @@ describe('HardwareService', () => {
       const result = hardwareService.formatModelSize({
         fileSize: 2 * 1024 * 1024 * 1024,
       });
-      expect(result).toBe('2.00 GB');
+      expect(result).toBe('2.0 GB');
     });
 
-    it('returns "0 B" for empty model', () => {
-      expect(hardwareService.formatModelSize({})).toBe('0 B');
+    it('reports an empty model as Unknown (the shared size formatter)', () => {
+      expect(hardwareService.formatModelSize({})).toBe('Unknown');
     });
   });
 

@@ -7,7 +7,7 @@
  * regression on flagship (>8GB) devices — 8x KV cache caused iOS Metal buffer-alloc
  * crashes and Android litert OOM, tanked tok/s, and never restored. It was removed.
  * MCP tools are now thinned to fit the normal context window by the embedding
- * tool-router (see `toolEmbeddingRouter` / `selectEffectiveSchemas` in
+ * Shared tool router (see `ToolRoutingService` in `@offgrid/models`) and
  * `generationToolLoop`). Only the enablement check remains here.
  */
 import { getToolExtensions } from './tools/extensions';

@@ -1,6 +1,4 @@
 import {
-  MutableRefObject,
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -10,22 +8,13 @@ import type { NavigationProp } from '@react-navigation/native';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import {
   contextCompactionService,
-  generationService,
   imageGenerationService,
   ImageGenerationState,
-  QueuedMessage,
 } from '../../services';
-import { generationSession } from '../../services/generationSession';
 import type { RootStackParamList } from '../../navigation/types';
-import {
-  dispatchGenerationFn,
-  GenerationDeps,
-} from './useChatGenerationActions';
-
-type StartGeneration = (
-  conversationId: string,
-  text: string,
-) => Promise<void>;
+import { mobileChatSession } from './mobileChatSession';
+import { requireWorkspaceConversationMessages } from '../../hooks/useApplicationProjection';
+import { toWorkspaceMessage } from './types';
 
 /** A missing stream never belongs to a missing conversation. */
 export function isStreamingActiveConversation(
@@ -70,8 +59,6 @@ export function useChatAudioLifecycle(
 }
 
 export function useChatRuntimeSubscriptions(
-  generationDepsRef: MutableRefObject<GenerationDeps | null>,
-  startGenerationRef: MutableRefObject<StartGeneration | null>,
 ): {
   imageGenState: ImageGenerationState;
   isCompacting: boolean;
@@ -96,39 +83,18 @@ export function useChatRuntimeSubscriptions(
     };
   }, []);
 
-  useEffect(
-    () =>
-      generationService.subscribe(state => {
-        setQueueCount(state.queuedMessages.length);
-        setQueuedTexts(
-          state.queuedMessages.map((message: QueuedMessage) => message.text),
-        );
-      }),
-    [],
-  );
-
-  const handleQueuedSend = useCallback(
-    async (item: QueuedMessage) => {
-      if (!generationDepsRef.current || !startGenerationRef.current) return;
-      await dispatchGenerationFn(
-        generationDepsRef.current,
-        {
-          text: item.text,
-          attachments: item.attachments,
-          conversationId: item.conversationId,
-          imageMode: item.imageMode,
-          assistantEnabled: item.assistantEnabled,
-        },
-        startGenerationRef.current,
-      );
-    },
-    [generationDepsRef, startGenerationRef],
-  );
-
   useEffect(() => {
-    generationService.setQueueProcessor(handleQueuedSend);
-    return () => generationService.setQueueProcessor(null);
-  }, [handleQueuedSend]);
+    return mobileChatSession.subscribeQueue(projection => {
+      const queued = projection.entries.filter(entry => entry.status === 'queued');
+      setQueueCount(queued.length);
+      setQueuedTexts(queued.map(entry => {
+        const message = requireWorkspaceConversationMessages(entry.conversationId)
+          .map(toWorkspaceMessage)
+          .find(candidate => candidate.id === entry.turnId);
+        return message?.content ?? '';
+      }));
+    });
+  }, []);
 
   return { imageGenState, isCompacting, queueCount, queuedTexts };
 }
@@ -144,12 +110,14 @@ interface ConversationLifecycleArgs {
 export function useChatConversationLifecycle({
   routeConversationId,
   routeProjectId,
-  activeConversationId,
   setActiveConversation,
   setPendingProjectId,
 }: ConversationLifecycleArgs): void {
   useEffect(() => {
     setActiveConversation(routeConversationId ?? null);
+    // Opening a chat asks the chat rules to repair anything the previous run left mid-flight. The
+    // screen must never read a saved reply and decide for itself that it was cut short.
+    if (routeConversationId) void mobileChatSession.restore(routeConversationId);
     // The route ID is the owner of this transition; store callbacks are stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeConversationId]);
@@ -158,17 +126,9 @@ export function useChatConversationLifecycle({
     setPendingProjectId(routeProjectId);
   }, [routeProjectId, setPendingProjectId]);
 
-  useEffect(() => {
-    if (
-      generationSession.getConversationId() &&
-      !generationSession.isGeneratingFor(activeConversationId)
-    ) {
-      generationSession.end('conversation-switch');
-    }
-    // Native conversation isolation is awaited by generationService immediately
-    // before a local turn starts. A navigation timer here raced the first Send and
-    // could clear too late (context leak) or during prefill (no-op).
-  }, [activeConversationId]);
+  // Switching conversations no longer clears anything here. The screen kept its own mark of which
+  // conversation was replying, and this effect existed to wipe it; the shared chat queue already
+  // records the conversation each running turn belongs to, so there is nothing left to reset.
 }
 
 export function useChatPresentationLifecycle(

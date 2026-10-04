@@ -53,6 +53,13 @@ describe('shouldShowEvictedBar', () => {
     expect(make({ displayMessages: [{ role: 'user' }, { role: 'assistant' }] })).toBe(false);
   });
 
+  it('hides after a stopped image turn — the user message is an image turn, no text reply is pending', () => {
+    // Regression: "Draw a dog" was routed to the image model, the person stopped it, and the bar
+    // announced "Model unloaded to free memory — tap to continue" for a text reply nobody asked for.
+    expect(make({ displayMessages: [{ role: 'user', turnKind: 'image' }] })).toBe(false);
+    expect(make({ displayMessages: [{ role: 'user', turnKind: 'text' }] })).toBe(true);
+  });
+
   it('hides while an image is generating even if the last message is the user request', () => {
     expect(make({ isGeneratingImage: true })).toBe(false);
   });

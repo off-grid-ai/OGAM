@@ -37,16 +37,16 @@ describe('two attached images in one turn', () => {
     await h.attachImageViaUI('camera');
 
     await h.send('what is different?', { content: 'The second one is darker.' });
-    await h.rtl.waitFor(() => {
-      expect(h.view!.queryByText(/The second one is darker\./)).not.toBeNull();
-    });
 
     // Whichever media entry point the service chose, the uris it handed native are what matter.
-    const mediaCalls = [
+    const readMediaCalls = () => [
       ...h.boundary.litert.calls.sendMessageWithMedia,
       ...h.boundary.litert.calls.sendMessageWithImages,
     ];
-    expect(mediaCalls.length).toBeGreaterThan(0);
+    await h.rtl.waitFor(() => {
+      expect(readMediaCalls().length).toBeGreaterThan(0);
+    }, { timeout: 4000 });
+    const mediaCalls = readMediaCalls();
     const sentUris = mediaCalls
       .flat()
       .flatMap((arg) => (Array.isArray(arg) ? arg : []))
@@ -57,5 +57,8 @@ describe('two attached images in one turn', () => {
     expect(new Set(sentUris).size).toBe(2);
     expect(sentUris.some((uri) => uri.includes('image.jpg'))).toBe(true);
     expect(sentUris.some((uri) => uri.includes('camera.jpg'))).toBe(true);
+    await h.rtl.waitFor(() => {
+      expect(h.view!.queryByText(/The second one is darker\./)).not.toBeNull();
+    });
   });
 });

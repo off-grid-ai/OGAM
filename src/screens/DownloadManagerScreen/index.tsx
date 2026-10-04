@@ -3,13 +3,14 @@ import { View, Text, FlatList, TouchableOpacity, ScrollView } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import { Card } from '../../components';
+import { Card } from '../../components/Card';
 import { CustomAlert, hideAlert } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
 import { ActiveDownloadCard, CompletedDownloadCard, formatBytes, type DownloadItem } from './items';
 import { useDownloadManager } from './useDownloadManager';
 import { isQueuedStatus, isDownloadingStatus, isFailedStatus, type DownloadStatus } from '../../stores/downloadStore';
+import { isPausedStatus } from '../../utils/downloadStatus';
 
 type FilterType = 'all' | 'text' | 'vision' | 'image' | 'voice';
 
@@ -48,6 +49,7 @@ export const DownloadManagerScreen: React.FC = () => {
     handleDeleteItem,
     handleRepairVision,
     isRepairingVision,
+    repairDownloadFor,
     totalStorageUsed,
   } = useDownloadManager();
 
@@ -64,7 +66,7 @@ export const DownloadManagerScreen: React.FC = () => {
   // Failed/retriable rows are shown here as cards; surface their count too so this screen and the
   // ModelsScreen badge agree on "outstanding download work" (badge = downloading + queued + failed).
   const activeFailedCount = filteredActive.filter(i => isFailedStatus(i.status as DownloadStatus)).length;
-  const activePausedCount = filteredActive.filter(i => i.status === 'paused').length;
+  const activePausedCount = filteredActive.filter(i => isPausedStatus(i.status)).length;
 
   const renderHeader = useCallback(() => (
     <ScrollView
@@ -127,8 +129,14 @@ export const DownloadManagerScreen: React.FC = () => {
                   )}
                 </View>
                 {filteredActive.map(item => (
-                  <View key={`active-${item.modelId}-${item.fileName}`} style={styles.downloadCardInset}>
-                    <ActiveDownloadCard item={item} onRemove={handleRemoveDownload} onRetry={handleRetryDownload} onPause={handlePauseDownload} onResume={handleResumeDownload} />
+                  <View key={`active-${item.modelId}-${item.fileName}`}>
+                    <ActiveDownloadCard
+                      item={item}
+                      onRemove={handleRemoveDownload}
+                      onRetry={handleRetryDownload}
+                      onPause={handlePauseDownload}
+                      onResume={handleResumeDownload}
+                    />
                   </View>
                 ))}
               </View>
@@ -146,7 +154,13 @@ export const DownloadManagerScreen: React.FC = () => {
               {filteredCompleted.length > 0 ? (
                 filteredCompleted.map(item => (
                   <View key={`completed-${item.modelId}-${item.fileName}`}>
-                    <CompletedDownloadCard item={item} onDelete={handleDeleteItem} onRepairVision={handleRepairVision} onPauseRepair={handlePauseDownload} onResumeRepair={handleResumeDownload} onCancelRepair={handleRemoveDownload} isRepairingVision={isRepairingVision(item.modelId)} />
+                    <CompletedDownloadCard
+                      item={item}
+                      onDelete={handleDeleteItem}
+                      onRepairVision={handleRepairVision}
+                      isRepairingVision={isRepairingVision(item.modelId)}
+                      repairDownload={repairDownloadFor(item.modelId)}
+                    />
                   </View>
                 ))
               ) : (

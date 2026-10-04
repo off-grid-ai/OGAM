@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   AlertState,
   showAlert,
@@ -6,28 +6,24 @@ import {
   initialAlertState,
 } from '../../components/CustomAlert';
 import { useAppStore } from '../../stores';
-import { useDownloadStore } from '../../stores/downloadStore';
 import {
-  modelManager,
+  modelLibrary,
   hardwareService,
-  backgroundDownloadService,
 } from '../../services';
-import { visionRepairMessage } from '../../services/modelManager/visionRepairMessage';
+import {
+  modelsFailureMessage,
+  visionRepairMessage,
+} from '@offgrid/application';
 import { useVoiceDownloadItems } from './useVoiceDownloadItems';
 import { DownloadedModel, ONNXImageModel } from '../../types';
 import { DownloadItem, formatBytes } from './items';
 import {
-  entryToActiveItem,
+  facadeDownloadToActiveItem,
   modelStoreCompletedItems,
-  queuedToActiveItem,
 } from './downloadItemMapping';
 import logger from '../../utils/logger';
-import { cancelSyntheticImageDownload } from '../../services/imageDownloadActions';
-import { retryImageDownload } from './retryHandlers';
-import { modelDownloadService } from '../../services/modelDownloadService';
-import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
-import { setImageDownloadOps } from '../../services/modelDownloadService/providers/imageProvider';
-import { useEffect } from 'react';
+import { useModelDownloadsProjection } from '../../hooks/useModelDownloadsProjection';
+import { applicationFacade } from '../../services/applicationFacade';
 
 export interface UseDownloadManagerResult {
   activeItems: DownloadItem[];
@@ -41,114 +37,38 @@ export interface UseDownloadManagerResult {
   handleDeleteItem: (item: DownloadItem) => void;
   handleRepairVision: (item: DownloadItem) => void;
   isRepairingVision: (modelId: string) => boolean;
+  repairDownloadFor: (modelId: string) => DownloadItem | undefined;
   totalStorageUsed: number;
 }
 
 export function useDownloadManager(): UseDownloadManagerResult {
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
-  const repairingVisionIds = useDownloadStore(s => s.repairingVisionIds);
-  const setRepairingVision = useDownloadStore(s => s.setRepairingVision);
-  const { downloadedModels, setDownloadedModels, downloadedImageModels } =
-    useAppStore();
-
-  const downloads = useDownloadStore(state => state.downloads);
-  const removeDownloadEntry = useDownloadStore(state => state.remove);
-
-  // Downloads waiting for a concurrency slot live only in the service's queue (no
-  // store row yet), so read them from their owner and show them as "Queued". Refresh
-  // on store changes (a completing download drains the queue) and on a light poll.
-  const [queuedItems, setQueuedItems] = useState<DownloadItem[]>([]);
-  useEffect(() => {
-    const refresh = () =>
-      setQueuedItems(
-        backgroundDownloadService.getQueuedItems().map(queuedToActiveItem),
-      );
-    // On the light poll, also reconcile the concurrency accounting against the native
-    // truth so a leaked slot (e.g. a folded mmproj sidecar) is reclaimed and a stuck
-    // Queued download starts — without waiting for a new start to trigger it.
-    const reconcileAndRefresh = () => {
-      backgroundDownloadService.reconcileActiveIds().catch(() => {});
-      refresh();
-    };
-    refresh();
-    // The service owns the queue and notifies on every control op (incl. cancelling a
-    // queued start), so a cancel drops the "Queued" row immediately, not on the poll.
-    const unsubscribe = modelDownloadService.subscribe(refresh);
-    const t = setInterval(reconcileAndRefresh, 1000);
-    return () => {
-      unsubscribe();
-      clearInterval(t);
-    };
-    // Mount once: the subscription already fires on every store change (that's what
-    // drains the queue) and the interval covers the rest. Depending on `downloads` here
-    // tore down + rebuilt the subscription and interval on EVERY progress tick — pure
-    // churn while a download runs — and refresh reads from the service, not `downloads`.
+  const [repairingVisionIds, setRepairingVisionIds] = useState<Record<string, boolean>>({});
+  const setRepairingVision = useCallback((id: string, repairing: boolean) => {
+    setRepairingVisionIds(current => {
+      if (repairing) return { ...current, [id]: true };
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
   }, []);
+  // Narrow selectors. A zero-argument `useAppStore()` re-rendered this whole screen for every
+  // unrelated store write - image-generation progress, chat state, a settings change - while a
+  // download was already re-rendering it on its own progress.
+  const downloadedModels = useAppStore(state => state.downloadedModels);
+  const downloadedImageModels = useAppStore(state => state.downloadedImageModels);
+
+  const downloads = useModelDownloadsProjection();
 
   // Voice (TTS) + transcription (STT) downloaded models, loaded from disk.
   const { voiceItems, buildDeleteAlert: buildVoiceDeleteAlert } =
     useVoiceDownloadItems(() => setAlertState(hideAlert()));
 
-  // Inject the UI-coupled image cancel/retry into the image provider so control ops
-  // route through the single download service (which logs every [DL-SM] action).
-  // These are the exact paths the manager used inline; they need alerts/resume, so
-  // they can't live in the (UI-free) provider — they're injected here.
-  useEffect(() => {
-    setImageDownloadOps({
-      cancel: async (modelId, entry) => {
-        removeDownloadEntry(entry.modelKey);
-        if (entry.downloadId.startsWith('image-multi:')) {
-          await cancelSyntheticImageDownload(modelId).catch(() => {});
-          const rows = await backgroundDownloadService
-            .getActiveDownloads()
-            .catch(() => [] as any[]);
-          await Promise.all(
-            rows
-              .filter(r => r.modelId === `image:${modelId}`)
-              .map(r =>
-                backgroundDownloadService
-                  .cancelDownload(r.downloadId)
-                  .catch(() => {}),
-              ),
-          );
-        } else {
-          await backgroundDownloadService
-            .cancelDownload(entry.downloadId)
-            .catch(() => {});
-        }
-      },
-      retry: async (_modelId, entry) => {
-        await retryImageDownload(
-          entryToActiveItem(entry),
-          entry,
-          setAlertState,
-        );
-      },
-    });
-  }, [removeDownloadEntry]);
-
-  /**
-   * Uniform download id the service routes on. MUST go through uniformDownloadId so
-   * it matches the id the owning provider assigned in list() — re-deriving it inline
-   * (`${type}:${modelId}`) leaked the per-type id scheme and broke STT remove/cancel:
-   * the store keys whisper rows `whisper-<id>` but the provider lists them as the bare
-   * `stt:<id>`, so the raw id missed and the service REFUSED it as not-found.
-   */
-  const idOf = (item: DownloadItem): string =>
-    uniformDownloadId(item.modelType, item.modelId);
-
-  // voiceItems (TTS/STT) carries BOTH finished and in-flight rows: a completed model
-  // is type:'completed', while a downloading or failed one is type:'active'. Route by
-  // that type — a downloading Kokoro must land in Active Downloads, NOT Downloaded
-  // Models. (Dumping all of voiceItems into completedItems made an in-progress voice
-  // download render as a finished 82MB model via CompletedDownloadCard, regardless of
-  // its real progress — the "shows downloaded while downloading/queued" bug.)
-  const voiceCompleted = voiceItems.filter(i => i.type === 'completed');
-  const voiceActive = voiceItems.filter(i => i.type === 'active');
+  const idOf = (item: DownloadItem): string => `${item.modelType}:${item.modelId}`;
 
   const completedItems: DownloadItem[] = [
     ...modelStoreCompletedItems(downloadedModels, downloadedImageModels),
-    ...voiceCompleted,
+    ...voiceItems,
   ];
 
   // One entry per model. A downloaded (registered, on-disk) model is authoritative, so
@@ -158,27 +78,17 @@ export function useDownloadManager(): UseDownloadManagerResult {
   // the same thing (e.g. SDXL Core ML appearing in both sections). Keyed by the shared
   // uniformDownloadId so text/image/stt all dedup the same way.
   const completedIds = new Set(completedItems.map(idOf));
-  const startedItems = Object.values(downloads)
+  const startedItems = downloads
     .filter(e => e.status !== 'completed' && e.status !== 'cancelled')
-    .map(entryToActiveItem)
+    .map(facadeDownloadToActiveItem)
     .filter(item => !completedIds.has(idOf(item)));
-  // Append queued (not-yet-started) downloads, skipping any already started or already
-  // downloaded — one entry per model, no duplicates across started/queued/completed.
-  const startedKeys = new Set(startedItems.map(i => i.modelKey));
-  const queuedActive = queuedItems.filter(
-    q => !startedKeys.has(q.modelKey) && !completedIds.has(idOf(q)),
-  );
-  // Include the in-flight/failed voice rows here so they render in Active Downloads
-  // (ActiveDownloadCard shows their live progress bar / Retry). Dedup against
-  // completedIds so a voice model that also has a completed row can't double-list.
-  const voiceActiveDeduped = voiceActive.filter(
-    item => !completedIds.has(idOf(item)),
-  );
-  const activeItems: DownloadItem[] = [
-    ...startedItems,
-    ...queuedActive,
-    ...voiceActiveDeduped,
-  ];
+  const activeItems: DownloadItem[] = startedItems;
+  const repairDownloadFor = (modelId: string): DownloadItem | undefined => {
+    const row = downloads.find(
+      download => download.modelKey === modelId || download.modelId === modelId,
+    );
+    return row ? facadeDownloadToActiveItem(row) : undefined;
+  };
 
   const totalStorageUsed = completedItems.reduce(
     (sum, item) => sum + item.fileSize,
@@ -188,24 +98,11 @@ export function useDownloadManager(): UseDownloadManagerResult {
   const executeRemoveDownload = async (item: DownloadItem) => {
     setAlertState(hideAlert());
     try {
-      // Older model-package transfers persisted their individual files as native
-      // "artifact" rows. Hydration can display them, but no model provider owns
-      // that type, so service.cancel() refuses the id and leaves the card in place.
-      if (item.modelKey?.startsWith('model-download:') && item.downloadId) {
-        await backgroundDownloadService.cancelDownload(item.downloadId);
-        const stillNative = (await backgroundDownloadService.getActiveDownloads())
-          .some(row => row.downloadId === item.downloadId);
-        if (stillNative) throw new Error('The native download could not be removed');
-        removeDownloadEntry(item.modelKey);
-        return;
-      }
-      // Single owner: the service cancels the in-flight download (routing to the
-      // owning provider — image uses the injected ops above) and logs [DL-SM].
-      await modelDownloadService.cancel(idOf(item));
-      // A projector repair remains a pending promise until its native cancellation
-      // callback settles. Its transient download row is already gone, so stop showing
-      // the completed model as busy now.
-      if (repairingVisionIds[item.modelId]) setRepairingVision(item.modelId, false);
+      const outcome = await applicationFacade().models.control({
+        type: 'cancel-download',
+        modelId: item.downloadId ?? item.modelId,
+      });
+      if (!outcome.ok) throw new Error(modelsFailureMessage(outcome.failure));
     } catch (error) {
       logger.error('[DownloadManager] Failed to remove download:', error);
       setAlertState(showAlert('Error', 'Failed to remove download'));
@@ -213,39 +110,44 @@ export function useDownloadManager(): UseDownloadManagerResult {
   };
 
   const handleRetryDownload = async (item: DownloadItem) => {
-    // Route purely by id — the service looks up the download and refuses a not-found
-    // id uniformly, so the UI does not gate on downloadId (which leaked the per-type
-    // id scheme: stt re-downloads via whisperService and never has a downloadId).
     try {
-      // Single owner: the service routes retry to the owning provider (image uses
-      // the injected retry above; text/stt are service-level) and logs [DL-SM].
-      await modelDownloadService.retry(idOf(item));
+      const outcome = await applicationFacade().models.control({
+        type: 'retry-download',
+        modelId: item.downloadId ?? item.modelId,
+      });
+      if (!outcome.ok) throw new Error(modelsFailureMessage(outcome.failure));
     } catch (error: any) {
       logger.error('[DownloadManager] Failed to retry download:', error);
-      const errorMessage =
-        error?.message || 'Retry failed. Please remove and re-download.';
-      if (item.downloadId)
-        useDownloadStore.getState().setStatus(item.downloadId, 'failed', {
-          message: errorMessage,
-        });
+      setAlertState(showAlert(
+        'Retry Failed',
+        error instanceof Error ? error.message : String(error),
+      ));
     }
   };
 
   const handlePauseDownload = async (item: DownloadItem) => {
     try {
-      await modelDownloadService.pause(idOf(item));
+      const outcome = await applicationFacade().models.control({
+        type: 'pause-download',
+        modelId: item.downloadId ?? item.modelId,
+      });
+      if (!outcome.ok) throw new Error(modelsFailureMessage(outcome.failure));
     } catch (error) {
       logger.error('[DownloadManager] Failed to pause download:', error);
-      setAlertState(showAlert('Pause failed', 'This download could not pause. Try again.'));
+      setAlertState(showAlert('Error', 'Failed to pause download'));
     }
   };
 
   const handleResumeDownload = async (item: DownloadItem) => {
     try {
-      await modelDownloadService.resume(idOf(item));
+      const outcome = await applicationFacade().models.control({
+        type: 'resume-download',
+        modelId: item.downloadId ?? item.modelId,
+      });
+      if (!outcome.ok) throw new Error(modelsFailureMessage(outcome.failure));
     } catch (error) {
       logger.error('[DownloadManager] Failed to resume download:', error);
-      setAlertState(showAlert('Resume failed', error instanceof Error ? error.message : 'Try again.'));
+      setAlertState(showAlert('Error', 'Failed to resume download'));
     }
   };
 
@@ -271,9 +173,8 @@ export function useDownloadManager(): UseDownloadManagerResult {
   const executeDeleteModel = async (model: DownloadedModel) => {
     setAlertState(hideAlert());
     try {
-      // Single owner: provider.remove unloads (n/a for text) + deletes + drops it
-      // from the store, and logs [DL-SM].
-      await modelDownloadService.remove(uniformDownloadId('text', model.id));
+      const outcome = await applicationFacade().models.remove(model.id);
+      if (!outcome.ok) throw new Error(modelsFailureMessage(outcome.failure));
     } catch (error) {
       logger.error('[DownloadManager] Failed to delete model:', error);
       setAlertState(showAlert('Error', 'Failed to delete model'));
@@ -283,9 +184,8 @@ export function useDownloadManager(): UseDownloadManagerResult {
   const executeDeleteImageModel = async (model: ONNXImageModel) => {
     setAlertState(hideAlert());
     try {
-      // Single owner: provider.remove unloads the image model + deletes + drops it
-      // from the store, and logs [DL-SM].
-      await modelDownloadService.remove(uniformDownloadId('image', model.id));
+      const outcome = await applicationFacade().models.remove(model.id);
+      if (!outcome.ok) throw new Error(modelsFailureMessage(outcome.failure));
     } catch (error) {
       logger.error('[DownloadManager] Failed to delete image model:', error);
       setAlertState(showAlert('Error', 'Failed to delete image model'));
@@ -365,10 +265,15 @@ export function useDownloadManager(): UseDownloadManagerResult {
       currentMmProjPath: item.mmProjPath,
       currentMmProjFileName: item.mmProjFileName,
     });
-    modelManager
-      .repairVision(model)
-      .then(async outcome => {
-        setDownloadedModels(await modelManager.getDownloadedModels());
+    modelLibrary
+      .executeVisionRepair({ type: 'repair-model', model })
+      .then(result => {
+        if (result.status === 'failed') throw new Error(result.error);
+        if (result.status === 'installed-reconciliation-pending') {
+          setAlertState(showAlert('Vision Installed', result.message));
+          return;
+        }
+        const outcome = result.outcome;
         logger.log('[DownloadDebug] Repair vision outcome', {
           modelId: item.modelId,
           outcome: outcome.kind,
@@ -377,7 +282,6 @@ export function useDownloadManager(): UseDownloadManagerResult {
         setAlertState(showAlert(title, body));
       })
       .catch((e: Error) => {
-        if (e.message === 'Download cancelled' || !useDownloadStore.getState().repairingVisionIds[item.modelId]) return;
         logger.error('[DownloadDebug] Repair vision failed', {
           modelId: item.modelId,
           error: e.message,
@@ -403,6 +307,7 @@ export function useDownloadManager(): UseDownloadManagerResult {
     handleDeleteItem,
     handleRepairVision,
     isRepairingVision,
+    repairDownloadFor,
     totalStorageUsed,
   };
 }

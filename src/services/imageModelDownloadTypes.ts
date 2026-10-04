@@ -4,7 +4,8 @@ import type { AlertState } from '../utils/alertState';
 export interface ImageDownloadDeps {
   addDownloadedImageModel: (model: ONNXImageModel) => void;
   activeImageModelId: string | null;
-  setActiveImageModelId: (id: string) => void;
+  /** User-selection intent. The shared LLM service owns the persisted projection. */
+  selectActiveImageModel: (model: ONNXImageModel) => Promise<void>;
   setAlertState: (state: AlertState) => void;
   triedImageGen: boolean;
 }

@@ -46,6 +46,7 @@ export class ProximityNativeFake extends NativeEventBus {
   connectFailure: Error | undefined;
   readonly calls: string[] = [];
   started = false;
+  browsing = false;
   advertising = false;
   device: Device;
 
@@ -59,6 +60,7 @@ export class ProximityNativeFake extends NativeEventBus {
     if (this.startFailure) throw this.startFailure;
     this.device = device;
     this.started = true;
+    this.browsing = true;
     this.advertising = false;
     this.air.announce(this);
   }
@@ -82,12 +84,19 @@ export class ProximityNativeFake extends NativeEventBus {
   async rescan(): Promise<void> {
     this.calls.push('rescan');
     if (this.rescanFailure) throw this.rescanFailure;
+    this.browsing = true;
     this.air.announce(this);
+  }
+
+  async stopBrowsing(): Promise<void> {
+    this.calls.push('stopBrowsing');
+    this.browsing = false;
   }
 
   async stop(): Promise<void> {
     this.calls.push('stop');
     this.started = false;
+    this.browsing = false;
     this.advertising = false;
     this.air.withdraw(this);
   }
@@ -144,10 +153,10 @@ export class ProximityAir {
     for (const peer of this.devices) {
       if (peer === source || !peer.started) continue;
       // Both directions, the way browsing and advertising each surface the other side.
-      if (source.advertising) {
+      if (source.advertising && peer.browsing) {
         peer.emit(PEER_FOUND_EVENT, { device: source.device });
       }
-      if (peer.advertising) {
+      if (peer.advertising && source.browsing) {
         source.emit(PEER_FOUND_EVENT, { device: peer.device });
       }
     }

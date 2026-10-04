@@ -1,0 +1,43 @@
+/**
+ * When the recorder does its heavy work - the lead's configurable "real-time vs batched" choice.
+ *
+ * Live: transcribe + summarise the moment you stop, so the day fills in immediately (best plugged in).
+ * Nightly: queue the capture and process it in a later batch, so recording stays cheap on battery and
+ * the Day is ready when you come back. Same pipeline; only WHEN it runs changes.
+ *
+ * Pure: the mode + the queued-capture shape. The screen owns the queue + the "process now" trigger.
+ */
+
+import type { SpeechSegment } from './vadSegmenter'
+
+export type ProcessingMode = 'live' | 'nightly'
+
+/** Session = one-tap capture; always-on = passive continuous capture (rotated). */
+export type CaptureMode = 'session' | 'always-on'
+
+export const DEFAULT_CAPTURE_MODE: CaptureMode = 'session'
+
+/** In always-on mode, finalise the current capture and start a fresh one every this many ms, so files
+ *  stay bounded and processing can happen in chunks. */
+export const ALWAYS_ON_ROTATE_MS = 10 * 60_000
+
+/** Whether an always-on capture has run long enough to rotate. */
+export function shouldRotate(elapsedMs: number, rotateMs: number = ALWAYS_ON_ROTATE_MS): boolean {
+  return elapsedMs >= rotateMs
+}
+
+export const DEFAULT_PROCESSING_MODE: ProcessingMode = 'live'
+
+/** A finished capture waiting to be transcribed + summarised (nightly/deferred mode). */
+export interface PendingCapture {
+  id: string
+  segments: SpeechSegment[]
+  recordingPath: string
+  captureStartedAtMs: number
+  anchorsMs: number[]
+}
+
+/** Whether to process immediately on stop, or queue it for a later pass. */
+export function processOnStop(mode: ProcessingMode): boolean {
+  return mode === 'live'
+}

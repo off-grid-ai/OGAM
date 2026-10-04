@@ -67,8 +67,10 @@ class RecordingController {
    */
   getPhase(): RecordPhase {
     const { state, phase } = voiceSession.current();
-    if (state === 'listen') return phase === 'recording' ? 'recording' : 'listening';
-    if (state === 'speak') return phase === 'transcribing' ? 'transcribing' : 'recording';
+    if (state === 'listen')
+      return phase === 'recording' ? 'recording' : 'listening';
+    if (state === 'speak')
+      return phase === 'transcribing' ? 'transcribing' : 'recording';
     return 'idle';
   }
 
@@ -77,27 +79,17 @@ class RecordingController {
     return voiceSession.subscribe(() => listener(this.getPhase()));
   }
 
-  /**
-   * Ask to begin. Two owners answer this, and that is fine - the recorder absorbs the duplicate.
-   *
-   * `dispatch` moves the session to listening, which `useVoiceSessionDriver` obeys by opening the
-   * microphone; `handlers.start()` is the direct route for a surface with no driver mounted. Both used
-   * to reach `startRealtimeTranscription` for ONE tap, entering the native `transcribeRealtime` twice
-   * while the first session was still coming up - the "State: -100" collision (B12), which never needed
-   * a double-tap. The latch that stops it lives in the recorder, not here: it has to hold for every
-   * duplicate ask, not just the two this method happens to make.
-   */
+  /** Ask Shared Speech to begin through the registered platform binding. */
   start(): void {
     if (this.getPhase() !== 'idle' || !this.handlers) return;
-    voiceSession.dispatch('userStart');
-    void this.handlers.start();
+    this.handlers.start();
   }
 
   /** Stop the in-flight recording. Listening counts: the mic is open, so stop must reach it -
    *  toggle() offered to stop a listening turn and this refused it. */
   stop(): void {
     if (!this.isRecording() || !this.handlers) return;
-    void this.handlers.stop();
+    this.handlers.stop();
   }
 
   /** The uniform mic action: stop when recording, start when idle. This is what

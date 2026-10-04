@@ -6,9 +6,8 @@
  */
 import {
   predictGgufCapabilities,
-  GGUF_THINKING_NAME_PATTERNS,
-  GGUF_TOOLS_NAME_PATTERNS,
 } from '../../../src/utils/ggufCapabilities';
+import { projectGgufCapabilities } from '@offgrid/models';
 
 describe('predictGgufCapabilities (pure)', () => {
   it('null/undefined model → no capabilities promised', () => {
@@ -40,8 +39,10 @@ describe('predictGgufCapabilities (pure)', () => {
     expect(predictGgufCapabilities({ name: 'Test Model' }).vision).toBe(false);
   });
 
-  it('every published pattern actually matches (the table is live, not decorative)', () => {
-    for (const p of GGUF_THINKING_NAME_PATTERNS) expect(predictGgufCapabilities({ name: p }).thinking).toBe(true);
-    for (const p of GGUF_TOOLS_NAME_PATTERNS) expect(predictGgufCapabilities({ name: p }).tools).toBe(true);
+  it('loaded runtime evidence overrides the static prediction in both directions', () => {
+    expect(projectGgufCapabilities({
+      artifact: { name: 'Mistral 7B', projectorPresent: true },
+      runtime: { loaded: true, tools: false, thinking: true, vision: false },
+    })).toEqual({ tools: false, thinking: true, vision: false });
   });
 });

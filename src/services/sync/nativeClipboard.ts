@@ -13,7 +13,7 @@ export interface NativeClipboardChange {
   ts: number;
 }
 
-export interface PendingNativeClipboardText extends NativeClipboardChange {
+interface PendingNativeClipboardText extends NativeClipboardChange {
   id: string;
 }
 

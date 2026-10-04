@@ -29,9 +29,22 @@ const setDownloadedFlag = (v: boolean) =>
     settings: { ...s.settings, modelDownloaded: { ...s.settings.modelDownloaded, kokoro: v } },
   }));
 
+async function initializeOnDemand(engine: KokoroEngine): Promise<void> {
+  // initialize() requests a React remount and then waits for the bridge. Do not
+  // await that promise inside one act callback: React cannot commit the remount
+  // until the callback returns, which creates a test-only deadlock.
+  let initialization!: Promise<void>;
+  act(() => {
+    initialization = engine.initialize();
+  });
+  await waitFor(() => expect(engine.getPhase()).toBe('ready'));
+  await initialization;
+}
+
 describe('KokoroTTSBridge mount gating', () => {
   beforeEach(() => {
     listDownloadedFiles.mockReset().mockResolvedValue([]);
+    (useTextToSpeech as jest.Mock).mockClear();
     setDownloadedFlag(false);
   });
 
@@ -44,13 +57,19 @@ describe('KokoroTTSBridge mount gating', () => {
     expect(engine.getPhase()).toBe('idle');
   });
 
-  it('mounts the hook and becomes ready when the model is downloaded', async () => {
+  it('keeps a downloaded model released until speech explicitly requests it', async () => {
     listDownloadedFiles.mockResolvedValue(onDisk());
     setDownloadedFlag(true);
     const engine = new KokoroEngine();
     const Bridge = engine.getBridgeComponent() as React.FC;
     render(<Bridge />);
-    await waitFor(() => expect(engine.getPhase()).toBe('ready'));
+    await act(async () => { await Promise.resolve(); });
+    expect(engine.getPhase()).toBe('idle');
+    expect(useTextToSpeech).not.toHaveBeenCalled();
+
+    await initializeOnDemand(engine);
+    expect(engine.getPhase()).toBe('ready');
+    expect(useTextToSpeech).toHaveBeenCalledTimes(1);
   });
 
   it('REGRESSION: deleting unmounts the hook (no auto re-download)', async () => {
@@ -59,7 +78,8 @@ describe('KokoroTTSBridge mount gating', () => {
     const engine = new KokoroEngine();
     const Bridge = engine.getBridgeComponent() as React.FC;
     render(<Bridge />);
-    await waitFor(() => expect(engine.getPhase()).toBe('ready'));
+    await initializeOnDemand(engine);
+    expect(engine.getPhase()).toBe('ready');
 
     // Delete: the engine clears its on-disk/progress state, and the store flag
     // flips false. Before the fix, shouldLoad stayed true and the hook re-fetched.
@@ -84,7 +104,8 @@ describe('KokoroTTSBridge mount gating', () => {
     const engine = new KokoroEngine();
     const Bridge = engine.getBridgeComponent() as React.FC;
     render(<Bridge />);
-    await waitFor(() => expect(engine.getPhase()).toBe('ready'));
+    await initializeOnDemand(engine);
+    expect(engine.getPhase()).toBe('ready');
 
     await act(async () => { await engine.speak('hello'); });
 
@@ -116,7 +137,8 @@ describe('KokoroTTSBridge mount gating', () => {
     const engine = new KokoroEngine();
     const Bridge = engine.getBridgeComponent() as React.FC;
     render(<Bridge />);
-    await waitFor(() => expect(engine.getPhase()).toBe('ready'));
+    await initializeOnDemand(engine);
+    expect(engine.getPhase()).toBe('ready');
 
     let resolved = false;
     await act(async () => {
@@ -153,7 +175,8 @@ describe('KokoroTTSBridge mount gating', () => {
     const engine = new KokoroEngine();
     const Bridge = engine.getBridgeComponent() as React.FC;
     render(<Bridge />);
-    await waitFor(() => expect(engine.getPhase()).toBe('ready'));
+    await initializeOnDemand(engine);
+    expect(engine.getPhase()).toBe('ready');
 
     await act(async () => {
       engine.speak('hi'); // → processing; bridge.speak stays pending (buffer not ended)

@@ -1,4 +1,5 @@
 import { useDownloadStore, isActiveStatus, isQueuedStatus, isDownloadingStatus, DownloadEntry, DownloadStatus } from '../../../src/stores/downloadStore';
+import {isPausedStatus} from '../../../src/utils/downloadStatus';
 
 const makeEntry = (overrides: Partial<DownloadEntry> = {}): DownloadEntry => ({
   modelKey: 'author/model/model.gguf',
@@ -7,7 +8,7 @@ const makeEntry = (overrides: Partial<DownloadEntry> = {}): DownloadEntry => ({
   fileName: 'model.gguf',
   quantization: 'Q4_K_M',
   modelType: 'text',
-  status: 'pending',
+  status: 'queued',
   bytesDownloaded: 0,
   totalBytes: 1000,
   combinedTotalBytes: 1000,
@@ -22,10 +23,9 @@ beforeEach(() => {
 
 describe('isActiveStatus', () => {
   it('returns true for active statuses', () => {
-    expect(isActiveStatus('pending')).toBe(true);
-    expect(isActiveStatus('running')).toBe(true);
-    expect(isActiveStatus('retrying')).toBe(true);
-    expect(isActiveStatus('waiting_for_network')).toBe(true);
+    expect(isActiveStatus('queued')).toBe(true);
+    expect(isActiveStatus('downloading')).toBe(true);
+    expect(isActiveStatus('paused')).toBe(true);
     expect(isActiveStatus('processing')).toBe(true);
   });
 
@@ -53,36 +53,39 @@ describe('isActiveStatus', () => {
 // so a queued item renders the clock everywhere and an "active" count can't call a queued
 // row "downloading" (the "Active Downloads: 5" bug when only 3 were transferring).
 describe('isQueuedStatus / isDownloadingStatus', () => {
-  const ALL: DownloadStatus[] = ['pending', 'running', 'retrying', 'waiting_for_network', 'processing', 'completed', 'failed', 'cancelled'];
+  const ALL: DownloadStatus[] = ['queued', 'downloading', 'paused', 'processing', 'completed', 'failed', 'cancelled'];
 
-  it('queued is exactly the pending status', () => {
-    expect(isQueuedStatus('pending')).toBe(true);
-    for (const s of ALL.filter(x => x !== 'pending')) expect(isQueuedStatus(s)).toBe(false);
+  it('queued is exactly the queued status', () => {
+    expect(isQueuedStatus('queued')).toBe(true);
+    for (const s of ALL.filter(x => x !== 'queued')) expect(isQueuedStatus(s)).toBe(false);
   });
 
-  it('downloading is active-but-not-queued', () => {
-    expect(isDownloadingStatus('running')).toBe(true);
-    expect(isDownloadingStatus('retrying')).toBe(true);
-    expect(isDownloadingStatus('waiting_for_network')).toBe(true);
+  it('downloading means bytes or processing are active', () => {
+    expect(isDownloadingStatus('downloading')).toBe(true);
+    expect(isDownloadingStatus('paused')).toBe(false);
     expect(isDownloadingStatus('processing')).toBe(true);
     // pending is queued, not downloading — this is the whole point of the split
-    expect(isDownloadingStatus('pending')).toBe(false);
+    expect(isDownloadingStatus('queued')).toBe(false);
     // terminal statuses are neither
     expect(isDownloadingStatus('completed')).toBe(false);
     expect(isDownloadingStatus('failed')).toBe(false);
     expect(isDownloadingStatus('cancelled')).toBe(false);
   });
 
-  it('partitions active exactly into queued + downloading (no overlap, no gap)', () => {
+  it('partitions active exactly into queued, downloading, or paused', () => {
     for (const s of ALL) {
-      // active === queued OR downloading, and queued/downloading never both true
-      expect(isActiveStatus(s)).toBe(isQueuedStatus(s) || isDownloadingStatus(s));
-      expect(isQueuedStatus(s) && isDownloadingStatus(s)).toBe(false);
+      const partitions = [
+        isQueuedStatus(s),
+        isDownloadingStatus(s),
+        isPausedStatus(s),
+      ].filter(Boolean).length;
+      expect(isActiveStatus(s)).toBe(partitions === 1);
+      expect(partitions).toBeLessThanOrEqual(1);
     }
   });
 
   it('a mixed active list splits into the correct downloading/queued counts (the "5 active" bug)', () => {
-    const statuses: DownloadStatus[] = ['running', 'running', 'processing', 'pending', 'pending'];
+    const statuses: DownloadStatus[] = ['downloading', 'downloading', 'processing', 'queued', 'queued'];
     const queued = statuses.filter(isQueuedStatus).length;
     const downloading = statuses.filter(isDownloadingStatus).length;
     expect(queued).toBe(2);        // was mislabeled "active"
@@ -133,7 +136,7 @@ describe('hydrate', () => {
   });
 
   it('keeps existing entry when local progress is ahead', () => {
-    const existing = makeEntry({ bytesDownloaded: 600, status: 'running' });
+    const existing = makeEntry({ bytesDownloaded: 600, status: 'downloading' });
     useDownloadStore.getState().add(existing);
     const incoming = makeEntry({ bytesDownloaded: 400, totalBytes: 2000 });
     useDownloadStore.getState().hydrate([incoming]);
@@ -158,7 +161,7 @@ describe('updateProgress', () => {
     const entry = useDownloadStore.getState().downloads['author/model/model.gguf'];
     expect(entry.bytesDownloaded).toBe(500);
     expect(entry.progress).toBe(0.5);
-    expect(entry.status).toBe('running');
+    expect(entry.status).toBe('downloading');
   });
 
   it('is a no-op for unknown downloadId', () => {
@@ -226,7 +229,7 @@ describe('setStatus', () => {
     useDownloadStore.getState().add(entry);
     useDownloadStore.getState().setStatus('dl-mm', 'failed', { message: 'mmproj err' });
     const updated = useDownloadStore.getState().downloads['author/model/model.gguf'];
-    expect(updated.status).toBe('pending');
+    expect(updated.status).toBe('queued');
     expect(updated.mmProjStatus).toBe('failed');
   });
 
@@ -238,9 +241,9 @@ describe('setStatus', () => {
 
   it('keeps the aggregate rate while the sidecar still transfers', () => {
     useDownloadStore.getState().add(makeEntry({
-      status: 'running',
+      status: 'downloading',
       mmProjDownloadId: 'dl-mm',
-      mmProjStatus: 'running',
+      mmProjStatus: 'downloading',
       bytesPerSecond: 512,
       rateSample: { currentBytes: 500, sampledAtMs: 1_000 },
     }));
@@ -258,13 +261,13 @@ describe('setStatus', () => {
 
 describe('setProcessing / setCompleted', () => {
   it('setProcessing sets status to processing', () => {
-    useDownloadStore.getState().add(makeEntry({ status: 'running' }));
+    useDownloadStore.getState().add(makeEntry({ status: 'downloading' }));
     useDownloadStore.getState().setProcessing('dl-1');
     expect(useDownloadStore.getState().downloads['author/model/model.gguf'].status).toBe('processing');
   });
 
   it('setCompleted sets status to completed and progress to 1', () => {
-    useDownloadStore.getState().add(makeEntry({ status: 'running' }));
+    useDownloadStore.getState().add(makeEntry({ status: 'downloading' }));
     useDownloadStore.getState().setCompleted('dl-1');
     const entry = useDownloadStore.getState().downloads['author/model/model.gguf'];
     expect(entry.status).toBe('completed');
@@ -295,7 +298,7 @@ describe('retryEntry', () => {
     const state = useDownloadStore.getState();
     const entry = state.downloads['author/model/model.gguf'];
     expect(entry.downloadId).toBe('dl-retry');
-    expect(entry.status).toBe('pending');
+    expect(entry.status).toBe('queued');
     expect(entry.bytesDownloaded).toBe(0);
     expect(state.downloadIdIndex['dl-retry']).toBe('author/model/model.gguf');
     expect(state.downloadIdIndex['dl-1']).toBeUndefined();

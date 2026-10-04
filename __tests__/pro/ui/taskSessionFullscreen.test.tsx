@@ -64,7 +64,7 @@ const steps: SyncedTaskVisualStep[] = [
   },
 ];
 
-describe('TaskSessionPlayback bottom sheet', () => {
+describe('TaskSessionPlayback full screen', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
 
@@ -79,7 +79,7 @@ describe('TaskSessionPlayback bottom sheet', () => {
     expect(screen.getByTestId('task-session-cursor')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('task-session-open-fullscreen'));
-    expect(screen.getByTestId('task-session-sheet')).toBeTruthy();
+    expect(screen.getByTestId('task-session-fullscreen')).toBeTruthy();
     expect(screen.queryByTestId('task-session-frame')).toBeNull();
     fireEvent(screen.getByTestId('task-session-fullscreen-frame'), 'layout', {
       nativeEvent: { layout: { width: 390, height: 700 } },
@@ -88,7 +88,7 @@ describe('TaskSessionPlayback bottom sheet', () => {
     expect(screen.getByTestId('task-session-fullscreen-cursor')).toBeTruthy();
 
     fireEvent.press(screen.getByLabelText('Close full screen'));
-    expect(screen.queryByTestId('task-session-sheet')).toBeNull();
+    expect(screen.queryByTestId('task-session-fullscreen')).toBeNull();
     expect(screen.getByTestId('task-session-frame')).toBeTruthy();
   });
 
@@ -98,52 +98,39 @@ describe('TaskSessionPlayback bottom sheet', () => {
     );
 
     fireEvent(screen.getByTestId('task-session-scrubber'), 'valueChange', 1);
-    expect(screen.getByText('Step 2 of 2')).toBeTruthy();
-    expect(screen.getByText('0:01 / 0:01')).toBeTruthy();
+    expect(screen.getByText('Step 2 of 2 · 0:01 / 0:01')).toBeTruthy();
     expect(screen.getByText('Selected Continue')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('task-session-open-fullscreen'));
-    expect(screen.getByText('Step 2 of 2')).toBeTruthy();
-    expect(screen.getByText('0:01 / 0:01')).toBeTruthy();
+    expect(screen.getByText('Step 2 of 2 · 0:01 / 0:01')).toBeTruthy();
     expect(screen.getByText('Selected Continue')).toBeTruthy();
     expect(screen.getByText('Play')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Close full screen' })).toBeTruthy();
+    expect(screen.getByText('Done')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('task-session-fullscreen-toggle'));
-    expect(screen.getByText('Step 1 of 2')).toBeTruthy();
-    expect(screen.getByText('0:00 / 0:01')).toBeTruthy();
+    expect(screen.getByText('Step 1 of 2 · 0:00 / 0:01')).toBeTruthy();
     expect(screen.getByText('Pause')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('task-session-close-fullscreen'));
-    expect(screen.getByText('Step 1 of 2')).toBeTruthy();
-    expect(screen.getByText('0:00 / 0:01')).toBeTruthy();
+    expect(screen.getByText('Step 1 of 2 · 0:00 / 0:01')).toBeTruthy();
     expect(screen.getByText('Pause')).toBeTruthy();
 
     act(() => screen.unmount());
   });
 
-  it('dismisses the session sheet from its backdrop without changing the replay position', () => {
-    const screen = render(<TaskSessionPlayback run={run('done')} steps={steps} />);
-    fireEvent(screen.getByTestId('task-session-scrubber'), 'valueChange', 1);
-    fireEvent.press(screen.getByTestId('task-session-open-fullscreen'));
-
-    expect(screen.getByTestId('task-session-sheet')).toBeTruthy();
-    fireEvent.press(screen.getByLabelText('Close session view'));
-    expect(screen.queryByTestId('task-session-sheet')).toBeNull();
-    expect(screen.getByText('Step 2 of 2')).toBeTruthy();
-  });
-
-  it('reviews saved steps during a live task and returns to the live frame', () => {
+  it('turns a legacy raw action into readable replay copy', () => {
+    const rawSteps = [
+      steps[0]!,
+      { ...steps[1]!, actionLabel: '{"action":"click","index":5}' },
+    ];
     const screen = render(
-      <TaskSessionPlayback run={run('running')} steps={steps} />,
+      <TaskSessionPlayback run={run('done')} steps={rawSteps} />,
     );
 
-    expect(screen.getByText('Step 2')).toBeTruthy();
-    fireEvent.press(screen.getByLabelText('Show previous task step'));
-    expect(screen.getByText('Step 2 of 2')).toBeTruthy();
-    expect(screen.getByText('Selected Continue')).toBeTruthy();
+    fireEvent(screen.getByTestId('task-session-scrubber'), 'valueChange', 1);
 
-    fireEvent.press(screen.getByLabelText('Return to live task view'));
-    expect(screen.getByText('Step 2')).toBeTruthy();
-    expect(screen.queryByText('Selected Continue')).toBeNull();
+    expect(screen.getByText('Clicked control 5')).toBeTruthy();
+    expect(screen.queryByText('{"action":"click","index":5}')).toBeNull();
   });
 });

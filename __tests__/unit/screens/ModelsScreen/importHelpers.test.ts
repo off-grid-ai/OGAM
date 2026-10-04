@@ -7,12 +7,15 @@
 
 // ── Mocks (hoisted before imports) ─────────────────────────────────────────
 
-const mockImportLocalModel = jest.fn();
+const mockImportSelectedModelFiles = jest.fn();
 jest.mock('../../../../src/services', () => ({
-  modelManager: {
-    importLocalModel: (...args: any[]) => mockImportLocalModel(...args),
+  modelLibrary: {
+    getModelsDirectory: jest.fn(() => '/models'),
     getImageModelsDirectory: jest.fn(() => '/models'),
   },
+}));
+jest.mock('../../../../src/services/adapters/models/library/modelFileImportApplicationAdapter', () => ({
+  importSelectedModelFiles: (...args: any[]) => mockImportSelectedModelFiles(...args),
 }));
 
 jest.mock('../../../../src/components/CustomAlert', () => ({
@@ -95,12 +98,12 @@ describe('classifyGgufPair', () => {
     expect(mmProjFile.name).toBe('model-clip.bin');
   });
 
-  it('falls back to file1 as main when sizes are both 0', () => {
+  it('uses the Shared classifier tie-break when sizes are both 0', () => {
     const f1 = makeFile('a.gguf', 0);
     const f2 = makeFile('b.gguf', 0);
     const { mainFile, mmProjFile } = classifyGgufPair(f1, f2);
-    expect(mainFile.name).toBe('a.gguf');
-    expect(mmProjFile.name).toBe('b.gguf');
+    expect(mainFile.name).toBe('b.gguf');
+    expect(mmProjFile.name).toBe('a.gguf');
   });
 });
 
@@ -140,20 +143,24 @@ describe('importGgufFiles', () => {
 
   // ── single GGUF ────────────────────────────────────────────────────────
 
-  it('single GGUF: calls importLocalModel with correct opts and shows success', async () => {
+  it('single GGUF: passes the picker artifact to the import application and shows success', async () => {
     const fakeModel = { id: 'm1', name: 'MyModel' };
-    mockImportLocalModel.mockResolvedValueOnce(fakeModel);
+    mockImportSelectedModelFiles.mockImplementationOnce(async (input: any) => {
+      input.refresh(fakeModel);
+      return { status: 'completed', model: fakeModel, projector: false };
+    });
 
     await importGgufFiles(
       [{ uri: 'file://my-model.gguf', name: 'my-model.gguf', size: 4000 }],
       deps,
     );
 
-    expect(mockImportLocalModel).toHaveBeenCalledWith(expect.objectContaining({
-      sourceUri: 'file://my-model.gguf',
-      fileName: 'my-model.gguf',
-      sourceSize: 4000,
-      onProgress: expect.any(Function),
+    expect(mockImportSelectedModelFiles).toHaveBeenCalledWith(expect.objectContaining({
+      modelsDir: '/models',
+      artifacts: [{ uri: 'file://my-model.gguf', name: 'my-model.gguf', sizeBytes: 4000 }],
+      decide: expect.any(Function),
+      onProgress: mockSetImportProgress,
+      refresh: mockAddDownloadedModel,
     }));
     expect(mockAddDownloadedModel).toHaveBeenCalledWith(fakeModel);
     expect(mockSetAlertState).toHaveBeenCalledWith(expect.objectContaining({ visible: true }));
@@ -161,16 +168,28 @@ describe('importGgufFiles', () => {
   });
 
   it('single GGUF: null name falls back to "unknown"', async () => {
-    mockImportLocalModel.mockResolvedValueOnce({ id: 'x', name: 'X' });
+    const model = { id: 'x', name: 'X' };
+    mockImportSelectedModelFiles.mockResolvedValueOnce({ status: 'completed', model, projector: false });
     await importGgufFiles([{ uri: 'file://x.gguf', name: null, size: 0 }], deps);
-    expect(mockImportLocalModel).toHaveBeenCalledWith(expect.objectContaining({ fileName: 'unknown' }));
+    expect(mockImportSelectedModelFiles).toHaveBeenCalledWith(expect.objectContaining({
+      artifacts: [{ uri: 'file://x.gguf', name: 'unknown', sizeBytes: 0 }],
+    }));
   });
 
   // ── two GGUFs — user confirms ──────────────────────────────────────────
 
   it('two GGUFs: shows confirmation dialog and on confirm imports with mmproj args', async () => {
     const fakeModel = { id: 'm2', name: 'VisionModel' };
-    mockImportLocalModel.mockResolvedValueOnce(fakeModel);
+    mockImportSelectedModelFiles.mockImplementationOnce(async (input: any) => {
+      const accepted = await input.decide({
+        type: 'confirm-projector',
+        primary: { uri: file1.uri, name: file1.name, sizeBytes: file1.size },
+        projector: { uri: file2.uri, name: file2.name, sizeBytes: file2.size },
+      });
+      if (!accepted) return { status: 'cancelled' };
+      input.refresh(fakeModel);
+      return { status: 'completed', model: fakeModel, projector: true };
+    });
 
     // Simulate user tapping "Import" in the native Alert dialog
     mockAlertAlert.mockImplementationOnce((_title: string, _msg: string, buttons: any[]) => {
@@ -190,15 +209,11 @@ describe('importGgufFiles', () => {
       expect.any(Object),
     );
 
-    // importLocalModel called with mmproj fields
-    expect(mockImportLocalModel).toHaveBeenCalledWith(expect.objectContaining({
-      sourceUri: file1.uri,
-      fileName: file1.name,
-      sourceSize: file1.size,
-      onProgress: expect.any(Function),
-      mmProjSourceUri: file2.uri,
-      mmProjFileName: file2.name,
-      mmProjSourceSize: file2.size,
+    expect(mockImportSelectedModelFiles).toHaveBeenCalledWith(expect.objectContaining({
+      artifacts: [
+        { uri: file1.uri, name: file1.name, sizeBytes: file1.size },
+        { uri: file2.uri, name: file2.name, sizeBytes: file2.size },
+      ],
     }));
 
     expect(mockAddDownloadedModel).toHaveBeenCalledWith(fakeModel);
@@ -206,11 +221,20 @@ describe('importGgufFiles', () => {
   });
 
   it('two GGUFs: classifies correctly — mmproj name in file1 position swaps to projector', async () => {
-    mockImportLocalModel.mockResolvedValueOnce({ id: 'v', name: 'VisionModel' });
-
     // file1 has mmproj in name → should become the projector, file2 is main
     const mmproj = { uri: 'file://mmproj-f16.gguf', name: 'mmproj-f16.gguf', size: 200 };
     const main = { uri: 'file://model-Q4.gguf', name: 'model-Q4.gguf', size: 4000 };
+
+    mockImportSelectedModelFiles.mockImplementationOnce(async (input: any) => {
+      const accepted = await input.decide({
+        type: 'confirm-projector',
+        primary: { uri: main.uri, name: main.name, sizeBytes: main.size },
+        projector: { uri: mmproj.uri, name: mmproj.name, sizeBytes: mmproj.size },
+      });
+      return accepted
+        ? { status: 'completed', model: { id: 'v', name: 'VisionModel' }, projector: true }
+        : { status: 'cancelled' };
+    });
 
     mockAlertAlert.mockImplementationOnce((_: string, __: string, buttons: any[]) => {
       buttons?.find((b: any) => b.text === 'Import')?.onPress?.();
@@ -218,15 +242,25 @@ describe('importGgufFiles', () => {
 
     await importGgufFiles([mmproj, main], deps);
 
-    expect(mockImportLocalModel).toHaveBeenCalledWith(expect.objectContaining({
-      sourceUri: main.uri,         // main model is file2
-      mmProjSourceUri: mmproj.uri, // projector is file1
-    }));
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Import Vision Model?',
+      expect.stringContaining(`Main model:  ${main.name}`),
+      expect.any(Array),
+      expect.any(Object),
+    );
   });
 
   // ── two GGUFs — user cancels ───────────────────────────────────────────
 
-  it('two GGUFs: on cancel, does NOT call importLocalModel', async () => {
+  it('two GGUFs: cancellation stops before registry refresh', async () => {
+    mockImportSelectedModelFiles.mockImplementationOnce(async (input: any) => {
+      const accepted = await input.decide({
+        type: 'confirm-projector',
+        primary: { uri: file1.uri, name: file1.name, sizeBytes: file1.size },
+        projector: { uri: file2.uri, name: file2.name, sizeBytes: file2.size },
+      });
+      return accepted ? { status: 'completed', model: {}, projector: true } : { status: 'cancelled' };
+    });
     mockAlertAlert.mockImplementationOnce((_title: string, _msg: string, buttons: any[]) => {
       buttons?.find((b: any) => b.text === 'Cancel')?.onPress?.();
     });
@@ -236,16 +270,16 @@ describe('importGgufFiles', () => {
 
     await importGgufFiles([file1, file2], deps);
 
-    expect(mockImportLocalModel).not.toHaveBeenCalled();
+    expect(mockImportSelectedModelFiles).toHaveBeenCalledTimes(1);
     expect(mockAddDownloadedModel).not.toHaveBeenCalled();
   });
 
   // ── onProgress wiring ──────────────────────────────────────────────────
 
   it('single GGUF: onProgress callback forwards progress to setImportProgress', async () => {
-    mockImportLocalModel.mockImplementationOnce(async ({ onProgress }: any) => {
-      onProgress({ fraction: 0.5, fileName: 'my-model.gguf' });
-      return { id: 'x', name: 'X' };
+    mockImportSelectedModelFiles.mockImplementationOnce(async (input: any) => {
+      input.onProgress({ fraction: 0.5, fileName: 'my-model.gguf' });
+      return { status: 'completed', model: { id: 'x', name: 'X' }, projector: false };
     });
 
     await importGgufFiles(

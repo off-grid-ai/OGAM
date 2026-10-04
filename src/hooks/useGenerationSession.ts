@@ -1,14 +1,23 @@
 import { useSyncExternalStore } from 'react';
-import { generationSession } from '../services/generationSession';
+import {
+  mobileChatQueueSnapshot,
+  subscribeMobileChatQueue,
+} from '../services/adapters/models/mobileChatHostPort';
 
 /**
- * Reactive View projection of the GenerationSession owner — returns the conversation
- * id a turn is currently generating for (or null), re-rendering when it changes. The
- * View observes this; it never writes the session (callers dispatch begin()/end()).
+ * Which conversation a reply is running for, read from the shared chat rules.
+ *
+ * The screen used to keep its own mark, written when a turn started and cleared when it ended. A
+ * restart replaced the chat session but not that mark, so the composer went on offering Stop for a
+ * reply that no longer existed. The shared queue is the only thing that knows a turn is running,
+ * and it is rebuilt with the session, so nothing can outlive its own turn.
  */
 export function useGeneratingConversationId(): string | null {
   return useSyncExternalStore(
-    (cb) => generationSession.subscribe(cb),
-    () => generationSession.getConversationId(),
+    cb => subscribeMobileChatQueue(() => cb()),
+    () =>
+      mobileChatQueueSnapshot().entries.find(
+        entry => entry.status === 'running',
+      )?.conversationId ?? null,
   );
 }

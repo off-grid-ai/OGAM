@@ -96,7 +96,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
 function getLoadingTitle(state: LoadingState): string {
   if (!state.modelName) return 'Unloading Model';
   if (state.modelName === 'Ejecting models...') return 'Ejecting Models';
-  return state.type === 'text' ? 'Loading Text Model' : 'Loading Image Model';
+  return state.type === 'text' ? 'Loading text model...' : 'Loading image model...';
 }
 
 type Props = {

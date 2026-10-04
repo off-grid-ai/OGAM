@@ -11,15 +11,8 @@ RCT_EXTERN_METHOD(startMultiFileDownload:(NSDictionary *)params
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
-RCT_EXTERN_METHOD(pauseDownload:(NSString *)downloadId
-                  resolver:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject)
-
-RCT_EXTERN_METHOD(resumeDownload:(NSString *)downloadId
-                  resolver:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject)
-
-RCT_EXTERN_METHOD(cancelDownload:(NSString *)downloadId
+RCT_EXTERN_METHOD(stopDownload:(NSString *)downloadId
+                  retainPartial:(BOOL)retainPartial
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 

@@ -77,6 +77,7 @@ fastlane/*.p8
 
 # testing
 /coverage
+/coverage-shards/
 /.artifacts
 
 # Yarn
@@ -98,3 +99,13 @@ docs/wire-captures/
 
 # Scratch renders derived from scripts/e2e/fixtures (regenerable, not versioned)
 /tmp/
+
+# On-device sherpa-onnx native blobs (fetched, not committed — same as the iOS xcframework).
+# Get them with: scripts/fetch-sherpa-android.sh
+android/app/libs/sherpa-onnx-*.aar
+android/app/src/main/assets/sherpa/*.onnx
+ios/OffgridMobile/OffgridMobile.dev.entitlements
+
+# On-device sherpa-onnx iOS native blobs (fetched/vendored, not committed — like the Android AAR).
+ios/sherpa/SherpaOnnxC.xcframework/
+ios/sherpa/models/*.onnx

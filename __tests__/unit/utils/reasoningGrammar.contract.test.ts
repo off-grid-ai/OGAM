@@ -2,7 +2,7 @@ import {
   REASONING_DELIMITERS,
   parseThinkingContent,
 } from '@offgrid/core/utils/messageContent';
-import { ThinkTagParser } from '../../../src/services/providers/openAICompatibleStream';
+import { ThinkTagParser } from '../../../src/services/adapters/providers/openAICompatibleStream';
 
 /**
  * Contract: the reasoning delimiter grammar (REASONING_DELIMITERS) is the SINGLE source of truth

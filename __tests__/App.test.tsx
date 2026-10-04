@@ -122,7 +122,7 @@ jest.mock('../src/stores', () => ({
 jest.mock('../src/services/downloadHydration', () => ({
   hydrateDownloadStore: jest.fn(() => Promise.resolve()),
 }));
-jest.mock('../src/services/modelDownloadService/registerProviders', () => ({
+jest.mock('../src/services/modelServices/downloadBootstrap', () => ({
   registerCoreDownloadProviders: jest.fn(),
 }));
 jest.mock('../src/services/proLicenseService', () => ({
@@ -135,7 +135,7 @@ jest.mock('../src/hooks/useDownloads', () => ({
   useDownloadListeners: jest.fn(),
 }));
 jest.mock('../src/services/loadPolicySync', () => ({
-  startLoadPolicySync: jest.fn(() => jest.fn()),
+  createLoadPolicySync: jest.fn(() => ({ start: jest.fn(), dispose: jest.fn() })),
 }));
 jest.mock('../src/services/networkReconnect', () => ({
   startNetworkReconnectWatcher: mockStartNetworkReconnectWatcher,
@@ -147,15 +147,34 @@ jest.mock('../src/utils/debugLogFile', () => ({
   stopDebugLogFile: jest.fn(),
 }));
 
+const unlockedSecuritySnapshot = {
+  status: 'disabled' as const,
+  enabled: false,
+  locked: false,
+  failedAttempts: 0,
+  remainingAttempts: 5,
+  lockedOut: false,
+  lockoutUntilMs: null,
+  lockoutRemainingSeconds: 0,
+  busy: false,
+};
+
 jest.mock('../src/services', () => ({
   hardwareService: {
     getDeviceInfo: jest.fn(() => Promise.resolve({ totalMemory: 8 * 1024 * 1024 * 1024 })),
     getModelRecommendation: jest.fn(() => ({ maxParameters: 7, recommendedQuantization: 'Q4_K_M' })),
   },
-  modelManager: mockModelManager,
-  authService: {
-    hasPassphrase: jest.fn(() => Promise.resolve(false)),
+  modelLibrary: mockModelManager,
+  // The lock has one owner now, so the fake is that owner. App starts it at boot and reads the
+  // snapshot to decide whether to draw the lock, and an unlocked snapshot is what "no passphrase
+  // set" looks like to a person.
+  mobileSecurity: {
+    start: jest.fn(() => Promise.resolve()),
+    lock: jest.fn(),
+    snapshot: jest.fn(() => unlockedSecuritySnapshot),
+    subscribe: jest.fn(() => () => undefined),
   },
+  useSecuritySnapshot: jest.fn(() => unlockedSecuritySnapshot),
   ragService: {
     ensureReady: jest.fn(() => Promise.resolve()),
   },
@@ -167,7 +186,7 @@ jest.mock('../src/services', () => ({
 // NOTE: App is required INSIDE the test, not imported at top level. The jest.mock
 // factories above are hoisted above the `const mock*` definitions; a top-level
 // `import App` is hoisted too and would run those factories BEFORE the consts
-// initialize, so every mocked hook (useAppStore, modelManager, …) captured
+// initialize, so every mocked hook (useAppStore, modelLibrary, …) captured
 // `undefined` → "useAppStore is not a function" during render. Requiring App from
 // inside the test defers the factories until the consts exist.
 

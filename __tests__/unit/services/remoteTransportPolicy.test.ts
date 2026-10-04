@@ -4,8 +4,9 @@ import {
   isCredentialTransportDowngrade,
   remoteAuthorizationHeaders,
   validateRemoteEndpoint,
-} from '../../../src/services/remoteTransportPolicy';
-import { fetchModelsFromServer } from '../../../src/stores/remoteServerHelpers';
+} from '@offgrid/models';
+import { RemoteModelDiscoveryError } from '../../../src/services/adapters/remote/serverDiscovery';
+import { fetchModelsFromServer } from '../../../src/services/composition/remote';
 
 describe('remote transport policy', () => {
   const originalFetch = global.fetch;
@@ -87,12 +88,48 @@ describe('remote transport policy', () => {
       id: 'desktop',
       name: 'Desktop',
       endpoint: 'http://192.168.1.30:7878',
-      providerType: 'openai-compatible',
+      provider: 'openai-compatible',
       apiKey: 'secret',
       createdAt: '2026-08-30',
     });
 
     expect(calls[0]?.headers).not.toHaveProperty('Authorization');
     expect(calls[0]?.redirect).toBe('error');
+  });
+
+  it('does not duplicate v1 when the saved address already ends in v1', async () => {
+    const urls: string[] = [];
+    global.fetch = jest.fn(async url => {
+      urls.push(String(url));
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => '' },
+        json: async () => ({ object: 'list', data: [] }),
+      } as unknown as Response;
+    }) as typeof fetch;
+
+    await fetchModelsFromServer({
+      id: 'remote', name: 'Remote', endpoint: 'https://models.example.test/v1',
+      provider: 'openai-compatible', createdAt: '2026-09-01',
+    });
+
+    expect(urls).toContain('https://models.example.test/v1/models');
+    expect(urls.some(url => url.includes('/v1/v1/'))).toBe(false);
+  });
+
+  it('preserves failed discovery instead of projecting an empty catalog', async () => {
+    global.fetch = jest.fn(async () => {
+      throw new Error('network unavailable');
+    }) as typeof fetch;
+
+    await expect(fetchModelsFromServer({
+      id: 'remote', name: 'Remote', endpoint: 'https://models.example.test/v1',
+      provider: 'openai-compatible', createdAt: '2026-09-01',
+    })).rejects.toEqual(expect.objectContaining({
+      name: RemoteModelDiscoveryError.name,
+      kind: 'remote-model-discovery',
+      message: 'network unavailable',
+    }));
   });
 });

@@ -9,38 +9,38 @@
  * so the KB screen surfaces the error.
  *
  * Real ragService.indexDocument runs over a REAL in-memory sqlite (node:sqlite) — the DB does the hard
- * work. The only faked boundaries are the native doc-extraction (documentService) and the embedding model
- * (embeddingService, made to OOM).
+ * work. The only faked boundaries are the filesystem, SQLite driver, and llama.rn embedding runtime.
  */
-import { installRealSqlite } from '../../harness/sqliteFake';
+import { installNativeBoundary } from '../../harness/nativeBoundary';
+import { doMockRealSqlite } from '../../harness/sqliteFake';
+
+let applicationFixture: import('../../harness/mobileApplicationFixture').MobileApplicationFixture | undefined;
+afterEach(async () => {
+  await applicationFixture?.dispose();
+  applicationFixture = undefined;
+});
 
 describe('PR#452 — KB indexDocument leaves a dead entry on embed failure (red-flow)', () => {
   it('rolls back the document (no silent non-searchable entry) when embedding fails', async () => {
-    installRealSqlite();
-     
-    const { ragService } = require('../../../src/services/rag');
-    const { embeddingService } = require('../../../src/services/rag/embedding');
-    const { documentService } = require('../../../src/services/documentService');
-     
+    const boundary = installNativeBoundary({ fs: true, llama: true });
+    doMockRealSqlite();
+    const RNFS = require('react-native-fs');
+    await RNFS.writeFile('/docs/report.txt', 'The quarterly report. '.repeat(200));
+    boundary.llama!.module.initLlama.mockResolvedValue({
+      embedding: jest.fn().mockRejectedValue(new Error('OOM: embedding model ran out of memory')),
+      release: jest.fn().mockResolvedValue(undefined),
+    });
+    const { startMobileApplicationFixture } = require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+    applicationFixture = await startMobileApplicationFixture();
 
-    // Native doc extraction → real text (so chunking produces chunks against the real DB).
-    jest.spyOn(documentService, 'processDocumentFromPath').mockResolvedValue({
-      type: 'document', textContent: 'The quarterly report. '.repeat(200),
-    } as never);
-    // Embedding model boundary: load ok, but the batch OOMs (the real device failure).
-    jest.spyOn(embeddingService, 'load').mockResolvedValue(undefined as never);
-    jest.spyOn(embeddingService, 'embedBatch').mockRejectedValue(new Error('OOM: embedding model ran out of memory'));
+    const indexed = await applicationFixture.application.rag.addDocument({
+      projectId: 'p1', path: '/docs/report.txt', fileName: 'report.txt', size: 4096,
+    });
+    const docs = await applicationFixture.application.rag.listDocuments('p1');
 
-    let threw = false;
-    await ragService.indexDocument({ projectId: 'p1', filePath: '/docs/report.pdf', fileName: 'report.pdf', fileSize: 4096 })
-      .catch(() => { threw = true; });
-
-    const docs = await ragService.getDocumentsByProject('p1');
-
-    // Correct: the embed failure rolls back the insert and throws → no dead entry in the KB.
-    // Today it swallows the failure and returns success → the doc IS listed (real sqlite inserted it)
-    // but has zero embeddings, so it's not searchable → RED (received length 1) + no throw.
-    expect(docs).toHaveLength(0);
-    expect(threw).toBe(true);
+    // The facade reports the embed failure and the transaction leaves no dead KB entry.
+    expect(indexed.ok).toBe(false);
+    expect(docs.ok).toBe(true);
+    if (docs.ok) expect(docs.value).toHaveLength(0);
   });
 });

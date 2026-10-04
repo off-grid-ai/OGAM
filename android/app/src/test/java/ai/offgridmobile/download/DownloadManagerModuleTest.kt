@@ -1,7 +1,8 @@
 package ai.offgridmobile.download
 
 import android.app.Application
-import kotlin.io.path.createTempFile
+import androidx.room.Room
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -22,6 +23,75 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = Application::class)
 class DownloadManagerModuleTest {
+
+    @Test
+    fun pauseRetainsPartialBytesForResume() {
+        val partial = java.nio.file.Files.createTempFile("paused-model", ".part").toFile()
+        try {
+            partial.writeBytes(byteArrayOf(1, 2, 3))
+
+            assertTrue(applyStoppedPartialPolicy(partial.absolutePath, retainPartial = true))
+            assertTrue(partial.exists())
+            assertEquals(3L, partial.length())
+        } finally {
+            partial.delete()
+        }
+    }
+
+    @Test
+    fun cancelDeletesPartialBytes() {
+        val partial = java.nio.file.Files.createTempFile("cancelled-model", ".part").toFile()
+        partial.writeBytes(byteArrayOf(1, 2, 3))
+
+        assertTrue(applyStoppedPartialPolicy(partial.absolutePath, retainPartial = false))
+        assertFalse(partial.exists())
+    }
+
+    @Test
+    fun stopClaimCannotOverwriteCompletedVerdict() = runBlocking {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val database = Room.inMemoryDatabaseBuilder(context, DownloadDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val dao = database.downloadDao()
+            dao.insertDownload(downloadEntity(id = "completed", status = DownloadStatus.COMPLETED))
+
+            assertEquals(0, dao.markStopRequested("completed", DownloadReason.USER_CANCELLED))
+            assertEquals(DownloadStatus.COMPLETED, dao.getDownload("completed")?.status)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun stopClaimAtomicallyMarksAnActiveTransfer() = runBlocking {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val database = Room.inMemoryDatabaseBuilder(context, DownloadDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val dao = database.downloadDao()
+            dao.insertDownload(downloadEntity(id = "running", status = DownloadStatus.RUNNING))
+
+            assertEquals(1, dao.markStopRequested("running", DownloadReason.USER_CANCELLED))
+            assertEquals(DownloadStatus.CANCELLED, dao.getDownload("running")?.status)
+        } finally {
+            database.close()
+        }
+    }
+
+    private fun downloadEntity(id: String, status: DownloadStatus) = DownloadEntity(
+        id = id,
+        url = "https://huggingface.co/test/model.gguf",
+        fileName = "model.gguf",
+        modelId = "test/model",
+        destination = "/tmp/$id.part",
+        totalBytes = 3,
+        downloadedBytes = 1,
+        status = status,
+        createdAt = 1,
+    )
 
     // ── WorkerDownload.isHostAllowed ──────────────────────────────────────────
 
@@ -106,7 +176,7 @@ class DownloadManagerModuleTest {
         assertTrue(values.contains("COMPLETED"))
         assertTrue(values.contains("FAILED"))
         assertTrue(values.contains("CANCELLED"))
-        assertTrue(values.contains("PAUSED"))
+        assertFalse("PAUSED must not exist in V2", values.contains("PAUSED"))
     }
 
     @Test
@@ -151,7 +221,7 @@ class DownloadManagerModuleTest {
     @Test
     fun computeFileSha256MatchesKnownHash() {
         // echo -n "hello" | sha256sum = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
-        val tmp = createTempFile("sha256test", ".bin").toFile()
+        val tmp = createTempFile("sha256test", ".bin")
         try {
             tmp.writeBytes("hello".toByteArray(Charsets.UTF_8))
             assertEquals(
@@ -166,7 +236,7 @@ class DownloadManagerModuleTest {
     @Test
     fun computeFileSha256EmptyFileReturnsKnownHash() {
         // sha256 of empty input = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-        val tmp = createTempFile("sha256empty", ".bin").toFile()
+        val tmp = createTempFile("sha256empty", ".bin")
         try {
             tmp.writeBytes(ByteArray(0))
             assertEquals(
@@ -180,7 +250,7 @@ class DownloadManagerModuleTest {
 
     @Test
     fun computeFileSha256IsCaseInsensitiveCompatible() {
-        val tmp = createTempFile("sha256case", ".bin").toFile()
+        val tmp = createTempFile("sha256case", ".bin")
         try {
             tmp.writeBytes("hello".toByteArray(Charsets.UTF_8))
             val hash = WorkerDownload.computeFileSha256(tmp)

@@ -1,36 +1,34 @@
-import React, { useEffect } from 'react';
-import { View, Text, FlatList, TextInput, RefreshControl, TouchableOpacity, Platform } from 'react-native';
+import { buildCuratedLiteRTFiles, curatedLiteRTDownloadWarning, getCuratedLiteRTEntry, isModelDownloadInProgress, LITERT_PARENT_ID, liteRTGpuUnsupportedNotice, modelsFailureMessage, stripModelFileExtension } from '@offgrid/application';
+import React, { useCallback, useEffect, useMemo } from 'react';
+import { View, Text, FlatList, TextInput, RefreshControl, TouchableOpacity, Platform, type ListRenderItemInfo } from 'react-native';
 import { LoadingDots } from '../../components/LoadingDots';
 import DeviceInfo from 'react-native-device-info';
 import Icon from 'react-native-vector-icons/Feather';
-import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { fileExceedsBudget } from '../../services/memoryBudget';
 import { Card, ModelCard } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
-import { CustomAlert, hideAlert, showAlert, AlertState } from '../../components/CustomAlert';
+import { CustomAlert, hideAlert, showAlert } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
 import { needsVisionRepair as checkNeedsVisionRepair } from '../../utils/visionRepair';
 import { CREDIBILITY_LABELS } from '../../constants';
 import { ModelInfo, ModelFile } from '../../types';
 import { createStyles } from './styles';
 import { ModelsScreenViewModel } from './useModelsScreen';
-import { useDownloadStore, isActiveStatus, isQueuedStatus } from '../../stores/downloadStore';
+import { isDownloadingStatus, isFailedStatus, isPausedStatus, isQueuedStatus } from '../../utils/downloadStatus';
 import { makeModelKey } from '../../utils/modelKey';
 import { modelSupportsNpuGpu, isAccelerableQuant } from '../../utils/acceleration';
-import { aggregateActiveDownloads } from '../../utils/downloadAggregate';
 import { TextFiltersSection } from './TextFiltersSection';
 import { FilterState, SortOption } from './types';
 import { SORT_OPTIONS } from './constants';
 import { formatNumber, getTextModelCompatibility } from './utils';
-import { buildCuratedLiteRTFiles, curatedLiteRTDownloadWarning, getCuratedLiteRTEntry, LITERT_PARENT_ID } from '../../services/curatedLiteRTRegistry';
 import { LITERT_FILE_META, LITERT_RECOMMENDED_MODEL, LITERT_PARENT_RECOMMENDED } from './litertRecommended';
-import { modelManager } from '../../services';
-import { modelDownloadService } from '../../services/modelDownloadService';
-import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
+import { repairDownloadedVisionMetadata } from '../../services/modelServices/modelMetadataRepairCommand';
+import { applicationFacade } from '../../services/applicationFacade';
+import { useModelDownloadsProjection } from '../../hooks/useModelDownloadsProjection';
 import { fetchModelFiles } from '../../services/modelCatalogFiles';
-import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
-
+import { huggingFaceService } from '../../services/huggingface';
+import { aggregateTextModelDownloads, buildFileDownloadHandler, modelDownloadMatchesFile } from './modelDownloadProjection';
 function hasNonSortFilters(fs: FilterState): boolean {
   return fs.orgs.length > 0 || fs.type !== 'all' || fs.source !== 'all' || fs.size !== 'all' || fs.quant !== 'all';
 }
@@ -42,59 +40,23 @@ function getEmptyText(hasSearched: boolean, hasActiveFilters: boolean): string {
 }
 
 type Props = Pick<ModelsScreenViewModel,
-  | 'searchQuery' | 'setSearchQuery'
-  | 'isLoading' | 'isRefreshing'
-  | 'hasSearched'
-  | 'selectedModel' | 'setSelectedModel'
-  | 'modelFiles' | 'setModelFiles'
-  | 'isLoadingFiles'
-  | 'filterState'
-  | 'textFiltersVisible' | 'setTextFiltersVisible'
+  | 'searchQuery' | 'setSearchQuery' | 'isLoading' | 'isRefreshing' | 'hasSearched'
+  | 'selectedModel' | 'setSelectedModel' | 'modelFiles' | 'setModelFiles' | 'isLoadingFiles'
+  | 'filterState' | 'textFiltersVisible' | 'setTextFiltersVisible'
   | 'filteredResults' | 'recommendedAsModelInfo' | 'trendingAsModelInfo'
-  | 'ramGB' | 'deviceRecommendation'
-  | 'hasActiveFilters'
-  | 'downloadedModels'
-  | 'alertState' | 'setAlertState'
-  | 'focusTrigger'
-  | 'handleSearch' | 'handleRefresh'
-  | 'handleImportLocalModel' | 'isImporting'
+  | 'ramGB' | 'deviceRecommendation' | 'hasActiveFilters' | 'downloadedModels'
+  | 'alertState' | 'setAlertState' | 'focusTrigger' | 'handleSearch' | 'handleRefresh'
   | 'handleSelectModel' | 'handleDownload' | 'handleRepairMmProj' | 'handleCancelDownload' | 'handleDeleteModel'
-  | 'clearFilters'
-  | 'toggleFilterDimension' | 'toggleOrg'
+  | 'clearFilters' | 'toggleFilterDimension' | 'toggleOrg'
   | 'setTypeFilter' | 'setSourceFilter' | 'setSizeFilter' | 'setQuantFilter' | 'setSortOption'
   | 'isModelDownloaded' | 'getDownloadedModel' | 'isRepairingVisionModel'
 > & { onboarding?: boolean };
 
 type DetailProps = Pick<Props,
-  | 'modelFiles' | 'isLoadingFiles' | 'filterState' | 'ramGB'
-  | 'alertState' | 'setAlertState'
+  | 'modelFiles' | 'isLoadingFiles' | 'filterState' | 'ramGB' | 'alertState' | 'setAlertState'
   | 'getDownloadedModel' | 'isModelDownloaded' | 'isRepairingVisionModel'
   | 'handleDownload' | 'handleRepairMmProj' | 'handleCancelDownload' | 'handleDeleteModel'
 > & { selectedModel: ModelInfo; onBack: () => void; };
-
-// Build the file card's onDownload handler. Whether to show the curated confirm-download
-// warning is the registry's single DEVICE-AWARE decision (curatedLiteRTDownloadWarning),
-// shared with the onboarding screen — never a static per-model flag re-derived here.
-function buildFileDownloadHandler({ s, fileName, sizeBytes, ramGB, proceedDownload, setAlertState }: {
-  s: { downloaded: boolean; progress: unknown; hasFailed: boolean };
-  fileName: string;
-  sizeBytes: number; ramGB: number;
-  proceedDownload: () => void;
-  setAlertState: (state: AlertState) => void;
-}): (() => void) | undefined {
-  if (s.downloaded || s.progress || s.hasFailed) return undefined;
-  return () => {
-    const warning = curatedLiteRTDownloadWarning(fileName, sizeBytes, ramGB);
-    if (warning) {
-      setAlertState(showAlert(warning.title, warning.message, [
-        { text: 'Cancel', style: 'cancel', onPress: () => setAlertState(hideAlert()) },
-        { text: 'Download anyway', style: 'default', onPress: () => { setAlertState(hideAlert()); proceedDownload(); } },
-      ]));
-      return;
-    }
-    proceedDownload();
-  };
-}
 
 const ModelDetailView: React.FC<DetailProps> = ({
   selectedModel, modelFiles, isLoadingFiles, filterState, ramGB,
@@ -104,51 +66,47 @@ const ModelDetailView: React.FC<DetailProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  // Shared decides which devices lack a LiteRT GPU path; this screen only shows the sentence.
+  const liteRTGpuNotice = liteRTGpuUnsupportedNotice({ platform: Platform.OS, deviceModel: DeviceInfo.getModel() });
 
-  // Pre-set the next pending (Download Manager icon) so it fires regardless of
-  // how the user dismisses step 9 (button or backdrop tap).
-
-  // Heal the durable vision flag from the authoritative catalog: this screen KNOWS a model is vision (its
-  // repo ships an mmproj → modelFiles carry mmProjFile), so persist isVisionModel:true onto any downloaded
-  // record that lost it (old link-cleanup bug). The Download Manager has no catalog, so this makes the
-  // RECORD the single source both surfaces read — the wrench then shows consistently (device 2026-07-14).
+  // Heal the durable vision flag from the authoritative catalog: this screen KNOWS a model is vision
+  // (its repo ships an mmproj → modelFiles carry mmProjFile), so persist isVisionModel:true onto any
+  // downloaded record that lost it. The Download Manager has no catalog, so the RECORD is the single
+  // source both surfaces read — the wrench then shows consistently (device 2026-07-14).
   useEffect(() => {
-    for (const f of modelFiles) {
-      if (!f.mmProjFile) continue;
-      const rec = getDownloadedModel(selectedModel.id, f.name);
-      if (rec?.engine === 'llama' && !rec.isVisionModel) {
-        modelManager.markVisionModel(rec.id).catch(() => undefined);
-      }
-    }
+    repairDownloadedVisionMetadata({
+      modelId: selectedModel.id,
+      files: modelFiles,
+      resolveDownloaded: getDownloadedModel,
+    }).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedModel.id, modelFiles]);
 
-  const storeDownloads = useDownloadStore(state => state.downloads);
+  const downloads = useModelDownloadsProjection();
 
   const getFileCardState = (item: ModelFile) => {
     const modelKey = makeModelKey(selectedModel.id, item.name);
-    const entry = storeDownloads[modelKey];
+    const entry = downloads.find(row => modelDownloadMatchesFile(row, selectedModel.id, item.name));
     const downloaded = isModelDownloaded(selectedModel.id, item.name);
     const downloadedModel = getDownloadedModel(selectedModel.id, item.name);
     const needsVisionRepair = checkNeedsVisionRepair(downloadedModel, item);
     const repairingVision = isRepairingVisionModel(`${selectedModel.id}/${item.name}`);
-    let progress = entry
-      ? {
-        progress: entry.progress,
-        bytesDownloaded: entry.bytesDownloaded + (entry.mmProjBytesDownloaded ?? 0),
-        totalBytes: entry.combinedTotalBytes,
-        bytesPerSecond: entry.bytesPerSecond,
-        status: entry.status,
-      }
-      : undefined;
+    const inProgress = entry ? isModelDownloadInProgress(entry.status) : false;
+    const hasFailed = entry ? isFailedStatus(entry.status) : false;
+    let progress = entry && (inProgress || hasFailed || entry.status === 'completed') ? {
+      progress: entry.totalBytes > 0 ? entry.bytesDownloaded / entry.totalBytes : 0,
+      bytesDownloaded: entry.bytesDownloaded,
+      totalBytes: entry.totalBytes,
+      bytesPerSecond: undefined,
+      status: entry.status,
+    } : undefined;
 
     // For completed downloads, discard if size doesn't match expected
     if (progress && progress.status === 'completed' && progress.bytesDownloaded < item.size) {
       progress = undefined;
     }
-    const canCancel   = !!entry && (isActiveStatus(entry.status) || entry.status === 'paused');
-    const hasFailed   = entry?.status === 'failed';
-    const errorMessage = hasFailed ? (entry?.errorMessage ?? 'Download failed') : undefined;
+    const canCancel   = inProgress;
+    const errorMessage = hasFailed ? (entry?.reason ?? 'Download failed') : undefined;
     return { downloadKey: modelKey, progress, downloaded, downloadedModel, needsVisionRepair, repairingVision, canCancel, hasFailed, errorMessage };
   };
 
@@ -157,35 +115,41 @@ const ModelDetailView: React.FC<DetailProps> = ({
     const proceedDownload = () => {
       handleDownload(selectedModel, item);
     };
-    const onDownload = buildFileDownloadHandler({ s, fileName: item.name, sizeBytes: item.size, ramGB, proceedDownload, setAlertState });
+    const onDownload = buildFileDownloadHandler({
+      state: s,
+      fileName: item.name,
+      sizeBytes: item.size,
+      ramGB,
+      warning: curatedLiteRTDownloadWarning,
+      proceed: proceedDownload,
+      setAlertState,
+    });
     const liteRTMeta = LITERT_FILE_META[item.name];
-    const displayName = liteRTMeta?.displayName ?? item.name.replace('.gguf', '');
+    const displayName = liteRTMeta?.displayName ?? stripModelFileExtension(item.name);
     const recommended = liteRTMeta ? { pillLabel: 'Recommended', highlightText: liteRTMeta.highlight } : undefined;
-    const storeEntry = storeDownloads[s.downloadKey];
-    // Retry routes through the single owner (modelDownloadService → textProvider): Android resumes the
-    // native row, iOS re-issues from the entry's metadata. The provider owns the platform decision AND
-    // the lost-downloadId case (a rehydrated app-killed entry can have no downloadId), so the failed
-    // card must render its Retry regardless of downloadId — gating on it here made iOS retry unreachable.
-    const failedState = s.hasFailed && s.errorMessage && storeEntry
-      ? {
-        errorMessage: s.errorMessage,
-        bytesDownloaded: storeEntry.bytesDownloaded,
-        totalBytes: storeEntry.combinedTotalBytes || storeEntry.totalBytes,
-        onRetry: () => { modelDownloadService.retry(uniformDownloadId('text', s.downloadKey)).catch(() => {}); },
-        onRemove: () => handleCancelDownload(s.downloadKey),
+    const download = downloads.find(row => modelDownloadMatchesFile(row, selectedModel.id, item.name));
+    const retry = async () => {
+      if (!download) return;
+      const outcome = await applicationFacade().models.retryDownload({ downloadId: download.downloadId });
+      if (!outcome.ok) {
+        setAlertState(showAlert('Retry Failed', modelsFailureMessage(outcome.failure)));
       }
-      : undefined;
+    };
+    const failedState = s.hasFailed && s.errorMessage && download ? {
+      errorMessage: s.errorMessage,
+      bytesDownloaded: download.bytesDownloaded,
+      totalBytes: download.totalBytes,
+      onRetry: () => { retry().catch(error => {
+        setAlertState(showAlert('Retry Failed', error instanceof Error ? error.message : String(error)));
+      }); },
+      onRemove: () => handleCancelDownload(s.downloadKey),
+    } : undefined;
     return <ModelCard
         model={{ id: selectedModel.id, name: displayName, author: selectedModel.author, credibility: selectedModel.credibility }}
         file={item} downloadedModel={s.downloadedModel} isDownloaded={s.downloaded}
-        capabilities={item.name.toLowerCase().endsWith('.gguf') ? {
-          ...predictGgufCapabilities({ id: selectedModel.id, name: selectedModel.name, fileName: item.name }),
-          vision: !!item.mmProjFile,
-          predicted: true,
-        } : undefined}
-        isDownloading={!!s.progress && !s.hasFailed && s.progress.status !== 'paused' && !isQueuedStatus(s.progress.status)}
+        isDownloading={isDownloadingStatus(s.progress?.status)}
         isQueued={isQueuedStatus(s.progress?.status ?? 'completed')}
-        isPaused={s.progress?.status === 'paused'}
+        isPaused={isPausedStatus(s.progress?.status)}
         downloadProgress={s.progress?.progress}
         downloadBytes={s.progress && !s.hasFailed ? {
           downloaded: s.progress.bytesDownloaded,
@@ -198,16 +162,6 @@ const ModelDetailView: React.FC<DetailProps> = ({
         onDelete={s.downloaded ? () => handleDeleteModel(`${selectedModel.id}/${item.name}`) : undefined}
         onRepairVision={s.needsVisionRepair && !s.progress && !s.repairingVision ? () => handleRepairMmProj(selectedModel, item) : undefined}
         onCancel={s.canCancel ? () => handleCancelDownload(s.downloadKey) : undefined}
-        onPause={storeEntry?.downloadId && s.progress?.status === 'running' ? () => {
-          modelDownloadService.pause(uniformDownloadId('text', s.downloadKey)).catch(error =>
-            setAlertState(showAlert('Pause failed', error instanceof Error ? error.message : 'Try again.')),
-          );
-        } : undefined}
-        onResume={storeEntry?.downloadId && s.progress?.status === 'paused' ? () => {
-          modelDownloadService.resume(uniformDownloadId('text', s.downloadKey)).catch(error =>
-            setAlertState(showAlert('Resume failed', error instanceof Error ? error.message : 'Try again.')),
-          );
-        } : undefined}
         compact
         recommended={recommended}
         supportsAcceleration={isAccelerableQuant(item.quantization) || !!liteRTMeta}
@@ -224,18 +178,12 @@ const ModelDetailView: React.FC<DetailProps> = ({
       />
       <Card style={styles.modelInfoCard}>
         <View style={styles.authorRow}>
-          {selectedModel.author !== 'Unknown' && <Text style={styles.modelAuthor}>{selectedModel.author}</Text>}
-          {selectedModel.credibility && (selectedModel.credibility.source === 'official' || selectedModel.credibility.source === 'verified-quantizer') && (
-            <MaterialIcon
-              name="verified"
-              size={14}
-              color={colors.primary}
-              accessibilityLabel={CREDIBILITY_LABELS[selectedModel.credibility.source].label}
-            />
-          )}
-          {selectedModel.credibility?.source === 'lmstudio' && (
+          <Text style={styles.modelAuthor}>{selectedModel.author}</Text>
+          {selectedModel.credibility && (
             <View style={[styles.credibilityBadge, { backgroundColor: `${CREDIBILITY_LABELS[selectedModel.credibility.source].color}25` }]}>
               {selectedModel.credibility.source === 'lmstudio' && <Text style={[styles.credibilityIcon, { color: CREDIBILITY_LABELS[selectedModel.credibility.source].color }]}>★</Text>}
+              {selectedModel.credibility.source === 'official' && <Text style={[styles.credibilityIcon, { color: CREDIBILITY_LABELS[selectedModel.credibility.source].color }]}>✓</Text>}
+              {selectedModel.credibility.source === 'verified-quantizer' && <Text style={[styles.credibilityIcon, { color: CREDIBILITY_LABELS[selectedModel.credibility.source].color }]}>◆</Text>}
               <Text style={[styles.credibilityText, { color: CREDIBILITY_LABELS[selectedModel.credibility.source].color }]}>
                 {CREDIBILITY_LABELS[selectedModel.credibility.source].label}
               </Text>
@@ -254,10 +202,10 @@ const ModelDetailView: React.FC<DetailProps> = ({
           </View>
         )}
       </Card>
-      {selectedModel.id === LITERT_PARENT_ID && Platform.OS === 'android' && DeviceInfo.getModel().toLowerCase().includes('pixel 10') && (
+      {selectedModel.id === LITERT_PARENT_ID && liteRTGpuNotice && (
         <Card style={styles.deviceBanner}>
           <Icon name="info" size={14} color={colors.trending} />
-          <Text style={styles.deviceBannerText}>{'GPU acceleration is not yet supported on Pixel 10. Models will run on CPU. Support coming soon.'}</Text>
+          <Text style={styles.deviceBannerText}>{liteRTGpuNotice}</Text>
         </Card>
       )}
       <Text style={styles.sectionTitle}>Available Files</Text>
@@ -272,7 +220,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
       ) : (
         <FlatList
           data={modelFiles
-            .filter(f => f.size > 0 && !fileExceedsBudget(f.size, ramGB) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
+            .filter(f => f.size > 0 && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
             .sort((a, b) => {
               if (selectedModel.id === LITERT_PARENT_ID) return a.size - b.size; // curated: small-first
               // Tier: Q4_K_M (CPU default, lowest size) → GPU/NPU Q4_0/Q8_0 → rest (CPU
@@ -301,27 +249,33 @@ const DeviceBanner: React.FC<{ ramGB: number; rec: { maxParameters: number; reco
 
 interface ModelListItemProps {
   item: ModelInfo; index: number; focusTrigger: number;
-  isDownloaded: boolean; isTrending: boolean; onPress: () => void;
-  onDownload?: () => void;
+  isDownloaded: boolean; isTrending: boolean;
+  // The row takes the STABLE handlers and closes over its own item, so a memoized row is
+  // not invalidated by a fresh arrow per parent render (which is what a keystroke causes).
+  onSelect: (model: ModelInfo) => void;
+  onDirectDownload?: (model: ModelInfo) => void;
 }
-const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger, isDownloaded, isTrending, onPress, onDownload }) => {
+const ModelListItemRow: React.FC<ModelListItemProps> = ({ item, index, focusTrigger, isDownloaded, isTrending, onSelect, onDirectDownload }) => {
   const { isCompatible, incompatibleReason } = getTextModelCompatibility(item);
+  const onDownload = useMemo(() => (onDirectDownload ? () => onDirectDownload(item) : undefined), [onDirectDownload, item]);
+  const onPress = useMemo(() => onDownload ?? (() => onSelect(item)), [onDownload, onSelect, item]);
   const isLiteRTParent = item.id === LITERT_PARENT_ID;
   const recommended = isLiteRTParent ? LITERT_PARENT_RECOMMENDED : undefined;
-  // Aggregate ALL in-flight entries for this model (main+mmproj / grouped LiteRT) into
-  // cumulative progress/bytes + a download count, so the card shows total, not one entry.
-  const downloads = useDownloadStore(s => s.downloads);
-  const agg = React.useMemo(() => aggregateActiveDownloads(downloads, item.id), [downloads, item.id]);
+  const downloads = useModelDownloadsProjection();
+  const agg = React.useMemo(
+    () => aggregateTextModelDownloads(downloads, item.id),
+    [downloads, item.id],
+  );
   // Strip files for the LiteRT parent so ModelCard skips the size-range / "N files"
   // badges (curated chips cover it); the original item still flows through onPress.
   const cardModel = isLiteRTParent ? { ...item, files: undefined } : item;
-  const capabilities = isLiteRTParent ? undefined : {
-    ...predictGgufCapabilities({ id: item.id, name: item.name }),
-    vision: item.modelType === 'vision',
-    predicted: true,
-  };
-  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} /></AnimatedEntry>;
+  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isDownloading={agg.downloading} isQueued={agg.queued} isPaused={agg.paused} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} /></AnimatedEntry>;
 };
+
+// Memoized: every row owns a download-store subscription, so without this one character
+// re-ran that subscription for every row on screen.
+const ModelListItem = React.memo(ModelListItemRow);
+ModelListItem.displayName = 'ModelListItem';
 
 function applyBackNavigation(setSelectedModel: (m: ModelInfo | null) => void, setModelFiles: (f: ModelFile[]) => void): void {
   setSelectedModel(null);
@@ -355,7 +309,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     filteredResults, recommendedAsModelInfo, trendingAsModelInfo, ramGB, deviceRecommendation,
     hasActiveFilters, downloadedModels,
     alertState, setAlertState, focusTrigger,
-    handleSearch, handleRefresh, handleImportLocalModel, isImporting, handleSelectModel, handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel,
+    handleSearch, handleRefresh, handleSelectModel, handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel,
     clearFilters, toggleFilterDimension, toggleOrg,
     setTypeFilter, setSourceFilter, setSizeFilter, setQuantFilter, setSortOption,
     isModelDownloaded, getDownloadedModel, isRepairingVisionModel, onboarding = false,
@@ -369,42 +323,47 @@ export const TextModelsTab: React.FC<Props> = (props) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
-  const downloadRecommendedFile = async (item: ModelInfo) => {
-    const files = await fetchModelFiles([item]);
+  const downloadRecommendedFile = useCallback(async (item: ModelInfo) => {
+    const files = await fetchModelFiles([item], huggingFaceService);
     const file = files[item.id]?.[0];
-    if (!file) {
-      setAlertState(showAlert('Download unavailable', 'No compatible Q4_K_M file was found.'));
-      return;
-    }
+    if (!file) { setAlertState(showAlert('Download unavailable', 'No compatible Q4_K_M file was found.')); return; }
     await handleDownload(item, file);
-  };
+  }, [handleDownload, setAlertState]);
 
-  const renderModelItem = ({ item, index }: { item: ModelInfo; index: number }) => {
-    const directDownload = onboarding
-      ? () => { downloadRecommendedFile(item).catch(() => undefined); }
-      : undefined;
-    // A disk scan can restore a file under a recovered_ id. The detail rows
-    // recognize it by filename, so the family row must use those same files.
-    const isDownloaded = downloadedModels.some(model =>
-      model.id.startsWith(`${item.id}/`) ||
-      item.files.some(file => file.name === model.fileName),
-    );
-    return (
-      <ModelListItem item={item} index={index} focusTrigger={focusTrigger} isDownloaded={isDownloaded} isTrending={trendingAsModelInfo.some(t => t.id === item.id)} onPress={directDownload ?? (() => handleSelectModel(item))} onDownload={directDownload} />
-    );
-  };
+  const onDirectDownload = useCallback((item: ModelInfo) => {
+    downloadRecommendedFile(item).catch(() => undefined);
+  }, [downloadRecommendedFile]);
 
-  const onboardingLiteRTCards = onboarding && Platform.OS === 'android'
-    ? buildCuratedLiteRTFiles().map((file, index) => {
+  // Derived lookups memoized once per data change instead of rebuilt for every row on
+  // every render, so a keystroke does not rescan the downloaded/trending lists N times.
+  const downloadedModelIds = useMemo(() => downloadedModels.map(m => m.id), [downloadedModels]);
+  const trendingModelIds = useMemo(() => new Set(trendingAsModelInfo.map(t => t.id)), [trendingAsModelInfo]);
+
+  const renderModelItem = useCallback(({ item, index }: ListRenderItemInfo<ModelInfo>) => (
+    <ModelListItem item={item} index={index} focusTrigger={focusTrigger} isDownloaded={downloadedModelIds.some(id => id.startsWith(item.id))} isTrending={trendingModelIds.has(item.id)} onSelect={handleSelectModel} onDirectDownload={onboarding ? onDirectDownload : undefined} />
+  ), [downloadedModelIds, focusTrigger, handleSelectModel, onDirectDownload, onboarding, trendingModelIds]);
+
+  const keyExtractor = useCallback((item: ModelInfo) => item.id, []);
+
+  const onboardingLiteRTCards = useMemo(() => onboarding && Platform.OS === 'android'
+    ? buildCuratedLiteRTFiles()
+      .filter(file =>
+        !fileExceedsBudget(file.size, ramGB) ||
+        curatedLiteRTDownloadWarning(file.name, file.size, ramGB) !== null,
+      )
+      .map((file, index) => {
         const entry = getCuratedLiteRTEntry(file.name);
         const model = { ...LITERT_RECOMMENDED_MODEL, name: entry?.displayName ?? file.name };
-        const proceedDownload = () => { handleDownload(model, file); };
-        const onDownload = buildFileDownloadHandler({
-          s: { downloaded: false, progress: undefined, hasFailed: false },
+        const startDownload = () => {
+          handleDownload(model, file);
+        };
+        const guardedDownload = buildFileDownloadHandler({
+          state: { downloaded: false, progress: null, hasFailed: false },
           fileName: file.name,
           sizeBytes: file.size,
           ramGB,
-          proceedDownload,
+          warning: curatedLiteRTDownloadWarning,
+          proceed: startDownload,
           setAlertState,
         });
         return (
@@ -416,14 +375,27 @@ export const TextModelsTab: React.FC<Props> = (props) => {
             recommended={{ pillLabel: 'Recommended' }}
             supportsAcceleration
             testID={`onboarding-litert-model-${index}`}
-            onPress={onDownload}
-            onDownload={onDownload}
+            onPress={guardedDownload}
+            onDownload={guardedDownload}
           />
         );
       })
-    : null;
+    : null, [handleDownload, onboarding, ramGB, setAlertState]);
 
-  const onBack = () => applyBackNavigation(setSelectedModel, setModelFiles);
+  const listData = useMemo(() => hasSearched
+    ? filteredResults
+    : [...(!onboarding && Platform.OS === 'android' ? [LITERT_RECOMMENDED_MODEL] : []), ...recommendedAsModelInfo],
+  [filteredResults, hasSearched, onboarding, recommendedAsModelInfo]);
+
+  const listHeader = useMemo(() => hasSearched ? null : (
+    <><DeviceBanner ramGB={ramGB} rec={deviceRecommendation} showTitle={recommendedAsModelInfo.length > 0} styles={styles} />{onboardingLiteRTCards}</>
+  ), [deviceRecommendation, hasSearched, onboardingLiteRTCards, ramGB, recommendedAsModelInfo.length, styles]);
+
+  const listEmpty = useMemo(() => (
+    <Card style={styles.emptyCard}><Text style={styles.emptyText}>{getEmptyText(hasSearched, hasActiveFilters)}</Text></Card>
+  ), [hasActiveFilters, hasSearched, styles]);
+
+  const onBack = useCallback(() => applyBackNavigation(setSelectedModel, setModelFiles), [setModelFiles, setSelectedModel]);
 
   if (selectedModel) {
     return (
@@ -449,7 +421,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
 
   return (
     <>
-      <View style={styles.searchContainer} testID="text-model-search-row">
+      <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
           placeholder="Search Hugging Face models..."
@@ -478,18 +450,6 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           <Icon name="sliders" size={14} color={filterToggleActive ? colors.primary : colors.textMuted} />
           {hasNonSortActiveFilters && <View style={styles.filterDot} />}
         </TouchableOpacity>
-        {!onboarding && (
-          <TouchableOpacity
-            style={styles.filterToggle}
-            onPress={handleImportLocalModel}
-            disabled={isImporting}
-            accessibilityRole="button"
-            accessibilityLabel="Import local file"
-            testID="import-local-model"
-          >
-            <Icon name="upload" size={14} color={colors.textMuted} />
-          </TouchableOpacity>
-        )}
       </View>
 
       {filterState.expandedDimension === 'sort' && <SortPanel filterState={filterState} setSortOption={setSortOption} styles={styles} colors={colors} />}
@@ -515,23 +475,15 @@ export const TextModelsTab: React.FC<Props> = (props) => {
         </View>
       ) : (
         <FlatList
-          data={hasSearched ? filteredResults : [...(!onboarding && Platform.OS === 'android' ? [LITERT_RECOMMENDED_MODEL] : []), ...recommendedAsModelInfo]}
+          data={listData}
           renderItem={renderModelItem}
-          keyExtractor={item => item.id}
+          keyExtractor={keyExtractor}
           contentContainerStyle={styles.listContent}
           testID="models-list"
+          keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
-          ListHeaderComponent={hasSearched ? null : (
-            <>
-              <DeviceBanner ramGB={ramGB} rec={deviceRecommendation} showTitle={recommendedAsModelInfo.length > 0} styles={styles} />
-              {onboardingLiteRTCards}
-            </>
-          )}
-          ListEmptyComponent={
-            <Card style={styles.emptyCard}>
-              <Text style={styles.emptyText}>{getEmptyText(hasSearched, hasActiveFilters)}</Text>
-            </Card>
-          }
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={listEmpty}
         />
       )}
     </>

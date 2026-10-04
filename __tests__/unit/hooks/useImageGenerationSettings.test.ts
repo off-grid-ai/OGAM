@@ -6,8 +6,23 @@ jest.mock('react-native', () => ({
   Alert: { alert: jest.fn() },
 }));
 
+let mockActiveImageRoute: { source: 'local'; id: string } | null = {
+  source: 'local',
+  id: 'model1',
+};
+
+jest.mock('../../../src/hooks/useActiveMobileModel', () => ({
+  useActiveMobileModel: () => ({ model: mockActiveImageRoute }),
+}));
+
+let mockImageStoreState: {
+  downloadedImageModels: Array<{ id: string; modelPath: string | null }>;
+  activeImageModelId: string | null;
+};
+
 jest.mock('../../../src/stores', () => ({
-  useAppStore: jest.fn(),
+  useAppStore: jest.fn((selector: (state: typeof mockImageStoreState) => unknown) =>
+    selector(mockImageStoreState)),
 }));
 
 jest.mock('../../../src/services/localDreamGenerator', () => ({
@@ -31,10 +46,12 @@ const activeModel = { id: 'model1', modelPath: '/path/to/model' };
 describe('useClearGpuCache', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseAppStore.mockReturnValue({
+    mockActiveImageRoute = { source: 'local', id: 'model1' };
+    mockImageStoreState = {
       downloadedImageModels: [activeModel],
       activeImageModelId: 'model1',
-    });
+    };
+    mockUseAppStore.mockImplementation(selector => selector(mockImageStoreState));
   });
 
   it('initializes with clearing=false', () => {
@@ -43,10 +60,11 @@ describe('useClearGpuCache', () => {
   });
 
   it('shows No Model alert when no active model', async () => {
-    mockUseAppStore.mockReturnValue({
+    mockActiveImageRoute = null;
+    mockImageStoreState = {
       downloadedImageModels: [],
       activeImageModelId: null,
-    });
+    };
     const { result } = renderHook(() => useClearGpuCache());
     await act(async () => { result.current.handleClearCache(); });
     expect(mockAlert).toHaveBeenCalledWith('No Model', expect.any(String));
@@ -54,10 +72,10 @@ describe('useClearGpuCache', () => {
   });
 
   it('shows No Model alert when active model has no modelPath', async () => {
-    mockUseAppStore.mockReturnValue({
+    mockImageStoreState = {
       downloadedImageModels: [{ id: 'model1', modelPath: null }],
       activeImageModelId: 'model1',
-    });
+    };
     const { result } = renderHook(() => useClearGpuCache());
     await act(async () => { result.current.handleClearCache(); });
     expect(mockAlert).toHaveBeenCalledWith('No Model', expect.any(String));

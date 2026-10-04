@@ -1,3 +1,4 @@
+import { huggingFaceRepositoryQuery, isGgufFile } from '@offgrid/models';
 import {
   HFModelSearchResult,
   ModelInfo,
@@ -6,14 +7,18 @@ import {
 } from '../types';
 import {
   HF_API,
-  QUANTIZATION_INFO,
   LMSTUDIO_AUTHORS,
   OFFICIAL_MODEL_AUTHORS,
   VERIFIED_QUANTIZERS,
 } from '../constants';
 import { looksLikeVisionModel } from '../utils/visionModel';
 import { huggingFaceRevisionPath } from '../utils/modelOrigin';
-import { isMMProjFile, pickMmProjForDownload } from './mmproj';
+import {
+  QUANTIZATION_INFO,
+  isAuxiliaryModelFile,
+  isModelProjectorFile as isMMProjFile,
+  pickProjectorForDownload as pickMmProjForDownload,
+} from '@offgrid/models';
 
 class HuggingFaceService {
   private baseUrl = HF_API.baseUrl;
@@ -71,10 +76,7 @@ class HuggingFaceService {
   > {
     // The repo is usually named after the model, so the file name minus its quant/extension is the
     // best query we have. `.gguf` and the trailing quant tag never appear in a repo id.
-    const query = fileName
-      .replace(/\.gguf$/i, '')
-      .replace(/[._-]i1$/i, '')
-      .replace(/[._-](?:Q[0-9]+(?:_[A-Z0-9]+)*|F(?:16|32))$/i, '');
+    const query = huggingFaceRepositoryQuery(fileName);
     const results = await this.searchModels(query, { limit });
     const listings = await Promise.all(
       results.map(async result => ({
@@ -134,10 +136,12 @@ class HuggingFaceService {
         lfs?: { size: number };
       }> = await response.json();
       const allGguf = files.filter(
-        f => f.type === 'file' && f.path.endsWith('.gguf'),
+        f => f.type === 'file' && isGgufFile(f.path),
       );
       const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.path));
-      const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.path));
+      const modelFiles = allGguf.filter(
+        f => !this.isMMProjFile(f.path) && !isAuxiliaryModelFile(f.path),
+      );
       return modelFiles
         .map(file => ({
           name: file.path,
@@ -165,9 +169,11 @@ class HuggingFaceService {
       `${this.apiUrl}/models/${modelId}${revisionPath}`,
     );
     if (!result.siblings) return [];
-    const allGguf = result.siblings.filter(f => f.rfilename.endsWith('.gguf'));
+    const allGguf = result.siblings.filter(f => isGgufFile(f.rfilename));
     const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.rfilename));
-    const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.rfilename));
+    const modelFiles = allGguf.filter(
+      f => !this.isMMProjFile(f.rfilename) && !isAuxiliaryModelFile(f.rfilename),
+    );
     const mmProjForMatch = mmProjFiles.map(f => ({
       path: f.rfilename,
       size: f.size,
@@ -226,7 +232,7 @@ class HuggingFaceService {
   private transformModelResult = (result: HFModelSearchResult): ModelInfo => {
     const files =
       result.siblings
-        ?.filter(file => file.rfilename.endsWith('.gguf'))
+        ?.filter(file => isGgufFile(file.rfilename))
         .map(file => this.transformFileInfo(result.id, file)) || [];
 
     const author = result.author || result.id.split('/')[0] || 'Unknown';
@@ -290,12 +296,12 @@ class HuggingFaceService {
     return 'Unknown';
   }
 
-  // Delegates to the single source of truth (src/services/mmproj.ts) so "is this a projector" is defined once.
+  // Delegates to the shared projector policy so "is this a projector" is defined once.
   private isMMProjFile(fileName: string): boolean {
     return isMMProjFile(fileName);
   }
 
-  // Routes through the single projector-rule owner (src/services/mmproj.ts). Quant is NOT a matching
+  // Routes through the shared projector-rule owner. Quant is NOT a matching
   // signal (one projector serves every quant of its model); a projector whose filename names a DIFFERENT
   // model+variant is the wrong architecture and is REFUSED, so the model downloads with its correct
   // projector or text-only rather than being mispaired (#510). See pickMmProjForDownload for the rule.

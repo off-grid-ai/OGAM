@@ -1,5 +1,5 @@
 import { ModelInfo } from '../../types';
-import { CURATED_LITERT_ENTRIES, buildCuratedLiteRTFiles, LITERT_PARENT_ID } from '../../services/curatedLiteRTRegistry';
+import { CURATED_LITERT_ENTRIES, buildCuratedLiteRTFiles, LITERT_PARENT_ID } from '@offgrid/application';
 
 // LiteRT-specific per-file metadata (display name + highlight) used to render
 // individual file cards in the detail view. Derived from the curated registry —

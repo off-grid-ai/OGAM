@@ -7,7 +7,6 @@
 jest.mock('@offgrid/core/utils/logger', () => ({ __esModule: true, default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 jest.mock('@offgrid/core/stores', () => ({ useRemoteServerStore: { getState: () => ({}) } }));
 jest.mock('../../../pro/mcp/mcpStore', () => ({ useMcpStore: { getState: () => ({ toolOwners: {}, enabledTools: [], serverTools: {} }) } }));
-jest.mock('../../../pro/mcp/schemaTrim', () => ({ trimToolForSmallModel: (t: any) => t }));
 
 const mockExecuteMcpTool = jest.fn();
 jest.mock('../../../pro/mcp/mcpService', () => ({

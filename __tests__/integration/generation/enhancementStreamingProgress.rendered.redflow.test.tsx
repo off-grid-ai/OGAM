@@ -36,14 +36,21 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
   useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
+  useFocusEffect: () => {},
+  useIsFocused: () => true,
 }));
 
 // The clean enhanced rewrite. The paused stream will have emitted the leading fragment below by the time we
 // inspect the screen — a fix that streams the enhancement makes that partial text visible mid-flight.
-const ENHANCED_PROMPT = 'a photorealistic tabby cat sitting in a sunlit garden, shallow depth of field';
+const ENHANCED_PROMPT =
+  'a photorealistic tabby cat sitting in a sunlit garden, shallow depth of field';
 const PARTIAL_FRAGMENT = 'a photorealistic'; // pauseAfter lands exactly here, mid-generation
 
 describe('T073 (rendered) — enhancement must stream / show live progress (DEV-B30b)', () => {
@@ -52,37 +59,55 @@ describe('T073 (rendered) — enhancement must stream / show live progress (DEV-
     h.render();
 
     await h.placeImageModel({ backend: 'coreml' });
-     
-    const { activeModelService } = require('../../../src/services/activeModelService');
-    await activeModelService.loadImageModel('sd');
-    await h.cycleImageMode(); // auto → ON(force): "draw a cat" routes to IMAGE
-    await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('image-mode-force-badge')).not.toBeNull(); });
+    await h.cycleImageMode(); // auto → ON(force): selects the imported model and routes to IMAGE
+    await h.rtl.waitFor(() => {
+      expect(h.view!.queryByTestId('image-mode-force-badge')).not.toBeNull();
+    });
 
-    // Enhancement ON — the exact device configuration for B30b.
-    h.useAppStore.getState().updateSettings({ enhanceImagePrompts: true });
+    // Enhancement ON through the real settings control — the exact device configuration for B30b.
+    const {
+      ImageGenerationSection,
+    } = require('../../../src/components/GenerationSettingsModal/ImageGenerationSection');
+    const settings = h.rtl.render(
+      h.React.createElement(ImageGenerationSection, {}),
+    );
+    h.rtl.fireEvent.press(settings.getByTestId('modal-image-advanced-toggle'));
+    h.rtl.fireEvent.press(
+      await h.rtl.waitFor(() => settings.getByTestId('image-enhance-on')),
+    );
+    settings.unmount();
 
     // Device-faithful: the enhancement streams char-by-char, then HOLDS mid-generation after the fragment
     // (releaseStream lets it finish so the turn isn't a hang). While held, the in-flight enhancement UI is on
     // screen for real (not a no-op — T056 discipline).
-    h.boundary.llama!.scriptCompletion({ text: ENHANCED_PROMPT, pauseAfter: PARTIAL_FRAGMENT });
+    h.boundary.llama!.scriptCompletion({
+      text: ENHANCED_PROMPT,
+      pauseAfter: PARTIAL_FRAGMENT,
+    });
     await h.tapSend('draw a cat');
 
     // PRECONDITION (observe the transient present, so an absent assertion below can't false-green): the
     // enhancement is truly in flight — its static status card is on screen.
     await h.rtl.waitFor(
-      () => { expect(h.view!.queryByText(/Enhancing your prompt/i)).not.toBeNull(); },
+      () => {
+        expect(h.view!.queryByText(/Enhancing your prompt/i)).not.toBeNull();
+      },
       { timeout: 6000 },
     );
 
     // SPEC (UI layer): mid-generation the user sees the enhancement STREAMING — the partial enhanced text
     // ("a photorealistic…") is on screen. RED on HEAD (B30b): generateStandalone drops every delta, so only
     // the static "Enhancing…" renders and the partial fragment is nowhere — it looks frozen.
-    expect(h.view!.queryByText(new RegExp(PARTIAL_FRAGMENT, 'i'))).not.toBeNull();
+    expect(
+      h.view!.queryByText(new RegExp(PARTIAL_FRAGMENT, 'i')),
+    ).not.toBeNull();
 
     // Release the held stream so the turn completes cleanly (no dangling promise / open handle).
     h.boundary.llama!.releaseStream();
     await h.rtl.waitFor(
-      () => { expect(h.boundary.diffusion.calls.generateImage.length).toBe(1); },
+      () => {
+        expect(h.boundary.diffusion.calls.generateImage.length).toBe(1);
+      },
       { timeout: 6000 },
     );
   });

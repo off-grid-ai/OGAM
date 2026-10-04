@@ -10,7 +10,7 @@
  *    the peer would receive half a model and a broken load),
  *  - offering a file that was never a model package to begin with.
  *
- * Real modelTransferService, real modelManager reading the real on-disk registry, real shared transfer rules.
+ * Real modelTransferService, real modelLibrary reading the real on-disk registry, real shared transfer rules.
  * The models live in an in-memory filesystem (memfs, through the repo's RNFS boundary) and the native TCP
  * module is stood in for; nothing in these cases reaches it, which is the point.
  */

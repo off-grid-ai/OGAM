@@ -3,11 +3,13 @@ import { StyleSheet, View } from 'react-native';
 import { ChatMessage } from '../../components';
 import { ThinkingIndicator } from '../../components/ThinkingIndicator';
 import { SPACING } from '../../constants';
-import { parseModelOutput, prepareMessageForSpeech } from '../../utils/messageContent';
+import { prepareMessageForSpeech } from '../../utils/messageContent';
 import { Message } from '../../types';
-import { useChatStore, useUiModeStore } from '../../stores';
+import { useSpeechProjection } from '../../hooks/useApplicationProjection';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { ChatMessageItem } from './useChatScreen';
+import { STREAMING_MESSAGE_ID } from './types';
+import { useActiveStreamText } from './useActiveStreamText';
 
 type MessageRendererProps = {
   item: Message | ChatMessageItem;
@@ -21,10 +23,6 @@ type MessageRendererProps = {
   onCopy: (content: string) => void;
   onRetry: (message: Message) => void;
   onEdit: (message: Message, newContent: string) => void;
-  onTranscribeAgain?: (
-    message: Message,
-    attachment: NonNullable<Message['attachments']>[number],
-  ) => Promise<void>;
   onGenerateImage: (prompt: string) => void;
   onImagePress: (uri: string) => void;
 };
@@ -42,30 +40,24 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
     onCopy,
     onRetry,
     onEdit,
-    onTranscribeAgain,
     onGenerateImage,
     onImagePress,
   } = props;
 
-  const interfaceMode = useUiModeStore(s => s.interfaceMode);
+  const voiceMode = useSpeechProjection().preferences.voiceMode;
   const msg = item as Message;
   const animateEntry =
     animateLastN > 0 && index >= displayMessagesLength - animateLastN;
-  const isStreamingThis =
-    item.id === 'streaming' ||
-    item.isStreaming === true ||
-    (isGeneratingImage &&
-      item.role === 'assistant' &&
-      index === displayMessagesLength - 1);
+  const isStreamingThis = item.id === 'streaming' || item.isStreaming === true;
   const statusText = (item as ChatMessageItem).statusText;
   const suppressMessageBubble = (item as ChatMessageItem).suppressMessageBubble;
   const supportingContext = (item as ChatMessageItem).supportingContext;
 
   // Audio mode: the pro audio feature owns the whole message presentation
   // (user/assistant bubbles, thinking, streaming). Free builds never reach
-  // this branch (interfaceMode stays 'chat').
+  // this branch because the audio slot is absent.
   const AudioMessage = getSlot(SLOTS.messageAudioMode);
-  if (interfaceMode === 'audio' && AudioMessage) {
+  if (voiceMode && AudioMessage) {
     const audioMessage = (
       <AudioMessage
         msg={msg}
@@ -76,7 +68,6 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
         onCopy={onCopy}
         onRetry={onRetry}
         onEdit={onEdit}
-        onTranscribeAgain={onTranscribeAgain}
         onGenerateImage={onGenerateImage}
         onImagePress={onImagePress}
       />
@@ -114,7 +105,6 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
       onCopy={onCopy}
       onRetry={onRetry}
       onEdit={onEdit}
-      onTranscribeAgain={onTranscribeAgain}
       onGenerateImage={onGenerateImage}
       onImagePress={onImagePress}
       canGenerateImage={imageModelLoaded && !isStreaming && !isGeneratingImage}
@@ -138,18 +128,19 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
 const styles = StyleSheet.create({
   remoteStatus: {
     marginLeft: SPACING.xl,
-    marginTop: SPACING.md,
+    marginTop: SPACING.xs,
   },
 });
 
 /**
- * Memoized so a ChatScreen re-render (a streaming token, a focus after returning from
- * the document picker, a keyboard event, any unrelated store tick) does NOT re-render
- * and re-parse the markdown of every message — the cause of the chat-screen freeze
- * (unresponsive until you leave + re-enter). getDisplayMessages returns
- * [...allMessages, streamingItem], so the historical message objects keep stable refs
- * across renders; only the 'streaming'/'thinking' item is a new object per token, so
- * only IT re-renders while the rest skip.
+ * Memoized so a ChatScreen re-render (a focus after returning from the document picker, a keyboard
+ * event, any unrelated store tick) does NOT re-render and re-parse the markdown of every message —
+ * the cause of the chat-screen freeze (unresponsive until you leave + re-enter). getDisplayMessages
+ * returns [...allMessages, syntheticItem], so the historical message objects keep stable refs
+ * across renders and every committed row skips.
+ *
+ * A token no longer produces a new item at all: the 'streaming' row is token-free and stable for
+ * the turn, and its text is read inside LiveStreamMessageRenderer below.
  *
  * The on* callbacks are recreated every parent render (defined inline in useChatScreen)
  * and are deliberately NOT compared: within a conversation they are behaviorally stable,
@@ -172,39 +163,36 @@ export function messageRendererPropsEqual(
   );
 }
 
-const StableMessageRenderer = React.memo(
+const CommittedMessageRenderer = React.memo(
   MessageRendererInner,
   messageRendererPropsEqual,
 );
 
+/**
+ * The in-progress reply - the ONLY component in the chat that re-renders per token.
+ *
+ * The screen model hands down a token-free 'streaming' row (stable object identity for the whole
+ * turn), and the live text is read here from its own narrow projection. So a flush re-renders this
+ * one leaf; the committed rows above it are not even compared.
+ */
 const LiveStreamMessageRenderer: React.FC<MessageRendererProps> = props => {
-  const content = useChatStore(state => state.streamingMessage);
-  const reasoningContent = useChatStore(state => state.streamingReasoningContent);
-  const item = React.useMemo(() => {
-    if (props.item.timeline?.length) {
-      const current = parseModelOutput(content, reasoningContent);
-      return {
-        ...props.item,
-        content: current.answer,
-        timeline: current.reasoning
-          ? [...(props.item.timeline ?? []), { kind: 'thinking' as const, text: current.reasoning }]
-          : props.item.timeline,
-      };
-    }
-    return {
+  const live = useActiveStreamText();
+  const item = React.useMemo(
+    () => ({
       ...props.item,
-      content,
-      reasoningContent: reasoningContent || undefined,
-    };
-  }, [props.item, content, reasoningContent]);
-  return <StableMessageRenderer {...props} item={item} />;
+      content: live.content,
+      reasoningContent: live.reasoningContent,
+    }),
+    [props.item, live],
+  );
+  return <CommittedMessageRenderer {...props} item={item} />;
 };
 
 const MessageRendererDispatch: React.FC<MessageRendererProps> = props =>
-  props.item.id === 'streaming' ? (
+  props.item.id === STREAMING_MESSAGE_ID ? (
     <LiveStreamMessageRenderer {...props} />
   ) : (
-    <StableMessageRenderer {...props} />
+    <CommittedMessageRenderer {...props} />
   );
 
 export const MessageRenderer = React.memo(

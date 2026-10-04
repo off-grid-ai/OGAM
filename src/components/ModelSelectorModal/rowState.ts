@@ -1,4 +1,4 @@
-import type { ActiveModelInfo } from '../../services/activeModelService/types';
+import type { ActiveModelInfo } from '../../services/modelServices/modelStateTypes';
 
 /**
  * Which text row shows a spinner: the model a load is actually running for, and nothing otherwise.

@@ -5,7 +5,7 @@
  * Use these factories to create consistent test data across all test files.
  */
 
-import type { ImageDownloadDeps } from '../../src/services/imageDownloadActions';
+import type { ImageDownloadDeps } from '../../src/services/imageModelDownloadTypes';
 import {
   Message,
   Conversation,
@@ -55,7 +55,6 @@ export interface MessageFactoryOptions {
   toolCallId?: string;
   toolCalls?: Array<{ id?: string; name: string; arguments: string }>;
   toolArtifacts?: Message['toolArtifacts'];
-  timeline?: Message['timeline'];
   toolName?: string;
   reasoningContent?: string;
 }
@@ -76,7 +75,6 @@ export const createMessage = (
   toolCallId: options.toolCallId,
   toolCalls: options.toolCalls,
   toolArtifacts: options.toolArtifacts,
-  timeline: options.timeline,
   toolName: options.toolName,
   reasoningContent: options.reasoningContent,
 });
@@ -535,7 +533,7 @@ export const makeImageDownloadDeps = (
 ): ImageDownloadDeps => ({
   addDownloadedImageModel: jest.fn(),
   activeImageModelId: null,
-  setActiveImageModelId: jest.fn(),
+  selectActiveImageModel: jest.fn(async () => undefined),
   setAlertState: jest.fn(),
   triedImageGen: false,
   ...overrides,

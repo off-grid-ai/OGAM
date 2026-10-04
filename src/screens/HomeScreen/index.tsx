@@ -19,6 +19,7 @@ import { useHomeScreen, HomeScreenNavigationProp } from './hooks/useHomeScreen';
 import { RecentConversations } from './components/RecentConversations';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { DesktopPromoCard } from './components/DesktopPromoCard';
+import { useAmbientRecordingPhase, useAmbientRecordingElapsed } from '../../hooks/useAmbientCapture';
 import { ModelsSummaryRow } from '../../components/models/ModelsSummaryRow';
 import {
   ModelsManagerSheet,
@@ -26,12 +27,12 @@ import {
 } from '../../components/models/ModelsManagerSheet';
 import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
-import { useWhisperStore } from '../../stores/whisperStore';
-import { WHISPER_MODELS } from '../../services';
+import { useTranscriptionModelsProjection } from '../../hooks/useTranscriptionModelsProjection';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { SLOTS, useSlot } from '../../bootstrap/slotRegistry';
 import { useOpenSync } from '../../hooks/useOpenSync';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
+import { useActiveMobileModel } from '../../hooks/useActiveMobileModel';
 import { openSupportEmail } from '../../utils/supportEmail';
 
 type HomeScreenProps = {
@@ -54,11 +55,20 @@ function homeModelLabels(input: {
   };
 }
 
+function homeMmss(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60);
+  const sec = String(total % 60).padStart(2, '0');
+  return `${m}:${sec}`;
+}
+
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const focusTrigger = useFocusTrigger();
   const { colors, isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
   const SyncHomeCard = useSlot(SLOTS.homeSyncCard);
+  const recPhase = useAmbientRecordingPhase();
+  const recElapsed = useAmbientRecordingElapsed();
   const HomeNotificationsButton = useSlot(SLOTS.homeNotificationsButton);
   const { isSyncUnlocked, openSync, openSyncNotifications } = useOpenSync();
 
@@ -74,9 +84,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     downloadedImageModels,
     activeImageModelId,
     generatedImages,
-    conversationCount,
-    activeTextModelId,
-    activeTextModelName,
+    conversations,
+    activeTextModel,
     activeImageModel,
     recentConversations,
     // Remote model state
@@ -85,7 +94,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     activeRemoteImageModelId,
     handleSelectTextModel,
     handleUnloadTextModel,
-    handleSelectImageModel,
     handleUnloadImageModel,
     // Remote model handlers
     handleEjectAll,
@@ -102,21 +110,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const pendingAfterCloseRef = React.useRef<(() => void) | null>(null);
   const [whisperOpen, setWhisperOpen] = React.useState(false);
   const [voiceOpen, setVoiceOpen] = React.useState(false);
-  const returnToModelsRef = React.useRef(false);
-  const whisperModelId = useWhisperStore(s => s.downloadedModelId);
-  const whisperPresentCount = useWhisperStore(
-    s => s.presentModelIds?.length ?? 0,
-  );
+  const transcriptionRoute = useActiveMobileModel('transcription').model;
+  const whisperPresentCount = useTranscriptionModelsProjection().models.filter(
+    model => model.installed,
+  ).length;
   const voiceSummary = useUiModeStore(s => s.voiceSummary);
   const remoteLabels = useActiveRemoteModelLabels();
 
   const modelLabels = homeModelLabels({
-    text: activeTextModelId ? activeTextModelName : undefined,
+    text: activeTextModel?.name,
     image: activeImageModel?.name,
     voice: remoteLabels.voice,
     transcription: remoteLabels.transcription,
     localVoice: voiceSummary,
-    localTranscription: WHISPER_MODELS.find(m => m.id === whisperModelId)?.name,
+    localTranscription: transcriptionRoute?.source === 'local'
+      ? transcriptionRoute.name
+      : undefined,
   });
 
   // Downloaded-model counts shown in the Models card (replaces the old stats row).
@@ -135,6 +144,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     setModelsManagerOpen(false);
   };
 
+  // One sheet per model type. From the summary card it opens at once; from inside the manager it
+  // waits for the manager to finish dismissing (two modals mid-transition wedge iOS).
   const presentModelSheet = (type: ModelRowType) => {
     if (type === 'text') setPickerType('text');
     else if (type === 'image') setPickerType('image');
@@ -149,16 +160,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     const action = pendingAfterCloseRef.current;
     pendingAfterCloseRef.current = null;
     action?.();
-  };
-
-  const reopenModelsAfterChildClose = () => {
-    if (!returnToModelsRef.current) return;
-    returnToModelsRef.current = false;
-    setModelsManagerOpen(true);
-  };
-  const closeChildForModels = (close: () => void) => {
-    returnToModelsRef.current = true;
-    close();
   };
 
   return (
@@ -212,7 +213,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </AnimatedEntry>
 
           {/* New Chat Button */}
-          {activeTextModelId || activeImageModelId ? (
+          {activeTextModel || activeImageModelId ? (
             <Button
               title="New Chat"
               onPress={startNewChat}
@@ -272,7 +273,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <AnimatedEntry index={3} staggerMs={50} trigger={focusTrigger}>
               <RecentConversations
                 conversations={recentConversations}
-                totalCount={conversationCount}
+                totalCount={conversations.length}
                 focusTrigger={focusTrigger}
                 onContinueChat={continueChat}
                 onDeleteConversation={handleDeleteConversation}
@@ -280,6 +281,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               />
             </AnimatedEntry>
           )}
+
+          {/* Day */}
+          <AnimatedPressable
+            style={styles.galleryCard}
+            onPress={() => navigation.navigate('AmbientDay')}
+            hapticType="selection"
+            testID="home-day-card"
+          >
+            <Icon name="sunrise" size={18} color={colors.primary} />
+            <View style={styles.galleryCardInfo}>
+              <Text style={styles.galleryCardTitle}>Day</Text>
+              {recPhase === 'recording' ? (
+                <View style={styles.dayRecRow}>
+                  <View style={styles.dayRecDot} />
+                  <Text style={styles.dayRecText}>Recording · {homeMmss(recElapsed)}</Text>
+                </View>
+              ) : recPhase === 'processing' ? (
+                <Text style={styles.galleryCardMeta}>Processing…</Text>
+              ) : (
+                <Text style={styles.galleryCardMeta}>Journal · to-dos · timeline</Text>
+              )}
+            </View>
+            <Icon name="chevron-right" size={16} color={colors.textMuted} />
+          </AnimatedPressable>
 
           {/* Image Gallery */}
           <AnimatedPressable
@@ -336,11 +361,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         visible={pickerType !== null}
         initialTab={pickerType ?? 'text'}
         onClose={() => setPickerType(null)}
-        onClosed={reopenModelsAfterChildClose}
-        onBackToModels={() => closeChildForModels(() => setPickerType(null))}
         onSelectModel={handleSelectTextModel}
         onUnloadModel={handleUnloadTextModel}
-        onSelectImageModel={handleSelectImageModel}
         onUnloadImageModel={handleUnloadImageModel}
         isLoading={loadingState.isLoading}
         onSelectionComplete={() => setPickerType(null)}
@@ -379,14 +401,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       <WhisperPickerSheet
         visible={whisperOpen}
         onClose={() => setWhisperOpen(false)}
-        onClosed={reopenModelsAfterChildClose}
-        onBackToModels={() => closeChildForModels(() => setWhisperOpen(false))}
       />
       <VoiceModelsSheet
         visible={voiceOpen}
         onClose={() => setVoiceOpen(false)}
-        onClosed={reopenModelsAfterChildClose}
-        onBackToModels={() => closeChildForModels(() => setVoiceOpen(false))}
       />
 
       {/* Full-screen model-loading overlay (animated progress + rotating tips). */}

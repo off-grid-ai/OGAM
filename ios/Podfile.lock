@@ -9,7 +9,7 @@ PODS:
   - hermes-engine (0.14.0):
     - hermes-engine/Pre-built (= 0.14.0)
   - hermes-engine/Pre-built (0.14.0)
-  - llama-rn (0.13.0-rc.4):
+  - llama-rn (0.13.0-rc.0):
     - boost
     - DoubleConversion
     - fast_float
@@ -42,6 +42,36 @@ PODS:
   - MMKV (2.4.0):
     - MMKVCore (~> 2.4.0)
   - MMKVCore (2.4.0)
+  - onnxruntime-c (1.30.0)
+  - onnxruntime-react-native (1.24.3):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - onnxruntime-c
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - op-sqlite (15.2.5):
     - boost
     - DoubleConversion
@@ -3457,6 +3487,7 @@ PODS:
   - RNZipArchive/Core (7.1.0):
     - React-Core
     - SSZipArchive (~> 2.5.5)
+  - SherpaOnnxC (1.13.8)
   - SocketRocket (0.7.1)
   - SSZipArchive (2.5.5)
   - VisionCamera (4.7.3):
@@ -3506,6 +3537,7 @@ DEPENDENCIES:
   - glog (from `../node_modules/react-native/third-party-podspecs/glog.podspec`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
   - llama-rn (from `../node_modules/llama.rn`)
+  - onnxruntime-react-native (from `../node_modules/onnxruntime-react-native`)
   - "op-sqlite (from `../node_modules/@op-engineering/op-sqlite`)"
   - RCT-Folly (from `../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
@@ -3604,6 +3636,7 @@ DEPENDENCIES:
   - RNVectorIcons (from `../node_modules/react-native-vector-icons`)
   - RNWorklets (from `../node_modules/react-native-worklets`)
   - RNZipArchive (from `../node_modules/react-native-zip-archive`)
+  - SherpaOnnxC (from `sherpa`)
   - SocketRocket (~> 0.7.1)
   - VisionCamera (from `../node_modules/react-native-vision-camera`)
   - whisper-rn (from `../node_modules/whisper.rn`)
@@ -3614,6 +3647,7 @@ SPEC REPOS:
     - CocoaAsyncSocket
     - MMKV
     - MMKVCore
+    - onnxruntime-c
     - opencv-rne
     - SocketRocket
     - SSZipArchive
@@ -3636,6 +3670,8 @@ EXTERNAL SOURCES:
     :tag: hermes-v0.14.0
   llama-rn:
     :path: "../node_modules/llama.rn"
+  onnxruntime-react-native:
+    :path: "../node_modules/onnxruntime-react-native"
   op-sqlite:
     :path: "../node_modules/@op-engineering/op-sqlite"
   RCT-Folly:
@@ -3830,6 +3866,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-worklets"
   RNZipArchive:
     :path: "../node_modules/react-native-zip-archive"
+  SherpaOnnxC:
+    :path: sherpa
   VisionCamera:
     :path: "../node_modules/react-native-vision-camera"
   whisper-rn:
@@ -3845,10 +3883,12 @@ SPEC CHECKSUMS:
   FBLazyVector: 309703e71d3f2f1ed7dc7889d58309c9d77a95a4
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
-  hermes-engine: 3de70ea2100f1780402cf146bb8110a0cdb2f34e
-  llama-rn: fc4d176920fff190ee3a5a4172ce739531150cc4
+  hermes-engine: 34c7ed219c0c2601856fc539a2b11284f30b7735
+  llama-rn: 889d119bdf886e4ffd8982fc6e4ee04e793c3a31
   MMKV: 86859fdfa2b0b21db1fd6e48788474a6416a2c77
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
+  onnxruntime-c: 36ca0f2cdbc89c6b330ec5287c3faf5ca6ed394d
+  onnxruntime-react-native: c5bc754d2502418bd52dab3a4fcc59bb33ee9737
   op-sqlite: bafff369cecaee4fe65c89eec47deaba26f2db95
   opencv-rne: 2305807573b6e29c8c87e3416ab096d09047a7a0
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669
@@ -3890,7 +3930,7 @@ SPEC CHECKSUMS:
   react-native-background-downloader: b02d12c3961322ce1c85fa0f8b3e4adb5b652106
   react-native-document-picker: dc2d83366e47e89e7c51e8a41eab99c1d54e941c
   react-native-document-viewer: 8c6ed07e7e27352743fa98e8dd6d288ad925b884
-  react-native-executorch: 863673cf458ceec5df61012fa30981ffa3ee8fc4
+  react-native-executorch: 32eba2c1cc940ad92ac0f9f43c307e294ea6dce3
   react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
   react-native-image-picker: 0314366753615115fa55c3cc937ac44cb7e75702
   react-native-keyboard-controller: 7534b5a39d1e8b2b79f86e8e998ed71c7154f69f
@@ -3947,12 +3987,13 @@ SPEC CHECKSUMS:
   RNVectorIcons: 791f13226ec4a3fd13062eda9e892159f0981fae
   RNWorklets: 944dddd0eef13006b658e653abbb3ee8365c3809
   RNZipArchive: f2806ba80e24cf1984d6a7cb361d8a07d734997d
+  SherpaOnnxC: 62b9f928be33ed245b4ad01b87444a4a042037eb
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   SSZipArchive: c69881e8ac5521f0e622291387add5f60f30f3c4
-  VisionCamera: b51af005669c6642dd1b4fca434eda4c1778de87
+  VisionCamera: 7187b3dac1ff3071234ead959ce311875748e14f
   whisper-rn: 7566faf9b7d78e39ab9fc634cb90fdee81177793
   Yoga: 5456bb010373068fc92221140921b09d126b116e
 
-PODFILE CHECKSUM: d2e7563af7ca0531bcab79cceff20997d2fbe48c
+PODFILE CHECKSUM: 6339ad874f9d6d7828e1d36d515ed2ccb81adf19
 
-COCOAPODS: 1.15.2
+COCOAPODS: 1.17.0

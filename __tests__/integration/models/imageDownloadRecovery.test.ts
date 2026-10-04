@@ -1,164 +1,173 @@
-import RNFS from 'react-native-fs';
-import { unzip } from 'react-native-zip-archive';
+/**
+ * Image download recovery over the REAL Mobile composition root and the REAL Shared coordinator.
+ *
+ * The retired `coordinatedDownloadBridge` / `hydrateDownloadStore` / `resumeImageDownload` trio is
+ * gone: Shared owns download state (`models.snapshot().control.downloads`) and Mobile projects it
+ * into `useDownloadStore` (downloadProjectionAdapter). A relaunch finds the durable journal row
+ * still `downloading` while the native transfer already reports `completed`; Shared attaches,
+ * the transfer port promotes the staged bytes over whatever stale zip sits at the destination,
+ * the image finalizer extracts + registers the model, and the row leaves the active projection.
+ * Fakes sit ONLY at the device boundary: background-download native, react-native-fs, and the
+ * zip-archive leaf (react-native-zip-archive writes the extracted files to the faked disk).
+ */
+import type {PersistedModelDownload} from '@offgrid/models';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import type {MobileApplicationFixture} from '../../harness/mobileApplicationFixture';
+import {installNativeBoundary} from '../../harness/nativeBoundary';
 
-const mockBackgroundDownloadService = {
-  isAvailable: jest.fn(),
-  getActiveDownloads: jest.fn(),
-  moveCompletedDownload: jest.fn(),
+const MODEL_ID = 'image:test-model';
+const IMAGE_ID = 'test-model';
+const FILE_NAME = 'test-model.zip';
+const DOWNLOAD_ID = `${MODEL_ID}/${FILE_NAME}`;
+const TRANSFER_ID = 'dl-1';
+const DOCS = '/docs';
+const ZIP_PATH = `${DOCS}/${FILE_NAME}`;
+const MODEL_DIR = `${DOCS}/image_models/${IMAGE_ID}`;
+const ZIP_BYTES = 1_000;
+/** Zip image metadata as the catalog emits it: the archive URL is mandatory (mobileImageDownloadMetadata). */
+const METADATA = {
+  imageDownloadType: 'zip',
+  imageModelDownloadUrl: `https://example.com/${FILE_NAME}`,
+  imageModelName: 'Test Model',
+  imageModelDescription: 'desc',
+  imageModelSize: ZIP_BYTES,
+  imageModelBackend: 'mnn',
 };
+/** A complete MNN package as the integrity gate (imageModelIntegrity) requires it. */
+const MNN_FILES = [
+  'pos_emb.bin', 'token_emb.bin', 'tokenizer.json',
+  'unet.mnn', 'unet.mnn.weight',
+  'vae_decoder.mnn', 'vae_decoder.mnn.weight',
+  'clip_v2.mnn', 'clip_v2.mnn.weight',
+];
 
-const mockModelManager = {
-  getImageModelsDirectory: jest.fn(),
-  addDownloadedImageModel: jest.fn(),
-};
+let fixture: MobileApplicationFixture | null = null;
 
-// Integrity is a boundary for this recovery test (it exercises the resume/move
-// orchestration, not the completeness rule — that has its own dedicated tests).
-jest.mock('../../../src/utils/imageModelIntegrity', () => ({
-  validateImageModelDir: jest.fn(async () => ({ complete: true, missing: [] })),
-  ensureImageExtractionComplete: jest.fn(async () => {}),
-}));
+afterEach(async () => {
+  await fixture?.dispose();
+  fixture = null;
+});
 
-jest.mock('../../../src/services/backgroundDownloadService', () => ({
-  backgroundDownloadService: mockBackgroundDownloadService,
-}));
-
-jest.mock('../../../src/services', () => ({
-  modelManager: mockModelManager,
-  hardwareService: {
-    getSoCInfo: jest.fn(),
-  },
-  backgroundDownloadService: mockBackgroundDownloadService,
-}));
-
-jest.mock('../../../src/components/CustomAlert', () => ({
-  showAlert: jest.fn((title: string, message: string) => ({ visible: true, title, message })),
-  hideAlert: jest.fn(() => ({ visible: false })),
-}));
-
-const { hydrateDownloadStore } = require('../../../src/services/downloadHydration');
-const { resumeImageDownload } = require('../../../src/screens/ModelsScreen/imageDownloadResume');
-const { useDownloadStore } = require('../../../src/stores/downloadStore');
-
-const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
-const mockUnzip = unzip as jest.MockedFunction<typeof unzip>;
-
-type DirItem = RNFS.ReadDirResItemT;
-
-function makeFileItem(path: string): DirItem {
-  const name = path.split('/').pop() || path;
+function record(phase: PersistedModelDownload['phase'], transferId?: string): PersistedModelDownload {
   return {
-    ctime: new Date(0),
-    mtime: new Date(0),
-    name,
-    path,
-    size: 1,
-    isFile: () => true,
-    isDirectory: () => false,
+    manifest: {
+      id: DOWNLOAD_ID,
+      modelId: MODEL_ID,
+      kind: 'image',
+      revision: 'main',
+      artifacts: [{
+        id: 'primary',
+        name: FILE_NAME,
+        role: 'primary',
+        required: true,
+        localName: FILE_NAME,
+        url: `https://example.com/${FILE_NAME}`,
+        sizeBytes: ZIP_BYTES,
+      }],
+      metadata: {
+        displayName: 'Test Model',
+        catalogEntry: false,
+        publicMetadataJson: JSON.stringify(METADATA),
+      },
+    },
+    phase,
+    artifacts: [{
+      artifactId: 'primary',
+      phase,
+      ...(transferId ? {transferId} : {}),
+      bytesDownloaded: ZIP_BYTES,
+      totalBytes: ZIP_BYTES,
+    }],
+    createdAt: 1,
+    updatedAt: 1,
+    attempt: 1,
   };
 }
 
-describe('image download recovery integration', () => {
-  let existingPaths: Set<string>;
-  let dirEntries: Record<string, DirItem[]>;
-  let statSizes: Record<string, number>;
-  let headers: Record<string, string>;
-
-  const imageModelsDir = '/mock/image_models';
-  const modelDir = `${imageModelsDir}/test-model`;
-  const zipPath = `${imageModelsDir}/test-model.zip`;
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    existingPaths = new Set<string>();
-    dirEntries = {};
-    statSizes = {};
-    headers = {};
-
-    useDownloadStore.setState({
-      downloads: {},
-      downloadIdIndex: {},
-      repairingVisionIds: {},
-    });
-
-    mockModelManager.getImageModelsDirectory.mockReturnValue(imageModelsDir);
-    mockModelManager.addDownloadedImageModel.mockResolvedValue(undefined);
-    mockBackgroundDownloadService.isAvailable.mockReturnValue(true);
-    mockBackgroundDownloadService.moveCompletedDownload.mockImplementation(async () => {
-      existingPaths.add(zipPath);
-      statSizes[zipPath] = 1000;
-      headers[zipPath] = 'PK34';
-      return zipPath;
-    });
-
-    mockedRNFS.exists.mockImplementation(async (path: string) => existingPaths.has(path));
-    mockedRNFS.readDir.mockImplementation(async (path: string) => dirEntries[path] ?? []);
-    mockedRNFS.stat.mockImplementation(async (path: string) => ({ size: statSizes[path] ?? 0 } as any));
-    mockedRNFS.read.mockImplementation(async (path: string) => headers[path] ?? '');
-    mockedRNFS.mkdir.mockImplementation(async (path: string) => {
-      existingPaths.add(path);
-    });
-    mockedRNFS.unlink.mockImplementation(async (path: string) => {
-      existingPaths.delete(path);
-      delete dirEntries[path];
-      delete statSizes[path];
-      delete headers[path];
-    });
-    mockUnzip.mockImplementation(async () => {
-      existingPaths.add(modelDir);
-      dirEntries[modelDir] = [makeFileItem(`${modelDir}/weights.bin`)];
-      return '/unzipped';
-    });
+/**
+ * Device boundary for a completed native transfer: the native module reports the row `completed`,
+ * `moveCompletedDownload` promotes the staged bytes over the destination (replacing any stale file
+ * there, as the OS does), and the zip leaf extracts a complete MNN package onto the faked disk.
+ */
+function installCompletedImageTransfer() {
+  const boundary = installNativeBoundary({download: true, fs: true});
+  const fs = boundary.fs!;
+  boundary.download!.seedActive({
+    downloadId: TRANSFER_ID,
+    modelId: MODEL_ID,
+    fileName: FILE_NAME,
+    modelType: 'image',
+    status: 'completed',
+    bytesDownloaded: ZIP_BYTES,
+    totalBytes: ZIP_BYTES,
   });
+  boundary.download!.module.moveCompletedDownload.mockImplementation(async (_id: string, target: string) => {
+    fs.seedTextFile(target, 'PK', ZIP_BYTES);
+    return target;
+  });
+  const zip = require('react-native-zip-archive') as {unzip: jest.Mock};
+  zip.unzip.mockImplementation(async (_archive: string, destination: string) => {
+    for (const name of MNN_FILES) fs.seedFile(`${destination}/${name}`, 1);
+    return destination;
+  });
+  return {boundary, fs, unzip: zip.unzip};
+}
 
-  it('hydrates a completed image row as processing and recovers by replacing an invalid destination zip', async () => {
-    existingPaths.add(zipPath);
-    statSizes[zipPath] = 128;
-    headers[zipPath] = 'NOPE';
+async function launch(records: readonly PersistedModelDownload[]) {
+  const {seedMobileDownloadJournal, startMobileApplicationFixture} =
+    require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+  await seedMobileDownloadJournal(records);
+  fixture = await startMobileApplicationFixture();
+  await fixture.refreshModels();
+}
 
-    mockBackgroundDownloadService.getActiveDownloads.mockResolvedValue([
-      {
-        downloadId: 'dl-1',
-        modelId: 'image:test-model',
-        modelKey: 'image:test-model',
-        fileName: 'test-model.zip',
-        modelType: 'image',
-        status: 'completed',
-        bytesDownloaded: 1000,
-        totalBytes: 1000,
-        combinedTotalBytes: 1000,
-        createdAt: 1,
-        metadataJson: JSON.stringify({
-          imageDownloadType: 'zip',
-          imageModelName: 'Test Model',
-          imageModelDescription: 'desc',
-          imageModelSize: 1000,
-          imageModelBackend: 'mnn',
-        }),
-      },
-    ]);
+function projected() {
+  const {useDownloadStore} = require('../../../src/stores/downloadStore') as typeof import('../../../src/stores/downloadStore');
+  return Object.values(useDownloadStore.getState().downloads);
+}
 
-    await hydrateDownloadStore();
+function installedImageModels() {
+  const {useAppStore} = require('../../../src/stores/appStore') as typeof import('../../../src/stores/appStore');
+  return useAppStore.getState().downloadedImageModels;
+}
 
-    const entry = useDownloadStore.getState().downloads['image:test-model'];
-    expect(entry.status).toBe('processing');
+async function settle() {
+  for (let i = 0; i < 20; i += 1) await new Promise<void>(resolve => setImmediate(resolve));
+}
 
-    const deps = {
-      addDownloadedImageModel: jest.fn(),
-      activeImageModelId: null,
-      setActiveImageModelId: jest.fn(),
-      setAlertState: jest.fn(),
-      triedImageGen: true,
-    };
+describe('image download recovery (real composition root + Shared-owned download state)', () => {
+  it('recovers a completed native image transfer on relaunch by replacing an invalid destination zip, extracting, and registering the model', async () => {
+    const {boundary, fs, unzip} = installCompletedImageTransfer();
+    // A stale, invalid zip already sits at the destination from an earlier attempt.
+    fs.seedTextFile(ZIP_PATH, 'NOPE', 128);
 
-    await resumeImageDownload(entry, deps as any);
+    await launch([record('downloading', TRANSFER_ID)]);
+    boundary.download!.events.emit('DownloadComplete', {downloadId: TRANSFER_ID});
+    await settle();
 
-    expect(mockBackgroundDownloadService.moveCompletedDownload).toHaveBeenCalledWith('dl-1', zipPath);
-    expect(mockModelManager.addDownloadedImageModel).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'test-model',
-      modelPath: modelDir,
-    }));
-    expect(deps.addDownloadedImageModel).toHaveBeenCalled();
-    expect(useDownloadStore.getState().downloads['image:test-model']).toBeUndefined();
+    // The staged native bytes were promoted over the invalid destination file.
+    expect(boundary.download!.module.moveCompletedDownload).toHaveBeenCalledWith(TRANSFER_ID, ZIP_PATH);
+    expect(await fs.readAscii(ZIP_PATH, 2)).toBe('PK');
+    // The archive was extracted and the image model registered at its install path.
+    expect(installedImageModels()).toEqual([expect.objectContaining({
+      id: IMAGE_ID,
+      modelPath: MODEL_DIR,
+    })]);
+    expect(unzip).toHaveBeenCalledWith(ZIP_PATH, expect.stringContaining('prepared-image'));
+    expect(await fs.exists(`${MODEL_DIR}/unet.mnn`)).toBe(true);
+    expect(await AsyncStorage.getItem('@local_llm/downloaded_model_packages')).toBeNull();
+    const storedRows = await AsyncStorage.getItem('@local_llm/downloaded_image_models');
+    expect(storedRows).not.toBeNull();
+    const canonicalRows = JSON.parse(storedRows!);
+    expect(canonicalRows).toEqual([expect.objectContaining({
+      id: IMAGE_ID,
+      modelPath: MODEL_DIR,
+      registryFamilyId: MODEL_ID,
+      registryPackageIdentity: expect.stringMatching(/^model-package-v1:/),
+    })]);
+    // The recovered download is no longer an active row the Download Manager renders.
+    expect(projected().filter(row => row.status !== 'completed')).toEqual([]);
+    expect(fixture!.application.models.snapshot().control.downloads
+      .filter(row => row.status !== 'completed' && row.status !== 'cancelled')).toEqual([]);
   });
 });

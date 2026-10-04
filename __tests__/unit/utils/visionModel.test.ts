@@ -6,7 +6,7 @@
  * diverge again. Consumers are driven for real; the assertion is each one's actual verdict.
  */
 import { looksLikeVisionModel, VISION_NAME_PATTERNS } from '../../../src/utils/visionModel';
-import { detectVisionCapability } from '../../../src/services/remoteServerManagerUtils';
+import { detectVisionCapability } from '../../../src/services/adapters/remote/serverRuntime';
 import { getModelType } from '../../../src/screens/ModelsScreen/utils';
 import type { ModelInfo } from '../../../src/types';
 

@@ -43,6 +43,7 @@ describe('T116 (rendered) — text + whisper allowed co-residence (In Memory UI)
 
     // Real gesture: download + select a whisper STT model (co-resides as a sidecar, must NOT evict text).
     await h.setupWhisperModel();
+    await h.loadSelectedWhisperOnDemand();
 
     // Result via the In Memory UI: BOTH are listed — the heavy text model kept its RAM, whisper co-resides.
     const after = openSelector();

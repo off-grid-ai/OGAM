@@ -1,26 +1,33 @@
 /**
- * GUARD (integration) — transcription with no result must NOT auto-send an empty turn; it tells the user
- * instead. resolveTranscription is the single seam every voice-note send should route through: an empty
- * transcript → do NOT dispatch, surface a clear message (whisper-not-ready vs no-speech distinguished).
- * Locks the correct behavior the Q20/B5b bug bypasses (Voice.ts:149-151 auto-sends content='' on the
- * direct-audio path instead of routing here).
+ * GUARD (integration) — transcription with no result must NOT auto-send an empty turn. The Shared
+ * transcription outcome is the seam every voice-note send routes through: an empty transcript does
+ * not dispatch, and it has a clear message distinct from a model-load failure.
  */
-import { resolveTranscription } from '../../../src/components/ChatInput/transcriptionOutcome';
+import {
+  transcriptionOutcomeFrom,
+  transcriptionOutcomeMessage,
+  transcriptionShouldDispatch,
+} from '@offgrid/application';
+
+const outcomeFrom = (modelReady: boolean, cleanedText: string) =>
+  transcriptionOutcomeFrom({ audioBytes: 1, modelReady, cleanedText });
 
 describe('transcription empty result (guard)', () => {
-  it('does not dispatch and shows a "couldn\'t hear that" message when the transcript is empty', () => {
-    const outcome = resolveTranscription(true, '   ');
-    expect(outcome.dispatch).toBe(false);
-    if (!outcome.dispatch) expect(outcome.message).toMatch(/hear that/i);
+  it('does not dispatch and shows a "didn\'t catch that" message when the transcript is empty', () => {
+    const outcome = outcomeFrom(true, '   ');
+    expect(transcriptionShouldDispatch(outcome)).toBe(false);
+    expect(transcriptionOutcomeMessage(outcome)).toMatch(/catch that/i);
   });
 
   it('tells the user the voice model failed to load when whisper is not ready', () => {
-    const outcome = resolveTranscription(false, '');
-    expect(outcome.dispatch).toBe(false);
-    if (!outcome.dispatch) expect(outcome.message).toMatch(/voice model/i);
+    const outcome = outcomeFrom(false, '');
+    expect(transcriptionShouldDispatch(outcome)).toBe(false);
+    expect(transcriptionOutcomeMessage(outcome)).toMatch(/voice model/i);
   });
 
   it('dispatches the trimmed transcript when speech was heard', () => {
-    expect(resolveTranscription(true, '  what is the capital of France  ')).toEqual({ dispatch: true, text: 'what is the capital of France' });
+    const outcome = outcomeFrom(true, '  what is the capital of France  ');
+    expect(transcriptionShouldDispatch(outcome)).toBe(true);
+    expect(outcome).toEqual({ kind: 'transcribed', text: 'what is the capital of France' });
   });
 });

@@ -1,7 +1,8 @@
 import { Dispatch, MutableRefObject, SetStateAction, useCallback } from 'react';
 import { AlertState } from '../../components';
+import type { ModelSettingsRecord } from '@offgrid/application';
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
-import { useAppStore, useChatStore } from '../../stores';
+import { useChatStore } from '../../stores';
 import {
   DebugInfo,
   DownloadedModel,
@@ -9,6 +10,8 @@ import {
   Project,
 } from '../../types';
 import type { ActiveTextModelResult } from '../../hooks/useActiveTextModel';
+import { useEnabledToolsSetting } from '../../hooks/useEnabledToolsSetting';
+import type { AppSettings } from '../../stores/appStore';
 import { saveImageToGallery } from './useSaveImage';
 import { computePendingSettings } from './pendingSettings';
 import { reloadTextModel } from './reloadTextModel';
@@ -21,50 +24,36 @@ import {
   handleSelectProjectFn,
   handleSendFn,
   handleStopFn,
-  startGenerationFn,
 } from './useChatGenerationActions';
 import {
   handleDeleteConversationFn,
   handleEditMessageFn,
   handleGenerateImageFromMsgFn,
   handleRetryMessageFn,
-  handleTranscribeAgainFn,
 } from './useChatMessageHandlers';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 type ChatStoreState = ReturnType<typeof useChatStore.getState>;
-type StartGeneration = (
-  conversationId: string,
-  text: string,
-  assistantEnabled?: boolean,
-) => Promise<void>;
 
 const VIEWER_FADE_OUT_MS = 350;
 
 interface ChatScreenActionsArgs {
   generationDeps: GenerationDeps;
-  generationDepsRef: MutableRefObject<GenerationDeps | null>;
   modelDeps: Parameters<typeof handleModelSelectFn>[0];
   activeModelInfo: ActiveTextModelResult;
   supportsToolCalling: boolean;
   activeModel?: DownloadedModel;
-  settings: ReturnType<typeof useAppStore.getState>['settings'];
-  loadedSettings: ReturnType<typeof useAppStore.getState>['loadedSettings'];
-  loadedTextModelId: string | null;
-  isModelLoading: boolean;
+  settings: ModelSettingsRecord;
+  loadedSettings: Partial<AppSettings> | null;
   pendingMessageRef: MutableRefObject<{
     text: string;
     attachments?: MediaAttachment[];
   } | null>;
-  startGenerationRef: MutableRefObject<StartGeneration | null>;
   setDebugInfo: SetState<DebugInfo | null>;
   setAlertState: SetState<AlertState>;
   activeConversationId: string | null;
   activeConversation: ChatStoreState['conversations'][number] | undefined;
   hasActiveModel: boolean;
-  deleteMessagesAfter: ChatStoreState['deleteMessagesAfter'];
-  updateMessageContent: ChatStoreState['updateMessageContent'];
-  setConversationProject: ChatStoreState['setConversationProject'];
   setPendingProjectId: (projectId?: string) => void;
   setShowProjectSelector: SetState<boolean>;
   activeImageModel: GenerationDeps['activeImageModel'];
@@ -74,57 +63,33 @@ interface ChatScreenActionsArgs {
 
 export function useChatScreenActions({
   generationDeps,
-  generationDepsRef,
   modelDeps,
   activeModelInfo,
   supportsToolCalling,
   activeModel,
   settings,
   loadedSettings,
-  loadedTextModelId,
-  isModelLoading,
   pendingMessageRef,
-  startGenerationRef,
   setDebugInfo,
   setAlertState,
   activeConversationId,
   activeConversation,
   hasActiveModel,
-  deleteMessagesAfter,
-  updateMessageContent,
-  setConversationProject,
   setPendingProjectId,
   setShowProjectSelector,
   activeImageModel,
   viewerImageUri,
   setViewerImageUri,
 }: ChatScreenActionsArgs) {
-  const startGeneration: StartGeneration = async (
-    targetConversationId,
-    messageText,
-    assistantEnabled,
-  ) => {
-    await startGenerationFn(generationDeps, {
-      setDebugInfo,
-      targetConversationId,
-      messageText,
-      assistantEnabled,
-    });
-  };
-  startGenerationRef.current = startGeneration;
-
   const handleSend = (
     text: string,
     attachments?: MediaAttachment[],
     imageMode?: 'auto' | 'force' | 'disabled',
-    assistantEnabled?: boolean,
   ) =>
     handleSendFn(generationDeps, {
       text,
       attachments,
       imageMode,
-      assistantEnabled,
-      startGeneration,
       setDebugInfo,
     });
 
@@ -155,14 +120,13 @@ export function useChatScreenActions({
     }
   };
 
-  const enabledTools = supportsToolCalling
-    ? settings.enabledTools || []
-    : [];
+  // The Shared committed projection is the read owner. This hook only READS the enabled tools:
+  // the pickers (ToolsScreen, McpServersScreen) own the toggle through the same seam, so no
+  // second writer of `enabledTools` lives on the chat path.
+  const { enabledTools: committedTools } = useEnabledToolsSetting();
+  const enabledTools = supportsToolCalling ? committedTools : [];
   const canReloadTextModel =
-    Boolean(activeModelInfo.modelId) &&
-    !activeModelInfo.isRemote &&
-    !isModelLoading &&
-    loadedTextModelId === activeModelInfo.modelId;
+    Boolean(activeModelInfo.modelId) && !activeModelInfo.isRemote;
 
   return {
     enabledTools,
@@ -172,14 +136,6 @@ export function useChatScreenActions({
     handleReloadTextModel,
     handleSend,
     handleModelSelect,
-    handleToggleTool: (toolId: string) => {
-      const current = settings.enabledTools || [];
-      useAppStore.getState().updateSettings({
-        enabledTools: current.includes(toolId)
-          ? current.filter(id => id !== toolId)
-          : [...current, toolId],
-      });
-    },
     handleStop: () => handleStopFn(generationDeps),
     handleUnloadModel: () => handleUnloadModelFn(modelDeps),
     handleDeleteConversation: () =>
@@ -191,16 +147,14 @@ export function useChatScreenActions({
     handleCopyMessage: (content: string) => {
       callHook(HOOKS.clipboardRecordLocalText, content, Date.now());
     },
-    handleRetryMessage: (message: ChatStoreState['conversations'][number]['messages'][number], assistantEnabled = false) => {
-      const currentDeps = generationDepsRef.current ?? generationDeps;
-      return handleRetryMessageFn(message, currentDeps, {
-        activeConversationId: currentDeps.activeConversationId,
-        hasActiveModel: !!currentDeps.hasActiveModel,
-        deleteMessagesAfter,
+    handleRetryMessage: (
+      message: ChatStoreState['conversations'][number]['messages'][number],
+    ) =>
+      handleRetryMessageFn(message, generationDeps, {
+        activeConversationId,
+        hasActiveModel,
         setDebugInfo,
-        assistantEnabled,
-      });
-    },
+      }),
     handleEditMessage: (
       message: ChatStoreState['conversations'][number]['messages'][number],
       newContent: string,
@@ -210,21 +164,7 @@ export function useChatScreenActions({
         newContent,
         activeConversationId,
         hasActiveModel,
-        updateMessageContent,
-        deleteMessagesAfter,
         setDebugInfo,
-      }),
-    handleTranscribeAgain: (
-      message: ChatStoreState['conversations'][number]['messages'][number],
-      attachment: MediaAttachment,
-    ) =>
-      handleTranscribeAgainFn({
-        message,
-        attachment,
-        activeConversationId,
-        updateMessageTranscription:
-          useChatStore.getState().updateMessageTranscription,
-        setAlertState,
       }),
     handleSelectProject: (project: Project | null) => {
       setPendingProjectId(project?.id);
@@ -235,7 +175,6 @@ export function useChatScreenActions({
       handleSelectProjectFn(
         {
           activeConversationId,
-          setConversationProject,
           setShowProjectSelector,
         },
         project,

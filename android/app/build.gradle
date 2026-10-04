@@ -151,6 +151,8 @@ android {
     aaptOptions {
         // Prevent AAPT from compressing .gguf model files — they must be copied byte-for-byte
         noCompress 'gguf'
+        // sherpa-onnx bundled models are copied byte-for-byte to filesDir at runtime.
+        noCompress 'onnx'
     }
 }
 
@@ -158,7 +160,16 @@ configurations.all {
     exclude group: 'com.android.support'
 }
 
+repositories {
+    // The vendored sherpa-onnx Android AAR (on-device diarization + voiceprints). Fetch it with
+    // scripts/fetch-sherpa-android.sh — it is gitignored, not committed (like the iOS xcframework).
+    flatDir { dirs "$projectDir/libs" }
+}
+
 dependencies {
+    // On-device speaker diarization + voiceprints (k2-fsa sherpa-onnx 1.13.8, same as iOS/Mac).
+    implementation(name: 'sherpa-onnx-1.13.8', ext: 'aar')
+
     // Backports java.time (and more) to API 24 - see the compileOptions note above.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 

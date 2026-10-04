@@ -16,21 +16,37 @@
 import { setupChatScreen } from '../../harness/chatHarness';
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
+  useNavigation: () => ({
+    navigate: () => {},
+    goBack: () => {},
+    setOptions: () => {},
+    addListener: () => () => {},
+  }),
   useRoute: () => require('../../harness/chatHarness').routeHolder,
-  useFocusEffect: () => {}, useIsFocused: () => true,
+  useFocusEffect: () => {},
+  useIsFocused: () => true,
 }));
 
 describe('realtime dictation: releasing the mic during model load starts NO ghost recording (#558)', () => {
   it('aborts the superseded start — no realtime session after release-during-load', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true });
-    const { useWhisperStore } = require('../../../src/stores/whisperStore');
+    const h = await setupChatScreen({
+      engine: 'llama',
+      platform: 'android',
+      whisper: true,
+    });
+    const { refreshTranscriptionModels, selectTranscriptionModel } =
+      require('../../../src/services/transcriptionModelApplication') as typeof import('../../../src/services/transcriptionModelApplication');
 
     // Whisper downloaded-not-loaded, so the mic press must load it (the async gap the race lives in).
     const docs = h.boundary.fs!.DocumentDirectoryPath;
-    h.boundary.fs!.seedFile(`${docs}/whisper-models/ggml-tiny.en.bin`, 75 * 1024 * 1024);
-    await useWhisperStore.getState().refreshPresentModels();
-    useWhisperStore.setState({ downloadedModelId: 'tiny.en', isModelLoaded: false });
+    h.boundary.fs!.seedFile(
+      `${docs}/whisper-models/ggml-tiny.en.bin`,
+      75 * 1024 * 1024,
+    );
+    const refreshed = await refreshTranscriptionModels();
+    expect(refreshed.ok).toBe(true);
+    const selected = await selectTranscriptionModel('tiny.en');
+    expect(selected.ok).toBe(true);
 
     h.render();
 
@@ -38,8 +54,8 @@ describe('realtime dictation: releasing the mic during model load starts NO ghos
     // inside the ensureModelReady() await when we release the mic.
     h.boundary.whisper!.holdNextLoad();
 
-    await h.tapMic();     // start begins → awaits ensureModelReady() → whisper load HELD
-    await h.settle(150);  // the start is now parked in the await
+    await h.tapMic(); // start begins → awaits ensureModelReady() → whisper load HELD
+    await h.settle(150); // the start is now parked in the await
     await h.releaseMic(); // RELEASE during the load → stopRecording bumps the session nonce
     await h.settle(50);
 
@@ -47,7 +63,9 @@ describe('realtime dictation: releasing the mic during model load starts NO ghos
     expect(h.boundary.whisper!.realtimeActive()).toBe(false);
 
     // Now let the load resolve. The superseded start must NOT resurrect a recording.
-    await h.rtl.act(async () => { h.boundary.whisper!.releaseLoad(); });
+    await h.rtl.act(async () => {
+      h.boundary.whisper!.releaseLoad();
+    });
     await h.settle(300);
 
     // TERMINAL artifact: no realtime session is active and none was subscribed — the ghost never started.

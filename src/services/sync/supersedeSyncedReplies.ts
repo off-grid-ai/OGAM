@@ -1,8 +1,8 @@
 import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import { useRemoteChatStreamStore } from '../../stores/remoteChatStreamStore';
 import logger from '../../utils/logger';
+import { CORE_SYNC_ENTITIES } from '@offgrid/application';
 import {
-  CORE_SYNC_ENTITIES,
   deleteSyncMutation,
   emitSyncMutation,
 } from './mutation';

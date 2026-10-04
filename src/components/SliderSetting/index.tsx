@@ -14,15 +14,13 @@ interface SliderSettingProps {
   decimals?: number;
   /** Formats the value shown in the header. */
   formatValue?: (value: number) => string;
-  /** Hide exact numeric entry when slider positions represent named choices. */
-  allowValueEditing?: boolean;
+  /** Allow direct numeric entry from the value label. Defaults to true. */
+  editableValue?: boolean;
   description?: string;
   warning?: string | null;
   warningColor?: string;
   onChange: (value: number) => void;
   testID?: string;
-  /** Tighter rhythm for sliders inside the in-chat settings sheet. */
-  compact?: boolean;
 }
 
 /**
@@ -39,13 +37,12 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
   step,
   decimals,
   formatValue,
-  allowValueEditing = true,
+  editableValue = true,
   description,
   warning,
   warningColor,
   onChange,
   testID,
-  compact = false,
 }) => {
   const { colors } = useTheme();
   const dp = decimals ?? (step < 1 ? 2 : 0);
@@ -83,10 +80,10 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
   const display = formatValue ? formatValue(shown) : shown.toFixed(dp);
 
   return (
-    <View style={[styles.group, compact && styles.compactGroup]}>
-      <View style={[styles.header, compact && styles.compactHeader]}>
+    <View style={styles.group}>
+      <View style={styles.header}>
         <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
-        {allowValueEditing && editing ? (
+        {editing ? (
           <TextInput
             testID={testID ? `${testID}-input` : undefined}
             style={[styles.value, { color: colors.primary, borderColor: colors.primary, backgroundColor: colors.surfaceLight }]}
@@ -99,7 +96,7 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
             selectTextOnFocus
             returnKeyType="done"
           />
-        ) : allowValueEditing ? (
+        ) : editableValue ? (
           <TouchableOpacity
             testID={testID ? `${testID}-value-button` : undefined}
             onPress={startEdit}
@@ -123,15 +120,15 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
       </View>
 
       {description ? (
-        <Text style={[styles.description, compact && styles.compactDescription, { color: colors.textSecondary }]}>{description}</Text>
+        <Text style={[styles.description, { color: colors.textSecondary }]}>{description}</Text>
       ) : null}
       {warning ? (
-        <Text style={[styles.description, compact && styles.compactDescription, { color: warningColor ?? colors.error }]}>{warning}</Text>
+        <Text style={[styles.description, { color: warningColor ?? colors.error }]}>{warning}</Text>
       ) : null}
 
       <Slider
         testID={testID ? `${testID}-slider` : undefined}
-        style={[styles.slider, compact && styles.compactSlider]}
+        style={styles.slider}
         minimumValue={min}
         maximumValue={max}
         step={step}
@@ -144,6 +141,8 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
         minimumTrackTintColor={colors.primary}
         maximumTrackTintColor={colors.surfaceLight}
         thumbTintColor={colors.primary}
+        accessibilityLabel={label}
+        accessibilityValue={{ min, max, now: shown, text: display }}
       />
     </View>
   );
@@ -153,17 +152,11 @@ const styles = StyleSheet.create({
   group: {
     marginBottom: SPACING.lg,
   },
-  compactGroup: {
-    marginBottom: SPACING.sm,
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: SPACING.sm,
-  },
-  compactHeader: {
-    marginBottom: SPACING.xs,
   },
   label: {
     ...TYPOGRAPHY.body,
@@ -186,14 +179,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     lineHeight: 18,
   },
-  compactDescription: {
-    marginBottom: SPACING.xs,
-  },
   slider: {
     width: '100%',
     height: 40,
-  },
-  compactSlider: {
-    height: 32,
   },
 });

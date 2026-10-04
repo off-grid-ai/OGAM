@@ -1,8 +1,8 @@
 import {
-  CORE_SYNC_ENTITIES,
   mobileModelSettingPatch,
   modelSettingMutations,
 } from '../../../src/services/sync/mutation';
+import { CORE_SYNC_ENTITIES } from '@offgrid/application';
 
 describe('model settings sync contract', () => {
   it('round-trips every setting shared by desktop and mobile through canonical wire keys', () => {
@@ -14,11 +14,7 @@ describe('model settings sync contract', () => {
       maxTokens: 2_048,
       maxToolCalls: 25,
       systemPrompt: 'Answer from local context.',
-      cacheType: 'q4_0',
-      flashAttn: true,
-      gpuLayers: 99,
-      nThreads: 8,
-      nBatch: 512,
+      thinkingEnabled: true,
     };
     const expectedWireToLocal = {
       temperature: 'temperature',
@@ -28,11 +24,7 @@ describe('model settings sync contract', () => {
       maxTokens: 'maxTokens',
       maxToolCalls: 'maxToolCalls',
       systemPrompt: 'systemPrompt',
-      kvCacheType: 'cacheType',
-      flashAttn: 'flashAttn',
-      gpuLayers: 'gpuLayers',
-      threads: 'nThreads',
-      batchSize: 'nBatch',
+      thinkingEnabled: 'thinkingEnabled',
     } as const;
 
     const mutations = modelSettingMutations({}, localSettings);
@@ -46,10 +38,38 @@ describe('model settings sync contract', () => {
       expect(mutation).toMatchObject({
         entity: CORE_SYNC_ENTITIES.modelSetting,
         kind: 'put',
+        fields: { version: 1 },
       });
       expect(
         mobileModelSettingPatch(mutation.entityId, mutation.fields ?? {}),
       ).toEqual({ [localKey]: localSettings[localKey] });
+    }
+  });
+
+  it('keeps device-specific runtime settings local', () => {
+    expect(
+      modelSettingMutations({}, {
+        cacheType: 'q4_0',
+        flashAttn: true,
+        gpuLayers: 99,
+        nThreads: 8,
+        nBatch: 512,
+        inferenceBackend: 'metal',
+      }),
+    ).toEqual([]);
+    for (const wireKey of [
+      'kvCacheType',
+      'flashAttn',
+      'gpuLayers',
+      'threads',
+      'batchSize',
+    ]) {
+      expect(
+        mobileModelSettingPatch(wireKey, {
+          version: 1,
+          value_json: '1',
+        }),
+      ).toBeNull();
     }
   });
 

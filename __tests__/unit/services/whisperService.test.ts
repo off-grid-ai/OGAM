@@ -10,9 +10,7 @@ import { Platform, PermissionsAndroid } from 'react-native';
 import RNFS from 'react-native-fs';
 import {
   whisperService,
-  WHISPER_MODELS,
 } from '../../../src/services/whisperService';
-import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
 import { audioSessionManager } from '../../../src/services/audioSessionManager';
 import { audioRecorderService } from '../../../src/services/audioRecorderService';
 import { AudioManager } from 'react-native-audio-api';
@@ -23,50 +21,39 @@ const mockSetAudioSessionOptions =
 const mockSetAudioSessionActivity =
   AudioManager.setAudioSessionActivity as jest.Mock;
 
-jest.mock('../../../src/services/backgroundDownloadService', () => ({
-  backgroundDownloadService: {
-    isAvailable: jest.fn(() => true),
-    downloadFileTo: jest.fn(),
-    cancelDownload: jest.fn(() => Promise.resolve()),
-  },
-}));
-
-// Names prefixed with `mock` so jest.mock's hoisting allows referencing them.
-const mockDownloadStoreAdd = jest.fn();
-const mockDownloadStoreRemove = jest.fn();
-const mockDownloadStoreRetryEntry = jest.fn();
-jest.mock('../../../src/stores/downloadStore', () => ({
-  useDownloadStore: {
-    getState: () => ({
-      add: mockDownloadStoreAdd,
-      remove: mockDownloadStoreRemove,
-      retryEntry: mockDownloadStoreRetryEntry,
-    }),
-  },
-}));
-
-const mockedBDS = backgroundDownloadService as jest.Mocked<
-  typeof backgroundDownloadService
->;
-
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
 const mockedInitWhisper = initWhisper as jest.MockedFunction<
   typeof initWhisper
 >;
 
-/** Mock RNFS to report a valid model file (exists + large enough) */
+const mockModelFilesSize = (size: number) => {
+  mockedRNFS.readDir.mockImplementation(async (directory: string) =>
+    ['model.bin', 'model1.bin', 'model2.bin', 'ggml-tiny.en.bin'].map(name => ({
+      name,
+      path: `${directory}/${name}`,
+      size,
+      isFile: () => true,
+      isDirectory: () => false,
+      mtime: new Date(),
+    })) as any,
+  );
+};
+
+/** Mock the native filesystem boundary to report a valid model file. */
 const mockValidModelFile = () => {
   mockedRNFS.exists.mockResolvedValue(true);
-  mockedRNFS.stat.mockResolvedValue({
-    size: 75 * 1024 * 1024,
-    isFile: () => true,
-  } as any);
+  mockModelFilesSize(75 * 1024 * 1024);
 };
 
 describe('WhisperService', () => {
   beforeEach(() => {
     jest.restoreAllMocks();
     jest.clearAllMocks();
+    mockedRNFS.exists.mockReset();
+    mockedRNFS.readDir.mockReset();
+    mockedRNFS.unlink.mockReset();
+    mockedRNFS.exists.mockResolvedValue(false);
+    mockedRNFS.unlink.mockResolvedValue(undefined as any);
     // Reset singleton state
     (whisperService as any).context = null;
     (whisperService as any).currentModelPath = null;
@@ -74,15 +61,7 @@ describe('WhisperService', () => {
     (whisperService as any).stopFn = null;
     (whisperService as any).isReleasingContext = false;
     (whisperService as any).transcriptionFullyStopped = Promise.resolve();
-    (whisperService as any).activeDownloadId = null;
-    // Default backgroundDownloadService mock
-    mockedBDS.isAvailable.mockReturnValue(true);
-    mockedBDS.downloadFileTo.mockReturnValue({
-      downloadId: 0,
-      downloadIdPromise: Promise.resolve(0),
-      promise: Promise.resolve(),
-    } as any);
-    mockedBDS.cancelDownload.mockResolvedValue(undefined as any);
+    mockedRNFS.readDir.mockResolvedValue([]);
     // Reset the audio-session owner's mode between tests (the realtime permission
     // path now drives it instead of AudioSessionIos directly). clearMocks wipes
     // the activity mock's resolved value, so re-establish the default (success).
@@ -125,194 +104,6 @@ describe('WhisperService', () => {
   });
 
   // ========================================================================
-  // downloadModel
-  // ========================================================================
-  describe('downloadModel', () => {
-    it('throws for unknown model ID', async () => {
-      await expect(whisperService.downloadModel('nonexistent')).rejects.toThrow(
-        'Unknown model',
-      );
-    });
-
-    it('returns existing path if already downloaded', async () => {
-      mockedRNFS.exists.mockResolvedValue(true);
-
-      const result = await whisperService.downloadModel('tiny.en');
-
-      expect(result).toBe('/mock/documents/whisper-models/ggml-tiny.en.bin');
-      expect(mockedBDS.downloadFileTo).not.toHaveBeenCalled();
-    });
-
-    it('downloads via backgroundDownloadService when not present', async () => {
-      mockedRNFS.exists
-        .mockResolvedValueOnce(true) // dir exists
-        .mockResolvedValueOnce(false) // model not yet downloaded
-        .mockResolvedValueOnce(true); // validateModelFile: file exists
-      mockedRNFS.stat.mockResolvedValueOnce({
-        size: 75 * 1024 * 1024,
-        isFile: () => true,
-      } as any);
-
-      mockedBDS.downloadFileTo.mockReturnValue({
-        downloadId: 1,
-        downloadIdPromise: Promise.resolve(1),
-        promise: Promise.resolve(),
-      } as any);
-
-      const result = await whisperService.downloadModel('tiny.en');
-
-      expect(mockedBDS.downloadFileTo).toHaveBeenCalledWith(
-        expect.objectContaining({
-          // modelType 'stt' files the in-progress download under Voice in the
-          // Download Manager (without it the entry defaulted to 'text').
-          params: expect.objectContaining({
-            url: WHISPER_MODELS[0].url,
-            modelType: 'stt',
-          }),
-          destPath: '/mock/documents/whisper-models/ggml-tiny.en.bin',
-        }),
-      );
-      expect(result).toBe('/mock/documents/whisper-models/ggml-tiny.en.bin');
-    });
-
-    it('calls progress callback', async () => {
-      mockedRNFS.exists
-        .mockResolvedValueOnce(true) // dir exists
-        .mockResolvedValueOnce(false) // model doesn't exist
-        .mockResolvedValueOnce(true); // validateModelFile: file exists
-      mockedRNFS.stat.mockResolvedValueOnce({
-        size: 75 * 1024 * 1024,
-        isFile: () => true,
-      } as any);
-
-      let capturedOnProgress: ((b: number, t: number) => void) | undefined;
-      mockedBDS.downloadFileTo.mockImplementation((opts: any) => {
-        capturedOnProgress = opts.onProgress;
-        return {
-          downloadId: 1,
-          downloadIdPromise: Promise.resolve(1),
-          promise: Promise.resolve(),
-        } as any;
-      });
-
-      const progressCb = jest.fn();
-      await whisperService.downloadModel('tiny.en', progressCb);
-
-      if (capturedOnProgress) {
-        capturedOnProgress(37500000, 75000000);
-        expect(progressCb).toHaveBeenCalledWith(0.5);
-      }
-    });
-
-    it('cleans up partial file and rethrows when download fails', async () => {
-      mockedRNFS.exists
-        .mockResolvedValueOnce(true) // dir exists
-        .mockResolvedValueOnce(false); // model not yet downloaded
-      mockedRNFS.unlink.mockResolvedValue(undefined as any);
-
-      mockedBDS.downloadFileTo.mockReturnValue({
-        downloadId: 1,
-        downloadIdPromise: Promise.resolve(1),
-        promise: Promise.reject(new Error('network_lost')),
-      } as any);
-
-      await expect(whisperService.downloadModel('tiny.en')).rejects.toThrow(
-        'network_lost',
-      );
-      expect(RNFS.unlink).toHaveBeenCalledWith(
-        '/mock/documents/whisper-models/ggml-tiny.en.bin',
-      );
-    });
-
-    it('registers the in-flight download in the download store so it shows live, then clears it on completion', async () => {
-      mockedRNFS.exists
-        .mockResolvedValueOnce(true) // dir exists
-        .mockResolvedValueOnce(false) // model not yet downloaded
-        .mockResolvedValueOnce(true); // validateModelFile: file exists
-      mockedRNFS.stat.mockResolvedValueOnce({
-        size: 75 * 1024 * 1024,
-        isFile: () => true,
-      } as any);
-      mockedBDS.downloadFileTo.mockReturnValue({
-        downloadId: 7,
-        downloadIdPromise: Promise.resolve(7),
-        promise: Promise.resolve(),
-      } as any);
-
-      await whisperService.downloadModel('tiny.en');
-
-      // A QUEUED placeholder row is published UP-FRONT (before the native start),
-      // keyed by whisper-<id>/<fileName> and filed under Voice via modelType 'stt',
-      // so a queued STT download shows as "Queued" in the same canonical store the
-      // Text/Image cards read (not "0%"). This is the single-source-of-truth path.
-      expect(mockDownloadStoreAdd).toHaveBeenCalledWith(
-        expect.objectContaining({
-          modelKey: 'whisper-tiny.en/ggml-tiny.en.bin',
-          downloadId: 'queued:whisper-tiny.en/ggml-tiny.en.bin',
-          modelId: 'whisper-tiny.en',
-          fileName: 'ggml-tiny.en.bin',
-          modelType: 'stt',
-          status: 'pending',
-        }),
-      );
-      // Once a slot opens and the native download starts, the placeholder is
-      // reconciled to the real downloadId so progress events route to it.
-      expect(mockDownloadStoreRetryEntry).toHaveBeenCalledWith(
-        'whisper-tiny.en/ggml-tiny.en.bin',
-        7,
-      );
-      // Cleared on success — completed STT models are listed from disk instead.
-      expect(mockDownloadStoreRemove).toHaveBeenCalledWith(
-        'whisper-tiny.en/ggml-tiny.en.bin',
-      );
-    });
-
-    it('clears the download store entry even when the download fails', async () => {
-      mockedRNFS.exists
-        .mockResolvedValueOnce(true) // dir exists
-        .mockResolvedValueOnce(false); // model not yet downloaded
-      mockedRNFS.unlink.mockResolvedValue(undefined as any);
-      mockedBDS.downloadFileTo.mockReturnValue({
-        downloadId: 8,
-        downloadIdPromise: Promise.resolve(8),
-        promise: Promise.reject(new Error('network_lost')),
-      } as any);
-
-      await expect(whisperService.downloadModel('tiny.en')).rejects.toThrow(
-        'network_lost',
-      );
-
-      expect(mockDownloadStoreAdd).toHaveBeenCalled();
-      expect(mockDownloadStoreRemove).toHaveBeenCalledWith(
-        'whisper-tiny.en/ggml-tiny.en.bin',
-      );
-    });
-  });
-
-  // ========================================================================
-  // deleteModel
-  // ========================================================================
-  describe('deleteModel', () => {
-    it('deletes file when it exists', async () => {
-      mockedRNFS.exists.mockResolvedValue(true);
-
-      await whisperService.deleteModel('tiny.en');
-
-      expect(RNFS.unlink).toHaveBeenCalledWith(
-        '/mock/documents/whisper-models/ggml-tiny.en.bin',
-      );
-    });
-
-    it('does nothing when file does not exist', async () => {
-      mockedRNFS.exists.mockResolvedValue(false);
-
-      await whisperService.deleteModel('tiny.en');
-
-      expect(RNFS.unlink).not.toHaveBeenCalled();
-    });
-  });
-
-  // ========================================================================
   // validateModelFile
   // ========================================================================
   describe('validateModelFile', () => {
@@ -332,10 +123,7 @@ describe('WhisperService', () => {
 
     it('throws and deletes file when file is too small (corrupted)', async () => {
       mockedRNFS.exists.mockResolvedValue(true);
-      mockedRNFS.stat.mockResolvedValue({
-        size: 1000,
-        isFile: () => true,
-      } as any);
+      mockModelFilesSize(1000);
       mockedRNFS.unlink.mockResolvedValue(undefined as any);
 
       await expect(
@@ -346,10 +134,7 @@ describe('WhisperService', () => {
 
     it('passes for valid file with sufficient size', async () => {
       mockedRNFS.exists.mockResolvedValue(true);
-      mockedRNFS.stat.mockResolvedValue({
-        size: 75 * 1024 * 1024,
-        isFile: () => true,
-      } as any);
+      mockModelFilesSize(75 * 1024 * 1024);
 
       await expect(
         whisperService.validateModelFile('/path/model.bin'),
@@ -443,10 +228,7 @@ describe('WhisperService', () => {
 
     it('throws when model file is corrupted/too small (prevents native crash)', async () => {
       mockedRNFS.exists.mockResolvedValue(true);
-      mockedRNFS.stat.mockResolvedValue({
-        size: 500,
-        isFile: () => true,
-      } as any);
+      mockModelFilesSize(500);
       mockedRNFS.unlink.mockResolvedValue(undefined as any);
 
       await expect(
@@ -967,7 +749,7 @@ describe('WhisperService', () => {
   describe('transcribeFile', () => {
     it('throws when no model loaded', async () => {
       await expect(
-        whisperService.transcribeFile('/path/to/audio.wav'),
+        whisperService.transcribeFileRaw('/path/to/audio.wav'),
       ).rejects.toThrow('No Whisper model loaded');
     });
 
@@ -984,7 +766,7 @@ describe('WhisperService', () => {
       mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
       await whisperService.loadModel('/path/model.bin');
 
-      const result = await whisperService.transcribeFile('/audio.wav');
+      const result = await whisperService.transcribeFileRaw('/audio.wav');
 
       expect(result).toBe('transcribed text');
       expect(mockContext.transcribe).toHaveBeenCalledWith(
@@ -993,6 +775,41 @@ describe('WhisperService', () => {
           language: 'en',
         }),
       );
+    });
+
+    it('does not start native transcription for an already-aborted request', async () => {
+      const transcribe = jest.fn();
+      (whisperService as any).context = { transcribe };
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(
+        whisperService.transcribeFileRaw('/audio.wav', { signal: controller.signal }),
+      ).rejects.toMatchObject({ name: 'GenerationAbortedError' });
+      expect(transcribe).not.toHaveBeenCalled();
+    });
+
+    it('awaits file stop and rejects instead of returning a transcript after cancellation', async () => {
+      let resolveTranscript!: (value: { result: string }) => void;
+      let rejectStop!: (error: Error) => void;
+      const nativeFailure = new Error('native file stop failed');
+      const stop = jest.fn(() => new Promise<void>((_resolve, reject) => { rejectStop = reject; }));
+      (whisperService as any).context = {
+        transcribe: jest.fn(() => ({
+          promise: new Promise(resolve => { resolveTranscript = resolve; }),
+          stop,
+        })),
+      };
+      const controller = new AbortController();
+      const result = whisperService.transcribeFileRaw('/audio.wav', { signal: controller.signal });
+
+      controller.abort();
+      await Promise.resolve();
+      resolveTranscript({ result: 'must not escape after cancellation' });
+      rejectStop(nativeFailure);
+
+      await expect(result).rejects.toBe(nativeFailure);
+      expect(stop).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1033,15 +850,14 @@ describe('WhisperService', () => {
       expect(whisperService.isCurrentlyTranscribing()).toBe(false);
     });
 
-    it('handles stopFn error gracefully during forceReset', async () => {
+    it('cleans up and preserves a native stop error during forceReset', async () => {
       (whisperService as any).isTranscribing = true;
       (whisperService as any).stopFn = () => {
         throw new Error('stop error');
       };
       (whisperService as any).context = { release: jest.fn() };
 
-      // Should not throw
-      await whisperService.forceReset();
+      await expect(whisperService.forceReset()).rejects.toThrow('stop error');
 
       expect(whisperService.isCurrentlyTranscribing()).toBe(false);
     });

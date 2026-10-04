@@ -1,89 +1,162 @@
 /**
- * RENDERED — the Home "Speech" model picker (WhisperPickerSheet) must reflect an STT download that
- * is tracked in the CANONICAL download store, not only the ones it started itself.
- *
- * Device 2026-07-15: with a voice model downloading, opening Home → Models → Speech showed the plain
- * download icon with NO progress, while the Models-screen Transcription tab showed the live bar. Root
- * cause (a DRY/SOLID break): the picker read ONLY whisperStore.downloadProgressById, while the tab read
- * the canonical downloadStore (+ a whisper-store fallback). A download registered in the canonical store
- * (started elsewhere, or rehydrated after a relaunch) was invisible to the picker.
- *
- * Fix under test: both surfaces now read ONE owner (useSttDownloadState). This mounts the real picker and
- * seeds the canonical store the way the native background-download service registers an in-flight entry —
- * the boundary's output — then asserts the matching row renders the transferring % (and a queued entry
- * renders the clock). RED (revert the picker to read whisperStore only): the canonical entry is invisible,
- * the row shows the download icon, and these queries throw.
+ * Render the real Whisper picker over the real Mobile application and Shared download owner.
+ * Native download and filesystem behavior are the only faked boundaries.
  */
-import React from 'react';
-import { render } from '@testing-library/react-native';
-import { WhisperPickerSheet } from '../../../src/components/models/WhisperPickerSheet';
-import { useDownloadStore } from '../../../src/stores/downloadStore';
-import { useWhisperStore } from '../../../src/stores/whisperStore';
-import type { DownloadEntry } from '../../../src/utils/downloadStatus';
+import type { PersistedModelDownload } from '@offgrid/models';
+import type { MobileApplicationFixture } from '../../harness/mobileApplicationFixture';
+import {
+  installNativeBoundary,
+  requireRTL,
+} from '../../harness/nativeBoundary';
 
-const TOTAL = 142 * 1024 * 1024; // ggml-base.en is 142 MB
+const TOTAL = 142 * 1024 * 1024;
+const MODEL_ID = 'base.en';
+const FILE_NAME = 'ggml-base.en.bin';
+const TRANSFER_ID = 'native-whisper-base';
 
-// A canonical download-store entry as the native background-download service produces it. The whisper
-// download id is prefixed `whisper-`; the picker's owner strips it back to the bare model id 'base.en'.
-const sttEntry = (over: Partial<DownloadEntry>): DownloadEntry => ({
-  modelKey: 'whisper-base.en',
-  downloadId: 'dl-whisper-base.en',
-  modelId: 'whisper-base.en',
-  fileName: 'ggml-base.en.bin',
-  quantization: '',
-  modelType: 'stt',
-  status: 'running',
-  bytesDownloaded: Math.round(0.42 * TOTAL),
-  totalBytes: TOTAL,
-  combinedTotalBytes: TOTAL,
-  progress: 0.42,
-  createdAt: 0,
-  ...over,
+let fixture: MobileApplicationFixture | null = null;
+
+afterEach(async () => {
+  await fixture?.dispose();
+  fixture = null;
 });
 
-describe('WhisperPickerSheet reflects a canonical-store STT download (device 2026-07-15)', () => {
-  beforeEach(() => {
-    useDownloadStore.setState({ downloads: {} });
-    useWhisperStore.setState({ downloadProgressById: {}, downloadedModelId: null, presentModelIds: [], isModelLoading: false });
+function record(
+  phase: PersistedModelDownload['phase'],
+  options: {
+    readonly bytesDownloaded?: number;
+    readonly modelId?: string;
+    readonly transferId?: string;
+  } = {},
+): PersistedModelDownload {
+  const modelId = options.modelId ?? MODEL_ID;
+  const fileName = `ggml-${modelId}.bin`;
+  return {
+    manifest: {
+      id: `whisper-${modelId}/${fileName}`,
+      modelId,
+      kind: 'transcription',
+      revision: 'main',
+      artifacts: [
+        {
+          id: 'primary',
+          name: fileName,
+          role: 'primary',
+          required: true,
+          localName: fileName,
+          url: `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${fileName}`,
+          sizeBytes: TOTAL,
+        },
+      ],
+    },
+    phase,
+    artifacts: [
+      {
+        artifactId: 'primary',
+        phase,
+        ...(options.transferId ? { transferId: options.transferId } : {}),
+        bytesDownloaded: options.bytesDownloaded ?? 0,
+        totalBytes: TOTAL,
+      },
+    ],
+    createdAt: 1,
+    updatedAt: 1,
+    attempt: 1,
+  };
+}
+
+async function start(
+  records: readonly PersistedModelDownload[],
+): Promise<void> {
+  const { seedMobileDownloadJournal, startMobileApplicationFixture } =
+    require('../../harness/mobileApplicationFixture') as typeof import('../../harness/mobileApplicationFixture');
+  await seedMobileDownloadJournal(records);
+  fixture = await startMobileApplicationFixture();
+  await fixture.refreshModels();
+}
+
+function renderPicker() {
+  const React = require('react') as typeof import('react');
+  const { render } = requireRTL();
+  const { WhisperPickerSheet } =
+    require('../../../src/components/models/WhisperPickerSheet') as typeof import('../../../src/components/models/WhisperPickerSheet');
+  return render(
+    React.createElement(WhisperPickerSheet, {
+      visible: true,
+      onClose: () => undefined,
+    }),
+  );
+}
+
+describe('WhisperPickerSheet uses the Shared transcription download projection', () => {
+  it('shows measured transfer progress for the matching model', async () => {
+    const boundary = installNativeBoundary({ download: true, fs: true });
+    boundary.download!.seedActive({
+      downloadId: TRANSFER_ID,
+      modelId: MODEL_ID,
+      fileName: FILE_NAME,
+      modelType: 'stt',
+      status: 'running',
+      bytesDownloaded: Math.round(0.42 * TOTAL),
+      totalBytes: TOTAL,
+    });
+    await start([
+      record('downloading', {
+        bytesDownloaded: Math.round(0.42 * TOTAL),
+        transferId: TRANSFER_ID,
+      }),
+    ]);
+
+    const view = renderPicker();
+
+    expect(view.getByTestId('whisper-row-progress')).toBeTruthy();
+    expect(view.getByText('42%')).toBeTruthy();
   });
 
-  it('shows the transferring % on the matching row — not the plain download icon', () => {
-    // Boundary: the native service registers a running STT download in the canonical store.
-    useDownloadStore.getState().add(sttEntry({ status: 'running', progress: 0.42 }));
+  it('uses the explicit queued phase instead of inferring it from bytes', async () => {
+    const boundary = installNativeBoundary({ download: true, fs: true });
+    const active = ['tiny.en', 'small.en', 'medium.en'].map(
+      (modelId, index) => {
+        const fileName = `ggml-${modelId}.bin`;
+        const transferId = `native-whisper-${index}`;
+        boundary.download!.seedActive({
+          downloadId: transferId,
+          modelId,
+          fileName,
+          modelType: 'stt',
+          status: 'running',
+          bytesDownloaded: 1,
+          totalBytes: TOTAL,
+        });
+        return record('downloading', {
+          bytesDownloaded: 1,
+          modelId,
+          transferId,
+        });
+      },
+    );
+    await start([...active, record('queued')]);
 
-    const { getByText, getByTestId } = render(<WhisperPickerSheet visible onClose={() => {}} />);
+    const view = renderPicker();
 
-    // TERMINAL artifact: the Base·EN row shows 42%, driven purely by the canonical store the picker
-    // used to ignore. (RED without the fix: the picker reads whisperStore only → no % → this throws.)
-    expect(getByTestId('whisper-row-progress')).toBeTruthy();
-    expect(getByText('42%')).toBeTruthy();
+    expect(view.getByTestId('whisper-row-queued')).toBeTruthy();
   });
 
-  it('shows the queued clock for a pending canonical STT download', () => {
-    useDownloadStore.getState().add(sttEntry({ status: 'pending', progress: 0, bytesDownloaded: 0 }));
+  it('renders the canonical transcription failure when disk reconciliation fails', async () => {
+    const boundary = installNativeBoundary({ download: true, fs: true });
+    await start([]);
+    boundary.fs!.module.exists.mockRejectedValueOnce(
+      new Error('Model storage is unavailable'),
+    );
+    const { waitFor } = requireRTL();
 
-    const { getByTestId } = render(<WhisperPickerSheet visible onClose={() => {}} />);
+    const view = renderPicker();
 
-    expect(getByTestId('whisper-row-queued')).toBeTruthy();
-  });
-
-  // Fallback path: the whisper store seeds progress before the canonical download-store entry exists
-  // (the RNFS URL-import path never gets one). The single owner covers it, so the picker still reflects
-  // it. (Replaces the deleted mockist TranscriptionModelsTab fallback tests with a real render.)
-  it('shows progress from the whisper-store fallback when there is no canonical entry', () => {
-    useWhisperStore.setState({ downloadProgressById: { 'base.en': 0.3 } });
-
-    const { getByText, getByTestId } = render(<WhisperPickerSheet visible onClose={() => {}} />);
-
-    expect(getByTestId('whisper-row-progress')).toBeTruthy();
-    expect(getByText('30%')).toBeTruthy();
-  });
-
-  it('treats a 0% whisper-store fallback (awaiting a slot) as queued', () => {
-    useWhisperStore.setState({ downloadProgressById: { 'base.en': 0 } });
-
-    const { getByTestId } = render(<WhisperPickerSheet visible onClose={() => {}} />);
-
-    expect(getByTestId('whisper-row-queued')).toBeTruthy();
+    await waitFor(() => {
+      expect(view.getByTestId('model-failure-stt')).toBeTruthy();
+      expect(
+        view.getByText('Transcription models are unavailable'),
+      ).toBeTruthy();
+    });
   });
 });

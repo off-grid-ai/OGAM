@@ -25,7 +25,7 @@ interface AccordionState {
   toggle: (key: string) => void;
 }
 
-export const useAccordionStore = create<AccordionState>((set) => ({
+const useAccordionStore = create<AccordionState>((set) => ({
   expanded: {},
   setExpanded: (key, value) =>
     set((s) => ({ expanded: { ...s.expanded, [key]: value } })),

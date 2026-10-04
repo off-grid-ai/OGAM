@@ -4,3 +4,4 @@
 // The background-download completion API moved from RNFSManager to
 // RNFSBackgroundDownloads. See AppDelegate.swift + the metro/jest/tsconfig alias.
 #import <ReactNativeFs/RNFSBackgroundDownloads.h>
+#import "sherpa-onnx/c-api/c-api.h"

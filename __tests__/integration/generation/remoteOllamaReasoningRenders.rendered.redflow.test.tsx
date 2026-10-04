@@ -32,7 +32,7 @@ describe('T051 (rendered) — remote Ollama reasoning RENDERS (contrast to LM St
   it('renders both the Ollama answer and the thinking it streamed', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
     // Endpoint :11434 → the native Ollama path (handleOllamaChatLine), which renders message.thinking.
-    await installRemoteModel({ name: 'Ollama', endpoint: 'http://localhost:11434', caps: { supportsThinking: false } });
+    await installRemoteModel({ name: 'Ollama', endpoint: 'http://localhost:11434', caps: { supportsThinking: false, supportsToolCalling: true } });
     installRemoteStream(OLLAMA_NDJSON);
     h.render();
 

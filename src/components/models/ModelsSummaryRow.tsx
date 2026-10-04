@@ -14,7 +14,9 @@ type Props = {
    *  carries information at a glance (replaces the separate stats row). */
   counts?: Partial<Record<ModelRowType, number>>;
   isLoading: boolean;
+  /** The header (label + chevron) opens the manager sheet. */
   onPress: () => void;
+  /** A type opens its own sheet directly; falls back to the manager when absent. */
   onPressType?: (type: ModelRowType) => void;
 };
 
@@ -28,7 +30,7 @@ const TYPE_ICONS: { type: ModelRowType; icon: string; caption: string }[] = [
 /**
  * Collapsed Models control. A labelled strip with one captioned icon per model
  * type — emerald + bright caption when that type has an active model, dimmed +
- * muted when not. Tap → manager sheet.
+ * muted when not. Tap the header → manager sheet; tap a type → that type's own sheet.
  */
 export const ModelsSummaryRow: React.FC<Props> = ({ labels, counts, isLoading, onPress, onPressType }) => {
   const { colors } = useTheme();
@@ -51,7 +53,7 @@ export const ModelsSummaryRow: React.FC<Props> = ({ labels, counts, isLoading, o
               key={type}
               testID={`model-summary-${type}-open`}
               hapticType="selection"
-              onPress={(event) => { event?.stopPropagation?.(); (onPressType ?? onPress)(type); }}
+              onPress={() => (onPressType ? onPressType(type) : onPress())}
             >
             <View
               testID={`model-summary-${type}`}

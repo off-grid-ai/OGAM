@@ -50,6 +50,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Personal Mesh keeps a live local-network connection to paired devices. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- The Day recorder captures the mic in the background behind an ongoing notification. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- Android 13+ needs this to SHOW the ongoing download notification (requested at runtime). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -139,6 +141,14 @@
           android:enabled="true"
           android:exported="false"
           android:foregroundServiceType="connectedDevice" />
+
+      <!-- Day recorder: keeps mic capture alive in the background behind an ongoing notification
+           with a Stop control. Not exported - only this app may start it. -->
+      <service
+          android:name="ai.offgridmobile.recording.RecordingService"
+          android:enabled="true"
+          android:exported="false"
+          android:foregroundServiceType="microphone" />
 
     </application>
 </manifest>

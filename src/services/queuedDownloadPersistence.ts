@@ -14,6 +14,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { DownloadParams } from './backgroundDownloadTypes';
 import logger from '../utils/logger';
+import { serializeQueuedDownloadRequests } from '@offgrid/models';
 
 const QUEUED_DOWNLOADS_KEY = '@offgrid/queued_downloads';
 
@@ -28,7 +29,7 @@ export type QueuedParams = DownloadParams;
  * defensively drops any isSidecar entry so restore can never re-issue an orphaned sidecar.
  */
 export function serializeQueue(queue: ReadonlyArray<{ params: DownloadParams }>): QueuedParams[] {
-  return queue.map((q) => q.params).filter((p) => !p.isSidecar);
+  return serializeQueuedDownloadRequests(queue);
 }
 
 /** Thin adapter: write the projection durably. Best-effort — never throws (a failed write must not

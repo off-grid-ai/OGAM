@@ -149,6 +149,22 @@ const createSectionStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textMuted,
     marginTop: 2,
   },
+  dayRecRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    marginTop: 3,
+  },
+  dayRecDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.error,
+  },
+  dayRecText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.error,
+  },
   desktopCard: {
     backgroundColor: colors.surface,
     borderRadius: 12,
