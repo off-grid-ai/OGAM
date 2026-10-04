@@ -40,7 +40,6 @@ describe('T051 (rendered) — remote Ollama reasoning RENDERS (contrast to LM St
 
     // The remote answer renders (transport works)...
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/The answer is 42/)).not.toBeNull(); }, { timeout: 6000 });
-    h.rtl.fireEvent.press(h.view!.getByTestId('assistant-work-toggle'));
     // ...AND the thinking the model streamed renders (Ollama's native path is not gated). GREEN.
     expect(h.view!.queryByText(/Reasoning Trace/)).not.toBeNull();
   });

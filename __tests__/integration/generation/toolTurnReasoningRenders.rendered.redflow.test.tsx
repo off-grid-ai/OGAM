@@ -50,7 +50,6 @@ describe('tool turn reasoning renders (rendered) — device log 21:11', () => {
     expect(view.queryByText(/<\|channel/)).toBeNull();
 
     // The reasoning is shown as a thinking block (expand it and read the content).
-    rtl.fireEvent.press(view.getByTestId('assistant-work-toggle'));
     const block = await rtl.waitFor(() => view.getByTestId('thinking-block'), { timeout: 4000 });
     const toggle = view.getByTestId('thinking-block-toggle');
     await rtl.act(async () => {

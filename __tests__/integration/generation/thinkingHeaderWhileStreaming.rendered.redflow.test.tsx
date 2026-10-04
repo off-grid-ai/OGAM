@@ -40,11 +40,9 @@ describe('T035 (rendered) — thinking-box header while reasoning still streams 
 
     await h.tapSend('what is 6 times 7');
 
-    // Mid-stream (paused): live work stays open and names the active reasoning state.
-    await h.rtl.waitFor(() => {
-      expect(h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel).toBe('Working');
-      expect(h.view!.queryByTestId('thinking-block')).not.toBeNull();
-    }, { timeout: 6000 });
+    // Mid-stream (paused): the thinking block is on screen and the reasoning is still streaming.
+    await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('streaming-thinking-hint')).not.toBeNull(); }, { timeout: 6000 });
+    // SPEC: the header reads "Thinking..." while still streaming. RED (Q6): it reads "Thought process".
     expect(String(h.view!.getByTestId('thinking-block-title').props.children)).toMatch(/Thinking/);
 
     stream.release(); // let the turn finish so the test tears down cleanly

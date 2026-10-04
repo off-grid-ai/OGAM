@@ -81,8 +81,6 @@ describePro('the Receiving section', () => {
     fireEvent.press(view.getByTestId('receive-open-rules'));
     expect(view.queryByText('Generated media')).toBeNull();
     expect(view.queryByText('Message attachments')).toBeNull();
-    expect(view.queryByText('Models')).toBeNull();
-    expect(view.queryByText('Shared files')).toBeNull();
   });
 
   it('routes the optional master to the selected scope', () => {

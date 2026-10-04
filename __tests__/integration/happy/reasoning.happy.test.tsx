@@ -22,9 +22,9 @@ describe('happy — reasoning renders a thinking block + the answer (heavy entry
 
     await h.send('is 17 prime', { reasoning: 'Check divisors up to sqrt(17): 2,3 — none divide it.', content: 'Yes, 17 is prime.' });
 
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Yes, 17 is prime\./)).not.toBeNull(); });
-    h.rtl.fireEvent.press(h.view!.getByTestId('assistant-work-toggle'));
     // The user sees the thinking affordance...
     await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('thinking-block')).not.toBeNull(); });
+    // ...and the final answer.
+    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Yes, 17 is prime\./)).not.toBeNull(); });
   });
 });

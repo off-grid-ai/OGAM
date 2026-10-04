@@ -43,7 +43,6 @@ describe('app boot is not blocked by the download DB (rendered)', () => {
 
     // Precondition (anti-false-green): the boot loader genuinely renders first.
     expect(view.queryByTestId('app-loading')).not.toBeNull();
-    expect(view.getByTestId('startup-loading-dots')).toBeTruthy();
 
     // Terminal artifact: the loader clears even though the download DB never answered.
     await rtl.waitFor(

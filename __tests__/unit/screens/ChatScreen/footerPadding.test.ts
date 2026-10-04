@@ -15,16 +15,18 @@ describe('computeFooterPaddingBottom', () => {
     expect(computeFooterPaddingBottom(true, 48)).toBe(0);
   });
 
-  it('lifts the iOS composer and caps its safe-area inset', () => {
-    expect(computeFooterPaddingBottom(false, 0)).toBe(8);
-    expect(computeFooterPaddingBottom(false, 4)).toBe(12);
-    expect(computeFooterPaddingBottom(false, 24)).toBe(12);
+  it('caps a thin overlay inset (iOS home indicator / gesture nav) at 4', () => {
+    expect(computeFooterPaddingBottom(false, 0)).toBe(0);
+    expect(computeFooterPaddingBottom(false, 4)).toBe(4);
+    expect(computeFooterPaddingBottom(false, 24)).toBe(4); // at the overlay ceiling
   });
 
-  it('keeps the iOS composer lift bounded for tall insets', () => {
-    expect(computeFooterPaddingBottom(false, 48)).toBe(12);
-    expect(computeFooterPaddingBottom(false, 36)).toBe(12);
-    expect(computeFooterPaddingBottom(false, 25)).toBe(12);
+  it('honors the full inset for an opaque 3-button nav bar (tall inset)', () => {
+    // Regression: OnePlus/Oppo 3-button nav bar. Must NOT cap to 4 or the input
+    // controls sit under the nav buttons.
+    expect(computeFooterPaddingBottom(false, 48)).toBe(48);
+    expect(computeFooterPaddingBottom(false, 36)).toBe(36);
+    expect(computeFooterPaddingBottom(false, 25)).toBe(25); // just above the ceiling
   });
 });
 

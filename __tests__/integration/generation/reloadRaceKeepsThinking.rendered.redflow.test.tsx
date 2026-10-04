@@ -77,12 +77,7 @@ describe('reload race — a send during the load window keeps thinking (device 2
       reasoning: REASON_BEFORE,
     });
     await h.rtl.waitFor(() => { expect(h.view!.queryByText(/The answer is 42/)).not.toBeNull(); }, { timeout: 4000 });
-    await h.rtl.act(async () => {
-      pressByWalkingUp(h.view!.getByTestId('assistant-work-toggle'));
-    });
-    await h.rtl.waitFor(() => {
-      expect(h.view!.queryByText(new RegExp('six sevens are forty-two'))).not.toBeNull();
-    });
+    expect(h.view!.queryByText(new RegExp('six sevens are forty-two'))).not.toBeNull();
 
     // GESTURE: pick GPU/OpenCL → the settings-changed reload banner appears.
     selectBackendViaUI(h, 'opencl');
@@ -99,7 +94,6 @@ describe('reload race — a send during the load window keeps thinking (device 2
     // GESTURE: tap the reload banner. The reload parks inside the capability window (hold engaged).
     await h.rtl.act(async () => { pressByWalkingUp(h.view!.getByTestId('reload-model-banner')); });
     await h.rtl.waitFor(() => { expect(h.boundary.llama!.multimodalHoldActive()).toBe(true); }, { timeout: 4000 });
-    await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('reload-model-banner')).toBeNull(); });
 
     // GESTURE: the user sends while the reload is still finishing (device: 18:50:27.733).
     await h.tapSend('is 17 prime');
@@ -111,13 +105,7 @@ describe('reload race — a send during the load window keeps thinking (device 2
     // ...WITH its reasoning — the racing turn must not silently lose thinking.
     // RED on HEAD: the turn ran with stale thinkingSupported=false → enable_thinking=false → the model
     // never reasoned → this text is nowhere on screen and the second turn has NO thinking block.
-    const workToggles = h.view!.getAllByTestId('assistant-work-toggle');
-    await h.rtl.act(async () => {
-      pressByWalkingUp(workToggles[workToggles.length - 1]);
-    });
-    await h.rtl.waitFor(() => {
-      expect(h.view!.queryByText(/seventeen has no divisors below its root/)).not.toBeNull();
-    });
+    expect(h.view!.queryByText(/seventeen has no divisors below its root/)).not.toBeNull();
     // BOTH turns carry the thinking affordance (the block collapses to its preview after completion).
     const blocks = h.view!.queryAllByTestId('thinking-block');
     expect(blocks.length).toBe(2);

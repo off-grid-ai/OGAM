@@ -191,25 +191,26 @@ describe('checkContextMultimodal', () => {
   });
 });
 
-describe('initContextWithFallback — both attempts fail', () => {
+describe('initContextWithFallback — all three attempts fail', () => {
   const { initLlama } = require('llama.rn');
   const mockedInitLlama = initLlama as jest.MockedFunction<typeof initLlama>;
 
-  it('throws a combined error chain when GPU and CPU fail', async () => {
+  it('throws a combined error chain when GPU, CPU and min-ctx all fail', async () => {
     mockedInitLlama
       .mockRejectedValueOnce(new Error('gpu fail'))
-      .mockRejectedValueOnce(new Error('cpu fail'));
+      .mockRejectedValueOnce(new Error('cpu fail'))
+      .mockRejectedValueOnce(new Error('minctx fail'));
 
     await expect(
       initContextWithFallback({ model: '/m.gguf' }, 4096, 0),
-    ).rejects.toThrow(/Failed to load model at selected context 4096/);
-    expect(mockedInitLlama).toHaveBeenCalledTimes(2);
+    ).rejects.toThrow(/Failed to load model even at minimum context/);
   });
 
   it('builds an error chain including GPU and CPU parts when distinct', async () => {
     mockedInitLlama
       .mockRejectedValueOnce(new Error('gpu-specific'))
-      .mockRejectedValueOnce(new Error('cpu-specific'));
+      .mockRejectedValueOnce(new Error('cpu-specific'))
+      .mockRejectedValueOnce(new Error('final-specific'));
 
     try {
       await initContextWithFallback({ model: '/m.gguf' }, 8192, 99);
@@ -217,12 +218,15 @@ describe('initContextWithFallback — both attempts fail', () => {
     } catch (e: any) {
       expect(e.message).toContain('GPU: gpu-specific');
       expect(e.message).toContain('CPU: cpu-specific');
-      expect(e.message).toContain('selected context 8192');
+      expect(e.message).toContain('min-ctx: final-specific');
     }
   });
 
-  it('reports both failed backends when they share a message', async () => {
+  it('omits duplicate GPU/CPU parts when all three errors share a message', async () => {
+    // gpuMsg === cpuMsg === finalMsg → both `!== finalMsg` ternaries take the null branch,
+    // leaving only the "min-ctx:" part in the chain.
     mockedInitLlama
+      .mockRejectedValueOnce(new Error('same'))
       .mockRejectedValueOnce(new Error('same'))
       .mockRejectedValueOnce(new Error('same'));
 
@@ -230,15 +234,17 @@ describe('initContextWithFallback — both attempts fail', () => {
       await initContextWithFallback({ model: '/m.gguf' }, 4096, 99);
       throw new Error('should have thrown');
     } catch (e: any) {
-      expect(e.message).toContain('GPU: same');
-      expect(e.message).toContain('CPU: same');
+      expect(e.message).toContain('min-ctx: same');
+      expect(e.message).not.toContain('GPU: same');
+      expect(e.message).not.toContain('CPU: same');
     }
   });
 
   it('handles a non-Error rejection via String() fallback', async () => {
     mockedInitLlama
       .mockRejectedValueOnce('plain-string-gpu')
-      .mockRejectedValueOnce('plain-string-cpu');
+      .mockRejectedValueOnce('plain-string-cpu')
+      .mockRejectedValueOnce('plain-string-final');
 
     await expect(
       initContextWithFallback({ model: '/m.gguf' }, 2048, 0),

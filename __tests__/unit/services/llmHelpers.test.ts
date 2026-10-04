@@ -509,18 +509,18 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
     expect(cpuCall.n_gpu_layers).toBe(0);
   });
 
-  it('does not retry at a smaller context when both backends fail', async () => {
+  it('strips devices from params on minimal CPU fallback (attempt 3)', async () => {
     mockedInitLlama.mockRejectedValueOnce(new Error('HTP init failed'));
     mockedInitLlama.mockRejectedValueOnce(new Error('CPU init failed'));
+    const mockCtx = { gpu: false, release: jest.fn() };
+    mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
 
-    await expect(initContextWithFallback(baseParams, 8192, 99))
-      .rejects.toThrow('selected context 8192');
+    await initContextWithFallback(baseParams, 8192, 99);
 
-    expect(mockedInitLlama).toHaveBeenCalledTimes(2);
-    const cpuCall = mockedInitLlama.mock.calls[1][0] as Record<string, unknown>;
-    expect(cpuCall.devices).toBeUndefined();
-    expect(cpuCall.n_gpu_layers).toBe(0);
-    expect(cpuCall.n_ctx).toBe(8192);
+    const minCtxCall = mockedInitLlama.mock.calls[2][0] as Record<string, unknown>;
+    expect(minCtxCall.devices).toBeUndefined();
+    expect(minCtxCall.n_gpu_layers).toBe(0);
+    expect(minCtxCall.n_ctx).toBe(2048);
   });
 
   // HTP is currently disabled via HTP_ENABLED feature flag

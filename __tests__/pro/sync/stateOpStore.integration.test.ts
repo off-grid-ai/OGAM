@@ -2,7 +2,7 @@ import { installRealSqlite } from '../../harness/sqliteFake';
 
 /** Uses the real Pro store and shared sync store with only the native SQLite binding replaced. */
 describe('Pro state op store startup', () => {
-  it('loads the current winner while preserving the complete operation log', async () => {
+  it('keeps the complete operation log across restart', async () => {
     installRealSqlite();
 
     const { StateOpStore } = require('../../../pro/sync/stateOpStore');
@@ -36,6 +36,7 @@ describe('Pro state op store startup', () => {
     const loaded = await new StateOpStore().load();
 
     expect(loaded.map((op: { opId: string }) => op.opId)).toEqual([
+      'old-task',
       'current-task',
     ]);
     expect(countOps(opStoreDriver)).toBe(2);

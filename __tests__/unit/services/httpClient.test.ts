@@ -424,7 +424,7 @@ describe('httpClient', () => {
 
       await expect(
         fetchWithTimeout('http://test.com/missing', { timeout: 5000 }),
-      ).rejects.toThrow('Not Found');
+      ).rejects.toThrow('HTTP 404');
     });
 
     it('should timeout after specified duration', async () => {
@@ -487,7 +487,7 @@ describe('httpClient', () => {
       expect(result).toBe('plain text response');
     });
 
-    it('should fall back to the HTTP status when response.text() fails', async () => {
+    it('should fallback to "Unknown error" when response.text() fails', async () => {
       jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: false,
         status: 500,
@@ -496,7 +496,7 @@ describe('httpClient', () => {
 
       await expect(
         fetchWithTimeout('http://test.com/error', { timeout: 5000 }),
-      ).rejects.toThrow('Remote server returned HTTP 500');
+      ).rejects.toThrow('HTTP 500: Unknown error');
     });
 
     it('should handle non-Error thrown values', async () => {

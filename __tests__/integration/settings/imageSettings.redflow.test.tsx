@@ -29,19 +29,19 @@ function openImageSettings(view: ReturnType<typeof render>) {
 
 describe('image settings — UI red-flow (assert what the user sees)', () => {
   it('Q12: "Reset to Defaults" also resets the Image Size the user sees', () => {
-    // Preserve an explicit smaller size until the user resets it.
-    useAppStore.getState().updateSettings({ imageWidth: 256, imageHeight: 256 });
+    // User previously set a large image size.
+    useAppStore.getState().updateSettings({ imageWidth: 512, imageHeight: 512 });
 
     const view = render(<GenerationSettingsModal visible onClose={() => {}} />);
     openImageSettings(view);
-    expect(view.getByText('256x256')).toBeTruthy();
+    expect(view.getByText('512x512')).toBeTruthy(); // precondition: the custom size is shown
 
     fireEvent.press(view.getByText('Reset to Defaults'));
 
-    expect(view.queryByText('256x256')).toBeNull();
-    expect(view.queryByText('512x512')).not.toBeNull();
-    expect(useAppStore.getState().settings.imageWidth).toBe(512);
-    expect(useAppStore.getState().settings.imageHeight).toBe(512);
+    // Correct: reset returns image size to the 256 default. Today only text params reset, so the
+    // slider still shows 512x512 → RED.
+    expect(view.queryByText('512x512')).toBeNull();
+    expect(view.queryByText('256x256')).not.toBeNull();
   });
 
   it('Q13: the chat modal Image Size floors a stale sub-256 value to the 256 sweet spot', () => {

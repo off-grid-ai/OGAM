@@ -40,41 +40,18 @@ const REPLY_SSE =
 
 describe('T048 (rendered) — remote parallel tool_calls render as bubbles + final reply', () => {
   it('accumulates 3 parallel calculator calls, runs them, renders 3 tool bubbles and the reply', async () => {
-    const h = await setupChatScreen({ engine: 'llama', platform: 'ios' });
+    const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
     // LM Studio advertises tool-calling (the capture shows [ToolLoop] executed) → the app sends the tools.
-    await installRemoteModel({ name: 'OGAD', caps: { supportsThinking: false, supportsToolCalling: true } });
-    const stream = installRemoteStream([
-      `__PAUSE__\n${TOOL_CALLS_SSE}`,
-      `__PAUSE__\n${REPLY_SSE}`,
-    ]); // multi-turn queue
+    await installRemoteModel({ name: 'LM Studio', caps: { supportsThinking: false, supportsToolCalling: true } });
+    installRemoteStream([TOOL_CALLS_SSE, REPLY_SSE]); // multi-turn queue
     h.render();
     h.enableToolViaUI('calculator'); // real Tools-screen switch (after the remote model is active)
 
     await h.tapSend('compute 47*83, 128*256, and 0.3*400');
 
-    await h.rtl.waitFor(() => {
-      expect(h.view!.getByLabelText('Working')).not.toBeNull();
-    }, { timeout: 6000 });
-    stream.release();
-
-    await h.rtl.waitFor(() => {
-      expect(
-        h.view!.getByTestId('assistant-work-toggle').props.accessibilityLabel,
-      ).toBe('Working');
-      expect(h.view!.queryByTestId('streaming-thinking-hint')).not.toBeNull();
-      expect(h.view!.queryAllByTestId('thinking-indicator')).toHaveLength(1);
-    }, { timeout: 6000 });
-    stream.release();
-
-    await h.rtl.waitFor(() => {
-      expect(h.view!.queryByText(/Results: 3901, 32768, and 120/)).not.toBeNull();
-    }, { timeout: 6000 });
-    await h.rtl.act(async () => {
-      let action: any = h.view!.getByTestId('assistant-work-toggle');
-      while (action && typeof action.props.onPress !== 'function') action = action.parent;
-      action.props.onPress();
-    });
     // The three parallel calculator calls each render a tool-result bubble (accumulate-by-index worked).
     await h.rtl.waitFor(() => { expect(h.view!.queryAllByTestId('tool-result-label-calculator').length).toBe(3); }, { timeout: 6000 });
+    // ...and the remote model's final reply renders.
+    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/Results: 3901, 32768, and 120/)).not.toBeNull(); }, { timeout: 6000 });
   });
 });

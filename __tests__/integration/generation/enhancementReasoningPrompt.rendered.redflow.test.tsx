@@ -50,10 +50,6 @@ describe('T072 (rendered) — enhancement reasoning must not become the image pr
     // The model reasons when thinking is on (dump), rewrites cleanly when it is off.
     h.boundary.llama!.scriptCompletion({ text: CLEAN_PROMPT, thinkingText: REASONING_DUMP });
     await h.tapSend('draw a cat');
-    await h.rtl.waitFor(() => {
-      expect(h.view!.queryByTestId('assistant-work-toggle')).not.toBeNull();
-    }, { timeout: 6000 });
-    h.rtl.fireEvent.press(h.view!.getByTestId('assistant-work-toggle'));
     // The enhancement ran and its result reached the chat as the "Enhanced prompt" block (precondition:
     // a real rendered surface, so a no-op can't fake a pass).
     await h.rtl.waitFor(() => { expect(h.view!.queryByText('Enhanced prompt')).not.toBeNull(); }, { timeout: 6000 });

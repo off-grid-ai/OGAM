@@ -30,8 +30,9 @@
  *
  * ── Budget physics used to size rows (12GB Android; see memoryBudget.ts) ─────────────────────────────────
  *  - balanced/conservative physical cap ≈ 8602MB; aggressive ≈ 10813MB.
- *  - Clean mmap loads use the physical cap; dirty loads also respect live available RAM.
- *    Pure co-residency rows use a generous device (12GB, availGB high).
+ *  - Android credits real-free RAM up to the physical cap (effectiveAvailableMB reclaim credit), so pure
+ *    co-residency rows use a generous device (12GB, availGB high) → budget is NOT the variable; only sizes
+ *    that EXCEED the cap force a genuine eviction.
  *  - Clean (text/GGUF, dirtyMemory:false) vs dirty (image/LiteRT, dirtyMemory:true); sidecars whisper/tts/
  *    embedding are small clean models that never evict a heavy.
  *
@@ -97,7 +98,8 @@ interface Row {
 // Generous device: 12GB total, plenty of real free RAM → the physical cap is the only ceiling, so pure
 // co-residency rows aren't gated by instantaneous free RAM. Balanced cap ≈8602MB, aggressive ≈10813MB.
 const ROOMY: DeviceRAM = { platform: 'android', totalGB: 12, availGB: 8 };
-// Tight device: 12GB total but only ~4GB truly free. Dirty loads must honor that live reading.
+// Tight device: 12GB total but only ~4GB truly free. On Android the reclaim credit floors avail to the
+// physical cap, so eviction is forced by making the co-resident TOTAL exceed the cap (not by low avail).
 const TIGHT: DeviceRAM = { platform: 'android', totalGB: 12, availGB: 4 };
 
 const sorted = (keys: string[]): string[] => [...keys].sort();
@@ -135,16 +137,17 @@ const ROWS: Row[] = [
     },
   },
   {
-    // (2b) A dirty image needs live RAM even when the aggressive physical cap
-    // would allow co-residency. With only 4GB free, text must be evicted first.
-    name: 'medium-large dirty image evicts text under live pressure',
+    // (2b) a LARGE image that fits the AGGRESSIVE cap but not the balanced one — the mode is the variable.
+    // text 4000 (clean) + image 5000 (dirty) = 9000: > balanced 8602 (evict text) but ≤ aggressive 10813
+    // (co-reside). Conservative is single-model regardless.
+    name: 'medium-large image: balanced evicts text, aggressive co-resides',
     residentsBefore: [{ key: 'text', type: 'text', sizeMB: 4000, dirtyMemory: false }],
     incoming: { key: 'image', type: 'image', sizeMB: 5000, dirtyMemory: true },
     deviceRAM: TIGHT,
     expected: {
       conservative: { fits: true, residentKeysAfter: ['image'] },
       balanced: { fits: true, residentKeysAfter: ['image'] }, // 9000 > 8602 → text evicted
-      aggressive: { fits: true, residentKeysAfter: ['image'] },
+      aggressive: { fits: true, residentKeysAfter: ['image', 'text'] }, // 9000 ≤ 10813 → co-reside
     },
   },
   {
