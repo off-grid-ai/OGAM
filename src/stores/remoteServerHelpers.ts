@@ -347,6 +347,44 @@ export async function testEndpointAndGetModels(
   }
 }
 
+/**
+ * Ollama-shaped models ({ name, details }) as RemoteModels, each probed for its capabilities with the
+ * server's key. Shared by the /v1/models and /api/tags paths, which list models the same way but
+ * filter them differently before calling this.
+ */
+async function mapOllamaModels(
+  models: Array<{ name: string; details?: Record<string, unknown> }>,
+  probeBase: string,
+  server: RemoteServer,
+): Promise<RemoteModel[]> {
+  const nameDetect = {
+    vision: detectVisionCapability,
+    toolCalling: detectToolCallingCapability,
+  };
+  const modelInfos = await Promise.all(
+    models.map(model =>
+      fetchModelCapabilities(probeBase, model.name, nameDetect, server.apiKey),
+    ),
+  );
+  return models.map((model, i) => ({
+    id: model.name,
+    name: displayModelName(model.name),
+    serverId: server.id,
+    capabilities: {
+      supportsVision: modelInfos[i].supportsVision,
+      supportsToolCalling:
+        modelInfos[i].supportsToolCalling ??
+        detectToolCallingCapability(model.name),
+      supportsThinking: modelInfos[i].supportsThinking ?? false,
+      thinkingLevelsOnly: modelInfos[i].thinkingLevelsOnly,
+      acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
+      maxContextLength: modelInfos[i].contextLength,
+    },
+    details: model.details,
+    lastUpdated: new Date().toISOString(),
+  }));
+}
+
 export async function fetchModelsFromServer(
   server: RemoteServer,
 ): Promise<RemoteModel[]> {
@@ -453,33 +491,7 @@ export async function fetchModelsFromServer(
         const generativeModels = data.models.filter(
           (model: { name: string; kind?: unknown }) => isTextModel(model),
         );
-        const modelInfos = await Promise.all(
-          generativeModels.map((model: { name: string }) =>
-            fetchModelCapabilities(probeBase, model.name, nameDetect, server.apiKey),
-          ),
-        );
-        return generativeModels.map(
-          (
-            model: { name: string; details?: Record<string, unknown> },
-            i: number,
-          ) => ({
-            id: model.name,
-            name: displayModelName(model.name),
-            serverId: server.id,
-            capabilities: {
-              supportsVision: modelInfos[i].supportsVision,
-              supportsToolCalling:
-                modelInfos[i].supportsToolCalling ??
-                detectToolCallingCapability(model.name),
-              supportsThinking: modelInfos[i].supportsThinking ?? false,
-              thinkingLevelsOnly: modelInfos[i].thinkingLevelsOnly,
-              acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
-              maxContextLength: modelInfos[i].contextLength,
-            },
-            details: model.details,
-            lastUpdated: new Date().toISOString(),
-          }),
-        );
+        return mapOllamaModels(generativeModels, probeBase, server);
       }
     }
   } catch (error) {
@@ -505,40 +517,10 @@ export async function fetchModelsFromServer(
       const data = await response.json();
 
       if (Array.isArray(data.models)) {
-        const nameDetect = {
-          vision: detectVisionCapability,
-          toolCalling: detectToolCallingCapability,
-        };
         const generativeModels = data.models.filter((model: { name: string }) =>
           isGenerativeModel(model.name),
         );
-        const modelInfos = await Promise.all(
-          generativeModels.map((model: { name: string }) =>
-            fetchModelCapabilities(probeBase, model.name, nameDetect, server.apiKey),
-          ),
-        );
-        return generativeModels.map(
-          (
-            model: { name: string; details?: Record<string, unknown> },
-            i: number,
-          ) => ({
-            id: model.name,
-            name: displayModelName(model.name),
-            serverId: server.id,
-            capabilities: {
-              supportsVision: modelInfos[i].supportsVision,
-              supportsToolCalling:
-                modelInfos[i].supportsToolCalling ??
-                detectToolCallingCapability(model.name),
-              supportsThinking: modelInfos[i].supportsThinking ?? false,
-              thinkingLevelsOnly: modelInfos[i].thinkingLevelsOnly,
-              acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
-              maxContextLength: modelInfos[i].contextLength,
-            },
-            details: model.details,
-            lastUpdated: new Date().toISOString(),
-          }),
-        );
+        return mapOllamaModels(generativeModels, probeBase, server);
       }
     }
   } catch (error) {
