@@ -104,6 +104,18 @@ describe('fetchRemoteModelInfo', () => {
     expect(result.contextLength).toBe(16384);
   });
 
+  it('keeps a reported 4096 context when parameters also set num_ctx', async () => {
+    mockFetch({
+      ok: true,
+      json: async () => ({
+        model_info: { 'llama.context_length': 4096 },
+        parameters: 'num_ctx 16384\ntemperature 0.8',
+      }),
+    } as any);
+    const result = await fetchRemoteModelInfo('http://localhost:11434', 'llama3');
+    expect(result.contextLength).toBe(4096);
+  });
+
   it('detects thinking support from template .Think marker', async () => {
     mockFetch({
       ok: true,
