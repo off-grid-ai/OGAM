@@ -1,6 +1,6 @@
 {
   "name": "offgrid-mobile",
-  "version": "0.0.112",
+  "version": "0.0.113",
   "private": true,
   "scripts": {
     "build:shared": "npm --prefix ../shared run build",
