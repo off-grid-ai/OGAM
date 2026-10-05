@@ -42,7 +42,12 @@ subprojects { subproject ->
     // report an empty test task instead of blocking the product build.
     if (subproject.path != ":app") {
         subproject.tasks.withType(Test).configureEach {
-            failOnNoDiscoveredTests = false
+            // `failOnNoDiscoveredTests` only exists on Gradle 9+ Test tasks. Guard it so the build
+            // still configures on the Gradle 8.x the CI runner uses — there the property is absent
+            // (and the no-discovered-tests failure it guards against doesn't happen either).
+            if (hasProperty('failOnNoDiscoveredTests')) {
+                failOnNoDiscoveredTests = false
+            }
         }
     }
 
