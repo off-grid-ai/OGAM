@@ -41,6 +41,11 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Google removed the legacy "tools" package; the action's default package list still
+          # requests it, which fails SDK setup ("Failed to find package 'tools'"). Install only
+          # platform-tools here — Gradle pulls the platform/build-tools it needs during the build.
+          packages: platform-tools
 
       - name: Setup Ruby (fastlane)
         uses: ruby/setup-ruby@v1
