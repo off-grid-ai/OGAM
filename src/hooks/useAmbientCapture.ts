@@ -18,6 +18,7 @@ import { createAmbientRecorder } from '../services/ambient/ambientRecorderFactor
 import { ensureAmbientSliceDir } from '../services/ambient/phoneSttExecutorFactory'
 import { createDefaultTimelineBuildDeps } from '../services/ambient/timelineBuilderFactory'
 import { buildTimelineSessions, type BuildProgress } from '../services/ambient/timelineBuilder'
+import type { TimelineSession } from '../services/ambient/timelineModel'
 import { createDefaultCaptureSttExecutor } from '../services/ambient/captureSttExecutorFactory'
 import { writeSegmentWav } from '../services/ambient/livePcmWav'
 import {
@@ -207,22 +208,22 @@ async function captureTranscriptionReady(): Promise<boolean> {
   return s.useMacForTranscription && !s.onDeviceOnly && macOffloadReady()
 }
 
-// Transcribe + summarise one capture and write it to the day store. Shared by live stop + the
-// deferred (nightly) queue, so both take exactly the same path.
-async function buildAndStore(
+// Transcribe + summarise one capture into day-store sessions (without writing them). Shared by live
+// stop, the deferred queue, and re-transcribe, so all take exactly the same path.
+async function buildSessions(
   segs: SpeechSegment[],
   recordingPath: string,
   captureStartedAtMs: number,
   anchorsMs: number[],
   /** Live transcript safety net for the whole-take fallback — see TimelineBuildDeps.fallbackTranscript. */
   fallbackTranscript?: string
-): Promise<void> {
+): Promise<TimelineSession[]> {
   await ensureAmbientSliceDir()
   // Voice recognition now runs INSIDE the build, between transcription and summary (its own residency
   // phase), so the summary is speaker-attributed and each conversation gets a relevance verdict. It's
   // resolved once per capture and injected; null (voice recognition off / no diarizer) = plain build.
   const annotator = createSpeakerAnnotator()
-  const built = await buildTimelineSessions(
+  return buildTimelineSessions(
     segs,
     recordingPath,
     captureStartedAtMs,
@@ -237,7 +238,23 @@ async function buildAndStore(
     },
     anchorsMs
   )
+}
+
+/** A fresh capture (live stop / deferred queue) has no prior content to protect, so build + store. */
+async function buildAndStore(
+  segs: SpeechSegment[],
+  recordingPath: string,
+  captureStartedAtMs: number,
+  anchorsMs: number[],
+  fallbackTranscript?: string
+): Promise<void> {
+  const built = await buildSessions(segs, recordingPath, captureStartedAtMs, anchorsMs, fallbackTranscript)
   useAmbientTimelineStore.getState().addSessions(built)
+}
+
+/** True when at least one segment of at least one session carries transcribed words. */
+function sessionsHaveTranscript(sessions: readonly TimelineSession[]): boolean {
+  return sessions.some(s => s.segments.some(seg => !!seg.transcript?.trim()))
 }
 
 export async function processPending(): Promise<void> {
@@ -267,22 +284,29 @@ export async function processPending(): Promise<void> {
  * the same conversation in place. The user's include/exclude choice is carried across the rebuild.
  * Returns false (not thrown) when the audio is gone, so a day-level loop can skip it and keep going.
  */
-async function reprocessOne(sessionId: string): Promise<boolean> {
+type ReprocessOutcome = 'ok' | 'no-audio' | 'empty-kept'
+
+async function reprocessOne(sessionId: string): Promise<ReprocessOutcome> {
   const session = useAmbientTimelineStore.getState().sessions.find(s => s.id === sessionId)
   const startedAtMs = session?.captureStartedAtMs
-  if (!session || !session.recordingPath || startedAtMs === undefined) return false
+  if (!session || !session.recordingPath || startedAtMs === undefined) return 'no-audio'
   const localPath = session.recordingPath.replace(/^file:\/\//, '')
-  if (!(await RNFS.exists(localPath).catch(() => false))) return false
+  if (!(await RNFS.exists(localPath).catch(() => false))) return 'no-audio'
   const segs: SpeechSegment[] = session.segments.map(s => ({
     startMs: s.startMs - startedAtMs,
     endMs: s.endMs - startedAtMs
   }))
   const priorOverride = session.userOverride
-  await buildAndStore(segs, session.recordingPath, startedAtMs, [])
+  const built = await buildSessions(segs, session.recordingPath, startedAtMs, [])
+  // A rebuild that came back with NO words (e.g. Mac offload dropped mid-re-transcribe and no on-device
+  // model could pick it up) must NOT overwrite a conversation that previously HAD a transcript — that
+  // silently blanks the user's conversation. Keep the old one and report it instead.
+  if (!sessionsHaveTranscript(built) && sessionsHaveTranscript([session])) return 'empty-kept'
+  useAmbientTimelineStore.getState().addSessions(built)
   if (typeof priorOverride === 'boolean') {
     useAmbientTimelineStore.getState().setSessionInclusion(sessionId, priorOverride)
   }
-  return true
+  return 'ok'
 }
 
 /**
@@ -297,8 +321,15 @@ export async function reprocessSession(sessionId: string): Promise<void> {
   }
   setCapture({ phase: 'processing', error: null, progress: { phase: 'transcribing', done: 0, total: 1 } })
   try {
-    const ok = await reprocessOne(sessionId)
-    if (!ok) setCapture({ error: 'The audio for this conversation has been removed, so it can’t be re-transcribed.' })
+    const outcome = await reprocessOne(sessionId)
+    if (outcome === 'no-audio') {
+      setCapture({ error: 'The audio for this conversation has been removed, so it can’t be re-transcribed.' })
+    } else if (outcome === 'empty-kept') {
+      setCapture({
+        error:
+          'Couldn’t transcribe this conversation — your Mac wasn’t reachable and no on-device model is available — so it was left unchanged.'
+      })
+    }
   } catch (e) {
     setCapture({ error: e instanceof Error ? e.message : 'Re-transcribe failed. Your conversation is unchanged.' })
   } finally {
@@ -321,8 +352,8 @@ export async function reprocessDay(sessionIds: readonly string[]): Promise<void>
   try {
     for (let i = 0; i < sessionIds.length; i += 1) {
       setCapture({ progress: { phase: 'transcribing', done: i, total: sessionIds.length } })
-      const ok = await reprocessOne(sessionIds[i])
-      if (!ok) skipped += 1
+      const outcome = await reprocessOne(sessionIds[i])
+      if (outcome !== 'ok') skipped += 1
     }
     if (skipped > 0) {
       setCapture({ error: `Re-transcribed the day. ${skipped} conversation${skipped === 1 ? '' : 's'} had no saved audio and ${skipped === 1 ? 'was' : 'were'} skipped.` })

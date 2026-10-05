@@ -173,11 +173,24 @@ export async function buildTimelineSessions(
   // Whole-take safety net: when the ONLY session came back with no transcript — the recording file read
   // as blank audio on this device even though the live frame tap heard real speech — adopt the live
   // transcript so the take is saved with its words instead of as an empty "Conversation".
-  if (transcribed.length === 1 && !transcribed[0].transcript.trim() && deps.fallbackTranscript?.trim()) {
-    const text = deps.fallbackTranscript.trim()
-    transcribed[0].transcript = text
-    if (transcribed[0].segments.length > 0) {
-      transcribed[0].segments[0] = { ...transcribed[0].segments[0], transcript: text }
+  //
+  // Extended beyond the empty case: the VAD segmenter can UNDER-cover a continuous take (a long read
+  // with few phrase-closes), so the per-segment rebuild comes back as only a fraction of what the user
+  // watched appear live. When the live transcript is substantially fuller than the rebuild, adopt it —
+  // the processed transcript (and therefore the summary, to-dos and journal) must not be a few lines of
+  // a take the user saw transcribed in full.
+  if (transcribed.length === 1 && deps.fallbackTranscript?.trim()) {
+    const live = deps.fallbackTranscript.trim()
+    const rebuilt = transcribed[0].transcript.trim()
+    const liveWords = live.split(/\s+/).length
+    const rebuiltWords = rebuilt ? rebuilt.split(/\s+/).length : 0
+    // Adopt when the rebuild is empty, or when the live transcriber captured clearly more (the rebuild
+    // got under ~70% of the words). The live path re-decodes the whole stream, so it is the fuller one.
+    if (!rebuilt || rebuiltWords < liveWords * 0.7) {
+      transcribed[0].transcript = live
+      if (transcribed[0].segments.length > 0) {
+        transcribed[0].segments[0] = { ...transcribed[0].segments[0], transcript: live }
+      }
     }
   }
 

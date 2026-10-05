@@ -9,15 +9,23 @@ import { mobileTextEngineControl } from '../modelServices/textEngineControl'
 import { generateDayJournal, type JournalDeps, type JournalResult } from './journal'
 import type { JournalSource } from './journalPrompt'
 import type { GenerationMessage } from '@offgrid/models'
+import { macTextReady, generateAmbientText } from './macTextOffload'
 
 export function createDefaultJournalDeps(onDeviceOnly = false): JournalDeps {
   const localReady = (): boolean => mobileTextEngineControl.isReady()
+  // When the recorder is offloading to a reachable Mac, the journal runs on the Mac's LLM too — so
+  // offloading means the WHOLE day (transcript, summary AND journal) is produced on the Mac without
+  // separately selecting it as the active chat model. onDeviceOnly still forces local.
   return {
-    isReady: () => (onDeviceOnly ? localReady() : mobileTextEngineControl.isRemoteActive() || localReady()),
+    isReady: () =>
+      macTextReady(onDeviceOnly) ||
+      (onDeviceOnly ? localReady() : mobileTextEngineControl.isRemoteActive() || localReady()),
     generate: (messages, maxTokens) =>
-      executeMobileText(messages.map(m => ({ role: m.role, content: m.content })) as GenerationMessage[], {
-        maxTokens
-      })
+      generateAmbientText(messages, maxTokens, onDeviceOnly, (m, mt) =>
+        executeMobileText(m.map(x => ({ role: x.role, content: x.content })) as GenerationMessage[], {
+          maxTokens: mt
+        })
+      )
   }
 }
 

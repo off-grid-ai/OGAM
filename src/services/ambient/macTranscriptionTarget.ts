@@ -56,6 +56,12 @@ export function embedEndpoint(baseUrl: string): string {
   return `${baseUrl.replace(/\/$/, '')}/v1/audio/embed`
 }
 
+/** The text-generation (chat) endpoint, so the ambient SUMMARY can run on the Mac's LLM too — the same
+ *  Mac the recorder already offloads transcription to, reached with the same gateway base + token. */
+export function chatCompletionsEndpoint(baseUrl: string): string {
+  return `${baseUrl.replace(/\/$/, '')}/v1/chat/completions`
+}
+
 // ─── Port: pro registers the concrete resolution; core reads through this ─────
 export type MacOffloadTargetProvider = () => MacOffloadTarget | null
 
