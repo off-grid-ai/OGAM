@@ -7,12 +7,13 @@
  * Switching keeps enrolled voices — they re-embed into the new model's space on the next recording.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
+import { ModelCard } from '../ModelCard';
 import { DIARIZATION_MODELS, type DiarizationModel } from '@offgrid/models';
 import { useVoiceRecognitionUnlocked } from '../../hooks/useVoiceRecognitionUnlocked';
 import { useSpeakerModelStore } from '../../stores/speakerModelStore';
@@ -118,49 +119,58 @@ export function DiarizationModelPicker(): React.ReactElement {
   }
 
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHead}>
-        <Icon name="users" size={16} color={colors.primary} />
-        <Text style={styles.cardTitle}>Voice recognition</Text>
-      </View>
-      <Text style={styles.cardWhat}>
-        Separates who-spoke-when in a conversation and recognizes each person's voice. Pick a model — the
-        default is built in; others download once.
-      </Text>
-      <View style={styles.runRow}>
-        <Icon name={macConnected ? 'airplay' : 'smartphone'} size={12} color={colors.textMuted} />
-        <Text style={styles.runText}>
-          {macConnected ? 'Now: running on your Mac' : 'Now: running on this device'}
+    <View style={styles.list}>
+      {/* Intro keeps the "what / where it runs" context the single-card layout had, then each model
+          renders as its own card — the same ModelCard used by the Text, Image, and Transcription tabs. */}
+      <View style={styles.intro}>
+        <View style={styles.cardHead}>
+          <Icon name="users" size={16} color={colors.primary} />
+          <Text style={styles.cardTitle}>Voice recognition</Text>
+        </View>
+        <Text style={styles.cardWhat}>
+          Separates who-spoke-when in a conversation and recognizes each person's voice. Pick a model — the
+          default is built in; others download once.
         </Text>
+        <View style={styles.runRow}>
+          <Icon name={macConnected ? 'airplay' : 'smartphone'} size={12} color={colors.textMuted} />
+          <Text style={styles.runText}>
+            {macConnected ? 'Now: running on your Mac' : 'Now: running on this device'}
+          </Text>
+        </View>
       </View>
-      {DIARIZATION_MODELS.map(m => {
+      {DIARIZATION_MODELS.map((m, index) => {
         const on = m.id === selectedId;
-        const isReady = ready[m.id];
+        const bundled = isEmbeddingBundled(m);
+        const isReady = bundled || ready[m.id];
         const prog = progress[m.id];
         const downloading = prog !== undefined;
+        // sizeMb → bytes so the card reads "X MB / Y MB" while downloading, matching the other tabs.
+        const totalBytes = m.sizeMb * 1024 * 1024;
         return (
-          <TouchableOpacity key={m.id} style={styles.optRow} onPress={() => onPick(m)} disabled={downloading} activeOpacity={0.7}>
-            <Icon name={on ? 'check-circle' : 'circle'} size={15} color={on ? colors.primary : colors.textMuted} />
-            <View style={styles.optText}>
-              <Text style={styles.optName}>{m.name}{m.recommended ? '  ·  recommended' : ''}</Text>
-              <Text style={styles.optMeta}>{m.description} · {m.sizeMb} MB</Text>
-            </View>
-            {downloading ? (
-              <View style={styles.statusWrap}>
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={styles.statusText}>{Math.round((prog ?? 0) * 100)}%</Text>
-              </View>
-            ) : isReady ? (
-              <Text style={[styles.statusText, { color: isEmbeddingBundled(m) ? colors.textMuted : colors.primary }]}>
-                {isEmbeddingBundled(m) ? 'Built in' : 'Ready'}
-              </Text>
-            ) : (
-              <View style={styles.statusWrap}>
-                <Icon name="download" size={14} color={colors.primary} />
-                <Text style={[styles.statusText, { color: colors.primary }]}>Get</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <ModelCard
+            key={m.id}
+            compact
+            model={{
+              id: m.id,
+              name: m.recommended ? `${m.name}  ·  recommended` : m.name,
+              // Size (or "Built in") sits in the author slot, exactly as the Transcription tab does.
+              author: bundled ? 'Built in' : `${m.sizeMb} MB`,
+              description: m.description,
+            }}
+            isDownloaded={isReady && !downloading}
+            isActive={on}
+            isDownloading={downloading}
+            downloadProgress={prog ?? 0}
+            downloadBytes={
+              downloading
+                ? { downloaded: Math.round((prog ?? 0) * totalBytes), total: totalBytes }
+                : undefined
+            }
+            testID={`recorder-model-card-${index}`}
+            // Ready + active → nothing to do; ready + inactive → switch; not ready → download (onPick does both).
+            onPress={downloading || (on && isReady) ? undefined : () => onPick(m)}
+            onDownload={!isReady && !downloading ? () => onPick(m) : undefined}
+          />
         );
       })}
     </View>
@@ -170,6 +180,8 @@ export function DiarizationModelPicker(): React.ReactElement {
 function createStyles(colors: ThemeColors) {
   const RADIUS = SPACING.sm;
   return StyleSheet.create({
+    list: { gap: SPACING.md },
+    intro: { gap: SPACING.sm, marginBottom: SPACING.xs },
     card: { borderWidth: 1, borderColor: colors.border, borderRadius: RADIUS, backgroundColor: colors.surface, padding: SPACING.md, gap: SPACING.sm },
     cardHead: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
     cardTitle: { ...TYPOGRAPHY.body, color: colors.text },
@@ -178,11 +190,5 @@ function createStyles(colors: ThemeColors) {
     runText: { ...TYPOGRAPHY.meta, color: colors.textMuted },
     linkBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, alignSelf: 'flex-start', marginTop: SPACING.xs },
     linkBtnText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
-    optRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.sm, borderTopWidth: 1, borderTopColor: colors.border },
-    optText: { flex: 1 },
-    optName: { ...TYPOGRAPHY.bodySmall, color: colors.text },
-    optMeta: { ...TYPOGRAPHY.meta, color: colors.textMuted, marginTop: 2 },
-    statusWrap: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
-    statusText: { ...TYPOGRAPHY.meta },
   });
 }
