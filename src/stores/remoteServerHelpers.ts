@@ -491,7 +491,7 @@ export async function fetchModelsFromServer(
         const generativeModels = data.models.filter(
           (model: { name: string; kind?: unknown }) => isTextModel(model),
         );
-        return mapOllamaModels(generativeModels, probeBase, server);
+        return await mapOllamaModels(generativeModels, probeBase, server);
       }
     }
   } catch (error) {
@@ -524,7 +524,7 @@ export async function fetchModelsFromServer(
         const generativeModels = data.models.filter((model: { name: string }) =>
           isGenerativeModel(model.name),
         );
-        return mapOllamaModels(generativeModels, probeBase, server);
+        return await mapOllamaModels(generativeModels, probeBase, server);
       }
     }
   } catch (error) {
