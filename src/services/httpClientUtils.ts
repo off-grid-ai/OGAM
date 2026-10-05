@@ -142,6 +142,9 @@ export async function testEndpoint(
     let url = endpoint;
     while (url.endsWith('/')) url = url.slice(0, -1);
 
+    // The saved key is never sent over HTTP, so a check that passed would not have used it.
+    if (keyedHttpEndpoint(url, apiKey)) return { success: false, error: HTTP_API_KEY_ERROR };
+
     const authHeaders: Record<string, string> = {
       Accept: 'application/json',
       ...remoteAuthorizationHeaders(url, apiKey),
