@@ -30,6 +30,10 @@ const LM_STUDIO_SSE =
   'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
   'data: [DONE]\n\n';
 
+// A loaded CI runner renders the streamed turn several times slower than a laptop; the waits below
+// are headroom for that, not for the behaviour under test.
+const RENDER_WAIT = { timeout: 20000 };
+
 describe('T049 (rendered) — remote LM Studio reasoning is shown (DEV-B16)', () => {
   it('renders the answer and the reasoning the remote model streamed', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
@@ -41,13 +45,13 @@ describe('T049 (rendered) — remote LM Studio reasoning is shown (DEV-B16)', ()
     await h.tapSend('what is 6 times 7');
 
     // The remote answer arrives (proves the remote send + transport ran).
-    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/The answer is 42/)).not.toBeNull(); }, { timeout: 6000 });
+    await h.rtl.waitFor(() => { expect(h.view!.queryByText(/The answer is 42/)).not.toBeNull(); }, RENDER_WAIT);
 
     h.rtl.fireEvent.press(h.view!.getByTestId('assistant-work-toggle'));
     // SPEC: the reasoning the model actually sent is shown to the user (in the thinking block).
     // The panel can appear after the streamed answer; wait for its rendered state.
     await h.rtl.waitFor(() => {
       expect(h.view!.queryByText(/Thinking Process/)).not.toBeNull();
-    }, { timeout: 6000 });
-  });
+    }, RENDER_WAIT);
+  }, 60000);
 });

@@ -690,7 +690,7 @@ export async function startGenerationFn(
     !deps.activeModelInfo?.isRemote &&
     deps.activeModel &&
     !(await ensureReadyOrAlert(deps, 'startGeneration', () => {
-      startGenerationFn(deps, call);
+      void startGenerationFn(deps, call);
     }))
   ) {
     generationSession.end('not-ready');
@@ -847,7 +847,7 @@ export async function startGenerationFn(
       message:
         'The model returned nothing. This can happen when it runs on an incompatible backend (a K-quant on NPU/GPU falls back to CPU and may emit nothing). Try again, or switch the backend/model.',
       onRetry: () => {
-        startGenerationFn(deps, call);
+        void startGenerationFn(deps, call);
       },
     });
   }
@@ -1073,8 +1073,10 @@ export async function executeDeleteConversationFn(
     await generationService.stopGeneration();
     deps.clearStreamingMessage();
   }
+  // Read each image's saved path first: remote .jpg/.webp files are found by it, not by id.
+  const imagePaths = new Map(useAppStore.getState().generatedImages.map(image => [image.id, image.imagePath]));
   for (const id of deps.removeImagesByConversationId(deps.activeConversationId))
-    await onnxImageGeneratorService.deleteGeneratedImage(id);
+    await onnxImageGeneratorService.deleteGeneratedImage(id, imagePaths.get(id));
   contextCompactionService.clearSummary(deps.activeConversationId);
   deps.deleteConversation(deps.activeConversationId);
   deps.setActiveConversation(null);
@@ -1151,7 +1153,7 @@ export async function regenerateResponseFn(
     !deps.activeModelInfo?.isRemote &&
     deps.activeModel &&
     !(await ensureReadyOrAlert(deps, 'regenerate', () => {
-      regenerateResponseFn(deps, call);
+      void regenerateResponseFn(deps, call);
     }))
   ) {
     generationSession.end('not-ready');

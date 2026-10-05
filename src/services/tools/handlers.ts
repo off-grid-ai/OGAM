@@ -64,6 +64,11 @@ async function handleWebSearch(query: string): Promise<string> {
         'Accept': 'text/html',
       },
     });
+    // A refused or rate-limited search page has no results to parse. Say the search failed,
+    // instead of telling the model that the web has nothing on this query.
+    if (response.status >= 400) {
+      throw new Error(`Web search is unavailable right now (HTTP ${response.status}).`);
+    }
     const html = await response.text();
     const results = parseBraveResults(html);
 

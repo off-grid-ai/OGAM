@@ -18,12 +18,15 @@ import logger from '../utils/logger';
 import {
   fetchModelCapabilities,
   isGenerativeModel,
+  RemoteAuthenticationError,
 } from './remoteModelCapabilities';
 import {
   detectVisionCapability,
   detectToolCallingCapability,
 } from '../utils/remoteCapabilityDetect';
 import {
+  HTTP_API_KEY_ERROR,
+  keyedHttpEndpoint,
   REMOTE_FETCH_REDIRECT_POLICY,
   remoteAuthorizationHeaders,
 } from '../services/remoteTransportPolicy';
@@ -344,11 +347,52 @@ export async function testEndpointAndGetModels(
   }
 }
 
+/**
+ * Ollama-shaped models ({ name, details }) as RemoteModels, each probed for its capabilities with the
+ * server's key. Shared by the /v1/models and /api/tags paths, which list models the same way but
+ * filter them differently before calling this.
+ */
+async function mapOllamaModels(
+  models: Array<{ name: string; details?: Record<string, unknown> }>,
+  probeBase: string,
+  server: RemoteServer,
+): Promise<RemoteModel[]> {
+  const nameDetect = {
+    vision: detectVisionCapability,
+    toolCalling: detectToolCallingCapability,
+  };
+  const modelInfos = await Promise.all(
+    models.map(model =>
+      fetchModelCapabilities(probeBase, model.name, nameDetect, server.apiKey),
+    ),
+  );
+  return models.map((model, i) => ({
+    id: model.name,
+    name: displayModelName(model.name),
+    serverId: server.id,
+    capabilities: {
+      supportsVision: modelInfos[i].supportsVision,
+      supportsToolCalling:
+        modelInfos[i].supportsToolCalling ??
+        detectToolCallingCapability(model.name),
+      supportsThinking: modelInfos[i].supportsThinking ?? false,
+      thinkingLevelsOnly: modelInfos[i].thinkingLevelsOnly,
+      acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
+      maxContextLength: modelInfos[i].contextLength,
+    },
+    details: model.details,
+    lastUpdated: new Date().toISOString(),
+  }));
+}
+
 export async function fetchModelsFromServer(
   server: RemoteServer,
 ): Promise<RemoteModel[]> {
   const url = trimTrailingSlashes(server.endpoint);
   const isOpenRouter = new URL(url).hostname === 'openrouter.ai';
+  // Capability probes (/props, /api/show, /api/v1/models) live beside /v1, not under it, so an
+  // address saved with a /v1 suffix probes from the base it was given. A proxy prefix stays.
+  const probeBase = url.endsWith('/v1') ? url.slice(0, -'/v1'.length) : url;
 
   // Headers for authentication
   const headers: Record<string, string> = {
@@ -366,6 +410,12 @@ export async function fetchModelsFromServer(
       headers,
     });
 
+    // A refused key is an authentication failure, not "this server has no models". On private
+    // HTTP the key is never sent, so the refusal is explained by the HTTPS rule.
+    if (response.status === 401 || response.status === 403) {
+      if (keyedHttpEndpoint(server.endpoint, server.apiKey)) throw new Error(HTTP_API_KEY_ERROR);
+      throw new RemoteAuthenticationError(response.status);
+    }
     if (response.ok) {
       const data = await response.json();
 
@@ -395,7 +445,7 @@ export async function fetchModelsFromServer(
                   supportsThinking: !!model.reasoning,
                   thinkingLevelsOnly: model.reasoning?.mandatory === true,
                 }
-              : fetchModelCapabilities(url, model.id, nameDetect),
+              : fetchModelCapabilities(probeBase, model.id, nameDetect, server.apiKey),
           ),
         );
         return generativeModels.map(
@@ -441,36 +491,18 @@ export async function fetchModelsFromServer(
         const generativeModels = data.models.filter(
           (model: { name: string; kind?: unknown }) => isTextModel(model),
         );
-        const modelInfos = await Promise.all(
-          generativeModels.map((model: { name: string }) =>
-            fetchModelCapabilities(url, model.name, nameDetect),
-          ),
-        );
-        return generativeModels.map(
-          (
-            model: { name: string; details?: Record<string, unknown> },
-            i: number,
-          ) => ({
-            id: model.name,
-            name: displayModelName(model.name),
-            serverId: server.id,
-            capabilities: {
-              supportsVision: modelInfos[i].supportsVision,
-              supportsToolCalling:
-                modelInfos[i].supportsToolCalling ??
-                detectToolCallingCapability(model.name),
-              supportsThinking: modelInfos[i].supportsThinking ?? false,
-              thinkingLevelsOnly: modelInfos[i].thinkingLevelsOnly,
-              acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
-              maxContextLength: modelInfos[i].contextLength,
-            },
-            details: model.details,
-            lastUpdated: new Date().toISOString(),
-          }),
-        );
+        return await mapOllamaModels(generativeModels, probeBase, server);
       }
     }
   } catch (error) {
+    // A refusal - including the keyed-HTTP explanation - is a failed discovery, so the saved
+    // model list stays in place instead of being replaced by whatever /api/tags returns.
+    if (error instanceof RemoteAuthenticationError) {
+      // A capability probe refused on private HTTP never carried the key either.
+      if (keyedHttpEndpoint(server.endpoint, server.apiKey)) throw new Error(HTTP_API_KEY_ERROR);
+      throw error;
+    }
+    if (error instanceof Error && error.message === HTTP_API_KEY_ERROR) throw error;
     logger.warn('[RemoteServer] Failed to fetch from /v1/models:', error);
   }
 
@@ -482,47 +514,25 @@ export async function fetchModelsFromServer(
       headers,
     });
 
+    if (response.status === 401 || response.status === 403) {
+      throw new RemoteAuthenticationError(response.status);
+    }
     if (response.ok) {
       const data = await response.json();
 
       if (Array.isArray(data.models)) {
-        const nameDetect = {
-          vision: detectVisionCapability,
-          toolCalling: detectToolCallingCapability,
-        };
         const generativeModels = data.models.filter((model: { name: string }) =>
           isGenerativeModel(model.name),
         );
-        const modelInfos = await Promise.all(
-          generativeModels.map((model: { name: string }) =>
-            fetchModelCapabilities(url, model.name, nameDetect),
-          ),
-        );
-        return generativeModels.map(
-          (
-            model: { name: string; details?: Record<string, unknown> },
-            i: number,
-          ) => ({
-            id: model.name,
-            name: displayModelName(model.name),
-            serverId: server.id,
-            capabilities: {
-              supportsVision: modelInfos[i].supportsVision,
-              supportsToolCalling:
-                modelInfos[i].supportsToolCalling ??
-                detectToolCallingCapability(model.name),
-              supportsThinking: modelInfos[i].supportsThinking ?? false,
-              thinkingLevelsOnly: modelInfos[i].thinkingLevelsOnly,
-              acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
-              maxContextLength: modelInfos[i].contextLength,
-            },
-            details: model.details,
-            lastUpdated: new Date().toISOString(),
-          }),
-        );
+        return await mapOllamaModels(generativeModels, probeBase, server);
       }
     }
   } catch (error) {
+    if (error instanceof RemoteAuthenticationError) {
+      // On private HTTP the key is never sent, so the refusal is explained by the HTTPS rule.
+      if (keyedHttpEndpoint(server.endpoint, server.apiKey)) throw new Error(HTTP_API_KEY_ERROR);
+      throw error;
+    }
     logger.warn('[RemoteServer] Failed to fetch from /api/tags:', error);
   }
 
