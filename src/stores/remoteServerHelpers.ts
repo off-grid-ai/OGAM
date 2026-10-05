@@ -483,7 +483,10 @@ export async function fetchModelsFromServer(
       }
     }
   } catch (error) {
+    // A refusal - including the keyed-HTTP explanation - is a failed discovery, so the saved
+    // model list stays in place instead of being replaced by whatever /api/tags returns.
     if (error instanceof RemoteAuthenticationError) throw error;
+    if (error instanceof Error && error.message === HTTP_API_KEY_ERROR) throw error;
     logger.warn('[RemoteServer] Failed to fetch from /v1/models:', error);
   }
 
