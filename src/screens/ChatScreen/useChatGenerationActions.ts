@@ -690,7 +690,7 @@ export async function startGenerationFn(
     !deps.activeModelInfo?.isRemote &&
     deps.activeModel &&
     !(await ensureReadyOrAlert(deps, 'startGeneration', () => {
-      startGenerationFn(deps, call);
+      void startGenerationFn(deps, call);
     }))
   ) {
     generationSession.end('not-ready');
@@ -847,7 +847,7 @@ export async function startGenerationFn(
       message:
         'The model returned nothing. This can happen when it runs on an incompatible backend (a K-quant on NPU/GPU falls back to CPU and may emit nothing). Try again, or switch the backend/model.',
       onRetry: () => {
-        startGenerationFn(deps, call);
+        void startGenerationFn(deps, call);
       },
     });
   }
@@ -1153,7 +1153,7 @@ export async function regenerateResponseFn(
     !deps.activeModelInfo?.isRemote &&
     deps.activeModel &&
     !(await ensureReadyOrAlert(deps, 'regenerate', () => {
-      regenerateResponseFn(deps, call);
+      void regenerateResponseFn(deps, call);
     }))
   ) {
     generationSession.end('not-ready');
