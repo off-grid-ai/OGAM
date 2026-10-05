@@ -42,6 +42,10 @@ export const ChatsListScreen: React.FC = () => {
   const { getProject } = useProjectStore();
   const activeImageModelId = useAppStore(s => s.activeImageModelId);
   const { removeImagesByConversationId } = useAppStore.getState();
+  // Remote images can be .jpg or .webp; deletion needs each image's saved file path, read
+  // before the records are removed.
+  const savedImagePaths = () =>
+    new Map(useAppStore.getState().generatedImages.map(image => [image.id, image.imagePath]));
   const { modelId: activeTextModelId } = useActiveTextModel();
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const [showModelSelector, setShowModelSelector] = useState(false);
@@ -103,9 +107,10 @@ export const ChatsListScreen: React.FC = () => {
           style: 'destructive',
           onPress: () => {
             setAlertState(hideAlert());
+            const imagePaths = savedImagePaths();
             const imageIds = removeImagesByConversationId(conversation.id);
             for (const imageId of imageIds) {
-              onnxImageGeneratorService.deleteGeneratedImage(imageId).catch(() => {});
+              onnxImageGeneratorService.deleteGeneratedImage(imageId, imagePaths.get(imageId)).catch(() => {});
             }
             deleteConversation(conversation.id);
           },
@@ -132,10 +137,11 @@ export const ChatsListScreen: React.FC = () => {
           style: 'destructive',
           onPress: () => {
             setAlertState(hideAlert());
+            const imagePaths = savedImagePaths();
             for (const conversation of selected) {
               const imageIds = removeImagesByConversationId(conversation.id);
               for (const imageId of imageIds) {
-                onnxImageGeneratorService.deleteGeneratedImage(imageId).catch(() => {});
+                onnxImageGeneratorService.deleteGeneratedImage(imageId, imagePaths.get(imageId)).catch(() => {});
               }
               deleteConversation(conversation.id);
             }

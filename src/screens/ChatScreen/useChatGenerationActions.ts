@@ -1073,8 +1073,10 @@ export async function executeDeleteConversationFn(
     await generationService.stopGeneration();
     deps.clearStreamingMessage();
   }
+  // Read each image's saved path first: remote .jpg/.webp files are found by it, not by id.
+  const imagePaths = new Map(useAppStore.getState().generatedImages.map(image => [image.id, image.imagePath]));
   for (const id of deps.removeImagesByConversationId(deps.activeConversationId))
-    await onnxImageGeneratorService.deleteGeneratedImage(id);
+    await onnxImageGeneratorService.deleteGeneratedImage(id, imagePaths.get(id));
   contextCompactionService.clearSummary(deps.activeConversationId);
   deps.deleteConversation(deps.activeConversationId);
   deps.setActiveConversation(null);
