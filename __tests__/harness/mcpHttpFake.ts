@@ -15,11 +15,17 @@ export interface FakeMcpServer {
 export interface McpHttpFake {
   /** Every tools/call that reached a server, in order. */
   calls: Array<{ url: string; tool: string }>;
+  /** A down server drops every request with a network error, as an unreachable host does. */
+  setDown: (url: string, down: boolean) => void;
+  /** Park the next request to `url` until the returned release() is called. */
+  holdNext: (url: string) => { release: () => void };
   restore: () => void;
 }
 
 export function installMcpHttpFake(servers: Record<string, FakeMcpServer>): McpHttpFake {
   const calls: McpHttpFake['calls'] = [];
+  const down = new Set<string>();
+  const holds = new Map<string, Promise<void>>();
   const original = (global as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest;
 
   class FakeMcpXHR {
@@ -40,8 +46,10 @@ export function installMcpHttpFake(servers: Record<string, FakeMcpServer>): McpH
 
     send(payload: string): void {
       const server = servers[this.url];
-      setTimeout(() => {
-        if (!server) { this.onerror?.(); return; }
+      const hold = holds.get(this.url);
+      holds.delete(this.url);
+      const answer = () => setTimeout(() => {
+        if (!server || down.has(this.url)) { this.onerror?.(); return; }
         const req = JSON.parse(payload) as { id: number; method: string; params: { name?: string } };
         this.status = 200;
         this.headers = { 'content-type': 'application/json' };
@@ -57,12 +65,19 @@ export function installMcpHttpFake(servers: Record<string, FakeMcpServer>): McpH
         this.responseText = result === undefined ? '' : JSON.stringify({ jsonrpc: '2.0', id: req.id, result });
         this.onload?.();
       }, 0);
+      if (hold) hold.then(answer); else answer();
     }
   }
 
   (global as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = FakeMcpXHR;
   return {
     calls,
+    setDown: (url, isDown) => { if (isDown) down.add(url); else down.delete(url); },
+    holdNext: url => {
+      let release = () => {};
+      holds.set(url, new Promise<void>(resolve => { release = resolve; }));
+      return { release: () => release() };
+    },
     restore: () => { (global as unknown as { XMLHttpRequest: unknown }).XMLHttpRequest = original; },
   };
 }

@@ -2,7 +2,7 @@
  * McpToolsScreen (Pro) Tests
  *
  * Drives the REAL McpToolsScreen against the REAL useMcpStore. Only genuine boundaries
- * are mocked: the Feather icon shim, navigation, and theme. Everything the tests assert
+ * are mocked: the Feather icon shim and navigation; the real theme runs. Everything the tests assert
  * (the enabled-tools set, per-tool toggle, bulk enable/disable, search filter, empty
  * states, header/back) exercises the real component + real store state.
  *
@@ -14,20 +14,11 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import type { McpTool } from '@offgrid/pro/mcp/types';
 
-const mockColors = {
-  text: '#000', textMuted: '#999', textSecondary: '#666', textDisabled: '#bbb',
-  primary: '#1DB954', error: '#E00', trending: '#F90',
-  background: '#FFF', surface: '#F5F5F5', surfaceLight: '#EEE', border: '#E0E0E0', overlay: 'rgba(0,0,0,0.4)',
-};
-
 jest.mock('react-native-vector-icons/Feather', () => {
   const { Text } = require('react-native');
   return ({ name }: any) => <Text>{name}</Text>;
 });
 
-jest.mock('../../../src/theme', () => ({
-  useTheme: () => ({ colors: mockColors, shadows: { small: {} } }),
-}));
 
 const mockGoBack = jest.fn();
 let mockRouteParams: { serverId: string } = { serverId: 'srv-1' };
@@ -116,11 +107,24 @@ const seed = (opts: {
     expect(getByText('Tools')).toBeTruthy();
   });
 
-  it('shows the connect-first empty message when no tools exist', () => {
+  it('says a missing server was removed and offers Go back', () => {
     seed({ serverId: 'srv-1', serverTools: {} });
-    const { getByText } = render(<McpToolsScreen />);
-    expect(getByText('No tools available — connect the server first.')).toBeTruthy();
+    const { getByText, getByTestId } = render(<McpToolsScreen />);
+    expect(getByText('This server was removed.')).toBeTruthy();
     expect(getByText('0 TOOLS AVAILABLE')).toBeTruthy();
+    fireEvent.press(getByTestId('mcp-tools-go-back'));
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('a paired device route that is not connected asks to keep the device online, not to connect', () => {
+    seed({
+      serverId: 'mesh-task-mac-1',
+      servers: [{ id: 'mesh-task-mac-1', name: 'My Mac', url: 'sync://mac-1' }],
+    });
+    const { getByText, queryByTestId, getByTestId } = render(<McpToolsScreen />);
+    expect(getByText('My Mac is not reachable. Keep the paired device online, then come back.')).toBeTruthy();
+    expect(queryByTestId('mcp-tools-connect')).toBeNull();
+    expect(getByTestId('mcp-tools-go-back')).toBeTruthy();
   });
 
   it('lists tools with the available count and a per-tool token chip', () => {
@@ -260,7 +264,7 @@ const seed = (opts: {
     expect(getByText('create')).toBeTruthy();
     expect(queryByText('lookup')).toBeNull();
 
-    // No match -> empty message (not the connect-first one).
+    // No match -> the filter message, not the server state.
     fireEvent.changeText(input, 'zzzz');
     expect(getByText('No tools match that filter.')).toBeTruthy();
   });
