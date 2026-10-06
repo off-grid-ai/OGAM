@@ -11,7 +11,10 @@ import {
   generationProgressStatus,
   imagePhaseTransitionLog,
 } from './imageGenerationHelpers';
-import { enhanceImagePrompt } from './imagePromptEnhancement';
+import {
+  cancelImagePromptEnhancement,
+  enhanceImagePrompt,
+} from './imagePromptEnhancement';
 import {
   completedImageGenerationState,
   saveImageGenerationResult,
@@ -479,6 +482,9 @@ class ImageGenerationService {
     }
     this.cancelRequested = true;
     this.remoteRequest?.abort();
+    // While enhancing, the job waits on a text request that the image backends cannot stop.
+    const enhancement =
+      this.state.phase === 'enhancing' ? cancelImagePromptEnhancement() : null;
     // Publish the terminal while conversation identity is still present. Sync subscribers run
     // synchronously, so every peer can remove its live image card before native cancellation waits.
     this.updateState({
@@ -489,6 +495,7 @@ class ImageGenerationService {
       error: null,
     });
     try {
+      await enhancement;
       await onnxImageGeneratorService.cancelGeneration();
     } catch {
       /* Ignore */

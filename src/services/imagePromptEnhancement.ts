@@ -6,6 +6,7 @@ import {
   generateStandalone,
   getActiveEngineService,
   isRemoteTextModelActive,
+  stopStandalone,
 } from './engines';
 import {
   buildEnhancementCardContent,
@@ -107,6 +108,18 @@ function enhancementTokenWriter(
       buildEnhancementCardContent(streamed),
     );
   };
+}
+
+/**
+ * Stop a prompt enhancement that is waiting on its text request, local or remote. The pending
+ * enhanceImagePrompt then returns promptly instead of holding its image job open.
+ */
+export async function cancelImagePromptEnhancement(): Promise<void> {
+  try {
+    await stopStandalone();
+  } catch (error) {
+    logger.warn('[ImageGen] Failed to stop prompt enhancement:', error);
+  }
 }
 
 export async function enhanceImagePrompt(
