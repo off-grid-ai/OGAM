@@ -29,6 +29,25 @@ type NavigationProp = CompositeNavigationProp<
   NativeStackNavigationProp<RootStackParamList>
 >;
 
+/**
+ * Delete the files of a chat's generated images. A record is removed only once its file is gone;
+ * remote images can be .jpg or .webp, so each delete uses the image's saved path. Returns how many
+ * images could not be removed.
+ */
+async function deleteChatImages(conversationId: string): Promise<number> {
+  const images = useAppStore.getState().generatedImages
+    .filter(image => image.conversationId === conversationId);
+  let notDeleted = 0;
+  for (const image of images) {
+    const deleted = await onnxImageGeneratorService
+      .deleteGeneratedImage(image.id, image.imagePath)
+      .catch(() => false);
+    if (deleted) useAppStore.getState().removeGeneratedImage(image.id);
+    else notDeleted += 1;
+  }
+  return notDeleted;
+}
+
 // This screen keeps its list actions together so search, selection, and swipe deletion share one owner.
 // eslint-disable-next-line max-lines-per-function
 export const ChatsListScreen: React.FC = () => {
@@ -41,11 +60,6 @@ export const ChatsListScreen: React.FC = () => {
   const { deleteConversation, setActiveConversation } = useChatStore.getState();
   const { getProject } = useProjectStore();
   const activeImageModelId = useAppStore(s => s.activeImageModelId);
-  const { removeImagesByConversationId } = useAppStore.getState();
-  // Remote images can be .jpg or .webp; deletion needs each image's saved file path, read
-  // before the records are removed.
-  const savedImagePaths = () =>
-    new Map(useAppStore.getState().generatedImages.map(image => [image.id, image.imagePath]));
   const { modelId: activeTextModelId } = useActiveTextModel();
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const [showModelSelector, setShowModelSelector] = useState(false);
@@ -96,6 +110,17 @@ export const ChatsListScreen: React.FC = () => {
     }
   };
 
+  // An image whose file could not be removed keeps its Gallery record, so the user can
+  // delete it again from the Gallery.
+  const reportImagesNotDeleted = (count: number) => {
+    if (count === 0) return;
+    setAlertState(showAlert(
+      'Some images were not deleted',
+      `${count} ${count === 1 ? 'image' : 'images'} from the deleted chat could not be removed. ${count === 1 ? 'It is' : 'They are'} still in your Gallery, where you can delete ${count === 1 ? 'it' : 'them'} again.`,
+      [{ text: 'OK' }],
+    ));
+  };
+
   const handleDeleteChat = (conversation: Conversation) => {
     setAlertState(showAlert(
       'Delete Chat',
@@ -105,14 +130,11 @@ export const ChatsListScreen: React.FC = () => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             setAlertState(hideAlert());
-            const imagePaths = savedImagePaths();
-            const imageIds = removeImagesByConversationId(conversation.id);
-            for (const imageId of imageIds) {
-              onnxImageGeneratorService.deleteGeneratedImage(imageId, imagePaths.get(imageId)).catch(() => {});
-            }
+            const notDeleted = await deleteChatImages(conversation.id);
             deleteConversation(conversation.id);
+            reportImagesNotDeleted(notDeleted);
           },
         },
       ]
@@ -135,17 +157,15 @@ export const ChatsListScreen: React.FC = () => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             setAlertState(hideAlert());
-            const imagePaths = savedImagePaths();
+            let notDeleted = 0;
             for (const conversation of selected) {
-              const imageIds = removeImagesByConversationId(conversation.id);
-              for (const imageId of imageIds) {
-                onnxImageGeneratorService.deleteGeneratedImage(imageId, imagePaths.get(imageId)).catch(() => {});
-              }
+              notDeleted += await deleteChatImages(conversation.id);
               deleteConversation(conversation.id);
             }
             stopSelecting();
+            reportImagesNotDeleted(notDeleted);
           },
         },
       ],

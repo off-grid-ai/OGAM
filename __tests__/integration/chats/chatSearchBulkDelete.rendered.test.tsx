@@ -81,7 +81,8 @@ describe('Chats list search and bulk delete', () => {
     rtl.fireEvent.press(chats.getByLabelText('Delete selected chats'));
     expect(chats.getByText('Delete Chats')).toBeTruthy();
     await rtl.act(() => new Promise(resolve => setTimeout(resolve, 350)));
-    rtl.fireEvent.press(chats.getByText('Delete'));
+    // Deleting waits for each chat's image files to be removed first.
+    await rtl.act(async () => { rtl.fireEvent.press(chats.getByText('Delete')); });
 
     await rtl.waitFor(() => expect(chats.queryByText('Aurora notes 1')).toBeNull());
     rtl.fireEvent.press(chats.getByLabelText('Clear chat search'));
