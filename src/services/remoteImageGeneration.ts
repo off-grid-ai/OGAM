@@ -157,10 +157,9 @@ export async function runRemoteImageGeneration(
       messageId, steps, guidanceScale, useOpenCL: false, startTime, isRemote: true,
     });
   } catch (error) {
-    if (controller.signal.aborted || deps.isCancelled()) {
-      await removePartialFile(partialPath);
-      return null;
-    }
+    // A failed or cancelled transfer must not leave an untracked file behind.
+    await removePartialFile(partialPath);
+    if (controller.signal.aborted || deps.isCancelled()) return null;
     return deps.fail(error instanceof Error ? error.message : 'Remote image generation failed', error);
   } finally {
     deps.setRequest(null);

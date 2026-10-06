@@ -4,6 +4,7 @@
  *
  * - Cancel during that transfer stops it and never saves the image, even when the transfer
  *   finishes as the cancel lands.
+ * - A failed transfer leaves no file behind and offers Retry, which then draws the image.
  *
  * Real ChatScreen, real image-mode toggle, real remote model picker, real imageGenerationService
  * and remote image runner. Fakes only at the network (fetch) and native file system (RNFS) edges.
@@ -112,5 +113,23 @@ describe('remote image transfer', () => {
 
     expect(h.view!.queryByTestId('generated-image')).toBeNull();
     expect(h.boundary.fs!.listFiles(imagesDir())).toEqual([]);
+  });
+
+  it('a failed transfer leaves no file and Retry draws the image', async () => {
+    h.boundary.fs!.serveRemoteFile(IMAGE_URL, { statusCode: 503, body: 'busy' });
+    await chooseRemoteImageModel(h);
+    await h.tapSend('draw a lighthouse at dusk');
+
+    const retry = await h.rtl.waitFor(() => h.view!.getByTestId('model-failure-retry-image'));
+    expect(h.view!.queryByTestId('generated-image')).toBeNull();
+    expect(h.boundary.fs!.listFiles(imagesDir())).toEqual([]);
+
+    h.boundary.fs!.serveRemoteFile(IMAGE_URL, { body: PNG_BODY, headers: { 'Content-Type': 'image/png' } });
+    await h.rtl.act(async () => { h.rtl.fireEvent.press(retry); });
+
+    await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('generated-image')).not.toBeNull(); });
+    expect(h.view!.queryByTestId('model-failure-image')).toBeNull();
+    expect(h.boundary.fs!.listFiles(imagesDir())).toHaveLength(1);
+    expect(server.requests).toBe(2);
   });
 });
