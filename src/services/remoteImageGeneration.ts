@@ -30,6 +30,8 @@ async function removePartialFile(path: string | null): Promise<void> {
 
 /** Transfer the image file. Cancel stops the transfer instead of letting it finish in the background. */
 async function downloadImage(fromUrl: string, toFile: string, signal: AbortSignal) {
+  // Cancelled while the folder was being made: an abort listener added now would never fire.
+  if (signal.aborted) throw new Error('Image generation cancelled');
   const transfer = RNFS.downloadFile({ fromUrl, toFile });
   const stopTransfer = () => RNFS.stopDownload(transfer.jobId);
   signal.addEventListener('abort', stopTransfer);

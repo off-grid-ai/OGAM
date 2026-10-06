@@ -74,6 +74,34 @@ describe('remote image transfer', () => {
     expect(h.boundary.fs!.listFiles(imagesDir())).toEqual([]);
   });
 
+  it('cancel while the image folder is being made never starts the transfer', async () => {
+    // Review finding: an abort that landed before the transfer began was never heard.
+    h.boundary.fs!.serveRemoteFile(IMAGE_URL, { body: PNG_BODY, headers: { 'Content-Type': 'image/png' } });
+    const fs = h.boundary.fs!;
+    const rnfs = fs.module;
+    let folderMade: () => void = () => {};
+    let making = false;
+    const make = rnfs.mkdir.getMockImplementation()!;
+    rnfs.mkdir.mockImplementation(async (path: string) => {
+      if (path === imagesDir() && !making) {
+        making = true;
+        await new Promise<void>((resolve) => { folderMade = resolve; });
+      }
+      return make(path);
+    });
+    await chooseRemoteImageModel(h);
+    await h.tapSend('draw a lighthouse at dusk');
+    await h.rtl.waitFor(() => { expect(making).toBe(true); });
+
+    await h.pressImageCardStop();
+    await h.rtl.act(async () => { folderMade(); });
+    await h.settle(200);
+
+    expect(rnfs.downloadFile).not.toHaveBeenCalled();
+    expect(h.view!.queryByTestId('generated-image')).toBeNull();
+    expect(fs.listFiles(imagesDir())).toEqual([]);
+  });
+
   it('a failed transfer leaves no file and Retry draws the image', async () => {
     h.boundary.fs!.serveRemoteFile(IMAGE_URL, { statusCode: 503, body: 'busy' });
     await chooseRemoteImageModel(h);
