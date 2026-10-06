@@ -53,6 +53,8 @@ class ImageGenerationService {
   private readonly listeners: Set<ImageGenerationListener> = new Set();
   private cancelRequested: boolean = false;
   private remoteRequest: AbortController | null = null;
+  /** The request being run and its conversation, so a deleted chat can wait for its own job to end. */
+  private job: { conversationId: string | null; settled: Promise<unknown> } | null = null;
   /** Last generate request, so a failure card's Retry button can re-run it. */
   private _lastParams: GenerateImageParams | null = null;
 
@@ -290,7 +292,7 @@ class ImageGenerationService {
         return null;
       }
       this.updateState(completedImageGenerationState(result));
-      return saveImageGenerationResult(result, {
+      return await saveImageGenerationResult(result, {
         params,
         activeImageModel,
         messageId: this.state.messageId,
@@ -337,6 +339,23 @@ class ImageGenerationService {
       );
       return null;
     }
+    const run = this._generate(params, opts);
+    const job = {
+      conversationId: params.conversationId || null,
+      settled: run.catch(() => null),
+    };
+    this.job = job;
+    try {
+      return await run;
+    } finally {
+      if (this.job === job) this.job = null;
+    }
+  }
+
+  private async _generate(
+    params: GenerateImageParams,
+    opts?: { override?: boolean },
+  ): Promise<GeneratedImage | null> {
     this.cancelRequested = false;
     this._lastParams = params; // so a failure card's Retry can re-run this exact request
     const remoteServer = useRemoteServerStore
@@ -441,8 +460,23 @@ class ImageGenerationService {
     });
   }
 
+  /**
+   * Cancel the request drawing an image for this conversation and wait until it has ended. Deleting
+   * a chat calls this first, so no image is saved for the chat after its images are removed.
+   */
+  async cancelGenerationFor(conversationId: string): Promise<void> {
+    const job = this.job;
+    if (job?.conversationId !== conversationId) return;
+    await this.cancelGeneration();
+    await job.settled;
+  }
+
   async cancelGeneration(): Promise<void> {
-    if (!isInFlight(this.state.phase)) return;
+    if (!isInFlight(this.state.phase)) {
+      // Started but not yet showing progress: the run checks this flag before each step.
+      if (this.job) this.cancelRequested = true;
+      return;
+    }
     this.cancelRequested = true;
     this.remoteRequest?.abort();
     // Publish the terminal while conversation identity is still present. Sync subscribers run

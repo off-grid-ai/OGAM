@@ -151,7 +151,7 @@ export async function runRemoteImageGeneration(
       width, height, steps, seed: params.seed ?? 0, modelId, createdAt: new Date().toISOString(),
     };
     deps.updateState(completedImageGenerationState(result));
-    return saveImageGenerationResult(result, {
+    return await saveImageGenerationResult(result, {
       params,
       activeImageModel: {
         id: modelId, name: `${server.name} / ${modelId}`, modelPath: server.endpoint, backend: 'remote',
