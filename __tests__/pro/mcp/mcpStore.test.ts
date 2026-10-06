@@ -136,6 +136,21 @@ describe('mcpStore setServerTools auto-enable semantics', () => {
     get().setServerTools('srv1', [tool('shared')]);
     expect(get().toolOwners.shared).toBe('srv2');
   });
+
+  it('turns a tool off when the account behind it would change without the user choosing', () => {
+    // Review finding: srv1 dropped the tool, it moved to srv2, and stayed enabled there.
+    get().setServerTools('srv1', [tool('shared')]);
+    get().setServerTools('srv2', [tool('shared')]);
+    get().toggleTool('shared', 'srv2');
+    get().toggleTool('shared', 'srv2');
+    get().toggleTool('shared', 'srv1');
+    expect(get().toolOwners.shared).toBe('srv1');
+    expect(get().enabledTools).toEqual(['shared']);
+
+    get().setServerTools('srv1', []);
+    expect(get().toolOwners.shared).toBe('srv2');
+    expect(get().enabledTools).toEqual([]);
+  });
 });
 
 describe('mcpStore toggleTool (both branches)', () => {
