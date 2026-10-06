@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Animated, Platform, ActionSheetIOS } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
+import { GodIcon } from '../GodIcon';
 import { useTheme, useThemedStyles } from '../../theme';
 import { ImageModeState, MediaAttachment } from '../../types';
 import { VoiceRecordButton, type VoiceRecordInteractionMode } from '../VoiceRecordButton';
@@ -518,8 +518,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 active={assistantEnabled}
                 loading={assistantTransitioning}
                 style={styles.assistantButton}
-                icon={<IconMC
-                  name={assistantEnabled ? 'robot' : 'robot-outline'}
+                icon={<GodIcon
                   size={16}
                   color={assistantEnabled ? colors.primary : colors.textDisabled}
                 />}
