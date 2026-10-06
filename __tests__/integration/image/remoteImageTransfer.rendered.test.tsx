@@ -9,9 +9,9 @@
  * Real ChatScreen, real image-mode toggle, real remote model picker, real imageGenerationService
  * and remote image runner. Fakes only at the network (fetch) and native file system (RNFS) edges.
  */
-import React from 'react';
 import { setupChatScreen } from '../../harness/chatHarness';
 import type { RemoteTransfer } from '../../harness/nativeFileSystem';
+import { REMOTE_IMAGE_URL, chooseRemoteImageModel, serveImageGeneration } from '../../harness/remoteImageServer';
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} }),
@@ -20,51 +20,10 @@ jest.mock('@react-navigation/native', () => ({
   useIsFocused: () => true,
 }));
 
-const ENDPOINT = 'http://192.168.1.60:7878'; // NOSONAR - private LAN test fixture
-const IMAGE_URL = 'https://images.example.test/out/lighthouse.png';
+const IMAGE_URL = REMOTE_IMAGE_URL;
 const PNG_BODY = 'synthetic-png-bytes';
 
 type Harness = Awaited<ReturnType<typeof setupChatScreen>>;
-
-/** The remote server answers an image request with a URL to transfer, as OpenAI-style servers do. */
-function serveImageGeneration(): { requests: number; restore: () => void } {
-  const original = globalThis.fetch;
-  const state = { requests: 0, restore: () => { globalThis.fetch = original; } };
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    if (url === `${ENDPOINT}/v1/images/generations`) {
-      state.requests += 1;
-      return new Response(JSON.stringify({ data: [{ url: IMAGE_URL }] }), {
-        status: 200, headers: { 'Content-Type': 'application/json' },
-      });
-    }
-    return original(input);
-  }) as typeof globalThis.fetch;
-  return state;
-}
-
-/** Pick the remote image model in the real picker, then switch the chat into image mode. */
-async function chooseRemoteImageModel(h: Harness) {
-  const { useRemoteServerStore } = require('../../../src/stores/remoteServerStore');
-  const { RemoteModelOptionsSection } = require('../../../src/components/models/RemoteModelOptionsSection');
-  // A saved server with its discovered image catalog is what the add-server flow leaves behind.
-  const serverId = useRemoteServerStore.getState().addServer({
-    name: 'Studio Mac',
-    endpoint: ENDPOINT,
-    providerType: 'openai-compatible',
-    modelCatalog: { image: [{ id: 'flux-schnell', name: 'Flux Schnell' }] },
-  });
-  const picker = h.rtl.render(React.createElement(RemoteModelOptionsSection, { category: 'image' }));
-  h.rtl.fireEvent.press(picker.getByTestId(`remote-image-model-${serverId}:flux-schnell`));
-  await h.rtl.waitFor(() => {
-    expect(useRemoteServerStore.getState().activeRemoteMediaServerIds.image).toBe(serverId);
-  });
-  picker.unmount();
-
-  h.render();
-  await h.cycleImageMode();
-  await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('image-mode-force-badge')).not.toBeNull(); });
-}
 
 describe('remote image transfer', () => {
   let h: Harness;

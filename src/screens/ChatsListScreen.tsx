@@ -18,7 +18,8 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useChatStore, useProjectStore, useAppStore } from '../stores';
 import { useActiveTextModel } from '../hooks/useActiveTextModel';
-import { onnxImageGeneratorService, activeModelService, llmService, remoteServerManager } from '../services';
+import { activeModelService, llmService, remoteServerManager } from '../services';
+import { deleteChatImages, imagesNotDeletedAlert } from '../services/chatImageCleanup';
 import { Conversation } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { byRecentActivity } from '../utils/conversationOrdering';
@@ -28,25 +29,6 @@ type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ChatsTab'>,
   NativeStackNavigationProp<RootStackParamList>
 >;
-
-/**
- * Delete the files of a chat's generated images. A record is removed only once its file is gone;
- * remote images can be .jpg or .webp, so each delete uses the image's saved path. Returns how many
- * images could not be removed.
- */
-async function deleteChatImages(conversationId: string): Promise<number> {
-  const images = useAppStore.getState().generatedImages
-    .filter(image => image.conversationId === conversationId);
-  let notDeleted = 0;
-  for (const image of images) {
-    const deleted = await onnxImageGeneratorService
-      .deleteGeneratedImage(image.id, image.imagePath)
-      .catch(() => false);
-    if (deleted) useAppStore.getState().removeGeneratedImage(image.id);
-    else notDeleted += 1;
-  }
-  return notDeleted;
-}
 
 // This screen keeps its list actions together so search, selection, and swipe deletion share one owner.
 // eslint-disable-next-line max-lines-per-function
@@ -110,15 +92,8 @@ export const ChatsListScreen: React.FC = () => {
     }
   };
 
-  // An image whose file could not be removed keeps its Gallery record, so the user can
-  // delete it again from the Gallery.
   const reportImagesNotDeleted = (count: number) => {
-    if (count === 0) return;
-    setAlertState(showAlert(
-      'Some images were not deleted',
-      `${count} ${count === 1 ? 'image' : 'images'} from the deleted chat could not be removed. ${count === 1 ? 'It is' : 'They are'} still in your Gallery, where you can delete ${count === 1 ? 'it' : 'them'} again.`,
-      [{ text: 'OK' }],
-    ));
+    if (count > 0) setAlertState(imagesNotDeletedAlert(count));
   };
 
   const handleDeleteChat = (conversation: Conversation) => {

@@ -8,7 +8,6 @@ import {
   intentClassifier,
   generationService,
   imageGenerationService,
-  onnxImageGeneratorService,
   ImageGenerationState,
   buildToolSystemPromptHint,
   contextCompactionService,
@@ -47,6 +46,7 @@ import {
   GenerationMeta,
 } from '../../types';
 import logger from '../../utils/logger';
+import { deleteChatImages, imagesNotDeletedAlert } from '../../services/chatImageCleanup';
 import { ModelReadyOutcome, ensureReadyOrAlert } from './modelReadiness';
 type SetState<T> = Dispatch<SetStateAction<T>>;
 const FALLBACK_RECENT_MESSAGE_COUNT = 2;
@@ -1058,7 +1058,6 @@ export async function executeDeleteConversationFn(
     | 'activeConversationId'
     | 'isStreaming'
     | 'clearStreamingMessage'
-    | 'removeImagesByConversationId'
     | 'deleteConversation'
     | 'setActiveConversation'
     | 'navigation'
@@ -1073,13 +1072,16 @@ export async function executeDeleteConversationFn(
     await generationService.stopGeneration();
     deps.clearStreamingMessage();
   }
-  // Read each image's saved path first: remote .jpg/.webp files are found by it, not by id.
-  const imagePaths = new Map(useAppStore.getState().generatedImages.map(image => [image.id, image.imagePath]));
-  for (const id of deps.removeImagesByConversationId(deps.activeConversationId))
-    await onnxImageGeneratorService.deleteGeneratedImage(id, imagePaths.get(id));
+  // Files first; a record goes only once its file is gone (shared with the chats list).
+  const notDeleted = await deleteChatImages(deps.activeConversationId);
   contextCompactionService.clearSummary(deps.activeConversationId);
   deps.deleteConversation(deps.activeConversationId);
   deps.setActiveConversation(null);
+  if (notDeleted > 0) {
+    // Say so before leaving, or the user never learns some images stayed in the Gallery.
+    deps.setAlertState(imagesNotDeletedAlert(notDeleted, () => deps.navigation.goBack()));
+    return;
+  }
   deps.navigation.goBack();
 }
 export type RegenerateCall = {
