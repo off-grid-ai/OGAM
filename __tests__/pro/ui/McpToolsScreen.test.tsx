@@ -69,7 +69,14 @@ maybe('McpToolsScreen', () => {
 
   const initial = useMcpStore.getState();
 
-  const seed = (opts: {
+  // A connected server owns the tools it lists (the first server to list a name keeps it).
+  const ownersOf = (serverTools: Record<string, McpTool[]> = {}): Record<string, string> => {
+    const owners: Record<string, string> = {};
+    Object.entries(serverTools).forEach(([id, list]) => list.forEach(t => { owners[t.name] ??= id; }));
+    return owners;
+  };
+
+const seed = (opts: {
     serverId?: string;
     servers?: any[];
     serverTools?: Record<string, McpTool[]>;
@@ -81,7 +88,7 @@ maybe('McpToolsScreen', () => {
       serverTools: opts.serverTools ?? {},
       enabledTools: opts.enabledTools ?? [],
       connectionStates: {},
-      toolOwners: {},
+      toolOwners: ownersOf(opts.serverTools),
       knownToolNames: [],
     });
   };

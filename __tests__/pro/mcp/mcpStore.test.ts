@@ -118,12 +118,23 @@ describe('mcpStore setServerTools auto-enable semantics', () => {
     expect(s.knownToolNames).toEqual(['t1']);
   });
 
-  it('re-owns a tool when a second server publishes the same name', () => {
+  it('keeps the first owner when a second server publishes the same name', () => {
     get().setServerTools('srv1', [tool('shared')]);
     get().setServerTools('srv2', [tool('shared')]);
-    // last writer wins on owner; not double-enabled (already known)
+    // a second server never takes over a name the user already has routed; not double-enabled
+    expect(get().toolOwners.shared).toBe('srv1');
+    expect(get().enabledTools).toEqual(['shared']);
+  });
+
+  it('moves a name to the server the user turns it on for', () => {
+    get().setServerTools('srv1', [tool('shared')]);
+    get().setServerTools('srv2', [tool('shared')]);
+    get().toggleTool('shared', 'srv2');
     expect(get().toolOwners.shared).toBe('srv2');
     expect(get().enabledTools).toEqual(['shared']);
+    // a reconnect of the first server keeps the user's choice
+    get().setServerTools('srv1', [tool('shared')]);
+    expect(get().toolOwners.shared).toBe('srv2');
   });
 });
 
