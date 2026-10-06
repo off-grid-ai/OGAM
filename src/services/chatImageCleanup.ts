@@ -1,14 +1,18 @@
 import { useAppStore } from '../stores/appStore';
 import { showAlert, type AlertState } from '../utils/alertState';
+import { imageGenerationService } from './imageGenerationService';
 import { localDreamGeneratorService } from './localDreamGenerator';
 
 /**
- * Delete the files of a chat's generated images. A record is removed only once its file is gone;
- * remote images can be .jpg or .webp, so each delete uses the image's saved path. An image whose
- * file stays keeps its Gallery record, so the user can delete it again from the Gallery.
- * Returns how many images could not be removed.
+ * Delete the files of a chat's generated images. An image still being drawn for the chat is
+ * cancelled first and its request ends before the images are read, so it cannot add one after
+ * this cleanup. A record is removed only once its file is gone; remote images can be .jpg or
+ * .webp, so each delete uses the image's saved path. An image whose file stays keeps its Gallery
+ * record, so the user can delete it again from the Gallery. Returns how many images could not be
+ * removed.
  */
 export async function deleteChatImages(conversationId: string): Promise<number> {
+  await imageGenerationService.cancelGenerationFor(conversationId);
   const images = useAppStore.getState().generatedImages
     .filter(image => image.conversationId === conversationId);
   let notDeleted = 0;
