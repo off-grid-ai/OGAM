@@ -175,6 +175,24 @@ describe('KokoroEngine.extra — uncovered branches', () => {
     expect((err as Error).message).toMatch(/did not mount in time/i);
   });
 
+  it('a speak waiting for the model to remount does not start once stop() was called', async () => {
+    // The model was freed; speak asks for a remount and waits. Stop arrives before it attaches.
+    const engine = new KokoroEngine();
+    let mountRequested = false;
+    engine._setMountRequester(() => { mountRequested = true; });
+    const handle = makeHandle();
+
+    const pending = engine.speak('do not say this');
+    await Promise.resolve();
+    expect(mountRequested).toBe(true);
+    engine.stop();
+    engine._setBridge(handle, 'af_heart'); // the remount completes after Stop
+
+    await pending;
+    expect(handle.speak).not.toHaveBeenCalled();
+    expect(engine.getPhase()).toBe('ready');
+  });
+
   // ── isSupported (both sides, all platforms) ───────────────────────────────
 
   it('isSupported reflects the OS version gate on android (both sides)', () => {
