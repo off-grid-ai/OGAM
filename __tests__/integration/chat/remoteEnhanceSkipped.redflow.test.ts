@@ -40,17 +40,16 @@ describe('B30/Q8 — prompt enhancement runs on the remote text model (red-flow)
 
      
     const { useAppStore } = require('../../../src/stores');
-    const { imageGenerationService } = require('../../../src/services/imageGenerationService');
+    const { enhanceImagePrompt } = require('../../../src/services/imagePromptEnhancement');
      
 
     // Enhancement is opt-in — turn it on the way the user does via settings.
     useAppStore.getState().updateSettings({ enhanceImagePrompts: true });
     installRemoteStream(ENHANCED_SSE); // fake ONLY the XHR transport with the device-shaped SSE
 
-    // Drive the REAL enhancement seam (the exact B30 surface). _enhancePrompt is the private owner of the
-    // enhance step; call it through the service instance so the whole real gate + generateStandalone run.
-    const enhance = (imageGenerationService as any)._enhancePrompt.bind(imageGenerationService);
-    const enhanced: string = await enhance({ prompt: 'a cat' }, 20);
+    // Drive the REAL enhancement seam (the exact B30 surface): the image service's enhance step, so the
+    // whole real gate + generateStandalone run.
+    const enhanced: string = await enhanceImagePrompt({ prompt: 'a cat' }, () => {});
 
     // Terminal artifact: the remote model's rewritten prompt reached the caller (would be fed downstream to
     // image generation). On HEAD the gate skips remote → returns the original "a cat".
