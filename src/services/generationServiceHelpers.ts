@@ -323,13 +323,6 @@ function assertLiteRTImageSupport(
       'This model does not support images. Import it with vision enabled, or remove the image.',
     );
   }
-  // The model takes images, but the engine came up text-only (a TPU load whose vision executor
-  // could not start). Say so instead of letting native drop the image silently.
-  if (liteRTService.isModelLoaded() && !liteRTService.supportsVision()) {
-    chatStore.clearStreamingMessage();
-    svc.resetState();
-    throw new Error('Images are not available for this model on this device. Remove the image to continue.');
-  }
 }
 
 // assertLiteRTAudioSupport removed: audio is transcript-only (modelInputAudioUris always []), so it

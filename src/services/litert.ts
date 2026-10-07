@@ -80,6 +80,7 @@ class LiteRTService {
   private loaded = false;
   private modelSupportsAudio = false;
   private modelSupportsVision = false;
+  private loadedModelPath: string | null = null;
   private activeBackend: LiteRTBackend | null = null;
   private readonly emitter: NativeEventEmitter | null = null;
   private subscriptions: EmitterSubscription[] = [];
@@ -144,12 +145,14 @@ class LiteRTService {
       // Native reports what the engine came up with: a TPU load can drop to text-only.
       this.modelSupportsVision = typeof res === 'object' && typeof res.vision === 'boolean' ? res.vision : supportsVision;
       this.modelSupportsAudio = typeof res === 'object' && typeof res.audio === 'boolean' ? res.audio : supportsAudio;
+      this.loadedModelPath = modelPath;
       logger.log(TAG, `loadModel — loaded on ${this.activeBackend}`);
     } catch (e) {
       this.loaded = false;
       this.activeBackend = null;
       this.modelSupportsAudio = false;
       this.modelSupportsVision = false;
+      this.loadedModelPath = null;
       logger.log(TAG, `loadModel — failed: ${String(e)}`);
       throw e;
     }
@@ -160,9 +163,10 @@ class LiteRTService {
     return this.loaded && this.modelSupportsAudio;
   }
 
-  /** Whether the loaded engine took images — false when a TPU load had to drop to text-only. */
-  supportsVision(): boolean {
-    return this.loaded && this.modelSupportsVision;
+  /** True when `modelPath` is the loaded model and its engine came up without vision: a TPU load
+   *  whose vision executor could not start dropped to text-only, so native would discard images. */
+  loadedTextOnly(modelPath: string): boolean {
+    return this.loaded && this.loadedModelPath === modelPath && !this.modelSupportsVision;
   }
 
   // ---------------------------------------------------------------------------
@@ -541,6 +545,7 @@ class LiteRTService {
       this.loaded = false;
       this.modelSupportsAudio = false;
       this.modelSupportsVision = false;
+      this.loadedModelPath = null;
       this.activeBackend = null;
     }
   }

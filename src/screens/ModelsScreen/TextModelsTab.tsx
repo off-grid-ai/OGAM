@@ -31,6 +31,7 @@ import { modelDownloadService } from '../../services/modelDownloadService';
 import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
 import { fetchModelFiles } from '../../services/modelCatalogFiles';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
+import { liteRTTensorTarget } from '../../utils/modelHelpers';
 
 function hasNonSortFilters(fs: FilterState): boolean {
   return fs.orgs.length > 0 || fs.type !== 'all' || fs.source !== 'all' || fs.size !== 'all' || fs.quant !== 'all';
@@ -118,6 +119,8 @@ const ModelDetailView: React.FC<DetailProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const tpuGeneration = useTensorTpuGeneration();
+  // A build for THIS phone's TPU is listed (a Pixel 10a's Tensor G4 has none yet).
+  const tpuBuildListed = tpuGeneration !== null && modelFiles.some(f => liteRTTensorTarget(f.name) === tpuGeneration);
 
   // Pre-set the next pending (Download Manager icon) so it fires regardless of
   // how the user dismisses step 9 (button or backdrop tap).
@@ -271,7 +274,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
       {selectedModel.id === LITERT_PARENT_ID && Platform.OS === 'android' && DeviceInfo.getModel().toLowerCase().includes('pixel 10') && (
         <Card style={styles.deviceBanner}>
           <Icon name="info" size={14} color={colors.trending} />
-          <Text style={styles.deviceBannerText}>{tpuGeneration === null
+          <Text style={styles.deviceBannerText}>{!tpuBuildListed
             ? 'GPU acceleration is not yet supported on Pixel 10. Models will run on CPU. Support coming soon.'
             : "Pixel 10 can't run LiteRT models on its GPU. The Tensor TPU build runs on the TPU; the other files run on the CPU."}</Text>
         </Card>

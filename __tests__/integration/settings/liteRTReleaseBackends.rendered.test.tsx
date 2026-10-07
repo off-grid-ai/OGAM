@@ -44,8 +44,23 @@ it('adopts the media the native engine came up with when a TPU load drops to tex
   const { liteRTService } = require('../../../src/services/litert');
   await liteRTService.loadModel(TENSOR_G5_FILE, 'gpu', { supportsVision: true, supportsAudio: true });
   expect(liteRTService.getActiveBackend()).toBe('npu');
-  expect(liteRTService.supportsVision()).toBe(false);
+  expect(liteRTService.loadedTextOnly(TENSOR_G5_FILE)).toBe(true);
   expect(liteRTService.supportsAudio()).toBe(false);
+});
+
+it('refuses an image for a vision model whose TPU engine came up text-only, before any generation path', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  boundary.litert.module.loadModel.mockResolvedValueOnce({ backend: 'npu', maxNumTokens: 4096, vision: false, audio: false });
+  const { liteRTService } = require('../../../src/services/litert');
+  const { localModelAcceptsImages, activeLocalTextCapabilities } = require('../../../src/services/engines');
+  const model = createDownloadedModel({ id: 'g5', engine: 'litert', filePath: TENSOR_G5_FILE, fileName: 'gemma-4-E2B-it_Google_Tensor_G5.litertlm', liteRTVision: true });
+  expect(localModelAcceptsImages(model)).toBe(true); // not loaded yet: the model's own flag decides
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'gpu', { supportsVision: true });
+  expect(localModelAcceptsImages(model)).toBe(false);
+  expect(activeLocalTextCapabilities(model).vision).toBe(false);
+  await liteRTService.unloadModel();
+  expect(localModelAcceptsImages(model)).toBe(true);
 });
 
 it('offers only CPU and GPU in Chat and Model Settings even with a saved NPU preference', async () => {

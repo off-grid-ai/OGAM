@@ -144,10 +144,16 @@ export function isModelReady(model: { engine?: string; filePath?: string } | nul
  * loads (used to gate image sends). llama needs a present projector (mmProjPath); LiteRT carries vision in
  * the bundle (the liteRTVision flag). A missing/absent projector means the native completion would throw
  * "Multimodal support not enabled" — so the send must be blocked here, not sent and crashed (device 2026-07-14).
+ * A LiteRT model whose engine came up text-only (a TPU load that dropped its vision executor) would have
+ * native discard the image silently, so it is refused here too — once, for every generation path.
  */
 export function localModelAcceptsImages(model: DownloadedModel | null | undefined): boolean {
   if (!model) return false;
-  return isLiteRTModel(model) ? !!model.liteRTVision : !!model.mmProjPath;
+  return isLiteRTModel(model) ? liteRTAcceptsImages(model) : !!model.mmProjPath;
+}
+
+function liteRTAcceptsImages(model: { liteRTVision?: boolean; filePath: string }): boolean {
+  return !!model.liteRTVision && !liteRTService.loadedTextOnly(model.filePath);
 }
 
 /**
@@ -181,7 +187,7 @@ export function activeTextCapabilities(i: {
     isRemote: i.isRemote,
     remoteCaps: i.remoteCaps,
     engine: i.model?.engine,
-    liteRTVision: litert ? litert.liteRTVision : undefined,
+    liteRTVision: litert ? liteRTAcceptsImages(litert) : undefined,
     liteRTAudio: litert ? litert.liteRTAudio : undefined,
     liteRTLoaded: liteRTService.isModelLoaded(),
     llama: {
