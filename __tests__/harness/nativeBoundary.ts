@@ -888,6 +888,11 @@ export interface WhisperFake {
   holdNextLoad(): void;
   /** Release a load held via holdNextLoad(). No-op if not held. */
   releaseLoad(): void;
+  /** HOLD the next file transcription (the voice-mode path) open until releaseTranscription() - the
+   *  seconds a real whisper pass over a recording takes on device. One-shot. */
+  holdNextTranscription(): void;
+  /** Release a transcription held via holdNextTranscription(). No-op if not held. */
+  releaseTranscription(): void;
 }
 
 function makeWhisperFake(): WhisperFake {
@@ -897,16 +902,26 @@ function makeWhisperFake(): WhisperFake {
   // Load hold: opens the in-flight model-load window a real (seconds-long) ggml init has.
   let loadHoldPending = false;
   let loadHoldRelease: (() => void) | null = null;
+  // Transcription hold: the in-flight window of a real whisper pass over a recorded file.
+  let transcriptionHoldPending = false;
+  let transcriptionHoldRelease: (() => void) | null = null;
   const context: Record<string, jest.Mock> = {
     // Faithful to whisper.rn: transcribe(path, opts) returns { stop, promise }, the promise resolving to
     // { result, segments } — this is the method whisperService.transcribeFile (the voice-mode file path) drives.
-    transcribe: jest.fn((_path: string) => ({
-      stop: jest.fn(async () => {}),
-      promise: Promise.resolve({
-        result: fileTranscript,
-        segments: [{ text: fileTranscript, t0: 0, t1: 100 }],
-      }),
-    })),
+    transcribe: jest.fn((_path: string) => {
+      const text = fileTranscript;
+      const held = transcriptionHoldPending
+        ? new Promise<void>(res => { transcriptionHoldRelease = res; })
+        : Promise.resolve();
+      transcriptionHoldPending = false;
+      return {
+        stop: jest.fn(async () => {}),
+        promise: held.then(() => ({
+          result: text,
+          segments: [{ text, t0: 0, t1: 100 }],
+        })),
+      };
+    }),
     transcribeFile: jest.fn(async () => ({
       result: fileTranscript,
       segments: [{ text: fileTranscript, t0: 0, t1: 100 }],
@@ -972,6 +987,14 @@ function makeWhisperFake(): WhisperFake {
     releaseLoad: () => {
       const f = loadHoldRelease;
       loadHoldRelease = null;
+      f?.();
+    },
+    holdNextTranscription: () => {
+      transcriptionHoldPending = true;
+    },
+    releaseTranscription: () => {
+      const f = transcriptionHoldRelease;
+      transcriptionHoldRelease = null;
       f?.();
     },
   };
