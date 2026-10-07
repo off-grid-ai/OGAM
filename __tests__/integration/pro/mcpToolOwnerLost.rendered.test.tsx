@@ -122,5 +122,10 @@ describe('a tool never switches on for another server by itself', () => {
     await setActive(ui, BETA.id, false);
     await setActive(ui, BETA.id, true);
     await waitFor(() => expect(toolCount(ui, BETA.id)).toHaveTextContent('0/1 tools'));
+
+    await act(async () => {
+      await McpToolExtension.execute({ id: 'call-1', name: 'search', arguments: {} });
+    });
+    expect(fake.calls.filter(c => c.url === BETA.url)).toEqual([]);
   });
 });
