@@ -117,6 +117,7 @@ jest.mock('../../../src/services/hardware', () => ({
     getTotalMemoryGB: () => mockGetTotalMemoryGB(),
     getModelRecommendation: jest.fn(() => ({ maxParameters: 14, recommendedQuantization: 'Q4_K_M', recommendedModels: [], warning: undefined })),
     getImageModelRecommendation: jest.fn(() => Promise.resolve({ recommendedBackend: 'mnn', maxModelSizeMB: 2048, canRunSD: true, canRunQNN: false })),
+    getTensorTpuGeneration: jest.fn(() => Promise.resolve(null)), // not a Pixel Tensor TPU
   },
 }));
 
