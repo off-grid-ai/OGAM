@@ -193,11 +193,22 @@ jobs:
       - name: Run Jest tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         env:
-          # The serial RN + jsdom suite retains more than Node's default 2 GB heap before
-          # coverage is written. The macOS runner has 14 GB; keep enough headroom for native
-          # tooling while allowing the complete suite to finish without weakening the gate.
-          NODE_OPTIONS: --max-old-space-size=8192
-        run: npx jest --coverage --forceExit --runInBand
+          # Serial, but in ONE recycled worker instead of --runInBand.
+          #
+          # In band, every suite runs in the same process and the heap left after each suite only
+          # grows: measured locally on 2dbf3e75, it climbs from ~0.4 GB after the first suite to
+          # ~6.3 GB after the last, with a 7.1 GB peak RSS. The macos-26-arm64 runner has 7 GB of
+          # RAM, so the back half of the run swaps. That is why CI throughput collapses (100
+          # suites took ~3 min early in run 37503803398 and ~19 min at the end) and why a
+          # different set of late, otherwise fast tests times out on every run, on main too.
+          #
+          # --maxWorkers=1 keeps the run serial (the parallel run flaked on CPU contention, see
+          # b18e65f5). --workerIdleMemoryLimit replaces that worker once its heap passes 1 GB
+          # after a suite, so memory stays bounded for the whole run. The worker heap cap only
+          # has to fit one worker's lifetime now, not the whole suite, so it sits well below
+          # the runner's RAM and V8 collects before the box starts swapping.
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npx jest --coverage --forceExit --maxWorkers=1 --workerIdleMemoryLimit=1GB
 
       - name: Install Android NDK
         # Configuring the native modules (op-sqlite etc.) needs the pinned NDK; the macOS
