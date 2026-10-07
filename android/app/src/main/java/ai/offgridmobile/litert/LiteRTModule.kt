@@ -131,10 +131,10 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 val requestedBackend = parseBackend(backendStr)
                 Log.i(TAG, "loadModel — attempting backend chain from $backendStr")
 
+                // Sets supportsVision/supportsAudio to what the engine actually came up with — the
+                // NPU tier may have dropped to text-only.
                 val resolvedBackend = initializeWithFallback(modelPath, requestedBackend, visionEnabled, audioEnabled)
                 activeBackend = backendName(resolvedBackend)
-                supportsVision = visionEnabled
-                supportsAudio = audioEnabled
 
                 Log.i(TAG, "loadModel — success on backend=$activeBackend vision=$supportsVision audio=$supportsAudio maxNumTokens=$configuredMaxTokens")
                 // Resolve what we ACTUALLY configured, not just the backend: resolveSafeMaxTokens
@@ -144,6 +144,8 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 val result = com.facebook.react.bridge.Arguments.createMap().apply {
                     putString("backend", activeBackend)
                     putInt("maxNumTokens", configuredMaxTokens)
+                    putBoolean("vision", supportsVision)
+                    putBoolean("audio", supportsAudio)
                 }
                 safe.resolve(result)
             } catch (e: Exception) {
@@ -193,6 +195,8 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
             eng = Engine(cfg)
             withTimeout(initTimeoutMs(backend, configuredMaxTokens)) { eng.initialize() }
             engine = eng
+            supportsVision = visionEnabled
+            supportsAudio = audioEnabled
             true
         } catch (e: Exception) {
             Log.w(TAG, "initializeWithFallback — $name failed: ${e.message}")
@@ -225,6 +229,13 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                     Log.i(TAG, "initializeWithFallback — trying $name vision=$visionEnabled audio=$audioEnabled")
                 }
                 if (tryInitBackend(modelPath, backend, name, visionEnabled, audioEnabled)) return backend
+            }
+
+            // Google's Tensor TPU reference app keeps a model on the TPU text-only when its vision
+            // or audio executor can't start there, rather than dropping to a far slower tier.
+            if (backend is Backend.NPU && (visionEnabled || audioEnabled)) {
+                Log.i(TAG, "initializeWithFallback — $name retrying text-only")
+                if (tryInitBackend(modelPath, backend, name, visionEnabled = false, audioEnabled = false)) return backend
             }
 
             if (backend != chain.last()) {
@@ -613,11 +624,33 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
         else           -> "cpu"
     }
 
-    /** Vision delegate matched to the main backend tier (CPU main -> CPU vision).
-     *  Also honors the Pixel 10 GPU gate: never hand the GPU vision delegate to a
-     *  device where GPU init crashes, even on the NPU/GPU main path. */
-    private fun visionBackendFor(mainBackend: Backend): Backend =
-        if (mainBackend is Backend.CPU || shouldSkipGpu()) Backend.CPU() else Backend.GPU()
+    /** Vision delegate matched to the main backend tier (CPU main -> CPU vision, NPU main ->
+     *  NPU vision, as in Google's Tensor TPU reference app). Also honors the Pixel 10 GPU
+     *  gate: never hand the GPU vision delegate to a device where GPU init crashes. */
+    private fun visionBackendFor(mainBackend: Backend): Backend = when {
+        mainBackend is Backend.NPU -> Backend.NPU(nativeLibraryDir = reactContext.applicationInfo.nativeLibraryDir)
+        mainBackend is Backend.CPU || shouldSkipGpu() -> Backend.CPU()
+        else -> Backend.GPU()
+    }
+
+    // -------------------------------------------------------------------------
+    // getTpuSupport — can this phone run a LiteRT model on its Google Tensor TPU?
+    // -------------------------------------------------------------------------
+
+    @ReactMethod
+    fun getTpuSupport(promise: Promise) {
+        val safe = SafePromise(promise, TAG)
+        val socModel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL else ""
+        val generation = TensorTpu.generation(socModel, Build.HARDWARE ?: "", Build.BOARD ?: "", Build.DEVICE ?: "")
+        val dispatchLibPresent = File(reactContext.applicationInfo.nativeLibraryDir, TensorTpu.DISPATCH_LIB).exists()
+        val reason = TensorTpu.unsupportedReason(generation, Build.VERSION.SDK_INT, dispatchLibPresent)
+        Log.i(TAG, "getTpuSupport — soc=$socModel hardware=${Build.HARDWARE} tensorGeneration=$generation sdk=${Build.VERSION.SDK_INT} dispatchLib=$dispatchLibPresent reason=$reason")
+        safe.resolve(Arguments.createMap().apply {
+            putBoolean("supported", reason == null)
+            if (generation != null) putInt("tensorGeneration", generation) else putNull("tensorGeneration")
+            if (reason != null) putString("reason", reason) else putNull("reason")
+        })
+    }
 
     /** Current free system RAM in MB. */
     private fun availableRamMb(): Long {

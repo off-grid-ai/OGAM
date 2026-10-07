@@ -12,7 +12,9 @@
 
 import { NativeModules, NativeEventEmitter, EmitterSubscription } from 'react-native';
 import logger from '../utils/logger';
+import { liteRTTensorTarget } from '../utils/modelHelpers';
 import { summarizeSession, runCompaction } from './liteRTCompaction';
+import { hardwareService } from './hardware';
 
 const TAG = '[LiteRTService]';
 
@@ -26,6 +28,22 @@ const EVENT_ERROR     = 'litert_error';
 const EVENT_TOOL_CALL = 'litert_tool_call';
 
 type LiteRTBackend = 'cpu' | 'gpu' | 'npu';
+
+/**
+ * The backend a load asks native for. A file compiled for this phone's Google Tensor TPU
+ * (…_Google_Tensor_G5.litertlm on a Pixel 10) runs on the TPU: that build exists only for it,
+ * and Pixel 10 has no working LiteRT GPU path. Any other NPU request stays out of this release —
+ * a saved NPU selection loads on GPU rather than attempting an unsupported native load.
+ */
+async function resolveLiteRTBackend(modelPath: string, requested: LiteRTBackend): Promise<LiteRTBackend> {
+  const target = liteRTTensorTarget(modelPath.split('/').pop() ?? modelPath);
+  if (target !== null) {
+    const tpu = await hardwareService.getTensorTpuGeneration();
+    if (tpu === target) return 'npu';
+    logger.log(TAG, `loadModel — file targets Tensor G${target} TPU, device TPU=${tpu ?? 'none'}; using ${requested}`);
+  }
+  return requested === 'npu' ? 'gpu' : requested;
+}
 
 interface GenerateRawHandlers {
   onToken?: (token: string) => void;
@@ -61,6 +79,7 @@ interface LiteRTGenerationCallbacks {
 class LiteRTService {
   private loaded = false;
   private modelSupportsAudio = false;
+  private modelSupportsVision = false;
   private activeBackend: LiteRTBackend | null = null;
   private readonly emitter: NativeEventEmitter | null = null;
   private subscriptions: EmitterSubscription[] = [];
@@ -100,9 +119,7 @@ class LiteRTService {
 
   async loadModel(modelPath: string, preferredBackend: LiteRTBackend, opts: { supportsVision?: boolean; supportsAudio?: boolean; maxNumTokens?: number } = {}): Promise<void> {
     if (!this.isAvailable()) throw new Error('LiteRT is not available on this platform');
-    // NPU was exposed in a test build, but is not part of this release.
-    // Keep saved selections usable without attempting an unsupported native load.
-    if (preferredBackend === 'npu') preferredBackend = 'gpu';
+    preferredBackend = await resolveLiteRTBackend(modelPath, preferredBackend);
     const { supportsVision = false, supportsAudio = false, maxNumTokens = 4096 } = opts;
     this.configuredMaxTokens = maxNumTokens;
     logger.log(TAG, `loadModel — path=${modelPath} backend=${preferredBackend} supportsVision=${supportsVision} supportsAudio=${supportsAudio} maxNumTokens=${maxNumTokens}`);
@@ -112,7 +129,7 @@ class LiteRTService {
       // budget after the native RAM clamp (may be < requested). Adopt it so compaction
       // thresholds + the context-usage bar aren't stale. Tolerate a bare string from an
       // older native build (backward-compatible).
-      const res: string | { backend: string; maxNumTokens?: number } =
+      const res: string | { backend: string; maxNumTokens?: number; vision?: boolean; audio?: boolean } =
         await LiteRTModule.loadModel(modelPath, preferredBackend, supportsVision, supportsAudio, maxNumTokens);
       logger.log(`[WIRE-LITERT-LOAD] ${JSON.stringify({ requested: preferredBackend, supportsVision, supportsAudio, maxNumTokens, res })}`); // [WIRE]
       const actualBackend = typeof res === 'string' ? res : res.backend;
@@ -124,12 +141,15 @@ class LiteRTService {
       }
       this.activeBackend = actualBackend as LiteRTBackend;
       this.loaded = true;
-      this.modelSupportsAudio = supportsAudio;
+      // Native reports what the engine came up with: a TPU load can drop to text-only.
+      this.modelSupportsVision = typeof res === 'object' && typeof res.vision === 'boolean' ? res.vision : supportsVision;
+      this.modelSupportsAudio = typeof res === 'object' && typeof res.audio === 'boolean' ? res.audio : supportsAudio;
       logger.log(TAG, `loadModel — loaded on ${this.activeBackend}`);
     } catch (e) {
       this.loaded = false;
       this.activeBackend = null;
       this.modelSupportsAudio = false;
+      this.modelSupportsVision = false;
       logger.log(TAG, `loadModel — failed: ${String(e)}`);
       throw e;
     }
@@ -138,6 +158,11 @@ class LiteRTService {
   /** Whether the currently loaded model accepts audio input directly. */
   supportsAudio(): boolean {
     return this.loaded && this.modelSupportsAudio;
+  }
+
+  /** Whether the loaded engine took images — false when a TPU load had to drop to text-only. */
+  supportsVision(): boolean {
+    return this.loaded && this.modelSupportsVision;
   }
 
   // ---------------------------------------------------------------------------
@@ -515,6 +540,7 @@ class LiteRTService {
     } finally {
       this.loaded = false;
       this.modelSupportsAudio = false;
+      this.modelSupportsVision = false;
       this.activeBackend = null;
     }
   }

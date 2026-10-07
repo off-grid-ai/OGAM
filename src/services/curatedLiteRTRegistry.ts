@@ -1,4 +1,5 @@
 import { DownloadedModel, ModelFile } from '../types';
+import { liteRTTensorTarget } from '../utils/modelHelpers';
 import { fileExceedsBudget } from './memoryBudget';
 
 // Synthetic parent id for the curated LiteRT models. Used both as the model id
@@ -57,7 +58,33 @@ export const CURATED_LITERT_ENTRIES: readonly CuratedLiteRTEntry[] = [
         "The model you have selected may exceed your device's memory and might not run reliably. For the best experience, try a smaller model.",
     },
   },
+  {
+    // Gemma 4 E2B compiled for the Tensor G5 TPU (Pixel 10) — the model Google's Pixel 10 TPU
+    // sample runs: https://github.com/google-ai-edge/litert-samples/tree/main/samples/litert/google/sample_app_tpu
+    // Listed only on a Tensor G5 phone (liteRTFileRunsOnDevice) and loaded on the TPU
+    // (litert.ts resolveLiteRTBackend). Not yet pinned: the commit holding this file and its
+    // exact byte size could not be resolved when it was added, so it tracks `main` and the size
+    // is the Hugging Face listing's 3.11 GB. The downloader takes Content-Length as authoritative.
+    fileName: 'gemma-4-E2B-it_Google_Tensor_G5.litertlm',
+    hfRepoId: 'litert-community/gemma-4-E2B-it-litert-lm',
+    commitHash: 'main',
+    sizeBytes: 3110000000,
+    displayName: 'Gemma 4 E2B (Tensor TPU)',
+    highlight: 'Runs on the Pixel 10 Tensor TPU',
+    liteRTVision: true,
+    liteRTAudio: false,
+  },
 ];
+
+/**
+ * Whether a LiteRT file can run on this phone: a build compiled for a Google Tensor TPU only on
+ * that generation's TPU (`tpuGeneration` from hardwareService.getTensorTpuGeneration), any
+ * portable build everywhere. Both the Models tab and onboarding filter the curated list with it.
+ */
+export function liteRTFileRunsOnDevice(fileName: string, tpuGeneration: number | null): boolean {
+  const target = liteRTTensorTarget(fileName);
+  return target === null || target === tpuGeneration;
+}
 
 const CURATED_LITERT_INDEX: Map<string, CuratedLiteRTEntry> = new Map(
   CURATED_LITERT_ENTRIES.map(e => [e.fileName, e]),

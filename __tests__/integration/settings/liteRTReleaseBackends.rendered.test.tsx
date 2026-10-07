@@ -10,6 +10,44 @@ it('uses GPU at the native boundary when an older build saved NPU', async () => 
   ]);
 });
 
+const TENSOR_G5_FILE = '/models/gemma-4-E2B-it_Google_Tensor_G5.litertlm';
+const PIXEL_10_TPU = { supported: true, tensorGeneration: 5, reason: null };
+
+it('loads a Tensor G5 build on the TPU of a phone with a Tensor G5 TPU, whatever the saved backend', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  const { liteRTService } = require('../../../src/services/litert');
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'gpu');
+  expect(boundary.litert.calls.loadModel).toEqual([[TENSOR_G5_FILE, 'npu', false, false, 4096]]);
+});
+
+it('keeps a portable LiteRT file off the NPU even on a phone with a Tensor TPU', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  const { liteRTService } = require('../../../src/services/litert');
+  await liteRTService.loadModel('/models/gemma-4-E2B-it.litertlm', 'npu');
+  expect(boundary.litert.calls.loadModel).toEqual([['/models/gemma-4-E2B-it.litertlm', 'gpu', false, false, 4096]]);
+});
+
+it('does not send a Tensor G5 build to the NPU when the phone has no usable Tensor G5 TPU', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue({ supported: false, tensorGeneration: 5, reason: 'dispatch_lib_missing' });
+  const { liteRTService } = require('../../../src/services/litert');
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'cpu');
+  expect(boundary.litert.calls.loadModel).toEqual([[TENSOR_G5_FILE, 'cpu', false, false, 4096]]);
+});
+
+it('adopts the media the native engine came up with when a TPU load drops to text-only', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  boundary.litert.module.loadModel.mockResolvedValueOnce({ backend: 'npu', maxNumTokens: 4096, vision: false, audio: false });
+  const { liteRTService } = require('../../../src/services/litert');
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'gpu', { supportsVision: true, supportsAudio: true });
+  expect(liteRTService.getActiveBackend()).toBe('npu');
+  expect(liteRTService.supportsVision()).toBe(false);
+  expect(liteRTService.supportsAudio()).toBe(false);
+});
+
 it('offers only CPU and GPU in Chat and Model Settings even with a saved NPU preference', async () => {
   installNativeBoundary();
   const React = require('react');

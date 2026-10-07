@@ -42,6 +42,7 @@ jest.mock('../../../src/services/llm', () => ({
 jest.mock('../../../src/services/litert', () => ({
   liteRTService: {
     isModelLoaded: jest.fn(() => false),
+    supportsVision: jest.fn(() => true),
     getActiveBackend: jest.fn(() => 'cpu'),
     prepareConversation: jest.fn(() => Promise.resolve()),
     sendMessage: jest.fn(() => Promise.resolve()),
@@ -186,6 +187,34 @@ describe('runLiteRTResponseImpl — image support guard', () => {
         ],
       }),
     ).rejects.toThrow(/does not support images/);
+
+    expect(store.clearStreamingMessage).toHaveBeenCalled();
+    expect(svc.resetState).toHaveBeenCalled();
+    expect(mockedLiteRT.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('rejects an image when the loaded engine came up text-only (a TPU load without its vision executor)', async () => {
+    mockedGetState.mockReturnValue(liteRTAppState({ liteRTVision: true }));
+    mockedLiteRT.supportsVision.mockReturnValueOnce(false);
+    const store = chatStoreMock();
+    const svc = makeServiceSvc();
+
+    await expect(
+      generateResponseImpl(svc, {
+        conversationId: 'conv-1',
+        messages: [
+          {
+            id: '1',
+            timestamp: 0,
+            role: 'user' as const,
+            content: 'look',
+            attachments: [
+              { id: 'i', type: 'image' as const, uri: 'file:///pic.png' },
+            ],
+          },
+        ],
+      }),
+    ).rejects.toThrow(/Images are not available for this model on this device/);
 
     expect(store.clearStreamingMessage).toHaveBeenCalled();
     expect(svc.resetState).toHaveBeenCalled();
