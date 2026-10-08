@@ -46,6 +46,12 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
         const val EVENT_TOOL_CALL = "litert_tool_call"
         const val EVENT_DEBUG_LOG = "litert_debug_log"
 
+        /** Set while a TPU engine initializes; still set at launch means that load killed the app. */
+        private const val TPU_LOAD_IN_FLIGHT = "tpu_load_in_flight"
+        private const val TPU_LOAD_STRIKES = "tpu_load_strikes"
+        private const val TPU_STRIKES_STAMP = "tpu_strikes_install"
+        private const val TPU_MAX_STRIKES = 2
+
         // Base timeouts per backend tier (for default 4096-token context).
         // Actual timeout scales up proportionally for larger context windows
         // because KV-cache allocation takes longer at higher token counts.
@@ -120,15 +126,18 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
 
         scope.launch {
             try {
+                val requestedBackend = parseBackend(backendStr)
                 // Clamp the token budget to what free RAM can actually hold. The KV cache
                 // grows with the budget, and an over-budget request aborts engine creation
                 // (SIGABRT in nativeCreateEngine) or segfaults during inference. Degrading
-                // to a smaller context keeps the app working instead of crashing.
-                configuredMaxTokens = resolveSafeMaxTokens(modelPath, maxNumTokens)
+                // to a smaller context keeps the app working instead of crashing. Not on the
+                // TPU: a TPU build's KV cache is fixed at compile time, so a smaller budget
+                // saves no memory and only shrinks the usable context.
+                configuredMaxTokens = if (requestedBackend is Backend.NPU) maxNumTokens
+                    else resolveSafeMaxTokens(modelPath, maxNumTokens)
                 // Unload any existing engine first
                 cleanupEngine()
 
-                val requestedBackend = parseBackend(backendStr)
                 Log.i(TAG, "loadModel — attempting backend chain from $backendStr")
 
                 // Sets supportsVision/supportsAudio to what the engine actually came up with — the
@@ -155,7 +164,7 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    // 3-tier fallback: NPU → GPU → CPU
+    // Fallback chain: GPU → CPU. NPU stands alone (see buildBackendChain).
     /** GPU init crashes on Pixel 10 (open LiteRT SDK bug) — skip the GPU delegate
      *  there, on both the main backend chain and the vision delegate. */
     private fun shouldSkipGpu(): Boolean =
@@ -164,11 +173,10 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
     private fun buildBackendChain(requested: Backend): List<Backend> {
         val skipGpu = shouldSkipGpu()
         return when (requested) {
-            is Backend.NPU -> listOfNotNull(
-                Backend.NPU(nativeLibraryDir = reactContext.applicationInfo.nativeLibraryDir),
-                if (skipGpu) null else Backend.GPU(),
-                Backend.CPU(),
-            )
+            // NPU is requested only for a file compiled for this phone's TPU, whose graphs are
+            // TPU bytecode (DISPATCH_OP): no GPU or CPU tier can run it, so fail with the TPU's
+            // own error instead of masking it with a doomed fallback.
+            is Backend.NPU -> listOf(Backend.NPU(nativeLibraryDir = reactContext.applicationInfo.nativeLibraryDir))
             is Backend.GPU -> if (skipGpu) listOf(Backend.CPU()) else listOf(Backend.GPU(), Backend.CPU())
             else           -> listOf(Backend.CPU())
         }
@@ -193,7 +201,15 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 audioBackend = if (audioEnabled) Backend.CPU() else null,
             )
             eng = Engine(cfg)
-            withTimeout(initTimeoutMs(backend, configuredMaxTokens)) { eng.initialize() }
+            // A broken TPU runtime aborts the process (SIGABRT) rather than throwing. Mark the
+            // attempt so the next launch reports the TPU as unusable instead of crashing again.
+            if (backend is Backend.NPU) markTpuLoadInFlight(true)
+            try {
+                withTimeout(initTimeoutMs(backend, configuredMaxTokens)) { eng.initialize() }
+            } finally {
+                if (backend is Backend.NPU) markTpuLoadInFlight(false)
+            }
+            if (backend is Backend.NPU) recordTpuLoadSucceeded()
             engine = eng
             supportsVision = visionEnabled
             supportsAudio = audioEnabled
@@ -223,11 +239,12 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
     /** Every attempt one backend tier gets before the chain moves to the next. */
     private suspend fun tryTier(modelPath: String, backend: Backend, visionEnabled: Boolean, audioEnabled: Boolean): Boolean {
         val name = backendName(backend)
-        // GPU/NPU failures can be transient (e.g. VRAM not yet released after a model switch).
-        // Retry up to 2 extra times with backoff before giving up on a non-CPU backend.
+        // GPU failures can be transient (e.g. VRAM not yet released after a model switch).
+        // Retry up to 2 extra times with backoff. CPU and NPU failures are not, and each NPU
+        // attempt re-maps a multi-GB model.
         val gpuRetries = 2
         val gpuRetryDelayMs = 600L
-        val maxAttempts = if (backend is Backend.CPU) 1 else gpuRetries + 1
+        val maxAttempts = if (backend is Backend.GPU) gpuRetries + 1 else 1
 
         for (attempt in 1..maxAttempts) {
             if (attempt > 1) {
@@ -643,16 +660,62 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun getTpuSupport(promise: Promise) {
         val safe = SafePromise(promise, TAG)
-        val socModel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL else ""
-        val generation = TensorTpu.generation(socModel, Build.HARDWARE ?: "", Build.BOARD ?: "", Build.DEVICE ?: "")
+        val sdk = Build.VERSION.SDK_INT
+        val socModel = if (sdk >= Build.VERSION_CODES.S) Build.SOC_MODEL else ""
+        val socManufacturer = if (sdk >= Build.VERSION_CODES.S) Build.SOC_MANUFACTURER else ""
+        val generation = TensorTpu.generation(socModel, socManufacturer)
         val dispatchLibPresent = File(reactContext.applicationInfo.nativeLibraryDir, TensorTpu.DISPATCH_LIB).exists()
-        val reason = TensorTpu.unsupportedReason(generation, Build.VERSION.SDK_INT, dispatchLibPresent)
-        Log.i(TAG, "getTpuSupport — soc=$socModel hardware=${Build.HARDWARE} tensorGeneration=$generation sdk=${Build.VERSION.SDK_INT} dispatchLib=$dispatchLibPresent reason=$reason")
+        // Only probe the vendor library on a phone that passed the cheap checks.
+        val eligible = generation != null && sdk >= TensorTpu.MIN_SDK && dispatchLibPresent
+        val reason = TensorTpu.unsupportedReason(
+            generation, sdk, Build.ID ?: "", dispatchLibPresent,
+            vendorLibLoads = !eligible || vendorLibLoads(),
+            previousInitCrashed = tpuLoadCrashedBefore(),
+        )
+        Log.i(TAG, "getTpuSupport — soc=$socModel/$socManufacturer build=${Build.ID} tensorGeneration=$generation sdk=$sdk dispatchLib=$dispatchLibPresent reason=$reason")
         safe.resolve(Arguments.createMap().apply {
             putBoolean("supported", reason == null)
             if (generation != null) putInt("tensorGeneration", generation) else putNull("tensorGeneration")
             if (reason != null) putString("reason", reason) else putNull("reason")
         })
+    }
+
+    private fun vendorLibLoads(): Boolean = try {
+        System.loadLibrary(TensorTpu.VENDOR_LIB)
+        true
+    } catch (e: Throwable) {
+        Log.w(TAG, "getTpuSupport — lib${TensorTpu.VENDOR_LIB}.so does not load: ${e.message}")
+        false
+    }
+
+    // Strikes are keyed to this install: an app update gets a fresh start.
+    private val tpuPrefs by lazy { reactContext.getSharedPreferences("litert_tpu", Context.MODE_PRIVATE) }
+    private fun installStamp(): Long = try {
+        reactContext.packageManager.getPackageInfo(reactContext.packageName, 0).lastUpdateTime
+    } catch (e: Exception) { 0L }
+
+    private fun markTpuLoadInFlight(inFlight: Boolean) {
+        // commit(), not apply(): the marker must be on disk before a native abort can kill us.
+        val edit = tpuPrefs.edit()
+        if (inFlight) edit.putBoolean(TPU_LOAD_IN_FLIGHT, true) else edit.remove(TPU_LOAD_IN_FLIGHT)
+        edit.commit()
+    }
+
+    private fun recordTpuLoadSucceeded() { tpuPrefs.edit().remove(TPU_LOAD_STRIKES).commit() }
+
+    /**
+     * A marker still set at launch means a TPU load never returned: the process died in it. Two
+     * such deaths in a row (one may just be the user closing the app mid-load) turn the TPU off
+     * for this install, so a crashing TPU runtime cannot crash the app on every load.
+     */
+    private fun tpuLoadCrashedBefore(): Boolean {
+        val stamp = installStamp()
+        var strikes = if (tpuPrefs.getLong(TPU_STRIKES_STAMP, stamp) == stamp) tpuPrefs.getInt(TPU_LOAD_STRIKES, 0) else 0
+        if (tpuPrefs.getBoolean(TPU_LOAD_IN_FLIGHT, false)) {
+            strikes++
+            tpuPrefs.edit().remove(TPU_LOAD_IN_FLIGHT).putInt(TPU_LOAD_STRIKES, strikes).putLong(TPU_STRIKES_STAMP, stamp).commit()
+        }
+        return strikes >= TPU_MAX_STRIKES
     }
 
     /** Current free system RAM in MB. */
