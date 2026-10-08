@@ -74,6 +74,9 @@ async function storeRemoteImage(
   if (outcome.statusCode < 200 || outcome.statusCode >= 300) {
     throw new Error(`Image download returned HTTP ${outcome.statusCode}`);
   }
+  if (outcome.bytesWritten <= 0) {
+    throw new Error('Remote server returned an empty image');
+  }
   const contentType = Object.entries(outcome.headers ?? {})
     .find(([key]) => key.toLowerCase() === 'content-type')?.[1]
     ?.split(';')[0]?.toLowerCase();
