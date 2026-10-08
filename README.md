@@ -15,7 +15,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20macOS-green.svg)](#install)
 [![codecov](https://codecov.io/gh/off-grid-ai/OGAM/graph/badge.svg)](https://codecov.io/gh/off-grid-ai/OGAM)
 [![Slack](https://img.shields.io/badge/Slack-Join%20Community-4A154B?logo=slack)](https://join.slack.com/t/off-grid-mobile/shared_invite/zt-411pbtz7r-lcOK4YCeY40vh_~FUdcvLA)
-[![Pro](https://img.shields.io/badge/Off%20Grid%20Pro-%2469%20lifetime%20and%20%2449%20annual-000000?style=flat)](https://offgridmobileai.co/pay/)
+[![Pro](https://img.shields.io/badge/Off%20Grid%20Pro-%24119%20lifetime%20or%20%247.99%20monthly-000000?style=flat)](https://offgridmobileai.co/pay/)
 
 </div>
 
@@ -37,7 +37,7 @@
 
 ## Off Grid AI Pro
 
-**A voice, personas, and actions. $69 for life, or $49/year.**
+**A voice, personas, and actions. $119 for life, or $7.99/month.**
 
 </div>
 
@@ -52,7 +52,7 @@ Pro is an optional, additive tier. It gives the assistant a voice that talks bac
 - **Draft, then approve** - connect Calendar, email, and MCP servers like Linear, Notion, and GitHub. It drafts the reply or files the ticket and waits. Nothing sends without your tap.
 - **Personal Mesh sync** - your phone and your Mac share chats, files, and settings over your own network. There is no relay. See the [Personal Mesh guide](docs/PERSONAL_MESH.md).
 
-**[→ Get Pro access](https://offgridmobileai.co/pay/)** - $69 once and it is yours forever (the price climbs as more people join, never down), or $49/year.
+**[→ Get Pro access](https://offgridmobileai.co/pay/)** - $119 once and it is yours forever (the price climbs as more people join, never down), or $7.99/month.
 
 Pair it with **[Off Grid AI Desktop](https://github.com/off-grid-ai/desktop/releases/latest)** on your Mac. One Pro license covers both.
 
