@@ -62,17 +62,17 @@ export const CURATED_LITERT_ENTRIES: readonly CuratedLiteRTEntry[] = [
     // Gemma 4 E2B compiled for the Tensor G5 TPU (Pixel 10) — the model Google's Pixel 10 TPU
     // sample runs: https://github.com/google-ai-edge/litert-samples/tree/main/samples/litert/google/sample_app_tpu
     // Listed only on a Tensor G5 phone (liteRTFileRunsOnDevice) and loaded on the TPU
-    // (litert.ts resolveLiteRTBackend). Not yet pinned: the commit holding this file and its
-    // exact byte size could not be resolved when it was added, so it tracks `main` and the size
-    // is the Hugging Face listing's 3.11 GB. The downloader takes Content-Length as authoritative.
+    // (litert.ts resolveLiteRTBackend).
     fileName: 'gemma-4-E2B-it_Google_Tensor_G5.litertlm',
     hfRepoId: 'litert-community/gemma-4-E2B-it-litert-lm',
-    commitHash: 'main',
-    sizeBytes: 3110000000,
+    commitHash: 'b3ca0d2f076785a8f4b2219ddbd2bdb99954eae1',
+    sizeBytes: 3113545589,
     displayName: 'Gemma 4 E2B (Tensor TPU)',
     highlight: 'Runs on the Pixel 10 Tensor TPU',
     liteRTVision: true,
     liteRTAudio: false,
+    // Compiled for the TPU with a fixed 4096-token KV cache (every prefill/decode signature).
+    maxContextTokens: 4096,
   },
 ];
 
