@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useAppStore, useRemoteServerStore } from '../stores';
 import { activeModelService } from '../services/activeModelService';
-import { displayModelName } from '../stores/remoteServerHelpers';
+import { displayModelName } from '../utils/displayModelName';
 import { DownloadedModel, RemoteModel } from '../types';
 
 export type ActiveTextModelResult = {

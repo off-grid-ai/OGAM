@@ -7,7 +7,7 @@ import type {
   RemoteServer,
 } from '../types';
 import { predictGgufCapabilities } from '../utils/ggufCapabilities';
-import { displayModelName } from '../stores/remoteServerHelpers';
+import { displayModelName } from '../utils/displayModelName';
 import {
   REMOTE_FETCH_REDIRECT_POLICY,
   remoteAuthorizationHeaders,
