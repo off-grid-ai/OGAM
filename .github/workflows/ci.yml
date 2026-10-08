@@ -223,15 +223,20 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: cd android && ./gradlew :app:testDebugUnitTest --rerun-tasks
 
+      - name: Setup Ruby for iOS dependencies
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Install iOS dependencies
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bundle exec pod install --project-directory=ios
+
       - name: Run iOS tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: |
-          cd ios && xcodebuild test \
-            -workspace OffgridMobile.xcworkspace \
-            -scheme OffgridMobile \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
-            -only-testing:OffgridMobileTests \
-            2>&1 | (xcpretty 2>/dev/null || cat)
+        run: npm run test:ios
 
       - name: Upload coverage to Codecov
         if: always()
