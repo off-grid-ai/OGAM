@@ -3,6 +3,7 @@ import type { RemoteMediaModelIds, RemoteServer } from '../types';
 import { REMOTE_FETCH_REDIRECT_POLICY, remoteAuthorizationHeaders } from './remoteTransportPolicy';
 import { remoteHttpErrorMessage } from './httpClient';
 import { OverridableMemoryError } from './modelLoadErrors';
+import logger from '../utils/logger';
 
 export interface RemoteImageResult {
   base64?: string;
@@ -37,12 +38,21 @@ async function request<T>(
 ): Promise<T> {
   const { server, path, init, signal } = input;
   const controller = new AbortController();
-  const abort = () => controller.abort();
+  // An async image submission must receive its ID before it can cancel the Desktop job.
+  const needsRequestId = server.modelManagement === 'offgrid-desktop-v1' &&
+    path === '/v1/images/generations' && init.method === 'POST';
+  let sent = false;
+  let responseTimer: ReturnType<typeof setTimeout> | undefined;
+  const abort = () => {
+    if (!needsRequestId || !sent) controller.abort();
+  };
   signal?.addEventListener('abort', abort, { once: true });
-  if (signal?.aborted) controller.abort();
+  if (signal?.aborted) abort();
   try {
     const apiKey = await remoteServerManager.getApiKey(server.id);
     if (controller.signal.aborted) throw new Error('Remote request cancelled');
+    sent = true;
+    if (needsRequestId) responseTimer = setTimeout(() => controller.abort(), 30000);
     const response = await fetch(endpoint(server, path), {
       ...init,
       headers: {
@@ -71,9 +81,16 @@ async function request<T>(
     // consumed. A successful header is not a completed image/audio transfer.
     return await consume(response);
   } catch (error) {
+    if (needsRequestId && sent && signal?.aborted) {
+      logger.warn('[RemoteImage] no Desktop request ID received; remote cancellation is unconfirmed:', error);
+    }
+    if (needsRequestId && controller.signal.aborted && !signal?.aborted) {
+      throw new Error('Desktop image request timed out');
+    }
     if (controller.signal.aborted) throw new Error('Remote request cancelled');
     throw error;
   } finally {
+    if (responseTimer) clearTimeout(responseTimer);
     signal?.removeEventListener('abort', abort);
   }
 }
@@ -126,36 +143,64 @@ export const remoteMediaRuntime = {
     }, response => response.json() as Promise<ImagePayload & { request_id?: string }>);
     let result: ImagePayload = payload;
     if (desktop && payload.request_id) {
-      while (true) {
-        if (options.signal?.aborted) throw new Error('Remote request cancelled');
-        const state = await request({
+      const requestId = payload.request_id;
+      let cancellation: Promise<void> | undefined;
+      const cancelDesktopRequest = () => {
+        if (cancellation) return;
+        const cancelController = new AbortController();
+        const timeout = setTimeout(() => cancelController.abort(), 30000);
+        cancellation = request({
           server,
-          path: `/v1/requests/${encodeURIComponent(payload.request_id)}`,
-          init: { method: 'GET' },
-          signal: options.signal,
-        }, response => response.json() as Promise<{
-          status: string;
-          result?: ImagePayload;
-          error?: { message?: string };
-          progress?: { step: number; total: number };
-        }>);
-        if (state.progress) options.onImageProgress?.(state.progress.step, state.progress.total);
-        if (state.status === 'completed') {
-          result = state.result ?? {};
-          break;
+          path: `/v1/requests/${encodeURIComponent(requestId)}`,
+          init: { method: 'DELETE' },
+          // The caller's signal is already aborted. Cleanup needs a fresh request.
+          signal: cancelController.signal,
+        }, response => response.json() as Promise<{ cancelled: boolean; status: string }>)
+          .then(state => {
+            if (!state.cancelled) {
+              logger.log('[RemoteImage] Desktop request was not cancelled:', requestId, state.status);
+            }
+          })
+          .catch(error => logger.warn('[RemoteImage] could not confirm Desktop cancellation:', error))
+          .finally(() => clearTimeout(timeout));
+      };
+      options.signal?.addEventListener('abort', cancelDesktopRequest, { once: true });
+      if (options.signal?.aborted) cancelDesktopRequest();
+      try {
+        while (true) {
+          if (options.signal?.aborted) throw new Error('Remote request cancelled');
+          const state = await request({
+            server,
+            path: `/v1/requests/${encodeURIComponent(payload.request_id)}`,
+            init: { method: 'GET' },
+            signal: options.signal,
+          }, response => response.json() as Promise<{
+            status: string;
+            result?: ImagePayload;
+            error?: { message?: string };
+            progress?: { step: number; total: number };
+          }>);
+          if (state.progress) options.onImageProgress?.(state.progress.step, state.progress.total);
+          if (state.status === 'completed') {
+            result = state.result ?? {};
+            break;
+          }
+          if (state.status === 'failed') throw new Error(state.error?.message ?? 'Remote image generation failed');
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => {
+              options.signal?.removeEventListener('abort', abort);
+              resolve();
+            }, 1000);
+            const abort = () => {
+              clearTimeout(timer);
+              reject(new Error('Remote request cancelled'));
+            };
+            options.signal?.addEventListener('abort', abort, { once: true });
+          });
         }
-        if (state.status === 'failed') throw new Error(state.error?.message ?? 'Remote image generation failed');
-        await new Promise<void>((resolve, reject) => {
-          const timer = setTimeout(() => {
-            options.signal?.removeEventListener('abort', abort);
-            resolve();
-          }, 1000);
-          const abort = () => {
-            clearTimeout(timer);
-            reject(new Error('Remote request cancelled'));
-          };
-          options.signal?.addEventListener('abort', abort, { once: true });
-        });
+      } finally {
+        options.signal?.removeEventListener('abort', cancelDesktopRequest);
+        if (cancellation) await cancellation;
       }
     }
     const image = result.data?.[0];
