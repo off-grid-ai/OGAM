@@ -74,12 +74,29 @@ export const useGalleryActions = (conversationId: string | undefined) => {
     return ids;
   }, [conversationId, conversations]);
 
+  // A record whose file is no longer on this device has nothing to draw: it rendered as a blank
+  // tile and opened an empty viewer. Hide it; the record itself is left alone.
+  const [missingIds, setMissingIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(
+      generatedImages.map(async img => {
+        const exists = await RNFS.exists(resolveDocumentPath(img.imagePath)).catch(() => true);
+        return exists ? null : img.id;
+      }),
+    ).then(ids => {
+      if (!cancelled) setMissingIds(new Set(ids.filter((id): id is string => id !== null)));
+    });
+    return () => { cancelled = true; };
+  }, [generatedImages]);
+
   const displayImages = useMemo(() => {
-    if (!conversationId) return generatedImages;
-    return generatedImages.filter(
+    const present = generatedImages.filter(img => !missingIds.has(img.id));
+    if (!conversationId) return present;
+    return present.filter(
       img => img.conversationId === conversationId || (chatImageIds && chatImageIds.has(img.id))
     );
-  }, [generatedImages, conversationId, chatImageIds]);
+  }, [generatedImages, missingIds, conversationId, chatImageIds]);
 
   const handleDelete = useCallback((image: GeneratedImage) => {
     const doDelete = async () => {
