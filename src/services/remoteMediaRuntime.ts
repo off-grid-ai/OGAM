@@ -181,6 +181,7 @@ export const remoteMediaRuntime = {
             progress?: { step: number; total: number };
           }>);
           if (state.progress) options.onImageProgress?.(state.progress.step, state.progress.total);
+          if (options.signal?.aborted) throw new Error('Remote request cancelled');
           if (state.status === 'completed') {
             result = state.result ?? {};
             break;
