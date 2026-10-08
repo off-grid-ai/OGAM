@@ -419,6 +419,10 @@ class LiteRTService {
       this.emitter!.addListener(EVENT_ERROR, (message: string) => {
         logger.log(TAG, `sendMessage — error: ${message}`);
         this.clearSubscriptions();
+        // The native conversation keeps the failed turn (and, on the TPU, the prefill that ran
+        // before the limit), so the next prepareConversation must rebuild it — e.g. the
+        // compaction retry after a full context.
+        this.invalidateConversation();
 
         this.currentToolCallHandler = null;
         callbacks.onError(new Error(message));
@@ -458,6 +462,7 @@ class LiteRTService {
       }
     } catch (e) {
       this.clearSubscriptions();
+      this.invalidateConversation();
       const err = e instanceof Error ? e : new Error(String(e));
       logger.log(TAG, `sendMessage — native error: ${err.message}`);
       callbacks.onError(err);

@@ -97,6 +97,26 @@ it('reports a spent TPU context as context-full, so the chat compacts and retrie
   expect(contextCompactionService.isContextFullError(onError.mock.calls[0][0])).toBe(true);
 });
 
+it('rebuilds the native conversation from the compacted history when the chat retries a full context', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  const { liteRTService } = require('../../../src/services/litert');
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'gpu');
+  const history = [
+    { role: 'user', content: 'first question' }, { role: 'assistant', content: 'first answer' },
+    { role: 'user', content: 'second question' }, { role: 'assistant', content: 'second answer' },
+  ];
+  await liteRTService.prepareConversation('chat-1', 'sys', { history });
+  boundary.litert.scriptError('Status Code: 3. Message: Prefill length (128) plus current step (3990) exceeds max sequence length (4096).');
+  await liteRTService.sendMessage('third question', { onToken: jest.fn(), onReasoning: jest.fn(), onComplete: jest.fn(), onError: jest.fn() });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  // The native conversation still holds the refused turn, so the retry must not reuse it.
+  const compacted = [{ role: 'user', content: 'Summary: two questions answered.' }, { role: 'assistant', content: 'Noted.' }];
+  await liteRTService.prepareConversation('chat-1', 'sys', { history: compacted });
+  const historyJson = boundary.litert.calls.resetConversation.at(-1)?.[5];
+  expect(historyJson).toBe(JSON.stringify(compacted));
+});
+
 it('offers only CPU and GPU in Chat and Model Settings even with a saved NPU preference', async () => {
   installNativeBoundary();
   const React = require('react');
