@@ -51,7 +51,12 @@ export async function saveImageGenerationResult(
     const removed = await localDreamGeneratorService
       .deleteGeneratedImage(result.id, result.imagePath)
       .catch(() => false);
-    if (!removed) logger.warn('[ImageGen] could not remove the image of a deleted chat');
+    if (!removed) {
+      result.modelId = activeImageModel.id;
+      result.conversationId = params.conversationId;
+      useAppStore.getState().addGeneratedImage(result);
+      logger.warn('[ImageGen] could not remove the image of a deleted chat; kept in Gallery');
+    }
     return null;
   }
   result.modelId = activeImageModel.id;

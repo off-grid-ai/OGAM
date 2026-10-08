@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
+import logger from '../utils/logger';
 import {
   isMicPermissionDenied,
   onMicPermissionRefused,
@@ -14,7 +15,9 @@ export function useMicPermissionDenied(): boolean {
   const [denied, setDenied] = useState(false);
   useEffect(() => {
     const refresh = () => {
-      isMicPermissionDenied().then(setDenied);
+      isMicPermissionDenied()
+        .then(setDenied)
+        .catch(error => logger.warn('[MicPermission] could not refresh the permission:', error));
     };
     refresh();
     const appState = AppState.addEventListener('change', state => {

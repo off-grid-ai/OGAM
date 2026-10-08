@@ -27,6 +27,28 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0  # Fetch all history for changelog
 
+      - name: Read pinned Pro revision
+        id: pro_revision
+        run: echo "sha=$(git rev-parse HEAD:pro)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out pinned Pro source
+        uses: actions/checkout@v4
+        with:
+          repository: off-grid-ai/mobile-pro
+          token: ${{ secrets.PRO_SUBMODULE_PAT }}
+          path: pro
+          ref: ${{ steps.pro_revision.outputs.sha }}
+          persist-credentials: false
+
+      - name: Check out shared packages
+        uses: actions/checkout@v4
+        with:
+          repository: off-grid-ai/shared
+          token: ${{ secrets.PRO_SUBMODULE_PAT }}
+          path: _shared
+          ref: main
+          persist-credentials: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -56,6 +78,17 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: gradle-
+
+      - name: Build shared packages
+        run: |
+          mv _shared ../shared
+          npm --prefix ../shared ci
+          npm --prefix ../shared/packages/automation run build
+          npm --prefix ../shared/packages/sync run build
+          npm --prefix ../shared/packages/rag run build
+          npm --prefix ../shared/packages/models run build
+          npm --prefix ../shared/packages/speech run build
+          npm --prefix ../shared/packages/ui run build
 
       - name: Install dependencies
         run: npm ci
