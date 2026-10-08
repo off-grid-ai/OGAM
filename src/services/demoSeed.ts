@@ -197,6 +197,24 @@ export async function seedDemoData(deps: {
       prompt: 'Draft a reply to Sam about the pilot date. Ask me before sending.',
       reply: { role: 'assistant', turnStatus: 'completed', content: 'Hi Sam,\n\nThe Acme Corp pilot starts on 14 November with 40 seats. Priya Nair owns the rollout. Tom Reyes verifies the gateway policy before kickoff.\n\nAlex\n\nSend this reply to Sam?' },
     },
+    {
+      key: '000000000012', title: 'Pilot email draft handoff',
+      prompt: 'Open the pilot reply to Sam in my mail app. I will review it before sending.',
+      reply: { role: 'assistant', content: '', isStreaming: true, turnStatus: 'running',
+        timeline: [{ kind: 'tool', toolIndex: 0 }],
+        toolArtifacts: [{ id: 'acme-email-draft', name: 'send_email',
+          arguments: JSON.stringify({ to: 'sam@acme.example', subject: 'Acme Corp pilot — 14 November', body: 'Hi Sam,\n\nThe Acme Corp pilot starts on 14 November with 40 seats. Priya Nair owns the rollout. Tom Reyes verifies the gateway policy before kickoff.\n\nAlex' }),
+          result: '', status: 'running' }] },
+    },
+    {
+      key: '000000000013', title: 'Pilot email draft ready',
+      prompt: 'Open the pilot reply to Sam in my mail app. I will review it before sending.',
+      reply: { role: 'assistant', content: 'The draft to **Sam Okafor** is ready in your mail app.\n\nReview the **14 November** pilot date and **40 seats**, then send it when you are ready.\n\n**No email has been sent.**', turnStatus: 'completed',
+        timeline: [{ kind: 'tool', toolIndex: 0 }],
+        toolArtifacts: [{ id: 'acme-email-draft', name: 'send_email',
+          arguments: JSON.stringify({ to: 'sam@acme.example', subject: 'Acme Corp pilot — 14 November', body: 'Hi Sam,\n\nThe Acme Corp pilot starts on 14 November with 40 seats. Priya Nair owns the rollout. Tom Reyes verifies the gateway policy before kickoff.\n\nAlex' }),
+          result: 'Mail app opened with a draft to sam@acme.example (subject: "Acme Corp pilot — 14 November").', status: 'completed', durationMs: 320 }] },
+    },
   ];
   for (const scene of captureScenes) {
     if (scene.receipt && !receiptAvailable) continue;
