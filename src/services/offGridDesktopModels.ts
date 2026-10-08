@@ -7,6 +7,7 @@ import type {
   RemoteServer,
 } from '../types';
 import { predictGgufCapabilities } from '../utils/ggufCapabilities';
+import { displayModelName } from '../stores/remoteServerHelpers';
 import {
   REMOTE_FETCH_REDIRECT_POLICY,
   remoteAuthorizationHeaders,
@@ -80,7 +81,9 @@ function parseCatalog(value: unknown): GatewayCatalogModel[] | null {
     }
     models.push({
       id: candidate.id.trim(),
-      name: candidate.name.trim(),
+      // Desktop names an imported model by its file path; every picker reads this name, so it is
+      // cleaned once here, exactly as the other remote discovery paths already clean theirs.
+      name: displayModelName(candidate.name.trim()),
       kind: candidate.kind,
       files: modelFiles(candidate.files),
     });
