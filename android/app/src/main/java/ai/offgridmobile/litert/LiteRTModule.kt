@@ -667,8 +667,8 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
     fun getTpuSupport(promise: Promise) {
         val safe = SafePromise(promise, TAG)
         val sdk = Build.VERSION.SDK_INT
-        val socModel = if (sdk >= Build.VERSION_CODES.S) Build.SOC_MODEL else ""
-        val socManufacturer = if (sdk >= Build.VERSION_CODES.S) Build.SOC_MANUFACTURER else ""
+        val socModel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL else ""
+        val socManufacturer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MANUFACTURER else ""
         val generation = TensorTpu.generation(socModel, socManufacturer)
         val dispatchLibPresent = File(reactContext.applicationInfo.nativeLibraryDir, TensorTpu.DISPATCH_LIB).exists()
         // Only probe the vendor library on a phone that passed the cheap checks.
