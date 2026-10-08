@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -59,6 +60,8 @@ export const SettingsScreen: React.FC = () => {
   const themeMode = useAppStore(s => s.themeMode);
   const setThemeMode = useAppStore(s => s.setThemeMode);
   const completeChecklistStep = useAppStore(s => s.completeChecklistStep);
+  const showSyncStatusBar = useAppStore(s => s.showSyncStatusBar);
+  const setShowSyncStatusBar = useAppStore(s => s.setShowSyncStatusBar);
   const [showDebugLogs, setShowDebugLogs] = useState(false);
   const deviceInfo = useAppStore(s => s.deviceInfo);
   // Hidden once the user dismisses it, or once Pro is active (the upsell makes no
@@ -311,6 +314,16 @@ export const SettingsScreen: React.FC = () => {
         {__DEV__ && (
           <AnimatedEntry index={11} staggerMs={40} trigger={focusTrigger}>
             <View style={styles.devButtonGroup}>
+              <View style={styles.devButton}>
+                <Text style={styles.devButtonText}>Show sync status bar</Text>
+                <Switch
+                  accessibilityLabel="Show sync status bar"
+                  value={showSyncStatusBar}
+                  onValueChange={setShowSyncStatusBar}
+                  trackColor={{ false: colors.surfaceLight, true: `${colors.primary}80` }}
+                  thumbColor={showSyncStatusBar ? colors.primary : colors.textMuted}
+                />
+              </View>
               <TouchableOpacity
                 style={styles.devButton}
                 onPress={handleResetOnboarding}

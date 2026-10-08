@@ -128,6 +128,8 @@ export type AppSettings = {
 type ThemeMode = 'system' | 'light' | 'dark';
 
 export interface AppState extends ProAccessSlice {
+  showSyncStatusBar: boolean;
+  setShowSyncStatusBar: (visible: boolean) => void;
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
   hasCompletedOnboarding: boolean;
@@ -290,6 +292,8 @@ const appStorage = createHydrationGatedStorage<PersistedAppState>(
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
+      showSyncStatusBar: true,
+      setShowSyncStatusBar: visible => set({ showSyncStatusBar: visible }),
       themeMode: 'system' as ThemeMode,
       setThemeMode: mode => set({ themeMode: mode }),
       hasCompletedOnboarding: false,
@@ -484,6 +488,7 @@ export const useAppStore = create<AppState>()(
 
 function persistedAppState(state: AppState) {
   return {
+        showSyncStatusBar: state.showSyncStatusBar,
         themeMode: state.themeMode,
         hasCompletedOnboarding: state.hasCompletedOnboarding,
         onboardingChecklist: state.onboardingChecklist,
