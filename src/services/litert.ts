@@ -326,6 +326,14 @@ class LiteRTService {
     media?: { imageUris?: string[]; audioUris?: string[] },
   ): Promise<void> {
     if (!this.isAvailable() || !this.loaded) { callbacks.onError(new Error('No LiteRT model loaded')); return; }
+    // An engine without vision (a TPU load that dropped to text-only) would have native discard the
+    // image without a word. Every generation path sends through here, after any lazy load, so refuse
+    // it once, here.
+    if (media?.imageUris?.some(Boolean) && !this.modelSupportsVision) {
+      logger.log(TAG, 'sendMessage — refused images: the loaded engine has no vision');
+      callbacks.onError(new Error('Images are not available for this model on this device. Remove the image to continue.'));
+      return;
+    }
 
     // Reset accumulators
     this.currentContent = '';

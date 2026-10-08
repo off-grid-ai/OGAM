@@ -63,6 +63,21 @@ it('refuses an image for a vision model whose TPU engine came up text-only, befo
   expect(localModelAcceptsImages(model)).toBe(true);
 });
 
+it('refuses an image at the engine when the TPU load came up text-only, on the first turn after a lazy load', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  boundary.litert.module.loadModel.mockResolvedValueOnce({ backend: 'npu', maxNumTokens: 4096, vision: false, audio: false });
+  const { liteRTService } = require('../../../src/services/litert');
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'gpu', { supportsVision: true });
+  // The tool loop's entry point (generateRaw) and the plain path (sendMessage) both refuse.
+  await expect(liteRTService.generateRaw('what is this?', { imageUris: ['file:///pic.png'] }))
+    .rejects.toThrow(/Images are not available for this model on this device/);
+  const onError = jest.fn();
+  await liteRTService.sendMessage('what is this?', { onToken: jest.fn(), onReasoning: jest.fn(), onComplete: jest.fn(), onError }, { imageUris: ['file:///pic.png'] });
+  expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringMatching(/Images are not available/) }));
+  expect(boundary.litert.calls.sendMessageWithImages).toEqual([]);
+});
+
 it('offers only CPU and GPU in Chat and Model Settings even with a saved NPU preference', async () => {
   installNativeBoundary();
   const React = require('react');
