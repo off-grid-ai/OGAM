@@ -46,6 +46,22 @@ type NavigationProp = CompositeNavigationProp<
   NativeStackNavigationProp<RootStackParamList>
 >;
 
+/** Developer-only: load the demo fixture and report what it added. Never throws. */
+async function loadDemoData(): Promise<void> {
+  try {
+    const { seedDemoData } = require('../services/demoSeed');
+    const { buildVoiceAttachment } = require('../components/ChatInput/voiceNoteSend');
+    const result = await seedDemoData({ buildVoiceAttachment });
+    const missing = result.warnings.length ? `\n\n${result.warnings.join('\n\n')}` : '';
+    Alert.alert(
+      result.warnings.length ? 'Demo loaded with missing documents' : 'Demo ready',
+      `${result.chats} chats and ${result.documents} documents added. Existing matching demo records were kept.${missing}`,
+    );
+  } catch (error) {
+    Alert.alert('Demo not loaded', error instanceof Error ? error.message : String(error));
+  }
+}
+
 export const SettingsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const focusTrigger = useFocusTrigger();
@@ -63,6 +79,7 @@ export const SettingsScreen: React.FC = () => {
   const showSyncStatusBar = useAppStore(s => s.showSyncStatusBar);
   const setShowSyncStatusBar = useAppStore(s => s.setShowSyncStatusBar);
   const [showDebugLogs, setShowDebugLogs] = useState(false);
+  const [isSeedingDemo, setIsSeedingDemo] = useState(false);
   const deviceInfo = useAppStore(s => s.deviceInfo);
   // Hidden once the user dismisses it, or once Pro is active (the upsell makes no
   // sense to a paid user). hasRegisteredPro only flips true after RC verification
@@ -124,6 +141,13 @@ export const SettingsScreen: React.FC = () => {
       disabling ? 'Pro disabled (DEV)' : 'Pro enabled (DEV)',
       `Restart the app to fully ${disabling ? 'unload' : 'load'} Pro features.`,
     );
+  };
+
+  const handleSeedDemo = async () => {
+    if (!__DEV__ || isSeedingDemo) return;
+    setIsSeedingDemo(true);
+    await loadDemoData();
+    setIsSeedingDemo(false);
   };
 
   const handleResetOnboarding = () => {
@@ -324,6 +348,25 @@ export const SettingsScreen: React.FC = () => {
                   thumbColor={showSyncStatusBar ? colors.primary : colors.textMuted}
                 />
               </View>
+              <TouchableOpacity
+                style={styles.devButton}
+                onPress={handleSeedDemo}
+                disabled={isSeedingDemo}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  isSeedingDemo ? 'Loading demo data' : 'Load demo data'
+                }
+                accessibilityState={{
+                  disabled: isSeedingDemo,
+                  busy: isSeedingDemo,
+                }}
+                testID="seed-demo-data"
+              >
+                <Icon name="database" size={14} color={colors.textMuted} />
+                <Text style={styles.devButtonText}>
+                  {isSeedingDemo ? 'Loading demo data...' : 'Load demo data'}
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.devButton}
                 onPress={handleResetOnboarding}
