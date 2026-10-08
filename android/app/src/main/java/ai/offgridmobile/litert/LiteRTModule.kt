@@ -205,12 +205,15 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
             // attempt so the next launch reports the TPU as unusable instead of crashing again.
             if (backend is Backend.NPU) markTpuLoadInFlight(true)
             try {
-                withTimeout(initTimeoutMs(backend, configuredMaxTokens)) { eng.initialize() }
-                // LiteRT-LM starts the vision and audio encoders with the first conversation, not in
-                // initialize(). Open one now so an encoder that can't run on the TPU fails this
-                // attempt, and the text-only retry below, instead of every chat turn.
-                if (backend is Backend.NPU && (visionEnabled || audioEnabled)) {
-                    eng.createConversation().close()
+                withTimeout(initTimeoutMs(backend, configuredMaxTokens)) {
+                    eng.initialize()
+                    // LiteRT-LM starts the vision and audio encoders with the first conversation, not
+                    // in initialize(). Open one now, within the same time budget, so an encoder that
+                    // can't run on the TPU fails this attempt, and the text-only retry below, instead
+                    // of every chat turn.
+                    if (backend is Backend.NPU && (visionEnabled || audioEnabled)) {
+                        eng.createConversation().close()
+                    }
                 }
             } finally {
                 if (backend is Backend.NPU) markTpuLoadInFlight(false)
