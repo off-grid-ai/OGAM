@@ -39,6 +39,7 @@ async function request<T>(
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) controller.abort();
   try {
     const apiKey = await remoteServerManager.getApiKey(server.id);
     if (controller.signal.aborted) throw new Error('Remote request cancelled');

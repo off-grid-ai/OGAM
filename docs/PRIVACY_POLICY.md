@@ -6,4 +6,4 @@ The Off Grid Privacy Policy is maintained in one place and covers all Off Grid p
 
 Read the current policy at: https://getoffgridai.co/privacy
 
-For questions, email the Off Grid Support Team at support@offgridmobileai.co.
+For questions, email the Off Grid Support Team at support@getoffgridai.co.
