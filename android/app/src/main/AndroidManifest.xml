@@ -77,8 +77,9 @@
       <uses-native-library android:name="libvndksupport.so" android:required="false" />
       <uses-native-library android:name="libcdsprpc.so" android:required="false" />
 
-      <!-- Google Tensor TPU (Pixel). LiteRT's Tensor dispatch library dlopen()s these vendor libs;
-           undeclared, the app's linker namespace refuses them and every TPU load falls back. -->
+      <!-- Google Tensor TPU (Pixel). LiteRT's Tensor dispatch library dlopen()s libedgetpu_litert.so,
+           which loads the other three; Pixel 10 firmware lists all four in public.libraries.txt.
+           Undeclared, the app's linker namespace refuses them and the TPU is unavailable. -->
       <uses-native-library android:name="libedgetpu_litert.so" android:required="false" />
       <uses-native-library android:name="libedgetpu_util.so" android:required="false" />
       <uses-native-library android:name="libedgetpu_client.google.so" android:required="false" />
