@@ -62,8 +62,26 @@ jobs:
           git config --global url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf "https://github.com/"
           git submodule update --init --recursive pro
           git config --global --unset url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf || true
+      - name: Check out shared packages
+        uses: actions/checkout@v4
+        with:
+          repository: off-grid-ai/shared
+          token: ${{ secrets.PRO_SUBMODULE_PAT }}
+          path: _shared
+          ref: main
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with: { node-version: '20', cache: npm }
+      - name: Build shared packages
+        run: |
+          mv _shared ../shared
+          npm --prefix ../shared ci
+          npm --prefix ../shared/packages/automation run build
+          npm --prefix ../shared/packages/sync run build
+          npm --prefix ../shared/packages/rag run build
+          npm --prefix ../shared/packages/models run build
+          npm --prefix ../shared/packages/speech run build
+          npm --prefix ../shared/packages/ui run build
       - run: npm ci
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
