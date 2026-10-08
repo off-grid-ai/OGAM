@@ -1066,6 +1066,13 @@ export interface NativeBoundary {
   setRam(profile: RamProfile): void;
   /** Fire the OS 'memoryWarning' AppState event the app's residency manager listens to (auto-eviction). */
   emitMemoryWarning(): void;
+  /** Fire an OS AppState 'change' (e.g. 'active' when the person comes back from Settings). */
+  emitAppStateChange(state: 'active' | 'background' | 'inactive'): void;
+  /** What the OS answers when the app reads the microphone permission (no prompt). Default 'Granted'.
+   *  'Unreadable' makes the read fail, as a native module error would. */
+  setMicPermission(status: 'Granted' | 'Denied' | 'Undetermined' | 'Unreadable'): void;
+  /** How many times the app asked the OS to open its Settings page. */
+  settingsOpenedCount(): number;
 }
 
 /**
@@ -1126,14 +1133,20 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   RN.NativeModules.CoreMLDiffusionModule = diffusion.module;
   if (downloadFake)
     RN.NativeModules.DownloadManagerModule = downloadFake.module;
+  let micPermission: 'Granted' | 'Denied' | 'Undetermined' | 'Unreadable' = 'Granted';
   // Mic permission is a device boundary: whisper STT refuses to start recording without RECORD_AUDIO
   // granted (whisperService.requestPermissions → PermissionsAndroid.request). Grant it when whisper is
   // installed so the real STT flow runs; the default jest PermissionsAndroid returns undefined (= denied).
+  // The answer follows the permission the test set (setMicPermission): granted stays granted, and
+  // anything else answers as a "Don't ask again" denial, the case Android reads back as Undetermined.
   if (whisperFake && RN.PermissionsAndroid) {
-    RN.PermissionsAndroid.request = jest
-      .fn()
-      .mockResolvedValue(RN.PermissionsAndroid.RESULTS?.GRANTED ?? 'granted');
-    RN.PermissionsAndroid.check = jest.fn().mockResolvedValue(true);
+    RN.PermissionsAndroid.request = () =>
+      Promise.resolve(
+        micPermission === 'Granted'
+          ? RN.PermissionsAndroid.RESULTS?.GRANTED ?? 'granted'
+          : RN.PermissionsAndroid.RESULTS?.NEVER_ASK_AGAIN ?? 'never_ask_again',
+      );
+    RN.PermissionsAndroid.check = () => Promise.resolve(micPermission === 'Granted');
   }
   RN.NativeModules.DeviceMemoryModule = {
     // Live read from memState so a context release (freeModelMemory) is reflected — the reclaim barrier
@@ -1173,6 +1186,20 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   // mock swallows the callback, so replace AppState with a capturing emitter and expose emitMemoryWarning()
   // to fire the OS memory-warning faithfully (OS event → the app's real listener → real handleMemoryWarning).
   const appState = makeEmitterRegistry();
+
+  // Microphone permission leaf: react-native-audio-api reads the OS record permission without a
+  // prompt. Stateful so a test can deny it, then grant it as if from Settings.
+  require('react-native-audio-api').AudioManager.checkRecordingPermissions = () =>
+    micPermission === 'Unreadable'
+      ? Promise.reject(new Error('record permission unavailable'))
+      : Promise.resolve(micPermission);
+  // Settings leaf: Linking.openSettings hands off to the OS; count the hand-offs.
+  let settingsOpened = 0;
+  RN.Linking.openSettings = () => {
+    settingsOpened += 1;
+    return Promise.resolve();
+  };
+
   Object.defineProperty(RN, 'AppState', {
     configurable: true,
     value: {
@@ -1217,5 +1244,10 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     whisper: whisperFake,
     setRam,
     emitMemoryWarning: () => appState.handle.emit('memoryWarning'),
+    emitAppStateChange: state => appState.handle.emit('change', state),
+    setMicPermission: status => {
+      micPermission = status;
+    },
+    settingsOpenedCount: () => settingsOpened,
   };
 }
