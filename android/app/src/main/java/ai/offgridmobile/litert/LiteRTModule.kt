@@ -211,38 +211,41 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
 
     private suspend fun initializeWithFallback(modelPath: String, requested: Backend, visionEnabled: Boolean, audioEnabled: Boolean): Backend {
         val chain = buildBackendChain(requested)
+        for (backend in chain) {
+            if (tryTier(modelPath, backend, visionEnabled, audioEnabled)) return backend
+            if (backend != chain.last()) {
+                Log.i(TAG, "initializeWithFallback — ${backendName(backend)} exhausted retries, falling back to next tier")
+            }
+        }
+        throw IllegalStateException("All backends failed")
+    }
 
+    /** Every attempt one backend tier gets before the chain moves to the next. */
+    private suspend fun tryTier(modelPath: String, backend: Backend, visionEnabled: Boolean, audioEnabled: Boolean): Boolean {
+        val name = backendName(backend)
         // GPU/NPU failures can be transient (e.g. VRAM not yet released after a model switch).
         // Retry up to 2 extra times with backoff before giving up on a non-CPU backend.
         val gpuRetries = 2
         val gpuRetryDelayMs = 600L
+        val maxAttempts = if (backend is Backend.CPU) 1 else gpuRetries + 1
 
-        for (backend in chain) {
-            val name = backendName(backend)
-            val maxAttempts = if (backend is Backend.CPU) 1 else gpuRetries + 1
-
-            for (attempt in 1..maxAttempts) {
-                if (attempt > 1) {
-                    Log.i(TAG, "initializeWithFallback — $name retry $attempt/$maxAttempts after ${gpuRetryDelayMs}ms")
-                    delay(gpuRetryDelayMs)
-                } else {
-                    Log.i(TAG, "initializeWithFallback — trying $name vision=$visionEnabled audio=$audioEnabled")
-                }
-                if (tryInitBackend(modelPath, backend, name, visionEnabled, audioEnabled)) return backend
+        for (attempt in 1..maxAttempts) {
+            if (attempt > 1) {
+                Log.i(TAG, "initializeWithFallback — $name retry $attempt/$maxAttempts after ${gpuRetryDelayMs}ms")
+                delay(gpuRetryDelayMs)
+            } else {
+                Log.i(TAG, "initializeWithFallback — trying $name vision=$visionEnabled audio=$audioEnabled")
             }
-
-            // Google's Tensor TPU reference app keeps a model on the TPU text-only when its vision
-            // or audio executor can't start there, rather than dropping to a far slower tier.
-            if (backend is Backend.NPU && (visionEnabled || audioEnabled)) {
-                Log.i(TAG, "initializeWithFallback — $name retrying text-only")
-                if (tryInitBackend(modelPath, backend, name, visionEnabled = false, audioEnabled = false)) return backend
-            }
-
-            if (backend != chain.last()) {
-                Log.i(TAG, "initializeWithFallback — $name exhausted retries, falling back to next tier")
-            }
+            if (tryInitBackend(modelPath, backend, name, visionEnabled, audioEnabled)) return true
         }
-        throw IllegalStateException("All backends failed")
+
+        // Google's Tensor TPU reference app keeps a model on the TPU text-only when its vision
+        // or audio executor can't start there, rather than dropping to a far slower tier.
+        if (backend is Backend.NPU && (visionEnabled || audioEnabled)) {
+            Log.i(TAG, "initializeWithFallback — $name retrying text-only")
+            return tryInitBackend(modelPath, backend, name, visionEnabled = false, audioEnabled = false)
+        }
+        return false
     }
 
     // -------------------------------------------------------------------------

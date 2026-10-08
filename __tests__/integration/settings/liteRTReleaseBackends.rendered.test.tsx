@@ -76,6 +76,10 @@ it('refuses an image at the engine when the TPU load came up text-only, on the f
   await liteRTService.sendMessage('what is this?', { onToken: jest.fn(), onReasoning: jest.fn(), onComplete: jest.fn(), onError }, { imageUris: ['file:///pic.png'] });
   expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringMatching(/Images are not available/) }));
   expect(boundary.litert.calls.sendMessageWithImages).toEqual([]);
+  // Audio on an engine that came up without it would reach the model as empty text: refused too.
+  await expect(liteRTService.generateRaw('', { audioUris: ['file:///note.wav'] }))
+    .rejects.toThrow(/Audio input is not available for this model on this device/);
+  expect(boundary.litert.calls.sendMessageWithMedia).toEqual([]);
 });
 
 it('offers only CPU and GPU in Chat and Model Settings even with a saved NPU preference', async () => {
