@@ -18,56 +18,79 @@ export function installRealSqlite(setupSql?: string): void {
  * before requiring the rag modules. installRealSqlite = resetModules + this.
  */
 export function doMockRealSqlite(setupSql?: string): void {
-  jest.doMock('@op-engineering/op-sqlite', () => {
-    const { DatabaseSync } = require('node:sqlite');
+  jest.doMock('@op-engineering/op-sqlite', () =>
+    realSqliteModule({ setupSql }),
+  );
+}
 
-    const wrap = (db: any) => ({
-      executeSync: (sql: string, params: unknown[] = []) => {
-        const bind = (params ?? []).map(p =>
-          // op-sqlite accepts ArrayBuffer for BLOBs; node:sqlite wants a Uint8Array/Buffer. Use a
-          // realm-safe check (Object.prototype.toString) because a composed harness (installNativeBoundary
-          // + doMockRealSqlite) can hand us an ArrayBuffer from a different realm where `instanceof` fails.
-          p instanceof ArrayBuffer ||
-          Object.prototype.toString.call(p) === '[object ArrayBuffer]'
-            ? new Uint8Array(p as ArrayBuffer)
-            : p,
-        );
-        // Transaction / DDL control statements: no params, run via exec.
-        if (
-          /^\s*(BEGIN|COMMIT|ROLLBACK|CREATE|PRAGMA|DROP)/i.test(sql) &&
-          bind.length === 0
-        ) {
-          db.exec(sql);
-          return { rows: [], insertId: undefined, rowsAffected: 0 };
-        }
-        const stmt = db.prepare(sql);
-        if (/^\s*(SELECT|WITH)\b/i.test(sql)) {
-          const rows = stmt.all(...bind);
-          return { rows, insertId: undefined, rowsAffected: 0 };
-        }
-        const info = stmt.run(...bind);
-        return {
-          rows: [],
-          insertId:
-            info.lastInsertRowid != null
-              ? Number(info.lastInsertRowid)
-              : undefined,
-          rowsAffected: Number(info.changes ?? 0),
-        };
-      },
-      execute: async function (this: any, sql: string, params: unknown[] = []) {
-        return this.executeSync(sql, params);
-      },
-      close: () => db.close(),
-      delete: () => {},
-    });
+/**
+ * The op-sqlite module itself, backed by real :memory: databases, for a hoisted
+ * `jest.mock('@op-engineering/op-sqlite', () => require(<this file>).realSqliteModule(...))` in a test
+ * that imports the app statically. `only` names the databases that get a real engine; any other open()
+ * gets the same inert database as the global mock, so code a test is not about keeps its old boundary.
+ */
+export function realSqliteModule(
+  options: { setupSql?: string; only?: readonly string[] } = {},
+): { open: (config?: { name?: string }) => unknown } {
+  const { DatabaseSync } = require('node:sqlite');
 
-    return {
-      open: () => {
-        const db = new DatabaseSync(':memory:');
-        if (setupSql) db.exec(setupSql);
-        return wrap(db);
-      },
-    };
+  const wrap = (db: any) => ({
+    executeSync: (sql: string, params: unknown[] = []) => {
+      const bind = (params ?? []).map(p =>
+        // op-sqlite accepts ArrayBuffer for BLOBs; node:sqlite wants a Uint8Array/Buffer. Use a
+        // realm-safe check (Object.prototype.toString) because a composed harness (installNativeBoundary
+        // + doMockRealSqlite) can hand us an ArrayBuffer from a different realm where `instanceof` fails.
+        p instanceof ArrayBuffer ||
+        Object.prototype.toString.call(p) === '[object ArrayBuffer]'
+          ? new Uint8Array(p as ArrayBuffer)
+          : p,
+      );
+      // Transaction / DDL control statements: no params, run via exec.
+      if (
+        /^\s*(BEGIN|COMMIT|ROLLBACK|CREATE|PRAGMA|DROP)/i.test(sql) &&
+        bind.length === 0
+      ) {
+        db.exec(sql);
+        return { rows: [], insertId: undefined, rowsAffected: 0 };
+      }
+      const stmt = db.prepare(sql);
+      if (/^\s*(SELECT|WITH)\b/i.test(sql)) {
+        const rows = stmt.all(...bind);
+        return { rows, insertId: undefined, rowsAffected: 0 };
+      }
+      const info = stmt.run(...bind);
+      return {
+        rows: [],
+        insertId:
+          info.lastInsertRowid != null
+            ? Number(info.lastInsertRowid)
+            : undefined,
+        rowsAffected: Number(info.changes ?? 0),
+      };
+    },
+    execute: async function (this: any, sql: string, params: unknown[] = []) {
+      return this.executeSync(sql, params);
+    },
+    close: () => db.close(),
+    delete: () => {},
   });
+
+  const inert = () => {
+    const result = { rows: [], insertId: 0, rowsAffected: 0 };
+    return {
+      executeSync: () => result,
+      execute: () => Promise.resolve(result),
+      close: () => {},
+      delete: () => {},
+    };
+  };
+  return {
+    open: (config?: { name?: string }) => {
+      if (options.only && !options.only.includes(config?.name ?? ''))
+        return inert();
+      const db = new DatabaseSync(':memory:');
+      if (options.setupSql) db.exec(options.setupSql);
+      return wrap(db);
+    },
+  };
 }
