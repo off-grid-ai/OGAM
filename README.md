@@ -37,7 +37,7 @@
 
 ## Off Grid AI Pro
 
-**A voice, personas, and actions. $69 for life, or $49/year.**
+**A voice, personas, and actions. $69 for life, or $4.99/month.**
 
 </div>
 
@@ -52,7 +52,7 @@ Pro is an optional, additive tier. It gives the assistant a voice that talks bac
 - **Draft, then approve** - connect Calendar, email, and MCP servers like Linear, Notion, and GitHub. It drafts the reply or files the ticket and waits. Nothing sends without your tap.
 - **Personal Mesh sync** - your phone and your Mac share chats, files, and settings over your own network. There is no relay. See the [Personal Mesh guide](docs/PERSONAL_MESH.md).
 
-**[→ Get Pro access](https://offgridmobileai.co/pay/)** - $69 once and it is yours forever (the price climbs as more people join, never down), or $49/year.
+**[→ Get Pro access](https://offgridmobileai.co/pay/)** - $69 once and it is yours forever (the price climbs as more people join, never down), or $4.99/month.
 
 Pair it with **[Off Grid AI Desktop](https://github.com/off-grid-ai/desktop/releases/latest)** on your Mac. One Pro license covers both.
 
