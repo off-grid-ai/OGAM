@@ -82,6 +82,21 @@ it('refuses an image at the engine when the TPU load came up text-only, on the f
   expect(boundary.litert.calls.sendMessageWithMedia).toEqual([]);
 });
 
+it('reports a spent TPU context as context-full, so the chat compacts and retries instead of failing', async () => {
+  const boundary = installNativeBoundary();
+  boundary.litert.module.getTpuSupport.mockResolvedValue(PIXEL_10_TPU);
+  const { liteRTService } = require('../../../src/services/litert');
+  const { contextCompactionService } = require('../../../src/services/contextCompaction');
+  await liteRTService.loadModel(TENSOR_G5_FILE, 'gpu');
+  // LiteRT-LM's TPU executor refuses a prefill that would pass the context compiled into the model.
+  boundary.litert.scriptError('Prefill length (128) plus current step (3990) exceeds max sequence length (4096).');
+  const onError = jest.fn();
+  await liteRTService.sendMessage('hi', { onToken: jest.fn(), onReasoning: jest.fn(), onComplete: jest.fn(), onError });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(onError).toHaveBeenCalledTimes(1);
+  expect(contextCompactionService.isContextFullError(onError.mock.calls[0][0])).toBe(true);
+});
+
 it('offers only CPU and GPU in Chat and Model Settings even with a saved NPU preference', async () => {
   installNativeBoundary();
   const React = require('react');
