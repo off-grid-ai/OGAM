@@ -131,6 +131,9 @@
   "op-sqlite": {},
   "overrides": {
     "react": "19.2.0",
-    "linkify-it": "^5.0.2"
+    "linkify-it": "^5.0.2",
+    "@expo/plist": {
+      "xmldom": "npm:@xmldom/xmldom@0.8.15"
+    }
   }
 }
