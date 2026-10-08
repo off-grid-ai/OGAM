@@ -4,8 +4,8 @@
  * Two plans, matching getoffgridai.co/pro: a one-time lifetime purchase and a monthly
  * subscription. Both are founder rates that only ever go up as we grow. The app states the
  * next tier ($119 / $7.99) because the website's first tier ($69 / $4.99) is nearly full
- * and a release outlives it; so the numbers are hardcoded to
- * today's tier and bumped in a new release when a tier fills. The web pay page
+ * and a release outlives it. The numbers are hardcoded and bumped in a new release
+ * when a tier fills. The web pay page
  * (getoffgridai.co/pay) is where checkout happens and holds the authoritative price.
  */
 export interface ProPricingCopy {
