@@ -1,7 +1,7 @@
 import RNFS from 'react-native-fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DownloadedModel, LlamaDownloadedModel, LiteRTDownloadedModel, ModelFile, ModelCredibility, ModelOrigin, ONNXImageModel } from '../../types';
-import { LMSTUDIO_AUTHORS, OFFICIAL_MODEL_AUTHORS, VERIFIED_QUANTIZERS } from '../../constants';
+import { LMSTUDIO_AUTHORS, OFFICIAL_MODEL_AUTHORS, RECOMMENDED_MODELS, VERIFIED_QUANTIZERS } from '../../constants';
 import { getCuratedLiteRTEntry } from '../curatedLiteRTRegistry';
 import logger from '../../utils/logger';
 import { statFile } from '../../utils/fileStat';
@@ -135,7 +135,13 @@ export async function loadDownloadedModels(modelsDir: string): Promise<Downloade
         const liteRTAudio = curated?.liteRTAudio ?? m.liteRTAudio ?? false;
         return { ...m, liteRTVision, liteRTAudio } as LiteRTDownloadedModel;
       }
-      return { ...m, engine: 'llama' as const } as LlamaDownloadedModel;
+      // A name that is still the raw repo basename was derived, not chosen: re-derive it so rows
+      // written before curated GGUF names existed stop showing ids like "gemma-4-E4B-it-GGUF".
+      const repoId = typeof m.id === 'string' ? m.id.slice(0, m.id.lastIndexOf('/')) : '';
+      const name = repoId && m.name === repoId.split('/').pop()
+        ? resolveDisplayName(repoId, { name: m.fileName } as ModelFile, undefined)
+        : m.name;
+      return { ...m, name, engine: 'llama' as const } as LlamaDownloadedModel;
     });
   } catch (error) {
     // Corrupt AsyncStorage should not prevent the app from loading other state.
@@ -242,8 +248,9 @@ function resolveMmProjFileName(
 
 /**
  * Registry wins for curated LiteRT artifacts: the display name comes from a single source of truth
- * keyed by fileName. Falls back to the file's own name for locally-imported .litertlm files, then to
- * the modelId basename for everything else.
+ * keyed by fileName. Falls back to the file's own name for locally-imported .litertlm files. A
+ * curated GGUF repo takes its catalog name ("Gemma 4 E4B"); any other repo shows its basename
+ * without the packaging suffix, so a raw id like "gemma-4-E4B-it-GGUF" never reaches the UI.
  */
 function resolveDisplayName(
   modelId: string,
@@ -252,7 +259,10 @@ function resolveDisplayName(
 ): string {
   if (curatedDisplayName) return curatedDisplayName;
   if (isLiteRTFileName(file.name)) return file.name.replace(/\.litertlm$/i, '');
-  return modelId.split('/').pop() || modelId;
+  const curated = RECOMMENDED_MODELS.find(model => model.id === modelId);
+  if (curated) return curated.name;
+  const basename = modelId.split('/').pop() || modelId;
+  return basename.replace(/[-_]GGUF$/i, '') || basename;
 }
 
 export async function buildDownloadedModel(opts: BuildModelOpts): Promise<DownloadedModel> {
