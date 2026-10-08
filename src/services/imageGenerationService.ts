@@ -333,7 +333,20 @@ class ImageGenerationService {
           });
         },
       );
-      if (!this.isLive(job) || !result?.imagePath) return this.resetFor(job);
+      if (!this.isLive(job) || !result?.imagePath) {
+        if (result?.imagePath) {
+          const removed = await onnxImageGeneratorService
+            .deleteGeneratedImage(result.id, result.imagePath)
+            .catch(() => false);
+          if (!removed) {
+            result.modelId = activeImageModel.id;
+            if (params.conversationId) result.conversationId = params.conversationId;
+            useAppStore.getState().addGeneratedImage(result);
+            logger.warn('[ImageGen] could not remove a cancelled image; kept in Gallery');
+          }
+        }
+        return this.resetFor(job);
+      }
       this.updateState(completedImageGenerationState(result));
       return await saveImageGenerationResult(result, {
         params,
