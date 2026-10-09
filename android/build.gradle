@@ -41,6 +41,13 @@ subprojects { subproject ->
             subproject.android {
                 ndkVersion rootProject.ext.ndkVersion
             }
+            if (subproject.name == "react-native-reanimated") {
+                // Worklets packages its own runtime. Reanimated imports that library
+                // for linking and must not package a second copy of it.
+                subproject.androidComponents.finalizeDsl { androidDsl ->
+                    androidDsl.packaging.jniLibs.excludes.add("**/libworklets.so")
+                }
+            }
         }
     }
 }
