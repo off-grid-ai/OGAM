@@ -273,6 +273,8 @@ function makeLiteRTFake(handle: FakeEmitterHandle): LiteRTFake {
     }),
     stopGeneration: jest.fn().mockResolvedValue(undefined),
     unloadModel: jest.fn().mockResolvedValue(undefined),
+    // Not a Google Tensor phone unless a test says otherwise (e.g. a Pixel 10: supported, generation 5).
+    getTpuSupport: jest.fn().mockResolvedValue({ supported: false, tensorGeneration: null, reason: 'not_tensor' }),
     getMemoryInfo: jest.fn().mockResolvedValue({
       totalRamMb: 12000,
       usedRamMb: 4000,

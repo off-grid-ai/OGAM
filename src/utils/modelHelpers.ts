@@ -13,3 +13,13 @@ export const getMmProjFileSize = (m?: DownloadedModel): number =>
  */
 export const isLiteRTFileName = (fileName: string): boolean =>
   fileName.toLowerCase().endsWith('.litertlm');
+
+/**
+ * The Google Tensor generation a LiteRT file was compiled for, read from Google's naming
+ * (`gemma-4-E2B-it_Google_Tensor_G5.litertlm` → 5), or null for a portable CPU/GPU build. Such a
+ * file runs only on that generation's TPU.
+ */
+export const liteRTTensorTarget = (fileName: string): number | null => {
+  const match = /_google_tensor_g(\d+)\.litertlm$/i.exec(fileName);
+  return match ? Number(match[1]) : null;
+};
