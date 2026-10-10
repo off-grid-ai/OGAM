@@ -18,7 +18,8 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useChatStore, useProjectStore, useAppStore } from '../stores';
 import { useActiveTextModel } from '../hooks/useActiveTextModel';
-import { onnxImageGeneratorService, activeModelService, llmService, remoteServerManager } from '../services';
+import { activeModelService, llmService, remoteServerManager } from '../services';
+import { deleteChatImages, imagesNotDeletedAlert } from '../services/chatImageCleanup';
 import { Conversation } from '../types';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { byRecentActivity } from '../utils/conversationOrdering';
@@ -41,11 +42,6 @@ export const ChatsListScreen: React.FC = () => {
   const { deleteConversation, setActiveConversation } = useChatStore.getState();
   const { getProject } = useProjectStore();
   const activeImageModelId = useAppStore(s => s.activeImageModelId);
-  const { removeImagesByConversationId } = useAppStore.getState();
-  // Remote images can be .jpg or .webp; deletion needs each image's saved file path, read
-  // before the records are removed.
-  const savedImagePaths = () =>
-    new Map(useAppStore.getState().generatedImages.map(image => [image.id, image.imagePath]));
   const { modelId: activeTextModelId } = useActiveTextModel();
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const [showModelSelector, setShowModelSelector] = useState(false);
@@ -96,6 +92,10 @@ export const ChatsListScreen: React.FC = () => {
     }
   };
 
+  const reportImagesNotDeleted = (count: number) => {
+    if (count > 0) setAlertState(imagesNotDeletedAlert(count));
+  };
+
   const handleDeleteChat = (conversation: Conversation) => {
     setAlertState(showAlert(
       'Delete Chat',
@@ -105,14 +105,11 @@ export const ChatsListScreen: React.FC = () => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             setAlertState(hideAlert());
-            const imagePaths = savedImagePaths();
-            const imageIds = removeImagesByConversationId(conversation.id);
-            for (const imageId of imageIds) {
-              onnxImageGeneratorService.deleteGeneratedImage(imageId, imagePaths.get(imageId)).catch(() => {});
-            }
+            const notDeleted = await deleteChatImages(conversation.id);
             deleteConversation(conversation.id);
+            reportImagesNotDeleted(notDeleted);
           },
         },
       ]
@@ -135,17 +132,15 @@ export const ChatsListScreen: React.FC = () => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             setAlertState(hideAlert());
-            const imagePaths = savedImagePaths();
+            let notDeleted = 0;
             for (const conversation of selected) {
-              const imageIds = removeImagesByConversationId(conversation.id);
-              for (const imageId of imageIds) {
-                onnxImageGeneratorService.deleteGeneratedImage(imageId, imagePaths.get(imageId)).catch(() => {});
-              }
+              notDeleted += await deleteChatImages(conversation.id);
               deleteConversation(conversation.id);
             }
             stopSelecting();
+            reportImagesNotDeleted(notDeleted);
           },
         },
       ],

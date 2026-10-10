@@ -487,7 +487,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = OffgridMobile/OffgridMobile.entitlements;
-				CURRENT_PROJECT_VERSION = 1790418213;
+				CURRENT_PROJECT_VERSION = 1791224063;
 				DEVELOPMENT_TEAM = 84V6KCAC49;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = OffgridMobile/Info.plist;
@@ -498,7 +498,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.0.111;
+				MARKETING_VERSION = 0.0.112;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -520,7 +520,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = OffgridMobile/OffgridMobile.entitlements;
-				CURRENT_PROJECT_VERSION = 1790418213;
+				CURRENT_PROJECT_VERSION = 1791224063;
 				DEVELOPMENT_TEAM = 84V6KCAC49;
 				INFOPLIST_FILE = OffgridMobile/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Off Grid AI";
@@ -530,7 +530,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.0.111;
+				MARKETING_VERSION = 0.0.112;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",

@@ -6,6 +6,7 @@ import {
   generateStandalone,
   getActiveEngineService,
   isRemoteTextModelActive,
+  stopStandalone,
 } from './engines';
 import {
   buildEnhancementCardContent,
@@ -109,16 +110,34 @@ function enhancementTokenWriter(
   };
 }
 
+/**
+ * Stop a prompt enhancement that is waiting on its text request, local or remote. The pending
+ * enhanceImagePrompt then returns promptly instead of holding its image job open.
+ */
+export async function cancelImagePromptEnhancement(): Promise<void> {
+  try {
+    await stopStandalone();
+  } catch (error) {
+    logger.warn('[ImageGen] Failed to stop prompt enhancement:', error);
+  }
+}
+
+/**
+ * Rewrite the image prompt on the text model. `isCancelled` reports that the image request was
+ * cancelled: it is checked once the text model is ready, so a request cancelled while the model
+ * was loading never starts a text request or a chat message.
+ */
 export async function enhanceImagePrompt(
   params: GenerateImageParams,
   setState: EnhancementStateWriter,
+  isCancelled: () => boolean = () => false,
 ): Promise<string> {
   if (!useAppStore.getState().settings.enhanceImagePrompts) return params.prompt;
   const loaded =
     isRemoteTextModelActive() ||
     (getActiveEngineService()?.isModelLoaded() ?? false) ||
     (await loadTextModel(setState));
-  if (!loaded) return params.prompt;
+  if (!loaded || isCancelled()) return params.prompt;
 
   setState(PROMPT_ENHANCEMENT_STATUS);
   const context = params.conversationId

@@ -259,6 +259,30 @@ export function isRemoteTextModelActive(): boolean {
   return true;
 }
 
+/** How to stop the one-shot request generateStandalone is running, so its caller can cancel it. */
+let standaloneStop: (() => Promise<void>) | null = null;
+
+/** Run one standalone request, remembering the engine or provider stop that ends it. */
+async function trackStandalone(
+  stop: () => Promise<void>,
+  run: () => Promise<string>,
+): Promise<string> {
+  standaloneStop = stop;
+  try {
+    return await run();
+  } finally {
+    if (standaloneStop === stop) standaloneStop = null;
+  }
+}
+
+/**
+ * Stop the request generateStandalone is running, through the same engine or provider it runs on.
+ * Its pending call then settles with whatever streamed before the stop. No-op when none is running.
+ */
+export async function stopStandalone(): Promise<void> {
+  await standaloneStop?.();
+}
+
 /**
  * One-shot standalone text completion on the ACTIVE text engine — engine-agnostic.
  *
@@ -288,17 +312,19 @@ export async function generateStandalone(
     if (activeRemoteTextModelId && provider.getLoadedModelId() !== activeRemoteTextModelId) {
       await provider.loadModel(activeRemoteTextModelId);
     }
-    let content = '';
-    await provider.generate(
-      messages,
-      { enableThinking: false },
-      {
-        onToken: (t: string) => { content += t; onToken?.(t); },
-        onComplete: (result) => { if (result?.content) content = result.content; },
-        onError: (err) => { throw err instanceof Error ? err : new Error(String(err)); },
-      },
-    );
-    return content;
+    return trackStandalone(() => provider.stopGeneration(), async () => {
+      let content = '';
+      await provider.generate(
+        messages,
+        { enableThinking: false },
+        {
+          onToken: (t: string) => { content += t; onToken?.(t); },
+          onComplete: (result) => { if (result?.content) content = result.content; },
+          onError: (err) => { throw err instanceof Error ? err : new Error(String(err)); },
+        },
+      );
+      return content;
+    });
   }
   if (getActiveEngineService() === liteRTService) {
     const system = messages.find(m => m.role === 'system');
@@ -311,15 +337,18 @@ export async function generateStandalone(
       history: [],
     });
     try {
-      return await liteRTService.generateRaw(userText, undefined, { onToken: (t: string) => onToken?.(t) });
+      return await trackStandalone(
+        () => liteRTService.stopGeneration(),
+        () => liteRTService.generateRaw(userText, undefined, { onToken: (t: string) => onToken?.(t) }),
+      );
     } finally {
       liteRTService.invalidateConversation();
     }
   }
   // llama (default engine). Stream tokens for live progress; force thinking OFF so the
   // enhanced prompt is a clean rewrite, never a leaked reasoning chain (B30/B30b).
-  return llmService.generateResponse(messages, {
+  return trackStandalone(() => llmService.stopGeneration(), () => llmService.generateResponse(messages, {
     onStream: onToken ? (data) => { if (typeof (data as { content?: string })?.content === 'string') onToken((data as { content: string }).content); } : () => {},
     disableThinking: true,
-  });
+  }));
 }

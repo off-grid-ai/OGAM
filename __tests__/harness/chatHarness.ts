@@ -730,11 +730,16 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     /** Mount the real ChatScreen (plus the real app.root slot when pro is active, so the TTS EngineBridge
      *  mounts and the voice engine can load over the executorch fake — the same slot App.tsx renders). */
     render() {
+      this.view = rtl.render(this.screenTree());
+      return this.view;
+    },
+
+    /** The mounted tree: ChatScreen, plus the app.root slot when pro is active. Fresh elements each call. */
+    screenTree(): React.ReactElement {
       const { ChatScreen } = require('../../src/screens/ChatScreen');
       const { getSlot, SLOTS } = require('../../src/bootstrap/slotRegistry');
-
       const AppRoot = opts.pro ? getSlot(SLOTS.appRoot) : undefined;
-      const tree = AppRoot
+      return AppRoot
         ? React.createElement(
             React.Fragment,
             null,
@@ -742,8 +747,23 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
             React.createElement(ChatScreen, {}),
           )
         : React.createElement(ChatScreen, {});
-      this.view = rtl.render(tree);
-      return this.view;
+    },
+
+    /**
+     * Open another chat on the SAME mounted ChatScreen, as navigating to a chat from the list does: the
+     * native stack keeps the screen and hands it new route params. No id opens a new chat. Anything
+     * still in flight in the composer (a transcription, a send) stays alive across the switch.
+     */
+    async openConversation(conversationId?: string) {
+      // The screen reads the route through the module registry the harness reset into, which holds its
+      // own copy of this module; set the params there.
+      require('./chatHarness').routeHolder.params = conversationId ? { conversationId } : {};
+      await rtl.act(async () => {
+        this.view!.rerender(this.screenTree());
+      });
+      await rtl.waitFor(() => {
+        expect(useChatStore.getState().activeConversationId).toBe(conversationId ?? null);
+      });
     },
 
     /**

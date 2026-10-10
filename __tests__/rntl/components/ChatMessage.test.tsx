@@ -255,7 +255,7 @@ describe('ChatMessage', () => {
       expect(getByText('Thought process')).toBeTruthy();
     });
 
-    it('renders Markdown in the collapsed thinking preview', () => {
+    it('shows the collapsed thinking preview as plain text, without Markdown syntax', () => {
       const message = createAssistantMessage(
         '<think>**Drafting Email Response**\nI am composing a direct reply.</think>Done.',
       );
@@ -266,7 +266,7 @@ describe('ChatMessage', () => {
       fireEvent.press(getByTestId('assistant-work-toggle'));
 
       expect(getByTestId('thinking-block-preview')).toBeTruthy();
-      expect(getByText('Drafting Email Response')).toBeTruthy();
+      expect(getByText('Drafting Email Response I am composing a direct reply.')).toBeTruthy();
       expect(queryByText(/\*\*Drafting Email Response\*\*/)).toBeNull();
     });
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { MarkdownText } from '../../MarkdownText';
+import { prepareMessageForSpeech } from '../../../utils/messageContent';
 import type { ParsedContent } from '../types';
 
 interface ThinkingBlockProps {
@@ -43,9 +44,15 @@ export function ThinkingBlock({
               testID="thinking-block-preview"
               style={styles.thinkingPreview}
             >
-              <MarkdownText dimmed compact>
-                {parsedContent.thinking}
-              </MarkdownText>
+              {/* Plain text clamped to two lines, so the cut ends in an ellipsis instead of a
+                  fixed-height box slicing through a word. */}
+              <Text
+                style={styles.thinkingPreviewText}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+              >
+                {prepareMessageForSpeech(parsedContent.thinking).replace(/\s+/g, ' ').trim()}
+              </Text>
             </View>
           )}
         </View>

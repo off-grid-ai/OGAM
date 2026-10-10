@@ -11,7 +11,10 @@ import {
   generationProgressStatus,
   imagePhaseTransitionLog,
 } from './imageGenerationHelpers';
-import { enhanceImagePrompt } from './imagePromptEnhancement';
+import {
+  cancelImagePromptEnhancement,
+  enhanceImagePrompt,
+} from './imagePromptEnhancement';
 import {
   completedImageGenerationState,
   saveImageGenerationResult,
@@ -34,6 +37,19 @@ export type {
   ImageGenerationState,
 } from './imageGenerationTypes';
 
+/**
+ * One generate request. Cancel and the remote request belong to the request, not the service, so
+ * a cancelled request that is still unwinding can never read the next request's flag, clear its
+ * controller or write its progress.
+ */
+interface ImageJob {
+  conversationId: string | null;
+  cancelled: boolean;
+  remoteRequest: AbortController | null;
+  /** Settles when the request has fully ended, whatever its outcome. */
+  settled: Promise<unknown>;
+}
+
 class ImageGenerationService {
   // The ONLY stored state is `phase` (+ the data fields). `isGenerating` is NOT
   // stored — there's no second source to desync. It's computed from phase in
@@ -51,8 +67,8 @@ class ImageGenerationService {
   };
 
   private readonly listeners: Set<ImageGenerationListener> = new Set();
-  private cancelRequested: boolean = false;
-  private remoteRequest: AbortController | null = null;
+  /** The latest request. A deleted chat waits for its own job; only this job may publish state. */
+  private job: ImageJob | null = null;
   /** Last generate request, so a failure card's Retry button can re-run it. */
   private _lastParams: GenerateImageParams | null = null;
 
@@ -91,6 +107,31 @@ class ImageGenerationService {
       logger.log(imagePhaseTransitionLog(prevPhase, this.state));
     }
     this.notifyListeners();
+  }
+
+  /** True while `job` is the latest request and nobody cancelled it. */
+  private isLive(job: ImageJob): boolean {
+    return this.job === job && !job.cancelled;
+  }
+
+  /** Publish state for `job` only while it is live, so a cancelled request stays silent. */
+  private updateFor(job: ImageJob, partial: Partial<ImageGenerationState>): void {
+    if (this.isLive(job)) this.updateState(partial);
+  }
+
+  /** A request that noticed its cancel returns the card to idle, unless a newer request owns it. */
+  private resetFor(job: ImageJob): null {
+    if (this.job === job) this.resetState();
+    return null;
+  }
+
+  /** Fail `job`; a cancelled or replaced request shows no failure card. */
+  private failFor(
+    job: ImageJob,
+    error: string,
+    opts?: { cause?: unknown; remote?: boolean },
+  ): null {
+    return this.isLive(job) ? this._fail(error, opts) : null;
   }
 
   /** Own the terminal error state and its retry actions. */
@@ -140,10 +181,11 @@ class ImageGenerationService {
   }
 
   private _setEnhancementState(
+    job: ImageJob,
     params: GenerateImageParams,
     status: string,
   ): void {
-    this.updateState({
+    this.updateFor(job, {
       phase: 'enhancing',
       prompt: params.prompt,
       conversationId: params.conversationId || null,
@@ -156,14 +198,18 @@ class ImageGenerationService {
   }
 
   private async _enhancePrompt(
+    job: ImageJob,
     params: GenerateImageParams,
   ): Promise<string> {
-    return enhanceImagePrompt(params, status =>
-      this._setEnhancementState(params, status),
+    return enhanceImagePrompt(
+      params,
+      status => this._setEnhancementState(job, params, status),
+      () => !this.isLive(job),
     );
   }
 
   private async _ensureImageModelLoaded(
+    job: ImageJob,
     activeImageModelId: string | null,
     activeImageModel: ActiveImageModel,
     opts: { desiredThreads: number; override?: boolean },
@@ -180,11 +226,11 @@ class ImageGenerationService {
     )
       return true;
     if (!activeImageModelId) {
-      this._fail('No image model selected');
+      this.failFor(job, 'No image model selected');
       return false;
     }
     try {
-      this.updateState({
+      this.updateFor(job, {
         phase: 'loading',
         status: `Loading ${activeImageModel.name}...`,
       });
@@ -197,7 +243,8 @@ class ImageGenerationService {
     } catch (error: any) {
       // Pass the TYPED error as `cause` — an OverridableMemoryError here is what lets
       // the failure card offer "Load Anyway". Stringifying it (as before) hid it.
-      this._fail(
+      this.failFor(
+        job,
         `Failed to load image model: ${error?.message || 'Unknown error'}`,
         { cause: error },
       );
@@ -206,6 +253,7 @@ class ImageGenerationService {
   }
 
   private async _runGenerationAndSave(
+    job: ImageJob,
     opts: RunGenerationOptions,
   ): Promise<GeneratedImage | null> {
     const {
@@ -240,7 +288,7 @@ class ImageGenerationService {
       }
     }
 
-    this.updateState({
+    this.updateFor(job, {
       phase: 'generating',
       status: isFirstRun
         ? 'Optimizing GPU for your device (~120s, one-time)...'
@@ -261,7 +309,7 @@ class ImageGenerationService {
           useOpenCL,
         },
         progress => {
-          if (this.cancelRequested) return;
+          if (!this.isLive(job)) return;
           const displayStep = Math.min(progress.step, steps);
           // Once steps are advancing it IS generating — don't mislabel it "GPU
           // optimization" (which read as if generation hadn't started). On the first run
@@ -277,7 +325,7 @@ class ImageGenerationService {
           });
         },
         preview => {
-          if (this.cancelRequested) return;
+          if (!this.isLive(job)) return;
           const displayStep = Math.min(preview.step, steps);
           this.updateState({
             previewPath: `file://${preview.previewPath}?t=${Date.now()}`,
@@ -285,12 +333,22 @@ class ImageGenerationService {
           });
         },
       );
-      if (this.cancelRequested || !result?.imagePath) {
-        this.resetState();
-        return null;
+      if (!this.isLive(job) || !result?.imagePath) {
+        if (result?.imagePath) {
+          const removed = await onnxImageGeneratorService
+            .deleteGeneratedImage(result.id, result.imagePath)
+            .catch(() => false);
+          if (!removed) {
+            result.modelId = activeImageModel.id;
+            if (params.conversationId) result.conversationId = params.conversationId;
+            useAppStore.getState().addGeneratedImage(result);
+            logger.warn('[ImageGen] could not remove a cancelled image; kept in Gallery');
+          }
+        }
+        return this.resetFor(job);
       }
       this.updateState(completedImageGenerationState(result));
-      return saveImageGenerationResult(result, {
+      return await saveImageGenerationResult(result, {
         params,
         activeImageModel,
         messageId: this.state.messageId,
@@ -301,8 +359,8 @@ class ImageGenerationService {
       });
     } catch (error: any) {
       const errorMsg = error?.message || 'Image generation failed';
-      if (errorMsg.includes('cancelled')) {
-        this.resetState();
+      if (errorMsg.includes('cancelled') || !this.isLive(job)) {
+        this.resetFor(job);
       } else {
         logger.error('[ImageGenerationService] Generation error:', error);
 
@@ -317,7 +375,7 @@ class ImageGenerationService {
           ? 'Image generation failed — the model encountered an error and was unloaded. Please try again.'
           : errorMsg;
 
-        this._fail(userMessage);
+        this.failFor(job, userMessage);
       }
       return null;
     }
@@ -331,29 +389,50 @@ class ImageGenerationService {
     params: GenerateImageParams,
     opts?: { override?: boolean },
   ): Promise<GeneratedImage | null> {
-    if (isInFlight(this.state.phase)) {
+    if (isInFlight(this.state.phase) || (this.job && !this.job.cancelled)) {
       logger.log(
         '[ImageGenerationService] Already generating, ignoring request',
       );
       return null;
     }
-    this.cancelRequested = false;
+    // A cancelled request may still be unwinding (a text model mid-load, a native cancel). It owns
+    // its own flag and controller and publishes nothing once replaced, so the new request starts now.
+    const job: ImageJob = {
+      conversationId: params.conversationId || null,
+      cancelled: false,
+      remoteRequest: null,
+      settled: Promise.resolve(),
+    };
+    this.job = job;
     this._lastParams = params; // so a failure card's Retry can re-run this exact request
+    const run = this._generate(job, params, opts);
+    job.settled = run.catch(() => null);
+    try {
+      return await run;
+    } finally {
+      if (this.job === job) this.job = null;
+    }
+  }
+
+  private async _generate(
+    job: ImageJob,
+    params: GenerateImageParams,
+    opts?: { override?: boolean },
+  ): Promise<GeneratedImage | null> {
     const remoteServer = useRemoteServerStore
       .getState()
       .getActiveRemoteMediaServer('image');
     if (remoteServer?.mediaModels?.image) {
-      const enhancedPrompt = await this._enhancePrompt(params);
-      if (this.cancelRequested) {
-        this.resetState();
-        return null;
-      }
+      const enhancedPrompt = await this._enhancePrompt(job, params);
+      if (!this.isLive(job)) return this.resetFor(job);
       return runRemoteImageGeneration(params, remoteServer, {
-        updateState: state => this.updateState(state),
-        fail: (message, cause) => this._fail(message, { cause, remote: true }),
-        isCancelled: () => this.cancelRequested,
+        updateState: state => this.updateFor(job, state),
+        fail: (message, cause) => this.failFor(job, message, { cause, remote: true }),
+        isCancelled: () => !this.isLive(job),
         setRequest: controller => {
-          this.remoteRequest = controller;
+          job.remoteRequest = controller;
+          // Cancelled between the check and the request: stop it before it is sent.
+          if (controller && job.cancelled) controller.abort();
         },
       }, { ...opts, enhancedPrompt });
     }
@@ -362,7 +441,7 @@ class ImageGenerationService {
     const activeImageModel = downloadedImageModels.find(
       m => m.id === activeImageModelId,
     );
-    if (!activeImageModel) return this._fail('No image model selected');
+    if (!activeImageModel) return this.failFor(job, 'No image model selected');
 
     const messageId = params.conversationId ? generateId() : null;
 
@@ -375,7 +454,7 @@ class ImageGenerationService {
     const imageWidth = imageParameters.size;
     const imageHeight = imageParameters.size;
 
-    this.updateState({
+    this.updateFor(job, {
       phase: settings.enhanceImagePrompts ? 'enhancing' : 'loading',
       prompt: params.prompt,
       conversationId: params.conversationId || null,
@@ -389,17 +468,14 @@ class ImageGenerationService {
       result: null,
     });
 
-    const enhancedPrompt = await this._enhancePrompt(params);
+    const enhancedPrompt = await this._enhancePrompt(job, params);
     logger.log(
       '[ImageGen] enhanceImagePrompts setting:',
       settings.enhanceImagePrompts,
     );
     // Stop can arrive while prompt enhancement owns the text engine. Do not clear that request and
     // continue into the image model after the user already pressed X.
-    if (this.cancelRequested) {
-      this.resetState();
-      return null;
-    }
+    if (!this.isLive(job)) return this.resetFor(job);
 
     // Establish the generating state unconditionally — not only when enhancement
     // is off. When enhancement is ON but _enhancePrompt bailed early (e.g. no text
@@ -407,7 +483,7 @@ class ImageGenerationService {
     // in-progress card never appeared. Setting it here fixes that; on the
     // enhancement-ran path this just swaps the 'Enhancing…' status for 'Preparing…'
     // before the image model loads.
-    this.updateState({
+    this.updateFor(job, {
       phase: 'loading',
       prompt: params.prompt,
       conversationId: params.conversationId || null,
@@ -419,17 +495,15 @@ class ImageGenerationService {
     });
 
     const loaded = await this._ensureImageModelLoaded(
+      job,
       activeImageModelId,
       activeImageModel,
       { desiredThreads: settings.imageThreads ?? 4, override: opts?.override },
     );
     if (!loaded) return null;
-    if (this.cancelRequested) {
-      this.resetState();
-      return null;
-    }
+    if (!this.isLive(job)) return this.resetFor(job);
 
-    return this._runGenerationAndSave({
+    return this._runGenerationAndSave(job, {
       params,
       enhancedPrompt,
       activeImageModel,
@@ -441,10 +515,31 @@ class ImageGenerationService {
     });
   }
 
+  /**
+   * Cancel the request drawing an image for this conversation and wait until it has ended. Deleting
+   * a chat calls this first, so no image is saved for the chat after its images are removed.
+   */
+  async cancelGenerationFor(conversationId: string): Promise<void> {
+    const job = this.job;
+    if (job?.conversationId !== conversationId) return;
+    await this.cancelGeneration();
+    await job.settled;
+  }
+
   async cancelGeneration(): Promise<void> {
-    if (!isInFlight(this.state.phase)) return;
-    this.cancelRequested = true;
-    this.remoteRequest?.abort();
+    const job = this.job;
+    if (!isInFlight(this.state.phase)) {
+      // Started but not yet showing progress: the run checks its job before each step.
+      if (job) job.cancelled = true;
+      return;
+    }
+    if (job) {
+      job.cancelled = true;
+      job.remoteRequest?.abort();
+    }
+    // While enhancing, the job waits on a text request that the image backends cannot stop.
+    const enhancement =
+      this.state.phase === 'enhancing' ? cancelImagePromptEnhancement() : null;
     // Publish the terminal while conversation identity is still present. Sync subscribers run
     // synchronously, so every peer can remove its live image card before native cancellation waits.
     this.updateState({
@@ -455,11 +550,13 @@ class ImageGenerationService {
       error: null,
     });
     try {
+      await enhancement;
       await onnxImageGeneratorService.cancelGeneration();
     } catch {
       /* Ignore */
     } finally {
-      this.resetState();
+      // A newer request may own the card by now; only clear what this cancel ended.
+      if (!job || this.job === job) this.resetState();
     }
   }
 

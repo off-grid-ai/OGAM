@@ -888,6 +888,11 @@ export interface WhisperFake {
   holdNextLoad(): void;
   /** Release a load held via holdNextLoad(). No-op if not held. */
   releaseLoad(): void;
+  /** HOLD the next file transcription (the voice-mode path) open until releaseTranscription() - the
+   *  seconds a real whisper pass over a recording takes on device. One-shot. */
+  holdNextTranscription(): void;
+  /** Release a transcription held via holdNextTranscription(). No-op if not held. */
+  releaseTranscription(): void;
 }
 
 function makeWhisperFake(): WhisperFake {
@@ -897,16 +902,26 @@ function makeWhisperFake(): WhisperFake {
   // Load hold: opens the in-flight model-load window a real (seconds-long) ggml init has.
   let loadHoldPending = false;
   let loadHoldRelease: (() => void) | null = null;
+  // Transcription hold: the in-flight window of a real whisper pass over a recorded file.
+  let transcriptionHoldPending = false;
+  let transcriptionHoldRelease: (() => void) | null = null;
   const context: Record<string, jest.Mock> = {
     // Faithful to whisper.rn: transcribe(path, opts) returns { stop, promise }, the promise resolving to
     // { result, segments } — this is the method whisperService.transcribeFile (the voice-mode file path) drives.
-    transcribe: jest.fn((_path: string) => ({
-      stop: jest.fn(async () => {}),
-      promise: Promise.resolve({
-        result: fileTranscript,
-        segments: [{ text: fileTranscript, t0: 0, t1: 100 }],
-      }),
-    })),
+    transcribe: jest.fn((_path: string) => {
+      const text = fileTranscript;
+      const held = transcriptionHoldPending
+        ? new Promise<void>(res => { transcriptionHoldRelease = res; })
+        : Promise.resolve();
+      transcriptionHoldPending = false;
+      return {
+        stop: jest.fn(async () => {}),
+        promise: held.then(() => ({
+          result: text,
+          segments: [{ text, t0: 0, t1: 100 }],
+        })),
+      };
+    }),
     transcribeFile: jest.fn(async () => ({
       result: fileTranscript,
       segments: [{ text: fileTranscript, t0: 0, t1: 100 }],
@@ -972,6 +987,14 @@ function makeWhisperFake(): WhisperFake {
     releaseLoad: () => {
       const f = loadHoldRelease;
       loadHoldRelease = null;
+      f?.();
+    },
+    holdNextTranscription: () => {
+      transcriptionHoldPending = true;
+    },
+    releaseTranscription: () => {
+      const f = transcriptionHoldRelease;
+      transcriptionHoldRelease = null;
       f?.();
     },
   };
@@ -1043,6 +1066,13 @@ export interface NativeBoundary {
   setRam(profile: RamProfile): void;
   /** Fire the OS 'memoryWarning' AppState event the app's residency manager listens to (auto-eviction). */
   emitMemoryWarning(): void;
+  /** Fire an OS AppState 'change' (e.g. 'active' when the person comes back from Settings). */
+  emitAppStateChange(state: 'active' | 'background' | 'inactive'): void;
+  /** What the OS answers when the app reads the microphone permission (no prompt). Default 'Granted'.
+   *  'Unreadable' makes the read fail, as a native module error would. */
+  setMicPermission(status: 'Granted' | 'Denied' | 'Undetermined' | 'Unreadable'): void;
+  /** How many times the app asked the OS to open its Settings page. */
+  settingsOpenedCount(): number;
 }
 
 /**
@@ -1103,14 +1133,20 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   RN.NativeModules.CoreMLDiffusionModule = diffusion.module;
   if (downloadFake)
     RN.NativeModules.DownloadManagerModule = downloadFake.module;
+  let micPermission: 'Granted' | 'Denied' | 'Undetermined' | 'Unreadable' = 'Granted';
   // Mic permission is a device boundary: whisper STT refuses to start recording without RECORD_AUDIO
   // granted (whisperService.requestPermissions → PermissionsAndroid.request). Grant it when whisper is
   // installed so the real STT flow runs; the default jest PermissionsAndroid returns undefined (= denied).
+  // The answer follows the permission the test set (setMicPermission): granted stays granted, and
+  // anything else answers as a "Don't ask again" denial, the case Android reads back as Undetermined.
   if (whisperFake && RN.PermissionsAndroid) {
-    RN.PermissionsAndroid.request = jest
-      .fn()
-      .mockResolvedValue(RN.PermissionsAndroid.RESULTS?.GRANTED ?? 'granted');
-    RN.PermissionsAndroid.check = jest.fn().mockResolvedValue(true);
+    RN.PermissionsAndroid.request = () =>
+      Promise.resolve(
+        micPermission === 'Granted'
+          ? RN.PermissionsAndroid.RESULTS?.GRANTED ?? 'granted'
+          : RN.PermissionsAndroid.RESULTS?.NEVER_ASK_AGAIN ?? 'never_ask_again',
+      );
+    RN.PermissionsAndroid.check = () => Promise.resolve(micPermission === 'Granted');
   }
   RN.NativeModules.DeviceMemoryModule = {
     // Live read from memState so a context release (freeModelMemory) is reflected — the reclaim barrier
@@ -1150,6 +1186,20 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   // mock swallows the callback, so replace AppState with a capturing emitter and expose emitMemoryWarning()
   // to fire the OS memory-warning faithfully (OS event → the app's real listener → real handleMemoryWarning).
   const appState = makeEmitterRegistry();
+
+  // Microphone permission leaf: react-native-audio-api reads the OS record permission without a
+  // prompt. Stateful so a test can deny it, then grant it as if from Settings.
+  require('react-native-audio-api').AudioManager.checkRecordingPermissions = () =>
+    micPermission === 'Unreadable'
+      ? Promise.reject(new Error('record permission unavailable'))
+      : Promise.resolve(micPermission);
+  // Settings leaf: Linking.openSettings hands off to the OS; count the hand-offs.
+  let settingsOpened = 0;
+  RN.Linking.openSettings = () => {
+    settingsOpened += 1;
+    return Promise.resolve();
+  };
+
   Object.defineProperty(RN, 'AppState', {
     configurable: true,
     value: {
@@ -1194,5 +1244,10 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     whisper: whisperFake,
     setRam,
     emitMemoryWarning: () => appState.handle.emit('memoryWarning'),
+    emitAppStateChange: state => appState.handle.emit('change', state),
+    setMicPermission: status => {
+      micPermission = status;
+    },
+    settingsOpenedCount: () => settingsOpened,
   };
 }

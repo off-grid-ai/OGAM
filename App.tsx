@@ -136,6 +136,7 @@ function App() {
   const applyPendingProRedirect = useProExpiryRedirect();
   const [isInitializing, setIsInitializing] = useState(true);
   const startupGeneration = useRef(0);
+  const showSyncStatusBar = useAppStore(s => s.showSyncStatusBar);
   const setDeviceInfo = useAppStore((s) => s.setDeviceInfo);
   const setModelRecommendation = useAppStore((s) => s.setModelRecommendation);
   const setDownloadedModels = useAppStore((s) => s.setDownloadedModels);
@@ -406,7 +407,7 @@ function App() {
             <SystemBars style={isDark ? 'light' : 'dark'} />
             <LoadingDots size={8} testID="startup-loading-dots" />
           </View>
-          {__DEV__ ? <DevSyncStrip /> : null}
+          {__DEV__ && showSyncStatusBar ? <DevSyncStrip /> : null}
         </SafeAreaProvider>
       </GestureHandlerRootView>
     );
@@ -419,7 +420,7 @@ function App() {
         <SafeAreaProvider>
           <SystemBars style={isDark ? 'light' : 'dark'} />
           <LockScreen onUnlock={handleUnlock} />
-          {__DEV__ ? <DevSyncStrip /> : null}
+          {__DEV__ && showSyncStatusBar ? <DevSyncStrip /> : null}
         </SafeAreaProvider>
       </GestureHandlerRootView>
     );
@@ -465,7 +466,7 @@ function App() {
         >
           <AppNavigator />
         </NavigationContainer>
-        {__DEV__ ? <DevSyncStrip /> : null}
+        {__DEV__ && showSyncStatusBar ? <DevSyncStrip /> : null}
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
