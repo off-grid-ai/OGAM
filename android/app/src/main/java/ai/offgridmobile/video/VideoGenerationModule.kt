@@ -162,7 +162,7 @@ class VideoGenerationModule(private val context: ReactApplicationContext) : Reac
             } catch (error: Throwable) {
                 val code = if (cancelled.get()) "VIDEO_CANCELLED" else "VIDEO_FAILED"
                 terminal = mapOf("phase" to "failed", "code" to code, "error" to (error.message ?: "Video generation failed."))
-                output?.delete()
+                discard(output)
                 if (context.hasActiveReactInstance()) promise.reject(code, error.message, error)
             } finally {
                 keepVideoScreenAwake(false)
@@ -248,10 +248,16 @@ class VideoGenerationModule(private val context: ReactApplicationContext) : Reac
                 promise.resolve(Arguments.createMap().apply {
                     putString("imagePath", output.path); putInt("width", width); putInt("height", height); putDouble("seed", input.getDouble("seed")); putString("id", input.getString("id"))
                 })
-            } catch (error: Throwable) { output?.delete(); promise.reject("IMAGE_FAILED", error.message, error) }
-            finally { imagePreviewFile?.delete(); imagePreviewFile = null; VideoGenerationService.cancel = null; context.stopService(Intent(context, VideoGenerationService::class.java)); busy.set(false) }
+            } catch (error: Throwable) { discard(output); promise.reject("IMAGE_FAILED", error.message, error) }
+            finally { discard(imagePreviewFile); imagePreviewFile = null; VideoGenerationService.cancel = null; context.stopService(Intent(context, VideoGenerationService::class.java)); busy.set(false) }
         }
     }
+    /** Remove a partial output; a file that cannot be removed is logged, not ignored. */
+    private fun discard(file: File?) {
+        if (file != null && file.exists() && !file.delete())
+            android.util.Log.w("OffGridVideo", "Could not delete ${file.path}")
+    }
+
     override fun invalidate() {
         keepVideoScreenAwake(false)
         context.removeLifecycleEventListener(this)
