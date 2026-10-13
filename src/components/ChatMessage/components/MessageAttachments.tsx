@@ -73,6 +73,11 @@ export function FadeInImage({ uri, imageStyle, testID, wrapperTestID, onPress, a
   );
 }
 
+const videoAttachmentStyles = StyleSheet.create({
+  container: { width: '100%', gap: SPACING.xs },
+  pictureInPicture: { width: SPACING.xl * 2, height: SPACING.xl * 2, paddingHorizontal: 0 },
+});
+
 const fadeInImageStyles = StyleSheet.create({
   wrapper: {
     borderRadius: 12,
@@ -118,7 +123,7 @@ function VideoAttachment({ attachment }: { attachment: MediaAttachment }) {
   const [loaded, setLoaded] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   return (
-    <View style={{ width: '100%', gap: SPACING.xs }}>
+    <View style={videoAttachmentStyles.container}>
       <VideoPlayer
         ref={player}
         preload
@@ -137,7 +142,7 @@ function VideoAttachment({ attachment }: { attachment: MediaAttachment }) {
             size="small"
             disabled={!loaded}
             icon={<Icon name="minimize-2" size={SPACING.lg} color={colors.text} />}
-            style={{ width: SPACING.xl * 2, height: SPACING.xl * 2, paddingHorizontal: 0 }}
+            style={videoAttachmentStyles.pictureInPicture}
             onPress={async () => {
               try {
                 await player.current?.enterPictureInPicture();

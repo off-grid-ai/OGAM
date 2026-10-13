@@ -6,7 +6,7 @@ import { localDreamGeneratorService as onnxImageGeneratorService } from '../loca
 import { hardwareService } from '../hardware';
 import { modelResidencyManager } from '../modelResidency';
 import { OverridableMemoryError, ImageModelIncompleteError } from '../modelLoadErrors';
-import { validateImageModelDir } from '../../utils/imageModelIntegrity';
+import { validateImageModelDir } from '../imageModelIntegrity';
 import { remoteServerManager } from '../remoteServerManager';
 import { useAppStore, useRemoteServerStore } from '../../stores';
 import logger from '../../utils/logger';

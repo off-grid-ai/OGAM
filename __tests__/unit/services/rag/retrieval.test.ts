@@ -8,6 +8,7 @@ jest.mock('../../../../src/services/rag/database', () => ({
 
 jest.mock('../../../../src/services/rag/embedding', () => ({
   embeddingService: {
+    runExclusive: <T,>(operation: () => Promise<T>) => operation(),
     isLoaded: jest.fn(() => false),
     load: jest.fn(() => Promise.resolve()),
     embed: jest.fn(() => Promise.resolve(new Array(384).fill(0.1))),

@@ -79,7 +79,7 @@ describe('Ollama over HTTPS with a saved key', () => {
 
     // Back on Home, the picker lists the Ollama's model.
     fireEvent.press(ui.getByLabelText('Back'));
-    await waitFor(() => expect(ui.getByText('Select a text or image model to start')).toBeTruthy());
+    await waitFor(() => expect(ui.getByText('Select a text, image, or video model to start')).toBeTruthy());
     fireEvent.press(ui.getByTestId('browse-models-button'));
     await waitFor(() => expect(ui.getByText(MODEL)).toBeTruthy());
   });

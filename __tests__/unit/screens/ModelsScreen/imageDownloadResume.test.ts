@@ -20,7 +20,8 @@ jest.mock('react-native-zip-archive', () => ({
 
 // Integrity is a boundary here (resume orchestration is under test, not the completeness
 // rule). Default to "complete" so mocked RNFS fixtures don't trip the post-unzip gate.
-jest.mock('../../../../src/utils/imageModelIntegrity', () => ({
+jest.mock('../../../../src/services/imageModelIntegrity', () => ({
+  ...jest.requireActual('../../../../src/services/imageModelIntegrity'),
   validateImageModelDir: jest.fn(async () => ({ complete: true, missing: [] })),
   ensureImageExtractionComplete: jest.fn(async () => {}),
 }));
@@ -46,6 +47,9 @@ jest.mock('../../../../src/stores/downloadStore', () => ({
 
 jest.mock('../../../../src/services/imageDownloadActions', () => ({
   registerAndNotify: jest.fn(),
+  // No download is running in this process, so resume owns the model.
+  isMultifileImageDownloadActive: () => false,
+  validateMultifileComplete: jest.requireActual('../../../../src/services/imageModelIntegrity').validateMultifileComplete,
 }));
 
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
@@ -238,9 +242,12 @@ describe('resumeImageDownload', () => {
         imageModelDescription: 'desc',
         imageModelSize: 1000,
         imageModelBackend: 'mnn',
+        imageModelHuggingFaceFiles: [{ path: 'unet.mnn', size: 1000 }],
       }),
     });
     existingPaths.add(modelDir);
+    existingPaths.add(`${modelDir}/unet.mnn`);
+    statSizes[`${modelDir}/unet.mnn`] = 1000;
 
     await resumeImageDownload(entry, makeDeps() as any);
 

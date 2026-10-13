@@ -150,10 +150,10 @@ export const GalleryScreen: React.FC = () => {
         )}
       </View>
 
-      <View style={{ flexDirection: 'row', padding: 8, gap: 8 }}>
+      <View style={styles.mediaTabs}>
         {(['images', 'videos'] as const).map(tab => <TouchableOpacity key={tab} onPress={() => setKind(tab)} accessibilityRole="button"
-          style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6, backgroundColor: kind === tab ? colors.primary : colors.surface }}>
-          <Text style={{ color: kind === tab ? colors.background : colors.text }}>{tab === 'images' ? `Images (${displayImages.length})` : `Videos (${displayVideos.length})`}</Text>
+          style={[styles.mediaTab, kind === tab && styles.mediaTabActive]}>
+          <Text style={kind === tab ? styles.mediaTabTextActive : styles.mediaTabText}>{tab === 'images' ? `Images (${displayImages.length})` : `Videos (${displayVideos.length})`}</Text>
         </TouchableOpacity>)}
       </View>
 
@@ -216,27 +216,19 @@ export const GalleryScreen: React.FC = () => {
           <FlatList
             data={displayVideos}
             keyExtractor={item => item.id}
-            contentContainerStyle={{ padding: 12 }}
+            contentContainerStyle={styles.videoList}
             renderItem={({ item }) => (
               <TouchableOpacity
                 onPress={() => setSelectedVideo(item)}
                 accessibilityRole="button"
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  padding: 16,
-                  marginBottom: 8,
-                  backgroundColor: colors.surface,
-                  borderRadius: 8,
-                  gap: 12,
-                }}
+                style={styles.videoRow}
               >
                 <Icon name="play-circle" size={28} color={colors.primary} />
-                <View style={{ flex: 1 }}>
-                  <Text numberOfLines={2} style={{ color: colors.text }}>
+                <View style={styles.videoRowBody}>
+                  <Text numberOfLines={2} style={styles.videoRowTitle}>
                     {item.prompt}
                   </Text>
-                  <Text style={{ color: colors.textMuted }}>
+                  <Text style={styles.videoRowMeta}>
                     {item.durationSeconds.toFixed(1)} s · {item.width} ×{' '}
                     {item.height}
                   </Text>
@@ -276,15 +268,9 @@ export const GalleryScreen: React.FC = () => {
         onRequestClose={() => setSelectedVideo(null)}
       >
         <SafeAreaView style={styles.container}>
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              padding: 16,
-            }}
-          >
+          <View style={styles.videoViewerHeader}>
             <TouchableOpacity onPress={() => setSelectedVideo(null)}>
-              <Text style={{ color: colors.text }}>Close</Text>
+              <Text style={styles.videoViewerText}>Close</Text>
             </TouchableOpacity>
             {selectedVideo ? (
               <TouchableOpacity
@@ -321,13 +307,12 @@ export const GalleryScreen: React.FC = () => {
                 controls
                 paused
                 resizeMode="contain"
-                style={{
-                  width: '100%',
-                  aspectRatio: selectedVideo.width / selectedVideo.height,
-                  backgroundColor: '#000',
-                }}
+                style={[
+                  styles.videoPlayer,
+                  { aspectRatio: selectedVideo.width / selectedVideo.height },
+                ]}
               />
-              <Text style={{ color: colors.text, padding: 16 }}>
+              <Text style={styles.videoPrompt}>
                 {selectedVideo.prompt}
               </Text>
               <TouchableOpacity
@@ -342,9 +327,9 @@ export const GalleryScreen: React.FC = () => {
                       ),
                     );
                 }}
-                style={{ padding: 16 }}
+                style={styles.videoDelete}
               >
-                <Text style={{ color: colors.error }}>Delete video</Text>
+                <Text style={styles.videoDeleteText}>Delete video</Text>
               </TouchableOpacity>
             </>
           ) : null}

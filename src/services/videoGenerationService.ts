@@ -155,7 +155,7 @@ class VideoGenerationService {
       .generatedVideos.find(item => item.id === id);
     if (!video) return;
     const path = resolveDocumentPath(video.videoPath);
-    const root = RNFS.DocumentDirectoryPath + '/';
+    const root = `${RNFS.DocumentDirectoryPath}/`;
     if (!path.startsWith(root) || path.split('/').includes('..'))
       throw new Error('The video path is outside app storage.');
     if (await RNFS.exists(path)) await RNFS.unlink(path);
@@ -557,16 +557,16 @@ class VideoGenerationService {
         this.journal
       ) {
         delete this.journal.remoteJobId;
-        await this.persist().catch(error =>
-          logger.warn('[Video] Could not save failed job', error),
+        await this.persist().catch(persistError =>
+          logger.warn('[Video] Could not save failed job', persistError),
         );
       }
       if ((error as { code?: string })?.code === 'VIDEO_CANCELLED')
         this.cancelled = true;
       if (this.cancelled) {
         this.journal = null;
-        await this.persist().catch(error =>
-          logger.warn('[Video] Could not clear stopped job', error),
+        await this.persist().catch(persistError =>
+          logger.warn('[Video] Could not clear stopped job', persistError),
         );
       }
       await RNFS.unlink(output).catch(() => {});

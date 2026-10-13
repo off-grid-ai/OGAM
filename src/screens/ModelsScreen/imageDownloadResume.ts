@@ -9,7 +9,7 @@ import { useDownloadStore, DownloadEntry } from '../../stores/downloadStore';
 import { ImageDownloadDeps, registerAndNotify, proceedWithDownload, validateMultifileComplete, isMultifileImageDownloadActive } from '../../services/imageDownloadActions';
 import type { ImageModelDescriptor } from '../../services/imageModelDownloadTypes';
 import { imageDescriptorFromMetadata } from './imageDescriptor';
-import { validateImageModelDir, ensureImageExtractionComplete } from '../../utils/imageModelIntegrity';
+import { validateImageModelDir, ensureImageExtractionComplete } from '../../services/imageModelIntegrity';
 import { makeImageModelKey } from '../../utils/modelKey';
 import logger from '../../utils/logger';
 

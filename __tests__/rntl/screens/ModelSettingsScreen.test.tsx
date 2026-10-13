@@ -182,7 +182,7 @@ describe('ModelSettingsScreen', () => {
       expect(getByText('Show Generation Details')).toBeTruthy();
       expect(
         getByText(
-          'Show context use, model, speed, and image settings below each reply',
+          'Applies to all chats. Show context use, model, speed, and image settings below each reply.',
         ),
       ).toBeTruthy();
     });
@@ -621,15 +621,15 @@ describe('ModelSettingsScreen', () => {
   // ============================================================================
   describe('GPU settings', () => {
     // Platform.OS is 'ios' in the test environment; Metal is the default backend, GPU Layers hidden when cpu
-    it('shows Inference Backend section on iOS', () => {
+    it('shows Text Model Backend section on iOS', () => {
       const { getByText } = renderWithSections('text');
-      expect(getByText('Inference Backend')).toBeTruthy();
+      expect(getByText('Text Model Backend')).toBeTruthy();
     });
 
     it('does not show GPU Layers on iOS when backend is cpu', () => {
       useAppStore.getState().updateSettings({ inferenceBackend: 'cpu' });
-      const { queryByText } = renderWithSections('text');
-      expect(queryByText('GPU Layers')).toBeNull();
+      const { queryByTestId } = renderWithSections('text');
+      expect(queryByTestId('gpu-layers-stepper-slider')).toBeNull();
     });
 
     // Android-specific backend tests: mock Platform.OS before each, restore after
@@ -652,12 +652,12 @@ describe('ModelSettingsScreen', () => {
         });
       });
 
-      it('shows Inference Backend section and GPU Layers slider when backend is OpenCL', () => {
+      it('shows Text Model Backend section and GPU Layers slider when backend is OpenCL', () => {
         useAppStore
           .getState()
           .updateSettings({ inferenceBackend: 'opencl', gpuLayers: 6 });
         const { getByText, getByTestId } = renderWithSections('text');
-        expect(getByText('Inference Backend')).toBeTruthy();
+        expect(getByText('Text Model Backend')).toBeTruthy();
         // Label now names the backend: "GPU Layers (OpenCL)". Assert the slider by its
         // SliderSetting child testID (SliderSetting suffixes testID with -slider/-value).
         expect(getByTestId('gpu-layers-stepper-slider')).toBeTruthy();
@@ -943,6 +943,10 @@ describe('ModelSettingsScreen', () => {
           liteRTTemperature: undefined as any,
           liteRTTopP: undefined as any,
           liteRTMaxTokens: undefined as any,
+          videoParams: undefined as any,
+          videoSeed: undefined as any,
+          videoNegative: undefined as any,
+          enhanceVideoPrompts: undefined as any,
         },
       });
 

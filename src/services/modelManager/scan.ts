@@ -6,7 +6,7 @@ import { DownloadedModel, LlamaDownloadedModel, ONNXImageModel } from '../../typ
 import { loadDownloadedModels, saveModelsList } from './storage';
 import { basenameOf } from './reconcileStoredPaths';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
-import { ensureImageExtractionComplete, validateMultifileComplete, validateImageModelDir } from '../../utils/imageModelIntegrity';
+import { ensureImageExtractionComplete, validateMultifileComplete, validateImageModelDir } from '../imageModelIntegrity';
 // Single source of truth for projector detection + model↔projector matching (see src/services/mmproj.ts).
 import { isMMProjFile, pickMmProjForModel } from '../mmproj';
 

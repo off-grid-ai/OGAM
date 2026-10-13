@@ -15,7 +15,7 @@ import {
 import { useTheme, useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { createStyles } from './styles';
-import { SystemPromptSection } from './SystemPromptSection';
+import { SystemPromptSection } from '../../components/settings/SystemPromptSection';
 import { ImageGenerationSection } from './ImageGenerationSection';
 import { TextGenerationSection } from './TextGenerationSection';
 import { VoiceTurnSettings } from '../../components/settings/voiceSections';

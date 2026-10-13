@@ -4,7 +4,7 @@ import { AdvancedToggle } from '../AdvancedToggle';
 import { SliderSetting } from '../SliderSetting';
 import { useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
-import { SystemPromptSection } from '../../screens/ModelSettingsScreen/SystemPromptSection';
+import { SystemPromptSection } from '../settings/SystemPromptSection';
 import {
   type NumericSettingModel,
   useTextGenerationSettings,

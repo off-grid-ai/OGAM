@@ -224,7 +224,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </AnimatedEntry>
 
           {/* New Chat Button */}
-          {activeTextModelId || activeImageModelId || modelLabels.video ? (
+          {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
             <Button
               title="New Chat"
               onPress={startNewChat}

@@ -17,11 +17,11 @@
  * coreml (iOS) uses a different layout validated elsewhere, so it's not checked here.
  */
 import RNFS from 'react-native-fs';
-import { statFile } from './fileStat';
-import { getSDImagePackFiles, isSDImageWeight, validateSDCheckpointFile } from '../services/huggingFaceModelBrowser';
+import { statFile } from '../utils/fileStat';
+import { getSDImagePackFiles, isSDImageWeight, validateSDCheckpointFile } from './huggingFaceModelBrowser';
 import { unzip } from 'react-native-zip-archive';
-import { ImageModelIncompleteError } from './modelLoadErrors';
-import logger from './logger';
+import { ImageModelIncompleteError } from '../utils/modelLoadErrors';
+import logger from '../utils/logger';
 
 type ReadDirItem = Awaited<ReturnType<typeof RNFS.readDir>>[number];
 
@@ -57,9 +57,9 @@ export function checkImageModelFiles(files: ImageDirEntry[], backend: ImageBacke
   for (const f of files) if (f.isFile) sizeByName.set(f.name, f.size);
 
   if (backend === 'sd') {
-    const files = getSDImagePackFiles([...sizeByName.keys()]);
-    if (!files) return { complete: false, missing: ['image model pack'] };
-    const missing = files.filter(file => (sizeByName.get(file.path) ?? 0) <= 0).map(file => file.path);
+    const packFiles = getSDImagePackFiles([...sizeByName.keys()]);
+    if (!packFiles) return { complete: false, missing: ['image model pack'] };
+    const missing = packFiles.filter(file => (sizeByName.get(file.path) ?? 0) <= 0).map(file => file.path);
     return { complete: missing.length === 0, missing };
   }
 

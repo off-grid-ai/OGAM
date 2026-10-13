@@ -417,9 +417,13 @@ describe('remoteServerManager', () => {
       expect(
         useRemoteServerStore.getState().setActiveRemoteImageModelId,
       ).toHaveBeenCalledWith(null);
-      expect(
-        useRemoteServerStore.getState().setActiveRemoteMediaServerId,
-      ).toHaveBeenCalledTimes(3);
+      const clearedMedia = (
+        useRemoteServerStore.getState().setActiveRemoteMediaServerId as jest.Mock
+      ).mock.calls;
+      expect(clearedMedia.map(([category]) => category).sort()).toEqual(
+        ['image', 'transcription', 'video', 'voice'],
+      );
+      expect(clearedMedia.every(([, id]) => id === null)).toBe(true);
       expect(providerRegistry.setActiveProvider).toHaveBeenCalledWith('local');
     });
   });

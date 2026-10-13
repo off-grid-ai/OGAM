@@ -32,7 +32,7 @@ export async function exportGeneratedMedia(
   if (permission !== PermissionsAndroid.RESULTS.GRANTED)
     throw new Error('Storage permission is required to save the file.');
   if (
-    !source.startsWith(RNFS.DocumentDirectoryPath + '/') ||
+    !source.startsWith(`${RNFS.DocumentDirectoryPath}/`) ||
     source.split('/').includes('..') ||
     /[/\\]/.test(fileName)
   ) {

@@ -14,8 +14,8 @@ import { useDownloadStore, isActiveStatus } from '../stores/downloadStore';
 import { makeImageModelKey } from '../utils/modelKey';
 import { ImageModelDescriptor, ImageDownloadDeps } from './imageModelDownloadTypes';
 import { getQnnWarningMessage, showQnnWarningAlert } from './imageDownloadQnn';
-import { ensureImageExtractionComplete, validateMultifileComplete } from '../utils/imageModelIntegrity';
-export { validateMultifileComplete } from '../utils/imageModelIntegrity';
+import { ensureImageExtractionComplete, validateMultifileComplete } from './imageModelIntegrity';
+export { validateMultifileComplete } from './imageModelIntegrity';
 import logger from '../utils/logger';
 
 // ImageDownloadDeps now lives in ./types (so imageDownloadQnn can import it without cycling back

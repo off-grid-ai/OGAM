@@ -110,6 +110,8 @@ describe('GenerationSettingsModal', () => {
       downloadedModels: [],
       downloadedImageModels: [],
       activeImageModelId: null,
+      downloadedVideoModels: [],
+      activeVideoModelId: null,
     };
   });
 
@@ -574,15 +576,15 @@ describe('GenerationSettingsModal', () => {
   // NEW TESTS: Performance section details
   // ============================================================================
 
-  it('shows generation details toggle in text generation section', () => {
+  it('shows generation details toggle in the General section', () => {
     const { getByText } = render(
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('GENERAL'));
 
     expect(getByText('Show Generation Details')).toBeTruthy();
-    expect(getByText('Show context use, model, speed, and image settings below each reply')).toBeTruthy();
+    expect(getByText('Applies to all chats. Show context use, model, speed, and image settings below each reply.')).toBeTruthy();
   });
 
   it('calls updateSettings to enable show generation details', () => {
@@ -590,9 +592,9 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('GENERAL'));
 
-    // Find the "On" buttons in text generation section
+    // Find the "On" buttons in the General section
     const onButtons = getAllByText('On');
     // The last "On" is for show generation details
     fireEvent.press(onButtons[onButtons.length - 1]);
@@ -882,19 +884,17 @@ describe('GenerationSettingsModal', () => {
       it('renders GPU layers slider with gpuLayersEffective when backend is OpenCL', () => {
         mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 8, flashAttn: false };
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-        expect(getByText('8')).toBeTruthy();
+        fireEvent.press(getByText('GENERAL'));
+        expect(getByTestId('gpu-layers-stepper-value').props.children).toBe('8');
       });
 
       it('shows GPU layers at full value when flash attention is On (no clamping)', () => {
         // Flash attention no longer caps GPU layers — gpuLayersMax is always 99
         mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 8, flashAttn: true };
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
+        fireEvent.press(getByText('GENERAL'));
         // gpuLayersEffective = Math.min(8, 99) = 8
-        expect(getByText('8')).toBeTruthy();
+        expect(getByTestId('gpu-layers-stepper-value').props.children).toBe('8');
       });
 
       it('uses default gpuLayers value of 1 when gpuLayers is undefined (covers ?? fallback)', () => {
@@ -905,8 +905,7 @@ describe('GenerationSettingsModal', () => {
           flashAttn: false,
         };
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
+        fireEvent.press(getByText('GENERAL'));
         // gpuLayersEffective = Math.min(undefined ?? 1, 99) = 1
         expect(getByTestId('gpu-layers-stepper-value').props.children).toBe('1');
       });
@@ -959,8 +958,7 @@ describe('GenerationSettingsModal', () => {
       it('calls updateSettings with inferenceBackend: cpu when CPU button pressed', () => {
         mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'opencl' as const };
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
+        fireEvent.press(getByText('GENERAL'));
         mockUpdateSettings.mockClear();
 
         fireEvent.press(getByTestId('backend-cpu-button'));
@@ -971,8 +969,7 @@ describe('GenerationSettingsModal', () => {
       it('calls updateSettings with inferenceBackend: opencl when OpenCL button pressed on Android', () => {
         mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'cpu' as const };
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
+        fireEvent.press(getByText('GENERAL'));
         mockUpdateSettings.mockClear();
 
         fireEvent.press(getByTestId('backend-opencl-button'));
@@ -983,8 +980,7 @@ describe('GenerationSettingsModal', () => {
       it('calls updateSettings with gpuLayers value from GPU layers slider', () => {
         mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 6, flashAttn: false };
         const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
+        fireEvent.press(getByText('GENERAL'));
         mockUpdateSettings.mockClear();
 
         fireEvent(getByTestId('gpu-layers-stepper-slider'), 'slidingComplete', 7);
@@ -1012,7 +1008,7 @@ describe('GenerationSettingsModal', () => {
       <GenerationSettingsModal {...defaultProps} />,
     );
 
-    fireEvent.press(getByText('TEXT GENERATION'));
+    fireEvent.press(getByText('GENERAL'));
     mockUpdateSettings.mockClear();
 
     // Find and press the Off button that sets showGenerationDetails

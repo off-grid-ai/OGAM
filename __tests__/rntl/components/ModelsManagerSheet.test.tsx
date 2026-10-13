@@ -21,7 +21,7 @@ jest.mock('../../../src/components/AnimatedPressable', () => {
 
 import { ModelsManagerSheet } from '../../../src/components/models/ModelsManagerSheet';
 
-const labels = { text: 'Qwen3.5', image: '—', voice: 'Kokoro', speech: 'Base' };
+const labels = { text: 'Qwen3.5', image: '—', video: '—', voice: 'Kokoro', speech: 'Base' };
 const baseProps = {
   visible: true,
   onClose: jest.fn(),

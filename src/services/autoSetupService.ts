@@ -24,7 +24,7 @@ export interface AutoSetupDownloadBoundaries {
   subscribe: (listener: () => void) => () => void;
 }
 
-export interface AutoSetupEmbeddingBoundaries {
+interface AutoSetupEmbeddingBoundaries {
   isDownloaded: (model: AutoSetupEmbeddingModel) => Promise<boolean>;
   start: (model: AutoSetupEmbeddingModel, progress: (fraction: number) => void, signal: AbortSignal) => Promise<void>;
 }

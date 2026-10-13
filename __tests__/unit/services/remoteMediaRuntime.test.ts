@@ -58,12 +58,17 @@ describe('remoteMediaRuntime', () => {
     expect(remoteServerCapabilities(server)).toEqual({
       imageGeneration: true,
       transcription: true,
+      videoGeneration: false,
       voice: true,
     });
+    expect(
+      remoteServerCapabilities({ mediaModels: { video: 'wan2.1' } }).videoGeneration,
+    ).toBe(true);
     expect(remoteServerCapabilities({ mediaModels: { image: '   ' } })).toEqual(
       {
       imageGeneration: false,
       transcription: false,
+      videoGeneration: false,
       voice: false,
       },
     );

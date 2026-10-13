@@ -32,7 +32,7 @@ const ClearGPUCacheButton: React.FC = () => {
 /** Basic controls: Image Steps + Image Size */
 export const ImageQualityBasicSliders: React.FC = () => {
   const { parameters, defaults, maxSize, applyDefaults } = useImageParameterSettings();
-  const { settings, updateSettings } = useAppStore();
+  const { updateSettings } = useAppStore();
 
   return (
     <>

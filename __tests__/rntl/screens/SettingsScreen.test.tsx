@@ -105,7 +105,7 @@ describe('SettingsScreen', () => {
   it('shows the Pro upsell banner when Pro is not active and not dismissed', () => {
     const { getByText } = render(<SettingsScreen />);
     expect(
-      getByText('Your private AI stays current across your devices with live sync.'),
+      getByText('Keep your work in context with memory, Sync, and actions you approve.'),
     ).toBeTruthy();
   });
 

@@ -50,7 +50,7 @@ describe('model settings surface parity', () => {
     expect(chatSettings.queryByText('Model Loading')).toBeNull();
     expect(chatSettings.queryByText('Show Generation Details')).toBeNull();
     fireEvent.press(chatSettings.getByTestId('modal-general-accordion'));
-    expect(chatSettings.getByText('Inference Backend')).toBeTruthy();
+    expect(chatSettings.getByText('Text Model Backend')).toBeTruthy();
     expect(chatSettings.getByTestId('model-loading-mode-aggressive-button')).toBeTruthy();
     expect(chatSettings.getByTestId('show-gen-details-on-button')).toBeTruthy();
     chatSettings.unmount();
@@ -59,7 +59,7 @@ describe('model settings surface parity', () => {
     fireEvent.press(modelSettings.getByTestId('text-generation-accordion'));
     expect(modelSettings.queryByText('Model Loading')).toBeNull();
     fireEvent.press(modelSettings.getByTestId('general-generation-accordion'));
-    expect(modelSettings.getByText('Inference Backend')).toBeTruthy();
+    expect(modelSettings.getByText('Text Model Backend')).toBeTruthy();
     expect(modelSettings.getByTestId('model-loading-mode-aggressive-button')).toBeTruthy();
     expect(modelSettings.getByTestId('show-gen-details-on-button')).toBeTruthy();
   });

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { FadeInImage } from './ChatMessage/components/MessageAttachments';
 import { videoGenerationService } from '../services/videoGenerationService';
 import { useTheme } from '../theme';
@@ -65,10 +65,10 @@ export function VideoGenerationStatus({
           <FadeInImage
             key={state.preview.path}
             uri={`file://${state.preview.path}`}
-            imageStyle={{
-              width: '100%',
-              aspectRatio: state.preview.width / state.preview.height,
-            }}
+            imageStyle={[
+              statusStyles.preview,
+              { aspectRatio: state.preview.width / state.preview.height },
+            ]}
             accessibilityLabel="First decoded video frame"
           />
         </View>
@@ -88,3 +88,7 @@ export function VideoGenerationStatus({
     </View>
   );
 }
+
+const statusStyles = StyleSheet.create({
+  preview: { width: '100%' },
+});

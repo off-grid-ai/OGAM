@@ -36,7 +36,7 @@ import { handleModelSelectFn } from '../../../src/screens/ChatScreen/useChatMode
 jest.mock('../../../src/services/llm');
 jest.mock('../../../src/services/localDreamGenerator');
 jest.mock('../../../src/services/hardware');
-jest.mock('../../../src/utils/imageModelIntegrity', () => ({
+jest.mock('../../../src/services/imageModelIntegrity', () => ({
   validateImageModelDir: jest.fn(async () => ({ complete: true, missing: [] })),
   ensureImageExtractionComplete: jest.fn(async () => {}),
 }));

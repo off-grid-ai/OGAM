@@ -209,6 +209,11 @@ def prepareVideoRuntime = tasks.register("prepareVideoRuntime", Exec) {
         new File(videoRoot, ".video-build/hexagon-runtime/htp_iface_stub.c"), new File(videoRoot, ".video-build/hexagon-runtime/htp_iface.h"))
     outputs.dir(new File(videoRoot, ".video-build/hexagon-assets/video-hexagon"))
 }
+// JVM unit tests never load the native video engine. Building it needs the shader compiler and
+// the Hexagon SDK, so a unit-test-only invocation (CI's Android test step) skips it.
+def unitTestsOnly = !gradle.startParameter.taskNames.isEmpty() &&
+    gradle.startParameter.taskNames.every { it.toLowerCase().contains("unittest") }
 tasks.configureEach { task ->
+    if (unitTestsOnly) return
     if (task.name.startsWith("configureCMake") || (task.name.startsWith("merge") && task.name.endsWith("Assets"))) task.dependsOn(prepareVideoRuntime)
 }

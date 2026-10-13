@@ -6,7 +6,7 @@ import {
   GeneratedImage,
 } from '../types';
 import { resolveSDImagePack } from './huggingFaceModelBrowser';
-import { validateImageModelDir } from '../utils/imageModelIntegrity';
+import { validateImageModelDir } from './imageModelIntegrity';
 import { generateId, generateRandomSeed } from '../utils/generateId';
 import logger from '../utils/logger';
 import { resolveOwnedDocumentPath } from '../utils/resolveDocumentPath';
