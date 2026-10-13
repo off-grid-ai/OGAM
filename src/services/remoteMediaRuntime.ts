@@ -2,12 +2,15 @@ import { isRecordProvenance, type RecordProvenance } from '@offgrid/sync';
 import { generateId } from '../utils/generateId';
 import RNFS from 'react-native-fs';
 import { Buffer } from 'buffer';
-import type {
-  ResolvedVideoRequest,
-  VideoGenerationResultContract,
-  VideoGenerationProgressContract,
-  VideoGenerationStage,
-  VideoGenerationUpdateContract,
+import {
+  pollRemoteVideoJob,
+  remoteVideoSubmitBody,
+  VIDEO_STOPPED_MESSAGE,
+  type ResolvedVideoRequest,
+  type VideoGenerationResultContract,
+  type VideoGenerationProgressContract,
+  type VideoGenerationStage,
+  type VideoGenerationUpdateContract,
 } from '@offgrid/models';
 import { remoteServerManager } from './remoteServerManager';
 import type { RemoteMediaModelIds, RemoteServer } from '../types';
@@ -153,12 +156,13 @@ export const remoteMediaRuntime = {
         init: {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...input,
-            model: options.model ?? requiredModel(server, 'video'),
-            enhancePrompt: false,
-            client_job_id: clientJobId,
-          }),
+          body: JSON.stringify(
+            remoteVideoSubmitBody(
+              input,
+              options.model ?? requiredModel(server, 'video'),
+              clientJobId,
+            ),
+          ),
         },
       },
       response => response.json() as Promise<{ request_id: string }>,
@@ -187,114 +191,99 @@ export const remoteMediaRuntime = {
         cancel();
         throw new Error('Video generation stopped.');
       }
-      while (true) {
-        const state = await request(
-          {
-            server,
-            path: `/v1/videos/${encodeURIComponent(job.request_id)}`,
-            signal: options.signal,
-            init: { method: 'GET' },
-          },
-          response =>
-            response.json() as Promise<{
-              status: string;
-              stage?: VideoGenerationStage;
-              progress?: { step: number; total: number };
-              preview?: { width: number; height: number };
-              error?: { message: string };
-              result?: VideoGenerationResultContract & {
-                provenance?: RecordProvenance;
-              };
-            }>,
-        );
-        const progress =
-          state.progress && Number.isFinite(state.progress.step) && Number.isFinite(state.progress.total)
-            ? state.progress
-            : null;
-        const stage =
-          state.stage && ['enhancing', 'preparing', 'conditioning', 'generating', 'decoding', 'encoding'].includes(state.stage)
-            ? state.stage
-            : undefined;
-        if (progress || stage) options.onProgress(progress, stage);
-        if (!previewRequest && options.onPreview && state.preview &&
-          Number.isFinite(state.preview.width) && state.preview.width > 0 &&
-          Number.isFinite(state.preview.height) && state.preview.height > 0) {
-          const dimensions = state.preview;
-          // Fetch only this job's authenticated route, never a URL from server metadata.
-          // Preview transfer must not delay job polling or final video delivery.
-          const timeout = setTimeout(stopPreview, 5000);
-          previewRequest = request({
-            server,
-            path: `/v1/videos/${encodeURIComponent(job.request_id)}/preview`,
-            signal: previewController.signal,
-            init: { method: 'GET', headers: { Accept: 'image/png' } },
-          }, async response => {
-            const bytes = await response.arrayBuffer();
-            if (bytes.byteLength === 0 || bytes.byteLength > 8 * 1024 * 1024) return;
-            const path = `${outputPath}.preview.png`;
-            await RNFS.writeFile(path, Buffer.from(bytes).toString('base64'), 'base64');
-            if (!previewController.signal.aborted) options.onPreview?.({ path, width: dimensions.width, height: dimensions.height });
-          }).catch(() => {
-            // A missing or expired preview must not fail video generation.
-          }).finally(() => clearTimeout(timeout));
-        }
-        if (state.status === 'failed' || state.status === 'cancelled')
-          throw Object.assign(
-            new Error(
-              state.error?.message ?? 'Remote video generation failed.',
-            ),
-            { code: 'VIDEO_REMOTE_FAILED' },
-          );
-        if (state.status === 'completed') {
-          if (!state.result?.syncId)
-            throw new Error('The server returned an invalid video result.');
-          const apiKey = await remoteServerManager.getApiKey(server.id);
-          const transfer = RNFS.downloadFile({
-            fromUrl: endpoint(
+      const status = await pollRemoteVideoJob({
+        poll: () =>
+          request(
+            {
               server,
-              `/v1/videos/${encodeURIComponent(job.request_id)}/content`,
-            ),
-            toFile: outputPath,
-            headers: remoteAuthorizationHeaders(server.endpoint, apiKey),
-            connectionTimeout: 15000,
-            readTimeout: 60000,
-          });
-          const stopTransfer = () => RNFS.stopDownload(transfer.jobId);
-          options.signal.addEventListener('abort', stopTransfer, {
-            once: true,
-          });
-          try {
-            if (options.signal.aborted) {
-              stopTransfer();
-              throw new Error('Video generation stopped.');
-            }
-            const result = await transfer.promise;
-            if (result.statusCode !== 200 || result.bytesWritten <= 0)
-              throw new Error('Could not download the generated video.');
-          } finally {
-            options.signal.removeEventListener('abort', stopTransfer);
+              path: `/v1/videos/${encodeURIComponent(job.request_id)}`,
+              signal: options.signal,
+              init: { method: 'GET' },
+            },
+            response => response.json() as Promise<unknown>,
+          ),
+        onStatus: state => {
+          if (state.progress || state.stage)
+            options.onProgress(state.progress, state.stage ?? undefined);
+          if (!previewRequest && options.onPreview && state.preview) {
+            const dimensions = state.preview;
+            // Fetch only this job's authenticated route, never a URL from server metadata.
+            // Preview transfer must not delay job polling or final video delivery.
+            const timeout = setTimeout(stopPreview, 5000);
+            previewRequest = request({
+              server,
+              path: `/v1/videos/${encodeURIComponent(job.request_id)}/preview`,
+              signal: previewController.signal,
+              init: { method: 'GET', headers: { Accept: 'image/png' } },
+            }, async response => {
+              const bytes = await response.arrayBuffer();
+              if (bytes.byteLength === 0 || bytes.byteLength > 8 * 1024 * 1024) return;
+              const path = `${outputPath}.preview.png`;
+              await RNFS.writeFile(path, Buffer.from(bytes).toString('base64'), 'base64');
+              if (!previewController.signal.aborted) options.onPreview?.({ path, width: dimensions.width, height: dimensions.height });
+            }).catch(() => {
+              // A missing or expired preview must not fail video generation.
+            }).finally(() => clearTimeout(timeout));
           }
-          return {
-            ...state.result,
-            provenance: isRecordProvenance(state.result.provenance)
-              ? state.result.provenance
-              : undefined,
-            path: outputPath,
-          };
+          if (state.status === 'failed')
+            throw Object.assign(new Error(state.error ?? 'Remote video generation failed.'), {
+              code: 'VIDEO_REMOTE_FAILED',
+            });
+        },
+        sleep: ms =>
+          new Promise<void>((resolve, reject) => {
+            const abort = () => {
+              clearTimeout(timer);
+              reject(new Error(VIDEO_STOPPED_MESSAGE));
+            };
+            const timer = setTimeout(() => {
+              options.signal.removeEventListener('abort', abort);
+              resolve();
+            }, ms);
+            options.signal.addEventListener('abort', abort, { once: true });
+            if (options.signal.aborted) abort();
+          }),
+        now: Date.now,
+        isCancelled: () => options.signal.aborted,
+      });
+      const result = status.result as
+        | (VideoGenerationResultContract & { provenance?: RecordProvenance })
+        | null;
+      if (!result?.syncId)
+        throw new Error('The server returned an invalid video result.');
+      const apiKey = await remoteServerManager.getApiKey(server.id);
+      const transfer = RNFS.downloadFile({
+        fromUrl: endpoint(
+          server,
+          `/v1/videos/${encodeURIComponent(job.request_id)}/content`,
+        ),
+        toFile: outputPath,
+        headers: remoteAuthorizationHeaders(server.endpoint, apiKey),
+        connectionTimeout: 15000,
+        readTimeout: 60000,
+      });
+      const stopTransfer = () => RNFS.stopDownload(transfer.jobId);
+      options.signal.addEventListener('abort', stopTransfer, {
+        once: true,
+      });
+      try {
+        if (options.signal.aborted) {
+          stopTransfer();
+          throw new Error(VIDEO_STOPPED_MESSAGE);
         }
-        await new Promise<void>((resolve, reject) => {
-          const abort = () => {
-            clearTimeout(timer);
-            reject(new Error('Video generation stopped.'));
-          };
-          const timer = setTimeout(() => {
-            options.signal.removeEventListener('abort', abort);
-            resolve();
-          }, 1000);
-          options.signal.addEventListener('abort', abort, { once: true });
-          if (options.signal.aborted) abort();
-        });
+        const downloaded = await transfer.promise;
+        if (downloaded.statusCode !== 200 || downloaded.bytesWritten <= 0)
+          throw new Error('Could not download the generated video.');
+      } finally {
+        options.signal.removeEventListener('abort', stopTransfer);
       }
+      return {
+        ...result,
+        provenance: isRecordProvenance(result.provenance)
+          ? result.provenance
+          : undefined,
+        path: outputPath,
+      };
     } finally {
       stopPreview();
       await previewRequest;

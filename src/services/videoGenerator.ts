@@ -1,6 +1,6 @@
 import logger from '../utils/logger';
-import { NativeEventEmitter, NativeModules } from 'react-native';
-import { videoArchitecture } from '@offgrid/models';
+import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
+import { isSamplingStep, videoEngineSettings } from '@offgrid/models';
 import type {
   ResolvedVideoRequest,
   VideoModelPack,
@@ -75,11 +75,7 @@ export const videoGenerator = {
         // sd.cpp also sends tensor-loading and VAE tile counters through this
         // callback. Only sampling steps belong in the generation step count.
         if (event.stage === 'generating') {
-          if (
-            event.total !== request.steps ||
-            event.step <= lastStep ||
-            event.step > request.steps
-          )
+          if (!isSamplingStep(lastStep, event.step, event.total, request.steps))
             return;
           lastStep = event.step;
         }
@@ -111,7 +107,7 @@ export const videoGenerator = {
           ...pack,
           outputPath,
           ...(__DEV__ && diagnosticBackend ? { diagnosticBackend } : {}),
-          flowShift: videoArchitecture(pack.weight)?.startsWith('wan') ? 3 : 0,
+          flowShift: videoEngineSettings(pack, Platform.OS).flowShift,
         })
       ).path;
     } finally {

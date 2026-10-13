@@ -14,6 +14,8 @@ import { activeModelService } from './activeModelService';
 import RNFS from 'react-native-fs';
 import { generateId as uuid } from '../utils/generateId';
 import {
+  estimateVideoMemoryMB,
+  idleVideoJob,
   resolveVideoRequest,
   videoArchitecture,
   type ModelEntry,
@@ -42,20 +44,7 @@ interface VideoJournal {
   startedAt: number;
   result?: GeneratedVideo;
 }
-const EMPTY: VideoGenerationJobContract = {
-  id: null,
-  phase: 'idle',
-  conversationId: null,
-  projectId: null,
-  stage: null,
-  enhancedPrompt: '',
-  progress: null,
-  preview: null,
-  outputPath: null,
-  error: null,
-  startedAt: null,
-  finishedAt: null,
-};
+const EMPTY: VideoGenerationJobContract = idleVideoJob();
 class VideoGenerationService {
   private state = EMPTY;
   private journal: VideoJournal | null = null;
@@ -280,12 +269,10 @@ class VideoGenerationService {
     options?: { override?: boolean; nativeRecovery?: boolean },
   ): Promise<symbol> {
     return modelResidencyManager.runExclusive('video-generation', async () => {
-      const sizeMB =
-        (model?.files.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0) ??
-          0) /
-          1048576 +
-        (request.width * request.height * request.frames * 12) / 1048576 +
-        1024;
+      const sizeMB = estimateVideoMemoryMB(
+        model?.files.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0) ?? 0,
+        request,
+      );
       const spec = {
         key: 'video',
         type: 'video' as const,
