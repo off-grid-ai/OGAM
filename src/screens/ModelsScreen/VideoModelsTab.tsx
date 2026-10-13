@@ -1,6 +1,6 @@
 import { videoModelDisplayName } from '../../utils/modelHelpers';
 import React, { useCallback, useEffect, useState } from 'react';
-import { BackHandler, ScrollView, Text, TextInput, View } from 'react-native';
+import { BackHandler, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 import {
   CATALOG,
   searchHuggingFace,
@@ -8,6 +8,7 @@ import {
   resolveHuggingFaceModel,
   formatFileSize,
   determineCredibility,
+  isVideoWeightAvailableOn,
   videoVaeFilename,
 } from '@offgrid/models';
 import type { HFSearchResult, ModelFileVariant } from '@offgrid/models';
@@ -83,7 +84,9 @@ export const VideoModelsTab: React.FC<{
     setError(null);
     getModelFiles(selected.id, { kind: 'video' })
       .then(rows => {
-        if (current) setFiles(rows);
+        // Offer only weights this phone's runtime can run (shared platform support table).
+        if (current)
+          setFiles(rows.filter(row => isVideoWeightAvailableOn(row.fileName, Platform.OS)));
       })
       .catch(e => {
         if (current) setError(String(e.message));
@@ -108,7 +111,14 @@ export const VideoModelsTab: React.FC<{
       if (!model) throw new Error('This file is no longer available.');
       await modelDownloadService.start({ modelType: 'video', model });
     });
-  const defaults = CATALOG.filter(m => m.kind === 'video');
+  const defaults = CATALOG.filter(
+    m =>
+      m.kind === 'video' &&
+      isVideoWeightAvailableOn(
+        m.files.find(file => file.role === 'primary')?.name ?? '',
+        Platform.OS,
+      ),
+  );
   const rows = query.trim()
     ? results
     : defaults.map(m => ({

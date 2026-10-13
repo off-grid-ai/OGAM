@@ -1,4 +1,5 @@
-import { CATALOG, videoPackError } from '@offgrid/models';
+import { Platform } from 'react-native';
+import { CATALOG, isVideoWeightAvailableOn, videoPackError } from '@offgrid/models';
 import { recommendedModelsForDevice, ramFitScore } from '../utils/recommendedModels';
 import { fileExceedsBudget } from './memoryBudget';
 import { fetchModelFiles } from './modelCatalogFiles';
@@ -97,6 +98,7 @@ export async function loadAutoSetupCompatibleCatalog(
   const completeVideoPacks = CATALOG.filter(model =>
     model.kind === 'video' && model.availability !== 'coming_soon' &&
     !!model.minRamGb && !videoPackError(model.files) &&
+    isVideoWeightAvailableOn(model.files.find(file => file.role === 'primary')?.name ?? '', Platform.OS) &&
     model.files.every(file => !!file.sizeBytes),
   );
   const video = completeVideoPacks.filter(model =>
