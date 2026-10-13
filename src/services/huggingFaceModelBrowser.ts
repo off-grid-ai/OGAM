@@ -1,5 +1,15 @@
 import { Buffer } from 'buffer';
-import { CATALOG, searchHuggingFace, extractQuantization, standardImageModelDefaults } from '@offgrid/models';
+import {
+  CATALOG,
+  searchHuggingFace,
+  extractQuantization,
+  imageEngineSettings,
+  isCompleteSDCheckpointHeader,
+  isSDImageWeight,
+  QWEN_IMAGE_21_COMPANIONS,
+  QWEN_IMAGE_21_WEIGHT,
+  SD_CHECKPOINT_HEADER_BYTES,
+} from '@offgrid/models';
 import RNFS from 'react-native-fs';
 import type { ImageModelDescriptor } from './imageModelDownloadTypes';
 
@@ -148,8 +158,7 @@ export function guessStyle(name: string): string {
   return 'anime';
 }
 
-const QWEN_IMAGE_WEIGHT = /^qwen_image_2\.1-.*\.gguf$/i;
-const IMAGE_HEADER_BYTES = 1024 * 1024;
+const QWEN_IMAGE_WEIGHT = QWEN_IMAGE_21_WEIGHT;
 
 /** Bundled complete checkpoints share the Desktop catalog. Split diffusion packs
  * need an explicit companion contract before they can be offered on mobile. */
@@ -169,62 +178,11 @@ export function getSDImageModels(): HFImageModel[] {
 }
 
 /** Filename candidates only. New checkpoint candidates must pass tensor validation. */
-export const isSDImageWeight = (name: string): boolean => QWEN_IMAGE_WEIGHT.test(name) ||
-  (/\.(gguf|safetensors)$/i.test(name) && !/[/\\]|(?:vae|clip|t5|encoder|mmproj|lora|adapter|qwen|flux|wan|hunyuan|ltx|z_image|sd3|\d{5}-of-\d{5})/i.test(name));
-
-/** Read tensor names, never model data or metadata strings, to reject text models,
- * adapters, and UNet-only exports. A bounded or malformed header fails closed. */
-function isCompleteSDCheckpoint(bytes: Buffer): boolean {
-  try {
-    let offset = 0;
-    const take = (size: number) => {
-      if (!Number.isSafeInteger(size) || size < 0 || offset + size > bytes.length) throw new Error('Incomplete header');
-      const start = offset; offset += size; return start;
-    };
-    const u32 = () => bytes.readUInt32LE(take(4));
-    const u64 = () => { const pos = take(8); return bytes.readUInt32LE(pos) + bytes.readUInt32LE(pos + 4) * 4294967296; };
-    const string = () => { const length = u64(); return bytes.toString('utf8', take(length), offset); };
-    let names: string[];
-    if (bytes.toString('ascii', 0, 4) === 'GGUF') {
-      take(4);
-      const version = u32();
-      if (version !== 2 && version !== 3) return false;
-      const tensors = u64(), metadata = u64();
-      if (tensors > 20000 || metadata > 10000) return false;
-      const skipValue = (type: number, depth = 0): void => {
-        if (depth > 1) throw new Error('Invalid metadata');
-        const sizes: Record<number, number> = { 0: 1, 1: 1, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 1, 10: 8, 11: 8, 12: 8 };
-        if (type === 8) { string(); return; }
-        if (type === 9) {
-          const subtype = u32(), count = u64();
-          if (count > IMAGE_HEADER_BYTES) throw new Error('Large metadata');
-          for (let i = 0; i < count; i++) skipValue(subtype, depth + 1);
-          return;
-        }
-        if (!sizes[type]) throw new Error('Unknown metadata');
-        take(sizes[type]);
-      };
-      for (let i = 0; i < metadata; i++) { string(); skipValue(u32()); }
-      names = [];
-      for (let i = 0; i < tensors; i++) {
-        names.push(string());
-        const dimensions = u32();
-        if (dimensions > 4) return false;
-        take(dimensions * 8 + 4 + 8);
-      }
-    } else {
-      const length = u64();
-      names = Object.keys(JSON.parse(bytes.toString('utf8', take(length), offset)));
-    }
-    return names.some(name => /^model\.diffusion_model\.input_blocks\./.test(name)) &&
-      names.some(name => /^first_stage_model\.decoder\./.test(name)) &&
-      names.some(name => /^(cond_stage_model\.|conditioner\.embedders\.)/.test(name));
-  } catch { return false; }
-}
+export { isSDImageWeight };
 
 export async function validateSDCheckpointFile(path: string): Promise<boolean> {
   const size = Number((await RNFS.stat(path)).size);
-  return isCompleteSDCheckpoint(Buffer.from(await RNFS.read(path, Math.min(size, IMAGE_HEADER_BYTES), 0, 'base64'), 'base64'));
+  return isCompleteSDCheckpointHeader(Buffer.from(await RNFS.read(path, Math.min(size, SD_CHECKPOINT_HEADER_BYTES), 0, 'base64'), 'base64'));
 }
 
 /** The same required-file list is used by loading, recovery, and model transfer. */
@@ -288,10 +246,10 @@ export async function searchSDImageModels(query: string, signal?: AbortSignal): 
         const downloadUrl = `https://huggingface.co/${repo.id}/resolve/${data.sha}/${encodeURIComponent(file.rfilename)}`;
         const qwen = QWEN_IMAGE_WEIGHT.test(file.rfilename);
         if (!qwen) {
-          const header = await fetch(downloadUrl, { signal, headers: { Range: `bytes=0-${IMAGE_HEADER_BYTES - 1}` } });
+          const header = await fetch(downloadUrl, { signal, headers: { Range: `bytes=0-${SD_CHECKPOINT_HEADER_BYTES - 1}` } });
           if (header.status !== 206 || !/^bytes 0-\d+\//.test(header.headers.get('content-range') ?? '') ||
-            Number(header.headers.get('content-length')) > IMAGE_HEADER_BYTES) continue;
-          if (!isCompleteSDCheckpoint(Buffer.from(await header.arrayBuffer()))) continue;
+            Number(header.headers.get('content-length')) > SD_CHECKPOINT_HEADER_BYTES) continue;
+          if (!isCompleteSDCheckpointHeader(Buffer.from(await header.arrayBuffer()))) continue;
         }
         const size = file.lfs?.size ?? file.size ?? 0;
         const canonical = catalogModels.find(model => model.repo === repo.id && model.fileName === file.rfilename);
@@ -313,7 +271,7 @@ export async function resolveSDImagePack(_modelId: string, modelPath: string) {
   const files = getSDImagePackFiles((await RNFS.readDir(modelPath)).filter(file => file.isFile()).map(file => file.name));
   if (!files) throw new Error('Select one complete SD checkpoint or a Qwen Image 2.1 pack.');
   const weight = files[0].path;
-  const defaults = standardImageModelDefaults(weight);
+  const defaults = imageEngineSettings(weight);
   if (!QWEN_IMAGE_WEIGHT.test(weight)) {
     if (!await validateSDCheckpointFile(`${modelPath}/${weight}`)) throw new Error('This checkpoint is unsupported or incomplete. It must include the SD image model, text encoder, and VAE.');
     return { family: 'checkpoint', weight: `${modelPath}/${weight}`, vae: '', llm: '', sampler: defaults.sampler, scheduler: defaults.scheduler };
@@ -324,7 +282,7 @@ export async function resolveSDImagePack(_modelId: string, modelPath: string) {
     return `${modelPath}/${file.path}`;
   };
   return { family: 'qwen-image-2.1', weight: `${modelPath}/${weight}`,
-    vae: required(/vae.*\.safetensors$/i), llm: required(/^Qwen3VL-.*\.gguf$/i),
+    vae: required(QWEN_IMAGE_21_COMPANIONS.vae), llm: required(QWEN_IMAGE_21_COMPANIONS.llm),
     sampler: defaults.sampler, scheduler: defaults.scheduler };
 }
 
