@@ -212,8 +212,45 @@ const createViewerStyles = (colors: ThemeColors) => ({
   detailDate: { ...TYPOGRAPHY.meta, color: colors.textMuted, marginTop: SPACING.sm + 2 },
 });
 
+const createVideoStyles = (colors: ThemeColors) => ({
+  mediaTabs: { flexDirection: 'row' as const, padding: SPACING.sm, gap: SPACING.sm },
+  mediaTab: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 6,
+    backgroundColor: colors.surface,
+  },
+  mediaTabActive: { backgroundColor: colors.primary },
+  mediaTabText: { color: colors.text },
+  mediaTabTextActive: { color: colors.background },
+  videoList: { padding: SPACING.md },
+  videoRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    padding: SPACING.lg,
+    marginBottom: SPACING.sm,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    gap: SPACING.md,
+  },
+  videoRowBody: { flex: 1 },
+  videoRowTitle: { color: colors.text },
+  videoRowMeta: { color: colors.textMuted },
+  videoViewerHeader: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    padding: SPACING.lg,
+  },
+  videoViewerText: { color: colors.text },
+  videoPlayer: { width: '100%' as const, backgroundColor: colors.background },
+  videoPrompt: { color: colors.text, padding: SPACING.lg },
+  videoDelete: { padding: SPACING.lg },
+  videoDeleteText: { color: colors.error },
+});
+
 export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   ...createHeaderStyles(colors, shadows),
   ...createGridStyles(colors),
   ...createViewerStyles(colors),
+  ...createVideoStyles(colors),
 });

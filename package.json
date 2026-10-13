@@ -81,6 +81,8 @@
     "react-native-tcp-socket": "^6.4.1",
     "react-native-url-polyfill": "^3.0.0",
     "react-native-vector-icons": "^10.3.0",
+    "react-native-video": "^6.19.3",
+    "react-native-video-player": "0.16.3",
     "react-native-vision-camera": "^4.7.3",
     "react-native-worklets": "^0.7.3",
     "react-native-zeroconf": "^0.14.0",

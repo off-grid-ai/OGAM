@@ -1,6 +1,7 @@
 package ai.offgridmobile.downloads
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -42,6 +43,38 @@ class SyncDownloadsModule(
     }
 
     override fun getName(): String = "SyncDownloadsModule"
+
+    /** Export an app-owned file through scoped storage without broad media access. */
+    @ReactMethod
+    fun saveFileToDownloads(sourcePath: String, displayName: String, mimeType: String, promise: Promise) {
+        Thread({
+            var created: Uri? = null
+            try {
+                require(Build.VERSION.SDK_INT >= 29) { "Scoped Downloads requires Android 10." }
+                val source = File(sourcePath).canonicalFile
+                val roots = listOf(context.filesDir.canonicalFile, context.cacheDir.canonicalFile)
+                require(roots.any { source.path.startsWith(it.path + File.separator) } && source.isFile) { "The file is outside app storage." }
+                require(displayName == File(displayName).name && displayName.isNotBlank() && displayName.length <= 200) { "Invalid export filename." }
+                require(mimeType in listOf("video/mp4", "image/png", "image/jpeg", "image/webp")) { "Unsupported media type." }
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+                val uri = checkNotNull(context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values))
+                created = uri
+                checkNotNull(context.contentResolver.openOutputStream(uri)).use { output -> source.inputStream().use { it.copyTo(output) } }
+                values.clear()
+                values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                context.contentResolver.update(uri, values, null, null)
+                promise.resolve(uri.toString())
+            } catch (error: Throwable) {
+                created?.let { runCatching { context.contentResolver.delete(it, null, null) } }
+                promise.reject("MEDIA_EXPORT_FAILED", error.message, error)
+            }
+        }, "offgrid-media-export").start()
+    }
 
     @ReactMethod
     fun hasPermission(promise: Promise) {

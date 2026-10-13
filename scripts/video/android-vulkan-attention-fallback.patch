@@ -1,0 +1,74 @@
+--- a/src/ggml-vulkan/ggml-vulkan.cpp
++++ b/src/ggml-vulkan/ggml-vulkan.cpp
+@@ -1259,6 +1259,16 @@
+     const uint32_t D_lsb = D ^ (D & (D-1));  // extract lowest set bit
+ 
+     result.d_split = std::min(std::min(result.subgroup_size, 8u), D_lsb / 4);
++
++#ifdef __ANDROID__
++    if (device->vendor_id == VK_VENDOR_ID_QUALCOMM && f32acc &&
++        k_type == GGML_TYPE_F16 && v_type == GGML_TYPE_F16) {
++        // Use the existing shared-memory reduction path instead of the
++        // subgroup shuffle pipeline that loses the Adreno device in Wan.
++        result.disable_subgroups = true;
++        result.block_rows = std::min(result.block_rows, 8u);
++    }
++#endif
+ 
+     result.shmem_staging = (device->vendor_id == VK_VENDOR_ID_NVIDIA && hsk < 256 && hsv < 256) ? 1 : 0;
+ 
+@@ -1982,6 +1992,16 @@
+             }
+             name = aligned ? "flash_attn_f32_f16_aligned" : "flash_attn_f32_f16";
+         }
++#ifdef __ANDROID__
++        if (device->vendor_id == VK_VENDOR_ID_QUALCOMM && f32acc &&
++            fa.first.k_type == GGML_TYPE_F16 && fa.first.v_type == GGML_TYPE_F16) {
++            // Preserve FP32 accumulation and avoid the mobile FP16 arithmetic
++            // path. K/V storage stays F16; no extra attention matrix is stored.
++            spv_data = flash_attn_f32_f16_fp32_data;
++            spv_size = flash_attn_f32_f16_fp32_len;
++            name = "flash_attn_adreno_f32_shared";
++        }
++#endif
+         ggml_vk_create_pipeline(device, fa.second, name, spv_size, spv_data, "main", 8,
+                                 sizeof(vk_flash_attn_push_constants), {Br, 1, 1},
+                                 get_fa_spec_constants(fa.first), aligned ? Bc : 1, true,
+@@ -14226,6 +14246,13 @@
+     uint64_t batch_flops = 0;
+     uint64_t total_flops = 0;
+     uint64_t flops_cap = 200'000'000'000ULL;
++#ifdef __ANDROID__
++    // Keep query chunks in separate submissions on mobile Adreno. A full
++    // Wan attention dispatch exceeds 130 GFLOP and can hit the driver limit.
++    if (ctx->device->vendor_id == VK_VENDOR_ID_QUALCOMM) {
++        flops_cap = 8'000'000'000ULL;
++    }
++#endif
+ 
+     // On weaker AMD GPUs larger submissions can hit a driver timeout, submit more often to avoid this
+     if (ctx->device->vendor_id == VK_VENDOR_ID_AMD && ctx->device->shader_core_count > 0) {
+@@ -14236,6 +14263,11 @@
+         }
+     }
+     uint64_t flops_per_submit = std::min(flops_cap, ctx->last_total_flops / 40u);
++#ifdef __ANDROID__
++    if (ctx->device->vendor_id == VK_VENDOR_ID_QUALCOMM) {
++        flops_per_submit = flops_cap;
++    }
++#endif
+ 
+     auto const submit_after = [&](int start, int end) {
+         if (ctx->device->serialize_submissions) {
+@@ -14263,6 +14295,11 @@
+         batch_flops = 0;
+         if (submit_count < 3) {
+             flops_per_submit *= 2;
++#ifdef __ANDROID__
++            if (ctx->device->vendor_id == VK_VENDOR_ID_QUALCOMM) {
++                flops_per_submit = std::min(flops_cap, flops_per_submit);
++            }
++#endif
+         }
+         submit_count++;
+     };

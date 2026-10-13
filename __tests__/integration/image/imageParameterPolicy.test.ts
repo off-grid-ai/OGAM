@@ -8,12 +8,22 @@ describe('shared image parameter policy at the Mobile generation boundary', () =
 
   it('uses current settings for both local and remote callers', () => {
     expect(
-      resolveMobileImageParameters(model, {
+      resolveMobileImageParameters({ id: 'juggernaut-xl', name: 'Juggernaut XL', backend: 'sd' }, {
         imageSteps: 42,
         imageGuidanceScale: 5.5,
         imageWidth: 768,
       }),
     ).toEqual({ steps: 42, guidanceScale: 5.5, size: 768 });
+  });
+
+  it('keeps a native image pack within its fixed 512 size', () => {
+    expect(
+      resolveMobileImageParameters({ ...model, backend: 'mnn' }, {
+        imageSteps: 42,
+        imageGuidanceScale: 5.5,
+        imageWidth: 768,
+      }),
+    ).toEqual({ steps: 42, guidanceScale: 5.5, size: 512 });
   });
 
   it('lets an explicit request win and falls back from damaged persisted values', () => {

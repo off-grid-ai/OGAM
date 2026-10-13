@@ -7,7 +7,7 @@ import logger from '../../../utils/logger';
 
 interface RemoteModelHandlersParams {
   activeModelId: string | null;
-  setPickerType: (type: 'text' | 'image' | null) => void;
+  setPickerType: (type: 'text' | 'image' | 'video' | null) => void;
   setLoadingState: (state: LoadingState) => void;
   setAlertState: (state: any) => void;
 }
@@ -25,19 +25,19 @@ export function useRemoteModelHandlers({
         model.id,
         model.serverId,
       );
-    setPickerType(null);
-    setLoadingState({ isLoading: true, type: 'text', modelName: model.name });
-    try {
-      // Unload any active local model first — only one active model at a time
-      if (activeModelId) {
-        await activeModelService.unloadTextModel();
-      }
+      setPickerType(null);
+      setLoadingState({ isLoading: true, type: 'text', modelName: model.name });
+      try {
+        // Unload any active local model first — only one active model at a time
+        if (activeModelId) {
+          await activeModelService.unloadTextModel();
+        }
         await remoteServerManager.setActiveRemoteTextModel(
           model.serverId,
           model.id,
         );
-      logger.log('[useHomeScreen] Remote text model set successfully');
-    } catch (_error) {
+        logger.log('[useHomeScreen] Remote text model set successfully');
+      } catch (_error) {
         logger.error(
           '[useHomeScreen] Failed to set remote text model:',
           _error,
@@ -48,9 +48,9 @@ export function useRemoteModelHandlers({
             `Failed to connect to remote model: ${(_error as Error).message}`,
           ),
         );
-    } finally {
-      setLoadingState({ isLoading: false, type: null, modelName: null });
-    }
+      } finally {
+        setLoadingState({ isLoading: false, type: null, modelName: null });
+      }
     },
     [activeModelId, setPickerType, setLoadingState, setAlertState],
   );
@@ -75,22 +75,22 @@ export function useRemoteModelHandlers({
         type: 'image',
         modelName: model.name,
       });
-    try {
+      try {
         await remoteServerManager.setActiveRemoteMediaModel(
           model.serverId,
           'image',
           model.id,
         );
-    } catch (_error) {
+      } catch (_error) {
         setAlertState(
           showAlert(
             'Error',
             `Failed to connect to remote model: ${(_error as Error).message}`,
           ),
         );
-    } finally {
-      setLoadingState({ isLoading: false, type: null, modelName: null });
-    }
+      } finally {
+        setLoadingState({ isLoading: false, type: null, modelName: null });
+      }
     },
     [setPickerType, setLoadingState, setAlertState],
   );

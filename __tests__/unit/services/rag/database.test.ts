@@ -51,10 +51,12 @@ describe('RagDatabase', () => {
             typeof sql === 'string' &&
             sql.includes('CREATE TABLE IF NOT EXISTS'),
         );
-      expect(tableCreates).toHaveLength(3);
+      expect(tableCreates).toHaveLength(4);
       expect(tableCreates[0]).toContain('rag_documents');
       expect(tableCreates[1]).toContain('rag_chunks');
       expect(tableCreates[2]).toContain('rag_embeddings');
+      // Records which embedding model the stored vectors came from.
+      expect(tableCreates[3]).toContain('rag_embedding_model');
     });
 
     it('does not re-initialize on second call', async () => {

@@ -61,6 +61,12 @@ const catalog: AutoSetupCatalogBoundaries = {
   ],
 };
 
+/** Open a plan's details; the device's own plan starts open, and its heading toggles. */
+function openPlan(ui: ReturnType<typeof render>, tier: string): void {
+  const heading = ui.getByTestId(`auto-setup-plan-heading-${tier}`);
+  if (!heading.props.accessibilityState?.expanded) fireEvent.press(heading);
+}
+
 test('Auto Setup shows Absolute Reality when the device catalog would choose NAI Anime', async () => {
   const navigation = { push() {}, replace() {} } as never;
   const ui = render(
@@ -74,7 +80,7 @@ test('Auto Setup shows Absolute Reality when the device catalog would choose NAI
     expect(ui.getByTestId('auto-setup-plan-lean')).toBeTruthy(),
   );
   for (const tier of ['lean', 'balanced', 'extreme']) {
-    fireEvent.press(ui.getByTestId(`auto-setup-plan-${tier}`));
+    openPlan(ui, tier);
     expect(ui.getByText('Absolute Reality (NPU 8gen2)')).toBeTruthy();
     expect(ui.queryByText('Absolute Reality (GPU)')).toBeNull();
     expect(ui.queryByText('NAI Anime (NPU 8gen2)')).toBeNull();
@@ -104,7 +110,7 @@ test('Auto Setup offers the GPU model when the device recommends GPU', async () 
   await waitFor(() =>
     expect(ui.getByTestId('auto-setup-plan-balanced')).toBeTruthy(),
   );
-  fireEvent.press(ui.getByTestId('auto-setup-plan-balanced'));
+  openPlan(ui, 'balanced');
   expect(ui.getByText('Absolute Reality (GPU)')).toBeTruthy();
   expect(ui.queryByText('Absolute Reality (NPU 8gen2)')).toBeNull();
 });
@@ -143,7 +149,7 @@ test('Android Auto Setup presents complementary image models across its three pl
     ['balanced', 'Absolute Reality (NPU 8gen2)'],
     ['extreme', 'Dream Shaper V8 (NPU 8gen2)'],
   ]) {
-    fireEvent.press(ui.getByTestId(`auto-setup-plan-${tier}`));
+    openPlan(ui, tier);
     expect(ui.getByText(name)).toBeTruthy();
   }
 });

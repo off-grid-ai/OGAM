@@ -65,8 +65,34 @@ describe('making a transferred file appear in the app', () => {
       ?.messages.find(({ uuid }) => uuid === messageUuid)?.attachments ?? [];
 
   beforeEach(() => {
-    useAppStore.setState({ generatedImages: [] });
+    useAppStore.setState({ generatedImages: [], generatedVideos: [] });
     useChatStore.setState({ conversations: [] });
+  });
+
+  describe('a video generated on another device', () => {
+    const video = () => record({
+      mimeType: 'video/mp4', name: 'lake.mp4', localPath: '/docs/shared_files/lake.mp4',
+      conversationId: 'chat-7', messageId: 'message-1', width: 320, height: 192,
+      durationSeconds: 2.125,
+      metadataJson: JSON.stringify({ prompt: 'A moving lake', steps: 20, guidance: 6, seed: 42, modelId: 'wan', fps: 8, frames: 17 }),
+    });
+    it('appears once in the video gallery and on its message after repeated delivery', () => {
+      useChatStore.setState({ conversations: [conversation()] });
+      materializeSharedFile(video());
+      materializeSharedFile(video());
+      expect(gallery()).toEqual([]);
+      expect(useAppStore.getState().generatedVideos).toHaveLength(1);
+      expect(useAppStore.getState().generatedVideos[0]).toMatchObject({ prompt: 'A moving lake', durationSeconds: 2.125, fps: 8, seed: 42 });
+      expect(attachmentsOn('chat-7', 'message-1')).toHaveLength(1);
+      expect(attachmentsOn('chat-7', 'message-1')[0]).toMatchObject({ type: 'video', mimeType: 'video/mp4' });
+    });
+    it('removes the gallery entry and chat attachment when the shared video is deleted', () => {
+      useChatStore.setState({ conversations: [conversation()] });
+      materializeSharedFile(video());
+      removeMaterializedSharedFile(video());
+      expect(useAppStore.getState().generatedVideos).toEqual([]);
+      expect(attachmentsOn('chat-7', 'message-1')).toEqual([]);
+    });
   });
 
   describe('a picture generated on another device', () => {

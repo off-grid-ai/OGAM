@@ -173,7 +173,16 @@ export const useChatScreen = () => {
     ? (activeModelInfo.model as RemoteModel | null)
     : null;
   const hasTextModel = activeModelInfo.modelId !== null;
-  const hasActiveModel = hasTextModel || !!activeImageModelId || !!activeRemoteImageServer;
+  const selectedVideoModelId = useAppStore(s => s.activeVideoModelId);
+  const remoteVideoId = useRemoteServerStore(
+    s => s.activeRemoteMediaServerIds.video,
+  );
+  const hasActiveModel =
+    !!remoteVideoId ||
+    !!selectedVideoModelId ||
+    hasTextModel ||
+    !!activeImageModelId ||
+    !!activeRemoteImageServer;
   const activeModelName = activeModelInfo.modelName;
   const availableDownloadedTextModels = useMemo(
     () =>
@@ -202,7 +211,10 @@ export const useChatScreen = () => {
     ? getProject(effectiveProjectId)
     : null;
   const activeImageModel = activeRemoteImageServer
-    ? { id: activeRemoteImageServer.mediaModels!.image!, name: `${activeRemoteImageServer.name} / ${activeRemoteImageServer.mediaModels!.image}` }
+    ? {
+        id: activeRemoteImageServer.mediaModels!.image!,
+        name: `${activeRemoteImageServer.name} / ${activeRemoteImageServer.mediaModels!.image}`,
+      }
     : downloadedImageModels.find(m => m.id === activeImageModelId);
   const imageModelLoaded = !!activeImageModel;
   const isGeneratingImage = imageGenState.isGenerating;
@@ -305,21 +317,30 @@ export const useChatScreen = () => {
   const remotePreviews = useRemoteChatStreamPreviews(activeConversationId);
   const localDeviceId = useSyncIdentityStore(s => s.localDeviceId);
   const displayMessages = useMemo(
-    () => getDisplayMessages(activeConversation?.messages || [], {
+    () =>
+      getDisplayMessages(activeConversation?.messages || [], {
+        isThinking,
+        streamingMessage: '',
+        streamingReasoningContent: '',
+        hasStreamingText,
+        isStreamingForThisConversation,
+        isModelLoading,
+        loadingModelName: loadingModel?.name,
+        isGeneratingForThisConversation,
+        remotePreviews,
+        localDeviceId,
+      }),
+    [
+      activeConversation?.messages,
       isThinking,
-      streamingMessage: '',
-      streamingReasoningContent: '',
       hasStreamingText,
       isStreamingForThisConversation,
       isModelLoading,
-      loadingModelName: loadingModel?.name,
+      loadingModel?.name,
       isGeneratingForThisConversation,
       remotePreviews,
       localDeviceId,
-    }),
-    [activeConversation?.messages, isThinking, hasStreamingText,
-      isStreamingForThisConversation, isModelLoading, loadingModel?.name,
-      isGeneratingForThisConversation, remotePreviews, localDeviceId],
+    ],
   );
 
   const animateLastN = useChatPresentationLifecycle(
@@ -329,7 +350,8 @@ export const useChatScreen = () => {
   );
 
   const chatActions = useChatScreenActions({
-    generationDeps: genDeps, generationDepsRef: genDepsRef,
+    generationDeps: genDeps,
+    generationDepsRef: genDepsRef,
     modelDeps,
     activeModelInfo,
     supportsToolCalling,

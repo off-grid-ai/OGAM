@@ -11,7 +11,7 @@ export const appNavigationRef =
   createNavigationContainerRef<RootStackParamList>();
 
 /**
- * Keep an expired installation on the purchase route.
+ * Show the purchase route when access expires, with Home as the return route.
  *
  * The returned callback is also the NavigationContainer onReady handler. This handles a credential
  * that was already expired during cold-start hydration, before the navigator existed.
@@ -32,8 +32,11 @@ export function useProExpiryRedirect(
     }
     redirectPending.current = false;
     navigation.resetRoot({
-      index: 0,
-      routes: [{ name: 'ProDetail' }],
+      index: 1,
+      routes: [
+        { name: 'Main', params: { screen: 'HomeTab' } },
+        { name: 'ProDetail' },
+      ],
     });
   }, [navigation]);
 

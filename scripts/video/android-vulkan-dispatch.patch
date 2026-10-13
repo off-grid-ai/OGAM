@@ -1,0 +1,29 @@
+--- a/src/ggml-vulkan/ggml-vulkan.cpp
++++ b/src/ggml-vulkan/ggml-vulkan.cpp
+@@ -4306,7 +4306,7 @@
+             device_extensions.push_back("VK_EXT_device_fault");
+         }
+ 
+-        vkGetPhysicalDeviceFeatures2(device->physical_device, &device_features2);
++        VULKAN_HPP_DEFAULT_DISPATCHER.vkGetPhysicalDeviceFeatures2(device->physical_device, &device_features2);
+ 
+         device->device_fault = device->device_fault && fault_features.deviceFault;
+ 
+@@ -4930,7 +4930,7 @@
+     }
+ #endif
+ 
+-    vkGetPhysicalDeviceFeatures2(physical_device, &device_features2);
++    VULKAN_HPP_DEFAULT_DISPATCHER.vkGetPhysicalDeviceFeatures2(physical_device, &device_features2);
+ 
+     fp16 = fp16 && vk12_features.shaderFloat16;
+ 
+@@ -16170,7 +16170,7 @@
+     vk11_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+     device_features2.pNext = &vk11_features;
+ 
+-    vkGetPhysicalDeviceFeatures2(vkdev, &device_features2);
++    VULKAN_HPP_DEFAULT_DISPATCHER.vkGetPhysicalDeviceFeatures2(vkdev, &device_features2);
+ 
+     return vk11_features.storageBuffer16BitAccess;
+ }

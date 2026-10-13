@@ -16,10 +16,10 @@ export interface ImageModelDescriptor {
   downloadUrl: string;
   size: number;
   style: string;
-  backend: 'mnn' | 'qnn' | 'coreml';
+  backend: 'mnn' | 'qnn' | 'coreml' | 'sd';
   variant?: string;
   huggingFaceRepo?: string;
-  huggingFaceFiles?: { path: string; size: number }[];
+  huggingFaceFiles?: { path: string; size: number; downloadUrl?: string; sha256?: string }[];
   coremlFiles?: { path: string; relativePath: string; size: number; downloadUrl: string }[];
   repo?: string;
   attentionVariant?: 'split_einsum' | 'original';

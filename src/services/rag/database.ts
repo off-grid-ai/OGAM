@@ -23,6 +23,13 @@ export interface RagSearchResult {
   score: number;
 }
 
+export interface EmbeddingModelSelection {
+  id: string;
+  name: string;
+  filePath: string;
+  size: number;
+}
+
 interface StoredEmbedding {
   chunk_rowid: number;
   doc_id: number;
@@ -96,6 +103,9 @@ class RagDatabase {
           FOREIGN KEY (doc_id) REFERENCES rag_documents(id)
         )`,
       );
+      this.db.executeSync(
+        'CREATE TABLE IF NOT EXISTS rag_embedding_model (id INTEGER PRIMARY KEY CHECK (id = 1), selection TEXT NOT NULL)',
+      );
       this.ready = true;
     } catch (error) {
       logger.error('[RagDB] Failed to initialize:', error);
@@ -160,6 +170,42 @@ class RagDatabase {
       throw e;
     }
     return rowIds;
+  }
+
+  getEmbeddingModel(): EmbeddingModelSelection | null {
+    const row = this.getDb().executeSync('SELECT selection FROM rag_embedding_model WHERE id = 1').rows?.[0];
+    return row ? JSON.parse(row.selection as string) as EmbeddingModelSelection : null;
+  }
+
+  beginEmbeddingRebuild(): void {
+    const db = this.getDb();
+    db.executeSync('CREATE TEMP TABLE IF NOT EXISTS rag_embedding_rebuild (chunk_rowid INTEGER, doc_id INTEGER, embedding BLOB)');
+    db.executeSync('DELETE FROM rag_embedding_rebuild');
+  }
+
+  stageEmbedding(entry: { chunkRowid: number; docId: number; embedding: number[] }): void {
+    this.getDb().executeSync('INSERT INTO rag_embedding_rebuild (chunk_rowid, doc_id, embedding) VALUES (?, ?, ?)',
+      [entry.chunkRowid, entry.docId, this.embeddingToBlob(entry.embedding)]);
+  }
+
+  discardEmbeddingRebuild(): void {
+    this.getDb().executeSync('DROP TABLE IF EXISTS temp.rag_embedding_rebuild');
+  }
+
+  /** The model identity and all vectors change in one durable SQLite transaction. */
+  commitEmbeddingRebuild(model: EmbeddingModelSelection | null): void {
+    const db = this.getDb();
+    db.executeSync('BEGIN');
+    try {
+      db.executeSync('DELETE FROM rag_embeddings');
+      db.executeSync('INSERT INTO rag_embeddings (chunk_rowid, doc_id, embedding) SELECT chunk_rowid, doc_id, embedding FROM rag_embedding_rebuild');
+      db.executeSync('DELETE FROM rag_embedding_model');
+      if (model) db.executeSync('INSERT INTO rag_embedding_model (id, selection) VALUES (1, ?)', [JSON.stringify(model)]);
+      db.executeSync('COMMIT');
+    } catch (error) {
+      db.executeSync('ROLLBACK');
+      throw error;
+    }
   }
 
   private embeddingToBlob(embedding: number[]): ArrayBuffer {

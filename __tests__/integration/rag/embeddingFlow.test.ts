@@ -44,6 +44,7 @@ const deterministicEmbed = (text: string): number[] => {
 
 jest.mock('../../../src/services/rag/embedding', () => ({
   embeddingService: {
+    runExclusive: <T,>(operation: () => Promise<T>) => operation(),
     load: jest.fn(() => Promise.resolve()),
     embed: jest.fn((text: string) => Promise.resolve(deterministicEmbed(text))),
     embedBatch: jest.fn((texts: string[]) => Promise.resolve(texts.map(deterministicEmbed))),
@@ -90,7 +91,8 @@ describe('Embedding Flow Integration', () => {
 
       // Verify embedding service was called
       expect(embeddingService.load).toHaveBeenCalled();
-      expect(embeddingService.embedBatch).toHaveBeenCalled();
+      // Each chunk is embedded on its own so indexing can report per-chunk progress.
+      expect(embeddingService.embed).toHaveBeenCalled();
 
       // Verify embeddings were inserted into the database
       const embInserts = mockExecuteSync.mock.calls.filter(

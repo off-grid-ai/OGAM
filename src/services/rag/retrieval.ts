@@ -22,7 +22,10 @@ interface SearchResult {
 
 class RetrievalService {
   async search(projectId: string, query: string, topK: number = 5): Promise<SearchResult> {
-    const chunks = await this.searchSemantic(projectId, query, topK);
+    const chunks = await embeddingService.runExclusive(async () => {
+      await ragDatabase.ensureReady();
+      return this.searchSemantic(projectId, query, topK);
+    });
     return { chunks, truncated: false };
   }
 

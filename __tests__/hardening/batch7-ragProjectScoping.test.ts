@@ -55,6 +55,7 @@ jest.mock('../../src/services/rag/database', () => ({
 // Embedding native boundary: deterministic, direction-preserving unit vectors.
 jest.mock('../../src/services/rag/embedding', () => ({
   embeddingService: {
+    runExclusive: <T,>(operation: () => Promise<T>) => operation(),
     isLoaded: jest.fn(() => true),
     load: jest.fn(() => Promise.resolve()),
     embed: jest.fn((text: string) => {

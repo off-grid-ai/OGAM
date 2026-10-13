@@ -100,9 +100,13 @@ class LiteRTService {
 
   async loadModel(modelPath: string, preferredBackend: LiteRTBackend, opts: { supportsVision?: boolean; supportsAudio?: boolean; maxNumTokens?: number } = {}): Promise<void> {
     if (!this.isAvailable()) throw new Error('LiteRT is not available on this platform');
+    const requestedBackend = preferredBackend;
     // NPU was exposed in a test build, but is not part of this release.
     // Keep saved selections usable without attempting an unsupported native load.
-    if (preferredBackend === 'npu') preferredBackend = 'gpu';
+    if (preferredBackend === 'npu') {
+      logger.warn(TAG, 'LiteRT NPU is disabled in this release; trying GPU, then CPU.');
+      preferredBackend = 'gpu';
+    }
     const { supportsVision = false, supportsAudio = false, maxNumTokens = 4096 } = opts;
     this.configuredMaxTokens = maxNumTokens;
     logger.log(TAG, `loadModel — path=${modelPath} backend=${preferredBackend} supportsVision=${supportsVision} supportsAudio=${supportsAudio} maxNumTokens=${maxNumTokens}`);
@@ -114,7 +118,7 @@ class LiteRTService {
       // older native build (backward-compatible).
       const res: string | { backend: string; maxNumTokens?: number } =
         await LiteRTModule.loadModel(modelPath, preferredBackend, supportsVision, supportsAudio, maxNumTokens);
-      logger.log(`[WIRE-LITERT-LOAD] ${JSON.stringify({ requested: preferredBackend, supportsVision, supportsAudio, maxNumTokens, res })}`); // [WIRE]
+      logger.log(`[WIRE-LITERT-LOAD] ${JSON.stringify({ requested: requestedBackend, attempted: preferredBackend, supportsVision, supportsAudio, maxNumTokens, res })}`); // [WIRE]
       const actualBackend = typeof res === 'string' ? res : res.backend;
       if (typeof res === 'object' && typeof res.maxNumTokens === 'number' && res.maxNumTokens > 0) {
         if (res.maxNumTokens !== this.configuredMaxTokens) {

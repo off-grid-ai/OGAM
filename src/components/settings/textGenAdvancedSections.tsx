@@ -73,13 +73,13 @@ export const BackendSelector: React.FC = () => {
   const current = settings.inferenceBackend ?? defaultBackend;
   const showLayers = current !== INFERENCE_BACKENDS.CPU;
   const layersLabel = current === INFERENCE_BACKENDS.HTP
-    ? 'NPU Layers'
-    : current === INFERENCE_BACKENDS.METAL ? 'GPU Layers (Metal)' : 'GPU Layers (OpenCL)';
+    ? 'Text NPU Layers'
+    : current === INFERENCE_BACKENDS.METAL ? 'Text GPU Layers (Metal)' : 'Text GPU Layers (OpenCL)';
 
   return (
     <SegmentedRow<InferenceBackend>
-      label="Inference Backend"
-      description={backends.find(b => b.id === current)?.desc ?? ''}
+      label="Text Model Backend"
+      description={`Text model default for all chats. ${backends.find(b => b.id === current)?.desc ?? ''} Image and video engines select their own hardware.`}
       options={backends}
       current={current}
       onSelect={(id) => updateSettings({ inferenceBackend: id })}
@@ -113,8 +113,8 @@ export const LiteRTBackendSelector: React.FC = () => {
   const current = settings.liteRTBackend === 'cpu' ? 'cpu' : 'gpu';
   return (
     <SegmentedRow<LiteRTBackend>
-      label="Acceleration"
-      description={LITERT_BACKENDS.find(b => b.id === current)?.desc ?? ''}
+      label="Text Model Acceleration"
+      description={`Text model default for all chats. ${LITERT_BACKENDS.find(b => b.id === current)?.desc ?? ''} Image and video engines select their own hardware.`}
       options={LITERT_BACKENDS}
       current={current}
       onSelect={(id) => updateSettings({ liteRTBackend: id })}
@@ -192,7 +192,7 @@ export const ModelLoadingModeSelector: React.FC = () => {
   return (
     <SegmentedRow<ModelLoadingMode>
       label="Model Loading"
-      description="Lean keeps ONE model in memory at a time. Balanced keeps models loaded together when they fit and swaps when they do not. Aggressive commits a larger share of RAM so bigger models load. You can always Load Anyway if a model is refused."
+      description="Applies to all chats. Lean keeps ONE model in memory at a time. Balanced keeps models loaded together when they fit and swaps when they do not. Aggressive commits a larger share of RAM so bigger models load. You can always Load Anyway if a model is refused."
       options={MODE_OPTIONS}
       current={current}
       onSelect={(id) => updateSettings({ modelLoadingMode: id })}
@@ -250,7 +250,7 @@ export const ShowGenerationDetailsToggle: React.FC = () => {
   return (
     <SegmentedRow<'off' | 'on'>
       label="Show Generation Details"
-      description="Show context use, model, speed, and image settings below each reply"
+      description="Applies to all chats. Show context use, model, speed, and image settings below each reply."
       options={BOOL_OPTIONS}
       current={on ? 'on' : 'off'}
       onSelect={(id) => updateSettings({ showGenerationDetails: id === 'on' })}

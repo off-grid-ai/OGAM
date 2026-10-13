@@ -1,3 +1,4 @@
+import { videoGenerationService } from './videoGenerationService';
 /**
  * Boot-time model preloader.
  *
@@ -36,6 +37,7 @@ export function abortPreload(): void {
 function isGenerationActive(): boolean {
   return (
     generationService.getState().isGenerating ||
+    videoGenerationService.getState().phase === 'running' ||
     imageGenerationService.getState().isGenerating
   );
 }

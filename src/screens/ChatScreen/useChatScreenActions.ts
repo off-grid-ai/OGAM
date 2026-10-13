@@ -116,7 +116,7 @@ export function useChatScreenActions({
   const handleSend = (
     text: string,
     attachments?: MediaAttachment[],
-    imageMode?: 'auto' | 'force' | 'disabled',
+    imageMode?: 'auto' | 'force' | 'disabled' | 'video',
     assistantEnabled?: boolean,
   ) =>
     handleSendFn(generationDeps, {
@@ -191,7 +191,10 @@ export function useChatScreenActions({
     handleCopyMessage: (content: string) => {
       callHook(HOOKS.clipboardRecordLocalText, content, Date.now());
     },
-    handleRetryMessage: (message: ChatStoreState['conversations'][number]['messages'][number], assistantEnabled = false) => {
+    handleRetryMessage: (
+      message: ChatStoreState['conversations'][number]['messages'][number],
+      assistantEnabled = false,
+    ) => {
       const currentDeps = generationDepsRef.current ?? generationDeps;
       return handleRetryMessageFn(message, currentDeps, {
         activeConversationId: currentDeps.activeConversationId,

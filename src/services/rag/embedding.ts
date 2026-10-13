@@ -1,7 +1,9 @@
-import { initLlama, LlamaContext } from 'llama.rn';
+import { initLlama, loadLlamaModelInfo, LlamaContext } from 'llama.rn';
 import { Platform } from 'react-native';
+import { sha256 } from 'js-sha256';
 import RNFS from 'react-native-fs';
 import logger from '../../utils/logger';
+import { ragDatabase, type EmbeddingModelSelection } from './database';
 import { modelResidencyManager } from '../modelResidency';
 
 const EMBEDDING_MODEL_FILENAME = 'all-MiniLM-L6-v2-Q8_0.gguf';
@@ -37,6 +39,117 @@ function withTimeout<T>(promise: Promise<T>, opts: { ms: number; message: string
 class EmbeddingService {
   private context: LlamaContext | null = null;
   private loading: Promise<void> | null = null;
+  private operations: Promise<unknown> = Promise.resolve();
+  private downloads: Promise<unknown> = Promise.resolve();
+  private operationActive = false;
+  private pendingModel: EmbeddingModelSelection | null | undefined;
+  private dimension = EMBEDDING_DIMENSION;
+  private modelId = 'bundled:all-MiniLM-L6-v2-Q8_0';
+
+  /** Hold this across vector creation AND index/cache reads or writes. */
+  runExclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this.operations.then(async () => {
+      this.operationActive = true;
+      try { return await operation(); } finally { this.operationActive = false; }
+    });
+    this.operations = next.catch(() => {});
+    return next;
+  }
+
+  getModelId(): string { return this.modelId; }
+
+  /** Caller holds the operation lock; failure leaves the stored model and index intact. */
+  async withRebuildModel<T>(model: EmbeddingModelSelection | null, rebuild: () => Promise<T>): Promise<T> {
+    if (this.loading) await this.loading;
+    await this.unload();
+    this.pendingModel = model;
+    try {
+      await this.load();
+      await this.embed('Embedding compatibility test.');
+      return await rebuild();
+    } catch (error) {
+      await this.unload();
+      throw error;
+    } finally {
+      this.pendingModel = undefined;
+    }
+  }
+
+  async isModelDownloaded(candidate: { id: string; size: number; sha256?: string }): Promise<boolean> {
+    const filePath = `${RNFS.DocumentDirectoryPath}/embedding-${sha256(candidate.id)}.gguf`;
+    if (!await RNFS.exists(filePath)) return false;
+    return Number((await RNFS.stat(filePath)).size) === candidate.size &&
+      (!candidate.sha256 || await RNFS.hash(filePath, 'sha256') === candidate.sha256);
+  }
+
+  /** Download only. Activation and rebuilding require a separate confirmed RAG operation. */
+  async downloadModel(
+    candidate: { id: string; name: string; size: number; downloadUrl: string; sha256?: string },
+    onProgress: (message: string) => void,
+    signal: AbortSignal,
+    onDownloadProgress?: (fraction: number) => void,
+  ): Promise<EmbeddingModelSelection> {
+    const next = this.downloads.then(() => this.downloadModelFile(candidate, onProgress, signal, onDownloadProgress));
+    this.downloads = next.catch(() => {});
+    return next;
+  }
+
+  private async downloadModelFile(
+    candidate: { id: string; name: string; size: number; downloadUrl: string; sha256?: string },
+    onProgress: (message: string) => void,
+    signal: AbortSignal,
+    onDownloadProgress?: (fraction: number) => void,
+  ): Promise<EmbeddingModelSelection> {
+    if (signal.aborted) throw new Error('Model download cancelled');
+    if (!Number.isFinite(candidate.size) || candidate.size <= 0) {
+      throw new Error('The embedding model has no valid file size.');
+    }
+    const filePath = `${RNFS.DocumentDirectoryPath}/embedding-${sha256(candidate.id)}.gguf`;
+    const selection = { id: candidate.id, name: candidate.name, size: candidate.size, filePath };
+    if (await RNFS.exists(filePath)) {
+      if (await this.isModelDownloaded(candidate)) {
+        if (signal.aborted) throw new Error('Model download cancelled');
+        onDownloadProgress?.(1);
+        return selection;
+      }
+      await ragDatabase.ensureReady();
+      if (ragDatabase.getEmbeddingModel()?.id === candidate.id) {
+        throw new Error('The active model file is damaged. Select the built-in model, then download this model again.');
+      }
+      await RNFS.unlink(filePath);
+    }
+    const partial = `${filePath}.part`;
+    const download = RNFS.downloadFile({
+      fromUrl: candidate.downloadUrl, toFile: partial,
+      progressInterval: 250,
+      begin: () => { onProgress('Downloading embedding model...'); onDownloadProgress?.(0); },
+      progress: progress => {
+        const fraction = Math.min(1, progress.bytesWritten / candidate.size);
+        onDownloadProgress?.(fraction);
+        onProgress(`Downloading embedding model: ${Math.round(fraction * 100)}%`);
+      },
+    });
+    const stop = () => RNFS.stopDownload(download.jobId);
+    signal.addEventListener('abort', stop);
+    try {
+      if (signal.aborted) { stop(); throw new Error('Model change cancelled'); }
+      const result = await download.promise;
+      if (signal.aborted) throw new Error('Model change cancelled');
+      if (result.statusCode !== 200 || Number((await RNFS.stat(partial)).size) !== candidate.size) {
+        throw new Error('The model download is incomplete. Try again.');
+      }
+      if (candidate.sha256 && await RNFS.hash(partial, 'sha256') !== candidate.sha256) {
+        throw new Error('The model file failed its integrity check. Try again.');
+      }
+      if (signal.aborted) throw new Error('Model download cancelled');
+      await RNFS.moveFile(partial, filePath);
+      onDownloadProgress?.(1);
+      return selection;
+    } finally {
+      signal.removeEventListener('abort', stop);
+      if (await RNFS.exists(partial)) await RNFS.unlink(partial);
+    }
+  }
 
   async load(): Promise<void> {
     if (this.context) return;
@@ -51,7 +164,30 @@ class EmbeddingService {
   }
 
   private async doLoad(): Promise<void> {
-    const modelPath = await this.ensureModelCopied();
+    await ragDatabase.ensureReady();
+    const selected = this.pendingModel !== undefined ? this.pendingModel : ragDatabase.getEmbeddingModel();
+    // iOS can move the app container after a restore; derive its current path from the stable identity.
+    const modelPath = selected
+      ? `${RNFS.DocumentDirectoryPath}/embedding-${sha256(selected.id)}.gguf`
+      : await this.ensureModelCopied();
+    this.dimension = EMBEDDING_DIMENSION;
+    if (selected) {
+      const info = await loadLlamaModelInfo(modelPath) as Record<string, unknown>;
+      // Only bidirectional BERT encoders with sentence pooling fit this runtime contract.
+      // Decoder models and rerankers need different prompting/output handling.
+      const contextLength = Number(info['bert.context_length']);
+      if (info['general.architecture'] !== 'bert' ||
+          ![1, 2].includes(Number(info['bert.pooling_type'])) ||
+          !Number.isInteger(contextLength) || contextLength < EMBEDDING_CTX_SIZE) {
+        throw new Error('Unsupported embedding model. Use a BERT GGUF text encoder with mean or CLS pooling and at least 512 tokens.');
+      }
+      const dimension = Number(info['bert.embedding_length']);
+      if (!Number.isInteger(dimension) || dimension < 1) {
+        throw new Error('This model has an unsupported embedding size.');
+      }
+      this.dimension = dimension;
+    }
+    this.modelId = selected?.id ?? 'bundled:all-MiniLM-L6-v2-Q8_0';
     logger.log('[Embedding] Loading embedding model...');
     // Load through the residency manager's global lock so this small RAG model
     // never initializes alongside another model load (the single load gateway).
@@ -59,6 +195,14 @@ class EmbeddingService {
     // ThreadPool::startWorkers hang) releases the lock instead of wedging a
     // concurrent chat-model load and tripping the OS watchdog.
     this.context = await modelResidencyManager.runExclusive('load:embedding', async () => {
+      const spec = {
+        key: EMBEDDING_RESIDENT_KEY, type: 'embedding' as const,
+        sizeMB: selected ? Math.ceil(selected.size / (1024 * 1024)) + 128 : EMBEDDING_RESIDENT_MB,
+        canEvict: () => !this.operationActive,
+      };
+      if (selected && !(await modelResidencyManager.makeRoomFor(spec)).fits) {
+        throw new Error('Not enough memory for this embedding model. Choose a smaller model.');
+      }
       const ctx = await withTimeout(
         initLlama({
           model: modelPath,
@@ -83,7 +227,7 @@ class EmbeddingService {
       // against stale free-RAM and OOM. It loads on the tiny MiniLM context and can be
       // evicted as a last-resort sidecar; it never evicts the active generation model.
       modelResidencyManager.register(
-        { key: EMBEDDING_RESIDENT_KEY, type: 'embedding', sizeMB: EMBEDDING_RESIDENT_MB },
+        spec,
         () => this.unload(),
       );
       return ctx;
@@ -112,7 +256,13 @@ class EmbeddingService {
       const result = await (this.context as any).embedding(text);
       // [WIRE] embedding dim + a sample (not the whole vector) so fixtures match the real model's dimensionality.
       logger.log(`[WIRE-EMBED] ${JSON.stringify({ dim: result?.embedding?.length, sample: result?.embedding?.slice?.(0, 8) })}`);
-      return result.embedding;
+      const vector: unknown = result.embedding;
+      if (!Array.isArray(vector) || vector.length !== this.dimension ||
+          !vector.every(value => typeof value === 'number' && Number.isFinite(value)) ||
+          !vector.some(value => value !== 0)) {
+        throw new Error('The model did not return a valid sentence embedding.');
+      }
+      return vector;
     } catch (error: any) {
       const msg = error?.message || String(error) || '';
       logger.error('[Embedding] Native error during embedding:', msg);
@@ -156,7 +306,7 @@ class EmbeddingService {
   }
 
   getDimension(): number {
-    return EMBEDDING_DIMENSION;
+    return this.dimension;
   }
 }
 

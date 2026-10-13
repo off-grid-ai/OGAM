@@ -186,20 +186,25 @@ export function buildImageGenMeta(
   },
 ): GenerationMeta {
   const backend = model.backend ?? 'mnn';
+  // SD selects placement in native code. Its result does not report hardware,
+  // so platform and OpenCL settings cannot establish whether GPU was used.
+  const isSD = backend === 'sd';
   const isGpu =
     Platform.OS === 'ios' ||
     backend === 'qnn' ||
     (backend === 'mnn' && opts.useOpenCL);
   const gpuBackend =
-    Platform.OS === 'ios'
-      ? 'Core ML (ANE)'
+    isSD
+      ? 'SD runtime'
+      : Platform.OS === 'ios'
+      ? 'Core ML'
       : backend === 'qnn'
       ? 'QNN (NPU)'
       : isGpu
       ? 'MNN (GPU)'
       : 'MNN (CPU)';
   return {
-    gpu: isGpu,
+    gpu: isSD ? undefined : isGpu,
     gpuBackend,
     modelName: model.name,
     steps: opts.steps,

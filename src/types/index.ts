@@ -171,7 +171,7 @@ export interface ImageModelRecommendation {
   recommendedModels?: string[];
   bannerText: string;
   warning?: string;
-  compatibleBackends: Array<'mnn' | 'qnn' | 'coreml'>;
+  compatibleBackends: Array<'mnn' | 'qnn' | 'coreml' | 'sd'>;
 }
 
 // Hardware-related types
@@ -195,7 +195,7 @@ export interface ModelRecommendation {
 // Media attachment types
 export interface MediaAttachment {
   id: string;
-  type: 'image' | 'document' | 'audio';
+  type: 'image' | 'document' | 'audio' | 'video';
   uri: string;
   mimeType?: string;
   width?: number;
@@ -249,12 +249,15 @@ export interface GenerationMeta {
   contextEstimate?: boolean;
   /** Model load/init time in seconds */
   modelLoadTimeSeconds?: number;
-  /** Image generation steps */
+  /** Image or video generation steps */
   steps?: number;
-  /** Image guidance scale */
+  /** Image or video guidance scale */
   guidanceScale?: number;
-  /** Image resolution */
+  /** Image or video resolution */
   resolution?: string;
+  frames?: number;
+  fps?: number;
+  seed?: number;
   cacheType?: string; // KV cache quantization type
   /** Tool names sent to the model for this turn (built-in + routed MCP/ext tools). */
   routedToolNames?: string[];
@@ -286,7 +289,7 @@ export interface Message {
    *  a cancelled image turn leaves only the "Enhanced prompt" reply and no image, and inferring from
    *  that made the retry a TEXT turn (device-confirmed on Android and iOS). Absent on turns recorded
    *  before this field existed; those still fall back to the reply scan. */
-  turnKind?: 'text' | 'image';
+  turnKind?: 'text' | 'image' | 'video';
   /** Indicates this is a system info message (model loaded/unloaded, etc.) */
   isSystemInfo?: boolean;
   attachments?: MediaAttachment[];
@@ -373,7 +376,7 @@ export interface ONNXImageModel {
   downloadedAt: string;
   size: number;
   style?: string;
-  backend?: 'mnn' | 'qnn' | 'coreml';
+  backend?: 'mnn' | 'qnn' | 'coreml' | 'sd';
   attentionVariant?: 'split_einsum' | 'original';
 }
 
@@ -403,7 +406,27 @@ export const INFERENCE_BACKENDS = {
   METAL: 'metal' as InferenceBackend,
 } as const;
 /** 'auto' = smart detect, 'force' = always generate image, 'disabled' = never */
-export type ImageModeState = 'auto' | 'force' | 'disabled';
+export type ImageModeState = 'auto' | 'force' | 'disabled' | 'video';
+
+export interface GeneratedVideo {
+  id: string;
+  provenance?: RecordProvenance;
+  prompt: string;
+  negativePrompt?: string;
+  videoPath: string;
+  fileName?: string;
+  width: number;
+  height: number;
+  fps: number;
+  frames: number;
+  durationSeconds: number;
+  steps: number;
+  guidance: number;
+  seed: number;
+  modelId: string;
+  createdAt: string;
+  conversationId?: string;
+}
 
 export interface GeneratedImage {
   id: string;

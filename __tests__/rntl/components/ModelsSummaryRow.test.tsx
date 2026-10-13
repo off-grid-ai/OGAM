@@ -16,7 +16,7 @@ jest.mock('../../../src/components/AnimatedPressable', () => {
 
 import { ModelsSummaryRow } from '../../../src/components/models/ModelsSummaryRow';
 
-const labels = { text: 'Qwen3.5', image: '—', voice: 'Kokoro · Warm', speech: 'Base' };
+const labels = { text: 'Qwen3.5', image: '—', video: '—', voice: 'Kokoro · Warm', speech: 'Base' };
 
 describe('ModelsSummaryRow', () => {
   it('renders the four model-type captions and the label', () => {

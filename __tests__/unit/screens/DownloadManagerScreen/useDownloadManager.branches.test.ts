@@ -93,7 +93,7 @@ const setDownloadedModels = jest.fn();
 
 function configureStores() {
   appState = {
-    downloadedModels: [], setDownloadedModels, downloadedImageModels: [],
+    downloadedModels: [], setDownloadedModels, downloadedImageModels: [], downloadedVideoModels: [],
     addDownloadedImageModel: jest.fn(), activeImageModelId: null, setActiveImageModelId: jest.fn(),
     onboardingChecklist: { triedImageGen: false },
   };

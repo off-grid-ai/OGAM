@@ -1,3 +1,4 @@
+import { videoGenerationService } from './videoGenerationService';
 /** GenerationService - Handles LLM generation independently of UI lifecycle */
 import { llmService } from './llm';
 import { getActiveEngineService, prepareActiveConversation, stopAllTextEngines } from './engines';
@@ -33,12 +34,15 @@ type FallbackRoute =
   | { kind: 'local'; id: string; name: string };
 
 export interface QueuedMessage {
-  id: string; conversationId: string; text: string;
-  attachments?: MediaAttachment[]; messageText: string;
+  id: string;
+  conversationId: string;
+  text: string;
+  attachments?: MediaAttachment[];
+  messageText: string;
   /** The modality the user forced for THIS send (force/disabled/auto). Carried through the queue so a
    *  message the user explicitly forced to image mode is dispatched as image on drain — never re-decided
    *  at 'auto' by resolveTurnKind (#510: a queued force-image send generated as text). */
-  imageMode?: 'auto' | 'force' | 'disabled';
+  imageMode?: 'auto' | 'force' | 'disabled' | 'video';
   assistantEnabled?: boolean;
 }
 
@@ -56,8 +60,12 @@ type QueueProcessor = (item: QueuedMessage) => Promise<void>;
 
 class GenerationService {
   private state: GenerationState = {
-    isGenerating: false, isThinking: false, conversationId: null,
-    streamingContent: '', startTime: null, queuedMessages: [],
+    isGenerating: false,
+    isThinking: false,
+    conversationId: null,
+    streamingContent: '',
+    startTime: null,
+    queuedMessages: [],
   };
 
   private listeners: Set<GenerationListener> = new Set();
@@ -66,12 +74,19 @@ class GenerationService {
   private generationAttempt: number = 0;
   /** Whether the last/active generation was stopped by the user — lets callers skip a
    *  "no response" retry prompt when the empty result was an intentional abort. */
-  wasAborted(): boolean { return this.abortRequested; }
+  wasAborted(): boolean {
+    return this.abortRequested;
+  }
   private pendingStop: Promise<void> | null = null;
   private queueProcessor: QueueProcessor | null = null;
   private currentRemoteAbortController: AbortController | null = null;
   private remoteTimeToFirstToken: number | undefined;
-  private contextUsage: Pick<GenerationMeta, 'contextPromptTokens' | 'contextWindowTokens' | 'contextEstimate'> | undefined;
+  private contextUsage:
+    | Pick<
+        GenerationMeta,
+        'contextPromptTokens' | 'contextWindowTokens' | 'contextEstimate'
+      >
+    | undefined;
 
   // Token batching — collect tokens and flush to UI at a controlled rate
   private tokenBuffer: string = '';
@@ -121,11 +136,16 @@ class GenerationService {
     this.flushTokenBuffer();
   }
 
-  private normalizeStreamChunk(data: StreamChunk): { content?: string; reasoningContent?: string } {
+  private normalizeStreamChunk(data: StreamChunk): {
+    content?: string;
+    reasoningContent?: string;
+  } {
     return typeof data === 'string' ? { content: data } : data;
   }
 
-  getState(): GenerationState { return { ...this.state }; }
+  getState(): GenerationState {
+    return { ...this.state };
+  }
 
   isGeneratingFor(conversationId: string): boolean {
     return this.state.isGenerating && this.state.conversationId === conversationId;
@@ -135,7 +155,9 @@ class GenerationService {
     this.listeners.add(listener); listener(this.getState()); return () => this.listeners.delete(listener);
   }
 
-  private notifyListeners(): void { this.listeners.forEach(l => l(this.getState())); }
+  private notifyListeners(): void {
+    this.listeners.forEach(l => l(this.getState()));
+  }
 
   private updateState(partial: Partial<GenerationState>): void {
     this.state = { ...this.state, ...partial };
@@ -149,8 +171,12 @@ class GenerationService {
     checkProPromptForText(delayMs);
   }
 
-  private buildToolLoopHandlers() { return buildToolLoopHandlersImpl(this); }
-  private buildGenerationMeta(): GenerationMeta { return buildGenerationMetaImpl(this); }
+  private buildToolLoopHandlers() {
+    return buildToolLoopHandlersImpl(this);
+  }
+  private buildGenerationMeta(): GenerationMeta {
+    return buildGenerationMetaImpl(this);
+  }
   private async prepareGeneration(conversationId: string): Promise<boolean> {
     return prepareGenerationImpl(this, conversationId);
   }
@@ -180,30 +206,51 @@ class GenerationService {
     const selectedId = startedRemote ? remote.activeRemoteTextModelId : local.activeModelId;
     const selectedName = startedRemote
       ? remote.getActiveRemoteTextModel()?.name || selectedId || 'Remote model'
-      : local.downloadedModels.find(model => model.id === selectedId)?.name || 'Local model';
+      : local.downloadedModels.find(model => model.id === selectedId)?.name ||
+        'Local model';
     const needsVision = messages.some(message =>
       message.attachments?.some(attachment => attachment.type === 'image'),
     );
     const remoteRoutes = startedRemote
       ? remote.servers.flatMap(server =>
           (remote.discoveredModels[server.id] || [])
-            .filter(model =>
-              (server.id !== remote.activeServerId || model.id !== selectedId) &&
-              (!needsVision || model.capabilities.supportsVision),
+            .filter(
+              model =>
+                (server.id !== remote.activeServerId ||
+                  model.id !== selectedId) &&
+                (!needsVision || model.capabilities.supportsVision),
             )
-            .map(model => ({ kind: 'remote' as const, serverId: server.id, id: model.id, name: model.name })),
+            .map(model => ({
+              kind: 'remote' as const,
+              serverId: server.id,
+              id: model.id,
+              name: model.name,
+            })),
         )
       : [];
     const localRoutes = local.downloadedModels
-      .filter(model =>
-        model.id !== selectedId &&
-        (!needsVision || (model.engine === 'litert' ? model.liteRTVision : model.isVisionModel)),
+      .filter(
+        model =>
+          model.id !== selectedId &&
+          (!needsVision ||
+            (model.engine === 'litert'
+              ? model.liteRTVision
+              : model.isVisionModel)),
       )
       .sort((a, b) => a.fileSize - b.fileSize)
-      .map(model => ({ kind: 'local' as const, id: model.id, name: model.name }));
+      .map(model => ({
+        kind: 'local' as const,
+        id: model.id,
+        name: model.name,
+      }));
     return [
       startedRemote
-        ? { kind: 'remote', serverId: remote.activeServerId || '', id: selectedId || '', name: selectedName }
+        ? {
+            kind: 'remote',
+            serverId: remote.activeServerId || '',
+            id: selectedId || '',
+            name: selectedName,
+          }
         : { kind: 'local', id: selectedId || '', name: selectedName },
       ...remoteRoutes,
       ...localRoutes,
@@ -250,7 +297,8 @@ class GenerationService {
         this.totalReasoningLength = 0;
         this.remoteTimeToFirstToken = undefined;
         useChatStore.getState().addMessage(conversationId, {
-          role: 'tool', toolName: 'model_fallback',
+          role: 'tool',
+          toolName: 'model_fallback',
           content: `${failedName} could not answer. Trying ${route.name}.`,
         });
         prepared = this.state.isGenerating;
@@ -301,46 +349,81 @@ class GenerationService {
         options.onToolCallComplete?.(name, result);
       },
     };
-    return this.withModelFallback(conversationId, messages, async (route, prepared) => {
-      if (route.kind === 'remote') {
-        return generateRemoteWithToolsImpl(this, {
-          conversationId, messages,
-          options: { ...trackedOptions, prepared, preservePartialOnError: false },
-        });
-      }
-      const { enabledToolIds, projectId, contextUsage, assistantEnabled, ...callbacks } = trackedOptions;
-      if (!prepared && !(await this.prepareGeneration(conversationId))) return;
-      this.contextUsage = contextUsage;
-      try {
-      const outcome = await runToolLoop({
-        conversationId,
-        messages,
-        enabledToolIds,
-        projectId,
-        assistantEnabled,
-        callbacks,
-        ...this.buildToolLoopHandlers(),
-      });
+    return this.withModelFallback(
+      conversationId,
+      messages,
+      async (route, prepared) => {
+        if (route.kind === 'remote') {
+          return generateRemoteWithToolsImpl(this, {
+            conversationId,
+            messages,
+            options: {
+              ...trackedOptions,
+              prepared,
+              preservePartialOnError: false,
+            },
+          });
+        }
+        const {
+          enabledToolIds,
+          projectId,
+          contextUsage,
+          assistantEnabled,
+          ...callbacks
+        } = trackedOptions;
+        if (!prepared && !(await this.prepareGeneration(conversationId)))
+          return;
+        this.contextUsage = contextUsage;
+        try {
+          const outcome = await runToolLoop({
+            conversationId,
+            messages,
+            enabledToolIds,
+            projectId,
+            assistantEnabled,
+            callbacks,
+            ...this.buildToolLoopHandlers(),
+          });
 
-      // If aborted, stopGeneration() already handled cleanup.
-      logger.log(`[GenService][ToolLoop] runToolLoop done — aborted=${this.abortRequested}, streamingContent=${this.state.streamingContent?.length ?? 0}ch, tokenBuffer=${this.tokenBuffer?.length ?? 0}ch`);
-      if (!this.abortRequested) {
-        this.forceFlushTokens();
-        const store = useChatStore.getState();
-        logger.log(`[GenService][ToolLoop] pre-finalize — streamingForConvId=${store.streamingForConversationId}, targetConvId=${conversationId}, streamingMsg=${store.streamingMessage?.length ?? 0}ch`);
-        const generationTime = this.state.startTime ? Date.now() - this.state.startTime : undefined;
-        store.finalizeStreamingMessage(conversationId, generationTime, this.buildGenerationMeta());
-        logger.log(`[GenService][ToolLoop] finalizeStreamingMessage called — convId=${conversationId}`);
-        this.checkSharePrompt();
-        this.resetState();
-      }
-      return outcome;
-    } catch (error) {
-      if (this.abortRequested) return;
-      logger.error('[GenerationService] Tool generation error:', error);
-      throw error;
-      }
-    }, () => !toolStarted);
+          // If aborted, stopGeneration() already handled cleanup.
+          logger.log(
+            `[GenService][ToolLoop] runToolLoop done — aborted=${this.abortRequested}, streamingContent=${this.state.streamingContent?.length ?? 0}ch, tokenBuffer=${this.tokenBuffer?.length ?? 0}ch`,
+          );
+          if (!this.abortRequested) {
+            this.forceFlushTokens();
+            const store = useChatStore.getState();
+            logger.log(
+              `[GenService][ToolLoop] pre-finalize — streamingForConvId=${store.streamingForConversationId}, targetConvId=${conversationId}, streamingMsg=${store.streamingMessage?.length ?? 0}ch`,
+            );
+            const generationTime = this.state.startTime
+              ? Date.now() - this.state.startTime
+              : undefined;
+            store.finalizeStreamingMessage(
+              conversationId,
+              generationTime,
+              this.buildGenerationMeta(),
+            );
+            logger.log(
+              `[GenService][ToolLoop] finalizeStreamingMessage called — convId=${conversationId}`,
+            );
+            this.checkSharePrompt();
+            this.resetState();
+          }
+          await videoGenerationService.finishDeferred(
+            conversationId,
+            outcome.interrupted,
+          );
+          this.drainQueue();
+          return outcome;
+        } catch (error) {
+          videoGenerationService.discardDeferred(conversationId);
+          if (this.abortRequested) return;
+          logger.error('[GenerationService] Tool generation error:', error);
+          throw error;
+        }
+      },
+      () => !toolStarted,
+    );
   }
 
   /**
@@ -424,8 +507,10 @@ class GenerationService {
     // generations can drain it before starting.
     const engine = getActiveEngineService();
     this.pendingStop = (engine?.stopGeneration() ?? Promise.resolve())
-      .catch(() => { })
-      .finally(() => { this.pendingStop = null; });
+      .catch(() => {})
+      .finally(() => {
+        this.pendingStop = null;
+      });
 
     return partialContent;
   }
@@ -460,9 +545,14 @@ class GenerationService {
     this.notifyListeners();
   }
 
-  clearQueue(): void { this.state = { ...this.state, queuedMessages: [] }; this.notifyListeners(); }
+  clearQueue(): void {
+    this.state = { ...this.state, queuedMessages: [] };
+    this.notifyListeners();
+  }
 
-  setQueueProcessor(processor: QueueProcessor | null): void { this.queueProcessor = processor; }
+  setQueueProcessor(processor: QueueProcessor | null): void {
+    this.queueProcessor = processor;
+  }
 
   /**
    * Process queued messages now. Text generation drains its own queue on
@@ -471,26 +561,23 @@ class GenerationService {
    * text generation is currently running.
    */
   drainQueue(): void {
-    if (this.state.isGenerating) return;
+    if (this.state.isGenerating || videoGenerationService.hasPending()) return;
     this.processNextInQueue();
   }
 
   private processNextInQueue(): void {
-    if (this.state.queuedMessages.length === 0 || !this.queueProcessor) return;
-    const all = this.state.queuedMessages;
-    this.state = { ...this.state, queuedMessages: [] };
+    if (
+      this.state.queuedMessages.length === 0 ||
+      !this.queueProcessor ||
+      videoGenerationService.hasPending()
+    )
+      return;
+    const [combined, ...remaining] = this.state.queuedMessages;
+    this.state = { ...this.state, queuedMessages: remaining };
     this.notifyListeners();
-    const combined: QueuedMessage = all.length === 1 ? all[0] : {
-      id: all[0].id, conversationId: all[0].conversationId,
-      text: all.map(m => m.text).join('\n\n'),
-      attachments: all.flatMap(m => m.attachments || []),
-      messageText: all.map(m => m.messageText).join('\n\n'),
-      // If ANY coalesced send forced image mode, the combined dispatch must force image too — the
-      // user's explicit force must never be dropped by the merge (mirror of the single-message carry).
-      imageMode: all.some(m => m.imageMode === 'force') ? 'force' : all[0].imageMode,
-      assistantEnabled: all.some(m => m.assistantEnabled),
-    };
-    this.queueProcessor(combined).catch(e => { logger.error('[GenerationService] Queue processor error:', e); });
+    this.queueProcessor(combined).catch(e => {
+      logger.error('[GenerationService] Queue processor error:', e);
+    });
   }
 
   private resetState(): void {

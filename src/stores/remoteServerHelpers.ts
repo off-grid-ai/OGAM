@@ -64,22 +64,28 @@ async function fetchForDiscovery(
 
 const gatewayCategory = (kind: unknown): RemoteModelCategory | null => {
   if (kind === 'chat' || kind === 'vision') return 'text';
+  if (kind === 'video') return 'video';
   if (kind === 'image') return 'image';
   if (kind === 'transcription') return 'transcription';
   if (kind === 'speech') return 'voice';
   return null;
 };
 
-function modelCategories(model: {
-  kind?: unknown;
-  architecture?: { input_modalities?: unknown; output_modalities?: unknown };
-}, isOpenRouter = false): RemoteModelCategory[] {
+function modelCategories(
+  model: {
+    kind?: unknown;
+    architecture?: { input_modalities?: unknown; output_modalities?: unknown };
+  },
+  isOpenRouter = false,
+): RemoteModelCategory[] {
   const declared = gatewayCategory(model.kind);
   if (declared) return [declared];
   const outputs = Array.isArray(model.architecture?.output_modalities)
-    ? model.architecture.output_modalities : [];
+    ? model.architecture.output_modalities
+    : [];
   const inputs = Array.isArray(model.architecture?.input_modalities)
-    ? model.architecture.input_modalities : [];
+    ? model.architecture.input_modalities
+    : [];
   if (outputs.includes('image')) return ['image'];
   if (outputs.includes('transcription')) return ['transcription'];
   if (outputs.includes('speech')) return ['voice'];
@@ -129,7 +135,10 @@ async function fetchGatewayModelCatalog(
       id?: unknown;
       name?: unknown;
       kind?: unknown;
-      architecture?: { input_modalities?: unknown; output_modalities?: unknown };
+      architecture?: {
+        input_modalities?: unknown;
+        output_modalities?: unknown;
+      };
     }>) {
       if (typeof model.id !== 'string') continue;
       for (const category of modelCategories(model, isOpenRouter)) {
@@ -394,7 +403,10 @@ export async function fetchModelsFromServer(
       };
 
       // OpenAI format: { object: "list", data: [{ id, object, owned_by, ... }] }
-      if ((data?.object === 'list' || isOpenRouter) && Array.isArray(data.data)) {
+      if (
+        (data?.object === 'list' || isOpenRouter) &&
+        Array.isArray(data.data)
+      ) {
         const generativeModels = data.data.filter(
           (model: { id: string; kind?: unknown }) => isTextModel(model),
         );
@@ -429,14 +441,14 @@ export async function fetchModelsFromServer(
             },
             i: number,
           ) => ({
-          id: model.id,
+            id: model.id,
             name: displayModelName(model.name?.trim() || model.id),
-          serverId: server.id,
-          capabilities: {
-            // The gateway declares each model's kind authoritatively; trust kind:'vision'
-            // for vision support. The name/probe-based fallback (modelInfos) can't detect a
-            // gateway vision model whose id doesn't match the name heuristics, which dropped
-            // the attached image client-side (the model then behaved text-only).
+            serverId: server.id,
+            capabilities: {
+              // The gateway declares each model's kind authoritatively; trust kind:'vision'
+              // for vision support. The name/probe-based fallback (modelInfos) can't detect a
+              // gateway vision model whose id doesn't match the name heuristics, which dropped
+              // the attached image client-side (the model then behaved text-only).
               supportsVision:
                 model.kind === 'vision' ||
                 (declaredCapability(model.capabilities, 'vision') ??
@@ -445,12 +457,12 @@ export async function fetchModelsFromServer(
                 declaredCapability(model.capabilities, 'tools') ??
                 modelInfos[i].supportsToolCalling ??
                 detectToolCallingCapability(model.id),
-            supportsThinking: modelInfos[i].supportsThinking ?? false,
-            thinkingLevelsOnly: modelInfos[i].thinkingLevelsOnly,
-            acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
-            maxContextLength: modelInfos[i].contextLength,
-          },
-          lastUpdated: new Date().toISOString(),
+              supportsThinking: modelInfos[i].supportsThinking ?? false,
+              thinkingLevelsOnly: modelInfos[i].thinkingLevelsOnly,
+              acceptsThinkingKwarg: modelInfos[i].acceptsThinkingKwarg ?? false,
+              maxContextLength: modelInfos[i].contextLength,
+            },
+            lastUpdated: new Date().toISOString(),
           }),
         );
       }

@@ -146,6 +146,7 @@ function mockDeterministicVector(text: string): number[] {
 }
 jest.mock('../../src/services/rag/embedding', () => ({
   embeddingService: {
+    runExclusive: <T,>(operation: () => Promise<T>) => operation(),
     load: jest.fn(() => Promise.resolve()),
     embed: jest.fn((text: string) => Promise.resolve(mockDeterministicVector(text))),
     embedBatch: jest.fn((texts: string[]) => Promise.resolve(texts.map(mockDeterministicVector))),
@@ -199,7 +200,15 @@ describe('BATCH 9 — KB add → indexed → searchable round-trip (real sqlite 
     expect(mockMemDb._rows('rag_documents')[0]).toMatchObject({ id: docId, project_id: PROJECT, name: 'solar.txt', size: 4200, enabled: 1 });
     expect(mockMemDb._rows('rag_chunks').length).toBeGreaterThan(0);
     expect(mockMemDb._rows('rag_embeddings').length).toBe(mockMemDb._rows('rag_chunks').length);
-    expect(stages).toEqual(['extracting', 'chunking', 'indexing', 'embedding', 'done']);
+    // Embedding announces itself, then reports once per chunk.
+    const chunkCount = mockMemDb._rows('rag_chunks').length;
+    expect(stages).toEqual([
+      'extracting',
+      'chunking',
+      'indexing',
+      ...Array.from({ length: chunkCount + 1 }, () => 'embedding'),
+      'done',
+    ]);
 
     // Case 15/16: the real filename + size come back from the list query.
     const docs = await ragService.getDocumentsByProject(PROJECT);

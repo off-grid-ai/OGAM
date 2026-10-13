@@ -19,7 +19,14 @@
 
 import { modelMemoryBudgetMB, LoadPolicy } from '../memoryBudget';
 
-export type ResidentType = 'text' | 'image' | 'whisper' | 'tts' | 'classifier' | 'embedding';
+export type ResidentType =
+  | 'text'
+  | 'image'
+  | 'video'
+  | 'whisper'
+  | 'tts'
+  | 'classifier'
+  | 'embedding';
 
 export interface Resident {
   /** Unique model id. */
@@ -60,7 +67,13 @@ const SIDECAR_TYPES = new Set<ResidentType>(['whisper', 'tts', 'embedding']);
 // Priority (what to KEEP): text is highest, then image, then the STT/TTS/embedding
 // sidecars (equal, lowest), then pinned helpers. Eviction takes the lowest first.
 const PRIORITY: Record<ResidentType, number> = {
-  text: 3, image: 2, whisper: 1, tts: 1, embedding: 1, classifier: 0,
+  text: 3,
+  image: 2,
+  video: 2,
+  whisper: 1,
+  tts: 1,
+  embedding: 1,
+  classifier: 0,
 };
 
 /**
@@ -77,11 +90,14 @@ function selectEvictionVictim(
 ): Resident | undefined {
   const incomingIsSidecar = SIDECAR_TYPES.has(incoming.type);
   return current
-    .filter(r =>
-      !r.pinned && r.key !== incoming.key && !isEvicted(r) &&
-      // A sidecar incoming may only reclaim from peer sidecars (never a
-      // generation model); a generation incoming may evict anything non-pinned.
-      (!incomingIsSidecar || SIDECAR_TYPES.has(r.type)),
+    .filter(
+      r =>
+        !r.pinned &&
+        r.key !== incoming.key &&
+        !isEvicted(r) &&
+        // A sidecar incoming may only reclaim from peer sidecars (never a
+        // generation model); a generation incoming may evict anything non-pinned.
+        (!incomingIsSidecar || SIDECAR_TYPES.has(r.type)),
     )
     .sort((a, b) => {
       const pa = PRIORITY[a.type] ?? 0;
@@ -145,9 +161,11 @@ export function planEviction(
     // Extreme mode: evict everything evictable (no co-residency). selectEvictionVictim
     // still skips pinned + in-use (canEvict veto) residents, so the classifier and a
     // playing TTS survive; every other model is unloaded to free the most RAM.
-    for (let victim = selectEvictionVictim(current, incoming, isEvicted);
+    for (
+      let victim = selectEvictionVictim(current, incoming, isEvicted);
       victim;
-      victim = selectEvictionVictim(current, incoming, isEvicted)) {
+      victim = selectEvictionVictim(current, incoming, isEvicted)
+    ) {
       evict.push(victim);
     }
     return {
