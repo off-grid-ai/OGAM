@@ -52,8 +52,7 @@ export const RemoteServersScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const theme = useTheme();
   const styles = useThemedStyles(createStyles);
-  const { servers, serverHealth, testConnection, activeServerId, setActiveServerId } =
-    useRemoteServerStore();
+  const { servers, serverHealth, activeServerId, setActiveServerId } = useRemoteServerStore();
   const autoDiscover = useAppStore(
     s => s.settings.autoDiscoverRemoteModels === true,
   );
@@ -69,10 +68,11 @@ export const RemoteServersScreen: React.FC = () => {
   const [scanFound, setScanFound] = useState(0);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
-  // Auto-check all server statuses when screen opens
+  // Auto-check all server statuses when screen opens. The manager reads each server's saved key,
+  // so an authenticated server is checked with its key rather than reported offline without it.
   useEffect(() => {
     servers.forEach(server => {
-      testConnection(server.id).catch(() => { });
+      remoteServerManager.testConnection(server.id).catch(() => { });
     });
 
   // Status refresh belongs to this screen-open event, not every health projection update.
@@ -82,7 +82,7 @@ export const RemoteServersScreen: React.FC = () => {
   const handleTestServer = useCallback(async (serverId: string) => {
     setTestingId(serverId);
     try {
-      const result = await testConnection(serverId);
+      const result = await remoteServerManager.testConnection(serverId);
       // The row's own status line already says Connected or Offline, so a success needs no
       // dialog to dismiss. Only a failure earns one, because it carries the reason.
       if (!result.success) {
@@ -93,7 +93,7 @@ export const RemoteServersScreen: React.FC = () => {
     } finally {
       setTestingId(null);
     }
-  }, [testConnection]);
+  }, []);
 
   const handleScanNetwork = useCallback(async () => {
     setIsScanning(true);

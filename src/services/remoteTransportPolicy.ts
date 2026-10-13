@@ -3,6 +3,14 @@ import { isTailscaleIPv4 } from '../utils/network';
 export const PUBLIC_HTTP_REMOTE_ERROR =
   'Remote HTTP servers must use a private LAN or Tailscale address.';
 
+export const HTTP_API_KEY_ERROR =
+  'API keys are only sent over HTTPS. Use an https:// address for this server, or remove the key if the server does not need one.';
+
+/** Whether an HTTP authentication refusal needs to explain that the saved key requires HTTPS. */
+export function keyedHttpEndpoint(endpoint: string, apiKey?: string | null): boolean {
+  return !!apiKey && validateRemoteEndpoint(endpoint).protocol === 'http:';
+}
+
 function isPrivateHost(hostname: string): boolean {
   if (
     hostname === 'localhost' ||

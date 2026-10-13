@@ -1,49 +1,17 @@
-/**
- * KokoroEngine live-state completeness — the SINGLE source of truth is the live
- * download lifecycle, never a disk presence scan.
- *
- * Root cause this guards against (device-confirmed): executorch's BareResourceFetcher
- * creates each destination file BEFORE its bytes finish (and a prior interrupted
- * attempt leaves the whole set behind), so mid-download the full asset set is present
- * on disk. The old code derived completeness from that presence, so the Download
- * Manager showed Kokoro "downloaded" (82MB) the instant a download started while the
- * Voice Models tab correctly showed live progress (e.g. 61%).
- *
- * The invariant: whenever the live signal says a download is in flight
- * (0<progress<1 or phase 'downloading'), isFullyDownloaded() is FALSE and
- * getOverallDownloadProgress() returns the RAW fraction (not 1). A model reads
- * completed only when the live download genuinely finished (fetch resolved) or the
- * persisted completion flag was hydrated in.
- *
- * These fail against the old disk-scan logic and pass after the live-source fix.
+/** Live transfer state wins over the completed-file list, including a prior cached copy.
+ * The device fake writes final files only on completion, as the installed fetcher does.
  */
-import { BareResourceFetcher } from 'react-native-executorch-bare-resource-fetcher';
 import { KokoroEngine } from '../../../pro/audio/engine/tts/engines/kokoro/KokoroEngine';
 
-const listDownloadedFiles = BareResourceFetcher.listDownloadedFiles as jest.Mock;
-const deleteResources = BareResourceFetcher.deleteResources as jest.Mock;
-const fetchResources = (BareResourceFetcher as any).fetch as jest.Mock;
-
-const KOKORO_FILES = [
-  'duration_predictor.pte',
-  'synthesizer.pte',
-  'af_heart.bin',
-  'tagger.pt',
-  'lexicon.json',
-];
-// Every required basename present on disk — the false-positive condition.
-const allOnDisk = () => KOKORO_FILES.map((f) => `/data/react-native-executorch/${f}`);
+import { installKokoroResourceBoundary } from '../../harness/kokoroResourceBoundary';
+let cache: ReturnType<typeof installKokoroResourceBoundary>;
 
 describe('KokoroEngine — live download lifecycle is the source of truth', () => {
-  beforeEach(() => {
-    listDownloadedFiles.mockReset().mockResolvedValue([]);
-    deleteResources.mockReset().mockResolvedValue(undefined);
-    fetchResources?.mockReset().mockResolvedValue(undefined);
-  });
+  beforeEach(() => { cache = installKokoroResourceBoundary(); });
 
   it('an in-flight download with all files "present" on disk is NOT downloaded, and progress is the raw fraction', async () => {
     // The exact device bug: BareResourceFetcher reports every file present mid-fetch.
-    listDownloadedFiles.mockResolvedValue(allOnDisk());
+    cache.seedVoice();
     const engine = new KokoroEngine();
 
     // Live download in progress (phase 'downloading', 0<progress<1).
@@ -62,7 +30,6 @@ describe('KokoroEngine — live download lifecycle is the source of truth', () =
 
   it('a genuinely completed download (fetch resolved) reads completed', async () => {
     const engine = new KokoroEngine();
-    fetchResources.mockResolvedValueOnce(undefined); // fetch finishes = all bytes landed
 
     await engine.downloadAssets();
 
@@ -73,10 +40,11 @@ describe('KokoroEngine — live download lifecycle is the source of truth', () =
     expect(state.progress).toBe(1);
   });
 
-  it('a persisted completion hydrated on boot reads completed without any disk scan', async () => {
-    listDownloadedFiles.mockRejectedValue(new Error('FS not ready')); // no disk dependency
+  it('a persisted completion hydrated on boot reads completed when the directory read fails', async () => {
+    cache.failReads(new Error('FS not ready')); // no disk dependency
     const engine = new KokoroEngine();
 
+    cache.seedVoice();
     engine.hydrateDownloaded(true);
 
     expect(engine.isFullyDownloaded()).toBe(true);
@@ -94,10 +62,7 @@ describe('KokoroEngine — live download lifecycle is the source of truth', () =
     expect(engine.isFullyDownloaded()).toBe(true);
 
     // fetch stays pending so we can sample the mid-fetch state.
-    let resolveFetch!: () => void;
-    fetchResources.mockImplementationOnce(
-      () => new Promise<void>((r) => { resolveFetch = r; }),
-    );
+    const resolveFetch = cache.holdNext(0.4);
 
     const p = engine.downloadAssets();
     await Promise.resolve(); // the engine serializes asset fetches through one microtask queue
@@ -158,6 +123,7 @@ describe('KokoroEngine — live download lifecycle is the source of truth', () =
     // disk (genuineCompletion hydrated true), the bridge mounts from 'idle', so phase
     // must still advance to 'ready' AND completeness must remain true.
     const engine = new KokoroEngine();
+    cache.seedVoice();
     engine.hydrateDownloaded(true);
     expect(engine.getPhase()).toBe('idle');
 
@@ -171,13 +137,15 @@ describe('KokoroEngine — live download lifecycle is the source of truth', () =
 
   it('delete flips it back to not-downloaded even if leftover files linger on disk', async () => {
     const engine = new KokoroEngine();
+    cache.seedVoice();
     engine.hydrateDownloaded(true);
     expect(engine.isFullyDownloaded()).toBe(true);
 
-    deleteResources.mockResolvedValue(undefined);
-    listDownloadedFiles.mockResolvedValue(allOnDisk()); // cache lag: files still present
+    // The temporary download copy can remain after final resources are deleted.
+    [...cache.files].forEach(path => cache.files.add(path.replace('/docs/react-native-executorch', '/caches')));
     await engine.deleteAssets();
 
+    expect([...cache.files].filter(path => path.startsWith('/caches/'))).toHaveLength(6);
     expect(engine.isFullyDownloaded()).toBe(false);
     expect(engine.getOverallDownloadProgress()).toBe(0);
     const [state] = await engine.checkAssetStatus();

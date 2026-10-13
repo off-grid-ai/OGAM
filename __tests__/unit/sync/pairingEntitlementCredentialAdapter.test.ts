@@ -1,6 +1,7 @@
 import {
   PERSONAL_MESH_DEVICE_CAP,
   PersonalMeshEntitlementError,
+  projectSyncControlCenter,
   type PairingEntitlementCredential,
   type PersonalMeshReconciliationSnapshot,
   type PersonalMeshRegistrationInput,
@@ -222,13 +223,6 @@ describe('two devices agreeing about a shared licence', () => {
   }
 
   beforeEach(async () => {
-    jest
-      .spyOn(
-        require('../../../pro/licensing/deviceFingerprint'),
-        'getDeviceFingerprintStrict',
-      )
-      .mockResolvedValue(FINGERPRINT);
-
     vault = new Map<string, string>();
     const secure = keychain();
     secure.getGenericPassword.mockImplementation(
@@ -251,10 +245,14 @@ describe('two devices agreeing about a shared licence', () => {
       async ({ service }: { service: string }) => vault.delete(service),
     );
 
+    await require('react-native-keychain').setGenericPassword('fingerprint', FINGERPRINT, {
+      service: 'off-grid-device-fingerprint',
+    });
+
     keygen = createKeygenFake();
     keygen.install();
     keygen.reset();
-    licenceId = keygen.addLicence({ key: LICENCE_KEY, seats: 3 });
+    licenceId = keygen.addLicence({ key: LICENCE_KEY, seats: 5 });
 
     pairingSecretStore.resetCache();
     await pairingSecretStore.load();
@@ -321,6 +319,48 @@ describe('two devices agreeing about a shared licence', () => {
       expect(fingerprintsOnFullLicence()).toHaveLength(
         PERSONAL_MESH_DEVICE_CAP - 1,
       );
+    });
+
+    it('keeps the oldest sponsor licensed and removes the device named in the notice', async () => {
+      onLicence(FINGERPRINT, thisPhone.deviceName, 'ios');
+      onLicence('fp-away-longest', 'Old laptop');
+      for (let index = 1; index <= 3; index += 1) {
+        onLicence(`fp-device-${index}`, `Device ${index}`);
+      }
+      await thisPhoneIsLicensed();
+      const adapter = host();
+      const snapshot = await adapter.reconcile('manual');
+      const notice = projectSyncControlCenter({
+        serviceState: 'running',
+        discoveryState: 'settled',
+        localDevice: {
+          id: FINGERPRINT, name: thisPhone.deviceName, platform: 'ios',
+          version: '1', host: '192.168.1.1', port: 4400,
+        },
+        registry: snapshot!.registry,
+        paired: [], discovered: [], connectedIds: [], pairingCodeReady: true,
+      }).mesh.notice;
+      expect(notice).toBe(
+        'All slots are in use. Pairing another device will remove Old laptop, the one away longest.',
+      );
+
+      const prepared = await adapter.prepareExport(theMac);
+      const remaining = keygen.machines(LICENCE_KEY).map(machine => machine.fingerprint);
+      expect(remaining).toHaveLength(4);
+      expect(remaining).toContain(FINGERPRINT);
+      expect(remaining).not.toContain('fp-away-longest');
+      // The remote device registers through Keygen using the exported credential.
+      const { activateMachine } = require('../../../pro/licensing/keygenClient');
+      await expect(activateMachine(prepared.credential.secret, prepared.credential.entitlementId, {
+        fingerprint: theMac.syncDeviceId, name: theMac.deviceName, platform: theMac.platform,
+      })).resolves.toMatchObject({ ok: true });
+      await adapter.commitExport(prepared.id);
+      await adapter.finalizeExport(prepared.id);
+
+      expect(keygen.machines(LICENCE_KEY).map(machine => machine.fingerprint).sort()).toEqual([
+        'fp-device-1', 'fp-device-2', 'fp-device-3', 'fp-the-mac', FINGERPRINT,
+      ]);
+      await expect(adapter.inspect()).resolves.toMatchObject({ status: 'licensed' });
     });
 
     it('puts a replaced device back when the pairing then fails', async () => {

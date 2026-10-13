@@ -92,6 +92,17 @@ const createGridStyles = (colors: ThemeColors) => ({
     backgroundColor: colors.surfaceLight,
   },
   gridImage: { width: '100%' as const, height: '100%' as const },
+  unavailableImage: {
+    flex: 1,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    padding: SPACING.sm,
+  },
+  unavailableText: {
+    ...TYPOGRAPHY.meta,
+    color: colors.textSecondary,
+    textAlign: 'center' as const,
+  },
   selectionOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-start' as const,

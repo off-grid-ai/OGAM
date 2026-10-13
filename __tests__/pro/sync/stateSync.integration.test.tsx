@@ -69,6 +69,14 @@ const PHONE_FINGERPRINT = 'fp-this-phone';
 
 jest.unmock('@react-navigation/native');
 
+// The sync op store keeps its history in SQLite and reads stored payloads back on use, so it needs a
+// database that remembers: a real one. Every other database keeps the global inert mock.
+jest.mock('@op-engineering/op-sqlite', () =>
+  require('../../harness/sqliteFake').realSqliteModule({
+    only: ['offgrid-sync.sqlite'],
+  }),
+);
+
 jest.mock('react-native-tcp-socket', () => {
   const {
     createNativeTcpBoundary,

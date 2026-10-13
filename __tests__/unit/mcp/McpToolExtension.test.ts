@@ -6,7 +6,11 @@
  */
 jest.mock('@offgrid/core/utils/logger', () => ({ __esModule: true, default: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 jest.mock('@offgrid/core/stores', () => ({ useRemoteServerStore: { getState: () => ({}) } }));
-jest.mock('../../../pro/mcp/mcpStore', () => ({ useMcpStore: { getState: () => ({ toolOwners: {}, enabledTools: [], serverTools: {} }) } }));
+// notion_search is switched on for the notion server.
+jest.mock('../../../pro/mcp/mcpStore', () => ({
+  isToolEnabledOnServer: jest.requireActual('../../../pro/mcp/mcpStore').isToolEnabledOnServer,
+  useMcpStore: { getState: () => ({ toolOwners: { notion_search: 'notion' }, enabledTools: ['notion_search'], serverTools: {} }) },
+}));
 jest.mock('../../../pro/mcp/schemaTrim', () => ({ trimToolForSmallModel: (t: any) => t }));
 
 const mockExecuteMcpTool = jest.fn();

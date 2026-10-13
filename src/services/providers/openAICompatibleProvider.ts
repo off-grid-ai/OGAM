@@ -167,7 +167,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
       let baseUrl = this.config.endpoint;
       while (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
-      const url = `${baseUrl}/v1/chat/completions`;
+      const url = `${baseUrl}${baseUrl.endsWith('/v1') ? '' : '/v1'}/chat/completions`;
 
       const state: OpenAIStreamState = {
         fullContent: '', fullReasoningContent: '',

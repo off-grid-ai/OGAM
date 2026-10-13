@@ -1,6 +1,6 @@
 {
   "name": "offgrid-mobile",
-  "version": "0.0.111",
+  "version": "0.0.114",
   "private": true,
   "scripts": {
     "android": "react-native run-android --mode=debug --appId ai.offgridmobile.dev",
@@ -8,7 +8,7 @@
     "ios:device": "./scripts/ios-device.sh",
     "lint": "eslint . && npm run lint:android && npm run lint:ios",
     "lint:android": "cd android && ./gradlew :app:lintDebug",
-    "lint:ios": "swiftlint lint --quiet || echo 'SwiftLint not installed, skipping iOS lint'",
+    "lint:ios": "if command -v swiftlint >/dev/null; then swiftlint lint --quiet; else echo 'SwiftLint not installed, skipping iOS lint'; fi",
     "prepare": "husky && (cd pro && git config core.hooksPath .githooks 2>/dev/null || true)",
     "sonar": "./scripts/run-sonar.sh",
     "start": "react-native start",
@@ -133,6 +133,9 @@
   "op-sqlite": {},
   "overrides": {
     "react": "19.2.0",
-    "linkify-it": "^5.0.2"
+    "linkify-it": "^5.0.2",
+    "@expo/plist": {
+      "xmldom": "npm:@xmldom/xmldom@0.8.15"
+    }
   }
 }

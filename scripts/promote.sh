@@ -10,7 +10,7 @@ set -euo pipefail
 #
 # What it does (promote-as-is, per channel):
 #   * Repo:    tag v<version> ON THE TESTED BETA COMMIT (not arbitrary HEAD), bump
-#              package.json there, push the intended branch + tag.
+#              package.json there if needed, and push only the release tag.
 #   * Play:    fastlane android promote - moves the internal AAB to production (draft),
 #              PINNED to the tested versionCode recovered from the beta tag.
 #   * iOS:     fastlane ios promote - attaches the EXACT tested TestFlight build (pinned
@@ -28,8 +28,8 @@ set -euo pipefail
 #   * iOS:     the App Store version is created but NOT submitted - hit Submit in ASC.
 #
 # Credentials come from fastlane/.env (same as uat.sh). Requires: node, gh, bundle.
-# The release commit is pushed to PROMOTE_BRANCH (default "main"); override to release off a
-# different branch, e.g. PROMOTE_BRANCH=release/0.0.103 scripts/promote.sh v0.0.103-beta.1.
+# The tested beta commit must be an ancestor of origin/main. Promotion pushes only
+# the release tag; main may have advanced since the beta was tested.
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -90,8 +90,7 @@ info "Tested build id for ${BETA_TAG}: ${BOLD}${TESTED_BUILD}${NC} (pins Play ve
 # ── 1. reconcile the repo: tag v<version> ON THE TESTED BETA COMMIT, bump, push ──
 # The vX.Y.Z tag MUST map to the tested beta lineage, so we base the release commit on
 # BETA_SHA - never on the operator's current HEAD, which can be ahead of / different from the
-# tested bytes. PROMOTE_BRANCH is the branch the release commit is pushed to (default main).
-PROMOTE_BRANCH="${PROMOTE_BRANCH:-main}"
+# tested bytes. Only the tag is pushed; no branch is moved.
 REMOTE_HAS_TAG=$(git ls-remote --tags origin "refs/tags/v${TARGET_VERSION}" 2>/dev/null || echo "")
 if [ -n "$REMOTE_HAS_TAG" ]; then
   # Already released on origin - a true idempotent no-op for the repo step.
@@ -123,10 +122,7 @@ else
   else
     warn "Tag v${TARGET_VERSION} exists locally but NOT on origin - a prior run's push failed. Re-attempting the push (idempotent)."
   fi
-  # Push the release commit to the intended branch and the tag, explicitly. Fast-forward only:
-  # if the branch has moved on origin we stop rather than force-push over someone else's work.
-  RELEASE_COMMIT=$(git rev-list -n1 "v${TARGET_VERSION}")
-  git push origin "${RELEASE_COMMIT}:refs/heads/${PROMOTE_BRANCH}" || error "Could not fast-forward origin/${PROMOTE_BRANCH} to the release commit. Reconcile the branch and re-run (the tag will be re-pushed)."
+  # Publish the tested release without moving main.
   git push origin "refs/tags/v${TARGET_VERSION}"
 fi
 

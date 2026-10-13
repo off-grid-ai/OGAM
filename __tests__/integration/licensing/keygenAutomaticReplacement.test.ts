@@ -136,9 +136,11 @@ describe('activating a key when every seat is taken', () => {
     expect(heldFingerprints()).toContain('fp-sixth-device');
   });
 
-  /** A full mesh still needs its live runtime to retire the replaced device membership. */
-  // eslint-disable-next-line jest/no-disabled-tests -- the free-seat path above is the release regression
-  it.skip('retires the device that has been away longest, and admits this one', async () => {
+  /**
+   * The sixth device on a full licence. The device being replaced was never paired with this phone, so there
+   * is no local membership to retire and no live sync runtime is needed: only the seat is released.
+   */
+  it('retires the device that has been away longest, and admits this one', async () => {
     const fingerprints = fillEverySeat();
     expect(keygen.machines(LICENCE_KEY)).toHaveLength(CAP);
 

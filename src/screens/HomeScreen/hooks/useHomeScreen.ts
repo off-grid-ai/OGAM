@@ -1,3 +1,4 @@
+import { deleteChatImages, imagesNotDeletedAlert } from '../../../services/chatImageCleanup';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { InteractionManager } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
@@ -54,9 +55,11 @@ function deleteConversationWithAlert(
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
           setAlertState(hideAlert());
+          const notDeleted = await deleteChatImages(conversation.id);
           deleteConversation(conversation.id);
+          if (notDeleted > 0) setAlertState(imagesNotDeletedAlert(notDeleted));
         },
       },
     ]),

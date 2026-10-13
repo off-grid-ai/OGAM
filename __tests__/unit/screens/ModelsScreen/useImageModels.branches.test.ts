@@ -6,7 +6,7 @@
  * - loadHFModels iOS (CoreML) vs Android (HF) paths + error fallback (?? 'Failed to fetch models')
  * - hardware recommendation effect: qnn / mnn / all backend selection + userChangedBackendFilter guard
  * - isRecommendedModel guards (no rec, backend mismatch, qnnVariant, recommendedModels, default true)
- * - filteredHFModels filters (recommended-only, backend, style, sd version, downloaded, query)
+ * - filteredHFModels filters (recommended-only, backend, style, sd version, query); downloaded models stay listed
  * - handleCancelImageDownload: missing entry, no downloadId, synthetic multi, native cancel
  * - loadDownloadedImageModels
  */
@@ -277,13 +277,17 @@ describe('filteredHFModels', () => {
     });
   });
 
-  it('applies backend, downloaded, and query filters and sorts when not recommended-only', async () => {
+  it('a downloaded image model stays on the Image tab; backend and query filters still apply', async () => {
     appState.downloadedImageModels = [{ id: 'a' }];
     const { result } = renderHook(() => useImageModels(setAlertState));
     await seed(result);
     act(() => { result.current.setShowRecommendedOnly(false); });
+    // 'a' is downloaded and stays listed (the card marks it downloaded), sorted by name
+    await waitFor(() => {
+      expect(result.current.filteredHFModels.map((m: any) => m.id)).toEqual(['a', 'b']);
+    });
+    // the backend filter, not the downloaded state, is what removes 'a' (mnn) here
     act(() => { result.current.setBackendFilter('qnn'); });
-    // 'a' is downloaded so filtered out; 'b' is qnn and passes
     await waitFor(() => {
       expect(result.current.filteredHFModels.map((m: any) => m.id)).toEqual(['b']);
     });

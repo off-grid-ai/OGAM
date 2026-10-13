@@ -98,7 +98,9 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
         animationType="none"
         onRequestClose={() => setOpen(false)}
       >
-        <TouchableWithoutFeedback onPress={() => setOpen(false)}>
+        {/* accessible={false}: the wrapper otherwise makes the whole overlay one accessibility
+            element, hiding every option from screen readers and automation. */}
+        <TouchableWithoutFeedback onPress={() => setOpen(false)} accessible={false}>
           <View
             style={styles.selectDropdownOverlay}
             testID={testID ? `${testID}-backdrop` : undefined}

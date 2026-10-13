@@ -45,6 +45,13 @@ const SERVER: McpServerConfig = { id: 'srv-1', name: 'Notion', url: 'https://x/m
 
 const INITIAL = useMcpStore.getState();
 
+// A connected server owns the tools it lists (the first server to list a name keeps it).
+const ownersOf = (serverTools: Record<string, McpTool[]> = {}): Record<string, string> => {
+  const owners: Record<string, string> = {};
+  Object.entries(serverTools).forEach(([id, list]) => list.forEach(t => { owners[t.name] ??= id; }));
+  return owners;
+};
+
 const seed = (opts: {
   servers?: McpServerConfig[];
   serverTools?: Record<string, McpTool[]>;
@@ -55,7 +62,7 @@ const seed = (opts: {
     serverTools: opts.serverTools ?? {},
     enabledTools: opts.enabledTools ?? [],
     connectionStates: {},
-    toolOwners: {},
+    toolOwners: ownersOf(opts.serverTools),
     knownToolNames: [],
   });
 

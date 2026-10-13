@@ -36,7 +36,7 @@ export const HOOKS = {
   /** () => readonly OnboardingSlide[] — optional feature-owned onboarding content. Core owns the
    *  renderer and navigation; feature packages contribute data only. */
   onboardingAdditionalSlides: 'onboarding.additionalSlides',
-  /** () => boolean — whether a message can be spoken (TTS enabled + ready). */
+  /** () => boolean | Promise<boolean> — whether a message can be spoken with available voice files. */
   audioCanSpeak: 'audio.canSpeak',
   /** (text: string, messageId: string) => void — speak a message aloud. */
   audioSpeak: 'audio.speak',

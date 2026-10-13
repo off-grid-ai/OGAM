@@ -87,10 +87,12 @@ export const useGalleryActions = (conversationId: string | undefined) => {
       const deleted = await onnxImageGeneratorService.deleteGeneratedImage(
         image.id,
         image.imagePath,
-      );
+      ).catch(() => false);
       if (deleted) {
         removeGeneratedImage(image.id);
         if (selectedImage?.id === image.id) setSelectedImage(null);
+      } else {
+        setAlertState(showAlert('Image was not deleted', 'The image could not be removed. Its record is still in your Gallery.'));
       }
     };
     setAlertState(showAlert(
@@ -106,6 +108,20 @@ export const useGalleryActions = (conversationId: string | undefined) => {
       ]
     ));
   }, [selectedImage, removeGeneratedImage]);
+
+  const handleRemoveUnavailable = useCallback((image: GeneratedImage) => {
+    setAlertState(showAlert(
+      'Remove Image',
+      'Remove this image record from your Gallery?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => {
+          removeGeneratedImage(image.id);
+          setAlertState(hideAlert());
+        } },
+      ],
+    ));
+  }, [removeGeneratedImage]);
 
   const toggleSelectMode = useCallback(() => {
     setIsSelectMode(prev => {
@@ -141,15 +157,23 @@ export const useGalleryActions = (conversationId: string | undefined) => {
             const doDeleteSelected = async () => {
               setAlertState(hideAlert());
               const selectedImages = displayImages.filter(image => selectedIds.has(image.id));
+              let notDeleted = 0;
               for (const image of selectedImages) {
                 const deleted = await onnxImageGeneratorService.deleteGeneratedImage(
                   image.id,
                   image.imagePath,
-                );
+                ).catch(() => false);
                 if (deleted) removeGeneratedImage(image.id);
+                else notDeleted += 1;
               }
               setSelectedIds(new Set());
               setIsSelectMode(false);
+              if (notDeleted > 0) {
+                setAlertState(showAlert(
+                  'Some images were not deleted',
+                  `${notDeleted} ${notDeleted === 1 ? 'image' : 'images'} could not be removed. ${notDeleted === 1 ? 'Its record is' : 'Their records are'} still in your Gallery.`,
+                ));
+              }
             };
             doDeleteSelected();
           },
@@ -213,6 +237,7 @@ export const useGalleryActions = (conversationId: string | undefined) => {
     imageGenState,
     displayImages,
     handleDelete,
+    handleRemoveUnavailable,
     toggleSelectMode,
     toggleImageSelection,
     handleDeleteSelected,

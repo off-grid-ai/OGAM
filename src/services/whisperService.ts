@@ -6,6 +6,7 @@ import {
 import { Platform, PermissionsAndroid } from 'react-native';
 import logger from '../utils/logger';
 import { audioSessionManager } from './audioSessionManager';
+import { noteMicPermissionRefused } from './micPermission';
 import { audioRecorderService } from './audioRecorderService';
 import { cleanTranscription } from './whisperModels';
 import * as whisperModelFiles from './whisperModelFiles';
@@ -163,6 +164,7 @@ class WhisperService {
             buttonNegative: 'Cancel',
           },
         );
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) noteMicPermissionRefused();
         return granted === PermissionsAndroid.RESULTS.GRANTED;
       } catch (error) {
         logger.error('[Whisper] Failed to request permission:', error);

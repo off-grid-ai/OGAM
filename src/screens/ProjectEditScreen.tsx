@@ -179,6 +179,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   headerTitle: {
     ...TYPOGRAPHY.h2,
+    color: colors.text,
     fontWeight: '400' as const,
   },
   saveText: {

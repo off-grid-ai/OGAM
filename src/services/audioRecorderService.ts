@@ -1,6 +1,7 @@
 import { AudioRecorder, FileFormat, FileDirectory, BitDepth, IOSAudioQuality, FlacCompressionLevel } from 'react-native-audio-api';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { audioSessionManager } from './audioSessionManager';
+import { noteMicPermissionRefused } from './micPermission';
 import logger from '../utils/logger';
 
 /** Supported formats for llama.rn audio input */
@@ -129,6 +130,7 @@ class AudioRecorderService {
             buttonNegative: 'Cancel',
           },
         );
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) noteMicPermissionRefused();
         return granted === PermissionsAndroid.RESULTS.GRANTED;
       } catch {
         return false;

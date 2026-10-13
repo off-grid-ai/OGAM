@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   Animated,
   Vibration,
+  Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import ReanimatedAnimated, {
@@ -32,6 +33,7 @@ import {
 } from './states';
 import { deriveVoiceButtonState } from './derive';
 import { useWhisperStore } from '../../stores';
+import { useMicPermissionDenied } from '../../hooks/useMicPermissionDenied';
 import logger from '../../utils/logger';
 import {
   buildVoiceRecordGesture,
@@ -104,6 +106,50 @@ const ChatButtonFace: React.FC<{
   );
 };
 
+/** The mic when its permission is denied: the unavailable glyph, and a tap that explains why and
+ *  opens Settings. Module scope keeps it out of the component's size budget. */
+const MicDeniedButton: React.FC<{ asSendButton: boolean }> = ({ asSendButton }) => {
+  const styles = useThemedStyles(createStyles);
+  const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
+  const openSettings = () => {
+    setAlertState(hideAlert());
+    Linking.openSettings().catch(err => {
+      logger.error('[VoiceRecordButton] Could not open Settings:', err);
+    });
+  };
+  return (
+    <View style={styles.container}>
+      <TouchableOpacity
+        testID="voice-record-button-mic-denied"
+        style={styles.buttonWrapper}
+        accessibilityRole="button"
+        accessibilityLabel="Microphone access is off"
+        onPress={() =>
+          setAlertState(
+            showAlert(
+              'Microphone Access Is Off',
+              'Turn on microphone access for Off Grid AI in Settings to talk instead of type.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Open Settings', onPress: openSettings },
+              ],
+            ),
+          )
+        }
+      >
+        <UnavailableButton asSendButton={asSendButton} />
+      </TouchableOpacity>
+      <CustomAlert
+        visible={alertState.visible}
+        title={alertState.title}
+        message={alertState.message}
+        buttons={alertState.buttons}
+        onClose={() => setAlertState(hideAlert())}
+      />
+    </View>
+  );
+};
+
 export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
   isRecording,
   isAvailable,
@@ -122,6 +168,7 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
   const styles = useThemedStyles(createStyles);
   const downloadModel = useWhisperStore(s => s.downloadModel);
   const downloadProgressById = useWhisperStore(s => s.downloadProgressById);
+  const isMicPermissionDenied = useMicPermissionDenied();
   // The ONE derivation of what the mic renders (see derive.ts): a background STT
   // download is never the busy spinner — that is reserved for a tap-triggered
   // model load and live transcription.
@@ -131,6 +178,7 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
     isTranscribing: !!isTranscribing,
     isRecording,
     downloadProgressById,
+    isMicPermissionDenied,
   });
   // State-machine trace: which face the mic renders. This is the crux of the
   // slide-to-cancel / release-during-load behaviour — when kind flips to 'loading'
@@ -308,6 +356,10 @@ export const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
         {alert}
       </View>
     );
+  }
+
+  if (buttonState.kind === 'micDenied') {
+    return <MicDeniedButton asSendButton={asSendButton} />;
   }
 
   if (

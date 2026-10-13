@@ -19,7 +19,9 @@ func fail(_ message: String) -> Never {
 }
 
 func say(_ value: [String: Any]) {
-  let data = try! JSONSerialization.data(withJSONObject: value)
+  guard let data = try? JSONSerialization.data(withJSONObject: value) else {
+    fail("could not encode \(value) as JSON")
+  }
   FileHandle.standardOutput.write(data)
   FileHandle.standardOutput.write(Data("\n".utf8))
 }

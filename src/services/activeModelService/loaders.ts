@@ -214,11 +214,11 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
     }
     const multimodalSupport = llmService.getMultimodalSupport();
 
-    // If the model had a pre-existing stored mmproj link but the native layer rejected it
-    // (incompatible file), clear it so the eye icon reappears for repair.
-    // Only applies when the link was already persisted before this load attempt — not
-    // when resolveMmProjPath just discovered the file via directory scan.
-    if (ctx.model.mmProjPath && !multimodalSupport?.vision) {
+    // Init can fail from incompatibility or temporary memory pressure. Clear only
+    // the link and size, keeping vision metadata so repair remains available.
+    // Include links just persisted by the directory scan. The file stays on disk
+    // so repair or HomeScreen can relink it for a later load attempt.
+    if ((mmProjPath || ctx.model.mmProjPath) && !multimodalSupport?.vision) {
       await modelManager.clearMmProjLink(ctx.modelId);
     }
 

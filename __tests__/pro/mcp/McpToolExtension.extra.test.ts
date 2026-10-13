@@ -270,7 +270,19 @@ describe('canHandle', () => {
 });
 
 describe('execute', () => {
+  // The user's server lists notion_search and it is switched on there (discovery turns it on).
+  const turnOnNotionSearch = () => useMcpStore.getState().setServerTools('notion', [compactTool]);
+
+  it('refuses a tool the user has switched off, without reaching any server', async () => {
+    turnOnNotionSearch();
+    useMcpStore.getState().toggleTool('notion_search', 'notion');
+    const r = await McpToolExtension.execute({ id: 'c0', name: 'notion_search', arguments: {} });
+    expect(r.error).toBe('The tool "notion_search" is turned off.');
+    expect(mockExecuteMcpTool).not.toHaveBeenCalled();
+  });
+
   it('returns content + toolCallId on success and never sets error', async () => {
+    turnOnNotionSearch();
     mockExecuteMcpTool.mockResolvedValue({
       content: 'the result',
       durationMs: 42,
@@ -396,6 +408,7 @@ describe('execute', () => {
   });
 
   it('returns a typed error result (does NOT throw) when the call rejects with an Error', async () => {
+    turnOnNotionSearch();
     mockExecuteMcpTool.mockRejectedValue(
       new Error('Server "notion" is not connected'),
     );
@@ -411,6 +424,7 @@ describe('execute', () => {
   });
 
   it('uses the fallback message when the rejection is not an Error instance', async () => {
+    turnOnNotionSearch();
     mockExecuteMcpTool.mockRejectedValue('boom-string');
     const r = await McpToolExtension.execute({
       id: 'c3',

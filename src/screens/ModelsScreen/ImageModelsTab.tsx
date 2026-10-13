@@ -7,6 +7,7 @@ import { ModelCard } from '../../components';
 import { useTheme, useThemedStyles } from '../../theme';
 import { HFImageModel, getVariantLabel } from '../../services/huggingFaceModelBrowser';
 import { ImageModelRecommendation } from '../../types';
+import { useAppStore } from '../../stores';
 import { useDownloadStore, isActiveStatus, isQueuedStatus, isDownloadingStatus } from '../../stores/downloadStore';
 import { makeImageModelKey } from '../../utils/modelKey';
 import { imageBackendLabel } from '../../utils/imageBackend';
@@ -70,6 +71,10 @@ export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
   const isDownloading = !!entry && isDownloadingStatus(entry.status);
   const isPaused = entry?.status === 'paused';
   const progressValue = entry?.progress ?? 0;
+  // A downloaded model stays in the catalog and shows as downloaded (as on the Text tab),
+  // so finishing a download never makes the card vanish.
+  const isDownloaded = useAppStore(s => s.downloadedImageModels.some(d => d.id === model.id));
+  const isActiveModel = useAppStore(s => s.activeImageModelId === model.id);
   const authorLabel = model._coreml ? 'Core ML' : imageBackendLabel(model.backend);
   const variantSuffix = model.variant ? ` \u00B7 ${getVariantLabel(model.variant)}` : '';
   return (
@@ -83,6 +88,8 @@ export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
           author: authorLabel,
           description: `${formatBytes(model.size)}${variantSuffix}`,
         }}
+        isDownloaded={isDownloaded}
+        isActive={isDownloaded && isActiveModel}
         isDownloading={isDownloading}
         isPaused={isPaused}
         isQueued={isQueued}
@@ -95,7 +102,7 @@ export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
         isCompatible={isCompatible}
         incompatibleReason={incompatibleReason}
         testID={`image-model-card-${index}`}
-        onDownload={isActive || isPaused ? undefined : () => handleDownloadImageModel(hfModelToDescriptor(model))}
+        onDownload={isDownloaded || isActive || isPaused ? undefined : () => handleDownloadImageModel(hfModelToDescriptor(model))}
         onCancel={isActive || isPaused ? () => handleCancelImageDownload(model.id) : undefined}
         onPause={isDownloading && entry?.downloadId ? () => {
           modelDownloadService.pause(uniformDownloadId('image', model.id)).catch(error => logger.error('Failed to pause image download:', error));
@@ -163,7 +170,7 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
   } else if (hasActiveImageFilters) {
     emptyMessage = 'No models match your filters';
   } else {
-    emptyMessage = 'All available models are downloaded';
+    emptyMessage = 'No models available';
   }
 
   return (

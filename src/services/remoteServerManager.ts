@@ -152,7 +152,14 @@ class RemoteServerManager {
     id: string,
   ): Promise<{ success: boolean; error?: string; models?: RemoteModel[] }> {
     const store = useRemoteServerStore.getState();
-    const apiKey = await this.getApiKey(id);
+    let apiKey: string | null;
+    try {
+      apiKey = await this.getApiKey(id);
+    } catch (error) {
+      // The check could not run, so an earlier "Connected" must not stay on screen.
+      store.updateServerHealth(id, false);
+      throw error;
+    }
     return store.testConnection(id, apiKey || undefined);
   }
 

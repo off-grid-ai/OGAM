@@ -48,9 +48,12 @@ export const CenteredAlert: React.FC<CenteredAlertProps> = ({
       onRequestClose={() => onClose?.()}
     >
       {/* Tapping the backdrop dismisses, matching the dropdown/sheet behaviour. */}
-      <Pressable style={styles.backdrop} onPress={() => onClose?.()}>
+      {/* accessible={false}: a Pressable is one accessibility element by default, which folded the
+          title, message and buttons into a single node that screen readers and automation could not
+          reach. */}
+      <Pressable style={styles.backdrop} onPress={() => onClose?.()} accessible={false}>
         {/* Stop propagation so taps on the card don't close it. */}
-        <Pressable style={styles.card} onPress={() => {}}>
+        <Pressable style={styles.card} onPress={() => {}} accessible={false} accessibilityViewIsModal>
           {title ? <Text style={styles.title}>{title}</Text> : null}
           {message ? <Text style={styles.message}>{message}</Text> : null}
           <View style={styles.buttonRow}>

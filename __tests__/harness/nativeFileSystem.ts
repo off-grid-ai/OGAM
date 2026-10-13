@@ -20,6 +20,28 @@ export interface NativeFileSystemBoundary {
   setReportedFileSize(path: string, size: number | string): void;
   readAscii(path: string, length: number, position?: number): Promise<string>;
   exists(path: string): Promise<boolean>;
+  /** Serve `url` to RNFS.downloadFile, the way a remote host answers a real transfer. */
+  serveRemoteFile(url: string, file: RemoteFile): RemoteTransfer;
+  /** Paths of the files currently inside `directory` (empty when it does not exist). */
+  listFiles(directory: string): string[];
+}
+
+/** What a remote host answers to a download. */
+export interface RemoteFile {
+  statusCode?: number;
+  headers?: Record<string, string>;
+  body?: string;
+  /** Park the transfer after the first half of the body is on disk, until release() or stop. */
+  hold?: boolean;
+  /** false = the transfer finishes even after stopDownload (it was already complete natively). */
+  honorsStop?: boolean;
+}
+
+export interface RemoteTransfer {
+  /** True while a transfer of this file is parked mid-body. */
+  held(): boolean;
+  /** Let a parked transfer finish. */
+  release(): void;
 }
 
 interface NativeFileSystemEntry {
@@ -80,6 +102,9 @@ export function createNativeFileSystemBoundary(
   const MainBundlePath = options.mainBundlePath ?? '/bundle';
   let volume = Volume.fromJSON({});
   const reportedFileSizes = new Map<string, number | string>();
+  const remoteFiles = new Map<string, RemoteFile & { parked: (() => void) | null }>();
+  const activeDownloads = new Map<number, () => void>();
+  let nextJobId = 1;
   let restoreModuleMocks = (): void => {};
 
   function normalize(path: string): string {
@@ -94,6 +119,8 @@ export function createNativeFileSystemBoundary(
   function reset(): void {
     volume = Volume.fromJSON({});
     reportedFileSizes.clear();
+    remoteFiles.clear();
+    activeDownloads.clear();
     for (const directory of [
       DocumentDirectoryPath,
       CachesDirectoryPath,
@@ -261,11 +288,40 @@ export function createNativeFileSystemBoundary(
       freeSpace: 100 * 1024 * 1024 * 1024,
       totalSpace: 128 * 1024 * 1024 * 1024,
     })),
-    downloadFile: jest.fn(() => ({
-      jobId: 1,
-      promise: Promise.resolve({ statusCode: 200, bytesWritten: 0 }),
-    })),
-    stopDownload: jest.fn(),
+    downloadFile: jest.fn((request?: Record<string, unknown>) => {
+      const served = remoteFiles.get(String(request?.fromUrl ?? ''));
+      if (!served) {
+        return { jobId: 1, promise: Promise.resolve({ statusCode: 200, bytesWritten: 0 }) };
+      }
+      const jobId = nextJobId++;
+      const target = normalize(String(request?.toFile));
+      const body = Buffer.from(served.body ?? '', 'utf8');
+      const promise = (async () => {
+        volume.mkdirSync(parent(target), { recursive: true });
+        // Bytes land on disk as they arrive, so a stopped or failed transfer leaves a partial file.
+        volume.writeFileSync(target, body.subarray(0, Math.ceil(body.length / 2)));
+        if (served.hold) {
+          const stopped = await new Promise<boolean>(resolve => {
+            served.parked = () => resolve(false);
+            if (served.honorsStop !== false) activeDownloads.set(jobId, () => resolve(true));
+          });
+          served.parked = null;
+          activeDownloads.delete(jobId);
+          if (stopped) throw new Error('Download has been aborted');
+        }
+        volume.writeFileSync(target, body);
+        return {
+          jobId,
+          statusCode: served.statusCode ?? 200,
+          headers: served.headers ?? {},
+          bytesWritten: body.length,
+        };
+      })();
+      return { jobId, promise };
+    }),
+    stopDownload: jest.fn((jobId?: number) => {
+      if (jobId !== undefined) activeDownloads.get(jobId)?.();
+    }),
   };
 
   const baseMockImplementations = [
@@ -339,6 +395,19 @@ export function createNativeFileSystemBoundary(
     readAscii: (path: string, length: number, position = 0) =>
       module.read(path, length, position, 'ascii'),
     exists: (path: string) => module.exists(path),
+    serveRemoteFile: (url: string, file: RemoteFile) => {
+      const entry = { ...file, parked: null as (() => void) | null };
+      remoteFiles.set(url, entry);
+      return {
+        held: () => entry.parked !== null,
+        release: () => entry.parked?.(),
+      };
+    },
+    listFiles: (directory: string) => {
+      const normalized = normalize(directory);
+      if (!volume.existsSync(normalized)) return [];
+      return (volume.readdirSync(normalized) as string[]).map(name => `${normalized}/${name}`);
+    },
   };
 }
 

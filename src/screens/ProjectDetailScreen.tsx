@@ -1,3 +1,4 @@
+import { deleteChatImages, imagesNotDeletedAlert } from '../services/chatImageCleanup';
 import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, FlatList, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -125,7 +126,12 @@ export const ProjectDetailScreen: React.FC = () => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => deleteConversation(conversation.id),
+          onPress: async () => {
+            setAlertState(hideAlert());
+            const notDeleted = await deleteChatImages(conversation.id);
+            deleteConversation(conversation.id);
+            if (notDeleted > 0) setAlertState(imagesNotDeletedAlert(notDeleted));
+          },
         },
       ]),
     );
@@ -136,6 +142,8 @@ export const ProjectDetailScreen: React.FC = () => {
   const renderChatRightActions = (conversation: Conversation) => (
     <TouchableOpacity
       style={styles.deleteAction}
+      accessibilityRole="button"
+      accessibilityLabel={`Delete ${conversation.title}`}
       onPress={() => handleDeleteChat(conversation)}
     >
       <Icon name="trash-2" size={16} color={colors.error} />

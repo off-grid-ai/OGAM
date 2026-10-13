@@ -3,6 +3,22 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { MarkdownText } from '../../MarkdownText';
 import type { ParsedContent } from '../types';
 
+/** Keep code verbatim while removing the formatting around the reasoning preview. */
+function thinkingPreview(text: string): string {
+  return text.split(/(```[^\n]*\n[\s\S]*?(?:```|$)|`[^`\n]+`)/g)
+    .map(part => {
+      if (part.startsWith('```')) return part.replace(/^```[^\n]*\n/, '').replace(/```$/, '');
+      if (part.startsWith('`')) return part.slice(1, -1);
+      return part
+        .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+        .replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1')
+        .replace(/(^|\W)_{1,3}([^_]+(?:_[^_]+)*)_{1,3}(?=\W|$)/g, '$1$2');
+    })
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 interface ThinkingBlockProps {
   parsedContent: ParsedContent;
   showThinking: boolean;
@@ -43,9 +59,15 @@ export function ThinkingBlock({
               testID="thinking-block-preview"
               style={styles.thinkingPreview}
             >
-              <MarkdownText dimmed compact>
-                {parsedContent.thinking}
-              </MarkdownText>
+              {/* Plain text clamped to two lines, so the cut ends in an ellipsis instead of a
+                  fixed-height box slicing through a word. */}
+              <Text
+                style={styles.thinkingPreviewText}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+              >
+                {thinkingPreview(parsedContent.thinking)}
+              </Text>
             </View>
           )}
         </View>

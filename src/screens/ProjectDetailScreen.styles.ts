@@ -172,6 +172,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   chatTitle: {
     ...TYPOGRAPHY.body,
+    color: colors.text,
     fontWeight: '400' as const,
     flex: 1,
     marginRight: SPACING.sm,

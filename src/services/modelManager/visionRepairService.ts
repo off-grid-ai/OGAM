@@ -237,15 +237,16 @@ export async function clearMmProjLink(
   modelId: string,
 ): Promise<void> {
   const models = await ctx.getDownloadedModels();
+  // Clearing a link must preserve the model's vision identity. Keep the filename
+  // so repair can relink the existing file or download its replacement.
   await commitModelsList(
     models.map(m =>
       m.id === modelId
         ? {
             ...m,
             mmProjPath: undefined,
-            mmProjFileName: undefined,
             mmProjFileSize: undefined,
-            isVisionModel: false,
+            isVisionModel: true,
           }
         : m,
     ),

@@ -23,6 +23,8 @@ export interface VoiceButtonInputs {
   isRecording: boolean;
   /** Per-model in-flight download progress (0..1); a key exists only while downloading. */
   downloadProgressById: Record<string, number>;
+  /** The microphone permission is denied, so nothing can be recorded until it is allowed. */
+  isMicPermissionDenied?: boolean;
 }
 
 export type VoiceButtonState =
@@ -30,11 +32,14 @@ export type VoiceButtonState =
   | { kind: 'transcribing' }
   | { kind: 'ready' }
   | { kind: 'downloading'; progress: number }
-  | { kind: 'unavailable' };
+  | { kind: 'unavailable' }
+  | { kind: 'micDenied' };
 
 export function deriveVoiceButtonState(i: VoiceButtonInputs): VoiceButtonState {
   if (i.isModelLoading) return { kind: 'loading' };
   if (i.isTranscribing && !i.isRecording) return { kind: 'transcribing' };
+  // A denied mic cannot record, whatever model is installed: the button must not look usable.
+  if (i.isMicPermissionDenied) return { kind: 'micDenied' };
   // A usable model wins over any background download — the mic stays a normal idle mic.
   if (i.isAvailable) return { kind: 'ready' };
   // No usable model: an in-flight STT download renders as download progress (the model

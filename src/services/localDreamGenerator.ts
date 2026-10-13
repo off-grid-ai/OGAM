@@ -288,15 +288,23 @@ class LocalDreamGeneratorService {
   }
 
   async deleteGeneratedImage(imageId: string, storedImagePath?: string): Promise<boolean> {
-    if (!this.isAvailable()) return false;
-
     if (storedImagePath !== undefined) {
+      const syncedPath = resolveOwnedDocumentPath(
+        storedImagePath,
+        `${RNFS.DocumentDirectoryPath}/shared_files`,
+      );
+      if (syncedPath && !syncedPath.includes('\0')) {
+        if (await RNFS.exists(syncedPath)) await RNFS.unlink(syncedPath);
+        return true;
+      }
       const generatedImageDirectory = `${RNFS.DocumentDirectoryPath}/generated_images`;
       const resolvedPath = resolveOwnedDocumentPath(
         storedImagePath,
         generatedImageDirectory,
       );
-      const expectedPath = `${generatedImageDirectory}/${imageId}.png`;
+      // Local generation writes <id>.png; remote generation can also save .jpg or .webp.
+      const extension = /\.(png|jpe?g|webp)$/i.exec(resolvedPath ?? '')?.[1]?.toLowerCase();
+      const expectedPath = extension ? `${generatedImageDirectory}/${imageId}.${extension}` : null;
       if (
         !resolvedPath ||
         resolvedPath !== expectedPath ||
@@ -312,8 +320,16 @@ class LocalDreamGeneratorService {
       } catch {
         // Let the native store decide when the filesystem check is unavailable.
       }
+
+      // The native store only knows <id>.png. A remote image in another format is removed here,
+      // after the checks above proved the path is this image's file inside generated_images.
+      if (extension !== 'png') {
+        await RNFS.unlink(resolvedPath);
+        return true;
+      }
     }
 
+    if (!this.isAvailable()) return false;
     return await DiffusionModule.deleteGeneratedImage(imageId);
   }
 

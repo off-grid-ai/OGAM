@@ -1,6 +1,6 @@
 import { useAppStore } from '../../stores';
 import { videoGenerationMeta } from '../../utils/modelHelpers';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -428,9 +428,19 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const ttsCanSpeak = callHook<boolean>(HOOKS.audioCanSpeak) ?? false;
+  const [ttsCanSpeak, setTtsCanSpeak] = useState(false);
   const isStreaming = Boolean(isStreamingProp || message.isStreaming);
   const [showActionMenu, setShowActionMenu] = useState(false);
+  useEffect(() => {
+    let current = true;
+    setTtsCanSpeak(false);
+    if (showActionMenu) {
+      Promise.resolve(callHook<boolean | Promise<boolean>>(HOOKS.audioCanSpeak) ?? false)
+        .then(canSpeak => { if (current) setTtsCanSpeak(canSpeak); })
+        .catch(() => { if (current) setTtsCanSpeak(false); });
+    }
+    return () => { current = false; };
+  }, [showActionMenu]);
   const [isEditing, setIsEditing] = useState(false);
   const [showThinking, setShowThinking] = useState(!!isStreaming);
   const [showSupportingContext, setShowSupportingContext] = useState(false);

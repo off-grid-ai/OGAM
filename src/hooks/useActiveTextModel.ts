@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useAppStore, useRemoteServerStore } from '../stores';
 import { activeModelService } from '../services/activeModelService';
+import { displayModelName } from '../utils/displayModelName';
 import { DownloadedModel, RemoteModel } from '../types';
 
 export type ActiveTextModelResult = {
@@ -42,7 +43,7 @@ export function useActiveTextModel(): ActiveTextModelResult {
       return {
         model: remoteModel ?? null,
         modelId: activeRemoteTextModelId,
-        modelName: remoteModel?.name ?? activeRemoteTextModelId,
+        modelName: remoteModel?.name ?? displayModelName(activeRemoteTextModelId),
         isRemote: true,
       };
     }

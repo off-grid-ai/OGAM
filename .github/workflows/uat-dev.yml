@@ -62,20 +62,43 @@ jobs:
           git config --global url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf "https://github.com/"
           git submodule update --init --recursive pro
           git config --global --unset url."https://x-access-token:${PRO_PAT}@github.com/".insteadOf || true
+      - name: Check out shared packages
+        uses: actions/checkout@v4
+        with:
+          repository: off-grid-ai/shared
+          token: ${{ secrets.PRO_SUBMODULE_PAT }}
+          path: _shared
+          ref: main
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with: { node-version: '20', cache: npm }
+      - name: Build shared packages
+        run: |
+          mv _shared ../shared
+          npm --prefix ../shared ci
+          npm --prefix ../shared/packages/automation run build
+          npm --prefix ../shared/packages/sync run build
+          npm --prefix ../shared/packages/rag run build
+          npm --prefix ../shared/packages/models run build
+          npm --prefix ../shared/packages/speech run build
+          npm --prefix ../shared/packages/ui run build
       - run: npm ci
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
       - uses: ruby/setup-ruby@v1
         with: { ruby-version: '3.3', bundler-cache: true }
       - name: pod install
-        # Restore Podfile.lock afterward: a CI CocoaPods version can rewrite it, which would
-        # dirty the tree and trip uat.sh's clean-tree pre-check. The pods are already installed,
-        # so the lock's content doesn't affect the build.
+        # Use the CocoaPods pinned in Gemfile.lock, so Podfile.lock is reproduced as committed.
+        # Restoring a lock rewritten by another CocoaPods left Pods/Manifest.lock out of step with
+        # it, and the iOS archive then stopped with "The sandbox is not in sync with the Podfile.lock".
+        # On the runner even the pinned CocoaPods still rewrites two lines of Podfile.lock. uat.sh
+        # needs the committed lock, and the archive's Check Pods Manifest.lock step compares it with
+        # Pods/Manifest.lock, so print the drift, restore the lock and record it as the manifest.
         run: |
-          cd ios && pod install
-          cd .. && git checkout -- ios/Podfile.lock 2>/dev/null || true
+          cd ios && bundle exec pod install
+          cd .. && git diff -- ios/Podfile.lock
+          git checkout -- ios/Podfile.lock
+          cp ios/Podfile.lock ios/Pods/Manifest.lock
       - name: Decode signing secrets
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/release.keystore"
@@ -90,6 +113,12 @@ jobs:
           git config user.email "ci@offgridmobile.ai"
           git checkout -B "$GITHUB_REF_NAME"
           git branch --set-upstream-to="origin/$GITHUB_REF_NAME" "$GITHUB_REF_NAME" || true
+          # setup-ruby's bundler-cache writes its path/deployment settings into the tracked
+          # .bundle/config (gems stay in vendor/bundle, which that file already names) and can
+          # rewrite Gemfile.lock. uat.sh refuses a dirty tree, so restore them and show anything
+          # else that is still dirty. Podfile.lock is not restored: it must match the installed pods.
+          git checkout -- .bundle/config Gemfile.lock 2>/dev/null || true
+          git status --porcelain
       - name: Ship beta (scripts/uat.sh)
         env:
           # Which platform(s): push events build both; manual dispatch honors the picker.
@@ -114,4 +143,20 @@ jobs:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
           FASTLANE_SKIP_UPDATE_CHECK: '1'
           FASTLANE_HIDE_CHANGELOG: '1'
+          # uat.sh announces the beta in Slack; without this it falls back to .env.keygen, which
+          # only exists on a developer machine, and silently skips the message.
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: bash scripts/uat.sh $UAT_PLATFORM_ARG
+      - name: Keep the built APK, AAB and IPA
+        # Saved even when a later uat.sh step fails (e.g. the push after the store uploads), so the
+        # exact files sent to Play and TestFlight can still be attached to the GitHub release.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-builds
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/bundle/release/app-release.aab
+            build/OffgridMobile.ipa
+          if-no-files-found: warn
+          retention-days: 30

@@ -105,8 +105,9 @@ export const ToolsScreen: React.FC = () => {
               <Switch
                 value={isEnabled}
                 onValueChange={() => handleToggleTool(tool.id)}
-                trackColor={{ false: colors.border, true: `${colors.primary}80` }}
-                thumbColor={isEnabled ? colors.primary : colors.textMuted}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={colors.border}
                 accessibilityLabel={`${tool.displayName}, ${isEnabled ? 'ON' : 'OFF'}`}
                 testID={`tool-picker-toggle-${tool.id}`}
               />

@@ -1,3 +1,4 @@
+import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useWhisperTranscription } from '../../hooks/useWhisperTranscription';
 import { useWhisperStore, useAppStore, useRemoteServerStore } from '../../stores';
@@ -75,8 +76,39 @@ function useRemoteTranscriptionAvailable(): boolean {
   });
 }
 
+/**
+ * Who a stopped turn's transcript belongs to. Transcription takes seconds and the person can open
+ * another chat meanwhile; the composer's callbacks then belong to that chat. A turn claims its result
+ * for the chat it was recorded in, and the claim is checked right before dispatch, after every wait.
+ */
+function useTurnResultOwnership(
+  conversationId: string | null | undefined,
+  recordingConversationIdRef: React.MutableRefObject<string | null>,
+) {
+  const conversationIdRef = useRef<string | null>(conversationId ?? null);
+  conversationIdRef.current = conversationId ?? null;
+  // Bumped when a turn's result must be dropped although its chat is still open (a cancel).
+  const tokenRef = useRef(0);
+  return {
+    /** Returns a check that holds while the turn is not cancelled and its chat is still on screen. */
+    claim: (): (() => boolean) => {
+      const token = tokenRef.current;
+      const chat = recordingConversationIdRef.current ?? conversationIdRef.current;
+      return () => tokenRef.current === token && chat === conversationIdRef.current;
+    },
+    invalidate: () => { tokenRef.current += 1; },
+    /** A result that no longer belongs to the open chat: nothing is sent and the floor is released. */
+    drop: () => {
+      logger.log('[TURN] result dropped - its chat is no longer open');
+      voiceSession.dispatch('nothingHeard');
+      voiceSession.dispatch('nothingHeard');
+    },
+  };
+}
+
 export function useVoiceInput({ conversationId, interfaceMode, onTranscript, onAudioAttachment, onAutoSend }: UseVoiceInputParams) {
   const recordingConversationIdRef = useRef<string | null>(null);
+  const turnResult = useTurnResultOwnership(conversationId, recordingConversationIdRef);
   const onTranscriptRef = useRef(onTranscript);
   onTranscriptRef.current = onTranscript;
   const onAudioAttachmentRef = useRef(onAudioAttachment);
@@ -190,6 +222,13 @@ export function useVoiceInput({ conversationId, interfaceMode, onTranscript, onA
     await startWhisperRecording();
   };
 
+  /** Tell the person nothing was heard. Each strike is one empty-turn verdict for the session. */
+  const reportNothingHeard = (message: string, strikes: number) => {
+    for (let i = 0; i < strikes; i++) voiceSession.dispatch('nothingHeard');
+    setDirectError(message);
+    setTimeout(() => setDirectError(null), 3000);
+  };
+
   // Transcribe a just-recorded file, toggling the transcribing flag around the work.
   // whisperReady tracks whether the MODEL loaded — a throw from transcribeFile after a
   // successful load is a transcription miss (not a load failure), so whisperReady stays
@@ -215,6 +254,7 @@ export function useVoiceInput({ conversationId, interfaceMode, onTranscript, onA
       const { path, durationSeconds } = await stopAndFinalise(silence);
       setIsDirectRecording(false);
       if (!recordingConversationIdRef.current || recordingConversationIdRef.current === conversationId) {
+        const stillOwned = turnResult.claim();
         const format = audioRecorderService.getFormat();
         // In Audio Mode, transcribe FIRST, then auto-send with the text.
         // Sending audio with EMPTY text made the intent router classify on "" — so a
@@ -222,41 +262,24 @@ export function useVoiceInput({ conversationId, interfaceMode, onTranscript, onA
         // needs the transcribed prompt, which never reached routing). We still attach
         // the audio so multimodal text models get the original speech; the text is what
         // lets routing pick image vs text.
-        if (onAutoSendRef.current && isInAudioInterfaceMode()) {
-          const { whisperReady, transcript } = await transcribeRecordedFile(path, '[Voice] transcription error:');
-          // NEVER dispatch an empty transcript — that misroutes to the text model.
-          const outcome = resolveTranscription(whisperReady, transcript);
-          if (outcome.dispatch) {
-            onAutoSendRef.current(outcome.text, { uri: path, format, durationSeconds });
-          } else {
-            // Nothing to send. Hands-free must NOT re-open the mic: on device that spun - record,
-            // hear the room, transcribe to nothing, arm again - three turns in eight seconds with no
-            // output. A person tapping the mic resumes it.
-            voiceSession.dispatch('nothingHeard');
-            voiceSession.dispatch('nothingHeard');
-            setDirectError(outcome.message);
-            setTimeout(() => setDirectError(null), 3000);
-          }
-        } else {
-          // CHAT mode: STT is dictation-into-the-input-box on EVERY engine — the SAME behavior a non-audio
-          // (llama) model's hold-to-talk has. Transcribe the recording and drop the text into the composer
-          // for the user to review/edit/send; do NOT build a voice-note attachment (that was the litert-only
-          // divergence). Voice/Audio interface mode still attaches audio above. `durationSeconds`/`format`
-          // are unused here now (no attachment) — the temp recording file is transient.
-          const { whisperReady, transcript } = await transcribeRecordedFile(path, '[Voice] chat-mode dictation transcription error:');
-          const outcome = resolveTranscription(whisperReady, transcript);
-          if (outcome.dispatch) {
-            onTranscriptRef.current(outcome.text);
-          } else {
-            // Nothing to send. Hands-free must NOT re-open the mic: on device that spun - record,
-            // hear the room, transcribe to nothing, arm again - three turns in eight seconds with no
-            // output. A person tapping the mic resumes it.
-            voiceSession.dispatch('nothingHeard');
-            voiceSession.dispatch('nothingHeard');
-            setDirectError(outcome.message);
-            setTimeout(() => setDirectError(null), 3000);
-          }
-        }
+        // CHAT mode: STT is dictation-into-the-input-box on EVERY engine — the SAME behavior a non-audio
+        // (llama) model's hold-to-talk has. Transcribe the recording and drop the text into the composer
+        // for the user to review/edit/send; do NOT build a voice-note attachment (that was the litert-only
+        // divergence). The temp recording file is transient there.
+        const autoSend = !!onAutoSendRef.current && isInAudioInterfaceMode();
+        const { whisperReady, transcript } = await transcribeRecordedFile(
+          path,
+          autoSend ? '[Voice] transcription error:' : '[Voice] chat-mode dictation transcription error:',
+        );
+        // NEVER dispatch an empty transcript — that misroutes to the text model.
+        const outcome = resolveTranscription(whisperReady, transcript);
+        if (!stillOwned()) turnResult.drop();
+        // Nothing to send. Hands-free must NOT re-open the mic: on device that spun - record, hear the
+        // room, transcribe to nothing, arm again - three turns in eight seconds with no output. Two
+        // verdicts end the session; a person tapping the mic resumes it.
+        else if (!outcome.dispatch) reportNothingHeard(outcome.message, 2);
+        else if (autoSend) onAutoSendRef.current?.(outcome.text, { uri: path, format, durationSeconds });
+        else onTranscriptRef.current(outcome.text);
       }
       recordingConversationIdRef.current = null;
     } catch (err) {
@@ -274,6 +297,7 @@ export function useVoiceInput({ conversationId, interfaceMode, onTranscript, onA
         recordingConversationIdRef.current = null;
         return;
       }
+      const stillOwned = turnResult.claim();
       setIsTranscribingFile(true);
       let whisperReady = false;
       let transcript = '';
@@ -287,17 +311,15 @@ export function useVoiceInput({ conversationId, interfaceMode, onTranscript, onA
       recordingConversationIdRef.current = null;
       // NEVER dispatch an empty transcript — that misroutes to the text model.
       const outcome = resolveTranscription(whisperReady, transcript);
-      if (outcome.dispatch) {
-        if (onAutoSendRef.current) {
-          onAutoSendRef.current(outcome.text, { uri: path, format: 'wav', durationSeconds });
-        } else {
-          onAudioAttachmentRef.current?.({ uri: path, format: 'wav', durationSeconds, transcription: outcome.text });
-          onTranscriptRef.current(outcome.text);
-        }
+      if (!stillOwned()) {
+        turnResult.drop();
+      } else if (!outcome.dispatch) {
+        reportNothingHeard(outcome.message, 1);
+      } else if (onAutoSendRef.current) {
+        onAutoSendRef.current(outcome.text, { uri: path, format: 'wav', durationSeconds });
       } else {
-        voiceSession.dispatch('nothingHeard');
-        setDirectError(outcome.message);
-        setTimeout(() => setDirectError(null), 3000);
+        onAudioAttachmentRef.current?.({ uri: path, format: 'wav', durationSeconds, transcription: outcome.text });
+        onTranscriptRef.current(outcome.text);
       }
     } catch (err) {
       setIsAudioModeRecording(false);
@@ -347,7 +369,7 @@ export function useVoiceInput({ conversationId, interfaceMode, onTranscript, onA
         setIsAudioModeRecording,
         stopWhisperRecording,
         clearWhisperResult: clearResult,
-        clearConversation: () => { recordingConversationIdRef.current = null; },
+        clearConversation: () => { recordingConversationIdRef.current = null; turnResult.invalidate(); },
       });
     } finally {
       // A user cancellation ends the manual turn. A replay cancellation is
