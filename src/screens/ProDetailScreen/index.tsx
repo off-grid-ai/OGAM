@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { Button } from '../../components';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import {
@@ -19,20 +18,25 @@ import {
   OFF_GRID_DESKTOP_BENEFIT,
   OFF_GRID_DESKTOP_URL,
 } from '../../constants';
-import { selectHasProAccess } from '../../stores/proAccessSlice';
-import { useAppStore } from '../../stores';
-import { PRO_PAY_PAGE_URL } from '../../services/proLicenseService';
 import { withUtm } from '../../utils/utm';
-import { loadProFeatures } from '../../bootstrap/loadProFeatures';
-import { getPricingCopy } from '../../utils/proPricing';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { ProManageSection } from './ProManageSection';
+import { useIsProActive } from '../../hooks/useIsProActive';
 import { ProIncludedSection } from './ProIncludedSection';
-import { ProUnlockModal } from './ProUnlockModal';
 import type { RootStackParamList } from '../../navigation/types';
 
-// Off Grid AI Pro is the ambient intelligence layer across desktop + phone, not a
-// mobile feature list. These pillars mirror the early-access page framing.
+/**
+ * What Pro used to be.
+ *
+ * This screen was the paywall: a price, a "Get Pro" button to the web checkout, and a licence-key field
+ * for the buyers who came back. Off Grid AI is free now - voice mode, personas, draft-then-approve
+ * actions and Personal Mesh sync are included for everybody - so the sales page has no job left. What
+ * remains is the part that was always useful underneath it: a plain index of what the app can do, with
+ * rows into the features that this build actually carries.
+ *
+ * The route keeps the name 'ProDetail' because that is what every entry point in the app navigates to
+ * (the Home crown, Settings, the Tools page, the chat assistant gate), and a rename would be churn for a
+ * string. Nothing here is for sale: there is no price, no checkout, and no licence key.
+ */
 const PILLARS = [
   {
     icon: 'layers',
@@ -43,6 +47,11 @@ const PILLARS = [
     icon: 'sunrise',
     title: 'Proactive, not reactive',
     desc: 'It briefs you on the day, surfaces what you left open, and drafts the reply before you remember you owe it.',
+  },
+  {
+    icon: 'volume-2',
+    title: 'A voice that answers',
+    desc: 'On-device speech, so it talks back and you can run the whole thing hands-free. The voice runs in your phone’s RAM.',
   },
   {
     icon: 'shield',
@@ -71,87 +80,32 @@ export const ProDetailScreen: React.FC = () => {
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const hasSavedProCredential = useAppStore(s => s.hasSavedProCredential);
-  const isProActive = useAppStore(s => s.isProActive);
-  const hasProAccess = useAppStore(selectHasProAccess);
-  const [verifyModalVisible, setVerifyModalVisible] = useState(false);
-  const pricing = getPricingCopy();
-  const isDevelopmentAccess = __DEV__ && isProActive && !hasSavedProCredential;
-  const deviceStatus = hasProAccess
-    ? { icon: 'check', label: 'Pro Active' }
-    : isDevelopmentAccess
-    ? { icon: 'tool', label: 'Development Access' }
-    : null;
-  const deviceStatusColor = hasProAccess ? colors.primary : colors.textMuted;
+  // Registration is the honest signal: this says whether the optional pro bundle is part of THIS build,
+  // not whether anyone paid. Nothing in the app pays any more; a build either carries the voice/tool/mesh
+  // surfaces or it does not.
+  const bundleLoaded = useIsProActive();
 
-  const openPayPage = () => {
-    Linking.openURL(withUtm(PRO_PAY_PAGE_URL, 'pro-detail')).catch(() => {});
-  };
   const openDesktop = () => {
     Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'pro-detail')).catch(
       () => {},
     );
   };
-  const openVerifyModal = () => setVerifyModalVisible(true);
-
-  // Activation verified: load the pro bundle now so Pro lights up live (the
-  // reactive appRoot slot mounts the engine without a restart). Registries dedupe.
-  const handleUnlocked = () => {
-    loadProFeatures(true).catch(() => {});
-  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* The app's one header, like every other screen: a back arrow, the title, and this device's
-          entitlement state where a screen's actions go. */}
+      {/* The app's one header, like every other screen: a back arrow, and the title where a screen's
+          actions go. There used to be an entitlement badge, a licence-key shortcut and a "Get Pro"
+          button here. */}
       <ScreenHeader
-        title="Off Grid AI Pro"
+        title="Pro features"
         onBack={() => navigation.goBack()}
         right={
-<View style={styles.headerActions}>
-            {deviceStatus ? (
-              <View
-                style={[
-                  styles.proActiveBadge,
-                  !hasProAccess && styles.proInactiveBadge,
-                ]}
-              >
-                <Icon
-                  name={deviceStatus.icon}
-                  size={12}
-                  color={deviceStatusColor}
-                />
-                <Text
-                  style={[
-                    styles.proActiveBadgeText,
-                    !hasProAccess && styles.proInactiveBadgeText,
-                  ]}
-                >
-                  {deviceStatus.label}
-                </Text>
-              </View>
-            ) : null}
-            {/* The body already offers "I have a license key" to anyone without Pro; this is the
-                shortcut for someone who has it and is re-entering it. */}
-            {!hasProAccess && !isDevelopmentAccess ? (
-              <TouchableOpacity
-                style={styles.headerKeyButton}
-                onPress={openVerifyModal}
-                accessibilityLabel="I have a license key"
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Icon name="key" size={16} color={colors.primary} />
-              </TouchableOpacity>
-            ) : null}
-            {!hasProAccess && !isDevelopmentAccess ? (
-              <TouchableOpacity
-                style={styles.getProButton}
-                onPress={openPayPage}
-              >
-                <Text style={styles.getProButtonText}>Get Pro</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          bundleLoaded ? (
+            <View style={styles.includedBadge}>
+              <Icon name="check" size={12} color={colors.primary} />
+              <Text style={styles.includedBadgeText}>Included</Text>
+            </View>
+          ) : null
         }
       />
       <ScrollView
@@ -159,72 +113,50 @@ export const ProDetailScreen: React.FC = () => {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {hasProAccess ? (
-          /* Pro, and this device still has it: subscription and device management, then what the
-             licence opened up. There is no in-between state - a device that was removed from the licence
-             is not Pro, so it sees exactly what someone who never bought it sees. */
-          <>
-            <ProManageSection />
-            <ProIncludedSection />
-          </>
-        ) : (
-          <>
-            {/* Hero */}
-            <View style={styles.hero}>
-              <Text style={styles.heroTitle}>Intelligence, democratized.</Text>
-              <Text style={styles.heroPrimary}>On your device.</Text>
-              <Text style={styles.heroSubtitle}>
-                Ambient and proactive. It sees your day, remembers it, and gets
-                ahead of you - and the model runs on your own hardware, so
-                nothing is sent anywhere.
-              </Text>
-            </View>
+        {/* Hero */}
+        <View style={styles.hero}>
+          <Text style={styles.heroTitle}>Everything is free.</Text>
+          <Text style={styles.heroPrimary}>On your device.</Text>
+          <Text style={styles.heroSubtitle}>
+            Ambient and proactive. It sees your day, remembers it, and gets
+            ahead of you - and the model runs on your own hardware, so nothing
+            is sent anywhere. Voice, personas, actions you approve, and sync
+            between your own devices are included for everyone: no licence
+            needed, nothing to renew.
+          </Text>
+        </View>
 
-            {/* Pricing — flat themed surface. */}
-            <View style={styles.pricingBanner}>
-              <View style={styles.pricingLabelRow}>
-                <Icon name="zap" size={13} color={colors.primary} />
-                <Text style={styles.pricingLabel}>{pricing.label}</Text>
+        {/* Doors into the features this build actually carries. Empty on a build without the bundle. */}
+        <ProIncludedSection />
+
+        {!bundleLoaded ? (
+          <View style={styles.bundleNote}>
+            <Icon name="info" size={16} color={colors.textMuted} />
+            <Text style={styles.bundleNoteText}>
+              This build does not include the optional Pro bundle, so the voice,
+              tool and sync surfaces are not registered here. A build with the
+              bundle gets them unlocked - there is nothing to buy either way.
+            </Text>
+          </View>
+        ) : null}
+
+        {/* What the app does, without the sales framing it used to carry. */}
+        <View style={styles.pillarsSection}>
+          <Text style={styles.sectionLabel}>WHAT'S INCLUDED</Text>
+          {PILLARS.map(p => (
+            <View key={p.title} style={styles.pillarRow}>
+              <View style={styles.pillarIconWrap}>
+                <Icon name={p.icon} size={18} color={colors.primary} />
               </View>
-              <Text style={styles.pricingTitle}>{pricing.title}</Text>
-              <Text style={styles.pricingSubtitle}>{pricing.subtitle}</Text>
+              <View style={styles.pillarText}>
+                <Text style={styles.pillarTitle}>{p.title}</Text>
+                <Text style={styles.pillarDesc}>{p.desc}</Text>
+              </View>
             </View>
+          ))}
+        </View>
 
-            {/* Ambient pillars */}
-            <View style={styles.pillarsSection}>
-              <Text style={styles.sectionLabel}>ONE PRIVATE LAYER</Text>
-              {PILLARS.map(p => (
-                <View key={p.title} style={styles.pillarRow}>
-                  <View style={styles.pillarIconWrap}>
-                    <Icon name={p.icon} size={18} color={colors.primary} />
-                  </View>
-                  <View style={styles.pillarText}>
-                    <Text style={styles.pillarTitle}>{p.title}</Text>
-                    <Text style={styles.pillarDesc}>{p.desc}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-
-            {/* CTAs — shared Button (outline). Buy is primary, verify is secondary. */}
-            <Button
-              title={pricing.cta}
-              variant="primary"
-              size="large"
-              onPress={openPayPage}
-              style={styles.ctaButton}
-            />
-            <Button
-              title="I have a license key"
-              variant="secondary"
-              onPress={openVerifyModal}
-              style={styles.verifyButton}
-            />
-          </>
-        )}
-
-        {/* Cross-device companion. Pro is one mind across laptop + phone, so every
-            Pro surface points to Off Grid AI Desktop. Shown in both states. */}
+        {/* Cross-device companion: the Desktop app is free and open source too. */}
         <TouchableOpacity
           style={styles.desktopRow}
           onPress={openDesktop}
@@ -241,12 +173,6 @@ export const ProDetailScreen: React.FC = () => {
           <Icon name="external-link" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </ScrollView>
-
-      <ProUnlockModal
-        visible={verifyModalVisible}
-        onClose={() => setVerifyModalVisible(false)}
-        onUnlocked={handleUnlocked}
-      />
     </SafeAreaView>
   );
 };
@@ -257,51 +183,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   content: { paddingTop: SPACING.lg, paddingBottom: SPACING.xxl },
 
   // Header
-  header: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'space-between' as const,
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.md,
-  },
-  logoRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.sm,
-  },
-  logoGrid: { gap: 3 },
-  logoDotRow: { flexDirection: 'row' as const, gap: 3 },
-  logoDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 1,
-    backgroundColor: colors.primary,
-  },
-  logoText: { ...TYPOGRAPHY.body, color: colors.text },
-  headerActions: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.sm,
-  },
-  headerKeyButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  getProButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.primary,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 8,
-  },
-  getProButtonText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
-  proActiveBadge: {
+  includedBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: SPACING.xs,
@@ -312,9 +194,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingVertical: SPACING.sm,
     borderRadius: 8,
   },
-  proActiveBadgeText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
-  proInactiveBadge: { borderColor: colors.border },
-  proInactiveBadgeText: { color: colors.textMuted },
+  includedBadgeText: { ...TYPOGRAPHY.bodySmall, color: colors.primary },
 
   // Hero
   hero: {
@@ -340,40 +220,23 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     lineHeight: 20,
   },
 
-  // Pricing banner
-  pricingBanner: {
+  // Absent-bundle note
+  bundleNote: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: SPACING.sm,
     marginHorizontal: SPACING.xl,
     marginBottom: SPACING.xl,
+    padding: SPACING.lg,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.xl,
-    ...shadows.small,
   },
-  pricingLabelRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: SPACING.xs,
-    marginBottom: SPACING.sm,
-  },
-  pricingLabel: {
-    ...TYPOGRAPHY.label,
-    color: colors.primary,
-    letterSpacing: 0.8,
-  },
-  pricingTitle: {
-    ...TYPOGRAPHY.display,
-    color: colors.text,
-    textAlign: 'center' as const,
-    marginBottom: SPACING.xs,
-  },
-  pricingSubtitle: {
+  bundleNoteText: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,
-    textAlign: 'center' as const,
+    flex: 1,
     lineHeight: 18,
   },
 
@@ -405,13 +268,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     color: colors.textSecondary,
     lineHeight: 18,
   },
-  // CTAs (Button supplies its own colours/border; these are layout-only).
-  ctaButton: {
-    marginHorizontal: SPACING.xl,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  verifyButton: { marginHorizontal: SPACING.xl, marginBottom: SPACING.xl },
 
   // Desktop companion link
   desktopRow: {
@@ -426,6 +282,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
+    ...shadows.small,
   },
   desktopIconWrap: {
     width: 28,

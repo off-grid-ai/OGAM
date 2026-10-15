@@ -12,11 +12,11 @@
  * registering individual slots per test.
  */
 export async function installPro(): Promise<void> {
-  // isPro=true → the real bootstrap requires @offgrid/pro and calls pro.activate({...registries}),
-  // registering every pro slot (chatInput.modeToggle, chatInput.audioMode, message.speakButton, …).
-   
+  // The real bootstrap requires @offgrid/pro and calls pro.activate({...registries}), registering every
+  // pro slot (chatInput.modeToggle, chatInput.audioMode, message.speakButton, …). Nothing is gated any
+  // more: a build with the bundle activates it with no licence, which is what this harness stands in for.
   const { loadProFeatures } = require('../../src/bootstrap/loadProFeatures');
-  await loadProFeatures(true);
+  await loadProFeatures();
 }
 
 /** Start the real app over device storage. The returned controls use only visible gestures. */

@@ -2,7 +2,7 @@
 
 Follow [the workspace engineering contract](../.codex/ENGINEERING_CONTRACT.md). It takes priority over these repo notes. Keep each change in the smallest existing owner.
 
-- Paid feature code belongs in the private `pro/` submodule. Core uses the existing registration seams. Commit Pro changes in its own repo.
+- Optional-feature code (voice, MCP tools, Personal Mesh sync) belongs in the private `pro/` submodule. Core uses the existing registration seams — slots, hooks, screens, settings sections — and every one of them is free: nothing in core gates a feature behind a purchase. Commit bundle changes in its own repo.
 - For UI work, use `@offgrid/design` and the relevant guide in `docs/design/`. For customer-facing copy, read `docs/brand_tone_voice.md`.
 - Keep capture opt-in with a visible recording indicator. Do not publish private device data.
 - During device checks, do not enter credentials or passcodes. Open private content only when the changed journey requires it.

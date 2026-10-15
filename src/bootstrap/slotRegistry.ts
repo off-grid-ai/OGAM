@@ -1,20 +1,20 @@
 import { useSyncExternalStore, type ComponentType } from 'react';
 
 /**
- * Component-slot seam. Pro features register UI components against named slots
- * during activation; core renders whatever is registered and renders nothing
- * (its own fallback) when a slot is empty. This lets the private pro package
- * inject UI into core screens without core ever importing pro — free builds
- * leave every slot empty and behave exactly as before.
+ * Component-slot seam. The optional pro bundle registers UI components against named slots
+ * during activation; core renders whatever is registered and renders nothing (its own
+ * fallback) when a slot is empty. This lets the pro package inject UI into core screens
+ * without core ever importing pro — a build compiled without the bundle leaves every slot
+ * empty and behaves exactly as before.
  *
  * Slot names are plain strings (see SLOTS below for the known set). Props are
  * passed through untyped on purpose: each slot documents its own prop shape and
  * the registering component declares it.
  *
  * Registration is reactive: `useSlot` subscribes, so a slot registered AFTER a
- * consumer has mounted (e.g. Pro activated at runtime via a license key, which
- * re-runs loadProFeatures) makes that consumer re-render and pick the component
- * up live — no app restart. `getSlot` stays for non-component / one-shot reads.
+ * consumer has mounted (e.g. the pro bundle loaded at runtime, which re-runs
+ * loadProFeatures) makes that consumer re-render and pick the component up live — no app
+ * restart. `getSlot` stays for non-component / one-shot reads.
  */
 const slots: Record<string, ComponentType<any>> = {};
 const listeners = new Set<() => void>();

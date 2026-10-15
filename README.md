@@ -15,7 +15,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20macOS-green.svg)](#install)
 [![codecov](https://codecov.io/gh/off-grid-ai/OGAM/graph/badge.svg)](https://codecov.io/gh/off-grid-ai/OGAM)
 [![Slack](https://img.shields.io/badge/Slack-Join%20Community-4A154B?logo=slack)](https://join.slack.com/t/off-grid-mobile/shared_invite/zt-494gbuv5c-kj9tT7U0AS8Kq8UUO63_jw)
-[![Pro](https://img.shields.io/badge/Off%20Grid%20Pro-%24119%20lifetime%20or%20%247.99%20monthly-000000?style=flat)](https://getoffgridai.co/pay/)
+[![Free](https://img.shields.io/badge/Off%20Grid%20AI-100%25%20free%20forever-brightgreen?style=flat)](#everything-is-free)
 
 <a href="https://trendshift.io/repositories/22348?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-22348" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/22348/daily?language=TypeScript" alt="off-grid-ai%2FOGAM | Trendshift" width="250" height="55"/></a>
 
@@ -37,26 +37,29 @@
 
 <div align="center">
 
-## Off Grid AI Pro
+## Everything is free
 
-**A voice, personas, and actions. $119 for life, or $7.99/month.**
+**A voice, personas, and actions. No licence, no subscription, nothing to unlock.**
 
 </div>
 
 <br />
 
-Pro is an optional, additive tier. It gives the assistant a voice that talks back, personas you shape, and the tools to draft real actions you approve. One license covers your phone and your Mac. All on-device.
+Off Grid AI has no paid tier. Every capability the app has is available to everyone: the assistant has a
+voice that talks back, personas you shape, and the tools to draft real actions you approve. Your phone and
+your Mac are both covered. All on-device.
 
-### What Pro adds
+### What you get
 
-- **Voice mode** - the free app transcribes your speech; Pro adds on-device Kokoro text-to-speech, so it talks back and you run the whole thing hands-free. The voice runs in your phone's RAM.
+- **Voice mode** - on-device Kokoro text-to-speech, so the assistant talks back and you run the whole thing hands-free. The voice runs in your phone's RAM.
 - **Custom personas** - give each assistant its own system prompt, voice, and persistent memory, so it stays in character across conversations.
 - **Draft, then approve** - connect Calendar, email, and MCP servers like Linear, Notion, and GitHub. It drafts the reply or files the ticket and waits. Nothing sends without your tap.
 - **Personal Mesh sync** - your phone and your Mac share chats, files, and settings over your own network. There is no relay. See the [Personal Mesh guide](docs/PERSONAL_MESH.md).
 
-**[→ Get Pro access](https://getoffgridai.co/pay/)** - $119 once and it is yours forever (the price climbs as more people join, never down), or $7.99/month.
+There is no purchase path in the app, no licence key to paste, and no expiry: the old paid tier was
+removed, and the licence plumbing that remains is only what pairing your own devices needs.
 
-Pair it with **[Off Grid AI Desktop](https://github.com/off-grid-ai/desktop/releases/latest)** on your Mac. One Pro license covers both.
+Pair it with **[Off Grid AI Desktop](https://github.com/off-grid-ai/desktop/releases/latest)** on your Mac.
 
 ---
 

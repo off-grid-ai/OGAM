@@ -69,7 +69,7 @@ async function launch(options: {
     }
     await storage.setItem('@local_llm/downloaded_models', JSON.stringify([model]));
     await storage.setItem('local-llm-app-storage', JSON.stringify({ state: {
-      hasCompletedOnboarding: true, checklistDismissed: true, downloadedModels: [model], devProDisabled: !options.pro,
+      hasCompletedOnboarding: true, checklistDismissed: true, downloadedModels: [model],
       generatedImages: images, settings: { autoDiscoverRemoteModels: false },
     }, version: 0 }));
     await storage.setItem('local-llm-chat-storage', JSON.stringify({ state: {
@@ -304,21 +304,16 @@ it('M16: a stale downloaded voice record does not offer Speak when its files are
   await require('../../pro').deactivate();
 });
 
-it('M15: the Pro purchase action opens the canonical payment page', async () => {
+it('M15: the feature index is free to open and sells nothing', async () => {
+  // Off Grid AI is free, so the screen reached from Settings has no price, no checkout and no licence-key
+  // field. What it must still do is open, from the same entry point it always had.
   const app = await launch();
-  const { Linking } = require('react-native');
-  const original = Linking.openURL;
-  let browserAddress = '';
-  Linking.openURL = async (url: string) => { browserAddress = url; };
-  try {
-    app.rtl.fireEvent.press(app.view.getByTestId('settings-tab'));
-    app.rtl.fireEvent.press(await app.view.findByText('Off Grid AI PRO'));
-    app.rtl.fireEvent.press(await app.view.findByRole('button', { name: 'Get Pro' }));
-    await app.rtl.waitFor(() => expect(browserAddress).toMatch(/^https:\/\/getoffgridai\.co\/pay\/\?/));
-  } finally {
-    Linking.openURL = original;
-    app.view.unmount();
-  }
+  app.rtl.fireEvent.press(app.view.getByTestId('settings-tab'));
+  app.rtl.fireEvent.press(await app.view.findByText('Pro features'));
+  await app.rtl.waitFor(() => expect(app.view.getByText('Everything is free.')).toBeTruthy());
+  expect(app.view.queryByText('Get Pro')).toBeNull();
+  expect(app.view.queryByText(/\$119|\$7\.99|lifetime/i)).toBeNull();
+  app.view.unmount();
 });
 
 /** Desktop's model-management and asynchronous image-job HTTP boundary. */

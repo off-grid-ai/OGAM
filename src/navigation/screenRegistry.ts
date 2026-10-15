@@ -42,7 +42,7 @@ export function getRegisteredScreens(): RegisteredScreen[] {
 /**
  * Reactive read of whether a screen with the given name is registered.
  * Subscribes via useSyncExternalStore so a screen registered AFTER a consumer
- * mounted (e.g. Pro activated at runtime, which re-runs loadProFeatures) makes
+ * mounted (e.g. the pro bundle loaded at runtime, which re-runs loadProFeatures) makes
  * the consumer re-render. Mirrors useSlot in slotRegistry.
  */
 export function useHasRegisteredScreen(name: string): boolean {

@@ -2,8 +2,11 @@
  * useOpenProTools — the single "open the Pro Tools destination" callback shared by
  * the chat quick-settings row and the Tools page. It routes on whether the Pro
  * Tools screen is registered (the same signal as useIsProActive):
- *   - free (screen not registered) -> ProDetail upsell
- *   - pro  (screen registered)     -> the Pro Tools screen
+ *   - no bundle (screen not registered) -> the Pro features screen, which explains why
+ *   - bundle    (screen registered)     -> the Pro Tools screen
+ *
+ * This used to fork on entitlement, with the non-entitled branch going to the purchase
+ * page. There is no purchase page: the only thing that can be missing is the code.
  */
 
 import React from 'react';
@@ -47,7 +50,7 @@ describe('useOpenProTools', () => {
     _clearScreensForTesting();
   });
 
-  it('routes a free user to the Pro upsell', () => {
+  it('routes to the Pro features screen when the bundle is not in this build', () => {
     const { getByTestId } = render(<Probe />);
     fireEvent.press(getByTestId('open'));
     expect(mockNavigate).toHaveBeenCalledWith('ProDetail');
@@ -66,7 +69,9 @@ describe('useOpenProTools', () => {
     expect(mockNavigate).toHaveBeenCalledWith(PRO_TOOLS_SCREEN);
   });
 
-  it('routes to the purchase screen as soon as live access is removed', () => {
+  it('still opens the tools for a device with no credential and no roster answer', () => {
+    // Nothing bought, nothing admitted: the tools are registered, so they open. This is the case that
+    // used to be routed to a purchase.
     registerScreen({ name: PRO_TOOLS_SCREEN, component: () => null });
     useAppStore.setState({
       hasRegisteredPro: false,
@@ -78,6 +83,6 @@ describe('useOpenProTools', () => {
     const { getByTestId } = render(<Probe />);
     fireEvent.press(getByTestId('open'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('ProDetail');
+    expect(mockNavigate).toHaveBeenCalledWith(PRO_TOOLS_SCREEN);
   });
 });

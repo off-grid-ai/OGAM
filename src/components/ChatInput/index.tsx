@@ -23,7 +23,7 @@ import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { AppSheet } from '../AppSheet';
 import { Button } from '../Button';
 
-type AssistantAvailability = 'no-pro' | 'needs-sync' | 'unavailable' | 'ready';
+type AssistantAvailability = 'no-bundle' | 'needs-sync' | 'unavailable' | 'ready';
 
 interface ChatInputProps {
   onSend: (message: string, attachments?: MediaAttachment[], imageMode?: ImageModeState, assistantEnabled?: boolean) => void;
@@ -57,7 +57,6 @@ interface ChatInputProps {
    * attachment thumbnail is tapped — the same handler in-message images use. */
   onImagePress?: (uri: string) => void;
   assistantAvailability?: AssistantAvailability;
-  onAssistantUpgrade?: () => void;
   onAssistantSetupSync?: () => void;
   onAssistantEnableTools?: () => boolean;
   assistantSelected?: boolean;
@@ -159,8 +158,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   isRemote = false,
   showSettingsDot = false,
   onImagePress,
-  assistantAvailability = 'no-pro',
-  onAssistantUpgrade,
+  assistantAvailability = 'no-bundle',
   onAssistantSetupSync,
   onAssistantEnableTools,
   assistantSelected,
@@ -341,12 +339,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }, ANIM_DURATION_IN);
   };
 
-  const assistantGate = assistantAvailability === 'no-pro'
+  const assistantGate = assistantAvailability === 'no-bundle'
     ? {
-        title: 'Assistant requires Pro',
-        body: 'Assistant uses Web Use and Computer Use on a connected Desktop.',
-        action: 'View Pro',
-        onPress: onAssistantUpgrade,
+        // A build without the optional pro bundle has no Desktop task tools to offer. This says so, and
+        // stops there: there is nothing to buy, so the gate carries no call to action.
+        title: 'Desktop tasks are not in this build',
+        body: 'Assistant uses Web Use and Computer Use on a connected Desktop, and ships in the optional Pro bundle. This build does not include it.',
+        action: 'OK',
+        onPress: undefined,
       }
     : assistantAvailability === 'unavailable'
       ? {

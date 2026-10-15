@@ -11,10 +11,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { AppNavigator } from './src/navigation';
-import {
-  appNavigationRef,
-  useProExpiryRedirect,
-} from './src/navigation/useProExpiryRedirect';
+import { appNavigationRef } from './src/navigation/navigationRef';
 import { useTheme } from './src/theme';
 import { hardwareService, modelManager, authService, knowledgeBase, remoteServerManager } from './src/services';
 import logger from './src/utils/logger';
@@ -133,7 +130,6 @@ function App() {
   // the appRoot slot (TTS engine bridge) registers and this re-renders to mount
   // it live — no restart needed.
   const AppRoot = useSlot(SLOTS.appRoot);
-  const applyPendingProRedirect = useProExpiryRedirect();
   const [isInitializing, setIsInitializing] = useState(true);
   const startupGeneration = useRef(0);
   const showSyncStatusBar = useAppStore(s => s.showSyncStatusBar);
@@ -435,7 +431,6 @@ function App() {
         {AppRoot ? <AppRoot /> : null}
         <NavigationContainer
           ref={appNavigationRef}
-          onReady={applyPendingProRedirect}
           theme={{
             dark: isDark,
             colors: {

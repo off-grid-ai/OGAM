@@ -192,7 +192,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 hitSlop={8}
                 style={styles.crownButton}
                 accessibilityRole="button"
-                accessibilityLabel="Open Off Grid AI Pro"
+                accessibilityLabel="Open Off Grid AI Pro features"
               >
                 <IconMC name="crown" size={16} color={colors.primary} />
               </TouchableOpacity>
