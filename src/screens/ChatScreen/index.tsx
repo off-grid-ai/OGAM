@@ -14,11 +14,9 @@ import {
   hideAlert,
   showAlert,
   SharePromptSheet,
-  ProAhaSheet,
 } from '../../components';
 import { useEjectAllModels } from '../../hooks/useEjectAllModels';
 import { subscribeSharePrompt } from '../../utils/sharePrompt';
-import { subscribeProPrompt } from '../../services/proPrompt';
 import type { Conversation, Message } from '../../types';
 import { useTheme, useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
@@ -151,17 +149,6 @@ export const ChatScreen: React.FC = () => {
   const [sharePromptVisible, setSharePromptVisible] = useState(false);
   useEffect(() => subscribeSharePrompt(() => setSharePromptVisible(true)), []);
 
-  const [proAhaVisible, setProAhaVisible] = useState(false);
-  const proAhaShownThisSession = useRef(false);
-  useEffect(
-    () =>
-      subscribeProPrompt(() => {
-    if (proAhaShownThisSession.current) return;
-    proAhaShownThisSession.current = true;
-    setProAhaVisible(true);
-      }),
-    [],
-  );
   // Only ONE AttachStep mounted at a time to avoid waypoint dots/lines.
 
   React.useEffect(() => {
@@ -387,11 +374,6 @@ export const ChatScreen: React.FC = () => {
       <SharePromptSheet
         visible={sharePromptVisible}
         onClose={() => setSharePromptVisible(false)}
-      />
-      <ProAhaSheet
-        visible={proAhaVisible}
-        onClose={() => setProAhaVisible(false)}
-        onRegister={() => rootNavigation.navigate('ProDetail')}
       />
     </SafeAreaView>
   );

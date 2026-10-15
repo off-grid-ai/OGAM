@@ -1,14 +1,12 @@
 /**
  * ProIncludedSection
  *
- * What an active licence actually gets you, as rows you can walk into.
+ * The features, as rows you can walk into.
  *
- * The Pro screen used to end after the licence card, leaving most of the page empty for anyone who
- * had already paid - and empty space that says nothing is a bug, not a layout. A subscriber does not
- * need the sales pitch again; they need the doors it opened.
- *
- * Every row is gated on a REGISTERED screen (`useHasRegisteredScreen`), so a build without a surface
- * never advertises it and there are no dead ends.
+ * These rooms used to be what a licence unlocked; now they are simply what the app does, and the only
+ * thing that can make one missing is a build without the optional pro bundle. Every row is gated on a
+ * REGISTERED screen (`useHasRegisteredScreen`) rather than on any entitlement, so a build without a
+ * surface never advertises it, there are no dead ends, and nothing is ever locked.
  */
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
@@ -63,7 +61,7 @@ export const ProIncludedSection: React.FC = () => {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Included with Pro</Text>
+      <Text style={styles.cardTitle}>Included for everyone</Text>
       {rows.map((row, index) => (
         <TouchableOpacity
           key={row.screen}

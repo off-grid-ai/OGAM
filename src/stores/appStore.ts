@@ -503,13 +503,10 @@ function persistedAppState(state: AppState) {
         textGenerationCount: state.textGenerationCount,
         imageGenerationCount: state.imageGenerationCount,
         hasEngagedSharePrompt: state.hasEngagedSharePrompt,
+        // Informational only: kept so a build can report what this install holds. Nothing gates on it.
         hasRegisteredPro: state.hasRegisteredPro,
-        // Persist eviction so a relaunch cannot grant Pro while the roster is offline.
         proDeviceAdmission: state.proDeviceAdmission,
-        devProDisabled: state.devProDisabled,
-        proBannerDismissed: state.proBannerDismissed,
         desktopPromoDismissed: state.desktopPromoDismissed,
-        proAhaTriggeredBy: state.proAhaTriggeredBy,
         loadedSettings: state.loadedSettings,
   };
 }

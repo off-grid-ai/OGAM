@@ -163,23 +163,6 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   devButtonGroup: { gap: 12 },
   devButtonText: { ...TYPOGRAPHY.bodySmall, color: colors.textMuted },
   proCardText: { flex: 1 },
-  proTitleRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.sm,
-    marginBottom: 2,
-  },
-  proBadge: {
-    backgroundColor: colors.primary,
-    borderRadius: 20,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 2,
-  },
-  proBadgeText: {
-    ...TYPOGRAPHY.labelSmall,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
   proDesc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary },
   proIconContainer: {
     width: 44,

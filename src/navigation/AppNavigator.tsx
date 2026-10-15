@@ -189,7 +189,7 @@ export const AppNavigator: React.FC = () => {
   const { colors } = useTheme();
   const hasCompletedOnboarding = useAppStore((s) => s.hasCompletedOnboarding);
   const downloadedModels = useAppStore((s) => s.downloadedModels);
-  // Reactive: screens registered at runtime (Pro activation re-runs loadProFeatures)
+  // Reactive: screens registered at runtime (loading the pro bundle re-runs loadProFeatures)
   // mount as real routes live, so navigate('McpServers') works without an app restart.
   const registeredScreens = useRegisteredScreens();
 

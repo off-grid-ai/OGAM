@@ -19,8 +19,9 @@ const Probe = () => {
 describe('useIsProActive / useHasRegisteredScreen', () => {
   beforeEach(() => {
     _clearScreensForTesting();
-    // Registration alone no longer means Pro: the device must still be entitled, or a device the owner
-    // removed from the licence would keep every Pro entry point until the app restarted.
+    // Registration is the whole answer now: it says the bundle is in this build, which is all that can
+    // differ. The licence flags below are the honest record of what this install holds, and no longer
+    // change what any of it may do.
     useAppStore.setState({
       hasRegisteredPro: true,
       hasSavedProCredential: true,

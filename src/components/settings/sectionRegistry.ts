@@ -1,12 +1,12 @@
 import { useSyncExternalStore, type ComponentType } from 'react';
 
 /**
- * Settings-section seam. Pro registers extra Settings sections during activation; core
- * renders whatever is registered. Registration is REACTIVE (same pattern as slotRegistry):
- * a section registered AFTER the Settings screen mounted — e.g. Pro unlocked at runtime
- * via a license key, which re-runs loadProFeatures — makes the screen re-render and show
- * the section live, with no app restart. (Before this, the screen read getSettingsSections()
- * once at render, so an activated Pro user still saw the section missing until relaunch.)
+ * Settings-section seam. The optional pro bundle registers extra Settings sections during
+ * activation; core renders whatever is registered. Registration is REACTIVE (same pattern as
+ * slotRegistry): a section registered AFTER the Settings screen mounted — e.g. the bundle loaded
+ * at runtime, which re-runs loadProFeatures — makes the screen re-render and show the section
+ * live, with no app restart. (Before this, the screen read getSettingsSections() once at render,
+ * so the section stayed missing until relaunch.)
  */
 const sections: ComponentType<any>[] = [];
 const listeners = new Set<() => void>();

@@ -8,7 +8,6 @@ import { GeneratedImage, GenerationMeta, Message } from '../types';
 import { parseModelOutput } from '../utils/messageContent';
 import { maybeScheduleSharePrompt } from '../utils/sharePrompt';
 import { reportModelFailure } from './modelFailureHandler';
-import { checkProPromptForImage } from './proPrompt';
 import type { ImageGenerationState } from './imageGenerationTypes';
 
 export function imagePhaseTransitionLog(
@@ -50,7 +49,6 @@ export function scheduleImageSharePrompt(): void {
     hasEngaged: appStore.hasEngagedSharePrompt,
     delayMs,
   });
-  checkProPromptForImage(delayMs);
 }
 
 interface ActiveImageModel {

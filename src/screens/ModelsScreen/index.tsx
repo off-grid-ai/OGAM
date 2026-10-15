@@ -11,7 +11,7 @@ import { useModelsScreen } from './useModelsScreen';
 import { createStyles } from './styles';
 import { TextModelsTab } from './TextModelsTab';
 import { ImageModelsTab } from './ImageModelsTab';
-import { VoiceModelsUpsell } from '../../components/models/VoiceModelsUpsell';
+import { VoiceModelsEmptyState } from '../../components/models/VoiceModelsEmptyState';
 import { TranscriptionModelsTab } from './TranscriptionModelsTab';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import type { ModelTab } from './types';
@@ -240,11 +240,12 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
         />
       )}
 
-      {/* Voice Models Tab: pro panel when registered, otherwise an upsell. */}
+      {/* Voice Models Tab: the voice panel when the bundle registers it, otherwise the empty state.
+          Voice is free either way; the only question is whether this build carries the engine. */}
       {vm.activeTab === 'voice' && (
         VoiceModelsPanel
           ? <VoiceModelsPanel showRemoteModels={false} />
-          : <VoiceModelsUpsell onGetPro={() => vm.navigation.navigate('ProDetail')} />
+          : <VoiceModelsEmptyState />
       )}
 
       {/* Transcription Models Tab (speech-to-text, core). */}

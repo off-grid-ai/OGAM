@@ -3,19 +3,7 @@ import type {
   PersonalMeshReconciliationReason,
 } from '@offgrid/sync';
 
-export const PRO_PAY_PAGE_URL = 'https://getoffgridai.co/pay/';
-
 export type ProTier = 'lifetime' | 'monthly' | 'annual' | 'subscription';
-
-export const PRO_TIER_META: Record<
-  ProTier,
-  { label: string; renews: boolean }
-> = {
-  lifetime: { label: 'Lifetime', renews: false },
-  monthly: { label: 'Monthly', renews: true },
-  annual: { label: 'Annual', renews: true },
-  subscription: { label: 'Subscription', renews: true },
-};
 
 export interface ProLicenseInfo {
   isPro: boolean;
@@ -26,6 +14,14 @@ export interface ProLicenseInfo {
   verifiedAt: number;
 }
 
+/**
+ * The seam the optional pro bundle uses to hand core a licence provider.
+ *
+ * The method list is unchanged even though nothing here gates a feature any more: the provider is what
+ * keeps a cached credential and the licensed-device roster current, and Personal Mesh pairing between
+ * your own devices still rides on that device identity. What the answers can no longer do is withhold a
+ * capability - see selectHasProAccess in stores/proAccessSlice.
+ */
 export interface ProEntitlementProvider {
   readActive(): Promise<boolean>;
   getInfo(): Promise<ProLicenseInfo>;
@@ -42,6 +38,12 @@ export interface ProEntitlementProvider {
   resetCurrentDevice(): Promise<boolean>;
 }
 
+/**
+ * The provider a build without the pro bundle registers: nothing held, nothing to read.
+ *
+ * These answers are FACTS about this install, never verdicts on what it may do. A build like this one
+ * simply has no licence plumbing, and every feature core can offer is offered anyway.
+ */
 const UNAVAILABLE_PROVIDER: ProEntitlementProvider = {
   readActive: async () => false,
   getInfo: async () => ({
@@ -78,16 +80,15 @@ export function revalidateProEntitlement(
   return provider.revalidate(reason);
 }
 
+/**
+ * Activate a licence key on this device, through whatever provider is registered.
+ *
+ * Kept for the device-roster path: a key imported from a paired device, or re-entered by someone who
+ * bought before Off Grid AI became free, still claims a seat and writes the credential. No screen in
+ * this app asks for a key any more, because there is nothing to buy.
+ */
 export function activateProByKey(
   rawCredential: string,
 ): Promise<PersonalMeshActivationResult> {
   return provider.activate(rawCredential);
-}
-
-export function clearProForTesting(): Promise<void> {
-  return provider.clearForTesting();
-}
-
-export function resetProOnThisDevice(): Promise<boolean> {
-  return provider.resetCurrentDevice();
 }

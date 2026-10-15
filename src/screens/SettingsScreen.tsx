@@ -26,7 +26,6 @@ import { AnimatedListItem } from '../components/AnimatedListItem';
 import { MadeWithLove } from '../components/MadeWithLove';
 import { DebugLogsScreen } from '../components/DebugLogsScreen';
 import { useSettingsSections } from '../components/settings/sectionRegistry';
-import { ProUpsellBanner } from '../components/settings/ProUpsellBanner';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import RNFS from 'react-native-fs';
@@ -34,7 +33,6 @@ import { useAppStore, useRemoteServerStore } from '../stores';
 import { hardwareService } from '../services';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
 import { useHasRegisteredScreen } from '../navigation/screenRegistry';
-import { clearProForTesting } from '../services/proLicenseService';
 import { useProStatusLabel } from '../hooks/useProStatusLabel';
 import { useOpenSync } from '../hooks/useOpenSync';
 import { appBuildLabel, appVersion } from '../utils/appVersion';
@@ -71,7 +69,7 @@ export const SettingsScreen: React.FC = () => {
   // loadProFeatures) show up live without an app restart.
   const settingsSections = useSettingsSections();
   const hasSync = useHasRegisteredScreen('Sync');
-  const { isSyncUnlocked, openSync } = useOpenSync();
+  const { openSync } = useOpenSync();
   const setOnboardingComplete = useAppStore(s => s.setOnboardingComplete);
   const themeMode = useAppStore(s => s.themeMode);
   const setThemeMode = useAppStore(s => s.setThemeMode);
@@ -81,12 +79,6 @@ export const SettingsScreen: React.FC = () => {
   const [showDebugLogs, setShowDebugLogs] = useState(false);
   const [isSeedingDemo, setIsSeedingDemo] = useState(false);
   const deviceInfo = useAppStore(s => s.deviceInfo);
-  // Hidden once the user dismisses it, or once Pro is active (the upsell makes no
-  // sense to a paid user). hasRegisteredPro only flips true after RC verification
-  // (activateProByEmail / revalidatePro), so this also covers "paid and verified".
-  const devProDisabled = useAppStore(s => s.devProDisabled);
-  const setDevProDisabled = useAppStore(s => s.setDevProDisabled);
-  const setHasRegisteredPro = useAppStore(s => s.setHasRegisteredPro);
   const { proStatusLabel } = useProStatusLabel();
 
   useEffect(() => {
@@ -122,27 +114,6 @@ export const SettingsScreen: React.FC = () => {
     await openSupportEmail({ subject, body });
   };
 
-  // DEV-only: flip the Pro auto-unlock. Disabling also clears the cached license
-  // so the build behaves like a fresh free install. We flip the store flags
-  // synchronously (so the UI drops Pro immediately) and do NOT auto-reload —
-  // an immediate reload races the async persist write and rehydrates the old
-  // Pro-active state. A manual restart applies feature load/unload (slots
-  // registered at boot can't be cleanly torn down at runtime).
-  const handleToggleDevPro = async () => {
-    const disabling = !devProDisabled;
-    if (disabling) {
-      setDevProDisabled(true);
-      await clearProForTesting();
-      setHasRegisteredPro(false);
-    } else {
-      setDevProDisabled(false);
-    }
-    Alert.alert(
-      disabling ? 'Pro disabled (DEV)' : 'Pro enabled (DEV)',
-      `Restart the app to fully ${disabling ? 'unload' : 'load'} Pro features.`,
-    );
-  };
-
   const handleSeedDemo = async () => {
     if (!__DEV__ || isSeedingDemo) return;
     setIsSeedingDemo(true);
@@ -169,12 +140,6 @@ export const SettingsScreen: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={styles.content}
       >
-        {/* PRO Banner */}
-        <ProUpsellBanner
-          trigger={focusTrigger}
-          onGetPro={() => navigation.navigate('ProDetail')}
-        />
-
         <SettingsAppearanceRow
           focusTrigger={focusTrigger}
           styles={styles}
@@ -203,10 +168,8 @@ export const SettingsScreen: React.FC = () => {
                 ? [
                     {
                       icon: 'refresh-cw',
-                      title: isSyncUnlocked ? 'Sync' : 'Sync with Pro',
-                      desc: isSyncUnlocked
-                        ? 'Chats, projects, files, and copied text across your devices'
-                        : 'Get Pro to set up encrypted Sync across your devices',
+                      title: 'Sync',
+                      desc: 'Chats, projects, files, and copied text across your devices',
                       screen: 'Sync' as const,
                       testID: 'open-sync-settings',
                     },
@@ -264,7 +227,7 @@ export const SettingsScreen: React.FC = () => {
             ))}
           </View>
 
-        {/* PRO Button */}
+        {/* Feature index: what the app can do, and which surfaces this build carries. */}
         <AnimatedEntry index={6} staggerMs={40} trigger={focusTrigger}>
           <TouchableOpacity
             style={styles.proNavButton}
@@ -275,12 +238,7 @@ export const SettingsScreen: React.FC = () => {
               <IconMC name="crown" size={18} color={colors.primary} />
             </View>
             <View style={styles.proCardText}>
-              <View style={styles.proTitleRow}>
-                <Text style={styles.proNavTitle}>Off Grid AI PRO</Text>
-                <View style={styles.proBadge}>
-                  <Text style={styles.proBadgeText}>PRO</Text>
-                </View>
-              </View>
+              <Text style={styles.proNavTitle}>Pro features</Text>
               <Text style={styles.proDesc}>{proStatusLabel}</Text>
             </View>
             <Icon name="chevron-right" size={16} color={colors.textMuted} />
@@ -380,19 +338,6 @@ export const SettingsScreen: React.FC = () => {
               >
                 <Icon name="terminal" size={14} color={colors.textMuted} />
                 <Text style={styles.devButtonText}>Debug Logs</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.devButton}
-                onPress={handleToggleDevPro}
-              >
-                <Icon
-                  name={devProDisabled ? 'unlock' : 'lock'}
-                  size={14}
-                  color={colors.textMuted}
-                />
-                <Text style={styles.devButtonText}>
-                  {devProDisabled ? 'Turn on Pro (DEV)' : 'Turn off Pro (DEV)'}
-                </Text>
               </TouchableOpacity>
             </View>
           </AnimatedEntry>

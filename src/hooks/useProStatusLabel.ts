@@ -1,50 +1,20 @@
-import { useEffect, useState } from 'react';
-import { selectHasProAccess } from '../stores/proAccessSlice';
-import { useAppStore } from '../stores';
-import {
-  getProLicenseInfo,
-  PRO_TIER_META,
-  type ProLicenseInfo,
-} from '../services/proLicenseService';
+import { useIsProActive } from './useIsProActive';
 
 /**
- * Label for the Settings "Off Grid AI PRO" row: the upsell line when not Pro, or
- * the subscription status (a renewing tier shows its date; a one-time tier shows
- * "<Tier> · active") when Pro.
+ * Label for the Settings "Pro features" row.
+ *
+ * It used to be an upsell line ("Unlock premium features") or a subscription status read out of the
+ * cached licence. Off Grid AI is free, so there is nothing to unlock and nothing to renew; the row now
+ * says what is true of the feature set in THIS build, which is the only thing that can still differ:
+ * whether the optional pro bundle (voice, tools, mesh sync) is compiled in.
  */
 export function useProStatusLabel(): {
   proStatusLabel: string;
 } {
-  const hasSavedProCredential = useAppStore(s => s.hasSavedProCredential);
-  const isProActive = useAppStore(s => s.isProActive);
-  const hasProAccess = useAppStore(selectHasProAccess);
-  const [info, setInfo] = useState<ProLicenseInfo | null>(null);
-  useEffect(() => {
-    if (hasSavedProCredential)
-      getProLicenseInfo()
-        .then(setInfo)
-        .catch(() => {});
-    else setInfo(null);
-  }, [hasSavedProCredential]);
-
-  // Drive off the tier's `renews` flag (single source), not a concrete-tier check.
-  const meta = info?.tier ? PRO_TIER_META[info.tier] : null;
-  const isDevelopmentAccess = __DEV__ && isProActive && !hasSavedProCredential;
-  const proStatusLabel = isDevelopmentAccess
-    ? 'Development access'
-    : !hasProAccess
-    ? 'Unlock premium features'
-    : info?.isPro && meta?.renews && info.expiry
-    ? `Active until ${new Date(info.expiry).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })}`
-    : info?.isPro && meta
-    ? `${meta.label} · active`
-    : info
-    ? 'Development · active'
-    : 'Pro · active';
-
-  return { proStatusLabel };
+  const bundleLoaded = useIsProActive();
+  return {
+    proStatusLabel: bundleLoaded
+      ? 'Everything included, free'
+      : 'Everything included, free - this build has no Pro bundle',
+  };
 }

@@ -166,12 +166,11 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   const interfaceMode = useUiModeStore(s => s.interfaceMode);
   const tabNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const toolCountHintDismissed = useAppStore(state => state.toolCountHintDismissed);
-  // Subscribe to Pro activation so this re-renders the moment a license is
-  // activated. loadProFeatures() registers the tool extensions + the Pro Tools
-  // screen in one pass; without this subscription the getToolExtensions() reads
-  // below are non-reactive and the Pro Tools badge stayed stale until an app
-  // restart. Return is intentionally unused — the count is naturally 0 when Pro
-  // is inactive (no extensions registered); we only need the re-render.
+  // Subscribe to the pro bundle loading so this re-renders the moment it registers its
+  // tool extensions + the Pro Tools screen. Without this subscription the getToolExtensions()
+  // reads below are non-reactive and the Pro Tools badge stayed stale until an app restart.
+  // Return is intentionally unused — the count is naturally 0 when the bundle is absent (no
+  // extensions registered); we only need the re-render.
   const isProActive = useIsProActive();
   const assistantAvailability = useAssistantToolAvailability();
   // extToolCount is the live MCP tool count (the email/calendar extension reports 0
@@ -432,12 +431,11 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           isRemote={chat.activeModelInfo.isRemote}
           onImagePress={chat.handleImagePress}
           assistantAvailability={
-            !isProActive
-              ? 'no-pro'
-              : assistantAvailability
+            // The bundle question, not a payment question: without the optional pro bundle there are no
+            // Desktop task tools registered to report an availability at all.
+            !isProActive ? 'no-bundle' : assistantAvailability
           }
           onAssistantEnableTools={enableAssistantTools}
-          onAssistantUpgrade={() => tabNav.navigate('ProDetail')}
           onAssistantSetupSync={() => tabNav.navigate('Sync')}
         />
       </View>

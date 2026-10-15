@@ -4,7 +4,7 @@
  * The tools picker is a full page (it replaced the old bottom-sheet drawer). Tests:
  * - Renders the page header and all free tool rows
  * - Pro Tools row is pinned to the top of the listing and is shown to everyone
- * - Pro Tools routing: free -> ProDetail upsell, pro -> the Pro Tools screen
+ * - Pro Tools routing: no bundle -> the Pro features screen, bundle -> the Pro Tools screen
  * - Tool toggles flow through the core settings store
  * - Back button navigates back
  */
@@ -95,13 +95,13 @@ describe('ToolsScreen', () => {
     expect(getByText('Pro Tools')).toBeTruthy();
   });
 
-  it('routes a free user to the Pro upsell when Pro Tools is pressed', () => {
+  it('routes to the Pro features screen when this build has no Pro bundle', () => {
     const { getByTestId } = render(<ToolsScreen />);
     fireEvent.press(getByTestId('tools-pro-tools'));
     expect(mockNavigate).toHaveBeenCalledWith('ProDetail');
   });
 
-  it('routes a pro user straight to the Pro Tools screen', () => {
+  it('routes straight to the Pro Tools screen when the bundle is in this build', () => {
     useAppStore.setState({
       hasRegisteredPro: true,
       hasSavedProCredential: true,

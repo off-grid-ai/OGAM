@@ -55,9 +55,6 @@ jest.mock('../../../src/components/AnimatedListItem', () => ({
 const mockSetOnboardingComplete = jest.fn();
 const mockSetThemeMode = jest.fn();
 const mockCompleteChecklistStep = jest.fn();
-// Mutated per-test to drive Pro banner visibility. `mock`-prefixed so jest.mock's
-// hoisted factory is allowed to reference it.
-const mockProState = { hasRegisteredPro: false, proBannerDismissed: false };
 jest.mock('../../../src/stores', () => ({
   useAppStore: Object.assign(jest.fn((selector?: any) => {
     const state = {
@@ -65,9 +62,7 @@ jest.mock('../../../src/stores', () => ({
       themeMode: 'system',
       setThemeMode: mockSetThemeMode,
       completeChecklistStep: mockCompleteChecklistStep,
-      setProBannerDismissed: jest.fn(),
-      hasRegisteredPro: mockProState.hasRegisteredPro,
-      proBannerDismissed: mockProState.proBannerDismissed,
+      hasRegisteredPro: false,
     };
     return selector ? selector(state) : state;
   }), {
@@ -98,21 +93,15 @@ jest.mock('@react-navigation/native', () => ({
 describe('SettingsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockProState.hasRegisteredPro = false;
-    mockProState.proBannerDismissed = false;
   });
 
-  it('shows the Pro upsell banner when Pro is not active and not dismissed', () => {
-    const { getByText } = render(<SettingsScreen />);
-    expect(
-      getByText('Your private AI stays current across your devices with live sync.'),
-    ).toBeTruthy();
-  });
-
-  it('hides the Pro upsell banner once Pro is active', () => {
-    mockProState.hasRegisteredPro = true;
+  it('sells nothing: no upsell banner and no purchase pitch', () => {
+    // Off Grid AI is free, so Settings carries no promo banner and no price.
     const { queryByText } = render(<SettingsScreen />);
-    expect(queryByText(/democratized/i)).toBeNull();
+    expect(queryByText('Get Pro')).toBeNull();
+    expect(
+      queryByText('Your private AI stays current across your devices with live sync.'),
+    ).toBeNull();
   });
 
   it('renders "Settings" title', () => {
