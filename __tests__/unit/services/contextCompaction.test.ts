@@ -73,6 +73,11 @@ describe('isContextFullError', () => {
     ['context window exceeded', true],
     ['context length exceeded', true],
     ['context is full', true],
+    // LiteRT-LM's own limit errors, as the native module forwards them
+    ['Max number of tokens reached, context window out of bounds', true],
+    ['Input token ids are too long. Exceeding the maximum number of tokens allowed: 4100 >= 4096', true],
+    ['Reached maximum number of tokens.', true],
+    ['Generation failed: Prefill length (128) plus current step (3990) exceeds max sequence length (4096).', true],
   ])('"%s" → %s', (msg, expected) => {
     const input = typeof msg === 'string' ? new Error(msg) : msg;
     expect(contextCompactionService.isContextFullError(input)).toBe(expected);

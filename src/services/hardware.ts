@@ -6,6 +6,7 @@ import { readPerformanceCoreCount } from './cpuTopologyReader';
 // Access NativeModules.LocalDreamModule dynamically (not destructured)
 // so it can be mocked in tests after module import.
 const getLocalDreamModule = () => NativeModules.LocalDreamModule;
+const getLiteRTModule = () => NativeModules.LiteRTModule;
 import {
   DeviceInfo as DeviceInfoType,
   ModelRecommendation,
@@ -30,6 +31,7 @@ class HardwareService {
   private cachedSoCInfo: SoCInfo | null = null;
   private cachedImageRecommendation: ImageModelRecommendation | null = null;
   private cachedOpenCLCapability: { supported: boolean; reason?: string } | null = null;
+  private cachedTensorTpuGeneration: Promise<number | null> | null = null;
   async getDeviceInfo(): Promise<DeviceInfoType> {
     if (this.cachedDeviceInfo) {
       return this.cachedDeviceInfo;
@@ -477,6 +479,28 @@ class HardwareService {
     if (Platform.OS !== 'android') return { hasNpu: false, hasGpu: false };
     const [soc, opencl] = await Promise.all([this.getSoCInfo(), this.getOpenCLCapability()]);
     return { hasNpu: HTP_ENABLED && soc.hasNPU, hasGpu: opencl.supported };
+  }
+
+  /**
+   * The Google Tensor generation whose TPU can run LiteRT models on this phone (5 on a Pixel 10),
+   * or null. The native probe checks the SoC, Android 16+, and that LiteRT's Tensor dispatch
+   * library shipped in the APK. Separate from getAccelerationCapability: llama.rn has no TPU path.
+   */
+  getTensorTpuGeneration(): Promise<number | null> {
+    this.cachedTensorTpuGeneration ??= this.probeTensorTpu();
+    return this.cachedTensorTpuGeneration;
+  }
+
+  private async probeTensorTpu(): Promise<number | null> {
+    const mod = getLiteRTModule();
+    if (Platform.OS !== 'android' || !mod?.getTpuSupport) return null;
+    try {
+      const res: { supported: boolean; tensorGeneration: number | null; reason: string | null } = await mod.getTpuSupport();
+      logger.log(`[WIRE-TPU] ${JSON.stringify(res)}`); // [WIRE] real Tensor TPU probe (gates TPU routing + the Tensor model card)
+      return res.supported ? res.tensorGeneration : null;
+    } catch {
+      return null;
+    }
   }
 
   async getOpenCLCapability(): Promise<{ supported: boolean; reason?: string }> {

@@ -884,6 +884,8 @@ async function callLiteRTForLoop(
     // The litertlm native FC parser hard-fails (Status Code 3) when a small model emits
     // a malformed tool call. Rather than surface a raw "Generation Error", retry once
     // WITHOUT tools so the user still gets a text answer instead of a crashed turn.
+    // A full context is also Status Code 3; the caller compacts for that instead.
+    if (contextCompactionService.isContextFullError(msg)) throw e;
     if (!/parse (tool|FC) calls|Status Code: 3/i.test(msg)) throw e;
     logger.warn(
       `[ToolLoop] LiteRT tool-call parse failed; retrying without tools: ${msg.slice(

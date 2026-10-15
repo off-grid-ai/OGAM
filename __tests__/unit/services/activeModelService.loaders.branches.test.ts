@@ -190,6 +190,20 @@ describe('doLoadLiteRTModel branches', () => {
     expect(ToastAndroid.showWithGravity).toHaveBeenCalled();
   });
 
+  it('caps the context at a curated build\'s own limit (the Tensor TPU build is compiled for 4096 tokens)', async () => {
+    mockedLiteRT.loadModel.mockResolvedValue(undefined);
+    mockedLiteRT.getActiveBackend.mockReturnValue('npu');
+    const fileName = 'gemma-4-E2B-it_Google_Tensor_G5.litertlm';
+    const ctx = liteCtx({
+      model: { id: `offgrid/litert-recommended/${fileName}`, engine: 'litert', fileName, filePath: `/models/${fileName}`, fileSize: 3113545589 },
+      store: { settings: { ...makeStore().settings, liteRTBackend: 'gpu', liteRTMaxTokens: 8192 } },
+    });
+
+    await doLoadTextModel(ctx);
+
+    expect(mockedLiteRT.loadModel).toHaveBeenCalledWith(`/models/${fileName}`, 'gpu', expect.objectContaining({ maxNumTokens: 4096 }));
+  });
+
   it('runs warmup when active backend is gpu/npu', async () => {
     mockedLiteRT.loadModel.mockResolvedValue(undefined);
     mockedLiteRT.getActiveBackend.mockReturnValue('npu');

@@ -8,6 +8,7 @@ import { useAppStore } from '../../stores';
 import { DownloadedModel, LlamaDownloadedModel, ONNXImageModel, INFERENCE_BACKENDS } from '../../types';
 import { llmService } from '../llm';
 import { liteRTService } from '../litert';
+import { getCuratedLiteRTContextLimit } from '../curatedLiteRTRegistry';
 import { unloadAllTextEngines } from '../engines';
 import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
 import { modelManager } from '../modelManager';
@@ -106,7 +107,9 @@ async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
 
     const preferredBackend = ctx.store.settings.liteRTBackend;
 
-    const maxTokens = ctx.store.settings.liteRTMaxTokens ?? 4096;
+    // A curated build's own limit wins over a larger setting: native would clamp silently (the
+    // Tensor TPU build's KV cache is fixed at 4096) while JS kept the larger budget for compaction.
+    const maxTokens = Math.min(ctx.store.settings.liteRTMaxTokens ?? 4096, getCuratedLiteRTContextLimit(liteRTModel) ?? Infinity);
     const contextScalar = Math.max(1, maxTokens / 4096);
     const baseTimeoutMs = 90_000;
     const timeoutMs = Math.min(Math.ceil(baseTimeoutMs * contextScalar), 180_000);

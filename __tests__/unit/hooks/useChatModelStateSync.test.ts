@@ -18,7 +18,7 @@ jest.mock('../../../src/services/llm', () => ({
   },
 }));
 jest.mock('../../../src/services/litert', () => ({
-  liteRTService: { isModelLoaded: jest.fn(() => false) },
+  liteRTService: { isModelLoaded: jest.fn(() => false), loadedTextOnly: jest.fn(() => false) },
 }));
 
 const { llmService } = require('../../../src/services/llm');
