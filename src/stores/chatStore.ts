@@ -323,10 +323,10 @@ export const useChatStore = create<ChatState>()(
         }
         // A version is chosen from now; an appended message names its parent only once the chat
         // has versions, so a plain chat stays ordered by time across devices.
-        const versionParent = messageData.parent ?? pending;
+        const parentOfVersion = messageData.parent ?? pending;
         const message = createPersistedMessage(
-          versionParent
-            ? { ...messageData, parent: versionParent, selectedAt: messageData.selectedAt ?? Date.now() }
+          parentOfVersion
+            ? { ...messageData, parent: parentOfVersion, selectedAt: messageData.selectedAt ?? Date.now() }
             : { ...messageData, ...appendPlaceFor(get().getConversationMessages(conversationId)) },
         );
 
