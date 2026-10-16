@@ -30,7 +30,7 @@ import {
   emitSyncMutation,
   messagePutMutation,
 } from '../services/sync/mutation';
-import { nextParent, neighbourMessage, versionParent } from '../utils/chatThread';
+import { appendPlaceFor, neighbourMessage, versionParent } from '../utils/chatThread';
 
 /**
  * The portion of the in-progress stream that is safe to SPEAK in voice mode —
@@ -321,12 +321,14 @@ export const useChatStore = create<ChatState>()(
           const { [conversationId]: _done, ...rest } = get().pendingVersionParents;
           set({ pendingVersionParents: rest });
         }
-        const existingMessages = get().getConversationMessages(conversationId);
-        const message = createPersistedMessage({
-          ...messageData,
-          parent: messageData.parent ?? pending ?? nextParent(existingMessages),
-          selectedAt: messageData.selectedAt ?? Date.now(),
-        });
+        // A version is chosen from now; an appended message names its parent only once the chat
+        // has versions, so a plain chat stays ordered by time across devices.
+        const versionParent = messageData.parent ?? pending;
+        const message = createPersistedMessage(
+          versionParent
+            ? { ...messageData, parent: versionParent, selectedAt: messageData.selectedAt ?? Date.now() }
+            : { ...messageData, ...appendPlaceFor(get().getConversationMessages(conversationId)) },
+        );
 
         set(state => ({
           conversations: state.conversations.map(conv =>

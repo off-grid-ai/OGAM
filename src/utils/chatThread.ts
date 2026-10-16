@@ -2,9 +2,9 @@
 // Each message follows a parent; messages with the same parent are versions of each other, and the
 // latest-chosen one is shown. Retrying, resending or editing adds a version and deletes nothing.
 import {
+  appendPlace,
   chatThread,
   neighbourVersion,
-  parentForNext,
   parentOfVersion,
 } from '@offgrid/sync';
 import type { Message } from '../types';
@@ -36,9 +36,9 @@ export function shownMessages(messages: readonly Message[], until?: string): Mes
   });
 }
 
-/** The parent a message added at the end of the shown thread takes. */
-export function nextParent(messages: readonly Message[]): string {
-  return parentForNext(threadRows(messages));
+/** What a message appended at the end stores: its parent, only once the chat has versions. */
+export function appendPlaceFor(messages: readonly Message[]): { parent?: string } {
+  return appendPlace(threadRows(messages));
 }
 
 /** The parent a new version of `message` takes, or undefined when it is not in the chat. */
