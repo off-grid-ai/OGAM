@@ -624,6 +624,8 @@ async function generateWithTurnDocuments(opts: {
   question: string;
   systemPrompt: string;
   isRemote: boolean;
+  /** The model can search the project's knowledge base this turn, so none of it is preloaded. */
+  knowledgeSearch: boolean;
   generate: (documents: TurnDocuments | null) => Promise<boolean>;
 }): Promise<boolean> {
   const status = useDocumentTurnStatusStore.getState();
@@ -638,6 +640,7 @@ async function generateWithTurnDocuments(opts: {
         contextLength:
           useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength,
         isRemote: opts.isRemote,
+        knowledgeSearch: opts.knowledgeSearch,
         ...(documentScale ? { documentScale } : {}),
         onStatus: turnStatus =>
           status.set(opts.conversationId, describeTurnStatus(turnStatus)),
@@ -773,6 +776,7 @@ export async function startGenerationFn(
       question: messageText,
       systemPrompt,
       isRemote,
+      knowledgeSearch: activeTools.includes('search_knowledge_base'),
       generate: documents => {
         const promptWithDocuments = documents?.stable
           ? `${systemPrompt}\n\n${documents.stable}`
@@ -1239,6 +1243,7 @@ export async function regenerateResponseFn(
       question: messageText,
       systemPrompt,
       isRemote,
+      knowledgeSearch: activeTools.includes('search_knowledge_base'),
       generate: documents => {
         const promptWithDocuments = documents?.stable
           ? `${systemPrompt}\n\n${documents.stable}`

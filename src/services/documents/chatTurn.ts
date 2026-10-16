@@ -88,6 +88,12 @@ export async function prepareTurnDocuments(input: {
   isRemote: boolean;
   /** < 1 on a retry after the prompt did not fit. */
   documentScale?: number;
+  /**
+   * The model can call search_knowledge_base this turn. Then the project's knowledge base is left
+   * to it (when needed): a question that does not need the documents does not wait on them. A
+   * model without that tool still gets the knowledge base in its prompt.
+   */
+  knowledgeSearch?: boolean;
   /** What the turn is doing with its documents, for the live status line. */
   onStatus?: (status: DocumentTurnStatus) => void;
 }): Promise<TurnDocuments | null> {
@@ -104,6 +110,7 @@ export async function prepareTurnDocuments(input: {
     conversationId: input.conversationId,
     ...(input.projectId ? { projectId: input.projectId } : {}),
     ...(input.onStatus ? { onStatus: input.onStatus } : {}),
+    ...(input.knowledgeSearch ? { projectDocuments: 'when-needed' as const } : {}),
     current,
     question: input.question,
     previousQuestions: messages
