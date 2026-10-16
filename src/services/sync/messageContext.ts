@@ -41,9 +41,14 @@ export function serializeMessageContext(
     | 'generationMeta'
     | 'isSystemInfo'
     | 'turnStatus'
+    | 'parent'
+    | 'selectedAt'
   >,
 ): string | null {
   return serializeSyncedMessageContext({
+    // Its place among versions (utils/chatThread), so every device shows the same thread.
+    parent: message.parent,
+    selectedAt: message.selectedAt,
     reasoning: message.reasoningContent,
     timeline: message.timeline,
     // "Model loaded: …" is the app talking, not the model. Only the device that wrote it knows

@@ -32,6 +32,7 @@ import {
 import type { ChatMessageProps } from './types';
 import type { Message } from '../../types';
 import { isSupportingChatContext } from '@offgrid/sync';
+import { VersionSwitcher } from './components/VersionSwitcher';
 
 type MetaRowProps = {
   message: Message;
@@ -393,6 +394,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   onCopy,
   onRetry,
   onEdit,
+  onSelectVersion,
   onGenerateImage,
   showActions = true,
   canGenerateImage = false,
@@ -592,6 +594,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       ) : (
         messageBody
       )}
+      {onSelectVersion && !isStreaming ? (
+        <VersionSwitcher
+          message={message}
+          onSelect={direction => onSelectVersion(message, direction)}
+        />
+      ) : null}
 
       <MessageOverlays
         message={message}

@@ -16,6 +16,7 @@ import { useChatStore } from '../../stores/chatStore';
 import type { DocumentCitation, MediaAttachment, Message } from '../../types';
 import { attachmentSource } from './conversation';
 import { documentTurns } from '.';
+import { shownMessages } from '../../utils/chatThread';
 
 /** Prompt-reading speed assumed for a phone until one is measured (tokens a second). */
 const PHONE_PREFILL_TOKENS_PER_SECOND = 150;
@@ -104,7 +105,7 @@ export async function prepareTurnDocuments(input: {
     if (source) current.push(source);
   }
   const conversation = useChatStore.getState().conversations.find((c) => c.id === input.conversationId);
-  const messages = (conversation?.messages ?? []).filter((message) => !message.isSystemInfo);
+  const messages = shownMessages(conversation?.messages ?? []).filter((message) => !message.isSystemInfo);
   const ctx = input.contextLength;
   const result = await documentTurns.prepare({
     conversationId: input.conversationId,

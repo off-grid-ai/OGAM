@@ -53,6 +53,7 @@ import {
   type TurnDocuments,
 } from '../../services/documents/chatTurn';
 import { useDocumentTurnStatusStore } from '../../services/documents/progressStore';
+import { shownMessages } from '../../utils/chatThread';
 type SetState<T> = Dispatch<SetStateAction<T>>;
 const FALLBACK_RECENT_MESSAGE_COUNT = 2;
 
@@ -210,7 +211,8 @@ function buildMessagesForContext(
   const conversation = useChatStore
     .getState()
     .conversations.find(c => c.id === conversationId);
-  const allMessages = (conversation?.messages || []).filter(
+  // The shown thread: each turn's chosen version, never the versions beside it.
+  const allMessages = shownMessages(conversation?.messages || []).filter(
     m => !m.isSystemInfo,
   );
   const { prefix, filtered } = applyCompactionPrefix(
@@ -1211,7 +1213,7 @@ export async function regenerateResponseFn(
   const conversation = useChatStore
     .getState()
     .conversations.find(c => c.id === targetConversationId);
-  const messages = (conversation?.messages || []).filter(
+  const messages = shownMessages(conversation?.messages || []).filter(
     (m: Message) => !m.isSystemInfo,
   );
   const messagesUpToUser = messages

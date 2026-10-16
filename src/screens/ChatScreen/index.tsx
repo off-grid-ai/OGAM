@@ -37,6 +37,7 @@ import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
+import { useChatStore } from '../../stores';
 
 function countConversationImages(conv: Conversation | undefined): number {
   return (conv?.messages || []).reduce(
@@ -256,6 +257,11 @@ export const ChatScreen: React.FC = () => {
         return chat.handleRetryMessage(message, selected);
       }}
       onEdit={chat.handleEditMessage}
+      onSelectVersion={(message, direction) => {
+        const conversationId = chat.activeConversation?.id;
+        if (conversationId)
+          useChatStore.getState().selectMessageVersion(conversationId, message, direction);
+      }}
       onTranscribeAgain={chat.handleTranscribeAgain}
       onGenerateImage={chat.handleGenerateImageFromMessage}
       onImagePress={chat.handleImagePress}

@@ -30,6 +30,8 @@ import {
   emitSyncMutation,
   messagePutMutation,
 } from '../services/sync/mutation';
+import { nextParent, neighbourMessage, versionParent } from '../utils/chatThread';
+
 /**
  * The portion of the in-progress stream that is safe to SPEAK in voice mode —
  * never the reasoning/thinking. Models that stream reasoning on a separate
@@ -101,6 +103,21 @@ export interface ChatState extends ChatMessageMutationActions {
     conversationId: string,
     message: Omit<Message, 'id' | 'timestamp'>,
   ) => Message;
+  /** Chats whose next answer is a new version beside an earlier one: the parent it takes. Not
+   *  saved; the chat shows its thread up to that parent while the new answer is made. */
+  pendingVersionParents: Record<string, string>;
+  /** The next answer added to this chat is a new version of `answer` (a retry or resend). */
+  prepareAnswerVersion: (conversationId: string, answer: Message) => boolean;
+  /** End a pending retry that saved no answer (it failed or was not started). */
+  clearPendingVersion: (conversationId: string) => void;
+  /** Add a new version of `of` beside it (an edit), chosen from now. */
+  addMessageVersion: (
+    conversationId: string,
+    of: Message,
+    message: Omit<Message, 'id' | 'timestamp'>,
+  ) => Message | null;
+  /** Show the version `direction` steps from shown `message`. */
+  selectMessageVersion: (conversationId: string, message: Message, direction: number) => boolean;
   startStreaming: (conversationId: string) => void;
   setStreamingMessage: (content: string) => void;
   appendToStreamingMessage: (token: string) => void;
@@ -187,6 +204,7 @@ export const useChatStore = create<ChatState>()(
     (set, get) => ({
       conversations: [],
       activeConversationId: null,
+      pendingVersionParents: {},
       ...NO_REPLY_FORMING,
       ...MODEL_NOT_LOADING,
       ...NO_REPLY_ENDED,
@@ -293,7 +311,22 @@ export const useChatStore = create<ChatState>()(
       },
 
       addMessage: (conversationId, messageData) => {
-        const message = createPersistedMessage(messageData);
+        // A message follows the end of the shown thread, unless it is a new version (it names its
+        // parent, or it is the answer a retry prepared). A new question ends any pending retry.
+        const pending =
+          messageData.role === 'assistant'
+            ? get().pendingVersionParents[conversationId]
+            : undefined;
+        if (get().pendingVersionParents[conversationId] !== undefined) {
+          const { [conversationId]: _done, ...rest } = get().pendingVersionParents;
+          set({ pendingVersionParents: rest });
+        }
+        const existingMessages = get().getConversationMessages(conversationId);
+        const message = createPersistedMessage({
+          ...messageData,
+          parent: messageData.parent ?? pending ?? nextParent(existingMessages),
+          selectedAt: messageData.selectedAt ?? Date.now(),
+        });
 
         set(state => ({
           conversations: state.conversations.map(conv =>
@@ -319,6 +352,49 @@ export const useChatStore = create<ChatState>()(
           emitSyncMutation(conversationPutMutation(conversation));
 
         return message;
+      },
+
+      prepareAnswerVersion: (conversationId, answer) => {
+        const parent = versionParent(get().getConversationMessages(conversationId), answer);
+        if (parent === undefined) return false;
+        set(state => ({
+          pendingVersionParents: { ...state.pendingVersionParents, [conversationId]: parent },
+        }));
+        return true;
+      },
+
+      clearPendingVersion: conversationId => {
+        if (get().pendingVersionParents[conversationId] === undefined) return;
+        const { [conversationId]: _done, ...rest } = get().pendingVersionParents;
+        set({ pendingVersionParents: rest });
+      },
+
+      addMessageVersion: (conversationId, of, messageData) => {
+        const parent = versionParent(get().getConversationMessages(conversationId), of);
+        if (parent === undefined) return null;
+        return get().addMessage(conversationId, { ...messageData, parent });
+      },
+
+      selectMessageVersion: (conversationId, message, direction) => {
+        const target = neighbourMessage(
+          get().getConversationMessages(conversationId),
+          message,
+          direction,
+        );
+        if (!target) return false;
+        const chosen = { ...target, selectedAt: Date.now() };
+        set(state => ({
+          conversations: state.conversations.map(conv =>
+            conv.id === conversationId
+              ? {
+                  ...conv,
+                  messages: conv.messages.map(entry => (entry.id === target.id ? chosen : entry)),
+                }
+              : conv,
+          ),
+        }));
+        emitSyncMutation(messagePutMutation(conversationId, chosen));
+        return true;
       },
 
       ...createMessageMutationActions({

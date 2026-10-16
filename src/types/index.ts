@@ -285,6 +285,13 @@ export interface Message {
    * prompt-only messages may omit it because they never enter the sync log.
    */
   uuid?: string;
+  /** The message this one follows (its uuid); messages with the same parent are versions of each
+   *  other (utils/chatThread). Absent on messages saved before versions. */
+  parent?: string;
+  /** When this version was last chosen (epoch ms); the latest-chosen version is shown. */
+  selectedAt?: number;
+  /** Display only: where this shown message sits among its versions, when it has others. */
+  threadVersions?: { index: number; count: number };
   /** Immutable device attribution for portable Sync records. */
   provenance?: RecordProvenance;
   role: 'user' | 'assistant' | 'system' | 'tool';

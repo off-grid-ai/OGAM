@@ -21,6 +21,7 @@ import { whisperService } from '../../services/whisperService';
 import { activeModelService } from '../../services/activeModelService';
 import { ensureWhisperForTranscription } from '../../components/ChatInput/ensureWhisperForTranscription';
 import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
+import { shownMessages } from '../../utils/chatThread';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
 
@@ -35,14 +36,39 @@ type RetryParams = {
 /** Shared context for the retry-branch helpers (bundled so each stays within the param limit). */
 type RetryCtx = { message: Message; genDeps: GenerationDeps; p: RetryParams; convId: string; msgs: Message[] };
 
-/** Retry from a USER message: read the turn's recorded modality BEFORE deleting the reply that
- *  carries it, so resend re-runs the SAME pipeline (deterministic) instead of re-classifying. */
+/** Regenerate `userMessage`'s answer as a new version beside `answer` (when it has one): the old
+ *  answer and the turns after it stay a version the person can go back to. Nothing is deleted. */
+async function regenerateAsVersion(
+  genDeps: GenerationDeps,
+  p: RetryParams,
+  convId: string,
+  userMessage: Message,
+  answer: Message | undefined,
+  recordedKind: ReturnType<typeof recordedTurnKind>,
+): Promise<void> {
+  const store = useChatStore.getState();
+  if (answer) store.prepareAnswerVersion(convId, answer);
+  try {
+    await regenerateResponseFn(genDeps, { setDebugInfo: p.setDebugInfo, userMessage, recordedKind, assistantEnabled: p.assistantEnabled });
+  } finally {
+    // A retry that saved no answer leaves the chat as it was.
+    useChatStore.getState().clearPendingVersion(convId);
+  }
+}
+
+/** The answer shown after `userMessage` in the chat, if any. */
+const answerAfter = (msgs: Message[], userMessage: Message): Message | undefined => {
+  const idx = msgs.findIndex((m: Message) => m.id === userMessage.id);
+  return idx === -1 ? undefined : msgs.slice(idx + 1).find(m => m.role === 'assistant' && !m.isSystemInfo);
+};
+
+/** Retry from a USER message (resend): read the turn's recorded modality first, so resend re-runs
+ *  the SAME pipeline (deterministic) instead of re-classifying. */
 async function retryFromUserMessage({ message, genDeps, p, convId, msgs }: RetryCtx): Promise<void> {
-  const idx = msgs.findIndex((m: Message) => m.id === message.id);
   const recordedKind = recordedTurnKind(msgs, message.id);
-  logger.log(`[RESEND-SM] retry user msg idx=${idx} willDelete=${idx !== -1 && idx < msgs.length - 1} recordedKind=${recordedKind ?? 'none'}`);
-  if (idx !== -1 && idx < msgs.length - 1) p.deleteMessagesAfter(convId, message.id);
-  await regenerateResponseFn(genDeps, { setDebugInfo: p.setDebugInfo, userMessage: message, recordedKind, assistantEnabled: p.assistantEnabled });
+  const answer = answerAfter(msgs, message);
+  logger.log(`[RESEND-SM] retry user msg answer=${answer?.id ?? 'none'} recordedKind=${recordedKind ?? 'none'}`);
+  await regenerateAsVersion(genDeps, p, convId, message, answer, recordedKind);
 }
 
 /** Retry from an ASSISTANT message: regenerate the preceding user turn. Uses the SAME whole-turn
@@ -53,17 +79,15 @@ async function retryFromAssistantMessage({ message, genDeps, p, convId, msgs }: 
   const prev = idx > 0 ? msgs.slice(0, idx).reverse().find((m: Message) => m.role === 'user') ?? null : null;
   const recordedKind = prev ? recordedTurnKind(msgs, prev.id) : undefined;
   logger.log(`[RESEND-SM] retry assistant msg idx=${idx} prevUser=${prev?.id ?? 'none'} recordedKind=${recordedKind ?? 'none'}`);
-  if (prev) {
-    p.deleteMessagesAfter(convId, prev.id);
-    await regenerateResponseFn(genDeps, { setDebugInfo: p.setDebugInfo, userMessage: prev, recordedKind, assistantEnabled: p.assistantEnabled });
-  }
+  if (prev) await regenerateAsVersion(genDeps, p, convId, prev, answerAfter(msgs, prev), recordedKind);
 }
 
 export async function handleRetryMessageFn(
   message: Message, genDeps: GenerationDeps, p: RetryParams,
 ): Promise<void> {
+  // The chat as shown: retry acts on the versions in view.
   const msgs = p.activeConversationId
-    ? useChatStore.getState().getConversationMessages(p.activeConversationId)
+    ? shownMessages(useChatStore.getState().getConversationMessages(p.activeConversationId))
     : [];
   // Memory breakdown at the crash-prone moment: the JetsamEvent shows the app
   // hitting the ~2GB per-process limit, but not WHAT's resident. Dump it so we see
@@ -105,35 +129,33 @@ type EditParams = {
 
 export async function handleEditMessageFn(genDeps: GenerationDeps, p: EditParams): Promise<void> {
   if (!p.activeConversationId) return;
+  const store = useChatStore.getState();
   if (p.message.role === 'assistant') {
-    p.updateMessageContent(p.activeConversationId, p.message.id, p.newContent);
+    // An edited answer is a new version of it; the original stays.
+    const { id: _id, timestamp: _timestamp, uuid: _uuid, threadVersions: _versions, parent: _parent, selectedAt: _selectedAt, ...rest } = p.message;
+    store.addMessageVersion(p.activeConversationId, p.message, { ...rest, content: p.newContent });
     return;
   }
   // Same as retry: no model loaded → alert instead of a silent no-op.
   if (!p.hasActiveModel) { genDeps.setAlertState(showAlert('No Model Selected', 'Please select a model first.')); return; }
   // Same as resend: a synced reply is a live preview until its op lands, so clear it before regenerating.
   supersedeSyncedReplies(p.activeConversationId);
-  // Preserve the turn's modality across an edit: an edited image prompt re-runs the image pipeline
-  // (read BEFORE the update/delete strips the reply that records it), not a re-classification.
-  const messages = useChatStore
-    .getState()
-    .getConversationMessages(p.activeConversationId);
+  // Preserve the turn's modality across an edit: an edited image prompt re-runs the image pipeline,
+  // not a re-classification.
+  const messages = shownMessages(store.getConversationMessages(p.activeConversationId));
   const recordedKind = recordedTurnKind(messages, p.message.id);
-  const audioAttachment = p.message.attachments?.find(
-    attachment => attachment.type === 'audio',
+  // The edited question is a new version beside the old one, which keeps its answers and later turns.
+  const attachments = p.message.attachments?.map(attachment =>
+    attachment.type === 'audio' ? { ...attachment, textContent: p.newContent } : attachment,
   );
-  if (audioAttachment) {
-    useChatStore.getState().updateMessageTranscription(
-      p.activeConversationId,
-      p.message.id,
-      audioAttachment.id,
-      p.newContent,
-    );
-  } else {
-    p.updateMessageContent(p.activeConversationId, p.message.id, p.newContent);
-  }
-  p.deleteMessagesAfter(p.activeConversationId, p.message.id);
-  await regenerateResponseFn(genDeps, { setDebugInfo: p.setDebugInfo, userMessage: { ...p.message, content: p.newContent }, recordedKind });
+  const edited = store.addMessageVersion(p.activeConversationId, p.message, {
+    role: 'user',
+    content: p.newContent,
+    ...(attachments ? { attachments } : {}),
+    ...(p.message.turnKind ? { turnKind: p.message.turnKind } : {}),
+  });
+  if (!edited) return;
+  await regenerateResponseFn(genDeps, { setDebugInfo: p.setDebugInfo, userMessage: edited, recordedKind });
 }
 
 export async function handleTranscribeAgainFn(p: {
