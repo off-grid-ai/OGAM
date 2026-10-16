@@ -32,7 +32,7 @@ function pagesLabel(count: number): string {
 
 const PHASE_LABEL = { reading: 'Reading', ocr: 'Scanning', indexing: 'Indexing' } as const;
 
-export const ChatDocumentsSheet: React.FC<ChatDocumentsSheetProps> = ({
+const ChatDocumentsSheet: React.FC<ChatDocumentsSheetProps> = ({
   visible,
   onClose,
   conversationId,
