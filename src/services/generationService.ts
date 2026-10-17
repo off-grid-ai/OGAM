@@ -516,7 +516,9 @@ class GenerationService {
       return;
     }
     const { batch: all, rest } = takeNextQueued(queue);
-    this.state = { ...this.state, queuedMessages: rest };
+    // A send-now message is the user's answer to the Stop it caused: the rest wait behind its reply, not paused.
+    const queueHold = all[0]?.now ? chatQueueHoldAfter('resume') : this.state.queueHold;
+    this.state = { ...this.state, queuedMessages: rest, queueHold };
     this.notifyListeners();
     const combined: QueuedMessage = all.length === 1 ? all[0] : {
       id: all[0].id, conversationId: all[0].conversationId,

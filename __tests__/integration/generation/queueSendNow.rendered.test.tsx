@@ -82,10 +82,18 @@ describe('queue and send now while a reply runs', () => {
     await h.tapSend('queued two');
     await h.rtl.waitFor(() => expect(h.view!.getByText('2 queued')).toBeTruthy());
 
-    h.boundary.llama!.scriptCompletions([{ text: 'Reply to two.' }, { text: 'Reply to one.' }]);
+    h.boundary.llama!.scriptCompletions([
+      { text: 'Reply to two. Done', pauseAfter: 'Reply to two.' },
+      { text: 'Reply to one.' },
+    ] as never);
     h.rtl.fireEvent.press(h.view!.getByTestId('queued-send-now-1'));
 
+    // While the message sent now is answered, the other one waits behind it; it is not paused.
     await h.rtl.waitFor(() => expect(h.view!.queryByText(/Reply to two\./)).not.toBeNull());
+    expect(h.view!.getByText('1 queued')).toBeTruthy();
+    expect(h.view!.queryByText('Paused after Stop')).toBeNull();
+    expect(h.view!.queryByTestId('queue-resume-button')).toBeNull();
+    h.boundary.llama!.releaseStream();
     await h.rtl.waitFor(() => expect(h.view!.queryByText(/Reply to one\./)).not.toBeNull());
     expect(h.view!.queryByTestId('queue-indicator')).toBeNull();
     const turns = userTurns(h);
