@@ -20,6 +20,7 @@ type MessageRendererProps = {
   showGenerationDetails: boolean;
   onCopy: (content: string) => void;
   onRetry: (message: Message) => void;
+  onSelectVersion?: (message: Message, direction: -1 | 1) => void;
   onEdit: (message: Message, newContent: string) => void;
   onTranscribeAgain?: (
     message: Message,
@@ -42,6 +43,7 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
     showGenerationDetails,
     onCopy,
     onRetry,
+    onSelectVersion,
     onEdit,
     onTranscribeAgain,
     onGenerateImage,
@@ -115,6 +117,7 @@ const MessageRendererInner: React.FC<MessageRendererProps> = props => {
       isStreaming={isStreamingThis}
       onCopy={onCopy}
       onRetry={onRetry}
+      onSelectVersion={onSelectVersion}
       onEdit={onEdit}
       onTranscribeAgain={onTranscribeAgain}
       onGenerateImage={onGenerateImage}

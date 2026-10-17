@@ -15,6 +15,7 @@ import {
   ImageGenerationState,
   QueuedMessage,
 } from '../../services';
+import type { GenerationState } from '../../services/generationService';
 import { generationSession } from '../../services/generationSession';
 import type { RootStackParamList } from '../../navigation/types';
 import {
@@ -75,15 +76,19 @@ export function useChatRuntimeSubscriptions(
 ): {
   imageGenState: ImageGenerationState;
   isCompacting: boolean;
-  queueCount: number;
-  queuedTexts: string[];
+  queuedMessages: QueuedMessage[];
+  queueHold: GenerationState['queueHold'];
 } {
   const [imageGenState, setImageGenState] = useState<ImageGenerationState>(
     imageGenerationService.getState(),
   );
   const [isCompacting, setIsCompacting] = useState(false);
-  const [queueCount, setQueueCount] = useState(0);
-  const [queuedTexts, setQueuedTexts] = useState<string[]>([]);
+  const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>(
+    generationService.getState().queuedMessages,
+  );
+  const [queueHold, setQueueHold] = useState<GenerationState['queueHold']>(
+    generationService.getState().queueHold,
+  );
 
   useEffect(() => {
     const unsubscribeImage =
@@ -99,10 +104,8 @@ export function useChatRuntimeSubscriptions(
   useEffect(
     () =>
       generationService.subscribe(state => {
-        setQueueCount(state.queuedMessages.length);
-        setQueuedTexts(
-          state.queuedMessages.map((message: QueuedMessage) => message.text),
-        );
+        setQueuedMessages(state.queuedMessages);
+        setQueueHold(state.queueHold);
       }),
     [],
   );
@@ -130,7 +133,7 @@ export function useChatRuntimeSubscriptions(
     return () => generationService.setQueueProcessor(null);
   }, [handleQueuedSend]);
 
-  return { imageGenState, isCompacting, queueCount, queuedTexts };
+  return { imageGenState, isCompacting, queuedMessages, queueHold };
 }
 
 interface ConversationLifecycleArgs {

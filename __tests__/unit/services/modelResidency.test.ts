@@ -1,16 +1,14 @@
 /**
  * Model residency policy + manager tests.
  *
- * The memory-budget / eviction core of model routing: generation models are
- * mutually exclusive, pinned models are never evicted, and LRU eviction frees
- * room for an incoming model. See docs/design/MODEL_ROUTING.md.
+ * The memory-budget / eviction core of model routing, run through the shared
+ * residency policy (@offgrid/models): models co-reside while they fit, pinned
+ * models are never evicted, and lowest-priority LRU eviction frees room for an
+ * incoming model. See docs/design/MODEL_ROUTING.md.
  */
 import { Platform } from 'react-native';
-import {
-  planEviction,
-  computeBudgetMB,
-  Resident,
-} from '../../../src/services/modelResidency/policy';
+import { planEviction, type Resident } from '@offgrid/models';
+import { computeBudgetMB } from '../../../src/services/modelResidency/budget';
 import { modelResidencyManager } from '../../../src/services/modelResidency';
 import { hardwareService } from '../../../src/services/hardware';
 

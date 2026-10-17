@@ -53,7 +53,7 @@ describe('batch2 handleRetryMessageFn — retry orchestration', () => {
   afterEach(() => jest.restoreAllMocks());
 
   // Cases 16/17: retry a COMPLETED assistant message -> regenerate for the prior user.
-  it('case16/17: retrying a completed assistant message trims after the prior user msg and regenerates', async () => {
+  it('case16/17: retrying a completed assistant message keeps it as a version and regenerates for the prior user msg', async () => {
     const store = useChatStore.getState();
     const convId = store.createConversation('m1');
     const userMsg = store.addMessage(convId, { role: 'user', content: 'say hi' } as any);
@@ -74,17 +74,17 @@ describe('batch2 handleRetryMessageFn — retry orchestration', () => {
       },
     );
 
-    // trimmed everything after the prior USER message (the assistant reply is removed)
-    expect(deleteMessagesAfter).toHaveBeenCalledWith(convId, userMsg.id);
+    // Nothing is deleted: the earlier reply stays, as a version beside the new one.
+    expect(deleteMessagesAfter).not.toHaveBeenCalled();
     const conv = useChatStore.getState().conversations.find(c => c.id === convId)!;
-    expect(conv.messages.map(m => m.id)).toEqual([userMsg.id]);
+    expect(conv.messages.map(m => m.id)).toEqual([userMsg.id, assistantMsg.id]);
     // regenerated for the prior user prompt
     expect(regenSpy).toHaveBeenCalledTimes(1);
     expect(regenSpy.mock.calls[0][1]).toMatchObject({ userMessage: expect.objectContaining({ id: userMsg.id }) });
   });
 
   // Case 17: retry a USER message directly -> trims trailing, regenerates for it.
-  it('case17: retrying a user message trims messages after it and regenerates for it', async () => {
+  it('case17: retrying a user message keeps its reply as a version and regenerates for it', async () => {
     const store = useChatStore.getState();
     const convId = store.createConversation('m1');
     const userMsg = store.addMessage(convId, { role: 'user', content: 'first' } as any);
@@ -105,7 +105,10 @@ describe('batch2 handleRetryMessageFn — retry orchestration', () => {
       },
     );
 
-    expect(deleteMessagesAfter).toHaveBeenCalledWith(convId, userMsg.id);
+    expect(deleteMessagesAfter).not.toHaveBeenCalled();
+    expect(
+      useChatStore.getState().conversations.find(c => c.id === convId)!.messages,
+    ).toHaveLength(2);
     expect(regenSpy).toHaveBeenCalledTimes(1);
     expect(regenSpy.mock.calls[0][1]).toMatchObject({ userMessage: expect.objectContaining({ id: userMsg.id }) });
   });

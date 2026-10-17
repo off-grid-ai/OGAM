@@ -434,7 +434,8 @@ export const useRemoteServerStore = create<RemoteServerState>()(
       version: 2,
       migrate: migrateRemoteServerState,
       storage: remoteServerStorage.storage,
-      onRehydrateStorage: () => (_state, error) => { if (!error) remoteServerStorage.markHydrated(); },
+      onRehydrateStorage: remoteServerStorage.onRehydrateStorage(),
+      merge: remoteServerStorage.merge<RemoteServerState>(),
       partialize: (state): PersistedRemoteServerState => ({
         servers: state.servers.map(({ apiKey: _apiKey, ...server }) => server),
         activeServerId: state.activeServerId,
@@ -447,3 +448,4 @@ export const useRemoteServerStore = create<RemoteServerState>()(
     },
   ),
 );
+remoteServerStorage.attach(useRemoteServerStore);

@@ -53,6 +53,7 @@ import {
   type TurnDocuments,
 } from '../../services/documents/chatTurn';
 import { useDocumentTurnStatusStore } from '../../services/documents/progressStore';
+import { shownMessages } from '../../utils/chatThread';
 type SetState<T> = Dispatch<SetStateAction<T>>;
 const FALLBACK_RECENT_MESSAGE_COUNT = 2;
 
@@ -210,7 +211,8 @@ function buildMessagesForContext(
   const conversation = useChatStore
     .getState()
     .conversations.find(c => c.id === conversationId);
-  const allMessages = (conversation?.messages || []).filter(
+  // The shown thread: each turn's chosen version, never the versions beside it.
+  const allMessages = shownMessages(conversation?.messages || []).filter(
     m => !m.isSystemInfo,
   );
   const { prefix, filtered } = applyCompactionPrefix(
@@ -455,13 +457,14 @@ export async function handleImageGenerationFn(
   // The service reads imageSteps/imageGuidanceScale FRESH from useAppStore.getState() at gen time,
   // exactly as it already does for width/height (which is why size applied immediately and these
   // didn't). Passing nothing here makes all four tunables read from the one fresh source.
-  await imageGenerationService.generateImage({
+  const image = await imageGenerationService.generateImage({
     prompt,
     conversationId,
     previewInterval: 2,
   });
-  // Image gen finishes outside generationService — release any queued messages.
-  generationService.drainQueue();
+  // Image gen finishes outside generationService — release any queued messages. A drawn image is a
+  // finished reply; a stopped or failed one leaves the queue as the Stop or the failure set it.
+  generationService.drainQueue(image ? 'done' : undefined);
 }
 export type StartGenerationCall = {
   setDebugInfo: SetState<any>;
@@ -624,6 +627,8 @@ async function generateWithTurnDocuments(opts: {
   question: string;
   systemPrompt: string;
   isRemote: boolean;
+  /** The model can search the project's knowledge base this turn, so none of it is preloaded. */
+  knowledgeSearch: boolean;
   generate: (documents: TurnDocuments | null) => Promise<boolean>;
 }): Promise<boolean> {
   const status = useDocumentTurnStatusStore.getState();
@@ -638,6 +643,7 @@ async function generateWithTurnDocuments(opts: {
         contextLength:
           useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength,
         isRemote: opts.isRemote,
+        knowledgeSearch: opts.knowledgeSearch,
         ...(documentScale ? { documentScale } : {}),
         onStatus: turnStatus =>
           status.set(opts.conversationId, describeTurnStatus(turnStatus)),
@@ -773,6 +779,7 @@ export async function startGenerationFn(
       question: messageText,
       systemPrompt,
       isRemote,
+      knowledgeSearch: activeTools.includes('search_knowledge_base'),
       generate: documents => {
         const promptWithDocuments = documents?.stable
           ? `${systemPrompt}\n\n${documents.stable}`
@@ -1021,6 +1028,8 @@ export type SendCall = {
   attachments?: MediaAttachment[];
   imageMode?: 'auto' | 'force' | 'disabled';
   assistantEnabled?: boolean;
+  /** While a reply runs: stop it and send this message at once instead of queueing it. */
+  sendNow?: boolean;
   startGeneration: (convId: string, text: string, assistantEnabled?: boolean) => Promise<void>;
   setDebugInfo: SetState<any>;
 };
@@ -1059,8 +1068,9 @@ export async function handleSendFn(
     const messageText = text;
     // Carry the user's forced modality through the queue so a queued force-image send is dispatched as
     // image on drain — not re-decided at 'auto' by resolveTurnKind (#510).
+    const queuedId = nextMsgId();
     generationService.enqueueMessage({
-      id: nextMsgId(),
+      id: queuedId,
       conversationId: targetConversationId,
       text,
       attachments,
@@ -1068,6 +1078,7 @@ export async function handleSendFn(
       imageMode,
       assistantEnabled,
     });
+    if (call.sendNow) await sendQueuedNowFn(deps, queuedId);
     return;
   }
   await dispatchGenerationFn(
@@ -1075,6 +1086,21 @@ export async function handleSendFn(
     { text, attachments, conversationId: targetConversationId, imageMode, assistantEnabled },
     startGeneration,
   );
+}
+/**
+ * Send one queued message at once: it moves to the front, the running reply (text or image) stops,
+ * and the stop's drain sends it on its own. With nothing running it goes straight away.
+ */
+export async function sendQueuedNowFn(
+  deps: Pick<GenerationDeps, 'isGeneratingImage'>,
+  id: string,
+): Promise<void> {
+  generationService.sendQueuedNow(id);
+  const running =
+    generationService.getState().isGenerating ||
+    imageGenerationService.getState().isGenerating;
+  if (running) await handleStopFn(deps);
+  else generationService.drainQueue();
 }
 export async function handleStopFn(
   deps: Pick<GenerationDeps, 'isGeneratingImage'>,
@@ -1207,7 +1233,7 @@ export async function regenerateResponseFn(
   const conversation = useChatStore
     .getState()
     .conversations.find(c => c.id === targetConversationId);
-  const messages = (conversation?.messages || []).filter(
+  const messages = shownMessages(conversation?.messages || []).filter(
     (m: Message) => !m.isSystemInfo,
   );
   const messagesUpToUser = messages
@@ -1239,6 +1265,7 @@ export async function regenerateResponseFn(
       question: messageText,
       systemPrompt,
       isRemote,
+      knowledgeSearch: activeTools.includes('search_knowledge_base'),
       generate: documents => {
         const promptWithDocuments = documents?.stable
           ? `${systemPrompt}\n\n${documents.stable}`

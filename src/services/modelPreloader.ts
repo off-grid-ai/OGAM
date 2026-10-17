@@ -3,10 +3,9 @@
  *
  * Warms the user's selected models in priority order — text → TTS → STT — so the
  * common paths are hot with no cold-start wait. The IMAGE model is deliberately
- * NOT preloaded: it's the heaviest model (large diffusion working set) and is
- * mutually exclusive with the text model in residency, so warming it at boot
- * would either evict text or push memory into swap. It loads on demand the first
- * time an image is requested. Each model loads only if it fits the residency
+ * NOT preloaded: it's the heaviest model (large diffusion working set), so warming
+ * it at boot could evict text or push memory into swap. It loads on demand the first
+ * time an image is requested, beside the text model when both fit. Each model loads only if it fits the residency
  * budget WITHOUT evicting a higher-priority model already warmed. Loads run
  * sequentially (one native load at a time) so the UI stays responsive.
  */

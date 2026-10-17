@@ -128,6 +128,32 @@ describe('a project knowledge base', () => {
 
     expect(turn?.stable).toContain('dal makhani every Friday');
   });
+
+  it('is left to the knowledge-base search when the model can search it, and still searchable', async () => {
+    const h = setup();
+    h.engine.seedText('/docs/Downloads/menu.txt', 'The canteen serves dal makhani every Friday.');
+    await h.knowledgeBase.addFile({
+      projectId: 'project-office',
+      filePath: '/docs/Downloads/menu.txt',
+      fileName: 'menu.txt',
+      fileSize: 44,
+    });
+    const conversationId = h.useChatStore.getState().createConversation('model-1', 'Lunch', 'project-office');
+
+    // A question that does not need the documents does not wait on them.
+    const turn = await turnFor(h, { conversationId, question: 'Tell me a joke.', knowledgeSearch: true });
+    expect(turn).toBeNull();
+
+    // The model searches when it needs to, and finds the document.
+    const found = await h.executeToolCall({
+      id: 'call-kb',
+      name: 'search_knowledge_base',
+      arguments: { query: 'What is served on Friday?' },
+      context: { conversationId, projectId: 'project-office' },
+    });
+    expect(found.error).toBeUndefined();
+    expect(found.content).toContain('dal makhani every Friday');
+  });
 });
 
 describe('a knowledge-base search during the turn', () => {

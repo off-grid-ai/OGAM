@@ -6,7 +6,7 @@
  * `stripUnload` projection the manager uses; moving them here changes no values and
  * no behavior — the manager imports them back unchanged.
  */
-import { Resident, ResidentType } from './policy';
+import type { Resident, ResidentType } from '@offgrid/models';
 
 export type UnloadFn = () => Promise<void>;
 
@@ -18,8 +18,6 @@ export const MIN_BUDGET_MB = 1024;
 export const DIRTY_AVAILABILITY_HEADROOM_MB = 1024;
 /** Aggressive-mode dirty headroom - leaner, still non-zero (lenient safeguard). */
 export const AGGRESSIVE_DIRTY_HEADROOM_MB = 512;
-/** Small, cheaply-reloadable models reclaimed first under memory pressure. */
-export const SIDECAR_TYPES = new Set<ResidentType>(['whisper', 'tts', 'embedding']);
 
 export interface RegisteredResident extends Resident {
   unload: UnloadFn;

@@ -25,6 +25,14 @@ import {
   generateRemoteResponseImpl,
   generateRemoteWithToolsImpl,
 } from './generationRemoteHelpers';
+import {
+  chatQueueHeld,
+  chatQueueHoldAfter,
+  markQueuedSendNow,
+  takeNextQueued,
+  type ChatQueueHold,
+  type ChatQueueSignal,
+} from '@offgrid/sync';
 
 const SHARE_PROMPT_DELAY_MS = 1500;
 type StreamChunk = string | { content?: string; reasoningContent?: string };
@@ -40,6 +48,8 @@ export interface QueuedMessage {
    *  at 'auto' by resolveTurnKind (#510: a queued force-image send generated as text). */
   imageMode?: 'auto' | 'force' | 'disabled';
   assistantEnabled?: boolean;
+  /** The user asked for it to go at once: it goes first and on its own. */
+  now?: boolean;
 }
 
 export interface GenerationState {
@@ -49,6 +59,8 @@ export interface GenerationState {
   streamingContent: string;
   startTime: number | null;
   queuedMessages: QueuedMessage[];
+  /** Why the queue is waiting for the user: a Stop ('stop') or a failed reply ('failure'). */
+  queueHold?: ChatQueueHold;
 }
 
 type GenerationListener = (state: GenerationState) => void;
@@ -69,6 +81,8 @@ class GenerationService {
   wasAborted(): boolean { return this.abortRequested; }
   private pendingStop: Promise<void> | null = null;
   private queueProcessor: QueueProcessor | null = null;
+  /** A queued turn has been handed to the processor and has not settled yet. */
+  private sendingQueuedTurn = false;
   private currentRemoteAbortController: AbortController | null = null;
   private remoteTimeToFirstToken: number | undefined;
   private contextUsage: Pick<GenerationMeta, 'contextPromptTokens' | 'contextWindowTokens' | 'contextEstimate'> | undefined;
@@ -379,6 +393,8 @@ class GenerationService {
     // failed completion has reset `isGenerating`; Stop/Eject must still prevent its retry.
     this.abortRequested = true;
     this.generationAttempt += 1;
+    // A Stop holds what is queued (except a send-now message), whichever kind of run it stopped.
+    this.state = { ...this.state, queueHold: chatQueueHoldAfter('stop') };
     if (!this.state.isGenerating) {
       // Settle the visible reply before native stop callbacks can finalize it as a normal completion.
       this.keepShownPartialOrClear();
@@ -405,7 +421,7 @@ class GenerationService {
     this.keepShownPartialOrClear(generationTime);
     if (hadShownPartial) this.checkSharePrompt();
 
-    this.resetState();
+    this.resetState('stop');
 
     // Stop both local and remote
     if (this.isUsingRemoteProvider()) {
@@ -455,12 +471,30 @@ class GenerationService {
     this.notifyListeners();
   }
 
+  /** Send one queued message at once. The caller stops the running reply; a stop never holds this one. */
+  sendQueuedNow(id: string): void {
+    this.state = {
+      ...this.state,
+      queuedMessages: markQueuedSendNow(this.state.queuedMessages, id),
+      // Choosing a message to send is the user's action a failed reply waits for.
+      queueHold: this.state.queueHold === 'failure' ? undefined : this.state.queueHold,
+    };
+    this.notifyListeners();
+  }
+
+  /** The user releases a held queue: what is queued goes as the next turn. */
+  resumeQueue(): void {
+    this.state = { ...this.state, queueHold: chatQueueHoldAfter('resume') };
+    this.notifyListeners();
+    this.drainQueue();
+  }
+
   removeFromQueue(id: string): void {
     this.state = { ...this.state, queuedMessages: this.state.queuedMessages.filter(m => m.id !== id) };
     this.notifyListeners();
   }
 
-  clearQueue(): void { this.state = { ...this.state, queuedMessages: [] }; this.notifyListeners(); }
+  clearQueue(): void { this.state = { ...this.state, queuedMessages: [], queueHold: undefined }; this.notifyListeners(); }
 
   setQueueProcessor(processor: QueueProcessor | null): void { this.queueProcessor = processor; }
 
@@ -468,17 +502,31 @@ class GenerationService {
    * Process queued messages now. Text generation drains its own queue on
    * completion, but image generation finishes outside this service, so the
    * image path calls this to release messages that queued behind it. No-op if a
-   * text generation is currently running.
+   * text generation is currently running. `signal` says how the image ended, when it ended on its own.
    */
-  drainQueue(): void {
+  drainQueue(signal?: ChatQueueSignal): void {
+    if (signal) this.state = { ...this.state, queueHold: chatQueueHoldAfter(signal) };
     if (this.state.isGenerating) return;
     this.processNextInQueue();
   }
 
   private processNextInQueue(): void {
-    if (this.state.queuedMessages.length === 0 || !this.queueProcessor) return;
-    const all = this.state.queuedMessages;
-    this.state = { ...this.state, queuedMessages: [] };
+    const queue = this.state.queuedMessages;
+    if (queue.length === 0 || !this.queueProcessor) return;
+    // One turn at a time. A stopped reply settles twice (the Stop, then the native stop), and each
+    // schedules a drain: the second must not start another turn while the first is still starting.
+    if (this.state.isGenerating || this.sendingQueuedTurn) {
+      logger.log('[QUEUE-SM] a turn is running; the queue waits for it');
+      return;
+    }
+    if (chatQueueHeld(this.state.queueHold, queue)) {
+      logger.log(`[QUEUE-SM] held (${this.state.queueHold}) with ${queue.length} queued`);
+      return;
+    }
+    const { batch: all, rest } = takeNextQueued(queue);
+    // A send-now message is the user's answer to the Stop it caused: the rest wait behind its reply, not paused.
+    const queueHold = all[0]?.now ? chatQueueHoldAfter('resume') : this.state.queueHold;
+    this.state = { ...this.state, queuedMessages: rest, queueHold };
     this.notifyListeners();
     const combined: QueuedMessage = all.length === 1 ? all[0] : {
       id: all[0].id, conversationId: all[0].conversationId,
@@ -489,11 +537,21 @@ class GenerationService {
       // user's explicit force must never be dropped by the merge (mirror of the single-message carry).
       imageMode: all.some(m => m.imageMode === 'force') ? 'force' : all[0].imageMode,
       assistantEnabled: all.some(m => m.assistantEnabled),
+      now: false,
     };
-    this.queueProcessor(combined).catch(e => { logger.error('[GenerationService] Queue processor error:', e); });
+    this.sendingQueuedTurn = true;
+    this.queueProcessor(combined)
+      .catch(e => { logger.error('[GenerationService] Queue processor error:', e); })
+      .finally(() => {
+        this.sendingQueuedTurn = false;
+        // The turn has settled: send what queued behind it (its own end may have found it still sending).
+        if (!this.state.isGenerating) this.processNextInQueue();
+      });
   }
 
-  private resetState(): void {
+  /** `signal`: how the reply ended. A Stop or a failure holds the queue for the user. */
+  private resetState(signal: ChatQueueSignal = 'done'): void {
+    this.state = { ...this.state, queueHold: chatQueueHoldAfter(signal) };
     const hasQueuedItems = this.state.queuedMessages.length > 0;
     if (this.flushTimer) {
       clearTimeout(this.flushTimer);

@@ -21,6 +21,7 @@ import {
   handleSelectProjectFn,
   handleSendFn,
   handleStopFn,
+  sendQueuedNowFn,
   startGenerationFn,
 } from './useChatGenerationActions';
 import {
@@ -118,12 +119,14 @@ export function useChatScreenActions({
     attachments?: MediaAttachment[],
     imageMode?: 'auto' | 'force' | 'disabled',
     assistantEnabled?: boolean,
+    sendNow?: boolean,
   ) =>
     handleSendFn(generationDeps, {
       text,
       attachments,
       imageMode,
       assistantEnabled,
+      sendNow,
       startGeneration,
       setDebugInfo,
     });
@@ -181,6 +184,7 @@ export function useChatScreenActions({
       });
     },
     handleStop: () => handleStopFn(generationDeps),
+    handleSendQueuedNow: (id: string) => sendQueuedNowFn(generationDeps, id),
     handleUnloadModel: () => handleUnloadModelFn(modelDeps),
     handleDeleteConversation: () =>
       handleDeleteConversationFn(generationDeps, {

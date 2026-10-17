@@ -40,6 +40,7 @@ export const SettingsAppearanceRow: React.FC<SettingsAppearanceRowProps> = ({
                     themeMode === mode && styles.themeSelectorOptionActive,
                   ]}
                   onPress={() => onSelect(mode)}
+                  testID={`theme-option-${mode}`}
                 >
                   <Icon
                     name={icon}

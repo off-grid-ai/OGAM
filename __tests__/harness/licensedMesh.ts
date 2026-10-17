@@ -156,10 +156,26 @@ export function installLicensedPhone(
      * whole store and losing the licence with it.
      */
     beforeWrite?: (service: string) => void;
+    /**
+     * A cold start over the same phone: wire the (fresh) Keychain module to `secrets` and write nothing.
+     * Whatever the previous run stored - the credential as it last saved it, the pairing secrets - is
+     * what this run reads. Re-seeding here would hide a run that lost or changed its own credential.
+     */
+    reuse?: boolean;
   } = {},
 ): Map<string, string> {
   const keychain = require('react-native-keychain');
   const secrets = options.secrets ?? new Map<string, string>();
+  if (!options.reuse) seedLicence(mesh, secrets, options.fingerprint);
+  wireKeychain(keychain, secrets, options.beforeWrite);
+  return secrets;
+}
+
+function seedLicence(
+  mesh: LicensedMesh,
+  secrets: Map<string, string>,
+  fingerprint: string | undefined,
+): void {
   // One Keychain entry carries two readings of the same credential: the licence client reads
   // `licenseId`, and the pairing-entitlement authority reads `entitlementId`. Both name the same licence.
   // Omitting the second one is not a smaller lie: without it the phone cannot SPONSOR another device, so
@@ -178,8 +194,15 @@ export function installLicensedPhone(
   );
   secrets.set(
     'off-grid-device-fingerprint',
-    options.fingerprint ?? 'fp-this-phone',
+    fingerprint ?? 'fp-this-phone',
   );
+}
+
+function wireKeychain(
+  keychain: any,
+  secrets: Map<string, string>,
+  beforeWrite: ((service: string) => void) | undefined,
+): void {
   keychain.getGenericPassword.mockImplementation(
     async ({ service }: { service: string }) => {
       const value = secrets.get(service);
@@ -188,7 +211,7 @@ export function installLicensedPhone(
   );
   keychain.setGenericPassword.mockImplementation(
     async (_username: string, password: string, opts: { service: string }) => {
-      options.beforeWrite?.(opts.service);
+      beforeWrite?.(opts.service);
       secrets.set(opts.service, password);
       return true;
     },
@@ -196,7 +219,6 @@ export function installLicensedPhone(
   keychain.resetGenericPassword?.mockImplementation?.(
     async ({ service }: { service: string }) => secrets.delete(service),
   );
-  return secrets;
 }
 
 /**

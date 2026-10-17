@@ -48,6 +48,8 @@ import {
   useChatRuntimeSubscriptions,
 } from './useChatScreenLifecycle';
 import { useChatScreenActions } from './useChatScreenActions';
+import { shownMessages } from '../../utils/chatThread';
+import { chatQueueView } from './chatQueueView';
 
 export type { AlertState };
 export type { ChatMessageItem } from './types';
@@ -102,7 +104,7 @@ export const useChatScreen = () => {
   >(null);
   const genDepsRef = useRef<GenerationDeps | null>(null);
   useChatAudioLifecycle(navigation);
-  const { imageGenState, isCompacting, queueCount, queuedTexts } =
+  const { imageGenState, isCompacting, queuedMessages, queueHold } =
     useChatRuntimeSubscriptions(genDepsRef, startGenerationRef);
 
   const activeModelId = useAppStore(s => s.activeModelId);
@@ -308,8 +310,12 @@ export const useChatScreen = () => {
     activeConversationId ? s.byConversation[activeConversationId] : undefined,
   );
   const localDeviceId = useSyncIdentityStore(s => s.localDeviceId);
+  // A retry's new answer is being made: the chat ends at its question meanwhile.
+  const pendingVersionParent = useChatStore(s =>
+    activeConversationId ? s.pendingVersionParents[activeConversationId] : undefined,
+  );
   const displayMessages = useMemo(
-    () => getDisplayMessages(activeConversation?.messages || [], {
+    () => getDisplayMessages(shownMessages(activeConversation?.messages || [], pendingVersionParent), {
       isThinking,
       streamingMessage: '',
       streamingReasoningContent: '',
@@ -322,7 +328,7 @@ export const useChatScreen = () => {
       remotePreviews,
       localDeviceId,
     }),
-    [activeConversation?.messages, isThinking, hasStreamingText,
+    [activeConversation?.messages, pendingVersionParent, isThinking, hasStreamingText,
       isStreamingForThisConversation, isModelLoading, loadingModel?.name,
       isGeneratingForThisConversation, documentStatus, remotePreviews, localDeviceId],
   );
@@ -381,8 +387,7 @@ export const useChatScreen = () => {
     setShowScrollToBottom,
     isClassifying,
     animateLastN,
-    queueCount,
-    queuedTexts,
+    queue: chatQueueView(queuedMessages, queueHold, activeConversationId),
     viewerImageUri,
     setViewerImageUri,
     imageGenState,

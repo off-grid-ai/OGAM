@@ -18,6 +18,8 @@ export interface ChatMessageProps {
   onCitationPress?: (source: DocumentCitation) => void;
   onCopy?: (content: string) => void;
   onRetry?: (message: Message) => void;
+  /** Step to another version of this message (it has versions when threadVersions is set). */
+  onSelectVersion?: (message: Message, direction: -1 | 1) => void;
   onEdit?: (message: Message, newContent: string) => void;
   onTranscribeAgain?: (
     message: Message,
