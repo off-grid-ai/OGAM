@@ -69,8 +69,6 @@ function renderLayout(overrides: Partial<React.ComponentProps<typeof AudioModeLa
     thinkingEnabled: false,
     attachments: [],
     onRemoveAttachment: jest.fn(),
-    queueCount: 0,
-    queuedTexts: [],
     isRecording: false,
     voiceAvailable: true,
     isModelLoading: false,

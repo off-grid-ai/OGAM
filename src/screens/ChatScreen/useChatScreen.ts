@@ -49,6 +49,7 @@ import {
 } from './useChatScreenLifecycle';
 import { useChatScreenActions } from './useChatScreenActions';
 import { shownMessages } from '../../utils/chatThread';
+import { chatQueueView } from './chatQueueView';
 
 export type { AlertState };
 export type { ChatMessageItem } from './types';
@@ -103,7 +104,7 @@ export const useChatScreen = () => {
   >(null);
   const genDepsRef = useRef<GenerationDeps | null>(null);
   useChatAudioLifecycle(navigation);
-  const { imageGenState, isCompacting, queueCount, queuedTexts } =
+  const { imageGenState, isCompacting, queuedMessages, queueHold } =
     useChatRuntimeSubscriptions(genDepsRef, startGenerationRef);
 
   const activeModelId = useAppStore(s => s.activeModelId);
@@ -386,8 +387,7 @@ export const useChatScreen = () => {
     setShowScrollToBottom,
     isClassifying,
     animateLastN,
-    queueCount,
-    queuedTexts,
+    queue: chatQueueView(queuedMessages, queueHold, activeConversationId),
     viewerImageUri,
     setViewerImageUri,
     imageGenState,
