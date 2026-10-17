@@ -289,7 +289,7 @@ export const DocumentPreviewScreen: React.FC = () => {
             setTimeout(() => pageListRef.current?.scrollToIndex({ index, animated: false }), 100);
           }}
           renderItem={({ item }) => (
-            <View style={[styles.page, item.page === page && styles.pageCited]}>
+            <View style={[styles.page, item.page === page && styles.pageCited]} testID={`document-preview-page-${item.page}`}>
               <Text style={styles.pageLabel}>{item.label ?? `Page ${item.page}`}</Text>
               <Text style={styles.contentText} selectable>{item.text}</Text>
             </View>

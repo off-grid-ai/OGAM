@@ -742,7 +742,12 @@ function makeDiffusionFake(
         });
       }
       seedCounter += 1;
-      const imagePath = `/generated/img-${seedCounter}.png`;
+      // Where the real native modules save it: <documents>/generated_images/<id>.png (LocalDreamModule.kt,
+      // CoreMLDiffusionModule.swift). The app's delete checks that exact path, so a fake elsewhere would
+      // make every local image look undeletable.
+      const imagePath = fs
+        ? `${fs.DocumentDirectoryPath}/generated_images/img-${seedCounter}.png`
+        : `/generated/img-${seedCounter}.png`;
       // The real native module writes the rendered PNG to disk — mirror that so the app's
       // downstream file reads (save-to-gallery, thumbnails) find a real file.
       fs?.seedFile(imagePath, 1024);

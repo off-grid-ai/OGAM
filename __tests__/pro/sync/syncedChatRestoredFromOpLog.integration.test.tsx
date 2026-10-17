@@ -17,7 +17,7 @@
  */
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
 import TcpSocket from 'react-native-tcp-socket';
@@ -62,6 +62,7 @@ import {
   createLicensedMesh,
   installLicensedPhone,
 } from '../../harness/licensedMesh';
+import { startPairedPeer } from '../../harness/proHarness';
 
 const PHONE_FINGERPRINT = 'fp-this-phone';
 const CHAT_STORAGE_KEY = 'local-llm-chat-storage';
@@ -277,5 +278,101 @@ describe('synced chat restored from the sync history on relaunch', () => {
     });
     fireEvent.press(await waitFor(() => ui!.getByText(CHAT_TITLE)));
     await waitFor(() => expect(ui!.getByText(MESSAGE_TEXT)).toBeTruthy());
+  }, 30_000);
+
+  /**
+   * Item 12 (pro 661315f1): the startup repair puts back only what the chat list is missing, and
+   * leaves what is already on screen where it is.
+   *
+   * SPEC: I am reading a synced chat when the app starts. A synced reply that did not make it into the
+   * saved chat list comes back in its written place - between the two it was written between - and the
+   * replies I am already reading stay, in the same order, each once.
+   *
+   * The Desktop is the paired-peer op injector. The phone saves the chat with the first and third
+   * replies, then the Desktop's second reply (written between them) reaches the sync history, and the
+   * app dies before the chat list is saved again.
+   */
+  it('puts a synced reply missing from the saved chat back in its place, without moving the ones on screen', async () => {
+    const FIRST = 'Tide tables first: low water is at 06:12 and the next at 18:40.';
+    const SECOND = 'Then the buoys: the red can at the channel mouth has lost its light.';
+    const THIRD = 'Finally the slipway: the lower third is green with weed, mind your footing.';
+    // Its own title: the first journey's chat is still in this file's sync history.
+    const TITLE = 'Tide and buoy checks';
+    const order = (view: ReturnType<typeof render>) =>
+      view.getAllByTestId('assistant-message').map(bubble =>
+        [FIRST, SECOND, THIRD].find(text => within(bubble).queryByText(text)) ?? '?',
+      );
+
+    const desktop = await startPairedPeer({
+      mesh,
+      device: { id: 'desktop-repair-peer', name: 'Off Grid AI Desktop' },
+    });
+    remote = { engine: desktop.engine } as unknown as ReturnType<typeof buildSyncEngine>;
+    const at = (minute: number) => `2026-10-08T07:0${minute}:00.000Z`;
+    desktop.record(CORE_SYNC_ENTITIES.conversation, 'tide-conversation', 'put', {
+      title: TITLE, project_id: null, created_at: at(0), updated_at: at(3),
+    });
+    const reply = (id: string, content: string, minute: number) =>
+      desktop.record(CORE_SYNC_ENTITIES.message, id, 'put', {
+        conversation_id: 'tide-conversation', role: 'assistant', content, context: null,
+        created_at: at(minute),
+      });
+    reply('tide-1', FIRST, 1);
+    reply('tide-3', THIRD, 3);
+
+    await stateSyncService.start();
+    await syncService.start();
+    ui = renderApp();
+    fireEvent.press(ui.getByTestId('settings-tab'));
+    fireEvent.press(await waitFor(() => ui!.getByTestId('open-sync-settings')));
+    const phoneId = await desktop.pairWithPhone(ui);
+    fireEvent.press(ui.getByLabelText('Back'));
+    fireEvent.press(await waitFor(() => ui!.getByTestId('chats-tab')));
+    fireEvent.press(await waitFor(() => ui!.getByText(TITLE)));
+    await waitFor(() => expect(order(ui!)).toEqual([FIRST, THIRD]), { timeout: 5000 });
+
+    // The chat list as saved to disk: the first and third replies.
+    await waitFor(async () =>
+      expect(await AsyncStorage.getItem(CHAT_STORAGE_KEY)).toContain(THIRD),
+    );
+    const savedWithoutSecond = (await AsyncStorage.getItem(CHAT_STORAGE_KEY))!;
+    expect(savedWithoutSecond).not.toContain(SECOND);
+
+    // The Desktop's second reply reaches the phone's sync history...
+    expect(desktop.connected.has(phoneId)).toBe(true);
+    reply('tide-2', SECOND, 2);
+    await waitFor(() => expect(order(ui!)).toEqual([FIRST, SECOND, THIRD]), { timeout: 5000 });
+
+    // ...and the app is killed before the chat list is saved again.
+    ui.unmount();
+    ui = undefined;
+    await desktop.stop();
+    remote = undefined;
+    await stateSyncService.stop();
+    await syncService.stop();
+    await AsyncStorage.setItem(CHAT_STORAGE_KEY, savedWithoutSecond);
+
+    // RELAUNCH, Desktop offline. The user opens the chat before sync history has loaded: the saved
+    // two replies, in order, and not the missing one.
+    await act(async () => {
+      await useChatStore.persist.rehydrate();
+    });
+    ui = renderApp();
+    fireEvent.press(await waitFor(() => ui!.getByTestId('auto-setup-skip')));
+    fireEvent.press(await waitFor(() => ui!.getByTestId('chats-tab')));
+    fireEvent.press(await waitFor(() => ui!.getByText(TITLE)));
+    await waitFor(() => expect(order(ui!)).toEqual([FIRST, THIRD]), { timeout: 5000 });
+    expect(ui.queryByText(SECOND)).toBeNull();
+
+    // Sync starts with the app and repairs the chat while it is open: the missing reply lands in its
+    // written place, the two on screen keep theirs, and nothing is shown twice.
+    await act(async () => {
+      await stateSyncService.start();
+      await syncService.start();
+    });
+    await waitFor(() => expect(order(ui!)).toEqual([FIRST, SECOND, THIRD]), { timeout: 5000 });
+    expect(ui.getAllByText(FIRST)).toHaveLength(1);
+    expect(ui.getAllByText(SECOND)).toHaveLength(1);
+    expect(ui.getAllByText(THIRD)).toHaveLength(1);
   }, 30_000);
 });

@@ -19,6 +19,8 @@
 import { launchVoiceApp } from '../../harness/proHarness';
 
 jest.unmock('@react-navigation/native');
+// Each test boots the whole app twice; on a busy machine the first one runs past the 10 s default.
+jest.setTimeout(30000);
 
 interface TtsRuntimeRecord {
   /** Voice file each live (preventLoad=false) runtime load was configured with, e.g. "am_michael". */
@@ -109,6 +111,61 @@ describe('the saved voice survives a relaunch', () => {
     expect(view.queryByRole('button', { name: 'Heart', selected: true })).toBeNull();
     expect(view.getByRole('button', { name: 'Heart' })).toBeTruthy();
 
+    await next.close();
+  });
+});
+
+/**
+ * A downloaded voice stays downloaded when the app cannot read its folder at startup. The person
+ * downloads Kokoro on Models > Voice; on the next launch the device's read of the voice folder fails
+ * (readDir throws). A failed read does not prove the files are gone, so the voice still shows as
+ * downloaded, with no Download button asking for it again. A read that succeeds and finds the folder
+ * empty is different: then the voice is gone and the Download button is offered.
+ */
+describe('a downloaded voice when its folder cannot be read', () => {
+  async function downloadThenRelaunch(relaunchWith: (files: Set<string>) => {
+    files: Set<string>; failReads?: boolean;
+  }) {
+    const first = await launchVoiceApp();
+    await first.voicePanel();
+    // Before: the voice is not downloaded, so the panel offers the download.
+    expect(first.view.getByTestId('voice-model-kokoro-download')).toBeTruthy();
+    expect(first.view.queryByTestId('voice-model-kokoro-delete')).toBeNull();
+    await first.downloadVoice();
+    expect(first.view.queryByTestId('voice-model-kokoro-download')).toBeNull();
+    await first.close();
+
+    const device = relaunchWith(first.cache.files);
+    const next = await launchVoiceApp({
+      files: device.files, preserveStorage: true,
+      configureRuntime: () => {
+        if (device.failReads) {
+          require('../../harness/kokoroResourceBoundary').currentKokoroResourceBoundary()
+            .failReads(new Error('ENOENT: no such file or directory, scandir'));
+        }
+      },
+    });
+    await next.voicePanel();
+    return next;
+  }
+
+  it('still shows the voice as downloaded, with no download offered, when readDir throws', async () => {
+    const next = await downloadThenRelaunch(files => ({ files, failReads: true }));
+    const { rtl, view } = next;
+    await rtl.waitFor(() => expect(view.getByTestId('voice-model-kokoro-delete')).toBeTruthy());
+    expect(view.queryByTestId('voice-model-kokoro-download')).toBeNull();
+    // It stays that way once the panel's disk check has settled.
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(view.getByTestId('voice-model-kokoro-delete')).toBeTruthy();
+    expect(view.queryByTestId('voice-model-kokoro-download')).toBeNull();
+    await next.close();
+  });
+
+  it('offers the download again when the folder reads fine but the voice files are gone', async () => {
+    const next = await downloadThenRelaunch(() => ({ files: new Set<string>() }));
+    const { rtl, view } = next;
+    await rtl.waitFor(() => expect(view.getByTestId('voice-model-kokoro-download')).toBeTruthy());
+    expect(view.queryByTestId('voice-model-kokoro-delete')).toBeNull();
     await next.close();
   });
 });

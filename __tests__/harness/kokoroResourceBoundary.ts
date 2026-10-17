@@ -25,7 +25,7 @@ export function installKokoroResourceBoundary(files = new Set<string>()) {
   fetcher.deleteResources = async (...sources: string[]) => {
     sources.forEach(source => files.delete(pathFor(source)));
   };
-  return {
+  const controls = {
     files,
     seedVoice(voice = 'af_heart') {
       for (const source of [
@@ -42,4 +42,17 @@ export function installKokoroResourceBoundary(files = new Set<string>()) {
     failReads(error?: Error) { readError = error; },
     failFetch(error?: Error) { fetchError = error; },
   };
+  installed = controls;
+  return controls;
+}
+
+let installed: ReturnType<typeof installKokoroResourceBoundary> | undefined;
+
+/**
+ * The cache installed for the current launch. A launch helper installs the cache itself, so a test
+ * reaches it here (e.g. in a pre-render hook) to make the device's directory read fail.
+ */
+export function currentKokoroResourceBoundary() {
+  if (!installed) throw new Error('installKokoroResourceBoundary() has not run in this module graph');
+  return installed;
 }
