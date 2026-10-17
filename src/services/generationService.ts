@@ -81,6 +81,8 @@ class GenerationService {
   wasAborted(): boolean { return this.abortRequested; }
   private pendingStop: Promise<void> | null = null;
   private queueProcessor: QueueProcessor | null = null;
+  /** A queued turn has been handed to the processor and has not settled yet. */
+  private sendingQueuedTurn = false;
   private currentRemoteAbortController: AbortController | null = null;
   private remoteTimeToFirstToken: number | undefined;
   private contextUsage: Pick<GenerationMeta, 'contextPromptTokens' | 'contextWindowTokens' | 'contextEstimate'> | undefined;
@@ -511,6 +513,12 @@ class GenerationService {
   private processNextInQueue(): void {
     const queue = this.state.queuedMessages;
     if (queue.length === 0 || !this.queueProcessor) return;
+    // One turn at a time. A stopped reply settles twice (the Stop, then the native stop), and each
+    // schedules a drain: the second must not start another turn while the first is still starting.
+    if (this.state.isGenerating || this.sendingQueuedTurn) {
+      logger.log('[QUEUE-SM] a turn is running; the queue waits for it');
+      return;
+    }
     if (chatQueueHeld(this.state.queueHold, queue)) {
       logger.log(`[QUEUE-SM] held (${this.state.queueHold}) with ${queue.length} queued`);
       return;
@@ -531,7 +539,14 @@ class GenerationService {
       assistantEnabled: all.some(m => m.assistantEnabled),
       now: false,
     };
-    this.queueProcessor(combined).catch(e => { logger.error('[GenerationService] Queue processor error:', e); });
+    this.sendingQueuedTurn = true;
+    this.queueProcessor(combined)
+      .catch(e => { logger.error('[GenerationService] Queue processor error:', e); })
+      .finally(() => {
+        this.sendingQueuedTurn = false;
+        // The turn has settled: send what queued behind it (its own end may have found it still sending).
+        if (!this.state.isGenerating) this.processNextInQueue();
+      });
   }
 
   /** `signal`: how the reply ended. A Stop or a failure holds the queue for the user. */

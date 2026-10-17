@@ -1803,5 +1803,30 @@ describe('generationService', () => {
       expect(processor).not.toHaveBeenCalled();
       expect(generationService.getState().queuedMessages).toHaveLength(1);
     });
+
+    // Seen on an iPhone: after send now, the stopped reply settled twice and the second drain sent the
+    // other queued message while the send-now turn was still starting, so the two ran at once.
+    it('sends the next queued turn only after the one being sent settles, however often a reply settles', async () => {
+      let settle: () => void = () => {};
+      const processor = jest.fn(
+        (_item: { text: string }) => new Promise<void>(resolve => { settle = resolve; }),
+      );
+      generationService.setQueueProcessor(processor);
+      generationService.enqueueMessage({ id: 'q1', conversationId: 'c1', text: 'title', messageText: 'title' });
+      generationService.enqueueMessage({ id: 'q2', conversationId: 'c1', text: 'moral', messageText: 'moral' });
+      generationService.sendQueuedNow('q2');
+
+      generationService.drainQueue();
+      generationService.drainQueue();
+
+      expect(processor).toHaveBeenCalledTimes(1);
+      expect(processor.mock.calls[0][0]).toMatchObject({ text: 'moral' });
+      expect(generationService.getState().queuedMessages.map(m => m.text)).toEqual(['title']);
+
+      settle();
+      await new Promise(r => setTimeout(r, 0));
+      expect(processor).toHaveBeenCalledTimes(2);
+      expect(processor.mock.calls[1][0]).toMatchObject({ text: 'title' });
+    });
   });
 });
