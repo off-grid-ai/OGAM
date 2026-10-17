@@ -2,8 +2,10 @@
  * ModelResidencyManager
  *
  * Keeps resident on-device models within a RAM budget. Callers ask to make a
- * model resident; the manager evicts others per `planEviction` (unloading via
- * each resident's registered unload fn) before loading the new one. Load/unload
+ * model resident; the manager evicts others per the shared residency policy in
+ * @offgrid/models (the same rules Off Grid Desktop runs), unloading via each
+ * resident's registered unload fn, before loading the new one. This file only
+ * does the IO: device memory reads, the model lock, and the unloads. Load/unload
  * are injected by the caller, so this stays decoupled from the text/image/
  * whisper/tts services and is unit-testable.
  *
@@ -14,9 +16,15 @@ import { hardwareService } from '../hardware';
 import logger from '../../utils/logger';
 import {
   planEviction,
-  computeBudgetMB,
-  Resident,
-} from './policy';
+  admissionBudgetMB,
+  hasDirtyPressure,
+  exceedsDirtyCeiling,
+  fitsWithoutEviction,
+  memoryWarningVictims,
+  freesIdleSpeechForGeneration,
+  type Resident,
+} from '@offgrid/models';
+import { computeBudgetMB } from './budget';
 import { LoadPolicy } from '../memoryBudget';
 import {
   formatMakeRoomForLine,
@@ -28,7 +36,6 @@ import {
   MIN_BUDGET_MB,
   DIRTY_AVAILABILITY_HEADROOM_MB,
   AGGRESSIVE_DIRTY_HEADROOM_MB,
-  SIDECAR_TYPES,
   RegisteredResident,
   ResidentSpec,
   EnsureResult,
@@ -99,9 +106,10 @@ class ModelResidencyManager {
     // race the lock exists to prevent. The sidecar unloads here don't re-acquire the
     // lock, so this can't deadlock.
     await this.runExclusive('memory-warning', async () => {
-      for (const [key, r] of [...this.residents.entries()]) {
-        if (r.pinned || !SIDECAR_TYPES.has(r.type)) continue;
-        if (r.canEvict && !r.canEvict()) continue; // in use - owner vetoes
+      // planningResidents treats an owner's in-use veto as pinned.
+      for (const { key } of memoryWarningVictims(this.planningResidents())) {
+        const r = this.residents.get(key);
+        if (!r) continue;
         logger.log(
           `[ModelResidency] memory warning → reclaiming idle ${r.type} (${key})`,
         );
@@ -200,35 +208,23 @@ class ModelResidencyManager {
     // paged out like clean mmap weights, so while one is present EVERY load (even an
     // mmap sidecar) must also respect real free RAM, or stacking onto the spike jetsams
     // the app. With no dirty pressure, mmap GGUF stays bounded by physical RAM only.
-    const dirtyPressure =
-      !!spec.dirtyMemory ||
-      [...this.residents.values()].some(r => r.dirtyMemory);
-    if (!dirtyPressure) {
-      // mmap'd, no dirty pressure: physical RAM is the ceiling (clean, file-backed
-      // weights page in even when instantaneous available is low).
-      return Math.round(Math.max(MIN_BUDGET_MB, physicalCapMB));
-    }
-    // Dirty/accelerator pages cannot rely on hypothetical OS reclamation. In particular,
-    // Android's physical-budget credit can turn 1GB of live available RAM into an 8GB
-    // admission budget while a diffusion model allocates several GB of anonymous memory.
-    // Use the fresh OS reading for dirty loads on both platforms; clean mmap weights above
-    // retain the physical-budget policy.
-    const availableMB = hardwareService.getAvailableMemoryGB() * 1024;
-    const residentMB = [...this.residents.values()].reduce(
-      (sum, r) => sum + r.sizeMB,
-      0,
-    );
+    const residents = this.planningResidents();
     // Aggressive mode holds a smaller real-free-RAM headroom for dirty loads (the
     // lenient safeguard) so e.g. a 3GB LiteRT model the balanced guard rejects on a
     // 12GB phone is allowed through. Still non-zero - never a guaranteed jetsam.
-    const dirtyHeadroomMB =
-      this.loadPolicy === 'aggressive'
-        ? AGGRESSIVE_DIRTY_HEADROOM_MB
-        : DIRTY_AVAILABILITY_HEADROOM_MB;
-    const dynamicMB = availableMB + residentMB - dirtyHeadroomMB;
-    // The small-model floor is valid for clean, pageable weights, not dirty
-    // allocations: at critically low free RAM even a sub-1GB dirty load must wait.
-    return Math.round(Math.max(0, Math.min(physicalCapMB, dynamicMB)));
+    // Dirty loads read the fresh OS figure on both platforms: Android's physical-budget
+    // credit could otherwise admit several GB of anonymous memory against 1GB free.
+    return admissionBudgetMB({
+      physicalCapMB,
+      floorMB: MIN_BUDGET_MB,
+      dirtyPressure: hasDirtyPressure(residents, spec),
+      residentMB: residents.reduce((sum, r) => sum + r.sizeMB, 0),
+      availableMB: hardwareService.getAvailableMemoryGB() * 1024,
+      headroomMB:
+        this.loadPolicy === 'aggressive'
+          ? AGGRESSIVE_DIRTY_HEADROOM_MB
+          : DIRTY_AVAILABILITY_HEADROOM_MB,
+    });
   }
 
   getResidents(): Resident[] {
@@ -245,12 +241,7 @@ class ModelResidencyManager {
    * lower-priority model never kicks out a higher-priority one.
    */
   canLoadWithoutEviction(spec: { key: string; sizeMB: number }): boolean {
-    if (this.residents.has(spec.key)) return true;
-    const usedMB = [...this.residents.values()].reduce(
-      (sum, r) => sum + r.sizeMB,
-      0,
-    );
-    return usedMB + spec.sizeMB <= this.getBudgetMB();
+    return fitsWithoutEviction(this.getResidents(), spec, this.getBudgetMB());
   }
 
   markUsed(key: string, now: number = Date.now()): void {
@@ -336,11 +327,7 @@ class ModelResidencyManager {
     // spec.sizeMB below already accounts for its footprint; counting the resident too double-charges
     // the model and wrongly refuses one already sitting in RAM (G4). Mirrors planEviction's
     // alreadyResident rule, which likewise charges the incoming 0 when it's already resident.
-    const keptDirtyMB = residents
-      .filter(r => r.dirtyMemory && r.key !== spec.key && !plan.evict.some(e => e.key === r.key))
-      .reduce((sum, r) => sum + r.sizeMB, 0);
-    const dirtyFootprintMB = (spec.dirtyMemory ? spec.sizeMB : 0) + keptDirtyMB;
-    const dirtyCeilingExceeded = !!spec.dirtyMemory && dirtyFootprintMB > dirtyCeilingMB;
+    const dirtyCeilingExceeded = exceedsDirtyCeiling(residents, spec, plan, dirtyCeilingMB);
 
     if ((!plan.fits || dirtyCeilingExceeded) && !override) {
       // Won't fit even after the planned evictions (total budget OR the dirty ceiling) - DON'T
@@ -457,7 +444,7 @@ class ModelResidencyManager {
     } catch {
       return;
     }
-    if (totalGB > 6) return; // roomy: keep STT warm
+    if (!freesIdleSpeechForGeneration(totalGB * 1024)) return; // roomy: keep STT warm
     if (!this.residents.has('whisper')) return;
     // Serialize with load/unload: this fires on the generation hot path (every send /
     // regenerate), so without the lock it can race an in-flight whisper load and desync
