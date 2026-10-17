@@ -61,6 +61,8 @@ export const CenteredAlert: React.FC<CenteredAlertProps> = ({
               <TouchableOpacity
                 key={index}
                 style={[styles.button, button.style === 'destructive' && styles.destructiveButton]}
+                accessibilityRole="button"
+                accessibilityLabel={button.text}
                 onPress={() => handleButtonPress(button)}
                 activeOpacity={0.7}
               >
