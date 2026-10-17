@@ -582,30 +582,11 @@ export const useChatStore = create<ChatState>()(
     {
       name: 'local-llm-chat-storage',
       storage: chatStorage.storage,
-      onRehydrateStorage: () => (_state, error) => {
-        if (!error) {
-          chatStorage.markHydrated();
-          return;
-        }
-        // Keep trying: chats made meanwhile are merged in and saved once the history can be read.
-        chatStorage.retryAfterFailedLoad({
-          rehydrate: async () => {
-            recoveringFailedLoad = true;
-            try {
-              await useChatStore.persist.rehydrate();
-            } finally {
-              recoveringFailedLoad = false;
-            }
-          },
-          save: () => useChatStore.setState({}),
-        });
-      },
+      onRehydrateStorage: chatStorage.onRehydrateStorage(),
       version: CHAT_STORAGE_VERSION,
       migrate: migratePersistedChatState,
-      merge: (persisted, current) =>
-        recoveringFailedLoad
-          ? mergeSavedChats(persisted as SavedChats | undefined, current)
-          : { ...current, ...(persisted as SavedChats | undefined) },
+      // After a failed read the open chat stays open: a new chat is null, not the saved one.
+      merge: chatStorage.merge<ChatState>(undefined, ['activeConversationId']),
       partialize: (state): PersistedChatState => ({
         conversations: state.conversations,
         activeConversationId: state.activeConversationId,
@@ -613,26 +594,7 @@ export const useChatStore = create<ChatState>()(
     },
   ),
 );
-
-/** True while a launch whose first read failed reads the saved chats again. */
-let recoveringFailedLoad = false;
-
-/** Saved chats plus any made before they were read, when a launch's first read failed. */
-/** The saved state after migration: the persisted fields, with conversations in their current shape. */
-type SavedChats = Pick<ChatState, 'conversations' | 'activeConversationId'>;
-
-function mergeSavedChats(saved: SavedChats | undefined, current: ChatState): ChatState {
-  if (!saved) return current;
-  const savedIds = new Set(saved.conversations.map(conversation => conversation.id));
-  const madeSince = current.conversations.filter(conversation => !savedIds.has(conversation.id));
-  return {
-    ...current,
-    ...saved,
-    conversations: [...madeSince, ...saved.conversations],
-    // The user is already somewhere (a new chat is null); the screen they are on stays open.
-    activeConversationId: current.activeConversationId,
-  };
-}
+chatStorage.attach(useChatStore);
 
 /** Wait until the latest persisted chat projection is durable. */
 export const waitForChatPersistence = (): Promise<void> =>

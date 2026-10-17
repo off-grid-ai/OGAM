@@ -475,16 +475,18 @@ export const useAppStore = create<AppState>()(
     {
       name: 'local-llm-app-storage',
       storage: appStorage.storage,
-      onRehydrateStorage: () => (_state, error) => { if (!error) appStorage.markHydrated(); },
-      merge: (persisted, current) =>
+      onRehydrateStorage: appStorage.onRehydrateStorage(),
+      merge: appStorage.merge<AppState>((persisted, current) =>
         migratePersistedState(persisted, current, {
           defaultSettings: DEFAULT_SETTINGS,
           documentsPath: RNFS.DocumentDirectoryPath,
         }),
+      ),
       partialize: persistedAppState,
     },
   ),
 );
+appStorage.attach(useAppStore);
 
 function persistedAppState(state: AppState) {
   return {

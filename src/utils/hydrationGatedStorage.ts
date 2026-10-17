@@ -5,19 +5,38 @@ import {
   type StateStorage,
 } from 'zustand/middleware';
 import logger from './logger';
+import { mergeSessionIntoSaved } from './mergeSessionIntoSaved';
 
 /** Waits between read attempts after a failed load. The first write made meanwhile tries at once. */
 const LOAD_RETRY_DELAYS_MS = [250, 1000, 4000, 15000, 60000];
+
+/** The parts of a persisted zustand store the gate drives. */
+interface GatedStore {
+  getState(): object;
+  setState(partial: object): void;
+  persist: { rehydrate(): Promise<void> | void };
+}
+
+type Merge<T> = (persisted: unknown, current: T) => T;
 
 export interface HydrationGatedStorage<S> {
   storage: PersistStorage<S>;
   markHydrated(): void;
   /**
-   * The saved state could not be read. Writes stay blocked, so the saved history is never replaced, but
-   * the read is tried again: `rehydrate` reads and merges the saved state with what was made since, and
-   * once it succeeds `save` writes that merge, so the session's new work is kept too.
+   * The persist `onRehydrateStorage` option. A good read opens the gate. A failed read keeps writes
+   * blocked, so the saved state is never replaced by launch defaults, and retries the read: at once on
+   * the first write, then with backoff. When a retry succeeds, the saved state is merged with what the
+   * user changed meanwhile (see `merge`) and that is saved.
    */
-  retryAfterFailedLoad(recovery: { rehydrate: () => Promise<void>; save: () => void }): void;
+  onRehydrateStorage(): () => (state: unknown, error: unknown) => void;
+  /** Hand the created store to the gate, so a failed read can be retried on it. Call right after create. */
+  attach(store: GatedStore): void;
+  /**
+   * The persist `merge` option. Normally `savedOverCurrent` (default: saved over current). During a retry after a
+   * failed read, the session's changes are kept on top of the saved state; `keepCurrent` keys always
+   * follow the session.
+   */
+  merge<T extends object>(savedOverCurrent?: Merge<T>, keepCurrent?: readonly string[]): Merge<T>;
   isHydrated(): boolean;
   waitForWrites(): Promise<void>;
 }
@@ -28,7 +47,12 @@ export function createHydrationGatedStorage<S>(
   unchanged?: (previous: S, next: S) => boolean,
 ): HydrationGatedStorage<S> {
   let hydrated = false;
-  let recovery: { rehydrate: () => Promise<void>; save: () => void } | null = null;
+  let attached: GatedStore | null = null;
+  let loadFailed = false;
+  let recovery: GatedStore | null = null;
+  // The store as it was when the read failed: what the user had before changing anything.
+  let atLaunch: object | null = null;
+  let recovering = false;
   let retryCount = 0;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let retrying = false;
@@ -46,21 +70,32 @@ export function createHydrationGatedStorage<S>(
     }, delay);
   };
 
+  const startRecovery = () => {
+    if (hydrated || recovery || !attached) return;
+    recovery = attached;
+    atLaunch = recovery.getState();
+    logger.warn('[STORAGE-SM] saved state unreadable at launch; retrying the read');
+    scheduleRetry();
+  };
+
   const tryRecover = async (): Promise<void> => {
     if (hydrated || retrying || !recovery) return;
     retrying = true;
     if (retryTimer) clearTimeout(retryTimer);
     retryTimer = null;
     try {
-      await recovery.rehydrate();
+      recovering = true;
+      await recovery.persist.rehydrate();
     } finally {
+      recovering = false;
       retrying = false;
     }
     if (hydrated) {
-      const { save } = recovery;
+      const store = recovery;
       recovery = null;
+      atLaunch = null;
       logger.log('[STORAGE-SM] saved state read on retry; merged with this session and saving');
-      save();
+      store.setState({});
       return;
     }
     scheduleRetry();
@@ -128,11 +163,25 @@ export function createHydrationGatedStorage<S>(
     markHydrated: () => {
       hydrated = true;
     },
-    retryAfterFailedLoad: next => {
-      if (hydrated || recovery) return;
-      recovery = next;
-      logger.warn('[STORAGE-SM] saved state unreadable at launch; retrying the read');
-      scheduleRetry();
+    onRehydrateStorage: () => () => (_state, error) => {
+      if (!error) {
+        hydrated = true;
+        return;
+      }
+      loadFailed = true;
+      startRecovery();
+    },
+    attach: store => {
+      attached = store;
+      if (loadFailed) startRecovery();
+    },
+    merge: <T extends object>(
+      savedOverCurrent: Merge<T> = (persisted, current) => ({ ...current, ...(persisted as Partial<T>) }),
+      keepCurrent: readonly string[] = [],
+    ): Merge<T> => (persisted, current) => {
+      const saved = savedOverCurrent(persisted, current);
+      if (!recovering || !atLaunch || !persisted) return saved;
+      return mergeSessionIntoSaved(saved, current, atLaunch as T, Object.keys(persisted), keepCurrent);
     },
     isHydrated: () => hydrated,
     waitForWrites: async () => {

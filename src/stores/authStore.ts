@@ -90,7 +90,8 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'local-llm-auth-storage',
       storage: authStorage.storage,
-      onRehydrateStorage: () => (_state, error) => { if (!error) authStorage.markHydrated(); },
+      onRehydrateStorage: authStorage.onRehydrateStorage(),
+      merge: authStorage.merge<AuthState>(),
       partialize: (state): PersistedAuthState => ({
         isEnabled: state.isEnabled,
         failedAttempts: state.failedAttempts,
@@ -99,3 +100,4 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
+authStorage.attach(useAuthStore);
