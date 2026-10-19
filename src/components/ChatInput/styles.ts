@@ -73,11 +73,40 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     fontWeight: 'bold' as const,
     marginTop: -2,
   },
-  // Queue badge row (above input)
+  // Queued messages (above input)
+  queueList: {
+    marginBottom: 4,
+    gap: 2,
+  },
+  queueItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    paddingLeft: 8,
+    gap: 2,
+  },
+  queueItemText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  queueResumeButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+  },
+  queueResumeText: {
+    fontSize: 11,
+    fontFamily: FONTS.mono,
+    fontWeight: '500' as const,
+    color: colors.background,
+  },
+  // Queue header row
   queueRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    marginBottom: 4,
     gap: 4,
   },
   queueBadge: {

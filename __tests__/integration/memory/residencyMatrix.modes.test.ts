@@ -49,7 +49,7 @@
  */
 import { modelResidencyManager } from '../../../src/services/modelResidency';
 import type { LoadPolicy } from '../../../src/services/memoryBudget';
-import type { ResidentType } from '../../../src/services/modelResidency/policy';
+import type { ResidentType } from '@offgrid/models';
 import { setDeviceMemory, resetDeviceMemory, makeResident } from '../../harness/deviceMemory';
 
 /** A seeded resident model (already loaded), as the row describes it. */

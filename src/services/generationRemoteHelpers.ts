@@ -28,7 +28,7 @@ export async function generateRemoteResponseImpl(
   const provider = svc.getCurrentProvider();
 
   if (!provider) {
-    svc.resetState();
+    svc.resetState('error');
     throw new Error('No remote provider available');
   }
   let firstTokenReceived = false;
@@ -140,7 +140,7 @@ export async function generateRemoteWithToolsImpl(
   const provider = svc.getCurrentProvider();
 
   if (!provider) {
-    svc.resetState();
+    svc.resetState('error');
     throw new Error('No remote provider available');
   }
   logger.log(

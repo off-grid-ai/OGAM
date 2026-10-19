@@ -67,6 +67,134 @@ export interface ChatHarnessOptions {
    *  detection. Omit for the reasoning-capable default; pass a marker-free template (Mistral's tool-use
    *  template) to model a model that does NOT support thinking so the Thinking toggle stays hidden. */
   chatTemplate?: string;
+  /** Launch with the FIRST read of this AsyncStorage key failing (an unreadable store on device), as
+   *  `relaunchApp` does. Pair with `closeApp()` first to model a relaunch onto persisted storage. */
+  failFirstReadOf?: string;
+  /** This launch is a RELAUNCH onto saved storage (after closeApp()): the model the user picked before is
+   *  still selected, so Home shows it and there is no picker tap; the user goes straight to New Chat. */
+  relaunched?: boolean;
+}
+
+/**
+ * The chat as the user reads it: every rendered message bubble, top to bottom, as `role: text`
+ * (the bubble's visible strings joined by a space). Scoped to the bubbles, so the header title
+ * (which repeats the first question) never counts as a message. Assert the whole thread with it:
+ * order, what is shown, and what is not.
+ */
+export function renderedThread(view: { queryAllByTestId: (id: RegExp) => unknown[] }): string[] {
+  type Node = { props?: { testID?: string }; children?: Array<Node | string> };
+  const textOf = (node: Node | string): string[] =>
+    typeof node === 'string' ? [node] : (node.children ?? []).flatMap(textOf);
+  return (view.queryAllByTestId(/^(user|assistant)-message$/) as Node[]).map(bubble => {
+    const role = bubble.props?.testID === 'user-message' ? 'user' : 'assistant';
+    const text = textOf(bubble).map(t => t.trim()).filter(Boolean).join(' ');
+    return `${role}: ${text}`;
+  });
+}
+
+/** The AsyncStorage key the chat store saves conversations under. */
+export const CHAT_STORE_KEY = 'local-llm-chat-storage';
+
+/**
+ * Where the screen asked to go. A test's navigation mock forwards `navigate` here
+ * (`navigate: (...a) => require('<harness>/chatHarness').recordNavigation(...a)`), so a tap on a chat
+ * row can be followed to the chat it opens.
+ */
+export const navHolder: { last: { screen: string; params?: Record<string, unknown> } | null } = {
+  last: null,
+};
+export function recordNavigation(screen: string, params?: Record<string, unknown>) {
+  navHolder.last = { screen, params };
+}
+
+/**
+ * BOUNDARY: the next read of `key` from AsyncStorage fails, once, as an unreadable store does on device;
+ * every other read, and every later read of `key`, goes to the stored data. Patches the AsyncStorage
+ * module of the CURRENT module graph, so call it after a module reset and before the stores are required.
+ * Resolves `failed` once the failing read has been answered.
+ */
+export function failFirstStorageRead(key: string): { failed: Promise<void> } {
+  const mod = require('@react-native-async-storage/async-storage');
+  const AsyncStorage = mod.default ?? mod;
+  const read = AsyncStorage.getItem.getMockImplementation() as (k: string) => Promise<string | null>;
+  let signal: () => void = () => {};
+  const failed = new Promise<void>(resolve => {
+    signal = resolve;
+  });
+  let pending = true;
+  AsyncStorage.getItem.mockImplementation((k: string) => {
+    if (pending && k === key) {
+      pending = false;
+      setTimeout(signal, 0);
+      return Promise.reject(new Error(`I/O error reading ${k}`));
+    }
+    return read(k);
+  });
+  return { failed };
+}
+
+/**
+ * Close the app: stop any reply in flight, unmount every screen, and wait until the chat store's last
+ * write is durable — what is in AsyncStorage is what a relaunch finds.
+ */
+export async function closeApp(): Promise<void> {
+  const g = globalThis as unknown as {
+    __GEN_CLEANUP__?: () => Promise<void>;
+    __RTL_CLEANUP__?: () => void;
+  };
+  await g.__GEN_CLEANUP__?.();
+  g.__RTL_CLEANUP__?.();
+  const { waitForChatPersistence } = require('../../src/stores/chatStore');
+  await waitForChatPersistence();
+}
+
+/**
+ * fixture (a) — relaunch the app onto its persisted storage. Closes the app (closeApp), then starts a
+ * fresh module graph over a fresh native boundary (llama + filesystem fakes; the in-memory disk starts
+ * empty, AsyncStorage keeps what was saved). The stores hydrate the way they do at launch — from storage,
+ * as they are created; nothing is seeded. `failFirstReadOf` makes that launch's first read of one key fail.
+ *
+ * For a relaunch that goes on to chat with a model, call closeApp() and then
+ * setupChatScreen({ ..., failFirstReadOf }) instead: that is the same fresh launch, plus picking the model.
+ */
+export async function relaunchApp(relaunch: { failFirstReadOf?: string } = {}) {
+  await closeApp();
+  installNativeBoundary({ llama: true, fs: true });
+  const readFailure = relaunch.failFirstReadOf
+    ? failFirstStorageRead(relaunch.failFirstReadOf)
+    : undefined;
+  const React = require('react');
+  const rtl = requireRTL();
+  const { useChatStore } = require('../../src/stores');
+  if (readFailure) await readFailure.failed;
+  else await rtl.waitFor(() => expect(useChatStore.persist.hasHydrated()).toBe(true));
+  await rtl.act(() => new Promise(resolve => setTimeout(resolve, 0)));
+  return {
+    React,
+    rtl,
+    /** Mount the real chat list (the Chats tab). */
+    renderChatList() {
+      const { ChatsListScreen } = require('../../src/screens/ChatsListScreen');
+      return rtl.render(React.createElement(ChatsListScreen));
+    },
+    /**
+     * Tap a chat's row on the mounted chat list and open the chat it navigates to: the real ChatScreen
+     * with the route params the row handed to navigation.
+     */
+    async openChatFromList(list: ReturnType<typeof rtl.render>, title: string) {
+      require('./chatHarness').navHolder.last = null;
+      rtl.fireEvent.press(list.getByText(title));
+      const target = require('./chatHarness').navHolder.last as {
+        screen: string;
+        params?: Record<string, unknown>;
+      } | null;
+      expect(target?.screen).toBe('Chat');
+      list.unmount();
+      require('./chatHarness').routeHolder.params = target!.params ?? {};
+      const { ChatScreen } = require('../../src/screens/ChatScreen');
+      return rtl.render(React.createElement(ChatScreen, {}));
+    },
+  };
 }
 
 export async function setupChatScreen(opts: ChatHarnessOptions) {
@@ -80,6 +208,8 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     whisper: opts.whisper,
     download: opts.download,
   });
+  // The storage read must fail before any store is required: a store reads its saved state as it is created.
+  if (opts.failFirstReadOf) failFirstStorageRead(opts.failFirstReadOf);
 
   // Global boundary polyfill: React 19's error reporter calls window.dispatchEvent; in the node test
   // env there is no window, so an unrelated crash would mask real errors. This is a jsdom/global shim,
@@ -178,18 +308,20 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     },
     { timeout: 4000 },
   );
-  rtl.fireEvent.press(
-    await rtl.waitFor(() => home.getByTestId('browse-models-button')),
-  );
-  const rows = await rtl.waitFor(
-    () => {
-      const r = home.queryAllByTestId(/^text-model-row-/);
-      expect(r.length).toBeGreaterThan(0);
-      return r;
-    },
-    { timeout: 4000 },
-  );
-  rtl.fireEvent.press(rows[0]);
+  if (!opts.relaunched) {
+    rtl.fireEvent.press(
+      await rtl.waitFor(() => home.getByTestId('browse-models-button')),
+    );
+    const rows = await rtl.waitFor(
+      () => {
+        const r = home.queryAllByTestId(/^text-model-row-/);
+        expect(r.length).toBeGreaterThan(0);
+        return r;
+      },
+      { timeout: 4000 },
+    );
+    rtl.fireEvent.press(rows[0]);
+  }
   await rtl.waitFor(
     () => {
       expect(useAppStore.getState().activeModelId).toBe('m');
@@ -767,6 +899,26 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     },
 
     /**
+     * Leave this chat for Home and tap New Chat, as the user does: the chat screen closes, Home's real
+     * New Chat button opens a fresh chat screen with no conversation (created on the first send).
+     */
+    async newChatViaHome() {
+      this.view?.unmount();
+      const homeView = rtl.render(
+        React.createElement(HomeScreen, {
+          navigation: { navigate: () => {}, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} },
+        }),
+      );
+      rtl.fireEvent.press(await rtl.waitFor(() => homeView.getByTestId('new-chat-button')));
+      homeView.unmount();
+      require('./chatHarness').routeHolder.params = {};
+      this.render();
+      await rtl.waitFor(() => {
+        expect(useChatStore.getState().activeConversationId).toBeNull();
+      });
+    },
+
+    /**
      * Script the next engine turn, then drive the real user send: type into the real input, press the real
      * send button, and await the assistant reply rendering. `scripted` is what the (faked) native engine
      * returns — the real generation pipeline turns it into the rendered bubble.
@@ -888,6 +1040,49 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
       else boundary.litert.scriptTurn(scripted as { content?: string });
       await this.openActionMenu('assistant', via);
       rtl.fireEvent.press(this.view!.getByTestId('action-retry'));
+    },
+
+    /**
+     * Switch this chat to a REMOTE (OpenAI-compatible) model the way the user does: a Desktop server is
+     * added and its model list discovered (the network is the boundary: `/v1/models` answers over a fake
+     * fetch), then the user opens the chat's model selector and taps the remote model. Replies then come
+     * over the streaming XHR boundary: queue each with remoteHarness.installRemoteStream before the send.
+     * Returns a cleanup that restores fetch and removes the server.
+     */
+    async selectRemoteModelViaUI(remote: { modelId?: string; endpoint?: string } = {}) {
+      const { modelId = 'gemini', endpoint = 'http://localhost:1234' } = remote;
+      const view = this.view!;
+      const { remoteServerManager } = require('../../src/services/remoteServerManager');
+      const { useRemoteServerStore } = require('../../src/stores');
+      const originalFetch = global.fetch;
+      global.fetch = (async (input: RequestInfo | URL) => {
+        if (String(input).includes('/v1/models')) {
+          return {
+            ok: true,
+            json: async () => ({
+              object: 'list',
+              data: [{ id: modelId, object: 'model', owned_by: 'test', kind: 'chat' }],
+            }),
+          } as Response;
+        }
+        return { ok: false, status: 404, json: async () => ({}) } as Response;
+      }) as typeof global.fetch;
+      const server = await remoteServerManager.addServer({
+        name: 'Desktop',
+        endpoint,
+        providerType: 'openai-compatible',
+      });
+      await remoteServerManager.testConnection(server.id);
+      rtl.fireEvent.press(view.getByTestId('model-selector'));
+      rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('models-row-text')));
+      rtl.fireEvent.press(await rtl.waitFor(() => view.getByText(modelId)));
+      await rtl.waitFor(() => {
+        expect(useRemoteServerStore.getState().activeRemoteTextModelId).toBe(modelId);
+      });
+      return async () => {
+        global.fetch = originalFetch;
+        await remoteServerManager.clearAllServers();
+      };
     },
 
     /**

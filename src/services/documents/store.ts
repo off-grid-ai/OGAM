@@ -122,10 +122,19 @@ function toDocument(row: Row): StoredDocument {
   };
 }
 
-/** Realm-safe: a BLOB can arrive as an ArrayBuffer created in another JS realm. */
+/**
+ * A BLOB can arrive as an ArrayBuffer from another JS realm, or as a typed-array view into a larger
+ * buffer. Only the view's own bytes are the vector, so they are copied out by offset and length.
+ */
 function toVector(value: unknown): Float32Array | null {
-  if (Object.prototype.toString.call(value) !== '[object ArrayBuffer]') return null;
-  return new Float32Array((value as ArrayBuffer).slice(0));
+  if (Object.prototype.toString.call(value) === '[object ArrayBuffer]') {
+    return new Float32Array((value as ArrayBuffer).slice(0));
+  }
+  if (!ArrayBuffer.isView(value)) return null;
+  const { buffer, byteOffset, byteLength } = value;
+  if (byteLength % Float32Array.BYTES_PER_ELEMENT !== 0) return null;
+  // Copy first: the offset into a pooled buffer need not be 4-byte aligned.
+  return new Float32Array(new Uint8Array(buffer, byteOffset, byteLength).slice().buffer);
 }
 
 export const documentStore: DocumentIndexStore = {

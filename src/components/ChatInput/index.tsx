@@ -11,7 +11,7 @@ import { triggerHaptic } from '../../utils/haptics';
 import logger from '../../utils/logger';
 import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
 import { createStyles, PILL_ICON_SIZE, ANIM_DURATION_IN, ANIM_DURATION_OUT } from './styles';
-import { QueueRow } from './Toolbar';
+import { QueueRow, type QueueActions, type QueueView } from './Toolbar';
 import { AttachmentPreview, useAttachments } from './Attachments';
 import { useVoiceInput } from './Voice';
 import { buildVoiceNoteHandlers } from './voiceNoteSend';
@@ -26,7 +26,8 @@ import { Button } from '../Button';
 type AssistantAvailability = 'no-pro' | 'needs-sync' | 'unavailable' | 'ready';
 
 interface ChatInputProps {
-  onSend: (message: string, attachments?: MediaAttachment[], imageMode?: ImageModeState, assistantEnabled?: boolean) => void;
+  /** `sendNow`: while a reply runs, stop it and send this message at once instead of queueing it. */
+  onSend: (message: string, attachments?: MediaAttachment[], imageMode?: ImageModeState, assistantEnabled?: boolean, sendNow?: boolean) => void;
   onStop?: () => void;
   disabled?: boolean;
   isGenerating?: boolean;
@@ -36,9 +37,8 @@ interface ChatInputProps {
   imageModelLoaded?: boolean;
   onImageModeChange?: (mode: ImageModeState) => void;
   onOpenSettings?: () => void;
-  queueCount?: number;
-  queuedTexts?: string[];
-  onClearQueue?: () => void;
+  queue?: QueueView;
+  queueActions?: QueueActions;
   onToolsPress?: () => void;
   enabledToolCount?: number;
   supportsToolCalling?: boolean;
@@ -146,9 +146,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   imageModelLoaded = false,
   onImageModeChange,
   onOpenSettings: _onOpenSettings,
-  queueCount = 0,
-  queuedTexts = [],
-  onClearQueue,
+  queue,
+  queueActions,
   onToolsPress,
   enabledToolCount = 0,
   supportsToolCalling = false,
@@ -260,12 +259,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const canSend = (message.trim().length > 0 || attachments.length > 0) && !disabled;
 
-  const handleSend = () => {
-    logger.log(`[COMPOSER-SM] handleSend canSend=${canSend} disabled=${disabled} hasText=${message.trim().length > 0} attachments=${attachments.length} imageMode=${imageMode}`);
+  /** `sendNow` (long-press while a reply runs): the reply stops and this message goes at once. */
+  const handleSend = (sendNow = false) => {
+    logger.log(`[COMPOSER-SM] handleSend canSend=${canSend} disabled=${disabled} hasText=${message.trim().length > 0} attachments=${attachments.length} imageMode=${imageMode} sendNow=${sendNow}`);
     if (!canSend) return;
     triggerHaptic('impactMedium');
     const outgoingAttachments = attachments.length > 0 ? attachments : undefined;
-    if (assistantEnabled) {
+    if (sendNow) {
+      onSend(message.trim(), outgoingAttachments, imageMode, assistantEnabled || undefined, true);
+    } else if (assistantEnabled) {
       onSend(message.trim(), outgoingAttachments, imageMode, true);
     } else {
       onSend(message.trim(), outgoingAttachments, imageMode);
@@ -405,9 +407,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         attachments={attachments}
         onRemoveAttachment={removeAttachment}
         onClearAttachments={clearAttachments}
-        queueCount={queueCount}
-        queuedTexts={queuedTexts}
-        onClearQueue={onClearQueue}
+        queue={queue}
+        queueActions={queueActions}
         isRecording={isRecording}
         voiceAvailable={voiceAvailable}
         isModelLoading={isModelLoading}
@@ -459,8 +460,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const actionButton = canSend ? (
     <TouchableOpacity
       testID="send-button"
+      accessibilityRole="button"
+      accessibilityLabel={isGenerating ? 'Queue message' : 'Send message'}
+      accessibilityHint={isGenerating ? 'Long press to stop the reply and send now' : undefined}
       style={styles.circleButton}
-      onPress={handleSend}
+      onPress={() => handleSend()}
+      onLongPress={isGenerating ? () => handleSend(true) : undefined}
     >
       <Icon name="send" size={18} color={colors.background} />
     </TouchableOpacity>
@@ -492,11 +497,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   return (
     <View style={styles.container}>
       <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
-      <QueueRow
-        queueCount={queueCount}
-        queuedTexts={queuedTexts}
-        onClearQueue={onClearQueue}
-      />
+      <QueueRow queue={queue} actions={queueActions} />
       <View style={styles.mainRow}>
         <View style={styles.pill}>
           {showVoiceStatus ? (

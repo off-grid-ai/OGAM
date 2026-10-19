@@ -16,7 +16,7 @@
  * Call AFTER installNativeBoundary (it resets modules) and BEFORE requiring any src module, because
  * pdfExtractor captures NativeModules at import.
  */
-import { doMockRealSqlite } from './sqliteFake';
+import { doMockRealSqlite, type RealSqliteDiskOptions } from './sqliteFake';
 import type { NativeFileSystemBoundary } from './nativeFileSystem';
 
 const PDF_HEADER = '%PDF-1.7\n';
@@ -32,6 +32,29 @@ export interface DocumentEngineOptions {
   withoutFts5?: boolean;
   /** The llama.rn module in use when installNativeBoundary({ llama: true }) replaced the global one. */
   llama?: Record<string, jest.Mock>;
+  /** Device variations of the SQLite boundary: databases kept on disk across a relaunch, pooled BLOBs. */
+  sqlite?: RealSqliteDiskOptions;
+  /**
+   * Make the embedding model answer by MEANING, as MiniLM does: each entry is one topic (a set of
+   * words), and a text's vector points along the topics whose words it uses, so a question and a
+   * passage about the same thing are close even when they share no word. Default: the llama.rn fake's
+   * own vector, which depends only on the text's length.
+   */
+  topics?: string[][];
+}
+
+const EMBEDDING_DIMENSIONS = 384;
+
+/** A unit vector along the topics a text uses (one dimension per topic, plus a small shared floor). */
+function topicVector(topics: string[][], text: string): number[] {
+  const words = new Set(text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []);
+  const vector = new Array<number>(EMBEDDING_DIMENSIONS).fill(0);
+  topics.forEach((topic, i) => {
+    vector[i] = topic.filter(word => words.has(word.toLowerCase())).length;
+  });
+  vector[EMBEDDING_DIMENSIONS - 1] = 0.05;
+  const norm = Math.hypot(...vector);
+  return vector.map(value => value / norm);
 }
 
 export interface DocumentEngineBoundary {
@@ -62,7 +85,7 @@ export function installDocumentEngine(
   fs: NativeFileSystemBoundary,
   options: DocumentEngineOptions = {},
 ): DocumentEngineBoundary {
-  doMockRealSqlite(undefined, { withoutFts5: options.withoutFts5 });
+  doMockRealSqlite(undefined, { withoutFts5: options.withoutFts5, ...options.sqlite });
 
   // The embedding model ships in the app bundle; embeddingService copies it out on first use.
   fs.seedFile(`${fs.module.MainBundlePath}/${EMBEDDING_MODEL}`, 25 * 1024 * 1024);
@@ -114,7 +137,7 @@ export function installDocumentEngine(
           releaseEmbeddingNow = null;
         }
         if (embeddingFailure) throw new Error(embeddingFailure);
-        return embed(text);
+        return options.topics ? { embedding: topicVector(options.topics, text) } : embed(text);
       },
     };
   });

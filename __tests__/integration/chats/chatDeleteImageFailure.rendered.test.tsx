@@ -10,15 +10,18 @@ import {
   installNativeBoundary,
   requireRTL,
 } from '../../harness/nativeBoundary';
+import { setupChatScreen } from '../../harness/chatHarness';
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
-    navigate: () => {},
+    navigate: (screen: string, params?: Record<string, unknown>) =>
+      require('../../harness/chatHarness').recordNavigation(screen, params),
     goBack: () => {},
     setOptions: () => {},
     addListener: () => () => {},
   }),
-  useRoute: () => ({ params: {} }),
+  // The route the screen was opened with (chatHarness.routeHolder; empty unless a step navigated).
+  useRoute: () => require('../../harness/chatHarness').routeHolder,
   useFocusEffect: () => {},
   useIsFocused: () => true,
 }));
@@ -116,6 +119,124 @@ describe.each<DeleteGesture>(['swipe delete', 'select and delete'])('Deleting a 
       expect(gallery.getByText('No generated images yet')).toBeTruthy();
     });
     expect(await fs.exists(lockedImage)).toBe(false);
+    await rtl.act(() => new Promise(resolve => setTimeout(resolve, 250)));
+  });
+});
+
+/**
+ * The same delete from the other places a chat can be deleted: Home's recents and a project's chat
+ * lists. Here the chat and its images are made the way the user makes them - a chat (in a project for
+ * the project rows) where two images are drawn - so the images carry the chat they were drawn in.
+ */
+type DeleteSurface = 'Home recents' | 'project detail' | 'project chats';
+
+describe.each<DeleteSurface>(['Home recents', 'project detail', 'project chats'])('Deleting a chat from %s', surface => {
+  it('removes its images from the Gallery and the disk, and reports an image that could not be removed', async () => {
+    const h = await setupChatScreen({ engine: 'llama' });
+    const { rtl, React } = h;
+    const harness = require('../../harness/chatHarness');
+    const navigatedTo = () => harness.navHolder.last as { screen: string; params?: Record<string, unknown> };
+    const homeNavigation = { navigate: harness.recordNavigation, goBack: () => {}, setOptions: () => {}, addListener: () => () => {} };
+
+    let projectId: string | undefined;
+    if (surface !== 'Home recents') {
+      // Make a project through its form, open it from the Projects list, and start a chat in it.
+      const { ProjectEditScreen } = require('../../../src/screens/ProjectEditScreen');
+      harness.routeHolder.params = {};
+      const form = rtl.render(React.createElement(ProjectEditScreen, {}));
+      rtl.fireEvent.changeText(form.getByTestId('project-edit-name'), 'Trip');
+      rtl.fireEvent.changeText(
+        form.getByPlaceholderText('Enter the instructions or context for the AI...'),
+        'You help plan trips.',
+      );
+      rtl.fireEvent.press(form.getByTestId('project-edit-save'));
+      form.unmount();
+      const { ProjectsScreen } = require('../../../src/screens/ProjectsScreen');
+      const projects = rtl.render(React.createElement(ProjectsScreen, {}));
+      rtl.fireEvent.press(await rtl.waitFor(() => projects.getByText('Trip')));
+      projects.unmount();
+      expect(navigatedTo().screen).toBe('ProjectDetail');
+      projectId = navigatedTo().params!.projectId as string;
+      harness.routeHolder.params = { projectId };
+      const { ProjectDetailScreen } = require('../../../src/screens/ProjectDetailScreen');
+      const detail = rtl.render(React.createElement(ProjectDetailScreen, {}));
+      rtl.fireEvent.press(await rtl.waitFor(() => detail.getByTestId('project-start-chat')));
+      detail.unmount();
+      expect(navigatedTo().screen).toBe('Chat');
+      harness.routeHolder.params = navigatedTo().params!;
+    }
+
+    // Draw two images in the chat.
+    await h.generateImageViaUI({ prompt: 'a lake at dawn' });
+    await h.cycleImageMode(); // image mode is on for one message; turn it on again for the next
+    await rtl.waitFor(() => expect(h.view!.queryByTestId('image-mode-force-badge')).not.toBeNull());
+    await h.tapSend('a lake at dusk');
+    await rtl.waitFor(() => expect(h.view!.queryAllByTestId('generated-image')).toHaveLength(2));
+    h.view!.unmount();
+    const fs = h.boundary.fs!;
+    const lockedImage = `${fs.DocumentDirectoryPath}/generated_images/img-1.png`;
+    const freeImage = `${fs.DocumentDirectoryPath}/generated_images/img-2.png`;
+    expect(await fs.exists(lockedImage)).toBe(true);
+    expect(await fs.exists(freeImage)).toBe(true);
+
+    // Before: the Gallery has both images.
+    const { GalleryScreen } = require('../../../src/screens/GalleryScreen');
+    harness.routeHolder.params = {};
+    let gallery = rtl.render(React.createElement(GalleryScreen));
+    await rtl.waitFor(() => expect(gallery.queryAllByTestId(/^gallery-image-/)).toHaveLength(2));
+    expect(gallery.queryByTestId('gallery-image-img-1')).not.toBeNull();
+    expect(gallery.queryByTestId('gallery-image-img-2')).not.toBeNull();
+    gallery.unmount();
+
+    // The device refuses to remove one file.
+    const unlink = fs.module.unlink.getMockImplementation()!;
+    fs.module.unlink.mockImplementation(async (path: string) => {
+      if (path === lockedImage) throw new Error('EACCES: permission denied');
+      return unlink(path);
+    });
+
+    // Delete the chat from the surface under test.
+    const title = 'a lake at dawn';
+    let screen: ReturnType<typeof rtl.render>;
+    if (surface === 'Home recents') {
+      const { HomeScreen } = require('../../../src/screens/HomeScreen');
+      screen = rtl.render(React.createElement(HomeScreen, { navigation: homeNavigation }));
+      expect(await screen.findByText(title)).toBeTruthy();
+      rtl.fireEvent.press(screen.getByTestId('delete-conversation-button'));
+    } else {
+      harness.routeHolder.params = { projectId };
+      const { ProjectDetailScreen } = require('../../../src/screens/ProjectDetailScreen');
+      screen = rtl.render(React.createElement(ProjectDetailScreen, {}));
+      if (surface === 'project chats') {
+        // The project's Chats header opens its full chat list.
+        rtl.fireEvent.press(await screen.findByText('Chats'));
+        screen.unmount();
+        expect(navigatedTo().screen).toBe('ProjectChats');
+        harness.routeHolder.params = navigatedTo().params!;
+        const { ProjectChatsScreen } = require('../../../src/screens/ProjectChatsScreen');
+        screen = rtl.render(React.createElement(ProjectChatsScreen, {}));
+      }
+      expect(await screen.findByText(title)).toBeTruthy();
+      rtl.fireEvent.press(screen.getByLabelText(`Delete ${title}`));
+    }
+    await rtl.act(() => new Promise(resolve => setTimeout(resolve, 350)));
+    await rtl.act(async () => { rtl.fireEvent.press(screen.getByText('Delete')); });
+
+    // The chat is gone, and the user is told one image stayed and where to find it.
+    expect(await screen.findByText('Some images were not deleted')).toBeTruthy();
+    expect(screen.getByText(/1 image from the deleted chat could not be removed/)).toBeTruthy();
+    expect(screen.queryByText(title)).toBeNull();
+    screen.unmount();
+
+    // The image that could be removed is off the disk and out of the Gallery; the one that stayed is listed.
+    expect(await fs.exists(freeImage)).toBe(false);
+    expect(await fs.exists(lockedImage)).toBe(true);
+    harness.routeHolder.params = {};
+    gallery = rtl.render(React.createElement(GalleryScreen));
+    await rtl.waitFor(() => expect(gallery.queryAllByTestId(/^gallery-image-/)).toHaveLength(1));
+    expect(gallery.queryByTestId('gallery-image-img-1')).not.toBeNull();
+    expect(gallery.queryByTestId('gallery-image-img-2')).toBeNull();
+    gallery.unmount();
     await rtl.act(() => new Promise(resolve => setTimeout(resolve, 250)));
   });
 });

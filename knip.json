@@ -10,8 +10,7 @@
     "pro/**/*.{ts,tsx}"
   ],
   "ignoreBinaries": [
-    "swiftlint",
-    "xcrun"
+    "swiftlint"
   ],
   "ignoreDependencies": [
     "@offgrid/pro",

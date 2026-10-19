@@ -12,6 +12,49 @@ Verdict legend:
 
 ---
 
+## Rendered tests cannot see three things from the v0.0.111 handoff - 2026-10-17
+
+**Verdict: instrument-and-revisit.**
+
+The rendered tests for the changes since v0.0.111 (commit 982f99d6b) are green, but four outcomes are
+not observable in Jest and need a device check (the thinking preview's ellipsis was checked on an
+iPhone 17 Pro Max on 2026-10-17 and is not listed):
+
+- **Synced chat repair at startup** (`pro/sync/syncedChatRestoredFromOpLog`): the test asserts the
+  order before and after the repair. It cannot see whether the list flashes or reorders in between,
+  or whether the scroll position holds, because the list has no layout in Jest.
+- **Project knowledge with an unknown model name** (`knowledge-base/projectKnowledgeSearchedWhenNeeded`):
+  the test uses a known name (Qwen3). With an unknown GGUF name, the first message after a lazy load
+  goes out with no tools, so the whole PDF is put into the prompt (`src/utils/ggufCapabilities.ts`,
+  by design). That cell is not covered.
+- **Demo data PDF** (`settings/devToolingReleaseGate`): the fake PDF reader cannot read the real demo
+  PDF, so the test checks that the PDF is listed, not that it was indexed.
+
+---
+
+## LiteRT-LM 0.18.0 is not checked on an Android phone - 2026-10-17
+
+**Verdict: instrument-and-revisit.**
+
+The runtime upgrade (handoff item 9) was checked on an iPhone 17 Pro Max with llama.rn 0.13.0-rc.7:
+a thinking chat completed with Metal (99 layers), tool calls ran, Stop kept the partial reply, and a
+vision question about a photo was answered correctly. LiteRT-LM 0.18.0 (`android/app/build.gradle`,
+commit c55dd1d72) is Android-only and no Android phone was connected. Still to check on Android: a
+LiteRT chat, the same llama.rn steps, and the backend chip or CPU fallback notice.
+
+---
+
+## A failed image generation does not hold the chat queue - 2026-10-17
+
+**Verdict: instrument-and-revisit.**
+
+A Stop or a failed text reply holds the queued messages until the user taps Send (the shared rules in
+`@offgrid/sync` chat-queue). A failed image generation does not: `imageGenerationService.generateImage`
+returns `null` for both a cancel and a failure, so `useChatGenerationActions` cannot tell them apart and
+leaves the hold as it was. Decide whether the queue should hold here too, then pass the outcome through.
+
+---
+
 ## Project deletion leaves an empty gap in the list - 2026-09-11
 
 **Verdict: fix-the-guard.**

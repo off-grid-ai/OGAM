@@ -69,6 +69,8 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
                 styles.button,
                 button.style === 'destructive' && styles.destructiveButton,
               ]}
+              accessibilityRole="button"
+              accessibilityLabel={button.text}
               onPress={() => handleButtonPress(button)}
             >
               <Text
