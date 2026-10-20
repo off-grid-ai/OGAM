@@ -12,7 +12,7 @@
  *    dirty memory the low-memory killer counts). Non-repacked quants and iOS keep mmap.
  *  - Batch is automatic by default: 128 on the NPU (HTP), 512 on the CPU and on Metal. The batch
  *    slider says so ("Auto (128)").
- *  - iOS threads the two performance cores.
+ *  - iOS threads four cores (measured fastest on an A19 Pro).
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB, MB } from '../../harness/nativeBoundary';
@@ -164,7 +164,7 @@ describe('load params follow the model header and the device', () => {
     expect(params.n_batch).toBe(256);
   });
 
-  it('iOS, a Q4_0 model: mmap stays on, auto batch 512, two threads', async () => {
+  it('iOS, a Q4_0 model: mmap stays on, auto batch 512, four threads', async () => {
     const h = await setupChatScreen({
       engine: 'llama',
       platform: 'ios',
@@ -176,6 +176,6 @@ describe('load params follow the model header and the device', () => {
     const params = await firstSendLoads(h);
     expect(params.use_mmap).toBe(true);
     expect(params.n_batch).toBe(512);
-    expect(params.n_threads).toBe(2);
+    expect(params.n_threads).toBe(4);
   });
 });

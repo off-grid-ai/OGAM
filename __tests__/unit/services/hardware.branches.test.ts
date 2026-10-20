@@ -177,9 +177,9 @@ describe('HardwareService — branch coverage', () => {
   });
 
   describe('getRecommendedThreadCount', () => {
-    it('threads the two performance cores on iOS (every iPhone chip has two)', async () => {
+    it('threads four cores on iOS, the count measured fastest on an A19 Pro', async () => {
       Platform.OS = 'ios';
-      expect(await hardwareService.getRecommendedThreadCount()).toBe(2);
+      expect(await hardwareService.getRecommendedThreadCount()).toBe(4);
     });
 
     it('returns the core count when cores <= 4 and the topology is unreadable', async () => {

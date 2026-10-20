@@ -2,7 +2,7 @@ import { Platform, NativeModules } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import RNFS from 'react-native-fs';
 import logger from '../utils/logger';
-import { IPHONE_PERFORMANCE_CORES } from '@offgrid/models';
+import { IPHONE_INFERENCE_THREADS } from '@offgrid/models';
 import { readPerformanceCoreCount } from './cpuTopologyReader';
 // Access NativeModules.LocalDreamModule dynamically (not destructured)
 // so it can be mocked in tests after module import.
@@ -465,8 +465,8 @@ class HardwareService {
       const fast = await this.getPerformanceCoreCount();
       if (fast >= 2) return Math.min(fast, cores);
     }
-    // iOS: every iPhone chip has two performance cores; threading the efficiency cores is slower.
-    if (Platform.OS === 'ios') return IPHONE_PERFORMANCE_CORES;
+    // iOS: the thread count measured fastest on an iPhone (shared table).
+    if (Platform.OS === 'ios') return IPHONE_INFERENCE_THREADS;
     return cores <= 4 ? cores : Math.floor(cores * 0.8);
   }
   /**
