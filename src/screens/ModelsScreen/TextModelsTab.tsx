@@ -31,6 +31,7 @@ import { modelDownloadService } from '../../services/modelDownloadService';
 import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
 import { fetchModelFiles, preferredDownloadQuants } from '../../services/modelCatalogFiles';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
+import { DevicePicksRow } from '../../components/models/DevicePicksRow';
 
 function hasNonSortFilters(fs: FilterState): boolean {
   return fs.orgs.length > 0 || fs.type !== 'all' || fs.source !== 'all' || fs.size !== 'all' || fs.quant !== 'all';
@@ -300,13 +301,6 @@ const ModelDetailView: React.FC<DetailProps> = ({
   );
 };
 
-const DeviceBanner: React.FC<{ ramGB: number; rec: { maxParameters: number; recommendedQuantization: string }; showTitle: boolean; styles: any }> = ({ ramGB, rec, showTitle, styles }) => (
-  <View>
-    <View style={styles.deviceBanner}><Text style={styles.deviceBannerText}>{Math.round(ramGB)}GB RAM — models up to {rec.maxParameters}B recommended ({rec.recommendedQuantization})</Text></View>
-    {showTitle && <Text style={styles.recommendedTitle}>Recommended for your device</Text>}
-  </View>
-);
-
 interface ModelListItemProps {
   item: ModelInfo; index: number; focusTrigger: number;
   isDownloaded: boolean; isTrending: boolean; onPress: () => void;
@@ -360,7 +354,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     searchQuery, setSearchQuery, isLoading, isRefreshing, hasSearched,
     selectedModel, setSelectedModel, modelFiles, setModelFiles, isLoadingFiles,
     filterState, textFiltersVisible, setTextFiltersVisible,
-    filteredResults, recommendedAsModelInfo, trendingAsModelInfo, ramGB, deviceRecommendation,
+    filteredResults, recommendedAsModelInfo, trendingAsModelInfo, ramGB,
     hasActiveFilters, downloadedModels,
     alertState, setAlertState, focusTrigger,
     handleSearch, handleRefresh, handleImportLocalModel, isImporting, handleSelectModel, handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel,
@@ -531,7 +525,8 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
           ListHeaderComponent={hasSearched ? null : (
             <>
-              <DeviceBanner ramGB={ramGB} rec={deviceRecommendation} showTitle={recommendedAsModelInfo.length > 0} styles={styles} />
+              <DevicePicksRow ramGB={ramGB} />
+              {recommendedAsModelInfo.length > 0 && <Text style={styles.recommendedTitle}>More models</Text>}
               {onboardingLiteRTCards}
             </>
           )}
