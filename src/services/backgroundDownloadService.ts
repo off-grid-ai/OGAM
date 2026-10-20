@@ -2,6 +2,7 @@
 import { NativeModules, NativeEventEmitter, Platform, Alert } from 'react-native';
 import { BackgroundDownloadInfo, BackgroundDownloadStatus } from '../types';
 import logger from '../utils/logger';
+import { assertFreeSpace } from './freeSpace';
 import { serializeQueue, saveQueuedDownloads } from './queuedDownloadPersistence';
 import type {
   DownloadParams,
@@ -62,6 +63,9 @@ class BackgroundDownloadService {
     if (!this.isAvailable()) {
       throw new Error('Background downloads not available on this platform');
     }
+    // Every model download (chat, vision projector, image, speech, MTP head) starts here, so this
+    // is the one place that checks the phone has room before any bytes move.
+    await assertFreeSpace(Math.max(params.totalBytes ?? 0, params.combinedTotalBytes ?? 0));
     // A sidecar (e.g. a vision model's mmproj) is a dependent sub-download of a main
     // file — it is NOT admission-controlled and does not occupy a concurrency slot. The
     // cap governs logical model downloads (the mains); the sidecar rides alongside its
