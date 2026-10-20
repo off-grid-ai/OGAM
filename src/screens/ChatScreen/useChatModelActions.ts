@@ -153,7 +153,12 @@ export async function initiateModelLoad(
           'Insufficient Memory',
           `${detail}\n\nWould you like to override these safeguards and load it anyway?`,
           [
-            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Cancel', style: 'cancel', onPress: () => {
+                deps.setAlertState(hideAlert());
+                activeModelService.keepLoadedTextModelSelected();
+              },
+            },
             {
               text: 'Load Anyway', style: 'destructive', onPress: () => {
                 deps.setAlertState(hideAlert());

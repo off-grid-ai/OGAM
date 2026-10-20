@@ -104,6 +104,15 @@ class ActiveModelService {
     }
     return llmService.isModelLoaded() && !!llmService.getMultimodalSupport()?.audio;
   }
+  /**
+   * A switch the person cancelled (the new model did not fit): the selection goes back to the model
+   * that is still loaded, so the chat keeps answering with it instead of retrying a load that cannot
+   * fit on every send. No loaded model: the selection is left as it is.
+   */
+  keepLoadedTextModelSelected(): void {
+    const loaded = this.loadedTextModelId;
+    if (loaded && useAppStore.getState().activeModelId !== loaded) this.selectTextModel(loaded);
+  }
   getLoadedModelIds(): {
     textModelId: string | null;
     imageModelId: string | null;
