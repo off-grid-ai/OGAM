@@ -189,6 +189,7 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
         <ImagePicksRow
           models={availableHFModels.filter(model => getImageModelCompatibility(model, imageRec).isCompatible)}
           ramGB={ramGB}
+          isRecommended={isRecommendedModel}
           onDownload={handleDownloadImageModel}
         />
         {imageRec?.warning && (
