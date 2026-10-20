@@ -12,8 +12,8 @@ export function engineLlamaBuild(): number | undefined {
 /** A catalog model this phone may offer: not replaced by a newer one, and loadable by its engine. */
 export function isOfferable(entry: Pick<ModelEntry, 'supersededBy' | 'minLlamaBuild'>): boolean {
   if (entry.supersededBy) return false;
-  const build = engineLlamaBuild();
-  return !(entry.minLlamaBuild && build !== undefined && entry.minLlamaBuild > build);
+  // An unknown engine build never offers a model that needs a specific newer one.
+  return !(entry.minLlamaBuild && entry.minLlamaBuild > (engineLlamaBuild() ?? 0));
 }
 
 /**
@@ -88,7 +88,7 @@ export function picksAmong<T>(
   ramGB: number,
 ): { slot: PickSlot; item: T }[] {
   const byId = new Map(items.map(item => [describe(item).id, item]));
-  const picks = pickModelsForDevice(items.map(describe), ramGB, PHONE_FIT_BUDGET, 'runsWell', engineLlamaBuild());
+  const picks = pickModelsForDevice(items.map(describe), ramGB, PHONE_FIT_BUDGET, 'runsWell', engineLlamaBuild() ?? 0);
   return (['fast', 'balanced', 'best'] as const).flatMap(slot => {
     const item = picks[slot] ? byId.get(picks[slot]!) : undefined;
     return item ? [{ slot, item }] : [];
