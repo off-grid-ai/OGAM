@@ -98,10 +98,14 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
 
   return (
     <>
+      {/* Two tight lines: the name with its capabilities inline, then what it is good at and its facts. */}
       <View style={styles.denseTitleRow}>
         <Text style={styles.denseName} numberOfLines={1} testID={nameTestID}>{model.name}</Text>
         <View style={styles.denseSourceGroup}>
-          {sourceBadge === 'Remote' ? <Icon name="cloud" size={14} color={colors.textMuted} accessibilityLabel="Remote model" />
+          {(capabilities?.vision || isVisionModel) && <Icon name="eye" size={12} color={colors.textMuted} accessibilityLabel="Vision" />}
+          {capabilities?.tools && <Icon name="tool" size={12} color={colors.textMuted} accessibilityLabel={capabilities.predicted ? 'Tool calling likely' : 'Tool calling'} />}
+          {capabilities?.thinking && <Icon name="zap" size={12} color={colors.textMuted} accessibilityLabel={capabilities.predicted ? 'Thinking likely' : 'Thinking'} />}
+          {sourceBadge === 'Remote' ? <Icon name="cloud" size={12} color={colors.textMuted} accessibilityLabel="Remote model" />
             : sourceBadge ? <Text style={styles.denseSource}>{sourceBadge}</Text> : null}
           {hasVerifiedMark && (
             <MaterialIcon
@@ -114,27 +118,14 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
           {sourceLabels.length > 0 && <Text style={styles.denseSource} numberOfLines={1}>
             {sourceLabels.join(' · ')}
           </Text>}
-
         </View>
       </View>
-      {!!description && (
-        <Text style={styles.denseDescription} numberOfLines={1}>{description}</Text>
-      )}
-      {facts.length > 0 && (
-        <Text style={styles.denseMeta} numberOfLines={2} testID={factsTestID}>{facts.join(' · ')}</Text>
-      )}
-      {(capabilities?.vision || isVisionModel || capabilities?.tools || capabilities?.thinking) && (
-        <View style={styles.capabilityRow}>
-          {(capabilities?.vision || isVisionModel) && <View style={styles.capabilityBadge} accessibilityLabel="Vision">
-            <Icon name="eye" size={13} color={colors.info} />
-          </View>}
-          {capabilities?.tools && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Tool calling likely' : 'Tool calling'}>
-            <Icon name="tool" size={13} color={colors.warning} />
-          </View>}
-          {capabilities?.thinking && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Thinking likely' : 'Thinking'}>
-            <Icon name="zap" size={13} color={colors.primary} />
-          </View>}
-        </View>
+      {(!!description || facts.length > 0) && (
+        <Text style={styles.denseMeta} numberOfLines={1}>
+          {description}
+          {!!description && facts.length > 0 ? ' · ' : ''}
+          {facts.length > 0 && <Text testID={factsTestID}>{facts.join(' · ')}</Text>}
+        </Text>
       )}
     </>
   );

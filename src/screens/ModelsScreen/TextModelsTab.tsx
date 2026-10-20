@@ -237,6 +237,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
           );
         } : undefined}
         compact
+        row
         recommended={recommended}
         supportsAcceleration={isAccelerableQuant(item.quantization) || !!liteRTMeta}
         failedState={failedState}
@@ -331,7 +332,7 @@ const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger
     vision: item.modelType === 'vision',
     predicted: true,
   };
-  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} /></AnimatedEntry>;
+  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact row isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} /></AnimatedEntry>;
 };
 
 function applyBackNavigation(setSelectedModel: (m: ModelInfo | null) => void, setModelFiles: (f: ModelFile[]) => void): void {

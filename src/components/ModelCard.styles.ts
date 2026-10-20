@@ -1,4 +1,5 @@
 import type { ThemeColors, ThemeShadows } from '../theme';
+import { StyleSheet } from 'react-native';
 import { SPACING, TYPOGRAPHY } from '../constants';
 
 export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
@@ -80,6 +81,27 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   cardActive: {
     borderWidth: 2,
     borderColor: colors.primary,
+  },
+  /** A thin list row: no box, no shadow; rows are divided by a hairline and the list is the surface. */
+  listRow: {
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    borderWidth: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    borderLeftWidth: 2,
+    borderLeftColor: 'transparent',
+    marginBottom: 0,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    // The theme's shadow is a boxShadow; the legacy shadow props alone leave it drawn.
+    boxShadow: 'none',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  /** The model in use is marked in its row by an emerald edge, not a bigger box. */
+  listRowActive: {
+    borderLeftColor: colors.primary,
   },
   cardIncompatible: {
     opacity: 0.6,

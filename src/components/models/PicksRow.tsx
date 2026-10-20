@@ -102,7 +102,7 @@ const createStyles = (colors: ThemeColors) => ({
   },
   rowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   rowActive: { borderLeftColor: colors.primary },
-  slot: { ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.primary, width: 64 },
+  slot: { ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted, width: 64 },
   name: { ...TYPOGRAPHY.body, color: colors.text, flex: 1 },
   size: { ...TYPOGRAPHY.meta, color: colors.textMuted },
   action: { width: 32, alignItems: 'flex-end' as const },

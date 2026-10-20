@@ -82,6 +82,7 @@ export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
     <View>
       <ModelCard
         compact
+        row
         recommended={recommended ? {} : undefined}
         model={{
           id: model.id,
