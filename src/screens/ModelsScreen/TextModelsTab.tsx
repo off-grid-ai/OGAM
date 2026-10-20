@@ -28,7 +28,7 @@ import { LITERT_FILE_META, LITERT_RECOMMENDED_MODEL, LITERT_PARENT_RECOMMENDED }
 import { modelManager } from '../../services';
 import { modelDownloadService } from '../../services/modelDownloadService';
 import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
-import { fetchModelFiles } from '../../services/modelCatalogFiles';
+import { fetchModelFiles, preferredDownloadQuants } from '../../services/modelCatalogFiles';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 
 function hasNonSortFilters(fs: FilterState): boolean {
@@ -263,7 +263,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
       <Text style={styles.sectionTitle}>Available Files</Text>
       {selectedModel.id !== LITERT_PARENT_ID && (
         <Text style={styles.sectionSubtitle}>
-          Choose a quantization level. Q4_K_M is recommended for mobile.
+          Choose a quantization level. The first one is recommended for this phone.
           {modelFiles.some(f => f.mmProjFile) && ' Vision files include mmproj.'}
         </Text>
       )}
@@ -275,11 +275,16 @@ const ModelDetailView: React.FC<DetailProps> = ({
             .filter(f => f.size > 0 && !fileExceedsBudget(f.size, ramGB) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
             .sort((a, b) => {
               if (selectedModel.id === LITERT_PARENT_ID) return a.size - b.size; // curated: small-first
-              // Tier: Q4_K_M (CPU default, lowest size) → GPU/NPU Q4_0/Q8_0 → rest (CPU
-              // fallback). Accelerable tier small-first (Q4_0 before Q8_0); others size desc.
-              const tier = (f: ModelFile) => f.name.includes('Q4_K_M') ? 0 : isAccelerableQuant(f.quantization) ? 1 : 2;
-              if (tier(a) !== tier(b)) return tier(a) - tier(b);
-              return tier(a) === 1 ? a.size - b.size : b.size - a.size;
+              // Tier: the preferred download quant (Q4_0 on Android CPU/NPU, else Q4_K_M) → GPU/NPU
+              // Q4_0/Q8_0 → rest (CPU fallback). Accelerable tier small-first; others size desc.
+              const preferred = preferredDownloadQuants();
+              const rank = (f: ModelFile) => {
+                const at = preferred.indexOf(f.quantization.toUpperCase());
+                if (at >= 0) return at;
+                return preferred.length + (isAccelerableQuant(f.quantization) ? 0 : 1);
+              };
+              if (rank(a) !== rank(b)) return rank(a) - rank(b);
+              return rank(a) === preferred.length ? a.size - b.size : b.size - a.size;
             })}
           renderItem={renderFileItem}
           keyExtractor={item => item.name}
@@ -373,7 +378,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     const files = await fetchModelFiles([item]);
     const file = files[item.id]?.[0];
     if (!file) {
-      setAlertState(showAlert('Download unavailable', 'No compatible Q4_K_M file was found.'));
+      setAlertState(showAlert('Download unavailable', 'No compatible file was found.'));
       return;
     }
     await handleDownload(item, file);

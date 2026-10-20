@@ -39,6 +39,8 @@ jest.mock('../../../src/theme', () => ({
 }));
 
 jest.mock('../../../src/constants', () => ({
+  // fetchModelFiles reads the backend from the app store, which needs the real APP_CONFIG.
+  ...jest.requireActual('../../../src/constants'),
   TYPOGRAPHY: {
     h2: { fontSize: 20, fontWeight: '600' },
     meta: { fontSize: 12 },
