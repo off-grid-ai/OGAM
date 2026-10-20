@@ -11,7 +11,7 @@ export const appNavigationRef =
   createNavigationContainerRef<RootStackParamList>();
 
 /**
- * Keep an expired installation on the purchase route.
+ * Show an expired installation the purchase route, with the app's home under it so Back leaves.
  *
  * The returned callback is also the NavigationContainer onReady handler. This handles a credential
  * that was already expired during cold-start hydration, before the navigator existed.
@@ -31,9 +31,11 @@ export function useProExpiryRedirect(
       return;
     }
     redirectPending.current = false;
+    // The app's home stays under the purchase screen: with ProDetail as the only route, its Back
+    // had nothing to pop and silently did nothing, trapping the person on the paywall.
     navigation.resetRoot({
-      index: 0,
-      routes: [{ name: 'ProDetail' }],
+      index: 1,
+      routes: [{ name: 'Main' }, { name: 'ProDetail' }],
     });
   }, [navigation]);
 
