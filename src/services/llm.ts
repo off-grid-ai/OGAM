@@ -67,7 +67,7 @@ class LLMService {
   private hashString(value: string): string { return hashString(value); }
   private ensureSessionCacheDir(): Promise<void> { return ensureSessionCacheDir(this.sessionCacheDir); }
   private getSessionPath(promptHash: string): string { return getSessionPath(this.sessionCacheDir, promptHash); }
-  private async validateAndPrepareModel(modelPath: string, override: boolean = false): Promise<{ fileSize: number; memCheck: Awaited<ReturnType<typeof checkMemoryForModel>>; params: ReturnType<typeof buildModelParams> }> {
+  private async validateAndPrepareModel(modelPath: string, override: boolean = false, reclaimBytes: number = 0): Promise<{ fileSize: number; memCheck: Awaited<ReturnType<typeof checkMemoryForModel>>; params: ReturnType<typeof buildModelParams> }> {
     logger.log(`[LLM] validateAndPrepareModel: ${modelPath}`);
     if (!await RNFS.exists(modelPath)) throw new Error(`Model file not found at: ${modelPath}`);
     const validation = await validateModelFile(modelPath);
@@ -103,7 +103,8 @@ class LLMService {
     // Policy comes from the residency manager (the authoritative owner).
     const getMem = async (): Promise<{ available: number; total: number; used: number }> => {
       const raw = await hardwareService.getAppMemoryUsage();
-      const availableMB = effectiveAvailableMB(raw.available / (1024 * 1024), raw.total / (1024 * 1024), {
+      // A model about to be released for this one gives its memory back.
+      const availableMB = effectiveAvailableMB((raw.available + reclaimBytes) / (1024 * 1024), raw.total / (1024 * 1024), {
         platform: Platform.OS,
         policy: modelResidencyManager.getLoadPolicy(),
       });
@@ -152,11 +153,16 @@ class LLMService {
       await mutex.ready;
       // Re-check after acquiring mutex — another call may have loaded the same model
       if (this.context && this.currentModelPath === modelPath) return;
-      if (this.context && this.currentModelPath !== modelPath) {
+      // Check the new model fits BEFORE releasing the current one: a refused switch must leave the
+      // chat on the model it had, not on nothing. The current model's memory is counted as coming
+      // back, since a switch that goes ahead releases it first.
+      const switching = !!this.context && this.currentModelPath !== modelPath;
+      const reclaimBytes = switching && this.currentModelPath ? (await statFile(this.currentModelPath))?.size ?? 0 : 0;
+      const { fileSize, memCheck, params } = await this.validateAndPrepareModel(modelPath, opts?.override, reclaimBytes);
+      if (switching) {
         logger.log('[LLM] Releasing previous context before loading new model');
         await this.doUnloadModel();
       }
-      const { fileSize, memCheck, params } = await this.validateAndPrepareModel(modelPath, opts?.override);
       if (mmProjPath && !await RNFS.exists(mmProjPath)) { logger.warn('[LLM] MMProj file not found, disabling vision support'); mmProjPath = undefined; }
       const { baseParams, nThreads, nBatch, ctxLen, nGpuLayers } = params;
       this.currentSettings = { nThreads, nBatch, contextLength: ctxLen };
