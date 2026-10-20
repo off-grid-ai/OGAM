@@ -64,23 +64,27 @@ export function catalogEntryToDownload(entry: ModelEntry): { model: ModelInfo; f
   return { model, file };
 }
 
-/** The picks for a phone with `ramGB` of RAM, in Fast, Balanced, Best order; empty slots are left out. */
-export function devicePicks(ramGB: number): DevicePick[] {
-  const downloads = new Map<string, { model: ModelInfo; file: ModelFile; sizeBytes: number }>();
-  for (const entry of chatEntries()) {
-    const download = catalogEntryToDownload(entry);
-    if (!download) continue;
-    downloads.set(entry.id, { ...download, sizeBytes: download.file.size + (download.file.mmProjFile?.size ?? 0) });
-  }
-  const picks = pickModelsForDevice(
-    [...downloads].map(([id, d]) => ({ id, sizeBytes: d.sizeBytes, params: d.model.paramCount })),
-    ramGB,
-    PHONE_FIT_BUDGET,
-    'runsWell',
-  );
+/** Fast, Balanced and Best among any kind of model (chat, image, speech) by the shared rule with the
+ *  phone budget, in that order; empty slots are left out. */
+export function picksAmong<T>(
+  items: readonly T[],
+  describe: (item: T) => { id: string; sizeBytes: number; params?: number },
+  ramGB: number,
+): { slot: PickSlot; item: T }[] {
+  const byId = new Map(items.map(item => [describe(item).id, item]));
+  const picks = pickModelsForDevice(items.map(describe), ramGB, PHONE_FIT_BUDGET, 'runsWell');
   return (['fast', 'balanced', 'best'] as const).flatMap(slot => {
-    const id = picks[slot];
-    const download = id ? downloads.get(id) : undefined;
-    return download ? [{ slot, ...download }] : [];
+    const item = picks[slot] ? byId.get(picks[slot]!) : undefined;
+    return item ? [{ slot, item }] : [];
   });
+}
+
+/** The chat picks for a phone with `ramGB` of RAM, in Fast, Balanced, Best order. */
+export function devicePicks(ramGB: number): DevicePick[] {
+  const downloads = chatEntries().flatMap(entry => {
+    const download = catalogEntryToDownload(entry);
+    return download ? [{ ...download, sizeBytes: download.file.size + (download.file.mmProjFile?.size ?? 0) }] : [];
+  });
+  return picksAmong(downloads, d => ({ id: d.model.id, sizeBytes: d.sizeBytes, params: d.model.paramCount }), ramGB)
+    .map(({ slot, item }) => ({ slot, ...item }));
 }

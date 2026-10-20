@@ -13,6 +13,7 @@ import { makeImageModelKey } from '../../utils/modelKey';
 import { imageBackendLabel } from '../../utils/imageBackend';
 import { createStyles } from './styles';
 import { ModelsScreenViewModel } from './useModelsScreen';
+import { ImagePicksRow } from './ImagePicksRow';
 import { ImageFilterBar } from './ImageFilterBar';
 import { BackendFilter, ImageFilterDimension } from './types';
 import { formatBytes, getImageModelCompatibility, hfModelToDescriptor } from './utils';
@@ -151,7 +152,7 @@ interface ScrollContentProps {
 
 const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
   showRecHint, showRecommendedOnly, setShowRecHint,
-  imageRec, ramGB, imageRecommendation,
+  imageRec, ramGB,
   imageFiltersVisible, backendFilter, setBackendFilter,
   styleFilter, setStyleFilter, sdVersionFilter, setSdVersionFilter,
   imageFilterExpanded, setImageFilterExpanded,
@@ -185,12 +186,16 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
           </TouchableOpacity>
         )}
 
-        <View style={styles.deviceBanner}>
-          <Text style={styles.deviceBannerText}>{Math.round(ramGB)}GB RAM — {imageRecommendation}</Text>
-          {imageRec?.warning && (
+        <ImagePicksRow
+          models={availableHFModels.filter(model => getImageModelCompatibility(model, imageRec).isCompatible)}
+          ramGB={ramGB}
+          onDownload={handleDownloadImageModel}
+        />
+        {imageRec?.warning && (
+          <View style={styles.deviceBanner}>
             <Text style={[styles.deviceBannerText, styles.deviceBannerWarning]}>{imageRec.warning}</Text>
-          )}
-        </View>
+          </View>
+        )}
 
         {imageFiltersVisible && (
           <ImageFilterBar
