@@ -32,6 +32,23 @@ const TOPOLOGIES = {
   'uniform (8)': { capacities: [1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024], expected: 8 },
 };
 
+/** Devices whose kernel publishes no cpu_capacity: the reader falls back to each core's
+ *  cpufreq/cpuinfo_max_freq (kHz). The count comes from the same shared rule over frequencies. */
+const FREQUENCY_TOPOLOGIES = {
+  // Snapdragon 8 Elite: six 3.53 GHz cores beside two 4.32 GHz cores. Every core is within reach of
+  // the fastest, and the top cluster is two cores, so all eight run.
+  'Snapdragon 8 Elite (6+2)': {
+    maxFreqsKhz: [3532800, 3532800, 3532800, 3532800, 3532800, 3532800, 4320000, 4320000],
+    expected: 8,
+  },
+  // Snapdragon 8 Gen 3: 2x2.27 + 2x2.96 + 3x3.15 + 1x3.30 GHz. The two 2.27 GHz efficiency cores are
+  // too slow; the lone 3.30 GHz prime core sits beside a bigger cluster and is left out: five run.
+  'Snapdragon 8 Gen 3 (2+2+3+1)': {
+    maxFreqsKhz: [2265600, 2265600, 2956800, 2956800, 3148800, 3148800, 3148800, 3302400],
+    expected: 5,
+  },
+};
+
 /** The filesystem, faked at the native line: /proc/cpuinfo lists the cores and each cpuN publishes
  *  its capacity, exactly as the kernel does. */
 function serveTopology(capacities: number[]): void {
@@ -40,6 +57,17 @@ function serveTopology(capacities: number[]): void {
     if (path === '/proc/cpuinfo') return Promise.resolve(cpuinfo);
     const match = /\/sys\/devices\/system\/cpu\/cpu(\d+)\/cpu_capacity$/.exec(path);
     if (match) return Promise.resolve(`${capacities[Number(match[1])]}\n`);
+    return Promise.reject(new Error(`ENOENT: ${path}`));
+  });
+}
+
+/** A kernel without cpu_capacity: only the per-core maximum frequency is published. */
+function serveFrequencies(maxFreqsKhz: number[]): void {
+  const cpuinfo = maxFreqsKhz.map((_unused, cpu) => `processor\t: ${cpu}\n`).join('\n');
+  (RNFS.readFile as jest.Mock).mockImplementation((path: string) => {
+    if (path === '/proc/cpuinfo') return Promise.resolve(cpuinfo);
+    const match = /\/sys\/devices\/system\/cpu\/cpu(\d+)\/cpufreq\/cpuinfo_max_freq$/.exec(path);
+    if (match) return Promise.resolve(`${maxFreqsKhz[Number(match[1])]}\n`);
     return Promise.reject(new Error(`ENOENT: ${path}`));
   });
 }
@@ -65,6 +93,19 @@ describe('CPU Threads — what the screen says when you have not chosen', () => 
 
       // It names the setting as automatic and shows the count that will actually run — the "1" this
       // replaces was the slider's own minimum standing in for an unset value.
+      await waitFor(() => {
+        expect(view.queryByText(`Auto (${expected})`)).not.toBeNull();
+      });
+      expect(view.queryByText('1')).toBeNull();
+    },
+  );
+
+  it.each(Object.entries(FREQUENCY_TOPOLOGIES))(
+    'reads %s from its core frequencies when cpu_capacity is missing',
+    async (_name, { maxFreqsKhz, expected }) => {
+      serveFrequencies(maxFreqsKhz);
+      const view = render(<CpuThreadsSlider />);
+
       await waitFor(() => {
         expect(view.queryByText(`Auto (${expected})`)).not.toBeNull();
       });
