@@ -264,7 +264,7 @@ export const ShowGenerationDetailsToggle: React.FC = () => {
 
 export const CpuThreadsSlider: React.FC = () => {
   const styles = useThemedStyles(createTextGenAdvancedStyles);
-  const { updateSettings } = useAppStore();
+  const { settings, updateSettings } = useAppStore();
   const { cpuThreadsSliderValue, cpuThreadsDisplayValue } = useTextGenerationAdvanced();
   return (
     <View style={styles.container}>
@@ -278,6 +278,8 @@ export const CpuThreadsSlider: React.FC = () => {
         formatValue={() => cpuThreadsDisplayValue}
         min={1} max={12} step={1}
         onChange={(v) => updateSettings({ nThreads: v })}
+        onReset={settings.nThreads ? () => updateSettings({ nThreads: 0 }) : undefined}
+        resetLabel="Use automatic threads"
       />
     </View>
   );
@@ -297,6 +299,8 @@ export const BatchSizeSlider: React.FC = () => {
         formatValue={(v) => (settings.nBatch ? String(v) : `Auto (${v})`)}
         min={32} max={512} step={32}
         onChange={(v) => updateSettings({ nBatch: v })}
+        onReset={settings.nBatch ? () => updateSettings({ nBatch: 0 }) : undefined}
+        resetLabel="Use automatic batch size"
       />
     </View>
   );
