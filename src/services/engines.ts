@@ -79,6 +79,19 @@ export function deriveEngineCapabilities(i: CapabilityInputs): EngineCapabilitie
  * cross-engine swap (LiteRT <-> llama) can't leave the previous model resident, without the
  * caller branching on which concrete engine held it. Adding an engine is one entry above (OCP).
  */
+/** Unload every text engine except `keep`: the engine about to load swaps its own model, checking
+ *  the new one fits before it lets the current one go. */
+export async function unloadOtherTextEngines(keep: { unloadModel: () => Promise<void> }): Promise<void> {
+  for (const engine of TEXT_ENGINES) {
+    if (engine === keep) continue;
+    try {
+      await engine.unloadModel();
+    } catch (e) {
+      logger.warn('[engines] text engine unload during switch failed, continuing:', e);
+    }
+  }
+}
+
 export async function unloadAllTextEngines(): Promise<void> {
   for (const engine of TEXT_ENGINES) {
     try {

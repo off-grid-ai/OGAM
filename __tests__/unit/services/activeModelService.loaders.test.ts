@@ -146,7 +146,7 @@ describe('doLoadTextModel — llama.cpp path', () => {
     expect(ctx.onFinally).toHaveBeenCalled();
   });
 
-  it('unloads previous model when loadedTextModelId differs', async () => {
+  it('a llama → llama switch leaves the current model to llama, which checks the new one fits before releasing it', async () => {
     mockedLlm.loadModel.mockResolvedValue(undefined);
     mockedLlm.unloadModel.mockResolvedValue(undefined);
     mockedRNFS.exists.mockResolvedValue(false);
@@ -155,7 +155,9 @@ describe('doLoadTextModel — llama.cpp path', () => {
     mockedGetState.mockReturnValue(ctx.store);
 
     await doLoadTextModel(ctx);
-    expect(mockedLlm.unloadModel).toHaveBeenCalled();
+    // Releasing it here first is what left a refused switch with nothing loaded.
+    expect(mockedLlm.unloadModel).not.toHaveBeenCalled();
+    expect(mockedLlm.loadModel).toHaveBeenCalled();
   });
 
   it('CROSS-ENGINE: loading a llama GGUF unloads a previously-resident LiteRT model (co-residence OOM fix)', async () => {
@@ -173,7 +175,8 @@ describe('doLoadTextModel — llama.cpp path', () => {
     await doLoadTextModel(ctx);
 
     expect(mockedLiteRT.unloadModel).toHaveBeenCalled(); // the resident LiteRT is freed (was the bug)
-    expect(mockedLlm.unloadModel).toHaveBeenCalled();
+    // llama swaps its own model inside loadModel, after checking the new one fits.
+    expect(mockedLlm.unloadModel).not.toHaveBeenCalled();
   });
 });
 

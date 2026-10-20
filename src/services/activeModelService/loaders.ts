@@ -8,7 +8,7 @@ import { useAppStore } from '../../stores';
 import { DownloadedModel, LlamaDownloadedModel, ONNXImageModel, INFERENCE_BACKENDS } from '../../types';
 import { llmService } from '../llm';
 import { liteRTService } from '../litert';
-import { unloadAllTextEngines } from '../engines';
+import { unloadAllTextEngines, unloadOtherTextEngines } from '../engines';
 import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
 import { modelManager } from '../modelManager';
 import { hardwareService } from '../hardware';
@@ -185,8 +185,9 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
 
   try {
     if (ctx.loadedTextModelId && ctx.loadedTextModelId !== ctx.modelId) {
-      await unloadAllTextEngines(); // cross-engine switch → no co-residence (engine set owned by engines.ts)
-      ctx.onError(); // resets loadedTextModelId to null before reassignment
+      // Another engine's model (LiteRT) goes now; a llama model stays until llama has checked the
+      // new one fits, so a refused switch leaves the chat on the model it had.
+      await unloadOtherTextEngines(llmService);
     }
 
     const mmProjPath = await resolveMmProjPath(ctx.model, ctx.modelId);
@@ -244,6 +245,12 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
     ctx.onLoaded(ctx.modelId);
     ctx.store.setActiveModelId(ctx.modelId);
   } catch (error) {
+    // A refused switch can leave the previous llama model loaded: it stays the active model.
+    const previous = ctx.store.downloadedModels.find(m => m.id === ctx.loadedTextModelId);
+    if (previous && previous.engine !== 'litert' && llmService.isModelLoaded() && llmService.getLoadedModelPath() === previous.filePath) {
+      ctx.store.setActiveModelId(previous.id);
+      throw error;
+    }
     ctx.onError();
     ctx.store.setActiveModelId(null); // load FAILED → no active model, consistently (never a stale selection)
     throw error;
