@@ -75,14 +75,41 @@ export async function performMmProjRepairDownload(opts: MmProjRepairDownloadOpts
   }
   // Same quant-independent name the normal download uses — repair and download must agree on the file.
   const mmProjLocalPath = `${modelsDir}/${mmProjLocalName(file.name, file.mmProjFile?.name)}`;
-  const totalBytes = mmProjFile.size;
-  if (await RNFS.exists(mmProjLocalPath)) await RNFS.unlink(mmProjLocalPath).catch(() => {});
+  return performSidecarDownload({
+    modelId, modelKey, quantization: file.quantization ?? '', localPath: mmProjLocalPath,
+    sidecar: { name: mmProjFile.name, url: mmProjFile.downloadUrl, sizeBytes: mmProjFile.size },
+    onProgress, onDownloadIdReady,
+  });
+}
+
+export interface SidecarDownloadOpts {
+  modelId: string;
+  /** The installed model's key: the download-store row the progress bar reads. */
+  modelKey: string;
+  quantization: string;
+  localPath: string;
+  sidecar: { name: string; url: string; sizeBytes: number; sha256?: string };
+  onProgress?: DownloadProgressCallback;
+  onDownloadIdReady?: (id: string) => void;
+}
+
+/**
+ * Download one extra file beside an installed model (a vision projector, an MTP head), routing
+ * progress through the model's own download-store row so the existing progress bar shows it. The
+ * native downloader resumes on Android and verifies the checksum when one is given. The row is
+ * transient and removed once the download settles. Returns the local path.
+ */
+export async function performSidecarDownload(opts: SidecarDownloadOpts): Promise<string> {
+  const { modelId, modelKey, sidecar, localPath, onProgress, onDownloadIdReady } = opts;
+  const totalBytes = sidecar.sizeBytes;
+  if (await RNFS.exists(localPath)) await RNFS.unlink(localPath).catch(() => {});
 
   const info = await backgroundDownloadService.startDownload({
-    url: mmProjFile.downloadUrl,
-    fileName: mmProjFile.name,
+    url: sidecar.url,
+    fileName: sidecar.name,
     modelId,
     totalBytes,
+    ...(sidecar.sha256 ? { sha256: sidecar.sha256 } : {}),
   });
   onDownloadIdReady?.(info.downloadId);
 
@@ -90,8 +117,8 @@ export async function performMmProjRepairDownload(opts: MmProjRepairDownloadOpts
     modelKey,
     downloadId: info.downloadId,
     modelId,
-    fileName: mmProjFile.name,
-    quantization: file.quantization ?? '',
+    fileName: sidecar.name,
+    quantization: opts.quantization,
     modelType: 'text',
     status: 'running',
     bytesDownloaded: 0,
@@ -101,7 +128,7 @@ export async function performMmProjRepairDownload(opts: MmProjRepairDownloadOpts
     createdAt: Date.now(),
   });
 
-  let resolvedPath = mmProjLocalPath;
+  let resolvedPath = localPath;
   try {
     await new Promise<void>((resolve, reject) => {
       const removeProgress = backgroundDownloadService.onProgress(info.downloadId, (event) => {
@@ -109,7 +136,7 @@ export async function performMmProjRepairDownload(opts: MmProjRepairDownloadOpts
         onProgress?.({
           downloadId: info.downloadId,
           modelId,
-          fileName: mmProjFile.name,
+          fileName: sidecar.name,
           bytesDownloaded: event.bytesDownloaded,
           totalBytes,
           progress: totalBytes > 0 ? event.bytesDownloaded / totalBytes : 0,
@@ -118,9 +145,9 @@ export async function performMmProjRepairDownload(opts: MmProjRepairDownloadOpts
       const removeComplete = backgroundDownloadService.onComplete(info.downloadId, async (event) => {
         removeProgress(); removeComplete(); removeError();
         try {
-          resolvedPath = await backgroundDownloadService.moveCompletedDownload(info.downloadId, mmProjLocalPath);
+          resolvedPath = await backgroundDownloadService.moveCompletedDownload(info.downloadId, localPath);
         } catch {
-          resolvedPath = event.localUri?.replace('file://', '') || mmProjLocalPath;
+          resolvedPath = event.localUri?.replace('file://', '') || localPath;
         }
         useDownloadStore.getState().setCompleted(info.downloadId);
         resolve();
@@ -134,7 +161,7 @@ export async function performMmProjRepairDownload(opts: MmProjRepairDownloadOpts
     });
     return resolvedPath;
   } finally {
-    // The repair row is transient — remove it once settled so the completed model
+    // The sidecar row is transient — remove it once settled so the completed model
     // (rebuilt via loadDownloadedModels) is the only surviving row.
     useDownloadStore.getState().remove(modelKey);
   }
