@@ -43,8 +43,13 @@ export const ImagePicksRow: React.FC<{
   const downloads = useDownloadStore(s => s.downloads);
 
   const stateFor = (model: HFImageModel): PickState => {
-    if (downloaded.some(d => d.id === model.id)) {
-      return activeId === model.id ? { kind: 'active' } : { kind: 'use', onUse: () => setActive(model.id) };
+    // A pick stands for its family: any downloaded variant of it counts.
+    const family = imageFamilyName(model.displayName);
+    const installed = downloaded.filter(d => imageFamilyName(d.name) === family);
+    if (installed.length > 0) {
+      if (installed.some(d => d.id === activeId)) return { kind: 'active' };
+      const first = installed[0];
+      return { kind: 'use', onUse: () => setActive(first.id) };
     }
     const entry = downloads[makeImageModelKey(model.id)];
     if (entry && isActiveStatus(entry.status)) return { kind: 'downloading', progress: entry.progress ?? 0 };
