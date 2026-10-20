@@ -1,3 +1,6 @@
+import { BuildInfo } from 'llama.rn';
+import { CATALOG, PHONE_FIT_BUDGET, type ModelEntry } from '@offgrid/models';
+
 // Model size recommendations based on device RAM
 export const MODEL_RECOMMENDATIONS = {
   // RAM in GB -> max model parameters in billions
@@ -11,129 +14,38 @@ export const MODEL_RECOMMENDATIONS = {
   ],
 };
 
-// Curated list of recommended models for mobile (updated Sep 2026)
-// Ordered editorially: MiniCPM5 featured first, then Gemma 4, Qwen 3.5, and others.
-export const RECOMMENDED_MODELS = [
-  // --- MiniCPM5 (featured) ---
-  {
-    id: 'openbmb/MiniCPM5-2B-GGUF',
-    name: 'MiniCPM5 2B',
-    params: 2,
-    description: 'Strong coding, reasoning, and tool use with 128K context',
-    minRam: 4,
-    type: 'text' as const,
-    org: 'openbmb',
-    isNew: true,
-  },
-  // --- Gemma 4 (featured) ---
-  {
-    id: 'unsloth/gemma-4-E2B-it-GGUF',
-    name: 'Gemma 4 E2B',
-    params: 2,
-    description: 'Google\'s latest, thinking mode + vision, MoE architecture',
-    minRam: 4,
-    type: 'vision' as const,
-    org: 'google',
-    isNew: true,
-  },
-  {
-    id: 'unsloth/gemma-4-E4B-it-GGUF',
-    name: 'Gemma 4 E4B',
-    params: 4,
-    description: 'Google\'s latest, stronger reasoning + vision',
-    minRam: 6,
-    type: 'vision' as const,
-    org: 'google',
-    isNew: true,
-  },
-  // --- Qwen 3.5 ---
-  {
-    id: 'unsloth/Qwen3.5-0.8B-GGUF',
-    name: 'Qwen 3.5 0.8B',
-    params: 0.8,
-    description: 'Thinking mode, ultra-light, 262K context',
-    minRam: 3,
-    type: 'vision' as const,
-    org: 'Qwen',
-  },
-  {
-    id: 'unsloth/Qwen3.5-2B-GGUF',
-    name: 'Qwen 3.5 2B',
-    params: 2,
-    description: 'Hybrid thinking + chat, 262K context',
-    minRam: 4,
-    type: 'vision' as const,
-    org: 'Qwen',
-  },
-  {
-    id: 'unsloth/Qwen3.5-9B-GGUF',
-    name: 'Qwen 3.5 9B',
-    params: 9,
-    description: 'Best Qwen 3.5 quality, thinking mode, 262K context',
-    minRam: 8,
-    type: 'vision' as const,
-    org: 'Qwen',
-  },
-  // --- Others ---
-  {
-    id: 'ggml-org/SmolLM3-3B-GGUF',
-    name: 'SmolLM3 3B',
-    params: 3,
-    description: 'Purpose-built for constrained devices, 128K context',
-    minRam: 6,
-    type: 'text' as const,
-    org: 'HuggingFaceTB',
-  },
-  {
-    id: 'bartowski/Mistral-7B-Instruct-v0.3-GGUF',
-    name: 'Mistral 7B',
-    params: 7,
-    description: 'Fast, reliable general purpose model',
-    minRam: 6,
-    type: 'text' as const,
-    org: 'mistralai',
-  },
-  // --- Low-RAM only (≤ 6 GB) ---
-  {
-    id: 'ggml-org/SmolVLM2-500M-Video-Instruct-GGUF',
-    name: 'SmolVLM2 500M',
-    params: 0.5,
-    description: 'Tiny vision + video model for constrained devices',
-    minRam: 3,
-    maxRam: 6,
-    type: 'vision' as const,
-    org: 'HuggingFaceTB',
-  },
-  {
-    id: 'QuantFactory/SmolLM2-360M-Instruct-GGUF',
-    name: 'SmolLM2 360M',
-    params: 0.36,
-    description: 'Ultra-light language model for low-RAM devices',
-    minRam: 3,
-    maxRam: 6,
-    type: 'text' as const,
-    org: 'HuggingFaceTB',
-  },
-  // --- Vision ---
-  {
-    id: 'ggml-org/SmolVLM-Instruct-GGUF',
-    name: 'SmolVLM 2B',
-    params: 2,
-    description: 'Mobile-optimized vision-language model',
-    minRam: 4,
-    type: 'vision' as const,
-    org: 'HuggingFaceTB',
-  },
-  {
-    id: 'ggml-org/SmolVLM2-2.2B-Instruct-GGUF',
-    name: 'SmolVLM2 2.2B',
-    params: 2.2,
-    description: 'Vision + video understanding',
-    minRam: 4,
-    type: 'vision' as const,
-    org: 'HuggingFaceTB',
-  },
-];
+// The phone's curated chat models are the shared catalog's (@offgrid/models): one list for every
+// app. Kept in the shape the phone's screens read. A model replaced by a newer one, or one this
+// engine's llama.cpp build cannot load, is not offered; an installed one keeps working, because
+// names and files are looked up in the full catalog.
+const ENGINE_LLAMA_BUILD = Number.parseInt(String(BuildInfo?.number ?? ''), 10);
+
+function offeredOnPhone(entry: ModelEntry): boolean {
+  if (entry.kind !== 'text' && entry.kind !== 'vision') return false;
+  if (entry.availability === 'coming_soon' || entry.grounder || entry.quantOf || entry.supersededBy) return false;
+  if (entry.minLlamaBuild && Number.isFinite(ENGINE_LLAMA_BUILD) && entry.minLlamaBuild > ENGINE_LLAMA_BUILD) return false;
+  return entry.files.some(file => (file.role === 'primary' || file.role === undefined) && !!file.sizeBytes);
+}
+
+/** RAM a model needs on a phone when the catalog does not say: its download over the phone's
+ *  "Runs well" share of RAM. */
+function phoneMinRamGb(entry: ModelEntry): number {
+  if (entry.minRamGb) return entry.minRamGb;
+  const bytes = entry.files.filter(f => f.role !== 'aux').reduce((sum, f) => sum + (f.sizeBytes ?? 0), 0);
+  return Math.ceil(bytes / 1e9 / PHONE_FIT_BUDGET.soft);
+}
+
+export const RECOMMENDED_MODELS = CATALOG.filter(offeredOnPhone).map(entry => ({
+  id: entry.id,
+  name: entry.name,
+  params: entry.params ?? 0,
+  description: entry.description ?? '',
+  minRam: phoneMinRamGb(entry),
+  maxRam: undefined as number | undefined,
+  type: entry.kind === 'vision' ? ('vision' as const) : ('text' as const),
+  org: entry.org ?? entry.id.split('/')[0],
+  isNew: entry.isNew,
+}));
 
 // Trending model families — one best-fit per family is shown as "trending"
 export const TRENDING_FAMILIES: Record<string, string[]> = {
