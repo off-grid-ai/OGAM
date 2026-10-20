@@ -32,6 +32,14 @@ export interface ModelInfo {
   modelType?: 'text' | 'vision' | 'code';
   paramCount?: number;
   minRamGB?: number;
+  /** Active parameters per token, in billions, for a mixture-of-experts model. */
+  activeParams?: number;
+  /** An upload of this model carries an MTP head: replies can come faster. */
+  hasMtp?: boolean;
+  /** A newer model that does this one's job better. */
+  newer?: string;
+  /** Other uploads of the same model (repo ids), shown as one result. */
+  variants?: string[];
 }
 
 export interface ModelFile {

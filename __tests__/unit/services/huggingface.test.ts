@@ -307,7 +307,7 @@ describe('HuggingFaceService', () => {
       expect(result.files[0].name).toBe('model.gguf');
     });
 
-    it('generates description with type and author', () => {
+    it('generates description with the type, not the publisher (that is the verified mark)', () => {
       const result = service.transformModelResult({
         id: 'org/model',
         author: 'org',
@@ -319,7 +319,7 @@ describe('HuggingFaceService', () => {
       });
 
       expect(result.description).toContain('Text generation');
-      expect(result.description).toContain('org');
+      expect(result.description).not.toContain('org');
     });
 
     it('detects code model type from tags', () => {
@@ -391,21 +391,27 @@ describe('HuggingFaceService', () => {
         status: 500,
       });
 
-      await expect(huggingFaceService.searchModels()).rejects.toThrow('API error: 500');
+      await expect(huggingFaceService.searchModels()).rejects.toThrow('HTTP 500');
     });
 
-    it('respects limit option', async () => {
+    it('over-fetches past the limit, so hiding and grouping still leave a full page', async () => {
       await huggingFaceService.searchModels('', { limit: 10 });
 
       const url = mockFetch.mock.calls[0][0];
-      expect(url).toContain('limit=10');
+      expect(url).toContain('limit=30');
     });
 
-    it('appends pipeline_tag when pipelineTag option is provided', async () => {
-      await huggingFaceService.searchModels('', { pipelineTag: 'image-text-to-text' });
+    it('a vision search keeps only vision models, by name (pipeline tags are unreliable on gguf repos)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([
+          { id: 'org/Qwen3-VL-2B-Instruct-GGUF', downloads: 5 },
+          { id: 'org/Qwen3-4B-GGUF', downloads: 9 },
+        ]),
+      });
+      const results = await huggingFaceService.searchModels('', { pipelineTag: 'image-text-to-text' });
 
-      const url = mockFetch.mock.calls[0][0];
-      expect(url).toContain('pipeline_tag=image-text-to-text');
+      expect(results.map(r => r.id)).toEqual(['org/Qwen3-VL-2B-Instruct-GGUF']);
     });
 
     it('does not append pipeline_tag when option is not provided', async () => {
@@ -415,12 +421,28 @@ describe('HuggingFaceService', () => {
       expect(url).not.toContain('pipeline_tag');
     });
 
-    it('combines query and pipeline_tag in the same request', async () => {
+    it('sends the query with the GGUF filter', async () => {
       await huggingFaceService.searchModels('qwen', { pipelineTag: 'image-text-to-text' });
 
       const url = mockFetch.mock.calls[0][0];
       expect(url).toContain('search=qwen');
-      expect(url).toContain('pipeline_tag=image-text-to-text');
+      expect(url).toContain('filter=gguf');
+    });
+
+    it('shows every upload of one model as one result, never an abliterated upload', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([
+          { id: 'bartowski/Qwen3-4B-GGUF', downloads: 10 },
+          { id: 'unsloth/Qwen3-4B-GGUF', downloads: 50 },
+          { id: 'someone/Qwen3-4B-abliterated-GGUF', downloads: 99 },
+        ]),
+      });
+      const results = await huggingFaceService.searchModels('qwen3');
+
+      expect(results).toHaveLength(1);
+      expect(results[0].variants).toHaveLength(1);
+      expect(results.some(r => /abliterated/i.test(r.id))).toBe(false);
     });
   });
 
@@ -428,6 +450,24 @@ describe('HuggingFaceService', () => {
   // getModelFiles (with fetch mock)
   // ============================================================================
   describe('getModelFiles', () => {
+    it('finds quantizations kept in folders, and never offers an MTP head as a size', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([
+          { type: 'file', path: 'model-Q4_K_M.gguf', size: 4000000000 },
+          { type: 'file', path: 'Q8_0/model-Q8_0.gguf', size: 8000000000 },
+          { type: 'file', path: 'MTP/mtp-model-Q8_0.gguf', size: 100000000 },
+          { type: 'file', path: 'model-MTP-ONLY-Q4_K_M.gguf', size: 1500000000 },
+        ]),
+      });
+      const files = await huggingFaceService.getModelFiles('org/model');
+
+      expect((global.fetch as jest.Mock).mock.calls[0][0]).toContain('recursive=true');
+      expect(files.map(f => f.name)).toEqual(['model-Q4_K_M.gguf', 'model-Q8_0.gguf']);
+      // The folder stays in the download address; the file on the phone has its own name.
+      expect(files[1].downloadUrl).toMatch(/\/Q8_0\/model-Q8_0\.gguf$/);
+    });
+
     it('separates mmproj files from model files', async () => {
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
