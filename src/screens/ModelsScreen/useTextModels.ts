@@ -55,6 +55,9 @@ function matchesOrgFilter(model: ModelInfo, orgs: string[]): boolean {
   });
 }
 
+/** A Q4_K_M download is about 4.8 bits per weight: 0.6 GB per billion parameters. */
+const Q4_BYTES_PER_BILLION_PARAMS = 0.6e9;
+
 function mapCuratedModel(m: typeof RECOMMENDED_MODELS[number], details: Record<string, ModelInfo>): ModelInfo {
   const fetched = details[m.id];
   const curatedFields = { modelType: m.type, paramCount: m.params, minRamGB: m.minRam };
@@ -88,7 +91,14 @@ function computeFilteredResults(
       }
     }
     const filesWithSize = (model.files || []).filter(f => f.size > 0);
-    if (filesWithSize.length > 0 && !filesWithSize.some(f => !fileExceedsBudget(f.size, ramGB))) return false;
+    if (filesWithSize.length > 0) {
+      if (!filesWithSize.some(f => !fileExceedsBudget(f.size, ramGB))) return false;
+    } else {
+      // Search results carry no file sizes: judge by the parameter count instead, so a model that
+      // is Too big for this phone is not offered at all.
+      const params = model.paramCount ?? parseParamCount(model);
+      if (params !== null && fileExceedsBudget(params * Q4_BYTES_PER_BILLION_PARAMS, ramGB)) return false;
+    }
     return true;
   });
   return filtered.map(model => {
