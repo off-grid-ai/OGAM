@@ -23,7 +23,7 @@ export const DevicePicksRow: React.FC<{ ramGB: number }> = ({ ramGB }) => {
     // A file name is unique in the models folder: the stable key for "is this pick downloaded".
     const downloaded = downloadedModels.find(m => m.fileName === pick.file.name);
     if (downloaded && activeModelId === downloaded.id) {
-      return { kind: 'active', next: { label: 'Chat now', onPress: () => navigation.navigate('Chat', {}) } };
+      return { kind: 'active', next: { label: 'Chat now', icon: 'message-circle', onPress: () => navigation.navigate('Chat', {}) } };
     }
     if (downloaded) return { kind: 'use', onUse: () => activeModelService.selectTextModel(downloaded.id) };
     const entry = downloads[makeModelKey(pick.model.id, pick.file.name)];
