@@ -50,8 +50,6 @@ interface ModelCardProps {
   incompatibleReason?: string;
   /** A size in words ("Smaller", "Recommended", "Best") shown instead of the quantization name. */
   sizeLabel?: string;
-  /** Render as a thin list row (hairline divider, no box) instead of a card. */
-  row?: boolean;
   testID?: string;
   onPress?: () => void;
   onDownload?: () => void;
@@ -284,7 +282,6 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   isCompatible = true,
   incompatibleReason,
   sizeLabel,
-  row,
   testID,
   onPress,
   onDownload,
@@ -361,8 +358,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
       style={[
         styles.card,
         useDenseLayout && styles.cardDense,
-        row && styles.listRow,
-        isActive && (row ? styles.listRowActive : styles.cardActive),
+        isActive && styles.cardActive,
         !isCompatible && styles.cardIncompatible,
       ]}
       onPress={onPress}
