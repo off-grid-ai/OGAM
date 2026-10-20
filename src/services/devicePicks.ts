@@ -88,3 +88,16 @@ export function devicePicks(ramGB: number): DevicePick[] {
   return picksAmong(downloads, d => ({ id: d.model.id, sizeBytes: d.sizeBytes, params: d.model.paramCount }), ramGB)
     .map(({ slot, item }) => ({ slot, ...item }));
 }
+
+/** Catalog models whose name, maker or description matches a search, as list entries. Search shows
+ *  these first, then Hugging Face results. */
+export function catalogMatches(query: string): ModelInfo[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  return chatEntries()
+    .filter(entry => [entry.name, entry.id, entry.org ?? '', entry.description ?? ''].some(text => text.toLowerCase().includes(needle)))
+    .flatMap(entry => {
+      const download = catalogEntryToDownload(entry);
+      return download ? [download.model] : [];
+    });
+}

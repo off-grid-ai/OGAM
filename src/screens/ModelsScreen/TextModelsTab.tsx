@@ -32,6 +32,7 @@ import { uniformDownloadId } from '../../services/modelDownloadService/uniformId
 import { fetchModelFiles, preferredDownloadQuants } from '../../services/modelCatalogFiles';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 import { DevicePicksRow } from '../../components/models/DevicePicksRow';
+import { catalogMatches } from '../../services/devicePicks';
 import { sizeChoices } from './sizeChoices';
 
 function hasNonSortFilters(fs: FilterState): boolean {
@@ -370,6 +371,12 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     setTypeFilter, setSourceFilter, setSizeFilter, setQuantFilter, setSortOption,
     isModelDownloaded, getDownloadedModel, isRepairingVisionModel, onboarding = false,
   } = props;
+  // The catalog answers a search first; Hugging Face results follow, without repeating a catalog model.
+  const searchResults = React.useMemo(() => {
+    const fromCatalog = catalogMatches(searchQuery).filter(model => !model.files.every(f => fileExceedsBudget(f.size, ramGB)));
+    const catalogIds = new Set(fromCatalog.map(model => model.id));
+    return [...fromCatalog, ...filteredResults.filter(model => !catalogIds.has(model.id))];
+  }, [searchQuery, filteredResults, ramGB]);
   const hasNonSortActiveFilters = hasNonSortFilters(filterState);
   const currentSort = SORT_OPTIONS.find(o => o.key === filterState.sort) ?? SORT_OPTIONS[0];
   const isSortActive = filterState.sort !== 'recommended';
@@ -462,7 +469,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
       <View style={styles.searchContainer} testID="text-model-search-row">
         <TextInput
           style={styles.searchInput}
-          placeholder="Search Hugging Face models..."
+          placeholder="Search models"
           placeholderTextColor={colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -525,7 +532,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
         </View>
       ) : (
         <FlatList
-          data={hasSearched ? filteredResults : [...(!onboarding && Platform.OS === 'android' ? [LITERT_RECOMMENDED_MODEL] : []), ...recommendedAsModelInfo]}
+          data={hasSearched ? searchResults : [...(!onboarding && Platform.OS === 'android' ? [LITERT_RECOMMENDED_MODEL] : []), ...recommendedAsModelInfo]}
           renderItem={renderModelItem}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
