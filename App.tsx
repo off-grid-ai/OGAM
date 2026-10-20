@@ -16,7 +16,7 @@ import {
   useProExpiryRedirect,
 } from './src/navigation/useProExpiryRedirect';
 import { useTheme } from './src/theme';
-import { hardwareService, modelManager, authService, knowledgeBase, remoteServerManager } from './src/services';
+import { hardwareService, modelManager, authService, knowledgeBase, remoteServerManager, llmService } from './src/services';
 import logger from './src/utils/logger';
 import { useAppStore, useAuthStore, useRemoteServerStore, useWhisperStore } from './src/stores';
 import { useDebugLogsStore } from './src/stores/debugLogsStore';
@@ -121,6 +121,13 @@ export function DevSyncStrip() {
   );
 }
 
+/** The OS may kill a backgrounded app: keep the open chat's KV state so it resumes warm. */
+function saveChatStateOnBackground(): void {
+  llmService.saveConversationState().catch((error) => {
+    logger.warn('[App] Failed to save chat state on background:', error);
+  });
+}
+
 function App() {
   useEffect(() => () => {
     stopStartupProbe?.();
@@ -175,6 +182,7 @@ function App() {
   // Handle app state changes for auto-lock
   useAppState({
     onBackground: useCallback(() => {
+      saveChatStateOnBackground();
       if (authEnabled) {
         setLastBackgroundTime(Date.now());
         setLocked(true);
