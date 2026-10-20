@@ -1,5 +1,20 @@
-import { CATALOG, pickModelsForDevice, PHONE_FIT_BUDGET, type ModelEntry } from '@offgrid/models';
+import { CATALOG, pickModelsForDevice, PHONE_FIT_BUDGET, type ModelEntry, type PickCandidate } from '@offgrid/models';
+import { BuildInfo } from 'llama.rn';
 import type { ModelFile, ModelInfo } from '../types';
+
+/** The llama.cpp build inside this app's engine (llama.rn), or undefined when unknown. A catalog
+ *  model that needs a newer build is never offered or picked. */
+export function engineLlamaBuild(): number | undefined {
+  const build = Number.parseInt(String(BuildInfo?.number ?? ''), 10);
+  return Number.isFinite(build) ? build : undefined;
+}
+
+/** A catalog model this phone may offer: not replaced by a newer one, and loadable by its engine. */
+export function isOfferable(entry: Pick<ModelEntry, 'supersededBy' | 'minLlamaBuild'>): boolean {
+  if (entry.supersededBy) return false;
+  const build = engineLlamaBuild();
+  return !(entry.minLlamaBuild && build !== undefined && entry.minLlamaBuild > build);
+}
 
 /**
  * Three chat models for this phone, Fast, Balanced and Best, from the shared catalog and the shared
@@ -24,6 +39,7 @@ function chatEntries(): ModelEntry[] {
     entry.availability !== 'coming_soon' &&
     !entry.grounder &&
     !entry.quantOf &&
+    isOfferable(entry) &&
     entry.files.some(file => file.role === 'primary' || file.role === undefined),
   );
 }
@@ -68,11 +84,11 @@ export function catalogEntryToDownload(entry: ModelEntry): { model: ModelInfo; f
  *  phone budget, in that order; empty slots are left out. */
 export function picksAmong<T>(
   items: readonly T[],
-  describe: (item: T) => { id: string; sizeBytes: number; params?: number },
+  describe: (item: T) => PickCandidate,
   ramGB: number,
 ): { slot: PickSlot; item: T }[] {
   const byId = new Map(items.map(item => [describe(item).id, item]));
-  const picks = pickModelsForDevice(items.map(describe), ramGB, PHONE_FIT_BUDGET, 'runsWell');
+  const picks = pickModelsForDevice(items.map(describe), ramGB, PHONE_FIT_BUDGET, 'runsWell', engineLlamaBuild());
   return (['fast', 'balanced', 'best'] as const).flatMap(slot => {
     const item = picks[slot] ? byId.get(picks[slot]!) : undefined;
     return item ? [{ slot, item }] : [];
@@ -83,9 +99,20 @@ export function picksAmong<T>(
 export function devicePicks(ramGB: number): DevicePick[] {
   const downloads = chatEntries().flatMap(entry => {
     const download = catalogEntryToDownload(entry);
-    return download ? [{ ...download, sizeBytes: download.file.size + (download.file.mmProjFile?.size ?? 0) }] : [];
+    return download ? [{ ...download, entry, sizeBytes: download.file.size + (download.file.mmProjFile?.size ?? 0) }] : [];
   });
-  return picksAmong(downloads, d => ({ id: d.model.id, sizeBytes: d.sizeBytes, params: d.model.paramCount }), ramGB)
+  // The catalog's own facts drive the choice: quality ranks, active parameters set the speed, and
+  // replaced, research-only or too-new models are never picked.
+  return picksAmong(downloads, d => ({
+    id: d.model.id,
+    sizeBytes: d.sizeBytes,
+    params: d.model.paramCount,
+    quality: d.entry.quality,
+    activeParams: d.entry.activeParams,
+    supersededBy: d.entry.supersededBy,
+    nonCommercial: d.entry.nonCommercial,
+    minLlamaBuild: d.entry.minLlamaBuild,
+  }), ramGB)
     .map(({ slot, item }) => ({ slot, ...item }));
 }
 
