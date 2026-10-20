@@ -73,23 +73,26 @@ describe('Fast, Balanced and Best on the Models screen', () => {
     const { render, fireEvent, waitFor, within, act } = requireRTL();
     await clearStorage();
     const { CATALOG } = require('@offgrid/models');
-    const fastEntry = CATALOG.find((e: { name: string }) => e.name === 'Qwen3-VL 2B');
+    const fastEntry = CATALOG.find((e: { name: string }) => e.name === 'Qwen 3.5 2B');
     const primary = fastEntry.files.find((f: { role?: string }) => f.role === 'primary');
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
 
     const models = render(React.createElement(ModelsScreen));
     await waitFor(() => expect(models.getByTestId('device-picks')).toBeTruthy());
     expect(within(models.getByTestId('device-picks')).getByText('For this phone')).toBeTruthy();
-    expect(within(models.getByTestId('pick-fast')).getByText('Qwen3-VL 2B')).toBeTruthy();
-    expect(within(models.getByTestId('pick-balanced')).getByText('Qwen 3.8 4B Distill')).toBeTruthy();
-    expect(within(models.getByTestId('pick-best')).getByText('Gemma 4 E2B')).toBeTruthy();
+    // Ranked by the catalog's quality score among models that run well here; replaced models
+    // (Qwen3-VL, the Qwen 3.8 distills) are never picked.
+    expect(within(models.getByTestId('pick-fast')).getByText('Qwen 3.5 2B')).toBeTruthy();
+    expect(within(models.getByTestId('pick-balanced')).getByText('Qwen 3.5 4B')).toBeTruthy();
+    expect(within(models.getByTestId('pick-best')).getByText('MiniCPM5 2B')).toBeTruthy();
+    expect(models.queryByText('Qwen3-VL 2B')).toBeNull();
     // The old RAM banner is gone.
     expect(models.queryByText(/RAM — models up to/)).toBeNull();
 
     // BEFORE: nothing downloading, the Fast pick offers a download and no "Chat now".
     expect(boundary.download!.active()).toHaveLength(0);
     expect(models.queryByTestId('pick-fast-next')).toBeNull();
-    expect(models.getByTestId('pick-fast-download').props.accessibilityLabel).toBe('Download Qwen3-VL 2B');
+    expect(models.getByTestId('pick-fast-download').props.accessibilityLabel).toBe('Download Qwen 3.5 2B');
 
     fireEvent.press(models.getByTestId('pick-fast-download'));
 
@@ -158,8 +161,8 @@ describe('Fast, Balanced and Best on the Models screen', () => {
     expect(models.queryByTestId('pick-fast')).toBeNull();
     expect(models.queryByTestId('pick-balanced')).toBeNull();
     // None of the 12 GB picks is offered to this phone.
-    expect(within(models.getByTestId('device-picks')).queryByText('Gemma 4 E2B')).toBeNull();
-    expect(within(models.getByTestId('device-picks')).queryByText('Qwen 3.8 4B Distill')).toBeNull();
+    expect(within(models.getByTestId('device-picks')).queryByText('MiniCPM5 2B')).toBeNull();
+    expect(within(models.getByTestId('device-picks')).queryByText('Qwen 3.5 4B')).toBeNull();
   });
 
   it('Image: two variants of one model are one pick, named in plain words', async () => {
@@ -229,7 +232,7 @@ describe('Text search answers from the catalog first', () => {
   it('lists a catalog Qwen model before a Hugging Face-only one, and a model in both once', async () => {
     installNativeBoundary({ fs: true, ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
     const hfOnly = 'someone/Qwen-Only-On-HF-GGUF';
-    const inBoth = 'unsloth/Qwen3-VL-2B-Instruct-GGUF';
+    const inBoth = 'unsloth/Qwen3.5-2B-GGUF';
     restoreFetch = installHuggingFace(url =>
       url.pathname === '/api/models'
         ? [inBoth, hfOnly].map(id => ({ id, author: id.split('/')[0], downloads: 10, likes: 0, tags: ['gguf'], siblings: [] }))
@@ -247,12 +250,12 @@ describe('Text search answers from the catalog first', () => {
 
     await waitFor(() => expect(models.getByText('Qwen-Only-On-HF-GGUF')).toBeTruthy());
     // The catalog model shows once, by its catalog name; its Hugging Face twin is not repeated.
-    expect(models.getAllByText('Qwen3-VL 2B')).toHaveLength(1);
-    expect(models.queryByText('Qwen3-VL-2B-Instruct-GGUF')).toBeNull();
+    expect(models.getAllByText('Qwen 3.5 2B')).toHaveLength(1);
+    expect(models.queryByText('Qwen3.5-2B-GGUF')).toBeNull();
     // Catalog first: the catalog Qwen is above the Hugging Face-only result in the list.
     const lines = screenText(models.toJSON()).split('\n');
-    expect(lines.indexOf('Qwen3-VL 2B')).toBeGreaterThan(-1);
-    expect(lines.indexOf('Qwen3-VL 2B')).toBeLessThan(lines.indexOf('Qwen-Only-On-HF-GGUF'));
+    expect(lines.indexOf('Qwen 3.5 2B')).toBeGreaterThan(-1);
+    expect(lines.indexOf('Qwen 3.5 2B')).toBeLessThan(lines.indexOf('Qwen-Only-On-HF-GGUF'));
     // A catalog model too big for the phone is left out.
     expect(models.queryByText('Qwen 3.8 27B')).toBeNull();
   });
