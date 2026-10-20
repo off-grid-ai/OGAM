@@ -25,7 +25,7 @@ import {
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
-import { useWhisperStore } from '../../stores';
+import { useWhisperStore, useAppStore } from '../../stores';
 import { useSttDownloadState } from '../../hooks/useSttDownloadState';
 import { WHISPER_MODELS } from '../../services';
 import { createStyles as createModelsScreenStyles } from './styles';
@@ -235,9 +235,12 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
   );
 
   // Fast, Balanced and Best by the shared rule. Multilingual models only: they work for everyone.
+  // Re-read when the device reading lands, so picks are never worked out for the fallback RAM.
+  const deviceRam = useAppStore(state => state.deviceInfo?.totalMemory);
   const speechPicks = useMemo(
     () => picksAmong(MULTI_MODELS, model => ({ id: model.id, sizeBytes: model.size * 1e6 }), hardwareService.getTotalMemoryGB()),
-    [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deviceRam],
   );
   const speechPickState = (id: string): PickState => {
     if (presentModelIds.includes(id)) {
