@@ -19,11 +19,17 @@ import { huggingFaceService } from '../../../src/services/huggingface';
 
 const originalFetch = global.fetch;
 
+/** Hugging Face as it answers: the model endpoint (`?blobs=true`) lists `siblings`; the tree
+ *  endpoint lists files. */
 function fakeTreeListing(files: Array<{ path: string; size: number }>) {
-  global.fetch = jest.fn().mockResolvedValue({
+  global.fetch = jest.fn().mockImplementation(async (url: string) => ({
     ok: true,
-    json: () => Promise.resolve(files.map(f => ({ type: 'file', path: f.path, size: f.size }))),
-  }) as unknown as typeof fetch;
+    json: () => Promise.resolve(
+      String(url).includes('?blobs=true')
+        ? { siblings: files.map(f => ({ rfilename: f.path, size: f.size })) }
+        : files.map(f => ({ type: 'file', path: f.path, size: f.size })),
+    ),
+  })) as unknown as typeof fetch;
 }
 
 afterEach(() => {

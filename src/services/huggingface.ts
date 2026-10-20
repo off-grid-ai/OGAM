@@ -14,14 +14,15 @@ import {
 import { looksLikeVisionModel } from '../utils/visionModel';
 import { huggingFaceRevisionPath } from '../utils/modelOrigin';
 import { isMMProjFile, pickMmProjForDownload } from './mmproj';
-import { searchHuggingFace, getModelType, type HFSearchResult } from '@offgrid/models';
-
-/** An MTP head published beside a model ("MTP/mtp-….gguf", "…-MTP-ONLY-….gguf"). It is not a size
- *  of the model: it downloads with MTP, never as a quantization choice. */
-export function isMtpHeadFile(path: string): boolean {
-  const name = path.split('/').pop() ?? path;
-  return /(^|\/)mtp\//i.test(path) || /^mtp[-_]/i.test(name) || /mtp[-_]only/i.test(name);
-}
+import {
+  searchHuggingFace,
+  getModelFiles as listRepoFiles,
+  getModelType,
+  isMtpHeadFile,
+  isDraftModelFile,
+  type HFSearchResult,
+  type ModelFileVariant,
+} from '@offgrid/models';
 
 class HuggingFaceService {
   private baseUrl = HF_API.baseUrl;
@@ -175,6 +176,13 @@ class HuggingFaceService {
     modelId: string,
     revision = 'main',
   ): Promise<ModelFile[]> {
+    // The current files come from the shared listing (@offgrid/models): subfolders included, MTP
+    // heads and draft models never offered as a size, and a projector only when it is named for this
+    // model or is the repo's generic one. A pinned revision (vision repair) reads that revision here.
+    if (revision === 'main') {
+      const variants = await listRepoFiles(modelId);
+      return variants.map(variant => this.fromSharedFile(variant)).sort((a, b) => a.size - b.size);
+    }
     try {
       const encodedRevision = encodeURIComponent(revision);
       // Recursive: many repos keep each quantization in its own folder (e.g. "Q8_0/…gguf").
@@ -191,7 +199,7 @@ class HuggingFaceService {
         lfs?: { size: number };
       }> = await response.json();
       const allGguf = files.filter(
-        f => f.type === 'file' && f.path.endsWith('.gguf') && !isMtpHeadFile(f.path),
+        f => f.type === 'file' && f.path.endsWith('.gguf') && !isMtpHeadFile(f.path) && !isDraftModelFile(f.path),
       );
       const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.path));
       const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.path));
@@ -213,6 +221,19 @@ class HuggingFaceService {
     }
   }
 
+  private fromSharedFile(variant: ModelFileVariant): ModelFile {
+    return {
+      name: variant.fileName,
+      size: variant.sizeBytes,
+      quantization: variant.quant,
+      downloadUrl: variant.downloadUrl,
+      ...(variant.sha256 ? { sha256: variant.sha256 } : {}),
+      ...(variant.mmproj ? {
+        mmProjFile: { name: variant.mmproj.fileName, size: variant.mmproj.sizeBytes ?? 0, downloadUrl: variant.mmproj.url },
+      } : {}),
+    };
+  }
+
   private async getModelFilesFromSiblings(
     modelId: string,
     revision = 'main',
@@ -223,7 +244,7 @@ class HuggingFaceService {
       `${this.apiUrl}/models/${modelId}${revisionPath}`,
     );
     if (!result.siblings) return [];
-    const allGguf = result.siblings.filter(f => f.rfilename.endsWith('.gguf') && !isMtpHeadFile(f.rfilename));
+    const allGguf = result.siblings.filter(f => f.rfilename.endsWith('.gguf') && !isMtpHeadFile(f.rfilename) && !isDraftModelFile(f.rfilename));
     const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.rfilename));
     const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.rfilename));
     const mmProjForMatch = mmProjFiles.map(f => ({
