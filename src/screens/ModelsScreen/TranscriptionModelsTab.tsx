@@ -10,7 +10,7 @@
  * The whisper store tracks a single active model; downloading another switches
  * the active one.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -35,6 +35,9 @@ import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabe
 import { remoteServerManager } from '../../services/remoteServerManager';
 import { modelDownloadService } from '../../services/modelDownloadService';
 import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
+import { picksAmong } from '../../services/devicePicks';
+import { hardwareService } from '../../services/hardware';
+import { PicksRow, type PickState } from '../../components/models/PicksRow';
 
 const ENGLISH_MODELS = WHISPER_MODELS.filter(m => m.lang === 'en');
 const MULTI_MODELS = WHISPER_MODELS.filter(m => m.lang === 'multi');
@@ -231,6 +234,20 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
     [deleteModelById],
   );
 
+  // Fast, Balanced and Best by the shared rule. Multilingual models only: they work for everyone.
+  const speechPicks = useMemo(
+    () => picksAmong(MULTI_MODELS, model => ({ id: model.id, sizeBytes: model.size * 1e6 }), hardwareService.getTotalMemoryGB()),
+    [],
+  );
+  const speechPickState = (id: string): PickState => {
+    if (presentModelIds.includes(id)) {
+      return downloadedModelId === id ? { kind: 'active' } : { kind: 'use', onUse: () => handleSelect(id) };
+    }
+    const state = downloadStateFor(id);
+    if (state?.downloading || state?.queued) return { kind: 'downloading', progress: state.progress ?? 0 };
+    return { kind: 'download', onDownload: () => handleDownload(id) };
+  };
+
   const renderWhisperCard = (
     model: (typeof WHISPER_MODELS)[number],
     index: number,
@@ -297,6 +314,13 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
       {showRemoteModels && (
         <RemoteModelOptionsSection category="transcription" />
       )}
+
+      <PicksRow testID="speech-picks" items={speechPicks.map(({ slot, item }) => ({
+        slot,
+        name: item.name,
+        sizeBytes: item.size * 1e6,
+        state: speechPickState(item.id),
+      }))} />
 
       <Text style={styles.sectionLabel}>English only</Text>
       {ENGLISH_MODELS.map((m, i) => renderWhisperCard(m, i))}
