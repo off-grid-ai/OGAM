@@ -79,8 +79,11 @@ export const TextTab: React.FC<TextTabProps> = ({
   const hasLoaded = currentModelPath !== null || currentRemoteModelId !== null;
   const activeLocalPath = currentModelPath ?? selectedModelPath;
   const hasActive = activeLocalPath !== null || currentRemoteModelId !== null;
+  // Matched by file name too: iOS moves the app's folder on reinstall and update, so a stored
+  // absolute path can differ from the one the engine loaded while naming the same file.
+  const loadedFileName = currentModelPath?.split('/').pop();
   const activeLocalModel = downloadedModels.find(
-    m => m.filePath === currentModelPath,
+    m => m.filePath === currentModelPath || (!!loadedFileName && m.fileName === loadedFileName),
   );
   const activeLocalCapabilities = activeLocalModel?.engine === 'llama'
     ? predictGgufCapabilities(activeLocalModel) : null;
