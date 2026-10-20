@@ -2,10 +2,10 @@
  * A catalog GGUF model is named by its catalog name everywhere the person sees it, never by the
  * Hugging Face repo id it was downloaded from.
  *
- * Product-correct outcome (the person's view): they open Models, tap the recommended "MiniCPM5 2B"
- * card, download its Q4_K_M file, and from then on the phone calls it "MiniCPM5 2B": in the text-model
+ * Product-correct outcome (the person's view): they open Models, tap the recommended "LFM2.5 8B A1B"
+ * card, download its Q4_K_M file, and from then on the phone calls it "LFM2.5 8B A1B": in the text-model
  * picker on Home, in the chat they start with it, and in Home's Models sheet. The repo id
- * ("openbmb/MiniCPM5-2B-GGUF") and its basename ("MiniCPM5-2B-GGUF") are plumbing and never show,
+ * ("LiquidAI/LFM2.5-8B-A1B-GGUF") and its basename ("LFM2.5-8B-A1B-GGUF") are plumbing and never show,
  * including in Downloads (which lists the file by its file name). A row an older version saved under
  * the repo basename is renamed when the app opens.
  *
@@ -29,10 +29,12 @@ import {
 jest.unmock('@react-navigation/native');
 jest.mock('react-native-bootsplash', () => ({ hide: jest.fn(async () => {}) }), { virtual: true });
 
-const REPO_ID = 'openbmb/MiniCPM5-2B-GGUF';
-const REPO_BASENAME = 'MiniCPM5-2B-GGUF';
-const CATALOG_NAME = 'MiniCPM5 2B';
-const FILE_NAME = 'MiniCPM5-2B-Q4_K_M.gguf';
+// A catalog text model that is on the 12 GB phone's recommended list and is not one of its picks
+// (Qwen 3.5 2B / Qwen 3.5 4B / MiniCPM5 2B): a pick is shown once, in the picks row, not as a card.
+const REPO_ID = 'LiquidAI/LFM2.5-8B-A1B-GGUF';
+const REPO_BASENAME = 'LFM2.5-8B-A1B-GGUF';
+const CATALOG_NAME = 'LFM2.5 8B A1B';
+const FILE_NAME = 'LFM2.5-8B-A1B-Q4_K_M.gguf';
 const FILE_SIZE = 1200 * MB;
 const RENDER_WAIT = { timeout: 8000 };
 
@@ -57,7 +59,11 @@ function installHuggingFace(): () => void {
     if (url.pathname === '/api/models') return json([]);
     if (url.pathname.startsWith('/api/models/')) {
       const id = decodeURIComponent(url.pathname.slice('/api/models/'.length));
-      return json({ id, author: id.split('/')[0], downloads: 1, likes: 0, tags: ['gguf'], siblings: [] });
+      // A model's files come from its listing with blob sizes (`?blobs=true`).
+      const siblings = id === REPO_ID && url.searchParams.get('blobs') === 'true'
+        ? [{ rfilename: FILE_NAME, size: FILE_SIZE, lfs: { size: FILE_SIZE } }]
+        : [];
+      return json({ id, author: id.split('/')[0], downloads: 1, likes: 0, tags: ['gguf'], siblings });
     }
     return json({}, 404);
   }) as typeof fetch;
@@ -202,7 +208,7 @@ describe('catalog GGUF model names', () => {
           {
             id: modelId,
             name: REPO_BASENAME,
-            author: 'openbmb',
+            author: 'LiquidAI',
             filePath,
             fileName: FILE_NAME,
             fileSize: FILE_SIZE,

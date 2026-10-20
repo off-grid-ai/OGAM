@@ -77,17 +77,17 @@ describe('RECOMMENDED_MODELS', () => {
     }
   });
 
-  it('contains all SmolVLM vision models', () => {
-    const smolVLMIds = [
+  it('no longer offers the models the shared catalog dropped (Mistral 7B, SmolLM2, SmolVLM)', () => {
+    const dropped = [
+      'bartowski/Mistral-7B-Instruct-v0.3-GGUF',
+      'QuantFactory/SmolLM2-360M-Instruct-GGUF',
       'ggml-org/SmolVLM-Instruct-GGUF',
       'ggml-org/SmolVLM2-2.2B-Instruct-GGUF',
+      'ggml-org/SmolVLM2-500M-Video-Instruct-GGUF',
     ];
-    for (const id of smolVLMIds) {
-      const model = RECOMMENDED_MODELS.find(m => m.id === id);
-      expect(model).toBeDefined();
-      expect(model!.type).toBe('vision');
-      expect(model!.org).toBe('HuggingFaceTB');
-    }
+    const ids = RECOMMENDED_MODELS.map(m => m.id);
+    expect(ids.length).toBeGreaterThan(0);
+    for (const id of dropped) expect(ids).not.toContain(id);
   });
 });
 

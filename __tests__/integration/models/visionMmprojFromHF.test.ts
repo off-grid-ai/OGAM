@@ -36,6 +36,11 @@ const POPULAR_VISION_REPOS = [
   'moondream/moondream2-gguf',
   'abetlen/Phi-3.5-vision-instruct-gguf',
   'leafspark/Llama-3.2-11B-Vision-Instruct-GGUF',
+  // Formerly curated; kept so their naming shapes stay examined after the curated list moved to the
+  // shared catalog.
+  'ggml-org/SmolVLM2-500M-Video-Instruct-GGUF',
+  'ggml-org/SmolVLM-Instruct-GGUF',
+  'ggml-org/SmolVLM2-2.2B-Instruct-GGUF',
 ];
 const ALL_REPOS = [...new Set([...CURATED_VISION_REPOS, ...POPULAR_VISION_REPOS])];
 

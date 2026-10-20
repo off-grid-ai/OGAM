@@ -302,8 +302,12 @@ describe("A model's detail offers its sizes in words", () => {
       ['sizes-demo-q8_0.gguf', 4000],
     ] as const;
     restoreFetch = installHuggingFace(url => {
-      if (url.pathname === `/api/models/${MODEL_ID}/tree/main`) {
-        return files.map(([path, mb]) => ({ type: 'file', path, size: mb * MB, lfs: { size: mb * MB } }));
+      // A model's files come from its listing with blob sizes (`?blobs=true`), as Hugging Face serves it.
+      if (url.pathname === `/api/models/${MODEL_ID}` && url.searchParams.get('blobs') === 'true') {
+        return {
+          id: MODEL_ID, author: 'someone', downloads: 1, likes: 0, tags: ['gguf'],
+          siblings: files.map(([rfilename, mb]) => ({ rfilename, size: mb * MB, lfs: { size: mb * MB } })),
+        };
       }
       if (url.pathname === '/api/models') {
         return [{ id: MODEL_ID, author: 'someone', downloads: 1, likes: 0, tags: ['gguf'], siblings: [] }];

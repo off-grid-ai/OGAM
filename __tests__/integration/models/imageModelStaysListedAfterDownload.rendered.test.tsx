@@ -14,7 +14,7 @@ import { installImageZipPackage, sdMnnTree } from '../../harness/imageModelPacka
 
 const ZIP_NAME = 'AnythingV5.zip';
 const MODEL_NAME = 'Anything V5 (GPU)';
-const ZIP_SIZE = 900 * 1024 * 1024;
+const ZIP_SIZE = 400 * 1024 * 1024;
 
 describe('Image tab after a download', () => {
   it('keeps the downloaded image model listed, now marked downloaded', async () => {
@@ -28,7 +28,16 @@ describe('Image tab after a download', () => {
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === 'https://huggingface.co/api/models/xororz/sd-mnn/tree/main') {
-        return new Response(JSON.stringify(sdMnnTree(ZIP_NAME, ZIP_SIZE)), { status: 200 });
+        // The repo carries several models. The Image tab shows its picks once, in the picks row, and
+        // leaves every picked model out of the list below; picks are spread by size (smallest, the
+        // largest, and the one nearest their midpoint), so the model under test is sized to be the
+        // one the picks leave in the list.
+        return new Response(JSON.stringify([
+          ...sdMnnTree('AbsoluteReality.zip', 300 * 1024 * 1024),
+          ...sdMnnTree(ZIP_NAME, ZIP_SIZE),
+          ...sdMnnTree('ChilloutMix.zip', 600 * 1024 * 1024),
+          ...sdMnnTree('QteaMix.zip', 900 * 1024 * 1024),
+        ]), { status: 200 });
       }
       if (url === 'https://huggingface.co/api/models/xororz/sd-qnn/tree/main') {
         return new Response(JSON.stringify([]), { status: 200 });

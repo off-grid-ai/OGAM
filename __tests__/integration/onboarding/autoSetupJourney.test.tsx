@@ -17,13 +17,11 @@ import { uniformDownloadId } from '../../../src/services/modelDownloadService/un
 import { useAppStore } from '../../../src/stores';
 
 const MB = 1024 * 1024;
+// The size the fake listing gives a repo follows its parameter count, read from the repo name
+// ("Qwen3.5-4B", "gemma-4-E4B", "gemma-4-26B-A4B" → 26), so every catalog model is sized faithfully.
 const parameterCount = (modelId: string): number => {
-  if (modelId.includes('9B')) return 9;
-  if (modelId.includes('E4B')) return 4;
-  if (modelId.includes('2.2B')) return 2.2;
-  if (modelId.includes('2B') || modelId.includes('E2B')) return 2;
-  if (modelId.includes('0.8B')) return 0.8;
-  return 1;
+  const match = modelId.split('/').pop()!.match(/(\d+(?:\.\d+)?)B(?![a-z])/i);
+  return match ? Number(match[1]) : 1;
 };
 const capabilities = {
   cancel: true,
@@ -219,13 +217,14 @@ describe('Auto Setup release journey', () => {
     );
 
     expect(ui.getAllByText('INCLUDES')).toHaveLength(1);
-    expect(ui.getByText('Gemma 4 E4B')).toBeTruthy();
+    // Balanced aims at 4B: the catalog now offers Qwen 3.5 4B, which leads Gemma 4 E4B.
+    expect(ui.getByText('Qwen 3.5 4B')).toBeTruthy();
     fireEvent.press(ui.getByTestId('auto-setup-plan-lean'));
     expect(ui.getByText('Qwen 3.5 2B')).toBeTruthy();
     expect(ui.queryByText('SmolVLM 2B')).toBeNull();
     fireEvent.press(ui.getByTestId('auto-setup-plan-extreme'));
     expect(ui.getByText('Qwen 3.5 9B')).toBeTruthy();
-    expect(ui.queryByText('Gemma 4 E4B')).toBeNull();
+    expect(ui.queryByText('Qwen 3.5 4B')).toBeNull();
     expect(useAppStore.getState().settings.modelLoadingMode).toBe('aggressive');
 
     fireEvent.press(ui.getByTestId('auto-setup-download'));
@@ -366,7 +365,7 @@ describe('Auto Setup release journey', () => {
     );
     fireEvent.press(ui.getByTestId('auto-setup-plan-extreme'));
 
-    expect(ui.getByText('Gemma 4 E4B')).toBeTruthy();
+    expect(ui.getByText('Qwen 3.5 4B')).toBeTruthy();
     expect(ui.queryByText('Qwen 3.5 9B')).toBeNull();
     expect(useAppStore.getState().settings.modelLoadingMode).toBe('balanced');
     ui.unmount();
