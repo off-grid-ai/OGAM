@@ -84,7 +84,6 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
     quantization && quantization !== 'Unknown' ? quantization : undefined,
     capabilities?.vision || isVisionModel ? undefined : modelType,
     model.paramCount ? `${model.paramCount}B params` : undefined,
-    model.minRamGB ? `${model.minRamGB}GB+ RAM` : undefined,
     supportsAcceleration ? 'NPU/GPU' : undefined,
     ...(recommended?.chips ?? []),
     ...additionalFacts,

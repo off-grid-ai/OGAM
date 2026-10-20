@@ -76,18 +76,15 @@ describe('detail Available Files fit hint matches the owned fileExceedsBudget ve
   }, 30000);
 
   it('BOUNDARY (M5a): a file EXACTLY at the budget is treated as over-budget (>=), one just under fits', async () => {
-    // Pins the exact budget comparison (the `>=` in fileExceedsBudget). The verifier's `>=`→`>` mutant
-    // survived because no test straddled equality. Device chosen so the budget is a WHOLE number of
-    // bytes: 4GB × balanced 0.50 = EXACTLY 2.0 GB (2147483648 B) — the only tier where integer bytes can
-    // hit exact equality (0.60×6GB is 3.6GB, not an integer, so >= and > can't differ there). A file of
-    // EXACTLY 2.0GB must be HIDDEN (>= = exceeds); 2.0GB−1byte must SHOW. Reverting to `>` flips the
-    // exact-budget file to "fits" → this test goes red (mutant killed).
+    // Pins the exact ceiling comparison of the shared fit rule: a file AT the ceiling is "Too big" and
+    // hidden; one byte under is "Tight" and shows.
     installNativeBoundary({ download: true, fs: true, ram: { platform: 'android', totalBytes: 4 * GB, availBytes: 3 * GB } });
 
      
-    const { modelBudgetFraction } = require('../../../src/services/memoryBudget');
+    const { PHONE_FIT_BUDGET } = require('@offgrid/models');
      
-    const budgetBytes = 4 * modelBudgetFraction(4, 'android', 'balanced') * GB; // 4 × 0.50 × GB = exactly 2.0 GB (integer bytes)
+    // The shared fit rule's ceiling on a 4 GB phone: 4 × 0.5 × 1e9 = exactly 2,000,000,000 bytes.
+    const budgetBytes = 4 * PHONE_FIT_BUDGET.ceil * 1e9;
     const atBudget = { name: 'model-atbudget.gguf', size: budgetBytes, quantization: 'Q5', downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-atbudget.gguf` };
     const underBudget = { name: 'model-under.gguf', size: budgetBytes - 1, quantization: 'Q4', downloadUrl: `https://hf.co/${MODEL_ID}/resolve/main/model-under.gguf` };
     const modelInfo = { id: MODEL_ID, name: 'Boundary Model', author: 'org', description: 'test', downloads: 50, likes: 1, tags: [], lastModified: '', files: [underBudget, atBudget] };

@@ -5,7 +5,8 @@ import DeviceInfo from 'react-native-device-info';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { fileExceedsBudget } from '../../services/memoryBudget';
+import { fitLabel } from '@offgrid/models';
+import { fileExceedsBudget, modelFitTier } from '../../services/memoryBudget';
 import { Card, ModelCard } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { CustomAlert, hideAlert, showAlert, AlertState } from '../../components/CustomAlert';
@@ -194,6 +195,8 @@ const ModelDetailView: React.FC<DetailProps> = ({
         } : undefined}
         isRepairingVision={s.repairingVision}
         isCompatible={!fileExceedsBudget(item.size, ramGB)} testID={`file-card-${index}`}
+        // "Runs well" is the default and goes unsaid; only a tight fit is worth a word on the card.
+        facts={modelFitTier(item.size, ramGB) === 'tight' ? [fitLabel('tight')] : undefined}
         onDownload={onDownload}
         onDelete={s.downloaded ? () => handleDeleteModel(`${selectedModel.id}/${item.name}`) : undefined}
         onRepairVision={s.needsVisionRepair && !s.progress && !s.repairingVision ? () => handleRepairMmProj(selectedModel, item) : undefined}
