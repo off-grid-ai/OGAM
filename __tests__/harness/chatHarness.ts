@@ -63,6 +63,13 @@ export interface ChatHarnessOptions {
   modelFileSizeBytes?: number;
   /** Place a second downloaded model at the native storage boundary for fallback journeys. */
   backupModel?: boolean;
+  /** More downloaded models (record + file on disk), listed after the main one — e.g. a model too big
+   *  for the device's RAM, to switch to from the chat's model sheet. */
+  extraModels?: Array<{ id: string; name: string; fileName: string; fileSizeBytes: number; engine?: 'llama' | 'litert' }>;
+  /** The absolute path the main model's saved record names, when it differs from where the file is now:
+   *  iOS moves the app's folder on reinstall and update, so a record saved earlier names the OLD folder
+   *  while the file sits under the current one. Default: the current path. */
+  storedModelFilePath?: string;
   /** (llama) GGUF chat_template on the model context's metadata — drives the REAL Thinking-capability
    *  detection. Omit for the reasoning-capable default; pass a marker-free template (Mistral's tool-use
    *  template) to model a model that does NOT support thinking so the Thinking toggle stays hidden. */
@@ -263,7 +270,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     id: 'm',
     name: opts.modelName ?? 'Test Model',
     engine: opts.engine,
-    filePath: modelPath,
+    filePath: opts.storedModelFilePath ?? modelPath,
     fileName,
     fileSize,
     liteRTVision: opts.vision,
@@ -277,6 +284,14 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     downloadedModels.push(createDownloadedModel({
       id: 'backup', name: 'Backup Model', engine: opts.engine,
       filePath: backupPath, fileName: backupFileName, fileSize: fileSize / 2,
+    }));
+  }
+  for (const extra of opts.extraModels ?? []) {
+    const extraPath = `${docs}/models/${extra.fileName}`;
+    boundary.fs!.seedFile(extraPath, 500 * 1024 * 1024);
+    downloadedModels.push(createDownloadedModel({
+      id: extra.id, name: extra.name, engine: extra.engine ?? opts.engine,
+      filePath: extraPath, fileName: extra.fileName, fileSize: extra.fileSizeBytes,
     }));
   }
   await AsyncStorage.setItem(
