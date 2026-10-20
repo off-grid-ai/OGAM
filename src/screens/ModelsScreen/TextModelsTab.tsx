@@ -32,7 +32,7 @@ import { uniformDownloadId } from '../../services/modelDownloadService/uniformId
 import { fetchModelFiles, preferredDownloadQuants } from '../../services/modelCatalogFiles';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 import { DevicePicksRow } from '../../components/models/DevicePicksRow';
-import { catalogMatches } from '../../services/devicePicks';
+import { catalogMatches, devicePicks } from '../../services/devicePicks';
 import { sizeChoices } from './sizeChoices';
 
 function hasNonSortFilters(fs: FilterState): boolean {
@@ -371,6 +371,11 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     setTypeFilter, setSourceFilter, setSizeFilter, setQuantFilter, setSortOption,
     isModelDownloaded, getDownloadedModel, isRepairingVisionModel, onboarding = false,
   } = props;
+  // The picks are shown once, above; the list below holds the other models.
+  const moreModels = React.useMemo(() => {
+    const pickIds = new Set(devicePicks(ramGB).map(pick => pick.model.id));
+    return recommendedAsModelInfo.filter(model => !pickIds.has(model.id));
+  }, [recommendedAsModelInfo, ramGB]);
   // The catalog answers a search first; Hugging Face results follow, without repeating a catalog model.
   const searchResults = React.useMemo(() => {
     const fromCatalog = catalogMatches(searchQuery).filter(model => !model.files.every(f => fileExceedsBudget(f.size, ramGB)));
@@ -532,7 +537,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
         </View>
       ) : (
         <FlatList
-          data={hasSearched ? searchResults : [...(!onboarding && Platform.OS === 'android' ? [LITERT_RECOMMENDED_MODEL] : []), ...recommendedAsModelInfo]}
+          data={hasSearched ? searchResults : [...(!onboarding && Platform.OS === 'android' ? [LITERT_RECOMMENDED_MODEL] : []), ...moreModels]}
           renderItem={renderModelItem}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
@@ -541,7 +546,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           ListHeaderComponent={hasSearched ? null : (
             <>
               <DevicePicksRow ramGB={ramGB} />
-              {recommendedAsModelInfo.length > 0 && <Text style={styles.recommendedTitle}>More models</Text>}
+              {moreModels.length > 0 && <Text style={styles.recommendedTitle}>More models</Text>}
               {onboardingLiteRTCards}
             </>
           )}
