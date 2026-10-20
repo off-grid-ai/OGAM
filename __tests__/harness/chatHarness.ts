@@ -73,6 +73,11 @@ export interface ChatHarnessOptions {
   /** This launch is a RELAUNCH onto saved storage (after closeApp()): the model the user picked before is
    *  still selected, so Home shows it and there is no picker tap; the user goes straight to New Chat. */
   relaunched?: boolean;
+  /** (llama) GGUF header fields the native metadata reader returns for the model file. */
+  llamaModelInfo?: Record<string, unknown>;
+  /** Device identity leaves (see InstallOpts): getHardware() and the SoC model. */
+  deviceHardware?: string;
+  socModel?: string;
 }
 
 /**
@@ -203,6 +208,9 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
   const boundary = installNativeBoundary({
     llama: opts.engine === 'llama',
     llamaChatTemplate: opts.chatTemplate,
+    llamaModelInfo: opts.llamaModelInfo,
+    deviceHardware: opts.deviceHardware,
+    socModel: opts.socModel,
     fs: true,
     ram,
     whisper: opts.whisper,

@@ -59,6 +59,11 @@ function migrateBoostedContext(
     s.liteRTMaxTokens = DEFAULT_SETTINGS.liteRTMaxTokens;
   }
 }
+/** 512 was the one batch default before batch became automatic (0). An install still on it
+ *  never chose it, so it moves to auto and picks up 128 on HTP. Any other value was chosen. */
+function migrateAutoBatch(merged: any): void {
+  if (merged.settings?.nBatch === 512) merged.settings = { ...merged.settings, nBatch: 0 };
+}
 export function migratePersistedState<TState>(
   persistedState: any,
   currentState: TState,
@@ -107,6 +112,7 @@ export function migratePersistedState<TState>(
     merged.checklistDismissed = false;
   migrateEnabledTools(merged);
   migrateBoostedContext(merged, defaultSettings);
+  migrateAutoBatch(merged);
   migrateGeneratedImageTimestamps(merged);
   migrateGeneratedImagePaths(merged, documentsPath);
   return merged as TState;

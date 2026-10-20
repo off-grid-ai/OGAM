@@ -42,6 +42,7 @@ export function computePendingSettings(
     changed(settings.gpuLayers, loadedSettings.gpuLayers) ||
     changed(settings.flashAttn, loadedSettings.flashAttn) ||
     changed(settings.speculativeDecoding, loadedSettings.speculativeDecoding) ||
+    changed(settings.speculativeDraftMax, loadedSettings.speculativeDraftMax) ||
     (loadedSettings.cacheType !== undefined &&
       effectiveLiveCache !== effectiveLoadedCache)
   );

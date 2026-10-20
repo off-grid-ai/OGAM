@@ -56,6 +56,7 @@ export type AppSettings = {
   repeatPenalty: number;
   contextLength: number;
   nThreads: number;
+  /** 0 is "auto": the shared backend row's batch (128 on HTP, 512 elsewhere). */
   nBatch: number;
   imageGenerationMode: ImageGenerationMode;
   autoDetectMethod: AutoDetectMethod;
@@ -73,6 +74,8 @@ export type AppSettings = {
   /** MTP speculative decoding: the model drafts several tokens per step and verifies them in one
    *  pass. Only models carrying MTP draft layers benefit; the engine ignores it on the rest. */
   speculativeDecoding: boolean;
+  /** MTP draft tokens per step. llama.cpp's default is 3. */
+  speculativeDraftMax: number;
   /** Aggressive model loading: commit more RAM + a smaller reserve so large models
    *  load (with a "Load Anyway" override when the budget still blocks). Off by
    *  default (behaviour-neutral). Single source of truth read by both the Settings
@@ -212,6 +215,9 @@ export interface AppState extends ProAccessSlice {
   incrementTextGenerationCount: () => number;
   incrementImageGenerationCount: () => number;
   hasEngagedSharePrompt: boolean;
+  /** The backend the "Use fastest settings" benchmark measured fastest on this device. */
+  speedBenchmarkBackend: InferenceBackend | null;
+  setSpeedBenchmarkBackend: (backend: InferenceBackend | null) => void;
   setHasEngagedSharePrompt: (v: boolean) => void;
   toolCountHintDismissed: boolean;
   setToolCountHintDismissed: () => void;
@@ -240,8 +246,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   repeatPenalty: 1.1,
   contextLength: 4096,
   nThreads: 0,
-  nBatch: 512,
+  nBatch: 0,
   speculativeDecoding: false,
+  speculativeDraftMax: 3,
   imageGenerationMode: 'auto' as ImageGenerationMode,
   autoDetectMethod: 'pattern' as AutoDetectMethod,
   classifierModelId: null,
@@ -465,6 +472,8 @@ export const useAppStore = create<AppState>()(
         return c;
       },
       hasEngagedSharePrompt: false,
+      speedBenchmarkBackend: null,
+      setSpeedBenchmarkBackend: backend => set({ speedBenchmarkBackend: backend }),
       setHasEngagedSharePrompt: v => set({ hasEngagedSharePrompt: v }),
       ...createProAccessSlice(state => set(state)),
       toolCountHintDismissed: false,
@@ -505,6 +514,7 @@ function persistedAppState(state: AppState) {
         textGenerationCount: state.textGenerationCount,
         imageGenerationCount: state.imageGenerationCount,
         hasEngagedSharePrompt: state.hasEngagedSharePrompt,
+        speedBenchmarkBackend: state.speedBenchmarkBackend,
         hasRegisteredPro: state.hasRegisteredPro,
         // Persist eviction so a relaunch cannot grant Pro while the roster is offline.
         proDeviceAdmission: state.proDeviceAdmission,

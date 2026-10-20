@@ -19,7 +19,6 @@ import {
   hashString,
   ensureSessionCacheDir,
   getSessionPath,
-  shouldDisableMmap,
 } from '../../../src/services/llmHelpers';
 import { INFERENCE_BACKENDS } from '../../../src/types';
 import { Platform } from 'react-native';
@@ -75,23 +74,45 @@ describe('ensureSessionCacheDir', () => {
   });
 });
 
-describe('shouldDisableMmap — android repackable quant branch', () => {
+describe('buildModelParams — mmap from the GGUF header quant type', () => {
   const origOS = Platform.OS;
   afterEach(() => { (Platform as any).OS = origOS; });
+  const mmap = (fileType: number | null) => (buildModelParams('/models/m.gguf', {}, { fileType }).baseParams as any).use_mmap;
 
-  it('returns true on android for a q4_0 model path', () => {
+  it('turns mmap off on android for a quant llama.cpp repacks (Q4_0, Q4_K_M, Q8_0)', () => {
     (Platform as any).OS = 'android';
-    expect(shouldDisableMmap('/models/llama.Q4_0.gguf')).toBe(true);
+    expect([mmap(2), mmap(15), mmap(7)]).toEqual([false, false, false]);
   });
 
-  it('returns true on android for an iq4_nl model path', () => {
+  it('keeps mmap on android for a quant that is not repacked, or an unread header', () => {
     (Platform as any).OS = 'android';
-    expect(shouldDisableMmap('/models/llama.IQ4_NL.gguf')).toBe(true);
+    expect([mmap(1), mmap(null)]).toEqual([true, true]);
   });
 
-  it('returns false on android for a non-repackable quant', () => {
-    (Platform as any).OS = 'android';
-    expect(shouldDisableMmap('/models/llama.Q8_0.gguf')).toBe(false);
+  it('keeps mmap on iOS', () => {
+    (Platform as any).OS = 'ios';
+    expect(mmap(2)).toBe(true);
+  });
+});
+
+describe('buildModelParams — batch, MTP draft length, KV prefix cache', () => {
+  it('auto batch is 128 on HTP and 512 on the CPU; a chosen batch wins', () => {
+    expect(buildModelParams('/m.gguf', { nBatch: 0, inferenceBackend: INFERENCE_BACKENDS.HTP }).nBatch).toBe(128);
+    expect(buildModelParams('/m.gguf', { nBatch: 0, inferenceBackend: INFERENCE_BACKENDS.CPU }).nBatch).toBe(512);
+    expect(buildModelParams('/m.gguf', { nBatch: 256, inferenceBackend: INFERENCE_BACKENDS.HTP }).nBatch).toBe(256);
+  });
+
+  it('MTP passes the draft length (default 3) and a downloaded head as the draft model', () => {
+    const on = buildModelParams('/m.gguf', { speculativeDecoding: true }, { mtpHeadPath: '/head.gguf' }).baseParams as any;
+    expect([on.spec_draft_n_max, on.model_draft]).toEqual([3, '/head.gguf']);
+    const five = buildModelParams('/m.gguf', { speculativeDecoding: true, speculativeDraftMax: 5 }).baseParams as any;
+    expect([five.spec_draft_n_max, five.model_draft]).toEqual([5, undefined]);
+    const off = buildModelParams('/m.gguf', { speculativeDecoding: false }, { mtpHeadPath: '/head.gguf' }).baseParams as any;
+    expect([off.speculative, off.model_draft]).toEqual([undefined, undefined]);
+  });
+
+  it('passes the state cache budget it is given', () => {
+    expect((buildModelParams('/m.gguf', {}, { stateCacheBudgetMb: 160 }).baseParams as any).state_cache_budget_mb).toBe(160);
   });
 });
 
