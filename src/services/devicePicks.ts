@@ -16,8 +16,6 @@ export interface DevicePick {
   sizeBytes: number;
 }
 
-export const PICK_LABELS: Record<PickSlot, string> = { fast: 'Fast', balanced: 'Balanced', best: 'Best' };
-
 /** The chat models a phone can download from the catalog: ready, chat or vision, one entry per
  *  model (quantization variants are options of their base model, not separate picks). */
 function chatEntries(): ModelEntry[] {
