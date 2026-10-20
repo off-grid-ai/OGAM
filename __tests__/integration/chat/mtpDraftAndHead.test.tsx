@@ -89,7 +89,7 @@ describe('MTP speculative decoding', () => {
     expect(draftShown(section)).toBeNull();
     // A model with no published head gets no download offer.
     await h.rtl.act(async () => { await new Promise(r => setTimeout(r, 20)); });
-    expect(section.queryByTestId('mtp-head-download')).toBeNull();
+    expect(section.queryByTestId('mtp-head-status')).toBeNull();
     section.unmount();
 
     h.render();
@@ -147,7 +147,7 @@ describe('MTP head download', () => {
   const HEAD_FILE = 'mtp-gemma-4-E4B-it-Q8_0.gguf';
   const HEAD_BYTES = 98653248;
 
-  it('offers the head, downloads it with its checksum, hides once installed, and loads it as the draft', async () => {
+  it('turning MTP on downloads the head by itself, with its checksum, and the next load drafts with it', async () => {
     const h = await setup({
       modelFileName: MODEL_FILE,
       download: true,
@@ -158,11 +158,13 @@ describe('MTP head download', () => {
     const headPath = `${docs}/models/${HEAD_FILE}`;
     const section = openAdvanced(h);
 
-    // BEFORE: the head is not on disk, so it is offered with its size.
-    const offer = await h.rtl.waitFor(() => section.getByText('Download MTP head (94 MB)'));
+    // BEFORE: MTP is off, nothing is downloading and there is nothing to press.
     expect(await h.boundary.fs!.exists(headPath)).toBe(false);
+    expect(h.boundary.download!.active()).toHaveLength(0);
+    expect(section.queryByTestId('mtp-head-status')).toBeNull();
 
-    await h.rtl.act(async () => { pressByWalkingUp(offer); });
+    // The one tap: MTP on.
+    h.rtl.fireEvent.press(section.getByTestId('speculative-on-button'));
     const row = await h.rtl.waitFor(() => {
       const active = h.boundary.download!.active();
       expect(active).toHaveLength(1);
@@ -174,16 +176,16 @@ describe('MTP head download', () => {
     expect(row.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(row.url).toMatch(/^https:\/\/huggingface\.co\/.+\/mtp-gemma-4-E4B-it-Q8_0\.gguf$/);
 
-    // Progress shows on the button.
+    // Progress shows under the switch.
     await h.rtl.act(async () => {
       h.boundary.download!.events.emit('DownloadProgress', {
         downloadId: row.downloadId, fileName: row.fileName, modelId: row.modelId,
         bytesDownloaded: HEAD_BYTES / 2, totalBytes: HEAD_BYTES, status: 'running',
       });
     });
-    await h.rtl.waitFor(() => expect(section.queryByText('MTP head 50%')).not.toBeNull());
+    await h.rtl.waitFor(() => expect(section.queryByText('Getting MTP head… 50%')).not.toBeNull());
 
-    // The native side finishes: the bytes are on disk and it reports completion.
+    // The native side finishes: the bytes are on disk, and the status goes away.
     await h.rtl.act(async () => {
       h.boundary.fs!.seedFile(headPath, HEAD_BYTES);
       h.boundary.download!.events.emit('DownloadComplete', {
@@ -192,12 +194,10 @@ describe('MTP head download', () => {
         localUri: `file://${headPath}`,
       });
     });
-    await h.rtl.waitFor(() => expect(section.queryByTestId('mtp-head-download')).toBeNull());
+    await h.rtl.waitFor(() => expect(section.queryByTestId('mtp-head-status')).toBeNull());
     expect(await h.boundary.fs!.exists(headPath)).toBe(true);
 
-    // Turn MTP on and load: the head goes to the engine as the draft model.
-    h.rtl.fireEvent.press(section.getByTestId('speculative-on-button'));
-    await h.rtl.waitFor(() => expect(draftShown(section)).toBe('3'));
+    // The next load passes the head to the engine as the draft model.
     section.unmount();
     h.render();
     await sendAndSee(h, 'hello', 'Hi.');
@@ -206,18 +206,14 @@ describe('MTP head download', () => {
     expect(params.model_draft).toBe(headPath);
   });
 
-  it('a later visit to settings does not offer a head that is already installed', async () => {
+  it('turning MTP on with the head already installed downloads nothing', async () => {
     const h = await setup({ modelFileName: MODEL_FILE, download: true });
-    const headPath = `${h.boundary.fs!.DocumentDirectoryPath}/models/${HEAD_FILE}`;
-    // Control: offered while missing...
-    let section = openAdvanced(h);
-    await h.rtl.waitFor(() => expect(section.queryByTestId('mtp-head-download')).not.toBeNull());
-    section.unmount();
-    // ...not offered once the file is beside the model.
-    h.boundary.fs!.seedFile(headPath, HEAD_BYTES);
-    section = openAdvanced(h);
+    h.boundary.fs!.seedFile(`${h.boundary.fs!.DocumentDirectoryPath}/models/${HEAD_FILE}`, HEAD_BYTES);
+    const section = openAdvanced(h);
+    h.rtl.fireEvent.press(section.getByTestId('speculative-on-button'));
     await h.rtl.act(async () => { await new Promise(r => setTimeout(r, 20)); });
-    expect(section.queryByTestId('mtp-head-download')).toBeNull();
+    expect(h.boundary.download!.active()).toHaveLength(0);
+    expect(section.queryByTestId('mtp-head-status')).toBeNull();
     section.unmount();
   });
 });

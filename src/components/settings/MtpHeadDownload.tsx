@@ -1,49 +1,54 @@
-import React, { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text } from 'react-native';
+import Icon from 'react-native-vector-icons/Feather';
 import { useAppStore } from '../../stores';
-import { useThemedStyles } from '../../theme';
-import { Button } from '../Button';
+import { useTheme, useThemedStyles } from '../../theme';
 import { downloadMtpHead, mtpHeadState } from '../../services/mtpHeads';
-import { formatFileSize } from '@offgrid/models';
 import { createTextGenAdvancedStyles } from './textGenAdvancedStyles';
 
-/** Offers the selected model's published MTP head when it is not installed yet. */
+/**
+ * Turning MTP on is the one tap: when the selected model has a published MTP head that is not on
+ * disk yet, it downloads by itself, with its progress here. Nothing to find or press; a failed
+ * download offers one retry icon.
+ */
 export const MtpHeadDownload: React.FC = () => {
   const styles = useThemedStyles(createTextGenAdvancedStyles);
+  const { colors } = useTheme();
+  const mtpOn = useAppStore(s => s.settings.speculativeDecoding);
   const model = useAppStore(s => s.downloadedModels.find(m => m.id === s.activeModelId));
-  const [offer, setOffer] = useState<{ sizeBytes: number } | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
+  const started = useRef<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    mtpHeadState(model?.filePath).then(state => {
-      if (!cancelled) setOffer(state && !state.installed ? { sizeBytes: state.head.sizeBytes } : null);
-    }).catch(() => { if (!cancelled) setOffer(null); });
-    return () => { cancelled = true; };
-  }, [model?.filePath]);
-
-  if (!model || !offer) return null;
-
-  const start = async (): Promise<void> => {
+  const start = (): void => {
+    if (!model) return;
+    started.current = model.filePath;
     setFailed(false);
     setProgress(0);
-    try {
-      await downloadMtpHead(model, setProgress);
-      setOffer(null);
-    } catch {
-      setFailed(true);
-    } finally {
-      setProgress(null);
-    }
+    downloadMtpHead(model, setProgress)
+      .catch(() => setFailed(true))
+      .finally(() => setProgress(null));
   };
 
-  const title = progress !== null
-    ? `MTP head ${Math.round(progress * 100)}%`
-    : `${failed ? 'Retry' : 'Download'} MTP head (${formatFileSize(offer.sizeBytes)})`;
+  useEffect(() => {
+    if (!mtpOn || !model || started.current === model.filePath) return;
+    let cancelled = false;
+    mtpHeadState(model.filePath).then(state => {
+      if (!cancelled && state && !state.installed) start();
+    }).catch(() => {});
+    return () => { cancelled = true; };
+    // start reads the latest model; re-run only when MTP or the model changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mtpOn, model?.filePath]);
+
+  if (!mtpOn || (progress === null && !failed)) return null;
   return (
-    <View style={styles.container}>
-      <Button testID="mtp-head-download" title={title} variant="outline" size="small" disabled={progress !== null} onPress={start} />
+    <View style={styles.container} testID="mtp-head-status">
+      {failed ? (
+        <Icon name="refresh-cw" size={18} color={colors.primary} onPress={start} accessibilityLabel="Retry MTP head download" testID="mtp-head-retry" />
+      ) : (
+        <Text style={styles.desc}>{`Getting MTP head… ${Math.round((progress ?? 0) * 100)}%`}</Text>
+      )}
     </View>
   );
 };
