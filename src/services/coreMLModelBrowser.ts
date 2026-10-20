@@ -124,7 +124,7 @@ async function fetchModelFromRepo(
     return {
       id,
       name,
-      displayName: `${name} (Core ML)`,
+      displayName: name,
       backend: 'coreml',
       downloadUrl: `https://huggingface.co/${repo}/resolve/main/${zipEntry.path}`,
       fileName: zipEntry.path,
@@ -185,7 +185,7 @@ async function fetchModelFromRepo(
   return {
     id,
     name,
-    displayName: `${name} (Core ML)`,
+    displayName: name,
     backend: 'coreml',
     downloadUrl: `https://huggingface.co/${repo}/tree/main/${compiledDir.path}`,
     fileName: compiledDir.path,

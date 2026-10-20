@@ -62,9 +62,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
   fileSize,
   quantization,
   isVisionModel,
-  supportsAcceleration,
   recommended,
-  isTrending,
   credibilitySource,
   credibilityLabel,
   incompatibleReason,
@@ -77,23 +75,24 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const description = cardDescription(model.description, recommended?.highlightText);
-  const modelType = isVisionModel || model.modelType === 'vision' ? 'Vision'
-    : model.modelType === 'code' ? 'Code' : model.modelType === 'text' ? 'Text' : undefined;
+  // "Code" says what a model is good at; "Text" and "Vision" repeat what the icons already say.
+  const goodAt = model.modelType === 'code' ? 'Code' : undefined;
+  // Only what differs between cards and helps a choice: size, the model's own facts, and the fit.
+  // Download counts, the "Text" type and the NPU/GPU chip repeated on nearly every card; the
+  // backend choice is made once in settings ("Use fastest settings").
   const facts = [...new Set([
     fileSize > 0 ? huggingFaceService.formatFileSize(fileSize) : undefined,
     quantization && quantization !== 'Unknown' ? quantization : undefined,
-    capabilities?.vision || isVisionModel ? undefined : modelType,
+    goodAt,
     model.paramCount ? `${model.paramCount}B params` : undefined,
-    supportsAcceleration ? 'NPU/GPU' : undefined,
     ...(recommended?.chips ?? []),
     ...additionalFacts,
-    model.downloads ? `${formatCompactNumber(model.downloads)} dl` : undefined,
     incompatibleReason,
   ].filter((value): value is string => !!value))];
   const hasVerifiedMark =
     credibilitySource === 'verified-quantizer' || credibilitySource === 'official';
+  // Who published a model is shown as one verified mark, not a name on every card.
   const sourceLabels = [
-    model.author && model.author !== 'Unknown' ? model.author : undefined,
     credibilitySource && credibilitySource !== 'community' && !hasVerifiedMark ? credibilityLabel : undefined,
   ].filter((value): value is string => !!value);
 
@@ -115,9 +114,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
           {sourceLabels.length > 0 && <Text style={styles.denseSource} numberOfLines={1}>
             {sourceLabels.join(' · ')}
           </Text>}
-          {(recommended || isTrending) && (
-            <MaterialIcon name="whatshot" size={14} color={colors.trending} accessibilityLabel={isTrending ? 'Trending' : 'Recommended'} />
-          )}
+
         </View>
       </View>
       {!!description && (
@@ -143,11 +140,6 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
   );
 };
 
-function formatCompactNumber(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return String(value);
-}
 
 /**
  * The ONE description string a card shows: the model's description plus any

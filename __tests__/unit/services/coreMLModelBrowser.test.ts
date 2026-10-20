@@ -201,13 +201,13 @@ describe('CoreMLModelBrowser', () => {
       }
     });
 
-    it('generates display name with "(Core ML)" suffix', async () => {
+    it('names a model in plain words, without the "(Core ML)" runtime suffix', async () => {
       setupSuccessfulFetch('apple/coreml-stable-diffusion-2-1-base');
 
       const models = await fetchCoreMLModels(true);
 
       if (models.length > 0) {
-        expect(models[0]!.displayName).toContain('Core ML');
+        expect(models[0]!.displayName).not.toContain('Core ML');
       }
     });
 
