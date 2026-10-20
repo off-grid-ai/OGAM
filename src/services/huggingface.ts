@@ -337,7 +337,6 @@ class HuggingFaceService {
   private extractDescription(result: HFModelSearchResult): string {
     const name = (result.id.split('/').pop() || '').toLowerCase();
     const tags = result.tags?.map(t => t.toLowerCase()) || [];
-    const author = result.author || result.id.split('/')[0] || '';
     const type = this.detectModelType(name, tags);
     const paramMatch = name.match(/(\d+\.?\d*)\s*b(?:\b|-)/);
     const paramStr = paramMatch ? `${paramMatch[1]}B` : null;
@@ -348,7 +347,7 @@ class HuggingFaceService {
     const parts: string[] = [type];
     if (paramStr) parts.push(paramStr);
     if (licenseStr) parts.push(licenseStr);
-    if (author) parts.push(`by ${author}`);
+    // Who published it is the verified mark on the card, not a name in every description.
     return parts.join(' · ');
   }
 
