@@ -60,7 +60,11 @@ const Q4_BYTES_PER_BILLION_PARAMS = 0.6e9;
 
 function mapCuratedModel(m: typeof RECOMMENDED_MODELS[number], details: Record<string, ModelInfo>): ModelInfo {
   const fetched = details[m.id];
-  const curatedFields = { modelType: m.type, paramCount: m.params, minRamGB: m.minRam };
+  const curatedFields = {
+    modelType: m.type, paramCount: m.params, minRamGB: m.minRam,
+    ...(m.activeParams ? { activeParams: m.activeParams } : {}),
+    ...(m.nonCommercial ? { nonCommercial: true } : {}),
+  };
   if (fetched) return { ...fetched, name: m.name, description: m.description, ...curatedFields };
   return { id: m.id, name: m.name, author: m.id.split('/')[0], description: m.description, downloads: -1, likes: 0, tags: [], lastModified: '', files: [], ...curatedFields };
 }

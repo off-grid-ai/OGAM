@@ -46,6 +46,8 @@ export const RECOMMENDED_MODELS = CATALOG.filter(offeredOnPhone).map(entry => ({
   type: entry.kind === 'vision' ? ('vision' as const) : ('text' as const),
   org: entry.org ?? entry.id.split('/')[0],
   isNew: entry.isNew,
+  activeParams: entry.activeParams,
+  nonCommercial: entry.nonCommercial,
 }));
 
 // Trending model families — one best-fit per family is shown as "trending"

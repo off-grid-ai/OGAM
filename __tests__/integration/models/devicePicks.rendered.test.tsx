@@ -259,6 +259,32 @@ describe('Text search answers from the catalog first', () => {
     // A catalog model too big for the phone is left out.
     expect(models.queryByText('Qwen 3.8 27B')).toBeNull();
   });
+
+  it('a search result says what matters: its active size, its other uploads, and nothing hidden', async () => {
+    installNativeBoundary({ fs: true, ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
+    const moe = 'unsloth/Tiny-MoE-8B-A1B-GGUF';
+    restoreFetch = installHuggingFace(url =>
+      url.pathname === '/api/models'
+        ? [moe, 'bartowski/Tiny-MoE-8B-A1B-GGUF', 'someone/Tiny-MoE-8B-A1B-abliterated-GGUF']
+          .map(id => ({ id, author: id.split('/')[0], downloads: 10, likes: 0, tags: ['gguf'], siblings: [] }))
+        : undefined,
+    );
+    const React = require('react');
+    const { render, fireEvent, waitFor } = requireRTL();
+    await clearStorage();
+    const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
+
+    const models = render(React.createElement(ModelsScreen));
+    const search = models.getByPlaceholderText('Search models');
+    fireEvent.changeText(search, 'tiny-moe');
+    fireEvent(search, 'submitEditing');
+
+    await waitFor(() => expect(models.getAllByText('Tiny-MoE-8B-A1B-GGUF')).toHaveLength(1));
+    const text = screenText(models.toJSON());
+    expect(text).toMatch(/MoE · 1B active/);
+    expect(text).toMatch(/\+1 uploads/);
+    expect(text).not.toMatch(/abliterated/i);
+  });
 });
 
 describe("A model's detail offers its sizes in words", () => {

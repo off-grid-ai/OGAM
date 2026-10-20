@@ -40,6 +40,8 @@ export interface ModelInfo {
   newer?: string;
   /** Other uploads of the same model (repo ids), shown as one result. */
   variants?: string[];
+  /** A research (non-commercial) licence. */
+  nonCommercial?: boolean;
 }
 
 export interface ModelFile {
