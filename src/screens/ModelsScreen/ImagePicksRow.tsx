@@ -27,16 +27,18 @@ export function oneVariantPerFamily<T extends { displayName: string }>(models: r
   return [...families.values()];
 }
 
+/** The image picks for this phone: one variant per model, by the shared rule. */
+export function imagePicks<T extends HFImageModel>(models: readonly T[], ramGB: number, isRecommended: (model: T) => boolean) {
+  return picksAmong(oneVariantPerFamily(models, isRecommended), model => ({ id: model.id, sizeBytes: model.size }), ramGB);
+}
+
 export const ImagePicksRow: React.FC<{
   models: HFImageModel[];
   ramGB: number;
   isRecommended: (model: HFImageModel) => boolean;
   onDownload: (descriptor: ImageModelDescriptor) => void;
 }> = ({ models, ramGB, isRecommended, onDownload }) => {
-  const picks = useMemo(
-    () => picksAmong(oneVariantPerFamily(models, isRecommended), model => ({ id: model.id, sizeBytes: model.size }), ramGB),
-    [models, ramGB, isRecommended],
-  );
+  const picks = useMemo(() => imagePicks(models, ramGB, isRecommended), [models, ramGB, isRecommended]);
   const downloaded = useAppStore(s => s.downloadedImageModels);
   const activeId = useAppStore(s => s.activeImageModelId);
   const setActive = useAppStore(s => s.setActiveImageModelId);

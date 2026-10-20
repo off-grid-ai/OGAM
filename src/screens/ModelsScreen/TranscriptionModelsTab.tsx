@@ -242,6 +242,8 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [deviceRam],
   );
+  // A pick is shown once, in the row above; the list leaves out that exact model.
+  const pickedIds = new Set(speechPicks.map(({ item }) => item.id));
   const speechPickState = (id: string): PickState => {
     if (presentModelIds.includes(id)) {
       return downloadedModelId === id ? { kind: 'active' } : { kind: 'use', onUse: () => handleSelect(id) };
@@ -329,7 +331,7 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
       {ENGLISH_MODELS.map((m, i) => renderWhisperCard(m, i))}
 
       <Text style={styles.sectionLabel}>Multilingual - 99 languages</Text>
-      {MULTI_MODELS.map((m, i) => renderWhisperCard(m, ENGLISH_MODELS.length + i))}
+      {MULTI_MODELS.filter(m => !pickedIds.has(m.id)).map((m, i) => renderWhisperCard(m, ENGLISH_MODELS.length + i))}
 
       <CustomAlert visible={alertState.visible} title={alertState.title}
         message={alertState.message} buttons={alertState.buttons}

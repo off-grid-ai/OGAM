@@ -13,7 +13,7 @@ import { makeImageModelKey } from '../../utils/modelKey';
 import { imageBackendLabel } from '../../utils/imageBackend';
 import { createStyles } from './styles';
 import { ModelsScreenViewModel } from './useModelsScreen';
-import { ImagePicksRow } from './ImagePicksRow';
+import { ImagePicksRow, imagePicks, imageFamilyName } from './ImagePicksRow';
 import { ImageFilterBar } from './ImageFilterBar';
 import { BackendFilter, ImageFilterDimension } from './types';
 import { formatBytes, getImageModelCompatibility, hfModelToDescriptor } from './utils';
@@ -165,6 +165,11 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
+  // A pick is shown once, in the row above; the list leaves out every variant of a picked model.
+  const compatible = availableHFModels.filter(model => getImageModelCompatibility(model, imageRec).isCompatible);
+  const pickedFamilies = new Set(imagePicks(compatible, ramGB, isRecommendedModel).map(({ item }) => imageFamilyName(item.displayName)));
+  const listedModels = filteredHFModels.filter(model => !pickedFamilies.has(imageFamilyName(model.displayName)));
+
   let emptyMessage: string;
   if (imageSearchQuery.trim()) {
     emptyMessage = 'No models match your search';
@@ -187,7 +192,7 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
         )}
 
         <ImagePicksRow
-          models={availableHFModels.filter(model => getImageModelCompatibility(model, imageRec).isCompatible)}
+          models={compatible}
           ramGB={ramGB}
           isRecommended={isRecommendedModel}
           onDownload={handleDownloadImageModel}
@@ -230,7 +235,7 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
           </View>
         )}
 
-        {!hfModelsLoading && !hfModelsError && filteredHFModels.map(
+        {!hfModelsLoading && !hfModelsError && listedModels.map(
           (model, index) => {
             const card = (
               <ImageModelCardItem

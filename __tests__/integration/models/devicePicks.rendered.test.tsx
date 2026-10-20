@@ -184,11 +184,12 @@ describe('Fast, Balanced and Best on the Models screen', () => {
     fireEvent.press(models.getByText('Image'));
 
     const picks = await waitFor(() => models.getByTestId('image-picks'));
-    // Both variants are listed as models on the tab ...
-    await waitFor(() => expect(models.getByText('SD 2.1 Palettized (Low RAM)')).toBeTruthy());
-    // ... but the picks show the model once, by its family name, with no variant or Core ML suffix.
+    // The picks show the model once, by its family name, with no variant or Core ML suffix ...
     expect(within(picks).getAllByText('SD 2.1 Palettized')).toHaveLength(1);
     expect(within(picks).queryByText(/Low RAM|Core ML/)).toBeNull();
+    // ... and the list below does not repeat it in any variant: the pick stands for them all.
+    expect(models.getAllByText('SD 2.1 Palettized')).toHaveLength(1);
+    expect(models.queryByText('SD 2.1 Palettized (Low RAM)')).toBeNull();
     expect(models.queryByText(/\(Core ML\)/)).toBeNull();
   });
 
@@ -209,6 +210,15 @@ describe('Fast, Balanced and Best on the Models screen', () => {
     expect(within(models.getByTestId('pick-balanced')).getByText('Small')).toBeTruthy();
     expect(within(models.getByTestId('pick-best')).getByText('Large v3')).toBeTruthy();
     expect(models.getByTestId('pick-fast-download')).toBeTruthy();
+    // The list below leaves out exactly the picked models: the multilingual Tiny, Small and Large v3
+    // are not repeated, while the English-only Tiny and Small (different models) and the
+    // multilingual Medium stay.
+    expect(models.getAllByText('Tiny')).toHaveLength(2);
+    expect(models.getAllByText('Small')).toHaveLength(2);
+    expect(models.getAllByText('Large v3')).toHaveLength(1);
+    expect(models.getAllByText('Medium')).toHaveLength(2);
+    expect(models.queryByText('Fastest, 99 languages')).toBeNull();
+    expect(models.getByText('Fastest, English only')).toBeTruthy();
   });
 });
 
