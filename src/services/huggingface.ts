@@ -14,7 +14,7 @@ import {
 import { looksLikeVisionModel } from '../utils/visionModel';
 import { huggingFaceRevisionPath } from '../utils/modelOrigin';
 import { isMMProjFile, pickMmProjForDownload } from './mmproj';
-import { searchHuggingFace, type HFSearchResult } from '@offgrid/models';
+import { searchHuggingFace, getModelType, type HFSearchResult } from '@offgrid/models';
 
 /** An MTP head published beside a model ("MTP/mtp-….gguf", "…-MTP-ONLY-….gguf"). It is not a size
  *  of the model: it downloads with MTP, never as a quantization choice. */
@@ -50,7 +50,10 @@ class HuggingFaceService {
       sort: options.sort,
       kind: options.pipelineTag === 'image-text-to-text' ? 'vision' : undefined,
     });
-    return results.map(result => this.fromSharedResult(result));
+    // An image generator is not a chat model: it belongs on the Image tab, not in chat search.
+    return results
+      .filter(result => getModelType(result.name) !== 'image-gen')
+      .map(result => this.fromSharedResult(result));
   }
 
   private fromSharedResult(result: HFSearchResult): ModelInfo {

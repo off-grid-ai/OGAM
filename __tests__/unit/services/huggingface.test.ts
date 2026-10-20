@@ -429,6 +429,19 @@ describe('HuggingFaceService', () => {
       expect(url).toContain('filter=gguf');
     });
 
+    it('leaves image generators out of chat search', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([
+          { id: 'org/Qwen-Image-2.1-GGUF', downloads: 99 },
+          { id: 'org/Qwen3-4B-GGUF', downloads: 9 },
+        ]),
+      });
+      const results = await huggingFaceService.searchModels('qwen');
+
+      expect(results.map(r => r.id)).toEqual(['org/Qwen3-4B-GGUF']);
+    });
+
     it('shows every upload of one model as one result, never an abliterated upload', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
