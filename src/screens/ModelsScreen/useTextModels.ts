@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Keyboard, BackHandler } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/types';
 import { showAlert, hideAlert, AlertState } from '../../components/CustomAlert';
 import { RECOMMENDED_MODELS, TRENDING_FAMILIES, MODEL_ORGS } from '../../constants';
 import { useAppStore } from '../../stores';
@@ -97,6 +99,7 @@ function computeFilteredResults(
 }
 
 export function useTextModels(setAlertState: (s: AlertState) => void) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -232,7 +235,12 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
             `${model.name} downloaded but the vision projection file could not be saved. Go to Download Manager and use "Repair Vision" to fix it.`,
           ));
         } else {
-          setAlertState(showAlert('Success', `${model.name} downloaded successfully!`));
+          // A finished download is the model you use next: make it active and offer the chat.
+          activeModelService.selectTextModel(dm.id);
+          setAlertState(showAlert(`${model.name} is ready`, undefined, [
+            { text: 'Later', style: 'cancel' },
+            { text: 'Chat now', onPress: () => { setAlertState(hideAlert()); navigation.navigate('Chat', {}); } },
+          ]));
         }
       },
       onError: (err) => setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(err.message))),

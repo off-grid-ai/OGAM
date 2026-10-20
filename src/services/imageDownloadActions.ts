@@ -233,11 +233,11 @@ export async function registerAndNotify(
   const { imageModel, modelName } = opts;
   await modelManager.addDownloadedImageModel(imageModel);
   deps.addDownloadedImageModel(imageModel);
-  // Auto-load the first image model unless onboarding is still active (Step 13 needs
-  // activeImageModelId null).
-  if (!deps.activeImageModelId && deps.triedImageGen) deps.setActiveImageModelId(imageModel.id);
+  // A finished download is the image model you use next, unless onboarding is still active
+  // (Step 13 needs activeImageModelId null).
+  if (deps.triedImageGen) deps.setActiveImageModelId(imageModel.id);
   removeStoreEntry(imageModel.id);
-  deps.setAlertState(showAlert('Success', `${modelName} downloaded successfully!`));
+  deps.setAlertState(showAlert(`${modelName} is ready`));
 }
 
 /** Add (or refuse-add) an image entry to the store. Returns true if a new entry was created. */

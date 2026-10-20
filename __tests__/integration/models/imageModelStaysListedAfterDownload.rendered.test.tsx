@@ -50,7 +50,7 @@ describe('Image tab after a download', () => {
 
       // BEFORE: the model is listed and offers a download; it is not marked downloaded.
       await waitFor(() => expect(models.getByText(MODEL_NAME)).toBeTruthy(), { timeout: 4000 });
-      expect(models.queryByText(/downloaded successfully/)).toBeNull();
+      expect(models.queryByText(/is ready/)).toBeNull();
       expect(models.getByTestId('image-model-card-0-download')).toBeTruthy();
       expect(models.queryByTestId('image-model-card-0-downloaded')).toBeNull();
 
@@ -75,7 +75,7 @@ describe('Image tab after a download', () => {
       // AFTER: the same model is still on the Image tab, marked downloaded, with no download offer.
       await waitFor(() => expect(models.getByTestId('image-model-card-0-downloaded')).toBeTruthy(), { timeout: 4000 });
       expect(models.getAllByText(MODEL_NAME)).toHaveLength(1);
-      expect(models.getByText(/downloaded successfully/)).toBeTruthy();
+      expect(models.getByText(/is ready/)).toBeTruthy();
       expect(models.queryByTestId('image-model-card-0-download')).toBeNull();
       expect(models.queryByText('No models available')).toBeNull();
     } finally {
