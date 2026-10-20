@@ -1,3 +1,4 @@
+import { FastestSettingsButton } from '../settings/FastestSettingsButton';
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { AdvancedToggle } from '../AdvancedToggle';
@@ -60,6 +61,7 @@ export const TextGenerationSection: React.FC = () => {
             </>
           ) : (
             <>
+              <FastestSettingsButton />
               <CpuThreadsSlider />
               <BatchSizeSlider />
               <BackendSelector />

@@ -1,3 +1,4 @@
+import { FastestSettingsButton } from '../../components/settings/FastestSettingsButton';
 import React, { useState } from 'react';
 import { Text } from 'react-native';
 import { AdvancedToggle, Card } from '../../components';
@@ -67,6 +68,7 @@ export const TextGenerationSection: React.FC = () => {
             <SliderSetting testID="llama-top-p" {...llama.topP} />
             <SliderSetting testID="repeat-penalty" {...llama.repeatPenalty} />
             <SliderSetting testID="max-tool-calls" {...toolCalls} />
+            <FastestSettingsButton />
             <CpuThreadsSlider />
             <BatchSizeSlider />
             <BackendSelector />
