@@ -313,6 +313,8 @@ export const ModelInfoBadges: React.FC<ModelInfoBadgesProps> = ({
 // ── Action icon buttons (download / select / delete) ──
 
 interface ModelCardActionsProps {
+  /** Names the icon buttons for screen readers ("Download <name>"). */
+  modelName?: string;
   isDownloaded: boolean | undefined;
   isDownloading: boolean | undefined;
   isQueued?: boolean;
@@ -374,7 +376,7 @@ function DownloadedActions({ isActive, testID, colors, styles, onSelect, onDelet
 }
 
 export const ModelCardActions: React.FC<ModelCardActionsProps> = ({
-  isDownloaded, isDownloading, isQueued, isPaused, isActive, isCompatible,
+  modelName, isDownloaded, isDownloading, isQueued, isPaused, isActive, isCompatible,
   testID, onDownload, onSelect, onDelete, onRepairVision, isRepairingVision, onCancel, onPause, onResume,
 }) => {
   const { colors } = useTheme();
@@ -389,7 +391,7 @@ export const ModelCardActions: React.FC<ModelCardActionsProps> = ({
     </>;
   }
   if (!isDownloaded && onDownload) {
-    return <ActionButton icon="download" color={colors.primary} haptic="impactLight" onPress={onDownload} disabled={!isCompatible} testID={tid('download')} styles={styles} />;
+    return <ActionButton icon="download" color={colors.primary} haptic="impactLight" onPress={onDownload} disabled={!isCompatible} testID={tid('download')} accessibilityLabel={modelName ? `Download ${modelName}` : 'Download model'} styles={styles} />;
   }
   if (isDownloaded) {
     return <DownloadedActions isActive={isActive} testID={testID} colors={colors} styles={styles} onSelect={onSelect} onDelete={onDelete} onRepairVision={onRepairVision} isRepairingVision={isRepairingVision} />;

@@ -334,6 +334,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   const actionsInProgress = !!compact && (isDownloading || isQueued || isPaused);
   const actionButtons = !failedState && (
     <ModelCardActions
+      modelName={model.name}
       isDownloaded={isDownloaded}
       isDownloading={isDownloading}
       isQueued={isQueued}
