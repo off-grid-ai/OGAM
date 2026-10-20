@@ -36,6 +36,14 @@ function phoneMinRamGb(entry: ModelEntry): number {
   return Math.ceil(bytes / 1e9 / PHONE_FIT_BUDGET.soft);
 }
 
+/** The catalog names a maker for people ("Meta"); the maker filter keys by its Hugging Face org
+ *  ("meta-llama"). One map so a catalog model is found under its maker's filter. */
+const CATALOG_ORG_TO_FILTER_KEY: Record<string, string> = {
+  Meta: 'meta-llama',
+  NVIDIA: 'nvidia',
+  Mistral: 'mistralai',
+};
+
 export const RECOMMENDED_MODELS = CATALOG.filter(offeredOnPhone).map(entry => ({
   id: entry.id,
   name: entry.name,
@@ -44,7 +52,7 @@ export const RECOMMENDED_MODELS = CATALOG.filter(offeredOnPhone).map(entry => ({
   minRam: phoneMinRamGb(entry),
   maxRam: undefined as number | undefined,
   type: entry.kind === 'vision' ? ('vision' as const) : ('text' as const),
-  org: entry.org ?? entry.id.split('/')[0],
+  org: CATALOG_ORG_TO_FILTER_KEY[entry.org ?? ''] ?? entry.org ?? entry.id.split('/')[0],
   isNew: entry.isNew,
   activeParams: entry.activeParams,
   nonCommercial: entry.nonCommercial,
@@ -70,6 +78,7 @@ export const MODEL_ORGS = [
   { key: 'deepseek-ai', label: 'DeepSeek' },
   { key: 'HuggingFaceTB', label: 'HuggingFace' },
   { key: 'nvidia', label: 'NVIDIA' },
+  { key: 'LiquidAI', label: 'Liquid AI' },
 ];
 
 // Quantization levels and their properties
