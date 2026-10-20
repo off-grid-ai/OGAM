@@ -324,8 +324,8 @@ describe('ModelCard', () => {
       expect(queryByText('0 dl')).toBeNull();
     });
 
-    it('shows credibility badge in compact mode for lmstudio', () => {
-      const { getByText } = render(
+    it('shows credibility badge in compact mode for lmstudio, without the author name', () => {
+      const { getByText, queryByText } = render(
         <ModelCard
           model={{
             ...baseModel,
@@ -339,14 +339,16 @@ describe('ModelCard', () => {
           compact={true}
         />
       );
-      expect(getByText(/test-author · LM Studio/)).toBeTruthy();
+      expect(getByText('LM Studio')).toBeTruthy();
+      expect(queryByText(/test-author/)).toBeNull();
     });
 
-    it('shows trending icon in compact mode', () => {
-      const { getByText } = render(
+    it('shows no trending icon in compact mode', () => {
+      const { queryByLabelText, getByText } = render(
         <ModelCard model={baseModel} compact={true} isTrending={true} />
       );
-      expect(getByText('')).toBeTruthy();
+      expect(getByText('Test Model')).toBeTruthy();
+      expect(queryByLabelText('Trending')).toBeNull();
     });
 
     it('shows an accessible verified icon without visible Verified text', () => {
@@ -368,7 +370,7 @@ describe('ModelCard', () => {
 
       expect(getByLabelText('Verified')).toBeTruthy();
       expect(queryByText('Verified')).toBeNull();
-      expect(queryByText(/Unsloth/)).toBeTruthy();
+      expect(queryByText(/Unsloth/)).toBeNull();
     });
 
     it('shows the verified icon instead of Official text for official models', () => {
@@ -390,7 +392,7 @@ describe('ModelCard', () => {
 
       expect(getByLabelText('Official')).toBeTruthy();
       expect(queryByText('Official')).toBeNull();
-      expect(queryByText(/OpenBMB/)).toBeTruthy();
+      expect(queryByText(/OpenBMB/)).toBeNull();
     });
   });
 
@@ -915,11 +917,12 @@ describe('ModelCard', () => {
       expect(queryByText('Recommended')).toBeNull();
     });
 
-    it('uses the fire icon without a visible label', () => {
-      const { getByLabelText, queryByText } = render(
+    it('shows neither a fire icon nor a visible label', () => {
+      const { getByText, queryByLabelText, queryByText } = render(
         <ModelCard model={baseModel} compact={true} recommended={{ pillLabel: 'Featured' }} />,
       );
-      expect(getByLabelText('Recommended')).toBeTruthy();
+      expect(getByText('Test Model')).toBeTruthy();
+      expect(queryByLabelText('Recommended')).toBeNull();
       expect(queryByText('Featured')).toBeNull();
     });
 

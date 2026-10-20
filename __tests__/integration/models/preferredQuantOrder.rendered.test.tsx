@@ -1,5 +1,6 @@
 /**
- * UI integration — which quant a model's "Available Files" offers first.
+ * UI integration — which quant a model's detail offers first: the "Recommended" size, and the head
+ * of the full list behind "All files".
  *
  * Real ModelsScreen (search → detail), real huggingFaceService, real catalog-file preference and the
  * shared @offgrid/models rule. Faked only at the boundaries: the Hugging Face network (global fetch,
@@ -43,12 +44,13 @@ function installHuggingFace(files: typeof FILES): () => void {
 let restoreFetch: () => void = () => {};
 afterEach(() => restoreFetch());
 
-/** Search for the repo, open it, and return the file names in the order the list shows them. */
-async function openDetailFileOrder(opts: { platform: 'android' | 'ios'; files?: typeof FILES; pickGpu?: boolean }): Promise<string[]> {
+/** Search for the repo, open it, and return the file the "Recommended" size card names, and every
+ *  file name in the order the "All files" list shows them. */
+async function openDetailFileOrder(opts: { platform: 'android' | 'ios'; files?: typeof FILES; pickGpu?: boolean }): Promise<{ recommended: string; order: string[] }> {
   installNativeBoundary({ download: true, fs: true, ram: { platform: opts.platform, totalBytes: 12 * GB, availBytes: 8 * GB } });
   restoreFetch = installHuggingFace(opts.files ?? FILES);
   const React = require('react');
-  const { render, fireEvent, waitFor, act } = requireRTL();
+  const { render, fireEvent, waitFor, act, within } = requireRTL();
   const { hardwareService } = require('../../../src/services/hardware');
   const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
   await hardwareService.refreshMemoryInfo();
@@ -71,28 +73,41 @@ async function openDetailFileOrder(opts: { platform: 'android' | 'ios'; files?: 
   const card = await waitFor(() => view.getByText(/Qwen3-1\.7B/), { timeout: 6000 });
   await act(async () => { fireEvent.press(card); });
   await waitFor(() => expect(view.getByTestId('model-detail-screen')).toBeTruthy(), { timeout: 4000 });
+  // The sizes in words: the Recommended card names the preferred file.
+  const recommendedCard = await waitFor(() => {
+    const cards = view.queryAllByTestId(/^file-card-\d+$/).filter(card => within(card).queryByText(/· Recommended/));
+    expect(cards).toHaveLength(1);
+    return cards[0];
+  }, { timeout: 4000 });
+  const recommended = String(within(recommendedCard).getByText(/^Qwen3-1\.7B-Q/).props.children);
+  // All files: every file, in the phone's order.
+  await act(async () => { fireEvent.press(view.getByTestId('all-files-toggle')); });
   await waitFor(() => expect(view.queryAllByText(/^Qwen3-1\.7B-Q/).length).toBe((opts.files ?? FILES).length), { timeout: 4000 });
-  return view.queryAllByText(/^Qwen3-1\.7B-Q/).map(node => String(node.props.children));
+  return { recommended, order: view.queryAllByText(/^Qwen3-1\.7B-Q/).map(node => String(node.props.children)) };
 }
 
-describe('Available Files: the preferred quant comes first', () => {
+describe('Model detail: the preferred quant is Recommended and comes first', () => {
   it('Android on the CPU: Q4_0 first', async () => {
-    const order = await openDetailFileOrder({ platform: 'android' });
+    const { recommended, order } = await openDetailFileOrder({ platform: 'android' });
+    expect(recommended).toBe('Qwen3-1.7B-Q4_0');
     expect(order[0]).toBe('Qwen3-1.7B-Q4_0');
   }, 30000);
 
   it('Android on the GPU: Q4_K_M first', async () => {
-    const order = await openDetailFileOrder({ platform: 'android', pickGpu: true });
+    const { recommended, order } = await openDetailFileOrder({ platform: 'android', pickGpu: true });
+    expect(recommended).toBe('Qwen3-1.7B-Q4_K_M');
     expect(order[0]).toBe('Qwen3-1.7B-Q4_K_M');
   }, 30000);
 
   it('iOS: Q4_K_M first', async () => {
-    const order = await openDetailFileOrder({ platform: 'ios' });
+    const { recommended, order } = await openDetailFileOrder({ platform: 'ios' });
+    expect(recommended).toBe('Qwen3-1.7B-Q4_K_M');
     expect(order[0]).toBe('Qwen3-1.7B-Q4_K_M');
   }, 30000);
 
   it('Android on the CPU, a repo without Q4_0: Q4_K_M first', async () => {
-    const order = await openDetailFileOrder({ platform: 'android', files: FILES.filter(f => !f.path.includes('Q4_0')) });
+    const { recommended, order } = await openDetailFileOrder({ platform: 'android', files: FILES.filter(f => !f.path.includes('Q4_0')) });
+    expect(recommended).toBe('Qwen3-1.7B-Q4_K_M');
     expect(order[0]).toBe('Qwen3-1.7B-Q4_K_M');
   }, 30000);
 });
