@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TextInput, RefreshControl, TouchableOpacity, Platform } from 'react-native';
 import { LoadingDots } from '../../components/LoadingDots';
 import DeviceInfo from 'react-native-device-info';
@@ -32,6 +32,7 @@ import { uniformDownloadId } from '../../services/modelDownloadService/uniformId
 import { fetchModelFiles, preferredDownloadQuants } from '../../services/modelCatalogFiles';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 import { DevicePicksRow } from '../../components/models/DevicePicksRow';
+import { sizeChoices } from './sizeChoices';
 
 function hasNonSortFilters(fs: FilterState): boolean {
   return fs.orgs.length > 0 || fs.type !== 'all' || fs.source !== 'all' || fs.size !== 'all' || fs.quant !== 'all';
@@ -106,6 +107,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const [showAllFiles, setShowAllFiles] = useState(false);
 
   // Pre-set the next pending (Download Manager icon) so it fires regardless of
   // how the user dismisses step 9 (button or backdrop tap).
@@ -154,6 +156,26 @@ const ModelDetailView: React.FC<DetailProps> = ({
     return { downloadKey: modelKey, progress, downloaded, downloadedModel, needsVisionRepair, repairingVision, canCancel, hasFailed, errorMessage };
   };
 
+  // Every file this phone can run, best first for this phone (the recommended quant leads).
+  const runnableFiles = modelFiles
+    .filter(f => f.size > 0 && !fileExceedsBudget(f.size, ramGB) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
+    .sort((a, b) => {
+      if (selectedModel.id === LITERT_PARENT_ID) return a.size - b.size; // curated: small-first
+      // Tier: the preferred download quant (Q4_0 on Android CPU/NPU, else Q4_K_M) → GPU/NPU
+      // Q4_0/Q8_0 → rest (CPU fallback). Accelerable tier small-first; others size desc.
+      const preferred = preferredDownloadQuants();
+      const rank = (f: ModelFile) => {
+        const at = preferred.indexOf(f.quantization.toUpperCase());
+        if (at >= 0) return at;
+        return preferred.length + (isAccelerableQuant(f.quantization) ? 0 : 1);
+      };
+      if (rank(a) !== rank(b)) return rank(a) - rank(b);
+      return rank(a) === preferred.length ? a.size - b.size : b.size - a.size;
+    });
+  // Three sizes in words; the raw file list sits behind "All files".
+  const choices = sizeChoices(runnableFiles);
+  const sizeLabelOf = (file: ModelFile) => (showAllFiles ? undefined : choices.find(c => c.file === file)?.label);
+
   const renderFileItem = ({ item, index }: { item: ModelFile; index: number }) => {
     const s = getFileCardState(item);
     const proceedDownload = () => {
@@ -197,6 +219,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
         isRepairingVision={s.repairingVision}
         isCompatible={!fileExceedsBudget(item.size, ramGB)} testID={`file-card-${index}`}
         // "Runs well" is the default and goes unsaid; only a tight fit is worth a word on the card.
+        sizeLabel={sizeLabelOf(item)}
         facts={modelFitTier(item.size, ramGB) === 'tight' ? [fitLabel('tight')] : undefined}
         onDownload={onDownload}
         onDelete={s.downloaded ? () => handleDeleteModel(`${selectedModel.id}/${item.name}`) : undefined}
@@ -264,36 +287,21 @@ const ModelDetailView: React.FC<DetailProps> = ({
           <Text style={styles.deviceBannerText}>{'GPU acceleration is not yet supported on Pixel 10. Models will run on CPU. Support coming soon.'}</Text>
         </Card>
       )}
-      <Text style={styles.sectionTitle}>Available Files</Text>
-      {selectedModel.id !== LITERT_PARENT_ID && (
-        <Text style={styles.sectionSubtitle}>
-          Choose a quantization level. The first one is recommended for this phone.
-          {modelFiles.some(f => f.mmProjFile) && ' Vision files include mmproj.'}
-        </Text>
-      )}
+      <Text style={styles.sectionTitle}>Sizes</Text>
       {isLoadingFiles ? (
         <View style={styles.loadingContainer}><LoadingDots color={colors.primary} size={8} /></View>
       ) : (
         <FlatList
-          data={modelFiles
-            .filter(f => f.size > 0 && !fileExceedsBudget(f.size, ramGB) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
-            .sort((a, b) => {
-              if (selectedModel.id === LITERT_PARENT_ID) return a.size - b.size; // curated: small-first
-              // Tier: the preferred download quant (Q4_0 on Android CPU/NPU, else Q4_K_M) → GPU/NPU
-              // Q4_0/Q8_0 → rest (CPU fallback). Accelerable tier small-first; others size desc.
-              const preferred = preferredDownloadQuants();
-              const rank = (f: ModelFile) => {
-                const at = preferred.indexOf(f.quantization.toUpperCase());
-                if (at >= 0) return at;
-                return preferred.length + (isAccelerableQuant(f.quantization) ? 0 : 1);
-              };
-              if (rank(a) !== rank(b)) return rank(a) - rank(b);
-              return rank(a) === preferred.length ? a.size - b.size : b.size - a.size;
-            })}
+          data={showAllFiles || selectedModel.id === LITERT_PARENT_ID ? runnableFiles : choices.map(c => c.file)}
           renderItem={renderFileItem}
           keyExtractor={item => item.name}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={<Card style={styles.emptyCard}><Text style={styles.emptyText}>No compatible files found for this model.</Text></Card>}
+          ListFooterComponent={selectedModel.id !== LITERT_PARENT_ID && runnableFiles.length > choices.length ? (
+            <TouchableOpacity onPress={() => setShowAllFiles(v => !v)} testID="all-files-toggle">
+              <Text style={styles.sectionSubtitle}>{showAllFiles ? 'Fewer sizes' : 'All files'}</Text>
+            </TouchableOpacity>
+          ) : null}
         />
       )}
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
