@@ -24,13 +24,15 @@
 import { installNativeBoundary, requireRTL } from '../../harness/nativeBoundary';
 import { createDownloadedModel } from '../../utils/factories';
 
-// Three recommended-model ids that render at the default 12GB RAM profile (params ≤ 13B). A downloaded
-// row whose id STARTS WITH a recommended id makes that recommended card render its downloaded mark
-// (the real match rule: downloadedModels.some(m => m.id.startsWith(item.id))).
+// Three recommended-model ids that render in the "More models" list at this test's RAM profile. A
+// downloaded row whose id STARTS WITH a recommended id makes that recommended card render its downloaded
+// mark (the real match rule: downloadedModels.some(m => m.id.startsWith(item.id))). Qwen 3.5 0.8B is the
+// device pick here (quality-ranked picks): a pick is shown once, in the "For this phone" row, and left
+// out of the list these cards belong to — so it is not one of the three.
 const RECOMMENDED_IDS = [
   'unsloth/gemma-4-E2B-it-GGUF',
-  'unsloth/Qwen3.5-0.8B-GGUF',
   'unsloth/Qwen3.5-2B-GGUF',
+  'openbmb/MiniCPM5-2B-GGUF',
 ];
 
 async function mountWithNDownloaded(n: number) {

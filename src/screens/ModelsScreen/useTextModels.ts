@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Keyboard, BackHandler } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/types';
 import { showAlert, hideAlert, AlertState } from '../../components/CustomAlert';
 import { RECOMMENDED_MODELS, TRENDING_FAMILIES, MODEL_ORGS } from '../../constants';
 import { useAppStore } from '../../stores';
@@ -53,9 +55,16 @@ function matchesOrgFilter(model: ModelInfo, orgs: string[]): boolean {
   });
 }
 
+/** A Q4_K_M download is about 4.8 bits per weight: 0.6 GB per billion parameters. */
+const Q4_BYTES_PER_BILLION_PARAMS = 0.6e9;
+
 function mapCuratedModel(m: typeof RECOMMENDED_MODELS[number], details: Record<string, ModelInfo>): ModelInfo {
   const fetched = details[m.id];
-  const curatedFields = { modelType: m.type, paramCount: m.params, minRamGB: m.minRam };
+  const curatedFields = {
+    modelType: m.type, paramCount: m.params, minRamGB: m.minRam,
+    ...(m.activeParams ? { activeParams: m.activeParams } : {}),
+    ...(m.nonCommercial ? { nonCommercial: true } : {}),
+  };
   if (fetched) return { ...fetched, name: m.name, description: m.description, ...curatedFields };
   return { id: m.id, name: m.name, author: m.id.split('/')[0], description: m.description, downloads: -1, likes: 0, tags: [], lastModified: '', files: [], ...curatedFields };
 }
@@ -86,7 +95,14 @@ function computeFilteredResults(
       }
     }
     const filesWithSize = (model.files || []).filter(f => f.size > 0);
-    if (filesWithSize.length > 0 && !filesWithSize.some(f => !fileExceedsBudget(f.size, ramGB))) return false;
+    if (filesWithSize.length > 0) {
+      if (!filesWithSize.some(f => !fileExceedsBudget(f.size, ramGB))) return false;
+    } else {
+      // Search results carry no file sizes: judge by the parameter count instead, so a model that
+      // is Too big for this phone is not offered at all.
+      const params = model.paramCount ?? parseParamCount(model);
+      if (params !== null && fileExceedsBudget(params * Q4_BYTES_PER_BILLION_PARAMS, ramGB)) return false;
+    }
     return true;
   });
   return filtered.map(model => {
@@ -97,6 +113,7 @@ function computeFilteredResults(
 }
 
 export function useTextModels(setAlertState: (s: AlertState) => void) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -232,7 +249,12 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
             `${model.name} downloaded but the vision projection file could not be saved. Go to Download Manager and use "Repair Vision" to fix it.`,
           ));
         } else {
-          setAlertState(showAlert('Success', `${model.name} downloaded successfully!`));
+          // A finished download is the model you use next: make it active and offer the chat.
+          activeModelService.selectTextModel(dm.id);
+          setAlertState(showAlert(`${model.name} is ready`, undefined, [
+            { text: 'Later', style: 'cancel' },
+            { text: 'Chat now', onPress: () => { setAlertState(hideAlert()); navigation.navigate('Chat', {}); } },
+          ]));
         }
       },
       onError: (err) => setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(err.message))),

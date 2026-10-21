@@ -1,14 +1,18 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/types';
 import { View, Text, FlatList, TextInput, RefreshControl, TouchableOpacity, Platform } from 'react-native';
 import { LoadingDots } from '../../components/LoadingDots';
 import DeviceInfo from 'react-native-device-info';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { fileExceedsBudget } from '../../services/memoryBudget';
+import { fitLabel } from '@offgrid/models';
+import { fileExceedsBudget, modelFitTier } from '../../services/memoryBudget';
 import { Card, ModelCard } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
-import { CustomAlert, hideAlert, showAlert, AlertState } from '../../components/CustomAlert';
+import { hideAlert, showAlert, AlertState } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
 import { needsVisionRepair as checkNeedsVisionRepair } from '../../utils/visionRepair';
 import { CREDIBILITY_LABELS } from '../../constants';
@@ -22,14 +26,17 @@ import { aggregateActiveDownloads } from '../../utils/downloadAggregate';
 import { TextFiltersSection } from './TextFiltersSection';
 import { FilterState, SortOption } from './types';
 import { SORT_OPTIONS } from './constants';
-import { formatNumber, getTextModelCompatibility } from './utils';
+import { formatNumber, getTextModelCompatibility, modelFactChips } from './utils';
 import { buildCuratedLiteRTFiles, curatedLiteRTDownloadWarning, getCuratedLiteRTEntry, LITERT_PARENT_ID } from '../../services/curatedLiteRTRegistry';
 import { LITERT_FILE_META, LITERT_RECOMMENDED_MODEL, LITERT_PARENT_RECOMMENDED } from './litertRecommended';
 import { modelManager } from '../../services';
 import { modelDownloadService } from '../../services/modelDownloadService';
 import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
-import { fetchModelFiles } from '../../services/modelCatalogFiles';
+import { fetchModelFiles, preferredDownloadQuants } from '../../services/modelCatalogFiles';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
+import { DevicePicksRow } from '../../components/models/DevicePicksRow';
+import { catalogMatches, devicePicks } from '../../services/devicePicks';
+import { sizeChoices } from './sizeChoices';
 
 function hasNonSortFilters(fs: FilterState): boolean {
   return fs.orgs.length > 0 || fs.type !== 'all' || fs.source !== 'all' || fs.size !== 'all' || fs.quant !== 'all';
@@ -67,7 +74,7 @@ type Props = Pick<ModelsScreenViewModel,
 
 type DetailProps = Pick<Props,
   | 'modelFiles' | 'isLoadingFiles' | 'filterState' | 'ramGB'
-  | 'alertState' | 'setAlertState'
+  | 'setAlertState'
   | 'getDownloadedModel' | 'isModelDownloaded' | 'isRepairingVisionModel'
   | 'handleDownload' | 'handleRepairMmProj' | 'handleCancelDownload' | 'handleDeleteModel'
 > & { selectedModel: ModelInfo; onBack: () => void; };
@@ -98,12 +105,13 @@ function buildFileDownloadHandler({ s, fileName, sizeBytes, ramGB, proceedDownlo
 
 const ModelDetailView: React.FC<DetailProps> = ({
   selectedModel, modelFiles, isLoadingFiles, filterState, ramGB,
-  alertState, setAlertState, onBack,
+  setAlertState, onBack,
   getDownloadedModel, isModelDownloaded, isRepairingVisionModel,
   handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const [showAllFiles, setShowAllFiles] = useState(false);
 
   // Pre-set the next pending (Download Manager icon) so it fires regardless of
   // how the user dismisses step 9 (button or backdrop tap).
@@ -152,6 +160,26 @@ const ModelDetailView: React.FC<DetailProps> = ({
     return { downloadKey: modelKey, progress, downloaded, downloadedModel, needsVisionRepair, repairingVision, canCancel, hasFailed, errorMessage };
   };
 
+  // Every file this phone can run, best first for this phone (the recommended quant leads).
+  const runnableFiles = modelFiles
+    .filter(f => f.size > 0 && !fileExceedsBudget(f.size, ramGB) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
+    .sort((a, b) => {
+      if (selectedModel.id === LITERT_PARENT_ID) return a.size - b.size; // curated: small-first
+      // Tier: the preferred download quant (Q4_0 on Android CPU/NPU, else Q4_K_M) → GPU/NPU
+      // Q4_0/Q8_0 → rest (CPU fallback). Accelerable tier small-first; others size desc.
+      const preferred = preferredDownloadQuants();
+      const rank = (f: ModelFile) => {
+        const at = preferred.indexOf(f.quantization.toUpperCase());
+        if (at >= 0) return at;
+        return preferred.length + (isAccelerableQuant(f.quantization) ? 0 : 1);
+      };
+      if (rank(a) !== rank(b)) return rank(a) - rank(b);
+      return rank(a) === preferred.length ? a.size - b.size : b.size - a.size;
+    });
+  // Three sizes in words; the raw file list sits behind "All files".
+  const choices = sizeChoices(runnableFiles);
+  const sizeLabelOf = (file: ModelFile) => (showAllFiles ? undefined : choices.find(c => c.file === file)?.label);
+
   const renderFileItem = ({ item, index }: { item: ModelFile; index: number }) => {
     const s = getFileCardState(item);
     const proceedDownload = () => {
@@ -194,6 +222,9 @@ const ModelDetailView: React.FC<DetailProps> = ({
         } : undefined}
         isRepairingVision={s.repairingVision}
         isCompatible={!fileExceedsBudget(item.size, ramGB)} testID={`file-card-${index}`}
+        // "Runs well" is the default and goes unsaid; only a tight fit is worth a word on the card.
+        sizeLabel={sizeLabelOf(item)}
+        facts={modelFitTier(item.size, ramGB) === 'tight' ? [fitLabel('tight')] : undefined}
         onDownload={onDownload}
         onDelete={s.downloaded ? () => handleDeleteModel(`${selectedModel.id}/${item.name}`) : undefined}
         onRepairVision={s.needsVisionRepair && !s.progress && !s.repairingVision ? () => handleRepairMmProj(selectedModel, item) : undefined}
@@ -260,44 +291,27 @@ const ModelDetailView: React.FC<DetailProps> = ({
           <Text style={styles.deviceBannerText}>{'GPU acceleration is not yet supported on Pixel 10. Models will run on CPU. Support coming soon.'}</Text>
         </Card>
       )}
-      <Text style={styles.sectionTitle}>Available Files</Text>
-      {selectedModel.id !== LITERT_PARENT_ID && (
-        <Text style={styles.sectionSubtitle}>
-          Choose a quantization level. Q4_K_M is recommended for mobile.
-          {modelFiles.some(f => f.mmProjFile) && ' Vision files include mmproj.'}
-        </Text>
-      )}
+      <Text style={styles.sectionTitle}>Sizes</Text>
       {isLoadingFiles ? (
         <View style={styles.loadingContainer}><LoadingDots color={colors.primary} size={8} /></View>
       ) : (
         <FlatList
-          data={modelFiles
-            .filter(f => f.size > 0 && !fileExceedsBudget(f.size, ramGB) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
-            .sort((a, b) => {
-              if (selectedModel.id === LITERT_PARENT_ID) return a.size - b.size; // curated: small-first
-              // Tier: Q4_K_M (CPU default, lowest size) → GPU/NPU Q4_0/Q8_0 → rest (CPU
-              // fallback). Accelerable tier small-first (Q4_0 before Q8_0); others size desc.
-              const tier = (f: ModelFile) => f.name.includes('Q4_K_M') ? 0 : isAccelerableQuant(f.quantization) ? 1 : 2;
-              if (tier(a) !== tier(b)) return tier(a) - tier(b);
-              return tier(a) === 1 ? a.size - b.size : b.size - a.size;
-            })}
+          data={showAllFiles || selectedModel.id === LITERT_PARENT_ID ? runnableFiles : choices.map(c => c.file)}
           renderItem={renderFileItem}
           keyExtractor={item => item.name}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={<Card style={styles.emptyCard}><Text style={styles.emptyText}>No compatible files found for this model.</Text></Card>}
+          ListFooterComponent={selectedModel.id !== LITERT_PARENT_ID && runnableFiles.length > choices.length ? (
+            <TouchableOpacity onPress={() => setShowAllFiles(v => !v)} testID="all-files-toggle">
+              <Text style={styles.sectionSubtitle}>{showAllFiles ? 'Fewer sizes' : 'All files'}</Text>
+            </TouchableOpacity>
+          ) : null}
         />
       )}
-      <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
+      {/* The Models screen shows this view's alerts; a second CustomAlert here opened every alert twice. */}
     </View>
   );
 };
-
-const DeviceBanner: React.FC<{ ramGB: number; rec: { maxParameters: number; recommendedQuantization: string }; showTitle: boolean; styles: any }> = ({ ramGB, rec, showTitle, styles }) => (
-  <View>
-    <View style={styles.deviceBanner}><Text style={styles.deviceBannerText}>{Math.round(ramGB)}GB RAM — models up to {rec.maxParameters}B recommended ({rec.recommendedQuantization})</Text></View>
-    {showTitle && <Text style={styles.recommendedTitle}>Recommended for your device</Text>}
-  </View>
-);
 
 interface ModelListItemProps {
   item: ModelInfo; index: number; focusTrigger: number;
@@ -320,7 +334,7 @@ const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger
     vision: item.modelType === 'vision',
     predicted: true,
   };
-  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} /></AnimatedEntry>;
+  return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact facts={modelFactChips(item)} isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} /></AnimatedEntry>;
 };
 
 function applyBackNavigation(setSelectedModel: (m: ModelInfo | null) => void, setModelFiles: (f: ModelFile[]) => void): void {
@@ -348,18 +362,30 @@ const SortPanel: React.FC<SortPanelProps> = ({ filterState, setSortOption, style
 );
 
 export const TextModelsTab: React.FC<Props> = (props) => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const {
     searchQuery, setSearchQuery, isLoading, isRefreshing, hasSearched,
     selectedModel, setSelectedModel, modelFiles, setModelFiles, isLoadingFiles,
     filterState, textFiltersVisible, setTextFiltersVisible,
-    filteredResults, recommendedAsModelInfo, trendingAsModelInfo, ramGB, deviceRecommendation,
+    filteredResults, recommendedAsModelInfo, trendingAsModelInfo, ramGB,
     hasActiveFilters, downloadedModels,
-    alertState, setAlertState, focusTrigger,
+    setAlertState, focusTrigger,
     handleSearch, handleRefresh, handleImportLocalModel, isImporting, handleSelectModel, handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel,
     clearFilters, toggleFilterDimension, toggleOrg,
     setTypeFilter, setSourceFilter, setSizeFilter, setQuantFilter, setSortOption,
     isModelDownloaded, getDownloadedModel, isRepairingVisionModel, onboarding = false,
   } = props;
+  // The picks are shown once, above; the list below holds the other models.
+  const moreModels = React.useMemo(() => {
+    const pickIds = new Set(devicePicks(ramGB).map(pick => pick.model.id));
+    return recommendedAsModelInfo.filter(model => !pickIds.has(model.id));
+  }, [recommendedAsModelInfo, ramGB]);
+  // The catalog answers a search first; Hugging Face results follow, without repeating a catalog model.
+  const searchResults = React.useMemo(() => {
+    const fromCatalog = catalogMatches(searchQuery).filter(model => !model.files.every(f => fileExceedsBudget(f.size, ramGB)));
+    const catalogIds = new Set(fromCatalog.map(model => model.id));
+    return [...fromCatalog, ...filteredResults.filter(model => !catalogIds.has(model.id))];
+  }, [searchQuery, filteredResults, ramGB]);
   const hasNonSortActiveFilters = hasNonSortFilters(filterState);
   const currentSort = SORT_OPTIONS.find(o => o.key === filterState.sort) ?? SORT_OPTIONS[0];
   const isSortActive = filterState.sort !== 'recommended';
@@ -373,7 +399,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     const files = await fetchModelFiles([item]);
     const file = files[item.id]?.[0];
     if (!file) {
-      setAlertState(showAlert('Download unavailable', 'No compatible Q4_K_M file was found.'));
+      setAlertState(showAlert('Download unavailable', 'No compatible file was found.'));
       return;
     }
     await handleDownload(item, file);
@@ -433,7 +459,6 @@ export const TextModelsTab: React.FC<Props> = (props) => {
         isLoadingFiles={isLoadingFiles}
         filterState={filterState}
         ramGB={ramGB}
-        alertState={alertState}
         setAlertState={setAlertState}
         onBack={onBack}
         getDownloadedModel={getDownloadedModel}
@@ -452,7 +477,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
       <View style={styles.searchContainer} testID="text-model-search-row">
         <TextInput
           style={styles.searchInput}
-          placeholder="Search Hugging Face models..."
+          placeholder="Search models"
           placeholderTextColor={colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -515,7 +540,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
         </View>
       ) : (
         <FlatList
-          data={hasSearched ? filteredResults : [...(!onboarding && Platform.OS === 'android' ? [LITERT_RECOMMENDED_MODEL] : []), ...recommendedAsModelInfo]}
+          data={hasSearched ? searchResults : [...(!onboarding && Platform.OS === 'android' ? [LITERT_RECOMMENDED_MODEL] : []), ...moreModels]}
           renderItem={renderModelItem}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
@@ -523,7 +548,8 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
           ListHeaderComponent={hasSearched ? null : (
             <>
-              <DeviceBanner ramGB={ramGB} rec={deviceRecommendation} showTitle={recommendedAsModelInfo.length > 0} styles={styles} />
+              <DevicePicksRow ramGB={ramGB} onChat={() => navigation.navigate('Chat', {})} />
+              {moreModels.length > 0 && <Text style={styles.recommendedTitle}>More models</Text>}
               {onboardingLiteRTCards}
             </>
           )}

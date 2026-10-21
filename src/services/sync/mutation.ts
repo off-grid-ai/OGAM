@@ -91,7 +91,8 @@ const MODEL_SETTING_DESCRIPTORS: Readonly<
   },
   gpuLayers: { localKey: 'gpuLayers', accepts: integerInRange(-1, 999) },
   threads: { localKey: 'nThreads', accepts: integerInRange(0, 256) },
-  batchSize: { localKey: 'nBatch', accepts: integerInRange(1, 65_536) },
+  // 0 is auto on both apps: the engine's own batch for this device.
+  batchSize: { localKey: 'nBatch', accepts: integerInRange(0, 65_536) },
   // Portable generation behaviour: these mean the same thing on every device, so a preference set
   // on one is a preference everywhere. Hardware choices deliberately do NOT appear here — see below.
   thinkingEnabled: {

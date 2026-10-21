@@ -48,6 +48,8 @@ interface ModelCardProps {
   isActive?: boolean;
   isCompatible?: boolean;
   incompatibleReason?: string;
+  /** A size in words ("Smaller", "Recommended", "Best") shown instead of the quantization name. */
+  sizeLabel?: string;
   testID?: string;
   onPress?: () => void;
   onDownload?: () => void;
@@ -279,6 +281,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   isActive,
   isCompatible = true,
   incompatibleReason,
+  sizeLabel,
   testID,
   onPress,
   onDownload,
@@ -331,6 +334,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   const actionsInProgress = !!compact && (isDownloading || isQueued || isPaused);
   const actionButtons = !failedState && (
     <ModelCardActions
+      modelName={model.name}
       isDownloaded={isDownloaded}
       isDownloading={isDownloading}
       isQueued={isQueued}
@@ -372,7 +376,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
             dense={!!useDenseLayout}
             model={model}
             fileSize={fileSize}
-            quantization={quantization}
+            quantization={sizeLabel ? undefined : quantization}
             isVisionModel={isVisionModel}
             supportsAcceleration={supportsAcceleration}
             recommended={recommended}
@@ -381,7 +385,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
             credibilityInfo={credibilityInfo}
             isActive={isActive}
             incompatibleReason={!isCompatible ? (incompatibleReason ?? 'Too large') : undefined}
-            facts={facts}
+            facts={sizeLabel ? [sizeLabel, ...(facts ?? [])] : facts}
             capabilities={capabilities}
             sourceBadge={sourceBadge}
             nameTestID={nameTestID}

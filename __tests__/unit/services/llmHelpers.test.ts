@@ -10,7 +10,6 @@ import {
   effectiveCacheType,
   backendForcesF16Cache,
   buildCompletionParams,
-  shouldDisableMmap,
   captureGpuInfo,
   logContextMetadata,
   initContextWithFallback,
@@ -311,13 +310,6 @@ describe('getModelMaxContext — alternative metadata keys', () => {
   it('returns null when context length is zero or negative', () => {
     const ctx = { model: { metadata: { 'llama.context_length': '0' } } } as any;
     expect(getModelMaxContext(ctx)).toBeNull();
-  });
-});
-
-describe('shouldDisableMmap', () => {
-  it('returns false on non-android', () => {
-    // Platform.OS is mocked as 'ios' in test env
-    expect(shouldDisableMmap('/path/to/model.q4_0.gguf')).toBe(false);
   });
 });
 

@@ -23,6 +23,10 @@ import { generateWithToolsImpl } from './llmToolGeneration';
 import type { ToolCall } from './tools/types';
 import type { MultimodalSupport, LLMPerformanceSettings, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
+import { stateCacheBudgetMb, MOBILE_BACKEND_ROWS, type MobileBackend } from '@offgrid/models';
+import { saveKvSession, loadKvSession } from './kvSessionStore';
+import { readModelFileType } from './modelHeader';
+import { installedMtpHeadPath } from './mtpHeads';
 import { resolveSpeculative } from './mtpDetection';
 import type { StreamToken } from './llmStreamTypes';
 export type { StreamToken };
@@ -34,6 +38,7 @@ class LLMService {
   private context: LlamaContext | null = null;
   private currentModelPath: string | null = null;
   private nativeConversationId: string | null = null; // owns native KV/recurrent state
+  private loadedWithMtp: boolean = false;
   private isGenerating: boolean = false;
   private activeCompletionPromise: Promise<void> | null = null;
   private multimodalSupport: MultimodalSupport | null = null;
@@ -62,7 +67,7 @@ class LLMService {
   private hashString(value: string): string { return hashString(value); }
   private ensureSessionCacheDir(): Promise<void> { return ensureSessionCacheDir(this.sessionCacheDir); }
   private getSessionPath(promptHash: string): string { return getSessionPath(this.sessionCacheDir, promptHash); }
-  private async validateAndPrepareModel(modelPath: string, override: boolean = false): Promise<{ fileSize: number; memCheck: Awaited<ReturnType<typeof checkMemoryForModel>>; params: ReturnType<typeof buildModelParams> }> {
+  private async validateAndPrepareModel(modelPath: string, override: boolean = false, reclaimBytes: number = 0): Promise<{ fileSize: number; memCheck: Awaited<ReturnType<typeof checkMemoryForModel>>; params: ReturnType<typeof buildModelParams> }> {
     logger.log(`[LLM] validateAndPrepareModel: ${modelPath}`);
     if (!await RNFS.exists(modelPath)) throw new Error(`Model file not found at: ${modelPath}`);
     const validation = await validateModelFile(modelPath);
@@ -74,8 +79,20 @@ class LLMService {
     // Any explicit user choice (1–12) is respected as-is.
     const effectiveNThreads = settings.nThreads === 0 ? recommendedThreads : settings.nThreads;
     const speculativeDecoding = await resolveSpeculative(modelPath, settings.speculativeDecoding);
-    const params = buildModelParams(modelPath, { ...settings, nThreads: effectiveNThreads, speculativeDecoding });
-    logger.log(`[LLM] Resolved params: threads=${params.nThreads}, batch=${params.nBatch}, ctx=${params.ctxLen}, gpuLayers=${params.nGpuLayers}`);
+    const fileType = await readModelFileType(modelPath);
+    const memory = await hardwareService.getAppMemoryUsage();
+    const freeRamMb = memory.available / (1024 * 1024);
+    const params = buildModelParams(
+      modelPath,
+      { ...settings, nThreads: effectiveNThreads, speculativeDecoding },
+      {
+        fileType,
+        totalRamGb: memory.total / 1024 ** 3,
+        stateCacheBudgetMb: stateCacheBudgetMb(freeRamMb),
+        mtpHeadPath: speculativeDecoding ? await installedMtpHeadPath(modelPath) : undefined,
+      },
+    );
+    logger.log(`[LLM] Resolved params: threads=${params.nThreads}, batch=${params.nBatch}, ctx=${params.ctxLen}, gpuLayers=${params.nGpuLayers}, fileType=${fileType}`);
     const fileSize = (await statFile(modelPath))?.size ?? 0;
     // Use the EFFECTIVE cache type, not the raw setting: OpenCL/HTP coerce the KV cache
     // to f16 (see buildModelParams), so keying off settings.cacheType alone would let the
@@ -86,7 +103,8 @@ class LLMService {
     // Policy comes from the residency manager (the authoritative owner).
     const getMem = async (): Promise<{ available: number; total: number; used: number }> => {
       const raw = await hardwareService.getAppMemoryUsage();
-      const availableMB = effectiveAvailableMB(raw.available / (1024 * 1024), raw.total / (1024 * 1024), {
+      // A model about to be released for this one gives its memory back.
+      const availableMB = effectiveAvailableMB((raw.available + reclaimBytes) / (1024 * 1024), raw.total / (1024 * 1024), {
         platform: Platform.OS,
         policy: modelResidencyManager.getLoadPolicy(),
       });
@@ -135,14 +153,20 @@ class LLMService {
       await mutex.ready;
       // Re-check after acquiring mutex — another call may have loaded the same model
       if (this.context && this.currentModelPath === modelPath) return;
-      if (this.context && this.currentModelPath !== modelPath) {
+      // Check the new model fits BEFORE releasing the current one: a refused switch must leave the
+      // chat on the model it had, not on nothing. The current model's memory is counted as coming
+      // back, since a switch that goes ahead releases it first.
+      const switching = !!this.context && this.currentModelPath !== modelPath;
+      const reclaimBytes = switching && this.currentModelPath ? (await statFile(this.currentModelPath))?.size ?? 0 : 0;
+      const { fileSize, memCheck, params } = await this.validateAndPrepareModel(modelPath, opts?.override, reclaimBytes);
+      if (switching) {
         logger.log('[LLM] Releasing previous context before loading new model');
         await this.doUnloadModel();
       }
-      const { fileSize, memCheck, params } = await this.validateAndPrepareModel(modelPath, opts?.override);
       if (mmProjPath && !await RNFS.exists(mmProjPath)) { logger.warn('[LLM] MMProj file not found, disabling vision support'); mmProjPath = undefined; }
       const { baseParams, nThreads, nBatch, ctxLen, nGpuLayers } = params;
       this.currentSettings = { nThreads, nBatch, contextLength: ctxLen };
+      this.loadedWithMtp = Boolean((baseParams as { speculative?: unknown }).speculative);
       logger.log(`[LLM] Loading model: ctx=${ctxLen}, threads=${nThreads}, batch=${nBatch}, fileSize=${(fileSize / (1024 * 1024)).toFixed(0)}MB, availRAM=${memCheck.availableMB.toFixed(0)}MB`);
       try {
         const { context, gpuAttemptFailed, actualLength, attemptedGpuLayers } = await this.initConfiguredContext({ baseParams, ctxLen, nGpuLayers, fileSize });
@@ -433,9 +457,27 @@ class LLMService {
     if (this.nativeConversationId === conversationId) return;
     if (!this.context) throw new Error('No model loaded');
     if (this.isGenerating) throw new Error('Model is still finishing the previous reply');
+    // Keep the chat we are leaving, so coming back to it skips re-reading its history.
+    await this.saveConversationState();
     await (this.context as any).clearCache(true);
     this.nativeConversationId = conversationId;
     logger.log(`[LLM] Native context reset for conversation ${conversationId}`);
+    if (this.canSaveSessions() && this.currentModelPath) {
+      await loadKvSession(this.context, this.sessionCacheDir, this.currentModelPath, conversationId);
+    }
+  }
+  /** Saved KV state needs a backend llama.rn can save from (not OpenCL without kv_unified), and no
+   *  MTP: the draft shares the KV cache and is reprocessed each turn anyway. */
+  private canSaveSessions(): boolean {
+    const configured = (useAppStore.getState().settings.inferenceBackend ?? 'cpu') as MobileBackend;
+    const backend: MobileBackend = this.activeGpuLayers > 0 ? configured : 'cpu';
+    return (MOBILE_BACKEND_ROWS[backend] ?? MOBILE_BACKEND_ROWS.cpu).sessionSave && !this.loadedWithMtp;
+  }
+  /** Save the active conversation's KV state (chat switch, app to background). A no-op mid-reply. */
+  async saveConversationState(): Promise<void> {
+    if (!this.context || this.isGenerating || !this.nativeConversationId || !this.currentModelPath) return;
+    if (!this.canSaveSessions()) return;
+    await saveKvSession(this.context, this.sessionCacheDir, this.currentModelPath, this.nativeConversationId);
   }
   getEstimatedMemoryUsage() {
     const contextMemoryMB = this.context ? (this.currentSettings.contextLength || 2048) * 0.5 : 0;

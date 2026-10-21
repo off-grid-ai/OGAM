@@ -12,7 +12,7 @@ jest.mock('../../../src/services/llm', () => ({
   },
 }));
 jest.mock('../../../src/services/litert', () => ({
-  liteRTService: { isModelLoaded: jest.fn(() => false) },
+  liteRTService: { isModelLoaded: jest.fn(() => false), getLoadedModelPath: jest.fn(() => null) },
 }));
 
 import { reasonFromLoadError, modelNotReadyAlert, ensureModelReady } from '../../../src/screens/ChatScreen/modelReadiness';
@@ -23,7 +23,7 @@ const mockLlm = llmService as unknown as {
   getLoadedModelPath: jest.Mock;
   isModelLoaded: jest.Mock;
 };
-const mockLiteRT = liteRTService as unknown as { isModelLoaded: jest.Mock };
+const mockLiteRT = liteRTService as unknown as { isModelLoaded: jest.Mock; getLoadedModelPath: jest.Mock };
 
 describe('reasonFromLoadError', () => {
   it('maps "not found" / missing-file errors to not-downloaded', () => {
@@ -145,6 +145,8 @@ describe('ensureModelReady — resume-after-Load-Anyway wiring (regression)', ()
 
   it('does not attempt a load when the LiteRT model is already resident', async () => {
     mockLiteRT.isModelLoaded.mockReturnValue(true);
+    // Resident means THIS model's file is the one loaded (not just any LiteRT model).
+    mockLiteRT.getLoadedModelPath.mockReturnValue('/models/gemma-e4b.gguf');
     const ensureModelLoaded = jest.fn();
 
     const outcome = await ensureModelReady(makeDeps('litert', ensureModelLoaded));

@@ -107,7 +107,7 @@ describe('vision projector that fails to start', () => {
     let downloads = await openDownloads();
     await waitFor(() => expect(within(downloads).getByText(MODEL_FILE)).toBeTruthy(), RENDER_WAIT);
     if (arrival === 'folder scan') {
-      expect(within(downloads).getByText(/Q4_K_M · Text$/)).toBeTruthy();
+      expect(within(downloads).getByText(/Q4_K_M$/)).toBeTruthy();
       expect(within(downloads).queryByLabelText('Vision')).toBeNull();
     } else {
       await waitFor(() => expect(within(downloads).getByLabelText('Vision')).toBeTruthy(), RENDER_WAIT);

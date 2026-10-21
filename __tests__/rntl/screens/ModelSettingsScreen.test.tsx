@@ -914,6 +914,7 @@ describe('ModelSettingsScreen', () => {
           nThreads: undefined as any,
           nBatch: undefined as any,
           speculativeDecoding: false,
+          speculativeDraftMax: 3,
           imageGenerationMode: undefined as any,
           autoDetectMethod: undefined as any,
           classifierModelId: null,
@@ -1107,7 +1108,7 @@ describe('ModelSettingsScreen', () => {
       expect(s.temperature).toBe(0.7);
       expect(s.maxTokens).toBe(1024);
       expect(s.nThreads).toBe(0);
-      expect(s.nBatch).toBe(512);
+      expect(s.nBatch).toBe(0); // auto: the engine's batch for the backend
       expect(s.cacheType).toBe('q8_0');
       expect(s.flashAttn).toBe(true);
       expect(s.inferenceBackend).toBe('metal'); // iOS default

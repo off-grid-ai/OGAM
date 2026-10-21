@@ -193,7 +193,7 @@ describe('imageDownloadActions', () => {
     expect(mockAddDownloadedImageModel).toHaveBeenCalled();
     expect(deps.addDownloadedImageModel).toHaveBeenCalled();
     expect(mockStoreApi.remove).toHaveBeenCalledWith('image:test-hf-model');
-    expect(deps.setAlertState).toHaveBeenCalledWith(expect.objectContaining({ title: 'Success' }));
+    expect(deps.setAlertState).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringMatching(/ is ready$/) }));
   });
 
   it('downloadHuggingFaceModel marks failure in store on error', async () => {
@@ -286,7 +286,7 @@ describe('imageDownloadActions', () => {
 
     expect(mockAddDownloadedImageModel).toHaveBeenCalled();
     expect(mockStoreApi.remove).toHaveBeenCalledWith('image:img-1');
-    expect(deps.setAlertState).toHaveBeenCalledWith(expect.objectContaining({ title: 'Success' }));
+    expect(deps.setAlertState).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringMatching(/ is ready$/) }));
   });
 
   it('handleDownloadImageModel shows incompatibility alert for unsupported QNN device', async () => {

@@ -51,7 +51,10 @@ describe('Downloaded text model selection', () => {
             downloads: 1,
             likes: 0,
             tags: ['gguf'],
-            siblings: [],
+            // A model's files come from its listing with blob sizes (`?blobs=true`).
+            siblings: id === MODEL_ID && url.searchParams.get('blobs') === 'true'
+              ? [{ rfilename: FILE_NAME, size: FILE_SIZE, lfs: { size: FILE_SIZE } }]
+              : [],
           }),
         } as Response;
       }

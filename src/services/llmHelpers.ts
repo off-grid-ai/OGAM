@@ -1,5 +1,5 @@
 import { initLlama, LlamaContext } from 'llama.rn';
-import { REASONING_BUDGET_AUTO, thinkingBudgetPayload } from '@offgrid/models';
+import { REASONING_BUDGET_AUTO, thinkingBudgetPayload, MOBILE_BACKEND_ROWS, MOBILE_MTP_DRAFT_TOKENS, mobileUseMmap, type MobileBackend } from '@offgrid/models';
 import RNFS from 'react-native-fs';
 import { Platform } from 'react-native';
 import { APP_CONFIG } from '../constants';
@@ -15,15 +15,14 @@ const RESPONSE_RESERVE = 512;
 /** Prompt compaction target. Output length is the user's model-aware maxTokens setting. */
 export const CONTEXT_PROMPT_BUDGET_RATIO = 0.55;
 const DEFAULT_THREADS = 4; // targets performance cores only; over-threading onto efficiency cores (A520) hurts
-const DEFAULT_BATCH = 512;
 const DEFAULT_GPU_LAYERS = Platform.OS === 'ios' ? 99 : 0;
 function getOptimalThreadCount(): number { return DEFAULT_THREADS; }
-function getOptimalBatchSize(): number { return DEFAULT_BATCH; }
-const REPACKABLE_QUANTS = ['q4_0', 'iq4_nl'];
-/** Detect repackable quant formats where disabling mmap improves inference speed. */
-export function shouldDisableMmap(modelPath: string): boolean {
-  if (Platform.OS !== 'android') return false;
-  return REPACKABLE_QUANTS.some(q => modelPath.toLowerCase().includes(q));
+/** nBatch 0 is "auto": the shared backend row's batch (128 on HTP, 512 on CPU, OpenCL, Metal). */
+export function batchForBackend(nBatch: number | undefined, backend: string | undefined): number {
+  if (nBatch) return nBatch;
+  const fallback: MobileBackend = Platform.OS === 'ios' ? 'metal' : 'cpu';
+  const row = MOBILE_BACKEND_ROWS[(backend as MobileBackend) ?? fallback] ?? MOBILE_BACKEND_ROWS[fallback];
+  return row.batch;
 }
 export function hashString(str: string): string {
   let hash = 0;
@@ -76,10 +75,12 @@ export function effectiveCacheType(backend: string | undefined, requested: strin
 
 export function buildModelParams(
   modelPath: string,
-  settings: { nThreads?: number; nBatch?: number; contextLength?: number; flashAttn?: boolean; enableGpu?: boolean; gpuLayers?: number; cacheType?: string; inferenceBackend?: string; speculativeDecoding?: boolean },
+  settings: { nThreads?: number; nBatch?: number; contextLength?: number; flashAttn?: boolean; enableGpu?: boolean; gpuLayers?: number; cacheType?: string; inferenceBackend?: string; speculativeDecoding?: boolean; speculativeDraftMax?: number },
+  /** Facts read from the GGUF header and the device at load time. */
+  load: { fileType?: number | null; totalRamGb?: number; mtpHeadPath?: string; stateCacheBudgetMb?: number } = {},
 ): ModelLoadParams {
   const nThreads = settings.nThreads || getOptimalThreadCount();
-  const nBatch = settings.nBatch || getOptimalBatchSize();
+  const nBatch = batchForBackend(settings.nBatch, settings.inferenceBackend);
   const ctxLen = settings.contextLength || APP_CONFIG.maxContextLength;
   // inferenceBackend takes precedence; fall back to legacy enableGpu flag
   const backend = settings.inferenceBackend;
@@ -98,7 +99,9 @@ export function buildModelParams(
   return {
     baseParams: {
       model: modelPath, use_mlock: false, n_batch: nBatch, n_ubatch: nBatch, n_threads: nThreads,
-      use_mmap: !shouldDisableMmap(modelPath), vocab_only: false, flash_attn_type,
+      // mmap is off on Android for a quant llama.cpp repacks for ARM (read from the GGUF header):
+      // the weights are copied into the repacked layout anyway.
+      use_mmap: mobileUseMmap(Platform.OS === 'android' ? 'android' : 'ios', load.fileType ?? null, load.totalRamGb), vocab_only: false, flash_attn_type,
       // Do NOT force kv_unified — let llama.cpp pick it per architecture. Forcing
       // `true` (a marginal single-seq perf tweak) hung gemma3n (gemma-4 E2B/E4B):
       // its interleaved sliding-window + heterogeneous KV layers froze building the
@@ -110,7 +113,15 @@ export function buildModelParams(
       // is named on purpose: MTP models carry their own draft layers, and llama.rn falls back to
       // the target model's embedded ones when `draft` is omitted. A model without MTP weights
       // simply never drafts, so the flag is safe to leave on for models that can't use it.
-      ...(settings.speculativeDecoding ? { speculative: { enabled: true, type: 'mtp' as const } } : {}),
+      // A separately downloaded MTP head is passed as the draft model; llama.cpp's default draft
+      // length is 3, and the person may change it.
+      ...(settings.speculativeDecoding ? {
+        speculative: { enabled: true, type: 'mtp' as const },
+        spec_draft_n_max: settings.speculativeDraftMax || MOBILE_MTP_DRAFT_TOKENS,
+        ...(load.mtpHeadPath ? { model_draft: load.mtpHeadPath } : {}),
+      } : {}),
+      // The cross-turn KV prefix cache (recurrent/hybrid models), sized by free RAM.
+      ...(load.stateCacheBudgetMb !== undefined ? { state_cache_budget_mb: load.stateCacheBudgetMb } : {}),
       ...(backend === INFERENCE_BACKENDS.OPENCL ? {} : { cache_type_k: cacheType, cache_type_v: cacheType }),
     },
     nThreads, nBatch, ctxLen, nGpuLayers,

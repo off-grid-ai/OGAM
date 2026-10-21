@@ -10,6 +10,7 @@ import { collapseDuplicateFileRows, collapseDuplicateImageRows } from './collaps
 import { reconcilePrimaryPaths, resolveStoredPath } from './reconcileStoredPaths';
 import { useAppStore } from '../../stores';
 import { isLiteRTFileName } from '../../utils/modelHelpers';
+import { CATALOG } from '@offgrid/models';
 
 // Re-exported because this module was the published home of these helpers before they were extracted
 // into the one place both registries share.
@@ -259,7 +260,8 @@ function resolveDisplayName(
 ): string {
   if (curatedDisplayName) return curatedDisplayName;
   if (isLiteRTFileName(file.name)) return file.name.replace(/\.litertlm$/i, '');
-  const curated = RECOMMENDED_MODELS.find(model => model.id === modelId);
+  const curated = RECOMMENDED_MODELS.find(model => model.id === modelId)
+    ?? CATALOG.find(entry => entry.id === modelId);
   if (curated) return curated.name;
   const basename = modelId.split('/').pop() || modelId;
   return basename.replace(/[-_]GGUF$/i, '') || basename;

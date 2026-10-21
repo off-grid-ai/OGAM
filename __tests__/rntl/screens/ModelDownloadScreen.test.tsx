@@ -134,6 +134,9 @@ jest.mock('../../../src/services', () => ({
     getDownloadedModels: jest.fn(() => Promise.resolve([])),
     getDownloadedImageModels: jest.fn(() => Promise.resolve([])),
   },
+  activeModelService: {
+    selectTextModel: jest.fn(),
+  },
   remoteServerManager: {
     addServer: jest.fn().mockResolvedValue({ id: 'new-server' }),
     testConnection: jest.fn().mockResolvedValue({ success: false }),

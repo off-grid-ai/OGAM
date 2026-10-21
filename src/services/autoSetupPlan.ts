@@ -123,7 +123,12 @@ function selectAutoSetupPlan(
 export function selectAutoSetupPlans(
   catalog: AutoSetupCompatibleCatalog,
 ): AutoSetupPlan[] {
-  return (['lean', 'balanced', 'extreme'] as const)
+  const plans = (['lean', 'balanced', 'extreme'] as const)
     .map(tier => selectAutoSetupPlan(tier, catalog))
     .filter((plan): plan is AutoSetupPlan => plan !== null);
+  // A bigger plan that lands on the same chat model as a smaller one offers nothing new: a phone
+  // without room for a larger model sees fewer plans, never the same model twice.
+  return plans.filter((plan, index) =>
+    plans.findIndex(other => other.items[0].id === plan.items[0].id) === index,
+  );
 }

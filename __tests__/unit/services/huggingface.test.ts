@@ -14,6 +14,19 @@ import { huggingFaceService } from '../../../src/services/huggingface';
 // Access private methods via cast
 const service = huggingFaceService as any;
 
+/** Hugging Face as it answers: the model endpoint (`?blobs=true`) lists `siblings` (folders
+ *  included); the tree endpoint lists files. Only the network is faked. */
+function fakeHuggingFace(files: Array<{ path: string; size: number }>) {
+  global.fetch = jest.fn().mockImplementation(async (url: string) => ({
+    ok: true,
+    json: () => Promise.resolve(
+      String(url).includes('?blobs=true')
+        ? { siblings: files.map(f => ({ rfilename: f.path, size: f.size })) }
+        : files.map(f => ({ type: 'file', path: f.path, size: f.size })),
+    ),
+  }));
+}
+
 describe('HuggingFaceService', () => {
   // ============================================================================
   // extractQuantization
@@ -307,7 +320,7 @@ describe('HuggingFaceService', () => {
       expect(result.files[0].name).toBe('model.gguf');
     });
 
-    it('generates description with type and author', () => {
+    it('generates description with the type, not the publisher (that is the verified mark)', () => {
       const result = service.transformModelResult({
         id: 'org/model',
         author: 'org',
@@ -319,7 +332,7 @@ describe('HuggingFaceService', () => {
       });
 
       expect(result.description).toContain('Text generation');
-      expect(result.description).toContain('org');
+      expect(result.description).not.toContain('org');
     });
 
     it('detects code model type from tags', () => {
@@ -391,21 +404,27 @@ describe('HuggingFaceService', () => {
         status: 500,
       });
 
-      await expect(huggingFaceService.searchModels()).rejects.toThrow('API error: 500');
+      await expect(huggingFaceService.searchModels()).rejects.toThrow('HTTP 500');
     });
 
-    it('respects limit option', async () => {
+    it('over-fetches past the limit, so hiding and grouping still leave a full page', async () => {
       await huggingFaceService.searchModels('', { limit: 10 });
 
       const url = mockFetch.mock.calls[0][0];
-      expect(url).toContain('limit=10');
+      expect(url).toContain('limit=30');
     });
 
-    it('appends pipeline_tag when pipelineTag option is provided', async () => {
-      await huggingFaceService.searchModels('', { pipelineTag: 'image-text-to-text' });
+    it('a vision search keeps only vision models, by name (pipeline tags are unreliable on gguf repos)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([
+          { id: 'org/Qwen3-VL-2B-Instruct-GGUF', downloads: 5 },
+          { id: 'org/Qwen3-4B-GGUF', downloads: 9 },
+        ]),
+      });
+      const results = await huggingFaceService.searchModels('', { pipelineTag: 'image-text-to-text' });
 
-      const url = mockFetch.mock.calls[0][0];
-      expect(url).toContain('pipeline_tag=image-text-to-text');
+      expect(results.map(r => r.id)).toEqual(['org/Qwen3-VL-2B-Instruct-GGUF']);
     });
 
     it('does not append pipeline_tag when option is not provided', async () => {
@@ -415,12 +434,41 @@ describe('HuggingFaceService', () => {
       expect(url).not.toContain('pipeline_tag');
     });
 
-    it('combines query and pipeline_tag in the same request', async () => {
+    it('sends the query with the GGUF filter', async () => {
       await huggingFaceService.searchModels('qwen', { pipelineTag: 'image-text-to-text' });
 
       const url = mockFetch.mock.calls[0][0];
       expect(url).toContain('search=qwen');
-      expect(url).toContain('pipeline_tag=image-text-to-text');
+      expect(url).toContain('filter=gguf');
+    });
+
+    it('leaves image generators out of chat search', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([
+          { id: 'org/Qwen-Image-2.1-GGUF', downloads: 99 },
+          { id: 'org/Qwen3-4B-GGUF', downloads: 9 },
+        ]),
+      });
+      const results = await huggingFaceService.searchModels('qwen');
+
+      expect(results.map(r => r.id)).toEqual(['org/Qwen3-4B-GGUF']);
+    });
+
+    it('shows every upload of one model as one result, never an abliterated upload', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([
+          { id: 'bartowski/Qwen3-4B-GGUF', downloads: 10 },
+          { id: 'unsloth/Qwen3-4B-GGUF', downloads: 50 },
+          { id: 'someone/Qwen3-4B-abliterated-GGUF', downloads: 99 },
+        ]),
+      });
+      const results = await huggingFaceService.searchModels('qwen3');
+
+      expect(results).toHaveLength(1);
+      expect(results[0].variants).toHaveLength(1);
+      expect(results.some(r => /abliterated/i.test(r.id))).toBe(false);
     });
   });
 
@@ -428,15 +476,26 @@ describe('HuggingFaceService', () => {
   // getModelFiles (with fetch mock)
   // ============================================================================
   describe('getModelFiles', () => {
+    it('finds quantizations kept in folders, and never offers an MTP head or a draft as a size', async () => {
+      fakeHuggingFace([
+        { path: 'model-Q4_K_M.gguf', size: 4000000000 },
+        { path: 'Q8_0/model-Q8_0.gguf', size: 8000000000 },
+        { path: 'MTP/mtp-model-Q8_0.gguf', size: 100000000 },
+        { path: 'model-MTP-ONLY-Q4_K_M.gguf', size: 1500000000 },
+      ]);
+      const files = await huggingFaceService.getModelFiles('org/model');
+
+      expect(files.map(f => f.name)).toEqual(['model-Q4_K_M.gguf', 'model-Q8_0.gguf']);
+      // The folder stays in the download address; the file on the phone has its own name.
+      expect(files[1].downloadUrl).toMatch(/\/Q8_0\/model-Q8_0\.gguf$/);
+    });
+
     it('separates mmproj files from model files', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve([
-          { type: 'file', path: 'model-Q4_K_M.gguf', size: 4000000000 },
-          { type: 'file', path: 'mmproj-f16.gguf', size: 800000000 },
-          { type: 'file', path: 'README.md', size: 1000 },
-        ]),
-      });
+      fakeHuggingFace([
+        { path: 'model-Q4_K_M.gguf', size: 4000000000 },
+        { path: 'mmproj-f16.gguf', size: 800000000 },
+        { path: 'README.md', size: 1000 },
+      ]);
 
       const files = await huggingFaceService.getModelFiles('org/model');
 
@@ -449,14 +508,11 @@ describe('HuggingFaceService', () => {
     });
 
     it('sorts files by size ascending', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve([
-          { type: 'file', path: 'model-Q8_0.gguf', size: 8000000000 },
-          { type: 'file', path: 'model-Q4_K_M.gguf', size: 4000000000 },
-          { type: 'file', path: 'model-Q2_K.gguf', size: 2000000000 },
-        ]),
-      });
+      fakeHuggingFace([
+        { path: 'model-Q8_0.gguf', size: 8000000000 },
+        { path: 'model-Q4_K_M.gguf', size: 4000000000 },
+        { path: 'model-Q2_K.gguf', size: 2000000000 },
+      ]);
 
       const files = await huggingFaceService.getModelFiles('org/model');
 
@@ -464,7 +520,7 @@ describe('HuggingFaceService', () => {
       expect(files[1].size).toBeLessThan(files[2].size);
     });
 
-    it('falls back to siblings when tree endpoint fails', async () => {
+    it('a pinned revision falls back to siblings when the tree endpoint fails', async () => {
       global.fetch = jest.fn()
         .mockResolvedValueOnce({ ok: false, status: 404 }) // tree fails
         .mockResolvedValueOnce({
@@ -477,7 +533,7 @@ describe('HuggingFaceService', () => {
           }),
         });
 
-      const files = await huggingFaceService.getModelFiles('org/model');
+      const files = await huggingFaceService.getModelFiles('org/model', 'abc123');
 
       expect(files).toHaveLength(1);
       expect(files[0].name).toBe('model-Q4_K_M.gguf');
@@ -570,7 +626,7 @@ describe('HuggingFaceService', () => {
   });
 
   describe('getModelFiles — catch block fallback (fetch throws)', () => {
-    it('falls back to getModelFilesFromSiblings when fetch throws', async () => {
+    it('a pinned revision falls back to siblings when the tree fetch throws', async () => {
       global.fetch = jest.fn()
         .mockRejectedValueOnce(new Error('network error')) // tree throws
         .mockResolvedValueOnce({
@@ -583,7 +639,7 @@ describe('HuggingFaceService', () => {
           }),
         });
 
-      const files = await huggingFaceService.getModelFiles('org/model');
+      const files = await huggingFaceService.getModelFiles('org/model', 'abc123');
       expect(files).toHaveLength(1);
     });
   });
@@ -603,7 +659,7 @@ describe('HuggingFaceService', () => {
           }),
         });
 
-      const files = await huggingFaceService.getModelFiles('org/model');
+      const files = await huggingFaceService.getModelFiles('org/model', 'abc123');
       expect(files).toHaveLength(2);
       expect(files[0].size).toBeLessThan(files[1].size);
     });

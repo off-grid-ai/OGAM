@@ -2,6 +2,7 @@ import { Platform, NativeModules } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import RNFS from 'react-native-fs';
 import logger from '../utils/logger';
+import { IPHONE_INFERENCE_THREADS } from '@offgrid/models';
 import { readPerformanceCoreCount } from './cpuTopologyReader';
 // Access NativeModules.LocalDreamModule dynamically (not destructured)
 // so it can be mocked in tests after module import.
@@ -464,6 +465,8 @@ class HardwareService {
       const fast = await this.getPerformanceCoreCount();
       if (fast >= 2) return Math.min(fast, cores);
     }
+    // iOS: the thread count measured fastest on an iPhone (shared table).
+    if (Platform.OS === 'ios') return IPHONE_INFERENCE_THREADS;
     return cores <= 4 ? cores : Math.floor(cores * 0.8);
   }
   /**
@@ -484,9 +487,9 @@ class HardwareService {
     if (Platform.OS !== 'android') return { supported: false, reason: 'not_android' };
     try {
       const hardware = (await DeviceInfo.getHardware()).toLowerCase();
-      // Support Qualcomm Adreno (qcom) and ARM Mali GPUs.
-      // Avoid 'arm' alone — it matches the CPU architecture string (arm64-v8a), not the GPU vendor.
-      const hasCompatibleGpu = hardware.includes('qcom') || hardware.includes('mali');
+      // llama.rn's OpenCL backend runs on Qualcomm Adreno only (llama.rn README); Mali is not
+      // supported, so a Mali phone stays on the CPU.
+      const hasCompatibleGpu = hardware.includes('qcom');
       if (!hasCompatibleGpu) return (this.cachedOpenCLCapability = { supported: false, reason: 'no_compatible_gpu' });
       return (this.cachedOpenCLCapability = { supported: true });
     } catch { return (this.cachedOpenCLCapability = { supported: false, reason: 'detection_failed' }); }

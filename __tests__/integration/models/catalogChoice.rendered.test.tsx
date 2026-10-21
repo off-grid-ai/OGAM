@@ -72,7 +72,7 @@ describe('Model choice on the phone', () => {
     expect(home.queryByText('TEXT MODEL')).toBeNull();
   });
 
-  it('keeps size, type, RAM, and curated facts on a compact model card', () => {
+  it('keeps size, quant, params and curated facts on a compact model card, without type, RAM or a trending mark', () => {
     installNativeBoundary();
     const React = require('react');
     const { render } = requireRTL();
@@ -83,8 +83,9 @@ describe('Model choice on the phone', () => {
       compact: true,
       recommended: { chips: ['Fast'] },
     }));
-    expect(card.getByText(/Q4_K_M.*Text.*7B params.*8GB\+ RAM.*Fast/)).toBeTruthy();
-    expect(card.getByLabelText('Recommended')).toBeTruthy();
+    expect(card.getByText(/Q4_K_M.*7B params.*Fast/)).toBeTruthy();
+    expect(card.queryByText(/Text|RAM/)).toBeNull();
+    expect(card.queryByLabelText('Recommended')).toBeNull();
     expect(card.queryByText('Recommended')).toBeNull();
   });
 

@@ -37,7 +37,8 @@ export function useTextGenerationAdvanced() {
     hardwareService.getRecommendedThreadCount().then(setResolvedThreadCount);
   }, [settings?.nThreads]);
 
-  const cpuThreadsSliderValue = settings?.nThreads && settings.nThreads > 0 ? settings.nThreads : 1;
+  // On auto the slider (and the number you edit) starts from the count that will actually run.
+  const cpuThreadsSliderValue = settings?.nThreads && settings.nThreads > 0 ? settings.nThreads : (resolvedThreadCount ?? 1);
   const cpuThreadsDisplayValue = settings?.nThreads === 0
     ? (resolvedThreadCount != null ? `Auto (${resolvedThreadCount})` : 'Auto')
     : String(cpuThreadsSliderValue);

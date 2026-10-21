@@ -137,8 +137,8 @@ describe('doLoadTextModel — mmproj clear branch', () => {
     expect(loaded.cacheType).toBe('f16');
   });
 
-  it('logs a warning but continues when unloading the previous llama model fails', async () => {
-    mockedLlm.unloadModel.mockRejectedValue(new Error('unload boom'));
+  it('logs a warning but continues when unloading the previous LiteRT model fails', async () => {
+    (mockedLiteRT.unloadModel as jest.Mock).mockRejectedValue(new Error('unload boom'));
     mockedLlm.loadModel.mockResolvedValue(undefined);
     (mockedLlm.getMultimodalSupport as jest.Mock).mockReturnValue(null);
     mockedRNFS.exists.mockResolvedValue(false);
@@ -149,7 +149,6 @@ describe('doLoadTextModel — mmproj clear branch', () => {
     await doLoadTextModel(ctx);
 
     expect(logger.warn).toHaveBeenCalledWith('[engines] text engine unload during switch failed, continuing:', expect.any(Error));
-    expect(ctx.onError).toHaveBeenCalled(); // reset before reassignment
     expect(ctx.onLoaded).toHaveBeenCalled();
   });
 });

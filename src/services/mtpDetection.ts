@@ -1,33 +1,17 @@
-import { loadLlamaModelInfo } from 'llama.rn';
 import logger from '../utils/logger';
 import { modelDeclaresMtp } from '../utils/mtpSupport';
+import { readModelHeader } from './modelHeader';
+import { installedMtpHeadPath } from './mtpHeads';
 
 /**
  * The I/O half of "can this model draft its own tokens": read the GGUF's self-declared metadata and
- * hand it to the pure rule. Separate from the rule so the rule is testable without a filesystem.
- *
- * `loadLlamaModelInfo` reads the header only — it does not load the model — so this is cheap enough
- * to run when a model becomes active, which is what lets the chat suggest MTP without the user
- * hunting through settings.
- *
- * Cached per path: a file's metadata cannot change under us, and an unreadable file is cached as a
- * NO so a broken path is not re-read on every render.
+ * hand it to the pure rule. The header read is cached per path (modelHeader), which is what lets
+ * the chat suggest MTP without the user hunting through settings.
  */
-const cache = new Map<string, boolean>();
-
 export async function modelSupportsMtp(modelPath: string | undefined): Promise<boolean> {
   if (!modelPath) return false;
-  const cached = cache.get(modelPath);
-  if (cached !== undefined) return cached;
-  let supports = false;
-  try {
-    const info = await loadLlamaModelInfo(modelPath);
-    supports = modelDeclaresMtp(info as Record<string, unknown>);
-    logger.log(`[MTP-SM] ${modelPath.split('/').pop()} declares MTP=${supports}`);
-  } catch (error) {
-    logger.warn('[MTP-SM] could not read model metadata:', error);
-  }
-  cache.set(modelPath, supports);
+  const supports = modelDeclaresMtp(await readModelHeader(modelPath));
+  logger.log(`[MTP-SM] ${modelPath.split('/').pop()} declares MTP=${supports}`);
   return supports;
 }
 
@@ -40,7 +24,8 @@ export async function modelSupportsMtp(modelPath: string | undefined): Promise<b
  */
 export async function resolveSpeculative(modelPath: string, requested: boolean | undefined): Promise<boolean> {
   if (!requested) return false;
-  const supported = await modelSupportsMtp(modelPath);
-  if (!supported) logger.log('[MTP-SM] speculative requested but this model declares no draft layers — not enabling');
+  // A downloaded MTP head brings its own draft layers, so the model needs none of its own.
+  const supported = (await installedMtpHeadPath(modelPath)) !== undefined || await modelSupportsMtp(modelPath);
+  if (!supported) logger.log('[MTP-SM] speculative requested but this model has no draft layers or head — not enabling');
   return supported;
 }

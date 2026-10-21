@@ -1,5 +1,5 @@
 import RNFS from 'react-native-fs';
-import { performanceCoreCount } from '../utils/cpuTopology';
+import { androidInferenceThreads } from '@offgrid/models';
 
 /**
  * The I/O half of "which cores are worth running inference on": read the kernel's per-core topology
@@ -24,9 +24,9 @@ async function readCoreValues(cores: number, file: string): Promise<number[]> {
   );
 }
 
-/** How many performance cores this device has, or 0 when the topology could not be read. */
+/** How many cores inference should thread (the shared rule), or 0 when the topology could not be read. */
 export async function readPerformanceCoreCount(cores: number): Promise<number> {
-  const byCapacity = performanceCoreCount(await readCoreValues(cores, 'cpu_capacity'));
+  const byCapacity = androidInferenceThreads(await readCoreValues(cores, 'cpu_capacity'));
   if (byCapacity > 0) return byCapacity;
-  return performanceCoreCount(await readCoreValues(cores, 'cpufreq/cpuinfo_max_freq'));
+  return androidInferenceThreads(await readCoreValues(cores, 'cpufreq/cpuinfo_max_freq'));
 }

@@ -14,6 +14,15 @@ import {
 import { looksLikeVisionModel } from '../utils/visionModel';
 import { huggingFaceRevisionPath } from '../utils/modelOrigin';
 import { isMMProjFile, pickMmProjForDownload } from './mmproj';
+import {
+  searchHuggingFace,
+  getModelFiles as listRepoFiles,
+  getModelType,
+  isMtpHeadFile,
+  isDraftModelFile,
+  type HFSearchResult,
+  type ModelFileVariant,
+} from '@offgrid/models';
 
 class HuggingFaceService {
   private baseUrl = HF_API.baseUrl;
@@ -27,7 +36,55 @@ class HuggingFaceService {
     return response.json() as Promise<T>;
   }
 
+  /**
+   * What the person searches: the shared search (@offgrid/models), so the phone and the desktop
+   * show the same results. Uploads that are hidden by rule (abliterated, uncensored and the like)
+   * never appear; every upload of one model is one result, led by the most trusted one, with the
+   * others counted as variants; a model a newer release replaces goes last.
+   */
   async searchModels(
+    query: string = '',
+    options: { limit?: number; sort?: string; direction?: string; pipelineTag?: string } = {},
+  ): Promise<ModelInfo[]> {
+    const results = await searchHuggingFace(query, {
+      limit: options.limit ?? 30,
+      sort: options.sort,
+      kind: options.pipelineTag === 'image-text-to-text' ? 'vision' : undefined,
+    });
+    // An image generator is not a chat model: it belongs on the Image tab, not in chat search.
+    return results
+      .filter(result => getModelType(result.name) !== 'image-gen')
+      .map(result => this.fromSharedResult(result));
+  }
+
+  private fromSharedResult(result: HFSearchResult): ModelInfo {
+    const author = result.org || result.id.split('/')[0] || 'Unknown';
+    const name = result.name.toLowerCase();
+    const paramMatch = name.match(/(\d+\.?\d*)\s*b(?:\b|-)/);
+    const parts = [this.detectModelType(name, [])];
+    if (result.activeParams && result.params) parts.push(`${result.params}B`);
+    else if (paramMatch) parts.push(`${paramMatch[1]}B`);
+    return {
+      id: result.id,
+      name: result.name,
+      author,
+      description: parts.join(' · '),
+      downloads: result.downloads ?? 0,
+      likes: result.likes ?? 0,
+      tags: [],
+      lastModified: result.lastModified ?? '',
+      files: [],
+      credibility: this.determineCredibility(author),
+      ...(result.params ? { paramCount: result.params } : {}),
+      ...(result.activeParams ? { activeParams: result.activeParams } : {}),
+      ...(result.hasMtp ? { hasMtp: true } : {}),
+      ...(result.newer ? { newer: result.newer } : {}),
+      ...(result.variants?.length ? { variants: result.variants } : {}),
+    };
+  }
+
+  /** Every upload, ungrouped: what vision repair needs to find the repo that published a file. */
+  private async rawSearch(
     query: string = '',
     options: {
       limit?: number;
@@ -75,7 +132,7 @@ class HuggingFaceService {
       .replace(/\.gguf$/i, '')
       .replace(/[._-]i1$/i, '')
       .replace(/[._-](?:Q[0-9]+(?:_[A-Z0-9]+)*|F(?:16|32))$/i, '');
-    const results = await this.searchModels(query, { limit });
+    const results = await this.rawSearch(query, { limit });
     const listings = await Promise.all(
       results.map(async result => ({
         repoId: result.id,
@@ -119,10 +176,18 @@ class HuggingFaceService {
     modelId: string,
     revision = 'main',
   ): Promise<ModelFile[]> {
+    // The current files come from the shared listing (@offgrid/models): subfolders included, MTP
+    // heads and draft models never offered as a size, and a projector only when it is named for this
+    // model or is the repo's generic one. A pinned revision (vision repair) reads that revision here.
+    if (revision === 'main') {
+      const variants = await listRepoFiles(modelId);
+      return variants.map(variant => this.fromSharedFile(variant)).sort((a, b) => a.size - b.size);
+    }
     try {
       const encodedRevision = encodeURIComponent(revision);
+      // Recursive: many repos keep each quantization in its own folder (e.g. "Q8_0/…gguf").
       const response = await fetch(
-        `${this.apiUrl}/models/${modelId}/tree/${encodedRevision}`,
+        `${this.apiUrl}/models/${modelId}/tree/${encodedRevision}?recursive=true`,
         { headers: { Accept: 'application/json' } },
       );
       if (!response.ok)
@@ -134,13 +199,14 @@ class HuggingFaceService {
         lfs?: { size: number };
       }> = await response.json();
       const allGguf = files.filter(
-        f => f.type === 'file' && f.path.endsWith('.gguf'),
+        f => f.type === 'file' && f.path.endsWith('.gguf') && !isMtpHeadFile(f.path) && !isDraftModelFile(f.path),
       );
       const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.path));
       const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.path));
       return modelFiles
         .map(file => ({
-          name: file.path,
+          // The on-disk name is the file's own name; the URL keeps its folder.
+          name: file.path.split('/').pop() ?? file.path,
           size: file.lfs?.size || file.size || 0,
           quantization: this.extractQuantization(file.path),
           downloadUrl: this.getDownloadUrl(modelId, file.path, revision),
@@ -155,6 +221,19 @@ class HuggingFaceService {
     }
   }
 
+  private fromSharedFile(variant: ModelFileVariant): ModelFile {
+    return {
+      name: variant.fileName,
+      size: variant.sizeBytes,
+      quantization: variant.quant,
+      downloadUrl: variant.downloadUrl,
+      ...(variant.sha256 ? { sha256: variant.sha256 } : {}),
+      ...(variant.mmproj ? {
+        mmProjFile: { name: variant.mmproj.fileName, size: variant.mmproj.sizeBytes ?? 0, downloadUrl: variant.mmproj.url },
+      } : {}),
+    };
+  }
+
   private async getModelFilesFromSiblings(
     modelId: string,
     revision = 'main',
@@ -165,7 +244,7 @@ class HuggingFaceService {
       `${this.apiUrl}/models/${modelId}${revisionPath}`,
     );
     if (!result.siblings) return [];
-    const allGguf = result.siblings.filter(f => f.rfilename.endsWith('.gguf'));
+    const allGguf = result.siblings.filter(f => f.rfilename.endsWith('.gguf') && !isMtpHeadFile(f.rfilename) && !isDraftModelFile(f.rfilename));
     const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.rfilename));
     const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.rfilename));
     const mmProjForMatch = mmProjFiles.map(f => ({
@@ -315,7 +394,7 @@ class HuggingFaceService {
     const modelId = typeof source === 'string' ? source : source.modelId;
     const revision = typeof source === 'string' ? 'main' : source.revision;
     return {
-      name: file.path,
+      name: file.path.split('/').pop() ?? file.path,
       size: file.lfs?.size || file.size || 0,
       downloadUrl: this.getDownloadUrl(modelId, file.path, revision),
     };
@@ -337,7 +416,6 @@ class HuggingFaceService {
   private extractDescription(result: HFModelSearchResult): string {
     const name = (result.id.split('/').pop() || '').toLowerCase();
     const tags = result.tags?.map(t => t.toLowerCase()) || [];
-    const author = result.author || result.id.split('/')[0] || '';
     const type = this.detectModelType(name, tags);
     const paramMatch = name.match(/(\d+\.?\d*)\s*b(?:\b|-)/);
     const paramStr = paramMatch ? `${paramMatch[1]}B` : null;
@@ -348,7 +426,7 @@ class HuggingFaceService {
     const parts: string[] = [type];
     if (paramStr) parts.push(paramStr);
     if (licenseStr) parts.push(licenseStr);
-    if (author) parts.push(`by ${author}`);
+    // Who published it is the verified mark on the card, not a name in every description.
     return parts.join(' · ');
   }
 

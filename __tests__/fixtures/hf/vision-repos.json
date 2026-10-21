@@ -1,94 +1,4 @@
 {
-  "unsloth/gemma-4-E2B-it-GGUF": {
-    "exists": true,
-    "ggufFiles": [
-      "MTP/mtp-gemma-4-E2B-it-BF16.gguf",
-      "MTP/mtp-gemma-4-E2B-it-F16.gguf",
-      "MTP/mtp-gemma-4-E2B-it-Q8_0.gguf",
-      "gemma-4-E2B-it-BF16.gguf",
-      "gemma-4-E2B-it-IQ4_NL.gguf",
-      "gemma-4-E2B-it-IQ4_XS.gguf",
-      "gemma-4-E2B-it-Q3_K_M.gguf",
-      "gemma-4-E2B-it-Q3_K_S.gguf",
-      "gemma-4-E2B-it-Q4_0.gguf",
-      "gemma-4-E2B-it-Q4_1.gguf",
-      "gemma-4-E2B-it-Q4_K_M.gguf",
-      "gemma-4-E2B-it-Q4_K_S.gguf",
-      "gemma-4-E2B-it-Q5_K_M.gguf",
-      "gemma-4-E2B-it-Q5_K_S.gguf",
-      "gemma-4-E2B-it-Q6_K.gguf",
-      "gemma-4-E2B-it-Q8_0.gguf",
-      "gemma-4-E2B-it-UD-IQ2_M.gguf",
-      "gemma-4-E2B-it-UD-IQ3_XXS.gguf",
-      "gemma-4-E2B-it-UD-Q2_K_XL.gguf",
-      "gemma-4-E2B-it-UD-Q3_K_XL.gguf",
-      "gemma-4-E2B-it-UD-Q4_K_XL.gguf",
-      "gemma-4-E2B-it-UD-Q5_K_XL.gguf",
-      "gemma-4-E2B-it-UD-Q6_K_XL.gguf",
-      "gemma-4-E2B-it-UD-Q8_K_XL.gguf",
-      "mmproj-BF16.gguf",
-      "mmproj-F16.gguf",
-      "mmproj-F32.gguf",
-      "mtp-gemma-4-E2B-it.gguf"
-    ],
-    "probe": {
-      "model": {
-        "name": "mtp-gemma-4-E2B-it.gguf",
-        "status": 206,
-        "magic": "GGUF"
-      },
-      "mmproj": {
-        "name": "mmproj-F16.gguf",
-        "status": 206,
-        "magic": "GGUF"
-      }
-    }
-  },
-  "unsloth/gemma-4-E4B-it-GGUF": {
-    "exists": true,
-    "ggufFiles": [
-      "MTP/mtp-gemma-4-E4B-it-BF16.gguf",
-      "MTP/mtp-gemma-4-E4B-it-F16.gguf",
-      "MTP/mtp-gemma-4-E4B-it-Q8_0.gguf",
-      "gemma-4-E4B-it-BF16.gguf",
-      "gemma-4-E4B-it-IQ4_NL.gguf",
-      "gemma-4-E4B-it-IQ4_XS.gguf",
-      "gemma-4-E4B-it-Q3_K_M.gguf",
-      "gemma-4-E4B-it-Q3_K_S.gguf",
-      "gemma-4-E4B-it-Q4_0.gguf",
-      "gemma-4-E4B-it-Q4_1.gguf",
-      "gemma-4-E4B-it-Q4_K_M.gguf",
-      "gemma-4-E4B-it-Q4_K_S.gguf",
-      "gemma-4-E4B-it-Q5_K_M.gguf",
-      "gemma-4-E4B-it-Q5_K_S.gguf",
-      "gemma-4-E4B-it-Q6_K.gguf",
-      "gemma-4-E4B-it-Q8_0.gguf",
-      "gemma-4-E4B-it-UD-IQ2_M.gguf",
-      "gemma-4-E4B-it-UD-IQ3_XXS.gguf",
-      "gemma-4-E4B-it-UD-Q2_K_XL.gguf",
-      "gemma-4-E4B-it-UD-Q3_K_XL.gguf",
-      "gemma-4-E4B-it-UD-Q4_K_XL.gguf",
-      "gemma-4-E4B-it-UD-Q5_K_XL.gguf",
-      "gemma-4-E4B-it-UD-Q6_K_XL.gguf",
-      "gemma-4-E4B-it-UD-Q8_K_XL.gguf",
-      "mmproj-BF16.gguf",
-      "mmproj-F16.gguf",
-      "mmproj-F32.gguf",
-      "mtp-gemma-4-E4B-it.gguf"
-    ],
-    "probe": {
-      "model": {
-        "name": "mtp-gemma-4-E4B-it.gguf",
-        "status": 206,
-        "magic": "GGUF"
-      },
-      "mmproj": {
-        "name": "mmproj-F16.gguf",
-        "status": 206,
-        "magic": "GGUF"
-      }
-    }
-  },
   "unsloth/Qwen3.5-0.8B-GGUF": {
     "exists": true,
     "ggufFiles": [
@@ -173,6 +83,48 @@
       }
     }
   },
+  "unsloth/Qwen3.5-4B-GGUF": {
+    "exists": true,
+    "ggufFiles": [
+      "Qwen3.5-4B-BF16.gguf",
+      "Qwen3.5-4B-IQ4_NL.gguf",
+      "Qwen3.5-4B-IQ4_XS.gguf",
+      "Qwen3.5-4B-Q3_K_M.gguf",
+      "Qwen3.5-4B-Q3_K_S.gguf",
+      "Qwen3.5-4B-Q4_0.gguf",
+      "Qwen3.5-4B-Q4_1.gguf",
+      "Qwen3.5-4B-Q4_K_M.gguf",
+      "Qwen3.5-4B-Q4_K_S.gguf",
+      "Qwen3.5-4B-Q5_K_M.gguf",
+      "Qwen3.5-4B-Q5_K_S.gguf",
+      "Qwen3.5-4B-Q6_K.gguf",
+      "Qwen3.5-4B-Q8_0.gguf",
+      "Qwen3.5-4B-UD-IQ2_M.gguf",
+      "Qwen3.5-4B-UD-IQ2_XXS.gguf",
+      "Qwen3.5-4B-UD-IQ3_XXS.gguf",
+      "Qwen3.5-4B-UD-Q2_K_XL.gguf",
+      "Qwen3.5-4B-UD-Q3_K_XL.gguf",
+      "Qwen3.5-4B-UD-Q4_K_XL.gguf",
+      "Qwen3.5-4B-UD-Q5_K_XL.gguf",
+      "Qwen3.5-4B-UD-Q6_K_XL.gguf",
+      "Qwen3.5-4B-UD-Q8_K_XL.gguf",
+      "mmproj-BF16.gguf",
+      "mmproj-F16.gguf",
+      "mmproj-F32.gguf"
+    ],
+    "probe": {
+      "model": {
+        "name": "Qwen3.5-4B-BF16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      },
+      "mmproj": {
+        "name": "mmproj-F16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      }
+    }
+  },
   "unsloth/Qwen3.5-9B-GGUF": {
     "exists": true,
     "ggufFiles": [
@@ -215,66 +167,404 @@
       }
     }
   },
-  "ggml-org/SmolVLM2-500M-Video-Instruct-GGUF": {
+  "unsloth/Qwen3.8-27B-GGUF": {
     "exists": true,
     "ggufFiles": [
-      "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "SmolVLM2-500M-Video-Instruct-f16.gguf",
-      "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf"
+      "BF16/Qwen3.8-27B-BF16-00001-of-00002.gguf",
+      "BF16/Qwen3.8-27B-BF16-00002-of-00002.gguf",
+      "MTP/mtp-Qwen3.8-27B-Q4_0.gguf",
+      "Qwen3.8-27B-Q4_0.gguf",
+      "Qwen3.8-27B-Q4_1.gguf",
+      "Qwen3.8-27B-Q8_0.gguf",
+      "Qwen3.8-27B-UD-IQ1_M.gguf",
+      "Qwen3.8-27B-UD-IQ1_S.gguf",
+      "Qwen3.8-27B-UD-IQ2_S.gguf",
+      "Qwen3.8-27B-UD-IQ2_XXS.gguf",
+      "Qwen3.8-27B-UD-IQ3_S.gguf",
+      "Qwen3.8-27B-UD-IQ3_XXS.gguf",
+      "Qwen3.8-27B-UD-IQ4_XS.gguf",
+      "Qwen3.8-27B-UD-Q2_K_XL.gguf",
+      "Qwen3.8-27B-UD-Q3_K_XL.gguf",
+      "Qwen3.8-27B-UD-Q4_K_M.gguf",
+      "Qwen3.8-27B-UD-Q4_K_S.gguf",
+      "Qwen3.8-27B-UD-Q4_K_XL.gguf",
+      "Qwen3.8-27B-UD-Q5_K_M.gguf",
+      "Qwen3.8-27B-UD-Q5_K_S.gguf",
+      "Qwen3.8-27B-UD-Q5_K_XL.gguf",
+      "Qwen3.8-27B-UD-Q6_K.gguf",
+      "Qwen3.8-27B-UD-Q6_K_L.gguf",
+      "Qwen3.8-27B-UD-Q6_K_M.gguf",
+      "Qwen3.8-27B-UD-Q6_K_XL.gguf",
+      "Qwen3.8-27B-UD-Q8_K_L.gguf",
+      "Qwen3.8-27B-UD-Q8_K_XL.gguf",
+      "imatrix_unsloth.gguf",
+      "mmproj-BF16.gguf",
+      "mmproj-F16.gguf"
     ],
     "probe": {
       "model": {
-        "name": "SmolVLM2-500M-Video-Instruct-f16.gguf",
+        "name": "imatrix_unsloth.gguf",
         "status": 206,
         "magic": "GGUF"
       },
       "mmproj": {
-        "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+        "name": "mmproj-F16.gguf",
         "status": 206,
         "magic": "GGUF"
       }
     }
   },
-  "ggml-org/SmolVLM-Instruct-GGUF": {
+  "unsloth/gemma-4-E2B-it-GGUF": {
     "exists": true,
     "ggufFiles": [
-      "SmolVLM-Instruct-Q4_K_M.gguf",
-      "SmolVLM-Instruct-Q8_0.gguf",
-      "SmolVLM-Instruct-f16.gguf",
-      "mmproj-SmolVLM-Instruct-Q8_0.gguf",
-      "mmproj-SmolVLM-Instruct-f16.gguf"
+      "MTP/mtp-gemma-4-E2B-it-BF16.gguf",
+      "MTP/mtp-gemma-4-E2B-it-F16.gguf",
+      "MTP/mtp-gemma-4-E2B-it-Q8_0.gguf",
+      "gemma-4-E2B-it-BF16.gguf",
+      "gemma-4-E2B-it-IQ4_NL.gguf",
+      "gemma-4-E2B-it-IQ4_XS.gguf",
+      "gemma-4-E2B-it-Q3_K_M.gguf",
+      "gemma-4-E2B-it-Q3_K_S.gguf",
+      "gemma-4-E2B-it-Q4_0.gguf",
+      "gemma-4-E2B-it-Q4_1.gguf",
+      "gemma-4-E2B-it-Q4_K_M.gguf",
+      "gemma-4-E2B-it-Q4_K_S.gguf",
+      "gemma-4-E2B-it-Q5_K_M.gguf",
+      "gemma-4-E2B-it-Q5_K_S.gguf",
+      "gemma-4-E2B-it-Q6_K.gguf",
+      "gemma-4-E2B-it-Q8_0.gguf",
+      "gemma-4-E2B-it-UD-IQ2_M.gguf",
+      "gemma-4-E2B-it-UD-IQ3_XXS.gguf",
+      "gemma-4-E2B-it-UD-Q2_K_XL.gguf",
+      "gemma-4-E2B-it-UD-Q3_K_XL.gguf",
+      "gemma-4-E2B-it-UD-Q4_K_XL.gguf",
+      "gemma-4-E2B-it-UD-Q5_K_XL.gguf",
+      "gemma-4-E2B-it-UD-Q6_K_XL.gguf",
+      "gemma-4-E2B-it-UD-Q8_K_XL.gguf",
+      "mmproj-BF16.gguf",
+      "mmproj-F16.gguf",
+      "mmproj-F32.gguf",
+      "mtp-gemma-4-E2B-it.gguf"
     ],
     "probe": {
       "model": {
-        "name": "SmolVLM-Instruct-f16.gguf",
+        "name": "mtp-gemma-4-E2B-it.gguf",
         "status": 206,
         "magic": "GGUF"
       },
       "mmproj": {
-        "name": "mmproj-SmolVLM-Instruct-Q8_0.gguf",
+        "name": "mmproj-F16.gguf",
         "status": 206,
         "magic": "GGUF"
       }
     }
   },
-  "ggml-org/SmolVLM2-2.2B-Instruct-GGUF": {
+  "unsloth/gemma-4-12b-it-GGUF": {
     "exists": true,
     "ggufFiles": [
-      "SmolVLM2-2.2B-Instruct-Q4_K_M.gguf",
-      "SmolVLM2-2.2B-Instruct-Q8_0.gguf",
-      "SmolVLM2-2.2B-Instruct-f16.gguf",
-      "mmproj-SmolVLM2-2.2B-Instruct-Q8_0.gguf",
-      "mmproj-SmolVLM2-2.2B-Instruct-f16.gguf"
+      "MTP/mtp-gemma-4-12b-it-BF16.gguf",
+      "MTP/mtp-gemma-4-12b-it-F16.gguf",
+      "MTP/mtp-gemma-4-12b-it-Q8_0.gguf",
+      "gemma-4-12b-it-BF16.gguf",
+      "gemma-4-12b-it-IQ4_NL.gguf",
+      "gemma-4-12b-it-IQ4_XS.gguf",
+      "gemma-4-12b-it-Q3_K_M.gguf",
+      "gemma-4-12b-it-Q3_K_S.gguf",
+      "gemma-4-12b-it-Q4_0.gguf",
+      "gemma-4-12b-it-Q4_1.gguf",
+      "gemma-4-12b-it-Q4_K_M.gguf",
+      "gemma-4-12b-it-Q4_K_S.gguf",
+      "gemma-4-12b-it-Q5_K_M.gguf",
+      "gemma-4-12b-it-Q5_K_S.gguf",
+      "gemma-4-12b-it-Q6_K.gguf",
+      "gemma-4-12b-it-Q8_0.gguf",
+      "gemma-4-12b-it-UD-IQ2_M.gguf",
+      "gemma-4-12b-it-UD-IQ3_XXS.gguf",
+      "gemma-4-12b-it-UD-Q2_K_XL.gguf",
+      "gemma-4-12b-it-UD-Q3_K_XL.gguf",
+      "gemma-4-12b-it-UD-Q4_K_XL.gguf",
+      "gemma-4-12b-it-UD-Q5_K_XL.gguf",
+      "gemma-4-12b-it-UD-Q6_K_XL.gguf",
+      "gemma-4-12b-it-UD-Q8_K_XL.gguf",
+      "mmproj-BF16.gguf",
+      "mmproj-F16.gguf",
+      "mmproj-F32.gguf",
+      "mtp-gemma-4-12b-it.gguf"
     ],
     "probe": {
       "model": {
-        "name": "SmolVLM2-2.2B-Instruct-f16.gguf",
+        "name": "mtp-gemma-4-12b-it.gguf",
         "status": 206,
         "magic": "GGUF"
       },
       "mmproj": {
-        "name": "mmproj-SmolVLM2-2.2B-Instruct-Q8_0.gguf",
+        "name": "mmproj-F16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      }
+    }
+  },
+  "unsloth/gemma-4-26B-A4B-it-GGUF": {
+    "exists": true,
+    "ggufFiles": [
+      "BF16/gemma-4-26B-A4B-it-BF16-00001-of-00002.gguf",
+      "BF16/gemma-4-26B-A4B-it-BF16-00002-of-00002.gguf",
+      "MTP/mtp-gemma-4-26B-A4B-it-BF16.gguf",
+      "MTP/mtp-gemma-4-26B-A4B-it-F16.gguf",
+      "MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf",
+      "gemma-4-26B-A4B-it-MXFP4_MOE.gguf",
+      "gemma-4-26B-A4B-it-Q8_0.gguf",
+      "gemma-4-26B-A4B-it-UD-IQ2_M.gguf",
+      "gemma-4-26B-A4B-it-UD-IQ2_XXS.gguf",
+      "gemma-4-26B-A4B-it-UD-IQ3_S.gguf",
+      "gemma-4-26B-A4B-it-UD-IQ3_XXS.gguf",
+      "gemma-4-26B-A4B-it-UD-IQ4_NL.gguf",
+      "gemma-4-26B-A4B-it-UD-IQ4_XS.gguf",
+      "gemma-4-26B-A4B-it-UD-Q2_K_XL.gguf",
+      "gemma-4-26B-A4B-it-UD-Q3_K_M.gguf",
+      "gemma-4-26B-A4B-it-UD-Q3_K_XL.gguf",
+      "gemma-4-26B-A4B-it-UD-Q4_K_M.gguf",
+      "gemma-4-26B-A4B-it-UD-Q4_K_S.gguf",
+      "gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf",
+      "gemma-4-26B-A4B-it-UD-Q5_K_M.gguf",
+      "gemma-4-26B-A4B-it-UD-Q5_K_S.gguf",
+      "gemma-4-26B-A4B-it-UD-Q5_K_XL.gguf",
+      "gemma-4-26B-A4B-it-UD-Q6_K.gguf",
+      "gemma-4-26B-A4B-it-UD-Q6_K_XL.gguf",
+      "gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf",
+      "mmproj-BF16.gguf",
+      "mmproj-F16.gguf",
+      "mmproj-F32.gguf",
+      "mtp-gemma-4-26B-A4B-it.gguf"
+    ],
+    "probe": {
+      "model": {
+        "name": "mtp-gemma-4-26B-A4B-it.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      },
+      "mmproj": {
+        "name": "mmproj-F16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      }
+    }
+  },
+  "unsloth/gemma-4-31B-it-GGUF": {
+    "exists": true,
+    "ggufFiles": [
+      "BF16/gemma-4-31B-it-BF16-00001-of-00002.gguf",
+      "BF16/gemma-4-31B-it-BF16-00002-of-00002.gguf",
+      "MTP/mtp-gemma-4-31B-it-BF16.gguf",
+      "MTP/mtp-gemma-4-31B-it-F16.gguf",
+      "MTP/mtp-gemma-4-31B-it-Q8_0.gguf",
+      "gemma-4-31B-it-IQ4_NL.gguf",
+      "gemma-4-31B-it-IQ4_XS.gguf",
+      "gemma-4-31B-it-Q3_K_M.gguf",
+      "gemma-4-31B-it-Q3_K_S.gguf",
+      "gemma-4-31B-it-Q4_0.gguf",
+      "gemma-4-31B-it-Q4_1.gguf",
+      "gemma-4-31B-it-Q4_K_M.gguf",
+      "gemma-4-31B-it-Q4_K_S.gguf",
+      "gemma-4-31B-it-Q5_K_M.gguf",
+      "gemma-4-31B-it-Q5_K_S.gguf",
+      "gemma-4-31B-it-Q6_K.gguf",
+      "gemma-4-31B-it-Q8_0.gguf",
+      "gemma-4-31B-it-UD-IQ2_M.gguf",
+      "gemma-4-31B-it-UD-IQ2_XXS.gguf",
+      "gemma-4-31B-it-UD-IQ3_XXS.gguf",
+      "gemma-4-31B-it-UD-Q2_K_XL.gguf",
+      "gemma-4-31B-it-UD-Q3_K_XL.gguf",
+      "gemma-4-31B-it-UD-Q4_K_XL.gguf",
+      "gemma-4-31B-it-UD-Q5_K_XL.gguf",
+      "gemma-4-31B-it-UD-Q6_K_XL.gguf",
+      "gemma-4-31B-it-UD-Q8_K_XL.gguf",
+      "mmproj-BF16.gguf",
+      "mmproj-F16.gguf",
+      "mmproj-F32.gguf",
+      "mtp-gemma-4-31B-it.gguf"
+    ],
+    "probe": {
+      "model": {
+        "name": "mtp-gemma-4-31B-it.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      },
+      "mmproj": {
+        "name": "mmproj-F16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      }
+    }
+  },
+  "unsloth/Muse-Glimmer-30B-GGUF": {
+    "exists": true,
+    "ggufFiles": [
+      "BF16/Muse-Glimmer-30B-BF16-00001-of-00002.gguf",
+      "BF16/Muse-Glimmer-30B-BF16-00002-of-00002.gguf",
+      "Muse-Glimmer-30B-Q8_0.gguf",
+      "Muse-Glimmer-30B-UD-IQ2_M.gguf",
+      "Muse-Glimmer-30B-UD-IQ2_XS.gguf",
+      "Muse-Glimmer-30B-UD-IQ2_XXS.gguf",
+      "Muse-Glimmer-30B-UD-IQ3_M.gguf",
+      "Muse-Glimmer-30B-UD-IQ3_XXS.gguf",
+      "Muse-Glimmer-30B-UD-Q2_K_XL.gguf",
+      "Muse-Glimmer-30B-UD-Q3_K_XL.gguf",
+      "Muse-Glimmer-30B-UD-Q4_K_XL.gguf",
+      "Muse-Glimmer-30B-UD-Q5_K_L.gguf",
+      "Muse-Glimmer-30B-UD-Q5_K_M.gguf",
+      "Muse-Glimmer-30B-UD-Q5_K_XL.gguf",
+      "Muse-Glimmer-30B-UD-Q6_K_XL.gguf",
+      "Muse-Glimmer-30B-UD-Q8_K_XL.gguf",
+      "dflash-kquant.gguf",
+      "mmproj-Muse-Glimmer-30B-BF16.gguf",
+      "mmproj-Muse-Glimmer-30B-Q8_0.gguf",
+      "mmproj-kquant.gguf"
+    ],
+    "probe": {
+      "model": {
+        "name": "Muse-Glimmer-30B-Q8_0.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      },
+      "mmproj": {
+        "name": "mmproj-Muse-Glimmer-30B-BF16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      }
+    }
+  },
+  "unsloth/Qwen3.6-35B-A3B-GGUF": {
+    "exists": true,
+    "ggufFiles": [
+      "BF16/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf",
+      "BF16/Qwen3.6-35B-A3B-BF16-00002-of-00002.gguf",
+      "Qwen3.6-35B-A3B-MXFP4_MOE.gguf",
+      "Qwen3.6-35B-A3B-Q8_0.gguf",
+      "Qwen3.6-35B-A3B-UD-IQ1_M.gguf",
+      "Qwen3.6-35B-A3B-UD-IQ2_M.gguf",
+      "Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf",
+      "Qwen3.6-35B-A3B-UD-IQ3_S.gguf",
+      "Qwen3.6-35B-A3B-UD-IQ3_XXS.gguf",
+      "Qwen3.6-35B-A3B-UD-IQ4_NL.gguf",
+      "Qwen3.6-35B-A3B-UD-IQ4_NL_XL.gguf",
+      "Qwen3.6-35B-A3B-UD-IQ4_XS.gguf",
+      "Qwen3.6-35B-A3B-UD-Q2_K_XL.gguf",
+      "Qwen3.6-35B-A3B-UD-Q3_K_M.gguf",
+      "Qwen3.6-35B-A3B-UD-Q3_K_S.gguf",
+      "Qwen3.6-35B-A3B-UD-Q3_K_XL.gguf",
+      "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf",
+      "Qwen3.6-35B-A3B-UD-Q4_K_S.gguf",
+      "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
+      "Qwen3.6-35B-A3B-UD-Q5_K_M.gguf",
+      "Qwen3.6-35B-A3B-UD-Q5_K_S.gguf",
+      "Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf",
+      "Qwen3.6-35B-A3B-UD-Q6_K.gguf",
+      "Qwen3.6-35B-A3B-UD-Q6_K_XL.gguf",
+      "Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf",
+      "mmproj-BF16.gguf",
+      "mmproj-F16.gguf",
+      "mmproj-F32.gguf"
+    ],
+    "probe": {
+      "model": {
+        "name": "Qwen3.6-35B-A3B-Q8_0.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      },
+      "mmproj": {
+        "name": "mmproj-F16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      }
+    }
+  },
+  "unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF": {
+    "exists": true,
+    "ggufFiles": [
+      "Devstral-Small-2-24B-Instruct-2512-BF16.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-IQ4_NL.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-IQ4_XS.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-Q2_K.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-Q2_K_L.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-Q3_K_M.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-Q3_K_S.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-Q4_0.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-Q4_1.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-Q4_K_S.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-Q5_K_M.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-Q5_K_S.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-Q6_K.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-Q8_0.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-UD-IQ1_M.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-UD-IQ1_S.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-UD-IQ2_M.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-UD-IQ2_XXS.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-UD-IQ3_XXS.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-UD-Q2_K_XL.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-UD-Q3_K_XL.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-UD-Q4_K_XL.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-UD-Q5_K_XL.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-UD-Q6_K_XL.gguf",
+      "Devstral-Small-2-24B-Instruct-2512-UD-Q8_K_XL.gguf",
+      "mmproj-BF16.gguf",
+      "mmproj-F16.gguf",
+      "mmproj-F32.gguf"
+    ],
+    "probe": {
+      "model": {
+        "name": "Devstral-Small-2-24B-Instruct-2512-BF16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      },
+      "mmproj": {
+        "name": "mmproj-F16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      }
+    }
+  },
+  "unsloth/gemma-4-E4B-it-GGUF": {
+    "exists": true,
+    "ggufFiles": [
+      "MTP/mtp-gemma-4-E4B-it-BF16.gguf",
+      "MTP/mtp-gemma-4-E4B-it-F16.gguf",
+      "MTP/mtp-gemma-4-E4B-it-Q8_0.gguf",
+      "gemma-4-E4B-it-BF16.gguf",
+      "gemma-4-E4B-it-IQ4_NL.gguf",
+      "gemma-4-E4B-it-IQ4_XS.gguf",
+      "gemma-4-E4B-it-Q3_K_M.gguf",
+      "gemma-4-E4B-it-Q3_K_S.gguf",
+      "gemma-4-E4B-it-Q4_0.gguf",
+      "gemma-4-E4B-it-Q4_1.gguf",
+      "gemma-4-E4B-it-Q4_K_M.gguf",
+      "gemma-4-E4B-it-Q4_K_S.gguf",
+      "gemma-4-E4B-it-Q5_K_M.gguf",
+      "gemma-4-E4B-it-Q5_K_S.gguf",
+      "gemma-4-E4B-it-Q6_K.gguf",
+      "gemma-4-E4B-it-Q8_0.gguf",
+      "gemma-4-E4B-it-UD-IQ2_M.gguf",
+      "gemma-4-E4B-it-UD-IQ3_XXS.gguf",
+      "gemma-4-E4B-it-UD-Q2_K_XL.gguf",
+      "gemma-4-E4B-it-UD-Q3_K_XL.gguf",
+      "gemma-4-E4B-it-UD-Q4_K_XL.gguf",
+      "gemma-4-E4B-it-UD-Q5_K_XL.gguf",
+      "gemma-4-E4B-it-UD-Q6_K_XL.gguf",
+      "gemma-4-E4B-it-UD-Q8_K_XL.gguf",
+      "mmproj-BF16.gguf",
+      "mmproj-F16.gguf",
+      "mmproj-F32.gguf",
+      "mtp-gemma-4-E4B-it.gguf"
+    ],
+    "probe": {
+      "model": {
+        "name": "mtp-gemma-4-E4B-it.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      },
+      "mmproj": {
+        "name": "mmproj-F16.gguf",
         "status": 206,
         "magic": "GGUF"
       }
@@ -640,6 +930,71 @@
       },
       "mmproj": {
         "name": "Llama-3.2-11B-Vision-Instruct-mmproj.f16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      }
+    }
+  },
+  "ggml-org/SmolVLM2-500M-Video-Instruct-GGUF": {
+    "exists": true,
+    "ggufFiles": [
+      "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+      "SmolVLM2-500M-Video-Instruct-f16.gguf",
+      "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+      "mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf"
+    ],
+    "probe": {
+      "model": {
+        "name": "SmolVLM2-500M-Video-Instruct-f16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      },
+      "mmproj": {
+        "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      }
+    }
+  },
+  "ggml-org/SmolVLM-Instruct-GGUF": {
+    "exists": true,
+    "ggufFiles": [
+      "SmolVLM-Instruct-Q4_K_M.gguf",
+      "SmolVLM-Instruct-Q8_0.gguf",
+      "SmolVLM-Instruct-f16.gguf",
+      "mmproj-SmolVLM-Instruct-Q8_0.gguf",
+      "mmproj-SmolVLM-Instruct-f16.gguf"
+    ],
+    "probe": {
+      "model": {
+        "name": "SmolVLM-Instruct-f16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      },
+      "mmproj": {
+        "name": "mmproj-SmolVLM-Instruct-Q8_0.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      }
+    }
+  },
+  "ggml-org/SmolVLM2-2.2B-Instruct-GGUF": {
+    "exists": true,
+    "ggufFiles": [
+      "SmolVLM2-2.2B-Instruct-Q4_K_M.gguf",
+      "SmolVLM2-2.2B-Instruct-Q8_0.gguf",
+      "SmolVLM2-2.2B-Instruct-f16.gguf",
+      "mmproj-SmolVLM2-2.2B-Instruct-Q8_0.gguf",
+      "mmproj-SmolVLM2-2.2B-Instruct-f16.gguf"
+    ],
+    "probe": {
+      "model": {
+        "name": "SmolVLM2-2.2B-Instruct-f16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      },
+      "mmproj": {
+        "name": "mmproj-SmolVLM2-2.2B-Instruct-Q8_0.gguf",
         "status": 206,
         "magic": "GGUF"
       }

@@ -345,6 +345,16 @@ export interface LlamaCompletionScript {
   completionMeta?: CompletionMeta;
 }
 
+/** The backend a context was initialised on, read off the initLlama params as llama.rn reads them:
+ *  `devices: ['HTP0']` is the Hexagon NPU, GPU layers without a device list is OpenCL (Android) or
+ *  Metal (iOS), no GPU layers is the CPU. */
+export type LlamaBenchBackend = 'cpu' | 'htp' | 'opencl' | 'metal';
+
+/** What a backend's `context.bench()` does: report this generation speed (tok/s), throw (a backend
+ *  that fails mid-run), hang (never answers), or run on the CPU while asked for an accelerator (llama.rn
+ *  reports nGpuLayers 0 when the offload silently fell back). */
+export type LlamaBenchOutcome = number | 'fail' | 'hang' | { cpuFallback: number };
+
 export interface LlamaFake {
   /** Set the result the NEXT context.completion() resolves with (text drives the text tool-call parser).
    *  Pass { throwMessage } to make completion REJECT (e.g. a native context-overflow error).
@@ -374,15 +384,50 @@ export interface LlamaFake {
   multimodalHoldActive(): boolean;
   /** react-native module object to inject for 'llama.rn'. */
   module: Record<string, jest.Mock>;
-  calls: { completion: unknown[][]; clearCache: boolean[] };
+  calls: {
+    completion: unknown[][];
+    clearCache: boolean[];
+    /** Every initLlama params object, in order. */
+    initLlama: Array<Record<string, unknown>>;
+    /** Every context.bench() run, with the backend its context was loaded on. */
+    bench: Array<{ backend: LlamaBenchBackend; args: unknown[] }>;
+    /** Every context.saveSession(path) / loadSession(path) path. */
+    saveSession: string[];
+    loadSession: string[];
+  };
+  /** Script what context.bench() reports per backend (default: 10 tok/s on every backend). */
+  scriptBench(outcomes: Partial<Record<LlamaBenchBackend, LlamaBenchOutcome>>): void;
+  /** Release every bench() held by a 'hang' outcome (it then reports 1 tok/s). */
+  releaseBench(): void;
 }
 
 function makeLlamaFake(
   onRelease?: () => void,
   chatTemplate?: string,
   modelInfo?: Record<string, unknown>,
+  fs?: NativeFileSystemBoundary,
 ): LlamaFake {
-  const calls: LlamaFake['calls'] = { completion: [], clearCache: [] };
+  const calls: LlamaFake['calls'] = {
+    completion: [],
+    clearCache: [],
+    initLlama: [],
+    bench: [],
+    saveSession: [],
+    loadSession: [],
+  };
+  // bench(): the backend the context was last initialised on decides what it reports.
+  let benchOutcomes: Partial<Record<LlamaBenchBackend, LlamaBenchOutcome>> = {};
+  let initBackend: LlamaBenchBackend = 'cpu';
+  const heldBenches: Array<() => void> = [];
+  const backendOf = (params?: Record<string, unknown>): LlamaBenchBackend => {
+    const gpuLayers = Number((params?.n_gpu_layers as number) ?? 0);
+    const devices = Array.isArray(params?.devices) ? (params!.devices as string[]) : [];
+    if (devices.some(d => d.startsWith('HTP'))) return 'htp';
+    if (gpuLayers <= 0) return 'cpu';
+    return require('react-native').Platform.OS === 'ios' ? 'metal' : 'opencl';
+  };
+  // A saved KV session is a file the native side writes; restoring needs it on disk.
+  let sessionTokens = 0;
   type PreparedCompletion = Omit<LlamaCompletionScript, 'text'> & {
     text: string;
   };
@@ -551,6 +596,41 @@ function makeLlamaFake(
     clearCache: jest.fn(async (clearData: boolean = false) => {
       calls.clearCache.push(clearData);
     }),
+    // llama.rn bench(pp, tg, pl, nr): loads nothing new, runs on the context's own backend and reports
+    // its speeds plus how many layers actually ran off the CPU.
+    bench: jest.fn(async (...args: unknown[]) => {
+      const backend = initBackend;
+      calls.bench.push({ backend, args });
+      const outcome = benchOutcomes[backend] ?? 10;
+      if (outcome === 'fail') throw new Error(`${backend} bench failed`);
+      if (outcome === 'hang') {
+        await new Promise<void>(res => heldBenches.push(res));
+        return { modelDesc: 'fake', modelSize: 0, modelNParams: 0, speedPp: 1, speedTg: 1, nGpuLayers: backend === 'cpu' ? 0 : 99 };
+      }
+      const cpuFallback = typeof outcome === 'object';
+      const speedTg = cpuFallback ? outcome.cpuFallback : outcome;
+      return {
+        modelDesc: 'fake',
+        modelSize: 0,
+        modelNParams: 0,
+        speedPp: speedTg * 10,
+        speedTg,
+        nGpuLayers: backend === 'cpu' || cpuFallback ? 0 : 99,
+      };
+    }),
+    // Session state: the native side writes the KV state to `path` and reports the tokens saved; a
+    // restore reads it back. With the in-memory disk installed the file really appears there.
+    saveSession: jest.fn(async (path: string) => {
+      calls.saveSession.push(path);
+      sessionTokens += 16;
+      fs?.seedFile(path, 4 * 1024 * 1024);
+      return sessionTokens;
+    }),
+    loadSession: jest.fn(async (path: string) => {
+      calls.loadSession.push(path);
+      if (fs && !(await fs.exists(path))) throw new Error(`session file not found: ${path}`);
+      return { tokens_loaded: sessionTokens, prompt: '' };
+    }),
     // Releasing the native context frees its memory — but the OS reclaims it SHORTLY AFTER release()
     // returns (device-faithful), not synchronously. Defer the free so the reclaim barrier captures the
     // still-high footprint as its baseline and then observes the drop on a later poll (as on device).
@@ -608,6 +688,7 @@ function makeLlamaFake(
     // init. Echo that from the requested load params so the REAL captureGpuInfo → GenerationMeta
     // path surfaces the true backend — EMERGENT from the settings→load flow, never programmed.
     initLlama: jest.fn(async (params?: Record<string, unknown>) => {
+      calls.initLlama.push({ ...(params ?? {}) });
       const n = Number((params?.n_gpu_layers as number) ?? 0);
       // A model that fails to load on EVERY backend (corrupt file / unsupported arch) — all 3 attempts reject.
       if (initFails)
@@ -623,6 +704,7 @@ function makeLlamaFake(
       (context as Record<string, unknown>).devices = n > 0 ? devices : [];
       (context as Record<string, unknown>).reasonNoGPU =
         n > 0 ? '' : 'gpu layers not requested';
+      initBackend = backendOf(params);
       return context;
     }),
     releaseContext: jest.fn().mockResolvedValue(undefined),
@@ -664,6 +746,12 @@ function makeLlamaFake(
       f?.();
     },
     multimodalHoldActive: () => mmHoldEngaged,
+    scriptBench: outcomes => {
+      benchOutcomes = { ...outcomes };
+    },
+    releaseBench: () => {
+      heldBenches.splice(0).forEach(release => release());
+    },
   };
 }
 
@@ -1054,6 +1142,12 @@ export interface InstallOpts {
   download?: boolean;
   /** Replace the global whisper.rn stub with a driveable STT context (boundary.whisper). */
   whisper?: boolean;
+  /** What react-native-device-info's getHardware() reports, e.g. 'qcom' for a Snapdragon (Adreno
+   *  GPU), 'mt6989' for a MediaTek (Mali). Default: the global stub's 'unknown'. */
+  deviceHardware?: string;
+  /** The SoC model the native module reports (LocalDreamModule.getSoCModel), e.g. 'SM8650' for a
+   *  Snapdragon 8 Gen 3, which carries a Hexagon NPU. Default: none. */
+  socModel?: string;
 }
 
 export interface NativeBoundary {
@@ -1126,7 +1220,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
 
   // Scriptable llama.rn: override the global stub so completion output is under test control.
   const llamaFake = opts.llama
-    ? makeLlamaFake(freeModelMemory, opts.llamaChatTemplate, opts.llamaModelInfo)
+    ? makeLlamaFake(freeModelMemory, opts.llamaChatTemplate, opts.llamaModelInfo, fsFake)
     : undefined;
   if (llamaFake) jest.doMock('llama.rn', () => llamaFake.module);
 
@@ -1139,6 +1233,10 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   // Both platform names point at the same fake; localDreamGenerator's Platform.select picks one.
   RN.NativeModules.LocalDreamModule = diffusion.module;
   RN.NativeModules.CoreMLDiffusionModule = diffusion.module;
+  if (opts.socModel) {
+    const socModel = opts.socModel;
+    diffusion.module.getSoCModel = jest.fn(async () => socModel);
+  }
   if (downloadFake)
     RN.NativeModules.DownloadManagerModule = downloadFake.module;
   let micPermission: 'Granted' | 'Denied' | 'Undetermined' | 'Unreadable' = 'Granted';
@@ -1225,6 +1323,8 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   (DeviceInfo.getUsedMemory as jest.Mock).mockResolvedValue(
     ram.totalBytes - ram.availBytes,
   );
+  if (opts.deviceHardware)
+    (DeviceInfo.getHardware as jest.Mock).mockResolvedValue(opts.deviceHardware);
 
   const setRam = (profile: RamProfile) => {
     memState.availBytes = profile.availBytes;

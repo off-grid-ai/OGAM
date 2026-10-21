@@ -11,7 +11,7 @@
  *  - per-model delete calls deleteModelById
  */
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
+import { render, fireEvent, act, within } from '@testing-library/react-native';
 
 jest.mock('../../../src/services', () => ({
   WHISPER_MODELS: [
@@ -31,6 +31,8 @@ const mockWhisperActions = {
 let mockWhisperState: any;
 jest.mock('../../../src/stores', () => ({
   useWhisperStore: () => mockWhisperState,
+  // The tab re-works its "For this phone" picks when the device RAM reading lands.
+  useAppStore: (selector: (s: any) => unknown) => selector({ deviceInfo: null }),
 }));
 
 jest.mock('../../../src/components', () => {
@@ -96,9 +98,12 @@ describe('TranscriptionModelsTab', () => {
   });
 
   it('renders the built-in whisper catalogue and privacy banner', () => {
-    const { getByTestId, getByText } = render(<TranscriptionModelsTab />);
+    const { getByTestId, getByText, queryByTestId } = render(<TranscriptionModelsTab />);
     expect(getByTestId('transcription-model-card-0-name')).toHaveTextContent('Tiny');
-    expect(getByTestId('transcription-model-card-1-name')).toHaveTextContent('Small');
+    // The one multilingual model is this phone's pick: it shows once, in the picks row, and the
+    // list leaves it out.
+    expect(within(getByTestId('pick-best')).getByText('Small')).toBeTruthy();
+    expect(queryByTestId('transcription-model-card-1')).toBeNull();
     expect(getByText(/audio is never sent anywhere/)).toBeTruthy();
   });
 
@@ -116,10 +121,11 @@ describe('TranscriptionModelsTab', () => {
     const { getByTestId, queryByTestId } = render(<TranscriptionModelsTab />);
     // Both show as downloaded...
     expect(getByTestId('transcription-model-card-0-downloaded')).toBeTruthy();
-    expect(getByTestId('transcription-model-card-1-downloaded')).toBeTruthy();
+    // (`small` is this phone's pick, so it shows in the picks row: on disk + active = "In use".)
+    expect(queryByTestId('pick-best-download')).toBeNull();
     // ...but only `small` is active.
     expect(queryByTestId('transcription-model-card-0-active')).toBeNull();
-    expect(getByTestId('transcription-model-card-1-active')).toBeTruthy();
+    expect(getByTestId('pick-best-active')).toBeTruthy();
   });
 
   it('selects a present-but-inactive model without re-downloading', () => {
@@ -132,11 +138,14 @@ describe('TranscriptionModelsTab', () => {
     expect(mockWhisperActions.downloadModel).not.toHaveBeenCalled();
   });
 
-  it('does nothing when the already-active model card is tapped', () => {
+  it('offers no download or select for the already-active model', () => {
     mockWhisperState.presentModelIds = ['small'];
     mockWhisperState.downloadedModelId = 'small';
-    const { getByTestId } = render(<TranscriptionModelsTab />);
-    fireEvent.press(getByTestId('transcription-model-card-1'));
+    const { getByTestId, queryByTestId } = render(<TranscriptionModelsTab />);
+    // The active pick offers no action: no download, no select.
+    expect(getByTestId('pick-best-active')).toBeTruthy();
+    expect(queryByTestId('pick-best-download')).toBeNull();
+    expect(queryByTestId('pick-best-select')).toBeNull();
     expect(mockWhisperActions.selectModel).not.toHaveBeenCalled();
     expect(mockWhisperActions.downloadModel).not.toHaveBeenCalled();
   });

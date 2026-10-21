@@ -22,6 +22,7 @@ import {
   CACHE_TYPE_OPTIONS,
 } from '../../hooks/useTextGenerationAdvanced';
 import { hardwareService } from '../../services/hardware';
+import { batchForBackend } from '../../services/llmHelpers';
 import {
   REASONING_BUDGET_AUTO,
   REASONING_BUDGET_OPTIONS,
@@ -45,7 +46,7 @@ const IOS_BACKENDS: BackendOption[] = [
 const ANDROID_BASE_BACKENDS: BackendOption[] = [
   { id: INFERENCE_BACKENDS.CPU, label: 'CPU', desc: 'Always available. Stable, predictable performance.' },
   // Display label 'GPU' (users don't know OpenCL); id stays OPENCL.
-  { id: INFERENCE_BACKENDS.OPENCL, label: 'GPU', desc: 'Offload layers to GPU via OpenCL. Fast decode on Adreno/Mali GPUs. Requires model reload.' },
+  { id: INFERENCE_BACKENDS.OPENCL, label: 'GPU', desc: 'Offload layers to GPU via OpenCL. Fast decode on Adreno GPUs. Requires model reload.' },
 ];
 
 const HTP_BACKEND: BackendOption = {
@@ -263,7 +264,7 @@ export const ShowGenerationDetailsToggle: React.FC = () => {
 
 export const CpuThreadsSlider: React.FC = () => {
   const styles = useThemedStyles(createTextGenAdvancedStyles);
-  const { updateSettings } = useAppStore();
+  const { settings, updateSettings } = useAppStore();
   const { cpuThreadsSliderValue, cpuThreadsDisplayValue } = useTextGenerationAdvanced();
   return (
     <View style={styles.container}>
@@ -277,6 +278,8 @@ export const CpuThreadsSlider: React.FC = () => {
         formatValue={() => cpuThreadsDisplayValue}
         min={1} max={12} step={1}
         onChange={(v) => updateSettings({ nThreads: v })}
+        onReset={settings.nThreads ? () => updateSettings({ nThreads: 0 }) : undefined}
+        resetLabel="Use automatic threads"
       />
     </View>
   );
@@ -291,9 +294,13 @@ export const BatchSizeSlider: React.FC = () => {
         testID="batch-size-stepper"
         label="Batch Size"
         description="Tokens processed per batch"
-        value={settings.nBatch ?? 512}
+        value={batchForBackend(settings.nBatch, settings.inferenceBackend)}
+        // 0 means auto: show the batch the engine will actually use.
+        formatValue={(v) => (settings.nBatch ? String(v) : `Auto (${v})`)}
         min={32} max={512} step={32}
         onChange={(v) => updateSettings({ nBatch: v })}
+        onReset={settings.nBatch ? () => updateSettings({ nBatch: 0 }) : undefined}
+        resetLabel="Use automatic batch size"
       />
     </View>
   );

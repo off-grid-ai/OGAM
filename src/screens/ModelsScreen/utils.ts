@@ -156,3 +156,17 @@ export function hfModelToDescriptor(
     attentionVariant: hfModel._coremlAttentionVariant,
   };
 }
+
+/**
+ * The facts a model card states beyond its size, the same words the desktop uses: a
+ * mixture-of-experts model's active size (what sets its speed), a newer model that replaces it, a
+ * research licence, and how many other uploads of it there are.
+ */
+export function modelFactChips(model: Pick<ModelInfo, 'activeParams' | 'newer' | 'nonCommercial' | 'variants'>): string[] {
+  return [
+    model.activeParams ? `MoE · ${model.activeParams}B active` : undefined,
+    model.newer ? `Newer: ${model.newer}` : undefined,
+    model.nonCommercial ? 'Research licence' : undefined,
+    model.variants?.length ? `+${model.variants.length} uploads` : undefined,
+  ].filter((chip): chip is string => !!chip);
+}

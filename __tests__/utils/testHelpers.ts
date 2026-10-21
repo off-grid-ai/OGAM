@@ -56,6 +56,7 @@ export const resetStores = (): void => {
       nThreads: 0,
       nBatch: 512,
       speculativeDecoding: false,
+      speculativeDraftMax: 3,
       imageGenerationMode: 'auto',
       autoDetectMethod: 'pattern',
       classifierModelId: null,

@@ -177,8 +177,16 @@ describe('HardwareService — branch coverage', () => {
   });
 
   describe('getRecommendedThreadCount', () => {
-    it('returns the core count when cores <= 4', async () => {
-      Platform.OS = 'ios'; // → 4 cores
+    it('threads four cores on iOS, the count measured fastest on an A19 Pro', async () => {
+      Platform.OS = 'ios';
+      expect(await hardwareService.getRecommendedThreadCount()).toBe(4);
+    });
+
+    it('returns the core count when cores <= 4 and the topology is unreadable', async () => {
+      Platform.OS = 'android';
+      mockedRNFS.readFile.mockResolvedValueOnce(
+        Array.from({ length: 4 }, (_, i) => `processor\t: ${i}`).join('\n') as any,
+      );
       expect(await hardwareService.getRecommendedThreadCount()).toBe(4);
     });
 
@@ -215,10 +223,13 @@ describe('HardwareService — branch coverage', () => {
       expect(mockedDeviceInfo.getHardware).not.toHaveBeenCalled();
     });
 
-    it('returns supported for mali hardware', async () => {
+    it('returns no_compatible_gpu for mali hardware (llama.rn OpenCL runs on Adreno only)', async () => {
       Platform.OS = 'android';
       mockedDeviceInfo.getHardware.mockResolvedValue('arm-mali-g78');
-      expect(await hardwareService.getOpenCLCapability()).toEqual({ supported: true });
+      expect(await hardwareService.getOpenCLCapability()).toEqual({
+        supported: false,
+        reason: 'no_compatible_gpu',
+      });
     });
 
     it('returns no_compatible_gpu for unsupported hardware', async () => {

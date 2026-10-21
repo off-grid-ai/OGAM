@@ -9,7 +9,7 @@
  *
  * Plan cases exercised here:
  *  - #1/#3  active id reflects the loaded model (setActive updates active id)
- *  - #2/#22 switching models: loading B unloads A's engine, activeModelId flips to B
+ *  - #2/#22 switching models: loading B hands the llama swap to llama, activeModelId flips to B
  *  - #4     activating the already-active model is a no-op (fast path, no reload)
  *  - #13-15 user unload frees RAM AND deselects (keepSelection=false)
  *  - #19-20 unloadAll / ejectAll frees RAM but KEEPS the selection (eject != deselect)
@@ -87,7 +87,7 @@ describe('BATCH 6 — model selection / activation / unload (real service + stor
   });
 
   // ---- #2 / #22: switching models flips the active id and unloads the old ---
-  it('switching from A to B flips activeModelId to B and unloads the previous engine context', async () => {
+  it('switching from A to B flips activeModelId to B and hands the llama swap to llama (which checks fit before releasing A)', async () => {
     const A = createDownloadedModel({ id: 'A', engine: 'llama', filePath: '/m/a.gguf' });
     const B = createDownloadedModel({ id: 'B', engine: 'llama', filePath: '/m/b.gguf' });
     useAppStore.setState({ downloadedModels: [A, B] });
@@ -96,9 +96,11 @@ describe('BATCH 6 — model selection / activation / unload (real service + stor
     await activeModelService.loadTextModel('A');
     expect(getAppState().activeModelId).toBe('A');
 
-    // Loading a DIFFERENT model must unload the previous llama context, then load B.
+    // llama -> llama: the service must NOT release A up front (a refused switch would leave no
+    // model). It unloads the OTHER engine (LiteRT) and hands B to llama, which swaps A itself.
     await activeModelService.loadTextModel('B');
-    expect(mockLlm.unloadModel).toHaveBeenCalled();
+    expect(mockLlm.unloadModel).not.toHaveBeenCalled();
+    expect(mockLiteRT.unloadModel).toHaveBeenCalled();
     expect(mockLlm.loadModel).toHaveBeenLastCalledWith(B.filePath, undefined, { override: false });
     expect(getAppState().activeModelId).toBe('B');
   });

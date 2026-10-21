@@ -14,7 +14,7 @@ import { installImageZipPackage, sdMnnTree } from '../../harness/imageModelPacka
 
 const ZIP_NAME = 'AnythingV5.zip';
 const MODEL_NAME = 'Anything V5 (GPU)';
-const ZIP_SIZE = 900 * 1024 * 1024;
+const ZIP_SIZE = 400 * 1024 * 1024;
 
 describe('Image tab after a download', () => {
   it('keeps the downloaded image model listed, now marked downloaded', async () => {
@@ -28,7 +28,16 @@ describe('Image tab after a download', () => {
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === 'https://huggingface.co/api/models/xororz/sd-mnn/tree/main') {
-        return new Response(JSON.stringify(sdMnnTree(ZIP_NAME, ZIP_SIZE)), { status: 200 });
+        // The repo carries several models. The Image tab shows its picks once, in the picks row, and
+        // leaves every picked model out of the list below; picks are spread by size (smallest, the
+        // largest, and the one nearest their midpoint), so the model under test is sized to be the
+        // one the picks leave in the list.
+        return new Response(JSON.stringify([
+          ...sdMnnTree('AbsoluteReality.zip', 300 * 1024 * 1024),
+          ...sdMnnTree(ZIP_NAME, ZIP_SIZE),
+          ...sdMnnTree('ChilloutMix.zip', 600 * 1024 * 1024),
+          ...sdMnnTree('QteaMix.zip', 900 * 1024 * 1024),
+        ]), { status: 200 });
       }
       if (url === 'https://huggingface.co/api/models/xororz/sd-qnn/tree/main') {
         return new Response(JSON.stringify([]), { status: 200 });
@@ -50,7 +59,7 @@ describe('Image tab after a download', () => {
 
       // BEFORE: the model is listed and offers a download; it is not marked downloaded.
       await waitFor(() => expect(models.getByText(MODEL_NAME)).toBeTruthy(), { timeout: 4000 });
-      expect(models.queryByText(/downloaded successfully/)).toBeNull();
+      expect(models.queryByText(/is ready/)).toBeNull();
       expect(models.getByTestId('image-model-card-0-download')).toBeTruthy();
       expect(models.queryByTestId('image-model-card-0-downloaded')).toBeNull();
 
@@ -75,7 +84,7 @@ describe('Image tab after a download', () => {
       // AFTER: the same model is still on the Image tab, marked downloaded, with no download offer.
       await waitFor(() => expect(models.getByTestId('image-model-card-0-downloaded')).toBeTruthy(), { timeout: 4000 });
       expect(models.getAllByText(MODEL_NAME)).toHaveLength(1);
-      expect(models.getByText(/downloaded successfully/)).toBeTruthy();
+      expect(models.getByText(/is ready/)).toBeTruthy();
       expect(models.queryByTestId('image-model-card-0-download')).toBeNull();
       expect(models.queryByText('No models available')).toBeNull();
     } finally {

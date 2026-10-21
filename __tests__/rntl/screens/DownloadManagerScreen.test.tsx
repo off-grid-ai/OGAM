@@ -380,8 +380,10 @@ describe('DownloadManagerScreen', () => {
 
     const { getByText, queryByText } = render(<DownloadManagerScreen />);
     expect(getByText('test-model-q4.gguf')).toBeTruthy();
-    expect(getByText('test-author')).toBeTruthy();
-    expect(getByText(/4\.00 GB · Q4_K_M · Text/)).toBeTruthy();
+    // Cards say only what helps a choice: size and quant, no publisher name, no type label.
+    expect(getByText('4.00 GB · Q4_K_M')).toBeTruthy();
+    expect(queryByText('test-author')).toBeNull();
+    expect(queryByText(/· Text/)).toBeNull();
     expect(queryByText('No models downloaded yet')).toBeNull();
   });
 
@@ -402,10 +404,11 @@ describe('DownloadManagerScreen', () => {
     });
     mockStoreState(state);
 
-    const { getByText } = render(<DownloadManagerScreen />);
+    const { getByText, queryByText } = render(<DownloadManagerScreen />);
     expect(getByText('SD Turbo')).toBeTruthy();
-    expect(getByText('Image Generation')).toBeTruthy();
     expect(getByText('2.00 GB')).toBeTruthy();
+    // No type label repeated on every card.
+    expect(queryByText('Image Generation')).toBeNull();
   });
 
   it('renders active download with progress info', () => {
@@ -788,9 +791,11 @@ describe('DownloadManagerScreen', () => {
       },
     };
 
-    const { getByText } = render(<DownloadManagerScreen />);
+    const { getByText, queryByText } = render(<DownloadManagerScreen />);
     expect(getByText('bg-model.gguf')).toBeTruthy();
-    expect(getByText('author')).toBeTruthy();
+    expect(getByText(/Q4_K_M · Text/)).toBeTruthy();
+    // The publisher name is not repeated on the card.
+    expect(queryByText('author')).toBeNull();
   });
 
   it('renders active download entries from store', () => {

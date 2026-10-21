@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import Slider from '@react-native-community/slider';
+import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 
@@ -23,6 +24,10 @@ interface SliderSettingProps {
   testID?: string;
   /** Tighter rhythm for sliders inside the in-chat settings sheet. */
   compact?: boolean;
+  /** Offered when the setting has an automatic value the person replaced: one icon puts it back. */
+  onReset?: () => void;
+  /** Names the reset for screen readers, e.g. "Use automatic threads". */
+  resetLabel?: string;
 }
 
 /**
@@ -46,6 +51,8 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
   onChange,
   testID,
   compact = false,
+  onReset,
+  resetLabel = 'Use automatic value',
 }) => {
   const { colors } = useTheme();
   const dp = decimals ?? (step < 1 ? 2 : 0);
@@ -86,6 +93,18 @@ export const SliderSetting: React.FC<SliderSettingProps> = ({
     <View style={[styles.group, compact && styles.compactGroup]}>
       <View style={[styles.header, compact && styles.compactHeader]}>
         <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+        {onReset && !editing ? (
+          <TouchableOpacity
+            testID={testID ? `${testID}-reset` : undefined}
+            onPress={onReset}
+            accessibilityRole="button"
+            accessibilityLabel={resetLabel}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.reset}
+          >
+            <Icon name="rotate-ccw" size={14} color={colors.textMuted} />
+          </TouchableOpacity>
+        ) : null}
         {allowValueEditing && editing ? (
           <TextInput
             testID={testID ? `${testID}-input` : undefined}
@@ -168,6 +187,10 @@ const styles = StyleSheet.create({
   label: {
     ...TYPOGRAPHY.body,
     flexShrink: 1,
+    marginRight: SPACING.sm,
+  },
+  reset: {
+    marginLeft: 'auto',
     marginRight: SPACING.sm,
   },
   value: {
