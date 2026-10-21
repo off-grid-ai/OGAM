@@ -2,6 +2,7 @@ import RNFS from 'react-native-fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DownloadedModel, LlamaDownloadedModel, LiteRTDownloadedModel, ModelFile, ModelCredibility, ModelOrigin, ONNXImageModel } from '../../types';
 import { LMSTUDIO_AUTHORS, OFFICIAL_MODEL_AUTHORS, RECOMMENDED_MODELS, VERIFIED_QUANTIZERS } from '../../constants';
+import { withRemoteCatalog } from '../../stores/modelCatalogStore';
 import { getCuratedLiteRTEntry } from '../curatedLiteRTRegistry';
 import logger from '../../utils/logger';
 import { statFile } from '../../utils/fileStat';
@@ -260,7 +261,7 @@ function resolveDisplayName(
 ): string {
   if (curatedDisplayName) return curatedDisplayName;
   if (isLiteRTFileName(file.name)) return file.name.replace(/\.litertlm$/i, '');
-  const curated = RECOMMENDED_MODELS.find(model => model.id === modelId)
+  const curated = withRemoteCatalog('text', RECOMMENDED_MODELS).find(model => model.id === modelId)
     ?? CATALOG.find(entry => entry.id === modelId);
   if (curated) return curated.name;
   const basename = modelId.split('/').pop() || modelId;

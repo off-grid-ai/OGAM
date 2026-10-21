@@ -1,0 +1,104 @@
+name: Engine updates
+
+# Every Monday, moves the app's native engines (llama.rn, whisper.rn, ExecuTorch, LiteRT-LM; see
+# scripts/lib/engines.js) to their newest upstream releases and opens one PR for CI to test.
+# A phone app cannot download new native code (App Store 2.5.2, Google Play's policy), so a new
+# engine reaches people only in an app release; this keeps every beta on the newest engines.
+# A release that needs peer dependencies the app does not meet is held and listed in the PR.
+#
+# The PR is pushed with PRO_SUBMODULE_PAT, not GITHUB_TOKEN: a push made with GITHUB_TOKEN does
+# not start other workflows, so CI would never test the update.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: engine-updates
+  cancel-in-progress: false
+
+env:
+  BRANCH: chore/engine-updates
+
+jobs:
+  update:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.PRO_SUBMODULE_PAT }}
+
+      - name: Check out pro
+        uses: actions/checkout@v4
+        with:
+          repository: off-grid-ai/mobile-pro
+          token: ${{ secrets.PRO_SUBMODULE_PAT }}
+          path: pro
+          ref: main
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: 'npm'
+
+      - name: Check out the shared monorepo
+        uses: actions/checkout@v4
+        with:
+          repository: off-grid-ai/shared
+          token: ${{ secrets.PRO_SUBMODULE_PAT }}
+          path: _shared
+          ref: main
+          persist-credentials: false
+
+      - name: Put shared beside this checkout
+        run: |
+          rm -rf ../shared
+          mv _shared ../shared
+          npm --prefix ../shared ci
+          for p in sync rag models speech ui; do npm --prefix ../shared/packages/$p run build; done
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install CocoaPods 1.16.2
+        # The version ios/Podfile.lock was written with, so the lock only changes where an engine moved.
+        run: sudo gem install cocoapods -v 1.16.2
+
+      - name: Move engines to their newest releases
+        id: engines
+        run: |
+          node scripts/update-engines.js --pods --summary "$RUNNER_TEMP/engines.md" | tee "$RUNNER_TEMP/engines.json"
+          git status --porcelain -- package.json package-lock.json ios/Podfile.lock android/app/build.gradle > "$RUNNER_TEMP/changed.txt"
+          if [ -s "$RUNNER_TEMP/changed.txt" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; else echo "changed=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Open or update the engine PR
+        if: ${{ steps.engines.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.PRO_SUBMODULE_PAT }}
+        run: |
+          TITLE="Engines: $(node -e 'const r=require(process.argv[1]);console.log(r.changed.map(c=>`${c.id} ${c.from} → ${c.to}`).join(", "))' "$RUNNER_TEMP/engines.json")"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$BRANCH"
+          git add package.json package-lock.json ios/Podfile.lock android/app/build.gradle
+          git commit -m "$TITLE"
+          git push --force origin "$BRANCH"
+          if gh pr view "$BRANCH" --json state -q .state 2>/dev/null | grep -q OPEN; then
+            gh pr edit "$BRANCH" --title "$TITLE" --body-file "$RUNNER_TEMP/engines.md"
+          else
+            gh pr create --base main --head "$BRANCH" --title "$TITLE" --body-file "$RUNNER_TEMP/engines.md"
+          fi
+
+      - name: Report
+        if: always()
+        run: |
+          [ -f "$RUNNER_TEMP/engines.md" ] && cat "$RUNNER_TEMP/engines.md" >> "$GITHUB_STEP_SUMMARY" || true

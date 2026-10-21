@@ -1,5 +1,6 @@
 import { BuildInfo } from 'llama.rn';
-import { CATALOG, PHONE_FIT_BUDGET, type ModelEntry } from '@offgrid/models';
+import { CATALOG, PHONE_FIT_BUDGET, type MobileTextCatalogModel, type ModelEntry } from '@offgrid/models';
+import { registerBundledCatalog } from '../stores/modelCatalogStore';
 
 // Model size recommendations based on device RAM
 export const MODEL_RECOMMENDATIONS = {
@@ -44,19 +45,21 @@ const CATALOG_ORG_TO_FILTER_KEY: Record<string, string> = {
   Mistral: 'mistralai',
 };
 
-export const RECOMMENDED_MODELS = CATALOG.filter(offeredOnPhone).map(entry => ({
+export const RECOMMENDED_MODELS: MobileTextCatalogModel[] = CATALOG.filter(offeredOnPhone).map(entry => ({
   id: entry.id,
   name: entry.name,
   params: entry.params ?? 0,
   description: entry.description ?? '',
   minRam: phoneMinRamGb(entry),
-  maxRam: undefined as number | undefined,
-  type: entry.kind === 'vision' ? ('vision' as const) : ('text' as const),
+  maxRam: undefined,
+  type: entry.kind === 'vision' ? 'vision' : 'text',
   org: CATALOG_ORG_TO_FILTER_KEY[entry.org ?? ''] ?? entry.org ?? entry.id.split('/')[0],
   isNew: entry.isNew,
   activeParams: entry.activeParams,
   nonCommercial: entry.nonCommercial,
 }));
+// The bundled fallback: screens read it merged with the remote catalog (withRemoteCatalog('text', …)).
+registerBundledCatalog('text', RECOMMENDED_MODELS);
 
 // Trending model families — one best-fit per family is shown as "trending"
 export const TRENDING_FAMILIES: Record<string, string[]> = {

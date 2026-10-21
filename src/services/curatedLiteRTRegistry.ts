@@ -1,31 +1,22 @@
 import { DownloadedModel, ModelFile } from '../types';
+import type { MobileLiteRTCatalogEntry } from '@offgrid/models';
 import { fileExceedsBudget } from './memoryBudget';
+import { registerBundledCatalog, useWithRemoteCatalog, withRemoteCatalog } from '../stores/modelCatalogStore';
 
 // Synthetic parent id for the curated LiteRT models. Used both as the model id
 // in the ModelsScreen browser and as the download id in onboarding so a model
 // downloaded in either place resolves to the same `${LITERT_PARENT_ID}/${file}`.
 export const LITERT_PARENT_ID = 'offgrid/litert-recommended';
 
-export interface CuratedLiteRTEntry {
-  fileName: string;
-  hfRepoId: string;
-  commitHash: string;
-  sizeBytes: number;
-  displayName: string;
-  highlight: string;
-  liteRTVision: boolean;
-  liteRTAudio: boolean;
-  /** Supported context for this pinned artifact, not the default load budget. */
-  maxContextTokens?: number;
-  /**
-   * Warning COPY to surface before downloading this file — DATA only, not a
-   * device-blind "always warn" flag. Whether the warning actually shows is a
-   * device-aware decision made by the caller (fileExceedsBudget: the file's size
-   * vs this device's RAM budget). A device that comfortably fits the model shows
-   * no warning; one that doesn't warns with this copy.
-   */
-  confirmDownload?: { title: string; message: string };
-}
+/**
+ * The shared catalog shape (@offgrid/models). `maxContextTokens` is the supported context for the
+ * pinned artifact, not the default load budget. `confirmDownload` is warning COPY to surface before
+ * downloading this file — DATA only, not a device-blind "always warn" flag. Whether the warning
+ * actually shows is a device-aware decision made by the caller (fileExceedsBudget: the file's size
+ * vs this device's RAM budget). A device that comfortably fits the model shows no warning; one that
+ * doesn't warns with this copy.
+ */
+export type CuratedLiteRTEntry = MobileLiteRTCatalogEntry;
 
 export const CURATED_LITERT_ENTRIES: readonly CuratedLiteRTEntry[] = [
   {
@@ -58,14 +49,24 @@ export const CURATED_LITERT_ENTRIES: readonly CuratedLiteRTEntry[] = [
     },
   },
 ];
+registerBundledCatalog('litert', CURATED_LITERT_ENTRIES);
 
-const CURATED_LITERT_INDEX: Map<string, CuratedLiteRTEntry> = new Map(
-  CURATED_LITERT_ENTRIES.map(e => [e.fileName, e]),
-);
+/** The bundled entries merged with the remote catalog. Read these, not CURATED_LITERT_ENTRIES. */
+const getCuratedLiteRTEntries = () => withRemoteCatalog('litert', CURATED_LITERT_ENTRIES);
+export const useCuratedLiteRTEntries = () => useWithRemoteCatalog('litert', CURATED_LITERT_ENTRIES);
+
+// Rebuilt when the merged list changes (a remote catalog update).
+let indexedEntries: readonly CuratedLiteRTEntry[] | null = null;
+let curatedLiteRTIndex = new Map<string, CuratedLiteRTEntry>();
 
 export function getCuratedLiteRTEntry(fileName: string | undefined): CuratedLiteRTEntry | undefined {
   if (!fileName) return undefined;
-  return CURATED_LITERT_INDEX.get(fileName);
+  const entries = getCuratedLiteRTEntries();
+  if (entries !== indexedEntries) {
+    indexedEntries = entries;
+    curatedLiteRTIndex = new Map(entries.map(e => [e.fileName, e]));
+  }
+  return curatedLiteRTIndex.get(fileName);
 }
 
 /** Do not apply a catalog limit to an unrelated import with the same filename. */
@@ -108,8 +109,8 @@ export function buildCuratedLiteRTUrl(entry: CuratedLiteRTEntry): string {
 // ModelFile-shaped view of the curated registry, ready to feed the download
 // pipeline. The registry is the single source of truth — both the ModelsScreen
 // browser and the onboarding download screen build their cards from this.
-export function buildCuratedLiteRTFiles(): ModelFile[] {
-  return CURATED_LITERT_ENTRIES.map(e => ({
+export function buildCuratedLiteRTFiles(entries: readonly CuratedLiteRTEntry[] = getCuratedLiteRTEntries()): ModelFile[] {
+  return entries.map(e => ({
     name: e.fileName,
     size: e.sizeBytes,
     // Repurpose the quant chip slot as an engine label for curated LiteRT

@@ -1,5 +1,6 @@
 import { useWhisperStore } from '../stores/whisperStore';
 import { WHISPER_MODELS } from '../services/whisperService';
+import { useWithRemoteCatalog } from '../stores/modelCatalogStore';
 import { selectedRemoteModelName } from '../services/remoteModelSelection';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
 
@@ -16,6 +17,7 @@ export function useTranscriptionModelSetting(): {
   isRemote: boolean;
 } {
   const modelId = useWhisperStore(state => state.downloadedModelId);
+  const whisperModels = useWithRemoteCatalog('transcription', WHISPER_MODELS);
   const activeServer = useRemoteServerStore(state =>
     state.servers.find(
       server => server.id === state.activeRemoteMediaServerIds.transcription,
@@ -31,7 +33,7 @@ export function useTranscriptionModelSetting(): {
       : modelId,
     modelName:
       remoteModelName ??
-      WHISPER_MODELS.find(model => model.id === modelId)?.name ??
+      whisperModels.find(model => model.id === modelId)?.name ??
       null,
     isRemote: remoteModelName !== null,
   };

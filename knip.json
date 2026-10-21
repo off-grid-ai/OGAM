@@ -3,7 +3,8 @@
   "entry": [
     "App.tsx",
     "__tests__/**/*.{ts,tsx}",
-    "pro/**/*.{ts,tsx}"
+    "pro/**/*.{ts,tsx}",
+    "scripts/lib/engines.js"
   ],
   "project": [
     "src/**/*.{ts,tsx}",

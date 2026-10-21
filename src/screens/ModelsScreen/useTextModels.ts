@@ -4,7 +4,9 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { showAlert, hideAlert, AlertState } from '../../components/CustomAlert';
+import type { MobileTextCatalogModel } from '@offgrid/models';
 import { RECOMMENDED_MODELS, TRENDING_FAMILIES, MODEL_ORGS } from '../../constants';
+import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useAppStore } from '../../stores';
 import { fileExceedsBudget } from '../../services/memoryBudget';
 import { useDownloadStore } from '../../stores/downloadStore';
@@ -58,7 +60,7 @@ function matchesOrgFilter(model: ModelInfo, orgs: string[]): boolean {
 /** A Q4_K_M download is about 4.8 bits per weight: 0.6 GB per billion parameters. */
 const Q4_BYTES_PER_BILLION_PARAMS = 0.6e9;
 
-function mapCuratedModel(m: typeof RECOMMENDED_MODELS[number], details: Record<string, ModelInfo>): ModelInfo {
+function mapCuratedModel(m: MobileTextCatalogModel, details: Record<string, ModelInfo>): ModelInfo {
   const fetched = details[m.id];
   const curatedFields = {
     modelType: m.type, paramCount: m.params, minRamGB: m.minRam,
@@ -69,9 +71,9 @@ function mapCuratedModel(m: typeof RECOMMENDED_MODELS[number], details: Record<s
   return { id: m.id, name: m.name, author: m.id.split('/')[0], description: m.description, downloads: -1, likes: 0, tags: [], lastModified: '', files: [], ...curatedFields };
 }
 
-async function fetchRecommendedModelDetails(): Promise<Record<string, ModelInfo>> {
+async function fetchRecommendedModelDetails(recommended: MobileTextCatalogModel[]): Promise<Record<string, ModelInfo>> {
   const details: Record<string, ModelInfo> = {};
-  await Promise.allSettled(RECOMMENDED_MODELS.map(async (m) => {
+  await Promise.allSettled(recommended.map(async (m) => {
     try { details[m.id] = await huggingFaceService.getModelDetails(m.id); }
     catch (e) { logger.warn(`[ModelsScreen] Failed to fetch details for ${m.id}:`, e); }
   }));
@@ -125,6 +127,7 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
   const [filterState, setFilterState] = useState<FilterState>(initialFilterState);
   const [textFiltersVisible, setTextFiltersVisible] = useState(false);
   const [recommendedModelDetails, setRecommendedModelDetails] = useState<Record<string, ModelInfo>>({});
+  const recommended = useWithRemoteCatalog('text', RECOMMENDED_MODELS);
   const repairingVisionIds = useDownloadStore(s => s.repairingVisionIds);
   const setRepairingVision = useDownloadStore(s => s.setRepairingVision);
 
@@ -140,9 +143,13 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
 
   useEffect(() => {
     let cancelled = false;
-    fetchRecommendedModelDetails().then(d => { if (!cancelled) setRecommendedModelDetails(d); });
+    // Details only enrich the cards: a model whose details fail keeps its catalog name, size and
+    // description (recommendedAsModelInfo), so a failure is logged, not shown.
+    fetchRecommendedModelDetails(recommended)
+      .then(d => { if (!cancelled) setRecommendedModelDetails(d); })
+      .catch(e => logger.warn('[ModelsScreen] Failed to load recommended model details:', e));
     return () => { cancelled = true; };
-  }, []);
+  }, [recommended]);
 
   useFocusEffect(
     useCallback(() => {
@@ -343,7 +350,7 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
 
   const recommendedAsModelInfo = useMemo((): ModelInfo[] => {
     const maxParams = deviceRecommendation.maxParameters;
-    const models = RECOMMENDED_MODELS
+    const models = recommended
       .filter(m => m.params <= maxParams && (!m.maxRam || ramGB <= m.maxRam))
       .filter(m => {
         if (filterState.type !== 'all' && m.type !== filterState.type) return false;
@@ -361,18 +368,18 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
     // the editorial 'recommended' sort — explicit sorts (size/downloads/…) are honored.
     if (filterState.sort !== 'recommended') return sorted;
     return [...sorted].sort((a, b) => Number(modelSupportsNpuGpu(b)) - Number(modelSupportsNpuGpu(a)));
-  }, [deviceRecommendation.maxParameters, filterState.type, filterState.orgs, filterState.size, filterState.sort, recommendedModelDetails, ramGB]);
+  }, [recommended, deviceRecommendation.maxParameters, filterState.type, filterState.orgs, filterState.size, filterState.sort, recommendedModelDetails, ramGB]);
 
   const trendingAsModelInfo = useMemo((): ModelInfo[] => {
     const maxParams = deviceRecommendation.maxParameters;
     // Pick the best-fit per family using the same bestFitScore used for "for you" recommendations
     return Object.values(TRENDING_FAMILIES)
-      .map(ids => RECOMMENDED_MODELS
+      .map(ids => recommended
         .filter(m => ids.includes(m.id) && m.params <= maxParams && (!m.maxRam || ramGB <= m.maxRam))
         .map(m => mapCuratedModel(m, recommendedModelDetails))
         .sort((a, b) => bestFitScore(a, ramGB) - bestFitScore(b, ramGB))[0])
       .filter((m): m is ModelInfo => Boolean(m));
-  }, [deviceRecommendation.maxParameters, recommendedModelDetails, ramGB]);
+  }, [recommended, deviceRecommendation.maxParameters, recommendedModelDetails, ramGB]);
 
   return {
     searchQuery, setSearchQuery,

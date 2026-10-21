@@ -1,4 +1,6 @@
+import type { MobileCoreMLCatalogRepo } from '@offgrid/models';
 import logger from '../utils/logger';
+import { registerBundledCatalog, withRemoteCatalog } from '../stores/modelCatalogStore';
 interface CoreMLModelFile {
   path: string;
   relativePath: string;
@@ -34,13 +36,7 @@ interface HFTreeEntry {
 // NOTE: SDXL (apple/coreml-stable-diffusion-xl-base-ios) is intentionally NOT offered on iOS.
 // Its Core ML runtime footprint is ~7 GB of DIRTY (un-pageable) memory, which jetsams even a
 // 12 GB iPhone 17 Pro Max mid-load. The 512×512 palettized SD models are the ceiling we ship.
-interface RepoEntry {
-  repo: string;
-  name: string;
-  description: string;
-  /** 'split_einsum' (default, ANE) or 'original' (CPU/GPU, lower peak memory) */
-  variant?: 'original';
-}
+type RepoEntry = MobileCoreMLCatalogRepo;
 
 const REPOS: RepoEntry[] = [
   {
@@ -76,8 +72,11 @@ const REPOS: RepoEntry[] = [
     description: 'Full precision, 512×512',
   },
 ];
+registerBundledCatalog('coreml', REPOS);
 
 let cachedModels: CoreMLImageModel[] | null = null;
+// The repo list the cache was built from: a remote catalog update makes a new list and refetches.
+let cachedRepos: RepoEntry[] | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -198,14 +197,15 @@ async function fetchModelFromRepo(
 export async function fetchAvailableCoreMLModels(
   forceRefresh = false,
 ): Promise<CoreMLImageModel[]> {
-  if (!forceRefresh && cachedModels && Date.now() - cacheTimestamp < CACHE_TTL) {
+  const repos = withRemoteCatalog('coreml', REPOS);
+  if (!forceRefresh && cachedModels && cachedRepos === repos && Date.now() - cacheTimestamp < CACHE_TTL) {
     return cachedModels;
   }
 
   const models: CoreMLImageModel[] = [];
 
   const results = await Promise.allSettled(
-    REPOS.map(async (repoInfo) => {
+    repos.map(async (repoInfo) => {
       const model = await fetchModelFromRepo(repoInfo);
       if (model) {
         models.push(model);
@@ -215,12 +215,13 @@ export async function fetchAvailableCoreMLModels(
 
   results.forEach((r, i) => {
     if (r.status === 'rejected') {
-      console.warn(`[CoreMLBrowser] Failed to fetch ${REPOS[i].repo}:`, r.reason);
-      logger.warn(`[CoreMLBrowser] Failed to fetch ${REPOS[i].repo}:`, r.reason);
+      console.warn(`[CoreMLBrowser] Failed to fetch ${repos[i].repo}:`, r.reason);
+      logger.warn(`[CoreMLBrowser] Failed to fetch ${repos[i].repo}:`, r.reason);
     }
   });
 
   cachedModels = models;
+  cachedRepos = repos;
   cacheTimestamp = Date.now();
   return models;
 }

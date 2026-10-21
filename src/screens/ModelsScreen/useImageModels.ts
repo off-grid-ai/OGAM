@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { AlertState } from '../../components/CustomAlert';
 import { useAppStore } from '../../stores';
 import { useDownloadStore } from '../../stores/downloadStore';
+import { useModelCatalogStore } from '../../stores/modelCatalogStore';
 import { makeImageModelKey } from '../../utils/modelKey';
 import { modelManager, hardwareService, backgroundDownloadService } from '../../services';
 import { fetchAvailableModels, HFImageModel, guessStyle } from '../../services/huggingFaceModelBrowser';
@@ -71,6 +72,13 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
       setHfModelsLoading(false);
     }
   }, []);
+
+  // A remote catalog update can add a Core ML repo: reload a list already shown.
+  const remoteCoreML = useModelCatalogStore(s => s.remote.coreml);
+  useEffect(() => {
+    if (Platform.OS === 'ios' && availableHFModels.length > 0) loadHFModels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteCoreML]);
 
   useEffect(() => {
     const init = async () => {

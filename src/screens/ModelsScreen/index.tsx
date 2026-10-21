@@ -1,5 +1,5 @@
-import React, { useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import { MainTabParamList } from '../../navigation/types';
@@ -16,6 +16,8 @@ import { TranscriptionModelsTab } from './TranscriptionModelsTab';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import type { ModelTab } from './types';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { checkForNewModels, useModelCatalogStore, withRemoteCatalog, type CatalogCheckResult } from '../../stores/modelCatalogStore';
+import { CatalogCheckSheet } from '../../components/models/CatalogCheckSheet';
 
 const MODEL_TABS: ReadonlyArray<{ key: ModelTab; label: string; testID?: string }> = [
   { key: 'text', label: 'Text' },
@@ -52,6 +54,10 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
   // show an upsell so users can see what Pro adds.
   const VoiceModelsPanel = useSlot(SLOTS.modelsScreenVoiceTab);
   const route = useRoute<RouteProp<MainTabParamList, 'ModelsTab'>>();
+  const isCheckingCatalog = useModelCatalogStore(s => s.isChecking);
+  // What the last "check for new models" found, shown in a sheet until dismissed.
+  const [catalogResult, setCatalogResult] = useState<CatalogCheckResult | null>(null);
+  const handleCheckForNewModels = () => { checkForNewModels().then(setCatalogResult).catch(() => setCatalogResult({ status: 'failed' })); };
 
   // Reset to model list view when tab loses focus (e.g. user switches away)
   // vm.setSelectedModel / vm.setModelFiles are useState setters — stable across renders.
@@ -71,7 +77,7 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
       }
       if (repairModelId && !didAutoSelect.current) {
         didAutoSelect.current = true;
-        const match = RECOMMENDED_MODELS.find(m => m.id === repairModelId);
+        const match = withRemoteCatalog('text', RECOMMENDED_MODELS).find(m => m.id === repairModelId);
         if (match) vm.handleSelectModel({ id: match.id, name: match.name, author: match.id.split('/')[0], description: match.description, modelType: match.type, paramCount: match.params, minRamGB: match.minRam, downloads: 0, likes: 0, tags: [], lastModified: '', files: [] });
       }
       return () => {
@@ -97,19 +103,35 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
             title="Models"
             variant="tab"
             right={
-              <TouchableOpacity
-                style={styles.downloadManagerButton}
-                hitSlop={SPACING.md}
-                onPress={() => vm.navigation.navigate('DownloadManager')}
-                testID="downloads-icon"
-              >
-                <Icon name="download" size={20} color={colors.text} />
-                {vm.downloadBadgeCount > 0 && (
-                  <View style={styles.downloadBadge}>
-                    <Text testID="downloads-badge-count" style={styles.downloadBadgeText}>{vm.downloadBadgeCount}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
+              <View style={headerStyles.actions}>
+                <TouchableOpacity
+                  style={styles.downloadManagerButton}
+                  hitSlop={SPACING.md}
+                  onPress={handleCheckForNewModels}
+                  disabled={isCheckingCatalog}
+                  accessibilityRole="button"
+                  accessibilityLabel="Check for new models"
+                  accessibilityState={{ busy: isCheckingCatalog }}
+                  testID="check-new-models-button"
+                >
+                  {isCheckingCatalog
+                    ? <ActivityIndicator size="small" color={colors.text} />
+                    : <Icon name="refresh-cw" size={20} color={colors.text} />}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.downloadManagerButton}
+                  hitSlop={SPACING.md}
+                  onPress={() => vm.navigation.navigate('DownloadManager')}
+                  testID="downloads-icon"
+                >
+                  <Icon name="download" size={20} color={colors.text} />
+                  {vm.downloadBadgeCount > 0 && (
+                    <View style={styles.downloadBadge}>
+                      <Text testID="downloads-badge-count" style={styles.downloadBadgeText}>{vm.downloadBadgeCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
             }
           />
         </HideWhenEmbedded>
@@ -255,6 +277,7 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
       )}
 
       <CustomAlert {...vm.alertState} onClose={() => vm.setAlertState(hideAlert())} />
+      <CatalogCheckSheet result={catalogResult} onClose={() => setCatalogResult(null)} />
     </>
   );
 
@@ -263,6 +286,10 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
 
 const collapsedStyle = StyleSheet.create({
   hidden: { height: 0, overflow: 'hidden' },
+});
+
+const headerStyles = StyleSheet.create({
+  actions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
 });
 
 const embeddedStyles = StyleSheet.create({

@@ -1,6 +1,7 @@
+import type { MobileTextCatalogModel } from '@offgrid/models';
 import { RECOMMENDED_MODELS, TRENDING_FAMILIES } from '../constants';
 
-type RecommendedModel = (typeof RECOMMENDED_MODELS)[number];
+type RecommendedModel = MobileTextCatalogModel;
 
 /**
  * Fit score for a model on a device: ideal ≈ 40% of RAM, penalised above 75% (too
@@ -21,17 +22,23 @@ function fitsDevice(m: RecommendedModel, deviceRamGB: number): boolean {
 /**
  * The curated recommended models that FIT this device, in editorial order. ONE place
  * both onboarding (which shows this filtered list) and the Models screen filter from —
- * no parallel RAM-filter implementations.
+ * no parallel RAM-filter implementations. The caller passes the catalog (bundled plus remote).
  */
-export function recommendedModelsForDevice(deviceRamGB: number): RecommendedModel[] {
-  return RECOMMENDED_MODELS.filter(m => fitsDevice(m, deviceRamGB));
+export function recommendedModelsForDevice(
+  deviceRamGB: number,
+  catalog: readonly RecommendedModel[] = RECOMMENDED_MODELS,
+): RecommendedModel[] {
+  return catalog.filter(m => fitsDevice(m, deviceRamGB));
 }
 
 /** One best-fit model id per trending family for this device (the "trending" pills). */
-export function trendingModelIdsForDevice(deviceRamGB: number): Set<string> {
+export function trendingModelIdsForDevice(
+  deviceRamGB: number,
+  catalog: readonly RecommendedModel[] = RECOMMENDED_MODELS,
+): Set<string> {
   const ids = new Set<string>();
   for (const familyIds of Object.values(TRENDING_FAMILIES)) {
-    const best = RECOMMENDED_MODELS
+    const best = catalog
       .filter(m => familyIds.includes(m.id) && fitsDevice(m, deviceRamGB))
       .sort((a, b) => ramFitScore(a.minRam, deviceRamGB) - ramFitScore(b.minRam, deviceRamGB))[0];
     if (best) ids.add(best.id);
