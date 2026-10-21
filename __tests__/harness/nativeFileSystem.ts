@@ -24,6 +24,8 @@ export interface NativeFileSystemBoundary {
   serveRemoteFile(url: string, file: RemoteFile): RemoteTransfer;
   /** Paths of the files currently inside `directory` (empty when it does not exist). */
   listFiles(directory: string): string[];
+  /** Free space RNFS.getFSInfo reports (default 100 GB, restored on reset()). */
+  setFreeBytes(bytes: number): void;
 }
 
 /** What a remote host answers to a download. */
@@ -105,6 +107,8 @@ export function createNativeFileSystemBoundary(
   const remoteFiles = new Map<string, RemoteFile & { parked: (() => void) | null }>();
   const activeDownloads = new Map<number, () => void>();
   let nextJobId = 1;
+  const DEFAULT_FREE_BYTES = 100 * 1024 * 1024 * 1024;
+  let freeBytes = DEFAULT_FREE_BYTES;
   let restoreModuleMocks = (): void => {};
 
   function normalize(path: string): string {
@@ -121,6 +125,7 @@ export function createNativeFileSystemBoundary(
     reportedFileSizes.clear();
     remoteFiles.clear();
     activeDownloads.clear();
+    freeBytes = DEFAULT_FREE_BYTES;
     for (const directory of [
       DocumentDirectoryPath,
       CachesDirectoryPath,
@@ -285,7 +290,7 @@ export function createNativeFileSystemBoundary(
         .digest('hex'),
     ),
     getFSInfo: jest.fn(async () => ({
-      freeSpace: 100 * 1024 * 1024 * 1024,
+      freeSpace: freeBytes,
       totalSpace: 128 * 1024 * 1024 * 1024,
     })),
     downloadFile: jest.fn((request?: Record<string, unknown>) => {
@@ -402,6 +407,9 @@ export function createNativeFileSystemBoundary(
         held: () => entry.parked !== null,
         release: () => entry.parked?.(),
       };
+    },
+    setFreeBytes: (bytes: number) => {
+      freeBytes = bytes;
     },
     listFiles: (directory: string) => {
       const normalized = normalize(directory);
