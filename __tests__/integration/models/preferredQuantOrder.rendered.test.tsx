@@ -75,7 +75,7 @@ async function openDetailFileOrder(opts: { platform: 'android' | 'ios'; files?: 
   await waitFor(() => expect(view.getByTestId('model-detail-screen')).toBeTruthy(), { timeout: 4000 });
   // The sizes in words: the Recommended card names the preferred file.
   const recommendedCard = await waitFor(() => {
-    const cards = view.queryAllByTestId(/^file-card-\d+$/).filter(card => within(card).queryByText(/· Recommended/));
+    const cards = view.queryAllByTestId(/^file-card-\d+$/).filter(fileCard => within(fileCard).queryByText(/· Recommended/));
     expect(cards).toHaveLength(1);
     return cards[0];
   }, { timeout: 4000 });
