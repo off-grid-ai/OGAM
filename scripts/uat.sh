@@ -66,6 +66,14 @@ SHARED_DIR="$ROOT_DIR/../shared"
 git -C "$SHARED_DIR" fetch --no-recurse-submodules --quiet origin main || error "Could not refresh ../shared origin/main"
 SHARED_SHA=$(git -C "$SHARED_DIR" rev-parse HEAD)
 [ "$SHARED_SHA" = "$(git -C "$SHARED_DIR" rev-parse origin/main)" ] || error "../shared HEAD must equal origin/main. Update ../shared before building."
+# A beta should ship the newest engines (an app cannot download new native code, so a release is
+# the only way one reaches people). Warn, never block: the weekly engine PR is where they move.
+if ENGINE_REPORT=$(node scripts/update-engines.js --check 2>/dev/null); then
+  NEWER=$(node -e 'const r=JSON.parse(process.argv[1]);console.log([...r.changed,...r.held].map(c=>`${c.id} ${c.from} → ${c.to}`).join(", "))' "$ENGINE_REPORT")
+  [ -z "$NEWER" ] || warn "Newer engines exist and are not in this beta: $NEWER (see scripts/update-engines.js)"
+else
+  warn "Could not check for newer engines"
+fi
 [ "$DO_ANDROID" = 0 ] || { [ -f android/gradlew ] || error "android/gradlew not found"; [ -n "${ANDROID_HOME:-}" ] || error "ANDROID_HOME not set"; }
 [ "$DO_IOS" = 0 ]     || command -v xcodebuild >/dev/null || error "xcodebuild not installed"
 
