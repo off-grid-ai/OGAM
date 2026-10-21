@@ -2,9 +2,9 @@ import RNFS from 'react-native-fs';
 import { formatFileSize } from '@offgrid/models';
 
 /** Room kept free past a download, so the phone itself never runs out mid-write. */
-export const FREE_SPACE_MARGIN_BYTES = 500 * 1024 * 1024;
+const FREE_SPACE_MARGIN_BYTES = 500 * 1024 * 1024;
 
-export class NotEnoughSpaceError extends Error {
+class NotEnoughSpaceError extends Error {
   readonly code = 'disk_full';
   constructor(readonly neededBytes: number, readonly freeBytes: number) {
     super(`Not enough space. This needs ${formatFileSize(neededBytes)} and your phone has ${formatFileSize(freeBytes)} free. Free up space in Settings → Storage, then try again.`);

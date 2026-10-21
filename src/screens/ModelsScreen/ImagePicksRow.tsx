@@ -17,7 +17,7 @@ export function imageFamilyName(displayName: string): string {
 }
 
 /** One candidate per family: the variant this phone is recommended, else the first listed. */
-export function oneVariantPerFamily<T extends { displayName: string }>(models: readonly T[], isRecommended: (model: T) => boolean): T[] {
+function oneVariantPerFamily<T extends { displayName: string }>(models: readonly T[], isRecommended: (model: T) => boolean): T[] {
   const families = new Map<string, T>();
   for (const model of models) {
     const family = imageFamilyName(model.displayName);

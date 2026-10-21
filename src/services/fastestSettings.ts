@@ -26,7 +26,7 @@ import { activeModelService } from './activeModelService';
  */
 
 /** The whole benchmark stops after this long; a backend not reached by then counts as failed. */
-export const BENCHMARK_BUDGET_MS = 30_000;
+const BENCHMARK_BUDGET_MS = 30_000;
 /** A short prompt read and a short generation: enough to rank backends, cheap enough to repeat. */
 const BENCH_PROMPT_TOKENS = 64;
 const BENCH_GENERATED_TOKENS = 16;
@@ -102,7 +102,7 @@ async function benchOne(modelPath: string, backend: MobileBackend, fileType: num
  * Measure each backend the device class may run, within the budget. The text model is unloaded
  * first and the measuring runs under the residency lock, so no other load can overlap it.
  */
-export async function benchmarkBackends(
+async function benchmarkBackends(
   modelPath: string,
   backends: readonly MobileBackend[],
   signal?: AbortSignal,

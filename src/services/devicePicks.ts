@@ -4,13 +4,13 @@ import type { ModelFile, ModelInfo } from '../types';
 
 /** The llama.cpp build inside this app's engine (llama.rn), or undefined when unknown. A catalog
  *  model that needs a newer build is never offered or picked. */
-export function engineLlamaBuild(): number | undefined {
+function engineLlamaBuild(): number | undefined {
   const build = Number.parseInt(String(BuildInfo?.number ?? ''), 10);
   return Number.isFinite(build) ? build : undefined;
 }
 
 /** A catalog model this phone may offer: not replaced by a newer one, and loadable by its engine. */
-export function isOfferable(entry: Pick<ModelEntry, 'supersededBy' | 'minLlamaBuild'>): boolean {
+function isOfferable(entry: Pick<ModelEntry, 'supersededBy' | 'minLlamaBuild'>): boolean {
   if (entry.supersededBy) return false;
   // An unknown engine build never offers a model that needs a specific newer one.
   return !(entry.minLlamaBuild && entry.minLlamaBuild > (engineLlamaBuild() ?? 0));
@@ -45,7 +45,7 @@ function chatEntries(): ModelEntry[] {
 }
 
 /** A catalog entry as the phone's download request: the primary weights plus the projector. */
-export function catalogEntryToDownload(entry: ModelEntry): { model: ModelInfo; file: ModelFile } | null {
+function catalogEntryToDownload(entry: ModelEntry): { model: ModelInfo; file: ModelFile } | null {
   const primary = entry.files.find(file => file.role === 'primary') ?? entry.files.find(file => file.role === undefined);
   if (!primary?.sizeBytes) return null;
   const mmproj = entry.files.find(file => file.role === 'mmproj');

@@ -11,9 +11,9 @@ import { hashString } from './llmHelpers';
  * edited or regenerated chat costs a partial re-read, never a wrong answer. Files are bounded
  * (KV state runs to hundreds of MB): only the most recent few are kept.
  */
-export const MAX_SAVED_SESSIONS = 3;
+const MAX_SAVED_SESSIONS = 3;
 
-export function kvSessionPath(dir: string, modelPath: string, conversationId: string): string {
+function kvSessionPath(dir: string, modelPath: string, conversationId: string): string {
   const key = hashString(`${modelPath}\n${conversationId}`);
   return `${dir}/kv-${key}.bin`;
 }

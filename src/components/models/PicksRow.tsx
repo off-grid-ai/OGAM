@@ -12,7 +12,7 @@ import type { PickSlot } from '../../services/devicePicks';
  * Fast, Balanced and Best for this phone, at the top of a models tab: three small cards side by
  * side with the app's card depth, so the picks take one short row and the list starts high.
  */
-export const PICK_LABELS: Record<PickSlot, string> = {
+const PICK_LABELS: Record<PickSlot, string> = {
   fast: 'Fast',
   balanced: 'Balanced',
   best: 'Best',
