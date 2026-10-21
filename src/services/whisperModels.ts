@@ -7,9 +7,12 @@
  * keeps working unchanged.
  */
 
+import type { MobileWhisperCatalogModel } from '@offgrid/models';
+import { registerBundledCatalog } from '../stores/modelCatalogStore';
+
 const GGML_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main';
 
-export const WHISPER_MODELS = [
+export const WHISPER_MODELS: MobileWhisperCatalogModel[] = [
   // ── English-only ──────────────────────────────────────────────────────────
   { id: 'tiny.en',   name: 'Tiny',   size: 75,   lang: 'en',    url: `${GGML_BASE}/ggml-tiny.en.bin`,   description: 'Fastest, English only' },
   { id: 'base.en',   name: 'Base',   size: 142,  lang: 'en',    url: `${GGML_BASE}/ggml-base.en.bin`,   description: 'Better accuracy, English only' },
@@ -23,6 +26,8 @@ export const WHISPER_MODELS = [
   { id: 'large-v3-turbo', name: 'Large v3 Turbo',  size: 809,  lang: 'multi', url: `${GGML_BASE}/ggml-large-v3-turbo.bin`, description: 'Fast + accurate, distilled large, 99 languages' },
   { id: 'large-v3',       name: 'Large v3',         size: 1550, lang: 'multi', url: `${GGML_BASE}/ggml-large-v3.bin`,       description: 'Best quality, 99 languages, ~3 GB RAM' },
 ];
+// The bundled fallback: read it merged with the remote catalog (withRemoteCatalog('transcription', …)).
+registerBundledCatalog('transcription', WHISPER_MODELS);
 
 /**
  * Normalize a raw Whisper transcription: strip the non-speech markers Whisper

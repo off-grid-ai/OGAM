@@ -36,6 +36,7 @@ import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services';
+import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
 import { useChatStore } from '../../stores';
 
@@ -78,6 +79,7 @@ export const ChatScreen: React.FC = () => {
   };
   const voiceSummary = useUiModeStore(s => s.voiceSummary);
   const whisperModelId = useWhisperStore(s => s.downloadedModelId);
+  const whisperModels = useWithRemoteCatalog('transcription', WHISPER_MODELS);
   const remoteLabels = useActiveRemoteModelLabels();
   const modelLabels: Record<ModelRowType, string> = {
     text: chat.activeModelName ?? chat.activeModel?.name ?? '—',
@@ -85,7 +87,7 @@ export const ChatScreen: React.FC = () => {
     voice: remoteLabels.voice ?? voiceSummary ?? '—',
     speech:
       remoteLabels.transcription ??
-      WHISPER_MODELS.find(m => m.id === whisperModelId)?.name ??
+      whisperModels.find(m => m.id === whisperModelId)?.name ??
       '—',
   };
   const pendingModelRowRef = useRef<ModelRowType | null>(null);

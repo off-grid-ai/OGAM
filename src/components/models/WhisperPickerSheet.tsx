@@ -9,6 +9,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { WHISPER_MODELS } from '../../services/whisperService';
+import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { useSttDownloadState } from '../../hooks/useSttDownloadState';
 import { RemoteModelOptionsSection } from './RemoteModelOptionsSection';
@@ -38,6 +39,7 @@ export const WhisperPickerSheet: React.FC<Props> = ({
   const downloadedModelId = useWhisperStore(s => s.downloadedModelId);
   const isModelLoading = useWhisperStore(s => s.isModelLoading);
   const presentModelIds = useWhisperStore(s => s.presentModelIds);
+  const whisperModels = useWithRemoteCatalog('transcription', WHISPER_MODELS);
   const downloadModel = useWhisperStore(s => s.downloadModel);
   const selectModel = useWhisperStore(s => s.selectModel);
   const deleteModelById = useWhisperStore(s => s.deleteModelById);
@@ -72,7 +74,7 @@ export const WhisperPickerSheet: React.FC<Props> = ({
           onSelect={onClose}
         />
         <Text style={styles.sectionLabel}>On-device models</Text>
-        {WHISPER_MODELS.map(m => {
+        {whisperModels.map(m => {
           const active = downloadedModelId === m.id;
           const present = presentModelIds.includes(m.id);
           // Per-model in-flight state from the shared owner: this row's own progress, disabled only

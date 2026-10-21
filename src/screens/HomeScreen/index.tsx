@@ -28,6 +28,7 @@ import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services';
+import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { SLOTS, useSlot } from '../../bootstrap/slotRegistry';
 import { useOpenSync } from '../../hooks/useOpenSync';
@@ -104,6 +105,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [voiceOpen, setVoiceOpen] = React.useState(false);
   const returnToModelsRef = React.useRef(false);
   const whisperModelId = useWhisperStore(s => s.downloadedModelId);
+  const whisperModels = useWithRemoteCatalog('transcription', WHISPER_MODELS);
   const whisperPresentCount = useWhisperStore(
     s => s.presentModelIds?.length ?? 0,
   );
@@ -116,7 +118,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     voice: remoteLabels.voice,
     transcription: remoteLabels.transcription,
     localVoice: voiceSummary,
-    localTranscription: WHISPER_MODELS.find(m => m.id === whisperModelId)?.name,
+    localTranscription: whisperModels.find(m => m.id === whisperModelId)?.name,
   });
 
   // Downloaded-model counts shown in the Models card (replaces the old stats row).

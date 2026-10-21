@@ -24,6 +24,7 @@ import { initDebugLogFile, appendDebugLine, stopDebugLogFile } from './src/utils
 import { startStartupMemoryProbe } from './src/services/startupMemoryProbe';
 import { loadProFeatures } from './src/bootstrap/loadProFeatures';
 import { hydrateDownloadStore } from './src/services/downloadHydration';
+import { initModelCatalog } from './src/stores/modelCatalogStore';
 import { initActiveDownloadPersistence } from './src/services/activeDownloadPersistence';
 import { restoreQueuedDownloads } from './src/services/restoreQueuedDownloads';
 import { startLoadPolicySync } from './src/services/loadPolicySync';
@@ -280,6 +281,9 @@ function App() {
 
   const initializeApp = useCallback(async (generation: number) => {
     try {
+      // Models a previous "check for new models" saved. Reads the cache only; off the boot gate.
+      initModelCatalog();
+
       // Ensure persisted download metadata is loaded before restore logic reads it.
       logger.log('[BOOT] app store hydrate');
       await ensureAppStoreHydrated();

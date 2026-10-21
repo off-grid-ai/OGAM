@@ -1,6 +1,8 @@
+import type { MobileTextCatalogModel } from '@offgrid/models';
 import { RECOMMENDED_MODELS, TRENDING_FAMILIES } from '../constants';
+import { withRemoteCatalog } from '../stores/modelCatalogStore';
 
-type RecommendedModel = (typeof RECOMMENDED_MODELS)[number];
+type RecommendedModel = MobileTextCatalogModel;
 
 /**
  * Fit score for a model on a device: ideal ≈ 40% of RAM, penalised above 75% (too
@@ -24,14 +26,14 @@ function fitsDevice(m: RecommendedModel, deviceRamGB: number): boolean {
  * no parallel RAM-filter implementations.
  */
 export function recommendedModelsForDevice(deviceRamGB: number): RecommendedModel[] {
-  return RECOMMENDED_MODELS.filter(m => fitsDevice(m, deviceRamGB));
+  return withRemoteCatalog('text', RECOMMENDED_MODELS).filter(m => fitsDevice(m, deviceRamGB));
 }
 
 /** One best-fit model id per trending family for this device (the "trending" pills). */
 export function trendingModelIdsForDevice(deviceRamGB: number): Set<string> {
   const ids = new Set<string>();
   for (const familyIds of Object.values(TRENDING_FAMILIES)) {
-    const best = RECOMMENDED_MODELS
+    const best = withRemoteCatalog('text', RECOMMENDED_MODELS)
       .filter(m => familyIds.includes(m.id) && fitsDevice(m, deviceRamGB))
       .sort((a, b) => ramFitScore(a.minRam, deviceRamGB) - ramFitScore(b.minRam, deviceRamGB))[0];
     if (best) ids.add(best.id);

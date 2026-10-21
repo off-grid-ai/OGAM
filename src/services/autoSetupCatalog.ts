@@ -3,6 +3,7 @@ import { fileExceedsBudget } from './memoryBudget';
 import { fetchModelFiles } from './modelCatalogFiles';
 import { hardwareService } from './hardware';
 import { WHISPER_MODELS } from './whisperModels';
+import { withRemoteCatalog } from '../stores/modelCatalogStore';
 import type { AutoSetupCompatibleCatalog } from './autoSetupPlan';
 import { autoSetupImageCatalogProvider } from './autoSetupImageCatalogProvider';
 
@@ -76,7 +77,7 @@ export async function loadAutoSetupCompatibleCatalog(
     payload: model,
   }));
 
-  const stt = WHISPER_MODELS.filter(model =>
+  const stt = withRemoteCatalog('transcription', WHISPER_MODELS).filter(model =>
     model.lang === 'multi' && !fileExceedsBudget(model.size * MB, ramGB),
   ).map(model => ({
     id: model.id,

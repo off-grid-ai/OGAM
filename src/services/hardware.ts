@@ -15,6 +15,7 @@ import {
   ImageModelRecommendation,
 } from '../types';
 import { MODEL_RECOMMENDATIONS, RECOMMENDED_MODELS } from '../constants';
+import { withRemoteCatalog } from '../stores/modelCatalogStore';
 import { HTP_ENABLED } from '../config/featureFlags';
 /**
  * QNN variant tiers — mirrors local-dream's chipsetModelSuffixes map exactly.
@@ -212,7 +213,7 @@ class HardwareService {
         t => totalRamGB >= t.minRam && totalRamGB < t.maxRam,
       ) || MODEL_RECOMMENDATIONS.memoryToParams[0];
     // Filter recommended models based on device capability
-    const compatibleModels = RECOMMENDED_MODELS.filter(
+    const compatibleModels = withRemoteCatalog('text', RECOMMENDED_MODELS).filter(
       m => m.minRam <= totalRamGB,
     ).map(m => m.id);
     let warning: string | undefined;

@@ -5,6 +5,8 @@ import { makeModelKey } from '../utils/modelKey';
 import { backgroundDownloadService } from './backgroundDownloadService';
 import * as whisperModelFiles from './whisperModelFiles';
 import { WHISPER_MODELS } from './whisperModels';
+import { withRemoteCatalog } from '../stores/modelCatalogStore';
+import type { MobileWhisperCatalogModel } from '@offgrid/models';
 
 export interface DownloadedWhisperModel {
   modelId: string;
@@ -42,7 +44,7 @@ function cancelNativeOwner(
 }
 
 interface MissingModelDownloadInput {
-  model: (typeof WHISPER_MODELS)[number];
+  model: MobileWhisperCatalogModel;
   fileName: string;
   destPath: string;
   owner: ActiveDownloadOwner;
@@ -67,7 +69,7 @@ export class WhisperModelDownloads {
     modelId: string,
     onProgress?: (progress: number) => void,
   ): Promise<string> {
-    const model = WHISPER_MODELS.find(candidate => candidate.id === modelId);
+    const model = withRemoteCatalog('transcription', WHISPER_MODELS).find(candidate => candidate.id === modelId);
     if (!model) throw new Error(`Unknown model: ${modelId}`);
     const fileName = `ggml-${modelId}.bin`;
     const modelKey = makeModelKey(`whisper-${modelId}`, fileName);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -27,8 +27,8 @@ import { TextFiltersSection } from './TextFiltersSection';
 import { FilterState, SortOption } from './types';
 import { SORT_OPTIONS } from './constants';
 import { formatNumber, getTextModelCompatibility, modelFactChips } from './utils';
-import { buildCuratedLiteRTFiles, curatedLiteRTDownloadWarning, getCuratedLiteRTEntry, LITERT_PARENT_ID } from '../../services/curatedLiteRTRegistry';
-import { LITERT_FILE_META, LITERT_RECOMMENDED_MODEL, LITERT_PARENT_RECOMMENDED } from './litertRecommended';
+import { buildCuratedLiteRTFiles, curatedLiteRTDownloadWarning, getCuratedLiteRTEntry, LITERT_PARENT_ID, useCuratedLiteRTEntries } from '../../services/curatedLiteRTRegistry';
+import { liteRTFileMeta, liteRTRecommendedModel, LITERT_PARENT_RECOMMENDED } from './litertRecommended';
 import { modelManager } from '../../services';
 import { modelDownloadService } from '../../services/modelDownloadService';
 import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
@@ -112,6 +112,8 @@ const ModelDetailView: React.FC<DetailProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [showAllFiles, setShowAllFiles] = useState(false);
+  const liteRTEntries = useCuratedLiteRTEntries();
+  const liteRTMetaByFile = useMemo(() => liteRTFileMeta(liteRTEntries), [liteRTEntries]);
 
   // Pre-set the next pending (Download Manager icon) so it fires regardless of
   // how the user dismisses step 9 (button or backdrop tap).
@@ -186,7 +188,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
       handleDownload(selectedModel, item);
     };
     const onDownload = buildFileDownloadHandler({ s, fileName: item.name, sizeBytes: item.size, ramGB, proceedDownload, setAlertState });
-    const liteRTMeta = LITERT_FILE_META[item.name];
+    const liteRTMeta = liteRTMetaByFile[item.name];
     const displayName = liteRTMeta?.displayName ?? item.name.replace('.gguf', '');
     const recommended = liteRTMeta ? { pillLabel: 'Recommended', highlightText: liteRTMeta.highlight } : undefined;
     const storeEntry = storeDownloads[s.downloadKey];
@@ -375,6 +377,8 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     setTypeFilter, setSourceFilter, setSizeFilter, setQuantFilter, setSortOption,
     isModelDownloaded, getDownloadedModel, isRepairingVisionModel, onboarding = false,
   } = props;
+  const liteRTEntries = useCuratedLiteRTEntries();
+  const liteRTModel = useMemo(() => liteRTRecommendedModel(liteRTEntries), [liteRTEntries]);
   // The picks are shown once, above; the list below holds the other models.
   const moreModels = React.useMemo(() => {
     const pickIds = new Set(devicePicks(ramGB).map(pick => pick.model.id));
@@ -421,9 +425,9 @@ export const TextModelsTab: React.FC<Props> = (props) => {
   };
 
   const onboardingLiteRTCards = onboarding && Platform.OS === 'android'
-    ? buildCuratedLiteRTFiles().map((file, index) => {
+    ? buildCuratedLiteRTFiles(liteRTEntries).map((file, index) => {
         const entry = getCuratedLiteRTEntry(file.name);
-        const model = { ...LITERT_RECOMMENDED_MODEL, name: entry?.displayName ?? file.name };
+        const model = { ...liteRTModel, name: entry?.displayName ?? file.name };
         const proceedDownload = () => { handleDownload(model, file); };
         const onDownload = buildFileDownloadHandler({
           s: { downloaded: false, progress: undefined, hasFailed: false },
@@ -540,7 +544,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
         </View>
       ) : (
         <FlatList
-          data={hasSearched ? searchResults : [...(!onboarding && Platform.OS === 'android' ? [LITERT_RECOMMENDED_MODEL] : []), ...moreModels]}
+          data={hasSearched ? searchResults : [...(!onboarding && Platform.OS === 'android' ? [liteRTModel] : []), ...moreModels]}
           renderItem={renderModelItem}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
