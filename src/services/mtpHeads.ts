@@ -1,12 +1,11 @@
 import RNFS from 'react-native-fs';
 import { mtpHeadForPrimaryFile, type MtpHeadFile } from '@offgrid/models';
-import { makeModelKey } from '../utils/modelKey';
-import { performSidecarDownload } from './modelManager/download';
 
 /**
  * MTP heads published as a separate GGUF beside a model. Which head belongs to which model is the
  * shared catalog fact (@offgrid/models); this is the phone's IO: where the head lives (next to its
- * model, so deleting the model's folder takes it too), whether it is installed, and the download.
+ * model, so deleting the model's folder takes it too) and whether it is installed. The download is
+ * in mtpHeadDownload, so loading a model never pulls in the download code.
  */
 export interface MtpHeadState {
   head: MtpHeadFile;
@@ -35,21 +34,4 @@ export async function mtpHeadState(modelPath: string | undefined): Promise<MtpHe
 export async function installedMtpHeadPath(modelPath: string): Promise<string | undefined> {
   const state = await mtpHeadState(modelPath);
   return state?.installed ? state.localPath : undefined;
-}
-
-/** Download the model's MTP head beside it: progress on the model's row, resume, checksum. */
-export async function downloadMtpHead(
-  model: { id: string; fileName: string; filePath: string; quantization: string },
-  onProgress?: (fraction: number) => void,
-): Promise<string> {
-  const state = await mtpHeadState(model.filePath);
-  if (!state) throw new Error('This model has no published MTP head');
-  return performSidecarDownload({
-    modelId: model.id,
-    modelKey: makeModelKey(model.id, model.fileName),
-    quantization: model.quantization,
-    localPath: state.localPath,
-    sidecar: { name: state.head.name, url: state.head.url, sizeBytes: state.head.sizeBytes, sha256: state.head.sha256 },
-    onProgress: event => onProgress?.(event.progress),
-  });
 }

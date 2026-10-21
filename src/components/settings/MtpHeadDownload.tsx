@@ -3,7 +3,8 @@ import { View, Text } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useAppStore } from '../../stores';
 import { useTheme, useThemedStyles } from '../../theme';
-import { downloadMtpHead, mtpHeadState } from '../../services/mtpHeads';
+import { mtpHeadState } from '../../services/mtpHeads';
+import { downloadMtpHead } from '../../services/mtpHeadDownload';
 import { createTextGenAdvancedStyles } from './textGenAdvancedStyles';
 
 /**
