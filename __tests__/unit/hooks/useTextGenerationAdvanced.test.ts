@@ -31,6 +31,9 @@ describe('useTextGenerationAdvanced', () => {
     await act(async () => {});
 
     expect(result.current.cpuThreadsDisplayValue).toMatch(/^Auto \(\d+\)$/);
-    expect(result.current.cpuThreadsSliderValue).toBe(1);
+    // On auto the slider starts from the count that will actually run (the N in "Auto (N)").
+    const resolved = Number(/^Auto \((\d+)\)$/.exec(result.current.cpuThreadsDisplayValue)![1]);
+    expect(resolved).toBeGreaterThan(1);
+    expect(result.current.cpuThreadsSliderValue).toBe(resolved);
   });
 });
