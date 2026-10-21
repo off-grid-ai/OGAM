@@ -102,11 +102,12 @@ export function devicePicks(ramGB: number): DevicePick[] {
     return download ? [{ ...download, entry, sizeBytes: download.file.size + (download.file.mmProjFile?.size ?? 0) }] : [];
   });
   // The catalog's own facts drive the choice: quality ranks, active parameters set the speed, and
-  // replaced, research-only or too-new models are never picked.
+  // replaced, research-only or too-new models are never picked. Picks come from makers people know.
   return picksAmong(downloads, d => ({
     id: d.model.id,
     sizeBytes: d.sizeBytes,
     params: d.model.paramCount,
+    org: d.entry.org,
     quality: d.entry.quality,
     activeParams: d.entry.activeParams,
     supersededBy: d.entry.supersededBy,
