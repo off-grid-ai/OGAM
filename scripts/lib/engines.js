@@ -65,11 +65,16 @@ function unmetPeers(peerDependencies, peerDependenciesMeta, installed) {
  * Whether the newest release replaces the pinned one:
  *   current — the pin is already the newest release (or newer)
  *   bump    — the newest release installs as is
- *   held    — the newest release needs peers the app does not meet; `reason` names them
+ *   held    — the newest release needs peers the app does not meet, or the pinned version
+ *             carries a local fix (a patch-package patch) that a new version would drop;
+ *             `reason` says which
  */
-function decide({ current, latest, peerDependencies, peerDependenciesMeta, installed }) {
+function decide({ current, latest, peerDependencies, peerDependenciesMeta, installed, patch }) {
   if (!latest || !semver.valid(latest) || (current && !semver.gt(latest, current))) {
     return { status: 'current' };
+  }
+  if (patch) {
+    return { status: 'held', to: latest, reason: `carries a local fix (${patch}); port the fix or drop the patch first` };
   }
   const unmet = unmetPeers(peerDependencies, peerDependenciesMeta, installed || {});
   if (unmet.length > 0) {
@@ -79,6 +84,11 @@ function decide({ current, latest, peerDependencies, peerDependenciesMeta, insta
     return { status: 'held', to: latest, reason: `needs ${reason}` };
   }
   return { status: 'bump', to: latest };
+}
+
+/** The patch-package file name for a package at a version ("@scope/name" → "@scope+name+1.2.3.patch"). */
+function patchFileName(pkg, version) {
+  return `${pkg.replace('/', '+')}+${version}.patch`;
 }
 
 /** The newest release in a Maven metadata file (its <release>, else its <latest>). */
@@ -130,6 +140,7 @@ module.exports = {
   specFor,
   unmetPeers,
   decide,
+  patchFileName,
   mavenRelease,
   gradlePin,
   setGradlePin,

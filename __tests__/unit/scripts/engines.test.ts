@@ -9,6 +9,7 @@ import {
   decide,
   gradlePin,
   mavenRelease,
+  patchFileName,
   pinnedVersion,
   setGradlePin,
   specFor,
@@ -80,6 +81,32 @@ describe('decide', () => {
       reason:
         'needs react-native-worklets >=0.10.0 <0.14.0 (the app has 0.7.3), react-native-blob-util >=0.24.11 (the app has none)',
     });
+  });
+});
+
+describe('a pinned engine with a local fix', () => {
+  // whisper.rn 0.5.5 carries Android crash fixes in patches/whisper.rn+0.5.5.patch, and 0.7.4
+  // drops the file they patch and the transcribeRealtime API the app calls. Moving it would ship
+  // the crash and break live transcription, so it is held until the fix is ported.
+  it('is held while its patch exists, even when every peer is met', () => {
+    expect(
+      decide({ current: '0.5.5', latest: '0.7.4', patch: 'patches/whisper.rn+0.5.5.patch', peerDependencies: {}, installed: {} }),
+    ).toEqual({
+      status: 'held',
+      to: '0.7.4',
+      reason: 'carries a local fix (patches/whisper.rn+0.5.5.patch); port the fix or drop the patch first',
+    });
+  });
+
+  it('is still current when no newer release exists', () => {
+    expect(decide({ current: '0.5.5', latest: '0.5.5', patch: 'patches/whisper.rn+0.5.5.patch' })).toEqual({ status: 'current' });
+  });
+
+  it('names patch files the way patch-package does', () => {
+    expect(patchFileName('whisper.rn', '0.5.5')).toBe('whisper.rn+0.5.5.patch');
+    expect(patchFileName('@kesha-antonov/react-native-background-downloader', '4.5.6')).toBe(
+      '@kesha-antonov+react-native-background-downloader+4.5.6.patch',
+    );
   });
 });
 

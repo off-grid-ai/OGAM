@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 // Moves the app's native engines (scripts/lib/engines.js) to their newest upstream releases.
-// A release that needs peer dependencies the app does not meet is held and reported, never
-// half-installed.
+// A release that needs peer dependencies the app does not meet, or that would drop a local
+// patch-package fix, is held and reported, never half-installed.
 //
 //   node scripts/update-engines.js [--check] [--pods] [--summary <file.md>]
 //
@@ -46,9 +46,11 @@ function npmEngine(engine, pkg) {
   const release = latest ? npmView(`${engine.pkg}@${latest}`, ['peerDependencies', 'peerDependenciesMeta']) : {};
   const peers = release?.peerDependencies ?? {};
   const installed = Object.fromEntries(Object.keys(peers).map(name => [name, installedVersion(name, pkg)]));
+  const patch = current ? path.join('patches', engines.patchFileName(engine.pkg, current)) : null;
   const decision = engines.decide({
     current,
     latest,
+    patch: patch && fs.existsSync(path.join(ROOT, patch)) ? patch : null,
     peerDependencies: peers,
     peerDependenciesMeta: release?.peerDependenciesMeta,
     installed,

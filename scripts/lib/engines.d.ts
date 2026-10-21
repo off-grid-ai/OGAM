@@ -41,7 +41,9 @@ export function decide(input: {
   peerDependencies?: Record<string, string>;
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
   installed?: Record<string, string | undefined>;
+  patch?: string | null;
 }): Decision;
+export function patchFileName(pkg: string, version: string): string;
 export function mavenRelease(metadataXml: string): string | null;
 export function gradlePin(gradle: string, group: string, artifact: string): string | null;
 export function setGradlePin(gradle: string, group: string, artifact: string, version: string): string;
