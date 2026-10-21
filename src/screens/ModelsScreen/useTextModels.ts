@@ -143,7 +143,11 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
 
   useEffect(() => {
     let cancelled = false;
-    fetchRecommendedModelDetails(recommended).then(d => { if (!cancelled) setRecommendedModelDetails(d); });
+    // Details only enrich the cards: a model whose details fail keeps its catalog name, size and
+    // description (recommendedAsModelInfo), so a failure is logged, not shown.
+    fetchRecommendedModelDetails(recommended)
+      .then(d => { if (!cancelled) setRecommendedModelDetails(d); })
+      .catch(e => logger.warn('[ModelsScreen] Failed to load recommended model details:', e));
     return () => { cancelled = true; };
   }, [recommended]);
 
