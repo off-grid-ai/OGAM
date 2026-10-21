@@ -63,9 +63,6 @@ class BackgroundDownloadService {
     if (!this.isAvailable()) {
       throw new Error('Background downloads not available on this platform');
     }
-    // Every model download (chat, vision projector, image, speech, MTP head) starts here, so this
-    // is the one place that checks the phone has room before any bytes move.
-    await assertFreeSpace(Math.max(params.totalBytes ?? 0, params.combinedTotalBytes ?? 0));
     // A sidecar (e.g. a vision model's mmproj) is a dependent sub-download of a main
     // file — it is NOT admission-controlled and does not occupy a concurrency slot. The
     // cap governs logical model downloads (the mains); the sidecar rides alongside its
@@ -135,6 +132,12 @@ class BackgroundDownloadService {
   /** The raw native start + BackgroundDownloadInfo mapping — no concurrency accounting.
    *  Sidecars call this directly; the counted path wraps it in slot bookkeeping. */
   private async startNativeDownload(params: DownloadParams): Promise<BackgroundDownloadInfo> {
+    // Every model download (chat, vision projector, image, speech, MTP head) reaches the native
+    // start here, so this is the one place that checks the phone has room before any bytes move.
+    // It runs after the slot/queue decision (which stays synchronous, so a burst can't over-admit
+    // or race the queue), and a queued start is checked when it is admitted, against the space
+    // free then. A refusal frees the reserved slot and lets the queue try the next (beginDownload).
+    await assertFreeSpace(Math.max(params.totalBytes ?? 0, params.combinedTotalBytes ?? 0));
     // Android 13+: prompt for notification permission so the foreground-service download
     // notification is visible (the download still runs as an FGS if denied). Best-effort.
     if (Platform.OS === 'android' && typeof DownloadManagerModule.requestNotificationPermission === 'function') {
