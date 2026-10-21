@@ -56,9 +56,11 @@ export const useModelCatalogStore = create<ModelCatalogState>(() => ({
 // (screens use it in deps and selectors).
 const memo = new Map<Section, { remote: unknown; bundled: unknown; merged: unknown[] }>();
 
-/** A bundled list merged with its remote catalog section. */
-export function withRemoteCatalog<K extends Section>(section: K, bundled: readonly SectionEntry<K>[]): SectionEntry<K>[] {
-  const remote = useModelCatalogStore.getState().remote[section];
+function mergeSection<K extends Section>(
+  section: K,
+  bundled: readonly SectionEntry<K>[],
+  remote: MobileCatalogSections[K],
+): SectionEntry<K>[] {
   const hit = memo.get(section);
   if (hit && hit.remote === remote && hit.bundled === bundled) return hit.merged as SectionEntry<K>[];
   const key = mobileCatalogKey[section] as (entry: SectionEntry<K>) => string;
@@ -67,10 +69,16 @@ export function withRemoteCatalog<K extends Section>(section: K, bundled: readon
   return merged;
 }
 
-/** Same as withRemoteCatalog, and re-renders when the catalog updates. */
+/** A bundled list merged with its remote catalog section. */
+export function withRemoteCatalog<K extends Section>(section: K, bundled: readonly SectionEntry<K>[]): SectionEntry<K>[] {
+  return mergeSection(section, bundled, useModelCatalogStore.getState().remote[section]);
+}
+
+/** Same as withRemoteCatalog, and re-renders when the catalog updates. The section is passed in
+ *  (not read inside) so the React Compiler's memo of this call changes with it. */
 export function useWithRemoteCatalog<K extends Section>(section: K, bundled: readonly SectionEntry<K>[]): SectionEntry<K>[] {
-  useModelCatalogStore(s => s.remote[section]);
-  return withRemoteCatalog(section, bundled);
+  const remote = useModelCatalogStore(s => s.remote[section]);
+  return mergeSection(section, bundled, remote);
 }
 
 // Registered by the modules that own a bundled list, so a manual check can count what is new
