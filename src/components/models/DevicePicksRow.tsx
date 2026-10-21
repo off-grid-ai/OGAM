@@ -2,7 +2,9 @@ import React, { useMemo } from 'react';
 import { useAppStore } from '../../stores';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { makeModelKey } from '../../utils/modelKey';
+import { CATALOG } from '@offgrid/models';
 import { devicePicks, type DevicePick } from '../../services/devicePicks';
+import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { startModelDownload } from '../../services/startModelDownload';
 import { activeModelService } from '../../services/activeModelService';
 import { PicksRow, type PickItem, type PickState } from './PicksRow';
@@ -10,7 +12,8 @@ import { PicksRow, type PickItem, type PickState } from './PicksRow';
 /** The chat picks: the shared catalog and picking rule; a finished pick becomes the active chat
  *  model and offers "Chat now". */
 export const DevicePicksRow: React.FC<{ ramGB: number; onChat: () => void }> = ({ ramGB, onChat }) => {
-  const picks = useMemo(() => devicePicks(ramGB), [ramGB]);
+  const catalog = useWithRemoteCatalog('models', CATALOG);
+  const picks = useMemo(() => devicePicks(ramGB, catalog), [ramGB, catalog]);
   const downloadedModels = useAppStore(s => s.downloadedModels);
   const activeModelId = useAppStore(s => s.activeModelId);
   const downloads = useDownloadStore(s => s.downloads);

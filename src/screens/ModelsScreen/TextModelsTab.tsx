@@ -8,7 +8,7 @@ import DeviceInfo from 'react-native-device-info';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { fitLabel } from '@offgrid/models';
+import { CATALOG, fitLabel } from '@offgrid/models';
 import { fileExceedsBudget, modelFitTier } from '../../services/memoryBudget';
 import { Card, ModelCard } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
@@ -28,6 +28,7 @@ import { FilterState, SortOption } from './types';
 import { SORT_OPTIONS } from './constants';
 import { formatNumber, getTextModelCompatibility, modelFactChips } from './utils';
 import { buildCuratedLiteRTFiles, curatedLiteRTDownloadWarning, getCuratedLiteRTEntry, LITERT_PARENT_ID, useCuratedLiteRTEntries } from '../../services/curatedLiteRTRegistry';
+import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { liteRTFileMeta, liteRTRecommendedModel, LITERT_PARENT_RECOMMENDED } from './litertRecommended';
 import { modelManager } from '../../services';
 import { modelDownloadService } from '../../services/modelDownloadService';
@@ -379,17 +380,18 @@ export const TextModelsTab: React.FC<Props> = (props) => {
   } = props;
   const liteRTEntries = useCuratedLiteRTEntries();
   const liteRTModel = useMemo(() => liteRTRecommendedModel(liteRTEntries), [liteRTEntries]);
+  const catalog = useWithRemoteCatalog('models', CATALOG);
   // The picks are shown once, above; the list below holds the other models.
   const moreModels = React.useMemo(() => {
-    const pickIds = new Set(devicePicks(ramGB).map(pick => pick.model.id));
+    const pickIds = new Set(devicePicks(ramGB, catalog).map(pick => pick.model.id));
     return recommendedAsModelInfo.filter(model => !pickIds.has(model.id));
-  }, [recommendedAsModelInfo, ramGB]);
+  }, [recommendedAsModelInfo, ramGB, catalog]);
   // The catalog answers a search first; Hugging Face results follow, without repeating a catalog model.
   const searchResults = React.useMemo(() => {
-    const fromCatalog = catalogMatches(searchQuery).filter(model => !model.files.every(f => fileExceedsBudget(f.size, ramGB)));
+    const fromCatalog = catalogMatches(searchQuery, catalog).filter(model => !model.files.every(f => fileExceedsBudget(f.size, ramGB)));
     const catalogIds = new Set(fromCatalog.map(model => model.id));
     return [...fromCatalog, ...filteredResults.filter(model => !catalogIds.has(model.id))];
-  }, [searchQuery, filteredResults, ramGB]);
+  }, [searchQuery, filteredResults, ramGB, catalog]);
   const hasNonSortActiveFilters = hasNonSortFilters(filterState);
   const currentSort = SORT_OPTIONS.find(o => o.key === filterState.sort) ?? SORT_OPTIONS[0];
   const isSortActive = filterState.sort !== 'recommended';

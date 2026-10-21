@@ -1,4 +1,5 @@
 import { CATALOG, pickModelsForDevice, PHONE_FIT_BUDGET, type ModelEntry, type PickCandidate } from '@offgrid/models';
+import { registerBundledCatalog, withRemoteCatalog } from '../stores/modelCatalogStore';
 import { BuildInfo } from 'llama.rn';
 import type { ModelFile, ModelInfo } from '../types';
 
@@ -31,10 +32,18 @@ export interface DevicePick {
   sizeBytes: number;
 }
 
+registerBundledCatalog('models', CATALOG);
+
+/** The bundled catalog plus the pool a check fetched. Screens pass `useWithRemoteCatalog('models',
+ *  CATALOG)` in, so they re-render when a check changes the pool. */
+export function phoneCatalog(): ModelEntry[] {
+  return withRemoteCatalog('models', CATALOG);
+}
+
 /** The chat models a phone can download from the catalog: ready, chat or vision, one entry per
  *  model (quantization variants are options of their base model, not separate picks). */
-function chatEntries(): ModelEntry[] {
-  return CATALOG.filter(entry =>
+function chatEntries(catalog: readonly ModelEntry[]): ModelEntry[] {
+  return catalog.filter(entry =>
     (entry.kind === 'text' || entry.kind === 'vision') &&
     entry.availability !== 'coming_soon' &&
     !entry.grounder &&
@@ -96,8 +105,8 @@ export function picksAmong<T>(
 }
 
 /** The chat picks for a phone with `ramGB` of RAM, in Fast, Balanced, Best order. */
-export function devicePicks(ramGB: number): DevicePick[] {
-  const downloads = chatEntries().flatMap(entry => {
+export function devicePicks(ramGB: number, catalog: readonly ModelEntry[] = phoneCatalog()): DevicePick[] {
+  const downloads = chatEntries(catalog).flatMap(entry => {
     const download = catalogEntryToDownload(entry);
     return download ? [{ ...download, entry, sizeBytes: download.file.size + (download.file.mmProjFile?.size ?? 0) }] : [];
   });
@@ -119,10 +128,10 @@ export function devicePicks(ramGB: number): DevicePick[] {
 
 /** Catalog models whose name, maker or description matches a search, as list entries. Search shows
  *  these first, then Hugging Face results. */
-export function catalogMatches(query: string): ModelInfo[] {
+export function catalogMatches(query: string, catalog: readonly ModelEntry[] = phoneCatalog()): ModelInfo[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
-  return chatEntries()
+  return chatEntries(catalog)
     .filter(entry => [entry.name, entry.id, entry.org ?? '', entry.description ?? ''].some(text => text.toLowerCase().includes(needle)))
     .flatMap(entry => {
       const download = catalogEntryToDownload(entry);
