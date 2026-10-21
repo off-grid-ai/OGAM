@@ -38,7 +38,7 @@ const source = {
 type Section = keyof MobileCatalogSections;
 type SectionEntry<K extends Section> = NonNullable<MobileCatalogSections[K]>[number];
 
-export type CatalogCheckResult = { status: 'new'; count: number } | { status: 'none' } | { status: 'failed' };
+export type CatalogCheckResult = { status: 'new'; names: string[] } | { status: 'none' } | { status: 'failed' };
 
 interface ModelCatalogState {
   remote: MobileCatalogSections;
@@ -88,17 +88,19 @@ export function registerBundledCatalog<K extends Section>(section: K, bundled: r
   (bundledLists as Record<Section, unknown>)[section] = bundled;
 }
 
-function mergedKeys(): Set<string> {
-  const keys = new Set<string>();
+/** Every merged entry, keyed by section and merge key, with the name a person reads. */
+function mergedNames(): Map<string, string> {
+  const names = new Map<string, string>();
   (Object.keys(mobileCatalogKey) as Section[]).forEach(section => {
     const key = mobileCatalogKey[section] as (entry: unknown) => string;
-    withRemoteCatalog(section, (bundledLists[section] ?? []) as never[]).forEach(e => keys.add(`${section}:${key(e)}`));
+    withRemoteCatalog(section, (bundledLists[section] ?? []) as never[]).forEach((e: { name?: string; displayName?: string }) =>
+      names.set(`${section}:${key(e)}`, e.displayName ?? e.name ?? key(e)));
   });
-  return keys;
+  return names;
 }
 
 async function refresh(): Promise<CatalogCheckResult> {
-  const before = mergedKeys();
+  const before = mergedNames();
   const result = await refreshRemoteCatalog(source);
   if (result.catalog) {
     useModelCatalogStore.setState({ remote: result.catalog.sections, fetchedAt: result.catalog.fetchedAt });
@@ -107,8 +109,9 @@ async function refresh(): Promise<CatalogCheckResult> {
     logger.warn('[ModelCatalog] refresh failed:', result.error);
     return { status: 'failed' };
   }
-  const count = [...mergedKeys()].filter(k => !before.has(k)).length;
-  return count > 0 ? { status: 'new', count } : { status: 'none' };
+  // One model can sit in two sections (the picks pool and the list): name it once.
+  const names = [...new Set([...mergedNames()].filter(([k]) => !before.has(k)).map(([, name]) => name))];
+  return names.length > 0 ? { status: 'new', names } : { status: 'none' };
 }
 
 /** Startup: the catalog a previous check saved, if any. No fetch. Never throws. */

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
@@ -16,8 +16,8 @@ import { TranscriptionModelsTab } from './TranscriptionModelsTab';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import type { ModelTab } from './types';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { checkForNewModels, useModelCatalogStore, withRemoteCatalog } from '../../stores/modelCatalogStore';
-import { showToast } from '../../utils/toast';
+import { checkForNewModels, useModelCatalogStore, withRemoteCatalog, type CatalogCheckResult } from '../../stores/modelCatalogStore';
+import { CatalogCheckSheet } from '../../components/models/CatalogCheckSheet';
 
 const MODEL_TABS: ReadonlyArray<{ key: ModelTab; label: string; testID?: string }> = [
   { key: 'text', label: 'Text' },
@@ -41,14 +41,6 @@ const ScreenFrame: React.FC<{
     <SafeAreaView style={styles.container} edges={['top']} testID="models-screen">{children}</SafeAreaView>
   );
 
-/** Fetches the remote model catalog now and says what changed. */
-async function handleCheckForNewModels(): Promise<void> {
-  const result = await checkForNewModels();
-  if (result.status === 'new') showToast(`${result.count} new model${result.count === 1 ? '' : 's'}`);
-  else if (result.status === 'none') showToast('Up to date');
-  else showToast("Couldn't check for new models");
-}
-
 const HideWhenEmbedded: React.FC<{ embedded: boolean; children: React.ReactNode }> = ({ embedded, children }) => (
   <View style={embedded ? collapsedStyle.hidden : undefined}>{children}</View>
 );
@@ -63,6 +55,9 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
   const VoiceModelsPanel = useSlot(SLOTS.modelsScreenVoiceTab);
   const route = useRoute<RouteProp<MainTabParamList, 'ModelsTab'>>();
   const isCheckingCatalog = useModelCatalogStore(s => s.isChecking);
+  // What the last "check for new models" found, shown in a sheet until dismissed.
+  const [catalogResult, setCatalogResult] = useState<CatalogCheckResult | null>(null);
+  const handleCheckForNewModels = () => { checkForNewModels().then(setCatalogResult).catch(() => setCatalogResult({ status: 'failed' })); };
 
   // Reset to model list view when tab loses focus (e.g. user switches away)
   // vm.setSelectedModel / vm.setModelFiles are useState setters — stable across renders.
@@ -282,6 +277,7 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
       )}
 
       <CustomAlert {...vm.alertState} onClose={() => vm.setAlertState(hideAlert())} />
+      <CatalogCheckSheet result={catalogResult} onClose={() => setCatalogResult(null)} />
     </>
   );
 
