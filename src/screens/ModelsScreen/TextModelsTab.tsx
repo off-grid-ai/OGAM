@@ -12,7 +12,7 @@ import { fitLabel } from '@offgrid/models';
 import { fileExceedsBudget, modelFitTier } from '../../services/memoryBudget';
 import { Card, ModelCard } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
-import { CustomAlert, hideAlert, showAlert, AlertState } from '../../components/CustomAlert';
+import { hideAlert, showAlert, AlertState } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
 import { needsVisionRepair as checkNeedsVisionRepair } from '../../utils/visionRepair';
 import { CREDIBILITY_LABELS } from '../../constants';
@@ -74,7 +74,7 @@ type Props = Pick<ModelsScreenViewModel,
 
 type DetailProps = Pick<Props,
   | 'modelFiles' | 'isLoadingFiles' | 'filterState' | 'ramGB'
-  | 'alertState' | 'setAlertState'
+  | 'setAlertState'
   | 'getDownloadedModel' | 'isModelDownloaded' | 'isRepairingVisionModel'
   | 'handleDownload' | 'handleRepairMmProj' | 'handleCancelDownload' | 'handleDeleteModel'
 > & { selectedModel: ModelInfo; onBack: () => void; };
@@ -105,7 +105,7 @@ function buildFileDownloadHandler({ s, fileName, sizeBytes, ramGB, proceedDownlo
 
 const ModelDetailView: React.FC<DetailProps> = ({
   selectedModel, modelFiles, isLoadingFiles, filterState, ramGB,
-  alertState, setAlertState, onBack,
+  setAlertState, onBack,
   getDownloadedModel, isModelDownloaded, isRepairingVisionModel,
   handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel,
 }) => {
@@ -308,7 +308,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
           ) : null}
         />
       )}
-      <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
+      {/* The Models screen shows this view's alerts; a second CustomAlert here opened every alert twice. */}
     </View>
   );
 };
@@ -369,7 +369,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     filterState, textFiltersVisible, setTextFiltersVisible,
     filteredResults, recommendedAsModelInfo, trendingAsModelInfo, ramGB,
     hasActiveFilters, downloadedModels,
-    alertState, setAlertState, focusTrigger,
+    setAlertState, focusTrigger,
     handleSearch, handleRefresh, handleImportLocalModel, isImporting, handleSelectModel, handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel,
     clearFilters, toggleFilterDimension, toggleOrg,
     setTypeFilter, setSourceFilter, setSizeFilter, setQuantFilter, setSortOption,
@@ -459,7 +459,6 @@ export const TextModelsTab: React.FC<Props> = (props) => {
         isLoadingFiles={isLoadingFiles}
         filterState={filterState}
         ramGB={ramGB}
-        alertState={alertState}
         setAlertState={setAlertState}
         onBack={onBack}
         getDownloadedModel={getDownloadedModel}
