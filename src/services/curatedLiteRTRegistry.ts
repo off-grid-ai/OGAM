@@ -52,7 +52,7 @@ export const CURATED_LITERT_ENTRIES: readonly CuratedLiteRTEntry[] = [
 registerBundledCatalog('litert', CURATED_LITERT_ENTRIES);
 
 /** The bundled entries merged with the remote catalog. Read these, not CURATED_LITERT_ENTRIES. */
-export const getCuratedLiteRTEntries = () => withRemoteCatalog('litert', CURATED_LITERT_ENTRIES);
+const getCuratedLiteRTEntries = () => withRemoteCatalog('litert', CURATED_LITERT_ENTRIES);
 export const useCuratedLiteRTEntries = () => useWithRemoteCatalog('litert', CURATED_LITERT_ENTRIES);
 
 // Rebuilt when the merged list changes (a remote catalog update).

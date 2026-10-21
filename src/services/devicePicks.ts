@@ -36,7 +36,7 @@ registerBundledCatalog('models', CATALOG);
 
 /** The bundled catalog plus the pool a check fetched. Screens pass `useWithRemoteCatalog('models',
  *  CATALOG)` in, so they re-render when a check changes the pool. */
-export function phoneCatalog(): ModelEntry[] {
+function phoneCatalog(): ModelEntry[] {
   return withRemoteCatalog('models', CATALOG);
 }
 

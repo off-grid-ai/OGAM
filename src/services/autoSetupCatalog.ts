@@ -4,6 +4,7 @@ import { fetchModelFiles } from './modelCatalogFiles';
 import { hardwareService } from './hardware';
 import { WHISPER_MODELS } from './whisperModels';
 import { withRemoteCatalog } from '../stores/modelCatalogStore';
+import { RECOMMENDED_MODELS } from '../constants';
 import type { AutoSetupCompatibleCatalog } from './autoSetupPlan';
 import { autoSetupImageCatalogProvider } from './autoSetupImageCatalogProvider';
 
@@ -51,7 +52,7 @@ export async function loadAutoSetupCompatibleCatalog(
   boundaries: AutoSetupCatalogBoundaries = productionCatalogBoundaries,
 ): Promise<AutoSetupCompatibleCatalog> {
   const ramGB = boundaries.totalMemoryGB();
-  const textModels = recommendedModelsForDevice(ramGB).filter(model => model.type === 'vision');
+  const textModels = recommendedModelsForDevice(ramGB, withRemoteCatalog('text', RECOMMENDED_MODELS)).filter(model => model.type === 'vision');
   const files = await boundaries.fetchTextFiles(textModels);
   const text = buildAutoSetupTextCandidates(textModels, files, ramGB);
 
