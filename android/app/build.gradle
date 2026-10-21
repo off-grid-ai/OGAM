@@ -178,7 +178,7 @@ dependencies {
     implementation("io.legere:pdfiumandroid:1.0.35")
 
     // LiteRT-LM on-device LLM inference (pinned — do not use latest.release)
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.1")
 
     // Download layer — Room + WorkManager + OkHttp
     def room_version = "2.8.2"
