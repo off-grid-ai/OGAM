@@ -88,7 +88,7 @@
     "text-encoding-polyfill": "^0.6.7",
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1",
-    "whisper.rn": "^0.7.4",
+    "whisper.rn": "^0.5.5",
     "zustand": "^5.0.10"
   },
   "devDependencies": {

@@ -3465,7 +3465,7 @@ PODS:
   - VisionCamera/Core (4.7.3)
   - VisionCamera/React (4.7.3):
     - React-Core
-  - whisper-rn (0.7.4):
+  - whisper-rn (0.5.5):
     - boost
     - DoubleConversion
     - fast_float
@@ -3950,7 +3950,7 @@ SPEC CHECKSUMS:
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   SSZipArchive: c69881e8ac5521f0e622291387add5f60f30f3c4
   VisionCamera: b51af005669c6642dd1b4fca434eda4c1778de87
-  whisper-rn: eee7cbc7850684522951f0ca3fc2b20de27770d1
+  whisper-rn: 7566faf9b7d78e39ab9fc634cb90fdee81177793
   Yoga: 5456bb010373068fc92221140921b09d126b116e
 
 PODFILE CHECKSUM: d2e7563af7ca0531bcab79cceff20997d2fbe48c
