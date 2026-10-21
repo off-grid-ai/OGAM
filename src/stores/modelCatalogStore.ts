@@ -38,7 +38,11 @@ const source = {
 type Section = keyof MobileCatalogSections;
 type SectionEntry<K extends Section> = NonNullable<MobileCatalogSections[K]>[number];
 
-export type CatalogCheckResult = { status: 'new'; names: string[] } | { status: 'none' } | { status: 'failed' };
+export type CatalogCheckResult =
+  | { status: 'new'; names: string[] }
+  | { status: 'updated' }
+  | { status: 'none' }
+  | { status: 'failed' };
 
 interface ModelCatalogState {
   remote: MobileCatalogSections;
@@ -111,7 +115,9 @@ async function refresh(): Promise<CatalogCheckResult> {
   }
   // One model can sit in two sections (the picks pool and the list): name it once.
   const names = [...new Set([...mergedNames()].filter(([k]) => !before.has(k)).map(([, name]) => name))];
-  return names.length > 0 ? { status: 'new', names } : { status: 'none' };
+  if (names.length > 0) return { status: 'new', names };
+  // Changed entries with no new name: the catalog replaced models this phone already lists.
+  return result.status === 'updated' ? { status: 'updated' } : { status: 'none' };
 }
 
 /** Startup: the catalog a previous check saved, if any. No fetch. Never throws. */

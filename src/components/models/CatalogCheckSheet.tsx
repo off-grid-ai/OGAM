@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { ScrollView, View, Text } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../AppSheet';
 import { useThemedStyles } from '../../theme';
@@ -14,12 +14,14 @@ export const CatalogCheckSheet: React.FC<{ result: CatalogCheckResult | null; on
     ? ''
     : result.status === 'new'
       ? `${result.names.length} new model${result.names.length === 1 ? '' : 's'}`
-      : result.status === 'none'
-        ? 'Up to date'
-        : "Couldn't check for new models";
+      : result.status === 'updated'
+        ? 'Models updated'
+        : result.status === 'none'
+          ? 'Up to date'
+          : "Couldn't check for new models";
   return (
     <AppSheet visible={result !== null} onClose={onClose} enableDynamicSizing title={title}>
-      <View style={styles.content} testID="catalog-check-sheet">
+      <ScrollView contentContainerStyle={styles.content} testID="catalog-check-sheet">
         {result?.status === 'new' && result.names.map(name => (
           <View key={name} style={styles.row}>
             <Icon name="plus-circle" size={18} color={styles.accent.color} />
@@ -27,7 +29,7 @@ export const CatalogCheckSheet: React.FC<{ result: CatalogCheckResult | null; on
           </View>
         ))}
         {result?.status === 'failed' && <Text style={styles.message}>Check your connection and try again.</Text>}
-      </View>
+      </ScrollView>
     </AppSheet>
   );
 };
