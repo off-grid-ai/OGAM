@@ -331,7 +331,8 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
       {ENGLISH_MODELS.map((m, i) => renderWhisperCard(m, i))}
 
       <Text style={styles.sectionLabel}>Multilingual - 99 languages</Text>
-      {MULTI_MODELS.filter(m => !pickedIds.has(m.id)).map((m, i) => renderWhisperCard(m, ENGLISH_MODELS.length + i))}
+      {/* The card keeps its catalogue position as its index, so a card means the same model whatever the picks are. */}
+      {MULTI_MODELS.map((m, i) => (pickedIds.has(m.id) ? null : renderWhisperCard(m, ENGLISH_MODELS.length + i)))}
 
       <CustomAlert visible={alertState.visible} title={alertState.title}
         message={alertState.message} buttons={alertState.buttons}
