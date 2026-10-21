@@ -1,4 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/types';
 import { View, Text, FlatList, TextInput, RefreshControl, TouchableOpacity, Platform } from 'react-native';
 import { LoadingDots } from '../../components/LoadingDots';
 import DeviceInfo from 'react-native-device-info';
@@ -359,6 +362,7 @@ const SortPanel: React.FC<SortPanelProps> = ({ filterState, setSortOption, style
 );
 
 export const TextModelsTab: React.FC<Props> = (props) => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const {
     searchQuery, setSearchQuery, isLoading, isRefreshing, hasSearched,
     selectedModel, setSelectedModel, modelFiles, setModelFiles, isLoadingFiles,
@@ -545,7 +549,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
           ListHeaderComponent={hasSearched ? null : (
             <>
-              <DevicePicksRow ramGB={ramGB} />
+              <DevicePicksRow ramGB={ramGB} onChat={() => navigation.navigate('Chat', {})} />
               {moreModels.length > 0 && <Text style={styles.recommendedTitle}>More models</Text>}
               {onboardingLiteRTCards}
             </>
