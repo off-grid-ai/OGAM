@@ -21,6 +21,7 @@
 import {
   flag,
   lastAssistantText,
+  literalPattern,
   openNewChat,
   runJourney,
   sendPrompt,
@@ -31,7 +32,7 @@ import {
 
 const only = flag('only', 'maker,check,remote,coldnew').split(',');
 const maker = flag('maker', 'Liquid AI');
-const makerExpect = new RegExp(flag('maker-expect', 'LFM'), 'i');
+const makerExpect = literalPattern(flag('maker-expect', 'LFM'));
 // The maker's curated catalog entry. LFM2.5 8B A1B needs minRamGb 10, so the fit rule hides it on a
 // phone that cannot hold it; the step then records that rather than failing.
 const makerCurated = flag('maker-curated', 'LFM2.5 8B A1B');

@@ -32,6 +32,7 @@ import {
   flag,
   hasLabel,
   lastAssistantText,
+  literalPattern,
   openNewChat,
   runJourney,
   selectTextModel,
@@ -227,7 +228,7 @@ await runJourney('engine-smoke', async (phone, run) => {
       await sendPrompt(phone, 'What is in this picture? Answer in one short sentence.');
       await waitForReply(phone, 300_000);
       const answer = await readsAnswer(phone, { minChars: 10 });
-      if (expectImage && !new RegExp(expectImage, 'i').test(answer)) {
+      if (expectImage && !literalPattern(expectImage).test(answer)) {
         throw new Error(`the answer does not name the picture (/${expectImage}/): ${answer}`);
       }
       return `answer: ${answer.slice(0, 160)}`;

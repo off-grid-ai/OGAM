@@ -35,6 +35,7 @@ import {
   APP_ID,
   clearComposer,
   ejectAllModels,
+  escapeRegExp,
   parseXml,
   walkXml,
   composerText,
@@ -149,7 +150,7 @@ async function setBackend(phone, label) {
   let before = null;
   for (const name of ['CPU', 'GPU', 'NPU (Beta)', 'Metal']) {
     const xml = await phone.sourceXml();
-    if (new RegExp(`(text|label)="${name.replace(/[()]/g, '\\$&')}"[^>]*(checked|selected)="true"`).test(xml)) before = name;
+    if (new RegExp(`(text|label)="${escapeRegExp(name)}"[^>]*(checked|selected)="true"`).test(xml)) before = name;
   }
   if (option) await c.tap(option.center.x, option.center.y);
   await sleep(1_000);

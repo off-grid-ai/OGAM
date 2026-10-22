@@ -25,7 +25,7 @@
     "e2e:coverage": "node scripts/e2e/collect-coverage.mjs",
     "e2e:build:ios": "E2E_COVERAGE=1 npx react-native run-ios --device",
     "e2e:build:android": "E2E_COVERAGE=1 npx react-native run-android --mode=debug --appId ai.offgridmobile.dev",
-    "test:device-parser": "node --test scripts/android/__tests__/adbClient.test.mjs",
+    "test:device-parser": "node --test scripts/android/__tests__/adbClient.test.mjs scripts/e2e/__tests__/deviceJourney.test.mjs",
     "e2e:mesh": "node --test __tests__/device/meshPairing.e2e.mjs",
     "e2e:image-sync": "node scripts/e2e/generated-image-sync.mjs",
     "e2e:thinking-sync": "node scripts/e2e/attended-thinking-sync.mjs",

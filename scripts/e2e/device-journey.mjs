@@ -25,6 +25,12 @@ export const APP_ID = process.env.E2E_APP_ID ?? 'ai.offgridmobile.dev';
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const safe = (value) => String(value).replace(/[^a-z0-9-]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
 
+/** Text with every regular-expression metacharacter escaped, so it matches only itself. */
+export const escapeRegExp = (text) => String(text).replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
+/** A case-insensitive pattern that finds `text` literally: CLI flags and labels are never patterns. */
+export const literalPattern = (text) => new RegExp(escapeRegExp(text), 'i');
+
 /** `--name value` from argv, else the fallback. A bare `--name` is "true". */
 export function flag(name, fallback) {
   const args = process.argv.slice(2);
