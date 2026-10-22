@@ -292,66 +292,22 @@ a text-only load.
 
 Fix: finalise before announcing, then un-skip the test.
 
-## Deleting the mockist ChatScreen suite leaves real ChatScreen journeys uncovered
+## ChatScreen journeys still uncovered after deleting the mockist suite
 
-`__tests__/rntl/screens/ChatScreen.test.tsx` was deleted: 155 tests that rendered ChatScreen with FOURTEEN
-of our own modules stood in for. Coverage it reported was not coverage of our behaviour - the stubs answered
-most of the questions the assertions asked - so the number was inflated rather than earned. Measured before
-deleting, over `src/screens/ChatScreen/**`:
+135 `chatHarness` tests exist now. Still missing:
 
-|                | mockist suite (155 tests) | rendered suites (227 tests) |
-|----------------|---------------------------|-----------------------------|
-| statements     | 70.72%                    | 62.93%                      |
-| branches       | 63.45%                    | 57.47%                      |
-| functions      | 69.17%                    | 58.56%                      |
-| lines          | 73.88%                    | 64.74%                      |
+- **ChatModalSection** - no rendered modal open/dismiss test.
+- **useChatMessageHandlers** - no copy or delete-message rendered test.
+- **useChatModelActions** - no switch while a reply is streaming.
+- Re-measure coverage for ChatScreenComponents, modelReadiness and the screen index.
 
-The 8-point statement drop is the honest number, and it is concentrated. These are the journeys that now
-have NO real coverage, and each wants a rendered test through `harness/chatHarness` (real screen, native
-faked) rather than a re-mocked one:
+## Image-generation journeys still uncovered
 
-- `ChatModalSection.tsx` (70% -> 30%) - the modals reachable from a chat: which one opens from which
-  affordance, and that dismissing returns the user to the conversation rather than a blank screen.
-- `useChatMessageHandlers.ts` (80% -> 53%) - per-message actions: edit, retry, copy, delete, speak. A dead
-  action here is invisible until a user long-presses a message and nothing happens.
-- `useChatModelActions.ts` (66% -> 42%) - switching model mid-conversation, and what happens to a reply in
-  flight when the user does.
-- `ChatScreenComponents.tsx` (89% -> 58%), `modelReadiness.ts` (56% -> 48%), `index.tsx` (63% -> 54%).
-
-Policy this follows: a mockist suite is deleted, not repaired, and the coverage it was claiming is logged
-here as a gap instead of being carried as a green number. Lower and true beats higher and fake.
-
-## Image-generation journeys left uncovered by deleting imageGenerationFlow.test.ts
-
-`__tests__/integration/generation/imageGenerationFlow.test.ts` was deleted: 60 tests that stood in for
-`localDreamGenerator` (the image generator itself), `activeModelService`, `llm` and `litert`. Six of its case
-names end in a line number - "should call stopGeneration after successful enhancement (line 247)",
-"(lines 253-255)", "(lines 290-292)" - which is what a test written to move a coverage number looks like
-rather than one written to protect a user.
-
-Already covered properly by rendered suites, so not re-created: draw-prompt routing (`imageIntentRouting`),
-force/off image mode (`imageModeToggle`), the OOM card and Load Anyway (`imageOomCard`, `imageMemoryCard`),
-lightbox + save-to-gallery (`imageLightbox`), voice-mode image journeys, and the enhancement rules
-(`enhancementNoThinking`, `enhancementReasoningPrompt`, `enhancementStreamingProgress`).
-
-Rewritten for real in `imageGenerationInFlight.rendered.guard.test.tsx`: STOP reaching the native generator,
-progress moving on the card, and a second send not starting a second diffusion.
-
-STILL UNCOVERED, each a real user-visible journey wanting a rendered test:
-
-- **image backend metadata on the finished message.** The per-message details should name the backend that
-  actually rendered it (QNN / MNN / Core ML). Wrong or missing backend attribution is how a user concludes
-  the NPU is being used when it is not. (`gpuBackendMeta` covers the TEXT side only.)
-- **enhancement conversation context rules.** The enhancement request carries recent chat context, capped at
-  the last 10 messages, with system messages skipped and long messages truncated. Uncapped context is a
-  silent context-window overflow on a small model; including system prompts leaks instructions into the
-  rewritten image prompt.
-- **image model auto-load on demand**, and reload when the thread count changed. A user who generates,
-  changes threads in settings, then generates again must not silently keep the old context.
-- **generating with no conversation open** saves to the gallery without trying to add a chat message.
-
-Policy: the mockist file is gone rather than repaired, and what it was claiming is written down here instead
-of carried as a green number.
+- **Enhancement context rules** - unit-covered only (`imageGenerationHelpers.test.ts`). Add a rendered test if
+  policy needs it.
+- **Auto-load and thread-count reload** - logic in `activeModelService/index.ts`; only a unit test. Rendered
+  test: generate, change threads, generate again.
+- **Generate with no conversation open** - no test. Add a rendered gallery-only test.
 
 ## Ejecting a model mid-reply unloads the engine WITHOUT stopping the generation
 
