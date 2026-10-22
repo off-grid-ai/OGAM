@@ -37,7 +37,7 @@ import { uniformDownloadId } from '../../services/modelDownloadService/uniformId
 import { fetchModelFiles, preferredDownloadQuants } from '../../services/modelCatalogFiles';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 import { DevicePicksRow } from '../../components/models/DevicePicksRow';
-import { catalogMatches, devicePicks } from '../../services/devicePicks';
+import { devicePicks } from '../../services/devicePicks';
 import { sizeChoices } from './sizeChoices';
 
 function hasNonSortFilters(fs: FilterState): boolean {
@@ -388,12 +388,6 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     const pickIds = new Set(devicePicks(ramGB, catalog).map(pick => pick.model.id));
     return recommendedAsModelInfo.filter(model => !pickIds.has(model.id));
   }, [recommendedAsModelInfo, ramGB, catalog]);
-  // The catalog answers a search first; Hugging Face results follow, without repeating a catalog model.
-  const searchResults = React.useMemo(() => {
-    const fromCatalog = catalogMatches(searchQuery, catalog).filter(model => !model.files.every(f => fileExceedsBudget(f.size, ramGB)));
-    const catalogIds = new Set(fromCatalog.map(model => model.id));
-    return [...fromCatalog, ...filteredResults.filter(model => !catalogIds.has(model.id))];
-  }, [searchQuery, filteredResults, ramGB, catalog]);
   const hasNonSortActiveFilters = hasNonSortFilters(filterState);
   const currentSort = SORT_OPTIONS.find(o => o.key === filterState.sort) ?? SORT_OPTIONS[0];
   const isSortActive = filterState.sort !== 'recommended';
@@ -549,7 +543,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
       ) : (
         <FlatList
           {...LIST_CLIPPING_PROPS}
-          data={hasSearched ? searchResults : [...(!onboarding && Platform.OS === 'android' ? [liteRTModel] : []), ...moreModels]}
+          data={hasSearched ? filteredResults : [...(!onboarding && Platform.OS === 'android' ? [liteRTModel] : []), ...moreModels]}
           renderItem={renderModelItem}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}

@@ -57,6 +57,24 @@ function matchesOrgFilter(model: ModelInfo, orgs: string[]): boolean {
   });
 }
 
+/** Whether a curated model passes the maker, type and size filters. */
+function matchesCuratedFilters(model: MobileTextCatalogModel, filterState: FilterState): boolean {
+  if (filterState.type !== 'all' && model.type !== filterState.type) return false;
+  if (filterState.orgs.length > 0 && !filterState.orgs.includes(model.org)) return false;
+  if (filterState.size !== 'all') {
+    const sizeOpt = SIZE_OPTIONS.find(s => s.key === filterState.size);
+    if (sizeOpt && (model.params < sizeOpt.min || model.params >= sizeOpt.max)) return false;
+  }
+  return true;
+}
+
+/** A curated model a search names: by its name, repo, maker or description. An empty search
+ *  (filters only) names every model. */
+function matchesCatalogSearch(query: string, model: MobileTextCatalogModel): boolean {
+  const needle = query.trim().toLowerCase();
+  return [model.name, model.id, model.org, model.description].some(text => text.toLowerCase().includes(needle));
+}
+
 /** A Q4_K_M download is about 4.8 bits per weight: 0.6 GB per billion parameters. */
 const Q4_BYTES_PER_BILLION_PARAMS = 0.6e9;
 
@@ -343,24 +361,11 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
     filterState.source !== 'all' || filterState.size !== 'all' || filterState.quant !== 'all' ||
     filterState.sort !== 'recommended';
 
-  const filteredResults = useMemo(
-    () => applySort(computeFilteredResults(searchResults, filterState, ramGB), filterState.sort, ramGB),
-    [searchResults, filterState, ramGB],
-  );
-
   const recommendedAsModelInfo = useMemo((): ModelInfo[] => {
     const maxParams = deviceRecommendation.maxParameters;
     const models = recommended
       .filter(m => m.params <= maxParams && (!m.maxRam || ramGB <= m.maxRam))
-      .filter(m => {
-        if (filterState.type !== 'all' && m.type !== filterState.type) return false;
-        if (filterState.orgs.length > 0 && !filterState.orgs.includes(m.org)) return false;
-        if (filterState.size !== 'all') {
-          const sizeOpt = SIZE_OPTIONS.find(s => s.key === filterState.size);
-          if (sizeOpt && (m.params < sizeOpt.min || m.params >= sizeOpt.max)) return false;
-        }
-        return true;
-      })
+      .filter(m => matchesCuratedFilters(m, filterState))
       .map(m => mapCuratedModel(m, recommendedModelDetails));
     const sorted = applySort(models, filterState.sort, ramGB);
     // Prioritize NPU/GPU-accelerable models (LiteRT or Q4_0/Q8_0) to the top of the
@@ -368,7 +373,17 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
     // the editorial 'recommended' sort — explicit sorts (size/downloads/…) are honored.
     if (filterState.sort !== 'recommended') return sorted;
     return [...sorted].sort((a, b) => Number(modelSupportsNpuGpu(b)) - Number(modelSupportsNpuGpu(a)));
-  }, [recommended, deviceRecommendation.maxParameters, filterState.type, filterState.orgs, filterState.size, filterState.sort, recommendedModelDetails, ramGB]);
+  }, [recommended, deviceRecommendation.maxParameters, filterState, recommendedModelDetails, ramGB]);
+
+  // A search lists the curated models it matches first, under the same filters and fit as the
+  // curated list, then Hugging Face results, without repeating a curated model.
+  const filteredResults = useMemo(() => {
+    const named = new Set(recommended.filter(m => matchesCatalogSearch(searchQuery, m)).map(m => m.id));
+    const fromCatalog = recommendedAsModelInfo.filter(model => named.has(model.id));
+    const catalogIds = new Set(fromCatalog.map(model => model.id));
+    const fromHuggingFace = applySort(computeFilteredResults(searchResults, filterState, ramGB), filterState.sort, ramGB);
+    return [...fromCatalog, ...fromHuggingFace.filter(model => !catalogIds.has(model.id))];
+  }, [recommended, recommendedAsModelInfo, searchQuery, searchResults, filterState, ramGB]);
 
   const trendingAsModelInfo = useMemo((): ModelInfo[] => {
     const maxParams = deviceRecommendation.maxParameters;

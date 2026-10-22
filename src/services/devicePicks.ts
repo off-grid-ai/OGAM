@@ -116,16 +116,3 @@ export function devicePicks(ramGB: number, catalog: readonly ModelEntry[] = phon
   }), ramGB)
     .map(({ slot, item }) => ({ slot, ...item }));
 }
-
-/** Catalog models whose name, maker or description matches a search, as list entries. Search shows
- *  these first, then Hugging Face results. */
-export function catalogMatches(query: string, catalog: readonly ModelEntry[] = phoneCatalog()): ModelInfo[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return [];
-  return chatEntries(catalog)
-    .filter(entry => [entry.name, entry.id, entry.org ?? '', entry.description ?? ''].some(text => text.toLowerCase().includes(needle)))
-    .flatMap(entry => {
-      const download = catalogEntryToDownload(entry);
-      return download ? [download.model] : [];
-    });
-}
