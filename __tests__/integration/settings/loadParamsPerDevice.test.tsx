@@ -141,7 +141,8 @@ describe('load params follow the model header and the device', () => {
     section.unmount();
 
     const params = await firstSendLoads(h);
-    expect(params.devices).toEqual(['HTP0']);
+    // CPU is named as the fallback so a missing HTP0 never resolves to llama.rn's OpenCL default.
+    expect(params.devices).toEqual(['HTP0', 'CPU']);
     expect(params.n_batch).toBe(128);
     expect(params.n_ubatch).toBe(128);
   });

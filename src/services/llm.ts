@@ -12,7 +12,7 @@ import {
   buildCompletionParams, buildThinkingCompletionParams, supportsNativeThinking,
   getGpuLayersForDevice, BYTES_PER_GB,
   validateModelFile, checkMemoryForModel, safeCompletion, resolveSafeContext,
-  describeGpuFallback, completionEnd, type CompletionEndFields,
+  describeGpuFallback, completionEnd, type CompletionEndFields, HTP_DEVICES,
 } from './llmHelpers';
 import { awaitMemoryReclaim, effectiveAvailableMB } from './memoryBudget';
 import { modelResidencyManager } from './modelResidency';
@@ -230,7 +230,7 @@ class LLMService {
         // HTP routes to the Hexagon NPU — not subject to Adreno GPU layer caps,
         // but we still respect the RAM-based safeGpuLayers floor (0 on ≤4GB devices).
         safeGpuLayers = safeGpuLayers > 0 ? (settings?.gpuLayers ?? 99) : 0;
-        resolvedBaseParams = { ...params.baseParams, devices: ['HTP0'] };
+        resolvedBaseParams = { ...params.baseParams, devices: [...HTP_DEVICES] };
         const socInfo = await hardwareService.getSoCInfo();
         logger.log(`[LLM] HTP backend — offloading ${safeGpuLayers} layers to NPU (${socInfo.qnnVariant ?? 'unknown'})`);
       } else if (backend === INFERENCE_BACKENDS.OPENCL) {

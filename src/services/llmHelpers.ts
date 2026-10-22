@@ -13,6 +13,25 @@ import { HTP_ENABLED } from '../config/featureFlags';
 
 const RESPONSE_RESERVE = 512;
 /** Prompt compaction target. Output length is the user's model-aware maxTokens setting. */
+/**
+ * The device list an NPU (Hexagon HTP) load asks llama.rn for. 'CPU' is the fallback named
+ * explicitly, and it is load-bearing: llama.rn (cpp/jsi/RNLlamaJSI.cpp buildDeviceOverrides +
+ * configureBackendDevices) treats a list that matches NO registered device as "not provided" and
+ * falls back to its Android default, which is every GPU except HTP — the Adreno OpenCL device. So
+ * `['HTP0']` alone on a phone whose Hexagon session did not open (ggml-hexagon drops HTP0 from the
+ * registry when the session probe fails) silently put every layer on OpenCL, and the Adreno driver
+ * killed the app mid-reply. With 'CPU' in the list the same miss resolves to a CPU-only context:
+ * llama.rn never offloads to the CPU device itself, so on a phone where HTP0 exists this list
+ * selects exactly what `['HTP0']` did.
+ */
+export const HTP_DEVICES: readonly string[] = ['HTP0', 'CPU'];
+
+/** Whether an initialised context actually landed on the NPU (llama.rn reports the devices the model uses). */
+function contextUsesHtp(context: LlamaContext): boolean {
+  const devices = (context as unknown as { devices?: unknown }).devices;
+  return Array.isArray(devices) && devices.some(d => typeof d === 'string' && d.startsWith('HTP'));
+}
+
 export const CONTEXT_PROMPT_BUDGET_RATIO = 0.55;
 const DEFAULT_THREADS = 4; // targets performance cores only; over-threading onto efficiency cores (A520) hurts
 const DEFAULT_GPU_LAYERS = Platform.OS === 'ios' ? 99 : 0;
@@ -205,6 +224,13 @@ export async function initContextWithFallback(
     logger.log(`[LLM] Attempt 1/2: ${isHtp ? 'HTP' : 'GPU'} init (ctx=${contextLength}, gpu_layers=${nGpuLayers})`);
     const gpuInitPromise = initLlama({ ...params, n_ctx: contextLength, n_gpu_layers: nGpuLayers } as any);
     const context = await tryGpuInit(gpuInitPromise, nGpuLayers, isHtp);
+    if (isHtp && nGpuLayers > 0 && !contextUsesHtp(context)) {
+      // The NPU was asked for but no HTP device was registered, so llama.rn resolved the list to
+      // its CPU entry. The context works, on the CPU: report it as the failed accelerator attempt
+      // it is, so the chat says so instead of claiming NPU layers.
+      logger.warn(`[LLM] HTP requested but no HTP device was available (context devices: ${JSON.stringify((context as unknown as { devices?: unknown }).devices ?? [])}) — running on CPU`);
+      return { context, gpuAttemptFailed: true, actualLength: contextLength };
+    }
     logger.log('[LLM] GPU init succeeded');
     return { context, gpuAttemptFailed, actualLength: contextLength };
   } catch (gpuError: any) {

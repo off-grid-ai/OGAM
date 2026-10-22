@@ -371,6 +371,11 @@ export interface LlamaFake {
    *  accelerator init does — so initContextWithFallback falls back to the CPU attempt (n_gpu_layers:0).
    *  Models B24 (GPU init timeout → CPU/partial fallback). Persistent until cleared. */
   scriptGpuInitFailure(fail?: boolean): void;
+  /** The Hexagon session did not open, so llama.rn's registry has no HTP0 (ggml-hexagon drops a device
+   *  whose session probe fails). A device list naming HTP0 then resolves as llama.rn resolves it: to the
+   *  other names on the list, or — when none of them is registered either — to the Android default,
+   *  the Adreno OpenCL GPU. Persistent until cleared. */
+  scriptHtpUnavailable(unavailable?: boolean): void;
   /** Make EVERY init attempt fail (a model that can't load on any backend) — the real load path throws. */
   scriptInitFailure(fail?: boolean): void;
   /** HOLD the next post-init multimodal-support check (context.getMultimodalSupport) open until
@@ -453,6 +458,7 @@ function makeLlamaFake(
   // `interrupted: true` (the exact device wire shape: predicted stops, stopped_eos=false). The flag
   // is per-completion (a fresh completion starts un-stopped), matching the native abort behavior.
   let stopRequested = false;
+  let htpUnavailable = false; // when true, the registry has no HTP device (session probe failed)
   let gpuInitFails = false; // when true, initLlama with n_gpu_layers>0 rejects (GPU/HTP init timeout → CPU fallback)
   let initFails = false; // when true, EVERY initLlama attempt rejects (a model that fails to load on any backend)
   // Sticky Metal backend error (ggml-metal-context has_error): set when the app goes to background with a
@@ -745,14 +751,23 @@ function makeLlamaFake(
       // initContextWithFallback falls back to the CPU attempt (which requests n_gpu_layers:0 and succeeds).
       if (gpuInitFails && n > 0)
         throw new Error('GPU context init timed out after 8000ms');
-      const devices = Array.isArray(params?.devices)
+      const requested = Array.isArray(params?.devices)
         ? (params!.devices as string[])
         : [];
-      (context as Record<string, unknown>).gpu = n > 0;
-      (context as Record<string, unknown>).devices = n > 0 ? devices : [];
+      // llama.rn's device resolution (cpp/jsi/RNLlamaJSI.cpp buildDeviceOverrides): the requested
+      // names that are registered, minus 'CPU' (always the fallback, never an offload target). An
+      // empty result counts as a CPU-only list only when 'CPU' was named; otherwise the request is
+      // treated as absent and the platform default applies (Android: the OpenCL GPU).
+      const registered = (d: string) => d === 'CPU' || !(htpUnavailable && d.startsWith('HTP'));
+      const selected = requested.filter(d => d !== 'CPU' && registered(d));
+      const cpuOnlyList = requested.length > 0 && selected.length === 0 && requested.includes('CPU');
+      const usedDefault = requested.length > 0 && selected.length === 0 && !cpuOnlyList;
+      const onDevice = n > 0 && !cpuOnlyList;
+      (context as Record<string, unknown>).gpu = onDevice;
+      (context as Record<string, unknown>).devices = onDevice && !usedDefault ? selected : [];
       (context as Record<string, unknown>).reasonNoGPU =
-        n > 0 ? '' : 'gpu layers not requested';
-      initBackend = backendOf(params);
+        onDevice ? '' : 'gpu layers not requested';
+      initBackend = cpuOnlyList ? 'cpu' : backendOf(usedDefault ? { n_gpu_layers: n } : params);
       return context;
     }),
     releaseContext: jest.fn().mockResolvedValue(undefined),
@@ -786,6 +801,9 @@ function makeLlamaFake(
       const f = releaseFn;
       releaseFn = null;
       f?.();
+    },
+    scriptHtpUnavailable: (unavailable = true) => {
+      htpUnavailable = unavailable;
     },
     scriptGpuInitFailure: (fail = true) => {
       gpuInitFails = fail;

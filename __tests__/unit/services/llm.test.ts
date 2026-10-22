@@ -2372,7 +2372,7 @@ describe('LLMService', () => {
       (hardwareService as any).cachedSoCInfo = null;
     });
 
-    it('passes devices:HTP0 and 99 gpu_layers when inferenceBackend is htp on Android', async () => {
+    it('passes devices HTP0 + CPU fallback and 99 gpu_layers when inferenceBackend is htp on Android', async () => {
       jest.spyOn(Platform, 'OS', 'get').mockReturnValue('android');
       jest.spyOn(hardwareService, 'getSoCInfo').mockResolvedValue({
         vendor: 'qualcomm', hasNPU: true, qnnVariant: '8gen3',
@@ -2388,7 +2388,7 @@ describe('LLMService', () => {
       await llmService.loadModel('/models/test.gguf');
 
       expect(mockedInitLlama).toHaveBeenCalledWith(
-        expect.objectContaining({ devices: ['HTP0'], n_gpu_layers: 99 }),
+        expect.objectContaining({ devices: ['HTP0', 'CPU'], n_gpu_layers: 99 }),
       );
     });
 
