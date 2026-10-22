@@ -28,7 +28,13 @@
     "test:device-parser": "node --test scripts/android/__tests__/adbClient.test.mjs",
     "e2e:mesh": "node --test __tests__/device/meshPairing.e2e.mjs",
     "e2e:image-sync": "node scripts/e2e/generated-image-sync.mjs",
-    "e2e:thinking-sync": "node scripts/e2e/attended-thinking-sync.mjs"
+    "e2e:thinking-sync": "node scripts/e2e/attended-thinking-sync.mjs",
+    "e2e:journeys": "node scripts/e2e/run-journeys.mjs",
+    "e2e:engine-smoke": "node scripts/e2e/engine-smoke-journey.mjs",
+    "e2e:mic-permission": "node scripts/e2e/mic-permission-journey.mjs",
+    "e2e:download-a11y": "node scripts/e2e/download-a11y-journey.mjs",
+    "e2e:branch-fixes": "node scripts/e2e/branch-fixes-journey.mjs",
+    "e2e:crash-smoke": "node scripts/e2e/crash-smoke-journey.mjs"
   },
   "dependencies": {
     "@dr.pogodin/react-native-fs": "^2.38.1",
