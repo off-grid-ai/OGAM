@@ -234,6 +234,39 @@ export const ChatsListScreen: React.FC = () => {
     visibleConversations.length > 0 &&
     visibleConversations.every(conversation => selectedIds.has(conversation.id));
 
+  // The search field scrolls away with the chats (as in Mail and Messages), so the header's own
+  // border and shadow stay the only fixed edge. One stable element keeps the field mounted, and so
+  // focused, while the list re-renders on each keystroke.
+  const searchHeader = useMemo(
+    () => (
+      <View style={styles.searchRow}>
+        <Icon name="search" size={16} color={colors.textMuted} />
+        <TextInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search chats"
+          placeholderTextColor={colors.textMuted}
+          style={styles.searchInput}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          testID="chat-search-input"
+        />
+        {searchQuery ? (
+          <TouchableOpacity
+            onPress={() => setSearchQuery('')}
+            accessibilityRole="button"
+            accessibilityLabel="Clear chat search"
+            hitSlop={SPACING.sm}
+          >
+            <Icon name="x" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    ),
+    [colors.textMuted, searchQuery, styles],
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader
@@ -299,30 +332,6 @@ export const ChatsListScreen: React.FC = () => {
         </View>
       ) : (
         <>
-          <View style={styles.searchRow}>
-            <Icon name="search" size={16} color={colors.textMuted} />
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search chats"
-              placeholderTextColor={colors.textMuted}
-              style={styles.searchInput}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
-              testID="chat-search-input"
-            />
-            {searchQuery ? (
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                accessibilityRole="button"
-                accessibilityLabel="Clear chat search"
-                hitSlop={SPACING.sm}
-              >
-                <Icon name="x" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
           {selecting ? (
             <View style={styles.selectionBar}>
               <Text style={styles.selectionCount}>{selectedIds.size} selected</Text>
@@ -357,6 +366,7 @@ export const ChatsListScreen: React.FC = () => {
             showsVerticalScrollIndicator={false}
             {...LIST_CLIPPING_PROPS}
             keyboardShouldPersistTaps="handled"
+            ListHeaderComponent={searchHeader}
             ListEmptyComponent={
               <Text style={styles.noMatches}>No chats match your search.</Text>
             }
@@ -415,8 +425,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: SPACING.sm,
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.md,
+    marginBottom: SPACING.md,
     paddingHorizontal: SPACING.md,
     minHeight: 44,
     borderWidth: 1,
