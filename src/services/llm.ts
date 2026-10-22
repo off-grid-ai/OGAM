@@ -316,16 +316,17 @@ class LLMService {
       this.isGenerating = false;
       this.activeCompletionPromise = null;
       try { await context.release(); } catch (e) { logger.warn('[LLM] Error releasing context (bridge may be torn down):', e); }
+      // The unload is not DONE until the native memory (weights + GPU/HTP buffers) is actually reclaimed.
+      // context.release() returns before the OS frees those pages, so a reload that immediately loaded the
+      // new context stacked BOTH models' memory at once → OOM/crash under pressure (device 2026-07-14: a
+      // reload with ~2GB free ground to 0 tok/s then died). Wait (bounded) for the process footprint to drop.
+      await awaitMemoryReclaim(() => hardwareService.getProcessMemory());
+      useAppStore.getState().setModelMaxContext(null);
+      Object.assign(this, { context: null, contextUnusable: false, currentModelPath: null, nativeConversationId: null, multimodalSupport: null, multimodalInitialized: false, toolCallingSupported: false, thinkingSupported: false, gpuEnabled: false, gpuReason: '', gpuDevices: [], activeGpuLayers: 0, requestedGpuLayers: 0, gpuAttemptFailed: false });
     } finally {
+      // Only now: until the context is cleared, a caller must not get the released one.
       this.releasingContext = false;
     }
-    // The unload is not DONE until the native memory (weights + GPU/HTP buffers) is actually reclaimed.
-    // context.release() returns before the OS frees those pages, so a reload that immediately loaded the
-    // new context stacked BOTH models' memory at once → OOM/crash under pressure (device 2026-07-14: a
-    // reload with ~2GB free ground to 0 tok/s then died). Wait (bounded) for the process footprint to drop.
-    await awaitMemoryReclaim(() => hardwareService.getProcessMemory());
-    useAppStore.getState().setModelMaxContext(null);
-    Object.assign(this, { context: null, contextUnusable: false, currentModelPath: null, nativeConversationId: null, multimodalSupport: null, multimodalInitialized: false, toolCallingSupported: false, thinkingSupported: false, gpuEnabled: false, gpuReason: '', gpuDevices: [], activeGpuLayers: 0, requestedGpuLayers: 0, gpuAttemptFailed: false });
   }
   async unloadModel(): Promise<void> {
     const mutex = this.acquireContextMutex();
