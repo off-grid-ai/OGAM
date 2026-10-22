@@ -92,7 +92,7 @@ iPhone 17 Pro Max on 2026-10-17 and is not listed):
 - **Demo data PDF** (`settings/devToolingReleaseGate`): the fake PDF reader cannot read the real demo
   PDF, so the test checks that the PDF is listed, not that it was indexed.
 
-## LiteRT-LM 0.18.0 is not checked on an Android phone - 2026-10-17
+## LiteRT-LM 0.18.1 is not checked on an Android phone - 2026-10-17
 
 **Check 2026-10-22:** now LiteRT-LM 0.18.1 (`3ad24e535`). Still not checked on an Android phone.
 
@@ -100,8 +100,8 @@ iPhone 17 Pro Max on 2026-10-17 and is not listed):
 
 The runtime upgrade (handoff item 9) was checked on an iPhone 17 Pro Max with llama.rn 0.13.0-rc.7:
 a thinking chat completed with Metal (99 layers), tool calls ran, Stop kept the partial reply, and a
-vision question about a photo was answered correctly. LiteRT-LM 0.18.0 (`android/app/build.gradle`,
-commit c55dd1d72) is Android-only and no Android phone was connected. Still to check on Android: a
+vision question about a photo was answered correctly. LiteRT-LM 0.18.1 (`android/app/build.gradle`,
+commit 3ad24e535; first filed against 0.18.0) is Android-only and no Android phone was connected. Still to check on Android: a
 LiteRT chat, the same llama.rn steps, and the backend chip or CPU fallback notice.
 
 ## A failed image generation does not hold the chat queue - 2026-10-17
@@ -588,8 +588,9 @@ the surface. Two questions this run raises that the current estimator cannot ans
 - Would the text model fit if the image model (3.6 GB, idle) were evicted first? Nothing appears to
   consider that trade - the image sidecar stays resident across every stage including two turns that
   never needed it.
-- Qwythos loaded earlier in the same session once the context was lowered to 1k, which the gate's
-  cost model cannot express, since it is context-blind. Still unexplained, still open.
+- Qwythos loaded earlier in the same session once the context was lowered to 1k. At the time the
+  gate's cost model was context-blind; superseded by the context-aware estimate (`82cb512f7`).
+  Re-check with the journey.
 
 **Cover it.** The journey is the regression test: any change to the cost model should be run against
 it, and `never resident at any stage: text` should become empty.
@@ -697,8 +698,8 @@ both directions:
 
 **Check 2026-10-22:** the code repairs below are all on `main` (`efbe3e700`, `pro/sync/pairingQr.ts`, `src/services/networkReconnect.ts`). Only the installed-device proof is left; the "code repair in progress" lines are out of date.
 
-**Status:** Shared QR and Android residency Code evidence pass. Mobile UI code is still being
-finalized. Final iOS and Android Built and Live verified gates are open. Filed 2026-08-30.
+**Status:** Shared QR and Android residency Code evidence pass. The Mobile code repairs are done
+(see the check above). Final iOS and Android Built and Live verified gates are open. Filed 2026-08-30.
 
 The Shared pairing contract is built and tested. The Sync ESM, CJS, and DTS builds pass. Focused QR,
 real-handshake, and ESM/CJS runtime checks pass 21/21. The final QR suite passes 11/11. Sync typecheck,
@@ -709,7 +710,7 @@ Promise. `MeshResidencyModule.begin()` and `state()` now use one canonical `Resi
 `WritableMap` projection. Native checks pass 7/7. Focused rendered checks pass 23/23 with
 open-handle detection and a clean exit.
 
-Keep this gap open until the final Mobile code and these installed checks pass:
+Keep this gap open until these installed checks pass:
 
 1. On iPhone, Show QR Code opens a bottom sheet. The code is hidden before that action.
 2. Scan QR Code is a direct action. A valid scan identifies the device, shows the connection target,
@@ -831,9 +832,9 @@ that has to watch journeys it is not driving.
 **Status:** open. Filed 2026-08-12. Deliberately NOT in the current PR - it is a package extraction,
 not a fix, and folding it in would bloat a release branch that is about sync feedback.
 
-**The gap.** MTP support exists on mobile and does not exist on desktop. Both apps consume the same
-model layer, so a capability that lives in one app's screens is a rule with one home and two
-audiences - the shape this repo keeps finding at the root of its bugs.
+**The gap.** Both apps now support MTP, but the "declares MTP" rule is written twice:
+`src/utils/mtpSupport.ts` on mobile and `gguf-metadata.ts` on desktop. Both apps consume the same
+model layer, so a rule that lives in each app's code has two homes and can drift - the shape this repo keeps finding at the root of its bugs.
 
 **Why it is a shared-package problem, not a desktop one.** Copying the mobile implementation across
 would make it a rule with TWO homes, which is worse than having it once. The model layer is the owner:

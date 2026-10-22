@@ -274,19 +274,19 @@ A row flagged HAS-UI-TEST may still carry a device caveat where the *trigger* is
 | Phase | HAS-UI-TEST | HAS-SERVICE-TEST-ONLY | NO-TEST | DEVICE-ONLY | Total |
 |---|---|---|---|---|---|
 | 0 Install | 2 | 0 | 0 | 1 | 3 |
-| 1 Downloads | 10 | 6 | 1 | 2 | 19 |
-| 2 Text gen | 21 | 2 | 1 | 2 | 26 |
+| 1 Downloads | 11 | 6 | 1 | 1 | 19 |
+| 2 Text gen | 23 | 2 | 1 | 2 | 28 |
 | 3 Voice | 12 | 2 | 0 | 1 | 15 |
-| 4 Image/Vision | 12 | 2 | 2 | 2 | 18 |
-| 5 Memory | 17 | 3 | 1 | 2 | 23 |
+| 4 Image/Vision | 13 | 2 | 2 | 2 | 19 |
+| 5 Memory | 20 | 4 | 1 | 2 | 27 |
 | 6 KB/Projects | 11 | 0 | 0 | 0 | 11 |
-| 7 Tools | 9 | 2 | 2 | 0 | 13 |
-| 8 Remote | 6 | 2 | 2 | 1 | 11 |
+| 7 Tools | 11 | 2 | 2 | 0 | 15 |
+| 8 Remote | 7 | 2 | 2 | 1 | 12 |
 | 9 Enhancement | 3 | 1 | 0 | 0 | 4 |
 | 10 TTS | 2 | 0 | 0 | 0 | 2 |
-| 11 Polish | 11 | 1 | 3 | 8 | 23 |
+| 11 Polish | 13 | 1 | 3 | 7 | 24 |
 | 12 This-release | 3 | 1 | 0 | 3 | 7 |
-| **TOTAL** | **119** | **21** | **12** | **24** | **186** |
+| **TOTAL** | **131** | **23** | **12** | **20** | **186** |
 
 ### GAP LIST — buildable UI-behavior test gaps
 
