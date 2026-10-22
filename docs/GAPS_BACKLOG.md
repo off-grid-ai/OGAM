@@ -273,136 +273,24 @@ reports vision failing right after a first download, instrument the load path: a
 record's mmProjPath is set before the first load, and re-derive multimodal if a mmproj is linked after
 a text-only load.
 
-## Personal Mesh (sync across macOS, iOS, Android) — 2026-07-30
+## Personal Mesh (sync across macOS, iOS, Android) — open items (re-checked 2026-10-22)
 
-First entry for Personal Mesh in this doc. Found by auditing the shared state machines in
-`@offgrid/sync` against what the two apps actually wire, with Android in scope as a first-class
-target. The shared layer is largely complete; these are the app-side holes.
+- **PM1 / PM2** - one device identity (`localDevice.ts`) and Android mesh residency
+  (`MeshResidencyService.kt`) are in code. Matrix rows 5–6 and 18–21 still need a device run.
+- **PM7** - Devices UI vs the state table: `docs/PERSONAL_MESH_TEST_MATRIX.csv` rows 39–42 have empty result
+  columns. Run on three platforms.
+- **PM8** - none of the 48 matrix rows records a pass. Run the matrix on hardware.
+- **PM9** - receive consent: `admitIncoming` is now wired to per-category receive preferences
+  (`pro/sync/fileTransferService.ts`). There is no prompt, by decision.
+- **PM12** - no late-pair app journey in `scripts/e2e`. Run the physical two-way late-pair journey, including a
+  receiver restart.
 
-**Closed in this pass (code + wired, NOT device-verified):**
+## Open bug: evicting an OFFLINE device may not leave the eviction outstanding
 
-| ID | Gap | Status |
-|---|---|---|
-| PM1 | Public core minted a second device identity (`getOrCreateLocalDevice` persisted a random id), so op-log provenance and version vectors were keyed to an identity absent from every roster and membership. `stateSyncService` used it directly while pairing used the fingerprint. | Fixed: core exposes display facts only; `getCanonicalLocalSyncDevice` is the one place an id is attached; a one-time pure migration re-attributes persisted ops. Needs device verification (matrix rows 5-6). |
-| PM2 | Backgrounding Android suspended the process: mDNS, the TCP listener and in-flight transfers stopped while the peer still showed the device connected. Only WorkManager's download service was declared. | Fixed: `MeshResidencyService` dataSync foreground service + one TS contract both platforms satisfy, with the capability gap declared as data (iOS honestly reports `survivesBackground: false`). Needs device verification (matrix rows 18-21). |
-| PM3 | Dead `devHarness` was a second identity minter behind a permanently-false flag. | Deleted. |
+`shared/packages/sync/src/personal-mesh-entitlement.ts` still calls `onRegistryChanged` before
+`finalizeEviction`. The test is skipped (`syncPersistence.integration.test.ts`, `it.skip`).
 
-**Open:**
-
-| ID | Gap | Verdict |
-|---|---|---|
-| PM4 | ~~Android reinstall orphans a licensed seat.~~ **By design, not a gap.** Android wipes the Keystore on uninstall so a reinstall mints a new fingerprint and consumes a seat. This is the exact case auto-eviction of the least-active installation plus user-driven device management already answers: the dead entry is by definition least-active, so it is what gets replaced. Closed. |
-| PM5 | ~~No license-key revocation or rotation.~~ **Out of scope by product decision (2026-07-30).** We do not support revoking or rotating a key: if a key is compromised, that is the user's loss. Device eviction remains the only removal mechanism. Do not re-open this as a gap. |
-| PM6 | ~~Two shared projections have zero callers.~~ **Wrong - both are rendered** (`KnownDevicesSection.tsx:78`, `DevicesScreen.tsx:2348`); the original grep excluded `shared/`. The real defect was the COPY: the confirmation said eviction "removes the pairing from both devices", omitting that the seat is freed and what happens to the target's saved licence. Fixed in shared: the copy now splits on reachability, so an offline device is told cleanup stays queued rather than claimed already clean. Closed. |
-| PM7 | **Devices UI never audited against the brief's state table.** Both platforms consume `projectSyncControlCenter`, but nobody has checked all six credential x registered x paired x connected rows render distinctly, that capacity reads "N of 5 registered", or that roster freshness is shown rather than stale data presented as authoritative. | audit. Matrix rows 39-42. |
-| PM8 | **The four riskiest areas have zero verified coverage.** The iOS/macOS manual gate (`desktop/outputs/ios-macos-sync-manual-gate-20260729`) is 8/108 verified: pairing 0/9, discovery 0/9, membership 0/7, persistence 0/5. It also has no Android axis at all, and defers the five-device cap as needing real multi-device hardware. | superseded by `docs/PERSONAL_MESH_TEST_MATRIX.csv` (42 rows, macOS/iOS/Android columns). |
-
-| PM9 | ~~No receive-side consent.~~ **Out of scope by product decision (2026-07-30).** Same-owner devices auto-accept, which is what AirDrop does between devices on one Apple ID; Personal Mesh is same-owner-only by definition, so a prompt would be friction with no threat model behind it. The `admitIncoming` gate exists in shared but stays unwired, so behaviour is accept-everything. Do not re-open as a gap; if a shared/family mesh ever ships, that is when the gate gets a policy behind it. |
-
-| PM10 | **Android has no screenshot watcher, so automatic screenshot sharing cannot work.** `ScreenshotSyncSource` calls `nativeScreenshotBoundary.observe()` and swallows the failure with the comment "Android and older iOS builds do not expose this native watcher". iOS ships `ios/SyncScreenshotModule.swift`; there is no Kotlin counterpart (`android/.../ai/offgridmobile/` has clipboard, devicememory, directory, download, litert, localdream, pdf, sync - no screenshot). The UI therefore reports "automatic sharing is not available" on Android. This is the platform-parity rule violated exactly as rules.md describes it: a capability that exists on one platform and silently no-ops on the other. | real gap, user-reported 2026-07-30. Android CAN do this: a `ContentObserver` on `MediaStore.Images` filtered to the Screenshots bucket. Until then the gap must be declared capability DATA, not a swallowed throw. |
-| PM11 | **"For your safety, share another folder" when sharing Downloads on Android is the OS refusing, not our bug.** `SyncDirectorySourceModule.kt` uses the Storage Access Framework (`DocumentsContract` tree URIs), and Android 11+ refuses to grant SAF access to the `Download` directory (and `Android/data`, `Android/obb`) - that sentence is stock Android picker copy. So the app offers Downloads as a share target and the OS then declines it, which reads to the user as our failure. | real gap, user-reported 2026-07-30. Fix is not a permission: on Android, enumerate downloads through `MediaStore.Downloads` (API 29+), which needs no SAF grant, and stop routing that category through the folder picker. Do NOT retry SAF against Download - it cannot be granted. |
-| PM12 | **Late-pair full graph has service-level proof but no real Desktop-to-Mobile app journey.** Shared anti-entropy now handles more than 10,000 ops and byte-bounds large chat records. Mobile integration tests prove exact generated-image, attachment, and knowledge-document bytes across two real sync engines. Desktop separately proves exact late-pair bytes with SQLite and a temporary filesystem. | Open verification gap, 2026-08-13. Pair the actual apps only after project settings, chat text, enhanced prompt, reasoning, a completed tool, image, attachment, and knowledge document exist. Verify all records and bytes after pairing and after receiver restart, in both directions, on physical iOS and Android. |
-
-**Verified as already correct (no code needed):**
-
-- **Android discovery and advertise.** `react-native-zeroconf` acquires a `MulticastLock` in both its NSD and rx2dnssd backends, `CHANGE_WIFI_MULTICAST_STATE` is declared, and Android supports `registerService`, so it advertises rather than only browsing. Android reports `['lan']` while the iOS-only proximity route surfaces as route data - the capability-as-data pattern, not a `Platform.OS` branch.
-- **Clipboard provenance.** Records carry immutable `provenance` plus a derived `isLocal`, so an Off Grid receipt is attributed to the sending device and an Apple Universal Clipboard pickup is recorded as a local pasteboard observation - never as an Off Grid transfer. Android has no Universal Clipboard, so that false-attribution risk does not exist there.
-
-### RESOLVED: Forget did nothing on a licensed device this phone never paired with
-
-Fixed. An eviction's local side may now be empty: `prepareCapacityReplacement` no longer refuses when
-there is no active pairing, and `finalizeMembershipEviction` owns the rule that an empty local side is a
-no-op (both the immediate and the restart-recovery path go through it). The failure is also no longer
-swallowed - `KnownDevicesSection` reports it on the same error surface disconnect and reconnect use.
-Covered by `licensedDevices.integration.test.tsx`, which asserts the seat comes back at the PROVIDER.
-
-Original report follows.
-
-**Symptom.** Sync lists a device that holds a seat on your licence but that this phone has never paired
-with - a phone you replaced, say. Its row offers Forget, the button is enabled, tapping it opens the usual
-confirmation sheet, and confirming "Evict device" does **nothing at all**: no error, no change, the seat
-stays occupied. At the device cap this leaves you unable to pair a new device with no explanation.
-
-**Mechanism.** `syncService.forgetDevice` -> `evictDevice` -> `PersonalMeshDeviceEvictionCoordinator.evict`
--> `membership.prepareEviction` -> `pairingSecretStore.prepareCapacityReplacement`, which requires an
-active LOCAL pairing:
-
-    const active = activePairing(installation.syncDeviceId);
-    if (!active?.membershipId) throw new PersonalMeshEntitlementError('mapping_required');
-
-There is no local pairing for such a device, so it throws `mapping_required` ("The oldest licensed
-installation cannot be matched to a Sync device.") BEFORE `registry.deregisterInstallation` is reached.
-The seat is therefore never released. `SyncScreen/index.tsx` then calls
-`syncService.forgetDevice(deviceId).catch(() => undefined)`, so the failure never surfaces.
-
-Note the coordinator already has a path for exactly this shape - `revokeUnregistered`, used when the
-registry has no installation for the device - but it does not cover the mirror case: the registry HAS the
-installation and the local device has no pairing.
-
-**Two separable defects, worth deciding on separately:**
-1. The eviction cannot release a seat without a local pairing, when releasing the seat is the entire point.
-2. The failure is swallowed, so a broken action is indistinguishable from a working one. Even once (1) is
-   fixed, an eviction that fails for a real reason (offline, provider error) will still look like nothing
-   happened. This is the "dead button" class in the backlog: capability and handler should travel together
-   so a button that cannot act is not offered as if it can.
-
-Check whether desktop has the same hole: its own `prepareEviction` may impose the same requirement, and
-the ghost-row report there ("repair asks for a pairing code") is the same underlying situation.
-
-### WITHDRAWN (not a bug): "after a failed credential save, a device appears to pair and never does"
-
-Reported here earlier today and WRONG. The pairing did land; entitlement reconciliation then retired it,
-deliberately, because the peer held no installation on the licence. `personal-mesh-entitlement.ts` retires
-any device it finds locally trusted but absent from the authoritative roster - that is the rule that stops
-a device lingering in your mesh after it has been removed from your licence elsewhere.
-
-The test was at fault: its stand-in desktop never registered, which no real licensed Mac does. Registering
-it makes the whole journey pass, including the clean retry after a storage failure. The trust surviving
-reconciliation is now asserted, which is the part that matters - a pairing whose trust is withdrawn a
-moment later still reports success on its way past.
-
-Worth keeping in mind when reading a device log: "paired, then gone" is the signature of a device missing
-from the licence roster, not of a broken handshake.
-
-
-### Open bug: evicting an OFFLINE device may not leave the eviction outstanding
-
-Found by `__tests__/pro/sync/syncPersistence.integration.test.ts` ("keeps an offline eviction pending
-across restart and completes it on rediscovery"). Two of that suite's three journeys pass; this one does
-not. Held open. Not fixed.
-
-**What should happen.** Evicting a device that is not reachable releases the licence seat immediately and
-leaves a PENDING revocation, because the other device still holds trust that has to be withdrawn when it
-next appears. That pending record is what survives a restart and completes on rediscovery.
-
-**What happens.** No pending revocation is persisted, so there is nothing to restore after the restart.
-
-**Where to look.** `PersonalMeshDeviceEvictionCoordinator.evict()` announces the registry change BEFORE it
-finalises the transaction:
-
-    await this.options.onRegistryChanged?.(installation)
-    await this.options.membership.finalizeEviction(token)
-
-On mobile that announcement runs reconciliation, and reconciliation calls `resumeCommittedEvictions()`,
-which finalises every committed transaction - including the one the caller is holding. So the local trust
-is retired by the recovery path rather than by the caller, and which of them stages the peer's revocation
-depends on which got there first.
-
-That ordering also made eviction report `replacement_failed` after succeeding, because the caller then
-finalised a transaction that no longer existed. That half is fixed: finalising an already-finalised
-transaction is a no-op rather than an error (finishing twice is not a failure; finishing something never
-committed still is).
-
-**And it is not an occasional race - it is the normal flow.** Coverage over the sync suites shows the
-caller's finalize reaching only the already-finalised branch: the lines that actually retire the local
-trust and complete the transaction
-(`pairingEntitlementReplacementAdapter.ts` 66-75) are never executed at all, while the no-op branch
-above them always is. Every eviction is therefore completed by the recovery path, and the code that
-reads as the main path is dead in practice.
-
-So the answer to "should the announcement happen before the transaction closes" is no. Until it moves,
-the adapter's finalize is a formality and `resumeCommittedEvictions` is the real implementation - which
-is worth knowing before anyone edits either of them.
+Fix: finalise before announcing, then un-skip the test.
 
 ## Deleting the mockist ChatScreen suite leaves real ChatScreen journeys uncovered
 
@@ -585,130 +473,29 @@ read_wiki_structure, read_wiki_contents) succeeded in the same turn.
 
 Worth checking what the DeepWiki MCP server expects for `ask_question` against what is being sent.
 
-## Test coverage we know we are missing (Mac's list, 16 Aug 2026)
+## Test coverage we know we are missing (Mac's list, 16 Aug 2026, re-checked 2026-10-22)
 
-**Verdict:** instrument-and-revisit — none of these are known failures. They are capabilities we
-ship and do not exercise, which is how today's defects survived: the PDF-in-a-message bug had been
-predicted from a diff for VOICE NOTES weeks earlier and was only found when someone actually sent
-one.
+Device journeys with no recorded result:
 
-### Models and hardware
+- Huge-model eviction on iPhone with a 9B model (`scripts/e2e/model-eviction-journey.mjs` exists).
+- GPU/NPU selection read back on a device.
+- Voice mode end to end (`scripts/e2e/two-device-voice.mjs` exists).
+- Copy outside the app reaching the clipboard on iOS.
+- Ambient sharing of screenshots and downloads, allowed and disallowed, both ways (shared policy test exists;
+  no app journey).
+- Model transfer: multi-GB, resume, then load on the receiver for image, vision, text and STT.
+- Non-PDF attachments (voice note) end to end on desktop.
+- A receiver without the model downloads on demand.
+- Interrupted transfers, offline behaviour, and five-device replacement.
 
-- **Huge models — eviction and co-residency.** Run with something like Qwythos 9B (5.5 GB) and prove
-  eviction and co-residency behave: what gets unloaded, what survives, and that the device does not
-  die instead of evicting. iOS matters most here - a memory breach there is an uncatchable jetsam
-  SIGKILL, so the engine's GPU→CPU→CPU@2048 ladder cannot save it.
-- **GPU and NPU selection.** Prove the chosen backend is the one actually used, read back from
-  "show generation details" rather than assumed from a setting.
+Code gaps:
 
-### Voice
-
-- **Voice mode end to end** - STT in, TTS out, on a real device.
-
-### Clipboard
-
-- **Copying OUTSIDE the app** reflects in the in-app clipboard, on both Android and iOS.
-
-#### Android external clipboard capture is not available through Accessibility
-
-**Verdict:** platform-limit; replace the false automatic path with an explicit Android
-`ACTION_PROCESS_TEXT` selection action.
-
-Verified on a physical Android 16 Oppo device on 2026-08-20. Clipboard Sync was enabled, the React
-Native observer was active, and Android reported `SyncClipboardAccessibilityService` as both enabled
-and bound. A Chrome select-all followed by the system floating-toolbar Copy still produced no local
-clipboard item:
-
-- Chrome emitted no `TYPE_VIEW_TEXT_SELECTION_CHANGED` event for the selection.
-- The system floating toolbar emitted no Accessibility event for its Copy action.
-- `ClipboardManager.OnPrimaryClipChangedListener` was not called while Off Grid was in the
-  background.
-- `flagIncludeNotImportantViews` did not change those results.
-
-This is the Android security contract, not a permission-refresh bug. From Android 10, a background app
-cannot read clipboard data unless it has focus or is the default input method. An Accessibility grant
-is not an exception. The current service can help only in apps and system builds that voluntarily emit
-both the selection and Copy events, so it cannot support the product claim that anything copied on
-Android is captured.
-
-The maintainable end state is an explicit `ACTION_PROCESS_TEXT` action in Android's text-selection
-menu, labelled "Copy to Off Grid". The selected app sends the text directly to Off Grid under the
-user's tap, so no background clipboard read, default-keyboard role, focus-stealing overlay, polling,
-or broad screen traversal is required. The Android UI must describe this explicit action and must not
-present Accessibility as universal clipboard access. Keep the existing native observer only as a
-best-effort capability where the OS supplies the required events.
-
-### Ambient sharing, both ways round
-
-Each of these needs the negative case as well as the positive, because a permission that fails open
-is invisible when you only test that sharing works:
-
-- screenshots ARE synced when allowed / are NOT synced when disallowed
-- downloads ARE synced when allowed / are NOT synced when disallowed
-
-### Model transfer between devices
-
-F6 code evidence on 2026-09-11 proves explicit capability advertisement, preservation through saved
-and discovered device facts, encrypted package transfer through the real Shared engines, manifest
-validation, and a stable rendered transfer sheet while peer projections refresh. The development
-bundle also loads in the iOS simulator and publishes discovery. Keep the physical gate open: run a
-real multi-GB transfer in both directions, interrupt and resume it, load the received model, compare
-both device states, and complete the visual review. This task did not control the UI, and no physical
-phone was available.
-
-- image models send and WORK on the receiver
-- vision models send and WORK on the receiver
-- text models send and WORK on the receiver
-- STT models send and WORK on the receiver
-- the right models are offered to send, based on what the RECEIVER is
-
-"Arrives" and "works on the receiver" are different claims, and only the second one is the feature.
-
-### The ones Mac's list did not name, ranked by what they would cost us
-
-Highest risk first, because these are the ones where the failure is silent or unrecoverable rather
-than merely wrong.
-
-1. **Peer-pushed model settings, with no device-fit check.** `contextLength`, `maxTokens`,
-   `gpuLayers`, `nThreads` and `nBatch` are writable by a paired desktop and validated for TYPE and
-   RANGE only - never against what the receiving device can actually honour. Desktop offers maxTokens
-   up to 32768 and ctxSize up to 131072; a phone sitting at 4096 accepts them. The mutations are
-   per-key, so a maxTokens change alone lands on a phone whose context never moved, giving
-   `n_predict > n_ctx` - llama.cpp rejects the turn before inference while the settings screen still
-   reads 4096. On iOS the memory case is worse than wrong: a breach is an uncatchable jetsam
-   SIGKILL, so the engine's GPU→CPU→CPU@2048 fallback ladder cannot catch it. There is in-repo
-   precedent - appStoreMigrations.ts documents a removed MCP auto-boost that pinned context to 32768
-   and caused OOM crashes needing a repair migration. Sync can now reproduce that state from a peer,
-   with no migration to undo it. **Test: push each of those keys from desktop to a phone that cannot
-   honour them, and to an iPhone specifically.**
-
-2. **`maxToolCalls` is synced as well.** A peer set to 1 turns a single-tool request into a "tool
-   limit reached" notice instead of an answer. The default also moved from 3/5 to 25.
-
-3. **"Arrives" and "works on the receiver" are different claims.** Worth stating explicitly against
-   every transfer item above: only the second one is the feature. A model that lands and will not
-   load is a failure that a transfer test scores as a pass.
-
-4. **Every non-image attachment kind except PDF.** describeAttachment now classifies audio and video,
-   but only PDF has been SEEN working end to end. The voice note is the exact case this defect was
-   predicted for in the v0.0.103 review and it remains unproven on desktop.
-
-5. **A receiver that does not already have the model** - the download-on-demand path, as distinct
-   from transfer between two devices that both happen to have it.
-
-6. **Interrupted transfers** - background the app, drop wifi, lock the phone mid-send, then resume.
-
-7. **Offline behaviour.** Entitlement reconciliation reports "License service unavailable" with no
-   network. Prove offline access genuinely stays usable rather than degrading into a lock-out - the
-   home screen already had one of those, where a card that was still loading had no way into Sync.
-
-8. **The five-device replacement flow** at the licence limit, including the failure mode where the
-   oldest membership cannot be removed (`replacement_incomplete`).
-
-9. **The vision journeys still only run from Android.** vision-image-sync and vision-answer-sync are
-   Android-hardcoded. The iOS system photo picker exposes no addressable cells - only PXG* layout
-   groups and one concatenated label - so the iOS path needs the geometric-tap approach now used in
-   multi-attachment-sync.
+- **Peer-pushed settings skip a device-fit check** - `src/services/sync/mutation.ts` checks type and range only;
+  `llmHelpers.ts` sends `n_predict` unclamped. Clamp on receive or at load.
+- **`maxToolCalls` syncs** - `mutation.ts` allows 1–100; default 25 (`tool-execution-policy.ts`). Decide
+  whether it should sync, and add a test.
+- **Vision journeys are Android-only** - `scripts/e2e/vision-answer-sync.mjs` uses the Android producer. Port
+  the iOS producer.
 
 ## Model memory: fallback multipliers and the refusal card
 
