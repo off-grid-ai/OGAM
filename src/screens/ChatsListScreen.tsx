@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Platform, TextInput } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, TextInput } from 'react-native';
+import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -354,7 +355,7 @@ export const ChatsListScreen: React.FC = () => {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
-            removeClippedSubviews={Platform.OS !== 'android'}
+            {...LIST_CLIPPING_PROPS}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <Text style={styles.noMatches}>No chats match your search.</Text>

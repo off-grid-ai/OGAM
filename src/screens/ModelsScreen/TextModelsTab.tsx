@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { View, Text, FlatList, TextInput, RefreshControl, TouchableOpacity, Platform } from 'react-native';
+import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import { LoadingDots } from '../../components/LoadingDots';
 import DeviceInfo from 'react-native-device-info';
 import Icon from 'react-native-vector-icons/Feather';
@@ -299,6 +300,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
         <View style={styles.loadingContainer}><LoadingDots color={colors.primary} size={8} /></View>
       ) : (
         <FlatList
+          {...LIST_CLIPPING_PROPS}
           data={showAllFiles || selectedModel.id === LITERT_PARENT_ID ? runnableFiles : choices.map(c => c.file)}
           renderItem={renderFileItem}
           keyExtractor={item => item.name}
@@ -546,6 +548,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
         </View>
       ) : (
         <FlatList
+          {...LIST_CLIPPING_PROPS}
           data={hasSearched ? searchResults : [...(!onboarding && Platform.OS === 'android' ? [liteRTModel] : []), ...moreModels]}
           renderItem={renderModelItem}
           keyExtractor={item => item.id}

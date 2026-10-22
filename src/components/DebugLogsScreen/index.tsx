@@ -14,6 +14,7 @@ import {
   SafeAreaView,
   Modal,
 } from 'react-native';
+import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useDebugLogsStore } from '../../stores/debugLogsStore';
@@ -153,6 +154,7 @@ export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClo
           </View>
         ) : (
           <FlatList
+            {...LIST_CLIPPING_PROPS}
             data={visibleLogs}
             keyExtractor={(_, index) => `${index}`}
             contentContainerStyle={styles.listContent}

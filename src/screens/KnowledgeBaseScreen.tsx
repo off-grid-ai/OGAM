@@ -8,6 +8,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
+import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { LoadingDots } from '../components/LoadingDots';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -317,6 +318,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
         </View>
       ) : (
         <FlatList
+          {...LIST_CLIPPING_PROPS}
           data={kbDocs}
           renderItem={renderDoc}
           keyExtractor={(item) => String(item.id)}

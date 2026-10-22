@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Linking,
 } from 'react-native';
+import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import ReanimatedAnimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -259,6 +260,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
         </View>
 
         <FlatList
+          {...LIST_CLIPPING_PROPS}
           ref={flatListRef}
           data={slides}
           renderItem={renderSlide}

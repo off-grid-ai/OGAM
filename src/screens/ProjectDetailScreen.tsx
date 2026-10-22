@@ -1,6 +1,7 @@
 import { deleteChatImages, imagesNotDeletedAlert } from '../services/chatImageCleanup';
 import React, { useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, FlatList, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList } from 'react-native';
+import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -309,7 +310,7 @@ export const ProjectDetailScreen: React.FC = () => {
               renderItem={({ item }) => (
                 <View style={styles.chatItemWrapper}>{renderChat({ item })}</View>
               )}
-              removeClippedSubviews={Platform.OS !== 'android'}
+              {...LIST_CLIPPING_PROPS}
             />
           )}
         </View>
