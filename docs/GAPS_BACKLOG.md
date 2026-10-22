@@ -12,6 +12,31 @@ Verdict legend:
 
 ---
 
+## Live transcription is not checked on a phone after the whisper.rn revert - 2026-10-22
+
+**Verdict: instrument-and-revisit.**
+
+OGAM#730 reverted whisper.rn to `^0.5.5` (`db25399be`) after 0.7.4 broke live transcription. The iPhone used on
+2026-10-21 still had the broken 0.7.4 build. Nothing has been tested on a phone since the revert.
+
+Acceptance: an installed beta on iPhone and Android transcribes live, and a voice note lands as text.
+
+## whisper.rn 0.7 is not adopted - 2026-10-22
+
+**Verdict: fix-the-guard (planned upgrade).**
+
+whisper.rn 0.7 removes `transcribeRealtime()`, which live transcription uses, and deletes the file that the
+Android crash fix patches. `main` pins `whisper.rn ^0.5.5` on purpose.
+
+Remaining work: move live transcription to the `RealtimeTranscriber` API, port the Android fixes, then bump.
+
+## ExecuTorch 0.10 is not adopted - 2026-10-22
+
+**Verdict: fix-the-guard (planned upgrade).**
+
+`main` has `react-native-executorch ^0.9.3`. 0.10 needs react-native-worklets 0.10 (the app has 0.7.3) and
+react-native-blob-util (the app has none). Proposed on 2026-10-21; not started.
+
 ## Rendered tests cannot see three things from the v0.0.111 handoff - 2026-10-17
 
 **Verdict: instrument-and-revisit.**
