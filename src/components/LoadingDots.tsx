@@ -3,6 +3,8 @@ import { View, StyleSheet, ViewStyle } from 'react-native';
 import Animated, { css, useReducedMotion } from 'react-native-reanimated';
 import { useTheme } from '../theme';
 
+const WAVE_MS = 1050;
+
 const wave = css.keyframes({
   '0%': { transform: [{ translateY: 0 }] },
   '50%': { transform: [{ translateY: -7 }] },
@@ -12,12 +14,16 @@ const wave = css.keyframes({
 const waveStyles = css.create({
   dot: {
     animationName: wave,
-    animationDuration: 1050,
+    animationDuration: WAVE_MS,
     animationTimingFunction: 'ease-in-out',
     animationIterationCount: 'infinite',
   },
-  second: { animationDelay: 160 },
-  third: { animationDelay: 320 },
+  // Each dot trails the one before it by 160 ms. On an endless wave, starting a cycle part-way
+  // through (a negative delay) gives the same offset as waiting. Reanimated 4.2 queues a positive
+  // delay in a list the UI and JS threads change without a lock, and the dots mount and unmount
+  // often enough that it crashed Android (SIGSEGV in DelayedItemsManager::pop).
+  second: { animationDelay: 160 - WAVE_MS },
+  third: { animationDelay: 320 - WAVE_MS },
 });
 
 interface LoadingDotsProps {
