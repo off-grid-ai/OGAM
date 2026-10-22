@@ -406,6 +406,7 @@ function makeLlamaFake(
   chatTemplate?: string,
   modelInfo?: Record<string, unknown>,
   fs?: NativeFileSystemBoundary,
+  vision = false,
 ): LlamaFake {
   const calls: LlamaFake['calls'] = {
     completion: [],
@@ -638,7 +639,7 @@ function makeLlamaFake(
       setTimeout(() => onRelease?.(), 50);
     }),
     tokenize: jest.fn().mockResolvedValue({ tokens: [1, 2, 3] }),
-    initMultimodal: jest.fn().mockResolvedValue(false),
+    initMultimodal: jest.fn().mockResolvedValue(vision),
     // The post-init multimodal probe. A scripted hold parks the caller here — the real device's
     // window between context init and capability detection — until releaseMultimodalHold().
     getMultimodalSupport: jest.fn(async () => {
@@ -650,7 +651,7 @@ function makeLlamaFake(
         });
         mmHoldEngaged = false;
       }
-      return { vision: false, audio: false };
+      return { vision, audio: false };
     }),
     // Embedding boundary (embedding-model contexts, initLlama({embedding:true})): return a device-shaped
     // 384-dim vector derived from the text so RAG cosine ranking is real. Matches all-MiniLM-L6-v2 (384).
@@ -1138,6 +1139,8 @@ export interface InstallOpts {
   llamaChatTemplate?: string;
   /** GGUF header fields returned by the native metadata reader. */
   llamaModelInfo?: Record<string, unknown>;
+  /** The projector starts: initMultimodal resolves true and the context reports vision support. */
+  llamaVision?: boolean;
   /** Seed a stateful background-download native module (boundary.download). */
   download?: boolean;
   /** Replace the global whisper.rn stub with a driveable STT context (boundary.whisper). */
@@ -1220,7 +1223,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
 
   // Scriptable llama.rn: override the global stub so completion output is under test control.
   const llamaFake = opts.llama
-    ? makeLlamaFake(freeModelMemory, opts.llamaChatTemplate, opts.llamaModelInfo, fsFake)
+    ? makeLlamaFake(freeModelMemory, opts.llamaChatTemplate, opts.llamaModelInfo, fsFake, opts.llamaVision)
     : undefined;
   if (llamaFake) jest.doMock('llama.rn', () => llamaFake.module);
 

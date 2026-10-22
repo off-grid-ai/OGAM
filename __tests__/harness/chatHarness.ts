@@ -37,7 +37,8 @@ export interface ChatHarnessOptions {
   /** 'ios' surfaces the Metal accelerator path for llama; default 'android'. */
   platform?: 'ios' | 'android';
   ram?: RamProfile;
-  /** Make the (LiteRT) model vision-capable so the attach-photo gesture is allowed. */
+  /** Make the model vision-capable so the attach-photo gesture is allowed: LiteRT carries vision in the
+   *  bundle; llama gets a projector file beside its weights and a native projector that starts. */
   vision?: boolean;
   /** Make the (LiteRT) model audio-capable (liteRTAudio) — so supportsDirectAudio() is true and chat-mode
    *  hold-to-talk exercises the direct-audio recording path (not the whisper-realtime path). */
@@ -216,6 +217,7 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
     llama: opts.engine === 'llama',
     llamaChatTemplate: opts.chatTemplate,
     llamaModelInfo: opts.llamaModelInfo,
+    llamaVision: opts.engine === 'llama' && opts.vision,
     deviceHardware: opts.deviceHardware,
     socModel: opts.socModel,
     fs: true,
@@ -266,8 +268,16 @@ export async function setupChatScreen(opts: ChatHarnessOptions) {
   // A realistic small model (2GB) is device-faithful and loads under the budget; memory/OOM tests set
   // their own explicit sizes + RAM profiles and are unaffected.
   const fileSize = opts.modelFileSizeBytes ?? 2 * 1024 * 1024 * 1024;
+  // A llama vision model has its projector file beside the weights, linked on the record.
+  const mmProjFileName = opts.engine === 'llama' && opts.vision ? `mmproj-${fileName}` : undefined;
+  if (mmProjFileName) boundary.fs!.seedFile(`${docs}/models/${mmProjFileName}`, 100 * 1024 * 1024);
   const model = createDownloadedModel({
     id: 'm',
+    ...(mmProjFileName && {
+      mmProjPath: `${docs}/models/${mmProjFileName}`,
+      mmProjFileName,
+      mmProjFileSize: 100 * 1024 * 1024,
+    }),
     name: opts.modelName ?? 'Test Model',
     engine: opts.engine,
     filePath: opts.storedModelFilePath ?? modelPath,
