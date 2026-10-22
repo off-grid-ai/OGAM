@@ -1,6 +1,6 @@
 /** Real release scripts and Git repos. Store builds and hosted release APIs are external boundaries. */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -47,7 +47,7 @@ beforeEach(() => {
   // A git hook exports GIT_DIR, GIT_INDEX_FILE and friends. Inherited, they point every fixture
   // command at the real repository (one push turned it bare), so the fixtures drop them.
   const outside = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^GIT_/.test(key)));
-  env = { ...outside, PATH: `${bin}:${process.env.PATH}`, RELEASE_BRANCH: '', SLACK_WEBHOOK_URL: '', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' };
+  env = { ...outside, PATH: `${bin}:${process.env.PATH}`, RELEASE_BRANCH: '', SLACK_WEBHOOK_URL: '', TESTFLIGHT_EXTERNAL_GROUPS: 'Fixture testers', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' };
   // No credentials or real uploads: these executables are the build/store/network boundary.
   writeFileSync(join(bin, 'bundle'), '#!/bin/sh\nif [ "$4" = build ]; then mkdir -p build; echo ipa > build/OffgridMobile.ipa; fi\n', { mode: 0o755 });
   writeFileSync(join(bin, 'gh'), `#!/bin/sh\nif [ "$2" = download ]; then exit 1; fi\necho "$*" >> "${join(root, 'gh-calls.log')}"\nexit 0\n`, { mode: 0o755 });
@@ -115,6 +115,13 @@ it('M4: refuses dirty shared source', () => {
   const result = run('uat', ['--ios']);
   expect(result.status).not.toBe(0);
   expect(result.stdout).toContain('../shared is dirty');
+});
+
+it('refuses an iOS beta with no TestFlight external group before it builds anything', () => {
+  const result = run('uat', ['--ios'], { TESTFLIGHT_EXTERNAL_GROUPS: '' });
+  expect(result.status).not.toBe(0);
+  expect(result.stdout).toContain('TESTFLIGHT_EXTERNAL_GROUPS is not set');
+  expect(existsSync(join(mobile, 'build/OffgridMobile.ipa'))).toBe(false);
 });
 
 it('M4: refuses a clean shared commit that differs from origin/main', () => {
