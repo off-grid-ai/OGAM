@@ -21,6 +21,11 @@ export interface UseWhisperTranscriptionParams {
    * throw, so it dead-ends into startRealtimeTranscription → 'No Whisper model loaded', no recovery).
    */
   ensureModelReady: () => Promise<boolean>;
+  /**
+   * The capture ended without a stop: whisper.rn closes the session itself at its length cap. The
+   * owner of the voice session must hear this, or it keeps "listening" to a mic that is shut.
+   */
+  onCaptureEnded?: () => void;
 }
 
 export interface UseWhisperTranscriptionResult {
@@ -38,7 +43,7 @@ export interface UseWhisperTranscriptionResult {
   clearResult: () => void;
 }
 
-export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscriptionParams): UseWhisperTranscriptionResult => {
+export const useWhisperTranscription = ({ ensureModelReady, onCaptureEnded }: UseWhisperTranscriptionParams): UseWhisperTranscriptionResult => {
   const [isRecording, setIsRecording] = useState(false);
   const [isStartingRecording, setIsStartingRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -47,6 +52,22 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
   const [error, setError] = useState<string | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const isCancelled = useRef(false);
+  /**
+   * A start is IN FLIGHT. Synchronous, and set before the first await.
+   *
+   * `isRecording` is React state read from a closure, so a second ask in the same tick still sees
+   * `false`; `whisperService.isTranscribing` is only set after an await for permissions. Two asks fit
+   * inside that window, both clear the old guard, and the native `transcribeRealtime` is entered twice -
+   * which is the "State: -100" collision. A plain ref closes the window because it needs no render.
+   *
+   * Distinct from `startNonce`, which answers "was this start superseded" AFTER the await. This answers
+   * "is one already running" BEFORE it.
+   */
+  const startInFlight = useRef(false);
+  /** Set by every stop path; a final event without it means the capture ended by itself. */
+  const stopRequested = useRef(false);
+  const onCaptureEndedRef = useRef(onCaptureEnded);
+  onCaptureEndedRef.current = onCaptureEnded;
   // Session-intent nonce: bumped whenever a start is superseded (stop/cancel). startRecording captures
   // it before the async ensureModelReady() gap (which now frees+reloads the model, so it can be seconds)
   // and aborts the continuation if it changed — otherwise releasing/cancelling the mic DURING the load
@@ -130,6 +151,18 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
 
     // Supersede any in-flight start still awaiting model load — it must not resurrect a recording.
     startNonce.current++;
+    stopRequested.current = true;
+    // No live session means no final event will come, so do not wait for one on "Transcribing...".
+    if (!startInFlight.current && !whisperService.isCurrentlyTranscribing()) {
+      logger.log('[Whisper] stopRecording: no live session - nothing to transcribe');
+      if (mountedRef.current) {
+        setIsRecording(false);
+        setIsStartingRecording(false);
+        setIsTranscribing(false);
+      }
+      transcribingStartTime.current = null;
+      return;
+    }
     // Immediately update UI to show "Transcribing..." state
     // But keep recording in background for better accuracy
     if (mountedRef.current) setIsRecording(false);
@@ -173,6 +206,7 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
     setIsStartingRecording(false);
     setIsTranscribing(false);
     isCancelled.current = true;
+    stopRequested.current = true;
     startNonce.current++; // supersede an in-flight start awaiting model load (no ghost recording)
     pendingResult.current = null;
     transcribingStartTime.current = null;
@@ -182,18 +216,6 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
     }
   }, []);
 
-  /**
-   * A start is IN FLIGHT. Synchronous, and set before the first await.
-   *
-   * `isRecording` is React state read from a closure, so a second ask in the same tick still sees
-   * `false`; `whisperService.isTranscribing` is only set after an await for permissions. Two asks fit
-   * inside that window, both clear the old guard, and the native `transcribeRealtime` is entered twice -
-   * which is the "State: -100" collision. A plain ref closes the window because it needs no render.
-   *
-   * Distinct from `startNonce`, which answers "was this start superseded" AFTER the await. This answers
-   * "is one already running" BEFORE it.
-   */
-  const startInFlight = useRef(false);
 
   /** The start itself, once it is known to be the only one running. */
   const beginRecording = useCallback(async () => {
@@ -227,6 +249,7 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
 
     try {
       isCancelled.current = false;
+      stopRequested.current = false;
       setError(null);
       setPartialResult('');
       setFinalResult('');
@@ -256,6 +279,10 @@ export const useWhisperTranscription = ({ ensureModelReady }: UseWhisperTranscri
           // Recording finished - haptic feedback
           if (mountedRef.current) Vibration.vibrate(30);
           if (mountedRef.current) setIsRecording(false);
+          if (!stopRequested.current) {
+            logger.log('[Whisper] capture ended without a stop');
+            onCaptureEndedRef.current?.();
+          }
           // Use finalizeTranscription to ensure minimum display time
           if (result.text && !isCancelled.current) {
             finalizeTranscription(result.text);

@@ -1061,6 +1061,8 @@ function makeWhisperFake(): WhisperFake {
     module,
     emitRealtime: ({ text, isCapturing, recordingTime, noData }) => {
       if (!realtimeCb) return;
+      // whisper.rn sends the final event when its capture has ended (stop, or the realtimeAudioSec cap).
+      if (!isCapturing) rtActive = false;
       realtimeCb({
         isCapturing,
         data: noData
