@@ -143,7 +143,7 @@ zero store risk.
 ```sh
 bundle exec fastlane lanes
 bundle exec fastlane bump            # bumps version (revert after)
-bundle exec fastlane android beta    # AAB -> Play internal track (draft)
+bundle exec fastlane android beta    # AAB -> Play open testing
 bundle exec fastlane ios beta        # IPA -> TestFlight
 ```
 

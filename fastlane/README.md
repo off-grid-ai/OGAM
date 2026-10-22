@@ -42,7 +42,7 @@ Build a signed release AAB locally - NO upload. Artifact for testing the pipelin
 [bundle exec] fastlane android beta
 ```
 
-Build a dev/beta AAB and upload to the Play Store internal track
+Build a dev/beta AAB and upload to Play open testing
 
 ### android upload_beta
 
@@ -50,7 +50,7 @@ Build a dev/beta AAB and upload to the Play Store internal track
 [bundle exec] fastlane android upload_beta
 ```
 
-Upload an ALREADY-BUILT AAB to Play internal (no build - for the atomic uat.sh flow)
+Upload an ALREADY-BUILT AAB to Play open testing (no build - for the atomic uat.sh flow)
 
 ### android release
 
@@ -74,7 +74,7 @@ Push Android store listing text + images (no build)
 [bundle exec] fastlane android promote
 ```
 
-Promote the tested internal build to production (no rebuild, no re-upload)
+Promote the tested open-testing build to production (no rebuild, no re-upload)
 
 Usage: fastlane android promote version_code:<n>  (the tested versionCode)
 

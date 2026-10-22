@@ -3,7 +3,7 @@
 #
 # Lanes:
 #   fastlane bump                 bump version (package.json + android + ios), no commit
-#   fastlane android beta         build dev AAB, upload to Play internal track
+#   fastlane android beta         build dev AAB, upload to Play open testing
 #   fastlane android release      build production AAB, upload to Play production
 #   fastlane android metadata     push store listing text/images (Supply)
 #   fastlane ios beta             build, upload to TestFlight
@@ -147,10 +147,12 @@ platform :android do
     UI.success("Built signed release AAB (no upload): #{aab}")
   end
 
-  # Upload an ALREADY-BUILT AAB to the Play internal track. Single source of truth for the
-  # Play upload - both `beta` (build+upload) and `upload_beta` (publish a pre-built artifact,
-  # used by scripts/uat.sh's atomic build-all-then-publish flow) call this. No build here.
-  private_lane :upload_android_internal do
+  # Upload an ALREADY-BUILT AAB to Play open testing (supply's "beta" track). Betas go straight
+  # to external testers: there is no internal testing team, so an internal hop only adds a step.
+  # Single source of truth for the Play upload - both `beta` (build+upload) and `upload_beta`
+  # (publish a pre-built artifact, used by scripts/uat.sh's atomic build-all-then-publish flow)
+  # call this. No build here.
+  private_lane :upload_android_beta do
     require_env("PLAY_STORE_JSON_KEY_PATH")
     aab = File.join(REPO_ROOT, "android/app/build/outputs/bundle/release/app-release.aab")
     UI.user_error!("AAB not found at #{aab} - build it first (fastlane android build).") unless File.exist?(aab)
@@ -173,7 +175,7 @@ platform :android do
       File.write(File.join(dir, "#{code}.txt"), notes)
     end
     upload_to_play_store(
-      track: "internal",
+      track: "beta", # Play Console "Open testing"
       aab: aab,
       json_key: ENV["PLAY_STORE_JSON_KEY_PATH"],
       skip_upload_apk: true,   # AAB only - a stale APK in the output dir must not fight the AAB
@@ -181,23 +183,23 @@ platform :android do
       skip_upload_images: true,
       skip_upload_screenshots: true,
       skip_upload_changelogs: !has_notes,
-      # "completed" = roll out to internal testers immediately. A "draft" only uploads the
-      # bundle and waits for a human to publish it in the console (that's the right gate for
-      # PRODUCTION, but for an internal beta we want testers to get it now).
+      # "completed" = send to open testers as soon as Play review passes. A "draft" only uploads
+      # the bundle and waits for a human to publish it in the console (that's the right gate for
+      # PRODUCTION, but for a beta we want testers to get it now).
       release_status: "completed"
     )
-    UI.success("Uploaded dev build to Play internal track (rolled out to testers)")
+    UI.success("Uploaded dev build to Play open testing (rolls out to testers after Play review)")
   end
 
-  desc "Build a dev/beta AAB and upload to the Play Store internal track"
+  desc "Build a dev/beta AAB and upload to Play open testing"
   lane :beta do
     gradle(task: "bundle", build_type: "Release", project_dir: "android/")
-    upload_android_internal
+    upload_android_beta
   end
 
-  desc "Upload an ALREADY-BUILT AAB to Play internal (no build - for the atomic uat.sh flow)"
+  desc "Upload an ALREADY-BUILT AAB to Play open testing (no build - for the atomic uat.sh flow)"
   lane :upload_beta do
-    upload_android_internal
+    upload_android_beta
   end
 
   desc "Build a production AAB and upload to the Play Store production track"
@@ -225,25 +227,25 @@ platform :android do
     UI.success("Pushed Android store metadata")
   end
 
-  desc "Promote the tested internal build to production (no rebuild, no re-upload)"
+  desc "Promote the tested open-testing build to production (no rebuild, no re-upload)"
   desc "Usage: fastlane android promote version_code:<n>  (the tested versionCode)"
   lane :promote do |options|
     require_env("PLAY_STORE_JSON_KEY_PATH")
     # PIN the exact tested build. Without a version_code, upload_to_play_store's
-    # track_promote_to promotes whatever is CURRENTLY latest on the internal track - which may
+    # track_promote_to promotes whatever is CURRENTLY latest on the open testing track - which may
     # not be the beta we tested. promote.sh recovers the tested versionCode from the beta tag
     # and passes it here; if it is missing we FAIL FAST rather than silently promote "latest".
     version_code = options[:version_code]
     UI.user_error!(
       "android promote requires version_code: (the tested versionCode). Refusing to promote " \
-      "'latest on internal', which could ship the wrong build. promote.sh recovers this from " \
+      "'latest on open testing', which could ship the wrong build. promote.sh recovers this from " \
       "the beta tag's 'Build: <n>' annotation."
     ) if version_code.nil? || version_code.to_s.strip.empty?
-    # True promote-as-is: move the exact AAB (this versionCode) already on the internal track
+    # True promote-as-is: move the exact AAB (this versionCode) already on the open testing track
     # up to production. No gradle build, no new upload - the bytes users get are the bytes
     # tested. Lands as a draft so a human confirms the rollout percentage in the console.
     upload_to_play_store(
-      track: "internal",
+      track: "beta", # Play Console "Open testing" - where uat.sh puts every beta
       track_promote_to: "production",
       version_code: version_code.to_i,
       json_key: ENV["PLAY_STORE_JSON_KEY_PATH"],
@@ -255,7 +257,7 @@ platform :android do
       skip_upload_screenshots: true,
       release_status: "draft" # human confirms rollout in Play Console
     )
-    UI.success("Promoted internal build (versionCode #{version_code}) to Play production (draft - confirm rollout in console)")
+    UI.success("Promoted open-testing build (versionCode #{version_code}) to Play production (draft - confirm rollout in console)")
   end
 end
 
