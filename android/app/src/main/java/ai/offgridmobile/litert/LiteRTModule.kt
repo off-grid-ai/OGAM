@@ -92,6 +92,24 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
             val affordableTokens = (kvBudgetMb / KV_MB_PER_TOKEN).toInt()
             return requested.coerceAtMost(maxOf(MIN_TOKEN_FLOOR, affordableTokens))
         }
+
+        /** Sub-directory of the app cache where LiteRT-LM keeps its compiled programs. */
+        const val ENGINE_CACHE_DIR_NAME = "litert-cache"
+
+        /**
+         * Directory where LiteRT-LM stores compiled GPU programs between loads. Without
+         * one, every load compiles every GPU kernel again (nativeCreateEngine -> clFinish),
+         * and that long GPU job makes the UI thread wait on its eglSwapBuffers fence (ANR).
+         * Created on each call, because the OS can clear the app cache between loads.
+         * Returns null (engine default) when the directory can't be created or written:
+         * the native side rejects a cache dir that is missing or not writable.
+         */
+        fun resolveEngineCacheDir(baseDir: File?): String? {
+            if (baseDir == null) return null
+            val dir = File(baseDir, ENGINE_CACHE_DIR_NAME)
+            if (!dir.isDirectory && !dir.mkdirs()) return null
+            return if (dir.canWrite()) dir.absolutePath else null
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -106,6 +124,7 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
     // Pending tool calls waiting for JS to respond via respondToToolCall()
     private val pendingToolCalls = ConcurrentHashMap<String, CompletableDeferred<String>>()
     private var configuredMaxTokens: Int = 4096
+    private var engineCacheDir: String? = null
 
     override fun getName(): String = "LiteRTModule"
 
@@ -125,6 +144,8 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 // (SIGABRT in nativeCreateEngine) or segfaults during inference. Degrading
                 // to a smaller context keeps the app working instead of crashing.
                 configuredMaxTokens = resolveSafeMaxTokens(modelPath, maxNumTokens)
+                engineCacheDir = withContext(Dispatchers.IO) { resolveEngineCacheDir(reactContext.cacheDir) }
+                if (engineCacheDir == null) Log.w(TAG, "loadModel — no writable engine cache dir, GPU programs will compile again")
                 // Unload any existing engine first
                 cleanupEngine()
 
@@ -179,7 +200,7 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 modelPath = modelPath,
                 backend = backend,
                 maxNumTokens = configuredMaxTokens,
-                cacheDir = null,
+                cacheDir = engineCacheDir,
                 // Vision delegate follows the main backend tier. Forcing the Mali GPU
                 // delegate even when the main backend has fallen to CPU is a SIGSEGV
                 // source (libGLES_mali) on weak/low-VRAM GPUs; on the CPU tier the vision
