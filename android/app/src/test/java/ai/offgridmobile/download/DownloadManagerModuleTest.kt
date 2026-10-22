@@ -323,4 +323,16 @@ class DownloadManagerModuleTest {
         assertEquals(File(app.filesDir, Environment.DIRECTORY_DOWNLOADS), dir)
         assertTrue(dir.isDirectory)
     }
+
+    @Test
+    fun isInsideAnyRefusesPathsOutsideTheSandbox() {
+        val root = createTempFile().toFile().apply { delete(); mkdirs() }
+        val files = File(root, "files").apply { mkdirs() }
+
+        assertTrue(DownloadManagerModule.isInsideAny(File(files, "models/a.gguf"), listOf(files)))
+        assertTrue(DownloadManagerModule.isInsideAny(files, listOf(files)))
+        assertFalse(DownloadManagerModule.isInsideAny(File(root, "elsewhere/a.gguf"), listOf(files)))
+        assertFalse(DownloadManagerModule.isInsideAny(File(root, "files-evil/a.gguf"), listOf(files)))
+        assertFalse(DownloadManagerModule.isInsideAny(File(files, "../elsewhere/a.gguf"), listOf(files)))
+    }
 }

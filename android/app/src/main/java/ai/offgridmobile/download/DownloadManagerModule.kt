@@ -285,9 +285,11 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
     fun moveCompletedDownload(downloadId: String, targetPath: String, promise: Promise) {
         scope.launch {
             try {
-                withContext(Dispatchers.IO) { validateTargetPath(targetPath) }
-                    ?: return@launch SafePromise(promise, NAME)
+                val allowed = withContext(Dispatchers.IO) { validateTargetPath(targetPath) }
+                if (!allowed) {
+                    return@launch SafePromise(promise, NAME)
                         .reject("MOVE_ERROR", "Target path is outside the app sandbox.")
+                }
 
                 val download = withContext(Dispatchers.IO) { downloadDao.getDownload(downloadId) }
                     ?: return@launch SafePromise(promise, NAME).reject("MOVE_ERROR", "Download info not found")
@@ -300,15 +302,14 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
         }
     }
 
-    private fun validateTargetPath(targetPath: String): Boolean? {
+    private fun validateTargetPath(targetPath: String): Boolean {
         if (targetPath.isEmpty()) return true
-        val targetFile = File(targetPath)
         val allowedDirs = listOfNotNull(
-            reactApplicationContext.filesDir?.canonicalPath,
-            reactApplicationContext.cacheDir?.canonicalPath,
-            reactApplicationContext.getExternalFilesDir(null)?.canonicalPath,
+            reactApplicationContext.filesDir,
+            reactApplicationContext.cacheDir,
+            reactApplicationContext.getExternalFilesDir(null),
         )
-        return allowedDirs.any { targetFile.canonicalPath.startsWith(it) }
+        return isInsideAny(File(targetPath), allowedDirs)
     }
 
     private suspend fun moveCompletedDownloadInternal(download: DownloadEntity, targetPath: String): String {
@@ -551,6 +552,18 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
         const val NAME = "DownloadManagerModule"
         const val PREFS_NAME = "OffgridWorkerDownloads"
         const val DOWNLOADS_KEY = "downloads"
+
+        /**
+         * True when [target] resolves inside one of [allowedDirs]. Compares whole path segments, so
+         * a sibling such as `files-evil` does not pass for `files`, and `..` is resolved first.
+         */
+        internal fun isInsideAny(target: File, allowedDirs: List<File>): Boolean {
+            val path = target.canonicalPath
+            return allowedDirs.any { dir ->
+                val root = dir.canonicalPath
+                path == root || path.startsWith(root + File.separator)
+            }
+        }
 
         /**
          * The directory new downloads land in. Blocking disk IO: call it off the main thread.
