@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.facebook.react.bridge.BridgeReactContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.robolectric.shadows.ShadowClipboardManager
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -45,5 +46,45 @@ class SyncClipboardModuleTest {
 
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         assertEquals("received from desktop", clipboard.primaryClip?.getItemAt(0)?.text)
+    }
+    @Test
+    fun anEnableQueuedBeforeInvalidationLeavesNoClipboardListener() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        shadowOf(context as Application)
+            .grantPermissions("${context.packageName}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
+        val module = SyncClipboardModule(BridgeReactContext(context))
+        val main = shadowOf(Looper.getMainLooper())
+        main.pause()
+
+        // JS turns sync on, and the module is torn down (a reload) before the main thread runs it.
+        val enabler = Thread { module.setEnabled(true) }
+        enabler.start()
+        enabler.join()
+        module.invalidate()
+        main.idle()
+
+        assertEquals("No listener may outlive the module", 0, clipboardListeners(context).size)
+    }
+
+    @Test
+    fun anEnableAfterInvalidationLeavesNoClipboardListener() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        shadowOf(context as Application)
+            .grantPermissions("${context.packageName}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
+        val module = SyncClipboardModule(BridgeReactContext(context))
+
+        module.invalidate()
+        module.setEnabled(true)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(0, clipboardListeners(context).size)
+    }
+
+    private fun clipboardListeners(context: Context): Collection<*> {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val shadow = shadowOf(clipboard) as ShadowClipboardManager
+        val field = ShadowClipboardManager::class.java.getDeclaredField("listeners")
+        field.isAccessible = true
+        return field.get(shadow) as Collection<*>
     }
 }

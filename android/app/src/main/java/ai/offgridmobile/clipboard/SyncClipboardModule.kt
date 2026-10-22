@@ -85,6 +85,9 @@ class SyncClipboardModule(
         )
     }
     private val observer by observerDelegate
+
+    /** Set before cleanup is queued, so main-thread work queued earlier cannot re-enable the observer. */
+    @Volatile private var invalidated = false
     private val pendingReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == ProcessTextActivity.ACTION_HANDOFF_AVAILABLE) {
@@ -106,8 +109,10 @@ class SyncClipboardModule(
     override fun getName(): String = "SyncClipboardModule"
 
     override fun invalidate() {
-        if (observerDelegate.isInitialized()) {
-            UiThreadUtil.runOnUiThread { observer.setEnabled(false) }
+        invalidated = true
+        // Checked on the main thread: an enable queued before this may create the observer first.
+        UiThreadUtil.runOnUiThread {
+            if (observerDelegate.isInitialized()) observer.setEnabled(false)
         }
         runCatching { reactContext.unregisterReceiver(pendingReceiver) }
         super.invalidate()
@@ -115,7 +120,11 @@ class SyncClipboardModule(
 
     @ReactMethod
     fun setEnabled(enabled: Boolean) {
-        UiThreadUtil.runOnUiThread { observer.setEnabled(enabled) }
+        UiThreadUtil.runOnUiThread {
+            // After invalidation nothing may register a listener this module will never remove.
+            if (enabled && invalidated) return@runOnUiThread
+            observer.setEnabled(enabled)
+        }
     }
 
     @ReactMethod
