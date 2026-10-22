@@ -32,6 +32,8 @@ iPhone 17 Pro Max on 2026-10-17 and is not listed):
 
 ## LiteRT-LM 0.18.0 is not checked on an Android phone - 2026-10-17
 
+**Check 2026-10-22:** now LiteRT-LM 0.18.1 (`3ad24e535`). Still not checked on an Android phone.
+
 **Verdict: instrument-and-revisit.**
 
 The runtime upgrade (handoff item 9) was checked on an iPhone 17 Pro Max with llama.rn 0.13.0-rc.7:
@@ -365,6 +367,8 @@ Greptile on mobile-pro#47, where the thread is deliberately left open so the sea
 
 ## A tool-heavy turn's FINAL ANSWER reaches peers LONG after its tool calls do
 
+**Check 2026-10-22:** later fixes (pro `237f16f5`, shared `3327116`, `8883ae51`) were never measured. Measure the latency on the mesh.
+
 **Verdict:** instrument-and-revisit — the delay is real and large; the trigger is unknown.
 
 Observed 16 Aug 2026, run `iostools20260816161658`, guided six-tool journey driven from iOS.
@@ -401,6 +405,8 @@ final answer DOES reach all four devices - so this is specific to the tool-heavy
 size, not to sync in general.
 
 ## "Preparing reply" state never reaches peer devices
+
+**Check 2026-10-22:** likely fixed by live preview streaming (`pro/sync/chatStreamService.ts`), shared phases (`4f76b0c`, `9fbe2db`) and keepalive (`237f16f5`). Device check that peers show the in-flight state, then remove.
 
 **Verdict:** instrument-and-revisit.
 
@@ -464,6 +470,8 @@ uses `estimateTextModelMemoryMB`. Still open:
   Show needed vs free memory and a "Reduce context" action.
 
 ## The selected text model is never resident on a 3-model device (16 Aug 2026, iPhone)
+
+**Check 2026-10-22:** code mostly fixed: shared residency policy (`04845bd1d`) and a context-aware estimate (`82cb512f7`). Re-run `scripts/e2e/model-eviction-journey.mjs` on the iPhone and confirm "never resident: text" is empty.
 
 Found by `scripts/e2e/model-eviction-journey.mjs`, which walks residency up one model at a time and
 reads the app's own Models sheet between each step.
@@ -602,6 +610,8 @@ both directions:
 4. A destination-gated delayed operation still arrives when its destination becomes eligible.
 
 ## Release 107 QR, reconnect, and residency changes need final Mobile proof
+
+**Check 2026-10-22:** the code repairs below are all on `main` (`efbe3e700`, `pro/sync/pairingQr.ts`, `src/services/networkReconnect.ts`). Only the installed-device proof is left; the "code repair in progress" lines are out of date.
 
 **Status:** Shared QR and Android residency Code evidence pass. Mobile UI code is still being
 finalized. Final iOS and Android Built and Live verified gates are open. Filed 2026-08-30.
