@@ -228,7 +228,12 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 audioBackend = if (audioEnabled) Backend.CPU() else null,
             )
             eng = Engine(cfg)
-            withTimeout(initTimeoutMs(backend, configuredMaxTokens)) { eng.initialize() }
+            // initialize() blocks in native code (GPU program compile) for up to minutes.
+            // Run it on the IO pool so it never holds a Default worker or the main thread.
+            // withTimeout cannot interrupt it; it only fails the attempt after it returns.
+            withTimeout(initTimeoutMs(backend, configuredMaxTokens)) {
+                withContext(Dispatchers.IO) { eng.initialize() }
+            }
             engine = eng
             true
         } catch (e: Exception) {
