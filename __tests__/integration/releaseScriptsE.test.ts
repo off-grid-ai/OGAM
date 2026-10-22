@@ -124,6 +124,13 @@ it('refuses an iOS beta with no TestFlight external group before it builds anyth
   expect(existsSync(join(mobile, 'build/OffgridMobile.ipa'))).toBe(false);
 });
 
+it('refuses an iOS beta whose group list names no group (",,") before it builds anything', () => {
+  const result = run('uat', ['--ios'], { TESTFLIGHT_EXTERNAL_GROUPS: ' , ,' });
+  expect(result.status).not.toBe(0);
+  expect(result.stdout).toContain('names no group');
+  expect(existsSync(join(mobile, 'build/OffgridMobile.ipa'))).toBe(false);
+});
+
 it('M4: refuses a clean shared commit that differs from origin/main', () => {
   save(shared, 'unreleased.txt', 'Unreleased shared change');
   const result = run('uat', ['--ios']);
