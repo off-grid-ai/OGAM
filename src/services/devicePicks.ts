@@ -1,20 +1,11 @@
 import { CATALOG, pickModelsForDevice, PHONE_FIT_BUDGET, type ModelEntry, type PickCandidate } from '@offgrid/models';
 import { registerBundledCatalog, withRemoteCatalog } from '../stores/modelCatalogStore';
-import { BuildInfo } from 'llama.rn';
+import { engineLlamaBuild, engineLoadsCatalogModel } from './llamaEngineSupport';
 import type { ModelFile, ModelInfo } from '../types';
-
-/** The llama.cpp build inside this app's engine (llama.rn), or undefined when unknown. A catalog
- *  model that needs a newer build is never offered or picked. */
-function engineLlamaBuild(): number | undefined {
-  const build = Number.parseInt(String(BuildInfo?.number ?? ''), 10);
-  return Number.isFinite(build) ? build : undefined;
-}
 
 /** A catalog model this phone may offer: not replaced by a newer one, and loadable by its engine. */
 function isOfferable(entry: Pick<ModelEntry, 'supersededBy' | 'minLlamaBuild'>): boolean {
-  if (entry.supersededBy) return false;
-  // An unknown engine build never offers a model that needs a specific newer one.
-  return !(entry.minLlamaBuild && entry.minLlamaBuild > (engineLlamaBuild() ?? 0));
+  return !entry.supersededBy && engineLoadsCatalogModel(entry);
 }
 
 /**
