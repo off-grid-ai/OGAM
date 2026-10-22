@@ -906,7 +906,7 @@ async function callLiteRTForLoop(
 }
 
 const TOOL_BEHAVIOR_GUIDANCE =
-  '\n\nAnswer general-knowledge questions directly from what you know; use a tool only when it gives you information you do not have, such as current facts, the user\'s documents, or a calculation. If you lack current information, use the appropriate tool rather than guessing. Never refuse or say you cannot help when a tool fits the request, and never refuse a question just because no tool fits it. For multiple distinct items, make a separate tool call for each. Call tools silently — do not announce them first. To find or look up content, prefer a general search tool (e.g. a tool whose name contains "search" or "fetch") before specialized query tools. If a tool returns an error, try a different tool that could accomplish the task before giving up.';
+  '\n\nMake good use of the tools available to you. If you are uncertain or lack current information, use the appropriate tool rather than guessing. Never refuse or say you cannot help when a tool is available. For multiple distinct items, make a separate tool call for each. Call tools silently — do not announce them first. To find or look up content, prefer a general search tool (e.g. a tool whose name contains "search" or "fetch") before specialized query tools. If a tool returns an error, try a different tool that could accomplish the task before giving up.';
 
 /** Tools that need precise time-of-day to resolve relative phrases like "in half an hour". */
 const TIME_SENSITIVE_TOOL_IDS = [
