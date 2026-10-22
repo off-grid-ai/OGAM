@@ -192,15 +192,19 @@ export function activeTextCapabilities(i: {
   model: DownloadedModel | null | undefined;
 }): EngineCapabilities {
   const litert = i.model && isLiteRTModel(i.model) ? i.model : null;
+  // The live engine speaks for THIS model only when it holds this model's file. Picking a model does
+  // not load it until the next send, so another model can still be resident; reading that one's
+  // capabilities hid Photo and refused images for a vision model picked while a text-only one was loaded.
+  const isThisModelLoaded = !!i.model && isModelReady(i.model);
   return deriveEngineCapabilities({
     isRemote: i.isRemote,
     remoteCaps: i.remoteCaps,
     engine: i.model?.engine,
     liteRTVision: litert ? litert.liteRTVision : undefined,
     liteRTAudio: litert ? litert.liteRTAudio : undefined,
-    liteRTLoaded: liteRTService.isModelLoaded(),
+    liteRTLoaded: !!litert && isThisModelLoaded,
     llama: {
-      loaded: llmService.isModelLoaded(),
+      loaded: i.model?.engine === 'llama' && isThisModelLoaded,
       vision: llmService.getMultimodalSupport()?.vision ?? false,
       audio: false,
       tools: llmService.supportsToolCalling(),

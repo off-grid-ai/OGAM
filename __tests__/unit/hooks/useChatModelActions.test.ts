@@ -181,6 +181,8 @@ describe('initiateModelLoad', () => {
   it('loads model successfully when not already loading', async () => {
     mockLoadTextModel.mockResolvedValueOnce(undefined);
     mockGetMultimodalSupport.mockReturnValueOnce({ vision: true });
+    // After the load, the engine holds this model's file, so its live capabilities are this model's.
+    mockGetLoadedModelPath.mockReturnValue('/path/model.gguf');
     const deps = makeDeps();
     await initiateModelLoad(deps, false);
     expect(deps.setIsModelLoading).toHaveBeenCalledWith(true);
