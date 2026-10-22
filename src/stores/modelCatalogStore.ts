@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   MOBILE_CATALOG_URL,
+  diffMergedCatalog,
   loadCachedCatalog,
   mergeCatalogEntries,
   mobileCatalogKey,
@@ -92,19 +93,16 @@ export function registerBundledCatalog<K extends Section>(section: K, bundled: r
   (bundledLists as Record<Section, unknown>)[section] = bundled;
 }
 
-/** Every merged entry, keyed by section and merge key, with the name a person reads. */
-function mergedNames(): Map<string, string> {
-  const names = new Map<string, string>();
-  (Object.keys(mobileCatalogKey) as Section[]).forEach(section => {
-    const key = mobileCatalogKey[section] as (entry: unknown) => string;
-    withRemoteCatalog(section, (bundledLists[section] ?? []) as never[]).forEach((e: { name?: string; displayName?: string }) =>
-      names.set(`${section}:${key(e)}`, e.displayName ?? e.name ?? key(e)));
-  });
-  return names;
+/** Every merged list the person sees, by section (the bundled list alone when nothing is cached). */
+function mergedLists(): Map<Section, unknown[]> {
+  const lists = new Map<Section, unknown[]>();
+  (Object.keys(mobileCatalogKey) as Section[]).forEach(section =>
+    lists.set(section, withRemoteCatalog(section, (bundledLists[section] ?? []) as never[])));
+  return lists;
 }
 
 async function refresh(): Promise<CatalogCheckResult> {
-  const before = mergedNames();
+  const before = mergedLists();
   const result = await refreshRemoteCatalog(source);
   if (result.catalog) {
     useModelCatalogStore.setState({ remote: result.catalog.sections, fetchedAt: result.catalog.fetchedAt });
@@ -113,11 +111,21 @@ async function refresh(): Promise<CatalogCheckResult> {
     logger.warn('[ModelCatalog] refresh failed:', result.error);
     return { status: 'failed' };
   }
-  // One model can sit in two sections (the picks pool and the list): name it once.
-  const names = [...new Set([...mergedNames()].filter(([k]) => !before.has(k)).map(([, name]) => name))];
-  if (names.length > 0) return { status: 'new', names };
+  const added = new Set<string>();
+  let changed = false;
+  for (const [section, after] of mergedLists()) {
+    const key = mobileCatalogKey[section] as (entry: unknown) => string;
+    const diff = diffMergedCatalog(before.get(section) ?? [], after, key);
+    // One model can sit in two sections (the picks pool and the list): name it once.
+    diff.added.forEach(e => {
+      const entry = e as { name?: string; displayName?: string };
+      added.add(entry.displayName ?? entry.name ?? key(e));
+    });
+    changed = changed || diff.changed.length > 0 || diff.removed.length > 0;
+  }
+  if (added.size > 0) return { status: 'new', names: [...added] };
   // Changed entries with no new name: the catalog replaced models this phone already lists.
-  return result.status === 'updated' ? { status: 'updated' } : { status: 'none' };
+  return changed ? { status: 'updated' } : { status: 'none' };
 }
 
 /** Startup: the catalog a previous check saved, if any. No fetch. Never throws. */
