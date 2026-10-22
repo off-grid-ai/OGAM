@@ -81,10 +81,10 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
                 val expectedSha256 = params.getString("sha256")?.lowercase()?.takeIf { it.length == 64 }
 
                 val downloadId = UUID.randomUUID().toString()
-                val destination = File(
-                    reactApplicationContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-                    "${downloadId}_${fileName}",
-                ).absolutePath
+                // Resolving the downloads directory creates it on disk, so it runs on IO, never on main.
+                val destination = withContext(Dispatchers.IO) {
+                    File(downloadsDir(reactApplicationContext), "${downloadId}_${fileName}").absolutePath
+                }
 
                 val entity = DownloadEntity(
                     id = downloadId,
@@ -285,14 +285,14 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
     fun moveCompletedDownload(downloadId: String, targetPath: String, promise: Promise) {
         scope.launch {
             try {
-                validateTargetPath(targetPath)
+                withContext(Dispatchers.IO) { validateTargetPath(targetPath) }
                     ?: return@launch SafePromise(promise, NAME)
                         .reject("MOVE_ERROR", "Target path is outside the app sandbox.")
 
                 val download = withContext(Dispatchers.IO) { downloadDao.getDownload(downloadId) }
                     ?: return@launch SafePromise(promise, NAME).reject("MOVE_ERROR", "Download info not found")
 
-                val movedPath = moveCompletedDownloadInternal(download, targetPath)
+                val movedPath = withContext(Dispatchers.IO) { moveCompletedDownloadInternal(download, targetPath) }
                 SafePromise(promise, NAME).resolve(movedPath)
             } catch (e: Exception) {
                 SafePromise(promise, NAME).reject("MOVE_ERROR", "Failed to move completed download: ${e.message}", e)
@@ -551,5 +551,14 @@ class DownloadManagerModule(reactContext: ReactApplicationContext) :
         const val NAME = "DownloadManagerModule"
         const val PREFS_NAME = "OffgridWorkerDownloads"
         const val DOWNLOADS_KEY = "downloads"
+
+        /**
+         * The directory new downloads land in. Blocking disk IO: call it off the main thread.
+         * External storage can be unavailable, and then the app's internal files directory is used
+         * instead of a path relative to the process working directory.
+         */
+        internal fun downloadsDir(context: Context): File =
+            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                ?: File(context.filesDir, Environment.DIRECTORY_DOWNLOADS).apply { mkdirs() }
     }
 }
