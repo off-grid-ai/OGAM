@@ -2145,6 +2145,39 @@ describe('LLMService', () => {
       );
       expect(result).toBe('Hello world');
     });
+
+    it('never releases the context under a completion that was still being set up', async () => {
+      mockedRNFS.exists.mockResolvedValue(true);
+      const events: string[] = [];
+      let released = false;
+      const ctx = createMockLlamaContext({
+        completion: jest.fn().mockImplementation((_params, cb) => {
+          events.push(released ? 'completion on a freed context' : 'completion');
+          cb({ token: 'ok' });
+          return Promise.resolve({ timings: {} });
+        }),
+        release: jest.fn().mockImplementation(async () => {
+          released = true;
+          events.push('release');
+        }),
+      });
+      mockedInitLlama.mockResolvedValue(ctx as any);
+      await llmService.loadModel('/models/test.gguf');
+
+      // The router starts a capped completion and, before it reaches the engine, the model is unloaded.
+      const reply = llmService.generateWithMaxTokens(
+        [{ id: '1', role: 'user', content: 'route this', timestamp: 0 }],
+        16,
+      );
+      const unloaded = llmService.unloadModel();
+
+      await expect(reply).resolves.toBe('ok');
+      await unloaded;
+      expect(events).toEqual(['completion', 'release']);
+      await expect(
+        llmService.generateWithMaxTokens([{ id: '2', role: 'user', content: 'again', timestamp: 0 }], 16),
+      ).rejects.toThrow('No model loaded');
+    });
   });
 
   // ========================================================================
