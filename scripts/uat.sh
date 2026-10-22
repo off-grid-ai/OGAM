@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# uat.sh - ship a BETA build to testers (TestFlight + Play open testing) and cut a GitHub PRERELEASE tag. Same fundamental as scripts/release.sh (build
+# uat.sh - ship a BETA build to external testers (TestFlight external groups + Play open
+# testing) and cut a GitHub PRERELEASE tag. Same fundamental as scripts/release.sh (build
 # locally, generate grouped release notes, tag on GitHub) - but flavored as a beta:
 #
 #   * Beta version = <NEXT patch>-beta.<N> (e.g. current live 0.0.102 → 0.0.103-beta.1). A
@@ -52,6 +53,12 @@ command -v node   >/dev/null || error "node not installed"
 command -v gh     >/dev/null || error "gh CLI not installed"
 command -v bundle >/dev/null || error "bundler not installed (bundle install)"
 [ -f fastlane/Fastfile ]     || error "fastlane/Fastfile not found"
+# iOS betas go to the TestFlight external groups this names. Check it now: a missing value found at
+# upload time would come after the Play upload already shipped.
+if [ "$DO_IOS" = 1 ] && [ -z "${TESTFLIGHT_EXTERNAL_GROUPS:-}" ] && \
+   ! grep -qE '^TESTFLIGHT_EXTERNAL_GROUPS=.+' fastlane/.env 2>/dev/null; then
+  error "TESTFLIGHT_EXTERNAL_GROUPS is not set (fastlane/.env). Name the TestFlight external groups, comma-separated."
+fi
 # Ignore fastlane/README.md — fastlane regenerates it on every run, so it is dirty by the time a
 # second build starts (and after any prior run). It is not source we build from.
 [ -z "$(git status --porcelain | grep -vE 'fastlane/README\.md$' || true)" ] || error "Working tree is dirty. Commit or stash first."
@@ -195,7 +202,7 @@ fi
 
 # ── PUBLISH - reached only if every build above succeeded ───────────
 if [ "$DO_ANDROID" = 1 ] && [ "$RESUME_IOS" = 0 ]; then info "Android → Play open testing (AAB)…"; bundle exec fastlane android upload_beta; fi
-if [ "$DO_IOS" = 1 ];     then info "iOS → TestFlight…";              bundle exec fastlane ios upload_beta;     fi
+if [ "$DO_IOS" = 1 ];     then info "iOS → TestFlight external…";     bundle exec fastlane ios upload_beta;     fi
 
 # ── success → commit the bump, cut the PRERELEASE tag, GH prerelease ──
 trap - EXIT   # keep the bump now that the build shipped
@@ -250,7 +257,7 @@ SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-$(sed -n 's/^SLACK_WEBHOOK_URL=//p' "$RO
 rm -f "$NOTES_FILE" "${ANDROID_CHANGELOG:-}" "$APK_DST" "$AAB_DST" "$IPA_DST"
 echo ""
 info "${BOLD}Beta ${BETA_VERSION} shipped.${NC}"
-[ "$DO_IOS" = 1 ]     && info "  iOS:     TestFlight (App Store Connect → TestFlight)"
+[ "$DO_IOS" = 1 ]     && info "  iOS:     TestFlight external groups (after Beta App Review)"
 [ "$DO_ANDROID" = 1 ] && info "  Android: Play Console → Open testing (after Play review)"
 info "  GitHub:  $(gh release view "$TAG" --json url -q .url 2>/dev/null)"
 info "Approve the beta, then run scripts/release.sh to cut the real version to production."

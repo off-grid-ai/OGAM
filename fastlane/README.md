@@ -97,7 +97,7 @@ Build a signed release IPA locally - NO upload. Artifact for testing the pipelin
 [bundle exec] fastlane ios beta
 ```
 
-Build and upload to TestFlight
+Build and upload to TestFlight external testers
 
 ### ios upload_beta
 
@@ -105,7 +105,7 @@ Build and upload to TestFlight
 [bundle exec] fastlane ios upload_beta
 ```
 
-Upload an ALREADY-BUILT IPA to TestFlight (no build - for the atomic uat.sh flow)
+Upload an ALREADY-BUILT IPA to TestFlight external testers (no build - for the atomic uat.sh flow)
 
 ### ios release
 

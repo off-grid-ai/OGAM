@@ -6,7 +6,7 @@
 #   fastlane android beta         build dev AAB, upload to Play open testing
 #   fastlane android release      build production AAB, upload to Play production
 #   fastlane android metadata     push store listing text/images (Supply)
-#   fastlane ios beta             build, upload to TestFlight
+#   fastlane ios beta             build, upload to TestFlight external testers
 #   fastlane ios release          build, upload to App Store
 #   fastlane ios metadata         push App Store listing (Deliver)
 #
@@ -307,36 +307,43 @@ platform :ios do
     UI.success("Built signed release IPA (no upload): #{ipa}")
   end
 
-  # Upload an ALREADY-BUILT IPA to TestFlight. Single source of truth for the TestFlight
-  # upload - both `beta` (build+upload) and `upload_beta` (publish a pre-built artifact, used
-  # by scripts/uat.sh's atomic build-all-then-publish flow) call this. No build here.
+  # Upload an ALREADY-BUILT IPA to TestFlight and hand it to the EXTERNAL tester groups named
+  # in TESTFLIGHT_EXTERNAL_GROUPS. Betas go straight to external testers: there is no internal
+  # testing team. Single source of truth for the TestFlight upload - both `beta` (build+upload)
+  # and `upload_beta` (publish a pre-built artifact, used by scripts/uat.sh's atomic
+  # build-all-then-publish flow) call this. No build here.
   private_lane :upload_ios_testflight do
+    require_env("TESTFLIGHT_EXTERNAL_GROUPS")
+    groups = ENV["TESTFLIGHT_EXTERNAL_GROUPS"].split(",").map(&:strip).reject(&:empty?)
+    UI.user_error!("TESTFLIGHT_EXTERNAL_GROUPS names no group (comma-separated TestFlight external group names)") if groups.empty?
     ipa = File.join(REPO_ROOT, "build/OffgridMobile.ipa")
     UI.user_error!("IPA not found at #{ipa} - build it first (fastlane ios build).") unless File.exist?(ipa)
-    tf = {
+    # Release notes: scripts/uat.sh writes the changelog to UAT_CHANGELOG_PATH. It becomes the
+    # TestFlight "What to Test", which external distribution requires - so fall back to a
+    # generic line when there are no notes.
+    has_notes = ENV["UAT_CHANGELOG_PATH"] && !ENV["UAT_CHANGELOG_PATH"].empty? && File.exist?(ENV["UAT_CHANGELOG_PATH"])
+    upload_to_testflight(
       **asc_auth_kwargs,
       ipa: "build/OffgridMobile.ipa",
-      skip_waiting_for_build_processing: true
-    }
-    # Release notes: scripts/uat.sh writes the changelog to UAT_CHANGELOG_PATH. Attach it as
-    # the TestFlight "What to Test". (Requires processing to finish, so only set the
-    # changelog when we have notes - otherwise keep skip_waiting for a fast upload.)
-    if ENV["UAT_CHANGELOG_PATH"] && !ENV["UAT_CHANGELOG_PATH"].empty? && File.exist?(ENV["UAT_CHANGELOG_PATH"])
-      tf[:changelog] = File.read(ENV["UAT_CHANGELOG_PATH"])
-      tf[:skip_waiting_for_build_processing] = false
-    end
-    upload_to_testflight(**tf)
-    UI.success("Uploaded to TestFlight")
+      changelog: has_notes ? File.read(ENV["UAT_CHANGELOG_PATH"]) : "Bug fixes and improvements.",
+      # Distributing to a group needs the processed build, so wait for processing.
+      skip_waiting_for_build_processing: false,
+      # External groups go through Beta App Review (usually only the first build of a version).
+      distribute_external: true,
+      groups: groups,
+      notify_external_testers: true
+    )
+    UI.success("Uploaded to TestFlight and sent to external groups: #{groups.join(', ')}")
   end
 
-  desc "Build and upload to TestFlight"
+  desc "Build and upload to TestFlight external testers"
   lane :beta do
     setup_signing
     build_ios_ipa
     upload_ios_testflight
   end
 
-  desc "Upload an ALREADY-BUILT IPA to TestFlight (no build - for the atomic uat.sh flow)"
+  desc "Upload an ALREADY-BUILT IPA to TestFlight external testers (no build - for the atomic uat.sh flow)"
   lane :upload_beta do
     upload_ios_testflight
   end

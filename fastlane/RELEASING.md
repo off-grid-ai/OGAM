@@ -46,7 +46,7 @@ bundle exec fastlane bump [type:patch]   # bump version in package.json + androi
 bundle exec fastlane android beta        # build AAB -> Play open testing
 bundle exec fastlane android release     # build AAB -> Play production (draft)
 bundle exec fastlane android metadata    # push Android store listing only (no build)
-bundle exec fastlane ios beta            # build IPA -> TestFlight
+bundle exec fastlane ios beta            # build IPA -> TestFlight external groups
 bundle exec fastlane ios release         # build IPA -> App Store (not submitted)
 bundle exec fastlane ios metadata        # push App Store listing only (no build)
 ```

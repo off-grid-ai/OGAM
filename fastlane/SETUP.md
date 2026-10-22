@@ -144,7 +144,7 @@ zero store risk.
 bundle exec fastlane lanes
 bundle exec fastlane bump            # bumps version (revert after)
 bundle exec fastlane android beta    # AAB -> Play open testing
-bundle exec fastlane ios beta        # IPA -> TestFlight
+bundle exec fastlane ios beta        # IPA -> TestFlight external groups
 ```
 
 Release lanes upload as **draft / not submitted** - a human confirms rollout in the Play
