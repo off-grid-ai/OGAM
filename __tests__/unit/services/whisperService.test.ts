@@ -999,6 +999,8 @@ describe('WhisperService', () => {
       fallback.resolve({ result: 'what I said' });
       await second;
       expect(mockContext.transcribeRealtime).toHaveBeenCalledTimes(2);
+      // The first session finishing must not clear the live second one.
+      expect(whisperService.isCurrentlyTranscribing()).toBe(true);
       expect(firstResult).toHaveBeenCalledWith(
         expect.objectContaining({ text: 'what I said', isCapturing: false }),
       );

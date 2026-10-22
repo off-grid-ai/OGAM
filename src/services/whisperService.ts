@@ -34,6 +34,8 @@ class WhisperService {
   private currentModelPath: string | null = null;
   private isTranscribing: boolean = false;
   private stopFn: (() => Promise<void>) | null = null;
+  /** Counts live sessions, so a finishing session only clears state it still owns. */
+  private realtimeSession = 0;
   private readonly realtimeStart = new RealtimeStartBarrier();
   private isReleasingContext: boolean = false;
   private remoteTranscription: AbortController | null = null;
@@ -231,6 +233,7 @@ class WhisperService {
 
     this.realtimeStart.begin();
     this.isTranscribing = true;
+    const session = ++this.realtimeSession;
 
     // Create a promise that resolves when the native side fully finishes. The session holds the
     // native lane until then, so a file job or a release never overlaps live capture.
@@ -365,8 +368,11 @@ class WhisperService {
             processTime: processTime || 0,
             recordingTime: recordingTime || 0,
           });
-          this.isTranscribing = false;
-          this.stopFn = null;
+          // A newer session may already be waiting for the lane: its state is not ours to clear.
+          if (session === this.realtimeSession) {
+            this.isTranscribing = false;
+            this.stopFn = null;
+          }
           // Signal that native processing is complete - safe to release context
           resolveTranscriptionStopped();
         });
