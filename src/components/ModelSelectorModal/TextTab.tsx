@@ -210,6 +210,12 @@ export const TextTab: React.FC<TextTabProps> = ({
             });
             const isLoadingThis = loadingModelId === model.id;
             const predictedCapabilities = model.engine === 'llama' ? predictGgufCapabilities(model) : null;
+            let trailing: React.ReactNode = null;
+            if (isLoadingThis) {
+              trailing = <LoadingDots color={colors.primary} testID="model-row-loading" />;
+            } else if (row.showLoadedCheck) {
+              trailing = <View style={styles.checkmark}><Icon name="check" size={16} color={colors.background} /></View>;
+            }
             return (
               <ModelCard
                 key={model.id}
@@ -223,10 +229,7 @@ export const TextTab: React.FC<TextTabProps> = ({
                   ? `~${(estimatedRamMB[model.id] / 1024).toFixed(1)} GB`
                   : hardwareService.formatModelRam(model, ramMultiplier)} RAM${memoryFits ? '' : ' (may not fit)'}`]}
                 isActive={row.isActive}
-                trailing={isLoadingThis ? <LoadingDots color={colors.primary} testID="model-row-loading" />
-                  : row.showLoadedCheck
-                    ? <View style={styles.checkmark}><Icon name="check" size={16} color={colors.background} /></View>
-                    : null}
+                trailing={trailing}
                 disabled={row.disabled}
                 onPress={() => onSelectModel(model)}
               />

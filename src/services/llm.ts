@@ -312,7 +312,8 @@ class LLMService {
         try { await context.stopCompletion(); } catch (e) { logger.log('[LLM] Stop during unload:', e); }
       }
       // Wait for every native call on this context, including one that had not reached the engine yet.
-      while (this.nativeWork.size > 0) await Promise.all([...this.nativeWork]);
+      // Re-checked after each wait: a call can start while the previous batch settles.
+      while (this.nativeWork.size > 0) await Promise.all(this.nativeWork); // NOSONAR
       this.isGenerating = false;
       this.activeCompletionPromise = null;
       try { await context.release(); } catch (e) { logger.warn('[LLM] Error releasing context (bridge may be torn down):', e); }
