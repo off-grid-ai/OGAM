@@ -585,7 +585,8 @@ export const useChatStore = create<ChatState>()(
       onRehydrateStorage: chatStorage.onRehydrateStorage(),
       version: CHAT_STORAGE_VERSION,
       migrate: migratePersistedChatState,
-      // After a failed read the open chat stays open: a new chat is null, not the saved one.
+      // A read that lands after the user moved (slow or retried) keeps the chat they have open; a new
+      // chat stays null instead of switching to the saved one. Chats made meanwhile join the saved ones.
       merge: chatStorage.merge<ChatState>(undefined, ['activeConversationId']),
       partialize: (state): PersistedChatState => ({
         conversations: state.conversations,
