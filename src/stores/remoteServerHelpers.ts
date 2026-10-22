@@ -72,10 +72,13 @@ function modelCategories(model: {
   kind?: unknown;
   architecture?: { input_modalities?: unknown; output_modalities?: unknown };
 }, isOpenRouter = false): RemoteModelCategory[] {
+  // Computer Use specialists (a grounder, a decider) are never chat or media models.
+  if (model.kind === 'grounding_specialist' || model.kind === 'decision_specialist') return [];
   const declared = gatewayCategory(model.kind);
   if (declared) return [declared];
   const outputs = Array.isArray(model.architecture?.output_modalities)
     ? model.architecture.output_modalities : [];
+  if (outputs.includes('decisions')) return [];
   const inputs = Array.isArray(model.architecture?.input_modalities)
     ? model.architecture.input_modalities : [];
   if (outputs.includes('image')) return ['image'];
