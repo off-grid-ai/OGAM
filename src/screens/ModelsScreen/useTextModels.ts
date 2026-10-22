@@ -4,7 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { showAlert, hideAlert, AlertState } from '../../components/CustomAlert';
-import type { MobileTextCatalogModel } from '@offgrid/models';
+import { CATALOG, type MobileTextCatalogModel } from '@offgrid/models';
 import { RECOMMENDED_MODELS, TRENDING_FAMILIES, MODEL_ORGS } from '../../constants';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useAppStore } from '../../stores';
@@ -12,6 +12,7 @@ import { fileExceedsBudget } from '../../services/memoryBudget';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { huggingFaceService, modelManager, hardwareService, activeModelService } from '../../services';
 import { startModelDownload } from '../../services/startModelDownload';
+import { hfUploadNeedsNewerEngine } from '../../services/llamaEngineSupport';
 import { ramFitScore } from '../../utils/recommendedModels';
 import { modelSupportsNpuGpu } from '../../utils/acceleration';
 import { ModelInfo, ModelFile, DownloadedModel } from '../../types';
@@ -102,8 +103,11 @@ function computeFilteredResults(
   searchResults: ModelInfo[],
   filterState: FilterState,
   ramGB: number,
+  needsNewerEngine: (repoId: string) => boolean,
 ): ModelInfo[] {
   const filtered = searchResults.filter(model => {
+    // An upload of a catalog model this engine cannot load is left out, as its catalog card is.
+    if (needsNewerEngine(model.id)) return false;
     if (filterState.source !== 'all' && model.credibility?.source !== filterState.source) return false;
     if (filterState.type !== 'all' && getModelType(model) !== filterState.type) return false;
     if (!matchesOrgFilter(model, filterState.orgs)) return false;
@@ -146,6 +150,7 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
   const [textFiltersVisible, setTextFiltersVisible] = useState(false);
   const [recommendedModelDetails, setRecommendedModelDetails] = useState<Record<string, ModelInfo>>({});
   const recommended = useWithRemoteCatalog('text', RECOMMENDED_MODELS);
+  const catalog = useWithRemoteCatalog('models', CATALOG);
   const repairingVisionIds = useDownloadStore(s => s.repairingVisionIds);
   const setRepairingVision = useDownloadStore(s => s.setRepairingVision);
 
@@ -381,9 +386,10 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
     const named = new Set(recommended.filter(m => matchesCatalogSearch(searchQuery, m)).map(m => m.id));
     const fromCatalog = recommendedAsModelInfo.filter(model => named.has(model.id));
     const catalogIds = new Set(fromCatalog.map(model => model.id));
-    const fromHuggingFace = applySort(computeFilteredResults(searchResults, filterState, ramGB), filterState.sort, ramGB);
+    const needsNewerEngine = hfUploadNeedsNewerEngine(catalog);
+    const fromHuggingFace = applySort(computeFilteredResults(searchResults, filterState, ramGB, needsNewerEngine), filterState.sort, ramGB);
     return [...fromCatalog, ...fromHuggingFace.filter(model => !catalogIds.has(model.id))];
-  }, [recommended, recommendedAsModelInfo, searchQuery, searchResults, filterState, ramGB]);
+  }, [recommended, recommendedAsModelInfo, catalog, searchQuery, searchResults, filterState, ramGB]);
 
   const trendingAsModelInfo = useMemo((): ModelInfo[] => {
     const maxParams = deviceRecommendation.maxParameters;
