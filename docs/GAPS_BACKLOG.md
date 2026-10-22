@@ -12,6 +12,36 @@ Verdict legend:
 
 ---
 
+## Clearing a maker filter does not leave search mode - 2026-10-22
+
+**Verdict: fix-the-guard.** The auto-search effect in `src/screens/ModelsScreen/useTextModels.ts` returns early when
+all filters are clear, so the list stays in search mode and shows the whole catalog plus stale Hugging Face results.
+
+## Desktop: catalog-check diff and the engine-build rule for Hugging Face results - 2026-10-22
+
+**Verdict: fix-the-guard.** Desktop's `checkForNewModels` (`desktop/src/main/models/remote-catalog.ts`) still says
+"updated" when a remote entry repeats a bundled one unchanged; it should use the shared `diffMergedCatalog` as mobile
+does. Hiding Hugging Face uploads that need a newer llama.cpp lives in mobile (`src/services/llamaEngineSupport.ts`)
+and should move into the shared `searchHuggingFace` so Desktop gets it too.
+
+## Gaps the v0.0.111 → v0.0.116 rendered tests could not close - 2026-10-22
+
+**Verdict: instrument-and-revisit.**
+
+- **The 4096 context fix (`9ea2c8275`) cannot be seen.** Nothing reads the server-reported context length. Remote
+  chats trim to the local context setting. Only the unit test covers it.
+- **No real model shows "Research licence".** Only the Qwen-Image models set `nonCommercial`, and the Image tab does
+  not show fact chips.
+- **The queue double-settle (`1151a103d`) does not reproduce in jest.** The rendered test guards the outcome only. An
+  iPhone log of the second settle is needed to make it a real guard.
+- **VoiceOver may never read the "Download <model>" labels.** The download button is inside the card's own button
+  (`src/components/ModelCard.tsx` ~345). Check with VoiceOver and TalkBack on a phone.
+- **The demo PDF's text is not checked.** The fake PDF reader in `__tests__/harness/documentEngine.ts` cannot read a
+  real PDF.
+- **Android sends two mic permission requests for one tap.** The user sees one prompt. The duplicate path is not traced.
+- **None of the v0.0.112 → v0.0.116 changes has a real-device e2e.** The WDA and adb journeys in `scripts/e2e/` predate
+  v0.0.111.
+
 ## Live transcription is not checked on a phone after the whisper.rn revert - 2026-10-22
 
 **Verdict: instrument-and-revisit.**
