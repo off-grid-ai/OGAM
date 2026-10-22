@@ -110,6 +110,22 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
             if (!dir.isDirectory && !dir.mkdirs()) return null
             return if (dir.canWrite()) dir.absolutePath else null
         }
+
+        /**
+         * Try each backend tier once, in order, and return the first one that initializes
+         * (null when all fail). One attempt per tier: a GPU attempt is a long blocking GPU
+         * job (nativeCreateEngine -> clFinish) that withTimeout cannot interrupt, and the UI
+         * thread waits on the same GPU for eglSwapBuffers. The old back-to-back GPU retries
+         * (for VRAM not yet freed after a model switch) stacked three of those jobs and
+         * made the ANR longer. cleanupEngine closes the previous engine before a load, and
+         * the CPU tier keeps the model usable when the GPU attempt fails.
+         */
+        suspend fun <T> firstWorkingBackend(chain: List<T>, tryInit: suspend (T) -> Boolean): T? {
+            for (backend in chain) {
+                if (tryInit(backend)) return backend
+            }
+            return null
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -228,31 +244,15 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
 
     private suspend fun initializeWithFallback(modelPath: String, requested: Backend, visionEnabled: Boolean, audioEnabled: Boolean): Backend {
         val chain = buildBackendChain(requested)
-
-        // GPU/NPU failures can be transient (e.g. VRAM not yet released after a model switch).
-        // Retry up to 2 extra times with backoff before giving up on a non-CPU backend.
-        val gpuRetries = 2
-        val gpuRetryDelayMs = 600L
-
-        for (backend in chain) {
+        return firstWorkingBackend(chain) { backend ->
             val name = backendName(backend)
-            val maxAttempts = if (backend is Backend.CPU) 1 else gpuRetries + 1
-
-            for (attempt in 1..maxAttempts) {
-                if (attempt > 1) {
-                    Log.i(TAG, "initializeWithFallback — $name retry $attempt/$maxAttempts after ${gpuRetryDelayMs}ms")
-                    delay(gpuRetryDelayMs)
-                } else {
-                    Log.i(TAG, "initializeWithFallback — trying $name vision=$visionEnabled audio=$audioEnabled")
-                }
-                if (tryInitBackend(modelPath, backend, name, visionEnabled, audioEnabled)) return backend
+            Log.i(TAG, "initializeWithFallback — trying $name vision=$visionEnabled audio=$audioEnabled")
+            val ok = tryInitBackend(modelPath, backend, name, visionEnabled, audioEnabled)
+            if (!ok && backend != chain.last()) {
+                Log.i(TAG, "initializeWithFallback — $name failed, falling back to next tier")
             }
-
-            if (backend != chain.last()) {
-                Log.i(TAG, "initializeWithFallback — $name exhausted retries, falling back to next tier")
-            }
-        }
-        throw IllegalStateException("All backends failed")
+            ok
+        } ?: throw IllegalStateException("All backends failed")
     }
 
     // -------------------------------------------------------------------------
