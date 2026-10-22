@@ -3,7 +3,7 @@ set -euo pipefail
 
 # promote.sh - bless a tested BETA cut to production on all three channels, reusing
 # the EXACT bytes that were tested. The other half of scripts/uat.sh (which cuts a
-# beta to Play internal + TestFlight + a GitHub prerelease). Nothing here rebuilds
+# beta to Play open testing + TestFlight + a GitHub prerelease). Nothing here rebuilds
 # the app.
 #
 #   Usage: scripts/promote.sh v0.0.103-beta.1 [--ios|--android|--github]   (no target arg = all three)
@@ -11,7 +11,7 @@ set -euo pipefail
 # What it does (promote-as-is, per channel):
 #   * Repo:    tag v<version> ON THE TESTED BETA COMMIT (not arbitrary HEAD), bump
 #              package.json there if needed, and push only the release tag.
-#   * Play:    fastlane android promote - moves the internal AAB to production (draft),
+#   * Play:    fastlane android promote - moves the open-testing AAB to production (draft),
 #              PINNED to the tested versionCode recovered from the beta tag.
 #   * iOS:     fastlane ios promote - attaches the EXACT tested TestFlight build (pinned
 #              by build_number) to a new App Store version (no binary upload).
@@ -126,9 +126,9 @@ else
   git push origin "refs/tags/v${TARGET_VERSION}"
 fi
 
-# ── 2. Play: promote the tested internal build to production (draft), version-pinned ──
+# ── 2. Play: promote the tested open-testing build to production (draft), version-pinned ──
 if [ "$DO_ANDROID" = 1 ]; then
-  info "Play: promoting the tested internal build (versionCode ${TESTED_BUILD}) to production (draft)…"
+  info "Play: promoting the tested open-testing build (versionCode ${TESTED_BUILD}) to production (draft)…"
   bundle exec fastlane android promote version_code:"${TESTED_BUILD}"
   info "Play done - open Play Console then Production and confirm the rollout %."
 fi

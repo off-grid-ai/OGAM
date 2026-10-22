@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# uat.sh - ship a BETA build to internal testers (TestFlight + Play internal) and cut a
-# GitHub PRERELEASE tag. Same fundamental as scripts/release.sh (build locally, generate
-# grouped release notes, tag on GitHub) - but flavored as a beta:
+# uat.sh - ship a BETA build to external testers (TestFlight external groups + Play open
+# testing) and cut a GitHub PRERELEASE tag. Same fundamental as scripts/release.sh (build
+# locally, generate grouped release notes, tag on GitHub) - but flavored as a beta:
 #
 #   * Beta version = <NEXT patch>-beta.<N> (e.g. current live 0.0.102 → 0.0.103-beta.1). A
 #     beta is a PRE-RELEASE OF THE NEXT version, never the current one: the current version
@@ -15,12 +15,12 @@ set -euo pipefail
 #   * The store BINARY carries the plain PRODUCTION version on BOTH platforms (Android
 #     versionName + iOS MARKETING_VERSION = the NEXT numeric version, no "-beta" suffix). A
 #     suffix is user-visible and frozen into the binary, so it would block promote-as-is
-#     (a tested beta build being promoted internal→production unchanged) and get carried to
+#     (a tested beta build being promoted open testing→production unchanged) and get carried to
 #     production forever. The "-beta.N" label lives only in the git tag, the GitHub
 #     prerelease, and the store release notes - never in the shipped binary. Approve a beta,
 #     then run scripts/promote.sh <tag> to bless that exact tested build to production.
 #   * Release notes are generated FROM THE COMMITS by `claude -p` (falls back to a grouped
-#     commit list), and pushed to TestFlight (What to Test) + Play internal + the GH release.
+#     commit list), and pushed to TestFlight (What to Test) + Play open testing + the GH release.
 #
 # Usage: scripts/uat.sh [--ios|--android|--resume-ios]   (no arg = both)
 # --resume-ios reuses the already-built AAB/APK/IPA after a failed Play
@@ -53,6 +53,12 @@ command -v node   >/dev/null || error "node not installed"
 command -v gh     >/dev/null || error "gh CLI not installed"
 command -v bundle >/dev/null || error "bundler not installed (bundle install)"
 [ -f fastlane/Fastfile ]     || error "fastlane/Fastfile not found"
+# iOS betas go to the TestFlight external groups this names. Check it now: a missing value found at
+# upload time would come after the Play upload already shipped.
+if [ "$DO_IOS" = 1 ] && [ -z "${TESTFLIGHT_EXTERNAL_GROUPS:-}" ] && \
+   ! grep -qE '^TESTFLIGHT_EXTERNAL_GROUPS=.+' fastlane/.env 2>/dev/null; then
+  error "TESTFLIGHT_EXTERNAL_GROUPS is not set (fastlane/.env). Name the TestFlight external groups, comma-separated."
+fi
 # Ignore fastlane/README.md — fastlane regenerates it on every run, so it is dirty by the time a
 # second build starts (and after any prior run). It is not source we build from.
 [ -z "$(git status --porcelain | grep -vE 'fastlane/README\.md$' || true)" ] || error "Working tree is dirty. Commit or stash first."
@@ -122,7 +128,7 @@ if [ "$DO_ANDROID" = 1 ]; then
   # versionName = this cut's own version, no "-beta" suffix, matching iOS's MARKETING_VERSION
   # below. versionName is frozen into the AAB and is what the app displays, so a "-beta" suffix
   # here would ride the exact tested bytes to production forever and block Play's promote-as-is
-  # (internal -> production, same AAB). Because every cut now takes the NEXT version, this number
+  # (open testing -> production, same AAB). Because every cut now takes the NEXT version, this number
   # is unique per build on its own: the GitHub release, both stores and the app all read 0.0.104.
   # The "-beta.N" label stays in the git tag, the GitHub prerelease, and the store release notes.
   sed -i '' "s/versionName .*/versionName \"$TARGET_VERSION\"/" android/app/build.gradle
@@ -195,8 +201,8 @@ if [ "$DO_IOS" = 1 ] && [ "$RESUME_IOS" = 0 ]; then
 fi
 
 # ── PUBLISH - reached only if every build above succeeded ───────────
-if [ "$DO_ANDROID" = 1 ] && [ "$RESUME_IOS" = 0 ]; then info "Android → Play internal (AAB)…"; bundle exec fastlane android upload_beta; fi
-if [ "$DO_IOS" = 1 ];     then info "iOS → TestFlight…";              bundle exec fastlane ios upload_beta;     fi
+if [ "$DO_ANDROID" = 1 ] && [ "$RESUME_IOS" = 0 ]; then info "Android → Play open testing (AAB)…"; bundle exec fastlane android upload_beta; fi
+if [ "$DO_IOS" = 1 ];     then info "iOS → TestFlight external…";     bundle exec fastlane ios upload_beta;     fi
 
 # ── success → commit the bump, cut the PRERELEASE tag, GH prerelease ──
 trap - EXIT   # keep the bump now that the build shipped
@@ -251,7 +257,7 @@ SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-$(sed -n 's/^SLACK_WEBHOOK_URL=//p' "$RO
 rm -f "$NOTES_FILE" "${ANDROID_CHANGELOG:-}" "$APK_DST" "$AAB_DST" "$IPA_DST"
 echo ""
 info "${BOLD}Beta ${BETA_VERSION} shipped.${NC}"
-[ "$DO_IOS" = 1 ]     && info "  iOS:     TestFlight (App Store Connect → TestFlight)"
-[ "$DO_ANDROID" = 1 ] && info "  Android: Play Console → Internal testing"
+[ "$DO_IOS" = 1 ]     && info "  iOS:     TestFlight external groups (after Beta App Review)"
+[ "$DO_ANDROID" = 1 ] && info "  Android: Play Console → Open testing (after Play review)"
 info "  GitHub:  $(gh release view "$TAG" --json url -q .url 2>/dev/null)"
 info "Approve the beta, then run scripts/release.sh to cut the real version to production."
