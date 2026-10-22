@@ -6,6 +6,32 @@ Branch `release/stable-v55-v115`. Last stable: v0.0.111. Change list and coverag
 
 **NO-GO, pending one step.** Every blocker found today is fixed and passed on a phone. The iPhone final pass is clean. The Android final pass on the release tip was still running at handoff (see "What is left").
 
+## Final pass on the tip (2026-10-22 23:00 – 10-23 00:10 IST)
+
+The tip is now `450698803`. It adds "A gateway's grounders and deciders are never offered as text models", a 3-line change to the remote model list. The user confirmed it belongs in this release.
+
+**iPhone on `f476663d0`:**
+- PASS: JS loads from Metro; D8 with tools off; a normal reply; Stop; a reply after Stop.
+- FAIL, known non-blocker: D8 with tools on. Same as on `0ec805123`.
+
+**Android on `450698803`:**
+- PASS: D8 with tools on and with tools off on 2B; Stop; a reply after Stop; background mid-reply.
+- PASS: D2, for context; D7 dictation; download labels.
+- PASS, branch fixes: maker filter (Liquid AI shows only LFM2.5-2.6B; 8B A1B is hidden by the RAM fit rule); "Check for new models" says "Up to date" in 3 s; cold New Chat opens a new empty chat.
+- Not rerun: D1, because the phone was hot (thermal status 2) and nothing since the earlier PASS touches local inference. Default system prompt read-out.
+- Android settings were reset to the defaults: KV q8_0, MTP off. Context is still 16K, which is not the 4096 default.
+
+**Found tonight (none blocks; all except finding 3 behave the same in v0.0.111):**
+1. **D6 "Free memory & Retry" → foreground kill by the low-memory killer.** The retry ejects every model, then prompt enhancement reloads the 2B text model before the image model loads. The phone had a 16K context and about 8 GB used by other apps. This belongs to the known retry-button follow-up. Not rerun at the 4096 context.
+2. **KV restore gives no speed gain on Qwen 3.5 (hybrid model).** `loadSession` restores, but llama.rn logs "no usable state checkpoint (recurrent/hybrid/SWA model), doing full cache clear", and the whole chat is read again (TTFT 30–40 s). Context is kept. v0.0.111 had no restore at all.
+3. **The chat store row is too big for Android.** `local-llm-chat-storage` is 8.35 MB (963 chats); Android reads at most 2 MB per row (`SQLiteBlobTooBigException`). The hydration gate then keeps writes blocked all session ("saved state still unreadable; writes stay blocked"). Chats came back through Sync. The write-blocking behaviour is new since v0.0.111; v0.0.111 started empty instead.
+4. **Pro Sync can hold the JS thread for minutes.** With a desktop peer sharing Downloads and Screenshots, decryption in pure-JS tweetnacl, file staging, and the Home screen re-sorting 963 chats on each store update held JS at 93–100%. A cold start took about 6 minutes to reach Home, and taps did not respond. The user turned the sharing off; a cold start still took 358 s while transfers settled. ChatStream was already in v0.0.111. The fix is deferred by the user (estimate: about 1 week, plus 1–2 weeks for moving chat storage).
+
+**Environment changes:**
+- The Mac is now `192.168.1.34`. Launch the iPhone with `xcrun devicectl device process launch --device 4CF4A291-280A-598C-8AC5-851073C14B30 --terminate-existing ai.offgridmobile.dev -- -RCT_jsLocation 192.168.1.34:8081`. Note the `--`.
+- `npm run e2e:wda` needs `WDA_UDID=00008150-000225103CD8C01C`.
+- Another session committed to this branch during testing. Metro hot-reloaded the change onto the phones mid-check.
+
 ## Fixes made today (all on the branch, in order)
 
 | Commit | What the user gets | Phone proof |
