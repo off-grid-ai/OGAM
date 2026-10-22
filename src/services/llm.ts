@@ -135,7 +135,7 @@ class LLMService {
     if (!memCheck.safe) {
       // Keep the selected context. A failed estimate asks for Load Anyway; an explicit
       // override passes the selected value to native init even when memory is tight.
-      const decision = await resolveSafeContext({ fileSize, requestedCtx: params.ctxLen, quantizedCache, override, getAvailableMemory: getMem });
+      const decision = await resolveSafeContext({ fileSize, requestedCtx: params.ctxLen, quantizedCache, override, getAvailableMemory: getMem, memCheck });
       memCheck = decision.memCheck;
     }
     logger.log(`[LLM] Memory check: estimatedMB=${memCheck.estimatedMB.toFixed(0)}, availableMB=${memCheck.availableMB.toFixed(0)}, safe=${memCheck.safe}, ctx=${params.ctxLen}`);
