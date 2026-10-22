@@ -706,3 +706,66 @@ Evidence:
 Close this gap only after the native manifest contract and rendered repeat-scan journey pass, the
 Android debug and release builds pass, the fixed debug app is installed without clearing data, and
 opening Scan QR shows the Android camera permission prompt once. Do not automate the camera scan.
+
+## Harness: there is NO passive way to observe an iPhone through WDA
+
+**Check 2026-10-22 (moved from the desktop backlog):** passive mode in `scripts/e2e/sync-surface.mjs` now reuses the existing WDA session (`scripts/ios/wda-client.mjs`). There is still no way to read app state outside WDA.
+
+**Status:** open, harness limitation. Learned the hard way 2026-08-07, twice in one session.
+
+Every read of the iOS app goes through a WebDriverAgent session, and creating one is not an
+observation - it changes the device:
+
+- `session(bundleId)` LAUNCHES/ACTIVATES that bundle, terminating whatever it was doing. This killed a
+  706 MB model transfer that was mid-receive: the snapshot tool called it "read-only by design" while
+  relaunching the app it was recording.
+- `session()` with no bundle id was the attempted fix. It does not launch the app under test, but it
+  still appears to deactivate the FOREGROUND app - a read taken while the user had the app open
+  returned the SpringBoard home screen instead.
+
+So `passive: true` on the iOS surface is weaker than its name promises: it will not relaunch the app,
+but it cannot be trusted not to disturb what the user is doing.
+
+**Rules that follow, until something better exists:**
+
+1. Never read an iPhone while a person is driving it or a transfer is in flight. Ask them for a
+   screenshot instead - it is the only genuinely zero-cost observation.
+2. Automated iOS flows are fine, because there the harness IS the driver and nothing else is going on.
+3. Android does not have this problem to the same degree: `adb shell uiautomator dump` reads the tree
+   without touching the app, and only `session()`'s `monkey` launch foregrounds it, which `passive`
+   now skips.
+
+**Worth investigating:** whether an iOS read can be taken outside WDA entirely - the app could expose
+its own state over a dev-only local endpoint, which the harness reads without going near the UI. That
+would make observation free on every platform and is probably the right long-term answer for a suite
+that has to watch journeys it is not driving.
+
+## MTP is a mobile feature, and it should be a `@offgrid/models` one
+
+**Check 2026-10-22 (moved from the desktop backlog):** desktop now supports MTP and the heads table is shared (`shared/packages/models/src/mtp-heads.ts`). The "declares MTP" check still lives in both `src/utils/mtpSupport.ts` and desktop `gguf-metadata.ts`. Move it into `@offgrid/models`.
+
+**Status:** open. Filed 2026-08-12. Deliberately NOT in the current PR - it is a package extraction,
+not a fix, and folding it in would bloat a release branch that is about sync feedback.
+
+**The gap.** MTP support exists on mobile and does not exist on desktop. Both apps consume the same
+model layer, so a capability that lives in one app's screens is a rule with one home and two
+audiences - the shape this repo keeps finding at the root of its bugs.
+
+**Why it is a shared-package problem, not a desktop one.** Copying the mobile implementation across
+would make it a rule with TWO homes, which is worse than having it once. The model layer is the owner:
+whether a model needs MTP, which artefacts it implies, and how a device advertises support are all
+properties of the MODEL, and every surface should be asking `@offgrid/models` rather than each app
+deciding for itself. Desktop then gets it by consuming the package, and so does any future surface.
+
+**Fix shape.**
+
+1. Move the MTP capability rule into `shared/packages/models` - one definition of what MTP is and which
+   models require it, keyed off the catalog entry, with no app-specific branching inside it.
+2. Mobile stops deciding and starts asking. Its current behaviour is the reference for what the rule
+   must produce, so it is the regression check that the extraction changed nothing.
+3. Desktop consumes the same rule. No `if (platform)` in either app: a platform that cannot serve MTP
+   reports that through the same interface, it does not get a special case at the call site.
+
+**Watch for:** the mobile implementation almost certainly carries assumptions that are really about the
+phone runtime rather than about MTP. Those belong on the platform adapter, not in the shared rule - and
+the tell is any code in the extracted package that names a platform.
