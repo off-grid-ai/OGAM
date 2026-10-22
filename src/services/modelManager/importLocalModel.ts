@@ -1,3 +1,4 @@
+import { isDraftModelFile, isMtpHeadFile } from '@offgrid/models';
 import RNFS from 'react-native-fs';
 import { statFile } from '../../utils/fileStat';
 import {
@@ -48,6 +49,9 @@ export async function importLocalModel(opts: ImportLocalModelOpts): Promise<Down
   const isLitert = isLiteRTFileName(fileName);
   if (!fileName.toLowerCase().endsWith('.gguf') && !isLitert) {
     throw new Error('Only .gguf and .litertlm files can be imported');
+  }
+  if (isMtpHeadFile(fileName) || isDraftModelFile(fileName)) {
+    throw new Error('This file only speeds up another model. It cannot run on its own.');
   }
 
   const resolvedSource = resolveUri(sourceUri);

@@ -1,3 +1,4 @@
+import { isDraftModelFile, isMtpHeadFile } from '@offgrid/models';
 import { LlamaContext } from 'llama.rn';
 import RNFS from 'react-native-fs';
 import { statFile } from '../utils/fileStat';
@@ -31,6 +32,15 @@ function decodeLittleEndianUint32(bytes: string): number | null {
 export async function validateModelFile(
   modelPath: string,
 ): Promise<{ valid: boolean; reason?: string }> {
+  // An MTP head or a draft model carries only the extra layers that speed a model up. Loaded on its
+  // own, the engine builds the graph with no main weights and crashes the app (null tensor in the
+  // Qwen3.5 linear-attention layers), so it is refused before it reaches the engine.
+  if (isMtpHeadFile(modelPath) || isDraftModelFile(modelPath)) {
+    return {
+      valid: false,
+      reason: 'This file only speeds up another model. It cannot run on its own.',
+    };
+  }
   try {
     const facts = await statFile(modelPath);
     if (!facts) {

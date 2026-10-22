@@ -911,6 +911,28 @@ describe('ModelManager', () => {
       expect(discovered[0].quantization).toBe('Q4_K_M');
     });
 
+    it('never adopts an MTP head or draft model stored beside its model as a model of its own', async () => {
+      mockedRNFS.exists.mockResolvedValue(true);
+      const entry = (name: string) => ({
+        name,
+        path: `/models/${name}`,
+        size: 1500000000,
+        isFile: () => true,
+        isDirectory: () => false,
+      } as any);
+      mockedRNFS.readDir.mockResolvedValue([
+        entry('Qwen3.5-9B-Q4_K_M.gguf'),
+        entry('Qwen3.5-9B-MTP-ONLY-Q4_K_M.gguf'),
+        entry('mtp-gemma-4-E4B-it-Q8_0.gguf'),
+        entry('Qwen3.5-9B-DFlash-Q4_0.gguf'),
+      ]);
+      mockedAsyncStorage.getItem.mockResolvedValue('[]');
+
+      const discovered = await modelManager.scanForUntrackedTextModels();
+
+      expect(discovered.map(m => m.fileName)).toEqual(['Qwen3.5-9B-Q4_K_M.gguf']);
+    });
+
     it('skips mmproj files', async () => {
       mockedRNFS.exists.mockResolvedValue(true);
       mockedRNFS.readDir.mockResolvedValue([
@@ -1266,6 +1288,13 @@ describe('ModelManager', () => {
       await expect(
         modelManager.importLocalModel({ sourceUri: '/path/to/model.bin', fileName: 'model.bin' })
       ).rejects.toThrow('Only .gguf and .litertlm files can be imported');
+    });
+
+    it('refuses to import an MTP head, which cannot run on its own', async () => {
+      await expect(
+        modelManager.importLocalModel({ sourceUri: '/path/to/head.gguf', fileName: 'Qwen3.5-9B-MTP-ONLY-Q4_K_M.gguf' })
+      ).rejects.toThrow('This file only speeds up another model. It cannot run on its own.');
+      expect(mockedRNFS.copyFile).not.toHaveBeenCalled();
     });
 
     it('rejects when destination already exists', async () => {

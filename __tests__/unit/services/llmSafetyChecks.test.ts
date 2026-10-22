@@ -22,6 +22,21 @@ describe('validateModelFile', () => {
     expect(result.reason).toContain('too small');
   });
 
+  it.each([
+    '/models/Qwen3.5-9B-MTP-ONLY-Q4_K_M.gguf',
+    '/models/MTP/mtp-gemma-4-E4B-it-Q8_0.gguf',
+    '/models/mtp-Qwen3.8-27B-Q4_0.gguf',
+    '/models/Qwen3.5-9B-DFlash-Q4_0.gguf',
+  ])('refuses %s, which only speeds up another model, before the engine loads it', async path => {
+    defaultNativeFileSystemBoundary.seedFile(path, 1_000_000);
+
+    const result = await validateModelFile(path);
+    expect(result).toEqual({
+      valid: false,
+      reason: 'This file only speeds up another model. It cannot run on its own.',
+    });
+  });
+
   it('returns valid for a proper GGUF file', async () => {
     defaultNativeFileSystemBoundary.seedFile('/models/test.gguf', 1_000_000);
 
