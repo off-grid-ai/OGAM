@@ -155,7 +155,9 @@ untyped dead-branch rules — all hard CI gates). These three are the open follo
    runtime). Fix-in-waves toward `error`. Companion tsconfig flags to measure: `allowUnreachableCode:false`,
    `noUnusedLocals/Parameters:true`.
 
-## Dead-code recon — open items (re-checked 2026-10-22)
+## Dead-code recon — open (deferred) items - 2026-07-06
+
+_Re-checked 2026-10-22: only the items still open are listed._
 
 - **ML3** - `activeModelService/utils.ts` still uses 1.2 and 1.3; `types.ts` has 1.5/2.2/1.8. Use the shared multipliers.
 - **ML5** - `activeModelService/index.ts` passes `cpuOnly: false` on to `loaders.ts`. Remove the arg in a typed refactor.
@@ -202,7 +204,9 @@ in its progress events — none were emitted, consistent with first-run OpenCL k
 the intermediate-latent decode. Next: confirm whether previews appear on a SECOND (warmed) generation.
 If yes → expected first-run behaviour (maybe show a hint). If never on mnn → native gap; JS/UI is correct.
 
-## On-device test session follow-ups (2026-07-09 session, re-checked 2026-10-22)
+## On-device test session - 2026-07-09 (Qwythos-9B vision + memory, 12GB iPhone/Android)
+
+_Re-checked 2026-10-22: only the items still open are listed._
 
 - **OD5** - Android retry after a network drop: code in `9b45bab31` and `8d8d09e90`. Device check owed.
 - **OD11** - Kokoro beside a large LLM: budget residency (`shared residency-policy.ts`), but the singleModel and
@@ -213,7 +217,9 @@ If yes → expected first-run behaviour (maybe show a hint). If never on mnn →
   (`generationToolLoop.ts`). Add the local catch and retry.
 - **OD16** - remote capabilities flaky: only hand-made fixtures. Capture live provider fixtures and add a contract test.
 
-## Repo-wide /hygiene audit — open items (2026-07-09, re-checked 2026-10-22)
+## Repo-wide /hygiene audit — open items - 2026-07-09 (SOLID §A/§B + DRY §C)
+
+_Re-checked 2026-10-22: only the items still open are listed._
 
 - **SO5** - `ImageFilterBar.tsx` hand-built filters. Use a data-driven filter descriptor.
 - **SO6** - `remoteServerManagerUtils.ts` type-switches. Put `updateCapabilities` on the provider interface.
@@ -237,7 +243,9 @@ back re-syncs. Suspect useChatModelStateSync / the chat's derived activeModel no
 in-chat load (the model loads fine; only the screen's projection is stale). Fix separately with its own
 on-device repro — do NOT bundle into the current release PR (scope + risk).
 
-## PR #510 follow-ups still open (re-checked 2026-10-22)
+## Device-verification gate before release (PR #510) — MUST pass before shipping
+
+_Re-checked 2026-10-22: only the items still open are listed._
 
 - **Native-first Gemma flip** - `parseGemmaNativeToolCalls` is still in `generationToolLoop.ts` with the
   `[GEMMA-FALLBACK]` log. Run on a device, then keep or delete the hand-parser.
@@ -282,7 +290,9 @@ that seam + a rendered red-flow (image mode → trigger the stuck path → next 
 "already generating"). Candidate hardening once pinned: a top-level try/finally in generateImage so no
 throw can leave the phase in-flight, and/or a self-healing staleness check on the isInFlight rejection.
 
-## M5a — exact budget boundary untested
+## M5a (marginal, logged) — exact budget boundary untested
+
+_Re-checked 2026-10-22: only the items still open are listed._
 
 The budget check is now `fitTier` in `shared/packages/models/src/model-fit.ts`. `model-fit-phone.test.mjs` has
 no case where size equals the budget. Add a boundary test in shared. Marginal.
@@ -307,7 +317,9 @@ reports vision failing right after a first download, instrument the load path: a
 record's mmProjPath is set before the first load, and re-derive multimodal if a mmproj is linked after
 a text-only load.
 
-## Personal Mesh (sync across macOS, iOS, Android) — open items (re-checked 2026-10-22)
+## Personal Mesh (sync across macOS, iOS, Android) — 2026-07-30
+
+_Re-checked 2026-10-22: only the items still open are listed._
 
 - **PM1 / PM2** - one device identity (`localDevice.ts`) and Android mesh residency
   (`MeshResidencyService.kt`) are in code. Matrix rows 5–6 and 18–21 still need a device run.
@@ -326,7 +338,9 @@ a text-only load.
 
 Fix: finalise before announcing, then un-skip the test.
 
-## ChatScreen journeys still uncovered after deleting the mockist suite
+## Deleting the mockist ChatScreen suite leaves real ChatScreen journeys uncovered
+
+_Re-checked 2026-10-22: only the items still open are listed._
 
 135 `chatHarness` tests exist now. Still missing:
 
@@ -335,7 +349,9 @@ Fix: finalise before announcing, then un-skip the test.
 - **useChatModelActions** - no switch while a reply is streaming.
 - Re-measure coverage for ChatScreenComponents, modelReadiness and the screen index.
 
-## Image-generation journeys still uncovered
+## Image-generation journeys left uncovered by deleting imageGenerationFlow.test.ts
+
+_Re-checked 2026-10-22: only the items still open are listed._
 
 - **Enhancement context rules** - unit-covered only (`imageGenerationHelpers.test.ts`). Add a rendered test if
   policy needs it.
@@ -467,7 +483,9 @@ read_wiki_structure, read_wiki_contents) succeeded in the same turn.
 
 Worth checking what the DeepWiki MCP server expects for `ask_question` against what is being sent.
 
-## Test coverage we know we are missing (Mac's list, 16 Aug 2026, re-checked 2026-10-22)
+## Test coverage we know we are missing (Mac's list, 16 Aug 2026)
+
+_Re-checked 2026-10-22: only the items still open are listed._
 
 Device journeys with no recorded result:
 
@@ -491,7 +509,9 @@ Code gaps:
 - **Vision journeys are Android-only** - `scripts/e2e/vision-answer-sync.mjs` uses the Android producer. Port
   the iOS producer.
 
-## Model memory: fallback multipliers and the refusal card
+## Model memory: the estimate is unscientific, inconsistent, and fails silently
+
+_Re-checked 2026-10-22: only the items still open are listed._
 
 The estimate now counts context (`82cb512f7`, `1d0800588`; `activeModelService/memory.ts`), and every caller
 uses `estimateTextModelMemoryMB`. Still open:
@@ -544,7 +564,9 @@ the surface. Two questions this run raises that the current estimator cannot ans
 **Cover it.** The journey is the regression test: any change to the cost model should be run against
 it, and `never resident at any stage: text` should become empty.
 
-## Voice: hands-free, barge-in and note trimming — open items (re-checked 2026-10-22)
+## Voice: hands-free, barge-in and note trimming — 2026-08-17
+
+_Re-checked 2026-10-22: only the items still open are listed._
 
 - **Desktop consumes only part of the shared voice logic** - desktop imports `SpeechEndpointTimer`,
   `VOICE_TURN_LABELS` and `VoiceTurnMode` (`5cacb52c8`), not `canArmHandsFreeTurn`, onset look-back, WAV trim or
