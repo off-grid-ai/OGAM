@@ -26,3 +26,36 @@ index 121edb4..34cc84e 100644
      @Override
      public @NonNull
      String getName() {
+diff --git a/node_modules/react-native-tcp-socket/ios/TcpSockets.m b/node_modules/react-native-tcp-socket/ios/TcpSockets.m
+index 0fe15d2..d8810c7 100644
+--- a/node_modules/react-native-tcp-socket/ios/TcpSockets.m
++++ b/node_modules/react-native-tcp-socket/ios/TcpSockets.m
+@@ -271,6 +271,15 @@ - (void)onSocketConnection:(TcpSocketClient *)client
+                   toClient:(NSNumber *)clientID
+             connectionType:(NSString *)connectionType {
+     GCDAsyncSocket *socket = [client getSocket];
++    NSString *localHost = [socket localHost];
++    NSString *remoteHost = [socket connectedHost];
++    // A peer that resets right after accept leaves no address. Inserting nil into the event
++    // dictionary throws an uncaught NSException and aborts the app, so drop the connection instead.
++    if (localHost == nil || remoteHost == nil) {
++        [_clients removeObjectForKey:client.id];
++        [socket disconnect];
++        return;
++    }
+ 
+     [self sendEventWithName:connectionType
+                        body:@{
+@@ -278,10 +287,10 @@ - (void)onSocketConnection:(TcpSocketClient *)client
+                            @"info" : @{
+                                @"id" : client.id,
+                                @"connection" : @{
+-                                   @"localAddress" : [socket localHost],
++                                   @"localAddress" : localHost,
+                                    @"localPort" : [NSNumber
+                                        numberWithInt:[socket localPort]],
+-                                   @"remoteAddress" : [socket connectedHost],
++                                   @"remoteAddress" : remoteHost,
+                                    @"remotePort" : [NSNumber
+                                        numberWithInt:[socket connectedPort]],
+                                    @"remoteFamily" : [socket isIPv4] ? @"IPv4"
