@@ -432,16 +432,42 @@ export function buildCompletionParams(settings: {
     ctx_shift: options?.disableCtxShift ? false : true,
   };
 }
+/** Device shape of a finished llama.rn completion — the fields that say WHY it stopped. */
+export interface CompletionEndFields {
+  interrupted?: boolean;
+  stopped_eos?: boolean;
+  stopped_word?: boolean | string;
+  stopped_limit?: number | boolean;
+  truncated?: boolean;
+  context_full?: boolean;
+  tokens_evaluated?: number;
+  tokens_predicted?: number;
+}
+
 /**
- * Was a completion cut off at the n_predict cap (B15), vs finishing on EOS or being STOPPED? SINGLE
- * truncation verdict for both the plain and tool-loop paths. A user stop is `interrupted:true`
- * (stopped_eos:false) — NOT truncation; only a stopped_limit/truncated hit is (device 2026-07-14).
+ * WHY a llama completion stopped — the ONE verdict every llama path reads.
+ * - 'stopped': the user's Stop (interrupted:true, stopped_eos:false) — never a cut-off.
+ * - 'token-limit': the n_predict cap (B15).
+ * - 'context-full': no room left in the context window.
+ * - 'finished': EOS or a stop word.
+ * - 'ended-early': none of those. llama.rn ends a completion this way when the backend fails a decode
+ *   (iOS forbids Metal work in background: ggml-metal sets has_error, rn-completion sets
+ *   has_next_token=false). That error is sticky on the context, so its next completions are empty.
+ * A result without a boolean stopped_eos is not native-shaped and reads as 'finished' (never guess).
  */
-export function isTruncatedResult(
-  cr: { interrupted?: boolean; stopped_limit?: number | boolean; truncated?: boolean } | null | undefined,
-): boolean {
-  if (!cr || cr.interrupted === true) return false;
-  return cr.stopped_limit === 1 || cr.stopped_limit === true || cr.truncated === true;
+export type CompletionEnd = 'finished' | 'token-limit' | 'stopped' | 'context-full' | 'ended-early';
+
+export function completionEnd(cr: CompletionEndFields | null | undefined, contextLength?: number): CompletionEnd {
+  if (!cr || typeof cr !== 'object') return 'finished';
+  if (cr.interrupted === true) return 'stopped';
+  if (cr.stopped_limit === 1 || cr.stopped_limit === true || cr.truncated === true) return 'token-limit';
+  if (cr.context_full === true) return 'context-full';
+  if (cr.stopped_eos === true || !!cr.stopped_word) return 'finished';
+  if (typeof cr.stopped_eos !== 'boolean') return 'finished';
+  // With ctx_shift off, llama.rn stops at a full window without setting context_full.
+  const used = (cr.tokens_evaluated ?? 0) + (cr.tokens_predicted ?? 0);
+  if (contextLength && used >= contextLength - 1) return 'context-full';
+  return 'ended-early';
 }
 export function recordGenerationStats(
   startTime: number,

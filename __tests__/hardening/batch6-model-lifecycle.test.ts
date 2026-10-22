@@ -44,6 +44,8 @@ describe('BATCH 6 — model selection / activation / unload (real service + stor
 
     mockLlm.isModelLoaded.mockReturnValue(false);
     mockLlm.getLoadedModelPath.mockReturnValue(null);
+    // A loaded context answers unless a backend fault marked it (llmService.isContextUsable).
+    mockLlm.isContextUsable.mockImplementation(() => mockLlm.isModelLoaded());
     mockLlm.loadModel.mockResolvedValue(undefined);
     mockLlm.unloadModel.mockResolvedValue(undefined);
     mockLlm.getMultimodalSupport.mockReturnValue(null);

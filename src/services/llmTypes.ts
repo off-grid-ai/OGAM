@@ -19,4 +19,6 @@ export interface LLMPerformanceStats {
   lastPromptTokenCount?: number;
   /** True when the completion hit the n_predict cap without an EOS token (cut off mid-output, B15). */
   lastTruncated?: boolean;
+  /** True when the completion ended with no EOS, stop word, token cap, Stop or full context (a backend fault). */
+  lastEndedEarly?: boolean;
 }

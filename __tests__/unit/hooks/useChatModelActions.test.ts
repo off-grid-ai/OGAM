@@ -35,6 +35,8 @@ jest.mock('../../../src/services/llm', () => ({
     getBackendFallbackNotice: jest.fn(() => null),
     stopGeneration: jest.fn(),
     isModelLoaded: jest.fn(),
+    // A loaded context answers unless a backend fault marked it (llmService.isContextUsable).
+    isContextUsable: jest.fn(function (this: { isModelLoaded: () => boolean }) { return this.isModelLoaded(); }),
     // engines.activeTextCapabilities (reached via loadedModelVision / state-sync) reads these too.
     supportsToolCalling: jest.fn(() => false),
     supportsThinking: jest.fn(() => false),

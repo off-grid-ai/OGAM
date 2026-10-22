@@ -285,6 +285,8 @@ export interface GenerationMeta {
   routedToolNames?: string[];
   /** True when the reply was cut off at the n_predict cap without an EOS token (B15). */
   truncated?: boolean;
+  /** True when the reply ended before the model finished, with no cap, Stop or full context (a backend fault). */
+  endedEarly?: boolean;
 }
 
 // Chat-related types

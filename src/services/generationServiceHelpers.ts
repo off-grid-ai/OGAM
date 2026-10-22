@@ -176,6 +176,7 @@ function buildBaseGenerationMeta(svc: any): GenerationMeta {
       settings.cacheType,
     ),
     truncated: perf.lastTruncated,
+    endedEarly: perf.lastEndedEarly,
   };
 }
 

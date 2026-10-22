@@ -191,6 +191,13 @@ interface MessageBubbleProps {
   onMenuOpen: () => void;
 }
 
+/** The note under a reply that did not finish: cut at the token cap, or ended early (a backend fault). */
+function cutoffNoteFor(meta: Message['generationMeta']): string | null {
+  if (meta?.truncated) return 'Reply cut off at the token limit. Retry to continue.';
+  if (meta?.endedEarly) return 'Reply stopped early. Retry to continue.';
+  return null;
+}
+
 const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   supportingContextParsedContent,
@@ -242,6 +249,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   // footer, and retries must not leave one metadata block per empty attempt.
   const showTurnFooter =
     !hideProse && !isUser && !isStreaming && hasVisibleAnswer;
+  const cutoffNote = cutoffNoteFor(message.generationMeta);
   return (
     <TouchableOpacity
       testID={isUser ? 'user-message' : 'assistant-message'}
@@ -364,12 +372,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         />
       )}
 
-      {showTurnFooter && message.generationMeta?.truncated && (
+      {showTurnFooter && cutoffNote && (
         <View testID="message-cutoff-indicator" style={styles.toolStatusRow}>
           <Icon name="alert-triangle" size={12} color={colors.textMuted} />
-          <Text style={styles.toolStatusText}>
-            Reply cut off at the token limit. Retry to continue.
-          </Text>
+          <Text style={styles.toolStatusText}>{cutoffNote}</Text>
         </View>
       )}
 

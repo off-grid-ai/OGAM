@@ -13,6 +13,7 @@ import {
   ToolGenerationDeps,
 } from '../../../src/services/llmToolGeneration';
 import type { Message } from '../../../src/types';
+import { completionEnd } from '../../../src/services/llmHelpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -36,6 +37,11 @@ function createMockDeps(overrides: Partial<ToolGenerationDeps> = {}): ToolGenera
       msgs.map(m => ({ role: m.role, content: m.content })),
     ),
     setPerformanceStats: jest.fn(),
+    // The service's real verdict (pure), as llmService wires it.
+    recordCompletionEnd: cr => ({
+      lastTruncated: completionEnd(cr) === 'token-limit',
+      lastEndedEarly: completionEnd(cr) === 'ended-early',
+    }),
     setIsGenerating: jest.fn(),
     ...overrides,
   };

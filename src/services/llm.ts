@@ -12,7 +12,7 @@ import {
   buildCompletionParams, buildThinkingCompletionParams, supportsNativeThinking,
   getGpuLayersForDevice, BYTES_PER_GB,
   validateModelFile, checkMemoryForModel, safeCompletion, resolveSafeContext,
-  describeGpuFallback, isTruncatedResult,
+  describeGpuFallback, completionEnd, type CompletionEndFields,
 } from './llmHelpers';
 import { awaitMemoryReclaim, effectiveAvailableMB } from './memoryBudget';
 import { modelResidencyManager } from './modelResidency';
@@ -49,6 +49,13 @@ class LLMService {
   private readonly nativeWork = new Set<Promise<unknown>>();
   /** True from the moment a release begins; no new native work may start on the old context. */
   private releasingContext: boolean = false;
+  /**
+   * The context stopped answering: a completion ended with no EOS, stop word, cap, Stop or full window.
+   * On iOS that is a Metal command buffer refused in background, and its error sticks to the context, so
+   * every later completion on it is empty. It stays resident (Eject and memory accounting still see it),
+   * but it is not ready: the next load through the residency lock replaces it.
+   */
+  private contextUnusable: boolean = false;
   private multimodalSupport: MultimodalSupport | null = null;
   private multimodalInitialized: boolean = false;
   private performanceStats: LLMPerformanceStats = { lastTokensPerSecond: 0, lastDecodeTokensPerSecond: 0, lastTimeToFirstToken: 0, lastGenerationTime: 0, lastTokenCount: 0 };
@@ -156,6 +163,7 @@ class LLMService {
     const toolCallingSupported = this.deriveToolCallingSupport(context);
     const thinkingSupported = supportsNativeThinking(context);
     this.context = context;
+    this.contextUnusable = false;
     this.currentModelPath = modelPath;
     this.nativeConversationId = null;
     if (actualLength !== this.currentSettings.contextLength) this.currentSettings.contextLength = actualLength;
@@ -173,11 +181,12 @@ class LLMService {
     try {
       await mutex.ready;
       // Re-check after acquiring mutex — another call may have loaded the same model
-      if (this.context && this.currentModelPath === modelPath) return;
+      if (this.context && this.currentModelPath === modelPath && !this.contextUnusable) return;
       // Check the new model fits BEFORE releasing the current one: a refused switch must leave the
       // chat on the model it had, not on nothing. The current model's memory is counted as coming
-      // back, since a switch that goes ahead releases it first.
-      const switching = !!this.context && this.currentModelPath !== modelPath;
+      // back, since a switch that goes ahead releases it first. A context that stopped answering is
+      // replaced the same way, even for the same file.
+      const switching = !!this.context && (this.currentModelPath !== modelPath || this.contextUnusable);
       const reclaimBytes = switching && this.currentModelPath ? (await statFile(this.currentModelPath))?.size ?? 0 : 0;
       const { fileSize, memCheck, params } = await this.validateAndPrepareModel(modelPath, opts?.override, reclaimBytes);
       if (switching) {
@@ -316,13 +325,27 @@ class LLMService {
     // reload with ~2GB free ground to 0 tok/s then died). Wait (bounded) for the process footprint to drop.
     await awaitMemoryReclaim(() => hardwareService.getProcessMemory());
     useAppStore.getState().setModelMaxContext(null);
-    Object.assign(this, { context: null, currentModelPath: null, nativeConversationId: null, multimodalSupport: null, multimodalInitialized: false, toolCallingSupported: false, thinkingSupported: false, gpuEnabled: false, gpuReason: '', gpuDevices: [], activeGpuLayers: 0, requestedGpuLayers: 0, gpuAttemptFailed: false });
+    Object.assign(this, { context: null, contextUnusable: false, currentModelPath: null, nativeConversationId: null, multimodalSupport: null, multimodalInitialized: false, toolCallingSupported: false, thinkingSupported: false, gpuEnabled: false, gpuReason: '', gpuDevices: [], activeGpuLayers: 0, requestedGpuLayers: 0, gpuAttemptFailed: false });
   }
   async unloadModel(): Promise<void> {
     const mutex = this.acquireContextMutex();
     try { await mutex.ready; await this.doUnloadModel(); } finally { mutex.release(); }
   }
   isModelLoaded(): boolean { return this.context !== null; }
+  /** A loaded context that still answers. False after a backend fault; the next load replaces it. */
+  isContextUsable(): boolean { return this.context !== null && !this.contextUnusable; }
+  /**
+   * Read WHY a completion stopped — the ONE place every llama path records it. A reply that ended
+   * early marks the context unusable, so the next send reloads the model instead of getting nothing.
+   */
+  private recordCompletionEnd(cr: CompletionEndFields | null | undefined): Pick<LLMPerformanceStats, 'lastTruncated' | 'lastEndedEarly'> {
+    const end = completionEnd(cr, this.currentSettings.contextLength);
+    if (end === 'ended-early') {
+      logger.warn(`[LLM] Completion ended early (no EOS/stop/cap/interrupt): ${JSON.stringify({ model: this.currentModelPath, predicted: cr?.tokens_predicted, evaluated: cr?.tokens_evaluated })} — context marked for reload`);
+      this.contextUnusable = true;
+    }
+    return { lastTruncated: end === 'token-limit', lastEndedEarly: end === 'ended-early' };
+  }
   getLoadedModelPath(): string | null { return this.currentModelPath; }
   async generateResponse(messages: Message[], options?: { onStream?: StreamCallback; onComplete?: CompleteCallback; disableThinking?: boolean }): Promise<string> {
     const { onStream, onComplete, ...opts } = options ?? {};
@@ -365,13 +388,12 @@ class LLMService {
       const cr = completionResult as any;
       // [WIRE] Full raw stream + final result, so we can build fixtures from real Gemma/Qwen wire format.
       logger.log(`[WIRE-LLAMA] ${JSON.stringify({ model: this.currentModelPath, stream: __wire, final: { content: cr?.content, text: cr?.text, reasoning_content: cr?.reasoning_content, tool_calls: cr?.tool_calls } })}`);
+      // Capture how the reply ended so the UI can flag a cut-off one (B15 cap, or a backend fault).
       this.performanceStats = {
         ...recordGenerationStats(startTime, firstTokenMs, tokenCount),
         lastPromptTokenCount: cr?.tokens_evaluated,
+        ...this.recordCompletionEnd(cr),
       };
-      // Capture truncation (hit n_predict cap without EOS) so the UI can flag a cut-off
-      // reply instead of it looking finished (B15).
-      this.performanceStats.lastTruncated = isTruncatedResult(cr);
       if (completionResult?.context_full) { logger.log('[LLM] Context full detected — signalling for compaction'); throw new Error('Context is full'); }
       const result = { content: cr?.content || cr?.text || fullContent, reasoningContent: cr?.reasoning_content || fullReasoningContent };
       logger.log(`[LLM][THINKING] Final result — hasContent=${!!result.content}, hasReasoningContent=${!!result.reasoningContent}, reasoningLength=${result.reasoningContent?.length ?? 0}, fullReasoningFromStream=${fullReasoningContent.length}`);
@@ -392,6 +414,7 @@ class LLMService {
       convertToOAIMessages: async msgs =>
         this.convertToOAIMessages(await this.dropMissingImageAttachments(msgs)),
       setPerformanceStats: (s) => { this.performanceStats = s; },
+      recordCompletionEnd: (cr) => this.recordCompletionEnd(cr),
       setIsGenerating: (v) => { this.isGenerating = v; },
     }, messages, {
       tools: options.tools,
@@ -442,10 +465,11 @@ class LLMService {
         await this.dropMissingImageAttachments(messages),
       );
       const { settings } = useAppStore.getState();
-      await safeCompletion(ctx, () => ctx.completion(
+      const cr = await safeCompletion(ctx, () => ctx.completion(
         { messages: oaiMessages, ...buildCompletionParams(settings, { disableCtxShift: this.shouldDisableCtxShift() }), n_predict: maxTokens },
         (data) => { if (this.isGenerating && data.token) fullResponse += data.token; },
       ), 'generateWithMaxTokens');
+      this.recordCompletionEnd(cr);
     })());
     this.activeCompletionPromise = completionWork.then(() => { }, () => { });
     try { await completionWork; return fullResponse.trim(); } finally { this.isGenerating = false; this.activeCompletionPromise = null; }

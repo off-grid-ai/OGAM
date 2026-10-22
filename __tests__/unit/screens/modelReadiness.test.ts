@@ -9,6 +9,8 @@ jest.mock('../../../src/services/llm', () => ({
   llmService: {
     getLoadedModelPath: jest.fn(() => null),
     isModelLoaded: jest.fn(() => false),
+    // A loaded context answers unless a backend fault marked it (llmService.isContextUsable).
+    isContextUsable: jest.fn(function (this: { isModelLoaded: () => boolean }) { return this.isModelLoaded(); }),
   },
 }));
 jest.mock('../../../src/services/litert', () => ({
