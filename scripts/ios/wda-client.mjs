@@ -17,9 +17,13 @@
  */
 import { writeFileSync } from 'node:fs';
 
+/** Out-of-process system UI a journey may TAP inside (never type into): the photo picker. */
+const SYSTEM_TAP_TARGETS = /PhotosUI|mobileslideshow|photospicker/i;
+
 export class WdaClient {
   #sessionId = null;
   #baseUrl;
+  #guardBundle = null;
 
   /** baseUrl e.g. "http://192.168.1.20:8100", printed by launch-wda.mjs. */
   constructor(baseUrl) {
@@ -69,6 +73,126 @@ export class WdaClient {
     return sessionId;
   }
 
+  /**
+   * Attach to WDA's live session, or create one that does NOT relaunch a running app.
+   *
+   * session(bundleId) asks WDA to launch the bundle, and WDA's default is forceAppLaunch=true: a
+   * running app is terminated and started again. A journey that only wants to drive what is on screen
+   * must not pay a cold start (or lose a stream in flight) for the privilege, so this passes
+   * forceAppLaunch=false and lets WDA merely activate the app.
+   */
+  async attachOrCreate(bundleId) {
+    try {
+      return await this.attach();
+    } catch {
+      const created = await this.#post('/session', {
+        capabilities: {
+          alwaysMatch: { bundleId, forceAppLaunch: false, shouldWaitForQuiescence: false },
+        },
+      });
+      this.#sessionId = created.value?.sessionId ?? created.sessionId ?? null;
+      if (!this.#sessionId) throw new Error(`WDA session failed: ${JSON.stringify(created).slice(0, 300)}`);
+      return this.#sessionId;
+    }
+  }
+
+  /**
+   * From now on, refuse to send input anywhere but `bundleId` (see AdbClient.requireForeground: a
+   * chat prompt once reached Slack because another app was in front when a journey typed).
+   */
+  requireForeground(bundleId) {
+    this.#guardBundle = bundleId;
+  }
+
+  /** The bundle id of the app WDA sees in front. */
+  async activeBundle() {
+    const info = await this.#get('/wda/activeAppInfo');
+    return info.value?.bundleId ?? '';
+  }
+
+  async #assertFront(kind) {
+    const bundle = this.#guardBundle;
+    if (!bundle) return;
+    let active = await this.activeBundle().catch(() => '');
+    if (active === bundle) return;
+    if ((kind === 'tap' || kind === 'swipe') && SYSTEM_TAP_TARGETS.test(active)) return;
+    // Never re-activate and carry on: the target point was read from a screen that is no longer in
+    // front. SpringBoard reads as active while a notification banner is up (the banner a fixed tap
+    // once hit, opening Slack); banners leave in ~5 s, so re-read for up to 10 s, then abort the step.
+    const was = active;
+    for (let i = 0; i < 10; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      active = await this.activeBundle().catch(() => '');
+      if (active === bundle) return;
+    }
+    throw new Error(`app not in foreground (${was || 'unknown'}, then ${active || 'unknown'}) - refusing to ${kind}`);
+  }
+
+  /** Terminate the app. Answers whether it was running. */
+  async terminate(bundleId) {
+    const out = await this.#post(`/session/${this.#requireSession()}/wda/apps/terminate`, { bundleId });
+    return Boolean(out.value);
+  }
+
+  /** Launch the app (cold when it is not running). */
+  async launch(bundleId) {
+    await this.#post(`/session/${this.#requireSession()}/wda/apps/launch`, { bundleId });
+  }
+
+  /** Bring the app to the foreground without restarting it. */
+  async activate(bundleId) {
+    await this.#post(`/session/${this.#requireSession()}/wda/apps/activate`, { bundleId });
+  }
+
+  /** XCUIApplicationState: 1 not running, 2 suspended, 3 background, 4 foreground. */
+  async appState(bundleId) {
+    const out = await this.#post(`/session/${this.#requireSession()}/wda/apps/state`, { bundleId });
+    return out.value;
+  }
+
+  /**
+   * The text of the system alert on screen, or null when there is none.
+   *
+   * A permission prompt belongs to SpringBoard, not the app, so it never appears in the app's
+   * accessibility tree. WDA reads it through its own alert route.
+   */
+  async alertText() {
+    const out = await this.#get(`/session/${this.#requireSession()}/alert/text`);
+    return typeof out.value === 'string' ? out.value : null;
+  }
+
+  /** The buttons the system alert offers, e.g. ["Don't Allow", "Allow"]. */
+  async alertButtons() {
+    const out = await this.#get(`/session/${this.#requireSession()}/wda/alert/buttons`);
+    return Array.isArray(out.value) ? out.value : [];
+  }
+
+  /** Press a named button on the system alert (or its default accept button). */
+  async acceptAlert(name) {
+    const out = await this.#post(`/session/${this.#requireSession()}/alert/accept`, name ? { name } : {});
+    if (out.value && out.value.error) throw new Error(`alert accept failed: ${out.value.message}`);
+  }
+
+  /**
+   * Put a privacy permission back to "not determined" for the session's app, on a real device.
+   *
+   * `xcrun simctl privacy` does not reach a physical phone. XCUIApplication's
+   * resetAuthorizationStatusForResource does, and WDA exposes it. iOS terminates the app as part of
+   * the reset, so the caller relaunches. Resource ids are XCUIProtectedResource values
+   * (microphone = 5, camera = 6, photos = 4).
+   */
+  async resetAuthorization(resource) {
+    const out = await this.#post(`/session/${this.#requireSession()}/wda/resetAppAuth`, { resource });
+    if (out.value && out.value.error) throw new Error(`resetAppAuth failed: ${out.value.message}`);
+  }
+
+  /** The accessibility tree as WDA's XML, which carries `accessible="true|false"` per element. */
+  async sourceXml() {
+    const sid = this.#requireSession();
+    const response = await fetch(`${this.#baseUrl}/session/${sid}/source?format=xml`);
+    return (await response.json()).value;
+  }
+
   #requireSession() {
     if (!this.#sessionId) throw new Error('No WDA session - call session() first');
     return this.#sessionId;
@@ -105,7 +229,9 @@ export class WdaClient {
       // truthy and name was never examined. The symptom was believing the platform did not expose testIDs at all.
       const fields = [node.label, node.name, node.value].map((f) => `${f ?? ''}`);
       const hit = fields.find((f) => f.toLowerCase().includes(wanted));
-      if (hit !== undefined && node.rect && node.rect.width > 0) {
+      // A swipe row's hidden actions (e.g. "Delete <chat title>") sit far left of the screen (x -9616) and,
+      // being smaller, beat the row itself - the tap then lands off-screen. Skip anything left of x=0.
+      if (hit !== undefined && node.rect && node.rect.width > 0 && node.rect.x + node.rect.width > 0) {
         // Prefer the SMALLEST, most exact match. Keeping the last match found meant a full-width
         // wrapper won over the control inside it: searching the file picker for "Open" returned
         // {x:0,y:119,w:440,h:63} - the row containing the search field - so every tap landed in the
@@ -141,6 +267,7 @@ export class WdaClient {
 
   /** Tap an absolute point, in logical points, via the W3C actions API. */
   async tap(x, y) {
+    await this.#assertFront('tap');
     await this.#post(`/session/${this.#requireSession()}/actions`, {
       actions: [
         {
@@ -160,6 +287,7 @@ export class WdaClient {
 
   /** Drag from one point to another - a scroll, for instance. */
   async swipe(x1, y1, x2, y2) {
+    await this.#assertFront('swipe');
     await this.#post(`/session/${this.#requireSession()}/actions`, {
       actions: [
         {
@@ -187,12 +315,14 @@ export class WdaClient {
 
   /** Send text to the focused field. Tap the field first so it has focus. */
   async type(text) {
+    await this.#assertFront('type');
     await this.#post(`/session/${this.#requireSession()}/wda/keys`, { value: [...text] });
   }
 
   /** Replace a React Native text field by its testID/accessibility identifier. */
   async replaceTestId(testId, text) {
     if (!/^[a-z0-9_./-]+$/i.test(testId)) throw new Error(`unsafe iOS testID: ${testId}`);
+    await this.#assertFront('type');
     const sid = this.#requireSession();
     const found = await this.#post(`/session/${sid}/element`, {
       using: 'accessibility id',
