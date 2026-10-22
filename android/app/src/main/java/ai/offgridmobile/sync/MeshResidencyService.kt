@@ -16,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Keeps the Personal Mesh reachable while Off Grid is not in the foreground.
@@ -30,12 +31,17 @@ class MeshResidencyService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val generation = intent?.getLongExtra(EXTRA_GENERATION, -1L) ?: -1L
-        if (!isCurrentGeneration(generation)) {
-            stopSelf(startId)
-            return START_NOT_STICKY
-        }
+        if (intent != null) unpromotedStarts.decrementAndGet()
         try {
+            // Every startForegroundService() must be answered with startForeground(), even when the
+            // request is already stale. Stopping first makes Android crash the app with
+            // ForegroundServiceDidNotStartInTimeException.
             startForegroundCompat()
+            if (!isCurrentGeneration(generation)) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf(startId)
+                return START_NOT_STICKY
+            }
             publish(generation, ResidencySnapshot("background"))
         } catch (error: RuntimeException) {
             val startWasDenied =
@@ -97,6 +103,13 @@ class MeshResidencyService : Service() {
         private const val EXTRA_GENERATION = "mesh_residency_generation"
         private const val PROMOTION_DEADLINE_MS = 5_000L
         private val residencyRequested = AtomicBoolean(false)
+
+        /**
+         * Foreground starts Android has accepted but not yet delivered to onStartCommand. While one
+         * is pending, the service must not be stopped from outside: it has not promoted yet, and a
+         * stop now crashes the app. The service promotes and then stops itself as a stale start.
+         */
+        private val unpromotedStarts = AtomicInteger(0)
         private val mainHandler = Handler(Looper.getMainLooper())
         private val lock = Any()
         private var activeGeneration = 0L
@@ -174,6 +187,7 @@ class MeshResidencyService : Service() {
                 } else {
                     context.startService(intent)
                 }
+                unpromotedStarts.incrementAndGet()
             } catch (_: RuntimeException) {
                 residencyRequested.set(false)
                 publish(
@@ -189,7 +203,7 @@ class MeshResidencyService : Service() {
                 )
                 if (timedOut) {
                     residencyRequested.set(false)
-                    context.stopService(Intent(context, MeshResidencyService::class.java))
+                    stopServiceIfPromoted(context)
                 }
             }, PROMOTION_DEADLINE_MS)
         }
@@ -203,6 +217,11 @@ class MeshResidencyService : Service() {
                 waiters.clear()
                 pending.forEach { it(snapshot) }
             }
+            stopServiceIfPromoted(context)
+        }
+
+        private fun stopServiceIfPromoted(context: Context) {
+            if (unpromotedStarts.get() > 0) return
             context.stopService(Intent(context, MeshResidencyService::class.java))
         }
 

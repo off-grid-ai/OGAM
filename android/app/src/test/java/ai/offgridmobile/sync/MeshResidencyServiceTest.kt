@@ -185,4 +185,38 @@ class MeshResidencyServiceTest {
         assertEquals("foreground_only", MeshResidencyService.currentSnapshot().status)
         assertEquals("unavailable", MeshResidencyService.currentSnapshot().reason)
     }
+
+    @Test
+    fun aStartThatIsStoppedBeforeDeliveryStillPromotesThenStopsItself() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val app = context as Application
+        MeshResidencyService.start(context) {}
+        val startIntent = shadowOf(app).nextStartedService
+
+        // A short discovery blip: the mesh releases residency before Android delivers the start.
+        MeshResidencyService.stop(context)
+        assertEquals(
+            "An unpromoted foreground service must not be stopped from outside",
+            null,
+            shadowOf(app).nextStoppedService,
+        )
+
+        val service =
+            org.robolectric.Robolectric
+                .buildService(MeshResidencyService::class.java)
+                .create()
+                .get()
+        service.onStartCommand(startIntent, 0, 21)
+
+        val shadow = shadowOf(service)
+        // Promotion is visible by its service type; the notification itself is removed on stop.
+        assertEquals(
+            "The stale start must still promote",
+            MeshResidencyService.FOREGROUND_SERVICE_TYPE,
+            service.foregroundServiceType,
+        )
+        assertTrue(shadow.isForegroundStopped)
+        assertTrue(shadow.isStoppedBySelf)
+        assertEquals("inactive", MeshResidencyService.currentSnapshot().status)
+    }
 }
