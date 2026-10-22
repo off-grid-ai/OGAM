@@ -504,102 +504,22 @@ the surface. Two questions this run raises that the current estimator cannot ans
 **Cover it.** The journey is the regression test: any change to the cost model should be run against
 it, and `never resident at any stage: text` should become empty.
 
-## Voice: hands-free, barge-in and note trimming — 2026-08-17
+## Voice: hands-free, barge-in and note trimming — open items (re-checked 2026-10-22)
 
-Built and merged in one session on `release/sync-feedback`. **None of it is device-verified**; the
-notes below say exactly which part is proven and how.
-
-### Open
-
-- **Desktop consumes none of it.** `@offgrid/speech` now owns the turn decision
-  (`SpeechEndpointTimer`, `canArmHandsFreeTurn`), the mode labels, the onset look-back and the WAV
-  trim math. Mobile uses all of it; desktop uses none. Parity was asked for explicitly, so SSOT here
-  is structural only until desktop's recorder is wired to the same package. **This is the top item.**
-- **Barge-in is NOT possible on this audio stack, and the attempt is backed out.** Talking over the
-  assistant cannot interrupt it. An AVAudioSession MODE is only a hint; real cancellation needs the
-  voice-processing I/O unit driving INPUT and OUTPUT together so it has a reference for what the
-  speaker plays. Our TTS goes out through an ordinary `AudioContext`, which that unit never sees, so on
-  device the mic recorded the assistant and speech detection fired on the assistant's own voice - iOS
-  AND Android alike. The Oboe `VoiceCommunication` patch was reverted for the same reason: it asks for
-  a cancelling capture source while playback leaves by another path, so it bought nothing and carried a
-  blank-audio risk on some devices (google/oboe#2123). `audioRecorderService.isEchoCancelled()` is the
-  single owner and returns false; when playback and capture share a voice-processing engine it returns
-  true and hands-free listens through the assistant with no other change. **Real fix: give TTS playback
-  and mic capture one voice-processing engine** - native/library work, not a setting.
-- **Voice processing degrades PLAYBACK, which is how TTS went silent.** `ensurePlayback` deliberately
-  leaves an active record session alone, so one recorded turn in a voice-processing mode left every
-  later playback voice-processed. Ordinary turns no longer request it. Guard rows are on the release
-  checklist (#202, #203).
-- **THE design gap: speaking and listening are not serialized.** They are one resource with one
-  holder - the assistant or the person, never both - and the code models them as two independent
-  subsystems (TTS state in `pro`, mic phase in core) with a 400ms poll guessing when it is safe. Every
-  fault today came from that: TTS pausing the moment it started (the mic armed in the gap between
-  generation ending and speech beginning), autoplay killed by an arm, the assistant recorded as the
-  person. The settle-ticks and abandon-guard in `useHandsFreeArming` are symptoms, not a design.
-
-  **The shape it wants:** one owner of the floor with event-driven handoff -
-  `assistant speaking → person listening → recording → transcribing → generating → assistant speaking`.
-  Exactly one holder; illegal states (mic open while speaking, two turns at once) become
-  unrepresentable instead of raced against.
-
-  **What forces the poll:** there is no "the assistant finished speaking" EVENT. Core cannot subscribe
-  to pro's TTS state, so `audio.isSpeaking` is a question that must be re-asked. Needs an
-  `audio.onSpeechEnded` hook fired by pro on playback completion, a floor owner in core that serializes
-  transitions, and `useHandsFreeArming` collapsing into a listener on it rather than a timer. Three
-  files, no new behaviour - it makes today's behaviour correct by construction instead of by timing.
-  **Desktop should be wired to the floor owner, not to the poll.**
-
-- **Idle hands-free stalls rather than ends.** The wait for speech is 120s, so two devices left
-  pointing at each other both go quiet and it reads as frozen, not finished.
-- **`@offgrid/speech` is a mixed package.** It was a gateway speech client (console/desktop) and now
-  also holds on-device turn logic. Same domain, but the name promises less than it holds.
-
-### Verified, and how
-
-- **WAV trim math** — proven in node against real WAV bytes, not on device: chunk-walking finds `data`
-  behind a LIST chunk (offset 70), a 1.5s cut of a 2s file yields `copyFrom 48044 / copyBytes 16000`,
-  the rewritten header declares the kept length, and garbage / over-trim / zero-trim are all refused.
-  The **file I/O around it is NOT verified** — no trim has run on a device.
-- **VAD auto-stop** — verified on device earlier in the session, with rms/floor/speech in the log.
-
-### Fixed while doing this, worth knowing
-
-- `recordingController.stop()` required phase `'recording'` while `toggle()` offered to stop a
-  `'listening'` turn, so stop was silently refused mid-listen. Live in every hands-free build before
-  `42147394`.
-- Phase had two writers (endpoint + recorder) that could disagree; callers now report facts and the
-  controller derives. `echoCancelled` was hardcoded `true` away from the code that configures capture;
-  the recorder owns it and derives iOS's answer from the session mode actually applied.
-
-### Open, added while making the voice delays user-chosen + putting replay in the session
-
-- **Trailing silence is not trimmed.** `finaliseRecording` calls `trimWavFront` only, so the person's
-  chosen end-of-turn window (up to 5s of dead air) rides into every file and Whisper transcribes
-  through it. The tail cut belongs in the same pure planner (`wav-trim.ts`), keeping ~300ms of
-  hangover so the last syllable is not clipped. Shortening the window in settings shrinks the tail but
-  does not remove it.
-- **Post-reply hand-back overhead beyond the drain is unmeasured.** The chosen drain accounts for the
-  speaker's tail; whatever the device adds on top (mic spin-up, audio-session switching) has never been
-  read off a real log. Measure before tuning anything.
-- **Replay-in-the-session and the two delay settings are code-complete, NOT device-verified.** The
-  machine transitions are pure and typecheck/lint/package tests are clean, but no phone has run them:
-  the replay-while-listening contention, the paused-replay hand-back, and the settings rows all need
-  the on-device pass.
-- **Queued outbound transfers do not follow a peer to its new address, and never expire.** Seen live:
-  the phone's pending WAVs all say "To OGAD x.x.x.64" while discovery is finding the same Mac at
-  .31 - inbound from .31 completes in seconds, outbound to .64 sits at 0% forever. The durable
-  SQLite op-store makes these rows survive restarts (correctly), which turns two missing rules into
-  a permanent pileup: (1) re-target queued items when the same device id is rediscovered at a new
-  host - the sibling of the existing "follow a peer that comes back on a new port" fix; (2) an
-  expiry/failed transition for a peer that stays unreachable, instead of pending-forever.
-- **A sender dying mid-batch leaves the receiver full of zombie rows.** Seen live: desktop was
-  sending a 90-item batch (its log shows one file importing every ~3s, serial); the desktop process
-  was killed mid-batch and Android's Sync activity froze with 35 rows at "Receiving - 0%, 0 B" from
-  the vanished peer. Two defects, both SSOT-shaped: (1) receiver rows are created at OFFER time and
-  nothing reconciles them when the sender disappears - no timeout, no failed transition, they sit
-  "in progress" forever; (2) admission marks the whole batch in-progress up front while transfer is
-  actually serial, so "35 in progress" describes the queue, not the wire. Any crash or quit
-  reproduces this; it does not need a kill.
+- **Desktop consumes only part of the shared voice logic** - desktop imports `SpeechEndpointTimer`,
+  `VOICE_TURN_LABELS` and `VoiceTurnMode` (`5cacb52c8`), not `canArmHandsFreeTurn`, onset look-back, WAV trim or
+  the `voice-session` machine.
+- **Barge-in is not possible** - `audioRecorderService.ts` `isEchoCancelled()` returns false on both platforms.
+  Playback and capture need one shared voice-processing engine (native work).
+- **`@offgrid/speech` is a mixed package** - its description says gateway client only, but it holds
+  voice-turn, voice-session and wav-trim. Split it, or fix the description.
+- **Post-reply hand-back overhead** - not measured. Read it from a device log.
+- **Replay-in-session and delay settings** - code in `8f62f6c82`. Device pass owed.
+- **Queued outbound transfers do not follow a new address and never expire** - the orchestrator re-dials
+  (`orchestrator.ts`), but queued transfers are not re-targeted and have no expiry.
+- **Sender dying mid-batch leaves zombie receiver rows** - `transfer/manager.ts` `handleDisconnect` does not
+  fail rows created at offer time, and the whole queue is marked in progress. Time them out; mark only the
+  file on the wire.
 
 ## Voice: the three RED realtime tests are GREEN, but NOT device-verified (2026-08-18)
 
