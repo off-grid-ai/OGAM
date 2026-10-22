@@ -30,8 +30,6 @@ iPhone 17 Pro Max on 2026-10-17 and is not listed):
 - **Demo data PDF** (`settings/devToolingReleaseGate`): the fake PDF reader cannot read the real demo
   PDF, so the test checks that the PDF is listed, not that it was indexed.
 
----
-
 ## LiteRT-LM 0.18.0 is not checked on an Android phone - 2026-10-17
 
 **Verdict: instrument-and-revisit.**
@@ -42,8 +40,6 @@ vision question about a photo was answered correctly. LiteRT-LM 0.18.0 (`android
 commit c55dd1d72) is Android-only and no Android phone was connected. Still to check on Android: a
 LiteRT chat, the same llama.rn steps, and the backend chip or CPU fallback notice.
 
----
-
 ## A failed image generation does not hold the chat queue - 2026-10-17
 
 **Verdict: instrument-and-revisit.**
@@ -53,8 +49,6 @@ A Stop or a failed text reply holds the queued messages until the user taps Send
 returns `null` for both a cancel and a failure, so `useChatGenerationActions` cannot tell them apart and
 leaves the hold as it was. Decide whether the queue should hold here too, then pass the outcome through.
 
----
-
 ## Project deletion leaves an empty gap in the list - 2026-09-11
 
 **Verdict: fix-the-guard.**
@@ -63,8 +57,6 @@ After the user deletes a project, the Mobile Projects list leaves an empty space
 The list should reflow immediately from its existing project state without navigation, refresh, or
 restart. Verify deletion at the start, middle, and end of the list and confirm that the remaining
 projects close the gap while their order stays stable.
-
----
 
 ## Active Kokoro voice-model download cannot stop at Pro expiry - 2026-08-26
 
@@ -80,8 +72,6 @@ Revisit when the native fetcher exposes cancellation, or put voice-model transfe
 cancellable downloader. The acceptance case is that exact Pro expiry aborts an active voice-model
 network request and no download progress or file write occurs after access closes.
 
----
-
 ## Android voice session can lose playback or transcription - 2026-08-24
 
 **Verdict: instrument-and-revisit.**
@@ -93,8 +83,6 @@ the failure is not reproduced. Capture Pixel logs for the playback and recorder 
 changing audio-focus or model-lifecycle behavior. Acceptance: repeated voice turns continue to play
 and transcribe before and after app restart, for the user's selected language.
 
----
-
 ## Projects screen does not refresh after desktop project sync - 2026-08-20
 
 **Verdict: instrument-and-revisit.**
@@ -104,28 +92,6 @@ the four Off Grid AI fixture documents reached the sync mesh, but the already-op
 screen did not show the new project in real time. Determine whether the project row was materialized
 while the screen's query/cache failed to invalidate, or whether materialization itself was delayed.
 The acceptance case is that an open Projects screen updates without navigation, rescan, or restart.
-
----
-
-## Synced iPhone image is missing from the Desktop Gallery - 2026-08-20
-
-**Verdict: instrument-and-revisit.**
-
-Observed during the physical iPhone generated-image journey. The iPhone showed the live generation,
-the final image, and the new Gallery item. Desktop received and decoded the same image in the synced
-chat, and the PNG exists in Desktop's uploads directory. However, Desktop's
-`listGeneratedImages()` result has no entry for that file, so the Generated Images Gallery does not
-show it.
-
-Evidence: `.artifacts/e2e-flows/generated-image-sync/ios-to-mesh-2026-08-20T05-07-45-131Z/`.
-The received file id is `5579552F-121E-4228-9BB7-B9F9C7541D69.png`.
-
-Determine whether the desktop sync importer skips Gallery metadata registration, or whether the
-Gallery reads a separate index that does not refresh after a synced image arrives. The acceptance
-case is that one synced generated image appears in both the receiving chat and the Desktop Gallery
-without a restart or manual refresh.
-
----
 
 ## Tooling gates — remaining follow-ups
 
@@ -154,8 +120,6 @@ untyped dead-branch rules — all hard CI gates). These three are the open follo
    it's not a real runtime guard (keep + `// eslint-disable` with a reason where the type lies about
    runtime). Fix-in-waves toward `error`. Companion tsconfig flags to measure: `allowUnreachableCode:false`,
    `noUnusedLocals/Parameters:true`.
-
----
 
 ## Dead-code recon — open (deferred) items - 2026-07-06
 
@@ -191,8 +155,6 @@ Recon sweep findings that are real but deferred (changing them risks behaviour).
 | IM4 | localDreamGenerator.ts:236-238 | `hasKernelCache()` wraps `hasOpenCLCache` (name mismatch) | fix-the-guard | rename to match native call |
 | IM5 | localDreamGenerator.ts:231-239 | `clearOpenCLCache`/`hasKernelCache` silent iOS no-op | instrument-and-revisit | throw or gate at call site on iOS |
 
----
-
 ## Image-gen QNN over-recommendation on non-flagship Snapdragons - 2026-07-08
 
 **Verdict: fix-the-guard (DEFERRED — needs a curated SoC allowlist + on-device rounds).**
@@ -221,8 +183,6 @@ onPreview → appStore). The preview only appears when the NATIVE localdream mod
 in its progress events — none were emitted, consistent with first-run OpenCL kernel compilation skipping
 the intermediate-latent decode. Next: confirm whether previews appear on a SECOND (warmed) generation.
 If yes → expected first-run behaviour (maybe show a hint). If never on mnn → native gap; JS/UI is correct.
-
----
 
 ## On-device test session - 2026-07-09 (Qwythos-9B vision + memory, 12GB iPhone/Android)
 
@@ -254,8 +214,6 @@ count fixed both (confirmed on device). Investigate why nThreads resolved to 1 f
 (`[LLM] Resolved params: threads=1`) and ship a sane default. GPU/NPU are NOT viable for this model
 (Adreno OpenCL 1GB max-alloc; Hexagon needs QNN-converted models; Qwythos is SSM-hybrid) — CPU-with-
 proper-threads is the path.
-
----
 
 ## Repo-wide /hygiene audit — open items - 2026-07-09 (SOLID §A/§B + DRY §C)
 
@@ -290,8 +248,6 @@ service.
 | TQ5 | coreMLModelUtils "downloads sequentially" | MED | Asserts order that only holds by .map push order while impl uses Promise.all. Assert real ordering w/ dynamic out-of-order mock or drop the claim. |
 | TQ6 | render tests w/ no getByText: TTSButton, ModelFailureCard, ImageGenAdviceCard, ToolAccordionStreaming, ModelsManagerSheet, McpAddServerSheet, PlaybackControls, KokoroTTSBridge | MED | Assert visible content/state, not just container testID. |
 
----
-
 ## Pre-existing: mid-chat model switch doesn't refresh chat state until remount - 2026-07-10
 **instrument-and-revisit** | Reported on-device (iOS, gemma-4 local + remote), confirmed present on the
 OLD build (NOT introduced by this PR's work). Loading a new model from within the Chat screen mid-
@@ -299,8 +255,6 @@ conversation does not update the screen's derived active-model state — not a f
 back re-syncs. Suspect useChatModelStateSync / the chat's derived activeModel not re-running after an
 in-chat load (the model loads fine; only the screen's projection is stale). Fix separately with its own
 on-device repro — do NOT bundle into the current release PR (scope + risk).
-
----
 
 ## Device-verification gate before release (PR #510) — MUST pass before shipping
 
@@ -390,8 +344,6 @@ state-machine traces:
   `ModelDownloadScreen`-mounted rendered test (Android, 12GB) that taps the E4B litert download and asserts
   no "may exceed your device's memory" sheet — the exact device-reported surface (IMG_0142).
 
----
-
 ## Cosmetic voice-mode label (deferred from the 0.0.103 device session)
 
 **Verdict: instrument-and-revisit.** During the 0.0.103-beta device session, two fixes landed (Lean
@@ -400,8 +352,6 @@ rendering the wrong text — was deferred: it is purely cosmetic (no functional 
 exact wrong value needs a device-log pull, not code reading. Next device session: pull the live tail of
 `offgrid-debug.log` from the `.dev` container, grep the `[*-SM]` traces while entering voice mode, read
 the actual rendered label value, then fix in `pro/audio/` UI. NOT a release hazard.
-
----
 
 ## #510 audit follow-ups (deferred from the load-anyway/dedup fix batch, 2026-07-15)
 
@@ -419,8 +369,6 @@ the actual rendered label value, then fix in `pro/audio/` UI. NOT a release haza
   projector naming a DIFFERENT model (E4B for E2B). Own download-listing matcher in mmproj.ts. See the
   it.failing at `huggingfaceProjectorStrictness.test.ts`.
 - **Reclaim-aware pre-load gate**: in progress on its own branch (device-verify on 12GB Android before merge).
-
----
 
 ## DEVICE FINDING (2026-07-15, iPhone) — false "something else is generating an image" (stale IMG-SM lock)
 
@@ -440,48 +388,6 @@ stuck transition (a `phase X → <in-flight>` with no following reset) names the
 that seam + a rendered red-flow (image mode → trigger the stuck path → next generate must NOT report
 "already generating"). Candidate hardening once pinned: a top-level try/finally in generateImage so no
 throw can leave the phase in-flight, and/or a self-healing staleness check on the isInFlight rejection.
-
----
-
-## #510 audit — remaining PARTIAL fixes (found during the finding→code verification, 2026-07-15)
-
-These are honestly NOT fully closed by the load-anyway batch — logged so they are not lost:
-
-- **STT terminal-failure has no override card.** The realtime dictation now RECOVERS via
-  ensureWhisperForTranscription (free the generation model → retry) — the common case. But if that retry
-  ALSO fails, transcriptionOutcome.ts returns a static "Couldn't load the voice model — free some memory
-  and try again" string, NOT a reportModelFailure('stt', {onLoadAnyway}) card. There is no generation
-  model left to free at that point, so there is genuinely nothing more to do — but the product rule
-  ("any memory refusal offers Load Anyway on any type") is only PARTIALLY met for STT: recovery yes,
-  terminal override no. reportModelFailure is now called for text/image/tts but NOT stt/embedding.
-- **Embedding-model load failure never surfaces a card.** modelFailureHandler reserves an 'embedding'
-  type but nothing calls reportModelFailure('embedding', …). A RAG/embedding load failure is still
-  silent. Low user impact (embedding is background) but it violates the "nothing is silent" promise.
-- **ModelPickerSheet:216 RAM display**: the fit VERDICT uses the owned fileExceedsBudget, but the
-  displayed "~X GB RAM" number is a separate 1.5x estimate — the "(may not fit)" tag and the number can
-  disagree at the margin. Assessed as by-design (verdict is authoritative; number is a hint) but noted.
-
----
-
-## #510 audit — STT-terminal + embedding: VERIFIED WORKING-AS-DESIGNED (not bugs, do NOT "fix")
-
-Re-examined the two items I earlier logged as "partial fixes needed". Code inspection shows both are
-correct terminal states, NOT dead-ends — surfacing failure cards would be theater or a regression:
-- **Embedding load failure**: `src/services/rag/retrieval.ts:43,53` catch a failed embedding load/embed
-  and RETURN `ragDatabase.getChunksByProject` (keyword/FTS chunks) — search still works (graceful
-  degradation). `toolEmbeddingRouter`/`generationToolLoop:821` likewise fall back to "use all tools".
-  A reportModelFailure('embedding') card would interrupt a working degraded flow → NOT added.
-- **STT terminal**: `ensureWhisperForTranscription` frees the generation model and retries; if whisper
-  STILL won't load, whisper-alone exceeds the device → a genuine HARD limit. The "free some memory"
-  string is the honest message; a Load-Anyway there is a guaranteed-fail no-op. The recovery IS the fix.
-CONCLUSION: these two need no code change. Removed from the "to fix" list.
-
-## #26 text-half (deferred, cosmetic-low)
-ModelPickerSheet text RAM hint still uses formatModelRam's 1.5 default, not the backend-aware
-textOverheadMultiplier the residency chip / TextTab use — so on a GPU backend the picker number can
-read lower than the chip. Verdict (fileExceedsBudget) is correct; this is a display-number nicety.
-Fix = pass settings.inferenceBackend into ModelPickerSheet + formatModelRam(model, textOverheadMultiplier(backend)).
-Deferred to avoid a new HomeScreen-picker dependency right before release. Image half fixed.
 
 ## M5a (marginal, logged) — exact budget boundary untested
 fileExceedsBudget's boundary (size == budget: `>` vs `>=`) has no test straddling the exact equality —
@@ -508,8 +414,6 @@ model loaded text-only if loaded in the window before its mmProjPath is persiste
 reports vision failing right after a first download, instrument the load path: assert the model
 record's mmProjPath is set before the first load, and re-derive multimodal if a mmproj is linked after
 a text-only load.
-
----
 
 ## Personal Mesh (sync across macOS, iOS, Android) — 2026-07-30
 
@@ -703,19 +607,6 @@ STILL UNCOVERED, each a real user-visible journey wanting a rendered test:
 Policy: the mockist file is gone rather than repaired, and what it was claiming is written down here instead
 of carried as a green number.
 
-## Two real-sqlite adapters for one boundary (harness DRY)
-
-`__tests__/harness/sqliteFake.ts` exposes `installRealSqlite` / `doMockRealSqlite`, backing the op-sqlite
-boundary with a real `node:sqlite` in-memory database. `__tests__/hardening/batch9-kb-roundtrip.test.ts`
-hand-rolls the SAME adapter inline (`makeInMemoryDb`, its own `toParam` blob conversion, its own
-transaction/DDL special-casing). Both are real sqlite and both are correct today, which is the problem: the
-next schema change (or the next blob column) has to be understood twice, and a divergence between them would
-show up as a knowledge-base test failing for reasons that have nothing to do with the knowledge base -
-exactly the failure mode batch9's own header describes from its previous hand-rolled matcher.
-
-Fix: batch9 requires `doMockRealSqlite` from the harness and deletes its private engine. Low risk (both
-already pass over real sqlite), and it makes the harness the single definition of that boundary.
-
 ## Ejecting a model mid-reply unloads the engine WITHOUT stopping the generation
 
 **Verdict: fix-the-guard (live bug, observed in a rendered test).**
@@ -770,8 +661,6 @@ edit.
 Bounded until then: the exposure is one already-streaming file, not every reconnection from then on. Raised by
 Greptile on mobile-pro#47, where the thread is deliberately left open so the seam stays tracked.
 
----
-
 ## A tool-heavy turn's FINAL ANSWER reaches peers LONG after its tool calls do
 
 **Verdict:** instrument-and-revisit — the delay is real and large; the trigger is unknown.
@@ -809,8 +698,6 @@ message for a long tool-using turn does not. Compare against the plain `run-norm
 final answer DOES reach all four devices - so this is specific to the tool-heavy path or to message
 size, not to sync in general.
 
----
-
 ## "Preparing reply" state never reaches peer devices
 
 **Verdict:** instrument-and-revisit.
@@ -822,8 +709,6 @@ the guided journey.
 
 Related to the entry above: the peers do eventually receive tool events, so SOMETHING streams -
 what is missing is any signal that a turn is in flight.
-
----
 
 ## DeepWiki `ask_question` returns a validation error
 
@@ -841,8 +726,6 @@ not the transport. Five of the six named tools (search_knowledge_base, web_searc
 read_wiki_structure, read_wiki_contents) succeeded in the same turn.
 
 Worth checking what the DeepWiki MCP server expects for `ask_question` against what is being sent.
-
----
 
 ## Test coverage we know we are missing (Mac's list, 16 Aug 2026)
 
@@ -969,8 +852,6 @@ than merely wrong.
    groups and one concatenated label - so the iOS path needs the geometric-tap approach now used in
    multi-attachment-sync.
 
----
-
 ## Model memory: the estimate is unscientific, inconsistent, and fails silently
 
 **Verdict:** fix-the-guard — three defects in one decision, found together on 16 Aug 2026 when
@@ -1088,63 +969,6 @@ A memory refusal belongs there, naming the numbers and the way out:
 Silence is the defect. Today the only trace of the refusal was `fits=false` in a debug log while the
 chat said "Type a message below to begin chatting with Qwythos" - a model that was never coming.
 
----
-
-## A synced file can deadlock: bytes arrive, control never re-applies (16 Aug 2026)
-
-**Symptom, from the device.** An image generated on iPhone rendered on macOS, Windows and iOS but
-stayed a spinner on Android. The gallery counted it (`1`) while the grid showed nothing - the file was
-staged but never imported.
-
-**The evidence (Android logcat, 21:02:33):**
-
-```
-[StateSync] ops from=9d25c24e received=1 applied=0 shared_file:1
-transfer_offer_accepted  resumeOffset=504593  delivered=true      <- already had every byte
-shared_file_decided      result=waiting_for_control  reason=control_missing
-transfer_settled         status=completed  bytes=504593
-```
-
-`received=1 applied=0` repeats. Per `state-sync.ts:102`, that means the op was ALREADY KNOWN.
-
-**The loop.** It is self-sustaining and silent:
-
-1. Android holds the bytes AND holds the `shared_file` control op in its oplog.
-2. `ControlledFileSync.controls` (an in-memory `Map`, `controlled-file-sync.ts:204`) has no entry for
-   that syncId, so reconcile answers `control_missing`.
-3. `sharedFileSyncService.ts:337` correctly asks the peer to repair the `control`.
-4. The peer answers by re-announcing (`shared-file-repair.ts:320`). `OpLog.record` returns the
-   already-recorded op unchanged, so it carries the SAME opId.
-5. Android dedups it by opId -> `applied=0` -> the materializer never fires -> `applyControlPut` is
-   never called -> the map stays empty. Back to 2, forever.
-
-**This is the SSOT failure `shared/CLAUDE.md` describes.** Two sources answer "does a control exist for
-this file": the durable oplog (yes) and the in-memory `controls` map (no). They are kept in step by
-hand - the map is only ever written by an op that APPLIES - so any op already in the log leaves the map
-cold, and version vectors then stop the peer from ever helping. `oplog.ts:198-200` names this exact
-hazard: "an ephemeral materializer cannot recover and peers correctly decline to resend already-seen
-ops."
-
-**Not mobile-specific.** `controlled-file-sync.ts`, `oplog.ts` and `shared-file-repair.ts` are all in
-`@offgrid/sync`. Every host shares the defect; Android is the device that hit the cold-map condition.
-
-**Still open - why the map was cold.** `stateSyncService.ts:217` DOES call `rematerializeAll()` on
-start, which should rebuild it. Two untested candidates:
-- `parseControl` returned null on replay, so `applyControlPut` returned `"ignored"` and never set the
-  map (`controlled-file-sync.ts:222`) - a silent drop by itself.
-- `compact()` (`stateSyncService.ts:221`) dropped the superseded control op while the version vector
-  kept claiming it, so there is nothing left to replay but peers still refuse to resend.
-
-**The fix shape (do not implement yet).** Make the durable log the only source: rebuild `controls` by
-replaying the log, and make a `control` repair request force re-materialisation of that syncId rather
-than re-broadcasting an op the peer will discard. A repair that cannot make progress must surface -
-a file waiting on a control that will never come is exactly the silent drop we said we cannot afford.
-
-**Cover it.** No test asserts a control arriving BEFORE its bytes and then the app restarting, which is
-the shape of this bug.
-
----
-
 ## The selected text model is never resident on a 3-model device (16 Aug 2026, iPhone)
 
 Found by `scripts/e2e/model-eviction-journey.mjs`, which walks residency up one model at a time and
@@ -1185,7 +1009,6 @@ the surface. Two questions this run raises that the current estimator cannot ans
 
 **Cover it.** The journey is the regression test: any change to the cost model should be run against
 it, and `never resident at any stage: text` should become empty.
-
 
 ## Voice: hands-free, barge-in and note trimming — 2026-08-17
 
@@ -1307,8 +1130,6 @@ these fixes are verified against faked native leaves. Three flows to run on a ph
 phase change so the hero can show "Recording you now"; with a level-triggered driver that same
 notification opens a second recording mid-turn. The two belong together and each says so in a comment.
 
----
-
 ## Personal Mesh visibility needs the final physical lifecycle pass
 
 **Status:** automation-backed; manual device verification is open. Filed 2026-08-24.
@@ -1326,8 +1147,6 @@ route and one non-default Sync port on every device.
 
 Close this gap only with the device names, OS versions, exact build commits, and the completed matrix
 rows. Simulator and injected-failure results do not close the physical radio boundary.
-
----
 
 ## Remote task controls need acknowledged, bounded Mobile state
 
@@ -1350,28 +1169,6 @@ covering both task kinds, applied, rejected, unrelated, and timed-out controls, 
 named routing, disabled/offline rejection, chat rendering, and non-task approval preservation. Keep
 this entry open only for the final narrow and wide physical-device checks on iOS and Android.
 
----
-
-## RESOLVED 2026-08-29: a fresh Android device reported the license server as unavailable
-
-The connected Android device reached Keygen. Validation returned HTTP 200 with
-`FINGERPRINT_SCOPE_MISMATCH`. This code means the key exists but the new device fingerprint is not on
-the license yet. It is an internal activation signal, not a network error and not a user-facing
-failure.
-
-The fixed activation path passed live at 23:34 local:
-
-- the first machine-list request returned HTTP 200 with four devices;
-- machine activation returned HTTP 201;
-- the local entitlement transaction completed prepare, commit, and finalize;
-- the final machine-list request returned HTTP 200 with five devices;
-- the user confirmed that Off Grid AI Pro activation succeeded.
-
-This closes the fresh-device activation defect. Do not repeat the live check unless licensing code or
-activation-owner wiring changes. The final Android production build remains a separate release gate.
-
----
-
 ## Release 107 two-way exact-operation Sync needs final device proof
 
 **Status:** Shared Code and build evidence exist; final Mobile Built and Live verified gates are
@@ -1389,8 +1186,6 @@ both directions:
 2. One Desktop change reaches Mobile once.
 3. A restart does not cause a record flood or active compaction.
 4. A destination-gated delayed operation still arrives when its destination becomes eligible.
-
----
 
 ## Release 107 QR, reconnect, and residency changes need final Mobile proof
 
