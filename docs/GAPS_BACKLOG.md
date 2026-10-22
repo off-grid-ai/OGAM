@@ -37,6 +37,13 @@ Remaining work: move live transcription to the `RealtimeTranscriber` API, port t
 `main` has `react-native-executorch ^0.9.3`. 0.10 needs react-native-worklets 0.10 (the app has 0.7.3) and
 react-native-blob-util (the app has none). Proposed on 2026-10-21; not started.
 
+## The in-chat MTP tip never fires for models whose MTP head is a separate file - 2026-10-20
+
+**Verdict: fix-the-guard.**
+
+The 2026-10-20 audit found the tip checks only the main GGUF. A model whose head ships as a separate file never
+shows it. Not re-checked since. Fix together with the shared MTP extraction below.
+
 ## Rendered tests cannot see three things from the v0.0.111 handoff - 2026-10-17
 
 **Verdict: instrument-and-revisit.**
