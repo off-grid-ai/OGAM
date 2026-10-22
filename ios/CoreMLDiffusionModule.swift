@@ -113,6 +113,60 @@ class CoreMLDiffusionModule: RCTEventEmitter {
     return nil
   }
 
+  // MARK: - Free-space guard for the Core ML compile cache
+
+  /// The first load of each sub-model on a device makes Core ML compile it
+  /// (E5RT / MPSGraph AOT) and write the compiled package to the app's caches.
+  /// When that write cannot complete — the disk is full — MPSGraph calls
+  /// llvm::report_fatal_error, which calls exit(). That is not an error we can
+  /// catch: the whole app terminates. So refuse BEFORE Core ML compiles.
+  ///
+  /// The compiled package of a sub-model is about as large as its weights, so
+  /// the bound is the model size on disk plus a margin that keeps the phone
+  /// itself usable (the same 500 MB margin the download free-space check
+  /// uses), with a 1 GB floor for a small or unmeasurable model directory.
+  static let compileSpaceMarginBytes: Int64 = 500 * 1024 * 1024
+  static let compileSpaceFloorBytes: Int64 = 1024 * 1024 * 1024
+
+  /// Bytes the model directory takes on disk (all files, recursively).
+  static func directorySizeBytes(at url: URL) -> Int64 {
+    let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey, .isRegularFileKey]
+    guard let walker = FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys) else {
+      return 0
+    }
+    var total: Int64 = 0
+    for case let fileURL as URL in walker {
+      guard let values = try? fileURL.resourceValues(forKeys: Set(keys)),
+            values.isRegularFile == true else { continue }
+      total += Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
+    }
+    return total
+  }
+
+  /// Returns a user-facing message when the volume that holds the Core ML
+  /// compile cache has too little free space to compile the model at `url`;
+  /// nil when there is enough. An unreadable reading never blocks a load.
+  static func storageShortfallMessage(forModelAt url: URL) -> String? {
+    let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first ?? url
+    guard let values = try? cacheDir.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
+          let free = values.volumeAvailableCapacityForImportantUsage else {
+      return nil
+    }
+    let needed = max(directorySizeBytes(at: url) + compileSpaceMarginBytes, compileSpaceFloorBytes)
+    guard free < needed else { return nil }
+    let formatter = ByteCountFormatter()
+    formatter.countStyle = .file
+    return "Not enough storage to prepare this image model. It needs \(formatter.string(fromByteCount: needed)) free and your phone has \(formatter.string(fromByteCount: free)). Free up space in Settings → Storage, then try again."
+  }
+
+  /// Rejects with ERR_DISK_FULL and returns true when the compile would not fit.
+  static func rejectIfStorageShort(forModelAt url: URL, _ reject: RCTPromiseRejectBlock) -> Bool {
+    guard let shortfall = storageShortfallMessage(forModelAt: url) else { return false }
+    NSLog("[CoreMLDiffusion] refused, low storage: %@", shortfall)
+    reject("ERR_DISK_FULL", shortfall, nil)
+    return true
+  }
+
   // MARK: - loadModel
 
   @objc func loadModel(_ params: NSDictionary,
@@ -141,6 +195,10 @@ class CoreMLDiffusionModule: RCTEventEmitter {
           reject("ERR_INVALID_MODEL", validationError, nil)
           return
         }
+
+        // Core ML compiles each sub-model on load (prewarm) — a full disk makes
+        // that compile exit() the app, so refuse while it is still catchable.
+        if Self.rejectIfStorageShort(forModelAt: url, reject) { return }
 
         let cpuOnly = params["cpuOnly"] as? Bool ?? false
         let attentionVariant = params["attentionVariant"] as? String ?? "split_einsum"
@@ -288,6 +346,14 @@ class CoreMLDiffusionModule: RCTEventEmitter {
         reject("ERR_NO_MODEL", "Model was unloaded (possibly due to low memory). Please reload and try again.", nil)
         return
       }
+
+      // With reduceMemory the pipeline loads (and so compiles) sub-models
+      // lazily inside generateImages() — always for the 'original' variant,
+      // which skips prewarm. Check the disk again here: free space can drop
+      // between load and generation, and a failed compile exit()s the app.
+      // The pipeline stays loaded so a retry after freeing space can reuse it.
+      if let modelPath = self.loadedModelPath,
+         Self.rejectIfStorageShort(forModelAt: URL(fileURLWithPath: modelPath), reject) { return }
 
       do {
         var pipelineConfig = PipelineConfiguration(prompt: prompt)
