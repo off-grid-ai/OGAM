@@ -55,9 +55,12 @@ command -v bundle >/dev/null || error "bundler not installed (bundle install)"
 [ -f fastlane/Fastfile ]     || error "fastlane/Fastfile not found"
 # iOS betas go to the TestFlight external groups this names. Check it now: a missing value found at
 # upload time would come after the Play upload already shipped.
-if [ "$DO_IOS" = 1 ] && [ -z "${TESTFLIGHT_EXTERNAL_GROUPS:-}" ] && \
-   ! grep -qE '^TESTFLIGHT_EXTERNAL_GROUPS=.+' fastlane/.env 2>/dev/null; then
-  error "TESTFLIGHT_EXTERNAL_GROUPS is not set (fastlane/.env). Name the TestFlight external groups, comma-separated."
+# Same rule as the Fastfile's testflight_external_groups: at least one non-empty name between commas.
+if [ "$DO_IOS" = 1 ]; then
+  groups="${TESTFLIGHT_EXTERNAL_GROUPS:-$(sed -n 's/^TESTFLIGHT_EXTERNAL_GROUPS=//p' fastlane/.env 2>/dev/null | tail -1)}"
+  groups="${groups%\"}"; groups="${groups#\"}"
+  [ -n "$(printf '%s' "$groups" | tr ',' '\n' | tr -d '[:space:]')" ] || \
+    error "TESTFLIGHT_EXTERNAL_GROUPS names no group (fastlane/.env). Name the TestFlight external groups, comma-separated."
 fi
 # Ignore fastlane/README.md — fastlane regenerates it on every run, so it is dirty by the time a
 # second build starts (and after any prior run). It is not source we build from.

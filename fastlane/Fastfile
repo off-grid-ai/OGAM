@@ -312,10 +312,17 @@ platform :ios do
   # testing team. Single source of truth for the TestFlight upload - both `beta` (build+upload)
   # and `upload_beta` (publish a pre-built artifact, used by scripts/uat.sh's atomic
   # build-all-then-publish flow) call this. No build here.
-  private_lane :upload_ios_testflight do
+  # The TestFlight external groups named in TESTFLIGHT_EXTERNAL_GROUPS (comma-separated). Fails when
+  # the value is missing or names no group (",," included), so a lane can check before it builds.
+  private_lane :testflight_external_groups do
     require_env("TESTFLIGHT_EXTERNAL_GROUPS")
     groups = ENV["TESTFLIGHT_EXTERNAL_GROUPS"].split(",").map(&:strip).reject(&:empty?)
     UI.user_error!("TESTFLIGHT_EXTERNAL_GROUPS names no group (comma-separated TestFlight external group names)") if groups.empty?
+    groups
+  end
+
+  private_lane :upload_ios_testflight do
+    groups = testflight_external_groups
     ipa = File.join(REPO_ROOT, "build/OffgridMobile.ipa")
     UI.user_error!("IPA not found at #{ipa} - build it first (fastlane ios build).") unless File.exist?(ipa)
     # Release notes: scripts/uat.sh writes the changelog to UAT_CHANGELOG_PATH. It becomes the
@@ -338,6 +345,7 @@ platform :ios do
 
   desc "Build and upload to TestFlight external testers"
   lane :beta do
+    testflight_external_groups # before signing and a long build, not after
     setup_signing
     build_ios_ipa
     upload_ios_testflight
