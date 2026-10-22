@@ -189,8 +189,11 @@ export function createHydrationGatedStorage<S>(
     ): Merge<T> => (persisted, current) => {
       const saved = savedOverCurrent(persisted, current);
       // A read landing after hydration, or on a store the session has not changed, takes the saved state.
-      if (hydrated || !atLaunch || !persisted || current === atLaunch) return saved;
+      if (hydrated || !atLaunch || current === atLaunch) return saved;
+      // The session changed the store while its writes were held back: they must be saved now, also
+      // when there was nothing saved before (a first launch).
       sessionMerged = true;
+      if (!persisted) return saved;
       return mergeSessionIntoSaved(saved, current, atLaunch as T, Object.keys(persisted), keepCurrent);
     },
     isHydrated: () => hydrated,

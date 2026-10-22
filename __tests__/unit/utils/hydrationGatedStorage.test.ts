@@ -89,6 +89,45 @@ describe('hydration-gated storage', () => {
   });
 });
 
+describe('hydration-gated storage on a first launch', () => {
+  it('saves a change made before an empty read landed', async () => {
+    let releaseRead = () => {};
+    const readBlocked = new Promise<void>(resolve => {
+      releaseRead = resolve;
+    });
+    const base = memoryStorage();
+    const slowBase: StateStorage = {
+      ...base,
+      getItem: async name => {
+        await readBlocked;
+        return base.getItem(name);
+      },
+    };
+    // Wired as the app stores are: the gate owns hydration, merge and the held-back writes.
+    const gate = createHydrationGatedStorage<Selection>(slowBase);
+    const store = createStore<Selection>()(
+      persist(() => ({ selected: 'default' }), {
+        name: 'settings',
+        storage: gate.storage,
+        onRehydrateStorage: gate.onRehydrateStorage(),
+        merge: gate.merge<Selection>(),
+      }),
+    );
+    gate.attach(store);
+
+    // The user acts before the (empty) saved state has been read: the write is held back.
+    store.setState({ selected: 'made-before-load' });
+    expect(base.values.has('settings')).toBe(false);
+
+    releaseRead();
+    await waitForHydration(store);
+    await gate.waitForWrites();
+
+    expect(store.getState().selected).toBe('made-before-load');
+    expect(JSON.parse(base.values.get('settings') ?? 'null')?.state).toEqual({ selected: 'made-before-load' });
+  });
+});
+
 type Selection = { selected: string };
 
 function createPersistedSelection(base: StateStorage) {
