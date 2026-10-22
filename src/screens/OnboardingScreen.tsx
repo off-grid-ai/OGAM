@@ -261,6 +261,8 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
 
         <FlatList
           {...LIST_CLIPPING_PROPS}
+          // Transformed list (inverted / animated pager): keep the iOS default, no clipping.
+          removeClippedSubviews={false}
           ref={flatListRef}
           data={slides}
           renderItem={renderSlide}

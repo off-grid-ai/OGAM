@@ -155,6 +155,8 @@ export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClo
         ) : (
           <FlatList
             {...LIST_CLIPPING_PROPS}
+            // Transformed list (inverted / animated pager): keep the iOS default, no clipping.
+            removeClippedSubviews={false}
             data={visibleLogs}
             keyExtractor={(_, index) => `${index}`}
             contentContainerStyle={styles.listContent}

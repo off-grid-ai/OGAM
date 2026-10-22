@@ -98,6 +98,13 @@ const navigation = {
 } as any;
 
 describe('OnboardingScreen', () => {
+  it('never clips the slides of its animated pager', () => {
+    const { FlatList } = require('react-native');
+    const { UNSAFE_getAllByType } = render(<OnboardingScreen navigation={navigation} />);
+    const pager = UNSAFE_getAllByType(FlatList).find((list: any) => list.props.horizontal);
+    expect(pager?.props.removeClippedSubviews).toBe(false);
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
