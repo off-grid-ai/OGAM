@@ -32,6 +32,30 @@ The tip is now `450698803`. It adds "A gateway's grounders and deciders are neve
 - `npm run e2e:wda` needs `WDA_UDID=00008150-000225103CD8C01C`.
 - Another session committed to this branch during testing. Metro hot-reloaded the change onto the phones mid-check.
 
+## Review fixes and smoke on the tip `8d8c4936d` (2026-10-23, 01:00–03:00 IST)
+
+PR #732 review fixes, each with a test that fails on the old code:
+- `llm.ts`: unload no longer hands out a released context during the memory-reclaim wait.
+- `whisperService.ts`: a finishing dictation no longer clears the next one's state.
+- `hydrationGatedStorage.ts`: a change made before an empty first-launch read is saved.
+- `MeshResidencyService.kt`: a foreground start is never stopped before it promotes.
+- `SyncClipboardModule.kt`: no clipboard listener survives invalidation.
+- Onboarding pager and Debug Logs list: keep iOS's default of no clipping.
+- `uat.sh` and Fastfile: an empty TestFlight group list is refused before any build.
+
+Tests: full jest (816 suites, 8399 tests), Android unit (139), node scripts (11), all pass.
+
+**Android smoke (new native build):** all PASS. Covered: Mesh service across 5 rapid background/foreground switches, a reply, Stop and a reply after it, background mid-reply, eject then reload, two dictations, vision on a photo, speak aloud and stop, Chats scroll and search, Debug Logs, Settings. One process all session, crash buffer empty.
+
+**iPhone smoke:** PASS for cold start (16 s), a reply, Stop, background (labelled early stop, then a normal reply), eject then reload (reproduced with logs), model list, vision on 0.8B, speak aloud, image generation (about 46 s), Chats, Debug Logs, Settings. The 6 app files changed since GO touch none of the problems below:
+- One unexplained exit at 02:38 near "Eject All Models", while WDA was attached. No crash or jetsam report. Not reproduced with logs running (dialog held 30 s, then Eject).
+- Dictation with Large v3: each turn runs to the 30 s cap (end on silence never fires), the first slice drops the start of the sentence, and the model adds "Thank you." over silence. Also: Android's speak-aloud was picked up by the iPhone mic during the test (the "Diwali" text).
+
+**New follow-ups:**
+- After image generation, the memory gate refuses to reload the 2B model. Cancelling the dialog clears the text model ("Unknown"), and the sent message gets no reply and no error.
+- iPhone: a reply cut by backgrounding saved only the word "assistant" (role token leaking).
+- Sync re-checks a backlog of 356 shared files each time the app comes to the front, which freezes the UI for a while (deferred Sync work).
+
 ## Fixes made today (all on the branch, in order)
 
 | Commit | What the user gets | Phone proof |
