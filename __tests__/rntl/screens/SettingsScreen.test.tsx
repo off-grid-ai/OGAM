@@ -184,12 +184,13 @@ describe('SettingsScreen', () => {
     // The three theme options are rendered - pressing one calls setThemeMode
   });
 
-  it('renders Privacy First section', () => {
-    const { getByText } = render(<SettingsScreen />);
-    expect(getByText('Privacy First')).toBeTruthy();
-    expect(
-      getByText(/All your data stays on this device/),
-    ).toBeTruthy();
+  it('renders the Analytics section with both consent toggles off by default', () => {
+    const { getByText, getByLabelText } = render(<SettingsScreen />);
+    expect(getByText('Analytics')).toBeTruthy();
+    expect(Boolean(getByLabelText('Usage data').props.on ?? getByLabelText('Usage data').props.value)).toBe(false);
+    expect(Boolean(getByLabelText('Crash reports').props.on ?? getByLabelText('Crash reports').props.value)).toBe(false);
+    expect(getByText('What we share')).toBeTruthy();
+    expect(getByText('Report a problem')).toBeTruthy();
   });
 
   it('renders about section text', () => {

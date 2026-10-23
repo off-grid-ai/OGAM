@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ import { ProManageSection } from './ProManageSection';
 import { ProIncludedSection } from './ProIncludedSection';
 import { ProUnlockModal } from './ProUnlockModal';
 import type { RootStackParamList } from '../../navigation/types';
+import { proPaywallViewed, proPurchased } from '../../services/analytics/analytics';
 
 // Off Grid AI Pro is the ambient intelligence layer across desktop + phone, not a
 // mobile feature list. These pillars mirror the early-access page framing.
@@ -47,7 +48,7 @@ const PILLARS = [
   {
     icon: 'shield',
     title: 'Private by architecture',
-    desc: 'The model runs on your own hardware. No training on your data, no server to leak. Open source, so you can check.',
+    desc: 'The model runs on your own hardware. Your chats and files never leave your devices, and nothing trains on them. Open source, so you can check.',
   },
   {
     icon: 'refresh-cw',
@@ -94,9 +95,16 @@ export const ProDetailScreen: React.FC = () => {
   };
   const openVerifyModal = () => setVerifyModalVisible(true);
 
+  useEffect(() => {
+    if (!hasProAccess) proPaywallViewed();
+    // Once per visit: a paywall view is the screen opening, not every access change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Activation verified: load the pro bundle now so Pro lights up live (the
   // reactive appRoot slot mounts the engine without a restart). Registries dedupe.
   const handleUnlocked = () => {
+    proPurchased();
     loadProFeatures(true).catch(() => {});
   };
 
@@ -176,7 +184,7 @@ export const ProDetailScreen: React.FC = () => {
               <Text style={styles.heroSubtitle}>
                 Ambient and proactive. It sees your day, remembers it, and gets
                 ahead of you - and the model runs on your own hardware, so
-                nothing is sent anywhere.
+                your chats and files never leave your devices.
               </Text>
             </View>
 

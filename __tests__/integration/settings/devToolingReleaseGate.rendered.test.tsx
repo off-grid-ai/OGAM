@@ -63,11 +63,11 @@ describe('developer tooling release gate (rendered, real App)', () => {
     const { view, rtl } = await bootReturningUser(false);
 
     // BEFORE the Settings tap: the user is on Home, the Settings screen is not yet shown.
-    expect(view.queryByText('Privacy First')).toBeNull();
+    expect(view.queryByText('Report a problem')).toBeNull();
     expect(view.queryByTestId('dev-sync-strip')).toBeNull();
 
     rtl.fireEvent.press(view.getByTestId('settings-tab'));
-    await rtl.waitFor(() => expect(view.getByText('Privacy First')).toBeTruthy());
+    await rtl.waitFor(() => expect(view.getByText('Report a problem')).toBeTruthy());
 
     expect(view.queryByTestId('seed-demo-data')).toBeNull();
     expect(view.queryByText('Load demo data')).toBeNull();
@@ -82,11 +82,11 @@ describe('developer tooling release gate (rendered, real App)', () => {
   it('a developer build shows the sync strip and both developer controls in Settings', async () => {
     const { view, rtl } = await bootReturningUser(true);
 
-    expect(view.queryByText('Privacy First')).toBeNull();
+    expect(view.queryByText('Report a problem')).toBeNull();
     expect(view.getByTestId('dev-sync-strip')).toBeTruthy();
 
     rtl.fireEvent.press(view.getByTestId('settings-tab'));
-    await rtl.waitFor(() => expect(view.getByText('Privacy First')).toBeTruthy());
+    await rtl.waitFor(() => expect(view.getByText('Report a problem')).toBeTruthy());
 
     expect(view.getByTestId('seed-demo-data')).toBeTruthy();
     expect(view.getByText('Load demo data')).toBeTruthy();

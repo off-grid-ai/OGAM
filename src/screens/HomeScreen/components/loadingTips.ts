@@ -18,7 +18,7 @@ export const LOADING_TIPS: readonly LoadingTip[] = [
     text: 'Raise the temperature toward 1.5-2 for more creative replies. Keep it near 0 for precise answers.',
   },
   {
-    text: "The model runs in your phone's RAM. Nothing is sent anywhere.",
+    text: "The model runs in your phone's RAM. Your chats never leave it.",
   },
   {
     text: 'Bigger models answer better but load slower and use more memory.',

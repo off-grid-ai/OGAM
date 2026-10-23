@@ -6,6 +6,7 @@ import { VoiceModelsUpsell } from './VoiceModelsUpsell';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
+import { proGateShown } from '../../services/analytics/analytics';
 
 type Props = {
   visible: boolean;
@@ -39,6 +40,7 @@ export const VoiceModelsSheet: React.FC<Props> = ({
   // a dead-end "not available" line. Close the sheet first so the Pro screen
   // isn't presented while this bottom sheet is still dismissing (iOS).
   const handleGetPro = () => {
+    proGateShown('voice');
     onClose();
     (navigation as unknown as { navigate: (name: string) => void }).navigate('ProDetail');
   };

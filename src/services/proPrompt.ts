@@ -1,5 +1,6 @@
 import { selectHasProAccess } from '../stores/proAccessSlice';
 import { useAppStore } from '../stores/appStore';
+import { proGateShown } from './analytics/analytics';
 
 // One automatic offer, after the user has completed enough work to understand the product.
 // The persisted `proAhaTriggeredBy` marker makes this an install-level decision. Later upgrade
@@ -21,6 +22,7 @@ export function subscribeProPrompt(listener: ProPromptListener): () => void {
 }
 
 export function emitProPrompt(variant: ProPromptVariant): void {
+  proGateShown(`aha_${variant}`);
   listeners.forEach(l => l(variant));
 }
 

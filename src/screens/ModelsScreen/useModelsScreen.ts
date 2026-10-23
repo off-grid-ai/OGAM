@@ -21,6 +21,7 @@ import { useImageModels } from './useImageModels';
 import { importGgufFiles, getErrorMessage } from './importHelpers';
 import { isPickerStuck } from '../../utils/pickerErrorUtils';
 import { isLiteRTFileName } from '../../utils/modelHelpers';
+import { flowStarted } from '../../services/analytics/analytics';
 
 type ZipImportDeps = {
   addDownloadedImageModel: (model: ONNXImageModel) => void;
@@ -89,6 +90,8 @@ export function useModelsScreen() {
   const image = useImageModels(setAlertState);
 
   useEffect(() => {
+    if (activeTab === 'image') flowStarted('image_setup', 'opened');
+    if (activeTab === 'voice' || activeTab === 'transcription') flowStarted('voice_setup', 'opened');
     if (activeTab === 'image' && image.availableHFModels.length === 0 && !image.hfModelsLoading) {
       image.loadHFModels();
     }

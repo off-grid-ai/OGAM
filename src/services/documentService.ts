@@ -10,6 +10,8 @@ import { statFile } from '../utils/fileStat';
 import { MediaAttachment } from '../types';
 import { pdfExtractor } from './pdfExtractor';
 import { generateId } from '../utils/generateId';
+import { documentAdded } from './analytics/analytics';
+import { fileExtension } from './analytics/values';
 
 // File extensions we can read as text
 const TEXT_EXTENSIONS = [
@@ -199,6 +201,7 @@ class DocumentService {
     const documentId = await RNFS.hash(uri.replace(/^file:\/\//, ''), 'sha256');
     const { startDocumentIngest } = await import('./documents');
     startDocumentIngest({ id: documentId, name, kind: isPdf ? 'pdf' : 'text', path: uri });
+    documentAdded(fileExtension(name), facts.size);
     return { id, type: 'document', uri, fileName: name, fileSize: facts.size, documentId };
   }
 

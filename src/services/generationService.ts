@@ -12,6 +12,8 @@ import { contextCompactionService } from './contextCompaction';
 import logger from '../utils/logger';
 import { maybeScheduleSharePrompt } from '../utils/sharePrompt';
 import { checkProPromptForText } from './proPrompt';
+import { generationStarted, type GenerationMetrics, type Outcome } from './analytics/analytics';
+import { textModelFacts } from './analytics/modelFacts';
 import {
   buildGenerationMetaImpl,
   buildToolLoopHandlersImpl,
@@ -92,6 +94,8 @@ class GenerationService {
   private reasoningBuffer: string = '';
   private totalReasoningLength: number = 0;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  /** How the last attempt ended, read once the whole turn (fallbacks included) settles. */
+  private analyticsEnd: { outcome: Outcome; metrics: GenerationMetrics } | null = null;
 
   /** Get the current provider (local or remote) */
   private getCurrentProvider() {
@@ -179,7 +183,7 @@ class GenerationService {
     contextUsage?: GenerationRequest['contextUsage'],
   ): Promise<void> {
     logger.log(`[REMOTE-SM] generateResponse entry conv=${conversationId} msgs=${messages.length}`);
-    return this.withModelFallback(conversationId, messages, async (route, prepared) => {
+    return this.withTrackedModelFallback(conversationId, messages, async (route, prepared) => {
       const request = { conversationId, messages, onFirstToken, contextUsage,
         prepared, preservePartialOnError: false };
       if (route.kind === 'remote') await generateRemoteResponseImpl(this, request);
@@ -224,11 +228,37 @@ class GenerationService {
     ];
   }
 
-  private async withModelFallback<T>(
+  /** One `generation_finished` per turn, however many fallback routes it took. */
+  private async withTrackedModelFallback<T>(
     conversationId: string,
     messages: Message[],
     run: (route: FallbackRoute, prepared: boolean) => Promise<T>,
     canRetry: () => boolean = () => true,
+  ): Promise<T | void> {
+    const needsVision = messages.some(message =>
+      message.attachments?.some(attachment => attachment.type === 'image'),
+    );
+    const endAnalytics = generationStarted(
+      needsVision ? 'vision' : 'text',
+      textModelFacts(this.isUsingRemoteProvider()),
+    );
+    this.analyticsEnd = null;
+    try {
+      const result = await this.withModelFallback(conversationId, messages, run, canRetry);
+      const end = this.analyticsEnd as { outcome: Outcome; metrics: GenerationMetrics } | null;
+      endAnalytics(end?.outcome ?? 'stopped', end?.metrics);
+      return result;
+    } catch (error) {
+      endAnalytics('failed', { error });
+      throw error;
+    }
+  }
+
+  private async withModelFallback<T>(
+    conversationId: string,
+    messages: Message[],
+    run: (route: FallbackRoute, prepared: boolean) => Promise<T>,
+    canRetry: () => boolean,
   ): Promise<T | void> {
     const routes = this.fallbackRoutes(messages);
     let failedName = routes[0].name;
@@ -315,7 +345,7 @@ class GenerationService {
         options.onToolCallComplete?.(name, result);
       },
     };
-    return this.withModelFallback(conversationId, messages, async (route, prepared) => {
+    return this.withTrackedModelFallback(conversationId, messages, async (route, prepared) => {
       if (route.kind === 'remote') {
         return generateRemoteWithToolsImpl(this, {
           conversationId, messages,
@@ -549,8 +579,27 @@ class GenerationService {
       });
   }
 
+  /** Keep this attempt's outcome and speed for the turn's `generation_finished` (read before reset). */
+  private recordAnalyticsEnd(signal: ChatQueueSignal): void {
+    if (!this.state.isGenerating && this.state.startTime === null) return;
+    if (signal !== 'done') {
+      this.analyticsEnd = { outcome: signal === 'stop' ? 'stopped' : 'failed', metrics: {} };
+      return;
+    }
+    const meta = this.buildGenerationMeta();
+    this.analyticsEnd = {
+      outcome: 'done',
+      metrics: {
+        ttftMs: meta.timeToFirstToken,
+        tokensPerSec: meta.tokensPerSecond,
+        contextTokens: meta.contextPromptTokens,
+      },
+    };
+  }
+
   /** `signal`: how the reply ended. A Stop or a failure holds the queue for the user. */
   private resetState(signal: ChatQueueSignal = 'done'): void {
+    this.recordAnalyticsEnd(signal);
     this.state = { ...this.state, queueHold: chatQueueHoldAfter(signal) };
     const hasQueuedItems = this.state.queuedMessages.length > 0;
     if (this.flushTimer) {

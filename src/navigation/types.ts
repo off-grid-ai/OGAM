@@ -4,6 +4,7 @@ export type RootStackParamList = {
   Onboarding: undefined;
   AutoSetup: undefined;
   AdvancedSetup: undefined;
+  AnalyticsInfo: undefined;
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   // Former ChatsStack
   Chat: { conversationId?: string; projectId?: string };

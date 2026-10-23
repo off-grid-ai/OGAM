@@ -18,6 +18,7 @@ import type { ModelTab } from './types';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { checkForNewModels, useModelCatalogStore, withRemoteCatalog, type CatalogCheckResult } from '../../stores/modelCatalogStore';
 import { CatalogCheckSheet } from '../../components/models/CatalogCheckSheet';
+import { proGateShown } from '../../services/analytics/analytics';
 
 const MODEL_TABS: ReadonlyArray<{ key: ModelTab; label: string; testID?: string }> = [
   { key: 'text', label: 'Text' },
@@ -266,7 +267,12 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({ embedded = false }) 
       {vm.activeTab === 'voice' && (
         VoiceModelsPanel
           ? <VoiceModelsPanel showRemoteModels={false} />
-          : <VoiceModelsUpsell onGetPro={() => vm.navigation.navigate('ProDetail')} />
+          : <VoiceModelsUpsell
+              onGetPro={() => {
+                proGateShown('voice');
+                vm.navigation.navigate('ProDetail');
+              }}
+            />
       )}
 
       {/* Transcription Models Tab (speech-to-text, core). */}

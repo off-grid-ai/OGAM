@@ -464,6 +464,13 @@ function makeLlamaFake(
   // Sticky Metal backend error (ggml-metal-context has_error): set when the app goes to background with a
   // completion in flight on Metal; cleared only by a fresh initLlama (a new native context).
   let backendFault = false;
+  // llama.cpp's own log (llama.rn toggleNativeLog / addNativeLogListener). While a lazy tool grammar
+  // waits for its trigger, llama.cpp logs every sampled token, with the token's text, at info level.
+  let nativeLogOn = false;
+  const nativeLogListeners: Array<(level: string, text: string) => void> = [];
+  const nativeLog = (level: string, text: string) => {
+    if (nativeLogOn) for (const listener of nativeLogListeners) listener(level, text);
+  };
   let completionInFlight = false;
   // The device shape of a completion that the backend fault ended: what streamed so far, no EOS, no stop
   // word, no cap, NOT interrupted (rn-completion.cpp just sets has_next_token=false on the failed decode).
@@ -570,6 +577,11 @@ function makeLlamaFake(
             if (backendFault) break; // the GPU refused the next decode (app went to background)
             acc += c;
             streamed = acc;
+            // A real token is about a word: log the word this character ends.
+            const word = /(\S+)$/.exec(acc.slice(0, -1))?.[1];
+            if (/\s/.test(c) && word) {
+              nativeLog('info', `Grammar still awaiting trigger after token ${acc.length} (\` ${word}\`)`);
+            }
             onToken({ token: c, content: acc });
             if (
               scripted.pauseAfter &&
@@ -736,6 +748,13 @@ function makeLlamaFake(
 
   const module: Record<string, jest.Mock> = {
     loadLlamaModelInfo: jest.fn(async () => modelInfo ?? {}),
+    toggleNativeLog: jest.fn(async (enabled: boolean) => {
+      nativeLogOn = enabled;
+    }),
+    addNativeLogListener: jest.fn((listener: (level: string, text: string) => void) => {
+      nativeLogListeners.push(listener);
+      return { remove: () => nativeLogListeners.splice(nativeLogListeners.indexOf(listener), 1) };
+    }),
     // Faithful to llama.rn/llama.cpp: the native loader reports gpu=true (+ the offload device
     // list) when it actually offloaded layers (n_gpu_layers > 0), and gpu=false for a pure-CPU
     // init. Echo that from the requested load params so the REAL captureGpuInfo → GenerationMeta

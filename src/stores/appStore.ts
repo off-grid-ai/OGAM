@@ -126,6 +126,13 @@ export type AppSettings = {
   autoDiscoverRemoteModels?: boolean;
   /** LAN server types to probe when Scan network is used. */
   remoteScanKinds?: Array<'gateway' | 'ollama' | 'lmstudio'>;
+  /** Opt-in analytics consent. Per device: never part of the synced model settings. */
+  analyticsUsage: boolean;
+  analyticsCrashes: boolean;
+  /** The person has seen the consent choice (Auto Setup or a prompt). */
+  analyticsAsked: boolean;
+  /** When a consent prompt was last shown, so a declined prompt waits 30 days. */
+  analyticsLastPromptAt: number | null;
 };
 
 type ThemeMode = 'system' | 'light' | 'dark';
@@ -280,6 +287,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   liteRTTemperature: 0.7,
   liteRTTopP: 0.9,
   liteRTMaxTokens: 4096,
+  analyticsUsage: false,
+  analyticsCrashes: false,
+  analyticsAsked: false,
+  analyticsLastPromptAt: null,
 };
 
 export const selectIsLiteRT = (state: AppState): boolean =>
@@ -380,7 +391,13 @@ export const useAppStore = create<AppState>()(
       },
       resetSettings: () => {
         const before = get().settings;
-        const after = { ...DEFAULT_SETTINGS };
+        // Consent resets to off (analytics opts out); whether the person was already asked does not,
+        // so a reset never brings back the one-time prompt.
+        const after = {
+          ...DEFAULT_SETTINGS,
+          analyticsAsked: before.analyticsAsked,
+          analyticsLastPromptAt: before.analyticsLastPromptAt,
+        };
         set({ settings: after });
         emitChangedModelSettings(before, after);
       },

@@ -30,6 +30,8 @@ import {
   ActiveImageModel,
   RunGenerationOptions,
 } from './imageGenerationTypes';
+import { featureUsed, generationStarted, type ModelFacts } from './analytics/analytics';
+import { imageModelFacts, REMOTE_MODEL_FACTS } from './analytics/modelFacts';
 
 export { isInFlight } from './imageGenerationTypes';
 export type {
@@ -405,13 +407,30 @@ class ImageGenerationService {
     };
     this.job = job;
     this._lastParams = params; // so a failure card's Retry can re-run this exact request
+    featureUsed('image_generation');
+    const endAnalytics = generationStarted('image', this.analyticsFacts());
     const run = this._generate(job, params, opts);
     job.settled = run.catch(() => null);
     try {
-      return await run;
+      const result = await run;
+      if (result) endAnalytics('done');
+      else endAnalytics(job.cancelled ? 'stopped' : 'failed', { error: this.state.error ?? undefined });
+      return result;
+    } catch (error) {
+      endAnalytics(job.cancelled ? 'stopped' : 'failed', { error });
+      throw error;
     } finally {
       if (this.job === job) this.job = null;
     }
+  }
+
+  /** The image route this request will use, in the spec's terms. */
+  private analyticsFacts(): ModelFacts {
+    if (useRemoteServerStore.getState().getActiveRemoteMediaServer('image')?.mediaModels?.image) {
+      return REMOTE_MODEL_FACTS;
+    }
+    const { activeImageModelId, downloadedImageModels } = useAppStore.getState();
+    return imageModelFacts(downloadedImageModels.find(m => m.id === activeImageModelId));
   }
 
   private async _generate(
