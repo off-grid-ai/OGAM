@@ -159,15 +159,23 @@ export function hfModelToDescriptor(
 }
 
 /**
- * The facts a model card states beyond its size, the same words the desktop uses: a
- * mixture-of-experts model's active size (what sets its speed), a published MTP head (it drafts
- * ahead, so replies come faster), a newer model that replaces it, a research licence, and how many
- * other uploads of it there are.
+ * What makes a model fast for its size, shown as badges: a mixture-of-experts model's active size
+ * (it runs like a model that small) and a published MTP head (it drafts ahead, so replies come
+ * faster).
  */
-export function modelFactChips(model: Pick<ModelInfo, 'id' | 'activeParams' | 'newer' | 'nonCommercial' | 'variants'>): string[] {
+export function modelSpeedBadges(model: Pick<ModelInfo, 'id' | 'activeParams'>): { moeActiveB?: number; mtp?: boolean } {
+  return {
+    ...(model.activeParams ? { moeActiveB: model.activeParams } : {}),
+    ...(mtpHeadForModel(model.id) ? { mtp: true } : {}),
+  };
+}
+
+/**
+ * The facts a model card states beyond its size, the same words the desktop uses: a newer model
+ * that replaces it, a research licence, and how many other uploads of it there are.
+ */
+export function modelFactChips(model: Pick<ModelInfo, 'newer' | 'nonCommercial' | 'variants'>): string[] {
   return [
-    model.activeParams ? `MoE · ${model.activeParams}B active` : undefined,
-    mtpHeadForModel(model.id) ? 'MTP · faster replies' : undefined,
     model.newer ? `Newer: ${model.newer}` : undefined,
     model.nonCommercial ? 'Research licence' : undefined,
     model.variants?.length ? `+${model.variants.length} uploads` : undefined,

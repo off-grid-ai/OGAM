@@ -27,7 +27,7 @@ import { aggregateActiveDownloads } from '../../utils/downloadAggregate';
 import { TextFiltersSection } from './TextFiltersSection';
 import { FilterState, SortOption } from './types';
 import { SORT_OPTIONS } from './constants';
-import { formatNumber, getTextModelCompatibility, modelFactChips } from './utils';
+import { formatNumber, getTextModelCompatibility, modelFactChips, modelSpeedBadges } from './utils';
 import { buildCuratedLiteRTFiles, curatedLiteRTDownloadWarning, getCuratedLiteRTEntry, LITERT_PARENT_ID, useCuratedLiteRTEntries } from '../../services/curatedLiteRTRegistry';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { liteRTFileMeta, liteRTRecommendedModel, LITERT_PARENT_RECOMMENDED } from './litertRecommended';
@@ -338,6 +338,7 @@ const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger
     ...predictGgufCapabilities({ id: item.id, name: item.name }),
     vision: item.modelType === 'vision',
     predicted: true,
+    ...modelSpeedBadges(item),
   };
   return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact facts={modelFactChips(item)} isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} /></AnimatedEntry>;
 };
@@ -476,7 +477,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
 
   return (
     <>
-      <View style={styles.searchContainer} testID="text-model-search-row">
+      <View style={[styles.searchContainer, styles.searchContainerRaised]} testID="text-model-search-row">
         <TextInput
           style={styles.searchInput}
           placeholder="Search models"

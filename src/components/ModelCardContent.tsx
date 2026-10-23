@@ -27,6 +27,17 @@ export interface RecommendedConfig {
   chips?: string[];
 }
 
+/** What a card's badge row shows. `predicted` softens the labels ("likely") for a guess from the
+ *  name; the speed badges are catalog facts: a mixture-of-experts active size and an MTP head. */
+export interface ModelCardCapabilities {
+  tools?: boolean;
+  thinking?: boolean;
+  vision?: boolean;
+  predicted?: boolean;
+  moeActiveB?: number;
+  mtp?: boolean;
+}
+
 interface DenseModelCardContentProps {
   model: {
     name: string;
@@ -47,7 +58,7 @@ interface DenseModelCardContentProps {
   credibilityLabel?: string;
   incompatibleReason?: string;
   facts?: string[];
-  capabilities?: { tools?: boolean; thinking?: boolean; vision?: boolean; predicted?: boolean };
+  capabilities?: ModelCardCapabilities;
   sourceBadge?: string;
   nameTestID?: string;
   factsTestID?: string;
@@ -123,23 +134,40 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
       {facts.length > 0 && (
         <Text style={styles.denseMeta} numberOfLines={2} testID={factsTestID}>{facts.join(' · ')}</Text>
       )}
-      {(capabilities?.vision || isVisionModel || capabilities?.tools || capabilities?.thinking) && (
-        <View style={styles.capabilityRow}>
-          {(capabilities?.vision || isVisionModel) && <View style={styles.capabilityBadge} accessibilityLabel="Vision">
-            <Icon name="eye" size={13} color={colors.info} />
-          </View>}
-          {capabilities?.tools && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Tool calling likely' : 'Tool calling'}>
-            <Icon name="tool" size={13} color={colors.warning} />
-          </View>}
-          {capabilities?.thinking && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Thinking likely' : 'Thinking'}>
-            <Icon name="zap" size={13} color={colors.primary} />
-          </View>}
-        </View>
-      )}
+      <CapabilityBadges capabilities={capabilities} isVisionModel={isVisionModel} />
     </>
   );
 };
 
+
+/** The badge row: what makes a model fast for its size first, then what it can do. */
+const CapabilityBadges: React.FC<{ capabilities?: ModelCardCapabilities; isVisionModel: boolean }> = ({ capabilities, isVisionModel }) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const vision = capabilities?.vision || isVisionModel;
+  if (!vision && !capabilities?.tools && !capabilities?.thinking && !capabilities?.moeActiveB && !capabilities?.mtp) return null;
+  return (
+    <View style={styles.capabilityRow}>
+      {!!capabilities?.moeActiveB && <View style={styles.capabilityBadge} accessibilityLabel={`Mixture of experts: runs like a ${capabilities.moeActiveB}B model`}>
+        <Icon name="layers" size={13} color={colors.primary} />
+        <Text style={styles.capabilityText}>{`MoE ${capabilities.moeActiveB}B`}</Text>
+      </View>}
+      {capabilities?.mtp && <View style={styles.capabilityBadge} accessibilityLabel="MTP: replies faster">
+        <Icon name="fast-forward" size={13} color={colors.primary} />
+        <Text style={styles.capabilityText}>MTP</Text>
+      </View>}
+      {vision && <View style={styles.capabilityBadge} accessibilityLabel="Vision">
+        <Icon name="eye" size={13} color={colors.info} />
+      </View>}
+      {capabilities?.tools && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Tool calling likely' : 'Tool calling'}>
+        <Icon name="tool" size={13} color={colors.warning} />
+      </View>}
+      {capabilities?.thinking && <View style={styles.capabilityBadge} accessibilityLabel={capabilities.predicted ? 'Thinking likely' : 'Thinking'}>
+        <Icon name="zap" size={13} color={colors.primary} />
+      </View>}
+    </View>
+  );
+};
 
 /**
  * The ONE description string a card shows: the model's description plus any
