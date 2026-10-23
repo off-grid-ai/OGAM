@@ -1,4 +1,4 @@
-import { isDraftModelFile, isImatrixFile, isLoadableOnDevice, isMtpHeadFile } from '@offgrid/models';
+import { isDraftModelFile, isImatrixFile, isLoadableOnDevice, isMtpHeadFile, splitGgufPartNames } from '@offgrid/models';
 import { LlamaContext } from 'llama.rn';
 import RNFS from 'react-native-fs';
 import { statFile } from '../utils/fileStat';
@@ -56,6 +56,13 @@ export async function validateModelFile(
     }
     if (!facts.isFile) {
       return { valid: false, reason: `Model path is not a file: ${modelPath}` };
+    }
+    // A split model loads from its first part only when every other part sits beside it.
+    const parts = splitGgufPartNames(modelPath);
+    const missing = [];
+    for (const part of parts.slice(1)) if (!(await statFile(part))) missing.push(part.split('/').pop());
+    if (missing.length > 0) {
+      return { valid: false, reason: `This model comes in ${parts.length} parts and ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} missing. Download it again to fetch the missing part.` };
     }
     const fileSize = facts.size;
     const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(1);

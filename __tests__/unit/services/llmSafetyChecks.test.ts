@@ -47,6 +47,18 @@ describe('validateModelFile', () => {
     });
   });
 
+  it('refuses a split model with a part missing, and loads it once every part is beside the first', async () => {
+    defaultNativeFileSystemBoundary.seedFile('/models/M-Q8_0-00001-of-00003.gguf', 1_000_000);
+    defaultNativeFileSystemBoundary.seedFile('/models/M-Q8_0-00003-of-00003.gguf', 1_000_000);
+    expect(await validateModelFile('/models/M-Q8_0-00001-of-00003.gguf')).toEqual({
+      valid: false,
+      reason: 'This model comes in 3 parts and M-Q8_0-00002-of-00003.gguf is missing. Download it again to fetch the missing part.',
+    });
+
+    defaultNativeFileSystemBoundary.seedFile('/models/M-Q8_0-00002-of-00003.gguf', 1_000_000);
+    expect(await validateModelFile('/models/M-Q8_0-00001-of-00003.gguf')).toEqual({ valid: true });
+  });
+
   it('returns valid for a proper GGUF file', async () => {
     defaultNativeFileSystemBoundary.seedFile('/models/test.gguf', 1_000_000);
 
