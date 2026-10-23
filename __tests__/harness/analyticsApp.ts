@@ -29,12 +29,18 @@ export function restoreBuildFlavor(): void {
  * Launch the App. `release: true` runs it as a store build (`__DEV__` false), the only build that
  * may start the analytics SDK. `relaunch: true` keeps the disk and storage of the previous launch.
  */
-export async function launchApp(options: { release: boolean; relaunch?: boolean }): Promise<AnalyticsApp> {
+export async function launchApp(options: {
+  release: boolean;
+  relaunch?: boolean;
+  /** Installed before this version: onboarding was finished on an earlier launch. */
+  returningUser?: boolean;
+  platform?: 'ios' | 'android';
+}): Promise<AnalyticsApp> {
   (global as DevGlobal).__DEV__ = !options.release;
   const boundary = installNativeBoundary({
     llama: true,
     fs: true,
-    ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB },
+    ram: { platform: options.platform ?? 'android', totalBytes: 12 * GB, availBytes: 8 * GB },
   });
   const endpoint = installPostHogEndpoint();
   const docs = boundary.fs!.DocumentDirectoryPath;
@@ -56,6 +62,13 @@ export async function launchApp(options: { release: boolean; relaunch?: boolean 
   if (!options.relaunch) {
     await storage.clear();
     await storage.setItem('@local_llm/downloaded_models', JSON.stringify([model]));
+    if (options.returningUser) {
+      // What an earlier version left on disk: onboarding done, the setup tour dismissed.
+      await storage.setItem(
+        'local-llm-app-storage',
+        JSON.stringify({ state: { hasCompletedOnboarding: true, checklistDismissed: true }, version: 0 }),
+      );
+    }
   }
   const g = globalThis as unknown as { window?: Record<string, unknown> };
   if (!g.window) g.window = { dispatchEvent: () => true, addEventListener: () => {}, removeEventListener: () => {} };

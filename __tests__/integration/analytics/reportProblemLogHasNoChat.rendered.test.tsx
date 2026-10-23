@@ -64,3 +64,65 @@ it('the shared debug log holds the chat trace but none of the prompt or reply', 
   expect(message).toMatch(/\[(GEN|LLM|ToolLoop|GenService)/);
   expect(message).not.toMatch(/passport|drawer|window|guests/i);
 });
+
+it('on iOS the log goes as an attached file, and closing the viewer sends nothing', async () => {
+  app = await launchApp({ release: false, platform: 'ios' });
+  const shared: Array<{ message?: string; url?: string }> = [];
+  require('react-native').Share.share = async (content: { message?: string; url?: string }) => {
+    shared.push(content);
+    return { action: 'sharedAction' };
+  };
+  const { view, rtl } = app;
+  await passOnboarding(app, false);
+  await openSettings(app);
+  rtl.fireEvent.press(view.getByTestId('settings-report-problem'));
+  rtl.fireEvent.press(await view.findByTestId('debug-logs-close'));
+  await rtl.waitFor(() => expect(view.queryByTestId('debug-logs-send-report')).toBeNull());
+  expect(shared).toHaveLength(0);
+
+  rtl.fireEvent.press(view.getByTestId('settings-report-problem'));
+  rtl.fireEvent.press(await view.findByTestId('debug-logs-send-report'));
+  await rtl.waitFor(() => expect(shared).toHaveLength(1));
+  expect(shared[0].url).toMatch(/^file:\/\/.*offgrid-debug\.log$/);
+  expect(shared[0].message).toContain('support@getoffgridai.co');
+  expect(shared[0].message).not.toContain('---');
+});
+
+it('an unreadable log still opens the share sheet with the support address', async () => {
+  app = await launchApp({ release: false });
+  const shared: Array<{ message?: string; url?: string }> = [];
+  require('react-native').Share.share = async (content: { message?: string; url?: string }) => {
+    shared.push(content);
+    throw new Error('share sheet dismissed');
+  };
+  const fs = require('react-native-fs');
+  fs.readFile = async () => {
+    throw new Error('EACCES');
+  };
+  const { view, rtl } = app;
+  await passOnboarding(app, false);
+  await openSettings(app);
+  rtl.fireEvent.press(view.getByTestId('settings-report-problem'));
+  rtl.fireEvent.press(await view.findByTestId('debug-logs-send-report'));
+  await rtl.waitFor(() => expect(shared).toHaveLength(1));
+  expect(shared[0].url).toBeUndefined();
+  expect(shared[0].message).toContain('support@getoffgridai.co');
+});
+
+it('with no log on disk yet, the share sheet still gets the support address', async () => {
+  app = await launchApp({ release: false });
+  const shared: Array<{ message?: string; url?: string }> = [];
+  require('react-native').Share.share = async (content: { message?: string; url?: string }) => {
+    shared.push(content);
+    return { action: 'sharedAction' };
+  };
+  require('react-native-fs').exists = async () => false;
+  const { view, rtl } = app;
+  await passOnboarding(app, false);
+  await openSettings(app);
+  rtl.fireEvent.press(view.getByTestId('settings-report-problem'));
+  rtl.fireEvent.press(await view.findByTestId('debug-logs-send-report'));
+  await rtl.waitFor(() => expect(shared).toHaveLength(1));
+  expect(shared[0].message).toContain('support@getoffgridai.co');
+  expect(shared[0].message).not.toContain('---');
+});
