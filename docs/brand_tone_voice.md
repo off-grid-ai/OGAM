@@ -24,7 +24,7 @@ That's the energy in every word Off Grid writes.
 
 ### 1. Generous, not transactional
 
-Off Grid asks nothing from you. No account. No API key. No data. The voice reflects this -- it gives without expecting anything back. It doesn't ask you to share, subscribe, follow, or review. It just hands you the thing.
+Off Grid asks nothing from you. No account. No API key. Your chats and files never leave your device; anonymous usage data and crash reports are sent only if you turn them on. The voice reflects this -- it gives without expecting anything back. It doesn't ask you to share, subscribe, follow, or review. It just hands you the thing.
 
 This means copy never implies a trade. No "get access to," no "unlock," no implied paywall. The frame is always: here's what you have.
 
@@ -41,7 +41,7 @@ Specificity is how you earn trust without asking for it.
 
 ```
 "Phi-3 Mini runs at ~28 tok/s on a Snapdragon 8 Gen 3. Llama 3.1 8B runs at ~12 tok/s on the same chip."
-"On-device. Offline. Zero data leaves your phone. Not a marketing claim -- airplane mode works."
+"On-device. Offline. Your chats never leave your phone. Not a marketing claim -- airplane mode works."
 ```
 
 ```
@@ -111,7 +111,7 @@ Every piece of Off Grid content follows the same arc:
 **Recognition -> Return -> Freedom**
 
 1. **Recognition**: Name what's been happening. "Every query you've sent to a cloud AI has been logged, stored, and used."
-2. **Return**: Show what's being given back. "With Off Grid, the model runs on your phone. Nothing leaves it."
+2. **Return**: Show what's being given back. "With Off Grid, the model runs on your phone. Your chats never leave it."
 3. **Freedom**: Hand them the capability without condition. "Go offline. It still works. It's yours."
 
 This isn't about doubt and resolution like a pricing tool. It's about something that was taken being handed back. The tone is quiet, clear, and generous -- not triumphant or righteous.
@@ -129,7 +129,7 @@ Short sentences. State what it does, then prove it. The reader should feel like 
 
 ```
 "Chat. Generate images. Use tools. See. Listen.
-All on your phone. All offline. Zero data leaves your device.
+All on your phone. All offline. Your chats and files never leave your device.
 
 No account. No API key. No subscription. Download and go."
 ```
@@ -368,7 +368,7 @@ Load failed: "Load failed -- the file may be corrupted. Delete it and re-downloa
 Primary: **"Private AI. No cloud. No compromise."**
 
 Alternatives:
-- "Run AI on your phone. Nothing leaves it."
+- "Run AI on your phone. Your chats never leave it."
 - "The Swiss Army Knife of On-Device AI."
 - "AI that stays on your device."
 - "No cloud. No account. No compromise."
@@ -382,6 +382,7 @@ Before publishing any Off Grid content:
 
 - [ ] Does it feel like something being given, not sold?
 - [ ] Are privacy claims stated as mechanisms ("the model runs in RAM"), not promises ("we value your privacy")?
+- [ ] Do privacy claims stay true with opt-in analytics on? Say "your chats and files never leave your device", never "nothing leaves" or "no telemetry".
 - [ ] Does every performance claim include a number and a device?
 - [ ] Are device requirements stated before steps?
 - [ ] Does it follow the recognition -> return -> freedom arc?

@@ -941,6 +941,10 @@ describe('ModelSettingsScreen', () => {
           liteRTTemperature: undefined as any,
           liteRTTopP: undefined as any,
           liteRTMaxTokens: undefined as any,
+          analyticsUsage: false,
+          analyticsCrashes: false,
+          analyticsAsked: false,
+          analyticsLastPromptAt: null,
         },
       });
 

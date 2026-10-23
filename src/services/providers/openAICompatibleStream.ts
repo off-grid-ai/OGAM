@@ -161,7 +161,8 @@ export function processDelta(
   state: OpenAIStreamState,
   ctx: DeltaCtx,
 ): void {
-  logger.log(`[WIRE-REMOTE] ${JSON.stringify(delta)}`); // [WIRE] raw OpenAI-compatible/Ollama delta from-device
+  // Shape only: streamed text and tool arguments never go in the log.
+  logger.log(`[WIRE-REMOTE] ${JSON.stringify({ keys: Object.keys(delta ?? {}) })}`);
   if (delta.content) {
     ctx.thinkTagParser.process(
       delta.content,
@@ -238,7 +239,7 @@ function handleOllamaChatLine(
   req: { callbacks: StreamCallbacks; signal: AbortSignal; abort: () => void },
 ): void {
   if (req.signal.aborted) return;
-  logger.log(`[WIRE-OLLAMA] ${JSON.stringify(line)}`); // [WIRE] raw Ollama /api/chat NDJSON line from-device
+  logger.log(`[WIRE-OLLAMA] ${JSON.stringify({ keys: Object.keys(line ?? {}), done: (line as { done?: unknown })?.done })}`);
 
   if (line.error) {
     streamState.streamErrorOccurred = true;
@@ -257,7 +258,7 @@ function handleOllamaChatLine(
     if (msg.tool_calls) {
       for (const tc of msg.tool_calls) {
         if (tc.function?.name) {
-          logger.log(`[OllamaChat] tool_call: ${tc.function.name}(${typeof tc.function.arguments === 'string' ? tc.function.arguments.substring(0, 100) : JSON.stringify(tc.function.arguments).substring(0, 100)})`);
+          logger.log(`[OllamaChat] tool_call: ${tc.function.name}`);
           streamState.accumulatedToolCalls.push(tc);
         }
       }

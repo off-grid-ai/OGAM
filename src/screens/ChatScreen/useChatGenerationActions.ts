@@ -44,6 +44,7 @@ import {
   GenerationMeta,
 } from '../../types';
 import logger from '../../utils/logger';
+import { featureUsed, messageSent, track } from '../../services/analytics/analytics';
 import { deleteChatImages, imagesNotDeletedAlert } from '../../services/chatImageCleanup';
 import { ModelReadyOutcome, ensureReadyOrAlert } from './modelReadiness';
 import { describeTurnStatus } from '@offgrid/rag/documents';
@@ -317,7 +318,7 @@ export async function shouldRouteToImageGenerationFn(
   // so "why didn't 'draw a dog' make an image?" is answerable from the logs (esp. the
   // voice path), never a guess.
   logger.log(
-    `[ROUTE-SM] route? text="${text.slice(0, 60)}" force=${
+    `[ROUTE-SM] route? text=${text.length}ch force=${
       forceImageMode ?? false
     } mode=${
       deps.settings.imageGenerationMode
@@ -993,10 +994,7 @@ export async function dispatchGenerationFn(
   // [ROUTE-SM]: confirms the turn reached the router (esp. the voice path) + the
   // final routed destination — so a "pipeline never triggered" is visible in logs.
   logger.log(
-    `[ROUTE-SM] dispatch text="${text.slice(
-      0,
-      60,
-    )}" imageMode=${imageMode} hasImageModel=${!!deps.activeImageModel}`,
+    `[ROUTE-SM] dispatch text=${text.length}ch imageMode=${imageMode} hasImageModel=${!!deps.activeImageModel}`,
   );
   // ONE decision seam (resolveTurnKind); a NEW turn has no recorded kind so the route rule decides.
   const kind = await resolveTurnKind(deps, {
@@ -1033,6 +1031,15 @@ export type SendCall = {
   startGeneration: (convId: string, text: string, assistantEnabled?: boolean) => Promise<void>;
   setDebugInfo: SetState<any>;
 };
+function reportMessageSent(attachments: MediaAttachment[] | undefined): void {
+  const hasImage = !!attachments?.some(attachment => attachment.type === 'image');
+  messageSent({
+    hasImage,
+    hasDocument: !!attachments?.some(attachment => attachment.type === 'document'),
+    toolsEnabled: (useAppStore.getState().settings.enabledTools?.length ?? 0) > 0,
+  });
+  if (hasImage) featureUsed('vision');
+}
 export async function handleSendFn(
   deps: GenerationDeps,
   call: SendCall,
@@ -1060,6 +1067,7 @@ export async function handleSendFn(
     );
     deps.setActiveConversation(targetConversationId);
   }
+  reportMessageSent(attachments);
   // Cross-modality serialization: queue if any generation is running (routed later).
   if (
     generationService.getState().isGenerating ||
@@ -1206,6 +1214,8 @@ export async function regenerateResponseFn(
     },
   });
   if (result.handled) {
+    // Counted where a regenerate really runs: a bail-out or a not-ready retry is not a second one.
+    track('reply_regenerated');
     generationSession.end('handled');
     return;
   }
@@ -1227,6 +1237,7 @@ export async function regenerateResponseFn(
     return;
   }
   logger.log('[RESEND-SM] regenerate → reached LLM generate path');
+  track('reply_regenerated');
   // LiteRT: native history must be rewound to match the JS messages we're about to replay.
   // Dispatched via the service (no engine branch here); a no-op for engines without a KV cache.
   invalidateActiveConversation();

@@ -63,6 +63,7 @@
     "llama.rn": "0.13.0-rc.7",
     "node-html-parser": "^7.1.0",
     "patch-package": "^8.0.1",
+    "posthog-react-native": "^4.81.10",
     "react": "19.2.0",
     "react-compiler-runtime": "^1.0.0",
     "react-native": "0.83.1",

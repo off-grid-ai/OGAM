@@ -2,6 +2,7 @@ import { modelDownloadService } from './modelDownloadService';
 import type { ModelDownload, ModelDownloadStartRequest } from './modelDownloadService/types';
 import { useAppStore } from '../stores';
 import { activeModelService } from './activeModelService';
+import { flowFinished, flowStep } from './analytics/analytics';
 import { uniformDownloadId } from './modelDownloadService/uniformId';
 import {
   loadAutoSetupCompatibleCatalog,
@@ -222,9 +223,11 @@ export function createAutoSetupSession(
           phase: 'failed',
           error: failure.error ?? 'A model download failed. Try again.',
         });
+        flowFinished('onboarding', 'failed', failure.error);
       } else if (allCompleted) {
         activeIds.clear();
         publish({ phase: 'completed', error: null });
+        flowStep('onboarding', 'download_done');
       }
     } finally {
       refreshInFlight = false;
@@ -294,7 +297,11 @@ export function createAutoSetupSession(
       outcomes,
       error: null,
     });
-    if (activeIds.size === 0) return;
+    flowStep('onboarding', 'download_started');
+    if (activeIds.size === 0) {
+      flowStep('onboarding', 'download_done');
+      return;
+    }
 
     const [text, image, stt] = plan.items;
     const jobs = [
@@ -334,6 +341,7 @@ export function createAutoSetupSession(
         outcomes: next,
         error: message(failure.reason),
       });
+      flowFinished('onboarding', 'failed', failure.reason);
       return;
     }
     await refreshDownloads();

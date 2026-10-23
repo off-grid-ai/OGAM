@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import type { RootStackParamList } from '../navigation/types';
 import { selectHasProAccess } from '../stores/proAccessSlice';
 import { useAppStore } from '../stores';
+import { proGateShown } from '../services/analytics/analytics';
 
 /**
  * Single navigation gate for the user-facing Sync control center.
@@ -24,9 +25,11 @@ export function useOpenSync(): {
   // screen's own header read "Device Not Active".
   const isSyncUnlocked = useAppStore(selectHasProAccess);
   const openSync = useCallback(() => {
+    if (!isSyncUnlocked) proGateShown('sync');
     navigation.navigate(isSyncUnlocked ? 'Sync' : 'ProDetail');
   }, [isSyncUnlocked, navigation]);
   const openSyncNotifications = useCallback(() => {
+    if (!isSyncUnlocked) proGateShown('sync');
     navigation.navigate(isSyncUnlocked ? 'Notifications' : 'ProDetail');
   }, [isSyncUnlocked, navigation]);
 

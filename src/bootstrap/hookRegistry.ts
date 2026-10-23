@@ -98,4 +98,7 @@ export const HOOKS = {
   /** (text: string, timestamp: number) => void — core copied text locally. Pro records it through
    *  the shared clipboard owner instead of waiting for a delayed native clipboard notification. */
   clipboardRecordLocalText: 'clipboard.recordLocalText',
+  /** () => Record<string, boolean> — Pro features switched on, for the daily analytics
+   *  `features_snapshot` (tts, mcp_tool, sync, clipboard, meetings, browser_action). */
+  analyticsProFeatures: 'analytics.proFeatures',
 } as const;

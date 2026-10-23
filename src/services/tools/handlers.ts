@@ -5,6 +5,8 @@ import { ToolCall, ToolResult } from './types';
 import { useDocumentTurnStatusStore } from '../documents/progressStore';
 import type * as DocumentChatTurn from '../documents/chatTurn';
 import logger from '../../utils/logger';
+import { featureUsed } from '../analytics/analytics';
+import { toolFeature } from '../analytics/values';
 
 function makeResult(call: ToolCall, start: number, opts: { content: string; error?: string }): ToolResult {
   return { toolCallId: call.id, name: call.name, content: opts.content, error: opts.error, durationMs: Date.now() - start };
@@ -16,6 +18,7 @@ function requireString(call: ToolCall, param: string): string | null {
 
 export async function executeToolCall(call: ToolCall): Promise<ToolResult> {
   const start = Date.now();
+  featureUsed(toolFeature(call.name));
   try {
     const content = await dispatchTool(call);
     return makeResult(call, start, { content });
@@ -375,7 +378,7 @@ async function handleReadUrl(rawUrl: string): Promise<string> {
 
     return text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}\n\n[Content truncated]` : text;
   } catch (e: any) {
-    logger.error(`[Tools] read_url FAILED for "${url}": ${e?.message || e}`);
+    logger.error(`[Tools] read_url FAILED: ${e?.message || e}`);
     throw e;
   } finally { clearTimeout(timeout); }
 }

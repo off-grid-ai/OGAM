@@ -38,6 +38,7 @@ import {
   RemoteServerEditorScreen,
   ProDetailScreen,
   AboutScreen,
+  AnalyticsInfoScreen,
   ToolsScreen,
 } from '../screens';
 import {
@@ -241,6 +242,7 @@ export const AppNavigator: React.FC = () => {
           component={AboutScreen}
           options={{ headerShown: false }}
         />
+        <RootStack.Screen name="AnalyticsInfo" component={AnalyticsInfoScreen} />
         <RootStack.Screen name="Tools" component={ToolsScreen} />
         <RootStack.Screen
           name="DownloadManager"

@@ -468,6 +468,14 @@ jest.mock('react-native-device-info', () => ({
   getDeviceId: jest.fn(() => 'test-device-id'),
   getHardware: jest.fn(() => Promise.resolve('unknown')),
   getIpAddress: jest.fn(() => Promise.resolve('192.168.1.20')),
+  // Battery + form factor (analytics `battery_pct`, `charging`, `device_class`).
+  getPowerState: jest.fn(() => Promise.resolve({ batteryLevel: 0.64, batteryState: 'unplugged', lowPowerMode: false })),
+  isTablet: jest.fn(() => false),
+  // Synchronous build/device identity the PostHog SDK reads for its app properties.
+  getApplicationName: jest.fn(() => 'Off Grid'),
+  getBundleId: jest.fn(() => 'ai.offgridmobile'),
+  getManufacturerSync: jest.fn(() => 'Google'),
+  isEmulatorSync: jest.fn(() => false),
 }));
 
 // react-native-image-picker mock

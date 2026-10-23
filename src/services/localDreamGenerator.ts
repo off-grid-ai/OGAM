@@ -156,7 +156,7 @@ class LocalDreamGeneratorService {
   }
 
   private buildResult(params: ImageGenerationParams, result: any): GeneratedImage {
-    logger.log(`[WIRE-IMAGE] ${JSON.stringify(result)}`); // [WIRE] raw native generateImage result shape from-device
+    logger.log(`[WIRE-IMAGE] ${JSON.stringify({ keys: Object.keys(result ?? {}) })}`); // shape only: the result can echo the prompt
     return {
       id: result.id,
       prompt: params.prompt,
