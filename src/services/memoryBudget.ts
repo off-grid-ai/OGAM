@@ -40,7 +40,7 @@
  * per-load, user-confirmed way to push past whatever budget is in effect.
  */
 import { Platform } from 'react-native';
-import { fitTier, PHONE_FIT_BUDGET, type FitTier } from '@offgrid/models';
+import { fitTier, phoneFitBudget, type FitBudget, type FitTier } from '@offgrid/models';
 
 /**
  * How the residency manager handles multiple models:
@@ -149,10 +149,15 @@ export function fileExceedsBudget(sizeBytes: number, ramGB: number): boolean {
   return modelFitTier(sizeBytes, ramGB) === 'wontFit';
 }
 
+/** This phone's fit budget: an iPhone maps a model's weights, Android copies them (shared rule). */
+export function phoneBudget(): FitBudget {
+  return phoneFitBudget(Platform.OS === 'ios' ? 'ios' : 'android');
+}
+
 /** The one fit verdict (shared with Desktop) for a download of this size on this phone: the
  *  shared rule with the phone budget. Cards, the detail list and the pickers all read this. */
 export function modelFitTier(sizeBytes: number, ramGB: number): FitTier {
-  return fitTier(sizeBytes / 1e9, ramGB, PHONE_FIT_BUDGET);
+  return fitTier(sizeBytes / 1e9, ramGB, phoneBudget());
 }
 
 /**

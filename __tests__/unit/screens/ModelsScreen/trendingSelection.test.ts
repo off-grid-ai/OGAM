@@ -74,29 +74,28 @@ describe('curated models offered by what loads on the phone', () => {
   // A 12 GB iPhone reports about 11.2 GB. The shared phone budget loads a download up to half of it.
   const TWELVE_GB_IPHONE = 11.2;
 
-  it('offers a 12 GB phone a model above 8B parameters that fits, and hides one that does not', () => {
+  it('offers a 12 GB iPhone the 9B class it loads, above any parameter cap, and hides what it cannot', () => {
     mockGetTotalMemoryGB.mockReturnValue(TWELVE_GB_IPHONE);
 
     const { result } = renderHook(() => useTextModels(setAlertState));
     const offered = result.current.recommendedAsModelInfo.map(m => m.id);
 
-    // LFM2.5 8B A1B is 8.3B parameters but a 5.2 GB download: it loads.
+    // Measured on a 12 GB iPhone 17 Pro Max: a 9B Q4_K_M and Gemma 4 E4B load (mapped weights).
+    expect(offered).toContain('unsloth/Qwen3.5-9B-GGUF');
+    expect(offered).toContain('unsloth/gemma-4-E4B-it-GGUF');
     expect(offered).toContain('LiquidAI/LFM2.5-8B-A1B-GGUF');
-    // Qwen 3.5 9B is 6.6 GB with its projector, and Gemma 4 E4B 6.0 GB: past this phone's budget.
-    expect(offered).not.toContain('unsloth/Qwen3.5-9B-GGUF');
-    expect(offered).not.toContain('unsloth/gemma-4-E4B-it-GGUF');
-    expect(offered).toContain('unsloth/Qwen3.5-4B-GGUF');
+    // Gemma 4 12B is 7.3 GB with its projector: past 0.62 of this phone's RAM.
+    expect(offered).not.toContain('unsloth/gemma-4-12b-it-GGUF');
   });
 
-  it('picks the trending model per family from what loads: Gemma 4 E2B, never E4B, on a 12 GB phone', () => {
+  it('picks the trending model per family from what loads on a 12 GB iPhone', () => {
     mockGetTotalMemoryGB.mockReturnValue(TWELVE_GB_IPHONE);
 
     const { result } = renderHook(() => useTextModels(setAlertState));
     const trending = result.current.trendingAsModelInfo.map(m => m.id);
 
     expect(trending).toContain('unsloth/gemma-4-E2B-it-GGUF');
-    expect(trending).not.toContain('unsloth/gemma-4-E4B-it-GGUF');
-    expect(trending).not.toContain('unsloth/Qwen3.5-9B-GGUF');
+    expect(trending).toHaveLength(3);
   });
 
   it('offers a 16 GB phone the larger models it can load', () => {

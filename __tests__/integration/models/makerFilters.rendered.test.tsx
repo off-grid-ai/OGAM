@@ -39,7 +39,7 @@ async function freshLaunch() {
 // Each maker's curated model, as the shared catalog names it, and one model from another maker that
 // must not be listed under it. The list only offers what loads on the device (download against the
 // phone budget), and Meta's and Mistral's curated models are 15-17 GB: this checks the maker mapping,
-// so it runs on a 36 GB device, where they load but are not one-tap picks (picks hide under a filter).
+// so it runs on a 36 GB Android device, where they load but are not one-tap picks (picks hide under a filter).
 const MAKERS: { chip: string; model: string; otherMaker: string }[] = [
   { chip: 'Liquid AI', model: 'LFM2.5 8B A1B', otherMaker: 'MiniCPM5 2B' },
   { chip: 'Llama', model: 'Muse Glimmer 30B', otherMaker: 'LFM2.5 8B A1B' },
@@ -51,7 +51,7 @@ describe('Maker filters on the Models screen', () => {
   afterEach(() => restoreFetch());
 
   it.each(MAKERS)('the $chip filter lists $model', async ({ chip, model, otherMaker }) => {
-    installNativeBoundary({ fs: true, ram: { platform: 'ios', totalBytes: 36 * GB, availBytes: 30 * GB } });
+    installNativeBoundary({ fs: true, ram: { platform: 'android', totalBytes: 36 * GB, availBytes: 30 * GB } });
     restoreFetch = installEmptyHuggingFace();
     const React = require('react');
     const { render, fireEvent, waitFor, within } = requireRTL();

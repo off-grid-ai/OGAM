@@ -1,4 +1,5 @@
-import { CATALOG, PHONE_FIT_BUDGET, type MobileTextCatalogModel, type ModelEntry } from '@offgrid/models';
+import { CATALOG, type MobileTextCatalogModel, type ModelEntry } from '@offgrid/models';
+import { phoneBudget } from '../services/memoryBudget';
 import { registerBundledCatalog } from '../stores/modelCatalogStore';
 import { engineLoadsCatalogModel } from '../services/llamaEngineSupport';
 
@@ -31,7 +32,7 @@ function offeredOnPhone(entry: ModelEntry): boolean {
 function phoneMinRamGb(entry: ModelEntry): number {
   if (entry.minRamGb) return entry.minRamGb;
   const bytes = entry.files.filter(f => f.role !== 'aux').reduce((sum, f) => sum + (f.sizeBytes ?? 0), 0);
-  return Math.ceil(bytes / 1e9 / PHONE_FIT_BUDGET.soft);
+  return Math.ceil(bytes / 1e9 / phoneBudget().soft);
 }
 
 /** The catalog names a maker for people ("Meta"); the maker filter keys by its Hugging Face org
