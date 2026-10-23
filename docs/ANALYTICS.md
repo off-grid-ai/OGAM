@@ -81,7 +81,7 @@ Off Grid AI Mobile (OGAM) and Off Grid AI Desktop (OGAD) send anonymous usage da
 | `message_sent` | `has_image`, `has_document`, `tools_enabled` |
 | `reply_regenerated` | none |
 | `project_created` | none |
-| `document_added` | `file_type` (extension only), `size_bucket` |
+| `document_added` | `file_type` (an extension the app opens, else `other`; `none` without one), `size_bucket` |
 | `feature_used` | `feature`: `voice_input`, `tts`, `image_generation`, `vision`, `web_search`, `tools`, `mcp_tool`, `remote_server`, `browser_action`, `clipboard`, `meetings`, `sync` |
 | `features_snapshot` | once a day: one `true`/`false` property per feature that is switched on |
 | `problem_reported` | none |
@@ -117,7 +117,8 @@ All multi-step journeys use three events with a `flow` property, so every funnel
 
 ## Report a problem
 
-- Opens the mail composer to the support address with the debug log attached. If no mail app is set up, use the share sheet.
+- OGAM: shows the debug log, then opens the share sheet addressed to support. iOS attaches the log file; Android puts the log's latest part in the message text.
+- OGAD: shows the debug log with Copy, then opens a mail draft to the support address; the user pastes the log into it (a `mailto:` link cannot attach a file).
 - The debug log never holds chat content: no log line may include prompts, replies, transcripts or tool output.
 - The user sees the log before it is sent.
 - It works whether or not analytics is on.
