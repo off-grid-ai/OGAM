@@ -6,6 +6,7 @@ import { DebugLogsScreen } from '../components/DebugLogsScreen';
 import { useAppStore } from '../stores/appStore';
 import { setAnalyticsConsent } from '../services/analytics/analytics';
 import { sendProblemReport } from '../services/problemReport';
+import { ignore } from '../services/analytics/values';
 import type { ThemeColors } from '../theme';
 import type { createStyles } from './SettingsScreen.styles';
 
@@ -47,10 +48,10 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
       <Text style={styles.sectionLabel}>Analytics</Text>
       <View style={styles.navSection} testID="settings-analytics">
         {toggle('Usage data', usage, next => {
-          setAnalyticsConsent({ usage: next }, 'settings').catch(() => undefined);
+          setAnalyticsConsent({ usage: next }, 'settings');
         })}
         {toggle('Crash reports', crashes, next => {
-          setAnalyticsConsent({ crashes: next }, 'settings').catch(() => undefined);
+          setAnalyticsConsent({ crashes: next }, 'settings');
         })}
         <TouchableOpacity style={styles.navItem} onPress={onWhatWeShare} testID="settings-what-we-share">
           <View style={styles.navItemIcon}>
@@ -82,7 +83,7 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
           visible
           onClose={() => setShowLog(false)}
           onSend={() => {
-            sendProblemReport().catch(() => undefined);
+            sendProblemReport().catch(ignore);
           }}
         />
       ) : null}

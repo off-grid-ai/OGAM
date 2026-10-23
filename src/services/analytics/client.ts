@@ -6,7 +6,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PostHog, { PostHogPersistedProperty } from 'posthog-react-native';
 import { POSTHOG_API_KEY, POSTHOG_HOST } from '../../config/analytics';
-import { languageOnly } from './values';
+import { ignore, languageOnly } from './values';
 
 type Properties = Record<string, unknown>;
 type CaptureEvent = { event: string; properties?: Properties };
@@ -76,10 +76,10 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
   return {
     capture: (event, properties) => posthog.capture(event, properties as never),
     screen: (name, properties) => {
-      posthog.screen(name, properties as never).catch(() => undefined);
+      posthog.screen(name, properties as never).catch(ignore);
     },
     register: properties => {
-      posthog.register(properties as never).catch(() => undefined);
+      posthog.register(properties as never).catch(ignore);
     },
     close: () => posthog.shutdown(),
     forget: async () => {

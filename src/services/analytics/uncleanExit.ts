@@ -6,6 +6,7 @@
  * a foreground marker, the app died in the foreground mid-load or mid-generation.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ignore } from './values';
 
 const KEY = 'offgrid.analytics.uncleanExit';
 
@@ -27,7 +28,7 @@ let current: UncleanExitMarker | null = null;
 
 function write(): void {
   const op = current ? AsyncStorage.setItem(KEY, JSON.stringify(current)) : AsyncStorage.removeItem(KEY);
-  op.catch(() => undefined);
+  op.catch(ignore);
 }
 
 export function markStageStarted(marker: Omit<UncleanExitMarker, 'foreground' | 'launch'>): void {
@@ -56,8 +57,8 @@ export async function takeUncleanExit(appVersion: string): Promise<UncleanExitMa
   } catch {
     stored = null;
   }
-  if (!stored || stored.launch === LAUNCH) return null;
-  if (!current) await AsyncStorage.removeItem(KEY).catch(() => undefined);
-  if (!stored.foreground || stored.appVersion !== appVersion) return null;
+  if (stored?.launch === LAUNCH) return null;
+  if (!current) await AsyncStorage.removeItem(KEY).catch(ignore);
+  if (!stored?.foreground || stored.appVersion !== appVersion) return null;
   return stored;
 }

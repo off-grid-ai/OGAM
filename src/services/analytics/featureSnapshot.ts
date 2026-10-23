@@ -9,7 +9,7 @@ import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 
 export function featureSnapshot(): Record<string, boolean> {
   const app = useAppStore.getState();
-  const tools = app.settings.enabledTools ?? [];
+  const tools = app.settings.enabledTools;
   const active = app.downloadedModels.find(model => model.id === app.activeModelId);
   const vision = active
     ? active.engine === 'litert' ? !!active.liteRTVision : !!active.isVisionModel

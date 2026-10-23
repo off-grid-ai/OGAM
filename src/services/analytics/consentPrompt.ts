@@ -23,8 +23,8 @@ function optedIn(): boolean {
   return !!analyticsUsage || !!analyticsCrashes;
 }
 
+/** Each caller records the ask first, so a second prompt can never open over the first. */
 function show(kind: ConsentPromptKind): void {
-  if (useConsentPromptStore.getState().kind) return;
   useAppStore.getState().updateSettings({ analyticsAsked: true, analyticsLastPromptAt: Date.now() });
   useConsentPromptStore.setState({ kind });
 }

@@ -25,6 +25,7 @@ import {
   bytesToGb,
   contextBucket,
   errorCode,
+  ignore,
   languageOnly,
   ms,
   oneDecimal,
@@ -77,7 +78,8 @@ let client: AnalyticsClient | null = null;
 let clientCrashes = false;
 let consentChain: Promise<void> = Promise.resolve();
 let stopListening: (() => void) | null = null;
-let featureSnapshot: () => Record<string, boolean> = () => ({});
+/** Set by startAnalytics, before any snapshot can run. */
+let featureSnapshot: () => Record<string, boolean>;
 let foregroundAt = Date.now();
 let ramGb: number | undefined;
 
@@ -101,18 +103,13 @@ function beforeSend(event: { event: string; properties?: Properties }) {
 
 function superProperties(): Properties {
   const version = appVersion();
-  let locale: string | undefined;
-  try {
-    locale = Intl.DateTimeFormat().resolvedOptions().locale;
-  } catch {
-    locale = undefined;
-  }
+  const locale = Intl.DateTimeFormat().resolvedOptions().locale;
   return {
     platform: Platform.OS,
     app_version: version,
     channel: releaseChannel(version),
     pro: selectHasProAccess(useAppStore.getState()),
-    device_class: DeviceInfo.isTablet?.() ? 'tablet' : 'phone',
+    device_class: DeviceInfo.isTablet() ? 'tablet' : 'phone',
     os_version: DeviceInfo.getSystemVersion(),
     locale: languageOnly(locale),
   };
@@ -140,12 +137,12 @@ async function applyConsent(): Promise<void> {
       ramGb = Math.round(total / GB);
       client?.register({ ram_gb: ramGb });
     })
-    .catch(() => undefined);
+    .catch(ignore);
 }
 
 /** Bring the client in line with the stored consent. Calls run one at a time, in order. */
 function syncClient(): Promise<void> {
-  consentChain = consentChain.then(applyConsent).catch(() => undefined);
+  consentChain = consentChain.then(applyConsent).catch(ignore);
   return consentChain;
 }
 
@@ -162,7 +159,7 @@ function capture(event: string, properties: Properties = {}): void {
  * Store consent and (re)build the client to match. Turning analytics on from fully off sends
  * `analytics_opted_in` with the source of the choice.
  */
-export async function setAnalyticsConsent(
+export function setAnalyticsConsent(
   next: { usage?: boolean; crashes?: boolean },
   source: ConsentSource,
 ): Promise<void> {
@@ -176,19 +173,20 @@ export async function setAnalyticsConsent(
     analyticsCrashes: after.crashes,
     analyticsAsked: true,
   });
-  await syncClient();
-  if (!before.usage && after.usage) capture('analytics_opted_in', { source });
+  return syncClient().then(() => {
+    if (!before.usage && after.usage) capture('analytics_opted_in', { source });
+  });
 }
 
 /** Called once the app has finished starting and its settings are hydrated. */
-export function startAnalytics(options: { features?: () => Record<string, boolean> } = {}): () => void {
-  if (options.features) featureSnapshot = options.features;
+export function startAnalytics(features: () => Record<string, boolean>): () => void {
+  featureSnapshot = features;
   stopListening?.();
   stopListening = useAppStore.subscribe((state, prev) => {
     const now = state.settings;
     const was = prev.settings;
     if (now.analyticsUsage !== was.analyticsUsage || now.analyticsCrashes !== was.analyticsCrashes) {
-      syncClient().catch(() => undefined);
+      syncClient().catch(ignore);
     }
     const pro = selectHasProAccess(state);
     if (pro !== selectHasProAccess(prev)) client?.register({ pro });
@@ -210,14 +208,14 @@ export function startAnalytics(options: { features?: () => Record<string, boolea
       }
       await snapshotFeaturesDaily();
     })
-    .catch(() => undefined);
+    .catch(ignore);
   // The App unmounting: send what is queued and stop the client's timers. The ID is kept.
   return () => {
     stopListening?.();
     stopListening = null;
     const previous = client;
     client = null;
-    previous?.close().catch(() => undefined);
+    previous?.close().catch(ignore);
   };
 }
 
@@ -232,7 +230,7 @@ export function appForegrounded(): void {
   markForeground(true);
   if (currentScreen) screenShownAt = Date.now();
   capture('app_opened');
-  snapshotFeaturesDaily().catch(() => undefined);
+  snapshotFeaturesDaily().catch(ignore);
 }
 
 export function appBackgrounded(): void {
@@ -258,9 +256,9 @@ export function trackScreen(name: string | undefined): void {
 async function snapshotFeaturesDaily(): Promise<void> {
   if (!client || !consent().usage) return;
   const today = new Date().toISOString().slice(0, 10);
-  const last = await AsyncStorage.getItem(SNAPSHOT_DAY_KEY).catch(() => null);
+  const last = await AsyncStorage.getItem(SNAPSHOT_DAY_KEY).catch(ignore);
   if (last === today) return;
-  await AsyncStorage.setItem(SNAPSHOT_DAY_KEY, today).catch(() => undefined);
+  await AsyncStorage.setItem(SNAPSHOT_DAY_KEY, today).catch(ignore);
   capture('features_snapshot', featureSnapshot());
 }
 
@@ -360,7 +358,7 @@ export async function trackModelLoad<T>(facts: ModelFacts, run: () => Promise<T>
   const report = (event: string, extra: Properties) => {
     socLabel()
       .then(soc => capture(event, { ...facts, soc, free_ram_gb: free, load_ms: ms(Date.now() - startedAt), ...extra }))
-      .catch(() => undefined);
+      .catch(ignore);
   };
   try {
     const result = await run();
@@ -418,7 +416,7 @@ export function generationStarted(modality: Modality, facts: ModelFacts): Genera
           error_code: outcome === 'failed' ? errorCode(metrics.error) : undefined,
         });
       })
-      .catch(() => undefined);
+      .catch(ignore);
     if (outcome === 'failed') maybePromptAfterFailure();
     if (outcome === 'done' && (modality === 'text' || modality === 'vision')) maybePromptAfterFirstChat();
   };
@@ -444,7 +442,7 @@ function setupFlow(modelType: DownloadFacts['modelType']): Flow | null {
 export function downloadStarted(key: string, facts: DownloadFacts): void {
   const base = RNFS.getFSInfo()
     .then(info => bytesToGb(info.freeSpace))
-    .catch(() => undefined)
+    .catch(ignore)
     .then(free => ({
       model: facts.model,
       quant: facts.quant,
@@ -454,7 +452,7 @@ export function downloadStarted(key: string, facts: DownloadFacts): void {
       free_storage_gb: free,
     }));
   downloads.set(key, { facts, startedAt: Date.now(), base });
-  base.then(props => capture('model_download_started', props)).catch(() => undefined);
+  base.then(props => capture('model_download_started', props)).catch(ignore);
   const flow = setupFlow(facts.modelType);
   if (flow) flowStep(flow, 'model_picked');
 }
@@ -475,7 +473,7 @@ export function downloadEnded(key: string, outcome: 'done' | 'failed', error?: u
         capture('model_download_failed', { ...props, duration_ms: ms(durationMs), error_code: errorCode(error) });
       }
     })
-    .catch(() => undefined);
+    .catch(ignore);
   const flow = setupFlow(entry.facts.modelType);
   if (flow && outcome === 'done') {
     flowStep(flow, 'downloaded');

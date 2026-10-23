@@ -30,7 +30,7 @@ export const AnalyticsConsentPrompt: React.FC = () => {
           text: 'Share',
           style: 'default',
           onPress: () => {
-            setAnalyticsConsent({ usage: true, crashes: true }, copy.source).catch(() => undefined);
+            setAnalyticsConsent({ usage: true, crashes: true }, copy.source);
           },
         },
       ]}

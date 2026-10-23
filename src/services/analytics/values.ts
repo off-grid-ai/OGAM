@@ -5,6 +5,9 @@
 
 const GB = 1024 * 1024 * 1024;
 
+/** Analytics never breaks the app: a failed boundary read or send is dropped. */
+export const ignore = (): undefined => undefined;
+
 /** Model ids that hold a file name the person chose (imports, recovered files). */
 const CUSTOM_ID = /^(local|recovered)_/;
 const HF_REPO_PREFIX = /^([\w.-]+)\/([\w.-]+)(?:\/|$)/;

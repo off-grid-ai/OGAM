@@ -69,7 +69,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
   const toggleShareAnalytics = () => {
     const next = !shareAnalytics;
     setShareAnalytics(next);
-    setAnalyticsConsent({ usage: next, crashes: next }, 'setup').catch(() => undefined);
+    setAnalyticsConsent({ usage: next, crashes: next }, 'setup');
   };
   // Every way out of Auto Setup passed the consent row, so the person has been asked.
   const markConsentAsked = () => {

@@ -385,7 +385,7 @@ function App() {
       setIsInitializing(false);
 
       // Settings are hydrated: analytics starts only now, and only if the person opted in.
-      stopAnalytics = startAnalytics({ features: featureSnapshot });
+      stopAnalytics = startAnalytics(featureSnapshot);
 
       // Reconcile downloaded Whisper models against disk at startup. presentModelIds
       // isn't persisted (the filesystem is the source of truth), so it rehydrates
