@@ -17,6 +17,7 @@ import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { ListSearchBar } from '../components/ListSearchBar';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
@@ -40,6 +41,15 @@ export const ProjectsScreen: React.FC = () => {
   const deleteProject = useProjectStore(state => state.deleteProject);
   const conversations = useChatStore(state => state.conversations);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
+  const [searchQuery, setSearchQuery] = useState('');
+  const visibleProjects = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return projects;
+    return projects.filter(project =>
+      project.name.toLowerCase().includes(query) ||
+      (project.description ?? '').toLowerCase().includes(query),
+    );
+  }, [projects, searchQuery]);
 
   const chatCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -188,14 +198,27 @@ export const ProjectsScreen: React.FC = () => {
           </AnimatedEntry>
         </View>
       ) : (
-        <FlatList
-          data={projects}
-          renderItem={renderProject}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-          {...LIST_CLIPPING_PROPS}
-        />
+        <>
+          <ListSearchBar
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search projects"
+            clearLabel="Clear project search"
+            testID="project-search-input"
+            style={styles.searchBar}
+          />
+          <FlatList
+            data={visibleProjects}
+            renderItem={renderProject}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            {...LIST_CLIPPING_PROPS}
+            ListEmptyComponent={<Text style={styles.noMatches}>No projects match your search.</Text>}
+            testID="project-list"
+          />
+        </>
       )}
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
     </SafeAreaView>
@@ -220,6 +243,16 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   list: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
+  },
+  // The subtitle sits above the search bar, so the bar needs less space on top than on Chats.
+  searchBar: {
+    paddingTop: SPACING.sm,
+  },
+  noMatches: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+    textAlign: 'center' as const,
+    paddingVertical: SPACING.xxl,
   },
   projectItem: {
     flexDirection: 'row' as const,
