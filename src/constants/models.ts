@@ -4,14 +4,14 @@ import { engineLoadsCatalogModel } from '../services/llamaEngineSupport';
 
 // Model size recommendations based on device RAM
 export const MODEL_RECOMMENDATIONS = {
-  // RAM in GB -> max model parameters in billions
+  // RAM in GB -> the quantization to suggest
   memoryToParams: [
-    { minRam: 3, maxRam: 4, maxParams: 1.5, quantization: 'Q4_K_M' },
-    { minRam: 4, maxRam: 6, maxParams: 3, quantization: 'Q4_K_M' },
-    { minRam: 6, maxRam: 8, maxParams: 4, quantization: 'Q4_K_M' },
-    { minRam: 8, maxRam: 12, maxParams: 8, quantization: 'Q4_K_M' },
-    { minRam: 12, maxRam: 16, maxParams: 13, quantization: 'Q4_K_M' },
-    { minRam: 16, maxRam: Infinity, maxParams: 30, quantization: 'Q4_K_M' },
+    { minRam: 3, maxRam: 4, quantization: 'Q4_K_M' },
+    { minRam: 4, maxRam: 6, quantization: 'Q4_K_M' },
+    { minRam: 6, maxRam: 8, quantization: 'Q4_K_M' },
+    { minRam: 8, maxRam: 12, quantization: 'Q4_K_M' },
+    { minRam: 12, maxRam: 16, quantization: 'Q4_K_M' },
+    { minRam: 16, maxRam: Infinity, quantization: 'Q4_K_M' },
   ],
 };
 

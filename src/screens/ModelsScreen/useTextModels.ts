@@ -13,6 +13,7 @@ import { useDownloadStore } from '../../stores/downloadStore';
 import { huggingFaceService, modelManager, hardwareService, activeModelService } from '../../services';
 import { startModelDownload } from '../../services/startModelDownload';
 import { hfUploadNeedsNewerEngine } from '../../services/llamaEngineSupport';
+import { loadsOnPhone } from '../../services/devicePicks';
 import { ramFitScore } from '../../utils/recommendedModels';
 import { modelSupportsNpuGpu } from '../../utils/acceleration';
 import { ModelInfo, ModelFile, DownloadedModel } from '../../types';
@@ -362,14 +363,20 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
   // Computed
   const ramGB = hardwareService.getTotalMemoryGB();
   const deviceRecommendation = useMemo(() => hardwareService.getModelRecommendation(), []);
+  // A curated model is offered when it loads on this phone by the shared fit rule (its download
+  // against the phone budget); one the catalog has no size for falls back to its RAM floor.
+  const fitsThisPhone = useCallback(
+    (m: MobileTextCatalogModel) =>
+      (loadsOnPhone(m.id, ramGB, catalog) ?? m.minRam <= ramGB) && (!m.maxRam || ramGB <= m.maxRam),
+    [ramGB, catalog],
+  );
   const hasActiveFilters = filterState.orgs.length > 0 || filterState.type !== 'all' ||
     filterState.source !== 'all' || filterState.size !== 'all' || filterState.quant !== 'all' ||
     filterState.sort !== 'recommended';
 
   const recommendedAsModelInfo = useMemo((): ModelInfo[] => {
-    const maxParams = deviceRecommendation.maxParameters;
     const models = recommended
-      .filter(m => m.params <= maxParams && (!m.maxRam || ramGB <= m.maxRam))
+      .filter(m => fitsThisPhone(m))
       .filter(m => matchesCuratedFilters(m, filterState))
       .map(m => mapCuratedModel(m, recommendedModelDetails));
     const sorted = applySort(models, filterState.sort, ramGB);
@@ -378,7 +385,7 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
     // the editorial 'recommended' sort — explicit sorts (size/downloads/…) are honored.
     if (filterState.sort !== 'recommended') return sorted;
     return [...sorted].sort((a, b) => Number(modelSupportsNpuGpu(b)) - Number(modelSupportsNpuGpu(a)));
-  }, [recommended, deviceRecommendation.maxParameters, filterState, recommendedModelDetails, ramGB]);
+  }, [recommended, fitsThisPhone, filterState, recommendedModelDetails, ramGB]);
 
   // A search lists the curated models it matches first, under the same filters and fit as the
   // curated list, then Hugging Face results, without repeating a curated model.
@@ -392,15 +399,14 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
   }, [recommended, recommendedAsModelInfo, catalog, searchQuery, searchResults, filterState, ramGB]);
 
   const trendingAsModelInfo = useMemo((): ModelInfo[] => {
-    const maxParams = deviceRecommendation.maxParameters;
     // Pick the best-fit per family using the same bestFitScore used for "for you" recommendations
     return Object.values(TRENDING_FAMILIES)
       .map(ids => recommended
-        .filter(m => ids.includes(m.id) && m.params <= maxParams && (!m.maxRam || ramGB <= m.maxRam))
+        .filter(m => ids.includes(m.id) && fitsThisPhone(m))
         .map(m => mapCuratedModel(m, recommendedModelDetails))
         .sort((a, b) => bestFitScore(a, ramGB) - bestFitScore(b, ramGB))[0])
       .filter((m): m is ModelInfo => Boolean(m));
-  }, [recommended, deviceRecommendation.maxParameters, recommendedModelDetails, ramGB]);
+  }, [recommended, fitsThisPhone, recommendedModelDetails, ramGB]);
 
   return {
     searchQuery, setSearchQuery,

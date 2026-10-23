@@ -22,6 +22,8 @@ describe('Model choice on the phone', () => {
     installNativeBoundary({ fs: true, ram: { platform: 'android', totalBytes: 11 * GB, availBytes: 8 * GB } });
     const React = require('react');
     const { render, waitFor, within } = requireRTL();
+    // The app reads the phone's memory at launch (Home), before the Models screen opens.
+    await require('../../../src/services/hardware').hardwareService.getDeviceInfo();
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
     const screen = render(React.createElement(ModelsScreen));
 

@@ -37,7 +37,9 @@ async function freshLaunch() {
 }
 
 // Each maker's curated model, as the shared catalog names it, and one model from another maker that
-// must not be listed under it. A 16 GB phone has room for all of them.
+// must not be listed under it. The list only offers what loads on the device (download against the
+// phone budget), and Meta's and Mistral's curated models are 15-17 GB: this checks the maker mapping,
+// so it runs on a 36 GB device, where they load but are not one-tap picks (picks hide under a filter).
 const MAKERS: { chip: string; model: string; otherMaker: string }[] = [
   { chip: 'Liquid AI', model: 'LFM2.5 8B A1B', otherMaker: 'MiniCPM5 2B' },
   { chip: 'Llama', model: 'Muse Glimmer 30B', otherMaker: 'LFM2.5 8B A1B' },
@@ -49,7 +51,7 @@ describe('Maker filters on the Models screen', () => {
   afterEach(() => restoreFetch());
 
   it.each(MAKERS)('the $chip filter lists $model', async ({ chip, model, otherMaker }) => {
-    installNativeBoundary({ fs: true, ram: { platform: 'ios', totalBytes: 16 * GB, availBytes: 12 * GB } });
+    installNativeBoundary({ fs: true, ram: { platform: 'ios', totalBytes: 36 * GB, availBytes: 30 * GB } });
     restoreFetch = installEmptyHuggingFace();
     const React = require('react');
     const { render, fireEvent, waitFor, within } = requireRTL();
@@ -59,18 +61,18 @@ describe('Maker filters on the Models screen', () => {
     const models = render(React.createElement(ModelsScreen));
     await waitFor(() => expect(models.getByTestId('device-picks')).toBeTruthy());
 
-    // BEFORE: no maker chosen, both models are in the list.
+    // BEFORE: no maker chosen, both models are offered (a device pick sits above the list).
     const list = () => within(models.getByTestId('models-list'));
-    expect(list().getByText(model)).toBeTruthy();
-    expect(list().getByText(otherMaker)).toBeTruthy();
+    expect(models.getAllByText(model).length).toBeGreaterThan(0);
+    expect(models.getAllByText(otherMaker).length).toBeGreaterThan(0);
     expect(models.queryByText(chip)).toBeNull();
 
     fireEvent.press(models.getByTestId('text-filter-toggle'));
     fireEvent.press(await waitFor(() => models.getByText(/^Org /)));
     fireEvent.press(await waitFor(() => models.getByText(chip)));
 
-    // AFTER: the maker's curated model is listed; the other maker's is not.
+    // AFTER: the maker's curated model is still offered; the other maker's is not in the list.
     await waitFor(() => expect(list().queryByText(otherMaker)).toBeNull());
-    expect(list().getByText(model)).toBeTruthy();
+    expect(models.getAllByText(model).length).toBeGreaterThan(0);
   });
 });

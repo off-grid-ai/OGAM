@@ -196,7 +196,6 @@ export interface DeviceInfo {
 }
 
 export interface ModelRecommendation {
-  maxParameters: number;
   recommendedQuantization: string;
   recommendedModels: string[];
   warning?: string;

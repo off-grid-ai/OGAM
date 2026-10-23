@@ -26,12 +26,12 @@ import { createDownloadedModel } from '../../utils/factories';
 
 // Three recommended-model ids that render in the "More models" list at this test's RAM profile. A
 // downloaded row whose id STARTS WITH a recommended id makes that recommended card render its downloaded
-// mark (the real match rule: downloadedModels.some(m => m.id.startsWith(item.id))). Qwen 3.5 0.8B is the
-// device pick here (quality-ranked picks): a pick is shown once, in the "For this phone" row, and left
-// out of the list these cards belong to — so it is not one of the three.
+// mark (the real match rule: downloadedModels.some(m => m.id.startsWith(item.id))). On this 12 GB phone
+// the Qwen 3.5 models are the device picks (quality-ranked): a pick is shown once, in the "For this
+// phone" row, and left out of the list these cards belong to — so none of them is one of the three.
 const RECOMMENDED_IDS = [
   'unsloth/gemma-4-E2B-it-GGUF',
-  'unsloth/Qwen3.5-2B-GGUF',
+  'LiquidAI/LFM2.5-8B-A1B-GGUF',
   'openbmb/MiniCPM5-2B-GGUF',
 ];
 
@@ -57,6 +57,8 @@ async function mountWithNDownloaded(n: number) {
   });
   await AsyncStorage.setItem('@local_llm/downloaded_models', JSON.stringify(rows));
 
+  // The app reads the phone's memory at launch (Home), before the Models screen opens.
+  await require('../../../src/services/hardware').hardwareService.getDeviceInfo();
   const view = render(React.createElement(ModelsScreen, {}));
   return { view, waitFor };
 }
