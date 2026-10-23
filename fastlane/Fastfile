@@ -321,26 +321,53 @@ platform :ios do
     groups
   end
 
+  # External TestFlight groups by name, resolved with App Store Connect's own internal flag.
+  # Group names are not unique ("testers" exists as an internal and an external group) and
+  # pilot matches by name only, so handing it the names also picks the internal group, and
+  # Apple then refuses the whole distribution. Builds are added to these groups directly.
+  def testflight_external_beta_groups(app, names)
+    external = app.get_beta_groups.reject(&:is_internal_group).select { |group| names.include?(group.name) }
+    missing = names - external.map(&:name)
+    UI.user_error!("No external TestFlight group named: #{missing.join(', ')}") unless missing.empty?
+    external
+  end
+
   private_lane :upload_ios_testflight do
-    groups = testflight_external_groups
+    names = testflight_external_groups
     ipa = File.join(REPO_ROOT, "build/OffgridMobile.ipa")
     UI.user_error!("IPA not found at #{ipa} - build it first (fastlane ios build).") unless File.exist?(ipa)
+    auth = asc_auth_kwargs
+    Spaceship::ConnectAPI.token = auth[:api_key] ? Spaceship::ConnectAPI::Token.from(hash: auth[:api_key]) : Spaceship::ConnectAPI::Token.from_json_file(auth[:api_key_path])
+    app = Spaceship::ConnectAPI::App.find(CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier))
+    groups = testflight_external_beta_groups(app, names)
+    version = get_ipa_info_plist_value(ipa: ipa, key: "CFBundleShortVersionString")
+    build_number = get_ipa_info_plist_value(ipa: ipa, key: "CFBundleVersion")
     # Release notes: scripts/uat.sh writes the changelog to UAT_CHANGELOG_PATH. It becomes the
     # TestFlight "What to Test", which external distribution requires - so fall back to a
     # generic line when there are no notes.
     has_notes = ENV["UAT_CHANGELOG_PATH"] && !ENV["UAT_CHANGELOG_PATH"].empty? && File.exist?(ENV["UAT_CHANGELOG_PATH"])
-    upload_to_testflight(
-      **asc_auth_kwargs,
-      ipa: "build/OffgridMobile.ipa",
+    options = {
+      **auth,
       changelog: has_notes ? File.read(ENV["UAT_CHANGELOG_PATH"]) : "Bug fixes and improvements.",
       # Distributing to a group needs the processed build, so wait for processing.
       skip_waiting_for_build_processing: false,
-      # External groups go through Beta App Review (usually only the first build of a version).
-      distribute_external: true,
-      groups: groups,
+      # Groups are added below (see testflight_external_beta_groups), not by pilot.
+      distribute_external: false,
       notify_external_testers: true
-    )
-    UI.success("Uploaded to TestFlight and sent to external groups: #{groups.join(', ')}")
+    }
+    find_build = -> { Spaceship::ConnectAPI::Build.all(app_id: app.id, version: version, build_number: build_number).first }
+    if find_build.call
+      # A rerun (uat.sh --resume-ios) finds this build already uploaded: distribute it, never upload twice.
+      upload_to_testflight(**options, distribute_only: true, app_version: version, build_number: build_number)
+    else
+      upload_to_testflight(**options, ipa: "build/OffgridMobile.ipa")
+    end
+    build = find_build.call
+    UI.user_error!("TestFlight has no build #{version} (#{build_number}) after the upload") unless build
+    # External groups go through Beta App Review (usually only the first build of a version).
+    build.post_beta_app_review_submission if build.ready_for_beta_submission?
+    build.add_beta_groups(beta_groups: groups)
+    UI.success("TestFlight #{version} (#{build_number}) sent to external groups: #{names.join(', ')}")
   end
 
   desc "Build and upload to TestFlight external testers"
