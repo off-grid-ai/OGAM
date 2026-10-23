@@ -135,6 +135,7 @@ async function start(model: ModelEntry): Promise<void> {
       downloadedAt: new Date().toISOString(),
     });
     app.setVideoDownload(model.id, null);
+    useDownloadStore.getState().setCompleted(key(model.id));
     useDownloadStore.getState().remove(key(model.id));
   } catch (error) {
     if (!transfer.cancelled)

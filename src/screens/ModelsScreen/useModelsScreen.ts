@@ -91,6 +91,7 @@ export function useModelsScreen() {
 
   useEffect(() => {
     if (activeTab === 'image') flowStarted('image_setup', 'opened');
+    if (activeTab === 'video') flowStarted('video_setup', 'opened');
     if (activeTab === 'voice' || activeTab === 'transcription') flowStarted('voice_setup', 'opened');
     if (activeTab === 'image' && image.availableHFModels.length === 0 && !image.hfModelsLoading) {
       image.loadHFModels();

@@ -42,12 +42,14 @@ export type Flow =
   | 'remote_server'
   | 'voice_setup'
   | 'image_setup'
+  | 'video_setup'
   | 'connector_add'
   | 'pro_upgrade';
 export type Feature =
   | 'voice_input'
   | 'tts'
   | 'image_generation'
+  | 'video_generation'
   | 'vision'
   | 'web_search'
   | 'tools'
@@ -57,7 +59,7 @@ export type Feature =
   | 'clipboard'
   | 'meetings'
   | 'sync';
-export type Modality = 'text' | 'vision' | 'image' | 'stt' | 'tts' | 'embedding';
+export type Modality = 'text' | 'vision' | 'image' | 'video' | 'stt' | 'tts' | 'embedding';
 export type Outcome = 'done' | 'stopped' | 'failed';
 
 /** What a model is, in the spec's words: `model`, `quant`, `engine`, `backend`. */
@@ -404,12 +406,16 @@ export interface GenerationMetrics {
   ttftMs?: number;
   tokensPerSec?: number;
   contextTokens?: number;
+  /** The whole generation, sent for video (it has no first token). */
+  durationMs?: number;
+  /** The backend that ran, when it is known only at the end (video). */
+  backend?: string;
   error?: unknown;
 }
 
 export type GenerationEnd = (outcome: Outcome, metrics?: GenerationMetrics) => void;
 
-const MARKED_MODALITIES = new Set<Modality>(['text', 'vision', 'image']);
+const MARKED_MODALITIES = new Set<Modality>(['text', 'vision', 'image', 'video']);
 
 /** Start timing one generation. Call the returned function exactly once when it ends. */
 export function generationStarted(modality: Modality, facts: ModelFacts): GenerationEnd {
@@ -430,8 +436,9 @@ export function generationStarted(modality: Modality, facts: ModelFacts): Genera
           modality,
           model: facts.model,
           engine: facts.engine,
-          backend: facts.backend,
+          backend: metrics.backend ?? facts.backend,
           outcome,
+          duration_ms: ms(metrics.durationMs),
           ttft_ms: ms(metrics.ttftMs),
           tokens_per_sec: oneDecimal(metrics.tokensPerSec),
           context_tokens_bucket: contextBucket(metrics.contextTokens),
@@ -452,13 +459,14 @@ export interface DownloadFacts {
   model: string;
   quant?: string;
   sizeBytes?: number;
-  modelType: 'text' | 'image' | 'stt' | 'tts';
+  modelType: 'text' | 'image' | 'video' | 'stt' | 'tts';
 }
 
 const downloads = new Map<string, { facts: DownloadFacts; startedAt: number; base: Promise<Properties> }>();
 
 function setupFlow(modelType: DownloadFacts['modelType']): Flow | null {
   if (modelType === 'image') return 'image_setup';
+  if (modelType === 'video') return 'video_setup';
   if (modelType === 'stt' || modelType === 'tts') return 'voice_setup';
   return null;
 }

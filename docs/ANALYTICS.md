@@ -36,7 +36,7 @@ Off Grid AI Mobile (OGAM) and Off Grid AI Desktop (OGAD) send anonymous usage da
 ## Shared value rules
 
 - `model`: catalog ID, or public Hugging Face `owner/repo`, or `custom`. Plus `quant` (e.g. `Q4_K_M`) and `size_bucket` (`<1GB`, `1-2GB`, `2-4GB`, `4-8GB`, `>8GB`).
-- `engine`: `llama.cpp`, `mlx`, `litert`, `executorch`, `coreml`, `onnx`, `whisper`, `remote`.
+- `engine`: `llama.cpp`, `mlx`, `litert`, `executorch`, `coreml`, `onnx`, `sd.cpp`, `whisper`, `remote`.
 - `backend`: `cpu`, `gpu`, `npu`, `remote`.
 - `error_code`: a fixed code from our own error classes, never a raw message.
 - Durations in milliseconds, rounded. Rates rounded to one decimal.
@@ -67,11 +67,13 @@ Off Grid AI Mobile (OGAM) and Off Grid AI Desktop (OGAD) send anonymous usage da
 | `model_loaded` | `model`, `quant`, `engine`, `backend`, `soc`, `free_ram_gb`, `load_ms` |
 | `model_load_failed` | same + `error_code` |
 
+Video packs send the download events (`model` = catalog ID, no `quant`). A video model loads inside each generation, so it sends no `model_loaded`.
+
 ### Generation
 
 | Event | Properties |
 |---|---|
-| `generation_finished` | `modality` (`text`, `vision`, `image`, `stt`, `tts`, `embedding`), `model`, `engine`, `backend`, `outcome` (`done`, `stopped`, `failed`), `ttft_ms`, `tokens_per_sec`, `context_tokens_bucket` (`<2k`, `2-8k`, `8-32k`, `>32k`), `battery_pct` (rounded to 10), `charging`, `error_code`, `source` (`app`, `api`, `extension`; OGAD only) |
+| `generation_finished` | `modality` (`text`, `vision`, `image`, `video`, `stt`, `tts`, `embedding`), `model`, `engine`, `backend`, `outcome` (`done`, `stopped`, `failed`), `duration_ms` (video only: the whole generation), `ttft_ms`, `tokens_per_sec`, `context_tokens_bucket` (`<2k`, `2-8k`, `8-32k`, `>32k`), `battery_pct` (rounded to 10), `charging`, `error_code`, `source` (`app`, `api`, `extension`; OGAD only) |
 
 ### Actions
 
@@ -82,7 +84,7 @@ Off Grid AI Mobile (OGAM) and Off Grid AI Desktop (OGAD) send anonymous usage da
 | `reply_regenerated` | none |
 | `project_created` | none |
 | `document_added` | `file_type` (an extension the app opens, else `other`; `none` without one), `size_bucket` |
-| `feature_used` | `feature`: `voice_input`, `tts`, `image_generation`, `vision`, `web_search`, `tools`, `mcp_tool`, `remote_server`, `browser_action`, `clipboard`, `meetings`, `sync` |
+| `feature_used` | `feature`: `voice_input`, `tts`, `image_generation`, `video_generation`, `vision`, `web_search`, `tools`, `mcp_tool`, `remote_server`, `browser_action`, `clipboard`, `meetings`, `sync` |
 | `features_snapshot` | once a day: one `true`/`false` property per feature that is switched on |
 | `problem_reported` | none |
 
@@ -104,6 +106,7 @@ All multi-step journeys use three events with a `flow` property, so every funnel
 | `remote_server` | `opened`, `address_entered`, `tested`, `connected` |
 | `voice_setup` | `opened`, `model_picked`, `downloaded` |
 | `image_setup` | `opened`, `model_picked`, `downloaded` |
+| `video_setup` | `opened`, `model_picked`, `downloaded` |
 | `connector_add` | `opened`, `connector_picked` (`catalog_id` or `custom`), `authorised` |
 | `pro_upgrade` | `gate_shown` (`feature`), `paywall_viewed`, `trial_started`, `purchased` |
 
@@ -112,7 +115,7 @@ All multi-step journeys use three events with a `flow` property, so every funnel
 | Event | Properties |
 |---|---|
 | `$exception` | SDK exception capture. Scrub message and frames before send: replace paths with the file name only, drop any quoted text, keep type, file name, line, function. A file name is kept only for the app's own code (e.g. `index.js`); a person's file, the home folder and the account name become `<file>` / `<user>`. |
-| `unclean_exit` | Sent on the next launch when the app died in the foreground during a model load or a generation. `stage` (`load`, `generate`), `model`, `engine`, `backend`, `free_ram_gb`, `elapsed_ms`. Not sent after a background kill, an app update or a reboot. |
+| `unclean_exit` | Sent on the next launch when the app died in the foreground during a model load or a generation. `stage` (`load`, `generate`; a video generation is `generate`), `model`, `engine`, `backend`, `free_ram_gb`, `elapsed_ms`. Not sent after a background kill, an app update or a reboot. |
 | `llama_server_crashed` (OGAD) | `model`, `engine`, `backend`, `exit_code`, `classified` |
 
 ## Report a problem

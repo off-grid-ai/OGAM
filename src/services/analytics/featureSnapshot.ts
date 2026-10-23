@@ -16,6 +16,7 @@ export function featureSnapshot(): Record<string, boolean> {
   return {
     voice_input: !!useWhisperStore.getState().downloadedModelId,
     image_generation: !!app.activeImageModelId,
+    video_generation: !!app.activeVideoModelId || !!useRemoteServerStore.getState().activeRemoteMediaServerIds.video,
     vision,
     web_search: tools.includes('web_search'),
     tools: tools.length > 0,

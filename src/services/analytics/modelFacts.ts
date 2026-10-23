@@ -30,8 +30,15 @@ export function textModelFacts(remote: boolean): ModelFacts {
     : { model: 'custom', engine: 'llama.cpp', backend: computeBackend(settings.inferenceBackend) };
 }
 
+/** A local video pack runs on stable-diffusion.cpp; the backend is known when it ends. */
+export function videoModelFacts(modelId: string | undefined): ModelFacts {
+  return { model: modelRef(modelId), engine: 'sd.cpp', backend: 'gpu' };
+}
+
 export function imageModelFacts(model: ONNXImageModel | undefined): ModelFacts {
   const backend = model?.backend;
+  // SD packs run on stable-diffusion.cpp, on the GPU (Metal, Vulkan).
+  if (backend === 'sd') return { model: modelRef(model?.id), engine: 'sd.cpp', backend: 'gpu' };
   return {
     model: modelRef(model?.id),
     engine: backend === 'coreml' || (!backend && Platform.OS === 'ios') ? 'coreml' : 'onnx',

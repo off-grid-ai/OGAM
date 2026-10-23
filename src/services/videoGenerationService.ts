@@ -32,6 +32,8 @@ import { reportModelFailure, clearModelFailure } from './modelFailureHandler';
 import { reasonFromLoadError } from './modelFailureReasons';
 import { generationSession } from './generationSession';
 import type { GeneratedVideo } from '../types';
+import { featureUsed, generationStarted, type Outcome } from './analytics/analytics';
+import { REMOTE_MODEL_FACTS, videoModelFacts } from './analytics/modelFacts';
 
 const JOURNAL_KEY = 'offgrid.video.active-job.v1';
 type VideoInput = VideoGenerationRequestContract & { conversationId?: string };
@@ -438,6 +440,14 @@ class VideoGenerationService {
       startedAt: resumed?.startedAt ?? Date.now(),
     });
     if (input.conversationId) generationSession.begin(input.conversationId);
+    featureUsed('video_generation');
+    const endAnalytics = generationStarted('video', server ? REMOTE_MODEL_FACTS : videoModelFacts(modelId));
+    const reportEnd = (outcome: Outcome, error?: unknown) =>
+      endAnalytics(outcome, {
+        durationMs: Date.now() - (this.state.startedAt ?? Date.now()),
+        backend: server ? undefined : this.state.backend ?? undefined,
+        error,
+      });
     let registration: symbol | undefined;
     this.journal = resumed ?? {
       input: { ...input, ...request, model: modelId },
@@ -550,6 +560,7 @@ class VideoGenerationService {
         outputPath: path,
         finishedAt: Date.now(),
       });
+      reportEnd('done');
       return result;
     } catch (error) {
       if (
@@ -576,6 +587,7 @@ class VideoGenerationService {
           error instanceof Error ? error.message : 'Video generation failed.',
         finishedAt: Date.now(),
       });
+      reportEnd(this.cancelled ? 'stopped' : 'failed', error);
       if (!this.cancelled) {
         this.reportFailure(error, !!server);
         throw error;
