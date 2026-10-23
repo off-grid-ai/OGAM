@@ -433,7 +433,20 @@ platform :ios do
       skip_metadata: false,
       force: true
     )
-    UI.success("Attached TestFlight build to App Store version (not submitted - submit in App Store Connect)")
+    # deliver selects build_number only inside its submit-for-review step, so with
+    # submit_for_review: false it never attaches the build - 0.0.117 reached App Store Connect
+    # with no build. Attach the tested build here and read it back.
+    Spaceship::ConnectAPI.token = auth[:api_key] ? Spaceship::ConnectAPI::Token.from(hash: auth[:api_key]) : Spaceship::ConnectAPI::Token.from_json_file(auth[:api_key_path])
+    app = Spaceship::ConnectAPI::App.find(CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier))
+    find_version = lambda do
+      app.get_app_store_versions(filter: { platform: "IOS", versionString: options[:app_version] }, includes: "build").first
+    end
+    build = Spaceship::ConnectAPI::Build.all(app_id: app.id, version: options[:app_version], build_number: options[:build_number].to_s, platform: "IOS").first
+    UI.user_error!("TestFlight has no build #{options[:app_version]} (#{options[:build_number]})") unless build
+    find_version.call.select_build(build_id: build.id)
+    attached = find_version.call.build
+    UI.user_error!("App Store #{options[:app_version]} still has no build #{options[:build_number]}") unless attached && attached.id == build.id
+    UI.success("Attached TestFlight build #{options[:build_number]} to App Store #{options[:app_version]} (not submitted - submit in App Store Connect)")
   end
 
   # Reuses the existing signing secrets the repo already uses for AltStore/GitHub
