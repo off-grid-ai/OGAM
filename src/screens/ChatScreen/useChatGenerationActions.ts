@@ -44,6 +44,7 @@ import {
   GenerationMeta,
 } from '../../types';
 import logger from '../../utils/logger';
+import { featureUsed, messageSent, track } from '../../services/analytics/analytics';
 import { deleteChatImages, imagesNotDeletedAlert } from '../../services/chatImageCleanup';
 import { ModelReadyOutcome, ensureReadyOrAlert } from './modelReadiness';
 import { describeTurnStatus } from '@offgrid/rag/documents';
@@ -1033,6 +1034,15 @@ export type SendCall = {
   startGeneration: (convId: string, text: string, assistantEnabled?: boolean) => Promise<void>;
   setDebugInfo: SetState<any>;
 };
+function reportMessageSent(attachments: MediaAttachment[] | undefined): void {
+  const hasImage = !!attachments?.some(attachment => attachment.type === 'image');
+  messageSent({
+    hasImage,
+    hasDocument: !!attachments?.some(attachment => attachment.type === 'document'),
+    toolsEnabled: (useAppStore.getState().settings.enabledTools?.length ?? 0) > 0,
+  });
+  if (hasImage) featureUsed('vision');
+}
 export async function handleSendFn(
   deps: GenerationDeps,
   call: SendCall,
@@ -1060,6 +1070,7 @@ export async function handleSendFn(
     );
     deps.setActiveConversation(targetConversationId);
   }
+  reportMessageSent(attachments);
   // Cross-modality serialization: queue if any generation is running (routed later).
   if (
     generationService.getState().isGenerating ||
@@ -1163,6 +1174,7 @@ export async function regenerateResponseFn(
   call: RegenerateCall,
 ): Promise<void> {
   const { setDebugInfo, userMessage, recordedKind, assistantEnabled } = call;
+  track('reply_regenerated');
   logger.log(
     `[RESEND-SM] regenerate start userMsg=${userMessage.id} conv=${
       deps.activeConversationId

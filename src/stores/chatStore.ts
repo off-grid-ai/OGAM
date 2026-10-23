@@ -31,6 +31,7 @@ import {
   messagePutMutation,
 } from '../services/sync/mutation';
 import { appendPlaceFor, neighbourMessage, versionParent } from '../utils/chatThread';
+import { track } from '../services/analytics/analytics';
 
 /**
  * The portion of the in-progress stream that is safe to SPEAK in voice mode —
@@ -226,6 +227,7 @@ export const useChatStore = create<ChatState>()(
           activeConversationId: id,
         }));
         emitSyncMutation(conversationPutMutation(conversation));
+        track('chat_created');
 
         return id;
       },
