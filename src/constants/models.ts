@@ -1,6 +1,6 @@
-import { BuildInfo } from 'llama.rn';
 import { CATALOG, PHONE_FIT_BUDGET, type MobileTextCatalogModel, type ModelEntry } from '@offgrid/models';
 import { registerBundledCatalog } from '../stores/modelCatalogStore';
+import { engineLoadsCatalogModel } from '../services/llamaEngineSupport';
 
 // Model size recommendations based on device RAM
 export const MODEL_RECOMMENDATIONS = {
@@ -19,13 +19,10 @@ export const MODEL_RECOMMENDATIONS = {
 // app. Kept in the shape the phone's screens read. A model replaced by a newer one, or one this
 // engine's llama.cpp build cannot load, is not offered; an installed one keeps working, because
 // names and files are looked up in the full catalog.
-const ENGINE_LLAMA_BUILD = Number.parseInt(String(BuildInfo?.number ?? ''), 10);
-
 function offeredOnPhone(entry: ModelEntry): boolean {
   if (entry.kind !== 'text' && entry.kind !== 'vision') return false;
   if (entry.availability === 'coming_soon' || entry.grounder || entry.quantOf || entry.supersededBy) return false;
-  // An unknown engine build never offers a model that needs a specific newer one.
-  if (entry.minLlamaBuild && entry.minLlamaBuild > (Number.isFinite(ENGINE_LLAMA_BUILD) ? ENGINE_LLAMA_BUILD : 0)) return false;
+  if (!engineLoadsCatalogModel(entry)) return false;
   return entry.files.some(file => (file.role === 'primary' || file.role === undefined) && !!file.sizeBytes);
 }
 

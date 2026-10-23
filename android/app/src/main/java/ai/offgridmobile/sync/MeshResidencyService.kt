@@ -30,12 +30,17 @@ class MeshResidencyService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val generation = intent?.getLongExtra(EXTRA_GENERATION, -1L) ?: -1L
-        if (!isCurrentGeneration(generation)) {
-            stopSelf(startId)
-            return START_NOT_STICKY
-        }
         try {
-            startForegroundCompat()
+            // Every startForegroundService() must be answered with startForeground(), even when the
+            // request is already stale. Stopping first makes Android crash the app with
+            // ForegroundServiceDidNotStartInTimeException. The start stays pending until then, so a
+            // stop that arrives while the notification is built cannot stop the service first.
+            if (intent != null) promoteAccepted { startForegroundCompat() } else startForegroundCompat()
+            if (!isCurrentGeneration(generation)) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf(startId)
+                return START_NOT_STICKY
+            }
             publish(generation, ResidencySnapshot("background"))
         } catch (error: RuntimeException) {
             val startWasDenied =
@@ -97,8 +102,17 @@ class MeshResidencyService : Service() {
         private const val EXTRA_GENERATION = "mesh_residency_generation"
         private const val PROMOTION_DEADLINE_MS = 5_000L
         private val residencyRequested = AtomicBoolean(false)
+
         private val mainHandler = Handler(Looper.getMainLooper())
         private val lock = Any()
+
+        /**
+         * Foreground starts Android may have accepted that have not finished promoting. While one is
+         * pending, the service must not be stopped from outside: it has not promoted yet, and a stop
+         * now crashes the app. The service promotes and then stops itself as a stale start. Guarded
+         * by [lock], so registering a start and deciding to stop never interleave.
+         */
+        private var pendingStarts = 0
         private var activeGeneration = 0L
         private var snapshot = ResidencySnapshot("inactive")
         private val waiters = mutableListOf<(ResidencySnapshot) -> Unit>()
@@ -164,6 +178,8 @@ class MeshResidencyService : Service() {
                 waiters.add(onResult)
             }
             residencyRequested.set(true)
+            // Registered before Android can accept the start: a stop in between must wait for it.
+            synchronized(lock) { pendingStarts += 1 }
             try {
                 ensureChannel(context)
                 val intent =
@@ -175,6 +191,8 @@ class MeshResidencyService : Service() {
                     context.startService(intent)
                 }
             } catch (_: RuntimeException) {
+                // Android refused the start, so no service will promote: nothing is pending.
+                synchronized(lock) { pendingStarts -= 1 }
                 residencyRequested.set(false)
                 publish(
                     generation,
@@ -189,7 +207,7 @@ class MeshResidencyService : Service() {
                 )
                 if (timedOut) {
                     residencyRequested.set(false)
-                    context.stopService(Intent(context, MeshResidencyService::class.java))
+                    stopServiceIfPromoted(context)
                 }
             }, PROMOTION_DEADLINE_MS)
         }
@@ -203,7 +221,27 @@ class MeshResidencyService : Service() {
                 waiters.clear()
                 pending.forEach { it(snapshot) }
             }
-            context.stopService(Intent(context, MeshResidencyService::class.java))
+            stopServiceIfPromoted(context)
+        }
+
+        private fun stopServiceIfPromoted(context: Context) {
+            synchronized(lock) {
+                if (pendingStarts > 0) return
+                context.stopService(Intent(context, MeshResidencyService::class.java))
+            }
+        }
+
+        /** Tests only: starts a test never delivered would otherwise stay pending into the next test. */
+        @androidx.annotation.VisibleForTesting
+        internal fun forgetPendingStarts() = synchronized(lock) { pendingStarts = 0 }
+
+        /** Runs one accepted start's promotion; the start stays pending until the attempt ends. */
+        internal fun promoteAccepted(promote: () -> Unit) {
+            try {
+                promote()
+            } finally {
+                synchronized(lock) { if (pendingStarts > 0) pendingStarts -= 1 }
+            }
         }
 
         fun currentSnapshot(): ResidencySnapshot = synchronized(lock) { snapshot }

@@ -1,3 +1,4 @@
+import { isDraftModelFile, isMtpHeadFile } from '@offgrid/models';
 import { LlamaContext } from 'llama.rn';
 import RNFS from 'react-native-fs';
 import { statFile } from '../utils/fileStat';
@@ -31,6 +32,15 @@ function decodeLittleEndianUint32(bytes: string): number | null {
 export async function validateModelFile(
   modelPath: string,
 ): Promise<{ valid: boolean; reason?: string }> {
+  // An MTP head or a draft model carries only the extra layers that speed a model up. Loaded on its
+  // own, the engine builds the graph with no main weights and crashes the app (null tensor in the
+  // Qwen3.5 linear-attention layers), so it is refused before it reaches the engine.
+  if (isMtpHeadFile(modelPath) || isDraftModelFile(modelPath)) {
+    return {
+      valid: false,
+      reason: 'This file only speeds up another model. It cannot run on its own.',
+    };
+  }
   try {
     const facts = await statFile(modelPath);
     if (!facts) {
@@ -124,6 +134,8 @@ export async function checkMemoryForModel(
   safe: boolean;
   reason?: string;
   estimatedMB: number;
+  /** What the verdict compares against: the estimate plus the OS/app headroom. Copy must quote this. */
+  requiredMB: number;
   availableMB: number;
 }> {
   const { modelFileSize, contextLength, getAvailableMemory, quantizedCache } =
@@ -142,7 +154,8 @@ export async function checkMemoryForModel(
     const estimatedMB = modelMB + kvCacheMB;
     // Require at least 200MB headroom after model load for OS and app
     const MIN_HEADROOM_MB = 200;
-    const safe = availableMB > estimatedMB + MIN_HEADROOM_MB;
+    const requiredMB = estimatedMB + MIN_HEADROOM_MB;
+    const safe = availableMB > requiredMB;
     // [MEM-SM] the pre-load fit decision — kept (surfaces the exact "it needs ~X but only Y" call
     // on-device AND in tests via DEBUG_LOGS=1). This is the gate the qwythos refusal came from.
     logger.log(
@@ -156,21 +169,22 @@ export async function checkMemoryForModel(
       return {
         safe: false,
         reason: `Not enough memory: model needs ~${Math.round(
-          estimatedMB,
+          requiredMB,
         )}MB but only ${Math.round(
           availableMB,
         )}MB available (device total: ${Math.round(
           totalMB,
         )}MB). Try closing other apps or using a smaller model.`,
         estimatedMB,
+        requiredMB,
         availableMB,
       };
     }
-    return { safe: true, estimatedMB, availableMB };
+    return { safe: true, estimatedMB, requiredMB, availableMB };
   } catch (e: any) {
     // If we can't check memory, proceed anyway but log a warning
     logger.warn('[LLM] Could not check available memory:', e?.message || e);
-    return { safe: true, estimatedMB: 0, availableMB: 0 };
+    return { safe: true, estimatedMB: 0, requiredMB: 0, availableMB: 0 };
   }
 }
 
@@ -181,6 +195,8 @@ export async function resolveSafeContext(args: {
   quantizedCache: boolean;
   override?: boolean;
   getAvailableMemory: () => Promise<{ available: number; total: number }>;
+  /** The check the caller already ran. Reused so the copy quotes the snapshot that failed. */
+  memCheck?: Awaited<ReturnType<typeof checkMemoryForModel>>;
 }): Promise<{
   ctxLen: number;
   memCheck: Awaited<ReturnType<typeof checkMemoryForModel>>;
@@ -192,7 +208,7 @@ export async function resolveSafeContext(args: {
     override = false,
     getAvailableMemory: getMem,
   } = args;
-  const memCheck = await checkMemoryForModel({
+  const memCheck = args.memCheck ?? await checkMemoryForModel({
     modelFileSize: fileSize,
     contextLength: requestedCtx,
     getAvailableMemory: getMem,
@@ -200,7 +216,7 @@ export async function resolveSafeContext(args: {
   });
   if (!memCheck.safe && !override) {
     throw new OverridableMemoryError(
-      `Not enough memory to load this model at ${requestedCtx.toLocaleString()} context tokens: it needs ~${Math.round(memCheck.estimatedMB)}MB but only ${Math.round(memCheck.availableMB)}MB is available. Close other apps or choose a smaller model.`,
+      `Not enough memory to load this model at ${requestedCtx.toLocaleString()} context tokens: it needs ~${Math.round(memCheck.requiredMB)}MB but only ${Math.round(memCheck.availableMB)}MB is available. Close other apps or choose a smaller model.`,
     );
   }
   if (!memCheck.safe && override) {

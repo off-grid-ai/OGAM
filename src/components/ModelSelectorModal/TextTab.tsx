@@ -13,6 +13,7 @@ import { fileExceedsBudget } from '../../services/memoryBudget';
 import { useResidentRows } from '../models/useResidentRows';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 import { LoadingDots } from '../LoadingDots';
+import { textRowState } from './rowState';
 
 export interface TextTabProps {
   downloadedModels: DownloadedModel[];
@@ -198,24 +199,23 @@ export const TextTab: React.FC<TextTabProps> = ({
           {downloadedModels.map(model => {
             const fileSize = (model.fileSize || 0) + ('mmProjFileSize' in model ? (model.mmProjFileSize || 0) : 0);
             const memoryFits = !fileExceedsBudget(fileSize, hardwareService.getTotalMemoryGB());
-            const isLoaded = currentModelPath === model.filePath;
-            // A selected-but-not-loaded model stays highlighted. A tap confirms the
-            // selection; the first chat message starts the load.
-            // Don't highlight a deferred-local selection while a remote model is
-            // current — otherwise both rows render active after a local→remote switch.
-            const isSelected =
-              currentRemoteModelId === null &&
-              !currentModelPath &&
-              selectedModelPath === model.filePath;
-            // While a load is in flight, the highlight + spinner + (suppressed) checkmark all follow the
-            // row being loaded — not the model that's still resident. So tapping B moves the selection to
-            // B immediately, instead of leaving A highlighted until the load finishes (device 2026-07-14).
+            const row = textRowState({
+              modelPath: model.filePath,
+              modelId: model.id,
+              loadedPath: currentModelPath,
+              selectedPath: selectedModelPath,
+              remoteActive: currentRemoteModelId !== null,
+              loadingModelId,
+              isAnyLoading,
+            });
             const isLoadingThis = loadingModelId === model.id;
-            const loadInProgress = loadingModelId != null;
-            const isActive =
-              currentRemoteModelId === null &&
-              (loadInProgress ? isLoadingThis : isLoaded || isSelected);
             const predictedCapabilities = model.engine === 'llama' ? predictGgufCapabilities(model) : null;
+            let trailing: React.ReactNode = null;
+            if (isLoadingThis) {
+              trailing = <LoadingDots color={colors.primary} testID="model-row-loading" />;
+            } else if (row.showLoadedCheck) {
+              trailing = <View style={styles.checkmark}><Icon name="check" size={16} color={colors.background} /></View>;
+            }
             return (
               <ModelCard
                 key={model.id}
@@ -228,12 +228,9 @@ export const TextTab: React.FC<TextTabProps> = ({
                 facts={[`${estimatedRamMB[model.id] != null
                   ? `~${(estimatedRamMB[model.id] / 1024).toFixed(1)} GB`
                   : hardwareService.formatModelRam(model, ramMultiplier)} RAM${memoryFits ? '' : ' (may not fit)'}`]}
-                isActive={isActive}
-                trailing={isLoadingThis ? <LoadingDots color={colors.primary} testID="model-row-loading" />
-                  : isLoaded && !loadInProgress && currentRemoteModelId === null
-                    ? <View style={styles.checkmark}><Icon name="check" size={16} color={colors.background} /></View>
-                    : null}
-                disabled={isAnyLoading || isLoaded}
+                isActive={row.isActive}
+                trailing={trailing}
+                disabled={row.disabled}
                 onPress={() => onSelectModel(model)}
               />
             );

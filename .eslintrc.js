@@ -69,6 +69,19 @@ module.exports = {
     'sonarjs/no-collapsible-if': 'warn',
     'sonarjs/prefer-immediate-return': 'warn',
     'sonarjs/no-duplicated-branches': 'warn',
+
+    // Android Fabric crash guard: FlatList turns removeClippedSubviews ON by default on
+    // Android, which crashes the draw pass (NPE on View.mViewFlags in dispatchDraw). Every
+    // list must spread the one shared default, src/constants/listClipping.ts.
+    'no-restricted-syntax': [
+      'error',
+      {
+        selector:
+          "JSXOpeningElement:matches([name.name=/^(FlatList|SectionList|VirtualizedList)$/], [name.property.name=/^(FlatList|SectionList|VirtualizedList)$/]):not(:has(JSXSpreadAttribute[argument.name='LIST_CLIPPING_PROPS']))",
+        message:
+          'Spread {...LIST_CLIPPING_PROPS} (src/constants/listClipping.ts) on every list: Android clipping crashes Fabric.',
+      },
+    ],
   },
   overrides: [
     {

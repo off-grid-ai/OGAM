@@ -16,12 +16,71 @@ import { promisify } from 'node:util';
 
 const run = promisify(execFile);
 
+/**
+ * Apps other than ours that a journey may legitimately TAP (never type into): the OS permission
+ * dialog and the system photo / document pickers a person goes through from inside the app.
+ */
+const SYSTEM_TAP_TARGETS = /permissioncontroller|photopicker|documentsui|providers\.media/;
+
 export class AdbClient {
   #serial;
+  #guardPackage = null;
 
   /** serial from `adb devices`; omit it when exactly one device is attached. */
   constructor(serial) {
     this.#serial = serial;
+  }
+
+  /**
+   * From now on, refuse to send input anywhere but `packageName`.
+   *
+   * A journey types into "whatever has focus" (`input text` has no target). If a notification, a
+   * share sheet or another app took the front, the text goes THERE - a chat prompt once landed in
+   * Slack that way. With a guard set, every type, key event, tap and swipe first checks the focused
+   * window, brings the app back once if it is not ours, and throws rather than send input elsewhere.
+   */
+  requireForeground(packageName) {
+    this.#guardPackage = packageName;
+  }
+
+  async #assertFront(kind) {
+    const pkg = this.#guardPackage;
+    if (!pkg) return;
+    // A heads-up banner does not take focus, so the focus check passes while it covers the top of
+    // the screen - and a tap there opens the notifying app (Slack came to the front this way, twice,
+    // on a tap meant for the chat header). Wait out any recent high-importance notification first.
+    if (kind === 'tap' || kind === 'swipe') await this.#waitOutHeadsUp();
+    const focus = await this.focusedWindow().catch(() => '');
+    if (focus.includes(pkg)) return;
+    if ((kind === 'tap' || kind === 'swipe') && SYSTEM_TAP_TARGETS.test(focus)) return;
+    // Not ours: abort this step. Nothing is brought back here - a person may be using that app.
+    // The journeys relaunch the app only at a step boundary (toHome), never mid-gesture.
+    throw new Error(`app not in foreground (${focus || 'unknown'}) - refusing to ${kind}`);
+  }
+
+  /** Wait (up to ~12 s) until no importance>=HIGH notification interrupted in the last 9 s. */
+  async #waitOutHeadsUp() {
+    for (let i = 0; i < 6; i += 1) {
+      const out = await this.#adb(['shell', 'date +%s%3N; dumpsys notification --noredact | grep -E "NotificationRecord|mInterruptionTimeMs"']).catch(() => '');
+      const lines = out.split('\n');
+      const now = Number(lines[0]?.trim());
+      if (!now) return;
+      let important = false;
+      let latest = 0;
+      for (const line of lines) {
+        if (line.includes('NotificationRecord(')) important = /importance=([4-5])/.test(line);
+        const at = line.match(/mInterruptionTimeMs=(\d+)/);
+        if (at && important) latest = Math.max(latest, Number(at[1]));
+      }
+      if (now - latest > 9_000) return;
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+    throw new Error('a high-importance notification keeps interrupting (heads-up over the app) - refusing to tap');
+  }
+
+  /** The adb serial this client drives (undefined when it relies on the only attached device). */
+  get serial() {
+    return this.#serial;
   }
 
   #args(rest) {
@@ -43,6 +102,33 @@ export class AdbClient {
    */
   async shell(command) {
     return this.#adb(['shell', ...(Array.isArray(command) ? command : command.split(' '))]);
+  }
+
+  /**
+   * Run any adb command against this device (logcat, pidof via shell, reverse ...). The journeys use
+   * this rather than spawning adb themselves, so the serial - WHICH phone - is never lost.
+   */
+  async run(args) {
+    // Raw input through run() is guarded like type(): text or a key event (other than leaving the
+    // app on purpose with HOME, or waking the screen) must only ever reach our app.
+    const at = args.indexOf('input');
+    if (args[0] === 'shell' && at >= 0) {
+      const what = args[at + 1];
+      const leaving = what === 'keyevent' && /^(KEYCODE_HOME|KEYCODE_WAKEUP|3|224)$/.test(args[at + 2] ?? '');
+      if (!leaving) await this.#assertFront(what === 'text' ? 'type' : 'key event');
+    }
+    return this.#adb(args);
+  }
+
+  /** Serials of every attached, authorised device (`adb devices`). */
+  static async listDevices() {
+    const { stdout } = await run('adb', ['devices']);
+    return stdout
+      .split('\n')
+      .slice(1)
+      .map((line) => line.trim().split(/\s+/))
+      .filter(([serial, state]) => serial && state === 'device')
+      .map(([serial]) => serial);
   }
 
   /** Is a device attached and responding? */
@@ -69,11 +155,8 @@ export class AdbClient {
     await this.#adb(['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP']).catch(() => {});
     await this.#adb(['shell', 'wm', 'dismiss-keyguard']).catch(() => {});
     await this.#adb(['shell', 'cmd', 'statusbar', 'collapse']).catch(() => {});
-    // Animations are the usual reason uiautomator never sees an idle window, and a dump that cannot run is a
-    // driver that cannot see. Best-effort: a device that refuses these settings still works, just less reliably.
-    for (const scale of ['window_animation_scale', 'transition_animation_scale', 'animator_duration_scale']) {
-      await this.#adb(['shell', 'settings', 'put', 'global', scale, '0']).catch(() => {});
-    }
+    // Animation scales are left alone: setting them to 0 changed the phone for its owner (the reply dots
+    // stopped animating) and hid exactly the animation bugs a release check is for.
     if (!packageName) return null;
     await this.#adb(['shell', 'monkey', '-p', packageName, '-c', 'android.intent.category.LAUNCHER', '1']);
     return packageName;
@@ -166,6 +249,24 @@ export class AdbClient {
     throw new Error(`Could not read the view hierarchy: ${why}`);
   }
 
+  /**
+   * The raw uiautomator XML, attributes intact.
+   *
+   * source() keeps only what locators need. An accessibility check needs more - whether a node is
+   * clickable, focusable, enabled - and those live only on the raw dump.
+   */
+  async sourceXml() {
+    const remote = '/data/local/tmp/offgrid-ui-dump-raw.xml';
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await this.#adb(['shell', 'rm', '-f', remote]).catch(() => {});
+      await this.#adb(['shell', 'uiautomator', 'dump', '--compressed', remote]).catch(() => '');
+      const xml = await this.#adb(['shell', 'cat', remote]).catch(() => '');
+      if (xml.includes('<hierarchy')) return xml;
+      await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+    }
+    throw new Error('Could not read the raw view hierarchy');
+  }
+
   /** First element whose label, name or value contains `needle`, case-insensitively. */
   async findByLabel(needle) {
     const wanted = needle.toLowerCase();
@@ -207,11 +308,13 @@ export class AdbClient {
 
   /** Tap an absolute point. */
   async tap(x, y) {
+    await this.#assertFront('tap');
     await this.#adb(['shell', 'input', 'tap', String(Math.round(x)), String(Math.round(y))]);
   }
 
   /** Drag from one point to another. */
   async swipe(x1, y1, x2, y2, durationMs = 400) {
+    await this.#assertFront('swipe');
     await this.#adb([
       'shell',
       'input',
@@ -234,11 +337,13 @@ export class AdbClient {
 
   /** Type into the focused field. Spaces are escaped because `input text` splits on them. */
   async type(text) {
+    await this.#assertFront('type');
     await this.#adb(['shell', 'input', 'text', text.replace(/ /g, '%s')]);
   }
 
   /** Hardware back. */
   async back() {
+    await this.#assertFront('key event');
     await this.#adb(['shell', 'input', 'keyevent', 'KEYCODE_BACK']);
   }
 

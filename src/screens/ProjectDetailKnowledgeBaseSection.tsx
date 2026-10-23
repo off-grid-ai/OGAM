@@ -7,6 +7,7 @@ import {
   FlatList,
   Platform,
 } from 'react-native';
+import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { LoadingDots } from '../components/LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import {
@@ -288,7 +289,7 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
           style={styles.sectionList}
           data={kbDocs}
           keyExtractor={doc => String(doc.id)}
-          removeClippedSubviews={Platform.OS !== 'android'}
+          {...LIST_CLIPPING_PROPS}
           renderItem={({ item: doc }) => (
             <TouchableOpacity
               style={styles.kbDocRow}

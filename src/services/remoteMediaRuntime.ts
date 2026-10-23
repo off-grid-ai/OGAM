@@ -4,6 +4,7 @@ import { REMOTE_FETCH_REDIRECT_POLICY, remoteAuthorizationHeaders } from './remo
 import { remoteHttpErrorMessage } from './httpClient';
 import { OverridableMemoryError } from './modelLoadErrors';
 import logger from '../utils/logger';
+import { onAbort } from '../utils/abortSignal';
 
 export interface RemoteImageResult {
   base64?: string;
@@ -60,8 +61,7 @@ async function request<T>(
   const abort = () => {
     if (!needsRequestId || !sent) controller.abort();
   };
-  signal?.addEventListener('abort', abort, { once: true });
-  if (signal?.aborted) abort();
+  const unlinkAbort = onAbort(signal, abort);
   try {
     const apiKey = await remoteServerManager.getApiKey(server.id);
     if (controller.signal.aborted) throw new Error('Remote request cancelled');
@@ -96,7 +96,7 @@ async function request<T>(
     throw error;
   } finally {
     if (responseTimer) clearTimeout(responseTimer);
-    signal?.removeEventListener('abort', abort);
+    unlinkAbort();
   }
 }
 
@@ -169,8 +169,7 @@ export const remoteMediaRuntime = {
           .catch(error => logger.warn('[RemoteImage] could not confirm Desktop cancellation:', error))
           .finally(() => clearTimeout(timeout));
       };
-      options.signal?.addEventListener('abort', cancelDesktopRequest, { once: true });
-      if (options.signal?.aborted) cancelDesktopRequest();
+      const unlinkCancel = onAbort(options.signal, cancelDesktopRequest);
       try {
         while (true) {
           if (options.signal?.aborted) throw new Error('Remote request cancelled');
@@ -207,7 +206,7 @@ export const remoteMediaRuntime = {
           });
         }
       } finally {
-        options.signal?.removeEventListener('abort', cancelDesktopRequest);
+        unlinkCancel();
         if (cancellation) await cancellation;
       }
     }

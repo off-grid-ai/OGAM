@@ -5,6 +5,7 @@ import {
   FlatList,
   TouchableOpacity,
 } from 'react-native';
+import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import type { DocumentPage } from '@offgrid/rag/documents';
 import { LoadingDots } from '../components/LoadingDots';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -248,7 +249,7 @@ export const DocumentPreviewScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} testID="document-preview-back">
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
@@ -273,6 +274,7 @@ export const DocumentPreviewScreen: React.FC = () => {
         </View>
       ) : pages ? (
         <FlatList
+          {...LIST_CLIPPING_PROPS}
           ref={pageListRef}
           data={pages}
           keyExtractor={(item) => String(item.page)}

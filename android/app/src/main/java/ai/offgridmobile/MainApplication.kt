@@ -5,7 +5,9 @@ import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
+import com.facebook.react.common.JavascriptException
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import ai.offgridmobile.crash.JsCrashFrames
 import ai.offgridmobile.download.DownloadManagerPackage
 import ai.offgridmobile.localdream.LocalDreamPackage
 import ai.offgridmobile.pdf.PDFExtractorPackage
@@ -38,6 +40,11 @@ class MainApplication : Application(), ReactApplication {
           add(SyncDownloadsPackage())
           add(BlobChannelPackage())
         },
+      // A fatal JS error still crashes the app, as React Native's default does, but with its JS
+      // stack as frames so Play Console can show and group it.
+      exceptionHandler = { error ->
+        throw if (error is JavascriptException) JsCrashFrames.withJsFrames(error) else error
+      },
     )
   }
 

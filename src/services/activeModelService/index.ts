@@ -137,7 +137,7 @@ class ActiveModelService {
     const model = useAppStore.getState().downloadedModels.find(m => m.id === modelId);
     return model?.engine === 'litert'
       ? liteRTService.isModelLoaded()
-      : llmService.isModelLoaded();
+      : llmService.isContextUsable(); // a context that stopped answering is reloaded, not reused
   }
 
   async loadTextModel(

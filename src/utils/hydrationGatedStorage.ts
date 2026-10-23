@@ -25,16 +25,20 @@ export interface HydrationGatedStorage<S> {
   /**
    * The persist `onRehydrateStorage` option. A good read opens the gate. A failed read keeps writes
    * blocked, so the saved state is never replaced by launch defaults, and retries the read: at once on
-   * the first write, then with backoff. When a retry succeeds, the saved state is merged with what the
-   * user changed meanwhile (see `merge`) and that is saved.
+   * the first write, then with backoff. Whether the read is slow or retried, what the user changed before
+   * it landed is merged with the saved state (see `merge`), and that is saved.
    */
   onRehydrateStorage(): () => (state: unknown, error: unknown) => void;
-  /** Hand the created store to the gate, so a failed read can be retried on it. Call right after create. */
+  /**
+   * Hand the created store to the gate. Call right after create: the gate notes the store as it is at
+   * launch (to tell the user's changes from launch defaults) and retries a failed read on it.
+   */
   attach(store: GatedStore): void;
   /**
-   * The persist `merge` option. Normally `savedOverCurrent` (default: saved over current). During a retry after a
-   * failed read, the session's changes are kept on top of the saved state; `keepCurrent` keys always
-   * follow the session.
+   * The persist `merge` option: `savedOverCurrent` (default: saved over current) builds the saved state.
+   * When the read lands after the session has changed the store (a slow read, or a retry after a failed
+   * one), the session's changes are kept on top of the saved state, and `keepCurrent` keys follow the
+   * session. A store the session never touched takes the saved state as is.
    */
   merge<T extends object>(savedOverCurrent?: Merge<T>, keepCurrent?: readonly string[]): Merge<T>;
   isHydrated(): boolean;
@@ -50,9 +54,10 @@ export function createHydrationGatedStorage<S>(
   let attached: GatedStore | null = null;
   let loadFailed = false;
   let recovery: GatedStore | null = null;
-  // The store as it was when the read failed: what the user had before changing anything.
+  // The store as it was at launch, before hydration: what the user had before changing anything.
   let atLaunch: object | null = null;
-  let recovering = false;
+  // The read that just landed was merged with this session's changes, so the result must be saved.
+  let sessionMerged = false;
   let retryCount = 0;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let retrying = false;
@@ -73,7 +78,6 @@ export function createHydrationGatedStorage<S>(
   const startRecovery = () => {
     if (hydrated || recovery || !attached) return;
     recovery = attached;
-    atLaunch = recovery.getState();
     logger.warn('[STORAGE-SM] saved state unreadable at launch; retrying the read');
     scheduleRetry();
   };
@@ -84,18 +88,13 @@ export function createHydrationGatedStorage<S>(
     if (retryTimer) clearTimeout(retryTimer);
     retryTimer = null;
     try {
-      recovering = true;
       await recovery.persist.rehydrate();
     } finally {
-      recovering = false;
       retrying = false;
     }
     if (hydrated) {
-      const store = recovery;
       recovery = null;
-      atLaunch = null;
-      logger.log('[STORAGE-SM] saved state read on retry; merged with this session and saving');
-      store.setState({});
+      logger.log('[STORAGE-SM] saved state read on retry');
       return;
     }
     scheduleRetry();
@@ -162,10 +161,18 @@ export function createHydrationGatedStorage<S>(
     },
     markHydrated: () => {
       hydrated = true;
+      atLaunch = null;
     },
     onRehydrateStorage: () => () => (_state, error) => {
       if (!error) {
         hydrated = true;
+        atLaunch = null;
+        if (sessionMerged && attached) {
+          sessionMerged = false;
+          logger.log('[STORAGE-SM] saved state merged with this session; saving');
+          // The writes made before the read landed were held back: save the merged state now.
+          attached.setState({});
+        }
         return;
       }
       loadFailed = true;
@@ -173,6 +180,7 @@ export function createHydrationGatedStorage<S>(
     },
     attach: store => {
       attached = store;
+      if (!hydrated) atLaunch = store.getState();
       if (loadFailed) startRecovery();
     },
     merge: <T extends object>(
@@ -180,7 +188,12 @@ export function createHydrationGatedStorage<S>(
       keepCurrent: readonly string[] = [],
     ): Merge<T> => (persisted, current) => {
       const saved = savedOverCurrent(persisted, current);
-      if (!recovering || !atLaunch || !persisted) return saved;
+      // A read landing after hydration, or on a store the session has not changed, takes the saved state.
+      if (hydrated || !atLaunch || current === atLaunch) return saved;
+      // The session changed the store while its writes were held back: they must be saved now, also
+      // when there was nothing saved before (a first launch).
+      sessionMerged = true;
+      if (!persisted) return saved;
       return mergeSessionIntoSaved(saved, current, atLaunch as T, Object.keys(persisted), keepCurrent);
     },
     isHydrated: () => hydrated,

@@ -34,12 +34,32 @@ class WhisperService {
   private currentModelPath: string | null = null;
   private isTranscribing: boolean = false;
   private stopFn: (() => Promise<void>) | null = null;
+  /** Counts live sessions, so a finishing session only clears state it still owns. */
+  private realtimeSession = 0;
   private readonly realtimeStart = new RealtimeStartBarrier();
   private isReleasingContext: boolean = false;
   private remoteTranscription: AbortController | null = null;
   private contextReleasePromise: Promise<void> = Promise.resolve();
   private transcriptionFullyStopped: Promise<void> = Promise.resolve();
+  /**
+   * The context runs one native job at a time: a realtime session (with its file fallback), a file
+   * transcription, or the release. whisper.rn's own guards check a flag and then act, so overlapping
+   * jobs reached the native side together. On iOS a finishing file job cleared the job the live
+   * audio callback reads (SIGSEGV in AudioInputCallback); on Android a release freed the weights a
+   * running encoder still read (SIGSEGV in wsp_ggml_vec_dot_f16).
+   */
+  private nativeLane: Promise<void> = Promise.resolve();
   private readonly modelDownloads = new WhisperModelDownloads();
+
+  /** Wait for every earlier native job, then hold the context until the returned leave() is called. */
+  private enterNativeLane(): Promise<() => void> {
+    const previous = this.nativeLane;
+    let leave: () => void = () => {};
+    this.nativeLane = new Promise<void>(resolve => {
+      leave = resolve;
+    });
+    return previous.then(() => leave);
+  }
 
   getModelsDir(): string {
     return whisperModelFiles.getModelsDir();
@@ -132,14 +152,16 @@ class WhisperService {
     }
     this.isReleasingContext = true;
     this.contextReleasePromise = (async () => {
+      const leave = await this.enterNativeLane();
       try {
-        await this.context!.release();
+        await this.context?.release();
       } catch (error) {
         logger.error('[WhisperService] Error releasing context:', error);
       } finally {
         this.context = null;
         this.currentModelPath = null;
         this.isReleasingContext = false;
+        leave();
       }
     })();
     await this.contextReleasePromise;
@@ -211,12 +233,18 @@ class WhisperService {
 
     this.realtimeStart.begin();
     this.isTranscribing = true;
+    const session = ++this.realtimeSession;
 
-    // Create a promise that resolves when the native side fully finishes
+    // Create a promise that resolves when the native side fully finishes. The session holds the
+    // native lane until then, so a file job or a release never overlaps live capture.
     let resolveTranscriptionStopped: () => void = () => {};
     this.transcriptionFullyStopped = new Promise<void>(resolve => {
       resolveTranscriptionStopped = resolve;
     });
+    const sessionStopped = this.transcriptionFullyStopped;
+    const leaveLane = await this.enterNativeLane();
+    // eslint-disable-next-line no-void
+    void sessionStopped.then(leaveLane);
 
     let recordedFile = false;
     try {
@@ -253,7 +281,8 @@ class WhisperService {
         try {
           const { path } = await audioRecorderService.stopRecording();
           if (cleanTranscription(realtimeText)) return realtimeText;
-          const fileText = await this.transcribeFile(path, { language });
+          // This session already holds the native lane; the fallback runs inside it.
+          const fileText = await this.transcribeLocalFile(path, { language });
           logger.log(
             `[WhisperService] Realtime captured nothing — file transcript: "${fileText.slice(
               0,
@@ -339,8 +368,11 @@ class WhisperService {
             processTime: processTime || 0,
             recordingTime: recordingTime || 0,
           });
-          this.isTranscribing = false;
-          this.stopFn = null;
+          // A newer session may already be waiting for the lane: its state is not ours to clear.
+          if (session === this.realtimeSession) {
+            this.isTranscribing = false;
+            this.stopFn = null;
+          }
           // Signal that native processing is complete - safe to release context
           resolveTranscriptionStopped();
         });
@@ -470,6 +502,22 @@ class WhisperService {
           this.remoteTranscription = null;
       }
     }
+    const leave = await this.enterNativeLane();
+    try {
+      return await this.transcribeLocalFile(filePath, options);
+    } finally {
+      leave();
+    }
+  }
+
+  /** The native file transcription. The caller must hold the native lane. */
+  private async transcribeLocalFile(
+    filePath: string,
+    options?: {
+      language?: string;
+      onProgress?: (progress: number) => void;
+    },
+  ): Promise<string> {
     if (!this.context) {
       throw new Error('No Whisper model loaded');
     }

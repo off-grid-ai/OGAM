@@ -8,6 +8,7 @@
 import logger from '../utils/logger';
 import { createSSELineProcessor } from './httpClientSSE';
 import { isCredentialTransportDowngrade } from './remoteTransportPolicy';
+import { onAbort } from '../utils/abortSignal';
 
 export {
   parseOpenAIMessage,
@@ -90,6 +91,24 @@ function rejectCredentialDowngrade(input: {
   return true;
 }
 
+/**
+ * Ties a streaming XHR to the caller's Stop. A Stop is a user abort, not a failure: the request
+ * settles quietly (resolves) so no error bubble renders. A Stop that already happened — e.g. while
+ * the caller was still reading an attached photo — means the request is never sent.
+ * Returns false when the request must not be sent.
+ */
+function bindStreamAbort(
+  xhr: XMLHttpRequest,
+  signal: AbortSignal | undefined,
+  resolve: () => void,
+): boolean {
+  onAbort(signal, () => {
+    xhr.abort();
+    resolve();
+  });
+  return !signal?.aborted;
+}
+
 /** Default timeouts */
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 const DEFAULT_RETRIES = 0;
@@ -114,6 +133,8 @@ export async function fetchWithTimeout<T = unknown>(
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
+    // The caller's own signal still cancels — including one that fired before this attempt.
+    const unlinkCallerAbort = onAbort(fetchOptions.signal, () => controller.abort());
 
     try {
       const response = await fetch(url, {
@@ -122,6 +143,7 @@ export async function fetchWithTimeout<T = unknown>(
       });
 
       clearTimeout(timeoutId);
+      unlinkCallerAbort();
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
@@ -136,6 +158,7 @@ export async function fetchWithTimeout<T = unknown>(
       return response.text() as Promise<T>;
     } catch (error) {
       clearTimeout(timeoutId);
+      unlinkCallerAbort();
       lastError = error instanceof Error ? error : new Error(String(error));
 
       // Don't retry on abort (user cancelled)
@@ -174,12 +197,9 @@ export async function createStreamingRequest(
     // does not support real-time streaming with progress events.
     // Requests are validated by isPrivateNetworkEndpoint before use.
     const xhr = new XMLHttpRequest(); // NOSONAR
-
-    if (signal) {
-      signal.addEventListener('abort', () => {
-        xhr.abort();
-        resolve();
-      });
+    if (!bindStreamAbort(xhr, signal, resolve)) {
+      logger.log('[HttpClient] Stopped before sending — request not sent:', url);
+      return;
     }
 
     const timeoutId = timeout > 0 ? setTimeout(() => {
@@ -296,12 +316,9 @@ export async function createNDJSONStreamingRequest(
   logger.log('[HttpClient] Creating NDJSON streaming request to:', url);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest(); // NOSONAR
-
-    if (signal) {
-      signal.addEventListener('abort', () => {
-        xhr.abort();
-        resolve();
-      });
+    if (!bindStreamAbort(xhr, signal, resolve)) {
+      logger.log('[HttpClient] Stopped before sending — request not sent:', url);
+      return;
     }
 
     const timeoutId = timeout > 0 ? setTimeout(() => {

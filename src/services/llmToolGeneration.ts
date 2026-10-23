@@ -6,7 +6,7 @@
 import { useAppStore } from '../stores/appStore';
 import type { Message } from '../types';
 import type { ToolCall } from './tools/types';
-import { recordGenerationStats, buildCompletionParams, buildThinkingCompletionParams, safeCompletion, isTruncatedResult, getStreamingDelta } from './llmHelpers';
+import { recordGenerationStats, buildCompletionParams, buildThinkingCompletionParams, safeCompletion, getStreamingDelta, type CompletionEndFields } from './llmHelpers';
 import type { StreamToken } from './llmStreamTypes';
 import logger from '../utils/logger';
 import { TOOL_CALL_OPENERS, TOOL_CALL_CLOSERS, maxPartialTagSuffix } from '../utils/messageContent';
@@ -131,6 +131,8 @@ export interface ToolGenerationDeps {
   /** Async because it also drops images whose file is gone — see LLMService.convertToOAIMessages. */
   convertToOAIMessages: (messages: Message[]) => Promise<any[]>;
   setPerformanceStats: (stats: any) => void;
+  /** The service's one verdict on how the completion ended (cut off at the cap, or ended early). */
+  recordCompletionEnd: (cr: CompletionEndFields | null | undefined) => { lastTruncated?: boolean; lastEndedEarly?: boolean };
   setIsGenerating: (v: boolean) => void;
 }
 
@@ -236,9 +238,9 @@ export async function generateWithToolsImpl(
     deps.setPerformanceStats({
       ...recordGenerationStats(startTime, firstTokenMs, tokenCount),
       lastPromptTokenCount: cr?.tokens_evaluated,
-      // Flag a reply cut off at the n_predict cap so the UI can show it (B15) — but NOT a user stop
-      // (interrupted), which also has stopped_eos:false. Single verdict shared with the plain path.
-      lastTruncated: isTruncatedResult(cr),
+      // Flag a reply cut off at the n_predict cap (B15) or ended early by a backend fault — but NOT a
+      // user stop (interrupted), which also has stopped_eos:false. Single verdict shared with the plain path.
+      ...deps.recordCompletionEnd(cr),
     });
     generating = false;
     deps.setIsGenerating(false);

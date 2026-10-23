@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ScrollView } from 'react-native';
+import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -97,6 +98,7 @@ export const DownloadManagerScreen: React.FC = () => {
       </View>
 
       <FlatList
+        {...LIST_CLIPPING_PROPS}
         data={[{ key: 'content' }]}
         ListHeaderComponent={renderHeader}
         renderItem={() => (

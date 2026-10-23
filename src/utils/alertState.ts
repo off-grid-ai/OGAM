@@ -45,3 +45,20 @@ export const showAlert = (
 
 /** Build the state for a dismissed alert. */
 export const hideAlert = (): AlertState => initialAlertState;
+
+/** Alerts waiting to be seen, the one on screen first. Two alerts raised together (a download is
+ *  ready while a queued one is refused) are both shown, one after the other, never overwritten. */
+export type AlertQueue = readonly AlertState[];
+
+const sameAlert = (a: AlertState, b: AlertState): boolean => a.title === b.title && a.message === b.message;
+
+/** The queue with `alert` added behind what is waiting; an alert already waiting is not added twice. */
+export const enqueueAlert = (queue: AlertQueue, alert: AlertState): AlertQueue =>
+  queue.some(waiting => sameAlert(waiting, alert)) ? queue : [...queue, alert];
+
+/** The queue without `alert` (the one the person closed); the next one waiting comes on screen. */
+export const dismissAlert = (queue: AlertQueue, alert: AlertState): AlertQueue =>
+  queue.filter(waiting => waiting !== alert);
+
+/** The alert on screen: the first one waiting, or none. */
+export const shownAlert = (queue: AlertQueue): AlertState => queue[0] ?? initialAlertState;

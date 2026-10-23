@@ -14,6 +14,7 @@ import {
   SafeAreaView,
   Modal,
 } from 'react-native';
+import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import { useDebugLogsStore } from '../../stores/debugLogsStore';
@@ -153,6 +154,9 @@ export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClo
           </View>
         ) : (
           <FlatList
+            {...LIST_CLIPPING_PROPS}
+            // Transformed list (inverted / animated pager): keep the iOS default, no clipping.
+            removeClippedSubviews={false}
             data={visibleLogs}
             keyExtractor={(_, index) => `${index}`}
             contentContainerStyle={styles.listContent}

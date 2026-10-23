@@ -1,6 +1,6 @@
 /**
- * A launch could not read its saved state, the user kept working on the launch defaults, and the read
- * then succeeded. Keep both: the saved state, with what the user changed during that session on top.
+ * The saved state was read late (slow, or retried after a failure) while the user was already working on
+ * the launch defaults. Keep both: the saved state, with what the user changed during that session on top.
  *
  * A value the session never touched is still the launch value (the same reference), so the saved one is
  * taken. A list of records with ids keeps the saved records, takes the session's edits and additions,

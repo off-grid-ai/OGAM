@@ -74,6 +74,7 @@ describe('WhisperService', () => {
     (whisperService as any).stopFn = null;
     (whisperService as any).isReleasingContext = false;
     (whisperService as any).transcriptionFullyStopped = Promise.resolve();
+    (whisperService as any).nativeLane = Promise.resolve();
     (whisperService as any).activeDownloadId = null;
     // Default backgroundDownloadService mock
     mockedBDS.isAvailable.mockReturnValue(true);
@@ -910,6 +911,98 @@ describe('WhisperService', () => {
           text: 'नमस्ते दुनिया',
           isCapturing: false,
         }),
+      );
+    });
+  });
+
+  // ========================================================================
+  // one native job at a time
+  // ========================================================================
+  describe('native job lane', () => {
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>(r => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    }
+    const flush = () => new Promise<void>(r => setImmediate(r));
+
+    it('releases the context only after a running file transcription has finished', async () => {
+      const job = deferred<{ result: string }>();
+      const events: string[] = [];
+      const mockContext = {
+        id: 'ctx',
+        release: jest.fn(async () => {
+          events.push('release');
+        }),
+        transcribe: jest.fn(() => ({ stop: jest.fn(), promise: job.promise })),
+      };
+      mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
+      mockValidModelFile();
+      await whisperService.loadModel('/path/model.bin');
+
+      const transcript = whisperService.transcribeFile('/clip.wav').then(text => {
+        events.push('transcribed');
+        return text;
+      });
+      await flush();
+      const unloaded = whisperService.unloadModel();
+      await flush();
+      expect(mockContext.release).not.toHaveBeenCalled();
+
+      job.resolve({ result: 'hello there' });
+      await expect(transcript).resolves.toBe('hello there');
+      await unloaded;
+      expect(events).toEqual(['transcribed', 'release']);
+      expect(whisperService.isModelLoaded()).toBe(false);
+    });
+
+    it('starts the next live session only after the previous one has finished its file fallback', async () => {
+      const fallback = deferred<{ result: string }>();
+      let subscribeFn: any;
+      const mockContext = {
+        id: 'ctx',
+        release: jest.fn(),
+        transcribeRealtime: jest.fn(() =>
+          Promise.resolve({
+            stop: jest.fn(),
+            subscribe: (fn: any) => {
+              subscribeFn = fn;
+            },
+          }),
+        ),
+        transcribe: jest.fn(() => ({ stop: jest.fn(), promise: fallback.promise })),
+      };
+      mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
+      mockValidModelFile();
+      await whisperService.loadModel('/path/model.bin');
+      Object.defineProperty(Platform, 'OS', { get: () => 'android' });
+      jest.spyOn(PermissionsAndroid, 'request').mockResolvedValue(PermissionsAndroid.RESULTS.GRANTED);
+      jest.spyOn(audioRecorderService, 'startRecording').mockResolvedValue();
+      jest.spyOn(audioRecorderService, 'stopRecording').mockResolvedValue({
+        path: '/recorded.wav',
+        durationSeconds: 1,
+      });
+
+      const firstResult = jest.fn();
+      await whisperService.startRealtimeTranscription(firstResult);
+      // The utterance ends with nothing heard live, so the recorded file is transcribed.
+      subscribeFn({ isCapturing: false, data: { result: '' } });
+      await whisperService.stopTranscription();
+
+      // The user taps the mic again while that file job is still running.
+      const second = whisperService.startRealtimeTranscription(jest.fn());
+      await flush();
+      expect(mockContext.transcribeRealtime).toHaveBeenCalledTimes(1);
+
+      fallback.resolve({ result: 'what I said' });
+      await second;
+      expect(mockContext.transcribeRealtime).toHaveBeenCalledTimes(2);
+      // The first session finishing must not clear the live second one.
+      expect(whisperService.isCurrentlyTranscribing()).toBe(true);
+      expect(firstResult).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'what I said', isCapturing: false }),
       );
     });
   });

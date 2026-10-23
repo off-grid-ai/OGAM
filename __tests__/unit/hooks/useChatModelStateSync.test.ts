@@ -12,13 +12,16 @@ import { useChatModelStateSync } from '../../../src/screens/ChatScreen/useChatMo
 jest.mock('../../../src/services/llm', () => ({
   llmService: {
     isModelLoaded: jest.fn(() => false),
+    // A loaded context answers unless a backend fault marked it (llmService.isContextUsable).
+    isContextUsable: jest.fn(function (this: { isModelLoaded: () => boolean }) { return this.isModelLoaded(); }),
+    getLoadedModelPath: jest.fn(() => undefined),
     getMultimodalSupport: jest.fn(() => null),
     supportsToolCalling: jest.fn(() => false),
     supportsThinking: jest.fn(() => false),
   },
 }));
 jest.mock('../../../src/services/litert', () => ({
-  liteRTService: { isModelLoaded: jest.fn(() => false) },
+  liteRTService: { isModelLoaded: jest.fn(() => false), getLoadedModelPath: jest.fn(() => undefined) },
 }));
 
 const { llmService } = require('../../../src/services/llm');
@@ -54,6 +57,8 @@ function run(deps: Partial<Parameters<typeof useChatModelStateSync>[0]>) {
 beforeEach(() => {
   jest.clearAllMocks();
   llmService.isModelLoaded.mockReturnValue(false);
+  llmService.getLoadedModelPath.mockReturnValue(undefined);
+  liteRTService.getLoadedModelPath.mockReturnValue(undefined);
   llmService.getMultimodalSupport.mockReturnValue(null);
   llmService.supportsToolCalling.mockReturnValue(false);
   llmService.supportsThinking.mockReturnValue(false);
@@ -94,5 +99,23 @@ describe('useChatModelStateSync — capability derivation (characterization)', (
   it('nothing loaded (local, no engine ready): all false', () => {
     const r = run({ activeModel: { engine: 'llama' } as any });
     expect(r).toEqual({ vision: false, tools: false, thinking: false });
+  });
+
+  it('a vision model picked while a text-only model is still loaded shows vision, not the loaded model\'s caps', () => {
+    // Qwen 3.5 2B (no projector) is resident; Qwen 3.5 0.8B with a projector is picked but loads on send.
+    llmService.isModelLoaded.mockReturnValue(true);
+    llmService.getLoadedModelPath.mockReturnValue('/models/Qwen3.5-2B-Q4_K_M.gguf');
+    llmService.getMultimodalSupport.mockReturnValue({ vision: false, audio: false });
+    const r = run({
+      activeModelId: 'qwen-0.8b',
+      activeModel: {
+        engine: 'llama',
+        name: 'Qwen 3.5 0.8B',
+        fileName: 'Qwen3.5-0.8B-Q4_K_M.gguf',
+        filePath: '/models/Qwen3.5-0.8B-Q4_K_M.gguf',
+        mmProjPath: '/models/mmproj-Qwen3.5-0.8B-F16.gguf',
+      } as any,
+    });
+    expect(r.vision).toBe(true);
   });
 });

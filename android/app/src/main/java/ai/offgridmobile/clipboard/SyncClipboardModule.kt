@@ -13,6 +13,7 @@ import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.UiThreadUtil
 import com.facebook.react.modules.core.DeviceEventManagerModule
 
 internal class SyncClipboardObserver(
@@ -73,11 +74,20 @@ class SyncClipboardModule(
     private val reactContext: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(reactContext) {
     private val handoffStore = ProcessTextHandoffStore(reactContext)
-    private val observer = SyncClipboardObserver(
-        reactContext,
-        reactContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager,
-        ::emitText,
-    )
+    // React Native builds modules on a background thread with no Looper. Before API 28 the
+    // ClipboardManager constructor creates a Handler, so resolving it there crashes the app on
+    // every start. Every observer use runs on the main thread, so the manager is created there.
+    private val observerDelegate = lazy {
+        SyncClipboardObserver(
+            reactContext,
+            reactContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager,
+            ::emitText,
+        )
+    }
+    private val observer by observerDelegate
+
+    /** Set before cleanup is queued, so main-thread work queued earlier cannot re-enable the observer. */
+    @Volatile private var invalidated = false
     private val pendingReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == ProcessTextActivity.ACTION_HANDOFF_AVAILABLE) {
@@ -99,19 +109,27 @@ class SyncClipboardModule(
     override fun getName(): String = "SyncClipboardModule"
 
     override fun invalidate() {
-        observer.setEnabled(false)
+        invalidated = true
+        // Checked on the main thread: an enable queued before this may create the observer first.
+        UiThreadUtil.runOnUiThread {
+            if (observerDelegate.isInitialized()) observer.setEnabled(false)
+        }
         runCatching { reactContext.unregisterReceiver(pendingReceiver) }
         super.invalidate()
     }
 
     @ReactMethod
     fun setEnabled(enabled: Boolean) {
-        observer.setEnabled(enabled)
+        UiThreadUtil.runOnUiThread {
+            // After invalidation nothing may register a listener this module will never remove.
+            if (enabled && invalidated) return@runOnUiThread
+            observer.setEnabled(enabled)
+        }
     }
 
     @ReactMethod
     fun writeText(text: String) {
-        observer.writeText(text)
+        UiThreadUtil.runOnUiThread { observer.writeText(text) }
     }
 
     @ReactMethod

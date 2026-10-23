@@ -371,6 +371,11 @@ export interface LlamaFake {
    *  accelerator init does — so initContextWithFallback falls back to the CPU attempt (n_gpu_layers:0).
    *  Models B24 (GPU init timeout → CPU/partial fallback). Persistent until cleared. */
   scriptGpuInitFailure(fail?: boolean): void;
+  /** The Hexagon session did not open, so llama.rn's registry has no HTP0 (ggml-hexagon drops a device
+   *  whose session probe fails). A device list naming HTP0 then resolves as llama.rn resolves it: to the
+   *  other names on the list, or — when none of them is registered either — to the Android default,
+   *  the Adreno OpenCL GPU. Persistent until cleared. */
+  scriptHtpUnavailable(unavailable?: boolean): void;
   /** Make EVERY init attempt fail (a model that can't load on any backend) — the real load path throws. */
   scriptInitFailure(fail?: boolean): void;
   /** HOLD the next post-init multimodal-support check (context.getMultimodalSupport) open until
@@ -395,6 +400,13 @@ export interface LlamaFake {
     saveSession: string[];
     loadSession: string[];
   };
+  /** The OS changed the app's state. iOS forbids Metal command buffers in background: a completion in
+   *  flight on a Metal context when the app goes to 'background' ends where it is (llama.rn sets
+   *  has_next_token=false: no EOS, no stop word, no cap, not interrupted), and the backend error STICKS
+   *  to the context (ggml-metal has_error) — every later completion on it returns empty with
+   *  stopped_eos:false, until the context is released and initLlama runs again. 'inactive' does nothing.
+   *  Called by the boundary's emitAppStateChange before the app's own listeners hear the change. */
+  osAppStateChanged(state: 'active' | 'background' | 'inactive'): void;
   /** Script what context.bench() reports per backend (default: 10 tok/s on every backend). */
   scriptBench(outcomes: Partial<Record<LlamaBenchBackend, LlamaBenchOutcome>>): void;
   /** Release every bench() held by a 'hang' outcome (it then reports 1 tok/s). */
@@ -406,6 +418,7 @@ function makeLlamaFake(
   chatTemplate?: string,
   modelInfo?: Record<string, unknown>,
   fs?: NativeFileSystemBoundary,
+  vision = false,
 ): LlamaFake {
   const calls: LlamaFake['calls'] = {
     completion: [],
@@ -445,21 +458,36 @@ function makeLlamaFake(
   // `interrupted: true` (the exact device wire shape: predicted stops, stopped_eos=false). The flag
   // is per-completion (a fresh completion starts un-stopped), matching the native abort behavior.
   let stopRequested = false;
+  let htpUnavailable = false; // when true, the registry has no HTP device (session probe failed)
   let gpuInitFails = false; // when true, initLlama with n_gpu_layers>0 rejects (GPU/HTP init timeout → CPU fallback)
   let initFails = false; // when true, EVERY initLlama attempt rejects (a model that fails to load on any backend)
+  // Sticky Metal backend error (ggml-metal-context has_error): set when the app goes to background with a
+  // completion in flight on Metal; cleared only by a fresh initLlama (a new native context).
+  let backendFault = false;
+  let completionInFlight = false;
+  // The device shape of a completion that the backend fault ended: what streamed so far, no EOS, no stop
+  // word, no cap, NOT interrupted (rn-completion.cpp just sets has_next_token=false on the failed decode).
+  const backendFaultResult = (streamed: string) => ({
+    text: streamed,
+    content: streamed,
+    tool_calls: undefined,
+    interrupted: false,
+    tokens_predicted: [...streamed].length,
+    tokens_evaluated: 4,
+    stopped_eos: false,
+    stopped_word: false,
+    stopped_limit: 0,
+    truncated: false,
+    context_full: false,
+    timings: { predicted_per_token_ms: 50, predicted_per_second: 20 },
+  });
   // Multimodal-check hold: opens the post-init capability window a real slow device has.
   let mmHoldPending = false;
   let mmHoldEngaged = false;
   let mmHoldRelease: (() => void) | null = null;
 
-  const context: Record<string, jest.Mock> = {
-    // Faithful to llama.rn: completion(params, onToken) STREAMS token-by-token through the callback
-    // (each call carries the delta `token` + the cumulative `content`, as the native lib does) BEFORE
-    // resolving with the final result. This drives the REAL streaming render path (getStreamingDelta →
-    // streamingMessage), not a single-shot final text. onToken stops being fed once isGenerating flips
-    // false (a real stop), because the service's own callback guards on `data.token` + isGenerating.
-    completion: jest.fn(
-      async (
+  // The native completion body (streaming, stop, scripted faults); `completion` wraps it to track in-flight.
+  const runCompletion = async (
         params: unknown,
         onToken?: (data: {
           token: string;
@@ -471,6 +499,8 @@ function makeLlamaFake(
         const scripted = completionQueue.shift() ?? pending;
         if (completionQueue.length === 0) pending = { text: '' };
         stopRequested = false; // per-completion abort flag — a fresh completion starts un-stopped
+        // A context whose backend already failed decodes nothing: the prefill fails, the completion ends.
+        if (backendFault) return backendFaultResult('');
         if (scripted.throwMessage) throw new Error(scripted.throwMessage);
         // holdBeforeStream models PREFILL-in-progress: the completion is in flight but has emitted ZERO
         // tokens. llama cannot honor a stop mid-prefill; on release-by-stop it resolves interrupted with
@@ -494,16 +524,17 @@ function makeLlamaFake(
         ) {
           let accR = '';
           for (const c of [...scripted.reasoning]) {
-            if (stopRequested) break;
+            if (stopRequested || backendFault) break;
             accR += c;
             onToken({ token: c, reasoning_content: accR });
           }
           let accC = '';
           for (const c of [...scripted.text]) {
-            if (stopRequested) break;
+            if (stopRequested || backendFault) break;
             accC += c;
             onToken({ token: c, content: accC, reasoning_content: accR });
           }
+          if (!stopRequested && backendFault) return backendFaultResult(accC);
           if (!stopRequested) {
             const metaR = scripted.completionMeta ?? {};
             return {
@@ -528,6 +559,7 @@ function makeLlamaFake(
           wantsThinking && scripted.thinkingText != null
             ? scripted.thinkingText
             : scripted.text;
+        let streamed = '';
         if (outText && typeof onToken === 'function') {
           // Char-by-char streaming so a pauseAfter lands EXACTLY (never spanning a delimiter like </think>).
           const chars = [...outText];
@@ -535,7 +567,9 @@ function makeLlamaFake(
           let paused = false;
           for (const c of chars) {
             if (stopRequested) break; // native abort: no further tokens after stopCompletion()
+            if (backendFault) break; // the GPU refused the next decode (app went to background)
             acc += c;
+            streamed = acc;
             onToken({ token: c, content: acc });
             if (
               scripted.pauseAfter &&
@@ -553,6 +587,7 @@ function makeLlamaFake(
         // streamed (B13 wire: tokens flow, then `llama_decode: failed to decode, ret = -1` →
         // "Failed to evaluate chunks"). Distinct from throwMessage (fails at the very start): throwAfter
         // reproduces the case where the spinner is already up + streaming when the runtime dies.
+        if (!stopRequested && backendFault) return backendFaultResult(streamed);
         if (scripted.throwAfter) throw new Error(scripted.throwAfter);
         // Defaults model a NORMAL complete turn (stopped on EOS, under the cap); a scripted completionMeta
         // overrides them to model a truncated turn (B15: stopped_eos=false, stopped_limit=1 at n_predict).
@@ -585,6 +620,24 @@ function makeLlamaFake(
           context_full: meta.context_full ?? false,
           timings: { predicted_per_token_ms: 50, predicted_per_second: 20 },
         };
+      };
+  const context: Record<string, jest.Mock> = {
+    // Faithful to llama.rn: completion(params, onToken) STREAMS token-by-token through the callback
+    // (each call carries the delta `token` + the cumulative `content`, as the native lib does) BEFORE
+    // resolving with the final result. This drives the REAL streaming render path (getStreamingDelta →
+    // streamingMessage), not a single-shot final text. onToken stops being fed once isGenerating flips
+    // false (a real stop), because the service's own callback guards on `data.token` + isGenerating.
+    completion: jest.fn(
+      async (
+        params: unknown,
+        onToken?: (data: { token: string; content?: string; reasoning_content?: string }) => void,
+      ) => {
+        completionInFlight = true;
+        try {
+          return await runCompletion(params, onToken);
+        } finally {
+          completionInFlight = false;
+        }
       },
     ),
     stopCompletion: jest.fn(async () => {
@@ -638,7 +691,7 @@ function makeLlamaFake(
       setTimeout(() => onRelease?.(), 50);
     }),
     tokenize: jest.fn().mockResolvedValue({ tokens: [1, 2, 3] }),
-    initMultimodal: jest.fn().mockResolvedValue(false),
+    initMultimodal: jest.fn().mockResolvedValue(vision),
     // The post-init multimodal probe. A scripted hold parks the caller here — the real device's
     // window between context init and capability detection — until releaseMultimodalHold().
     getMultimodalSupport: jest.fn(async () => {
@@ -650,7 +703,7 @@ function makeLlamaFake(
         });
         mmHoldEngaged = false;
       }
-      return { vision: false, audio: false };
+      return { vision, audio: false };
     }),
     // Embedding boundary (embedding-model contexts, initLlama({embedding:true})): return a device-shaped
     // 384-dim vector derived from the text so RAG cosine ranking is real. Matches all-MiniLM-L6-v2 (384).
@@ -689,6 +742,7 @@ function makeLlamaFake(
     // path surfaces the true backend — EMERGENT from the settings→load flow, never programmed.
     initLlama: jest.fn(async (params?: Record<string, unknown>) => {
       calls.initLlama.push({ ...(params ?? {}) });
+      backendFault = false; // a new native context starts without the old one's backend error
       const n = Number((params?.n_gpu_layers as number) ?? 0);
       // A model that fails to load on EVERY backend (corrupt file / unsupported arch) — all 3 attempts reject.
       if (initFails)
@@ -697,14 +751,23 @@ function makeLlamaFake(
       // initContextWithFallback falls back to the CPU attempt (which requests n_gpu_layers:0 and succeeds).
       if (gpuInitFails && n > 0)
         throw new Error('GPU context init timed out after 8000ms');
-      const devices = Array.isArray(params?.devices)
+      const requested = Array.isArray(params?.devices)
         ? (params!.devices as string[])
         : [];
-      (context as Record<string, unknown>).gpu = n > 0;
-      (context as Record<string, unknown>).devices = n > 0 ? devices : [];
+      // llama.rn's device resolution (cpp/jsi/RNLlamaJSI.cpp buildDeviceOverrides): the requested
+      // names that are registered, minus 'CPU' (always the fallback, never an offload target). An
+      // empty result counts as a CPU-only list only when 'CPU' was named; otherwise the request is
+      // treated as absent and the platform default applies (Android: the OpenCL GPU).
+      const registered = (d: string) => d === 'CPU' || !(htpUnavailable && d.startsWith('HTP'));
+      const selected = requested.filter(d => d !== 'CPU' && registered(d));
+      const cpuOnlyList = requested.length > 0 && selected.length === 0 && requested.includes('CPU');
+      const usedDefault = requested.length > 0 && selected.length === 0 && !cpuOnlyList;
+      const onDevice = n > 0 && !cpuOnlyList;
+      (context as Record<string, unknown>).gpu = onDevice;
+      (context as Record<string, unknown>).devices = onDevice && !usedDefault ? selected : [];
       (context as Record<string, unknown>).reasonNoGPU =
-        n > 0 ? '' : 'gpu layers not requested';
-      initBackend = backendOf(params);
+        onDevice ? '' : 'gpu layers not requested';
+      initBackend = cpuOnlyList ? 'cpu' : backendOf(usedDefault ? { n_gpu_layers: n } : params);
       return context;
     }),
     releaseContext: jest.fn().mockResolvedValue(undefined),
@@ -717,6 +780,14 @@ function makeLlamaFake(
   return {
     module,
     calls,
+    osAppStateChanged: state => {
+      // iOS refuses Metal command buffers once the app is in background; 'inactive' keeps the GPU.
+      if (state !== 'background' || !completionInFlight || initBackend !== 'metal') return;
+      backendFault = true;
+      const f = releaseFn;
+      releaseFn = null;
+      f?.(); // a stream held mid-reply resumes into the failed decode
+    },
     scriptCompletion: r => {
       completionQueue.length = 0;
       pending = prepareCompletion(r);
@@ -730,6 +801,9 @@ function makeLlamaFake(
       const f = releaseFn;
       releaseFn = null;
       f?.();
+    },
+    scriptHtpUnavailable: (unavailable = true) => {
+      htpUnavailable = unavailable;
     },
     scriptGpuInitFailure: (fail = true) => {
       gpuInitFails = fail;
@@ -1060,6 +1134,8 @@ function makeWhisperFake(): WhisperFake {
     module,
     emitRealtime: ({ text, isCapturing, recordingTime, noData }) => {
       if (!realtimeCb) return;
+      // whisper.rn sends the final event when its capture has ended (stop, or the realtimeAudioSec cap).
+      if (!isCapturing) rtActive = false;
       realtimeCb({
         isCapturing,
         data: noData
@@ -1138,6 +1214,8 @@ export interface InstallOpts {
   llamaChatTemplate?: string;
   /** GGUF header fields returned by the native metadata reader. */
   llamaModelInfo?: Record<string, unknown>;
+  /** The projector starts: initMultimodal resolves true and the context reports vision support. */
+  llamaVision?: boolean;
   /** Seed a stateful background-download native module (boundary.download). */
   download?: boolean;
   /** Replace the global whisper.rn stub with a driveable STT context (boundary.whisper). */
@@ -1220,7 +1298,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
 
   // Scriptable llama.rn: override the global stub so completion output is under test control.
   const llamaFake = opts.llama
-    ? makeLlamaFake(freeModelMemory, opts.llamaChatTemplate, opts.llamaModelInfo, fsFake)
+    ? makeLlamaFake(freeModelMemory, opts.llamaChatTemplate, opts.llamaModelInfo, fsFake, opts.llamaVision)
     : undefined;
   if (llamaFake) jest.doMock('llama.rn', () => llamaFake.module);
 
@@ -1352,7 +1430,11 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     whisper: whisperFake,
     setRam,
     emitMemoryWarning: () => appState.handle.emit('memoryWarning'),
-    emitAppStateChange: state => appState.handle.emit('change', state),
+    emitAppStateChange: state => {
+      // The native engine meets the OS change first (the GPU refuses work at once); JS hears it after.
+      llamaFake?.osAppStateChanged(state);
+      appState.handle.emit('change', state);
+    },
     setMicPermission: status => {
       micPermission = status;
     },

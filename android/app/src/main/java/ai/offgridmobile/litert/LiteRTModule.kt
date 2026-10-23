@@ -92,6 +92,40 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
             val affordableTokens = (kvBudgetMb / KV_MB_PER_TOKEN).toInt()
             return requested.coerceAtMost(maxOf(MIN_TOKEN_FLOOR, affordableTokens))
         }
+
+        /** Sub-directory of the app cache where LiteRT-LM keeps its compiled programs. */
+        const val ENGINE_CACHE_DIR_NAME = "litert-cache"
+
+        /**
+         * Directory where LiteRT-LM stores compiled GPU programs between loads. Without
+         * one, every load compiles every GPU kernel again (nativeCreateEngine -> clFinish),
+         * and that long GPU job makes the UI thread wait on its eglSwapBuffers fence (ANR).
+         * Created on each call, because the OS can clear the app cache between loads.
+         * Returns null (engine default) when the directory can't be created or written:
+         * the native side rejects a cache dir that is missing or not writable.
+         */
+        fun resolveEngineCacheDir(baseDir: File?): String? {
+            if (baseDir == null) return null
+            val dir = File(baseDir, ENGINE_CACHE_DIR_NAME)
+            if (!dir.isDirectory && !dir.mkdirs()) return null
+            return if (dir.canWrite()) dir.absolutePath else null
+        }
+
+        /**
+         * Try each backend tier once, in order, and return the first one that initializes
+         * (null when all fail). One attempt per tier: a GPU attempt is a long blocking GPU
+         * job (nativeCreateEngine -> clFinish) that withTimeout cannot interrupt, and the UI
+         * thread waits on the same GPU for eglSwapBuffers. The old back-to-back GPU retries
+         * (for VRAM not yet freed after a model switch) stacked three of those jobs and
+         * made the ANR longer. cleanupEngine closes the previous engine before a load, and
+         * the CPU tier keeps the model usable when the GPU attempt fails.
+         */
+        suspend fun <T> firstWorkingBackend(chain: List<T>, tryInit: suspend (T) -> Boolean): T? {
+            for (backend in chain) {
+                if (tryInit(backend)) return backend
+            }
+            return null
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -106,6 +140,7 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
     // Pending tool calls waiting for JS to respond via respondToToolCall()
     private val pendingToolCalls = ConcurrentHashMap<String, CompletableDeferred<String>>()
     private var configuredMaxTokens: Int = 4096
+    private var engineCacheDir: String? = null
 
     override fun getName(): String = "LiteRTModule"
 
@@ -125,6 +160,8 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 // (SIGABRT in nativeCreateEngine) or segfaults during inference. Degrading
                 // to a smaller context keeps the app working instead of crashing.
                 configuredMaxTokens = resolveSafeMaxTokens(modelPath, maxNumTokens)
+                engineCacheDir = withContext(Dispatchers.IO) { resolveEngineCacheDir(reactContext.cacheDir) }
+                if (engineCacheDir == null) Log.w(TAG, "loadModel — no writable engine cache dir, GPU programs will compile again")
                 // Unload any existing engine first
                 cleanupEngine()
 
@@ -179,7 +216,7 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 modelPath = modelPath,
                 backend = backend,
                 maxNumTokens = configuredMaxTokens,
-                cacheDir = null,
+                cacheDir = engineCacheDir,
                 // Vision delegate follows the main backend tier. Forcing the Mali GPU
                 // delegate even when the main backend has fallen to CPU is a SIGSEGV
                 // source (libGLES_mali) on weak/low-VRAM GPUs; on the CPU tier the vision
@@ -191,7 +228,12 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
                 audioBackend = if (audioEnabled) Backend.CPU() else null,
             )
             eng = Engine(cfg)
-            withTimeout(initTimeoutMs(backend, configuredMaxTokens)) { eng.initialize() }
+            // initialize() blocks in native code (GPU program compile) for up to minutes.
+            // Run it on the IO pool so it never holds a Default worker or the main thread.
+            // withTimeout cannot interrupt it; it only fails the attempt after it returns.
+            withTimeout(initTimeoutMs(backend, configuredMaxTokens)) {
+                withContext(Dispatchers.IO) { eng.initialize() }
+            }
             engine = eng
             true
         } catch (e: Exception) {
@@ -207,31 +249,15 @@ class LiteRTModule(private val reactContext: ReactApplicationContext) :
 
     private suspend fun initializeWithFallback(modelPath: String, requested: Backend, visionEnabled: Boolean, audioEnabled: Boolean): Backend {
         val chain = buildBackendChain(requested)
-
-        // GPU/NPU failures can be transient (e.g. VRAM not yet released after a model switch).
-        // Retry up to 2 extra times with backoff before giving up on a non-CPU backend.
-        val gpuRetries = 2
-        val gpuRetryDelayMs = 600L
-
-        for (backend in chain) {
+        return firstWorkingBackend(chain) { backend ->
             val name = backendName(backend)
-            val maxAttempts = if (backend is Backend.CPU) 1 else gpuRetries + 1
-
-            for (attempt in 1..maxAttempts) {
-                if (attempt > 1) {
-                    Log.i(TAG, "initializeWithFallback — $name retry $attempt/$maxAttempts after ${gpuRetryDelayMs}ms")
-                    delay(gpuRetryDelayMs)
-                } else {
-                    Log.i(TAG, "initializeWithFallback — trying $name vision=$visionEnabled audio=$audioEnabled")
-                }
-                if (tryInitBackend(modelPath, backend, name, visionEnabled, audioEnabled)) return backend
+            Log.i(TAG, "initializeWithFallback — trying $name vision=$visionEnabled audio=$audioEnabled")
+            val ok = tryInitBackend(modelPath, backend, name, visionEnabled, audioEnabled)
+            if (!ok && backend != chain.last()) {
+                Log.i(TAG, "initializeWithFallback — $name failed, falling back to next tier")
             }
-
-            if (backend != chain.last()) {
-                Log.i(TAG, "initializeWithFallback — $name exhausted retries, falling back to next tier")
-            }
-        }
-        throw IllegalStateException("All backends failed")
+            ok
+        } ?: throw IllegalStateException("All backends failed")
     }
 
     // -------------------------------------------------------------------------

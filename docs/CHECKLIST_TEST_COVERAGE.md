@@ -71,7 +71,7 @@ A row flagged HAS-UI-TEST may still carry a device caveat where the *trigger* is
 | 41 | 2 Text gen | Long output cutoff indicator | HAS-UI-TEST | `__tests__/integration/generation/maxPredictSilentCutoff.rendered.redflow.test.tsx` | T034/DEV-B15; rendered cutoff indicator |
 | 42 | 2 Text gen | Failed generation clears the spinner | HAS-UI-TEST | `__tests__/integration/generation/errorClearsSpinner.rendered.redflow.test.tsx` | T056/DEV-B13; rendered spinner-clears + error bubble |
 | 43 | 2 Text gen | Stop mid-generation keeps partial | HAS-UI-TEST | `__tests__/rntl/screens/ChatScreen.test.tsx` (stop) + `__tests__/unit/screens/getDisplayMessages.test.ts` (partial) | T037; rendered stop button; partial-retention at store level |
-| 44 | 2 Text gen | Queue while generating | HAS-SERVICE-TEST-ONLY | `__tests__/integration/generation/queuedSendFeedback.test.ts` | T036; queue subscription/count, no render() |
+| 44 | 2 Text gen | Queue while generating | HAS-UI-TEST | `__tests__/integration/generation/queueSendNow.rendered.test.tsx` (+ `queuedSendFeedback.test.ts`) | T036. Rendered queue while a reply streams; queued messages send after it, in order |
 | 45 | 2 Text gen | Copy a message | HAS-UI-TEST | `__tests__/rntl/components/ChatMessage.test.tsx` | Rendered action-copy fires onCopy |
 | 46 | 2 Text gen | Edit a user message and resend | HAS-UI-TEST | `__tests__/integration/happy/editMessage.happy.test.tsx` | Rendered long-press → Edit → resend, real regen |
 | 47 | 2 Text gen | Regenerate a reply | HAS-UI-TEST | `__tests__/integration/happy/resend.happy.test.tsx` | Rendered long-press → Retry, real regenerate |
@@ -84,7 +84,7 @@ A row flagged HAS-UI-TEST may still carry a device caveat where the *trigger* is
 | # | Phase | What to test | Bucket | Existing test (if any) | Note |
 |---|---|---|---|---|---|
 | 51 | 3 Voice | Mic permission prompt on first record | DEVICE-ONLY | — | Real OS mic dialog; cannot fake |
-| 52 | 3 Voice | Mic permission DENIED handled | HAS-SERVICE-TEST-ONLY | `__tests__/unit/hooks/useVoiceRecording.test.ts`, `__tests__/unit/services/audioRecorderService.test.ts` | Deny-path logic unit-tested; real deny dialog is device |
+| 52 | 3 Voice | Mic permission DENIED handled | HAS-UI-TEST | `__tests__/integration/audio/micPermissionDenied.rendered.test.tsx` (+ `useVoiceRecording.test.ts`, `audioRecorderService.test.ts`) | Rendered denied mic on iOS + Android: explains why, opens Settings, recovers on allow. Real deny dialog is device |
 | 53 | 3 Voice | Chat-mode dictation to composer | HAS-UI-TEST | `__tests__/integration/audio/chatModeSttArchitecture.rendered.redflow.test.tsx` | T075/B26/B28; renders ChatScreen, transcript lands in input; native capture device caveat |
 | 54 | 3 Voice | Chat-mode dictation on litert | HAS-UI-TEST | `__tests__/integration/audio/chatModeSttArchitecture.rendered.redflow.test.tsx` | B28; one-pipeline proof; real litert mic capture device caveat |
 | 55 | 3 Voice | Voice note carries transcript (chat) | HAS-SERVICE-TEST-ONLY | `__tests__/integration/generation/voiceNoteTranscriptOnly.test.ts`, `__tests__/unit/components/voiceNoteSend.test.ts` | T076/Q20; transcript-not-audio invariant at service seam |
@@ -118,7 +118,7 @@ A row flagged HAS-UI-TEST may still carry a device caveat where the *trigger* is
 | 78 | 4 Vision | Photo permission prompt on first attach | DEVICE-ONLY | — | Real OS photo dialog |
 | 79 | 4 Vision | Photo permission DENIED handled | DEVICE-ONLY | — | Real OS deny dialog |
 | 80 | 4 Vision | Vision answers about an image | HAS-UI-TEST | `__tests__/integration/happy/multimodalVision.happy.test.tsx` | T054; rendered attach-photo → answer |
-| 81 | 4 Vision | Image + text in one turn | HAS-SERVICE-TEST-ONLY | `__tests__/hardening/batch3-visionSendGate.test.ts` | Mixed-modality prompt build at llmMessages seam; no rendered mixed-turn test |
+| 81 | 4 Vision | Image + text in one turn | HAS-UI-TEST | `__tests__/integration/generation/multipleImagesReachEngine.rendered.guard.test.tsx` (+ `batch3-visionSendGate.test.ts`) | Rendered turn with images + a question; reply renders, images reach the engine. Prompt build at llmMessages seam |
 | 82 | 4 Vision | Big vision model decode handled | NO-TEST | — | T055/B9; model-specific decode failure/spinner-clear not tested |
 | 83 | 4 Vision | litert vision affordance consistent | HAS-UI-TEST | `__tests__/integration/vision/litertVisionAffordanceConsistent.guard.test.tsx` | T058/B20; guard.test.tsx renders + attach, asserts chip |
 | 84 | 4 Vision | Non-vision model image refused gracefully | HAS-SERVICE-TEST-ONLY | `__tests__/hardening/batch3-visionSendGate.test.ts`, `__tests__/unit/services/generationServiceHelpers.branches.test.ts` | T060/Q17b; gate at service; native crash device |
@@ -130,7 +130,7 @@ A row flagged HAS-UI-TEST may still carry a device caveat where the *trigger* is
 | 85 | 5 Memory | Loading mode selectable + persists | HAS-UI-TEST | `__tests__/integration/memory/aggressiveDirtyOverCommit.rendered.redflow.test.tsx` | M1; renders ModelLoadingModeSelector, presses aggressive |
 | 86 | 5 Memory | Whisper not resident on download | HAS-UI-TEST | `__tests__/integration/memory/whisperResidentOnDownload.rendered.redflow.test.tsx` | T022/B1; rendered In-Memory selector, whisper absent |
 | 87 | 5 Memory | Conservative = one heavy at a time | HAS-SERVICE-TEST-ONLY | `__tests__/integration/memory/loadingModes.redflow.test.ts` | T026/M1; service redflow, real residency manager; no rendered variant |
-| 88 | 5 Memory | Balanced = co-reside if they fit | HAS-SERVICE-TEST-ONLY | `__tests__/integration/memory/loadingModes.redflow.test.ts` | T026; service redflow co-reside branch |
+| 88 | 5 Memory | Balanced = co-reside if they fit | HAS-UI-TEST | `__tests__/integration/memory/sharedResidencyPolicy.rendered.happy.test.tsx` (+ `loadingModes.redflow.test.ts`) | T026. Rendered chat on default Balanced; text + image both resident when they fit |
 | 89 | 5 Memory | Text + whisper co-reside (roomy) | HAS-UI-TEST | `__tests__/integration/memory/textWhisperCoresident.rendered.happy.test.tsx` | T116/M1; rendered In-Memory lists both |
 | 90 | 5 Memory | Sidecars co-reside with a heavy | HAS-UI-TEST | `__tests__/integration/memory/ttsCoresidentInVoiceTurn.rendered.happy.test.tsx` | T120; rendered STT+TTS co-reside with text |
 | 91 | 5 Memory | TTS co-resident in a voice turn | HAS-UI-TEST | `__tests__/integration/memory/ttsCoresidentInVoiceTurn.rendered.happy.test.tsx` | T120/V4/V5; rendered In-Memory lists tts |
@@ -145,7 +145,7 @@ A row flagged HAS-UI-TEST may still carry a device caveat where the *trigger* is
 | 100 | 5 Memory | Estimators agree (no safe-then-refuse) | HAS-SERVICE-TEST-ONLY | `__tests__/integration/memory/imageEstimatorDivergence.redflow.test.ts` | T027/Q14; service-level estimator agreement |
 | 101 | 5 Memory | Load Anyway always loads | DEVICE-ONLY | `__tests__/integration/memory/aggressiveDirtyOverCommit.rendered.redflow.test.tsx` (verdict only) | T024/DEV. Native jetsam/OOM survival is device; gate verdict UI-tested |
 | 102 | 5 Memory | Survival floor blocks guaranteed OOM | DEVICE-ONLY | `__tests__/integration/memory/overrideFloor.redflow.test.ts` (verdict) | T028/DEV-M3/M4. iOS jetsam confirmation device; floor verdict service-tested |
-| 103 | 5 Memory | Image→chat swap | HAS-SERVICE-TEST-ONLY | `__tests__/integration/memory/resendAfterImageGen.redflow.test.ts` | T025/DEV-M11. Residency co-reside at service altitude |
+| 103 | 5 Memory | Image→chat swap | HAS-UI-TEST | `__tests__/integration/memory/sharedResidencyPolicy.rendered.happy.test.tsx` (+ `resendAfterImageGen.redflow.test.ts`) | T025/DEV-M11. Rendered: image swaps text out, next message loads text, reply renders |
 | 104 | 5 Memory | Switch active model mid-chat | HAS-UI-TEST | `__tests__/integration/memory/litertLazyOnSelect.rendered.happy.test.tsx` | Real ModelSelector select→active→lazy-load, In Memory assert |
 | 105 | 5 Memory | Eject All frees everything | HAS-UI-TEST | `__tests__/integration/memory/ejectAllUnloadsEveryType.rendered.redflow.test.tsx` | T023/DEV-B1. Renders + asserts every type unloaded |
 | 106 | 5 Memory | Eject one resident from In Memory | HAS-UI-TEST | `__tests__/integration/memory/modelSelectorEjectResident.rendered.redflow.test.tsx` | T112/DEV-B1. Selector eject targets one type, rendered |
@@ -165,7 +165,7 @@ A row flagged HAS-UI-TEST may still carry a device caveat where the *trigger* is
 | 115 | 6 KB/Projects | Scanned PDF clear message | HAS-UI-TEST | `__tests__/integration/knowledge-base/kbScannedPdfMessage.rendered.redflow.test.tsx` | T010/DEV. Rendered scanned-PDF message |
 | 116 | 6 KB/Projects | >5MB file rejected | HAS-UI-TEST | `__tests__/integration/knowledge-base/kbFileSizeGuard.rendered.happy.test.tsx` | T011/DEV. Rendered size gate |
 | 117 | 6 KB/Projects | Embedding failure aborts + retry | HAS-UI-TEST | `__tests__/integration/knowledge-base/kbIndexEmbedFailAbort.rendered.redflow.test.tsx` (+ `indexDocumentRollback.redflow.test.ts`) | T009/DEV. Rendered error card + retry |
-| 118 | 6 KB/Projects | KB retrieval in a chat | HAS-SERVICE-TEST-ONLY | `__tests__/integration/knowledge-base/searchKnowledgeBaseRoundtrip.test.ts` (+ `rag/ragFlow.test.ts`) | T089/DEV. Round-trip at service level; no chat-screen render |
+| 118 | 6 KB/Projects | KB retrieval in a chat | HAS-UI-TEST | `__tests__/integration/knowledge-base/projectKnowledgeSearchedWhenNeeded.rendered.test.tsx` (+ `searchKnowledgeBaseRoundtrip.test.ts`) | T089/DEV. Real App: project chat calls search_knowledge_base, answer cites the PDF page |
 | 119 | 6 KB/Projects | New chat inherits the project | HAS-UI-TEST | `__tests__/integration/projects/newChatFilesPendingProject.rendered.guard.test.tsx` | T092/DEV-Q10. Rendered |
 | 120 | 6 KB/Projects | Context-full new chat keeps project | HAS-UI-TEST | `__tests__/integration/projects/contextFullNewChatDropsProject.rendered.redflow.test.tsx` | T093/DEV-Q11. Rendered continuation inherits project |
 | 121 | 6 KB/Projects | Edit a project | HAS-UI-TEST | `__tests__/rntl/screens/ProjectEditScreen.test.tsx` | Render + save |
@@ -178,7 +178,7 @@ A row flagged HAS-UI-TEST may still carry a device caveat where the *trigger* is
 | 123 | 7 Tools | Calculator tool runs | HAS-UI-TEST | `__tests__/integration/happy/tools.happy.test.tsx` | T043/DEV. Enable via real Tools screen, result bubble renders |
 | 124 | 7 Tools | Datetime tool runs | NO-TEST | — | get_current_datetime only in unit registry/handlers; no rendered run |
 | 125 | 7 Tools | Device info tool runs | NO-TEST | — | get_device_info only in unit handlers; no rendered run |
-| 126 | 7 Tools | Web search tool runs | NO-TEST | — | web_search unit handlers + ToolsScreen list only; no rendered run |
+| 126 | 7 Tools | Web search tool runs | HAS-UI-TEST | `__tests__/integration/chat/webSearchProviderFailure.rendered.test.tsx` | Rendered web_search turn on llama + litert; HTTP 403/503 shows a clear failed-search result. Success results render not tested |
 | 127 | 7 Tools | Parallel tool calls | HAS-UI-TEST | `__tests__/integration/happy/tools.happy.test.tsx` (T044 case) | T044/DEV. Two calculator bubbles rendered |
 | 128 | 7 Tools | Thinking + tool + answer in order | HAS-UI-TEST | `__tests__/integration/chat/thinkingToolAnswerRender.rendered.happy.test.tsx` | T038/DEV. Ordered render asserted |
 | 129 | 7 Tools | Messy tool JSON still runs | HAS-UI-TEST | `__tests__/integration/chat/toolMessyJson.rendered.redflow.test.tsx` | T039/DEV-Q2. Rendered tolerant parse |
@@ -239,11 +239,11 @@ A row flagged HAS-UI-TEST may still carry a device caveat where the *trigger* is
 | 164 | 11 Polish | App lock passphrase set + enforce | HAS-UI-TEST | `__tests__/rntl/screens/LockScreen.test.tsx`, `SecuritySettingsScreen.test.tsx`, `PassphraseSetupScreen.test.tsx` | Rendered lock/setup; verify/unlock/reject. Biometric device |
 | 165 | 11 Polish | Share/promo sheet once per session | HAS-UI-TEST | `__tests__/integration/happy/supportShareDismiss.happy.test.tsx` (+ `home/sharePromptOncePerSession.rendered.test.tsx`) | T096/DEV. Rendered once-per-session guard |
 | 166 | 11 Polish | Settings persist across relaunch | HAS-UI-TEST | `__tests__/integration/happy/persistence.happy.test.tsx` (+ `settingsApplied.happy.test.tsx`) | Persistence gate. Real persist+relaunch; project round-trip, not every setting individually |
-| 167 | 11 Polish | Chat history survives relaunch | HAS-SERVICE-TEST-ONLY | `__tests__/integration/happy/persistence.happy.test.tsx` | Persistence renders project round-trip only; chat-history relaunch = store rehydration |
+| 167 | 11 Polish | Chat history survives relaunch | HAS-UI-TEST | `__tests__/integration/happy/chatHistoryRelaunch.happy.test.tsx` | Rendered relaunch over saved storage; chats reopen with their messages and versions |
 | 168 | 11 Polish | Downloaded models survive relaunch | NO-TEST | — | No per-entity relaunch test for downloaded-models list |
 | 169 | 11 Polish | Active model selection survives relaunch | NO-TEST | — | No relaunch test asserting active-model persists |
 | 170 | 11 Polish | Projects + KB survive relaunch | HAS-UI-TEST | `__tests__/integration/happy/persistence.happy.test.tsx` | Real form-create project → relaunch → renders (KB/index persistence not separately asserted) |
-| 171 | 11 Polish | Download entries survive relaunch | NO-TEST | — | DEV. No relaunch test for Download Manager entry restore/retriable |
+| 171 | 11 Polish | Download entries survive relaunch | HAS-SERVICE-TEST-ONLY | `__tests__/integration/downloads/queuedDownloadsSurviveKill.redflow.test.ts` | DEV. Queued entries restore after a kill at service level; no rendered Download Manager assert |
 | 172 | 11 Polish | Background → foreground mid-gen | DEVICE-ONLY | — | Real OS bg/fg transition |
 | 173 | 11 Polish | Kill mid-generation recovers | DEVICE-ONLY | — | On-kill / jetsam |
 | 174 | 11 Polish | Airplane mode local-only works | DEVICE-ONLY | — | Real radio off |
@@ -262,7 +262,7 @@ A row flagged HAS-UI-TEST may still carry a device caveat where the *trigger* is
 | 182 | 12 This-release | Parse-once think+tool+answer on litert | HAS-UI-TEST | `__tests__/integration/chat/thinkingToolAnswerRender.rendered.happy.test.tsx` (+ `engineParityRedflow.test.ts`) | T038. Rendered litert reason→tool→answer in order |
 | 183 | 12 This-release | Parse-once think+tool+answer on remote | HAS-UI-TEST | `__tests__/integration/generation/remoteOllamaReasoningRenders.rendered.redflow.test.tsx` (+ `remoteParallelTools.rendered.happy.test.tsx`) | T051/T048. Rendered remote thinking + tool + answer |
 | 184 | 12 This-release | Remote activation frees local heavy | HAS-SERVICE-TEST-ONLY | `__tests__/integration/happy/residencySwap.happy.test.ts` | Residency accounting via getResidents(); no render / no In Memory UI assert |
-| 185 | 12 This-release | Mid-chat model switch stays coherent | HAS-SERVICE-TEST-ONLY | `__tests__/integration/models/chatHomeSelectorParity.test.ts` (+ `activeModelService.test.ts`) | GAPS:180. Service decision; no render, no send-again coherence at UI |
+| 185 | 12 This-release | Mid-chat model switch stays coherent | HAS-UI-TEST | `__tests__/integration/litert/litertSwitchLoadsPickedModel.rendered.test.tsx`, `__tests__/integration/memory/llamaSwitchFitCheckedBeforeRelease.rendered.test.tsx` | GAPS:180. Rendered switch in the chat sheet; next send loads the new model and it answers |
 | 186 | 12 This-release | Remote stream interruption recovers | DEVICE-ONLY | `__tests__/integration/generation/errorClearsSpinner.rendered.redflow.test.tsx` (partial) | Real WiFi kill device; spinner-clear/error-surface partly covered |
 
 ---
@@ -274,19 +274,19 @@ A row flagged HAS-UI-TEST may still carry a device caveat where the *trigger* is
 | Phase | HAS-UI-TEST | HAS-SERVICE-TEST-ONLY | NO-TEST | DEVICE-ONLY | Total |
 |---|---|---|---|---|---|
 | 0 Install | 2 | 0 | 0 | 1 | 3 |
-| 1 Downloads | 10 | 6 | 1 | 2 | 19 |
-| 2 Text gen | 20 | 3 | 1 | 2 | 26 |
-| 3 Voice | 11 | 3 | 0 | 1 | 15 |
-| 4 Image/Vision | 11 | 3 | 2 | 2 | 18 |
-| 5 Memory | 15 | 5 | 1 | 2 | 23 |
-| 6 KB/Projects | 10 | 1 | 0 | 0 | 11 |
-| 7 Tools | 8 | 2 | 3 | 0 | 13 |
-| 8 Remote | 6 | 2 | 2 | 1 | 11 |
+| 1 Downloads | 11 | 6 | 1 | 1 | 19 |
+| 2 Text gen | 23 | 2 | 1 | 2 | 28 |
+| 3 Voice | 12 | 2 | 0 | 1 | 15 |
+| 4 Image/Vision | 13 | 2 | 2 | 2 | 19 |
+| 5 Memory | 20 | 4 | 1 | 2 | 27 |
+| 6 KB/Projects | 11 | 0 | 0 | 0 | 11 |
+| 7 Tools | 11 | 2 | 2 | 0 | 15 |
+| 8 Remote | 7 | 2 | 2 | 1 | 12 |
 | 9 Enhancement | 3 | 1 | 0 | 0 | 4 |
 | 10 TTS | 2 | 0 | 0 | 0 | 2 |
-| 11 Polish | 10 | 1 | 4 | 8 | 23 |
-| 12 This-release | 2 | 2 | 0 | 3 | 7 |
-| **TOTAL** | **110** | **29** | **14** | **24** | **186** |
+| 11 Polish | 13 | 1 | 3 | 7 | 24 |
+| 12 This-release | 3 | 1 | 0 | 3 | 7 |
+| **TOTAL** | **131** | **23** | **12** | **20** | **186** |
 
 ### GAP LIST — buildable UI-behavior test gaps
 
@@ -306,7 +306,6 @@ proves the logic, add a rendered variant that drives it through the screen).
 **Phase 2 Text gen**
 - 34 — System prompt applies (NO-TEST)
 - 36 — Batch size applies (service-only)
-- 44 — Queue while generating (service-only)
 - 48 — Mid-conversation sampler change takes effect (service-only)
 
 **Phase 3 Voice**
@@ -316,26 +315,19 @@ proves the logic, add a rendered variant that drives it through the screen).
 **Phase 4 Image/Vision**
 - 69 — Image steps applies (service-only)
 - 76 — First-gen warmup notice accurate (NO-TEST)
-- 81 — Image + text in one turn (service-only)
 - 82 — Big vision model decode handled (NO-TEST)
 - 84 — Non-vision model image refused gracefully (service-only)
 
 **Phase 5 Memory**
 - 87 — Conservative = one heavy at a time (service-only)
-- 88 — Balanced = co-reside if they fit (service-only)
 - 97 — Aggressive loads bigger automatically (service-only)
 - 100 — Estimators agree, no safe-then-refuse (service-only)
-- 103 — Image→chat swap (service-only)
 - 109 — Stale TTS pressure cleared on delete (service-only)
 - 110 — Delete mid-playback keeps audio (NO-TEST)
-
-**Phase 6 KB/Projects**
-- 118 — KB retrieval in a chat (service-only)
 
 **Phase 7 Tools**
 - 124 — Datetime tool runs (NO-TEST)
 - 125 — Device info tool runs (NO-TEST)
-- 126 — Web search tool runs (NO-TEST)
 - 131 — Tool router no false positive (service-only)
 - 136 — MCP tool error handled (service-only)
 
@@ -349,14 +341,12 @@ proves the logic, add a rendered variant that drives it through the screen).
 - 153 — Enhancement rewrites then regenerates (service-only)
 
 **Phase 11 Polish**
-- 167 — Chat history survives relaunch (service-only)
 - 168 — Downloaded models survive relaunch (NO-TEST)
 - 169 — Active model selection survives relaunch (NO-TEST)
-- 171 — Download entries survive relaunch (NO-TEST)
+- 171 — Download entries survive relaunch (service-only)
 - 176 — Stay-in-the-loop card placement (NO-TEST)
 
 **Phase 12 This-release**
 - 184 — Remote activation frees local heavy (service-only)
-- 185 — Mid-chat model switch stays coherent (service-only)
 
-**Total buildable gaps: 43** (14 NO-TEST + 29 HAS-SERVICE-TEST-ONLY).
+**Total buildable gaps: 35** (12 NO-TEST + 23 HAS-SERVICE-TEST-ONLY).

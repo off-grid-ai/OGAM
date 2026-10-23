@@ -5,6 +5,7 @@ import {
   Text,
   Platform,
 } from 'react-native';
+import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardVisible } from '../../hooks/useKeyboardVisible';
@@ -311,7 +312,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             minIndexForVisible: 0,
             autoscrollToTopThreshold: 100,
           }}
-          removeClippedSubviews={Platform.OS !== 'android'}
+          {...LIST_CLIPPING_PROPS}
         />
       )}
       {chat.showScrollToBottom && chat.displayMessages.length > 0 && (

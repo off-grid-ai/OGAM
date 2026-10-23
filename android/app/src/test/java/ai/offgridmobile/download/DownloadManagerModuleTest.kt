@@ -1,6 +1,11 @@
 package ai.offgridmobile.download
 
 import android.app.Application
+import android.content.Context
+import android.content.ContextWrapper
+import android.os.Environment
+import androidx.test.core.app.ApplicationProvider
+import java.io.File
 import kotlin.io.path.createTempFile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -303,5 +308,31 @@ class DownloadManagerModuleTest {
         val mgr = ctx.getSystemService(android.content.Context.NOTIFICATION_SERVICE)
             as android.app.NotificationManager
         assertNotNull(mgr.getNotificationChannel("model_downloads"))
+    }
+
+    @Test
+    fun downloadsDirFallsBackToInternalStorageWhenExternalStorageIsUnavailable() {
+        val app = ApplicationProvider.getApplicationContext<Context>()
+        val noExternal = object : ContextWrapper(app) {
+            override fun getExternalFilesDir(type: String?): File? = null
+        }
+
+        val dir = DownloadManagerModule.downloadsDir(noExternal)
+
+        assertTrue("downloads must stay inside the app sandbox", dir.isAbsolute)
+        assertEquals(File(app.filesDir, Environment.DIRECTORY_DOWNLOADS), dir)
+        assertTrue(dir.isDirectory)
+    }
+
+    @Test
+    fun isInsideAnyRefusesPathsOutsideTheSandbox() {
+        val root = createTempFile().toFile().apply { delete(); mkdirs() }
+        val files = File(root, "files").apply { mkdirs() }
+
+        assertTrue(DownloadManagerModule.isInsideAny(File(files, "models/a.gguf"), listOf(files)))
+        assertTrue(DownloadManagerModule.isInsideAny(files, listOf(files)))
+        assertFalse(DownloadManagerModule.isInsideAny(File(root, "elsewhere/a.gguf"), listOf(files)))
+        assertFalse(DownloadManagerModule.isInsideAny(File(root, "files-evil/a.gguf"), listOf(files)))
+        assertFalse(DownloadManagerModule.isInsideAny(File(files, "../elsewhere/a.gguf"), listOf(files)))
     }
 }

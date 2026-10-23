@@ -35,6 +35,8 @@ jest.mock('../../../src/services/llm', () => ({
     getBackendFallbackNotice: jest.fn(() => null),
     stopGeneration: jest.fn(),
     isModelLoaded: jest.fn(),
+    // A loaded context answers unless a backend fault marked it (llmService.isContextUsable).
+    isContextUsable: jest.fn(function (this: { isModelLoaded: () => boolean }) { return this.isModelLoaded(); }),
     // engines.activeTextCapabilities (reached via loadedModelVision / state-sync) reads these too.
     supportsToolCalling: jest.fn(() => false),
     supportsThinking: jest.fn(() => false),
@@ -181,6 +183,8 @@ describe('initiateModelLoad', () => {
   it('loads model successfully when not already loading', async () => {
     mockLoadTextModel.mockResolvedValueOnce(undefined);
     mockGetMultimodalSupport.mockReturnValueOnce({ vision: true });
+    // After the load, the engine holds this model's file, so its live capabilities are this model's.
+    mockGetLoadedModelPath.mockReturnValue('/path/model.gguf');
     const deps = makeDeps();
     await initiateModelLoad(deps, false);
     expect(deps.setIsModelLoading).toHaveBeenCalledWith(true);

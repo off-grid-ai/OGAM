@@ -149,7 +149,22 @@ export function useVoiceInput({ conversationId, interfaceMode, onTranscript, onA
     startRecording: startWhisperRecording,
     stopRecording: stopWhisperRecording,
     clearResult,
-  } = useWhisperTranscription({ ensureModelReady: ensureWhisper });
+  } = useWhisperTranscription({
+    ensureModelReady: ensureWhisper,
+    // The capture closed itself (whisper.rn's length cap). The session must leave "listening", or every
+    // later tap is refused. Dictation ends as a stop ends it; voice mode gets no reply from this, so it
+    // ends the session the way an empty turn does instead of handing the floor to an assistant.
+    onCaptureEnded: () => {
+      logger.log('[TURN] capture ended by itself');
+      if (isInAudioInterfaceMode()) {
+        voiceSession.dispatch('nothingHeard');
+        voiceSession.dispatch('nothingHeard');
+        return;
+      }
+      voiceSession.dispatch('turnCaptured');
+      voiceSession.dispatch('dictationFinished');
+    },
+  });
 
   const isTranscribing = isWhisperTranscribing || isTranscribingFile;
   const isRecording = isDirectRecording || isAudioModeRecording || isWhisperRecording;
