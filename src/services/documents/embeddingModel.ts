@@ -4,7 +4,7 @@
 import { embeddingService } from '../rag/embedding';
 import { commitEmbeddingModel, type EmbeddingModelSelection } from './store';
 
-export interface EmbeddingModelCandidate {
+interface EmbeddingModelCandidate {
   id: string;
   name: string;
   size: number;
@@ -12,7 +12,7 @@ export interface EmbeddingModelCandidate {
   sha256?: string;
 }
 
-export interface EmbeddingModelChange {
+interface EmbeddingModelChange {
   busy: boolean;
   message: string;
   error: string;
