@@ -1,5 +1,4 @@
 import RNFS from 'react-native-fs';
-import { splitGgufPartNames } from '@offgrid/models';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DownloadedModel, LlamaDownloadedModel, LiteRTDownloadedModel, ModelFile, ModelCredibility, ModelOrigin, ONNXImageModel } from '../../types';
 import { LMSTUDIO_AUTHORS, OFFICIAL_MODEL_AUTHORS, RECOMMENDED_MODELS, VERIFIED_QUANTIZERS } from '../../constants';
@@ -12,7 +11,7 @@ import { collapseDuplicateFileRows, collapseDuplicateImageRows } from './collaps
 import { reconcilePrimaryPaths, resolveStoredPath } from './reconcileStoredPaths';
 import { useAppStore } from '../../stores';
 import { isLiteRTFileName } from '../../utils/modelHelpers';
-import { CATALOG } from '@offgrid/models';
+import { CATALOG, splitGgufPartNames } from '@offgrid/models';
 
 // Re-exported because this module was the published home of these helpers before they were extracted
 // into the one place both registries share.
