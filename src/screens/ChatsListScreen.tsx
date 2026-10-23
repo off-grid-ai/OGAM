@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity } from 'react-native';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
@@ -13,6 +13,7 @@ import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { ListSearchBar } from '../components/ListSearchBar';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
@@ -31,8 +32,6 @@ type NavigationProp = CompositeNavigationProp<
   NativeStackNavigationProp<RootStackParamList>
 >;
 
-// This screen keeps its list actions together so search, selection, and swipe deletion share one owner.
-// eslint-disable-next-line max-lines-per-function
 export const ChatsListScreen: React.FC = () => {
   const previewLine = useConversationPreviewLine();
   const navigation = useNavigation<NavigationProp>();
@@ -234,38 +233,6 @@ export const ChatsListScreen: React.FC = () => {
     visibleConversations.length > 0 &&
     visibleConversations.every(conversation => selectedIds.has(conversation.id));
 
-  // The search field stays put above the chats, with a shadow along its bottom edge that the list
-  // scrolls under. One stable element outside the list keeps the field mounted, and so focused,
-  // while the list re-renders on each keystroke.
-  const searchHeader = useMemo(
-    () => (
-      <View style={styles.searchRow}>
-        <Icon name="search" size={16} color={colors.textMuted} />
-        <TextInput
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search chats"
-          placeholderTextColor={colors.textMuted}
-          style={styles.searchInput}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          testID="chat-search-input"
-        />
-        {searchQuery ? (
-          <TouchableOpacity
-            onPress={() => setSearchQuery('')}
-            accessibilityRole="button"
-            accessibilityLabel="Clear chat search"
-            hitSlop={SPACING.sm}
-          >
-            <Icon name="x" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-        ) : null}
-      </View>
-    ),
-    [colors.textMuted, searchQuery, styles],
-  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -332,7 +299,13 @@ export const ChatsListScreen: React.FC = () => {
         </View>
       ) : (
         <>
-          <View style={styles.searchBar}>{searchHeader}</View>
+          <ListSearchBar
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search chats"
+            clearLabel="Clear chat search"
+            testID="chat-search-input"
+          />
           {selecting ? (
             <View style={styles.selectionBar}>
               <Text style={styles.selectionCount}>{selectedIds.size} selected</Text>
@@ -418,35 +391,9 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.lg,
   },
-  // Fixed above the list; the list scrolls under its bottom-edge shadow.
-  searchBar: {
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.sm,
-    backgroundColor: colors.background,
-    zIndex: 1,
-    ...shadows.edge,
-  },
   headerActions: {
     flexDirection: 'row' as const,
     gap: SPACING.sm,
-  },
-  searchRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    backgroundColor: colors.surfaceLight,
-  },
-  searchInput: {
-    ...TYPOGRAPHY.body,
-    color: colors.text,
-    flex: 1,
-    paddingVertical: SPACING.sm,
   },
   selectionBar: {
     flexDirection: 'row' as const,
