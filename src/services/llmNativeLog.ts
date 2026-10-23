@@ -25,7 +25,10 @@ const RING_SIZE = 40;
  * They are still kept in the ring buffer, which is the point of this passthrough: a load failure can
  * attach the real reason. The ring is memory and costs nothing; the file is what hurt.
  */
-const PER_TENSOR_NOISE = /create_tensor|loading tensor|done_getting_tensors|load_tensors:/;
+// `llama_graph_n_input_tensors` names one graph node per line (hundreds per load): it filled the whole
+// Report a problem view and pushed every useful line out.
+const PER_TENSOR_NOISE =
+  /create_tensor|loading tensor|done_getting_tensors|load_tensors:|llama_graph_n_input_tensors/;
 
 /**
  * Lines llama.cpp emits once PER SAMPLED TOKEN while a lazy tool grammar waits for its trigger, e.g.
