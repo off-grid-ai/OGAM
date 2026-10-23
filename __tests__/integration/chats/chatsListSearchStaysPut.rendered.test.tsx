@@ -1,10 +1,10 @@
 /**
- * The chats list's search field scrolls with the chats, and typing in it filters without losing it.
+ * The chats list's search field stays put above the chats, and typing in it filters without losing it.
  *
- * SPEC (the user's view): on the Chats tab the search field is the first thing in the list, as in
- * Mail and Messages. It scrolls away with the chats, so no chat is ever cut against a fixed search
- * bar. When I type a word one letter at a time, the list narrows to the matching chats and the
- * field stays the same field (it is not rebuilt, which would drop the keyboard).
+ * SPEC (the user's view): on the Chats tab the search field is a bar fixed above the list, with a
+ * shadow along its bottom edge that the chats scroll under. When I type a word one letter at a time,
+ * the list narrows to the matching chats and the field stays the same field (it is not rebuilt,
+ * which would drop the keyboard).
  *
  * The real ChatScreen makes the chats (type, press send, the llama native leaf answers); the real
  * ChatsListScreen shows them. Only native leaves are faked.
@@ -30,7 +30,7 @@ const isInside = (node: Node, ancestor: Node) => {
 };
 
 describe('chats list search field', () => {
-  it('scrolls with the chats and filters as I type without being rebuilt', async () => {
+  it('stays put above the chats and filters as I type without being rebuilt', async () => {
     const h = await setupChatScreen({ engine: 'llama' });
     h.render();
     const prompts = ['first trip plan', 'second grocery list', 'third reading notes'];
@@ -46,9 +46,9 @@ describe('chats list search field', () => {
     const list = h.rtl.render(React.createElement(ChatsListScreen));
     for (const prompt of prompts) expect(list.getByText(prompt)).toBeTruthy();
 
-    // The field is part of the scrolling list, not a bar fixed above it.
+    // The field is a bar fixed above the list, not part of what scrolls.
     const field = list.getByTestId('chat-search-input') as Node;
-    expect(isInside(field, list.getByTestId('conversation-list') as Node)).toBe(true);
+    expect(isInside(field, list.getByTestId('conversation-list') as Node)).toBe(false);
 
     // Type "grocery" one letter at a time: the same field takes every letter.
     let typed = '';

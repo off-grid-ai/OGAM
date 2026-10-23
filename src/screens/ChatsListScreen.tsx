@@ -234,9 +234,9 @@ export const ChatsListScreen: React.FC = () => {
     visibleConversations.length > 0 &&
     visibleConversations.every(conversation => selectedIds.has(conversation.id));
 
-  // The search field scrolls away with the chats (as in Mail and Messages), so the header's own
-  // border and shadow stay the only fixed edge. One stable element keeps the field mounted, and so
-  // focused, while the list re-renders on each keystroke.
+  // The search field stays put above the chats, with a shadow along its bottom edge that the list
+  // scrolls under. One stable element outside the list keeps the field mounted, and so focused,
+  // while the list re-renders on each keystroke.
   const searchHeader = useMemo(
     () => (
       <View style={styles.searchRow}>
@@ -332,6 +332,7 @@ export const ChatsListScreen: React.FC = () => {
         </View>
       ) : (
         <>
+          <View style={styles.searchBar}>{searchHeader}</View>
           {selecting ? (
             <View style={styles.selectionBar}>
               <Text style={styles.selectionCount}>{selectedIds.size} selected</Text>
@@ -366,7 +367,6 @@ export const ChatsListScreen: React.FC = () => {
             showsVerticalScrollIndicator={false}
             {...LIST_CLIPPING_PROPS}
             keyboardShouldPersistTaps="handled"
-            ListHeaderComponent={searchHeader}
             ListEmptyComponent={
               <Text style={styles.noMatches}>No chats match your search.</Text>
             }
@@ -415,7 +415,17 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   list: {
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.lg,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.lg,
+  },
+  // Fixed above the list; the list scrolls under its bottom-edge shadow.
+  searchBar: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.sm,
+    backgroundColor: colors.background,
+    zIndex: 1,
+    ...shadows.edge,
   },
   headerActions: {
     flexDirection: 'row' as const,
@@ -425,7 +435,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: SPACING.sm,
-    marginBottom: SPACING.md,
     paddingHorizontal: SPACING.md,
     minHeight: 44,
     borderWidth: 1,
