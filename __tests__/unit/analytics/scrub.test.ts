@@ -1,12 +1,16 @@
 /**
- * Crash report scrubbing (docs/ANALYTICS.md, Crashes): paths become file names, quoted text, URLs
- * and IP addresses are dropped, and anything after a colon goes. Type, file, line and function stay.
+ * Crash report scrubbing (docs/ANALYTICS.md, Crashes): a path keeps only an app code file name,
+ * a person's file becomes `<file>`, quoted text, URLs and IP addresses are dropped, and anything
+ * after a colon goes. Type, file, line and function stay.
  */
 import { fileName, scrubExceptionProperties, scrubMessage } from '../../../src/services/analytics/scrub';
 
 describe('crash report scrubbing', () => {
   it.each([
-    ['Cannot read /var/mobile/Containers/Data/notes/secret.txt', 'Cannot read secret.txt'],
+    ['Cannot read /var/mobile/Containers/Data/notes/secret.txt', 'Cannot read <file>'],
+    ['Bad token in /data/app/index.android.bundle', 'Bad token in index.android.bundle'],
+    ['Could not open Taxes2025.pdf now', 'Could not open <file> now'],
+    ['Failed to load qwen-private-finetune.gguf', 'Failed to load <file>'],
     ['Failed to parse "my diary entry" here', 'Failed to parse here'],
     ["TypeError: undefined is not a function", 'TypeError'],
     ['fetch https://my.server.lan/v1/chat?q=private failed', 'fetch failed'],

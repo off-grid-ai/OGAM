@@ -111,7 +111,7 @@ All multi-step journeys use three events with a `flow` property, so every funnel
 
 | Event | Properties |
 |---|---|
-| `$exception` | SDK exception capture. Scrub message and frames before send: replace paths with the file name only, drop any quoted text, keep type, file name, line, function. |
+| `$exception` | SDK exception capture. Scrub message and frames before send: replace paths with the file name only, drop any quoted text, keep type, file name, line, function. A file name is kept only for the app's own code (e.g. `index.js`); a person's file, the home folder and the account name become `<file>` / `<user>`. |
 | `unclean_exit` | Sent on the next launch when the app died in the foreground during a model load or a generation. `stage` (`load`, `generate`), `model`, `engine`, `backend`, `free_ram_gb`, `elapsed_ms`. Not sent after a background kill, an app update or a reboot. |
 | `llama_server_crashed` (OGAD) | `model`, `engine`, `backend`, `exit_code`, `classified` |
 
