@@ -12,13 +12,16 @@ export const ignore = (): undefined => undefined;
 const CUSTOM_ID = /^(local|recovered)_/;
 const HF_REPO_PREFIX = /^([\w.-]+)\/([\w.-]+)(?:\/|$)/;
 const CATALOG_ID = /^[\w.-]+$/;
+const KIND_PREFIX = /^(?:image|stt|tts):/;
 
 /**
  * Catalog ID, public Hugging Face `owner/repo`, or `custom`. Anything that may carry a file
  * name the person chose is `custom`.
  */
-export function modelRef(id: string | null | undefined, repoId?: string): string {
+export function modelRef(rawId: string | null | undefined, repoId?: string): string {
   if (repoId && HF_REPO_PREFIX.test(repoId)) return repoId.split('/').slice(0, 2).join('/');
+  // Download rows key image models as `image:<catalog id>`; the kind is not part of the ID.
+  const id = rawId?.replace(KIND_PREFIX, '');
   if (!id || CUSTOM_ID.test(id)) return 'custom';
   const repo = HF_REPO_PREFIX.exec(id);
   if (repo) return `${repo[1]}/${repo[2]}`;

@@ -30,6 +30,8 @@ describe('analytics value rules', () => {
     ['local_my_zip_123', undefined, 'custom'],
     ['recovered_family.gguf', undefined, 'custom'],
     ['anythingv5_cpu', undefined, 'anythingv5_cpu'],
+    ['image:anythingv5_cpu', undefined, 'anythingv5_cpu'],
+    ['image:local_my_zip_123', undefined, 'custom'],
     ['has spaces in it', undefined, 'custom'],
     [null, undefined, 'custom'],
     [undefined, 'not a repo', 'custom'],
