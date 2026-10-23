@@ -255,7 +255,10 @@ platform :android do
       skip_upload_changelogs: true,
       skip_upload_images: true,
       skip_upload_screenshots: true,
-      release_status: "draft" # human confirms rollout in Play Console
+      # A promoted release takes track_promote_release_status, which defaults to "completed" (a 100%
+      # rollout). release_status does NOT apply here: with version_code set, supply never reads it,
+      # and 0.0.117 went to production at 100% because this lane set only that.
+      track_promote_release_status: "draft" # human confirms rollout in Play Console
     )
     UI.success("Promoted open-testing build (versionCode #{version_code}) to Play production (draft - confirm rollout in console)")
   end
