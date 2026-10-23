@@ -231,7 +231,7 @@ export async function initContextWithFallback(
       // its CPU entry. The context works, on the CPU: report it as the failed accelerator attempt
       // it is, so the chat says so instead of claiming NPU layers.
       logger.warn(`[LLM] HTP requested but no HTP device was available (context devices: ${JSON.stringify((context as unknown as { devices?: unknown }).devices ?? [])}) — running on CPU`);
-      return { context, gpuAttemptFailed: true, actualLength: contextLength };
+      return { context, gpuAttemptFailed: true, actualLength: contextLength, attemptedGpuLayers: 0 };
     }
     logger.log('[LLM] GPU init succeeded');
     return { context, gpuAttemptFailed, actualLength: contextLength, attemptedGpuLayers: nGpuLayers };
