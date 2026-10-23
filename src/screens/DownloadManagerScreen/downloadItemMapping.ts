@@ -1,4 +1,4 @@
-import { DownloadEntry } from '../../stores/downloadStore';
+import { DownloadEntry, jobBytesDownloaded } from '../../stores/downloadStore';
 import { hardwareService } from '../../services';
 import { DownloadedModel, ONNXImageModel } from '../../types';
 import { DownloadItem } from './items';
@@ -101,7 +101,7 @@ export function entryToActiveItem(entry: DownloadEntry): DownloadItem {
     author: getActiveItemAuthor(entry, isImage, metadata),
     quantization: getActiveItemQuantization(entry, isImage, metadata),
     fileSize: entry.combinedTotalBytes || entry.totalBytes,
-    bytesDownloaded: entry.bytesDownloaded + (entry.mmProjBytesDownloaded ?? 0),
+    bytesDownloaded: jobBytesDownloaded(entry),
     progress: entry.progress,
     bytesPerSecond: entry.bytesPerSecond,
     status: entry.status,

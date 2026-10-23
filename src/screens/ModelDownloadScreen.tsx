@@ -15,7 +15,7 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING, OFF_GRID_DESKTOP_URL } from '../constants';
 import { withUtm } from '../utils/utm';
 import { useAppStore } from '../stores';
-import { isActiveStatus } from '../stores/downloadStore';
+import { isActiveStatus, jobBytesDownloaded } from '../stores/downloadStore';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { hardwareService, remoteServerManager } from '../services';
 import { discoverLANServers } from '../services/networkDiscovery';
@@ -36,7 +36,7 @@ export function downloadProgressFor(
 ): { progress: number; queued: boolean; bytes?: { downloaded: number; total: number; bytesPerSecond?: number } } | null {
   if (!entry || !isActiveStatus(entry.status as any)) return null;
   const total = entry.combinedTotalBytes ?? entry.totalBytes ?? 0;
-  const downloaded = (entry.bytesDownloaded ?? 0) + (entry.mmProjBytesDownloaded ?? 0);
+  const downloaded = jobBytesDownloaded(entry);
   return {
     progress: entry.progress,
     queued: entry.status === 'pending',

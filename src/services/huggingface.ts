@@ -19,9 +19,17 @@ import {
   getModelFiles as listRepoFiles,
   getModelType,
   isCompanionFile,
+  collapseSplitGgufParts,
   type HFSearchResult,
   type ModelFileVariant,
 } from '@offgrid/models';
+
+const splitPartOf = (part: ModelFile): NonNullable<ModelFile['parts']>[number] => ({
+  name: part.name,
+  size: part.size,
+  downloadUrl: part.downloadUrl,
+  ...(part.sha256 ? { sha256: part.sha256 } : {}),
+});
 
 class HuggingFaceService {
   private baseUrl = HF_API.baseUrl;
@@ -179,8 +187,11 @@ class HuggingFaceService {
     // heads and draft models never offered as a size, and a projector only when it is named for this
     // model or is the repo's generic one. A pinned revision (vision repair) reads that revision here.
     if (revision === 'main') {
+      // A model split into parts is one size: its first part, sized as the whole, listing every part.
       const variants = await listRepoFiles(modelId);
-      return variants.map(variant => this.fromSharedFile(variant)).sort((a, b) => a.size - b.size);
+      return collapseSplitGgufParts(variants.map(variant => this.fromSharedFile(variant)))
+        .map(({ parts, ...file }) => (parts ? { ...file, parts: parts.map(splitPartOf) } : file))
+        .sort((a, b) => a.size - b.size);
     }
     try {
       const encodedRevision = encodeURIComponent(revision);
