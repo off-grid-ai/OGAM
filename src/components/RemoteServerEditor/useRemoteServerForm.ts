@@ -10,6 +10,7 @@ import {
 } from '../../types';
 import { isPrivateNetworkEndpoint } from '../../services/httpClient';
 import { AlertState, initialAlertState, showAlert } from '../CustomAlert';
+import { flowStarted, flowStep } from '../../services/analytics/analytics';
 
 interface FormOptions {
   server?: RemoteServer;
@@ -98,6 +99,7 @@ export function useRemoteServerForm({
         });
     } else {
       // Reset form for new server
+      flowStarted('remote_server', 'opened');
       setName('');
       setEndpoint('');
       setApiKey('');
@@ -190,6 +192,7 @@ export function useRemoteServerForm({
 
   const handleTestConnection = useCallback(async () => {
     if (!validateForm()) return;
+    flowStep('remote_server', 'address_entered');
     setIsTesting(true);
     setTestResult(null);
     setDiscoveredModels([]);
