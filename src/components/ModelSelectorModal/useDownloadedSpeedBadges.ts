@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CATALOG, mtpHeadForPrimaryFile, parseMoeParams } from '@offgrid/models';
 import { modelSupportsMtp } from '../../services/mtpDetection';
+import logger from '../../utils/logger';
 import type { DownloadedModel } from '../../types';
 import type { ModelCardCapabilities } from '../ModelCardContent';
 
@@ -30,6 +31,9 @@ export function useDownloadedSpeedBadges(models: readonly DownloadedModel[]): Re
       return [model.id, { ...(active ? { moeActiveB: active } : {}), ...(mtp ? { mtp: true } : {}) }] as const;
     })).then(entries => {
       if (current) setBadges(Object.fromEntries(entries));
+    }).catch(error => {
+      // Badges only add information: a header that cannot be read leaves the rows without them.
+      logger.warn('[ModelSelector] could not read speed badges:', error);
     });
     return () => { current = false; };
   }, [models]);
