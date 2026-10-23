@@ -142,7 +142,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
 
 /** What the speed badges say, in words: the badges' own labels and the card's accessibility hint,
  *  since a screen reader focuses the whole card and does not reach the badges inside it. */
-export function speedDescriptions(capabilities?: ModelCardCapabilities): string[] {
+function speedDescriptions(capabilities?: ModelCardCapabilities): string[] {
   return [
     capabilities?.moeActiveB ? `Mixture of experts: runs like a ${capabilities.moeActiveB}B model` : undefined,
     capabilities?.mtp ? 'MTP: replies faster' : undefined,
