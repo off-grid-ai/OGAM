@@ -93,7 +93,7 @@ describe('VoiceModelsPanel', () => {
 
   it('shows the RAM privacy banner', async () => {
     const { getByText } = await renderPanel();
-    expect(getByText(/nothing is sent anywhere/)).toBeTruthy();
+    expect(getByText(/your voice never leaves it/)).toBeTruthy();
   });
 
   it('shows the installed model without speaker choices', async () => {

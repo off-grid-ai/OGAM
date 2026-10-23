@@ -48,7 +48,7 @@ const PILLARS = [
   {
     icon: 'shield',
     title: 'Private by architecture',
-    desc: 'The model runs on your own hardware. No training on your data, no server to leak. Open source, so you can check.',
+    desc: 'The model runs on your own hardware. Your chats and files never leave your devices, and nothing trains on them. Open source, so you can check.',
   },
   {
     icon: 'refresh-cw',
@@ -184,7 +184,7 @@ export const ProDetailScreen: React.FC = () => {
               <Text style={styles.heroSubtitle}>
                 Ambient and proactive. It sees your day, remembers it, and gets
                 ahead of you - and the model runs on your own hardware, so
-                nothing is sent anywhere.
+                your chats and files never leave your devices.
               </Text>
             </View>
 
