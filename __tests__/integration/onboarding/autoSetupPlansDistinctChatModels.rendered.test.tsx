@@ -106,18 +106,21 @@ async function plansSeenOnPhone(totalGB: number) {
     for (const tier of TIERS) {
       const card = ui.queryByTestId(`auto-setup-plan-${tier}`);
       if (!card) continue;
-      fireEvent.press(card);
+      // One plan is open at a time; its heading opens it.
+      if (!within(card).queryByTestId('auto-setup-selected-plan')) {
+        fireEvent.press(within(card).getByTestId(`auto-setup-plan-heading-${tier}`));
+      }
       const expanded = within(ui.getByTestId(`auto-setup-plan-${tier}`)).getByTestId(
         'auto-setup-selected-plan',
       );
-      // The chat model is the name printed under the "TEXT + VISION" label.
+      // The chat model is the name printed before its "TEXT" label.
       const labels = within(expanded).getAllByText(/.+/).map(node => {
         const children = (node.props as { children?: unknown }).children;
         return typeof children === 'string' ? children : null;
       });
-      const at = labels.indexOf('TEXT + VISION');
-      expect(at).toBeGreaterThanOrEqual(0);
-      seen.push({ tier, chatModel: labels[at + 1] as string });
+      const at = labels.indexOf('TEXT');
+      expect(at).toBeGreaterThan(0);
+      seen.push({ tier, chatModel: labels[at - 1] as string });
     }
     return seen;
   } finally {
