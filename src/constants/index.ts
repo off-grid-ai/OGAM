@@ -63,6 +63,10 @@ export const OFFICIAL_MODEL_AUTHORS: Record<string, string> = {
   allenai: 'Allen AI',
   nvidia: 'NVIDIA',
   apple: 'Apple',
+  // Makers of the late-October catalog models.
+  XHToken: 'iFLYTEK',
+  InternScience: 'Shanghai AI Lab',
+  RecursiveSI: 'Recursive',
 };
 
 // Verified quantizers - trusted community members who quantize models

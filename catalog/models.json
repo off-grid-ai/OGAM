@@ -1,9 +1,45 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-21",
+  "updatedAt": "2026-10-23",
   "sections": {
-    "models": [],
-    "text": [],
+    "models": [
+      {
+        "id": "XHToken/Spark-X2.6-4B-GGUF",
+        "sourceModelId": "XHToken/Spark-X2.6-4B",
+        "quality": 18,
+        "name": "Spark X2.6 4B",
+        "kind": "text",
+        "org": "XHToken",
+        "description": "Best agent and coding model at 4B; text only",
+        "params": 4.1,
+        "minRamGb": 6,
+        "quant": "Q4_K_M",
+        "minLlamaBuild": 10828,
+        "isNew": true,
+        "releaseDate": "2026-10-19",
+        "files": [
+          {
+            "name": "Spark-X2.6-4B-Q4_K_M.gguf",
+            "url": "https://huggingface.co/XHToken/Spark-X2.6-4B-GGUF/resolve/fe31f8d64890302cc3a1d365d700357b4b75ba77/Spark-X2.6-4B-Q4_K_M.gguf",
+            "sizeBytes": 3543441312,
+            "sha256": "91cb2811aebb47ac916aa619d27d4cdd7f4143106b7917accb8ead4cd7f5cbd9",
+            "role": "primary"
+          }
+        ]
+      }
+    ],
+    "text": [
+      {
+        "id": "XHToken/Spark-X2.6-4B-GGUF",
+        "name": "Spark X2.6 4B",
+        "params": 4.1,
+        "description": "Best agent and coding model at 4B; text only",
+        "minRam": 6,
+        "type": "text",
+        "org": "XHToken",
+        "isNew": true
+      }
+    ],
     "transcription": [],
     "coreml": [],
     "litert": []
