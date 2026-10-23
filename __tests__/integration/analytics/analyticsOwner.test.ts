@@ -181,11 +181,14 @@ it('downloads report start, finish speed, failure, and the image and voice setup
 
 it('reports the spec properties when the device cannot say its chip, memory or battery', async () => {
   const { analytics, endpoint, flush } = await setup(null);
+  // Before opting in a download is not tracked at all, so its end later sends nothing.
+  analytics.downloadStarted('text:early', { model: 'custom', modelType: 'text' });
   const DeviceInfo = require('react-native-device-info');
   DeviceInfo.getTotalMemory.mockRejectedValueOnce(new Error('unavailable'));
   DeviceInfo.getPowerState.mockRejectedValue(new Error('unavailable'));
   DeviceInfo.getHardware.mockRejectedValueOnce(new Error('unavailable'));
   await analytics.setAnalyticsConsent({ usage: true }, 'settings');
+  analytics.downloadEnded('text:early', 'done');
   await expect(analytics.trackModelLoad({ model: 'custom', engine: 'llama.cpp', backend: 'cpu' }, async () => 'ok')).resolves.toBe('ok');
   analytics.generationStarted('image', { model: 'custom', engine: 'onnx', backend: 'npu' })('stopped');
   await new Promise(resolve => setTimeout(resolve, 20));
@@ -197,6 +200,7 @@ it('reports the spec properties when the device cannot say its chip, memory or b
   expect(generation).toMatchObject({ modality: 'image', outcome: 'stopped' });
   expect(generation.battery_pct).toBeUndefined();
   expect(generation.charging).toBeUndefined();
+  expect(endpoint.named('model_download_finished')).toEqual([]);
   DeviceInfo.getPowerState.mockResolvedValue({ batteryLevel: 0.64, batteryState: 'unplugged', lowPowerMode: false });
 });
 

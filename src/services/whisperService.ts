@@ -347,7 +347,7 @@ class WhisperService {
         });
         // [WIRE] raw realtime transcription event shape from-device (voice-mode STT path) — full result +
         // segments + timing, so we can ground the realtime-transcript fixtures (distinct from file transcribe).
-        logger.log(`[WIRE-STT-REALTIME] ${JSON.stringify({ isCapturing: evt.isCapturing, textLength: evt.data?.result?.length ?? 0, segments: evt.data?.segments?.length ?? 0, processTime: evt.processTime, recordingTime: evt.recordingTime })}`);
+        logger.log(`[WIRE-STT-REALTIME] ${JSON.stringify({ isCapturing: evt.isCapturing, textLength: evt.data?.result?.length ?? 0, processTime: evt.processTime, recordingTime: evt.recordingTime })}`);
 
         const { isCapturing, data, processTime, recordingTime } = evt;
 
@@ -543,7 +543,7 @@ class WhisperService {
 
     const __res = await promise;
     // Shape only: the transcript is what the person said and never goes in the log.
-    logger.log(`[WIRE-STT] ${JSON.stringify({ textLength: __res?.result?.length ?? 0, segments: __res?.segments?.length ?? 0 })}`);
+    logger.log(`[WIRE-STT] ${JSON.stringify({ textLength: __res?.result?.length ?? 0 })}`);
     const { result } = __res;
     return cleanTranscription(result);
   }
