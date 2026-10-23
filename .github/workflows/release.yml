@@ -63,6 +63,10 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default also installs the legacy `tools` package, which the runner's
+          # command-line tools 16.0 no longer ship, so the step failed. Gradle fetches platforms.
+          packages: platform-tools
 
       - name: Setup Ruby (fastlane)
         uses: ruby/setup-ruby@v1
