@@ -11,9 +11,8 @@ export function featureSnapshot(): Record<string, boolean> {
   const app = useAppStore.getState();
   const tools = app.settings.enabledTools;
   const active = app.downloadedModels.find(model => model.id === app.activeModelId);
-  const vision = active
-    ? active.engine === 'litert' ? !!active.liteRTVision : !!active.isVisionModel
-    : false;
+  const visionFlag = active?.engine === 'litert' ? active.liteRTVision : active?.isVisionModel;
+  const vision = !!visionFlag;
   return {
     voice_input: !!useWhisperStore.getState().downloadedModelId,
     image_generation: !!app.activeImageModelId,
@@ -21,6 +20,6 @@ export function featureSnapshot(): Record<string, boolean> {
     web_search: tools.includes('web_search'),
     tools: tools.length > 0,
     remote_server: useRemoteServerStore.getState().servers.length > 0,
-    ...(callHook<Record<string, boolean>>(HOOKS.analyticsProFeatures) ?? {}),
+    ...callHook<Record<string, boolean>>(HOOKS.analyticsProFeatures),
   };
 }

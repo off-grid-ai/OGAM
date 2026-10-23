@@ -89,7 +89,7 @@ function reportEnd(
   code?: string,
 ): void {
   const entry = state.downloads[state.downloadIdIndex[downloadId] ?? ''];
-  if (!entry || entry.downloadId !== downloadId) return;
+  if (entry?.downloadId !== downloadId) return;
   if (status === 'failed') downloadEnded(entry.modelKey, 'failed', { code });
   else if (status === 'completed') downloadEnded(entry.modelKey, 'done');
 }
