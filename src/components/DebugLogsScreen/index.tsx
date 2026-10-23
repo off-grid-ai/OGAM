@@ -157,7 +157,8 @@ export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClo
             <Text style={styles.actionButtonText}>Share</Text>
           </TouchableOpacity>
 
-          {!syncOnly && <TouchableOpacity style={styles.actionButton} onPress={clearLogs}>
+          {/* Report a problem sends the log file; clearing only this view would hide what is sent. */}
+          {!syncOnly && !onSend && <TouchableOpacity style={styles.actionButton} onPress={clearLogs}>
             <Icon name="trash-2" size={16} color={theme.colors.error} style={styles.actionIcon} />
             <Text style={[styles.actionButtonText, { color: theme.colors.error }]}>Clear</Text>
           </TouchableOpacity>}
