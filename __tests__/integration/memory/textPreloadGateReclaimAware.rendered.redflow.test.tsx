@@ -90,10 +90,10 @@ describe('text pre-load gate reads reclaim-aware available (rendered, red-flow)'
     stopSync();
   }, 30000);
 
-  it('iOS UNCHANGED: the pre-load gate stays RAW (jetsam kills us, no reclaim credit) so the same model is refused', async () => {
-    // Identical intersection on iOS. effectiveAvailableMB returns the RAW snapshot on iOS (no LMK reclaim —
-    // jetsam kills US, not background apps), so the pre-load gate must STILL refuse the 5GB-on-disk model on
-    // 5GB raw-available. This proves the fix did NOT alter iOS jetsam behavior: iOS availability is untouched.
+  it('iOS: mapped weights are not charged against free memory, so a 5 GB model loads with 5 GB free', async () => {
+    // iOS gives no reclaim credit (the raw snapshot stays), but every iPhone load maps its weights: they page in
+    // from the file and are bounded by the fit rule against total RAM, not by free memory. Measured on a 12 GB
+    // iPhone 17 Pro Max: Gemma 4 E4B (5.0 GB) and a 9B Q4_K_M (5.6 GB) load with ~6 GB free.
     const h = await setupChatScreen({
       engine: 'llama',
       platform: 'ios',
@@ -106,7 +106,7 @@ describe('text pre-load gate reads reclaim-aware available (rendered, red-flow)'
     const { ModelLoadingModeSelector } = require('../../../src/components/settings/textGenAdvancedSections');
     const { startLoadPolicySync } = require('../../../src/services/loadPolicySync');
 
-    // BOUNDARY: the ACTUAL on-disk file is 5GB → the gate sizes weights at 6144MB > 5120MB raw available.
+    // BOUNDARY: the ACTUAL on-disk file is 5GB.
     h.boundary.fs!.seedFile('/docs/models/ggml-small.gguf', Math.round(5 * GB));
 
     h.render();
@@ -120,11 +120,48 @@ describe('text pre-load gate reads reclaim-aware available (rendered, red-flow)'
 
     expect(h.view!.queryByText(/it needs ~/)).toBeNull();
 
-    // GESTURE: send → residency admits (iOS physical cap holds the 3.5GB spec) → the RAW pre-load gate refuses.
     await h.send('what is the capital of France', { text: 'Paris.' });
 
-    // TERMINAL ARTIFACT: iOS still refuses on the raw snapshot — the "it needs ~" refusal renders and the reply
-    // does NOT. iOS jetsam behavior is unchanged by the fix.
+    // TERMINAL ARTIFACT: the gate admits, the model loads and the reply renders; no refusal.
+    await h.rtl.waitFor(() => {
+      expect(h.view!.queryByText(/Paris\./)).not.toBeNull();
+    }, { timeout: 8000 });
+    expect(h.view!.queryByText(/it needs ~/)).toBeNull();
+
+    stopSync();
+  }, 30000);
+
+  it('iOS: a model past the fit rule for this RAM is still refused (8 GB on a 12 GB iPhone)', async () => {
+    // Mapped weights are bounded by the shared iPhone fit budget: 8 GB is past 0.62 of 12 GB, so the gate refuses.
+    const h = await setupChatScreen({
+      engine: 'llama',
+      platform: 'ios',
+      modelFileSizeBytes: 3.5 * GB,
+      ram: { platform: 'ios', totalBytes: 12 * GB, availBytes: 5 * GB },
+      deferInitialLoad: true,
+    });
+
+    const React = require('react');
+    const { ModelLoadingModeSelector } = require('../../../src/components/settings/textGenAdvancedSections');
+    const { startLoadPolicySync } = require('../../../src/services/loadPolicySync');
+
+    // BOUNDARY: the ACTUAL on-disk file is 8GB.
+    h.boundary.fs!.seedFile('/docs/models/ggml-small.gguf', Math.round(8 * GB));
+
+    h.render();
+
+    const stopSync = startLoadPolicySync();
+    // GESTURE: Aggressive (matches the Android case) — but on iOS aggressive gives NO reclaim credit.
+    const toggle = h.rtl.render(React.createElement(ModelLoadingModeSelector, {}));
+    h.rtl.fireEvent.press(toggle.getByTestId('model-loading-mode-aggressive-button'));
+    await h.rtl.waitFor(() => { expect(require('../../../src/services/modelResidency').modelResidencyManager.getLoadPolicy()).toBe('aggressive'); });
+    toggle.unmount();
+
+    expect(h.view!.queryByText(/it needs ~/)).toBeNull();
+
+    await h.send('what is the capital of France', { text: 'Paris.' });
+
+    // TERMINAL ARTIFACT: the refusal renders and the reply does not.
     await h.rtl.waitFor(() => {
       expect(h.view!.queryByText(/it needs ~/)).not.toBeNull();
     }, { timeout: 8000 });

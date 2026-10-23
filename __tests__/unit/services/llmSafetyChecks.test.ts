@@ -99,6 +99,34 @@ describe('checkMemoryForModel', () => {
     jest.clearAllMocks();
   });
 
+  // Measured on a 12 GB iPhone 17 Pro Max: 11.2 GB reported, ~5,984 MB free for the app, and a 9B
+  // Q4_K_M (5.6 GB) and Gemma 4 E4B (5.0 GB) both load at a 4K context with their weights mapped.
+  const IPHONE_12GB = { available: 5984 * 1024 * 1024, total: 11.2 * 1024 ** 3 };
+
+  it('passes a 9B Q4_K_M on a 12 GB iPhone: mapped weights are not charged against free memory', async () => {
+    mockGetMemory.mockResolvedValue(IPHONE_12GB);
+    const result = await checkMemoryForModel({
+      modelFileSize: 5.63e9, contextLength: 4096, getAvailableMemory: mockGetMemory, quantizedCache: true, weightsMapped: true,
+    });
+    expect(result.safe).toBe(true);
+  });
+
+  it('still refuses the same 9B when its weights are copied into memory', async () => {
+    mockGetMemory.mockResolvedValue(IPHONE_12GB);
+    const result = await checkMemoryForModel({
+      modelFileSize: 5.63e9, contextLength: 4096, getAvailableMemory: mockGetMemory, quantizedCache: true,
+    });
+    expect(result.safe).toBe(false);
+  });
+
+  it('refuses mapped weights past what the fit rule allows on this RAM (Gemma 4 12B on 12 GB)', async () => {
+    mockGetMemory.mockResolvedValue(IPHONE_12GB);
+    const result = await checkMemoryForModel({
+      modelFileSize: 7.3e9, contextLength: 4096, getAvailableMemory: mockGetMemory, quantizedCache: true, weightsMapped: true,
+    });
+    expect(result.safe).toBe(false);
+  });
+
   it('returns safe when enough memory is available', async () => {
     mockGetMemory.mockResolvedValue({
       available: 4 * 1024 * 1024 * 1024, // 4 GB

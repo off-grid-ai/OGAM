@@ -1,9 +1,10 @@
-import { isDraftModelFile, isImatrixFile, isMtpHeadFile } from '@offgrid/models';
+import { isDraftModelFile, isImatrixFile, isLoadableOnDevice, isMtpHeadFile } from '@offgrid/models';
 import { LlamaContext } from 'llama.rn';
 import RNFS from 'react-native-fs';
 import { statFile } from '../utils/fileStat';
 import logger from '../utils/logger';
 import { OverridableMemoryError } from '../utils/modelLoadErrors';
+import { phoneBudget } from './memoryBudget';
 
 /**
  * GGUF magic number — first 4 bytes of every valid GGUF file.
@@ -133,6 +134,9 @@ export interface MemoryCheckArgs {
   contextLength: number;
   getAvailableMemory: () => Promise<{ available: number; total: number }>;
   quantizedCache?: boolean;
+  /** The weights are memory-mapped and paged in from the file (every iPhone load): they are not
+   *  charged against the app's free memory but bounded by the fit rule against total RAM. */
+  weightsMapped?: boolean;
 }
 
 export async function checkMemoryForModel(
@@ -145,14 +149,14 @@ export async function checkMemoryForModel(
   requiredMB: number;
   availableMB: number;
 }> {
-  const { modelFileSize, contextLength, getAvailableMemory, quantizedCache } =
+  const { modelFileSize, contextLength, getAvailableMemory, quantizedCache, weightsMapped } =
     args;
   try {
     const { available, total } = await getAvailableMemory();
     const availableMB = available / (1024 * 1024);
     const totalMB = total / (1024 * 1024);
     // Model weights in RAM (~1x file size for mmap, up to 1.2x without)
-    const modelMB = (modelFileSize * 1.2) / (1024 * 1024);
+    const modelMB = (modelFileSize * (weightsMapped ? 1 : 1.2)) / (1024 * 1024);
     // KV cache estimate: a fraction of the model weights per 1024 tokens (see above).
     const kvFractionPer1k = quantizedCache
       ? KV_FRACTION_PER_1K_QUANT
@@ -161,8 +165,12 @@ export async function checkMemoryForModel(
     const estimatedMB = modelMB + kvCacheMB;
     // Require at least 200MB headroom after model load for OS and app
     const MIN_HEADROOM_MB = 200;
-    const requiredMB = estimatedMB + MIN_HEADROOM_MB;
-    const safe = availableMB > requiredMB;
+    // Mapped weights page in from the file and are not charged against the app's limit (a 12 GB
+    // iPhone loads a 5.6 GB 9B Q4_K_M with 6.0 GB free): the shared fit rule bounds them against
+    // total RAM, and only the KV cache and headroom must fit in what is free.
+    const weightsFit = !weightsMapped || isLoadableOnDevice(modelFileSize / 1e9, total / 1024 ** 3, phoneBudget());
+    const requiredMB = weightsMapped && weightsFit ? kvCacheMB + MIN_HEADROOM_MB : estimatedMB + MIN_HEADROOM_MB;
+    const safe = weightsFit && availableMB > requiredMB;
     // [MEM-SM] the pre-load fit decision — kept (surfaces the exact "it needs ~X but only Y" call
     // on-device AND in tests via DEBUG_LOGS=1). This is the gate the qwythos refusal came from.
     logger.log(
@@ -170,7 +178,7 @@ export async function checkMemoryForModel(
         modelMB,
       )} kvMB=${Math.round(kvCacheMB)} estMB=${Math.round(
         estimatedMB,
-      )} availMB=${Math.round(availableMB)} ctx=${contextLength} safe=${safe}`,
+      )} availMB=${Math.round(availableMB)} ctx=${contextLength} mapped=${!!weightsMapped} safe=${safe}`,
     );
     if (!safe) {
       return {
@@ -200,6 +208,7 @@ export async function resolveSafeContext(args: {
   fileSize: number;
   requestedCtx: number;
   quantizedCache: boolean;
+  weightsMapped?: boolean;
   override?: boolean;
   getAvailableMemory: () => Promise<{ available: number; total: number }>;
   /** The check the caller already ran. Reused so the copy quotes the snapshot that failed. */
@@ -220,6 +229,7 @@ export async function resolveSafeContext(args: {
     contextLength: requestedCtx,
     getAvailableMemory: getMem,
     quantizedCache,
+    weightsMapped: args.weightsMapped,
   });
   if (!memCheck.safe && !override) {
     throw new OverridableMemoryError(

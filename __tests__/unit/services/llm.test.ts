@@ -119,10 +119,10 @@ describe('LLMService', () => {
       mockedRNFS.stat.mockResolvedValue({ size: 2 * 1024 * 1024 * 1024 } as any); // 2 GB model
       const ctx = createMockLlamaContext();
       mockedInitLlama.mockResolvedValue(ctx as any);
-      // ~2.9 GB available: the estimate rejects the selected 8192 context.
+      // ~600 MB available: the mapped weights fit this RAM, but the 8192-token KV cache does not.
       jest.spyOn(hardwareService, 'getAppMemoryUsage').mockResolvedValue({
-        used: 5 * 1024 * 1024 * 1024,
-        available: 2900 * 1024 * 1024,
+        used: 7.4 * 1024 * 1024 * 1024,
+        available: 600 * 1024 * 1024,
         total: 8 * 1024 * 1024 * 1024,
       });
       useAppStore.setState({

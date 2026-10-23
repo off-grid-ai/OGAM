@@ -138,11 +138,13 @@ class LLMService {
       });
       return { ...raw, available: availableMB * 1024 * 1024 };
     };
-    let memCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: params.ctxLen, getAvailableMemory: getMem, quantizedCache });
+    // Every iPhone load maps its weights (mobileUseMmap); Android keeps its copied-weights check.
+    const weightsMapped = Platform.OS === 'ios';
+    let memCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: params.ctxLen, getAvailableMemory: getMem, quantizedCache, weightsMapped });
     if (!memCheck.safe) {
       // Keep the selected context. A failed estimate asks for Load Anyway; an explicit
       // override passes the selected value to native init even when memory is tight.
-      const decision = await resolveSafeContext({ fileSize, requestedCtx: params.ctxLen, quantizedCache, override, getAvailableMemory: getMem, memCheck });
+      const decision = await resolveSafeContext({ fileSize, requestedCtx: params.ctxLen, quantizedCache, weightsMapped, override, getAvailableMemory: getMem, memCheck });
       memCheck = decision.memCheck;
     }
     logger.log(`[LLM] Memory check: estimatedMB=${memCheck.estimatedMB.toFixed(0)}, availableMB=${memCheck.availableMB.toFixed(0)}, safe=${memCheck.safe}, ctx=${params.ctxLen}`);
