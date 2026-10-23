@@ -87,7 +87,8 @@ const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     gap: 16,
   },
   loadingText: { ...TYPOGRAPHY.body, color: colors.textSecondary },
-  listContent: { paddingHorizontal: SPACING.md, paddingBottom: 32 },
+  // Top padding keeps the first card off the list's clip edge, under the search row.
+  listContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, paddingBottom: 32 },
   deviceBanner: {
     backgroundColor: `${colors.trending}15`,
     borderRadius: 8,
