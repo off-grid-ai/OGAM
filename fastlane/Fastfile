@@ -358,7 +358,7 @@ platform :ios do
     find_build = -> { Spaceship::ConnectAPI::Build.all(app_id: app.id, version: version, build_number: build_number).first }
     if find_build.call
       # A rerun (uat.sh --resume-ios) finds this build already uploaded: distribute it, never upload twice.
-      upload_to_testflight(**options, distribute_only: true, app_version: version, build_number: build_number)
+      upload_to_testflight(**options, distribute_only: true, app_platform: "ios", app_version: version, build_number: build_number)
     else
       upload_to_testflight(**options, ipa: "build/OffgridMobile.ipa")
     end
