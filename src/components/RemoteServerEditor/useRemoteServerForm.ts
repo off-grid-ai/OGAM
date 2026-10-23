@@ -98,8 +98,8 @@ export function useRemoteServerForm({
           if (!cancelled) setApiKey('');
         });
     } else {
-      // Reset form for new server
-      flowStarted('remote_server', 'opened');
+      // Reset form for new server. The flow starts only when the editor opens, not when it hides.
+      if (visible) flowStarted('remote_server', 'opened');
       setName('');
       setEndpoint('');
       setApiKey('');
