@@ -8,7 +8,7 @@ import { CATALOG, type MobileTextCatalogModel } from '@offgrid/models';
 import { RECOMMENDED_MODELS, TRENDING_FAMILIES, MODEL_ORGS } from '../../constants';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useAppStore } from '../../stores';
-import { fileExceedsBudget } from '../../services/memoryBudget';
+import { fileExceedsBudget, textModelBudget } from '../../services/memoryBudget';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { huggingFaceService, modelManager, hardwareService, activeModelService } from '../../services';
 import { startModelDownload } from '../../services/startModelDownload';
@@ -121,12 +121,12 @@ function computeFilteredResults(
     }
     const filesWithSize = (model.files || []).filter(f => f.size > 0);
     if (filesWithSize.length > 0) {
-      if (!filesWithSize.some(f => !fileExceedsBudget(f.size, ramGB))) return false;
+      if (!filesWithSize.some(f => !fileExceedsBudget(f.size, ramGB, textModelBudget()))) return false;
     } else {
       // Search results carry no file sizes: judge by the parameter count instead, so a model that
       // is Too big for this phone is not offered at all.
       const params = model.paramCount ?? parseParamCount(model);
-      if (params !== null && fileExceedsBudget(params * Q4_BYTES_PER_BILLION_PARAMS, ramGB)) return false;
+      if (params !== null && fileExceedsBudget(params * Q4_BYTES_PER_BILLION_PARAMS, ramGB, textModelBudget())) return false;
     }
     return true;
   });

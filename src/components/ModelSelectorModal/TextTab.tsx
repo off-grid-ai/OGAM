@@ -9,7 +9,7 @@ import { estimateTextModelMemoryMB } from '../../services/activeModelService/mem
 import { useAppStore } from '../../stores';
 import { ModelCard } from '../ModelCard';
 import { createAllStyles } from './styles';
-import { fileExceedsBudget } from '../../services/memoryBudget';
+import { fileExceedsBudget, textModelBudget } from '../../services/memoryBudget';
 import { useResidentRows } from '../models/useResidentRows';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 import { LoadingDots } from '../LoadingDots';
@@ -198,7 +198,7 @@ export const TextTab: React.FC<TextTabProps> = ({
           </View>
           {downloadedModels.map(model => {
             const fileSize = (model.fileSize || 0) + ('mmProjFileSize' in model ? (model.mmProjFileSize || 0) : 0);
-            const memoryFits = !fileExceedsBudget(fileSize, hardwareService.getTotalMemoryGB());
+            const memoryFits = !fileExceedsBudget(fileSize, hardwareService.getTotalMemoryGB(), textModelBudget());
             const row = textRowState({
               modelPath: model.filePath,
               modelId: model.id,

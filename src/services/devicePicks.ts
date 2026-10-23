@@ -1,5 +1,5 @@
-import { CATALOG, isLoadableOnDevice, pickModelsForDevice, type ModelEntry, type PickCandidate } from '@offgrid/models';
-import { phoneBudget } from './memoryBudget';
+import { CATALOG, isLoadableOnDevice, pickModelsForDevice, PHONE_FIT_BUDGET, type FitBudget, type ModelEntry, type PickCandidate } from '@offgrid/models';
+import { textModelBudget } from './memoryBudget';
 import { registerBundledCatalog, withRemoteCatalog } from '../stores/modelCatalogStore';
 import { engineLlamaBuild, engineLoadsCatalogModel } from './llamaEngineSupport';
 import type { ModelFile, ModelInfo } from '../types';
@@ -89,7 +89,7 @@ export function loadsOnPhone(id: string, ramGB: number, catalog: readonly ModelE
   const download = entry ? catalogEntryToDownload(entry) : null;
   if (!download) return undefined;
   const bytes = download.file.size + (download.file.mmProjFile?.size ?? 0);
-  return isLoadableOnDevice(bytes / 1e9, ramGB, phoneBudget());
+  return isLoadableOnDevice(bytes / 1e9, ramGB, textModelBudget());
 }
 
 /** Fast, Balanced and Best among any kind of model (chat, image, speech) by the shared rule with the
@@ -98,9 +98,10 @@ export function picksAmong<T>(
   items: readonly T[],
   describe: (item: T) => PickCandidate,
   ramGB: number,
+  budget: FitBudget = PHONE_FIT_BUDGET,
 ): { slot: PickSlot; item: T }[] {
   const byId = new Map(items.map(item => [describe(item).id, item]));
-  const picks = pickModelsForDevice(items.map(describe), ramGB, phoneBudget(), 'runsWell', engineLlamaBuild() ?? 0);
+  const picks = pickModelsForDevice(items.map(describe), ramGB, budget, 'runsWell', engineLlamaBuild() ?? 0);
   return (['fast', 'balanced', 'best'] as const).flatMap(slot => {
     const item = picks[slot] ? byId.get(picks[slot]!) : undefined;
     return item ? [{ slot, item }] : [];
@@ -125,6 +126,6 @@ export function devicePicks(ramGB: number, catalog: readonly ModelEntry[] = phon
     supersededBy: d.entry.supersededBy,
     nonCommercial: d.entry.nonCommercial,
     minLlamaBuild: d.entry.minLlamaBuild,
-  }), ramGB)
+  }), ramGB, textModelBudget())
     .map(({ slot, item }) => ({ slot, ...item }));
 }

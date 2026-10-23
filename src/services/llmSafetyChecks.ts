@@ -4,7 +4,7 @@ import RNFS from 'react-native-fs';
 import { statFile } from '../utils/fileStat';
 import logger from '../utils/logger';
 import { OverridableMemoryError } from '../utils/modelLoadErrors';
-import { phoneBudget } from './memoryBudget';
+import { textModelBudget } from './memoryBudget';
 
 /**
  * GGUF magic number — first 4 bytes of every valid GGUF file.
@@ -173,7 +173,7 @@ export async function checkMemoryForModel(
     // total RAM, and only the KV cache and headroom must fit in what is free.
     // A vision projector is copied, not mapped: it counts against what is free.
     const projectorMB = weightsMapped ? projectorFileSize / (1024 * 1024) : 0;
-    const weightsFit = !weightsMapped || isLoadableOnDevice((modelFileSize + projectorFileSize) / 1e9, total / 1024 ** 3, phoneBudget());
+    const weightsFit = !weightsMapped || isLoadableOnDevice((modelFileSize + projectorFileSize) / 1e9, total / 1024 ** 3, textModelBudget());
     const requiredMB = weightsMapped && weightsFit ? kvCacheMB + projectorMB + MIN_HEADROOM_MB : estimatedMB + projectorMB + MIN_HEADROOM_MB;
     const safe = weightsFit && availableMB > requiredMB;
     // [MEM-SM] the pre-load fit decision — kept (surfaces the exact "it needs ~X but only Y" call
