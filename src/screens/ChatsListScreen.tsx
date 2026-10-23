@@ -415,7 +415,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   list: {
     paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.md,
+    paddingTop: SPACING.sm,
     paddingBottom: SPACING.lg,
   },
   // Fixed above the list; the list scrolls under its bottom-edge shadow.
