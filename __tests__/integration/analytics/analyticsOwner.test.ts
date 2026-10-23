@@ -223,17 +223,20 @@ it('sends a daily features snapshot once per day and survives unreadable storage
   const { analytics, endpoint, flush, boundary } = await setup({ usage: true });
   const AsyncStorage = require('@react-native-async-storage/async-storage');
   boundary.emitAppStateChange('active');
-  analytics.appForegrounded();
+  boundary.emitAppStateChange('background');
+  boundary.emitAppStateChange('active');
   analytics.trackScreen('HomeTab');
-  analytics.appBackgrounded();
-  analytics.appForegrounded();
+  boundary.emitAppStateChange('background');
+  boundary.emitAppStateChange('background');
+  boundary.emitAppStateChange('active');
   analytics.trackScreen('HomeTab');
   analytics.trackScreen(undefined);
   analytics.trackScreen('Settings');
   AsyncStorage.getItem.mockRejectedValueOnce(new Error('unreadable'));
   AsyncStorage.setItem.mockRejectedValueOnce(new Error('unwritable'));
   await AsyncStorage.removeItem('offgrid.analytics.snapshotDay');
-  analytics.appForegrounded();
+  boundary.emitAppStateChange('background');
+  boundary.emitAppStateChange('active');
   await new Promise(resolve => setTimeout(resolve, 20));
   await flush();
   await waitFor(() => expect(endpoint.named('$screen')).toHaveLength(2));
@@ -324,10 +327,11 @@ it('each generation ends once; voice generations finish without an unclean-exit 
 });
 
 it('time on a screen stops while the app is in the background', async () => {
-  const { analytics, endpoint, flush } = await setup({ usage: true });
-  analytics.appBackgrounded();
+  const { analytics, endpoint, flush, boundary } = await setup({ usage: true });
+  boundary.emitAppStateChange('background');
+  boundary.emitAppStateChange('active');
   analytics.trackScreen('HomeTab');
-  analytics.appBackgrounded();
+  boundary.emitAppStateChange('background');
   analytics.trackScreen('Chat');
   await flush();
   await waitFor(() => expect(endpoint.named('$screen')).toHaveLength(2));

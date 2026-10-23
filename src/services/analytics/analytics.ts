@@ -250,7 +250,7 @@ function onAppStateChange(next: AppStateStatus): void {
   }
 }
 
-export function appForegrounded(): void {
+function appForegrounded(): void {
   foregroundAt = Date.now();
   markForeground(true);
   if (currentScreen) screenShownAt = Date.now();
@@ -258,7 +258,7 @@ export function appForegrounded(): void {
   snapshotFeaturesDaily().catch(ignore);
 }
 
-export function appBackgrounded(): void {
+function appBackgrounded(): void {
   markForeground(false);
   if (screenShownAt !== null) screenElapsed += Date.now() - screenShownAt;
   screenShownAt = null;
