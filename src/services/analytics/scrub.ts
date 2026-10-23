@@ -18,20 +18,40 @@ const IPV4_PATTERN = /\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b/g;
 const QUOTED_PATTERN = /(["'`])(?:(?!\1).)*\1/g;
 const PATH_PATTERN = /(?:[A-Za-z]:)?(?:[\\/][^\\/\s:"'`]+)+[\\/]([^\\/\s:"'`]+)/g;
 // The app's own code: its file name helps find the bug and names nothing of the person's.
-const CODE_FILE = /\.(?:[cm]?[jt]sx?|bundle|hbc|so|dylib|wasm|java|kt|swift|mm?|cpp|cc|c|h)$/i;
-// A bare file name a person owns: a document, media, an archive or a model file.
-const USER_FILE =
-  /[^\s/\\:<>"'`]+\.(?:pdf|docx?|xlsx?|pptx?|txt|md|csv|tsv|json|rtf|pages|key|numbers|html?|png|jpe?g|gif|heic|webp|svg|mp3|m4a|wav|ogg|mp4|mov|mkv|zip|gguf|safetensors|onnx|bin|pte|tflite|litertlm|task)\b/gi;
+const CODE_EXTENSIONS = new Set(
+  'js jsx ts tsx mjs cjs mts cts bundle hbc so dylib wasm java kt swift m mm cpp cc c h'.split(' '),
+);
+// A file a person owns: a document, media, an archive or a model file.
+const USER_EXTENSIONS = new Set(
+  ('pdf doc docx xls xlsx ppt pptx txt md csv tsv json rtf pages key numbers htm html png jpg jpeg ' +
+    'gif heic webp svg mp3 m4a wav ogg mp4 mov mkv zip gguf safetensors onnx bin pte tflite litertlm task')
+    .split(' '),
+);
+// Punctuation that may close a sentence after a file name.
+const TRAILING = new Set(['.', ',', ';', ')', '!', '?']);
+
+function extensionOf(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+}
 
 function codeFileOnly(_path: string, name: string): string {
-  return CODE_FILE.test(name) ? name : '<file>';
+  return CODE_EXTENSIONS.has(extensionOf(name)) ? name : '<file>';
+}
+
+/** A bare file name a person owns becomes `<file>`; the punctuation after it stays. */
+function userFileToken(token: string): string {
+  let end = token.length;
+  while (end > 0 && TRAILING.has(token[end - 1])) end -= 1;
+  const name = token.slice(0, end);
+  return USER_EXTENSIONS.has(extensionOf(name)) ? `<file>${token.slice(end)}` : token;
 }
 
 export function fileName(path: unknown): string | undefined {
   if (typeof path !== 'string' || !path) return undefined;
-  const clean = path.replace(/[?#].*$/, '');
-  const parts = clean.split(/[\\/]/);
-  return parts[parts.length - 1] || undefined;
+  const query = path.search(/[?#]/);
+  const clean = query >= 0 ? path.slice(0, query) : path;
+  return clean.split(/[\\/]/).at(-1) || undefined;
 }
 
 export function scrubMessage(message: unknown): string | undefined {
@@ -41,7 +61,9 @@ export function scrubMessage(message: unknown): string | undefined {
     .replace(IPV4_PATTERN, '')
     .replace(QUOTED_PATTERN, '')
     .replace(PATH_PATTERN, codeFileOnly)
-    .replace(USER_FILE, '<file>');
+    .split(/(\s+)/)
+    .map(userFileToken)
+    .join('');
   const colon = scrubbed.indexOf(':');
   return (colon >= 0 ? scrubbed.slice(0, colon) : scrubbed).replace(/\s+/g, ' ').trim();
 }
