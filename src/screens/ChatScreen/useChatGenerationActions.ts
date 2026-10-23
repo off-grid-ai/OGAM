@@ -318,7 +318,7 @@ export async function shouldRouteToImageGenerationFn(
   // so "why didn't 'draw a dog' make an image?" is answerable from the logs (esp. the
   // voice path), never a guess.
   logger.log(
-    `[ROUTE-SM] route? text="${text.slice(0, 60)}" force=${
+    `[ROUTE-SM] route? text=${text.length}ch force=${
       forceImageMode ?? false
     } mode=${
       deps.settings.imageGenerationMode
@@ -994,10 +994,7 @@ export async function dispatchGenerationFn(
   // [ROUTE-SM]: confirms the turn reached the router (esp. the voice path) + the
   // final routed destination — so a "pipeline never triggered" is visible in logs.
   logger.log(
-    `[ROUTE-SM] dispatch text="${text.slice(
-      0,
-      60,
-    )}" imageMode=${imageMode} hasImageModel=${!!deps.activeImageModel}`,
+    `[ROUTE-SM] dispatch text=${text.length}ch imageMode=${imageMode} hasImageModel=${!!deps.activeImageModel}`,
   );
   // ONE decision seam (resolveTurnKind); a NEW turn has no recorded kind so the route rule decides.
   const kind = await resolveTurnKind(deps, {

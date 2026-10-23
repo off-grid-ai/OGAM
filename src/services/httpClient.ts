@@ -405,7 +405,7 @@ function parseNDJSONLine(
       final
         ? '[HttpClient] Failed to parse final NDJSON line:'
         : '[HttpClient] Failed to parse NDJSON line:',
-      (final ? line : trimmed).substring(0, 100),
+      `${(final ? line : trimmed).length}ch`,
     );
   }
 }
