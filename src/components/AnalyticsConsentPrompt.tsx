@@ -5,6 +5,7 @@ import {
   useConsentPromptStore,
 } from '../services/analytics/consentPrompt';
 import { setAnalyticsConsent } from '../services/analytics/analytics';
+import { ignore } from '../services/analytics/values';
 
 const COPY = {
   failure: { title: 'Help us fix this?', source: 'failure_prompt' },
@@ -30,7 +31,7 @@ export const AnalyticsConsentPrompt: React.FC = () => {
           text: 'Share',
           style: 'default',
           onPress: () => {
-            setAnalyticsConsent({ usage: true, crashes: true }, copy.source);
+            setAnalyticsConsent({ usage: true, crashes: true }, copy.source).catch(ignore);
           },
         },
       ]}

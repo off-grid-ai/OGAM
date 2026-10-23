@@ -48,10 +48,10 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
       <Text style={styles.sectionLabel}>Analytics</Text>
       <View style={styles.navSection} testID="settings-analytics">
         {toggle('Usage data', usage, next => {
-          setAnalyticsConsent({ usage: next }, 'settings');
+          setAnalyticsConsent({ usage: next }, 'settings').catch(ignore);
         })}
         {toggle('Crash reports', crashes, next => {
-          setAnalyticsConsent({ crashes: next }, 'settings');
+          setAnalyticsConsent({ crashes: next }, 'settings').catch(ignore);
         })}
         <TouchableOpacity style={styles.navItem} onPress={onWhatWeShare} testID="settings-what-we-share">
           <View style={styles.navItemIcon}>

@@ -20,6 +20,7 @@ import {
   proGateShown,
   setAnalyticsConsent,
 } from '../services/analytics/analytics';
+import { ignore } from '../services/analytics/values';
 import { useAppStore } from '../stores/appStore';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
@@ -69,7 +70,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
   const toggleShareAnalytics = () => {
     const next = !shareAnalytics;
     setShareAnalytics(next);
-    setAnalyticsConsent({ usage: next, crashes: next }, 'setup');
+    setAnalyticsConsent({ usage: next, crashes: next }, 'setup').catch(ignore);
   };
   // Every way out of Auto Setup passed the consent row, so the person has been asked.
   const markConsentAsked = () => {

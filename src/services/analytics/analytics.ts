@@ -173,9 +173,12 @@ export function setAnalyticsConsent(
     analyticsCrashes: after.crashes,
     analyticsAsked: true,
   });
-  return syncClient().then(() => {
-    if (!before.usage && after.usage) capture('analytics_opted_in', { source });
-  });
+  // Never rejects: a consent change must not surface as an error in the UI that made it.
+  return syncClient()
+    .then(() => {
+      if (!before.usage && after.usage) capture('analytics_opted_in', { source });
+    })
+    .catch(ignore);
 }
 
 /** Called once the app has finished starting and its settings are hydrated. */
@@ -244,9 +247,8 @@ export function appBackgrounded(): void {
 export function trackScreen(name: string | undefined): void {
   if (!name || name === currentScreen) return;
   const now = Date.now();
-  const prevMs = currentScreen
-    ? screenElapsed + (screenShownAt === null ? 0 : now - screenShownAt)
-    : undefined;
+  const shownMs = screenShownAt === null ? 0 : now - screenShownAt;
+  const prevMs = currentScreen ? screenElapsed + shownMs : undefined;
   client?.screen(name, { screen: name, prev_screen: currentScreen ?? undefined, prev_ms: ms(prevMs) });
   currentScreen = name;
   screenShownAt = now;
