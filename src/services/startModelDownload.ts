@@ -4,6 +4,7 @@ import { useDownloadStore, isActiveStatus } from '../stores/downloadStore';
 import { useAppStore } from '../stores';
 import { activeModelService } from './activeModelService';
 import { makeModelKey } from '../utils/modelKey';
+import { ensureMtpHead } from './mtpHeadDownload';
 import type { ModelFile, DownloadedModel } from '../types';
 
 /** Placeholder downloadId for a row that exists only to represent the QUEUED state
@@ -105,6 +106,8 @@ export async function startModelDownload(
       }
       useDownloadStore.getState().remove(modelKey);
       opts.onRegistered?.(model);
+      // The same tap brings the model's MTP head when one is published; it shows on the model's row.
+      ensureMtpHead(model).catch(() => {});
     }, fail);
   } catch (e) {
     // A start cancelled while still queued (no slot yet) rejects with `.cancelled` — it
