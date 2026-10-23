@@ -65,7 +65,8 @@ describe('features snapshot', () => {
     useAppStore.getState().setActiveModelId(null);
     useAppStore.getState().updateSettings({ enabledTools: [] });
     expect(featureSnapshot()).toEqual({
-      voice_input: false, image_generation: false, vision: false, web_search: false, tools: false, remote_server: false,
+      voice_input: false, image_generation: false, video_generation: false, vision: false, web_search: false, tools: false,
+      remote_server: false,
     });
 
     const llamaVision = createDownloadedModel({ id: 'v', engine: 'llama', isVisionModel: true });
@@ -73,11 +74,12 @@ describe('features snapshot', () => {
     useAppStore.getState().setDownloadedModels([llamaVision, litert]);
     useAppStore.getState().setActiveModelId('v');
     useAppStore.getState().setActiveImageModelId('img');
+    useAppStore.getState().setActiveVideoModelId('Comfy-Org/Wan_2.1_ComfyUI_repackaged');
     useAppStore.getState().updateSettings({ enabledTools: ['web_search'] });
     useRemoteServerStore.getState().addServer({ name: 'Mac', endpoint: 'http://192.168.1.2:1234', providerType: 'openai-compatible' });
     registerHook(HOOKS.analyticsProFeatures, () => ({ tts: true, sync: false }));
     expect(featureSnapshot()).toMatchObject({
-      image_generation: true, vision: true, web_search: true, tools: true, remote_server: true, tts: true, sync: false,
+      image_generation: true, video_generation: true, vision: true, web_search: true, tools: true, remote_server: true, tts: true, sync: false,
     });
     useAppStore.getState().setActiveModelId('l');
     expect(featureSnapshot().vision).toBe(true);
@@ -98,6 +100,7 @@ describe('model facts', () => {
 
     expect(imageModelFacts({ id: 'sd_qnn', backend: 'qnn' } as never)).toEqual({ model: 'sd_qnn', engine: 'onnx', backend: 'npu' });
     expect(imageModelFacts({ id: 'sd_coreml', backend: 'coreml' } as never)).toEqual({ model: 'sd_coreml', engine: 'coreml', backend: 'gpu' });
+    expect(imageModelFacts({ id: 'sd-flux', backend: 'sd' } as never)).toEqual({ model: 'sd-flux', engine: 'sd.cpp', backend: 'gpu' });
     const os = Platform.OS;
     Object.defineProperty(Platform, 'OS', { value: 'ios', configurable: true });
     expect(imageModelFacts(undefined)).toEqual({ model: 'custom', engine: 'coreml', backend: 'cpu' });
