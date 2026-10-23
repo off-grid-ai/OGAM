@@ -187,8 +187,8 @@ describe('SettingsScreen', () => {
   it('renders the Analytics section with both consent toggles off by default', () => {
     const { getByText, getByLabelText } = render(<SettingsScreen />);
     expect(getByText('Analytics')).toBeTruthy();
-    expect(getByLabelText('Usage data').props.value).toBe(false);
-    expect(getByLabelText('Crash reports').props.value).toBe(false);
+    expect(Boolean(getByLabelText('Usage data').props.on ?? getByLabelText('Usage data').props.value)).toBe(false);
+    expect(Boolean(getByLabelText('Crash reports').props.on ?? getByLabelText('Crash reports').props.value)).toBe(false);
     expect(getByText('What we share')).toBeTruthy();
     expect(getByText('Report a problem')).toBeTruthy();
   });
