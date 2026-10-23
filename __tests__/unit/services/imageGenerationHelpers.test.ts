@@ -168,7 +168,7 @@ describe('buildImageGenMeta', () => {
     (Platform as any).OS = 'ios';
     const meta = buildImageGenMeta(baseModel, baseOpts);
     expect(meta.gpu).toBe(true);
-    expect(meta.gpuBackend).toBe('Core ML (ANE)');
+    expect(meta.gpuBackend).toBe('Core ML');
   });
 
   it('includes model name, steps, guidanceScale, resolution', () => {

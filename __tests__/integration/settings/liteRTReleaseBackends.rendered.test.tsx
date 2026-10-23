@@ -17,21 +17,20 @@ it('offers only CPU and GPU in Chat and Model Settings even with a saved NPU pre
   const { useAppStore } = require('../../../src/stores');
   await useAppStore.persist.rehydrate();
   const { GenerationSettingsModal } = require('../../../src/components/GenerationSettingsModal');
-  const { TextGenerationSection } = require('../../../src/screens/ModelSettingsScreen/TextGenerationSection');
+  const { GeneralGenerationControls } = require('../../../src/components/settings/GeneralGenerationControls');
   const model = createDownloadedModel({ id: 'gemma-litert', engine: 'litert', filePath: '/models/gemma.litertlm' });
   useAppStore.getState().setDownloadedModels([model]);
   useAppStore.getState().setActiveModelId(model.id);
   useAppStore.getState().updateSettings({ liteRTBackend: 'npu' });
   const chat = render(React.createElement(GenerationSettingsModal, { visible: true, onClose: () => {} }));
-  fireEvent.press(chat.getByText('TEXT GENERATION'));
-  fireEvent.press(chat.getByTestId('modal-text-advanced-toggle'));
+  // Acceleration is a General control on both surfaces.
+  fireEvent.press(chat.getByTestId('modal-general-accordion'));
   expect(chat.queryByText('NPU (Beta)')).toBeNull();
   expect(chat.getByText(/Run on GPU via OpenCL/)).toBeTruthy();
   fireEvent.press(chat.getByText('CPU'));
   expect(useAppStore.getState().settings.liteRTBackend).toBe('cpu');
   chat.unmount();
-  const settings = render(React.createElement(TextGenerationSection));
-  fireEvent.press(settings.getByTestId('text-advanced-toggle'));
+  const settings = render(React.createElement(GeneralGenerationControls));
   expect(settings.queryByText('NPU (Beta)')).toBeNull();
   fireEvent.press(settings.getByText('GPU'));
   expect(useAppStore.getState().settings.liteRTBackend).toBe('gpu');

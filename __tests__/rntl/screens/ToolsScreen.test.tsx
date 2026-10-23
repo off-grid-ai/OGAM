@@ -115,10 +115,9 @@ describe('ToolsScreen', () => {
   });
 
   it('toggles a tool through the core settings store', () => {
-    const { getAllByRole } = render(<ToolsScreen />);
-    const switches = getAllByRole('switch');
+    const { getByTestId } = render(<ToolsScreen />);
     // web_search + calculator are enabled, get_current_datetime is not.
-    fireEvent(switches[2], 'valueChange', true);
+    fireEvent(getByTestId('tool-picker-toggle-get_current_datetime'), 'valueChange', true);
     expect(mockUpdateSettings).toHaveBeenCalledWith({
       enabledTools: ['web_search', 'calculator', 'get_current_datetime'],
     });

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { useAppStore } from '../stores';
+import { mobileImageParameterDefaults, mobileImageSizeLimit, resolveMobileImageParameters } from '../services/imageParameterPolicy';
 import { localDreamGeneratorService } from '../services/localDreamGenerator';
 
 export function useClearGpuCache() {
@@ -25,4 +26,23 @@ export function useClearGpuCache() {
   }, [downloadedImageModels, activeImageModelId]);
 
   return { clearing, handleClearCache };
+}
+
+/** Both settings surfaces display the same values that generation will use. */
+export function useImageParameterSettings() {
+  const { settings, updateSettings, activeImageModelId, downloadedImageModels } = useAppStore();
+  const model = downloadedImageModels.find(item => item.id === activeImageModelId) ?? { id: 'legacy-image' };
+  const defaults = mobileImageParameterDefaults(model, Platform.OS);
+  const parameters = resolveMobileImageParameters(model, settings);
+  return {
+    parameters,
+    defaults,
+    maxSize: mobileImageSizeLimit(model),
+    applyDefaults: () => updateSettings({
+      imageSteps: defaults.steps,
+      imageGuidanceScale: defaults.guidanceScale,
+      imageWidth: defaults.size,
+      imageHeight: defaults.size,
+    }),
+  };
 }

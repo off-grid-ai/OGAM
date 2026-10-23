@@ -1,3 +1,5 @@
+import { useAppStore } from '../../stores';
+import { videoGenerationMeta } from '../../utils/modelHelpers';
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -221,6 +223,18 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   onLongPress,
   onMenuOpen,
 }) => {
+  const savedVideo = useAppStore(state =>
+    message.role === 'assistant'
+      ? state.generatedVideos.find(video =>
+          message.attachments?.some(attachment =>
+            attachment.type === 'video' && attachment.id === video.id,
+          ),
+        )
+      : undefined,
+  );
+  const generationMeta = savedVideo
+    ? { ...videoGenerationMeta(savedVideo), ...message.generationMeta }
+    : message.generationMeta;
   const timelineHasThinking = Boolean(
     message.timeline?.some(entry => entry.kind === 'thinking'),
   );
@@ -237,6 +251,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const answerParsedContent = hasAssistantWork
     ? { ...parsedContent, thinking: '' }
     : parsedContent;
+  const isGeneratedVideo = Boolean(
+    !isUser &&
+      message.turnKind === 'video' &&
+      message.attachments?.length &&
+      message.attachments.every(attachment => attachment.type === 'video'),
+  );
   const hasVisibleAnswer = Boolean(
     hasAttachments || answerParsedContent.response.trim(),
   );
@@ -324,7 +344,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       {(!hideProse || hasAttachments) && showAnswerBubble && (
         <View
           testID={message.isThinking ? undefined : 'message-bubble'}
-          style={message.isThinking ? undefined : bubbleStyle}
+          style={
+            message.isThinking
+              ? undefined
+              : isGeneratedVideo
+                ? styles.videoMessage
+                : bubbleStyle
+          }
         >
           {hasAttachments && (
             <MessageAttachments
@@ -336,18 +362,20 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             />
           )}
 
-          <MessageContent
-            isUser={isUser}
-            isThinking={message.isThinking}
-            content={message.content}
-            isStreaming={isStreaming}
-            parsedContent={answerParsedContent}
-            showThinking={showThinking}
-            onToggleThinking={onToggleThinking}
-            styles={styles}
-            documentSources={message.documentSources}
-            onCitationPress={onCitationPress}
-          />
+          {!isGeneratedVideo && (
+            <MessageContent
+              isUser={isUser}
+              isThinking={message.isThinking}
+              content={message.content}
+              isStreaming={isStreaming}
+              parsedContent={answerParsedContent}
+              showThinking={showThinking}
+              onToggleThinking={onToggleThinking}
+              styles={styles}
+              documentSources={message.documentSources}
+              onCitationPress={onCitationPress}
+            />
+          )}
         </View>
       )}
 
@@ -379,10 +407,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </View>
       )}
 
-      {showTurnFooter && showGenerationDetails && message.generationMeta && (
+      {showTurnFooter && showGenerationDetails && generationMeta && (
         <GenerationMeta
           messageId={message.id}
-          generationMeta={message.generationMeta}
+          generationMeta={generationMeta}
           styles={styles}
           colors={colors}
         />

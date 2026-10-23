@@ -21,6 +21,7 @@ type Props = {
 const TYPE_ICONS: { type: ModelRowType; icon: string; caption: string }[] = [
   { type: 'text', icon: 'message-square', caption: 'Text' },
   { type: 'image', icon: 'image', caption: 'Image' },
+  { type: 'video', icon: 'video', caption: 'Video' },
   { type: 'voice', icon: 'volume-2', caption: 'Voice' },
   { type: 'speech', icon: 'mic', caption: 'Speech' },
 ];
@@ -30,12 +31,23 @@ const TYPE_ICONS: { type: ModelRowType; icon: string; caption: string }[] = [
  * type — emerald + bright caption when that type has an active model, dimmed +
  * muted when not. Tap → manager sheet.
  */
-export const ModelsSummaryRow: React.FC<Props> = ({ labels, counts, isLoading, onPress, onPressType }) => {
+export const ModelsSummaryRow: React.FC<Props> = ({
+  labels,
+  counts,
+  isLoading,
+  onPress,
+  onPressType,
+}) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
   return (
-    <AnimatedPressable style={styles.container} hapticType="selection" testID="models-summary" onPress={onPress}>
+    <AnimatedPressable
+      style={styles.container}
+      hapticType="selection"
+      testID="models-summary"
+      onPress={onPress}
+    >
       <View style={styles.header}>
         <Text style={styles.label}>Models</Text>
         {isLoading
@@ -51,26 +63,42 @@ export const ModelsSummaryRow: React.FC<Props> = ({ labels, counts, isLoading, o
               key={type}
               testID={`model-summary-${type}-open`}
               hapticType="selection"
-              onPress={(event) => { event?.stopPropagation?.(); (onPressType ?? onPress)(type); }}
+              onPress={event => {
+                event?.stopPropagation?.();
+                (onPressType ?? onPress)(type);
+              }}
             >
-            <View
-              testID={`model-summary-${type}`}
-              // `selected` reflects "this model type has an active model" — the same signal the
-              // caption/icon colour encodes visually. Exposed so a test can observe active-vs-dimmed
-              // state without inspecting colours (e.g. a remote text model active while local count = 0).
-              accessibilityState={{ selected: active }}
-              style={[styles.iconCol, !active && styles.inactive]}
-            >
-              <View style={styles.typeStack}>
-                <Icon name={icon} size={18} color={active ? colors.primary : colors.textMuted} />
-                <Text style={[styles.caption, active && styles.captionActive]}>{caption}</Text>
+              <View
+                testID={`model-summary-${type}`}
+                // `selected` reflects "this model type has an active model" — the same signal the
+                // caption/icon colour encodes visually. Exposed so a test can observe active-vs-dimmed
+                // state without inspecting colours (e.g. a remote text model active while local count = 0).
+                accessibilityState={{ selected: active }}
+                style={[styles.iconCol, !active && styles.inactive]}
+              >
+                <View style={styles.typeStack}>
+                  <Icon
+                    name={icon}
+                    size={18}
+                    color={active ? colors.primary : colors.textMuted}
+                  />
+                  <Text
+                    style={[styles.caption, active && styles.captionActive]}
+                  >
+                    {caption}
+                  </Text>
+                </View>
+                {typeof count === 'number' && (
+                  // Big numeral to the RIGHT of the icon+label, tall enough to span
+                  // both — fills the gap between types so the row reads at a glance.
+                  <Text
+                    testID={`model-summary-count-${type}`}
+                    style={[styles.count, count > 0 && styles.countActive]}
+                  >
+                    {count}
+                  </Text>
+                )}
               </View>
-              {typeof count === 'number' && (
-                // Big numeral to the RIGHT of the icon+label, tall enough to span
-                // both — fills the gap between types so the row reads at a glance.
-                <Text testID={`model-summary-count-${type}`} style={[styles.count, count > 0 && styles.countActive]}>{count}</Text>
-              )}
-            </View>
             </AnimatedPressable>
           );
         })}
@@ -95,13 +123,21 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
   },
-  label: { ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted },
+  label: {
+    ...TYPOGRAPHY.label,
+    textTransform: 'uppercase' as const,
+    color: colors.textMuted,
+  },
   icons: {
     flexDirection: 'row' as const,
     justifyContent: 'space-between' as const,
     paddingHorizontal: SPACING.xs,
   },
-  iconCol: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.sm },
+  iconCol: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.sm,
+  },
   inactive: { opacity: 0.35 },
   typeStack: { alignItems: 'center' as const, gap: SPACING.xs },
   caption: { ...TYPOGRAPHY.metaSmall, color: colors.textMuted },
@@ -109,6 +145,11 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   // Numeral to the right of the icon+label. Thin (weight 200) and only modestly
   // larger than the icon so it reads as a quiet secondary count, not a loud hero —
   // matches the restrained terminal look. lineHeight spans the stack for centering.
-  count: { ...TYPOGRAPHY.display, fontSize: 18, lineHeight: 34, color: colors.textMuted },
+  count: {
+    ...TYPOGRAPHY.display,
+    fontSize: 18,
+    lineHeight: 34,
+    color: colors.textMuted,
+  },
   countActive: { color: colors.primary },
 });

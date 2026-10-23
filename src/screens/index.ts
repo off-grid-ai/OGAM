@@ -23,6 +23,7 @@ export { SecuritySettingsScreen } from './SecuritySettingsScreen';
 export { RemoteServersScreen } from './RemoteServersScreen';
 export { RemoteServerEditorScreen } from './RemoteServerEditorScreen';
 export { ProDetailScreen } from './ProDetailScreen';
+export { DesignPartnersScreen } from './DesignPartnersScreen';
 export { AboutScreen } from './AboutScreen';
 export { AnalyticsInfoScreen } from './AnalyticsInfoScreen';
 export { ToolsScreen } from './ToolsScreen';

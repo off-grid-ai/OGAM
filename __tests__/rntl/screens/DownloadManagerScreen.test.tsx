@@ -240,6 +240,8 @@ const createDefaultState = (overrides: any = {}) => ({
   downloadedImageModels: [],
   setDownloadedImageModels: jest.fn(),
   removeDownloadedImageModel: jest.fn(),
+  downloadedVideoModels: [],
+  removeDownloadedVideoModel: jest.fn(),
   themeMode: 'system',
   ...overrides,
 });

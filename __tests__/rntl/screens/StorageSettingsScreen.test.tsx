@@ -92,7 +92,9 @@ jest.mock('../../../src/stores', () => ({
   useAppStore: jest.fn(() => ({
     downloadedModels: mockDownloadedModels,
     downloadedImageModels: mockDownloadedImageModels,
+    downloadedVideoModels: [],
     generatedImages: [],
+    generatedVideos: [],
   })),
   useChatStore: jest.fn((selector?: any) => {
     const state = { conversations: mockConversations };

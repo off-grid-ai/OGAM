@@ -24,6 +24,7 @@ type RowDef = { type: ModelRowType; icon: string; label: string };
 const ROWS: RowDef[] = [
   { type: 'text', icon: 'message-square', label: 'Text' },
   { type: 'image', icon: 'image', label: 'Image' },
+  { type: 'video', icon: 'video', label: 'Video' },
   { type: 'voice', icon: 'volume-2', label: 'Voice' },
   { type: 'speech', icon: 'mic', label: 'Speech' },
 ];
@@ -50,7 +51,16 @@ type Props = {
  * type's picker.
  */
 export const ModelsManagerSheet: React.FC<Props> = ({
-  visible, onClose, onClosed, labels, remote, loadingState, isEjecting, hasActiveModel, onOpenRow, onEject,
+  visible,
+  onClose,
+  onClosed,
+  labels,
+  remote,
+  loadingState,
+  isEjecting,
+  hasActiveModel,
+  onOpenRow,
+  onEject,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -66,7 +76,9 @@ export const ModelsManagerSheet: React.FC<Props> = ({
     setEjectingRow(row);
     logger.log(`[MODEL-SM] sheet eject → ${resident.type} (${resident.key}) ~${(resident.sizeMB / 1024).toFixed(1)}GB`);
     ejectResident(resident)
-      .catch((err) => logger.log(`[MODEL-SM] sheet eject ${resident.key} failed:`, err))
+      .catch(err =>
+        logger.log(`[MODEL-SM] sheet eject ${resident.key} failed:`, err),
+      )
       .finally(() => setEjectingRow(null));
   };
   const refreshModels = async () => {
@@ -105,10 +117,17 @@ export const ModelsManagerSheet: React.FC<Props> = ({
   };
 
   return (
-    <AppSheet visible={visible} onClose={onClose} onClosed={onClosed} title="MODELS" enableDynamicSizing>
+    <AppSheet
+      visible={visible}
+      onClose={onClose}
+      onClosed={onClosed}
+      title="MODELS"
+      enableDynamicSizing
+    >
       <View style={styles.content}>
-        {ROWS.map((row) => {
-          const isLoading = loadingState.isLoading && loadingState.type === row.type;
+        {ROWS.map(row => {
+          const isLoading =
+            loadingState.isLoading && loadingState.type === row.type;
           const value = labels[row.type];
           const isSet = value && value !== '—';
           const resident = residentByRow[row.type];
@@ -124,9 +143,10 @@ export const ModelsManagerSheet: React.FC<Props> = ({
               <Text style={styles.label}>{row.label}</Text>
               {/* Fixed-width eject column right of the label so all four rows align; empty when not resident. */}
               <View style={styles.ejectSlot}>
-                {resident && (ejectingRow === row.type
-                  ? <LoadingDots color={colors.error} />
-                  : (
+                {resident &&
+                  (ejectingRow === row.type ? (
+                    <LoadingDots color={colors.error} />
+                  ) : (
                     <TouchableOpacity
                       testID={`models-row-${row.type}-eject`}
                       accessibilityLabel={`Eject ${row.label} model from memory`}
@@ -139,11 +159,19 @@ export const ModelsManagerSheet: React.FC<Props> = ({
               </View>
               <View style={styles.valueGroup}>
                 {resident && (
-                  <View testID={`models-row-${row.type}-ram`} style={styles.ramChip}>
-                    <Text style={styles.ramChipText}>{`${(resident.sizeMB / 1024).toFixed(1)} GB`}</Text>
+                  <View
+                    testID={`models-row-${row.type}-ram`}
+                    style={styles.ramChip}
+                  >
+                    <Text
+                      style={styles.ramChipText}
+                    >{`${(resident.sizeMB / 1024).toFixed(1)} GB`}</Text>
                   </View>
                 )}
-                <Text style={[styles.value, isSet && styles.valueSet]} numberOfLines={1}>
+                <Text
+                  style={[styles.value, isSet && styles.valueSet]}
+                  numberOfLines={1}
+                >
                   {isLoading ? 'Loading…' : value}
                 </Text>
                 {!!remote?.[row.type] && isSet && (
@@ -196,7 +224,12 @@ export const ModelsManagerSheet: React.FC<Props> = ({
 };
 
 const createStyles = (colors: ThemeColors) => ({
-  content: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm, paddingBottom: SPACING.md, gap: SPACING.sm as number },
+  content: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.md,
+    gap: SPACING.sm as number,
+  },
   row: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -208,9 +241,18 @@ const createStyles = (colors: ThemeColors) => ({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  label: { ...TYPOGRAPHY.label, textTransform: 'uppercase' as const, color: colors.textMuted, width: 64 },
+  label: {
+    ...TYPOGRAPHY.label,
+    textTransform: 'uppercase' as const,
+    color: colors.textMuted,
+    width: 64,
+  },
   // Fixed-width control column right of the label — all four rows align whether or not resident.
-  ejectSlot: { width: 22, alignItems: 'center' as const, justifyContent: 'center' as const },
+  ejectSlot: {
+    width: 22,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
   ejectGlyph: { opacity: 0.8 },
   ramChip: {
     borderWidth: 1,
@@ -222,8 +264,19 @@ const createStyles = (colors: ThemeColors) => ({
   ramChipText: { ...TYPOGRAPHY.label, color: colors.textMuted },
   // Right-aligned value cluster: the name (shrinks/ellipsizes) with the remote cloud hugging its
   // right edge at the minimum token gap (xs) — the marker reads as part of the name, not the row.
-  valueGroup: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'flex-end' as const, gap: SPACING.xs },
-  value: { ...TYPOGRAPHY.body, color: colors.textMuted, flexShrink: 1, textAlign: 'right' as const },
+  valueGroup: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'flex-end' as const,
+    gap: SPACING.xs,
+  },
+  value: {
+    ...TYPOGRAPHY.body,
+    color: colors.textMuted,
+    flexShrink: 1,
+    textAlign: 'right' as const,
+  },
   valueSet: { color: colors.text },
   actions: {
     flexDirection: 'row' as const,

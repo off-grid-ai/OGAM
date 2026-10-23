@@ -631,7 +631,7 @@ describe('generationService', () => {
       expect((generationService as any).queueProcessor).toBeNull();
     });
 
-    it('processNextInQueue aggregates multiple messages', async () => {
+    it('processNextInQueue sends queued messages one at a time, in order', async () => {
       const processor = jest.fn().mockResolvedValue(undefined);
       generationService.setQueueProcessor(processor);
 
@@ -662,12 +662,18 @@ describe('generationService', () => {
       // Wait for async processor
       await new Promise<void>(resolve => setTimeout(resolve, 10));
 
+      // Each queued send keeps its own modality and attachments, so a queued video
+      // request is never merged into a text turn.
       expect(processor).toHaveBeenCalledTimes(1);
-      const combined = processor.mock.calls[0][0];
-      expect(combined.text).toContain('First');
-      expect(combined.text).toContain('Second');
-      expect(combined.text).toContain('Third');
-      expect(combined.attachments).toHaveLength(1); // Only q1 had attachment
+      const first = processor.mock.calls[0][0];
+      expect(first.text).toBe('First');
+      expect(first.attachments).toHaveLength(1);
+      expect(generationService.getState().queuedMessages.map(m => m.text)).toEqual(['Second', 'Third']);
+
+      (generationService as any).processNextInQueue();
+      await new Promise<void>(resolve => setTimeout(resolve, 10));
+      expect(processor.mock.calls[1][0].text).toBe('Second');
+      expect(generationService.getState().queuedMessages.map(m => m.text)).toEqual(['Third']);
     });
 
     it('processNextInQueue passes single message directly', async () => {
@@ -1097,6 +1103,7 @@ describe('generationService', () => {
       mockedRunToolLoop.mockImplementation(async ({ onStream, onThinkingDone }: any) => {
         onThinkingDone?.();
         onStream?.({ content: 'result', reasoningContent: '' });
+        return { interrupted: false };
       });
 
       await generationService.generateWithTools(convId, [
@@ -1115,6 +1122,7 @@ describe('generationService', () => {
         onStream?.({ content: 'before reset' });
         onStreamReset?.();
         onStream?.({ content: 'after reset' });
+        return { interrupted: false };
       });
 
       await generationService.generateWithTools(convId, [
@@ -1130,6 +1138,7 @@ describe('generationService', () => {
 
       mockedRunToolLoop.mockImplementation(async ({ onFinalResponse }: any) => {
         onFinalResponse?.('final answer');
+        return { interrupted: false };
       });
 
       await generationService.generateWithTools(convId, [
@@ -1317,7 +1326,7 @@ describe('generationService', () => {
 
     it('routes generateWithTools to generateRemoteWithTools and calls runToolLoop with forceRemote', async () => {
       const convId = setupWithConversation();
-      mockedRunToolLoop.mockResolvedValue(undefined);
+      mockedRunToolLoop.mockResolvedValue({ interrupted: false });
 
       await generationService.generateWithTools(convId, [
         createMessage({ role: 'user', content: 'use tools' }),
@@ -1345,6 +1354,7 @@ describe('generationService', () => {
       const convId = setupWithConversation();
       mockedRunToolLoop.mockImplementation(async ({ onFinalResponse }: any) => {
         onFinalResponse?.('remote result');
+        return { interrupted: false };
       });
 
       await generationService.generateWithTools(convId, [
@@ -1494,7 +1504,7 @@ describe('generationService', () => {
       expect(() => (generationService as any).processNextInQueue()).not.toThrow();
     });
 
-    it('merges multiple queued messages into a single combined message', async () => {
+    it('dispatches the oldest queued message alone and keeps the rest queued', async () => {
       const processor = jest.fn(() => Promise.resolve());
       (generationService as any).queueProcessor = processor;
       (generationService as any).state.queuedMessages = [
@@ -1505,9 +1515,13 @@ describe('generationService', () => {
       (generationService as any).processNextInQueue();
       await new Promise(resolve => setTimeout(resolve, 10));
 
+      expect(processor).toHaveBeenCalledTimes(1);
       expect(processor).toHaveBeenCalledWith(
-        expect.objectContaining({ text: 'msg1\n\nmsg2' }),
+        { id: '1', conversationId: 'c1', text: 'msg1', messageText: 'msg1' },
       );
+      expect((generationService as any).state.queuedMessages).toEqual([
+        { id: '2', conversationId: 'c1', text: 'msg2', messageText: 'msg2' },
+      ]);
     });
 
     it('passes single queued message directly without merging', async () => {

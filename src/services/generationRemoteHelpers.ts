@@ -1,3 +1,4 @@
+import { videoGenerationService } from './videoGenerationService';
 // Remote (OpenAI-compatible server) generation paths for GenerationService.
 //
 // Split from generationServiceHelpers.ts, which owns the LOCAL engines (llama.rn and LiteRT). The two
@@ -151,7 +152,7 @@ export async function generateRemoteWithToolsImpl(
 
   try {
     // Use the same tool loop but with remote provider
-    await runToolLoop({
+    const outcome = await runToolLoop({
       conversationId,
       messages,
       enabledToolIds,
@@ -185,8 +186,14 @@ export async function generateRemoteWithToolsImpl(
         );
       svc.checkSharePrompt();
       svc.resetState();
+      await videoGenerationService.finishDeferred(
+        conversationId,
+        outcome.interrupted,
+      );
+      svc.drainQueue();
     }
   } catch (error) {
+    videoGenerationService.discardDeferred(conversationId);
     if (svc.abortRequested) return;
     logger.error('[GenerationService] Remote tool generation error:', error);
     // Reset generating state on error, else isGenerating stays stuck → red stop, next send blocked (2026-07-14).

@@ -2,7 +2,32 @@
 
 ## Core Philosophy
 
-OffgridMobile follows a **brutalist, minimal design system** inspired by terminal aesthetics and focused on functionality over decoration. The interface emphasizes clarity, efficiency, and respect for the user's attention.
+OffgridMobile follows a **brutalist, minimal design system** inspired by terminal aesthetics. Visual quality and function are both essential. The interface must be clear, consistent, easy to use, and responsive.
+
+### Product priority: UI and UX are P0
+
+Styling, UI/UX, consistency, ease of use, finesse, animation, and interactions are **P0 requirements**. Do not defer known problems in these areas as optional polish. A feature must work well and feel complete in use.
+
+- Reuse existing components, theme tokens, and interaction patterns across screens.
+- Use restrained depth and theme-aware shadows to separate cards and show hierarchy. Minimal does not mean flat or unfinished.
+- Follow the recent chat and remote-server card improvements. Mobile commits `93e90268` (chat card depth), `f87ae730` (remote-server card depth), and `4871a9ad` (enhanced prompt card styling) provide implementation references.
+- Make taps, selection, expansion, collapse, loading, cancellation, and recovery clear and predictable. Show the actual state of the operation.
+- Use smooth, purposeful animation and immediate interaction feedback. Respect reduced-motion settings and device performance.
+- Keep common actions easy to find. Keep rows compact and easy to scan. Hide technical file details until the user needs them.
+- Check the result in the real app on each affected platform. A source change alone does not establish visual or interaction quality.
+
+These rules apply to new features and changes to existing screens. Fix concrete feedback within the affected area; this is not a request for unrelated redesigns.
+
+### Mobile design decisions
+
+This document is the source of truth for Off Grid AI Mobile layout and interaction decisions. The shared brand philosophy supplies the common visual identity; use this document for the mobile details.
+
+- Use less visible text. Keep the words a person needs to choose or act. Put longer explanations in details, confirmation, or recovery states.
+- Use a clear icon for a familiar action when it saves space. Give every icon action an accessible label and a touch target of at least 44px. Keep visible text when the icon could be misunderstood.
+- Keep model rows lean and compact. Use the shared `ModelCard` for text, image, video, embedding, and speech models. Highlight the active model in the same list; do not make a separate active-model list. Put the main action in the row; do not add a large button below every card.
+- Use the screen area well. Align headings, inputs, cards, and actions to the same content edge. Avoid repeated copy and empty space that makes a list harder to scan.
+- Use standard `SPACING` tokens for gaps and padding. Keep the same spacing between equivalent parts across screens.
+- Give cards useful depth with restrained, theme-aware shadows. Use the same depth pattern across related screens; keep borders crisp and avoid heavy elevation.
 
 ---
 
@@ -273,12 +298,12 @@ header: {
 
 ## Anti-Patterns (What to Avoid)
 
-❌ **Colorful gradients or heavy shadows** — Keep it flat; use theme shadows sparingly
+❌ **Colorful gradients or heavy shadows** — Use restrained, theme-aware depth that matches existing cards
 ❌ **Multiple accent colors** — Emerald only
 ❌ **Rounded pill shapes** — Use minimal `8px` radius
 ❌ **Decorative animations** — Only functional animations (loading, state transitions)
 ❌ **Mixed font families** — Menlo only
-❌ **Heavy borders or 3D effects** — Flat, sharp, minimal
+❌ **Heavy borders or 3D effects** — Keep edges crisp and elevation restrained
 ❌ **Large empty spaces without purpose** — Dense when appropriate
 ❌ **Color-coded information** — Use hierarchy, not color
 ❌ **Cluttered layouts** — Remove before adding
@@ -357,7 +382,7 @@ When building or refactoring a component:
 - Monospace font throughout
 - Uppercase label for section ("DOWNLOADED MODELS")
 - Metadata as small, muted text
-- Subtle border, no shadow
+- Subtle border and theme-aware shadow, consistent with the shared card pattern
 - Compact mode: horizontal layout with icon action buttons (download, select, delete) on right
 - Author shown as small pill-style tag, not a full line
 
@@ -370,7 +395,7 @@ When building or refactoring a component:
 - Mixed fonts for metadata
 
 **After:**
-- Flat background (`COLORS.surface`)
+- Theme surface background with the established card depth and shadow
 - No avatars (text-first)
 - Compact padding (`SPACING.md`)
 - Sharp edges
@@ -391,7 +416,7 @@ This design system was intentionally created to:
 6. **Age gracefully** — minimalism doesn't go out of style
 
 As the app evolves:
-- **Stay true to brutalism** — add functionality, not decoration
+- **Keep the minimal aesthetic** — preserve visual quality, useful depth, and clear interactions
 - **Maintain consistency** — use tokens religiously
 - **Question additions** — does this serve the user or just look nice?
 - **Optimize for density** — information should be easy to scan
@@ -408,4 +433,4 @@ As the app evolves:
 
 ---
 
-**Remember:** Silence, clarity, and function over form. Let the AI's capabilities speak, not the interface.
+**Remember:** Clarity, visual quality, and ease of use are part of the feature. Minimal design must still feel complete.

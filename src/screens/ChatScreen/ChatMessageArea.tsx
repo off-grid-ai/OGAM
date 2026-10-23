@@ -1,3 +1,4 @@
+import { VideoGenerationStatus } from '../../components/VideoGenerationStatus';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
@@ -231,7 +232,10 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
     prevIsStreamingRef.current = isStreaming;
   }, [isStreaming]);
   useEffect(() => {
-    if (chat.isGeneratingForThisConversation && !generationWasActiveRef.current) {
+    if (
+      chat.isGeneratingForThisConversation &&
+      !generationWasActiveRef.current
+    ) {
       userScrolledDuringGenerationRef.current = false;
     }
     generationWasActiveRef.current = chat.isGeneratingForThisConversation;
@@ -275,6 +279,9 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           renderItem={renderItem}
           keyExtractor={item => item.id}
           extraData={interfaceMode}
+          ListFooterComponent={
+            <VideoGenerationStatus conversationId={chat.activeConversationId} />
+          }
           contentContainerStyle={styles.messageList}
           onScroll={handleScroll}
           onContentSizeChange={(_w, h) => {
@@ -372,7 +379,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
       <RequiredThinkingAdviceCard
         modelName={chat.activeModelName}
         required={Boolean(
-          chat.activeRemoteModel?.capabilities.thinkingLevelsOnly
+          chat.activeRemoteModel?.capabilities.thinkingLevelsOnly,
         )}
       />
       {/* A vision model missing its projector: repairable from here, because this is where the
@@ -417,7 +424,9 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           onSend={chat.handleSend}
           onStop={chat.handleStop}
           disabled={!chat.hasActiveModel}
-          isGenerating={chat.isStreaming || chat.isThinking}
+          isGenerating={
+            chat.isGeneratingForThisConversation || chat.isStreaming || chat.isThinking
+          }
           supportsVision={chat.supportsVision}
           visionNeedsRepair={chat.visionNeedsRepair}
           conversationId={chat.activeConversationId}

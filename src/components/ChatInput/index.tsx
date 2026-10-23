@@ -18,6 +18,7 @@ import { buildVoiceNoteHandlers } from './voiceNoteSend';
 import { QuickSettingsPopover, AttachPickerPopover } from './Popovers';
 import { useKeyboardAwarePopover } from './useKeyboardAwarePopover';
 import { useAppStore } from '../../stores';
+import { useRemoteServerStore } from '../../stores/remoteServerStore';
 import { useUiModeStore } from '../../stores';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { AppSheet } from '../AppSheet';
@@ -120,7 +121,15 @@ const buildNoVisionAlert = (opts: {
       [
         { text: 'Cancel', onPress: opts.dismiss },
         ...(opts.onRepairVision
-          ? [{ text: 'Go to Download Manager', onPress: () => { opts.dismiss(); opts.onRepairVision!(); } }]
+          ? [
+              {
+                text: 'Go to Download Manager',
+                onPress: () => {
+                  opts.dismiss();
+                  opts.onRepairVision!();
+                },
+              },
+            ]
           : [{ text: 'OK' }]),
       ],
     );
@@ -222,13 +231,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     addAudioAttachment,
     clearAttachments,
     onHaptic: () => triggerHaptic('impactMedium'),
-    appendTranscript: (text) => setMessage(prev => {
-      const prefix = prev.trim() ? `${prev.trim()} ` : '';
-      return prefix + text;
-    }),
+    appendTranscript: text =>
+      setMessage(prev => {
+        const prefix = prev.trim() ? `${prev.trim()} ` : '';
+        return prefix + text;
+      }),
   });
 
-  const { isRecording, isModelLoading, isStartingRecording, isTranscribing, partialResult, error, voiceAvailable, isAwaitingSpeech, startRecording, stopRecording, cancelRecording } = useVoiceInput({
+  const {
+    isRecording,
+    isModelLoading,
+    isStartingRecording,
+    isTranscribing,
+    partialResult,
+    error,
+    voiceAvailable,
+    isAwaitingSpeech,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+  } = useVoiceInput({
     conversationId,
     interfaceMode,
     onTranscript: voiceHandlers.onTranscript,
@@ -281,7 +303,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setMessage('');
     clearAttachments();
     inputRef.current?.focus();
-    if (imageMode === 'force') {
+    if (imageMode === 'force' || imageMode === 'video') {
       setImageMode('auto');
       onImageModeChange?.('auto');
     }
@@ -301,6 +323,35 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setActiveImageModelId(downloadedImageModels[0].id);
     }
     const newMode = IMAGE_MODE_CYCLE[(IMAGE_MODE_CYCLE.indexOf(imageMode) + 1) % IMAGE_MODE_CYCLE.length];
+    setImageMode(newMode);
+    onImageModeChange?.(newMode);
+  };
+
+  const handleVideoModeToggle = () => {
+    if (imageMode !== 'video') {
+      const { activeVideoModelId, downloadedVideoModels, setActiveVideoModelId } =
+        useAppStore.getState();
+      const remoteVideoId =
+        useRemoteServerStore.getState().activeRemoteMediaServerIds.video;
+      const localVideoSelected = downloadedVideoModels.some(
+        model => model.id === activeVideoModelId,
+      );
+      if (!remoteVideoId && !localVideoSelected) {
+        if (downloadedVideoModels.length === 0) {
+          setAlertState(
+            showAlert(
+              'No Video Model',
+              'Download a video generation model from the Models screen to enable this feature.',
+              [{ text: 'OK' }],
+            ),
+          );
+          quickSettings.hide();
+          return;
+        }
+        setActiveVideoModelId(downloadedVideoModels[0].id);
+      }
+    }
+    const newMode: ImageModeState = imageMode === 'video' ? 'auto' : 'video';
     setImageMode(newMode);
     onImageModeChange?.(newMode);
   };
@@ -343,26 +394,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }, ANIM_DURATION_IN);
   };
 
-  const assistantGate = assistantAvailability === 'no-pro'
-    ? {
-        title: 'Assistant requires Pro',
-        body: 'Assistant uses Web Use and Computer Use on a connected Desktop.',
-        action: 'View Pro',
-        onPress: onAssistantUpgrade,
-      }
-    : assistantAvailability === 'unavailable'
+  const assistantGate =
+    assistantAvailability === 'no-pro'
       ? {
-          title: 'Desktop tasks unavailable',
-          body: 'This Desktop is connected, but Web Use and Computer Use are not available. Allow remote tasks on the Desktop and try again.',
-          action: 'OK',
-          onPress: undefined,
+          title: 'Assistant requires Pro',
+          body: 'Assistant uses Web Use and Computer Use on a connected Desktop.',
+          action: 'View Pro',
+          onPress: onAssistantUpgrade,
         }
-    : {
-        title: 'Connect a Desktop',
-        body: 'Set up Sync and connect Off Grid AI Desktop to use Web Use and Computer Use.',
-        action: 'Set up Sync',
-        onPress: onAssistantSetupSync,
-      };
+      : assistantAvailability === 'unavailable'
+        ? {
+            title: 'Desktop tasks unavailable',
+            body: 'This Desktop is connected, but Web Use and Computer Use are not available. Allow remote tasks on the Desktop and try again.',
+            action: 'OK',
+            onPress: undefined,
+          }
+        : {
+            title: 'Connect a Desktop',
+            body: 'Set up Sync and connect Off Grid AI Desktop to use Web Use and Computer Use.',
+            action: 'Set up Sync',
+            onPress: onAssistantSetupSync,
+          };
 
   const handleAttachPress = () => {
     logger.log(`[COMPOSER-SM] attach pressed platform=${Platform.OS} supportsVision=${supportsVision}`);
@@ -372,7 +424,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         : ['Document', 'Cancel'];
       ActionSheetIOS.showActionSheetWithOptions(
         { options, cancelButtonIndex: options.length - 1 },
-        (index) => {
+        index => {
           if (supportsVision) {
             if (index === 0) handleVisionPress();
             else if (index === 1) handlePickDocument();
@@ -420,6 +472,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onCancelRecording={cancelRecording}
         onStop={onStop}
         onImageModeToggle={handleImageModeToggle}
+        onVideoModeToggle={handleVideoModeToggle}
         onThinkingToggle={handleThinkingToggle}
         onToolsPress={onToolsPress}
         onMcpPress={onMcpPress}
@@ -514,7 +567,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 size="small"
                 testID="assistant-toggle"
                 accessibilityLabel="Assistant"
-                accessibilityState={{ selected: assistantEnabled, busy: assistantTransitioning }}
+                accessibilityState={{
+                  selected: assistantEnabled,
+                  busy: assistantTransitioning,
+                }}
                 onPress={handleAssistantPress}
                 active={assistantEnabled}
                 loading={assistantTransitioning}
@@ -533,7 +589,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 style={styles.pillInput}
                 value={message}
                 onChangeText={setMessage}
-                placeholder={placeholder}
+                placeholder={
+                  imageMode === 'video' ? 'Describe a video' : placeholder
+                }
                 placeholderTextColor={colors.textMuted}
                 multiline
                 scrollEnabled
@@ -578,6 +636,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         anchorX={quickSettings.anchor.x}
         imageMode={imageMode}
         onImageModeToggle={handleImageModeToggle}
+        onVideoModeToggle={handleVideoModeToggle}
         imageModelLoaded={imageModelLoaded}
         supportsThinking={supportsThinking}
         supportsToolCalling={supportsToolCalling}

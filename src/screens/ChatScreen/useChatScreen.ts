@@ -176,7 +176,16 @@ export const useChatScreen = () => {
     ? (activeModelInfo.model as RemoteModel | null)
     : null;
   const hasTextModel = activeModelInfo.modelId !== null;
-  const hasActiveModel = hasTextModel || !!activeImageModelId || !!activeRemoteImageServer;
+  const selectedVideoModelId = useAppStore(s => s.activeVideoModelId);
+  const remoteVideoId = useRemoteServerStore(
+    s => s.activeRemoteMediaServerIds.video,
+  );
+  const hasActiveModel =
+    !!remoteVideoId ||
+    !!selectedVideoModelId ||
+    hasTextModel ||
+    !!activeImageModelId ||
+    !!activeRemoteImageServer;
   const activeModelName = activeModelInfo.modelName;
   const availableDownloadedTextModels = useMemo(
     () =>
@@ -205,7 +214,10 @@ export const useChatScreen = () => {
     ? getProject(effectiveProjectId)
     : null;
   const activeImageModel = activeRemoteImageServer
-    ? { id: activeRemoteImageServer.mediaModels!.image!, name: `${activeRemoteImageServer.name} / ${activeRemoteImageServer.mediaModels!.image}` }
+    ? {
+        id: activeRemoteImageServer.mediaModels!.image!,
+        name: `${activeRemoteImageServer.name} / ${activeRemoteImageServer.mediaModels!.image}`,
+      }
     : downloadedImageModels.find(m => m.id === activeImageModelId);
   const imageModelLoaded = !!activeImageModel;
   const isGeneratingImage = imageGenState.isGenerating;
@@ -340,7 +352,8 @@ export const useChatScreen = () => {
   );
 
   const chatActions = useChatScreenActions({
-    generationDeps: genDeps, generationDepsRef: genDepsRef,
+    generationDeps: genDeps,
+    generationDepsRef: genDepsRef,
     modelDeps,
     activeModelInfo,
     supportsToolCalling,

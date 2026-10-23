@@ -1,0 +1,16 @@
+diff --git a/src/conditioning/conditioner.hpp b/src/conditioning/conditioner.hpp
+index 7796a40..33ec41e 100644
+--- a/src/conditioning/conditioner.hpp
++++ b/src/conditioning/conditioner.hpp
+@@ -1570,7 +1570,10 @@ struct T5CLIPEmbedder : public Conditioner {
+                                                    input_ids,
+                                                    t5_attn_mask_chunk,
+                                                    false);
+-            GGML_ASSERT(!chunk_hidden_states.empty());
++            if (chunk_hidden_states.empty()) {
++                LOG_ERROR("T5 encoder returned no output; the backend failed or generation was cancelled");
++                return {};
++            }
+             chunk_hidden_states = apply_token_weights(std::move(chunk_hidden_states), chunk_weights);
+ 
+             if (zero_out_masked) {

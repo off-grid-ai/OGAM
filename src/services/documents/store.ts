@@ -46,6 +46,9 @@ function db(): DB {
     document_id TEXT NOT NULL, position INTEGER NOT NULL, page INTEGER NOT NULL, label TEXT,
     heading TEXT, text TEXT NOT NULL, tokens INTEGER NOT NULL, vector BLOB,
     PRIMARY KEY (document_id, position))`);
+  opened.executeSync(
+    'CREATE TABLE IF NOT EXISTS embedding_model (id INTEGER PRIMARY KEY CHECK (id = 1), selection TEXT NOT NULL)',
+  );
   opened.executeSync(`CREATE TABLE IF NOT EXISTS conversation_document_exclusions (
     conversation_id TEXT NOT NULL, document_id TEXT NOT NULL,
     PRIMARY KEY (conversation_id, document_id))`);
@@ -361,4 +364,32 @@ export function setDocumentExcluded(conversationId: string, documentId: string, 
 
 export function forgetConversationExclusions(conversationId: string): void {
   run('DELETE FROM conversation_document_exclusions WHERE conversation_id = ?', [conversationId]);
+}
+
+/** An embedding model the person chose instead of the built-in one. */
+export interface EmbeddingModelSelection {
+  id: string;
+  name: string;
+  filePath: string;
+  size: number;
+}
+
+/** The chosen embedding model; null means the built-in one. */
+export function activeEmbeddingModel(): EmbeddingModelSelection | null {
+  const row = rows('SELECT selection FROM embedding_model WHERE id = 1')[0];
+  return row ? (JSON.parse(String(row.selection)) as EmbeddingModelSelection) : null;
+}
+
+/**
+ * Change the embedding model. The new choice and the removal of every vector of the old model
+ * happen in one transaction, so search never ranks vectors of two models together. The shared
+ * ingest re-embeds each document the next time it is used; keyword search answers meanwhile.
+ */
+export function commitEmbeddingModel(model: EmbeddingModelSelection | null): void {
+  inTransaction(() => {
+    run('UPDATE attached_document_chunks SET vector = NULL');
+    run("UPDATE attached_documents SET embedded_count = 0, embedder = 'none', map = NULL");
+    run('DELETE FROM embedding_model');
+    if (model) run('INSERT INTO embedding_model (id, selection) VALUES (1, ?)', [JSON.stringify(model)]);
+  });
 }

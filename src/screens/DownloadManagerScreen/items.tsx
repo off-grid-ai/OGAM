@@ -18,7 +18,7 @@ import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 
 export type DownloadItem = {
   type: 'active' | 'completed';
-  modelType: 'text' | 'image' | 'tts' | 'stt';
+  modelType: 'text' | 'image' | 'video' | 'tts' | 'stt';
   downloadId?: string;
   modelKey?: string;
   modelId: string;
@@ -71,7 +71,12 @@ function textCapabilities(item: DownloadItem) {
 
 function getStatusLabel(item: DownloadItem): string {
   if (item.status === 'running') return '';
-  if (item.status === 'failed' || item.status === 'retrying' || item.status === 'pending' || item.status === 'waiting_for_network') {
+  if (
+    item.status === 'failed' ||
+    item.status === 'retrying' ||
+    item.status === 'pending' ||
+    item.status === 'waiting_for_network'
+  ) {
     return getDownloadStatusLabel(item.status, item.reasonCode, item.reason);
   }
   if (!item.reason && !item.reasonCode) return getStatusText(item.status);
@@ -88,7 +93,13 @@ interface ActiveDownloadCardProps {
   onResume: (item: DownloadItem) => void;
 }
 
-export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, onRemove, onRetry, onPause, onResume }) => {
+export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
+  item,
+  onRemove,
+  onRetry,
+  onPause,
+  onResume,
+}) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const progressColor =
@@ -120,78 +131,158 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({ item, on
   return (
     <ModelCard
       compact
-      model={{ id: item.modelId, name: item.fileName, author: item.author,
-        modelType: item.isVisionModel ? 'vision' : item.modelType === 'text' ? 'text' : undefined }}
-      file={{ name: item.fileName, size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
+      model={{
+        id: item.modelId,
+        name: item.fileName,
+        author: item.author,
+        modelType: item.isVisionModel
+          ? 'vision'
+          : item.modelType === 'text'
+            ? 'text'
+            : undefined,
+      }}
+      file={{
+        name: item.fileName,
+        size: item.fileSize,
+        quantization: item.quantization,
+        downloadUrl: '',
+      }}
       capabilities={textCapabilities(item)}
-      facts={[item.modelType === 'tts' ? 'Voice' : item.modelType === 'stt' ? 'Transcription' : item.modelType === 'image' ? 'Image' : 'Text']}
-      footer={<>
-      <View style={styles.progressContainer}>
-        <View style={styles.transferRow}>
-          <View style={[styles.progressBarBackground, styles.transferProgressBar]}>
-            <View style={[styles.progressBarFill, { width: `${percentage}%` as const, backgroundColor: progressColor }]} />
-          </View>
-          <View style={styles.transferActions}>
-            {item.status === 'failed' ? (
-              <>
-                {isRetryable(item.reasonCode) && !item.modelKey?.startsWith('model-download:') && (
-                  <TouchableOpacity style={styles.transferIconButton} hitSlop={SPACING.md} testID="failed-retry-button" accessibilityRole="button" accessibilityLabel={`Retry ${item.fileName}`} onPress={() => onRetry(item)}>
-                    <Icon name="refresh-cw" size={14} color={colors.primary} />
-                  </TouchableOpacity>
+      facts={[
+        item.modelType === 'tts'
+          ? 'Voice'
+          : item.modelType === 'stt'
+            ? 'Transcription'
+            : item.modelType === 'video'
+              ? 'Video'
+              : item.modelType === 'image'
+                ? 'Image'
+                : 'Text',
+      ]}
+      footer={
+        <>
+          <View style={styles.progressContainer}>
+            <View style={styles.transferRow}>
+              <View
+                style={[
+                  styles.progressBarBackground,
+                  styles.transferProgressBar,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      width: `${percentage}%` as const,
+                      backgroundColor: progressColor,
+                    },
+                  ]}
+                />
+              </View>
+              <View style={styles.transferActions}>
+                {item.status === 'failed' ? (
+                  <>
+                    {isRetryable(item.reasonCode) &&
+                      !item.modelKey?.startsWith('model-download:') && (
+                        <TouchableOpacity
+                          style={styles.transferIconButton}
+                          hitSlop={SPACING.md}
+                          testID="failed-retry-button"
+                          accessibilityRole="button"
+                          accessibilityLabel={`Retry ${item.fileName}`}
+                          onPress={() => onRetry(item)}
+                        >
+                          <Icon
+                            name="refresh-cw"
+                            size={14}
+                            color={colors.primary}
+                          />
+                        </TouchableOpacity>
+                      )}
+                    <TouchableOpacity
+                      style={styles.transferIconButton}
+                      hitSlop={SPACING.md}
+                      testID="failed-remove-button"
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${item.fileName}`}
+                      onPress={() => onRemove(item)}
+                    >
+                      <Icon name="trash-2" size={14} color={colors.error} />
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    {(item.canPause || item.canResume) && (
+                      <TouchableOpacity
+                        style={styles.transferIconButton}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${item.canResume ? 'Resume' : 'Pause'} ${item.fileName}`}
+                        hitSlop={6}
+                        onPress={() =>
+                          item.canResume ? onResume(item) : onPause(item)
+                        }
+                      >
+                        <Icon
+                          name={item.canResume ? 'play' : 'pause'}
+                          size={14}
+                          color={colors.primary}
+                        />
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={styles.transferIconButton}
+                      testID="remove-download-button"
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${item.fileName}`}
+                      hitSlop={6}
+                      onPress={() => onRemove(item)}
+                    >
+                      <Icon name="x" size={16} color={colors.error} />
+                    </TouchableOpacity>
+                  </>
                 )}
-                <TouchableOpacity style={styles.transferIconButton} hitSlop={SPACING.md} testID="failed-remove-button" accessibilityRole="button" accessibilityLabel={`Remove ${item.fileName}`} onPress={() => onRemove(item)}>
-                  <Icon name="trash-2" size={14} color={colors.error} />
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-              {(item.canPause || item.canResume) && (
-                <TouchableOpacity
-                  style={styles.transferIconButton}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${item.canResume ? 'Resume' : 'Pause'} ${item.fileName}`}
-                  hitSlop={6}
-                  onPress={() => item.canResume ? onResume(item) : onPause(item)}
-                >
-                  <Icon name={item.canResume ? 'play' : 'pause'} size={14} color={colors.primary} />
-                </TouchableOpacity>
-              )}
-                <TouchableOpacity
-                  style={styles.transferIconButton}
-                  testID="remove-download-button"
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove ${item.fileName}`}
-                  hitSlop={6}
-                  onPress={() => onRemove(item)}
-                >
-                  <Icon name="x" size={16} color={colors.error} />
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
-        <View style={styles.transferCaptionRow}>
-          <Text style={styles.progressText} testID="download-progress-detail">{presented.detailText}</Text>
-          <Text style={styles.progressText}>{presented.percentageText}</Text>
-        </View>
-      </View>
-      <View style={styles.downloadMeta}>
-        {(!!getStatusLabel(item) || !!getStatusIcon()) && (
-          <View style={styles.statusIconRow}>
-            {getStatusIcon() && (
-              <Icon name={getStatusIcon()!} size={14} color={getStatusIconColor()} accessibilityLabel={getStatusText(item.status)} />
-            )}
-            {/* Queued is icon-only (clock) — the word is redundant next to it. Other states
-                (failed/retrying/network) keep their explanatory text. */}
-            {item.status !== 'pending' && !!getStatusLabel(item) && (
-              <Text style={[styles.statusText, item.status === 'failed' && { color: colors.error }]}>
-                {getStatusLabel(item)}
+              </View>
+            </View>
+            <View style={styles.transferCaptionRow}>
+              <Text
+                style={styles.progressText}
+                testID="download-progress-detail"
+              >
+                {presented.detailText}
               </Text>
+              <Text style={styles.progressText}>
+                {presented.percentageText}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.downloadMeta}>
+            {(!!getStatusLabel(item) || !!getStatusIcon()) && (
+              <View style={styles.statusIconRow}>
+                {getStatusIcon() && (
+                  <Icon
+                    name={getStatusIcon()!}
+                    size={14}
+                    color={getStatusIconColor()}
+                    accessibilityLabel={getStatusText(item.status)}
+                  />
+                )}
+                {/* Queued is icon-only (clock) — the word is redundant next to it. Other states
+                (failed/retrying/network) keep their explanatory text. */}
+                {item.status !== 'pending' && !!getStatusLabel(item) && (
+                  <Text
+                    style={[
+                      styles.statusText,
+                      item.status === 'failed' && { color: colors.error },
+                    ]}
+                  >
+                    {getStatusLabel(item)}
+                  </Text>
+                )}
+              </View>
             )}
           </View>
-        )}
-      </View>
-      </>}
+        </>
+      }
     />
   );
 };
@@ -206,7 +297,15 @@ interface CompletedDownloadCardProps {
   isRepairingVision?: boolean;
 }
 
-export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ item, onDelete, onRepairVision, onPauseRepair, onResumeRepair, onCancelRepair, isRepairingVision = false }) => {
+export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({
+  item,
+  onDelete,
+  onRepairVision,
+  onPauseRepair,
+  onResumeRepair,
+  onCancelRepair,
+  isRepairingVision = false,
+}) => {
   const needsVisionRepair = checkNeedsVisionRepair(item);
   // A vision repair drives a live download-store row keyed on the completed
   // model's modelKey (`repo/file` = item.modelId). Read it so the SAME
@@ -223,21 +322,60 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({ it
           id: item.modelId,
           name: item.fileName,
           author: item.author,
-          modelType: item.isVisionModel ? 'vision' : item.modelType === 'text' ? 'text' : undefined,
-          description: item.downloadedAt ? new Date(item.downloadedAt).toLocaleDateString() : undefined,
+          modelType: item.isVisionModel
+            ? 'vision'
+            : item.modelType === 'text'
+              ? 'text'
+              : undefined,
+          description: item.downloadedAt
+            ? new Date(item.downloadedAt).toLocaleDateString()
+            : undefined,
         }}
-        file={{ name: item.fileName, size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
+        file={{
+          name: item.fileName,
+          size: item.fileSize,
+          quantization: item.quantization,
+          downloadUrl: '',
+        }}
         capabilities={textCapabilities(item)}
         isDownloaded
         isDownloading={showRepairProgress && repairEntry.status !== 'paused'}
         isPaused={showRepairProgress && repairEntry.status === 'paused'}
         isRepairingVision={repairActive}
         downloadProgress={repairEntry?.progress}
-        downloadBytes={repairEntry ? { downloaded: repairEntry.bytesDownloaded, total: repairEntry.totalBytes, bytesPerSecond: repairEntry.bytesPerSecond } : undefined}
-        onRepairVision={needsVisionRepair && onRepairVision ? () => onRepairVision(item) : undefined}
-        onPause={showRepairProgress && repairEntry.status === 'running' && onPauseRepair ? () => onPauseRepair(item) : undefined}
-        onResume={showRepairProgress && repairEntry.status === 'paused' && onResumeRepair ? () => onResumeRepair(item) : undefined}
-        onCancel={showRepairProgress && onCancelRepair ? () => onCancelRepair(item) : undefined}
+        downloadBytes={
+          repairEntry
+            ? {
+                downloaded: repairEntry.bytesDownloaded,
+                total: repairEntry.totalBytes,
+                bytesPerSecond: repairEntry.bytesPerSecond,
+              }
+            : undefined
+        }
+        onRepairVision={
+          needsVisionRepair && onRepairVision
+            ? () => onRepairVision(item)
+            : undefined
+        }
+        onPause={
+          showRepairProgress &&
+          repairEntry.status === 'running' &&
+          onPauseRepair
+            ? () => onPauseRepair(item)
+            : undefined
+        }
+        onResume={
+          showRepairProgress &&
+          repairEntry.status === 'paused' &&
+          onResumeRepair
+            ? () => onResumeRepair(item)
+            : undefined
+        }
+        onCancel={
+          showRepairProgress && onCancelRepair
+            ? () => onCancelRepair(item)
+            : undefined
+        }
         onDelete={() => onDelete(item)}
       />
     </View>

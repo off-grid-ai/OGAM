@@ -1,3 +1,5 @@
+import { videoModelDisplayName } from '../../utils/modelHelpers';
+import { useAppStore } from '../../stores/appStore';
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -42,6 +44,7 @@ type HomeScreenProps = {
 function homeModelLabels(input: {
   text?: string;
   image?: string;
+  video?: string;
   voice?: string | null;
   transcription?: string | null;
   localVoice?: string | null;
@@ -50,6 +53,7 @@ function homeModelLabels(input: {
   return {
     text: input.text ?? '—',
     image: input.image ?? '—',
+    video: input.video ?? '—',
     voice: input.voice ?? input.localVoice ?? '—',
     speech: input.transcription ?? input.localTranscription ?? '—',
   };
@@ -75,6 +79,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     downloadedImageModels,
     activeImageModelId,
     generatedImages,
+    generatedVideos,
     conversationCount,
     activeTextModelId,
     activeTextModelName,
@@ -112,7 +117,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const voiceSummary = useUiModeStore(s => s.voiceSummary);
   const remoteLabels = useActiveRemoteModelLabels();
 
+  const videoLabel = useAppStore(s => {
+    const model = s.downloadedVideoModels.find(m => m.id === s.activeVideoModelId);
+    return model ? videoModelDisplayName(model.id, model.name) : undefined;
+  });
   const modelLabels = homeModelLabels({
+    video: remoteLabels.video ?? videoLabel,
     text: activeTextModelId ? activeTextModelName : undefined,
     image: activeImageModel?.name,
     voice: remoteLabels.voice,
@@ -123,6 +133,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
   // Downloaded-model counts shown in the Models card (replaces the old stats row).
   const modelCounts: Partial<Record<ModelRowType, number>> = {
+    video: useAppStore(s => s.downloadedVideoModels.length),
     text: downloadedModels.length,
     image: downloadedImageModels.length,
     speech: whisperPresentCount,
@@ -140,6 +151,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const presentModelSheet = (type: ModelRowType) => {
     if (type === 'text') setPickerType('text');
     else if (type === 'image') setPickerType('image');
+    else if (type === 'video') setPickerType('video');
     else if (type === 'speech') setWhisperOpen(true);
     else setVoiceOpen(true);
   };
@@ -214,7 +226,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </AnimatedEntry>
 
           {/* New Chat Button */}
-          {activeTextModelId || activeImageModelId ? (
+          {activeTextModelId || activeImageModelId || remoteLabels.video || videoLabel ? (
             <Button
               title="New Chat"
               onPress={startNewChat}
@@ -225,7 +237,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <Card style={styles.setupCard} testID="setup-card">
               <Text style={styles.setupText}>
                 {downloadedModels.length > 0 || remoteTextModels.length > 0
-                  ? 'Select a text or image model to start'
+                  ? 'Select a text, image, or video model to start'
                   : 'Choose a model here or on your network.'}
               </Text>
               <View style={styles.setupActions}>
@@ -283,7 +295,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </AnimatedEntry>
           )}
 
-          {/* Image Gallery */}
+          {/* Media Gallery */}
           <AnimatedPressable
             style={styles.galleryCard}
             onPress={() => navigation.navigate('Gallery')}
@@ -293,8 +305,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <View style={styles.galleryCardInfo}>
               <Text style={styles.galleryCardTitle}>Image Gallery</Text>
               <Text style={styles.galleryCardMeta}>
-                {generatedImages.length}{' '}
-                {generatedImages.length === 1 ? 'image' : 'images'}
+                {generatedImages.length} images · {generatedVideos.length}{' '}
+                videos
               </Text>
             </View>
             <Icon name="chevron-right" size={16} color={colors.textMuted} />

@@ -6,7 +6,7 @@ const IMAGE_TRANSFER_ARCHIVE_SUFFIX = '.offgrid-image.zip';
 type MobileImagePlatform = Extract<DevicePlatform, 'ios' | 'android'>;
 type TransferableImageBackend = Extract<
   NonNullable<ONNXImageModel['backend']>,
-  'coreml' | 'mnn'
+  'coreml' | 'mnn' | 'sd'
 >;
 
 export interface TransferredImageDescriptor {
@@ -20,7 +20,7 @@ export interface TransferredImageDescriptor {
 
 export interface TransferredImageManifest extends TransferredModelManifest {
   kind: 'image';
-  engine: 'coreml' | 'localdream-mnn';
+  engine: 'coreml' | 'localdream-mnn' | 'mobile-sd-gguf';
   platform: MobileImagePlatform;
   image: TransferredImageDescriptor;
 }
@@ -36,10 +36,11 @@ function isSafeImageModelId(id: string): boolean {
   );
 }
 
-function expectedImageRuntime(platform: MobileImagePlatform): {
+function expectedImageRuntime(platform: MobileImagePlatform, backend?: ONNXImageModel['backend']): {
   backend: TransferableImageBackend;
   engine: TransferredImageManifest['engine'];
 } {
+  if (backend === 'sd') return { backend: 'sd', engine: 'mobile-sd-gguf' };
   return platform === 'ios'
     ? { backend: 'coreml', engine: 'coreml' }
     : { backend: 'mnn', engine: 'localdream-mnn' };
@@ -48,8 +49,8 @@ function expectedImageRuntime(platform: MobileImagePlatform): {
 /**
  * Why an installed image model may or may not move from this phone.
  *
- * The generated images are portable. The model packages are not: iOS loads Core ML bundles and
- * Android LocalDream loads an MNN package. QNN is intentionally excluded because an Android label
+ * SD image packs work on both mobile platforms. Core ML and LocalDream MNN packages
+ * stay on their original platform. QNN is intentionally excluded because an Android label
  * does not prove that the receiving device has the matching Qualcomm target.
  */
 export function imageModelTransferBlocker(
@@ -59,7 +60,7 @@ export function imageModelTransferBlocker(
   if (!isSafeImageModelId(model.id)) {
     return 'the image model identity is not safe to transfer';
   }
-  const expected = expectedImageRuntime(platform);
+  const expected = expectedImageRuntime(platform, model.backend);
   if (model.backend !== expected.backend) {
     if (model.backend === 'qnn') {
       return 'QNN image models are tied to a specific Qualcomm target and cannot be sent safely';
@@ -68,6 +69,7 @@ export function imageModelTransferBlocker(
       ? 'iPhone and iPad can send only Core ML image models'
       : 'Android can send only LocalDream MNN image models';
   }
+  if (model.backend === 'sd' && !model.id.startsWith('sd-')) return 'this image model pack is not supported';
   if (!Number.isFinite(model.size) || model.size <= 0) {
     return 'the image model size is not valid';
   }
@@ -114,7 +116,7 @@ export function transferredImageManifest(
   if (!Number.isSafeInteger(archiveSizeBytes) || archiveSizeBytes <= 0) {
     throw new Error('the image model archive size is not valid');
   }
-  const runtime = expectedImageRuntime(platform);
+  const runtime = expectedImageRuntime(platform, model.backend);
   return {
     id: model.id,
     name: model.name,
@@ -161,9 +163,11 @@ export function transferredImageDescriptor(
   if (manifest.kind !== 'image') {
     throw new Error('this is not an image model package');
   }
-  const expected = expectedImageRuntime(receiverPlatform);
+  const sdPack = manifest.engine === 'mobile-sd-gguf';
+  if (sdPack && !manifest.id.startsWith('sd-')) throw new Error('This image model pack is not supported.');
+  const expected = expectedImageRuntime(receiverPlatform, sdPack ? 'sd' : undefined);
   if (
-    manifest.platform !== receiverPlatform ||
+    (!sdPack && manifest.platform !== receiverPlatform) ||
     manifest.engine !== expected.engine
   ) {
     throw new Error(

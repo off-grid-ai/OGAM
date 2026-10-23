@@ -1,0 +1,55 @@
+--- a/src/pipeline/video.cpp
++++ b/src/pipeline/video.cpp
+@@ -1214,6 +1214,32 @@
+         return embeds;
+     }
+ 
++#if defined(__ANDROID__)
++    // These tensors are already in host memory. Scan once without copying them.
++    static void log_video_tensor_summary(const char* stage, const sd::Tensor<float>& tensor) {
++        int64_t finite = 0;
++        int64_t zero = 0;
++        double minimum = INFINITY;
++        double maximum = -INFINITY;
++        double sum = 0;
++        double squares = 0;
++        for (const float value : tensor.values()) {
++            if (!std::isfinite(value)) continue;
++            ++finite;
++            if (value == 0.0f) ++zero;
++            minimum = std::min(minimum, static_cast<double>(value));
++            maximum = std::max(maximum, static_cast<double>(value));
++            sum += value;
++            squares += static_cast<double>(value) * value;
++        }
++        LOG_INFO("OFFGRID_VIDEO_NUMERICS stage=%s values=%lld finite=%lld nonfinite=%lld zero=%lld min=%.9g max=%.9g mean=%.9g rms=%.9g",
++                 stage, (long long)tensor.numel(), (long long)finite,
++                 (long long)(tensor.numel() - finite), (long long)zero,
++                 minimum, maximum, finite ? sum / finite : 0.0,
++                 finite ? std::sqrt(squares / finite) : 0.0);
++    }
++#endif
++
+     static sd_image_t* decode_video_outputs(StableDiffusionGGML* sd,
+                                             const GenerationRequest& request,
+                                             const sd::Tensor<float>& final_latent,
+@@ -1226,6 +1252,9 @@
+             LOG_ERROR("cancelling video decode");
+             return nullptr;
+         }
++#if defined(__ANDROID__)
++        log_video_tensor_summary("diffusion_latent", final_latent);
++#endif
+         sd::Tensor<float> video_latent = final_latent;
+         if ((sd_version_is_ltxav(sd->version) || sd_version_is_minimax_h3(sd->version)) &&
+             video_latent.shape()[3] > sd->get_latent_channel()) {
+@@ -1254,6 +1283,9 @@
+                     (int)vid.shape()[1],
+                     (int)vid.shape()[2],
+                     (int)vid.shape()[3]);
++#if defined(__ANDROID__)
++        log_video_tensor_summary("decoded_rgb", vid);
++#endif
+         if (request.frames > 0 &&
+             vid.shape()[2] > request.frames) {
+             vid = sd::ops::slice(vid, 2, 0, request.frames);
