@@ -117,6 +117,10 @@ describe('one-tap download', () => {
       await waitFor(() => expect(models.getByTestId('file-card-0-delete')).toBeTruthy());
       expect(await boundary.fs!.exists(`/docs/models/${PART1}`)).toBe(true);
       expect(await boundary.fs!.exists(`/docs/models/${PART2}`)).toBe(true);
+      // The downloaded model is the whole of it: every list that shows its size shows both parts.
+      const { useAppStore } = require('../../../src/stores');
+      const saved = useAppStore.getState().downloadedModels.find((m: { fileName: string }) => m.fileName === PART1);
+      expect(saved?.fileSize).toBe(400 * MB);
       models.unmount();
     } finally {
       restore();

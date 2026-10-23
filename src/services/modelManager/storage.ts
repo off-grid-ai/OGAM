@@ -1,4 +1,5 @@
 import RNFS from 'react-native-fs';
+import { splitGgufPartNames } from '@offgrid/models';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DownloadedModel, LlamaDownloadedModel, LiteRTDownloadedModel, ModelFile, ModelCredibility, ModelOrigin, ONNXImageModel } from '../../types';
 import { LMSTUDIO_AUTHORS, OFFICIAL_MODEL_AUTHORS, RECOMMENDED_MODELS, VERIFIED_QUANTIZERS } from '../../constants';
@@ -275,7 +276,9 @@ export async function buildDownloadedModel(opts: BuildModelOpts): Promise<Downlo
   // and iOS raises an uncatchable NSInvalidArgumentException for a path whose type it cannot resolve.
   // A missing file is now a size of 0 - the model reads as present-but-empty, which the caller already
   // handles - instead of taking the process down. See utils/fileStat.
-  const stat = await statFile(resolvedLocalPath);
+  // A split model is all of its parts; its size is theirs together.
+  const partStats = await Promise.all(splitGgufPartNames(resolvedLocalPath).map(part => statFile(part)));
+  const fileSize = partStats.reduce((total, stat) => total + (stat?.size ?? 0), 0);
   const author = modelId.split('/')[0] || 'Unknown';
   const isLiteRT = isLiteRTFileName(file.name);
   const mmProjFile = file.mmProjFile;
@@ -297,7 +300,7 @@ export async function buildDownloadedModel(opts: BuildModelOpts): Promise<Downlo
     author,
     filePath: resolvedLocalPath,
     fileName: file.name,
-    fileSize: stat?.size ?? 0,
+    fileSize,
     quantization: file.quantization,
     downloadedAt: new Date().toISOString(),
     credibility: determineCredibility(author),
