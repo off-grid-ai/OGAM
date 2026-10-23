@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useSyncExternalStore } from 'react';
-import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import Icon from 'react-native-vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, Card } from '../components';
@@ -13,6 +14,8 @@ import {
   createAutoSetupSession,
   type AutoSetupSession,
 } from '../services/autoSetupService';
+import { flowFinished, flowStarted, setAnalyticsConsent } from '../services/analytics/analytics';
+import { useAppStore } from '../stores/appStore';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 
@@ -50,6 +53,23 @@ export const AutoSetupScreen: React.FC<Props> = ({
     session.load().catch(() => undefined);
     return () => session.dispose();
   }, [session]);
+
+  useEffect(() => {
+    flowStarted('onboarding', 'setup_shown');
+  }, []);
+
+  const [shareAnalytics, setShareAnalytics] = useState(
+    () => useAppStore.getState().settings.analyticsUsage,
+  );
+  const toggleShareAnalytics = () => {
+    const next = !shareAnalytics;
+    setShareAnalytics(next);
+    setAnalyticsConsent({ usage: next, crashes: next }, 'setup').catch(() => undefined);
+  };
+  // Every way out of Auto Setup passed the consent row, so the person has been asked.
+  const markConsentAsked = () => {
+    useAppStore.getState().updateSettings({ analyticsAsked: true, analyticsLastPromptAt: Date.now() });
+  };
 
   const selected =
     snapshot.plans.find(plan => plan.tier === snapshot.selectedTier) ??
@@ -107,6 +127,39 @@ export const AutoSetupScreen: React.FC<Props> = ({
             />
           </Card>
         )}
+
+        <View style={styles.consentRow}>
+          <Pressable
+            style={styles.consentToggle}
+            onPress={toggleShareAnalytics}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: shareAnalytics }}
+            accessibilityLabel="Share anonymous usage and crash reports"
+            testID="auto-setup-share-analytics"
+          >
+            <Icon
+              name={shareAnalytics ? 'check-square' : 'square'}
+              size={20}
+              color={shareAnalytics ? colors.primary : colors.textSecondary}
+            />
+            <View style={styles.consentText}>
+              <Text style={styles.consentLabel}>
+                Share anonymous usage and crash reports
+              </Text>
+              <Text style={styles.consentHint}>
+                Helps us fix what breaks on your device. Your chats never leave it.
+              </Text>
+            </View>
+          </Pressable>
+          <Text
+            style={styles.consentLink}
+            onPress={() => navigation.push('AnalyticsInfo')}
+            accessibilityRole="link"
+            testID="auto-setup-what-we-share"
+          >
+            What we share
+          </Text>
+        </View>
 
         <View style={[styles.planGrid, width >= 700 && styles.planGridWide]}>
           {snapshot.plans.map(plan => (
@@ -183,6 +236,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
                           : `Download ${formatBytes(plan.totalBytes)}`
                       }
                       onPress={() => {
+                        markConsentAsked();
                         session.start().catch(() => undefined);
                       }}
                       loading={starting}
@@ -206,13 +260,20 @@ export const AutoSetupScreen: React.FC<Props> = ({
         <Button
           title="Configure it yourself"
           variant="ghost"
-          onPress={() => navigation.push('AdvancedSetup')}
+          onPress={() => {
+            markConsentAsked();
+            navigation.push('AdvancedSetup');
+          }}
           testID="auto-setup-advanced"
         />
         <Button
           title="Skip for Now"
           variant="ghost"
-          onPress={() => navigation.replace('Main')}
+          onPress={() => {
+            markConsentAsked();
+            flowFinished('onboarding', 'cancelled');
+            navigation.replace('Main');
+          }}
           testID="auto-setup-skip"
         />
       </ScrollView>
@@ -307,5 +368,19 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   progressFill: { height: SPACING.xs, backgroundColor: colors.primary },
   errorCard: { gap: SPACING.md, borderWidth: 1, borderColor: colors.error },
+  consentRow: { gap: SPACING.xs },
+  consentToggle: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: SPACING.sm,
+  },
+  consentText: { flex: 1, gap: SPACING.xs },
+  consentLabel: { ...TYPOGRAPHY.body, color: colors.text },
+  consentHint: { ...TYPOGRAPHY.meta, color: colors.textSecondary },
+  consentLink: {
+    ...TYPOGRAPHY.meta,
+    color: colors.primary,
+    marginLeft: 20 + SPACING.sm,
+  },
   error: { ...TYPOGRAPHY.body, color: colors.error },
 });
