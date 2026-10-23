@@ -13,7 +13,7 @@
       "bundleIdentifier": "ai.offgridmobile",
       "developerName": "Off Grid",
       "subtitle": "On-device AI",
-      "localizedDescription": "Run large language models, generate images with Stable Diffusion, and transcribe speech with Whisper — all on-device, fully offline, no cloud required.",
+      "localizedDescription": "Run large language models, generate images with Stable Diffusion, and transcribe speech with Whisper — all on-device, fully offline, no cloud required. Your chats and files never leave your device; anonymous usage data and crash reports only if you turn them on.",
       "iconURL": "https://raw.githubusercontent.com/alichherawalla/offline-mobile-llm-manager/main/ios/OffgridMobile/Images.xcassets/AppIcon.appiconset/icon.png",
       "tintColor": "000000",
       "versions": [

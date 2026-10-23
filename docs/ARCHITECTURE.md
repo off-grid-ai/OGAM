@@ -922,7 +922,7 @@ export const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 - Generate images with seed control for reproducibility
 - Save to device gallery or share directly
 
-**Privacy:** Zero network activity after model download. Prompts never leave device.
+**Privacy:** Prompts and images never leave the device. Opt-in analytics (see ANALYTICS.md) sends anonymous usage data only if the person turns it on.
 
 ### 3. Document Analysis with Vision
 
@@ -1124,8 +1124,12 @@ All data stored in app's private storage, inaccessible to other apps (Android sa
 - Hugging Face CDN (model file downloads)
 - xororz HuggingFace repos (image model listings)
 
+**Opt-in analytics (off by default):**
+- PostHog Cloud EU (`eu.i.posthog.com`), only after the person turns on Usage data or Crash reports
+- Anonymous events and scrubbed crash reports; never chats, files, prompts or replies (see `docs/ANALYTICS.md`)
+
 **After model download:**
-- Zero network activity
+- No other network activity
 - Enable airplane mode and use indefinitely
 - All inference happens on-device
 

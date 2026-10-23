@@ -8,7 +8,7 @@ Tier: Pro-gated
 
 A Pro surface in the mobile app to record audio on-device, transcribe it locally
 with Whisper, and generate an LLM title, summary, and action items. Recording works
-in the foreground and in the background (lock screen). Nothing leaves the phone.
+in the foreground and in the background (lock screen). Recordings and transcripts never leave the phone.
 
 This is mobile's native analog of the desktop meeting recorder. The desktop recorder
 relies on macOS ScreenCaptureKit + system-audio loopback, which iOS and Android do not
