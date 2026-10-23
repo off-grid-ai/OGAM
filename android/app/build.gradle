@@ -216,4 +216,6 @@ def unitTestsOnly = !gradle.startParameter.taskNames.isEmpty() &&
 tasks.configureEach { task ->
     if (unitTestsOnly) return
     if (task.name.startsWith("configureCMake") || (task.name.startsWith("merge") && task.name.endsWith("Assets"))) task.dependsOn(prepareVideoRuntime)
+    // The release JS bundle reads the project root, where the video runtime writes .video-build.
+    if (task.name.startsWith("createBundle") && task.name.endsWith("JsAndAssets")) task.mustRunAfter(prepareVideoRuntime)
 }
