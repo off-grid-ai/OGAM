@@ -214,6 +214,7 @@ export const ProjectsScreen: React.FC = () => {
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             {...LIST_CLIPPING_PROPS}
             ListEmptyComponent={<Text style={styles.noMatches}>No projects match your search.</Text>}
             testID="project-list"

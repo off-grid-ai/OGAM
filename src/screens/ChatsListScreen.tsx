@@ -340,6 +340,7 @@ export const ChatsListScreen: React.FC = () => {
             showsVerticalScrollIndicator={false}
             {...LIST_CLIPPING_PROPS}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             ListEmptyComponent={
               <Text style={styles.noMatches}>No chats match your search.</Text>
             }

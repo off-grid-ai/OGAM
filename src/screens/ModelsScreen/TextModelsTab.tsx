@@ -549,6 +549,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
           testID="models-list"
+          keyboardDismissMode="on-drag"
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
           ListHeaderComponent={hasSearched ? null : (
             <>
