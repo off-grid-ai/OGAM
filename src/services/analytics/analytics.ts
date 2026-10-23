@@ -440,7 +440,10 @@ function setupFlow(modelType: DownloadFacts['modelType']): Flow | null {
 }
 
 export function downloadStarted(key: string, facts: DownloadFacts): void {
-  const base = RNFS.getFSInfo()
+  // Not opted in: no disk read, nothing kept.
+  if (!client) return;
+  const base = Promise.resolve()
+    .then(() => RNFS.getFSInfo())
     .then(info => bytesToGb(info.freeSpace))
     .catch(ignore)
     .then(free => ({
@@ -465,8 +468,9 @@ export function downloadEnded(key: string, outcome: 'done' | 'failed', error?: u
   entry.base
     .then(props => {
       if (outcome === 'done') {
-        const mbPerSec = entry.facts.sizeBytes && durationMs > 0
-          ? entry.facts.sizeBytes / MB / (durationMs / 1000)
+        // A same-millisecond finish (a resumed file already on disk) counts as one millisecond.
+        const mbPerSec = entry.facts.sizeBytes
+          ? entry.facts.sizeBytes / MB / (Math.max(durationMs, 1) / 1000)
           : undefined;
         capture('model_download_finished', { ...props, duration_ms: ms(durationMs), mb_per_sec: oneDecimal(mbPerSec) });
       } else {
