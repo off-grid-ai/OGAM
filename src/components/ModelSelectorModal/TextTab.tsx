@@ -125,7 +125,7 @@ export const TextTab: React.FC<TextTabProps> = ({
               vision: activeRemoteModelInfo.model.capabilities.supportsVision,
               tools: activeRemoteModelInfo.model.capabilities.supportsToolCalling,
               thinking: activeRemoteModelInfo.model.capabilities.supportsThinking,
-            } : { ...activeLocalCapabilities, predicted: true }}
+            } : { ...activeLocalCapabilities, predicted: true, ...(activeLocalModel ? speedBadges[activeLocalModel.id] : {}) }}
             facts={activeLocalModel
               ? [`${textResident
                   ? `${(textResident.sizeMB / 1024).toFixed(1)} GB`

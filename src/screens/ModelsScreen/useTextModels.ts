@@ -119,14 +119,16 @@ function computeFilteredResults(
         if (sizeOpt && (params < sizeOpt.min || params >= sizeOpt.max)) return false;
       }
     }
+    // Only GGUF chat models get the text budget; an image-generation result keeps the strict one.
+    const budget = getModelType(model) === 'image-gen' ? undefined : textModelBudget();
     const filesWithSize = (model.files || []).filter(f => f.size > 0);
     if (filesWithSize.length > 0) {
-      if (!filesWithSize.some(f => !fileExceedsBudget(f.size, ramGB, textModelBudget()))) return false;
+      if (!filesWithSize.some(f => !fileExceedsBudget(f.size, ramGB, budget))) return false;
     } else {
       // Search results carry no file sizes: judge by the parameter count instead, so a model that
       // is Too big for this phone is not offered at all.
       const params = model.paramCount ?? parseParamCount(model);
-      if (params !== null && fileExceedsBudget(params * Q4_BYTES_PER_BILLION_PARAMS, ramGB, textModelBudget())) return false;
+      if (params !== null && fileExceedsBudget(params * Q4_BYTES_PER_BILLION_PARAMS, ramGB, budget)) return false;
     }
     return true;
   });
