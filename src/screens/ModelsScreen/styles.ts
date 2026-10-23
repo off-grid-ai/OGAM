@@ -53,11 +53,11 @@ const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingBottom: 16,
     gap: 8,
   },
-  // The Text tab's search row stays put and casts a shadow, so the list scrolls visibly under it.
+  // The Text tab's search row stays put with a shadow along its bottom edge; the list scrolls under it.
   searchContainerRaised: {
     backgroundColor: colors.background,
     zIndex: 1,
-    ...shadows.small,
+    ...shadows.edge,
   },
   searchInput: {
     ...TYPOGRAPHY.body,
