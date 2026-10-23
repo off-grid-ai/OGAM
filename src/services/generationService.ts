@@ -183,7 +183,7 @@ class GenerationService {
     contextUsage?: GenerationRequest['contextUsage'],
   ): Promise<void> {
     logger.log(`[REMOTE-SM] generateResponse entry conv=${conversationId} msgs=${messages.length}`);
-    return this.withModelFallback(conversationId, messages, async (route, prepared) => {
+    return this.withTrackedModelFallback(conversationId, messages, async (route, prepared) => {
       const request = { conversationId, messages, onFirstToken, contextUsage,
         prepared, preservePartialOnError: false };
       if (route.kind === 'remote') await generateRemoteResponseImpl(this, request);
@@ -228,7 +228,8 @@ class GenerationService {
     ];
   }
 
-  private async withModelFallback<T>(
+  /** One `generation_finished` per turn, however many fallback routes it took. */
+  private async withTrackedModelFallback<T>(
     conversationId: string,
     messages: Message[],
     run: (route: FallbackRoute, prepared: boolean) => Promise<T>,
@@ -243,7 +244,7 @@ class GenerationService {
     );
     this.analyticsEnd = null;
     try {
-      const result = await this.runWithModelFallback(conversationId, messages, run, canRetry);
+      const result = await this.withModelFallback(conversationId, messages, run, canRetry);
       const end = this.analyticsEnd as { outcome: Outcome; metrics: GenerationMetrics } | null;
       endAnalytics(end?.outcome ?? 'stopped', end?.metrics);
       return result;
@@ -253,7 +254,7 @@ class GenerationService {
     }
   }
 
-  private async runWithModelFallback<T>(
+  private async withModelFallback<T>(
     conversationId: string,
     messages: Message[],
     run: (route: FallbackRoute, prepared: boolean) => Promise<T>,
@@ -344,7 +345,7 @@ class GenerationService {
         options.onToolCallComplete?.(name, result);
       },
     };
-    return this.withModelFallback(conversationId, messages, async (route, prepared) => {
+    return this.withTrackedModelFallback(conversationId, messages, async (route, prepared) => {
       if (route.kind === 'remote') {
         return generateRemoteWithToolsImpl(this, {
           conversationId, messages,
