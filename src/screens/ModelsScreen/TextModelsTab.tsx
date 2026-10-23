@@ -9,7 +9,7 @@ import DeviceInfo from 'react-native-device-info';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { CATALOG, fitLabel } from '@offgrid/models';
+import { CATALOG, fitLabel, isSplitGgufPart } from '@offgrid/models';
 import { fileExceedsBudget, modelFitTier, textModelBudget } from '../../services/memoryBudget';
 import { Card, ModelCard } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
@@ -166,8 +166,9 @@ const ModelDetailView: React.FC<DetailProps> = ({
 
   // Every file this phone can run, best first for this phone (the recommended quant leads). A vision
   // file's projector downloads and loads with it, so the fit counts both, as the picks and load check do.
+  // The phone downloads a model as one file, so a split model's parts are not offered.
   const runnableFiles = modelFiles
-    .filter(f => f.size > 0 && !fileExceedsBudget(downloadBytes(f), ramGB, textModelBudget()) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
+    .filter(f => f.size > 0 && !isSplitGgufPart(f.name) && !fileExceedsBudget(downloadBytes(f), ramGB, textModelBudget()) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
     .sort((a, b) => {
       if (selectedModel.id === LITERT_PARENT_ID) return a.size - b.size; // curated: small-first
       // Tier: the preferred download quant (Q4_0 on Android CPU/NPU, else Q4_K_M) → GPU/NPU
