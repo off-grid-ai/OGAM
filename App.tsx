@@ -39,10 +39,19 @@ import { useDownloadStore } from './src/stores/downloadStore';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { DebugLogsScreen } from './src/components/DebugLogsScreen';
 import { LoadingDots } from './src/components/LoadingDots';
+import { AnalyticsConsentPrompt } from './src/components/AnalyticsConsentPrompt';
+import {
+  appBackgrounded,
+  appForegrounded,
+  startAnalytics,
+  trackScreen,
+} from './src/services/analytics/analytics';
+import { featureSnapshot } from './src/services/analytics/featureSnapshot';
 
 LogBox.ignoreAllLogs(); // Suppress all logs
 
 let stopStartupProbe: (() => void) | null = null;
+let stopAnalytics: (() => void) | null = null;
 // Dev-only: mirror logger output into the in-app Debug Logs viewer. The whole block
 // is behind __DEV__, so release builds keep main's no-op logger (zero logging cost).
 if (__DEV__) {
@@ -183,6 +192,7 @@ function App() {
   // Handle app state changes for auto-lock
   useAppState({
     onBackground: useCallback(() => {
+      appBackgrounded();
       saveChatStateOnBackground();
       if (authEnabled) {
         setLastBackgroundTime(Date.now());
@@ -190,6 +200,7 @@ function App() {
       }
     }, [authEnabled, setLastBackgroundTime, setLocked]),
     onForeground: useCallback(() => {
+      appForegrounded();
       // Rebuild the unified store before reattaching JS listeners so restored
       // progress events map onto current download entries instead of racing hydration.
       // NOTE: restoreQueuedDownloads() is intentionally NOT called here — on a foreground
@@ -373,6 +384,9 @@ function App() {
       logger.log('[BOOT] startup complete');
       setIsInitializing(false);
 
+      // Settings are hydrated: analytics starts only now, and only if the person opted in.
+      stopAnalytics = startAnalytics({ features: featureSnapshot });
+
       // Reconcile downloaded Whisper models against disk at startup. presentModelIds
       // isn't persisted (the filesystem is the source of truth), so it rehydrates
       // empty — without this scan a freshly launched app shows an already-installed
@@ -406,6 +420,8 @@ function App() {
     return () => {
       startupGeneration.current += 1;
       stopNetworkReconnectWatcher();
+      stopAnalytics?.();
+      stopAnalytics = null;
     };
   }, [initializeApp]);
 
@@ -447,7 +463,11 @@ function App() {
         {AppRoot ? <AppRoot /> : null}
         <NavigationContainer
           ref={appNavigationRef}
-          onReady={applyPendingProRedirect}
+          onReady={() => {
+            applyPendingProRedirect();
+            trackScreen(appNavigationRef.getCurrentRoute()?.name);
+          }}
+          onStateChange={() => trackScreen(appNavigationRef.getCurrentRoute()?.name)}
           theme={{
             dark: isDark,
             colors: {
@@ -480,6 +500,7 @@ function App() {
         >
           <AppNavigator />
         </NavigationContainer>
+        <AnalyticsConsentPrompt />
         {__DEV__ && showSyncStatusBar ? <DevSyncStrip /> : null}
       </SafeAreaProvider>
     </GestureHandlerRootView>
