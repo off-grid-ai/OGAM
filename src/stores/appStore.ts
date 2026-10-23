@@ -391,7 +391,13 @@ export const useAppStore = create<AppState>()(
       },
       resetSettings: () => {
         const before = get().settings;
-        const after = { ...DEFAULT_SETTINGS };
+        // Consent resets to off (analytics opts out); whether the person was already asked does not,
+        // so a reset never brings back the one-time prompt.
+        const after = {
+          ...DEFAULT_SETTINGS,
+          analyticsAsked: before.analyticsAsked,
+          analyticsLastPromptAt: before.analyticsLastPromptAt,
+        };
         set({ settings: after });
         emitChangedModelSettings(before, after);
       },
