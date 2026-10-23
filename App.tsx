@@ -52,9 +52,10 @@ LogBox.ignoreAllLogs(); // Suppress all logs
 
 let stopStartupProbe: (() => void) | null = null;
 let stopAnalytics: (() => void) | null = null;
-// Dev-only: mirror logger output into the in-app Debug Logs viewer. The whole block
-// is behind __DEV__, so release builds keep main's no-op logger (zero logging cost).
-if (__DEV__) {
+// Every build mirrors logger output into the in-app Debug Logs viewer and the size-capped log
+// file, so Report a problem carries a trace from a store build too. Log lines hold metadata only,
+// never chat content (docs/ANALYTICS.md, Report a problem). The console stays dev-only (logger.ts).
+{
   const fmt = (a: unknown): string => {
     if (a instanceof Error) return `${a.name}: ${a.message}`;
     if (typeof a === 'string') return a;
@@ -77,7 +78,7 @@ if (__DEV__) {
   initDebugLogFile();
   // Immediately after the sink exists, so the first sample lands before anything heavy runs. The app
   // was being killed by iOS at launch with the log going silent half a second in; this says where it
-  // stops and what memory was doing when it did.
+  // stops and what memory was doing when it did. Dev builds only (the probe is a no-op elsewhere).
   stopStartupProbe = startStartupMemoryProbe();
 }
 

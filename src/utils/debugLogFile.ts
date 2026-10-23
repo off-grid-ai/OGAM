@@ -1,5 +1,5 @@
 /**
- * Dev-only persistent log file sink.
+ * Persistent log file sink. Report a problem sends this file to support, in every build.
  *
  * RN 0.83 moved JS console logs off the Metro terminal into React Native DevTools,
  * and RN's console never reaches the iOS device syslog — so neither `metro` stdout
@@ -12,8 +12,8 @@
  *     --domain-type appDataContainer --domain-identifier <bundleId> \
  *     --source Documents/offgrid-debug.log --destination /tmp/offgrid-debug.log
  *
- * It is entirely behind __DEV__ (wired in App.tsx) — release builds never touch it.
- * Writes are buffered + flushed on an interval so high-frequency logging never
+ * It runs in every build (wired in App.tsx). Log lines hold metadata only, never chat content
+ * (docs/ANALYTICS.md, Report a problem). Writes are buffered + flushed on an interval so high-frequency logging never
  * blocks the JS thread, and the file is rotated at a size cap so it can't grow
  * unbounded. Logging must NEVER throw, so every FS call is best-effort.
  */
@@ -31,6 +31,7 @@ const FLUSH_AT_LINES = 50;
 // native tool-call dumps). It is NEVER rotated or size-capped, so a long
 // multi-model ground-truth run can't drop the earliest captures — the whole point
 // is to miss nothing. Pull it alongside the debug log; delete it manually when done.
+// Dev builds only: a store build must not grow a file without bound.
 const WIRE_LOG_PATH = `${RNFS.DocumentDirectoryPath}/offgrid-wire.log`;
 const WIRE_CAPTURE = /\[WIRE-|\[LLM-Tools\]|tool call received/;
 let wireBuffer: string[] = [];
@@ -103,9 +104,9 @@ export function flushDebugLogNow(): Promise<void> {
   return flush().catch(() => {});
 }
 
-/** Begin capturing to the file. Idempotent; no-op outside __DEV__. */
+/** Begin capturing to the file. Idempotent. */
 export function initDebugLogFile(): void {
-  if (!__DEV__ || enabled) return;
+  if (enabled) return;
   enabled = true;
   // Append (don't wipe) a session marker so a prior session's tail survives a
   // reload/crash for post-mortem, while the size cap keeps it bounded.
@@ -138,7 +139,7 @@ export function appendDebugLine(level: string, message: string): void {
   }
   // Tee model-wire captures into the lossless, never-rotated file so a long capture
   // run can't drop the earliest lines.
-  if (WIRE_CAPTURE.test(message)) {
+  if (__DEV__ && WIRE_CAPTURE.test(message)) {
     wireBuffer.push(line);
     if (wireBuffer.length >= 20) {
       flushWire().catch(() => {});

@@ -5,8 +5,9 @@
  * "Send to support" hands it to the share sheet. Neither the log the person sees nor what is shared
  * holds their prompt or the model's reply. It works with analytics off.
  *
- * The real App runs as a developer build (the build with a debug log). The share sheet is the OS
- * boundary: it is replaced by a recorder of what the app handed it.
+ * The real App runs as a store build: the debug log is on in every build, so this is the log a
+ * person actually sends. The share sheet is the OS boundary: it is replaced by a recorder of what
+ * the app handed it.
  */
 import {
   launchApp,
@@ -36,7 +37,7 @@ afterEach(async () => {
 });
 
 it('the shared debug log holds the chat trace but none of the prompt or reply', async () => {
-  app = await launchApp({ release: false });
+  app = await launchApp({ release: true });
   const shared: Array<{ message?: string; url?: string }> = [];
   require('react-native').Share.share = async (content: { message?: string; url?: string }) => {
     shared.push(content);
@@ -66,7 +67,7 @@ it('the shared debug log holds the chat trace but none of the prompt or reply', 
 });
 
 it('on iOS the log goes as an attached file, and closing the viewer sends nothing', async () => {
-  app = await launchApp({ release: false, platform: 'ios' });
+  app = await launchApp({ release: true, platform: 'ios' });
   const shared: Array<{ message?: string; url?: string }> = [];
   require('react-native').Share.share = async (content: { message?: string; url?: string }) => {
     shared.push(content);
@@ -89,7 +90,7 @@ it('on iOS the log goes as an attached file, and closing the viewer sends nothin
 });
 
 it('an unreadable log still opens the share sheet with the support address', async () => {
-  app = await launchApp({ release: false });
+  app = await launchApp({ release: true });
   const shared: Array<{ message?: string; url?: string }> = [];
   require('react-native').Share.share = async (content: { message?: string; url?: string }) => {
     shared.push(content);
@@ -110,7 +111,7 @@ it('an unreadable log still opens the share sheet with the support address', asy
 });
 
 it('with no log on disk yet, the share sheet still gets the support address', async () => {
-  app = await launchApp({ release: false });
+  app = await launchApp({ release: true });
   const shared: Array<{ message?: string; url?: string }> = [];
   require('react-native').Share.share = async (content: { message?: string; url?: string }) => {
     shared.push(content);
