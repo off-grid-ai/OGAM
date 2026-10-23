@@ -378,7 +378,7 @@ async function handleReadUrl(rawUrl: string): Promise<string> {
 
     return text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}\n\n[Content truncated]` : text;
   } catch (e: any) {
-    logger.error(`[Tools] read_url FAILED for "${url}": ${e?.message || e}`);
+    logger.error(`[Tools] read_url FAILED: ${e?.message || e}`);
     throw e;
   } finally { clearTimeout(timeout); }
 }

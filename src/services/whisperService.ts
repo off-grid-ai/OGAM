@@ -293,10 +293,7 @@ class WhisperService {
           // This session already holds the native lane; the fallback runs inside it.
           const fileText = await this.transcribeLocalFile(path, { language });
           logger.log(
-            `[WhisperService] Realtime captured nothing — file transcript: "${fileText.slice(
-              0,
-              50,
-            )}"`,
+            `[WhisperService] Realtime captured nothing — file transcript: ${fileText.length}ch`,
           );
           return fileText;
         } catch (fileErr) {
@@ -346,11 +343,11 @@ class WhisperService {
         logger.log('[WhisperService] Event received:', {
           isCapturing: evt.isCapturing,
           hasData: !!evt.data,
-          text: evt.data?.result?.slice(0, 50),
+          textLength: evt.data?.result?.length ?? 0,
         });
         // [WIRE] raw realtime transcription event shape from-device (voice-mode STT path) — full result +
         // segments + timing, so we can ground the realtime-transcript fixtures (distinct from file transcribe).
-        logger.log(`[WIRE-STT-REALTIME] ${JSON.stringify(evt)}`);
+        logger.log(`[WIRE-STT-REALTIME] ${JSON.stringify({ isCapturing: evt.isCapturing, textLength: evt.data?.result?.length ?? 0, segments: evt.data?.segments?.length ?? 0, processTime: evt.processTime, recordingTime: evt.recordingTime })}`);
 
         const { isCapturing, data, processTime, recordingTime } = evt;
 
@@ -545,7 +542,8 @@ class WhisperService {
     });
 
     const __res = await promise;
-    logger.log(`[WIRE-STT] ${JSON.stringify(__res)}`); // [WIRE] raw whisper.rn transcribe result (segments/text) from-device
+    // Shape only: the transcript is what the person said and never goes in the log.
+    logger.log(`[WIRE-STT] ${JSON.stringify({ textLength: __res?.result?.length ?? 0, segments: __res?.segments?.length ?? 0 })}`);
     const { result } = __res;
     return cleanTranscription(result);
   }

@@ -332,7 +332,8 @@ class LiteRTService {
       this.emitter!.addListener(EVENT_COMPLETE, (benchmarkJson: string) => {
         logger.log(TAG, `sendMessage — complete, content=${this.currentContent.length} chars`);
         // [WIRE] Full raw event stream + accumulated content/reasoning, for real-format fixtures.
-        logger.log(`[WIRE-LITERT] ${JSON.stringify({ stream: __wire, content: this.currentContent, reasoning: this.currentReasoning })}`);
+        // Shape only: the reply and reasoning never go in the log.
+        logger.log(`[WIRE-LITERT] ${JSON.stringify({ events: __wire.length, contentLength: this.currentContent.length, reasoningLength: this.currentReasoning.length })}`);
         this.clearSubscriptions();
 
         this.currentToolCallHandler = null;
@@ -386,8 +387,8 @@ class LiteRTService {
         callbacks.onError(new Error(message));
       }),
       this.emitter!.addListener(EVENT_TOOL_CALL, async (json: string) => {
-        logger.log(TAG, `sendMessage — tool call received: ${json.substring(0, 200)}`);
-        logger.log(`[WIRE-LITERT-TOOL] ${json}`); // [WIRE] full untruncated raw litert tool_call json from-device
+        // Never the arguments: they can hold what the person asked for.
+        logger.log(TAG, `sendMessage — tool call received: ${json.length}ch`);
         try {
           const { id, name, arguments: args } = JSON.parse(json) as {
             id: string;
@@ -438,14 +439,14 @@ class LiteRTService {
   ): Promise<string> {
     const { imageUris, audioUris } = media ?? {};
     const { onToken, onToolCall, onReasoning } = handlers ?? {};
-    logger.log(TAG, `generateRaw — text=${text.length}ch, hasToolHandler=${!!onToolCall}, imageCount=${imageUris?.length ?? 0}, audioCount=${audioUris?.length ?? 0}, first100="${text.substring(0, 100)}"`);
+    logger.log(TAG, `generateRaw — text=${text.length}ch, hasToolHandler=${!!onToolCall}, imageCount=${imageUris?.length ?? 0}, audioCount=${audioUris?.length ?? 0}`);
     this.currentToolCallHandler = onToolCall ?? null;
     return new Promise((resolve, reject) => {
       this.sendMessage(text, {
         onToken: t => onToken?.(t),
         onReasoning: t => onReasoning?.(t),
         onComplete: (fullContent, _reasoning, stats) => {
-          logger.log(TAG, `generateRaw — complete, response=${fullContent.length}ch, first200="${fullContent.substring(0, 200)}"`);
+          logger.log(TAG, `generateRaw — complete, response=${fullContent.length}ch`);
           this._lastBenchmarkStats = stats;
           resolve(fullContent);
         },
