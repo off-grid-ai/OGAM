@@ -12,6 +12,8 @@ import {
   MEMORY_RESERVE_MB,
   AGGRESSIVE_RESERVE_MB,
   awaitMemoryReclaim,
+  fileExceedsBudget,
+  textModelBudget,
 } from '../../../src/services/memoryBudget';
 
 const GB = 1024;
@@ -150,5 +152,19 @@ describe('awaitMemoryReclaim — unload does not return until native memory is f
     await awaitMemoryReclaim(getProcessMemory, { sleep });
     expect(getProcessMemory).toHaveBeenCalledTimes(1); // read once, saw null, bailed to the fixed wait
     expect(sleep).toHaveBeenCalledWith(250);
+  });
+});
+
+describe('fit budgets: an iPhone maps GGUF chat weights, nothing else', () => {
+  // A 12 GB iPhone reports ~11.2 GB. A 9B Q4_K_M with its vision file is 6.6 GB.
+  const RAM = 11.2;
+  const BYTES = 6.6e9;
+
+  it('fits a 6.6 GB chat model on a 12 GB iPhone with the text budget', () => {
+    expect(fileExceedsBudget(BYTES, RAM, textModelBudget())).toBe(false);
+  });
+
+  it('keeps the strict budget for any other model of that size (image, speech, LiteRT)', () => {
+    expect(fileExceedsBudget(BYTES, RAM)).toBe(true);
   });
 });

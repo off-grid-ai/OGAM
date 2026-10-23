@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { CATALOG, isVideoWeightAvailableOn, videoPackError } from '@offgrid/models';
 import { recommendedModelsForDevice, ramFitScore } from '../utils/recommendedModels';
-import { fileExceedsBudget } from './memoryBudget';
+import { fileExceedsBudget, textModelBudget } from './memoryBudget';
 import { fetchModelFiles } from './modelCatalogFiles';
 import { hardwareService } from './hardware';
 import { WHISPER_MODELS } from './whisperModels';
@@ -40,7 +40,7 @@ export function buildAutoSetupTextCandidates(
   return models.filter(model => model.type === 'vision').flatMap(model => {
     const file = files[model.id]?.[0];
     const sizeBytes = file ? file.size + (file.mmProjFile?.size ?? 0) : 0;
-    if (!file || fileExceedsBudget(sizeBytes, ramGB)) return [];
+    if (!file || fileExceedsBudget(sizeBytes, ramGB, textModelBudget())) return [];
     return [{
       id: `${model.id}/${file.name}`,
       name: model.name,

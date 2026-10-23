@@ -1,17 +1,18 @@
-import { CATALOG, PHONE_FIT_BUDGET, type MobileTextCatalogModel, type ModelEntry } from '@offgrid/models';
+import { CATALOG, type MobileTextCatalogModel, type ModelEntry } from '@offgrid/models';
+import { textModelBudget } from '../services/memoryBudget';
 import { registerBundledCatalog } from '../stores/modelCatalogStore';
 import { engineLoadsCatalogModel } from '../services/llamaEngineSupport';
 
 // Model size recommendations based on device RAM
 export const MODEL_RECOMMENDATIONS = {
-  // RAM in GB -> max model parameters in billions
+  // RAM in GB -> the quantization to suggest
   memoryToParams: [
-    { minRam: 3, maxRam: 4, maxParams: 1.5, quantization: 'Q4_K_M' },
-    { minRam: 4, maxRam: 6, maxParams: 3, quantization: 'Q4_K_M' },
-    { minRam: 6, maxRam: 8, maxParams: 4, quantization: 'Q4_K_M' },
-    { minRam: 8, maxRam: 12, maxParams: 8, quantization: 'Q4_K_M' },
-    { minRam: 12, maxRam: 16, maxParams: 13, quantization: 'Q4_K_M' },
-    { minRam: 16, maxRam: Infinity, maxParams: 30, quantization: 'Q4_K_M' },
+    { minRam: 3, maxRam: 4, quantization: 'Q4_K_M' },
+    { minRam: 4, maxRam: 6, quantization: 'Q4_K_M' },
+    { minRam: 6, maxRam: 8, quantization: 'Q4_K_M' },
+    { minRam: 8, maxRam: 12, quantization: 'Q4_K_M' },
+    { minRam: 12, maxRam: 16, quantization: 'Q4_K_M' },
+    { minRam: 16, maxRam: Infinity, quantization: 'Q4_K_M' },
   ],
 };
 
@@ -31,7 +32,7 @@ function offeredOnPhone(entry: ModelEntry): boolean {
 function phoneMinRamGb(entry: ModelEntry): number {
   if (entry.minRamGb) return entry.minRamGb;
   const bytes = entry.files.filter(f => f.role !== 'aux').reduce((sum, f) => sum + (f.sizeBytes ?? 0), 0);
-  return Math.ceil(bytes / 1e9 / PHONE_FIT_BUDGET.soft);
+  return Math.ceil(bytes / 1e9 / textModelBudget().soft);
 }
 
 /** The catalog names a maker for people ("Meta"); the maker filter keys by its Hugging Face org

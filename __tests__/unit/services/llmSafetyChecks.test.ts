@@ -37,6 +37,28 @@ describe('validateModelFile', () => {
     });
   });
 
+  it('refuses an importance matrix, which is calibration data and not a model', async () => {
+    defaultNativeFileSystemBoundary.seedFile('/models/Spark-X2.6-4B-imatrix.gguf', 7_151_872);
+
+    const result = await validateModelFile('/models/Spark-X2.6-4B-imatrix.gguf');
+    expect(result).toEqual({
+      valid: false,
+      reason: 'This file is calibration data for making a model, not a model. Choose one of the sizes instead.',
+    });
+  });
+
+  it('refuses a split model with a part missing, and loads it once every part is beside the first', async () => {
+    defaultNativeFileSystemBoundary.seedFile('/models/M-Q8_0-00001-of-00003.gguf', 1_000_000);
+    defaultNativeFileSystemBoundary.seedFile('/models/M-Q8_0-00003-of-00003.gguf', 1_000_000);
+    expect(await validateModelFile('/models/M-Q8_0-00001-of-00003.gguf')).toEqual({
+      valid: false,
+      reason: 'This model comes in 3 parts and M-Q8_0-00002-of-00003.gguf is missing. Download it again to fetch the missing part.',
+    });
+
+    defaultNativeFileSystemBoundary.seedFile('/models/M-Q8_0-00002-of-00003.gguf', 1_000_000);
+    expect(await validateModelFile('/models/M-Q8_0-00001-of-00003.gguf')).toEqual({ valid: true });
+  });
+
   it('returns valid for a proper GGUF file', async () => {
     defaultNativeFileSystemBoundary.seedFile('/models/test.gguf', 1_000_000);
 
@@ -87,6 +109,45 @@ describe('checkMemoryForModel', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  // Measured on a 12 GB iPhone 17 Pro Max: 11.2 GB reported, ~5,984 MB free for the app, and a 9B
+  // Q4_K_M (5.6 GB) and Gemma 4 E4B (5.0 GB) both load at a 4K context with their weights mapped.
+  const IPHONE_12GB = { available: 5984 * 1024 * 1024, total: 11.2 * 1024 ** 3 };
+
+  it('passes a 9B Q4_K_M on a 12 GB iPhone: mapped weights are not charged against free memory', async () => {
+    mockGetMemory.mockResolvedValue(IPHONE_12GB);
+    const result = await checkMemoryForModel({
+      modelFileSize: 5.63e9, contextLength: 4096, getAvailableMemory: mockGetMemory, quantizedCache: true, weightsMapped: true,
+    });
+    expect(result.safe).toBe(true);
+  });
+
+  it('still refuses the same 9B when its weights are copied into memory', async () => {
+    mockGetMemory.mockResolvedValue(IPHONE_12GB);
+    const result = await checkMemoryForModel({
+      modelFileSize: 5.63e9, contextLength: 4096, getAvailableMemory: mockGetMemory, quantizedCache: true,
+    });
+    expect(result.safe).toBe(false);
+  });
+
+  it('counts a vision projector against free memory: it is copied, not mapped', async () => {
+    // 1.5 GB free: the 9B's KV cache and headroom fit, but not with its 0.92 GB projector on top.
+    mockGetMemory.mockResolvedValue({ available: 1500 * 1024 * 1024, total: 11.2 * 1024 ** 3 });
+    const args = { modelFileSize: 5.63e9, contextLength: 4096, getAvailableMemory: mockGetMemory, quantizedCache: true, weightsMapped: true };
+    expect((await checkMemoryForModel(args)).safe).toBe(true);
+    expect((await checkMemoryForModel({ ...args, projectorFileSize: 0.92e9 })).safe).toBe(false);
+    // With the phone's usual ~6 GB free, the 9B and its projector load (measured on a 12 GB iPhone).
+    mockGetMemory.mockResolvedValue(IPHONE_12GB);
+    expect((await checkMemoryForModel({ ...args, projectorFileSize: 0.92e9 })).safe).toBe(true);
+  });
+
+  it('refuses mapped weights past what the fit rule allows on this RAM (Gemma 4 12B on 12 GB)', async () => {
+    mockGetMemory.mockResolvedValue(IPHONE_12GB);
+    const result = await checkMemoryForModel({
+      modelFileSize: 7.3e9, contextLength: 4096, getAvailableMemory: mockGetMemory, quantizedCache: true, weightsMapped: true,
+    });
+    expect(result.safe).toBe(false);
   });
 
   it('returns safe when enough memory is available', async () => {

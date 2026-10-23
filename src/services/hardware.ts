@@ -224,7 +224,6 @@ class HardwareService {
       warning = 'Running in emulator. Performance may be significantly slower.';
     }
     return {
-      maxParameters: tier.maxParams,
       recommendedQuantization: tier.quantization,
       recommendedModels: compatibleModels,
       warning,

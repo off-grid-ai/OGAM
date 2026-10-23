@@ -11,6 +11,8 @@ export type ThemeShadows = {
   medium: ShadowStyle;
   large: ShadowStyle;
   glow: ShadowStyle;
+  /** A shadow along the bottom edge only: a fixed bar that content scrolls under. */
+  edge: ShadowStyle;
 };
 
 // ── Light palette ──────────────────────────────────────────────────
@@ -103,6 +105,9 @@ export const SHADOWS_LIGHT: ThemeShadows = {
   glow: {
     boxShadow: '0px 0px 12px 0px rgba(5,150,105,0.25)',
   },
+  edge: {
+    boxShadow: '0px 6px 6px -6px rgba(0,0,0,0.22)',
+  },
 };
 
 // ── Dark shadows (crisp white glow for depth) ───────────────────────
@@ -118,6 +123,9 @@ export const SHADOWS_DARK: ThemeShadows = {
   },
   glow: {
     boxShadow: '0px 0px 8px 0px rgba(52,211,153,0.30)',
+  },
+  edge: {
+    boxShadow: '0px 6px 6px -6px rgba(0,0,0,0.6)',
   },
 };
 

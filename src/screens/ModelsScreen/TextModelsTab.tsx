@@ -9,8 +9,8 @@ import DeviceInfo from 'react-native-device-info';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { CATALOG, fitLabel } from '@offgrid/models';
-import { fileExceedsBudget, modelFitTier } from '../../services/memoryBudget';
+import { CATALOG, fitLabel, splitGgufModelName } from '@offgrid/models';
+import { fileExceedsBudget, modelFitTier, textModelBudget } from '../../services/memoryBudget';
 import { Card, ModelCard } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { hideAlert, showAlert, AlertState } from '../../components/CustomAlert';
@@ -21,13 +21,14 @@ import { ModelInfo, ModelFile } from '../../types';
 import { createStyles } from './styles';
 import { ModelsScreenViewModel } from './useModelsScreen';
 import { useDownloadStore, isActiveStatus, isQueuedStatus } from '../../stores/downloadStore';
+import { jobBytesDownloaded } from '../../utils/downloadStatus';
 import { makeModelKey } from '../../utils/modelKey';
 import { modelSupportsNpuGpu, isAccelerableQuant } from '../../utils/acceleration';
 import { aggregateActiveDownloads } from '../../utils/downloadAggregate';
 import { TextFiltersSection } from './TextFiltersSection';
 import { FilterState, SortOption } from './types';
 import { SORT_OPTIONS } from './constants';
-import { formatNumber, getTextModelCompatibility, modelFactChips } from './utils';
+import { formatNumber, getTextModelCompatibility, modelFactChips, modelSpeedBadges } from './utils';
 import { buildCuratedLiteRTFiles, curatedLiteRTDownloadWarning, getCuratedLiteRTEntry, LITERT_PARENT_ID, useCuratedLiteRTEntries } from '../../services/curatedLiteRTRegistry';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { liteRTFileMeta, liteRTRecommendedModel, LITERT_PARENT_RECOMMENDED } from './litertRecommended';
@@ -147,7 +148,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
     let progress = entry
       ? {
         progress: entry.progress,
-        bytesDownloaded: entry.bytesDownloaded + (entry.mmProjBytesDownloaded ?? 0),
+        bytesDownloaded: jobBytesDownloaded(entry),
         totalBytes: entry.combinedTotalBytes,
         bytesPerSecond: entry.bytesPerSecond,
         status: entry.status,
@@ -164,9 +165,10 @@ const ModelDetailView: React.FC<DetailProps> = ({
     return { downloadKey: modelKey, progress, downloaded, downloadedModel, needsVisionRepair, repairingVision, canCancel, hasFailed, errorMessage };
   };
 
-  // Every file this phone can run, best first for this phone (the recommended quant leads).
+  // Every file this phone can run, best first for this phone (the recommended quant leads). A vision
+  // file's projector downloads and loads with it, so the fit counts both, as the picks and load check do.
   const runnableFiles = modelFiles
-    .filter(f => f.size > 0 && !fileExceedsBudget(f.size, ramGB) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
+    .filter(f => f.size > 0 && !fileExceedsBudget(downloadBytes(f), ramGB, textModelBudget()) && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
     .sort((a, b) => {
       if (selectedModel.id === LITERT_PARENT_ID) return a.size - b.size; // curated: small-first
       // Tier: the preferred download quant (Q4_0 on Android CPU/NPU, else Q4_K_M) → GPU/NPU
@@ -191,7 +193,8 @@ const ModelDetailView: React.FC<DetailProps> = ({
     };
     const onDownload = buildFileDownloadHandler({ s, fileName: item.name, sizeBytes: item.size, ramGB, proceedDownload, setAlertState });
     const liteRTMeta = liteRTMetaByFile[item.name];
-    const displayName = liteRTMeta?.displayName ?? item.name.replace('.gguf', '');
+    // A split model is named once, without its part number.
+    const displayName = liteRTMeta?.displayName ?? splitGgufModelName(item.name).replace('.gguf', '');
     const recommended = liteRTMeta ? { pillLabel: 'Recommended', highlightText: liteRTMeta.highlight } : undefined;
     const storeEntry = storeDownloads[s.downloadKey];
     // Retry routes through the single owner (modelDownloadService → textProvider): Android resumes the
@@ -214,6 +217,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
           ...predictGgufCapabilities({ id: selectedModel.id, name: selectedModel.name, fileName: item.name }),
           vision: !!item.mmProjFile,
           predicted: true,
+          ...modelSpeedBadges(selectedModel),
         } : undefined}
         isDownloading={!!s.progress && !s.hasFailed && s.progress.status !== 'paused' && !isQueuedStatus(s.progress.status)}
         isQueued={isQueuedStatus(s.progress?.status ?? 'completed')}
@@ -225,10 +229,10 @@ const ModelDetailView: React.FC<DetailProps> = ({
           bytesPerSecond: s.progress.bytesPerSecond,
         } : undefined}
         isRepairingVision={s.repairingVision}
-        isCompatible={!fileExceedsBudget(item.size, ramGB)} testID={`file-card-${index}`}
+        isCompatible={!fileExceedsBudget(downloadBytes(item), ramGB, textModelBudget())} testID={`file-card-${index}`}
         // "Runs well" is the default and goes unsaid; only a tight fit is worth a word on the card.
         sizeLabel={sizeLabelOf(item)}
-        facts={modelFitTier(item.size, ramGB) === 'tight' ? [fitLabel('tight')] : undefined}
+        facts={modelFitTier(downloadBytes(item), ramGB, textModelBudget()) === 'tight' ? [fitLabel('tight')] : undefined}
         onDownload={onDownload}
         onDelete={s.downloaded ? () => handleDeleteModel(`${selectedModel.id}/${item.name}`) : undefined}
         onRepairVision={s.needsVisionRepair && !s.progress && !s.repairingVision ? () => handleRepairMmProj(selectedModel, item) : undefined}
@@ -318,6 +322,9 @@ const ModelDetailView: React.FC<DetailProps> = ({
   );
 };
 
+/** What a file costs the phone: its weights plus the vision projector that comes with it. */
+const downloadBytes = (file: ModelFile): number => file.size + (file.mmProjFile?.size ?? 0);
+
 interface ModelListItemProps {
   item: ModelInfo; index: number; focusTrigger: number;
   isDownloaded: boolean; isTrending: boolean; onPress: () => void;
@@ -338,6 +345,7 @@ const ModelListItem: React.FC<ModelListItemProps> = ({ item, index, focusTrigger
     ...predictGgufCapabilities({ id: item.id, name: item.name }),
     vision: item.modelType === 'vision',
     predicted: true,
+    ...modelSpeedBadges(item),
   };
   return <AnimatedEntry index={index} staggerMs={30} trigger={focusTrigger}><ModelCard model={cardModel} isDownloaded={isDownloaded} isDownloading={agg.downloading} isQueued={agg.queued} downloadProgress={agg.progress} downloadBytes={agg.bytes} downloadCount={agg.count} isCompatible={isCompatible} incompatibleReason={incompatibleReason} onPress={isCompatible ? onPress : undefined} onDownload={isCompatible ? onDownload : undefined} testID={`model-card-${index}`} compact facts={modelFactChips(item)} isTrending={isTrending} recommended={recommended} supportsAcceleration={!isLiteRTParent && modelSupportsNpuGpu(item)} capabilities={capabilities} /></AnimatedEntry>;
 };
@@ -476,7 +484,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
 
   return (
     <>
-      <View style={styles.searchContainer} testID="text-model-search-row">
+      <View style={[styles.searchContainer, styles.searchContainerRaised]} testID="text-model-search-row">
         <TextInput
           style={styles.searchInput}
           placeholder="Search models"
@@ -548,6 +556,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
           testID="models-list"
+          keyboardDismissMode="on-drag"
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
           ListHeaderComponent={hasSearched ? null : (
             <>

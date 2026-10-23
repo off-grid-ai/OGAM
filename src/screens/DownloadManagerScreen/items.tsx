@@ -13,6 +13,7 @@ import { presentProgress } from '../../utils/progressPresentation';
 import { SPACING } from '../../constants';
 import { isMMProjFile } from '../../services/mmproj';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
+import { splitGgufModelName } from '@offgrid/models';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -131,22 +132,9 @@ export const ActiveDownloadCard: React.FC<ActiveDownloadCardProps> = ({
   return (
     <ModelCard
       compact
-      model={{
-        id: item.modelId,
-        name: item.fileName,
-        author: item.author,
-        modelType: item.isVisionModel
-          ? 'vision'
-          : item.modelType === 'text'
-            ? 'text'
-            : undefined,
-      }}
-      file={{
-        name: item.fileName,
-        size: item.fileSize,
-        quantization: item.quantization,
-        downloadUrl: '',
-      }}
+      model={{ id: item.modelId, name: splitGgufModelName(item.fileName), author: item.author,
+        modelType: item.isVisionModel ? 'vision' : item.modelType === 'text' ? 'text' : undefined }}
+      file={{ name: splitGgufModelName(item.fileName), size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
       capabilities={textCapabilities(item)}
       facts={[
         item.modelType === 'tts'
@@ -320,7 +308,7 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({
         compact
         model={{
           id: item.modelId,
-          name: item.fileName,
+          name: splitGgufModelName(item.fileName),
           author: item.author,
           modelType: item.isVisionModel
             ? 'vision'
@@ -331,12 +319,7 @@ export const CompletedDownloadCard: React.FC<CompletedDownloadCardProps> = ({
             ? new Date(item.downloadedAt).toLocaleDateString()
             : undefined,
         }}
-        file={{
-          name: item.fileName,
-          size: item.fileSize,
-          quantization: item.quantization,
-          downloadUrl: '',
-        }}
+        file={{ name: splitGgufModelName(item.fileName), size: item.fileSize, quantization: item.quantization, downloadUrl: '' }}
         capabilities={textCapabilities(item)}
         isDownloaded
         isDownloading={showRepairProgress && repairEntry.status !== 'paused'}

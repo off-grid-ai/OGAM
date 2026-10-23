@@ -138,12 +138,12 @@ describe('Auto Setup plans by phone memory', () => {
     expect(new Set(chatModels(plans)).size).toBe(3);
   });
 
-  // The phone in the commit: a 12 GB iPhone has no room for the 9B with its projector, so Extreme
-  // would only repeat Balanced's 4B. It is not shown.
-  it('a 12 GB phone sees two plans, never the same chat model twice', async () => {
+  // A 12 GB iPhone maps its weights, so the 9B with its projector loads there (measured on an iPhone
+  // 17 Pro Max): Extreme offers it, and no plan repeats another's chat model.
+  it('a 12 GB iPhone sees three plans, Extreme with the 9B, never the same chat model twice', async () => {
     const plans = await plansSeenOnPhone(12);
-    expect(plans.map(plan => plan.tier)).toEqual(['lean', 'balanced']);
-    expect(chatModels(plans)).toEqual(['Qwen 3.5 2B', 'Qwen 3.5 4B']);
+    expect(plans.map(plan => plan.tier)).toEqual(['lean', 'balanced', 'extreme']);
+    expect(chatModels(plans)).toEqual(['Qwen 3.5 2B', 'Qwen 3.5 4B', 'Qwen 3.5 9B']);
   });
 
   it('a 6 GB phone sees fewer plans than a 16 GB phone, and no chat model twice', async () => {

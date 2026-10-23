@@ -5,8 +5,9 @@
  * "it needs ~1818MB but only 1898MB is available ... Load Anyway?". The verdict adds a 200MB OS/app
  * headroom to the estimate (1818 + 200 > 1898); the copy quoted the estimate without it.
  *
- * Pinned in that band: a 1GB GGUF at the default 4K context estimates ~1376–1524MB (quantized or f16 KV),
- * so 1550MB available is above the bare estimate but below estimate + headroom on either cache type.
+ * An iPhone maps the weights, so only the KV cache and the headroom must fit in what is free (that
+ * device case now loads). Pinned in the band: a 1GB GGUF at the default 4K context needs ~114–229MB of
+ * KV (quantized or f16), so 260MB available is above the bare KV but below KV + headroom on either.
  */
 import { setupChatScreen } from '../../harness/chatHarness';
 import { GB, MB } from '../../harness/nativeBoundary';
@@ -24,7 +25,7 @@ describe('memory refusal copy agrees with the verdict', () => {
       engine: 'llama',
       platform: 'ios',
       modelFileSizeBytes: 1 * GB,
-      ram: { platform: 'ios', totalBytes: 8 * GB, availBytes: 1550 * MB },
+      ram: { platform: 'ios', totalBytes: 8 * GB, availBytes: 260 * MB },
       deferInitialLoad: true,
     });
     h.boundary.fs!.seedFile('/docs/models/ggml-small.gguf', Math.round(1 * GB));

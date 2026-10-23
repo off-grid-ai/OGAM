@@ -13,6 +13,8 @@ import {
   ModelInfoBadges,
   ModelCardActions,
   RecommendedConfig,
+  type ModelCardCapabilities,
+  speedHint,
 } from './ModelCardContent';
 import { PAUSED_ICON, QUEUED_ICON } from '../utils/downloadStatusIcon';
 import { formatBytes } from '../utils/formatBytes';
@@ -74,7 +76,7 @@ interface ModelCardProps {
   };
   /** Facts the owning surface knows (RAM, remote capabilities, model style). */
   facts?: string[];
-  capabilities?: { tools?: boolean; thinking?: boolean; vision?: boolean; predicted?: boolean };
+  capabilities?: ModelCardCapabilities;
   sourceBadge?: string;
   trailing?: React.ReactNode;
   disabled?: boolean;
@@ -115,7 +117,7 @@ interface ModelCardHeadingProps {
   isActive?: boolean;
   incompatibleReason?: string;
   facts?: string[];
-  capabilities?: { tools?: boolean; thinking?: boolean; vision?: boolean; predicted?: boolean };
+  capabilities?: ModelCardCapabilities;
   sourceBadge?: string;
   nameTestID?: string;
   factsTestID?: string;
@@ -367,6 +369,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
       disabled={disabled || !onPress}
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={model.name}
+      accessibilityHint={speedHint(capabilities)}
       accessibilityState={{ selected: !!isActive, disabled: !!disabled }}
       testID={testID}
     >

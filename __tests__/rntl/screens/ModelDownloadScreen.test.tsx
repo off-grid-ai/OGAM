@@ -114,7 +114,6 @@ jest.mock('../../../src/services', () => ({
   hardwareService: {
     getDeviceInfo: jest.fn(() => Promise.resolve({ deviceModel: 'Test Device', availableMemory: 8000000000 })),
     getModelRecommendation: jest.fn(() => ({
-      maxParameters: 8,
       recommendedQuantization: 'Q4_K_M',
       recommendedModels: [],
     })),
@@ -300,7 +299,6 @@ describe('ModelDownloadScreen', () => {
     mockDownloadModelBackground.mockResolvedValue(undefined);
     mockHardwareService.getDeviceInfo.mockResolvedValue({ deviceModel: 'Test Device', availableMemory: 8000000000 });
     mockHardwareService.getModelRecommendation.mockReturnValue({
-      maxParameters: 8,
       recommendedQuantization: 'Q4_K_M',
       recommendedModels: [],
     });
@@ -392,13 +390,14 @@ describe('ModelDownloadScreen', () => {
     const result = render(<AdvancedSetupScreen navigation={mockNavigation} />);
     await flushPromises();
 
-    expect(result.getByTestId('model-card-0')).toBeTruthy();
+    // It is this phone's one-tap pick.
+    expect(result.getByText('Qwen 3.5 0.8B')).toBeTruthy();
   });
 
   it('keeps a curated local option visible on a low-memory device', async () => {
-    mockHardwareService.getTotalMemoryGB.mockReturnValue(1);
+    // The smallest phones sold have 3 GB: Qwen 3.5 0.8B (0.74 GB) still loads there.
+    mockHardwareService.getTotalMemoryGB.mockReturnValue(3);
     mockHardwareService.getModelRecommendation.mockReturnValue({
-      maxParameters: 1.5,
       recommendedQuantization: 'Q4_K_M',
       recommendedModels: [],
     });
@@ -406,7 +405,8 @@ describe('ModelDownloadScreen', () => {
     const result = render(<AdvancedSetupScreen navigation={mockNavigation} />);
     await flushPromises();
 
-    expect(result.getByTestId('model-card-0')).toBeTruthy();
+    // It is this phone's one-tap pick.
+    expect(result.getByText('Qwen 3.5 0.8B')).toBeTruthy();
   });
 
   it('download button triggers handleDownload via background download', async () => {

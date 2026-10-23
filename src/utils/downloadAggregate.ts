@@ -7,7 +7,7 @@
  * running — not just the first entry. Pure + testable; the card component is unchanged
  * and just consumes these fields.
  */
-import { DownloadEntry, isActiveStatus, isQueuedStatus } from './downloadStatus';
+import { DownloadEntry, isActiveStatus, isQueuedStatus, jobBytesDownloaded } from './downloadStatus';
 
 export interface AggregatedDownload {
   /** At least one entry is actively transferring (not just queued). */
@@ -38,7 +38,7 @@ export function aggregateActiveDownloads(
     return { downloading: false, queued: false, count: 0, progress: 0 };
   }
   const transferring = active.filter(e => !isQueuedStatus(e.status));
-  const downloaded = active.reduce((s, e) => s + e.bytesDownloaded + (e.mmProjBytesDownloaded ?? 0), 0);
+  const downloaded = active.reduce((s, e) => s + jobBytesDownloaded(e), 0);
   const total = active.reduce((s, e) => s + (e.combinedTotalBytes || e.totalBytes || 0), 0);
   const allRatesKnown =
     transferring.length > 0 &&

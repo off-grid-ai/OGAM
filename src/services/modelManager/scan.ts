@@ -1,4 +1,4 @@
-import { isDraftModelFile, isMtpHeadFile } from '@offgrid/models';
+import { isCompanionFile, splitGgufPartNames } from '@offgrid/models';
 import { getSDImageModels, getSDImagePackFiles, isSDImageWeight } from '../huggingFaceModelBrowser';
 import RNFS from 'react-native-fs';
 import { statFile } from '../../utils/fileStat';
@@ -395,7 +395,9 @@ async function doScanForUntrackedTextModels(
     const isMmProj = isMMProjFile(lowerName);
     // An MTP head or draft model stored beside its model is part of that model, never a model of its
     // own: adopting one offers a file that crashes the engine when loaded alone.
-    if (!item.isFile() || !item.name.endsWith('.gguf') || isMmProj || isMtpHeadFile(item.name) || isDraftModelFile(item.name)) {
+    // A split model's later part belongs to the model its first part names, the same way.
+    const laterSplitPart = splitGgufPartNames(item.name)[0] !== item.name;
+    if (!item.isFile() || !item.name.endsWith('.gguf') || isMmProj || isCompanionFile(item.name) || laterSplitPart) {
       continue;
     }
 

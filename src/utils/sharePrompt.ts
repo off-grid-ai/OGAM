@@ -5,7 +5,7 @@ const GITHUB_URL = 'https://github.com/off-grid-ai/mobile';
 // Community links (Settings "Stay in the loop" card + About screen). Single source of truth.
 const FOLLOW_X_URL = 'https://x.com/alichherawalla';
 const SLACK_INVITE_URL =
-  'https://join.slack.com/t/off-grid-mobile/shared_invite/zt-3swt3s84k-R0CHRwISaUpExV2~3qUUdQ';
+  'https://join.slack.com/t/off-grid-mobile/shared_invite/zt-494gbuv5c-kj9tT7U0AS8Kq8UUO63_jw';
 
 // Ratings live where the store ranks us, and each store only counts its own.
 // iOS: the numeric App Store id, with action=write-review so the review sheet is

@@ -191,6 +191,10 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
     }
 
     const mmProjPath = await resolveMmProjPath(ctx.model, ctx.modelId);
+    // A model from before heads came with the download, or whose head download failed, gets it now;
+    // this load runs without MTP and the next one drafts with it. Imported here, not at the top:
+    // loading a model must not pull in the download code (see mtpHeads).
+    import('../mtpHeadDownload').then(({ ensureMtpHead }) => ensureMtpHead(ctx.model)).catch(() => {});
 
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const timeoutPromise = new Promise<never>((_, reject) => {

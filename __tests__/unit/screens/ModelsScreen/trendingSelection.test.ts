@@ -1,9 +1,8 @@
 /**
  * trendingSelection.test.ts
  *
- * Tests for the trendingAsModelInfo logic in useTextModels.
- * Verifies that the best-fit model per trending family is selected
- * based on the device's available RAM.
+ * The curated and trending lists in useTextModels offer a model when it loads on the phone by the
+ * shared fit rule: its download against the phone budget, not a parameter count.
  */
 
 import { renderHook } from '@testing-library/react-native';
@@ -30,7 +29,7 @@ jest.mock('../../../../src/stores', () => ({
 
 // ── Services ─────────────────────────────────────────────────────────
 const mockGetTotalMemoryGB = jest.fn(() => 8);
-const mockGetModelRecommendation = jest.fn(() => ({ maxParameters: 8 }));
+const mockGetModelRecommendation = jest.fn(() => ({ recommendedQuantization: 'Q4_K_M', recommendedModels: [] }));
 
 jest.mock('../../../../src/services', () => ({
   huggingFaceService: {
@@ -67,81 +66,54 @@ jest.mock('../../../../src/components/CustomAlert', () => ({
 
 const setAlertState = jest.fn();
 
-describe('trendingAsModelInfo — family best-fit selection', () => {
+describe('curated models offered by what loads on the phone', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('selects Gemma 4 E2B (2B) over E4B (4B) for a 4GB RAM device (maxParams 3)', () => {
-    // 4GB RAM → maxParams = 3; E4B requires params=4 which exceeds maxParams, only E2B (params=2) qualifies
-    mockGetModelRecommendation.mockReturnValue({ maxParameters: 3 });
-    mockGetTotalMemoryGB.mockReturnValue(4);
+  // A 12 GB iPhone reports about 11.2 GB. The shared phone budget loads a download up to half of it.
+  const TWELVE_GB_IPHONE = 11.2;
+
+  it('offers a 12 GB iPhone the 9B class it loads, above any parameter cap, and hides what it cannot', () => {
+    mockGetTotalMemoryGB.mockReturnValue(TWELVE_GB_IPHONE);
 
     const { result } = renderHook(() => useTextModels(setAlertState));
+    const offered = result.current.recommendedAsModelInfo.map(m => m.id);
 
-    const gemmaFamily = result.current.trendingAsModelInfo.find(m =>
-      m.id === 'unsloth/gemma-4-E2B-it-GGUF',
-    );
-    const e4bSelected = result.current.trendingAsModelInfo.find(m =>
-      m.id === 'unsloth/gemma-4-E4B-it-GGUF',
-    );
-
-    expect(gemmaFamily).toBeDefined();
-    expect(e4bSelected).toBeUndefined();
+    // Measured on a 12 GB iPhone 17 Pro Max: a 9B Q4_K_M and Gemma 4 E4B load (mapped weights).
+    expect(offered).toContain('unsloth/Qwen3.5-9B-GGUF');
+    expect(offered).toContain('unsloth/gemma-4-E4B-it-GGUF');
+    expect(offered).toContain('LiquidAI/LFM2.5-8B-A1B-GGUF');
+    // Gemma 4 12B is 7.3 GB with its projector: past 0.62 of this phone's RAM.
+    expect(offered).not.toContain('unsloth/gemma-4-12b-it-GGUF');
   });
 
-  it('selects Qwen 3.5 0.8B as best fit for an 8GB RAM device (maxParams 8)', () => {
-    // 8GB RAM → maxParams = 8; both 2B and 9B qualify, but 9B scores better (ratio closer to 0.4 * 8 = 3.2)
-    mockGetModelRecommendation.mockReturnValue({ maxParameters: 8 });
-    mockGetTotalMemoryGB.mockReturnValue(8);
+  it('picks the trending model per family from what loads on a 12 GB iPhone', () => {
+    mockGetTotalMemoryGB.mockReturnValue(TWELVE_GB_IPHONE);
 
     const { result } = renderHook(() => useTextModels(setAlertState));
+    const trending = result.current.trendingAsModelInfo.map(m => m.id);
 
-    const qwenSelection = result.current.trendingAsModelInfo.find(m =>
-      m.id === 'unsloth/Qwen3.5-9B-GGUF' ||
-      m.id === 'unsloth/Qwen3.5-2B-GGUF' ||
-      m.id === 'unsloth/Qwen3.5-0.8B-GGUF',
-    );
-
-    expect(qwenSelection).toBeDefined();
-    // 9B needs 8GB RAM → ratio = 1.0, but it still scores better than 2B for an 8GB device
-    // 2B needs 4GB → ratio = 0.5; |0.5 - 0.4| = 0.1, penalty = 0 → score 0.1
-    // 9B needs 8GB → ratio = 1.0; |1.0 - 0.4| = 0.6, penalty = (1.0 - 0.75) * 4 = 1.0 → score 1.6
-    // 0.8B needs 3GB → ratio = 0.375; |0.375 - 0.4| = 0.025 → score 0.025 (best raw fit)
-    // However 9B has params=9 <= maxParams=8? No: 9 > 8, so 9B is filtered out.
-    // Only 0.8B (0.8 <= 8) and 2B (2 <= 8) qualify. 0.8B has lower score.
-    // Actually for the stated test: "9B should be selected over 2B" — 9B params=9 > maxParams=8, filtered.
-    // Let's adjust: this test verifies the BEST available Qwen model is chosen (lowest bestFitScore).
-    // With maxParams=8, Qwen models that qualify: 0.8B, 2B (9B is excluded as 9>8).
-    // bestFitScore for 0.8B: minRam=3, ratio=3/8=0.375, |0.375-0.4|=0.025, no penalty → 0.025
-    // bestFitScore for 2B:   minRam=4, ratio=4/8=0.5,   |0.5-0.4|=0.1,   no penalty → 0.1
-    // So 0.8B is the best fit. The test ID matches the lowest-score candidate.
-    expect(qwenSelection!.id).toBe('unsloth/Qwen3.5-0.8B-GGUF');
+    expect(trending).toContain('unsloth/gemma-4-E2B-it-GGUF');
+    expect(trending).toHaveLength(3);
   });
 
-  it('returns no trending models for a very limited device (maxParams 1)', () => {
-    // maxParams=1 → no RECOMMENDED_MODELS qualify (smallest param=0.8 which passes, but let's use 0)
-    mockGetModelRecommendation.mockReturnValue({ maxParameters: 0 });
+  it('offers a 16 GB phone the larger models it can load', () => {
+    mockGetTotalMemoryGB.mockReturnValue(15);
+
+    const { result } = renderHook(() => useTextModels(setAlertState));
+    const offered = result.current.recommendedAsModelInfo.map(m => m.id);
+
+    expect(offered).toContain('unsloth/Qwen3.5-9B-GGUF');
+    expect(offered).toContain('unsloth/gemma-4-E4B-it-GGUF');
+  });
+
+  it('offers nothing to a phone too small to load any model', () => {
     mockGetTotalMemoryGB.mockReturnValue(1);
 
     const { result } = renderHook(() => useTextModels(setAlertState));
 
+    expect(result.current.recommendedAsModelInfo).toHaveLength(0);
     expect(result.current.trendingAsModelInfo).toHaveLength(0);
-  });
-
-  it('returns one model per trending family', () => {
-    mockGetModelRecommendation.mockReturnValue({ maxParameters: 10 });
-    mockGetTotalMemoryGB.mockReturnValue(12);
-
-    const { result } = renderHook(() => useTextModels(setAlertState));
-
-    // There are 3 families (MiniCPM5, Gemma 4, Qwen 3.5), so one model from each is shown.
-    expect(result.current.trendingAsModelInfo).toHaveLength(3);
-
-    // Each returned model ID belongs to one of the trending families
-    const { TRENDING_MODEL_IDS } = require('../../../../src/constants');
-    for (const model of result.current.trendingAsModelInfo) {
-      expect(TRENDING_MODEL_IDS).toContain(model.id);
-    }
   });
 });

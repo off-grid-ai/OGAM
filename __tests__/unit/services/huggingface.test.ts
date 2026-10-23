@@ -476,12 +476,14 @@ describe('HuggingFaceService', () => {
   // getModelFiles (with fetch mock)
   // ============================================================================
   describe('getModelFiles', () => {
-    it('finds quantizations kept in folders, and never offers an MTP head or a draft as a size', async () => {
+    it('finds quantizations kept in folders, and never offers an MTP head, a draft or an importance matrix as a size', async () => {
       fakeHuggingFace([
         { path: 'model-Q4_K_M.gguf', size: 4000000000 },
         { path: 'Q8_0/model-Q8_0.gguf', size: 8000000000 },
         { path: 'MTP/mtp-model-Q8_0.gguf', size: 100000000 },
         { path: 'model-MTP-ONLY-Q4_K_M.gguf', size: 1500000000 },
+        // bartowski publishes the calibration data beside every quant set.
+        { path: 'model-imatrix.gguf', size: 7151872 },
       ]);
       const files = await huggingFaceService.getModelFiles('org/model');
 

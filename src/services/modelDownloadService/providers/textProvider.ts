@@ -17,11 +17,13 @@ import { huggingFaceService } from '../../huggingface';
 import { hardwareService } from '../../hardware';
 import { useAppStore } from '../../../stores';
 import { useDownloadStore, isActiveStatus, DownloadEntry } from '../../../stores/downloadStore';
+import { jobBytesDownloaded } from '../../../utils/downloadStatus';
 import logger from '../../../utils/logger';
 import { mapStoreStatus } from '../storeStatus';
 import { uniformDownloadId } from '../uniformId';
 import { startModelDownload } from '../../startModelDownload';
 import type { DownloadParams } from '../../backgroundDownloadTypes';
+import type { ModelFile } from '../../../types';
 import type { DownloadProvider, ModelDownload } from '../types';
 
 const TEXT_CAPABILITIES = {
@@ -43,15 +45,23 @@ const findEntry = (modelKey: string): DownloadEntry | undefined =>
 /** iOS re-start: foreground URLSession can't resume, so re-issue the download from
  *  scratch. It flows through startDownload's 3-slot cap (queued if full). Shared by
  *  retry (one model) and reconcile (every interrupted model on relaunch). */
+/** The weights' size and, for a split model, the parts saved with its download (whose sum is the
+ *  model's size); a single file keeps the size it was saved with. */
+function weightsFrom(meta: Record<string, any> | null, savedSize: number): Pick<ModelFile, 'parts' | 'size'> {
+  const parts = meta?.parts as ModelFile['parts'];
+  return parts?.length ? { parts, size: parts.reduce((total, part) => total + part.size, 0) } : { size: savedSize };
+}
+
 async function restartIosTextDownload(entry: DownloadEntry): Promise<void> {
   const meta = entry.metadataJson ? safeJson(entry.metadataJson) : null;
   const mmProjFile = entry.mmProjFileName && entry.mmProjFileSize && meta?.mmProjDownloadUrl
     ? { name: entry.mmProjFileName, size: entry.mmProjFileSize, downloadUrl: meta.mmProjDownloadUrl }
     : undefined;
   const file = {
-    name: entry.fileName, size: entry.totalBytes, quantization: entry.quantization,
+    name: entry.fileName, quantization: entry.quantization,
     downloadUrl: huggingFaceService.getDownloadUrl(entry.modelId, entry.fileName),
     ...(mmProjFile ? { mmProjFile } : {}),
+    ...weightsFrom(meta, entry.totalBytes),
   };
   // Immediate feedback: mark the entry queued so its card shows "queued" instead of staying "failed"
   // while the re-issued download waits for a free concurrency slot (device 2026-07-15: a retried item
@@ -95,7 +105,7 @@ export const textProvider: DownloadProvider = {
       out.push({
         id: uniformDownloadId('text', e.modelKey), modelType: 'text', name: e.fileName || e.modelId,
         sizeBytes: e.combinedTotalBytes || e.totalBytes,
-        bytesDownloaded: e.bytesDownloaded + (e.mmProjBytesDownloaded ?? 0),
+        bytesDownloaded: jobBytesDownloaded(e),
         progress: e.progress, status: mapStoreStatus(e.status),
         capabilities: { ...TEXT_CAPABILITIES, pause: isActiveStatus(e.status) && e.status !== 'processing', resume: e.status === 'paused' }, error: e.errorMessage,
       });
@@ -203,15 +213,15 @@ export const textProvider: DownloadProvider = {
     // native row, so this is the only way it re-enters the store and auto-starts as a slot frees.
     const meta = params.metadataJson ? safeJson(params.metadataJson) : null;
     const mmProjFile = meta?.mmProjFileName && meta?.mmProjDownloadUrl
-      ? { name: meta.mmProjFileName, size: params.combinedTotalBytes && params.totalBytes ? params.combinedTotalBytes - params.totalBytes : 0, downloadUrl: meta.mmProjDownloadUrl }
+      ? { name: meta.mmProjFileName, size: meta.mmProjFileSize ?? (params.combinedTotalBytes && params.totalBytes ? params.combinedTotalBytes - params.totalBytes : 0), downloadUrl: meta.mmProjDownloadUrl }
       : undefined;
     const file = {
       name: params.fileName,
-      size: params.totalBytes ?? 0,
       quantization: params.quantization ?? 'Unknown',
       downloadUrl: params.url,
       sha256: params.sha256,
       ...(mmProjFile ? { mmProjFile } : {}),
+      ...weightsFrom(meta, params.totalBytes ?? 0),
     };
     await startModelDownload(params.modelId, file, {
       autoSelectIfEmpty: true,

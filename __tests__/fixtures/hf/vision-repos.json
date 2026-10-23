@@ -434,51 +434,6 @@
       }
     }
   },
-  "unsloth/Qwen3.6-35B-A3B-GGUF": {
-    "exists": true,
-    "ggufFiles": [
-      "BF16/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf",
-      "BF16/Qwen3.6-35B-A3B-BF16-00002-of-00002.gguf",
-      "Qwen3.6-35B-A3B-MXFP4_MOE.gguf",
-      "Qwen3.6-35B-A3B-Q8_0.gguf",
-      "Qwen3.6-35B-A3B-UD-IQ1_M.gguf",
-      "Qwen3.6-35B-A3B-UD-IQ2_M.gguf",
-      "Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf",
-      "Qwen3.6-35B-A3B-UD-IQ3_S.gguf",
-      "Qwen3.6-35B-A3B-UD-IQ3_XXS.gguf",
-      "Qwen3.6-35B-A3B-UD-IQ4_NL.gguf",
-      "Qwen3.6-35B-A3B-UD-IQ4_NL_XL.gguf",
-      "Qwen3.6-35B-A3B-UD-IQ4_XS.gguf",
-      "Qwen3.6-35B-A3B-UD-Q2_K_XL.gguf",
-      "Qwen3.6-35B-A3B-UD-Q3_K_M.gguf",
-      "Qwen3.6-35B-A3B-UD-Q3_K_S.gguf",
-      "Qwen3.6-35B-A3B-UD-Q3_K_XL.gguf",
-      "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf",
-      "Qwen3.6-35B-A3B-UD-Q4_K_S.gguf",
-      "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
-      "Qwen3.6-35B-A3B-UD-Q5_K_M.gguf",
-      "Qwen3.6-35B-A3B-UD-Q5_K_S.gguf",
-      "Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf",
-      "Qwen3.6-35B-A3B-UD-Q6_K.gguf",
-      "Qwen3.6-35B-A3B-UD-Q6_K_XL.gguf",
-      "Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf",
-      "mmproj-BF16.gguf",
-      "mmproj-F16.gguf",
-      "mmproj-F32.gguf"
-    ],
-    "probe": {
-      "model": {
-        "name": "Qwen3.6-35B-A3B-Q8_0.gguf",
-        "status": 206,
-        "magic": "GGUF"
-      },
-      "mmproj": {
-        "name": "mmproj-F16.gguf",
-        "status": 206,
-        "magic": "GGUF"
-      }
-    }
-  },
   "unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF": {
     "exists": true,
     "ggufFiles": [
@@ -520,6 +475,44 @@
       },
       "mmproj": {
         "name": "mmproj-F16.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      }
+    }
+  },
+  "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-GGUF": {
+    "exists": true,
+    "ggufFiles": [
+      "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB.gguf",
+      "mmproj-NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB.gguf"
+    ],
+    "probe": {
+      "model": {
+        "name": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      },
+      "mmproj": {
+        "name": "mmproj-NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      }
+    }
+  },
+  "InternScience/Sage-A1.5-Q4_K_M-GGUF": {
+    "exists": true,
+    "ggufFiles": [
+      "Sage-A1.5-Q4_K_M.gguf",
+      "Sage-A1.5-mmproj.gguf"
+    ],
+    "probe": {
+      "model": {
+        "name": "Sage-A1.5-Q4_K_M.gguf",
+        "status": 206,
+        "magic": "GGUF"
+      },
+      "mmproj": {
+        "name": "Sage-A1.5-mmproj.gguf",
         "status": 206,
         "magic": "GGUF"
       }
