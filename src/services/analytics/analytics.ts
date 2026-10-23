@@ -94,8 +94,8 @@ function beforeSend(event: { event: string; properties?: Properties }) {
   const { usage, crashes } = consent();
   const crash = CRASH_EVENTS.has(event.event);
   if (crash ? !crashes : !usage) return null;
-  // The SDK's own lifecycle events can be captured before registration lands; every event still
-  // carries the spec's properties.
+  // An event can be captured before registration lands; every event still carries the spec's
+  // properties.
   const properties = { ...superProperties(), ...(ramGb === undefined ? {} : { ram_gb: ramGb }), ...event.properties };
   if (event.event !== '$exception') return { ...event, properties };
   return { ...event, properties: scrubExceptionProperties(properties) };

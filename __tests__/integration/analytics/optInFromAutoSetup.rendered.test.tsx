@@ -68,6 +68,14 @@ it('ticking the Auto Setup row sends opt-in and the reply outcome, never the cha
   expect(finished.model).toBe('unsloth/Qwen3-0.6B-GGUF');
   expect(endpoint.named('message_sent')[0].properties).toMatchObject({ has_image: false, has_document: false });
 
+  // Only the events docs/ANALYTICS.md lists: none of the SDK's own lifecycle events, whose
+  // "Application Opened" carries the deep link the app was opened with.
+  const listed = new Set([
+    'app_opened', 'app_backgrounded', '$screen', 'analytics_opted_in', 'model_loaded',
+    'generation_finished', 'chat_created', 'message_sent', 'features_snapshot',
+    'flow_started', 'flow_step', 'flow_finished',
+  ]);
+  expect(endpoint.events.map(e => e.event).filter(name => !listed.has(name))).toEqual([]);
   // Only event batches: no flags, no remote config, no surveys.
   expect(endpoint.urls.every(url => url === 'https://eu.i.posthog.com/batch/')).toBe(true);
   // Never the chat, never a file name.

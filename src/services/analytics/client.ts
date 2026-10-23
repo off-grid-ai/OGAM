@@ -53,7 +53,9 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
     persistence: 'file',
     // The app's own AsyncStorage, named explicitly rather than discovered as an optional peer.
     customStorage: AsyncStorage,
-    captureAppLifecycleEvents: true,
+    // The app sends its own `app_opened` / `app_backgrounded`. The SDK's lifecycle events are not
+    // in the spec, and its "Application Opened" carries the deep link URL the app opened with.
+    captureAppLifecycleEvents: false,
     enableSessionReplay: false,
     preloadFeatureFlags: false,
     disableRemoteFeatureFlags: true,
