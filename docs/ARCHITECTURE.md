@@ -1129,7 +1129,7 @@ All data stored in app's private storage, inaccessible to other apps (Android sa
 - Anonymous events and scrubbed crash reports; never chats, files, prompts or replies (see `docs/ANALYTICS.md`)
 
 **After model download:**
-- No other network activity
+- No other network activity unless you turn on a feature that uses it (analytics, a remote server, web search, Sync)
 - Enable airplane mode and use indefinitely
 - All inference happens on-device
 
