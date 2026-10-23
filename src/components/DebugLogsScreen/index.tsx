@@ -24,9 +24,11 @@ interface DebugLogsScreenProps {
   visible: boolean;
   onClose: () => void;
   syncOnly?: boolean;
+  /** Report a problem: the person reads the log here, then sends it to support. */
+  onSend?: () => void;
 }
 
-export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClose, syncOnly = false }) => {
+export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClose, syncOnly = false, onSend }) => {
   const theme = useTheme();
   const styles = useThemedStyles(createStyles);
   const { logs, clearLogs } = useDebugLogsStore();
@@ -126,6 +128,20 @@ export const DebugLogsScreen: React.FC<DebugLogsScreenProps> = ({ visible, onClo
                 </Text>
               </TouchableOpacity>
             ))}
+          </View>
+        )}
+
+        {onSend && (
+          <View style={styles.actionBar}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={onSend}
+              accessibilityRole="button"
+              testID="debug-logs-send-report"
+            >
+              <Icon name="send" size={16} color={theme.colors.primary} style={styles.actionIcon} />
+              <Text style={styles.actionButtonText}>Send to support</Text>
+            </TouchableOpacity>
           </View>
         )}
 

@@ -98,9 +98,9 @@ function scheduleFlush(): void {
  * JS thread - or a process the OS is about to kill - never reaches it, and the log stops exactly
  * where the interesting part begins. That is how an 11-second main-thread block left no trace.
  */
-export function flushDebugLogNow(): void {
-  if (!enabled) return;
-  flush().catch(() => {});
+export function flushDebugLogNow(): Promise<void> {
+  if (!enabled) return Promise.resolve();
+  return flush().catch(() => {});
 }
 
 /** Begin capturing to the file. Idempotent; no-op outside __DEV__. */
