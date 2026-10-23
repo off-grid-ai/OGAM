@@ -14,7 +14,12 @@ import {
   createAutoSetupSession,
   type AutoSetupSession,
 } from '../services/autoSetupService';
-import { flowFinished, flowStarted, setAnalyticsConsent } from '../services/analytics/analytics';
+import {
+  flowFinished,
+  flowStarted,
+  proGateShown,
+  setAnalyticsConsent,
+} from '../services/analytics/analytics';
 import { useAppStore } from '../stores/appStore';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
@@ -201,7 +206,10 @@ export const AutoSetupScreen: React.FC<Props> = ({
                     ))}
                     {VoiceIndicator ? (
                       <VoiceIndicator
-                        onPress={() => navigation.push('ProDetail')}
+                        onPress={() => {
+                          proGateShown('voice');
+                          navigation.push('ProDetail');
+                        }}
                         style={styles.planItem}
                       />
                     ) : null}

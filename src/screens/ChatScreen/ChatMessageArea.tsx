@@ -38,6 +38,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { SPACING } from '../../constants';
+import { proGateShown } from '../../services/analytics/analytics';
 
 export type ChatMessageAreaProps = {
   assistantSelected: boolean;
@@ -446,7 +447,10 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
               : assistantAvailability
           }
           onAssistantEnableTools={enableAssistantTools}
-          onAssistantUpgrade={() => tabNav.navigate('ProDetail')}
+          onAssistantUpgrade={() => {
+            proGateShown('assistant');
+            tabNav.navigate('ProDetail');
+          }}
           onAssistantSetupSync={() => tabNav.navigate('Sync')}
         />
       </View>

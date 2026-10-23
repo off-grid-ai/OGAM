@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ import { ProManageSection } from './ProManageSection';
 import { ProIncludedSection } from './ProIncludedSection';
 import { ProUnlockModal } from './ProUnlockModal';
 import type { RootStackParamList } from '../../navigation/types';
+import { proPaywallViewed, proPurchased } from '../../services/analytics/analytics';
 
 // Off Grid AI Pro is the ambient intelligence layer across desktop + phone, not a
 // mobile feature list. These pillars mirror the early-access page framing.
@@ -94,9 +95,16 @@ export const ProDetailScreen: React.FC = () => {
   };
   const openVerifyModal = () => setVerifyModalVisible(true);
 
+  useEffect(() => {
+    if (!hasProAccess) proPaywallViewed();
+    // Once per visit: a paywall view is the screen opening, not every access change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Activation verified: load the pro bundle now so Pro lights up live (the
   // reactive appRoot slot mounts the engine without a restart). Registries dedupe.
   const handleUnlocked = () => {
+    proPurchased();
     loadProFeatures(true).catch(() => {});
   };
 

@@ -284,6 +284,22 @@ export function flowFinished(flow: Flow, outcome: 'done' | 'failed' | 'cancelled
   });
 }
 
+/** A Pro feature was gated: the person was sent to the Pro page instead of the feature. */
+export function proGateShown(feature: string): void {
+  flowStarted('pro_upgrade', 'gate_shown', { feature });
+}
+
+export function proPaywallViewed(): void {
+  if (!flows.has('pro_upgrade')) flowStarted('pro_upgrade');
+  flowStep('pro_upgrade', 'paywall_viewed');
+}
+
+/** Pro was activated on this device (the purchase itself happens on the web). */
+export function proPurchased(): void {
+  flowStep('pro_upgrade', 'purchased');
+  flowFinished('pro_upgrade', 'done');
+}
+
 // ── actions ────────────────────────────────────────────────────────────────────
 
 export function track(
