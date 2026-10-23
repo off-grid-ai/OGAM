@@ -9,7 +9,7 @@ import { sampleProgressRate } from '@offgrid/ui';
 
 export type { DownloadStatus, DownloadEntry };
 export type { ModelType } from '../utils/downloadStatus';
-export { isActiveStatus, isQueuedStatus, isDownloadingStatus, isFailedStatus, jobBytesDownloaded } from '../utils/downloadStatus';
+export { isActiveStatus, isQueuedStatus, isDownloadingStatus, isFailedStatus } from '../utils/downloadStatus';
 
 interface DownloadStoreState {
   downloads: Record<ModelKey, DownloadEntry>

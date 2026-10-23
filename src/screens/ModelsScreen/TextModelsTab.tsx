@@ -9,7 +9,7 @@ import DeviceInfo from 'react-native-device-info';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { CATALOG, fitLabel } from '@offgrid/models';
+import { CATALOG, fitLabel, splitGgufModelName } from '@offgrid/models';
 import { fileExceedsBudget, modelFitTier, textModelBudget } from '../../services/memoryBudget';
 import { Card, ModelCard } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
@@ -20,7 +20,8 @@ import { CREDIBILITY_LABELS } from '../../constants';
 import { ModelInfo, ModelFile } from '../../types';
 import { createStyles } from './styles';
 import { ModelsScreenViewModel } from './useModelsScreen';
-import { useDownloadStore, isActiveStatus, isQueuedStatus, jobBytesDownloaded } from '../../stores/downloadStore';
+import { useDownloadStore, isActiveStatus, isQueuedStatus } from '../../stores/downloadStore';
+import { jobBytesDownloaded } from '../../utils/downloadStatus';
 import { makeModelKey } from '../../utils/modelKey';
 import { modelSupportsNpuGpu, isAccelerableQuant } from '../../utils/acceleration';
 import { aggregateActiveDownloads } from '../../utils/downloadAggregate';
@@ -193,7 +194,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
     const onDownload = buildFileDownloadHandler({ s, fileName: item.name, sizeBytes: item.size, ramGB, proceedDownload, setAlertState });
     const liteRTMeta = liteRTMetaByFile[item.name];
     // A split model is named once, without its part number.
-    const displayName = liteRTMeta?.displayName ?? item.name.replace(/-\d{5}-of-\d{5}(?=\.gguf$)/i, '').replace('.gguf', '');
+    const displayName = liteRTMeta?.displayName ?? splitGgufModelName(item.name).replace('.gguf', '');
     const recommended = liteRTMeta ? { pillLabel: 'Recommended', highlightText: liteRTMeta.highlight } : undefined;
     const storeEntry = storeDownloads[s.downloadKey];
     // Retry routes through the single owner (modelDownloadService → textProvider): Android resumes the

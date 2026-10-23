@@ -1,4 +1,5 @@
-import { DownloadEntry, jobBytesDownloaded } from '../../stores/downloadStore';
+import { DownloadEntry } from '../../stores/downloadStore';
+import { jobBytesDownloaded } from '../../utils/downloadStatus';
 import { hardwareService } from '../../services';
 import { DownloadedModel, ONNXImageModel } from '../../types';
 import { DownloadItem } from './items';
