@@ -15,6 +15,9 @@ import { RealtimeStartBarrier } from './realtimeStartBarrier';
 import { WhisperModelDownloads } from './whisperModelDownloads';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { remoteMediaRuntime } from './remoteMediaRuntime';
+import { featureUsed, generationStarted } from './analytics/analytics';
+import { modelRef } from './analytics/values';
+import { fileName } from './analytics/scrub';
 
 // Re-export the model catalog + transcription normalizer (moved to whisperModels.ts
 // to keep this file within the max-lines budget). Behavior-neutral: every existing
@@ -234,6 +237,12 @@ class WhisperService {
     this.realtimeStart.begin();
     this.isTranscribing = true;
     const session = ++this.realtimeSession;
+    featureUsed('voice_input');
+    const endAnalytics = generationStarted('stt', {
+      model: modelRef(fileName(this.currentModelPath)?.replace(/^ggml-|\.bin$/g, '')),
+      engine: 'whisper',
+      backend: 'cpu',
+    });
 
     // Create a promise that resolves when the native side fully finishes. The session holds the
     // native lane until then, so a file job or a release never overlaps live capture.
@@ -362,6 +371,7 @@ class WhisperService {
         // The native callback cannot await the fallback transcription.
         // eslint-disable-next-line no-void
         void resolveFinalText(data?.result || '').then(finalText => {
+          endAnalytics('done');
           onResult({
             text: finalText,
             isCapturing: false,
@@ -384,6 +394,7 @@ class WhisperService {
       this.realtimeStart.settle();
       if (recordedFile) audioRecorderService.cancelRecording();
       logger.error('[WhisperService] transcribeRealtime error:', error);
+      endAnalytics('failed', { error });
       this.isTranscribing = false;
       this.stopFn = null;
       resolveTranscriptionStopped();
