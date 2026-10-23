@@ -1171,7 +1171,6 @@ export async function regenerateResponseFn(
   call: RegenerateCall,
 ): Promise<void> {
   const { setDebugInfo, userMessage, recordedKind, assistantEnabled } = call;
-  track('reply_regenerated');
   logger.log(
     `[RESEND-SM] regenerate start userMsg=${userMessage.id} conv=${
       deps.activeConversationId
@@ -1215,6 +1214,8 @@ export async function regenerateResponseFn(
     },
   });
   if (result.handled) {
+    // Counted where a regenerate really runs: a bail-out or a not-ready retry is not a second one.
+    track('reply_regenerated');
     generationSession.end('handled');
     return;
   }
@@ -1236,6 +1237,7 @@ export async function regenerateResponseFn(
     return;
   }
   logger.log('[RESEND-SM] regenerate → reached LLM generate path');
+  track('reply_regenerated');
   // LiteRT: native history must be rewound to match the JS messages we're about to replay.
   // Dispatched via the service (no engine branch here); a no-op for engines without a KV cache.
   invalidateActiveConversation();
