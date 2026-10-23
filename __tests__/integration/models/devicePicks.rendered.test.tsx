@@ -288,6 +288,23 @@ describe('Text search answers from the catalog first', () => {
     expect(text).toMatch(/\+1 uploads/);
     expect(text).not.toMatch(/abliterated/i);
   });
+
+  it('a model with a published MTP head says it replies faster, and one without does not', async () => {
+    // 16 GB: Gemma 4 E4B (6 GB with its projector) loads and is not one of the picks.
+    installNativeBoundary({ fs: true, ram: { platform: 'ios', totalBytes: 16 * GB, availBytes: 12 * GB } });
+    restoreFetch = installHuggingFace();
+    const React = require('react');
+    const { render, waitFor, within } = requireRTL();
+    await launchReadsDevice();
+    const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
+
+    const models = render(React.createElement(ModelsScreen));
+
+    const gemma = await waitFor(() => models.getByLabelText('Gemma 4 E4B'));
+    expect(within(gemma).getByText(/MTP · faster replies/)).toBeTruthy();
+    const minicpm = models.getByLabelText('MiniCPM5 2B');
+    expect(within(minicpm).queryByText(/MTP/)).toBeNull();
+  });
 });
 
 describe("A model's detail offers its sizes in words", () => {

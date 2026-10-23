@@ -1,6 +1,7 @@
 import RNFS from 'react-native-fs';
 import { guessStyle, HFImageModel } from '../../services/huggingFaceModelBrowser';
 import { ModelInfo, ImageModelRecommendation, SoCInfo } from '../../types';
+import { mtpHeadForModel } from '@offgrid/models';
 import { ImageModelDescriptor, ModelTypeFilter } from './types';
 import { imageBackendLabel } from '../../utils/imageBackend';
 import { looksLikeVisionModel } from '../../utils/visionModel';
@@ -159,12 +160,14 @@ export function hfModelToDescriptor(
 
 /**
  * The facts a model card states beyond its size, the same words the desktop uses: a
- * mixture-of-experts model's active size (what sets its speed), a newer model that replaces it, a
- * research licence, and how many other uploads of it there are.
+ * mixture-of-experts model's active size (what sets its speed), a published MTP head (it drafts
+ * ahead, so replies come faster), a newer model that replaces it, a research licence, and how many
+ * other uploads of it there are.
  */
-export function modelFactChips(model: Pick<ModelInfo, 'activeParams' | 'newer' | 'nonCommercial' | 'variants'>): string[] {
+export function modelFactChips(model: Pick<ModelInfo, 'id' | 'activeParams' | 'newer' | 'nonCommercial' | 'variants'>): string[] {
   return [
     model.activeParams ? `MoE · ${model.activeParams}B active` : undefined,
+    mtpHeadForModel(model.id) ? 'MTP · faster replies' : undefined,
     model.newer ? `Newer: ${model.newer}` : undefined,
     model.nonCommercial ? 'Research licence' : undefined,
     model.variants?.length ? `+${model.variants.length} uploads` : undefined,
