@@ -137,6 +137,9 @@ export interface MemoryCheckArgs {
   /** The weights are memory-mapped and paged in from the file (every iPhone load): they are not
    *  charged against the app's free memory but bounded by the fit rule against total RAM. */
   weightsMapped?: boolean;
+  /** A vision projector loaded beside mapped weights: it is copied into memory, so it counts against
+   *  what is free and within the fit rule's bound. */
+  projectorFileSize?: number;
 }
 
 export async function checkMemoryForModel(
@@ -149,7 +152,7 @@ export async function checkMemoryForModel(
   requiredMB: number;
   availableMB: number;
 }> {
-  const { modelFileSize, contextLength, getAvailableMemory, quantizedCache, weightsMapped } =
+  const { modelFileSize, contextLength, getAvailableMemory, quantizedCache, weightsMapped, projectorFileSize = 0 } =
     args;
   try {
     const { available, total } = await getAvailableMemory();
@@ -168,8 +171,10 @@ export async function checkMemoryForModel(
     // Mapped weights page in from the file and are not charged against the app's limit (a 12 GB
     // iPhone loads a 5.6 GB 9B Q4_K_M with 6.0 GB free): the shared fit rule bounds them against
     // total RAM, and only the KV cache and headroom must fit in what is free.
-    const weightsFit = !weightsMapped || isLoadableOnDevice(modelFileSize / 1e9, total / 1024 ** 3, phoneBudget());
-    const requiredMB = weightsMapped && weightsFit ? kvCacheMB + MIN_HEADROOM_MB : estimatedMB + MIN_HEADROOM_MB;
+    // A vision projector is copied, not mapped: it counts against what is free.
+    const projectorMB = weightsMapped ? projectorFileSize / (1024 * 1024) : 0;
+    const weightsFit = !weightsMapped || isLoadableOnDevice((modelFileSize + projectorFileSize) / 1e9, total / 1024 ** 3, phoneBudget());
+    const requiredMB = weightsMapped && weightsFit ? kvCacheMB + projectorMB + MIN_HEADROOM_MB : estimatedMB + projectorMB + MIN_HEADROOM_MB;
     const safe = weightsFit && availableMB > requiredMB;
     // [MEM-SM] the pre-load fit decision — kept (surfaces the exact "it needs ~X but only Y" call
     // on-device AND in tests via DEBUG_LOGS=1). This is the gate the qwythos refusal came from.
@@ -209,6 +214,7 @@ export async function resolveSafeContext(args: {
   requestedCtx: number;
   quantizedCache: boolean;
   weightsMapped?: boolean;
+  projectorFileSize?: number;
   override?: boolean;
   getAvailableMemory: () => Promise<{ available: number; total: number }>;
   /** The check the caller already ran. Reused so the copy quotes the snapshot that failed. */
@@ -230,6 +236,7 @@ export async function resolveSafeContext(args: {
     getAvailableMemory: getMem,
     quantizedCache,
     weightsMapped: args.weightsMapped,
+    projectorFileSize: args.projectorFileSize,
   });
   if (!memCheck.safe && !override) {
     throw new OverridableMemoryError(

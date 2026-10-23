@@ -119,6 +119,17 @@ describe('checkMemoryForModel', () => {
     expect(result.safe).toBe(false);
   });
 
+  it('counts a vision projector against free memory: it is copied, not mapped', async () => {
+    // 1.5 GB free: the 9B's KV cache and headroom fit, but not with its 0.92 GB projector on top.
+    mockGetMemory.mockResolvedValue({ available: 1500 * 1024 * 1024, total: 11.2 * 1024 ** 3 });
+    const args = { modelFileSize: 5.63e9, contextLength: 4096, getAvailableMemory: mockGetMemory, quantizedCache: true, weightsMapped: true };
+    expect((await checkMemoryForModel(args)).safe).toBe(true);
+    expect((await checkMemoryForModel({ ...args, projectorFileSize: 0.92e9 })).safe).toBe(false);
+    // With the phone's usual ~6 GB free, the 9B and its projector load (measured on a 12 GB iPhone).
+    mockGetMemory.mockResolvedValue(IPHONE_12GB);
+    expect((await checkMemoryForModel({ ...args, projectorFileSize: 0.92e9 })).safe).toBe(true);
+  });
+
   it('refuses mapped weights past what the fit rule allows on this RAM (Gemma 4 12B on 12 GB)', async () => {
     mockGetMemory.mockResolvedValue(IPHONE_12GB);
     const result = await checkMemoryForModel({
