@@ -30,6 +30,15 @@ function decodeLittleEndianUint32(bytes: string): number | null {
  * Validate that a model file is a plausible GGUF file.
  * Checks magic bytes and minimum file size to catch corrupted/truncated downloads.
  */
+/** Why a split model cannot load from its first part (a part is not beside it), or null when it can. */
+async function missingSplitPartReason(modelPath: string): Promise<string | null> {
+  const parts = splitGgufPartNames(modelPath);
+  const present = await Promise.all(parts.slice(1).map(async part => !!(await statFile(part))));
+  const missing = parts.slice(1).filter((_, i) => !present[i]).map(part => part.split('/').pop());
+  if (missing.length === 0) return null;
+  return `This model comes in ${parts.length} parts and ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} missing. Download it again to fetch the missing part.`;
+}
+
 export async function validateModelFile(
   modelPath: string,
 ): Promise<{ valid: boolean; reason?: string }> {
@@ -57,13 +66,8 @@ export async function validateModelFile(
     if (!facts.isFile) {
       return { valid: false, reason: `Model path is not a file: ${modelPath}` };
     }
-    // A split model loads from its first part only when every other part sits beside it.
-    const parts = splitGgufPartNames(modelPath);
-    const missing = [];
-    for (const part of parts.slice(1)) if (!(await statFile(part))) missing.push(part.split('/').pop());
-    if (missing.length > 0) {
-      return { valid: false, reason: `This model comes in ${parts.length} parts and ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} missing. Download it again to fetch the missing part.` };
-    }
+    const missingPart = await missingSplitPartReason(modelPath);
+    if (missingPart) return { valid: false, reason: missingPart };
     const fileSize = facts.size;
     const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(1);
     logger.log(`[LLM] Validating model: ${modelPath}`);

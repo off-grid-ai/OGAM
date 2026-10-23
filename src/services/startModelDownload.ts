@@ -39,21 +39,19 @@ async function onDisk(path: string, sizeBytes: number): Promise<boolean> {
 async function fetchCompanions(modelId: string, modelKey: string, companions: CompanionFile[]): Promise<void> {
   if (companions.length === 0) return;
   const dir = modelManager.getModelsDirectory();
-  let done = 0;
-  for (const companion of companions) {
+  const present = await Promise.all(companions.map(c => onDisk(`${dir}/${c.name}`, c.sizeBytes)));
+  let done = companions.reduce((total, c, i) => total + (present[i] ? c.sizeBytes : 0), 0);
+  useDownloadStore.getState().setCompanionBytes(modelKey, done);
+  for (const companion of companions.filter((_, i) => !present[i])) {
     const localPath = `${dir}/${companion.name}`;
-    if (await onDisk(localPath, companion.sizeBytes)) {
-      done += companion.sizeBytes;
-      useDownloadStore.getState().setCompanionBytes(modelKey, done);
-      continue;
-    }
     if (!useDownloadStore.getState().downloads[modelKey]) throw Object.assign(new Error('cancelled'), { cancelled: true });
     let transferId: string | undefined;
     const stopWatching = useDownloadStore.subscribe(state => {
       if (!state.downloads[modelKey] && transferId) backgroundDownloadService.cancelDownload(transferId).catch(() => {});
     });
     try {
-      await downloadCompanionFile({
+      // One transfer at a time on purpose: the bar fills in order and the job holds one download slot.
+      await downloadCompanionFile({ // NOSONAR
         modelId,
         file: companion,
         localPath,

@@ -116,7 +116,7 @@ class ModelManager {
     }
     await RNFS.unlink(modelPath);
     // A split model's other parts go with it.
-    for (const part of splitGgufPartNames(modelPath).slice(1)) await RNFS.unlink(part).catch(() => {});
+    await Promise.all(splitGgufPartNames(modelPath).slice(1).map(part => RNFS.unlink(part).catch(() => {})));
 
     // Only delete mmproj if no other models reference it
     if (llamaModel?.mmProjPath && mmProjPath) {
