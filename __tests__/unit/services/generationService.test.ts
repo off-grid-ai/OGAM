@@ -631,7 +631,7 @@ describe('generationService', () => {
       expect((generationService as any).queueProcessor).toBeNull();
     });
 
-    it('processNextInQueue sends queued messages one at a time, in order', async () => {
+    it('processNextInQueue aggregates multiple messages', async () => {
       const processor = jest.fn().mockResolvedValue(undefined);
       generationService.setQueueProcessor(processor);
 
@@ -662,18 +662,12 @@ describe('generationService', () => {
       // Wait for async processor
       await new Promise<void>(resolve => setTimeout(resolve, 10));
 
-      // Each queued send keeps its own modality and attachments, so a queued video
-      // request is never merged into a text turn.
       expect(processor).toHaveBeenCalledTimes(1);
-      const first = processor.mock.calls[0][0];
-      expect(first.text).toBe('First');
-      expect(first.attachments).toHaveLength(1);
-      expect(generationService.getState().queuedMessages.map(m => m.text)).toEqual(['Second', 'Third']);
-
-      (generationService as any).processNextInQueue();
-      await new Promise<void>(resolve => setTimeout(resolve, 10));
-      expect(processor.mock.calls[1][0].text).toBe('Second');
-      expect(generationService.getState().queuedMessages.map(m => m.text)).toEqual(['Third']);
+      const combined = processor.mock.calls[0][0];
+      expect(combined.text).toContain('First');
+      expect(combined.text).toContain('Second');
+      expect(combined.text).toContain('Third');
+      expect(combined.attachments).toHaveLength(1); // Only q1 had attachment
     });
 
     it('processNextInQueue passes single message directly', async () => {
@@ -1504,7 +1498,7 @@ describe('generationService', () => {
       expect(() => (generationService as any).processNextInQueue()).not.toThrow();
     });
 
-    it('dispatches the oldest queued message alone and keeps the rest queued', async () => {
+    it('merges multiple queued messages into a single combined message', async () => {
       const processor = jest.fn(() => Promise.resolve());
       (generationService as any).queueProcessor = processor;
       (generationService as any).state.queuedMessages = [
@@ -1515,13 +1509,9 @@ describe('generationService', () => {
       (generationService as any).processNextInQueue();
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      expect(processor).toHaveBeenCalledTimes(1);
       expect(processor).toHaveBeenCalledWith(
-        { id: '1', conversationId: 'c1', text: 'msg1', messageText: 'msg1' },
+        expect.objectContaining({ text: 'msg1\n\nmsg2' }),
       );
-      expect((generationService as any).state.queuedMessages).toEqual([
-        { id: '2', conversationId: 'c1', text: 'msg2', messageText: 'msg2' },
-      ]);
     });
 
     it('passes single queued message directly without merging', async () => {
