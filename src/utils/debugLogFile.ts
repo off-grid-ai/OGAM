@@ -63,7 +63,15 @@ async function flushWire(): Promise<void> {
   await RNFS.appendFile(WIRE_LOG_PATH, chunk, 'utf8').catch(() => {});
 }
 
-async function flush(): Promise<void> {
+/** The flush writing now; the next one waits for it, so lines reach the file in order. */
+let inFlight: Promise<void> = Promise.resolve();
+
+function flush(): Promise<void> {
+  inFlight = inFlight.then(writeBuffered).catch(() => {});
+  return inFlight;
+}
+
+async function writeBuffered(): Promise<void> {
   timer = null;
   if (buffer.length === 0) return;
   const chunk = buffer.join('');
