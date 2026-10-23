@@ -37,6 +37,16 @@ describe('validateModelFile', () => {
     });
   });
 
+  it('refuses an importance matrix, which is calibration data and not a model', async () => {
+    defaultNativeFileSystemBoundary.seedFile('/models/Spark-X2.6-4B-imatrix.gguf', 7_151_872);
+
+    const result = await validateModelFile('/models/Spark-X2.6-4B-imatrix.gguf');
+    expect(result).toEqual({
+      valid: false,
+      reason: 'This file is calibration data for making a model, not a model. Choose one of the sizes instead.',
+    });
+  });
+
   it('returns valid for a proper GGUF file', async () => {
     defaultNativeFileSystemBoundary.seedFile('/models/test.gguf', 1_000_000);
 

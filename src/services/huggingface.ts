@@ -18,8 +18,7 @@ import {
   searchHuggingFace,
   getModelFiles as listRepoFiles,
   getModelType,
-  isMtpHeadFile,
-  isDraftModelFile,
+  isCompanionFile,
   type HFSearchResult,
   type ModelFileVariant,
 } from '@offgrid/models';
@@ -199,7 +198,7 @@ class HuggingFaceService {
         lfs?: { size: number };
       }> = await response.json();
       const allGguf = files.filter(
-        f => f.type === 'file' && f.path.endsWith('.gguf') && !isMtpHeadFile(f.path) && !isDraftModelFile(f.path),
+        f => f.type === 'file' && f.path.endsWith('.gguf') && !isCompanionFile(f.path),
       );
       const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.path));
       const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.path));
@@ -244,7 +243,7 @@ class HuggingFaceService {
       `${this.apiUrl}/models/${modelId}${revisionPath}`,
     );
     if (!result.siblings) return [];
-    const allGguf = result.siblings.filter(f => f.rfilename.endsWith('.gguf') && !isMtpHeadFile(f.rfilename) && !isDraftModelFile(f.rfilename));
+    const allGguf = result.siblings.filter(f => f.rfilename.endsWith('.gguf') && !isCompanionFile(f.rfilename));
     const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.rfilename));
     const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.rfilename));
     const mmProjForMatch = mmProjFiles.map(f => ({

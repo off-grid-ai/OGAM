@@ -1,4 +1,4 @@
-import { isDraftModelFile, isMtpHeadFile } from '@offgrid/models';
+import { isCompanionFile } from '@offgrid/models';
 import RNFS from 'react-native-fs';
 import { statFile } from '../../utils/fileStat';
 import { unzip } from 'react-native-zip-archive';
@@ -369,7 +369,7 @@ async function doScanForUntrackedTextModels(
     const isMmProj = isMMProjFile(lowerName);
     // An MTP head or draft model stored beside its model is part of that model, never a model of its
     // own: adopting one offers a file that crashes the engine when loaded alone.
-    if (!item.isFile() || !item.name.endsWith('.gguf') || isMmProj || isMtpHeadFile(item.name) || isDraftModelFile(item.name)) {
+    if (!item.isFile() || !item.name.endsWith('.gguf') || isMmProj || isCompanionFile(item.name)) {
       continue;
     }
 

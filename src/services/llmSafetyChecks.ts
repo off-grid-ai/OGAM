@@ -1,4 +1,4 @@
-import { isDraftModelFile, isMtpHeadFile } from '@offgrid/models';
+import { isDraftModelFile, isImatrixFile, isMtpHeadFile } from '@offgrid/models';
 import { LlamaContext } from 'llama.rn';
 import RNFS from 'react-native-fs';
 import { statFile } from '../utils/fileStat';
@@ -39,6 +39,13 @@ export async function validateModelFile(
     return {
       valid: false,
       reason: 'This file only speeds up another model. It cannot run on its own.',
+    };
+  }
+  // An importance matrix is the quantizer's calibration data: it has no model weights at all.
+  if (isImatrixFile(modelPath)) {
+    return {
+      valid: false,
+      reason: 'This file is calibration data for making a model, not a model. Choose one of the sizes instead.',
     };
   }
   try {
