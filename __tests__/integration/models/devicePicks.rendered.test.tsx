@@ -304,6 +304,8 @@ describe('Text search answers from the catalog first', () => {
 
     const gemma = await waitFor(() => models.getByLabelText('Gemma 4 E4B'));
     expect(within(gemma).getByLabelText('MTP: replies faster')).toBeTruthy();
+    // A screen reader focuses the whole card, so the card itself says it.
+    expect(gemma.props.accessibilityHint).toContain('MTP: replies faster');
     const minicpm = models.getByLabelText('MiniCPM5 2B');
     expect(within(minicpm).queryByLabelText('MTP: replies faster')).toBeNull();
   });

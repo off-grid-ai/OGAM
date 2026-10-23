@@ -14,6 +14,7 @@ import {
   ModelCardActions,
   RecommendedConfig,
   type ModelCardCapabilities,
+  speedHint,
 } from './ModelCardContent';
 import { PAUSED_ICON, QUEUED_ICON } from '../utils/downloadStatusIcon';
 import { formatBytes } from '../utils/formatBytes';
@@ -368,6 +369,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({
       disabled={disabled || !onPress}
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={model.name}
+      accessibilityHint={speedHint(capabilities)}
       accessibilityState={{ selected: !!isActive, disabled: !!disabled }}
       testID={testID}
     >

@@ -140,6 +140,20 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
 };
 
 
+/** What the speed badges say, in words: the badges' own labels and the card's accessibility hint,
+ *  since a screen reader focuses the whole card and does not reach the badges inside it. */
+export function speedDescriptions(capabilities?: ModelCardCapabilities): string[] {
+  return [
+    capabilities?.moeActiveB ? `Mixture of experts: runs like a ${capabilities.moeActiveB}B model` : undefined,
+    capabilities?.mtp ? 'MTP: replies faster' : undefined,
+  ].filter((text): text is string => !!text);
+}
+
+/** The speed descriptions as one accessibility hint for the whole card, or none. */
+export function speedHint(capabilities?: ModelCardCapabilities): string | undefined {
+  return speedDescriptions(capabilities).join('. ') || undefined;
+}
+
 /** The badge row: what makes a model fast for its size first, then what it can do. */
 const CapabilityBadges: React.FC<{ capabilities?: ModelCardCapabilities; isVisionModel: boolean }> = ({ capabilities, isVisionModel }) => {
   const { colors } = useTheme();
@@ -148,11 +162,11 @@ const CapabilityBadges: React.FC<{ capabilities?: ModelCardCapabilities; isVisio
   if (!vision && !capabilities?.tools && !capabilities?.thinking && !capabilities?.moeActiveB && !capabilities?.mtp) return null;
   return (
     <View style={styles.capabilityRow}>
-      {!!capabilities?.moeActiveB && <View style={styles.capabilityBadge} accessibilityLabel={`Mixture of experts: runs like a ${capabilities.moeActiveB}B model`}>
+      {!!capabilities?.moeActiveB && <View style={styles.capabilityBadge} accessibilityLabel={speedDescriptions({ moeActiveB: capabilities.moeActiveB })[0]}>
         <Icon name="layers" size={13} color={colors.primary} />
         <Text style={styles.capabilityText}>{`MoE ${capabilities.moeActiveB}B`}</Text>
       </View>}
-      {capabilities?.mtp && <View style={styles.capabilityBadge} accessibilityLabel="MTP: replies faster">
+      {capabilities?.mtp && <View style={styles.capabilityBadge} accessibilityLabel={speedDescriptions({ mtp: true })[0]}>
         <Icon name="fast-forward" size={13} color={colors.primary} />
         <Text style={styles.capabilityText}>MTP</Text>
       </View>}
