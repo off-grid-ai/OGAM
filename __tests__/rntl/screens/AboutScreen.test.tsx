@@ -45,7 +45,7 @@ describe('AboutScreen — Follow / Community', () => {
     const { getByTestId } = render(<AboutScreen />);
     fireEvent.press(getByTestId('about-join-slack'));
     expect(openURL).toHaveBeenCalledWith(
-      'https://join.slack.com/t/off-grid-mobile/shared_invite/zt-3swt3s84k-R0CHRwISaUpExV2~3qUUdQ',
+      'https://join.slack.com/t/off-grid-mobile/shared_invite/zt-494gbuv5c-kj9tT7U0AS8Kq8UUO63_jw',
     );
   });
 });
