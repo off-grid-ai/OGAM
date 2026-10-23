@@ -211,9 +211,13 @@ export function startAnalytics(options: { features?: () => Record<string, boolea
       await snapshotFeaturesDaily();
     })
     .catch(() => undefined);
+  // The App unmounting: send what is queued and stop the client's timers. The ID is kept.
   return () => {
     stopListening?.();
     stopListening = null;
+    const previous = client;
+    client = null;
+    previous?.close().catch(() => undefined);
   };
 }
 
