@@ -284,9 +284,30 @@ describe('Text search answers from the catalog first', () => {
 
     await waitFor(() => expect(models.getAllByText('Tiny-MoE-8B-A1B-GGUF')).toHaveLength(1));
     const text = screenText(models.toJSON());
-    expect(text).toMatch(/MoE · 1B active/);
+    // Its speed shows as a badge: a mixture-of-experts model that runs like a 1B.
+    expect(models.getByLabelText('Mixture of experts: runs like a 1B model')).toBeTruthy();
+    expect(text).toMatch(/MoE 1B/);
     expect(text).toMatch(/\+1 uploads/);
     expect(text).not.toMatch(/abliterated/i);
+  });
+
+  it('a model with a published MTP head carries the MTP badge, and one without does not', async () => {
+    // 16 GB: Gemma 4 E4B (6 GB with its projector) loads and is not one of the picks.
+    installNativeBoundary({ fs: true, ram: { platform: 'ios', totalBytes: 16 * GB, availBytes: 12 * GB } });
+    restoreFetch = installHuggingFace();
+    const React = require('react');
+    const { render, waitFor, within } = requireRTL();
+    await launchReadsDevice();
+    const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
+
+    const models = render(React.createElement(ModelsScreen));
+
+    const gemma = await waitFor(() => models.getByLabelText('Gemma 4 E4B'));
+    expect(within(gemma).getByLabelText('MTP: replies faster')).toBeTruthy();
+    // A screen reader focuses the whole card, so the card itself says it.
+    expect(gemma.props.accessibilityHint).toContain('MTP: replies faster');
+    const minicpm = models.getByLabelText('MiniCPM5 2B');
+    expect(within(minicpm).queryByLabelText('MTP: replies faster')).toBeNull();
   });
 });
 

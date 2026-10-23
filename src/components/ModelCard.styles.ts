@@ -57,6 +57,10 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     gap: SPACING.xs,
     marginTop: SPACING.xs,
   },
+  capabilityText: {
+    ...TYPOGRAPHY.meta,
+    color: colors.primary,
+  },
   capabilityBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,

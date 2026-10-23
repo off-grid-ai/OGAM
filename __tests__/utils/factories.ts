@@ -297,7 +297,6 @@ export const createHighMemoryDevice = (): DeviceInfo =>
 // ============================================================================
 
 export interface ModelRecommendationFactoryOptions {
-  maxParameters?: number;
   recommendedQuantization?: string;
   recommendedModels?: string[];
   warning?: string;
@@ -306,7 +305,6 @@ export interface ModelRecommendationFactoryOptions {
 export const createModelRecommendation = (
   options: ModelRecommendationFactoryOptions = {},
 ): ModelRecommendation => ({
-  maxParameters: options.maxParameters ?? 7000000000, // 7B
   recommendedQuantization: options.recommendedQuantization ?? 'Q4_K_M',
   recommendedModels: options.recommendedModels ?? [
     'llama-3.2-3b',

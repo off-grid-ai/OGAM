@@ -115,7 +115,7 @@ jest.mock('../../../src/services/hardware', () => ({
     })),
     formatBytes: jest.fn((b: number) => `${(b / (1024 ** 3)).toFixed(1)} GB`),
     getTotalMemoryGB: () => mockGetTotalMemoryGB(),
-    getModelRecommendation: jest.fn(() => ({ maxParameters: 14, recommendedQuantization: 'Q4_K_M', recommendedModels: [], warning: undefined })),
+    getModelRecommendation: jest.fn(() => ({ recommendedQuantization: 'Q4_K_M', recommendedModels: [], warning: undefined })),
     getImageModelRecommendation: jest.fn(() => Promise.resolve({ recommendedBackend: 'mnn', maxModelSizeMB: 2048, canRunSD: true, canRunQNN: false })),
   },
 }));

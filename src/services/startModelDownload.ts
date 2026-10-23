@@ -1,15 +1,70 @@
 import { modelManager } from './modelManager';
-import { mmProjLocalName } from './modelManager/download';
+import RNFS from 'react-native-fs';
+import { mtpHeadForPrimaryFile } from '@offgrid/models';
+import { mmProjLocalName, downloadCompanionFile } from './modelManager/download';
+import { backgroundDownloadService } from './backgroundDownloadService';
 import { useDownloadStore, isActiveStatus } from '../stores/downloadStore';
 import { useAppStore } from '../stores';
 import { activeModelService } from './activeModelService';
 import { makeModelKey } from '../utils/modelKey';
+import { statFile } from '../utils/fileStat';
 import type { ModelFile, DownloadedModel } from '../types';
 
 /** Placeholder downloadId for a row that exists only to represent the QUEUED state
  *  before a real native download has been started (which may wait for a concurrency
  *  slot). Reconciled to the real id by download.ts's retryEntry once the start begins. */
 const queuedPlaceholderId = (modelKey: string) => `queued:${modelKey}`;
+
+type CompanionFile = { name: string; url: string; sizeBytes: number; sha256?: string };
+
+/** The job's files besides the weights and their vision projector: a split model's later parts and
+ *  the model's separately published MTP head. */
+function companionFiles(file: ModelFile): CompanionFile[] {
+  const parts = (file.parts ?? []).slice(1).map(part => ({
+    name: part.name, url: part.downloadUrl, sizeBytes: part.size, ...(part.sha256 ? { sha256: part.sha256 } : {}),
+  }));
+  const head = mtpHeadForPrimaryFile(file.name);
+  return head ? [...parts, head] : parts;
+}
+
+async function onDisk(path: string, sizeBytes: number): Promise<boolean> {
+  return (await RNFS.exists(path)) && (await statFile(path))?.size === sizeBytes;
+}
+
+/**
+ * Fetch the job's other files before its weights, one after another, counting their bytes toward the
+ * model's one progress bar. A file already on disk is not fetched again. Removing the row (cancel)
+ * stops the transfer under way. Rejects when a file fails, so the model never registers incomplete.
+ */
+async function fetchCompanions(modelId: string, modelKey: string, companions: CompanionFile[]): Promise<void> {
+  if (companions.length === 0) return;
+  const dir = modelManager.getModelsDirectory();
+  const present = await Promise.all(companions.map(c => onDisk(`${dir}/${c.name}`, c.sizeBytes)));
+  let done = companions.reduce((total, c, i) => total + (present[i] ? c.sizeBytes : 0), 0);
+  useDownloadStore.getState().setCompanionBytes(modelKey, done);
+  for (const companion of companions.filter((_, i) => !present[i])) {
+    const localPath = `${dir}/${companion.name}`;
+    if (!useDownloadStore.getState().downloads[modelKey]) throw Object.assign(new Error('cancelled'), { cancelled: true });
+    let transferId: string | undefined;
+    const stopWatching = useDownloadStore.subscribe(state => {
+      if (!state.downloads[modelKey] && transferId) backgroundDownloadService.cancelDownload(transferId).catch(() => {});
+    });
+    try {
+      // One transfer at a time on purpose: the bar fills in order and the job holds one download slot.
+      await downloadCompanionFile({ // NOSONAR
+        modelId,
+        file: companion,
+        localPath,
+        onDownloadIdReady: id => { transferId = id; },
+        onBytes: bytes => useDownloadStore.getState().setCompanionBytes(modelKey, done + bytes),
+      });
+    } finally {
+      stopWatching();
+    }
+    done += companion.sizeBytes;
+    useDownloadStore.getState().setCompanionBytes(modelKey, done);
+  }
+}
 
 export interface StartModelDownloadOpts {
   /** Select a downloaded user model when the download began without a selection.
@@ -50,6 +105,9 @@ export async function startModelDownload(
   // up-front avoids the unnecessary native call.
   const existing = useDownloadStore.getState().downloads[modelKey];
   if (existing && isActiveStatus(existing.status)) return;
+  // One tap downloads everything the model needs: every part of a split model, its vision projector
+  // and its MTP head, on one progress bar.
+  const companions = companionFiles(file);
 
   // Publish a QUEUED row to the store IMMEDIATELY, before starting the (possibly
   // slot-limited) native download. Without this, a queued download had no store entry
@@ -68,7 +126,8 @@ export async function startModelDownload(
     status: 'pending',
     bytesDownloaded: 0,
     totalBytes: file.size,
-    combinedTotalBytes: file.size + (file.mmProjFile?.size ?? 0),
+    // A split model's size is already every part's; the MTP head is the one file it does not count.
+    combinedTotalBytes: file.size + (file.mmProjFile?.size ?? 0) + (mtpHeadForPrimaryFile(file.name)?.sizeBytes ?? 0),
     progress: 0,
     createdAt: Date.now(),
     ...(file.mmProjFile && {
@@ -85,6 +144,17 @@ export async function startModelDownload(
     }
     opts.onError?.(err);
   };
+
+  try {
+    await fetchCompanions(modelId, modelKey, companions);
+  } catch (e) {
+    // Cancelled (the row is gone) stops quietly. A failed file clears the row and says so; the next
+    // tap fetches only what is still missing.
+    const cancelled = (e as Error & { cancelled?: boolean }).cancelled || !useDownloadStore.getState().downloads[modelKey];
+    useDownloadStore.getState().remove(modelKey);
+    if (!cancelled) opts.onError?.(e as Error);
+    return;
+  }
 
   try {
     // downloadModelBackground writes the row + adds the store entry synchronously

@@ -39,6 +39,8 @@ export const TextGenerationSection: React.FC = () => {
 
   return (
     <View style={styles.sectionCard}>
+      {/* The one-tap speed setup comes first; the controls it sets stay under Advanced. */}
+      {!isLiteRT && <FastestSettingsButton />}
       {basicSettings.map(setting => (
         <ChatSettingSlider key={setting.key} setting={setting} />
       ))}
@@ -61,7 +63,6 @@ export const TextGenerationSection: React.FC = () => {
             </>
           ) : (
             <>
-              <FastestSettingsButton />
               <CpuThreadsSlider />
               <BatchSizeSlider />
               <BackendSelector />

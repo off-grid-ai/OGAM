@@ -2,7 +2,7 @@ import { TYPOGRAPHY, SPACING } from '../../constants';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { createImageModelsStyles } from './imageStyles';
 
-const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+const createBaseStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   flex1: { flex: 1 },
   backButton: { padding: 4, marginRight: 8 },
   searchContainerNoPadding: { paddingHorizontal: 0 },
@@ -53,6 +53,12 @@ const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     paddingBottom: 16,
     gap: 8,
   },
+  // The Text tab's search row stays put with a shadow along its bottom edge; the list scrolls under it.
+  searchContainerRaised: {
+    backgroundColor: colors.background,
+    zIndex: 1,
+    ...shadows.edge,
+  },
   searchInput: {
     ...TYPOGRAPHY.body,
     flex: 1,
@@ -87,7 +93,8 @@ const createBaseStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     gap: 16,
   },
   loadingText: { ...TYPOGRAPHY.body, color: colors.textSecondary },
-  listContent: { paddingHorizontal: SPACING.md, paddingBottom: 32 },
+  // Top padding keeps the first card off the list's clip edge, under the search row.
+  listContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, paddingBottom: 32 },
   deviceBanner: {
     backgroundColor: `${colors.trending}15`,
     borderRadius: 8,

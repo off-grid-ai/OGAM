@@ -32,6 +32,9 @@ export const TextGenerationSection: React.FC = () => {
           : 'Configure LLM behavior for text responses.'}
       </Text>
 
+      {/* The one-tap speed setup comes first; the controls it sets stay under Advanced. */}
+      {!isLiteRT && <FastestSettingsButton />}
+
       {isLiteRT ? (
         <>
           <SliderSetting testID="litert-temperature" {...liteRT.temperature} />
@@ -68,7 +71,6 @@ export const TextGenerationSection: React.FC = () => {
             <SliderSetting testID="llama-top-p" {...llama.topP} />
             <SliderSetting testID="repeat-penalty" {...llama.repeatPenalty} />
             <SliderSetting testID="max-tool-calls" {...toolCalls} />
-            <FastestSettingsButton />
             <CpuThreadsSlider />
             <BatchSizeSlider />
             <BackendSelector />

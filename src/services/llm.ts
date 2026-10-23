@@ -23,7 +23,7 @@ import { generateWithToolsImpl } from './llmToolGeneration';
 import type { ToolCall } from './tools/types';
 import type { MultimodalSupport, LLMPerformanceSettings, LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
-import { stateCacheBudgetMb, MOBILE_BACKEND_ROWS, type MobileBackend } from '@offgrid/models';
+import { stateCacheBudgetMb, MOBILE_BACKEND_ROWS, splitGgufPartNames, type MobileBackend } from '@offgrid/models';
 import { saveKvSession, loadKvSession } from './kvSessionStore';
 import { readModelFileType } from './modelHeader';
 import { installedMtpHeadPath } from './mtpHeads';
@@ -34,6 +34,12 @@ type StreamCallback = (data: StreamToken) => void;
 type CompleteCallback = (result: { content: string; reasoningContent: string }) => void;
 const resolveGpuBackend = (enabled: boolean, devices: string[]): string =>
   !enabled ? 'CPU' : (Platform.OS === 'ios' ? 'Metal' : (devices.join(', ') || 'OpenCL'));
+/** A model's bytes on disk: every part of a split model, which llama.cpp loads from the first part's path. */
+async function modelBytesOnDisk(modelPath: string): Promise<number> {
+  const sizes = await Promise.all(splitGgufPartNames(modelPath).map(async part => (await statFile(part))?.size ?? 0));
+  return sizes.reduce((total, size) => total + size, 0);
+}
+
 class LLMService {
   private context: LlamaContext | null = null;
   private currentModelPath: string | null = null;
@@ -95,7 +101,7 @@ class LLMService {
   private hashString(value: string): string { return hashString(value); }
   private ensureSessionCacheDir(): Promise<void> { return ensureSessionCacheDir(this.sessionCacheDir); }
   private getSessionPath(promptHash: string): string { return getSessionPath(this.sessionCacheDir, promptHash); }
-  private async validateAndPrepareModel(modelPath: string, override: boolean = false, reclaimBytes: number = 0): Promise<{ fileSize: number; memCheck: Awaited<ReturnType<typeof checkMemoryForModel>>; params: ReturnType<typeof buildModelParams> }> {
+  private async validateAndPrepareModel(modelPath: string, override: boolean = false, reclaimBytes: number = 0, mmProjPath?: string): Promise<{ fileSize: number; memCheck: Awaited<ReturnType<typeof checkMemoryForModel>>; params: ReturnType<typeof buildModelParams> }> {
     logger.log(`[LLM] validateAndPrepareModel: ${modelPath}`);
     if (!await RNFS.exists(modelPath)) throw new Error(`Model file not found at: ${modelPath}`);
     const validation = await validateModelFile(modelPath);
@@ -121,7 +127,9 @@ class LLMService {
       },
     );
     logger.log(`[LLM] Resolved params: threads=${params.nThreads}, batch=${params.nBatch}, ctx=${params.ctxLen}, gpuLayers=${params.nGpuLayers}, fileType=${fileType}`);
-    const fileSize = (await statFile(modelPath))?.size ?? 0;
+    const fileSize = await modelBytesOnDisk(modelPath);
+    // The vision projector loads beside the model (initMultimodal), copied into memory, not mapped.
+    const projectorFileSize = mmProjPath && await RNFS.exists(mmProjPath) ? (await statFile(mmProjPath))?.size ?? 0 : 0;
     // Use the EFFECTIVE cache type, not the raw setting: OpenCL/HTP coerce the KV cache
     // to f16 (see buildModelParams), so keying off settings.cacheType alone would let the
     // guard use the cheaper quantized estimate and approve a context that then OOMs.
@@ -138,11 +146,13 @@ class LLMService {
       });
       return { ...raw, available: availableMB * 1024 * 1024 };
     };
-    let memCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: params.ctxLen, getAvailableMemory: getMem, quantizedCache });
+    // Every iPhone load maps its weights (mobileUseMmap); Android keeps its copied-weights check.
+    const weightsMapped = Platform.OS === 'ios';
+    let memCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: params.ctxLen, getAvailableMemory: getMem, quantizedCache, weightsMapped, projectorFileSize });
     if (!memCheck.safe) {
       // Keep the selected context. A failed estimate asks for Load Anyway; an explicit
       // override passes the selected value to native init even when memory is tight.
-      const decision = await resolveSafeContext({ fileSize, requestedCtx: params.ctxLen, quantizedCache, override, getAvailableMemory: getMem, memCheck });
+      const decision = await resolveSafeContext({ fileSize, requestedCtx: params.ctxLen, quantizedCache, weightsMapped, projectorFileSize, override, getAvailableMemory: getMem, memCheck });
       memCheck = decision.memCheck;
     }
     logger.log(`[LLM] Memory check: estimatedMB=${memCheck.estimatedMB.toFixed(0)}, availableMB=${memCheck.availableMB.toFixed(0)}, safe=${memCheck.safe}, ctx=${params.ctxLen}`);
@@ -187,8 +197,8 @@ class LLMService {
       // back, since a switch that goes ahead releases it first. A context that stopped answering is
       // replaced the same way, even for the same file.
       const switching = !!this.context && (this.currentModelPath !== modelPath || this.contextUnusable);
-      const reclaimBytes = switching && this.currentModelPath ? (await statFile(this.currentModelPath))?.size ?? 0 : 0;
-      const { fileSize, memCheck, params } = await this.validateAndPrepareModel(modelPath, opts?.override, reclaimBytes);
+      const reclaimBytes = switching && this.currentModelPath ? await modelBytesOnDisk(this.currentModelPath) : 0;
+      const { fileSize, memCheck, params } = await this.validateAndPrepareModel(modelPath, opts?.override, reclaimBytes, mmProjPath);
       if (switching) {
         logger.log('[LLM] Releasing previous context before loading new model');
         await this.doUnloadModel();

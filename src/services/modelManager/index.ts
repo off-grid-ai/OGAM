@@ -1,4 +1,5 @@
 import RNFS from 'react-native-fs';
+import { splitGgufPartNames } from '@offgrid/models';
 import logger from '../../utils/logger';
 import { getMmProjFileSize } from '../../utils/modelHelpers';
 import { DownloadedModel, ModelFile, BackgroundDownloadInfo, ONNXImageModel, PersistedDownloadInfo } from '../../types';
@@ -114,6 +115,8 @@ class ModelManager {
       throw new Error('Invalid mmproj path: outside app directory');
     }
     await RNFS.unlink(modelPath);
+    // A split model's other parts go with it.
+    await Promise.all(splitGgufPartNames(modelPath).slice(1).map(part => RNFS.unlink(part).catch(() => {})));
 
     // Only delete mmproj if no other models reference it
     if (llamaModel?.mmProjPath && mmProjPath) {

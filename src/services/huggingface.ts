@@ -18,11 +18,18 @@ import {
   searchHuggingFace,
   getModelFiles as listRepoFiles,
   getModelType,
-  isMtpHeadFile,
-  isDraftModelFile,
+  isCompanionFile,
+  collapseSplitGgufParts,
   type HFSearchResult,
   type ModelFileVariant,
 } from '@offgrid/models';
+
+const splitPartOf = (part: ModelFile): NonNullable<ModelFile['parts']>[number] => ({
+  name: part.name,
+  size: part.size,
+  downloadUrl: part.downloadUrl,
+  ...(part.sha256 ? { sha256: part.sha256 } : {}),
+});
 
 class HuggingFaceService {
   private baseUrl = HF_API.baseUrl;
@@ -180,8 +187,11 @@ class HuggingFaceService {
     // heads and draft models never offered as a size, and a projector only when it is named for this
     // model or is the repo's generic one. A pinned revision (vision repair) reads that revision here.
     if (revision === 'main') {
+      // A model split into parts is one size: its first part, sized as the whole, listing every part.
       const variants = await listRepoFiles(modelId);
-      return variants.map(variant => this.fromSharedFile(variant)).sort((a, b) => a.size - b.size);
+      return collapseSplitGgufParts(variants.map(variant => this.fromSharedFile(variant)))
+        .map(({ parts, ...file }) => (parts ? { ...file, parts: parts.map(splitPartOf) } : file))
+        .sort((a, b) => a.size - b.size);
     }
     try {
       const encodedRevision = encodeURIComponent(revision);
@@ -199,7 +209,7 @@ class HuggingFaceService {
         lfs?: { size: number };
       }> = await response.json();
       const allGguf = files.filter(
-        f => f.type === 'file' && f.path.endsWith('.gguf') && !isMtpHeadFile(f.path) && !isDraftModelFile(f.path),
+        f => f.type === 'file' && f.path.endsWith('.gguf') && !isCompanionFile(f.path),
       );
       const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.path));
       const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.path));
@@ -244,7 +254,7 @@ class HuggingFaceService {
       `${this.apiUrl}/models/${modelId}${revisionPath}`,
     );
     if (!result.siblings) return [];
-    const allGguf = result.siblings.filter(f => f.rfilename.endsWith('.gguf') && !isMtpHeadFile(f.rfilename) && !isDraftModelFile(f.rfilename));
+    const allGguf = result.siblings.filter(f => f.rfilename.endsWith('.gguf') && !isCompanionFile(f.rfilename));
     const mmProjFiles = allGguf.filter(f => this.isMMProjFile(f.rfilename));
     const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.rfilename));
     const mmProjForMatch = mmProjFiles.map(f => ({

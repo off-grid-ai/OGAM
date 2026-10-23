@@ -23,6 +23,7 @@ interface DownloadStoreState {
   setMmProjDownloadId: (modelKey: ModelKey, mmProjDownloadId: string) => void
   updateProgress: (downloadId: string, bytes: number, total: number) => void
   updateMmProjProgress: (mmProjDownloadId: string, bytes: number) => void
+  setCompanionBytes: (modelKey: ModelKey, bytes: number) => void
   setStatus: (downloadId: string, status: DownloadStatus, error?: { message: string; code?: string }) => void
   setProcessing: (downloadId: string) => void
   setCompleted: (downloadId: string) => void
@@ -152,12 +153,12 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
     const entry = state.downloads[modelKey];
     if (!entry || entry.downloadId !== downloadId) return state;
     const combinedTotal = entry.combinedTotalBytes || total;
-    const mmProjBytes = entry.mmProjBytesDownloaded ?? 0;
-    const liveRate = rateFields(entry, bytes + mmProjBytes);
+    const otherBytes = (entry.mmProjBytesDownloaded ?? 0) + (entry.companionBytesDownloaded ?? 0);
+    const liveRate = rateFields(entry, bytes + otherBytes);
     // Clamp: when combinedTotalBytes isn't set yet, the denominator is the main file
     // only, so adding the mmproj sidecar's bytes can push this past 1.0 (the >100%
     // progress bar). A wrong total can also overshoot. Never report >1 or <0.
-    const progress = combinedTotal > 0 ? Math.min(1, Math.max(0, (bytes + mmProjBytes) / combinedTotal)) : 0;
+    const progress = combinedTotal > 0 ? Math.min(1, Math.max(0, (bytes + otherBytes) / combinedTotal)) : 0;
     return {
       downloads: {
         ...state.downloads,
@@ -189,9 +190,10 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
       return state;
     }
     const combinedTotal = entry.combinedTotalBytes || entry.totalBytes;
-    const liveRate = rateFields(entry, entry.bytesDownloaded + bytes);
+    const done = entry.bytesDownloaded + bytes + (entry.companionBytesDownloaded ?? 0);
+    const liveRate = rateFields(entry, done);
     // Clamp to [0,1] — same reason as updateProgress (main-only denominator + mmproj bytes).
-    const progress = combinedTotal > 0 ? Math.min(1, Math.max(0, (entry.bytesDownloaded + bytes) / combinedTotal)) : 0;
+    const progress = combinedTotal > 0 ? Math.min(1, Math.max(0, done / combinedTotal)) : 0;
     return {
       downloads: {
         ...state.downloads,
@@ -201,6 +203,25 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
           mmProjStatus: 'running',
           progress,
           ...liveRate,
+        },
+      },
+    };
+  }),
+
+  setCompanionBytes: (modelKey, bytes) => set(state => {
+    const entry = state.downloads[modelKey];
+    if (!entry) return state;
+    const combinedTotal = entry.combinedTotalBytes || entry.totalBytes;
+    const done = entry.bytesDownloaded + (entry.mmProjBytesDownloaded ?? 0) + bytes;
+    return {
+      downloads: {
+        ...state.downloads,
+        [modelKey]: {
+          ...entry,
+          companionBytesDownloaded: bytes,
+          status: 'running',
+          progress: combinedTotal > 0 ? Math.min(1, Math.max(0, done / combinedTotal)) : 0,
+          ...rateFields(entry, done),
         },
       },
     };
@@ -311,7 +332,10 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
           downloadId: newDownloadId,
           status: 'pending',
           bytesDownloaded: 0,
-          progress: 0,
+          // The job's other files stay on disk across a retry and still count.
+          progress: (entry.combinedTotalBytes ?? 0) > 0
+            ? Math.min(1, (entry.companionBytesDownloaded ?? 0) / entry.combinedTotalBytes!)
+            : 0,
           rateSample: undefined,
           bytesPerSecond: undefined,
           errorMessage: undefined,

@@ -39,6 +39,9 @@ export interface DownloadEntry {
   bytesPerSecond?: number
   mmProjDownloadId?: string
   mmProjBytesDownloaded?: number
+  /** Bytes of the job's other files already fetched: a split model's later parts and its MTP head.
+   *  They download before the weights and count toward the one progress bar. */
+  companionBytesDownloaded?: number
   mmProjStatus?: DownloadStatus
   mmProjFileName?: string
   mmProjFileSize?: number
@@ -85,4 +88,10 @@ export function isQueuedStatus(status: DownloadStatus): boolean {
 
 export function isDownloadingStatus(status: DownloadStatus): boolean {
   return isActiveStatus(status) && status !== 'pending';
+}
+
+/** Bytes a download has fetched across its whole job: the weights, the vision projector, and the
+ *  other files (a split model's later parts, an MTP head). One number for every progress caption. */
+export function jobBytesDownloaded(entry: { bytesDownloaded?: number; mmProjBytesDownloaded?: number; companionBytesDownloaded?: number }): number {
+  return (entry.bytesDownloaded ?? 0) + (entry.mmProjBytesDownloaded ?? 0) + (entry.companionBytesDownloaded ?? 0);
 }

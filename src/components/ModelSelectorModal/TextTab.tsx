@@ -9,11 +9,12 @@ import { estimateTextModelMemoryMB } from '../../services/activeModelService/mem
 import { useAppStore } from '../../stores';
 import { ModelCard } from '../ModelCard';
 import { createAllStyles } from './styles';
-import { fileExceedsBudget } from '../../services/memoryBudget';
+import { fileExceedsBudget, textModelBudget } from '../../services/memoryBudget';
 import { useResidentRows } from '../models/useResidentRows';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 import { LoadingDots } from '../LoadingDots';
 import { textRowState } from './rowState';
+import { useDownloadedSpeedBadges } from './useDownloadedSpeedBadges';
 
 export interface TextTabProps {
   downloadedModels: DownloadedModel[];
@@ -72,6 +73,7 @@ export const TextTab: React.FC<TextTabProps> = ({
     });
     return () => { current = false; };
   }, [downloadedModels, inferenceBackend]);
+  const speedBadges = useDownloadedSpeedBadges(downloadedModels);
   const textResident = useResidentRows(true).text;
   // "Loaded" drives the Currently-Loaded + Unload section (only meaningful once a model
   // is actually in memory). "Active" also counts the selected-but-not-yet-loaded model
@@ -123,7 +125,7 @@ export const TextTab: React.FC<TextTabProps> = ({
               vision: activeRemoteModelInfo.model.capabilities.supportsVision,
               tools: activeRemoteModelInfo.model.capabilities.supportsToolCalling,
               thinking: activeRemoteModelInfo.model.capabilities.supportsThinking,
-            } : { ...activeLocalCapabilities, predicted: true }}
+            } : { ...activeLocalCapabilities, predicted: true, ...(activeLocalModel ? speedBadges[activeLocalModel.id] : {}) }}
             facts={activeLocalModel
               ? [`${textResident
                   ? `${(textResident.sizeMB / 1024).toFixed(1)} GB`
@@ -198,7 +200,7 @@ export const TextTab: React.FC<TextTabProps> = ({
           </View>
           {downloadedModels.map(model => {
             const fileSize = (model.fileSize || 0) + ('mmProjFileSize' in model ? (model.mmProjFileSize || 0) : 0);
-            const memoryFits = !fileExceedsBudget(fileSize, hardwareService.getTotalMemoryGB());
+            const memoryFits = !fileExceedsBudget(fileSize, hardwareService.getTotalMemoryGB(), textModelBudget());
             const row = textRowState({
               modelPath: model.filePath,
               modelId: model.id,
@@ -224,7 +226,7 @@ export const TextTab: React.FC<TextTabProps> = ({
                 model={{ id: model.id, name: model.name, author: model.author || 'On device',
                   modelType: predictedCapabilities?.vision ? 'vision' : 'text' }}
                 downloadedModel={model}
-                capabilities={{ ...predictedCapabilities, predicted: true }}
+                capabilities={{ ...predictedCapabilities, predicted: true, ...speedBadges[model.id] }}
                 facts={[`${estimatedRamMB[model.id] != null
                   ? `~${(estimatedRamMB[model.id] / 1024).toFixed(1)} GB`
                   : hardwareService.formatModelRam(model, ramMultiplier)} RAM${memoryFits ? '' : ' (may not fit)'}`]}

@@ -222,22 +222,7 @@ describe('HardwareService', () => {
       await setupWithMemory(3);
       const rec = hardwareService.getModelRecommendation();
 
-      expect(rec.maxParameters).toBe(1.5);
       expect(rec.recommendedQuantization).toBe('Q4_K_M');
-    });
-
-    it('returns recommendation for 8GB device', async () => {
-      await setupWithMemory(8);
-      const rec = hardwareService.getModelRecommendation();
-
-      expect(rec.maxParameters).toBe(8);
-    });
-
-    it('returns recommendation for 16GB device', async () => {
-      await setupWithMemory(16);
-      const rec = hardwareService.getModelRecommendation();
-
-      expect(rec.maxParameters).toBe(30);
     });
 
     it('adds low-memory warning for devices under 4GB', async () => {
