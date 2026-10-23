@@ -12,8 +12,8 @@
  *
  * The intersection reproduced (numbers pinned from the live [MEM-SM] trace, not guessed): Aggressive
  * mode → residency makeRoomFor ADMITS (sizeMB 5376 < budget 10813, fits=true); then resolveSafeContext
- * REFUSES because the model's weight estimate (6144MB, from the 5GB on-disk file) exceeds the raw
- * available snapshot (5120MB). That refusal — signature "it needs ~XMB but only YMB is available" — is
+ * REFUSES. On an iPhone the weights are mapped, so the gate refuses a file past the fit rule for its
+ * RAM: an 8GB file on a 12GB iPhone (past 0.62 of RAM). That refusal — signature "it needs ~XMB but only YMB is available" — is
  * the device error and the fix site. So the test can ONLY pass when THAT gate refuses (it asserts the
  * signature), never false-greening on the residency gate.
  *
@@ -34,7 +34,7 @@ describe('memory refusal shows "Load Anyway" on the rendered alert, not a dead-e
     // Pinned to iOS ON PURPOSE: the reclaim-aware gate fix (textPreloadGateReclaimAware) makes the
     // Android-aggressive cell ADMIT via the LMK reclaim credit, so the refusal this test needs only
     // survives on iOS (no reclaim credit — the gate reads raw). residency still admits (3.5GB record);
-    // resolveSafeContext refuses on the raw 5GB on-disk weight estimate. deferInitialLoad → first send
+    // resolveSafeContext refuses the 8GB on-disk file (past the iPhone fit rule). deferInitialLoad → first send
     // triggers the real lazy load. This is why the two memory tests don't contradict each other.
     const h = await setupChatScreen({
       engine: 'llama',
@@ -50,10 +50,9 @@ describe('memory refusal shows "Load Anyway" on the rendered alert, not a dead-e
     const { startLoadPolicySync } = require('../../../src/services/loadPolicySync');
      
 
-    // BOUNDARY: the ACTUAL on-disk model file is 5GB — resolveSafeContext sizes the model from the real
-    // file (RNFS.stat), so its weight estimate (6144MB) exceeds the 5120MB raw-available snapshot and it
-    // refuses. (The harness seeds a 500MB placeholder; a real 5GB download is the device reality.)
-    h.boundary.fs!.seedFile('/docs/models/ggml-small.gguf', Math.round(5 * GB));
+    // BOUNDARY: the ACTUAL on-disk model file is 8GB — resolveSafeContext sizes the model from the real
+    // file (RNFS.stat), and 8GB of mapped weights is past the fit rule for a 12GB iPhone, so it refuses.
+    h.boundary.fs!.seedFile('/docs/models/ggml-small.gguf', Math.round(8 * GB));
 
     h.render();
 

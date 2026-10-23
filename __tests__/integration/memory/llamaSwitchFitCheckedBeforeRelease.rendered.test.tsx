@@ -11,7 +11,7 @@
  * Model A (llama, 2 GB file) is picked on Home and loads on the first message. The person then picks
  * Model B in the chat's model sheet and sends.
  *
- * 1. Model B (5 GB) does not fit even with Model A's 2 GB given back → "Insufficient Memory"; Model A's
+ * 1. Model B (11 GB) does not fit even with Model A's 2 GB given back (past the iPhone fit rule on 16 GB) → "Insufficient Memory"; Model A's
  *    context is not released, Cancel leaves the chat on Model A, and A answers the next message without
  *    a reload. Before the fix, Model A was released first, then the check refused B: nothing was loaded.
  * 2. Model B (2.5 GB) needs more than the free 3.5 GB, but fits once Model A's 2 GB comes back → it loads
@@ -67,7 +67,7 @@ async function chatOnModelA(modelBBytes: number) {
 
 describe('llama → llama switch: the fit is checked before Model A is released', () => {
   it('Model B too big even with A given back: alert, A stays loaded, Cancel → A answers', async () => {
-    const { h, rtl, view, initsFor, openModelSheet, contextA } = await chatOnModelA(5 * GB);
+    const { h, rtl, view, initsFor, openModelSheet, contextA } = await chatOnModelA(11 * GB);
 
     // BEFORE: no memory alert.
     expect(view().queryByText('Insufficient Memory')).toBeNull();
