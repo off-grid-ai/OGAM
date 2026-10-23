@@ -79,6 +79,7 @@ let consentChain: Promise<void> = Promise.resolve();
 let stopListening: (() => void) | null = null;
 let featureSnapshot: () => Record<string, boolean> = () => ({});
 let foregroundAt = Date.now();
+let ramGb: number | undefined;
 
 // ── consent + client ───────────────────────────────────────────────────────────
 
@@ -91,8 +92,11 @@ function beforeSend(event: { event: string; properties?: Properties }) {
   const { usage, crashes } = consent();
   const crash = CRASH_EVENTS.has(event.event);
   if (crash ? !crashes : !usage) return null;
-  if (event.event !== '$exception') return event;
-  return { ...event, properties: scrubExceptionProperties(event.properties ?? {}) };
+  // The SDK's own lifecycle events can be captured before registration lands; every event still
+  // carries the spec's properties.
+  const properties = { ...superProperties(), ...(ramGb === undefined ? {} : { ram_gb: ramGb }), ...event.properties };
+  if (event.event !== '$exception') return { ...event, properties };
+  return { ...event, properties: scrubExceptionProperties(properties) };
 }
 
 function superProperties(): Properties {
@@ -132,7 +136,10 @@ async function applyConsent(): Promise<void> {
   clientCrashes = crashes;
   client.register(superProperties());
   DeviceInfo.getTotalMemory()
-    .then(total => client?.register({ ram_gb: Math.round(total / GB) }))
+    .then(total => {
+      ramGb = Math.round(total / GB);
+      client?.register({ ram_gb: ramGb });
+    })
     .catch(() => undefined);
 }
 

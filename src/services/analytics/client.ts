@@ -3,6 +3,7 @@
  * spec requires (docs/ANALYTICS.md) and gives the analytics owner four verbs: capture, screen,
  * register, and shut down (keeping or forgetting the anonymous ID).
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import PostHog, { PostHogPersistedProperty } from 'posthog-react-native';
 import { POSTHOG_API_KEY, POSTHOG_HOST } from '../../config/analytics';
 import { languageOnly } from './values';
@@ -50,6 +51,8 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
   const posthog = new OffGridPostHog(POSTHOG_API_KEY, {
     host: POSTHOG_HOST,
     persistence: 'file',
+    // The app's own AsyncStorage, named explicitly rather than discovered as an optional peer.
+    customStorage: AsyncStorage,
     captureAppLifecycleEvents: true,
     enableSessionReplay: false,
     preloadFeatureFlags: false,
