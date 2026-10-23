@@ -8,7 +8,7 @@
  * - Usage data gates every event except `$exception` and `unclean_exit`, which Crash reports gates.
  * - Turning both off opts out: what is queued is dropped and the anonymous ID is reset.
  */
-import { Platform } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import RNFS from 'react-native-fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -195,6 +195,9 @@ export function startAnalytics(features: () => Record<string, boolean>): () => v
     if (pro !== selectHasProAccess(prev)) client?.register({ pro });
   });
   foregroundAt = Date.now();
+  stopAppState?.();
+  const appStateSubscription = AppState.addEventListener('change', onAppStateChange);
+  stopAppState = () => appStateSubscription.remove();
   syncClient()
     .then(async () => {
       capture('app_opened', { cold_start_ms: ms(Date.now() - moduleLoadedAt) });
@@ -216,6 +219,8 @@ export function startAnalytics(features: () => Record<string, boolean>): () => v
   return () => {
     stopListening?.();
     stopListening = null;
+    stopAppState?.();
+    stopAppState = null;
     const previous = client;
     client = null;
     previous?.close().catch(ignore);
@@ -227,6 +232,23 @@ export function startAnalytics(features: () => Record<string, boolean>): () => v
 let currentScreen: string | null = null;
 let screenShownAt: number | null = null;
 let screenElapsed = 0;
+
+let stopAppState: (() => void) | null = null;
+let inBackground = false;
+
+/**
+ * Only a real trip to the background counts. iOS also passes through `inactive` at a cold launch and
+ * under every system dialog; counting that sent a second `app_opened` 128 ms after launch.
+ */
+function onAppStateChange(next: AppStateStatus): void {
+  if (next === 'background' && !inBackground) {
+    inBackground = true;
+    appBackgrounded();
+  } else if (next === 'active' && inBackground) {
+    inBackground = false;
+    appForegrounded();
+  }
+}
 
 export function appForegrounded(): void {
   foregroundAt = Date.now();

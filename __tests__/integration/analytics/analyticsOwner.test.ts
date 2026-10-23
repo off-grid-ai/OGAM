@@ -204,6 +204,21 @@ it('reports the spec properties when the device cannot say its chip, memory or b
   DeviceInfo.getPowerState.mockResolvedValue({ batteryLevel: 0.64, batteryState: 'unplugged', lowPowerMode: false });
 });
 
+it('a cold launch or a system dialog (inactive, then active) is not a new app open', async () => {
+  const { endpoint, flush, boundary } = await setup({ usage: true });
+  boundary.emitAppStateChange('inactive');
+  boundary.emitAppStateChange('active');
+  boundary.emitAppStateChange('inactive');
+  boundary.emitAppStateChange('active');
+  await flush();
+  await waitFor(() => expect(endpoint.named('app_backgrounded')).toHaveLength(1));
+  expect(endpoint.named('app_opened')).toHaveLength(1);
+  boundary.emitAppStateChange('active');
+  await flush();
+  await waitFor(() => expect(endpoint.named('app_backgrounded')).toHaveLength(2));
+  expect(endpoint.named('app_opened')).toHaveLength(2);
+});
+
 it('sends a daily features snapshot once per day and survives unreadable storage', async () => {
   const { analytics, endpoint, flush, boundary } = await setup({ usage: true });
   const AsyncStorage = require('@react-native-async-storage/async-storage');

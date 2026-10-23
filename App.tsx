@@ -41,8 +41,6 @@ import { DebugLogsScreen } from './src/components/DebugLogsScreen';
 import { LoadingDots } from './src/components/LoadingDots';
 import { AnalyticsConsentPrompt } from './src/components/AnalyticsConsentPrompt';
 import {
-  appBackgrounded,
-  appForegrounded,
   startAnalytics,
   trackScreen,
 } from './src/services/analytics/analytics';
@@ -193,7 +191,6 @@ function App() {
   // Handle app state changes for auto-lock
   useAppState({
     onBackground: useCallback(() => {
-      appBackgrounded();
       saveChatStateOnBackground();
       if (authEnabled) {
         setLastBackgroundTime(Date.now());
@@ -201,7 +198,6 @@ function App() {
       }
     }, [authEnabled, setLastBackgroundTime, setLocked]),
     onForeground: useCallback(() => {
-      appForegrounded();
       // Rebuild the unified store before reattaching JS listeners so restored
       // progress events map onto current download entries instead of racing hydration.
       // NOTE: restoreQueuedDownloads() is intentionally NOT called here — on a foreground
