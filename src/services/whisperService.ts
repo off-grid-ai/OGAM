@@ -262,6 +262,8 @@ class WhisperService {
       logger.log('[WhisperService] Permission granted:', hasPermission);
 
       if (!hasPermission) {
+        // The person's choice, not a failure: no failed generation, no consent prompt.
+        endAnalytics('stopped');
         throw new Error('Microphone permission denied');
       }
 
