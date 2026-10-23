@@ -14,7 +14,6 @@ import { modelManager } from '../modelManager';
 import { hardwareService } from '../hardware';
 import { modelResidencyManager } from '../modelResidency';
 import logger from '../../utils/logger';
-import { ensureMtpHead } from '../mtpHeadDownload';
 import RNFS from 'react-native-fs';
 import {
   canKeepMmProjLink,
@@ -193,8 +192,9 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
 
     const mmProjPath = await resolveMmProjPath(ctx.model, ctx.modelId);
     // A model from before heads came with the download, or whose head download failed, gets it now;
-    // this load runs without MTP and the next one drafts with it.
-    ensureMtpHead(ctx.model).catch(() => {});
+    // this load runs without MTP and the next one drafts with it. Imported here, not at the top:
+    // loading a model must not pull in the download code (see mtpHeads).
+    import('../mtpHeadDownload').then(({ ensureMtpHead }) => ensureMtpHead(ctx.model)).catch(() => {});
 
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const timeoutPromise = new Promise<never>((_, reject) => {
