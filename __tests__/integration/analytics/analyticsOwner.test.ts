@@ -144,7 +144,7 @@ it('reports every action, flow and Pro funnel step with only the spec properties
   ]);
 });
 
-it('downloads report start, finish speed, failure, and the image and voice setup funnels', async () => {
+it('downloads report start, finish speed, failure, and the image, voice and video setup funnels', async () => {
   const { analytics, endpoint, flush } = await setup({ usage: true });
   const { useDownloadStore } = require('../../../src/stores/downloadStore');
   const entry = (modelKey: string, modelType: string, downloadId: string) => ({
@@ -164,10 +164,13 @@ it('downloads report start, finish speed, failure, and the image and voice setup
   analytics.flowStarted('voice_setup', 'opened');
   analytics.downloadStarted('tts:kokoro', { model: 'kokoro', modelType: 'tts' });
   analytics.downloadEnded('tts:kokoro', 'done');
+  analytics.flowStarted('video_setup', 'opened');
+  analytics.downloadStarted('video:wan', { model: 'Comfy-Org/Wan_2.1_ComfyUI_repackaged', modelType: 'video' });
+  analytics.downloadEnded('video:wan', 'done');
   await new Promise(resolve => setTimeout(resolve, 20));
   await flush();
-  await waitFor(() => expect(endpoint.named('model_download_finished')).toHaveLength(3));
-  expect(endpoint.named('model_download_started')).toHaveLength(4);
+  await waitFor(() => expect(endpoint.named('model_download_finished')).toHaveLength(4));
+  expect(endpoint.named('model_download_started')).toHaveLength(5);
   const failed = endpoint.named('model_download_failed')[0].properties;
   expect(failed).toMatchObject({ model: 'ggml-org/SmolVLM-GGUF', quant: 'Q4_K_M', size_bucket: '1-2GB', network: 'unknown', error_code: 'disk_full' });
   expect(JSON.stringify(failed)).not.toContain('/data/x');
@@ -176,7 +179,7 @@ it('downloads report start, finish speed, failure, and the image and voice setup
   expect(typeof done.free_storage_gb).toBe('number');
   expect(endpoint.named('model_download_finished')[2].properties.mb_per_sec).toBeUndefined();
   const funnels = endpoint.named('flow_finished').map(e => e.properties.flow);
-  expect(funnels).toEqual(['image_setup', 'voice_setup']);
+  expect(funnels).toEqual(['image_setup', 'voice_setup', 'video_setup']);
 });
 
 it('reports the spec properties when the device cannot say its chip, memory or battery', async () => {

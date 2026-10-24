@@ -14,7 +14,7 @@ import {
   useConsentPromptStore,
 } from '../../../src/services/analytics/consentPrompt';
 import { featureSnapshot } from '../../../src/services/analytics/featureSnapshot';
-import { imageModelFacts, textModelFacts, REMOTE_MODEL_FACTS } from '../../../src/services/analytics/modelFacts';
+import { imageModelFacts, textModelFacts, videoModelFacts, REMOTE_MODEL_FACTS } from '../../../src/services/analytics/modelFacts';
 import { createDownloadedModel } from '../../utils/factories';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -101,6 +101,9 @@ describe('model facts', () => {
     expect(imageModelFacts({ id: 'sd_qnn', backend: 'qnn' } as never)).toEqual({ model: 'sd_qnn', engine: 'onnx', backend: 'npu' });
     expect(imageModelFacts({ id: 'sd_coreml', backend: 'coreml' } as never)).toEqual({ model: 'sd_coreml', engine: 'coreml', backend: 'gpu' });
     expect(imageModelFacts({ id: 'sd-flux', backend: 'sd' } as never)).toEqual({ model: 'sd-flux', engine: 'sd.cpp', backend: 'gpu' });
+    expect(videoModelFacts('Comfy-Org/Wan_2.1_ComfyUI_repackaged')).toEqual({
+      model: 'Comfy-Org/Wan_2.1_ComfyUI_repackaged', engine: 'sd.cpp', backend: 'gpu',
+    });
     const os = Platform.OS;
     Object.defineProperty(Platform, 'OS', { value: 'ios', configurable: true });
     expect(imageModelFacts(undefined)).toEqual({ model: 'custom', engine: 'coreml', backend: 'cpu' });
