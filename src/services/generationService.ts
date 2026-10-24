@@ -58,6 +58,17 @@ export interface QueuedMessage {
   now?: boolean;
 }
 
+/**
+ * The next queued turn. Text follows the shared rule (messages queued in one chat go together, a
+ * send-now message first); a queued video prompt is always its own turn, never merged with text.
+ */
+function takeNextQueuedTurn(queue: QueuedMessage[]): { batch: QueuedMessage[]; rest: QueuedMessage[] } {
+  const next = queue.find(entry => entry.now) ?? queue[0];
+  if (next?.imageMode === 'video') return { batch: [next], rest: queue.filter(entry => entry !== next) };
+  const { batch } = takeNextQueued(queue.filter(entry => entry.imageMode !== 'video'));
+  return { batch, rest: queue.filter(entry => !batch.includes(entry)) };
+}
+
 export interface GenerationState {
   isGenerating: boolean;
   isThinking: boolean;
@@ -643,7 +654,7 @@ class GenerationService {
       logger.log(`[QUEUE-SM] held (${this.state.queueHold}) with ${queue.length} queued`);
       return;
     }
-    const { batch: all, rest } = takeNextQueued(queue);
+    const { batch: all, rest } = takeNextQueuedTurn(queue);
     // A send-now message is the user's answer to the Stop it caused: the rest wait behind its reply, not paused.
     const queueHold = all[0]?.now ? chatQueueHoldAfter('resume') : this.state.queueHold;
     this.state = { ...this.state, queuedMessages: rest, queueHold };
