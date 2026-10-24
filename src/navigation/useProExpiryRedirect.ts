@@ -35,7 +35,10 @@ export function useProExpiryRedirect(
     // had nothing to pop and silently did nothing, trapping the person on the paywall.
     navigation.resetRoot({
       index: 1,
-      routes: [{ name: 'Main' }, { name: 'ProDetail' }],
+      routes: [
+        { name: 'Main', params: { screen: 'HomeTab' } },
+        { name: 'ProDetail' },
+      ],
     });
   }, [navigation]);
 

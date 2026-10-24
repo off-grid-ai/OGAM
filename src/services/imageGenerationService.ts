@@ -30,6 +30,8 @@ import {
   ActiveImageModel,
   RunGenerationOptions,
 } from './imageGenerationTypes';
+import { featureUsed, generationStarted, type ModelFacts } from './analytics/analytics';
+import { imageModelFacts, REMOTE_MODEL_FACTS } from './analytics/modelFacts';
 
 export { isInFlight } from './imageGenerationTypes';
 export type {
@@ -241,6 +243,11 @@ class ImageGenerationService {
       );
       return true;
     } catch (error: any) {
+      // A request cancelled while its model loads ends without an error card.
+      if (job.cancelled || !this.isLive(job)) {
+        this.resetFor(job);
+        return false;
+      }
       // Pass the TYPED error as `cause` — an OverridableMemoryError here is what lets
       // the failure card offer "Load Anyway". Stringifying it (as before) hid it.
       this.failFor(
@@ -273,10 +280,10 @@ class ImageGenerationService {
     // the single cross-platform signal (so the notice shows once on every device);
     // the OpenCL kernel-cache check is an extra Android signal in case the cache was
     // cleared after the flag was set.
-    let isFirstRun = !useAppStore
+    let isFirstRun = activeImageModel.backend !== 'sd' && !useAppStore
       .getState()
       .warmedImageModels.includes(activeImageModel.id);
-    if (useOpenCL) {
+    if (useOpenCL && activeImageModel.backend !== 'sd') {
       try {
         const hasCache = await onnxImageGeneratorService.hasKernelCache(
           activeImageModel.modelPath,
@@ -290,7 +297,7 @@ class ImageGenerationService {
 
     this.updateFor(job, {
       phase: 'generating',
-      status: isFirstRun
+      status: activeImageModel.backend === 'sd' ? 'Processing image prompt...' : isFirstRun
         ? 'Optimizing GPU for your device (~120s, one-time)...'
         : 'Starting image generation...',
     });
@@ -389,7 +396,7 @@ class ImageGenerationService {
     params: GenerateImageParams,
     opts?: { override?: boolean },
   ): Promise<GeneratedImage | null> {
-    if (isInFlight(this.state.phase) || (this.job && !this.job.cancelled)) {
+    if (isInFlight(this.state.phase) || (this.job && !this.job.cancelled) || onnxImageGeneratorService.isGenerating()) {
       logger.log(
         '[ImageGenerationService] Already generating, ignoring request',
       );
@@ -405,13 +412,30 @@ class ImageGenerationService {
     };
     this.job = job;
     this._lastParams = params; // so a failure card's Retry can re-run this exact request
+    featureUsed('image_generation');
+    const endAnalytics = generationStarted('image', this.analyticsFacts());
     const run = this._generate(job, params, opts);
     job.settled = run.catch(() => null);
     try {
-      return await run;
+      const result = await run;
+      if (result) endAnalytics('done');
+      else endAnalytics(job.cancelled ? 'stopped' : 'failed', { error: this.state.error ?? undefined });
+      return result;
+    } catch (error) {
+      endAnalytics(job.cancelled ? 'stopped' : 'failed', { error });
+      throw error;
     } finally {
       if (this.job === job) this.job = null;
     }
+  }
+
+  /** The image route this request will use, in the spec's terms. */
+  private analyticsFacts(): ModelFacts {
+    if (useRemoteServerStore.getState().getActiveRemoteMediaServer('image')?.mediaModels?.image) {
+      return REMOTE_MODEL_FACTS;
+    }
+    const { activeImageModelId, downloadedImageModels } = useAppStore.getState();
+    return imageModelFacts(downloadedImageModels.find(m => m.id === activeImageModelId));
   }
 
   private async _generate(

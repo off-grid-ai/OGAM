@@ -17,6 +17,7 @@ function ModelsSheet() {
       labels={{
         text: textModel ?? 'Local text',
         image: imageModel ?? 'Local image',
+        video: 'Local video',
         voice: mediaServers.voice ? 'Cloud voice' : 'Local voice',
         speech: mediaServers.transcription ? 'Cloud speech' : 'Local speech',
       }}

@@ -17,10 +17,10 @@ import {
 } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { Card } from '../components';
 import { createStyles } from './SettingsScreen.styles';
 import { SettingsAppearanceRow } from './SettingsAppearanceRow';
 import { SettingsCommunitySections } from './SettingsCommunitySections';
+import { SettingsAnalyticsSection } from './SettingsAnalyticsSection';
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { MadeWithLove } from '../components/MadeWithLove';
@@ -173,6 +173,7 @@ export const SettingsScreen: React.FC = () => {
         <ProUpsellBanner
           trigger={focusTrigger}
           onGetPro={() => navigation.navigate('ProDetail')}
+          onDesignPartners={() => navigation.navigate('DesignPartners')}
         />
 
         <SettingsAppearanceRow
@@ -315,19 +316,13 @@ export const SettingsScreen: React.FC = () => {
           </View>
         </AnimatedEntry>
 
-        {/* Privacy */}
-        <AnimatedEntry index={10} staggerMs={40} trigger={focusTrigger}>
-          <Card style={styles.privacyCard}>
-            <View style={styles.privacyIconContainer}>
-              <Icon name="shield" size={18} color={colors.textSecondary} />
-            </View>
-            <Text style={styles.privacyTitle}>Privacy First</Text>
-            <Text style={styles.privacyText}>
-              All your data stays on this device. No conversations, prompts, or
-              personal information is ever sent to any server.
-            </Text>
-          </Card>
-        </AnimatedEntry>
+        {/* Analytics: opt-in consent, what is shared, Report a problem */}
+        <SettingsAnalyticsSection
+          focusTrigger={focusTrigger}
+          styles={styles}
+          colors={colors}
+          onWhatWeShare={() => navigation.navigate('AnalyticsInfo')}
+        />
 
         {/* Pro feature sections registered at runtime by @offgrid/pro */}
         {settingsSections.map((Section, i) => (

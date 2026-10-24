@@ -1,3 +1,4 @@
+import { VideoTab } from './VideoTab';
 import React, { useEffect, useState, useMemo } from 'react';
 import { Text, ScrollView, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -34,25 +35,26 @@ import {
 } from '../../utils/modelSelectorFilters';
 import logger from '../../utils/logger';
 
-type TabType = 'text' | 'image';
+type TabType = 'text' | 'image' | 'video';
 
 function savedTextModels(
   server: RemoteServer,
   discovered: RemoteModel[],
 ): RemoteModel[] {
-  return remoteServerModelOptions([server], 'text').map(option =>
-    discovered.find(model => model.id === option.id) ?? {
-      id: option.id,
-      name: option.name,
-      serverId: option.serverId,
-      capabilities: {
-        supportsVision: false,
-        supportsToolCalling: false,
-        supportsThinking: false,
+  return remoteServerModelOptions([server], 'text').map(
+    option =>
+      discovered.find(model => model.id === option.id) ?? {
+        id: option.id,
+        name: option.name,
+        serverId: option.serverId,
+        capabilities: {
+          supportsVision: false,
+          supportsToolCalling: false,
+          supportsThinking: false,
+        },
+        details: { serverName: option.serverName },
+        lastUpdated: server.lastHealthCheck ?? server.createdAt,
       },
-      details: { serverName: option.serverName },
-      lastUpdated: server.lastHealthCheck ?? server.createdAt,
-    },
   );
 }
 
@@ -69,7 +71,7 @@ interface ModelSelectorModalProps {
   onSelectionComplete?: () => void;
   onClosed?: () => void;
   onBackToModels?: () => void;
-  onBrowseModels?: (tab: 'text' | 'image') => void;
+  onBrowseModels?: (tab: 'text' | 'image' | 'video') => void;
 }
 
 export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
@@ -180,7 +182,11 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
           id: option.id,
           name: option.name,
           serverId: option.serverId,
-          capabilities: { supportsVision: false, supportsToolCalling: false, supportsThinking: false },
+          capabilities: {
+            supportsVision: false,
+            supportsToolCalling: false,
+            supportsThinking: false,
+          },
           details: { serverName: option.serverName },
           lastUpdated: server.lastHealthCheck ?? server.createdAt,
         })),
@@ -286,28 +292,41 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
       onClosed={onClosed}
       onBackPress={onBackToModels}
       snapPoints={['40%', '75%']}
-      title={activeTab === 'image' ? 'IMAGE MODEL' : 'TEXT MODEL'}
+      title={
+        activeTab === 'video'
+          ? 'VIDEO MODEL'
+          : activeTab === 'image'
+            ? 'IMAGE MODEL'
+            : 'TEXT MODEL'
+      }
     >
-        {/* Text-model loading now shows an inline spinner ON the selected row (TextTab → ModelRow),
+      {/* Text-model loading now shows an inline spinner ON the selected row (TextTab → ModelRow),
             not a banner over the list. The image tab keeps its own indicator, so no banner for text. */}
 
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
       >
-          {activeTab === 'text' ? (
-            <TextTab
-              downloadedModels={filteredDownloadedModels}
-              remoteModels={remoteTextModels}
-              currentModelPath={currentModelPath}
-              selectedModelPath={selectedModelPath}
-              currentRemoteModelId={activeRemoteTextModelId}
-              isAnyLoading={isAnyLoading}
-              loadingModelId={effectiveLoadingTextModelId}
-              loadingRemoteModelKey={loadingRemoteTextModelKey}
-              onSelectModel={handleSelectLocalModel}
-              onSelectRemoteModel={handleSelectRemoteTextModel}
-              onUnloadModel={handleUnloadModel}
+        {activeTab === 'video' ? (
+          <VideoTab
+            onSelect={() => {
+              onSelectionComplete?.();
+              onClose();
+            }}
+          />
+        ) : activeTab === 'text' ? (
+          <TextTab
+            downloadedModels={filteredDownloadedModels}
+            remoteModels={remoteTextModels}
+            currentModelPath={currentModelPath}
+            selectedModelPath={selectedModelPath}
+            currentRemoteModelId={activeRemoteTextModelId}
+            isAnyLoading={isAnyLoading}
+            loadingModelId={effectiveLoadingTextModelId}
+            loadingRemoteModelKey={loadingRemoteTextModelKey}
+            onSelectModel={handleSelectLocalModel}
+            onSelectRemoteModel={handleSelectRemoteTextModel}
+            onUnloadModel={handleUnloadModel}
             onAddServer={() => {
               onClose();
               onAddServer?.();
@@ -315,14 +334,16 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
             onBrowseModels={
               onBrowseModels ? () => onBrowseModels('text') : undefined
             }
-            />
-          ) : (
-            <ImageTab
-              downloadedImageModels={filteredDownloadedImageModels}
+          />
+        ) : (
+          <ImageTab
+            downloadedImageModels={filteredDownloadedImageModels}
             remoteVisionModels={remoteImageModels}
-              activeImageModelId={activeImageModelId}
-              loadedImageModelId={activeModelService.getLoadedModelIds().imageModelId}
-              activeRemoteImageModelId={activeRemoteImageModelId}
+            activeImageModelId={activeImageModelId}
+            loadedImageModelId={
+              activeModelService.getLoadedModelIds().imageModelId
+            }
+            activeRemoteImageModelId={activeRemoteImageModelId}
             activeRemoteImageServerId={activeRemoteMediaServerIds.image ?? null}
               isAnyLoading={isAnyLoading}
               isLoadingImage={isLoadingImage}
@@ -333,9 +354,9 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
             onBrowseModels={
               onBrowseModels ? () => onBrowseModels('image') : undefined
             }
-            />
-          )}
-        </ScrollView>
+          />
+        )}
+      </ScrollView>
 
       {onBrowseModels && (
         <TouchableOpacity

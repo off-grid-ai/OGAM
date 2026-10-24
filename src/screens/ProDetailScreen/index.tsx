@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,8 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { Button } from '../../components';
+import { Button, Card } from '../../components';
+import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import {
@@ -30,6 +31,7 @@ import { ProManageSection } from './ProManageSection';
 import { ProIncludedSection } from './ProIncludedSection';
 import { ProUnlockModal } from './ProUnlockModal';
 import type { RootStackParamList } from '../../navigation/types';
+import { proPaywallViewed, proPurchased } from '../../services/analytics/analytics';
 
 // Off Grid AI Pro is the ambient intelligence layer across desktop + phone, not a
 // mobile feature list. These pillars mirror the early-access page framing.
@@ -47,7 +49,7 @@ const PILLARS = [
   {
     icon: 'shield',
     title: 'Private by architecture',
-    desc: 'The model runs on your own hardware. No training on your data, no server to leak. Open source, so you can check.',
+    desc: 'The model runs on your own hardware. Your chats and files never leave your devices, and nothing trains on them. Open source, so you can check.',
   },
   {
     icon: 'refresh-cw',
@@ -94,9 +96,16 @@ export const ProDetailScreen: React.FC = () => {
   };
   const openVerifyModal = () => setVerifyModalVisible(true);
 
+  useEffect(() => {
+    if (!hasProAccess) proPaywallViewed();
+    // Once per visit: a paywall view is the screen opening, not every access change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Activation verified: load the pro bundle now so Pro lights up live (the
   // reactive appRoot slot mounts the engine without a restart). Registries dedupe.
   const handleUnlocked = () => {
+    proPurchased();
     loadProFeatures(true).catch(() => {});
   };
 
@@ -106,7 +115,10 @@ export const ProDetailScreen: React.FC = () => {
           entitlement state where a screen's actions go. */}
       <ScreenHeader
         title="Off Grid AI Pro"
-        onBack={() => navigation.goBack()}
+        onBack={() => {
+          if (navigation.canGoBack()) navigation.goBack();
+          else navigation.replace('Main', { screen: 'HomeTab' });
+        }}
         right={
 <View style={styles.headerActions}>
             {deviceStatus ? (
@@ -176,7 +188,7 @@ export const ProDetailScreen: React.FC = () => {
               <Text style={styles.heroSubtitle}>
                 Ambient and proactive. It sees your day, remembers it, and gets
                 ahead of you - and the model runs on your own hardware, so
-                nothing is sent anywhere.
+                your chats and files never leave your devices.
               </Text>
             </View>
 
@@ -189,6 +201,26 @@ export const ProDetailScreen: React.FC = () => {
               <Text style={styles.pricingTitle}>{pricing.title}</Text>
               <Text style={styles.pricingSubtitle}>{pricing.subtitle}</Text>
             </View>
+
+            <Card style={styles.partnerCard}>
+              <Text style={styles.sectionLabel}>SMALL BUSINESS DESIGN PARTNERS</Text>
+              <Text style={styles.partnerTitle} accessibilityRole="header">
+                Free lifetime Pro for design partners
+              </Text>
+              <Text style={styles.partnerDescription}>
+                Have fewer than 50 people? If your business idea fits, Pro is free
+                for life, even if we do not build the full solution together.
+              </Text>
+              <AnimatedPressable
+                style={styles.partnerLink}
+                accessibilityRole="button"
+                accessibilityLabel="See the partner offer"
+                onPress={() => navigation.navigate('DesignPartners')}
+              >
+                <Text style={styles.partnerLinkText}>See the partner offer</Text>
+                <Icon name="chevron-right" size={16} color={colors.primary} />
+              </AnimatedPressable>
+            </Card>
 
             {/* Ambient pillars */}
             <View style={styles.pillarsSection}>
@@ -238,7 +270,7 @@ export const ProDetailScreen: React.FC = () => {
             <Text style={styles.desktopTitle}>Get Off Grid AI Desktop</Text>
             <Text style={styles.desktopDesc}>{OFF_GRID_DESKTOP_BENEFIT}</Text>
           </View>
-          <Icon name="external-link" size={16} color={colors.textMuted} />
+          <Icon name="external-link" size={16} color={colors.primary} />
         </TouchableOpacity>
       </ScrollView>
 
@@ -378,6 +410,27 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
 
   // Pillars
+  partnerCard: { marginHorizontal: SPACING.xl, marginBottom: SPACING.xl },
+  partnerTitle: { ...TYPOGRAPHY.h3, color: colors.text, marginBottom: SPACING.sm },
+  partnerDescription: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.textSecondary,
+    marginBottom: SPACING.xs,
+  },
+  partnerLink: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: SPACING.sm,
+    minHeight: 44,
+    paddingVertical: SPACING.sm,
+  },
+  partnerLinkText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: colors.primary,
+    textDecorationLine: 'underline' as const,
+    flex: 1,
+  },
   pillarsSection: { paddingHorizontal: SPACING.xl, marginBottom: SPACING.lg },
   sectionLabel: {
     ...TYPOGRAPHY.label,
@@ -433,7 +486,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     justifyContent: 'center' as const,
   },
   desktopText: { flex: 1, gap: 3 as number },
-  desktopTitle: { ...TYPOGRAPHY.body, color: colors.text },
+  desktopTitle: { ...TYPOGRAPHY.body, color: colors.primary, textDecorationLine: 'underline' as const },
   desktopDesc: {
     ...TYPOGRAPHY.bodySmall,
     color: colors.textSecondary,

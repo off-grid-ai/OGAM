@@ -6,6 +6,8 @@ import logger from '../utils/logger';
 // existing `from '../stores/downloadStore'` importer of these keeps working unchanged.
 import { DownloadStatus, DownloadEntry, isActiveStatus } from '../utils/downloadStatus';
 import { sampleProgressRate } from '@offgrid/ui';
+import { downloadEnded, downloadStarted } from '../services/analytics/analytics';
+import { modelRef } from '../services/analytics/values';
 
 export type { DownloadStatus, DownloadEntry };
 export type { ModelType } from '../utils/downloadStatus';
@@ -58,7 +60,42 @@ function terminalRateFields(
     : { rateSample: undefined, bytesPerSecond: undefined };
 }
 
-export const useDownloadStore = create<DownloadStoreState>((set) => ({
+function addEntry(state: DownloadStoreState, entry: DownloadEntry): Partial<DownloadStoreState> {
+  if (state.downloads[entry.modelKey]) return state;
+  return {
+    downloads: { ...state.downloads, [entry.modelKey]: entry },
+    downloadIdIndex: {
+      ...state.downloadIdIndex,
+      [entry.downloadId]: entry.modelKey,
+      ...(entry.mmProjDownloadId ? { [entry.mmProjDownloadId]: entry.modelKey } : {}),
+    },
+  };
+}
+/** Report a download start. A hydrated or restored row is not a new start, so only add/retry call this. */
+function reportStarted(entry: DownloadEntry | undefined): void {
+  if (!entry) return;
+  downloadStarted(entry.modelKey, {
+    model: modelRef(entry.modelId),
+    quant: entry.quantization || undefined,
+    sizeBytes: entry.combinedTotalBytes || entry.totalBytes,
+    modelType: entry.modelType,
+  });
+}
+
+/** Report the end of the main file's download (a vision sidecar never ends the download). */
+function reportEnd(
+  state: DownloadStoreState,
+  downloadId: string,
+  status: DownloadStatus,
+  code?: string,
+): void {
+  const entry = state.downloads[state.downloadIdIndex[downloadId] ?? ''];
+  if (entry?.downloadId !== downloadId) return;
+  if (status === 'failed') downloadEnded(entry.modelKey, 'failed', { code });
+  else if (status === 'completed') downloadEnded(entry.modelKey, 'done');
+}
+
+export const useDownloadStore = create<DownloadStoreState>((set, get) => ({
   downloads: {},
   downloadIdIndex: {},
   repairingVisionIds: {},
@@ -121,17 +158,11 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
   // remove() them first. This enforces "one logical entry per model/file"
   // and prevents a fresh start path from silently replacing a visible failed
   // entry that the product rules say must persist until explicit user action.
-  add: (entry) => set(state => {
-    if (state.downloads[entry.modelKey]) return state;
-    return {
-      downloads: { ...state.downloads, [entry.modelKey]: entry },
-      downloadIdIndex: {
-        ...state.downloadIdIndex,
-        [entry.downloadId]: entry.modelKey,
-        ...(entry.mmProjDownloadId ? { [entry.mmProjDownloadId]: entry.modelKey } : {}),
-      },
-    };
-  }),
+  add: (entry) => {
+    if (get().downloads[entry.modelKey]) return;
+    set(state => addEntry(state, entry));
+    reportStarted(get().downloads[entry.modelKey]);
+  },
 
   setMmProjDownloadId: (modelKey, mmProjDownloadId) => set(state => {
     const entry = state.downloads[modelKey];
@@ -227,7 +258,9 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
     };
   }),
 
-  setStatus: (downloadId, status, error) => set(state => {
+  setStatus: (downloadId, status, error) => {
+    reportEnd(get(), downloadId, status, error?.code);
+    set(state => {
     const modelKey = state.downloadIdIndex[downloadId];
     if (!modelKey) return state;
     const entry = state.downloads[modelKey];
@@ -265,7 +298,8 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
         },
       },
     };
-  }),
+  });
+  },
 
   setProcessing: (downloadId) => set(state => {
     const modelKey = state.downloadIdIndex[downloadId];
@@ -277,7 +311,9 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
     };
   }),
 
-  setCompleted: (downloadId) => set(state => {
+  setCompleted: (downloadId) => {
+    reportEnd(get(), downloadId, 'completed');
+    set(state => {
     const modelKey = state.downloadIdIndex[downloadId];
     if (!modelKey) return state;
     const entry = state.downloads[modelKey];
@@ -293,7 +329,8 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
         },
       },
     };
-  }),
+  });
+  },
 
   setMmProjCompleted: (mmProjDownloadId, bytes) => set(state => {
     const modelKey = state.downloadIdIndex[mmProjDownloadId];
@@ -313,7 +350,8 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
     };
   }),
 
-  retryEntry: (modelKey, newDownloadId) => set(state => {
+  retryEntry: (modelKey, newDownloadId) => {
+    set(state => {
     const entry = state.downloads[modelKey];
     if (!entry) return state;
     const newIndex = { ...state.downloadIdIndex };
@@ -350,7 +388,9 @@ export const useDownloadStore = create<DownloadStoreState>((set) => ({
       },
       downloadIdIndex: newIndex,
     };
-  }),
+  });
+    reportStarted(get().downloads[modelKey]);
+  },
 
   remove: (modelKey) => set(state => {
     const entry = state.downloads[modelKey];

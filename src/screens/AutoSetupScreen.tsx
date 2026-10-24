@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useSyncExternalStore } from 'react';
-import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import Icon from 'react-native-vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, Card } from '../components';
@@ -7,12 +8,21 @@ import { LoadingDots } from '../components/LoadingDots';
 import { SLOTS, useSlot } from '../bootstrap/slotRegistry';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import type { RootStackParamList } from '../navigation/types';
-import type { AutoSetupPlan } from '../services/autoSetupPlan';
+import type { AutoSetupItem, AutoSetupTier } from '../services/autoSetupPlan';
 import {
   autoSetupDownloadId,
+  autoSetupItemNeedsAction,
   createAutoSetupSession,
   type AutoSetupSession,
 } from '../services/autoSetupService';
+import {
+  flowFinished,
+  flowStarted,
+  proGateShown,
+  setAnalyticsConsent,
+} from '../services/analytics/analytics';
+import { ignore } from '../services/analytics/values';
+import { useAppStore } from '../stores/appStore';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 
@@ -25,10 +35,12 @@ type Props = {
   sessionFactory?: () => AutoSetupSession;
 };
 
-const labelForItem = (item: AutoSetupPlan['items'][number]) => {
-  if (item.kind === 'text') return 'TEXT + VISION';
+const labelForItem = (item: AutoSetupItem) => {
+  if (item.kind === 'text') return 'TEXT';
   if (item.kind === 'image') return 'IMAGE';
-  return 'SPEECH INPUT';
+  if (item.kind === 'video') return 'VIDEO';
+  if (item.kind === 'embedding') return 'SEARCH';
+  return 'SPEECH';
 };
 
 export const AutoSetupScreen: React.FC<Props> = ({
@@ -41,22 +53,49 @@ export const AutoSetupScreen: React.FC<Props> = ({
     session.snapshot,
     session.snapshot,
   );
-  const { width } = useWindowDimensions();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const VoiceIndicator = useSlot(SLOTS.autoSetupVoiceIndicator);
+  const [expandedTier, setExpandedTier] = useState<AutoSetupTier | null>(
+    () => session.snapshot().selectedTier,
+  );
 
   useEffect(() => {
     session.load().catch(() => undefined);
     return () => session.dispose();
   }, [session]);
 
+  useEffect(() => {
+    flowStarted('onboarding', 'setup_shown');
+  }, []);
+
+  const [shareAnalytics, setShareAnalytics] = useState(
+    () => useAppStore.getState().settings.analyticsUsage,
+  );
+  const toggleShareAnalytics = () => {
+    const next = !shareAnalytics;
+    setShareAnalytics(next);
+    setAnalyticsConsent({ usage: next, crashes: next }, 'setup').catch(ignore);
+  };
+  // Every way out of Auto Setup passed the consent row, so the person has been asked.
+  const markConsentAsked = () => {
+    useAppStore.getState().updateSettings({ analyticsAsked: true, analyticsLastPromptAt: Date.now() });
+  };
+
   const selected =
     snapshot.plans.find(plan => plan.tier === snapshot.selectedTier) ??
     snapshot.plans[0];
+  const selectedItems = [...(selected?.items ?? []), ...(selected?.embedding ? [selected.embedding] : [])].filter(item =>
+    snapshot.selectedKinds.includes(item.kind) &&
+    autoSetupItemNeedsAction(item, snapshot.installedIds),
+  );
+  const selectedBytes = selectedItems.reduce(
+    (total, item) => total + (
+      snapshot.installedIds.includes(autoSetupDownloadId(item)) ? 0 : item.sizeBytes
+    ), 0,
+  );
   const selectedOutcomes =
-    selected?.items.map(item => snapshot.outcomes[autoSetupDownloadId(item)]) ??
-    [];
+    selectedItems.map(item => snapshot.outcomes[autoSetupDownloadId(item)]);
   const progress =
     selectedOutcomes.length === 0
       ? 0
@@ -73,7 +112,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
         <View style={styles.center}>
           <LoadingDots color={colors.primary} />
           <Text style={styles.secondary}>
-            Finding the best models for this device...
+            Finding model choices...
           </Text>
         </View>
       </SafeAreaView>
@@ -85,11 +124,9 @@ export const AutoSetupScreen: React.FC<Props> = ({
         contentContainerStyle={styles.content}
         testID="auto-setup-screen"
       >
-        <Text style={styles.eyebrow}>AUTO SETUP</Text>
-        <Text style={styles.title}>Your private AI, ready in one step.</Text>
+        <Text style={styles.title}>Choose model downloads.</Text>
         <Text style={styles.secondary}>
-          Choose how much capability you want. Every option is safe for this
-          device.
+          Installed models add no download size.
         </Text>
 
         {snapshot.error && (
@@ -108,60 +145,148 @@ export const AutoSetupScreen: React.FC<Props> = ({
           </Card>
         )}
 
-        <View style={[styles.planGrid, width >= 700 && styles.planGridWide]}>
+        <View style={styles.consentRow}>
+          <Pressable
+            style={styles.consentToggle}
+            onPress={toggleShareAnalytics}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: shareAnalytics }}
+            accessibilityLabel="Share anonymous usage and crash reports"
+            testID="auto-setup-share-analytics"
+          >
+            <Icon
+              name={shareAnalytics ? 'check-square' : 'square'}
+              size={20}
+              color={shareAnalytics ? colors.primary : colors.textSecondary}
+            />
+            <View style={styles.consentText}>
+              <Text style={styles.consentLabel}>
+                Share anonymous usage and crash reports
+              </Text>
+              <Text style={styles.consentHint}>
+                Helps us fix what breaks on your device. Your chats never leave it.
+              </Text>
+            </View>
+          </Pressable>
+          <Text
+            style={styles.consentLink}
+            onPress={() => navigation.push('AnalyticsInfo')}
+            accessibilityRole="link"
+            testID="auto-setup-what-we-share"
+          >
+            What we share
+          </Text>
+        </View>
+
+        <View style={styles.planGrid}>
           {snapshot.plans.map(plan => (
             <Card
               key={plan.tier}
-              onPress={() => session.selectTier(plan.tier)}
               style={{
                 ...styles.planCard,
-                ...(width >= 700 ? styles.planCardWide : {}),
                 ...(selected?.tier === plan.tier ? styles.selectedCard : {}),
               }}
               testID={`auto-setup-plan-${plan.tier}`}
             >
-              <Text style={styles.planTitle}>{plan.title}</Text>
-              <Text style={styles.secondary}>{plan.summary}</Text>
-              {selected?.tier === plan.tier && (
+              <TouchableOpacity
+                style={styles.planHeader}
+                onPress={() => {
+                  if (expandedTier === plan.tier) {
+                    setExpandedTier(null);
+                    return;
+                  }
+                  if (selected?.tier !== plan.tier) session.selectTier(plan.tier);
+                  setExpandedTier(plan.tier);
+                }}
+                disabled={starting}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`${plan.title} plan`}
+                accessibilityState={{ expanded: expandedTier === plan.tier, disabled: starting }}
+                testID={`auto-setup-plan-heading-${plan.tier}`}
+              >
+                <View style={styles.planHeading}>
+                  <Text style={styles.planTitle}>{plan.title}</Text>
+                  <Icon
+                    name={expandedTier === plan.tier ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color={colors.textMuted}
+                  />
+                </View>
+                <Text style={styles.secondary}>{plan.summary}</Text>
+              </TouchableOpacity>
+              {expandedTier === plan.tier && (
                 <View
                   style={styles.expandedPlan}
                   testID="auto-setup-selected-plan"
                 >
-                  <Text style={styles.includesLabel}>INCLUDES</Text>
                   <View style={styles.planItems}>
-                    {plan.items.map(item => (
-                      <View
-                        key={`${plan.tier}:${item.kind}:${item.id}`}
-                        style={styles.planItem}
-                      >
-                        <Text style={styles.itemKind}>
-                          {labelForItem(item)}
-                        </Text>
-                        <Text style={styles.planItemName}>{item.name}</Text>
-                        <Text style={styles.itemSize}>
-                          {formatBytes(item.sizeBytes)}
-                          {outcomeLabel(
-                            snapshot.outcomes[autoSetupDownloadId(item)],
+                    {[...plan.items, ...(plan.embedding ? [plan.embedding] : [])].map(item => {
+                      const checked = snapshot.selectedKinds.includes(item.kind);
+                      const installed = snapshot.installedIds.includes(autoSetupDownloadId(item));
+                      const needsAction = autoSetupItemNeedsAction(item, snapshot.installedIds);
+                      const size = item.kind === 'embedding' && item.sizeBytes === 0
+                        ? 'Included' : formatBytes(item.sizeBytes);
+                      return (
+                        <View
+                          key={`${plan.tier}:${item.kind}:${item.id}`}
+                          style={styles.planItem}
+                        >
+                          {needsAction ? (
+                            <Button
+                              title=""
+                              icon={<Icon name={checked ? 'check-square' : 'square'} size={20} color={checked ? colors.primary : colors.textSecondary} />}
+                              variant="ghost"
+                              size="small"
+                              active={checked}
+                              style={styles.choiceControl}
+                              onPress={() => session.toggleKind(item.kind)}
+                              disabled={starting}
+                              accessibilityRole="checkbox"
+                              accessibilityLabel={`Include ${item.name}, ${size}${installed ? ', already downloaded' : ''}`}
+                              accessibilityState={{ checked, disabled: starting }}
+                              testID={`auto-setup-choice-${item.kind}`}
+                            />
+                          ) : (
+                            <View
+                              style={styles.choiceControl}
+                              accessible
+                              accessibilityLabel={`${item.name}, included`}
+                              testID={`auto-setup-included-${item.kind}`}
+                            >
+                              <Icon name="package" size={20} color={colors.textMuted} />
+                            </View>
                           )}
+                          <Text style={styles.planItemName} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          <Text style={styles.itemKind}>{labelForItem(item)}</Text>
+                          <Text style={styles.itemSize}>
+                            {needsAction
+                              ? `${size}${installed ? '' : outcomeLabel(snapshot.outcomes[autoSetupDownloadId(item)])}`
+                              : item.sizeBytes === 0 ? 'Included' : `${size} · Included`}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                    {!plan.items[3] && (
+                      <View style={styles.unavailableItem}>
+                        <Text style={styles.itemKind}>VIDEO</Text>
+                        <Text style={styles.itemSize}>
+                          {plan.videoExclusionReason ?? 'No video model is included in this Auto Setup plan.'}
                         </Text>
                       </View>
-                    ))}
-                    {VoiceIndicator ? (
-                      <VoiceIndicator
-                        onPress={() => navigation.push('ProDetail')}
-                        style={styles.planItem}
-                      />
-                    ) : null}
+                    )}
                   </View>
                   <Text style={styles.total}>
-                    {formatBytes(plan.totalBytes)} download
+                    {formatBytes(selectedBytes)} selected download
                   </Text>
-                  {(starting || selectedOutcomes.length > 0) && (
+                  {starting && (
                     <View style={styles.progressTrack}>
                       <View
                         style={[
                           styles.progressFill,
-                          { width: `${Math.max(2, progress * 100)}%` },
+                          { width: `${progress * 100}%` },
                         ]}
                       />
                     </View>
@@ -180,13 +305,24 @@ export const AutoSetupScreen: React.FC<Props> = ({
                       title={
                         snapshot.phase === 'failed'
                           ? 'Retry Downloads'
-                          : `Download ${formatBytes(plan.totalBytes)}`
+                          : selectedBytes === 0 ? 'Use selected models'
+                          : `Download ${formatBytes(selectedBytes)}`
                       }
                       onPress={() => {
+                        markConsentAsked();
                         session.start().catch(() => undefined);
                       }}
                       loading={starting}
+                      disabled={selectedItems.length === 0}
                       testID="auto-setup-download"
+                    />
+                  )}
+                  {starting && (
+                    <Button
+                      title="Stop Downloads"
+                      variant="outline"
+                      onPress={() => { session.cancel().catch(() => undefined); }}
+                      testID="auto-setup-cancel"
                     />
                   )}
                 </View>
@@ -195,10 +331,20 @@ export const AutoSetupScreen: React.FC<Props> = ({
           ))}
         </View>
 
+        {VoiceIndicator ? (
+          <VoiceIndicator
+            onPress={() => {
+              proGateShown('voice');
+              navigation.push('ProDetail');
+            }}
+            style={styles.voiceItem}
+          />
+        ) : null}
+
         {!selected && (
           <Card style={styles.errorCard}>
             <Text style={styles.error}>
-              No complete model set is safe for this device.
+              Auto Setup could not find the models it needs to show a plan.
             </Text>
           </Card>
         )}
@@ -206,13 +352,22 @@ export const AutoSetupScreen: React.FC<Props> = ({
         <Button
           title="Configure it yourself"
           variant="ghost"
-          onPress={() => navigation.push('AdvancedSetup')}
+          style={styles.textAction}
+          onPress={() => {
+            markConsentAsked();
+            navigation.push('AdvancedSetup');
+          }}
           testID="auto-setup-advanced"
         />
         <Button
           title="Skip for Now"
           variant="ghost"
-          onPress={() => navigation.replace('Main')}
+          style={styles.textAction}
+          onPress={() => {
+            markConsentAsked();
+            flowFinished('onboarding', 'cancelled');
+            navigation.replace('Main');
+          }}
           testID="auto-setup-skip"
         />
       </ScrollView>
@@ -240,13 +395,13 @@ function outcomeLabel(
   return '';
 }
 
-const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
+const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   container: { flex: 1, backgroundColor: colors.background },
   content: {
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.xl,
     paddingBottom: SPACING.xxl,
-    gap: SPACING.md,
+    gap: SPACING.sm,
   },
   center: {
     flex: 1,
@@ -255,51 +410,89 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     gap: SPACING.md,
     padding: SPACING.xl,
   },
-  eyebrow: { ...TYPOGRAPHY.label, color: colors.primary },
-  title: { ...TYPOGRAPHY.h2, color: colors.text },
-  secondary: { ...TYPOGRAPHY.body, color: colors.textSecondary },
-  planGrid: { gap: SPACING.sm },
-  planGridWide: { flexDirection: 'row' as const },
+  title: { ...TYPOGRAPHY.h2, color: colors.text, textAlign: 'left' as const },
+  secondary: { ...TYPOGRAPHY.body, color: colors.textSecondary, textAlign: 'left' as const },
+  planGrid: { gap: SPACING.xs },
   planCard: {
     borderWidth: 1,
     borderColor: colors.border,
     gap: SPACING.xs,
-    padding: SPACING.md,
+    padding: SPACING.sm,
     borderRadius: SPACING.sm,
   },
-  planCardWide: { flex: 1 },
   selectedCard: { borderColor: colors.primary },
-  planTitle: { ...TYPOGRAPHY.h3, color: colors.text },
+  planHeader: {
+    gap: SPACING.xs,
+    minHeight: 44,
+    justifyContent: 'center' as const,
+  },
+  planHeading: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+  },
+  planTitle: { ...TYPOGRAPHY.h3, color: colors.text, textAlign: 'left' as const },
   expandedPlan: {
     borderTopWidth: 1,
     borderTopColor: colors.border,
     marginTop: SPACING.xs,
-    paddingTop: SPACING.sm,
-    gap: SPACING.sm,
-  },
-  includesLabel: { ...TYPOGRAPHY.labelSmall, color: colors.textMuted },
-  planItems: {
-    flexDirection: 'row' as const,
-    flexWrap: 'wrap' as const,
-    gap: SPACING.sm,
-  },
-  planItem: {
-    flexBasis: '45%' as const,
-    flexGrow: 1,
+    paddingTop: SPACING.xs,
     gap: SPACING.xs,
-    padding: SPACING.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: SPACING.sm,
-    backgroundColor: colors.surfaceLight,
   },
-  planItemName: { ...TYPOGRAPHY.body, color: colors.text },
+  planItems: { gap: 0 },
+  planItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: SPACING.sm,
+    minHeight: 44,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  unavailableItem: {
+    padding: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  voiceItem: {
+    padding: SPACING.sm,
+    gap: SPACING.xs,
+    borderRadius: SPACING.sm,
+    backgroundColor: colors.surface,
+    ...shadows.small,
+  },
+  textAction: {
+    minHeight: 44,
+    alignSelf: 'stretch' as const,
+    justifyContent: 'center' as const,
+    paddingHorizontal: 0,
+    paddingVertical: SPACING.xs,
+  },
+  choiceControl: {
+    width: 44,
+    height: 44,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  planItemName: {
+    ...TYPOGRAPHY.body,
+    color: colors.text,
+    flex: 1,
+    minWidth: 0,
+    textAlign: 'left' as const,
+  },
   itemSize: {
     ...TYPOGRAPHY.meta,
     color: colors.textSecondary,
+    flexShrink: 0,
   },
-  total: { ...TYPOGRAPHY.meta, color: colors.primary },
-  itemKind: { ...TYPOGRAPHY.labelSmall, color: colors.textMuted },
+  total: { ...TYPOGRAPHY.meta, color: colors.primary, textAlign: 'left' as const },
+  itemKind: {
+    ...TYPOGRAPHY.labelSmall,
+    color: colors.textMuted,
+    textAlign: 'right' as const,
+    flexShrink: 0,
+  },
   progressTrack: {
     height: SPACING.xs,
     backgroundColor: colors.surfaceLight,
@@ -307,5 +500,19 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   progressFill: { height: SPACING.xs, backgroundColor: colors.primary },
   errorCard: { gap: SPACING.md, borderWidth: 1, borderColor: colors.error },
+  consentRow: { gap: SPACING.xs },
+  consentToggle: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: SPACING.sm,
+  },
+  consentText: { flex: 1, gap: SPACING.xs },
+  consentLabel: { ...TYPOGRAPHY.body, color: colors.text },
+  consentHint: { ...TYPOGRAPHY.meta, color: colors.textSecondary },
+  consentLink: {
+    ...TYPOGRAPHY.meta,
+    color: colors.primary,
+    marginLeft: 20 + SPACING.sm,
+  },
   error: { ...TYPOGRAPHY.body, color: colors.error },
 });

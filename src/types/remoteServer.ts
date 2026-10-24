@@ -12,6 +12,7 @@ type RemoteProviderType = 'openai-compatible' | 'anthropic';
 export interface RemoteMediaModelIds {
   text?: string;
   image?: string;
+  video?: string;
   transcription?: string;
   voice?: string;
 }
@@ -33,6 +34,7 @@ export type RemoteModelCatalog = Partial<
 
 export interface RemoteServerCapabilities {
   imageGeneration: boolean;
+  videoGeneration: boolean;
   transcription: boolean;
   voice: boolean;
 }
@@ -71,6 +73,7 @@ export function remoteServerCapabilities(
 ): RemoteServerCapabilities {
   return {
     imageGeneration: !!server.mediaModels?.image?.trim(),
+    videoGeneration: !!server.mediaModels?.video?.trim(),
     transcription: !!server.mediaModels?.transcription?.trim(),
     voice: !!server.mediaModels?.voice?.trim(),
   };

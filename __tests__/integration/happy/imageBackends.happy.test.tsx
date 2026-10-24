@@ -1,7 +1,7 @@
 /**
  * HAPPY-PATH (UI, BEHAVIORAL) — image generation across compute backends via the REAL ChatScreen: the user
  * turns on the image-mode toggle (ON/force) and sends; the generated image's details show the correct
- * backend label: NPU→"QNN (NPU)" · MNN(GPU)→"MNN (GPU)" · Metal(iOS)→"Core ML (ANE)".
+ * backend label: NPU→"QNN (NPU)" · MNN(GPU)→"MNN (GPU)" · Metal(iOS)→"Core ML".
  *
  * Only the native diffusion + LiteRT leaves are faked. The image model is DOWNLOADED (boundary) and ACTIVATED
  * by the real toggle gesture (not setState). Generation details are turned on via the real toggle.
@@ -21,7 +21,7 @@ jest.mock('@react-navigation/native', () => ({
 type Cfg = { label: string; backend: 'mnn' | 'qnn'; platform: 'ios' | 'android'; expected: string };
 const CONFIGS: Cfg[] = [
   { label: 'MNN GPU (Android)', backend: 'mnn', platform: 'android', expected: 'MNN (GPU)' },
-  { label: 'Metal (Core ML, iOS)', backend: 'mnn', platform: 'ios', expected: 'Core ML (ANE)' },
+  { label: 'Metal (Core ML, iOS)', backend: 'mnn', platform: 'ios', expected: 'Core ML' },
 ];
 
 describe('happy — image generation shows the correct backend label (heavy entry point)', () => {

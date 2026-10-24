@@ -140,7 +140,7 @@ describe('ModelManager', () => {
 
       await modelManager.initialize();
 
-      expect(mockedBackgroundDownloadService.excludeFromBackup).toHaveBeenCalledTimes(3);
+      expect(mockedBackgroundDownloadService.excludeFromBackup).toHaveBeenCalledTimes(4);
       expect(mockedBackgroundDownloadService.excludeFromBackup).toHaveBeenCalledWith(
         expect.stringContaining('/models'),
       );
@@ -149,6 +149,9 @@ describe('ModelManager', () => {
       );
       expect(mockedBackgroundDownloadService.excludeFromBackup).toHaveBeenCalledWith(
         expect.stringContaining('/whisper-models'),
+      );
+      expect(mockedBackgroundDownloadService.excludeFromBackup).toHaveBeenCalledWith(
+        expect.stringContaining('/video-models'),
       );
     });
   });

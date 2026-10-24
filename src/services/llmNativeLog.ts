@@ -25,7 +25,19 @@ const RING_SIZE = 40;
  * They are still kept in the ring buffer, which is the point of this passthrough: a load failure can
  * attach the real reason. The ring is memory and costs nothing; the file is what hurt.
  */
-const PER_TENSOR_NOISE = /create_tensor|loading tensor|done_getting_tensors|load_tensors:/;
+// `llama_graph_n_input_tensors` names one graph node per line (hundreds per load): it filled the whole
+// Report a problem view and pushed every useful line out.
+const PER_TENSOR_NOISE =
+  /create_tensor|loading tensor|done_getting_tensors|load_tensors:|llama_graph_n_input_tensors/;
+
+/**
+ * Lines llama.cpp emits once PER SAMPLED TOKEN while a lazy tool grammar waits for its trigger, e.g.
+ * "Grammar still awaiting trigger after token 7932 (` gift`)". They carry the reply's own words, and
+ * the debug log never holds chat content (docs/ANALYTICS.md, Report a problem), so they are dropped.
+ */
+const PER_TOKEN_LINE = /Grammar (?:still awaiting trigger|triggered) /;
+/** llama.cpp quotes token and prompt text in backticks; keep the line, never the text. */
+const QUOTED_TEXT = /`[^`]*`/g;
 const recent: string[] = [];
 let started = false;
 
@@ -37,8 +49,10 @@ export function ensureNativeLogCapture(): void {
     toggleNativeLog(true);
     addNativeLogListener((level: string, text: string) => {
       const severity = (level || 'info').trim();
-      const line = `${severity}: ${(text || '').trim()}`;
-      // Ring ALWAYS: this is what makes a load failure explain itself.
+      const raw = (text || '').trim();
+      if (PER_TOKEN_LINE.test(raw)) return;
+      const line = `${severity}: ${raw.replace(QUOTED_TEXT, '`…`')}`;
+      // Ring every other line: this is what makes a load failure explain itself.
       recent.push(line);
       if (recent.length > RING_SIZE) recent.shift();
       // File only when it is worth a write. Anything not per-tensor still goes through, so

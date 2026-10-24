@@ -66,6 +66,10 @@ class NativeDownloadBoundary implements DownloadProvider {
     if (request.modelType === 'image') {
       return this.begin(request.model.id, request.model.name, request.model.size);
     }
+    if (request.modelType === 'video') {
+      const size = request.model.files.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0);
+      return this.begin(request.model.id, request.model.name, size);
+    }
     return this.begin(request.modelId, request.modelId, 1 * MB);
   }
 
@@ -216,17 +220,22 @@ describe('Auto Setup release journey', () => {
       expect(ui.getByTestId('auto-setup-plan-balanced')).toBeTruthy(),
     );
 
-    expect(ui.getAllByText('INCLUDES')).toHaveLength(1);
+    // Only the chosen plan is expanded.
+    expect(ui.getAllByTestId('auto-setup-selected-plan')).toHaveLength(1);
     // Balanced aims at 4B: the catalog now offers Qwen 3.5 4B, which leads Gemma 4 E4B.
     expect(ui.getByText('Qwen 3.5 4B')).toBeTruthy();
-    fireEvent.press(ui.getByTestId('auto-setup-plan-lean'));
+    fireEvent.press(ui.getByTestId('auto-setup-plan-heading-lean'));
     expect(ui.getByText('Qwen 3.5 2B')).toBeTruthy();
     expect(ui.queryByText('SmolVLM 2B')).toBeNull();
-    fireEvent.press(ui.getByTestId('auto-setup-plan-extreme'));
+    fireEvent.press(ui.getByTestId('auto-setup-plan-heading-extreme'));
     expect(ui.getByText('Qwen 3.5 9B')).toBeTruthy();
     expect(ui.queryByText('Qwen 3.5 4B')).toBeNull();
-    expect(useAppStore.getState().settings.modelLoadingMode).toBe('aggressive');
+    // A tier only previews downloads; it never changes the live loading policy.
+    expect(useAppStore.getState().settings.modelLoadingMode).toBe('balanced');
 
+    // Text is preselected; image and speech-to-text are opt-in.
+    fireEvent.press(ui.getByTestId('auto-setup-choice-image'));
+    fireEvent.press(ui.getByTestId('auto-setup-choice-stt'));
     fireEvent.press(ui.getByTestId('auto-setup-download'));
     await waitFor(() =>
       expect(ui.getByTestId('auto-setup-continue')).toBeTruthy(),
@@ -284,6 +293,8 @@ describe('Auto Setup release journey', () => {
       expect(ui.getByTestId('auto-setup-download')).toBeTruthy(),
     );
 
+    fireEvent.press(ui.getByTestId('auto-setup-choice-image'));
+    fireEvent.press(ui.getByTestId('auto-setup-choice-stt'));
     fireEvent.press(ui.getByTestId('auto-setup-download'));
 
     await waitFor(() =>
@@ -313,6 +324,8 @@ describe('Auto Setup release journey', () => {
     await waitFor(() =>
       expect(ui.getByTestId('auto-setup-download')).toBeTruthy(),
     );
+    fireEvent.press(ui.getByTestId('auto-setup-choice-image'));
+    fireEvent.press(ui.getByTestId('auto-setup-choice-stt'));
     fireEvent.press(ui.getByTestId('auto-setup-download'));
     await waitFor(() =>
       expect(ui.getAllByText(/STARTING|0%/).length).toBeGreaterThan(0),
@@ -363,7 +376,7 @@ describe('Auto Setup release journey', () => {
     await waitFor(() =>
       expect(ui.getAllByText(/STARTING|0%/).length).toBeGreaterThan(0),
     );
-    fireEvent.press(ui.getByTestId('auto-setup-plan-extreme'));
+    fireEvent.press(ui.getByTestId('auto-setup-plan-heading-extreme'));
 
     expect(ui.getByText('Qwen 3.5 4B')).toBeTruthy();
     expect(ui.queryByText('Qwen 3.5 9B')).toBeNull();

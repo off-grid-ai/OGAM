@@ -173,8 +173,7 @@ export async function generateWithToolsImpl(
       tool_choice: 'auto',
       ...buildThinkingCompletionParams(deps.isThinkingEnabled, deps.isGemma4Model, settings.reasoningBudget),
     };
-    logger.log('[LLM-Tools] === INPUT ===');
-    logger.log(JSON.stringify(completionParams, null, 2));
+    logger.log(`[LLM-Tools] input messages=${completionParams.messages?.length ?? 0} tools=${options.tools?.length ?? 0}`);
     const completionResult: any = await safeCompletion(deps.context, () => deps.context.completion(completionParams as any, (data: any) => {
       if (!generating) return;
       if (data.tool_calls) {
@@ -202,16 +201,12 @@ export async function generateWithToolsImpl(
         if (visible) options.onStream?.({ content: visible });
       }
     }), 'generateWithTools');
-    logger.log('[LLM-Tools] === OUTPUT ===');
-    logger.log(JSON.stringify(completionResult, null, 2));
-    // [WIRE] full tool-generation input+output on ONE tagged line so the lossless wire file captures the
-    // whole payload (the pretty-printed dumps above are separate untagged lines the tee can't match).
-    logger.log(`[WIRE-LLAMA-TOOL] ${JSON.stringify({ input: completionParams, output: completionResult })}`);
+    // Shape only: prompts, replies and tool arguments never go in the log.
+    logger.log(`[WIRE-LLAMA-TOOL] ${JSON.stringify({ textLength: completionResult?.text?.length ?? 0, contentLength: completionResult?.content?.length ?? 0, toolCalls: completionResult?.tool_calls?.length ?? 0 })}`);
 
     const cr = completionResult;
-    logger.log(`[LLM-Tools] Completion done: streamed=${tokenCount} tokens, response="${fullResponse.substring(0, 100)}"`);
+    logger.log(`[LLM-Tools] Completion done: streamed=${tokenCount} tokens, response=${fullResponse.length}ch`);
     logger.log(`[LLM-Tools] Result: predicted=${cr?.tokens_predicted}, evaluated=${cr?.tokens_evaluated}, context_full=${cr?.context_full}, stopped_eos=${cr?.stopped_eos}`);
-    logger.log(`[LLM-Tools] Result text="${(cr?.text || '').substring(0, 200)}", content="${(cr?.content || '').substring(0, 200)}"`);
 
     // If streaming didn't capture tokens, fall back to the CLEAN parsed content — NEVER cr.text, which
     // carries the raw <|channel>thought…<channel|> reasoning markers. reasoning falls back likewise.

@@ -194,20 +194,21 @@ class IntentClassifier {
       : options;
 
     const trimmedMessage = message.trim().toLowerCase();
-    const logMsg = trimmedMessage.slice(0, 60);
+    // Length only: the message is what the person typed and never goes in the log.
+    const logMsg = `${trimmedMessage.length}ch`;
 
     // Check cache first
     const cacheKey = trimmedMessage.slice(0, 200); // Limit key size
     const cachedIntent = intentCache.get(cacheKey);
     if (cachedIntent) {
-      logger.log(`[ROUTE-SM] classify CACHE intent=${cachedIntent} msg="${logMsg}"`);
+      logger.log(`[ROUTE-SM] classify CACHE intent=${cachedIntent} msg=${logMsg}`);
       return cachedIntent;
     }
 
     // Fast pattern matching
     const patternResult = this.classifyByPattern(trimmedMessage);
     if (patternResult !== null) {
-      logger.log(`[ROUTE-SM] classify PATTERN intent=${patternResult} msg="${logMsg}"`);
+      logger.log(`[ROUTE-SM] classify PATTERN intent=${patternResult} msg=${logMsg}`);
       this.cacheIntent(cacheKey, patternResult);
       return patternResult;
     }
@@ -216,7 +217,7 @@ class IntentClassifier {
     if (opts.useLLM) {
       try {
         const llmResult = await this.classifyWithLLM(message, opts);
-        logger.log(`[ROUTE-SM] classify LLM intent=${llmResult} msg="${logMsg}"`);
+        logger.log(`[ROUTE-SM] classify LLM intent=${llmResult} msg=${logMsg}`);
         this.cacheIntent(cacheKey, llmResult);
         return llmResult;
       } catch (error) {
@@ -225,7 +226,7 @@ class IntentClassifier {
     }
 
     // Default to text intent if uncertain
-    logger.log(`[ROUTE-SM] classify DEFAULT→text (uncertain, llm=${opts.useLLM}) msg="${logMsg}"`);
+    logger.log(`[ROUTE-SM] classify DEFAULT→text (uncertain, llm=${opts.useLLM}) msg=${logMsg}`);
     return 'text';
   }
 

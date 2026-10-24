@@ -104,12 +104,21 @@ interface RestoreEntryOpts {
   onProgress?: DownloadProgressCallback;
 }
 
-function buildMetadataFromActiveDownload(download: RestorableDownloadInfo, modelsDir: string): PersistedDownloadInfo | null {
+function buildMetadataFromActiveDownload(
+  download: RestorableDownloadInfo,
+  modelsDir: string,
+): PersistedDownloadInfo | null {
   // image: (image models) and whisper- (STT models) are owned by their own
   // managers, not the text model manager. Recovering them here registered them
   // as text models, so they showed up under Text in the model selector and the
   // Download Manager's downloaded list.
-  if (!download.modelId || download.modelId.startsWith('image:') || download.modelId.startsWith('whisper-')) return null;
+  if (
+    !download.modelId ||
+    download.modelId.startsWith('video:') ||
+    download.modelId.startsWith('image:') ||
+    download.modelId.startsWith('whisper-')
+  )
+    return null;
   const mainFileSize = download.totalBytes;
   const combinedTotal = download.combinedTotalBytes || download.totalBytes;
   const mmProjFileSize = Math.max(combinedTotal - mainFileSize, 0);
@@ -126,7 +135,9 @@ function buildMetadataFromActiveDownload(download: RestorableDownloadInfo, model
       if (typeof parsed.mmProjFileName === 'string' && parsed.mmProjFileName) {
         derivedMmProjFileName = parsed.mmProjFileName;
       }
-    } catch { /* non-fatal: fall through to heuristic */ }
+    } catch {
+      /* non-fatal: fall through to heuristic */
+    }
   }
   if (!derivedMmProjFileName && hasMmProj) {
     derivedMmProjFileName = mmProjLocalName(download.fileName);
@@ -141,15 +152,22 @@ function buildMetadataFromActiveDownload(download: RestorableDownloadInfo, model
     mainFileSize,
     mmProjFileName: derivedMmProjFileName,
     mmProjFileSize: derivedMmProjFileName ? mmProjFileSize : undefined,
-    mmProjLocalPath: derivedMmProjFileName ? `${modelsDir}/${derivedMmProjFileName}` : null,
+    mmProjLocalPath: derivedMmProjFileName
+      ? `${modelsDir}/${derivedMmProjFileName}`
+      : null,
     mmProjDownloadId: download.mmProjDownloadId,
   };
 }
 
 async function restoreDownloadEntry(opts: RestoreEntryOpts): Promise<void> {
   const {
-    download, metadata, modelsDir, activeDownloads,
-    backgroundDownloadContext, backgroundDownloadMetadataCallback, onProgress,
+    download,
+    metadata,
+    modelsDir,
+    activeDownloads,
+    backgroundDownloadContext,
+    backgroundDownloadMetadataCallback,
+    onProgress,
   } = opts;
 
   const localPath = `${modelsDir}/${metadata.fileName}`;
@@ -184,36 +202,49 @@ async function restoreDownloadEntry(opts: RestoreEntryOpts): Promise<void> {
   let mainBytesDownloaded = download.bytesDownloaded;
   let mmProjBytesDownloaded = mmProjCompleted
     ? mmProjFileSize
-    : (mmProjDownload?.bytesDownloaded || 0);
+    : mmProjDownload?.bytesDownloaded || 0;
 
   const reportProgress = () => {
     const combinedDownloaded = mainBytesDownloaded + mmProjBytesDownloaded;
     onProgress?.({
       downloadId: download.downloadId,
-      modelId: metadata.modelId, fileName: metadata.fileName,
-      bytesDownloaded: combinedDownloaded, totalBytes: combinedTotalBytes,
-      progress: combinedTotalBytes > 0 ? combinedDownloaded / combinedTotalBytes : 0,
+      modelId: metadata.modelId,
+      fileName: metadata.fileName,
+      bytesDownloaded: combinedDownloaded,
+      totalBytes: combinedTotalBytes,
+      progress:
+        combinedTotalBytes > 0 ? combinedDownloaded / combinedTotalBytes : 0,
     });
   };
 
   const removeProgressListener = backgroundDownloadService.onProgress(
-    download.downloadId, (event) => {
-      mainBytesDownloaded = event.bytesDownloaded; reportProgress();
+    download.downloadId,
+    event => {
+      mainBytesDownloaded = event.bytesDownloaded;
+      reportProgress();
     },
   );
 
   let removeMmProjProgressListener: (() => void) | undefined;
   if (mmProjDownloadId && !mmProjCompleted) {
     removeMmProjProgressListener = backgroundDownloadService.onProgress(
-      mmProjDownloadId, (event) => {
-        mmProjBytesDownloaded = event.bytesDownloaded; reportProgress();
+      mmProjDownloadId,
+      event => {
+        mmProjBytesDownloaded = event.bytesDownloaded;
+        reportProgress();
       },
     );
   }
 
   backgroundDownloadContext.set(download.downloadId, {
-    modelId: metadata.modelId, file: fileInfo, localPath, mmProjLocalPath,
-    removeProgressListener, mmProjDownloadId, mmProjCompleted, mainCompleted: download.status === 'completed',
+    modelId: metadata.modelId,
+    file: fileInfo,
+    localPath,
+    mmProjLocalPath,
+    removeProgressListener,
+    mmProjDownloadId,
+    mmProjCompleted,
+    mainCompleted: download.status === 'completed',
     removeMmProjProgressListener,
   });
   backgroundDownloadMetadataCallback?.(download.downloadId, { ...metadata, mmProjLocalPath });
@@ -234,8 +265,16 @@ function collectMmProjIds(
   return ids;
 }
 
-export async function restoreInProgressDownloads(opts: RestoreDownloadsOpts): Promise<string[]> {
-  const { modelsDir, backgroundDownloadContext, backgroundDownloadMetadataCallback, onProgress, persistedDownloads } = opts;
+export async function restoreInProgressDownloads(
+  opts: RestoreDownloadsOpts,
+): Promise<string[]> {
+  const {
+    modelsDir,
+    backgroundDownloadContext,
+    backgroundDownloadMetadataCallback,
+    onProgress,
+    persistedDownloads,
+  } = opts;
 
   if (!backgroundDownloadService.isAvailable()) return [];
 
@@ -267,8 +306,13 @@ export async function restoreInProgressDownloads(opts: RestoreDownloadsOpts): Pr
     if (!metadata || backgroundDownloadContext.has(download.downloadId)) continue;
     try {
       await restoreDownloadEntry({
-        download, metadata, modelsDir, activeDownloads,
-        backgroundDownloadContext, backgroundDownloadMetadataCallback, onProgress,
+        download,
+        metadata,
+        modelsDir,
+        activeDownloads,
+        backgroundDownloadContext,
+        backgroundDownloadMetadataCallback,
+        onProgress,
       });
       restoredDownloadIds.push(download.downloadId);
       if (isInFlight(download.status)) adoptableIds.push(download.downloadId);

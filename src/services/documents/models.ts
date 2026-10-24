@@ -1,5 +1,5 @@
-// EmbedPort for the phone: the MiniLM-L6 model the knowledge base already runs on llama.rn, the
-// same family desktop indexes documents with. Vectors are normalised so the shared ranking can
+// EmbedPort for the phone: the built-in MiniLM-L6 model on llama.rn (the same family desktop
+// indexes documents with), or the embedding model the person chose instead. Vectors are normalised so the shared ranking can
 // compare them by dot product. The phone has no reranker; keyword + vector ranking answers.
 
 import type { EmbedPort } from '@offgrid/rag/documents';
@@ -17,7 +17,9 @@ async function ready(): Promise<void> {
 }
 
 export const documentEmbedder: EmbedPort = {
-  embedder: 'all-MiniLM-L6-v2-Q8_0.gguf',
+  get embedder() {
+    return embeddingService.getModelId();
+  },
   async embedPassages(texts) {
     await ready();
     return (await embeddingService.embedBatch(texts)).map(normalise);

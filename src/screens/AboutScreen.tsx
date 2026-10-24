@@ -39,7 +39,7 @@ export const AboutScreen: React.FC = () => {
           <Text style={styles.appName}>Off Grid AI</Text>
           <Text style={styles.version}>Version {appVersion()}</Text>
           <Text style={styles.description}>
-            Local AI that runs entirely on your phone. No cloud, no telemetry, nothing leaves the device.
+            Local AI that runs entirely on your phone. Your chats and files never leave your device. Anonymous usage data and crash reports only if you turn them on.
           </Text>
         </View>
 

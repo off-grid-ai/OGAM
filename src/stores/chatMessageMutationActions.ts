@@ -7,6 +7,7 @@ import {
 } from '../services/sync/mutation';
 
 export interface ChatMessageMutationActions {
+  removeMediaAttachment: (attachmentId: string) => void;
   updateMessageContent: (
     conversationId: string,
     messageId: string,
@@ -90,6 +91,40 @@ export function createMessageMutationActions(
   owner: ChatMessageMutationOwner,
 ): ChatMessageMutationActions {
   return {
+    removeMediaAttachment: attachmentId => {
+      const changed: Array<{ conversationId: string; message: Message }> = [];
+      owner.updateConversations(conversations =>
+        conversations.map(conversation => {
+          let updated = false;
+          const messages = conversation.messages.map(message => {
+            if (
+              !message.attachments?.some(
+                attachment => attachment.id === attachmentId,
+              )
+            )
+              return message;
+            updated = true;
+            const next = {
+              ...message,
+              attachments: message.attachments.filter(
+                attachment => attachment.id !== attachmentId,
+              ),
+            };
+            changed.push({ conversationId: conversation.id, message: next });
+            return next;
+          });
+          return updated
+            ? {
+                ...conversation,
+                messages,
+                updatedAt: nextUpdatedAt(conversation.updatedAt),
+              }
+            : conversation;
+        }),
+      );
+      for (const { conversationId, message } of changed)
+        emitSyncMutation(messagePutMutation(conversationId, message));
+    },
     updateMessageContent: (conversationId, messageId, content) => {
       owner.updateConversations(conversations =>
         mapConversation(conversations, conversationId, conversation =>

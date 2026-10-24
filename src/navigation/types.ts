@@ -4,6 +4,7 @@ export type RootStackParamList = {
   Onboarding: undefined;
   AutoSetup: undefined;
   AdvancedSetup: undefined;
+  AnalyticsInfo: undefined;
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   // Former ChatsStack
   Chat: { conversationId?: string; projectId?: string };
@@ -33,6 +34,7 @@ export type RootStackParamList = {
   DownloadManager: undefined;
   Gallery: { conversationId?: string } | undefined;
   ProDetail: undefined;
+  DesignPartners: undefined;
   About: undefined;
   Tools: undefined;
 };
@@ -44,7 +46,7 @@ export type MainTabParamList = {
   ProjectsTab: undefined;
   ModelsTab:
     | {
-        initialTab?: 'text' | 'image' | 'voice' | 'transcription';
+        initialTab?: 'text' | 'image' | 'video' | 'voice' | 'transcription' | 'embedding';
         repairModelId?: string;
         initialSearchQuery?: string;
       }

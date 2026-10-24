@@ -6,7 +6,9 @@
 
 ### The Swiss Army Knife of On-Device AI
 
-**Chat. Generate images. Use tools. See. Listen. All on your phone or Mac. All offline. Zero data leaves your device.**
+**Chat. Generate images. Use tools. See. Listen. All on your phone or Mac. All offline. Your chats and files never leave your device.**
+
+Anonymous usage data and crash reports only if you turn them on. See [what we share](docs/ANALYTICS.md).
 
 [![GitHub stars](https://img.shields.io/github/stars/off-grid-ai/OGAM?style=social)](https://github.com/off-grid-ai/OGAM)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -223,7 +225,7 @@ Built on the shoulders of giants:
 
 **Off Grid AI** — Your AI, your device, your data.
 
-*No cloud. No data harvesting. Just AI that works anywhere.*
+*No cloud. Your chats and files never leave your device. Just AI that works anywhere.*
 
 [Join the Community on Slack](https://join.slack.com/t/off-grid-mobile/shared_invite/zt-494gbuv5c-kj9tT7U0AS8Kq8UUO63_jw)
 

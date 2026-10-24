@@ -15,6 +15,9 @@ import { RealtimeStartBarrier } from './realtimeStartBarrier';
 import { WhisperModelDownloads } from './whisperModelDownloads';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { remoteMediaRuntime } from './remoteMediaRuntime';
+import { featureUsed, generationStarted } from './analytics/analytics';
+import { modelRef } from './analytics/values';
+import { fileName } from './analytics/scrub';
 
 // Re-export the model catalog + transcription normalizer (moved to whisperModels.ts
 // to keep this file within the max-lines budget). Behavior-neutral: every existing
@@ -234,6 +237,12 @@ class WhisperService {
     this.realtimeStart.begin();
     this.isTranscribing = true;
     const session = ++this.realtimeSession;
+    featureUsed('voice_input');
+    const endAnalytics = generationStarted('stt', {
+      model: modelRef(fileName(this.currentModelPath)?.replace(/^ggml-|\.bin$/g, '')),
+      engine: 'whisper',
+      backend: 'cpu',
+    });
 
     // Create a promise that resolves when the native side fully finishes. The session holds the
     // native lane until then, so a file job or a release never overlaps live capture.
@@ -253,6 +262,8 @@ class WhisperService {
       logger.log('[WhisperService] Permission granted:', hasPermission);
 
       if (!hasPermission) {
+        // The person's choice, not a failure: no failed generation, no consent prompt.
+        endAnalytics('stopped');
         throw new Error('Microphone permission denied');
       }
 
@@ -284,10 +295,7 @@ class WhisperService {
           // This session already holds the native lane; the fallback runs inside it.
           const fileText = await this.transcribeLocalFile(path, { language });
           logger.log(
-            `[WhisperService] Realtime captured nothing — file transcript: "${fileText.slice(
-              0,
-              50,
-            )}"`,
+            `[WhisperService] Realtime captured nothing — file transcript: ${fileText.length}ch`,
           );
           return fileText;
         } catch (fileErr) {
@@ -337,11 +345,11 @@ class WhisperService {
         logger.log('[WhisperService] Event received:', {
           isCapturing: evt.isCapturing,
           hasData: !!evt.data,
-          text: evt.data?.result?.slice(0, 50),
+          textLength: evt.data?.result?.length ?? 0,
         });
         // [WIRE] raw realtime transcription event shape from-device (voice-mode STT path) — full result +
         // segments + timing, so we can ground the realtime-transcript fixtures (distinct from file transcribe).
-        logger.log(`[WIRE-STT-REALTIME] ${JSON.stringify(evt)}`);
+        logger.log(`[WIRE-STT-REALTIME] ${JSON.stringify({ isCapturing: evt.isCapturing, textLength: evt.data?.result?.length ?? 0, processTime: evt.processTime, recordingTime: evt.recordingTime })}`);
 
         const { isCapturing, data, processTime, recordingTime } = evt;
 
@@ -362,6 +370,7 @@ class WhisperService {
         // The native callback cannot await the fallback transcription.
         // eslint-disable-next-line no-void
         void resolveFinalText(data?.result || '').then(finalText => {
+          endAnalytics('done');
           onResult({
             text: finalText,
             isCapturing: false,
@@ -384,6 +393,7 @@ class WhisperService {
       this.realtimeStart.settle();
       if (recordedFile) audioRecorderService.cancelRecording();
       logger.error('[WhisperService] transcribeRealtime error:', error);
+      endAnalytics('failed', { error });
       this.isTranscribing = false;
       this.stopFn = null;
       resolveTranscriptionStopped();
@@ -534,7 +544,8 @@ class WhisperService {
     });
 
     const __res = await promise;
-    logger.log(`[WIRE-STT] ${JSON.stringify(__res)}`); // [WIRE] raw whisper.rn transcribe result (segments/text) from-device
+    // Shape only: the transcript is what the person said and never goes in the log.
+    logger.log(`[WIRE-STT] ${JSON.stringify({ textLength: __res?.result?.length ?? 0 })}`);
     const { result } = __res;
     return cleanTranscription(result);
   }

@@ -313,7 +313,7 @@ describe('GalleryScreen', () => {
     }
   });
 
-  it('shows "Chat Images" title when conversationId is provided', () => {
+  it('shows "Chat Media" title when conversationId is provided', () => {
     mockRouteParams = { conversationId: 'conv-123' };
     mockGeneratedImages.push({
       ...sampleImages[0],
@@ -321,7 +321,7 @@ describe('GalleryScreen', () => {
     });
 
     const { getByText } = render(<GalleryScreen />);
-    expect(getByText('Chat Images')).toBeTruthy();
+    expect(getByText('Chat Media')).toBeTruthy();
   });
 
   it('shows chat-specific empty state when no images match conversation', () => {

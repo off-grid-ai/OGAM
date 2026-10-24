@@ -94,7 +94,9 @@ describe('chat switch keeps each chat warm', () => {
       llamaModelInfo: { 'general.architecture': 'qwen35', 'qwen35.nextn_predict_layers': 1 },
     });
     const { TextGenerationSection } = require('../../../src/components/GenerationSettingsModal/TextGenerationSection');
-    const section = h.rtl.render(h.React.createElement(TextGenerationSection, {}));
+    // The sheet shows the shared General controls (backend, loading mode) above the Text section.
+    const { GeneralGenerationControls } = require('../../../src/components/settings/GeneralGenerationControls');
+    const section = h.rtl.render(h.React.createElement(h.React.Fragment, null, h.React.createElement(GeneralGenerationControls), h.React.createElement(TextGenerationSection, {})));
     h.rtl.fireEvent.press(section.getByTestId('modal-text-advanced-toggle'));
     h.rtl.fireEvent.press(section.getByTestId('speculative-on-button'));
     await h.rtl.waitFor(() => expect(section.queryByTestId('speculative-draft-stepper-value')).not.toBeNull());
@@ -118,11 +120,13 @@ describe('chat switch keeps each chat warm', () => {
     });
     // Choose the GPU the way the user does, before the first load.
     const { TextGenerationSection } = require('../../../src/components/GenerationSettingsModal/TextGenerationSection');
-    const section = h.rtl.render(h.React.createElement(TextGenerationSection, {}));
+    // The sheet shows the shared General controls (backend, loading mode) above the Text section.
+    const { GeneralGenerationControls } = require('../../../src/components/settings/GeneralGenerationControls');
+    const section = h.rtl.render(h.React.createElement(h.React.Fragment, null, h.React.createElement(GeneralGenerationControls), h.React.createElement(TextGenerationSection, {})));
     h.rtl.fireEvent.press(section.getByTestId('modal-text-advanced-toggle'));
     h.rtl.fireEvent.press(section.getByTestId('backend-opencl-button'));
     await h.rtl.waitFor(() => {
-      expect(section.queryByText('GPU Layers (OpenCL)')).not.toBeNull();
+      expect(section.queryByText('Text GPU Layers (OpenCL)')).not.toBeNull();
     });
     section.unmount();
 

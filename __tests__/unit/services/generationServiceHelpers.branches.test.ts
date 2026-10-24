@@ -74,7 +74,7 @@ jest.mock('../../../src/stores/debugLogsStore', () => ({
 }));
 
 jest.mock('../../../src/services/generationToolLoop', () => ({
-  runToolLoop: jest.fn(() => Promise.resolve()),
+  runToolLoop: jest.fn(() => Promise.resolve({ interrupted: false })),
   buildLiteRTHistory: jest.fn(() => []),
 }));
 
@@ -136,6 +136,7 @@ function makeServiceSvc(overrides: any = {}) {
     forceFlushTokens: jest.fn(),
     flushTokenBuffer: jest.fn(),
     checkSharePrompt: jest.fn(),
+    drainQueue: jest.fn(),
     isUsingRemoteProvider: () => false,
     getCurrentProvider: () => null,
     ...rest,
@@ -451,6 +452,8 @@ describe('generateRemoteWithToolsImpl', () => {
     expect(store.finalizeStreamingMessage).toHaveBeenCalled();
     expect(svc.checkSharePrompt).toHaveBeenCalled();
     expect(svc.resetState).toHaveBeenCalled();
+    // The next queued send starts only after this turn has finished.
+    expect(svc.drainQueue).toHaveBeenCalled();
   });
 
   it('skips finalize when the generation was aborted during the tool loop', async () => {

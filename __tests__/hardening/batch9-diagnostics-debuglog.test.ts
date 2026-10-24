@@ -14,9 +14,9 @@
  *    (getDeviceTier thresholds + formatBytes are already COVERED-REAL in
  *    hardware.test.ts and are NOT duplicated here.)
  *
- * 2. debugLogFile.ts — the dev file sink's size-cap/rotation logic (flush appends, checks
+ * 2. debugLogFile.ts — the file sink's size-cap/rotation logic (flush appends, checks
  *    stat, and truncates to the newest half once over MAX_BYTES), the flush-at-50-lines
- *    trigger, the disabled no-op, and __DEV__/idempotent init. No existing test covers it.
+ *    trigger, the disabled no-op, idempotent init, and the dev-only wire file. No existing test covers it.
  *    We stand up an in-memory RNFS so the REAL flush()/rotation runs end to end.
  */
 
@@ -109,7 +109,7 @@ describe('BATCH 9 — debugLogFile size-cap / rotation (real flush logic)', () =
       : '';
 
   beforeEach(() => {
-    (global as any).__DEV__ = true; // the sink is __DEV__-gated
+    (global as any).__DEV__ = true; // the wire file is __DEV__-gated
     jest.resetModules(); // fresh module-level `enabled`/`buffer` state per test
     fileSystem = require('../harness/nativeFileSystem').defaultNativeFileSystemBoundary;
     fileSystem.reset();
@@ -182,13 +182,16 @@ describe('BATCH 9 — debugLogFile size-cap / rotation (real flush logic)', () =
     expect(mod.getDebugLogPath()).toBe('/mock/documents/offgrid-debug.log');
   });
 
-  it('initDebugLogFile is a no-op outside __DEV__', async () => {
+  it('a store build writes the log for Report a problem, but never the unbounded wire file', async () => {
     (global as any).__DEV__ = false;
     jest.resetModules();
+    fileSystem = require('../harness/nativeFileSystem').defaultNativeFileSystemBoundary;
     const prodMod = require('../../src/utils/debugLogFile');
     prodMod.initDebugLogFile();
     prodMod.appendDebugLine('info', 'prod line');
+    prodMod.appendDebugLine('log', '[WIRE-STT] {"textLength":3}');
     await jest.runOnlyPendingTimersAsync();
-    expect(await readLog()).toBe('');
+    expect(await readLog()).toContain('prod line');
+    expect(await fileSystem.exists(prodMod.getWireLogPath())).toBe(false);
   });
 });

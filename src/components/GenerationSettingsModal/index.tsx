@@ -1,3 +1,4 @@
+import { VideoGenerationSection } from './VideoGenerationSection';
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -7,6 +8,7 @@ import { useAppStore } from '../../stores';
 import { llmService } from '../../services';
 import { createStyles } from './styles';
 import { VoiceTurnSettings } from '../settings/voiceSections';
+import { GeneralGenerationControls } from '../settings/GeneralGenerationControls';
 import { ConversationActionsSection } from './ConversationActionsSection';
 import { ImageGenerationSection } from './ImageGenerationSection';
 import { TextGenerationSection } from './TextGenerationSection';
@@ -25,7 +27,9 @@ interface GenerationSettingsModalProps {
   isRemote?: boolean;
 }
 
-export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = ({
+export const GenerationSettingsModal: React.FC<
+  GenerationSettingsModalProps
+> = ({
   visible,
   onClose,
   onOpenProject,
@@ -42,6 +46,7 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
 
   const [performanceStats, setPerformanceStats] = useState(llmService.getPerformanceStats());
   const [imageSettingsOpen, setImageSettingsOpen] = useState(false);
+  const [generalSettingsOpen, setGeneralSettingsOpen] = useState(false);
   const [textSettingsOpen, setTextSettingsOpen] = useState(false);
   const [sttSettingsOpen, setSttSettingsOpen] = useState(false);
   const [ttsSettingsOpen, setTtsSettingsOpen] = useState(false);
@@ -95,12 +100,22 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
           activeProjectName={activeProjectName}
         />
 
+        <TouchableOpacity
+          style={[styles.accordionHeader, !hasConversationActions && styles.accordionHeaderNoMargin]}
+          onPress={() => setGeneralSettingsOpen(!generalSettingsOpen)}
+          activeOpacity={0.7}
+          testID="modal-general-accordion"
+          accessibilityRole="button"
+          accessibilityState={{ expanded: generalSettingsOpen }}
+        >
+          <Text style={styles.accordionTitle}>GENERAL</Text>
+          <Icon name={generalSettingsOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        {generalSettingsOpen && <View style={styles.sectionCard}><GeneralGenerationControls /></View>}
+
         {/* IMAGE GENERATION SETTINGS */}
         <TouchableOpacity
-          style={[
-            styles.accordionHeader,
-            !hasConversationActions && styles.accordionHeaderNoMargin,
-          ]}
+          style={styles.accordionHeader}
           onPress={() => setImageSettingsOpen(!imageSettingsOpen)}
           activeOpacity={0.7}
           testID="modal-image-accordion"
@@ -113,6 +128,7 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
           />
         </TouchableOpacity>
         {imageSettingsOpen && <ImageGenerationSection />}
+        <VideoGenerationSection />
 
         {/* TEXT GENERATION SETTINGS */}
         <TouchableOpacity
@@ -133,7 +149,8 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
               <View style={styles.remoteNotice}>
                 <Icon name="info" size={13} color={colors.textMuted} />
                 <Text style={styles.remoteNoticeText}>
-                  These settings only apply to local models and won't affect the current remote session.
+                  These settings only apply to local models and won't affect the
+                  current remote session.
                 </Text>
               </View>
             )}

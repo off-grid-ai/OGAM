@@ -35,6 +35,7 @@ import {
 } from './remoteServerManagerUtils';
 import { remoteAuthorizationHeaders } from './remoteTransportPolicy';
 import { activateOffGridDesktopModel } from './offGridDesktopModels';
+import { featureUsed, flowFinished, flowStep } from './analytics/analytics';
 
 /** Normalize an endpoint for identity comparison (lowercase, no trailing slashes). */
 const trimSlash = (url: string): string => {
@@ -72,6 +73,8 @@ class RemoteServerManager {
 
     const server = store.getServerById(id);
     if (!server) throw new Error('Failed to create server');
+    flowStep('remote_server', 'connected');
+    flowFinished('remote_server', 'done');
 
     await createProviderForServerImpl(server);
     logger.log('[RemoteServerManager] Added server:', server.name);
@@ -168,9 +171,11 @@ class RemoteServerManager {
     endpoint: string,
     apiKey?: string,
   ): Promise<ServerTestResult> {
-    return useRemoteServerStore
+    const result = await useRemoteServerStore
       .getState()
       .testConnectionByEndpoint(endpoint, apiKey);
+    if (result.success) flowStep('remote_server', 'tested');
+    return result;
   }
 
   /**
@@ -199,6 +204,7 @@ class RemoteServerManager {
     serverId: string,
     modelId: string,
   ): Promise<void> {
+    featureUsed('remote_server');
     return setActiveRemoteTextModelImpl(serverId, modelId);
   }
 
@@ -257,6 +263,7 @@ class RemoteServerManager {
     store.setActiveServerId(null);
     store.setActiveRemoteTextModelId(null);
     store.setActiveRemoteImageModelId(null);
+    store.setActiveRemoteMediaServerId('video', null);
     store.setActiveRemoteMediaServerId('image', null);
     store.setActiveRemoteMediaServerId('transcription', null);
     store.setActiveRemoteMediaServerId('voice', null);
@@ -303,7 +310,9 @@ class RemoteServerManager {
   }> {
     let discovered: DiscoveredServer[];
     const savedEndpoints = new Set(
-      useRemoteServerStore.getState().servers.map(server => trimSlash(server.endpoint)),
+      useRemoteServerStore
+        .getState()
+        .servers.map(server => trimSlash(server.endpoint)),
     );
     try {
       discovered = await discoverLANServers(undefined, {
@@ -321,7 +330,9 @@ class RemoteServerManager {
     }
     return {
       moved: [],
-      found: discovered.filter(server => !savedEndpoints.has(trimSlash(server.endpoint))),
+      found: discovered.filter(
+        server => !savedEndpoints.has(trimSlash(server.endpoint)),
+      ),
     };
   }
 

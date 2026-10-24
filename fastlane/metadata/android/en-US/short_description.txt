@@ -1,1 +1,1 @@
-Run open-source LLMs on your device. Voice, vision, image gen — all offline.
+On-device AI: chat, voice, vision, images. Your chats never leave your phone.
