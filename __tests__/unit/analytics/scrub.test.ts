@@ -10,6 +10,7 @@ describe('crash report scrubbing', () => {
     ['Cannot read /var/mobile/Containers/Data/notes/secret.txt', 'Cannot read <file>'],
     ['Bad token in /data/app/index.android.bundle', 'Bad token in index.android.bundle'],
     ['Could not open Taxes2025.pdf now', 'Could not open <file> now'],
+    ['Could not open Taxes2025.pdf, then retried', 'Could not open <file>, then retried'],
     ['Failed to load qwen-private-finetune.gguf', 'Failed to load <file>'],
     ['Failed to parse "my diary entry" here', 'Failed to parse here'],
     ["TypeError: undefined is not a function", 'TypeError'],
