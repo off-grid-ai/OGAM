@@ -10,6 +10,10 @@ import {
 } from '../../types';
 import { isPrivateNetworkEndpoint } from '../../services/httpClient';
 import { AlertState, initialAlertState, showAlert } from '../CustomAlert';
+import {
+  isMiniMaxEndpoint,
+  MINIMAX_DEFAULT_MODEL,
+} from '../../services/providers/minimax';
 
 interface FormOptions {
   server?: RemoteServer;
@@ -55,6 +59,7 @@ export function useRemoteServerForm({
 }: FormOptions) {
   const [name, setName] = useState('');
   const [endpoint, setEndpoint] = useState('');
+  const [providerType, setProviderType] = useState<RemoteServer['providerType']>('openai-compatible');
   const [apiKey, setApiKey] = useState('');
   const [notes, setNotes] = useState('');
   const [textModelId, setTextModelId] = useState('');
@@ -82,6 +87,7 @@ export function useRemoteServerForm({
     if (server) {
       setName(server.name);
       setEndpoint(server.endpoint);
+      setProviderType(server.providerType);
       setNotes(server.notes || '');
       setTextModelId(server.mediaModels?.text || '');
       setImageModelId(server.mediaModels?.image || '');
@@ -100,6 +106,7 @@ export function useRemoteServerForm({
       // Reset form for new server
       setName('');
       setEndpoint('');
+      setProviderType('openai-compatible');
       setApiKey('');
       setNotes('');
       setTextModelId('');
@@ -191,6 +198,10 @@ export function useRemoteServerForm({
   const handleTestConnection = useCallback(async () => {
     if (!validateForm()) return;
     setIsTesting(true);
+    const minimax = isMiniMaxEndpoint(endpoint);
+    setProviderType(current =>
+      minimax ? 'minimax' : current === 'minimax' ? 'openai-compatible' : current,
+    );
     setTestResult(null);
     setDiscoveredModels([]);
     setModelCatalog({});
@@ -202,7 +213,13 @@ export function useRemoteServerForm({
         apiKey || undefined,
       );
       if (result.success) {
-        applySuccessfulConnection(result);
+        applySuccessfulConnection(minimax
+          ? {
+              ...result,
+              mediaModels: { ...result.mediaModels, text: MINIMAX_DEFAULT_MODEL },
+            }
+          : result,
+        );
       } else {
         const triedUrl = `${endpoint.replace(/\/+$/, '')}/v1/models`;
         setTestResult({
@@ -262,6 +279,7 @@ export function useRemoteServerForm({
         await remoteServerManager.updateServer(server.id, {
           name,
           endpoint,
+          providerType,
           notes,
           apiKey,
           mediaModels: desktopManaged ? server.mediaModels : mediaModels,
@@ -292,7 +310,7 @@ export function useRemoteServerForm({
         const newServer = await remoteServerManager.addServer({
           name,
           endpoint,
-          providerType: 'openai-compatible',
+          providerType,
           notes: notes || undefined,
           apiKey: apiKey || undefined,
           mediaModels: desktopManaged ? confirmedMediaModels : mediaModels,
@@ -336,6 +354,7 @@ export function useRemoteServerForm({
     apiKey,
     notes,
     textModelId,
+    providerType,
     imageModelId,
     transcriptionModelId,
     voiceModelId,
@@ -370,6 +389,7 @@ export function useRemoteServerForm({
     name,
     setName,
     endpoint,
+    providerType,
     setEndpoint,
     apiKey,
     setApiKey,
