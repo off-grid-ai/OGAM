@@ -235,6 +235,8 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
   };
 
   return {
+    // The fetched engine catalog (QNN/MNN or Core ML), apart from the sd.cpp catalog entries always listed.
+    hfCatalogLoaded: availableHFModels.length > 0,
     availableHFModels: allHFModels, hfModelsLoading: hfModelsLoading || sdSearchLoading, hfModelsError: imageSearchQuery.trim() ? sdSearchError : hfModelsError,
     backendFilter, setBackendFilter,
     styleFilter, setStyleFilter,
