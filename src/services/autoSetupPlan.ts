@@ -1,4 +1,4 @@
-import type { ModelEntry } from '@offgrid/models';
+import type { FitTier, ModelEntry } from '@offgrid/models';
 import type { ModelFile } from '../types';
 import type { ImageModelDescriptor } from './imageModelDownloadTypes';
 
@@ -21,6 +21,8 @@ interface AutoSetupCandidate<T = unknown> {
   sizeBytes: number;
   fitScore: number;
   parameterCountB?: number;
+  /** The shared fit verdict on this phone, for chat models. */
+  fit?: FitTier;
   payload: T;
 }
 
@@ -54,17 +56,18 @@ const PLAN_COPY: Record<
   AutoSetupTier,
   Pick<AutoSetupPlan, 'title' | 'summary'>
 > = {
-  lean: { title: 'Lean', summary: 'Smaller model downloads.' },
-  balanced: { title: 'Balanced', summary: 'Models near the middle of each list.' },
+  lean: { title: 'Lean', summary: 'Easy on this phone.' },
+  balanced: { title: 'Balanced', summary: 'A comfortable fit for this phone.' },
   extreme: {
     title: 'Extreme',
-    summary: 'The largest models this phone can run.',
+    summary: 'The most this phone can run.',
   },
 };
 
-const AUTO_SETUP_TEXT_TARGET_BILLIONS: Record<Exclude<AutoSetupTier, 'extreme'>, number> = {
-  lean: 2,
-  balanced: 4,
+/** How easily the chat model fits this phone's memory, by the shared fit rule. */
+const TEXT_FIT: Record<Exclude<AutoSetupTier, 'extreme'>, FitTier> = {
+  lean: 'easy',
+  balanced: 'fits',
 };
 
 function choose<T>(
@@ -84,29 +87,16 @@ function chooseText(
   candidates: AutoSetupCompatibleCatalog['text'],
 ): AutoSetupCompatibleCatalog['text'][number] | null {
   if (candidates.length === 0) return null;
-  if (tier === 'lean') {
-    const qwen2b = candidates.find(candidate =>
-      candidate.id.startsWith('unsloth/Qwen3.5-2B-GGUF/'),
-    );
-    if (qwen2b) return qwen2b;
-  }
-  // Extreme pushes the device to its limit: the largest chat model it can run, not a fixed size.
-  if (tier === 'extreme') {
-    return [...candidates].sort(
+  // Extreme pushes the phone to its limit: the heaviest chat model that still loads.
+  if (tier === 'extreme') return [...candidates].sort((a, b) => b.sizeBytes - a.sizeBytes)[0];
+  // Lean and Balanced are how easily a model fits this phone, not its size: the strongest model
+  // that is easy to fit, and the strongest that fits with room to spare.
+  return candidates
+    .filter(candidate => candidate.fit === TEXT_FIT[tier])
+    .sort(
       (a, b) =>
         (b.parameterCountB ?? 0) - (a.parameterCountB ?? 0) || b.sizeBytes - a.sizeBytes,
-    )[0];
-  }
-  const target = AUTO_SETUP_TEXT_TARGET_BILLIONS[tier];
-  return [...candidates].sort((a, b) => {
-    const aDistance = Math.abs((a.parameterCountB ?? 0) - target);
-    const bDistance = Math.abs((b.parameterCountB ?? 0) - target);
-    return (
-      aDistance - bDistance ||
-      a.fitScore - b.fitScore ||
-      a.sizeBytes - b.sizeBytes
-    );
-  })[0];
+    )[0] ?? null;
 }
 
 /** Pure plan selector. Its input contains only candidates admitted by existing compatibility owners. */

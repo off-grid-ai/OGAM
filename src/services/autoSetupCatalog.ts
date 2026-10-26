@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import { videoSeam } from '../bootstrap/videoSeam';
 import { CATALOG, isVideoWeightAvailableOn, videoPackError } from '@offgrid/models';
 import { recommendedModelsForDevice, ramFitScore } from '../utils/recommendedModels';
-import { fileExceedsBudget, textModelBudget } from './memoryBudget';
+import { fileExceedsBudget, modelFitTier, textModelBudget } from './memoryBudget';
 import { fetchModelFiles } from './modelCatalogFiles';
 import { hardwareService } from './hardware';
 import { WHISPER_MODELS } from './whisperModels';
@@ -49,6 +49,7 @@ export function buildAutoSetupTextCandidates(
       sizeBytes,
       fitScore: ramFitScore(model.minRam, ramGB),
       parameterCountB: model.params,
+      fit: modelFitTier(sizeBytes, ramGB, textModelBudget()),
       payload: { modelId: model.id, file },
     }];
   });
