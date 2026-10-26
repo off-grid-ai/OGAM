@@ -20,7 +20,6 @@ interface Props {
   /** Re-trigger the entrance animation when the screen regains focus. */
   trigger: number;
   onGetPro: () => void;
-  onDesignPartners: () => void;
 }
 
 /**
@@ -28,7 +27,7 @@ interface Props {
  * (hidden once Pro is active or the banner is dismissed). Flat, token-only, and
  * weights <= 400 per docs/design.
  */
-export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro, onDesignPartners }) => {
+export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   // A saved credential may need device reactivation, but it is never an upsell.
@@ -66,21 +65,6 @@ export const ProUpsellBanner: React.FC<Props> = ({ trigger, onGetPro, onDesignPa
 
         <Button title={pricing.cta} variant="primary" size="small" onPress={onGetPro} style={styles.cta} />
 
-        <View style={styles.partnerOffer}>
-          <Text style={styles.desc}>
-            Fewer than 50 people? Get free lifetime Pro if your business idea fits.
-          </Text>
-          <AnimatedPressable
-            style={styles.linkRow}
-            accessibilityRole="button"
-            accessibilityLabel="See the partner offer"
-            onPress={onDesignPartners}
-          >
-            <Text style={styles.linkText}>See the partner offer</Text>
-            <Icon name="chevron-right" size={16} color={colors.primary} />
-          </AnimatedPressable>
-        </View>
-
         <AnimatedPressable
           style={[styles.linkRow, styles.desktopLink]}
           onPress={() => Linking.openURL(withUtm(OFF_GRID_DESKTOP_URL, 'pro-upsell')).catch(() => {})}
@@ -116,14 +100,6 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   desc: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, lineHeight: 18 },
   close: { padding: SPACING.xs, minWidth: 44, minHeight: 44, alignItems: 'center' as const },
   cta: { marginHorizontal: SPACING.lg, marginBottom: SPACING.md },
-  partnerOffer: {
-    marginHorizontal: SPACING.lg,
-    marginBottom: 0,
-    paddingTop: SPACING.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: SPACING.xs,
-  },
   linkRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
