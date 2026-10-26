@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { LoadingDots } from './LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
@@ -9,6 +9,19 @@ import { createStyles } from './ModelCard.styles';
 import { huggingFaceService } from '../services/huggingface';
 import { ModelCredibility } from '../types';
 import { triggerHaptic } from '../utils/haptics';
+
+const OFF_GRID_LOGO = require('../assets/logo.png');
+
+/** The app's own mark beside a model Off Grid AI made: small, no words on the row. */
+const MadeByOffGrid: React.FC = () => (
+  <Image
+    source={OFF_GRID_LOGO}
+    style={{ width: 12, height: 12, borderRadius: 3 }}
+    accessibilityLabel="Made by Off Grid AI"
+    accessibilityRole="image"
+    testID="made-by-off-grid"
+  />
+);
 
 interface CredibilityInfo {
   color: string;
@@ -104,7 +117,9 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
     credibilitySource === 'verified-quantizer' || credibilitySource === 'official';
   // Who published a model is shown as one verified mark, not a name on every card.
   const sourceLabels = [
-    credibilitySource && credibilitySource !== 'community' && !hasVerifiedMark ? credibilityLabel : undefined,
+    credibilitySource && credibilitySource !== 'community' && credibilitySource !== 'offgrid' && !hasVerifiedMark
+      ? credibilityLabel
+      : undefined,
   ].filter((value): value is string => !!value);
 
   return (
@@ -114,6 +129,7 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
         <View style={styles.denseSourceGroup}>
           {sourceBadge === 'Remote' ? <Icon name="cloud" size={14} color={colors.textMuted} accessibilityLabel="Remote model" />
             : sourceBadge ? <Text style={styles.denseSource}>{sourceBadge}</Text> : null}
+          {credibilitySource === 'offgrid' && <MadeByOffGrid />}
           {hasVerifiedMark && (
             <MaterialIcon
               name="verified"
@@ -230,6 +246,7 @@ export const StandardModelCardContent: React.FC<StandardModelCardContentProps> =
         {model.author && model.author !== 'Unknown' && <View style={styles.authorTag}>
           <Text style={styles.authorTagText}>{model.author}</Text>
         </View>}
+        {credibility?.source === 'offgrid' && <MadeByOffGrid />}
         {credibilityInfo && (credibility?.source === 'official' || credibility?.source === 'verified-quantizer') && (
           <MaterialIcon name="verified" size={14} color={colors.primary} accessibilityLabel={credibilityInfo.label} />
         )}

@@ -84,6 +84,11 @@ export const VERIFIED_QUANTIZERS: Record<string, string> = {
 
 // Credibility level labels
 export const CREDIBILITY_LABELS = {
+  offgrid: {
+    label: 'Off Grid AI',
+    description: 'Made by Off Grid AI',
+    color: '#34D399', // emerald
+  },
   lmstudio: {
     label: 'LM Studio',
     description: 'Official LM Studio quantization - highest quality GGUF',

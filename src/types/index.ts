@@ -6,6 +6,7 @@ import type {
 } from '@offgrid/sync';
 // Model source and credibility types
 export type ModelSource =
+  | 'offgrid'
   | 'lmstudio'
   | 'official'
   | 'verified-quantizer'

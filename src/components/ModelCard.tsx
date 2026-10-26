@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useThemedStyles, useTheme } from '../theme';
+import { isOffGridHfRepo } from '@offgrid/models';
 import { QUANTIZATION_INFO, CREDIBILITY_LABELS } from '../constants';
 import { ModelFile, DownloadedModel, ModelCredibility } from '../types';
 import { needsVisionRepair } from '../utils/visionRepair';
@@ -96,10 +97,14 @@ function resolveFileSize(file?: ModelFile, downloadedModel?: DownloadedModel) {
   return main + mmProj;
 }
 
+const OFF_GRID_CREDIBILITY: ModelCredibility = { source: 'offgrid', isOfficial: false, isVerifiedQuantizer: false };
+
+/** A model from Off Grid AI's own org is Off Grid AI's, whatever else is said about it. */
 function resolveCredibility(
-  model: { credibility?: ModelCredibility },
+  model: { id: string; credibility?: ModelCredibility },
   downloadedModel?: DownloadedModel,
 ) {
+  if (isOffGridHfRepo(model.id)) return OFF_GRID_CREDIBILITY;
   return model.credibility ?? downloadedModel?.credibility;
 }
 
