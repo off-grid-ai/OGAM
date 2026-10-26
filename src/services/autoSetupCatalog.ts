@@ -1,8 +1,8 @@
 import { Platform } from 'react-native';
 import { videoSeam } from '../bootstrap/videoSeam';
 import { CATALOG, isVideoWeightAvailableOn, videoPackError } from '@offgrid/models';
-import { recommendedModelsForDevice, ramFitScore } from '../utils/recommendedModels';
-import { fileExceedsBudget, textModelBudget } from './memoryBudget';
+import { ramFitScore } from '../utils/recommendedModels';
+import { fileExceedsBudget } from './memoryBudget';
 import { devicePicks } from './devicePicks';
 import { fetchModelFiles } from './modelCatalogFiles';
 import { hardwareService } from './hardware';
@@ -13,8 +13,6 @@ import { autoSetupImageCatalogProvider } from './autoSetupImageCatalogProvider';
 import { BUNDLED_EMBEDDING_MODEL, RECOMMENDED_EMBEDDING_MODELS } from './huggingFaceModelBrowser';
 
 const MB = 1024 * 1024;
-
-type CompatibleTextModel = ReturnType<typeof recommendedModelsForDevice>[number];
 
 export interface AutoSetupCatalogBoundaries {
   totalMemoryGB: () => number | Promise<number>;
@@ -32,27 +30,6 @@ const productionCatalogBoundaries: AutoSetupCatalogBoundaries = {
   imageRecommendation: () => hardwareService.getImageModelRecommendation(),
   imageModels: () => autoSetupImageCatalogProvider.load(),
 };
-
-export function buildAutoSetupTextCandidates(
-  models: CompatibleTextModel[],
-  files: Record<string, import('../types').ModelFile[]>,
-  ramGB: number,
-): AutoSetupCompatibleCatalog['text'] {
-  return models.filter(model => model.type === 'vision').flatMap(model => {
-    const file = files[model.id]?.[0];
-    const sizeBytes = file ? file.size + (file.mmProjFile?.size ?? 0) : 0;
-    if (!file || fileExceedsBudget(sizeBytes, ramGB, textModelBudget())) return [];
-    return [{
-      id: `${model.id}/${file.name}`,
-      name: model.name,
-      kind: 'text' as const,
-      sizeBytes,
-      fitScore: ramFitScore(model.minRam, ramGB),
-      parameterCountB: model.params,
-      payload: { modelId: model.id, file },
-    }];
-  });
-}
 
 /** Setup's chat models are this phone's Fast, Balanced and Best: the shared picking rule over the
  *  catalog pool (bundled plus catalog/models.json), the same three the Models screen offers. */
