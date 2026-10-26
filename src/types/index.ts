@@ -573,3 +573,8 @@ export interface DebugInfo {
 // Remote server types
 export type { RemoteServer, RemoteModel, ServerTestResult, RemoteMediaModelIds, RemoteModelCategory, RemoteModelOption, RemoteModelCatalog } from './remoteServer';
 export { remoteServerCapabilities } from './remoteServer';
+
+/** A modality as the shared backend policy names it (@offgrid/models BackendModality, phone subset). */
+export type ModalityName = 'llm' | 'image' | 'video' | 'stt' | 'tts' | 'embeddings';
+/** Where a modality runs, in the words people see. */
+export type ProcessorPlace = 'npu' | 'gpu' | 'cpu';

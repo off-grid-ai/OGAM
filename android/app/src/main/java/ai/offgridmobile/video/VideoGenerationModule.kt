@@ -227,7 +227,12 @@ class VideoGenerationModule(private val context: ReactApplicationContext) : Reac
                         if (input.hasKey("llm")) input.getString("llm") ?: "" else "",
                         if (input.hasKey("embeddings")) input.getString("embeddings") ?: "" else "",
                         if (input.hasKey("audioVae")) input.getString("audioVae") ?: "" else "",
-                        input.getDouble("flowShift"), if (BuildConfig.DEBUG && input.hasKey("diagnosticBackend")) input.getString("diagnosticBackend") ?: "auto" else "auto",
+                        input.getDouble("flowShift"), when {
+                            BuildConfig.DEBUG && input.hasKey("diagnosticBackend") -> input.getString("diagnosticBackend") ?: "auto"
+                            // Fastest settings' choice: "cpu" runs on the CPU, "gpu" skips the NPU.
+                            input.hasKey("backend") -> input.getString("backend") ?: "auto"
+                            else -> "auto"
+                        },
                         initImageRgb(if (input.hasKey("initImage")) input.getString("initImage") else null, input.getInt("width"), input.getInt("height")))
                     writer.finish { cancelled.get() }
                 }

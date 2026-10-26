@@ -1,3 +1,4 @@
+import { savedPlace } from '../modalityBackends';
 import { initLlama, loadLlamaModelInfo, LlamaContext } from 'llama.rn';
 import { Platform } from 'react-native';
 import { sha256 } from 'js-sha256';
@@ -225,11 +226,12 @@ class EmbeddingService {
       if (selected && !(await modelResidencyManager.makeRoomFor(spec)).fits) {
         throw new Error('Not enough memory for this embedding model. Choose a smaller model.');
       }
-      const ctx = await withTimeout(
+      // The GPU when Fastest settings found it correct here; the CPU otherwise, and as the fallback.
+      const open = (gpuLayers: number) => withTimeout(
         initLlama({
           model: modelPath,
           embedding: true,
-          n_gpu_layers: 0,
+          n_gpu_layers: gpuLayers,
           n_ctx: EMBEDDING_CTX_SIZE,
           n_batch: EMBEDDING_CTX_SIZE,
           n_threads: 2,
@@ -242,6 +244,12 @@ class EmbeddingService {
           onOrphan: (orphan) => { (orphan as LlamaContext)?.release?.().catch(() => {}); },
         },
       );
+      const onGpu = savedPlace('embeddings') === 'gpu';
+      const ctx = await open(onGpu ? 99 : 0).catch(error => {
+        if (!onGpu) throw error;
+        logger.warn('[Embedding] GPU load failed; using the CPU', error);
+        return open(0);
+      });
       // Register WHILE still holding the global load lock, so the embedding model's
       // footprint counts against the RAM budget atomically with the load. Registering
       // after runExclusive returns left a window where the model was in RAM but absent
@@ -255,6 +263,33 @@ class EmbeddingService {
       return ctx;
     });
     logger.log('[Embedding] Model loaded successfully');
+  }
+
+  /**
+   * Fastest settings: embed one fixed sentence on the GPU or the CPU with the active search model,
+   * and time it. The vector comes back so the caller can check the GPU agrees with the CPU.
+   */
+  async measure(place: 'gpu' | 'cpu'): Promise<{ ms: number; vector: number[] } | null> {
+    await this.unload();
+    const selected = activeEmbeddingModel();
+    const modelPath = selected ? this.modelPath(selected.id) : await this.ensureModelCopied();
+    return modelResidencyManager.runExclusive('benchmark:embedding', async () => {
+      let context: LlamaContext | null = null;
+      try {
+        context = await withTimeout(
+          initLlama({ model: modelPath, embedding: true, n_gpu_layers: place === 'gpu' ? 99 : 0, n_ctx: EMBEDDING_CTX_SIZE, n_batch: EMBEDDING_CTX_SIZE, n_threads: 2, use_mlock: false, use_mmap: true } as any),
+          { ms: EMBEDDING_LOAD_TIMEOUT_MS, message: 'Embedding benchmark load timed out', onOrphan: orphan => { (orphan as LlamaContext)?.release?.().catch(() => {}); } },
+        ) as LlamaContext;
+        const started = Date.now();
+        const result = await context.embedding('Off Grid AI keeps your documents on your device.');
+        return { ms: Date.now() - started, vector: result.embedding };
+      } catch (error) {
+        logger.warn(`[Embedding] ${place} benchmark failed`, error);
+        return null;
+      } finally {
+        await context?.release().catch(() => {});
+      }
+    });
   }
 
   private async ensureModelCopied(): Promise<string> {

@@ -1,3 +1,4 @@
+import type { ModalityName, ProcessorPlace } from '../types';
 import { videoModelDisplayName } from '../utils/modelHelpers';
 import type {
   ModelEntry,
@@ -120,6 +121,9 @@ export type AppSettings = {
    *  answer still streams after the cap closes the thinking block. Optional so installs persisted
    *  before this setting read as auto. */
   reasoningBudget?: number;
+  /** Where each modality runs, as Fastest settings measured or decided it (npu / gpu / cpu).
+   *  Optional: absent means each loader keeps its own default. */
+  modalityBackends?: Partial<Record<ModalityName, ProcessorPlace>>;
   inferenceBackend: InferenceBackend;
   /** True once the user has explicitly picked an inference backend in Settings.
    *  While false, the boot-time backendSync may upgrade the default to the GPU
