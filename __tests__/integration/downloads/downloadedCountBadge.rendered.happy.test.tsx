@@ -27,12 +27,13 @@ import { createDownloadedModel } from '../../utils/factories';
 // Three recommended-model ids that render in the "More models" list at this test's RAM profile. A
 // downloaded row whose id STARTS WITH a recommended id makes that recommended card render its downloaded
 // mark (the real match rule: downloadedModels.some(m => m.id.startsWith(item.id))). On this 12 GB phone
-// the Qwen 3.5 models are the device picks (quality-ranked): a pick is shown once, in the "For this
-// phone" row, and left out of the list these cards belong to — so none of them is one of the three.
+// the picks rank by quality alone (afdb05f): LFM2.5 8B A1B and MiniCPM5 2B are picks now. A pick is
+// shown once, in the "For this phone" row, and left out of the list these cards belong to — so none
+// of them is one of the three.
 const RECOMMENDED_IDS = [
   'unsloth/gemma-4-E2B-it-GGUF',
-  'LiquidAI/LFM2.5-8B-A1B-GGUF',
-  'openbmb/MiniCPM5-2B-GGUF',
+  'unsloth/Qwen3.5-0.8B-GGUF',
+  'unsloth/Qwen3.5-2B-GGUF',
 ];
 
 async function mountWithNDownloaded(n: number) {
