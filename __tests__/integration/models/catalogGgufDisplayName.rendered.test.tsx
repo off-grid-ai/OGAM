@@ -105,7 +105,8 @@ describe('catalog GGUF model names', () => {
       download: true,
       fs: true,
       llama: true,
-      ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB },
+      // 16 GB: LFM2.5 8B A1B is a list card here. On 12 GB it is now a Fast pick in the picks row (ddaa6c1).
+      ram: { platform: 'android', totalBytes: 16 * GB, availBytes: 10 * GB },
     });
     const restoreFetch = installHuggingFace();
     try {
