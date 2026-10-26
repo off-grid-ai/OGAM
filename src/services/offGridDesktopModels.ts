@@ -13,8 +13,6 @@ import {
   remoteAuthorizationHeaders,
 } from './remoteTransportPolicy';
 
-const REQUEST_TIMEOUT_MS = 5_000;
-
 type GatewayCategory = RemoteModelCategory | null;
 
 interface GatewayCatalogModel {
@@ -143,24 +141,17 @@ async function gatewayFetch(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let endpoint = server.endpoint;
   while (endpoint.endsWith('/')) endpoint = endpoint.slice(0, -1);
-  try {
-    return await fetch(`${endpoint}${path}`, {
-      ...init,
-      headers: {
-        Accept: 'application/json',
-        ...remoteAuthorizationHeaders(server.endpoint, server.apiKey),
-        ...init.headers,
-      },
-      signal: controller.signal,
-      redirect: REMOTE_FETCH_REDIRECT_POLICY,
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
+  return fetch(`${endpoint}${path}`, {
+    ...init,
+    headers: {
+      Accept: 'application/json',
+      ...remoteAuthorizationHeaders(server.endpoint, server.apiKey),
+      ...init.headers,
+    },
+    redirect: REMOTE_FETCH_REDIRECT_POLICY,
+  });
 }
 
 function optionFor(

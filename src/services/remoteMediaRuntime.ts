@@ -58,7 +58,6 @@ export async function request<T>(
   const needsRequestId = server.modelManagement === 'offgrid-desktop-v1' &&
     path === '/v1/images/generations' && init.method === 'POST';
   let sent = false;
-  let responseTimer: ReturnType<typeof setTimeout> | undefined;
   const abort = () => {
     if (!needsRequestId || !sent) controller.abort();
   };
@@ -68,7 +67,6 @@ export async function request<T>(
     if (signal?.aborted) controller.abort();
     if (controller.signal.aborted) throw new Error('Remote request cancelled');
     sent = true;
-    if (needsRequestId) responseTimer = setTimeout(() => controller.abort(), 30000);
     const response = await fetch(endpoint(server, path), {
       ...init,
       headers: {
@@ -91,13 +89,9 @@ export async function request<T>(
     if (needsRequestId && sent && signal?.aborted) {
       logger.warn('[RemoteImage] no Desktop request ID received; remote cancellation is unconfirmed:', error);
     }
-    if (needsRequestId && controller.signal.aborted && !signal?.aborted) {
-      throw new Error('Desktop image request timed out');
-    }
     if (controller.signal.aborted) throw new Error('Remote request cancelled');
     throw error;
   } finally {
-    if (responseTimer) clearTimeout(responseTimer);
     unlinkAbort();
   }
 }
@@ -164,22 +158,18 @@ export const remoteMediaRuntime = {
       let cancellation: Promise<void> | undefined;
       const cancelDesktopRequest = () => {
         if (cancellation) return;
-        const cancelController = new AbortController();
-        const timeout = setTimeout(() => cancelController.abort(), 30000);
+        // The caller's signal is already aborted. Cleanup needs a fresh request.
         cancellation = request({
           server,
           path: `/v1/requests/${encodeURIComponent(requestId)}`,
           init: { method: 'DELETE' },
-          // The caller's signal is already aborted. Cleanup needs a fresh request.
-          signal: cancelController.signal,
         }, response => response.json() as Promise<{ cancelled: boolean; status: string }>)
           .then(state => {
             if (!state.cancelled) {
               logger.log('[RemoteImage] Desktop request was not cancelled:', requestId, state.status);
             }
           })
-          .catch(error => logger.warn('[RemoteImage] could not confirm Desktop cancellation:', error))
-          .finally(() => clearTimeout(timeout));
+          .catch(error => logger.warn('[RemoteImage] could not confirm Desktop cancellation:', error));
       };
       const unlinkCancel = onAbort(options.signal, cancelDesktopRequest);
       try {
