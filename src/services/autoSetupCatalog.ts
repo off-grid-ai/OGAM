@@ -56,7 +56,7 @@ export function buildAutoSetupTextCandidates(
 
 /** Setup's chat models are this phone's Fast, Balanced and Best: the shared picking rule over the
  *  catalog pool (bundled plus catalog/models.json), the same three the Models screen offers. */
-export function buildAutoSetupPickCandidates(ramGB: number): AutoSetupCompatibleCatalog['text'] {
+function buildAutoSetupPickCandidates(ramGB: number): AutoSetupCompatibleCatalog['text'] {
   return devicePicks(ramGB).map(pick => ({
     id: `${pick.model.id}/${pick.file.name}`,
     name: pick.model.name,
