@@ -276,7 +276,7 @@ export async function searchSDImageModels(query: string, signal?: AbortSignal): 
     } catch { /* One inaccessible repository must not hide other supported results. */ }
   }
   if (repositories.length && !readableRepos) throw new Error('Could not read image model files from Hugging Face. Try again.');
-  if (repositories.length && !models.length) throw new Error('No complete supported image checkpoints found. Use SD 1.x, SD 2.x, SDXL, or Qwen Image 2.1. Split models and adapters need other files.');
+  // No supported checkpoint (Flux ships split files) is an empty result, not an error.
   return models;
 }
 
