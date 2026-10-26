@@ -13,6 +13,9 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { ToolsScreen } from '../../../src/screens/ToolsScreen';
 import { AVAILABLE_TOOLS } from '../../../src/services/tools/registry';
+
+const PRO_VIDEO_TOOL_IDS = ['generate_video', 'make_film'];
+const FREE_TOOLS = AVAILABLE_TOOLS.filter(tool => !PRO_VIDEO_TOOL_IDS.includes(tool.id));
 import { registerScreen, _clearScreensForTesting } from '../../../src/navigation/screenRegistry';
 import { PRO_TOOLS_SCREEN } from '../../../src/hooks/useIsProActive';
 import { useAppStore } from '../../../src/stores/appStore';
@@ -82,10 +85,14 @@ describe('ToolsScreen', () => {
   });
 
   it('renders the page header and every free tool row', () => {
-    const { getByText, getByTestId } = render(<ToolsScreen />);
+    const { getByText, getByTestId, queryByTestId } = render(<ToolsScreen />);
     expect(getByText('Tools')).toBeTruthy();
-    for (const tool of AVAILABLE_TOOLS) {
+    for (const tool of FREE_TOOLS) {
       expect(getByTestId(`tool-picker-row-${tool.id}`)).toBeTruthy();
+    }
+    // Video tools are Pro (d51e111c1, a3f6bd8cf): without Pro video they are not offered.
+    for (const id of PRO_VIDEO_TOOL_IDS) {
+      expect(queryByTestId(`tool-picker-row-${id}`)).toBeNull();
     }
   });
 
