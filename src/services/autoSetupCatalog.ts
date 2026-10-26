@@ -122,7 +122,8 @@ export async function loadAutoSetupCompatibleCatalog(
   );
   const video = completeVideoPacks.filter(model =>
     model.minRamGb! <= ramGB ||
-    (ramGB >= 11 && model.id === 'off-grid-ai/Wan2.1-T2V-1.3B-GGUF-Q4'),
+    // 11 GB+ phones also get Off Grid AI's Light builds to try (below the packs' desktop minimum).
+    (ramGB >= 11 && (model.id === 'off-grid-ai/Wan2.1-T2V-1.3B-GGUF-Q4' || model.id === 'off-grid-ai/Wan2.2-TI2V-5B-GGUF-Q4')),
   ).map(model => {
     const sizeBytes = model.files.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0);
     return {
