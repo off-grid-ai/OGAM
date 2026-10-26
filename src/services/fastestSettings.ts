@@ -175,7 +175,7 @@ export async function applyFastestSettings(opts: { modelPath?: string; signal?: 
   const others = await placeOtherModalities(opts.signal);
   const placements = [llmPlacement(plan.backend), ...others];
   if (!opts.signal?.aborted) savePlacements(placements);
-  const summary = placements.map(item => item.modality + '=' + item.place).join(' ');
+  const summary = placements.map(item => [item.modality, item.place].join('=')).join(' ');
   logger.log(`[SPEED] fastest settings applied: ${summary}`);
   return { backend: plan.backend, applied: true, placements };
 }
