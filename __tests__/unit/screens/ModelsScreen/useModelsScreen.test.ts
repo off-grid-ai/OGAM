@@ -724,6 +724,8 @@ describe('useModelsScreen', () => {
       useImageModels.mockReturnValue({
         downloadedImageModels: [],
         availableHFModels: [{ id: 'existing-model' }],
+        // The engine catalog was fetched (848a7f0c0: sd.cpp entries alone no longer count as loaded).
+        hfCatalogLoaded: true,
         hfModelsLoading: false,
         loadHFModels: mockLoadHFModels,
         setImageFiltersVisible: jest.fn(),
