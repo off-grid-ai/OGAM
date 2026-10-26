@@ -68,9 +68,10 @@ function downloadCards(tree: unknown, cardId: RegExp): { card: string; shows: st
   return out;
 }
 
-const TEXT_REPO = 'openbmb/MiniCPM5-2B-GGUF';
-const TEXT_NAME = 'MiniCPM5 2B';
-const TEXT_FILES = [['MiniCPM5-2B-Q4_K_M.gguf', 1500 * MB], ['MiniCPM5-2B-Q8_0.gguf', 2600 * MB]] as const;
+// A list model, not one of this phone's picks (afdb05f made MiniCPM5 2B a pick on 12 GB).
+const TEXT_REPO = 'unsloth/Qwen3.5-2B-GGUF';
+const TEXT_NAME = 'Qwen 3.5 2B';
+const TEXT_FILES = [['Qwen3.5-2B-Q4_K_M.gguf', 1300 * MB], ['Qwen3.5-2B-Q8_0.gguf', 2200 * MB]] as const;
 const ZIP_NAME = 'AnythingV5.zip';
 const IMAGE_NAME = 'Anything V5 (GPU)';
 
@@ -91,7 +92,7 @@ function installNetwork(): () => void {
     const parsed = new URL(url);
     if (parsed.pathname === `/api/models/${TEXT_REPO}` && parsed.searchParams.get('blobs') === 'true') {
       return new Response(JSON.stringify({
-        id: TEXT_REPO, author: 'openbmb', downloads: 1, likes: 0, tags: ['gguf'],
+        id: TEXT_REPO, author: 'unsloth', downloads: 1, likes: 0, tags: ['gguf'],
         siblings: TEXT_FILES.map(([rfilename, size]) => ({ rfilename, size, lfs: { size } })),
       }), { status: 200 });
     }
@@ -136,10 +137,11 @@ describe('Download buttons say which model they download', () => {
     const { waitFor, fireEvent } = rtl;
     await waitFor(() => expect(models.getByTestId('device-picks')).toBeTruthy());
 
-    // The picks row: each pick's download button says the pick's name.
-    for (const slot of ['fast', 'balanced', 'best']) {
-      const pick = models.getByTestId(`pick-${slot}`);
-      const name = texts(rtl.within(pick).getByText(/^Qwen /).props.children).join('');
+    // The picks row: each pick's download button says the pick's name (this 12 GB phone's
+    // quality-ranked picks, afdb05f and ddaa6c1).
+    const picks = { fast: 'LFM2.5 8B A1B', balanced: 'Qwen 3.5 4B', best: 'MiniCPM5 2B' };
+    for (const [slot, name] of Object.entries(picks)) {
+      expect(rtl.within(models.getByTestId(`pick-${slot}`)).getByText(name)).toBeTruthy();
       expect(models.getByTestId(`pick-${slot}-download`).props.accessibilityLabel).toBe(`Download ${name}`);
     }
 
@@ -149,16 +151,16 @@ describe('Download buttons say which model they download', () => {
     await waitFor(() => expect(models.getByTestId('file-card-1')).toBeTruthy());
     const cards = downloadCards(models.toJSON(), /^file-card-\d+$/);
     expect(cards).toHaveLength(2);
-    expect(cards.map(c => c.shows).sort()).toEqual(['MiniCPM5-2B-Q4_K_M', 'MiniCPM5-2B-Q8_0']);
+    expect(cards.map(c => c.shows).sort()).toEqual(['Qwen3.5-2B-Q4_K_M', 'Qwen3.5-2B-Q8_0']);
     for (const { shows, says } of cards) expect(says).toBe(`Download ${shows}`);
     expect(models.queryAllByRole('button', { name: 'Download model' })).toHaveLength(0);
 
     // BEFORE: nothing downloading.
     expect(boundary.download!.active()).toHaveLength(0);
-    fireEvent.press(models.getByLabelText('Download MiniCPM5-2B-Q8_0'));
+    fireEvent.press(models.getByLabelText('Download Qwen3.5-2B-Q8_0'));
 
     // The device is asked for exactly that file.
-    await waitFor(() => expect(boundary.download!.active().map(row => row.fileName)).toEqual(['MiniCPM5-2B-Q8_0.gguf']));
+    await waitFor(() => expect(boundary.download!.active().map(row => row.fileName)).toEqual(['Qwen3.5-2B-Q8_0.gguf']));
   });
 
   it('Image: each card names its own model, and that button downloads that model', async () => {
