@@ -86,7 +86,8 @@ describe('Models search leaves out what this phone cannot run', () => {
   const SMALL = 'someone/Demo-Chat-1B-GGUF';
 
   it.each([
-    { phone: '8 GB', totalBytes: 8 * GB, bigShown: false },
+    // Android loads up to 62% of RAM (ddaa6c1): an 8B's estimate fits 8 GB now, not 6 GB.
+    { phone: '6 GB', totalBytes: 6 * GB, bigShown: false },
     { phone: '16 GB', totalBytes: 16 * GB, bigShown: true },
   ])('a $phone phone: an 8B search result with no file sizes is offered only when it fits', async ({ totalBytes, bigShown }) => {
     installNativeBoundary({ fs: true, ram: { platform: 'android', totalBytes, availBytes: totalBytes / 2 } });
