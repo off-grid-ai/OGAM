@@ -42,8 +42,8 @@ function installHuggingFace(): () => void {
 }
 
 /** The strings a rendered subtree shows, in order. */
-function texts(within: (node: unknown) => { getAllByText: (m: RegExp) => Array<{ props: { children?: unknown } }> }, node: unknown): string[] {
-  return within(node)
+function texts(scope: { getAllByText: (m: RegExp) => Array<{ props: { children?: unknown } }> }): string[] {
+  return scope
     .getAllByText(/.+/)
     .map(text => text.props.children)
     .filter((child): child is string => typeof child === 'string');
@@ -81,7 +81,7 @@ describe('Auto Setup plans are the phone picks', () => {
           fireEvent.press(within(card).getByTestId(`auto-setup-plan-heading-${tier}`));
         }
         const expanded = within(app.getByTestId(`auto-setup-plan-${tier}`)).getByTestId('auto-setup-selected-plan');
-        const labels = texts(within, expanded);
+        const labels = texts(within(expanded));
         const at = labels.indexOf('TEXT');
         expect(at).toBeGreaterThan(0);
         planModels[tier] = labels[at - 1];
@@ -109,7 +109,7 @@ describe('Auto Setup plans are the phone picks', () => {
       for (const slot of Object.values(PLAN_TO_PICK)) {
         const card = models.queryByTestId(`pick-${slot}`);
         // A pick card shows its slot label, then the model name.
-        pickModels[slot] = card ? texts(within, card)[1] : undefined;
+        pickModels[slot] = card ? texts(within(card))[1] : undefined;
       }
       models.unmount();
 
