@@ -21,6 +21,7 @@ import { useAppStore } from '../../stores';
 import { useRemoteServerStore } from '../../stores/remoteServerStore';
 import { useUiModeStore } from '../../stores';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { videoSeam } from '../../bootstrap/videoSeam';
 import { AppSheet } from '../AppSheet';
 import { Button } from '../Button';
 
@@ -37,6 +38,8 @@ interface ChatInputProps {
   conversationId?: string | null;
   imageModelLoaded?: boolean;
   onImageModeChange?: (mode: ImageModeState) => void;
+  /** Video is Pro. Called instead of turning video on when Pro is not active. */
+  onVideoUpgrade?: () => void;
   onOpenSettings?: () => void;
   queue?: QueueView;
   queueActions?: QueueActions;
@@ -154,6 +157,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   conversationId,
   imageModelLoaded = false,
   onImageModeChange,
+  onVideoUpgrade,
   onOpenSettings: _onOpenSettings,
   queue,
   queueActions,
@@ -328,6 +332,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleVideoModeToggle = () => {
+    if (imageMode !== 'video' && !videoSeam.available()) {
+      quickSettings.hide();
+      onVideoUpgrade?.();
+      return;
+    }
     if (imageMode !== 'video') {
       const { activeVideoModelId, downloadedVideoModels, setActiveVideoModelId } =
         useAppStore.getState();

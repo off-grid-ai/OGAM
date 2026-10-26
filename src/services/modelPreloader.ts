@@ -1,4 +1,4 @@
-import { videoGenerationService } from './videoGenerationService';
+import { videoSeam } from '../bootstrap/videoSeam';
 /**
  * Boot-time model preloader.
  *
@@ -37,7 +37,7 @@ export function abortPreload(): void {
 function isGenerationActive(): boolean {
   return (
     generationService.getState().isGenerating ||
-    videoGenerationService.getState().phase === 'running' ||
+    videoSeam.isBusy() ||
     imageGenerationService.getState().isGenerating
   );
 }

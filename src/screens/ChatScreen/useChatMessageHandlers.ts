@@ -22,7 +22,7 @@ import { activeModelService } from '../../services/activeModelService';
 import { ensureWhisperForTranscription } from '../../components/ChatInput/ensureWhisperForTranscription';
 import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
 import { shownMessages } from '../../utils/chatThread';
-import { videoGenerationService } from '../../services/videoGenerationService';
+import { videoSeam } from '../../bootstrap/videoSeam';
 import { generationSession } from '../../services/generationSession';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
@@ -105,7 +105,7 @@ export async function handleRetryMessageFn(
   if (!p.activeConversationId) { logger.log('[RESEND-SM] retry BAIL: no conv'); return; }
   // Stop can end the chat session before the native video worker exits.
   // Reject retry before deleting replies or starting another frontend session.
-  if (videoGenerationService.getState().phase === 'running') {
+  if (videoSeam.isBusy()) {
     genDeps.setAlertState(showAlert('Video is busy', 'Wait for the video engine to finish or stop before resending.'));
     return;
   }

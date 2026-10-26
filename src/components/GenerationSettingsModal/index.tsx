@@ -1,4 +1,3 @@
-import { VideoGenerationSection } from './VideoGenerationSection';
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -53,6 +52,7 @@ export const GenerationSettingsModal: React.FC<
   // TTS settings come from the pro audio feature via a slot. Free builds have
   // no TTS section.
   const TtsSection = getSlot(SLOTS.generationSettingsTts);
+  const VideoSettings = getSlot(SLOTS.generationSettingsVideo);
 
   useEffect(() => {
     if (visible) {
@@ -128,7 +128,7 @@ export const GenerationSettingsModal: React.FC<
           />
         </TouchableOpacity>
         {imageSettingsOpen && <ImageGenerationSection />}
-        <VideoGenerationSection />
+        {VideoSettings && <VideoSettings />}
 
         {/* TEXT GENERATION SETTINGS */}
         <TouchableOpacity

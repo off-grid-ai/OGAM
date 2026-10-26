@@ -95,4 +95,23 @@ export const SLOTS = {
   modelsScreenVoiceTab: 'modelsScreen.voiceTab',
   /** Small Pro-owned Voice availability indicator on the core Auto Setup plan. */
   autoSetupVoiceIndicator: 'autoSetup.voiceIndicator',
+  /** Video is Pro. Each video surface below is empty in free builds, where core shows the upgrade
+   *  screen or nothing. */
+  /** Body of the Video tab on the Models screen. Props: none. */
+  modelsScreenVideoTab: 'modelsScreen.videoTab',
+  /** Body of the Video tab in the model picker sheet. Props: { onSelect: () => void }. */
+  modelSelectorVideoTab: 'modelSelector.videoTab',
+  /** Video settings in Chat Settings and Model Settings. Props: none. */
+  generationSettingsVideo: 'generationSettings.video',
+  /** Live status of a running video under the chat or the Gallery.
+   *  Props: { conversationId?: string | null }. */
+  videoStatus: 'video.status',
+  /** Actions under a finished clip or film in chat (Continue, New shot, Make it a story).
+   *  Props: { message: Message; conversationId: string }. */
+  messageVideoActions: 'message.videoActions',
+  /** "Animate this photo" on an image. Props: { imagePath: string; conversationId?: string;
+   *  onStarted?: () => void }. */
+  imageAnimateAction: 'image.animateAction',
+  /** Films and characters at the top of the Gallery. Props: none. */
+  galleryVideoSection: 'gallery.videoSection',
 } as const;

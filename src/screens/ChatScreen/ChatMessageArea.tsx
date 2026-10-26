@@ -1,4 +1,3 @@
-import { VideoGenerationStatus } from '../../components/VideoGenerationStatus';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
@@ -34,7 +33,7 @@ import { enableAssistantTools, useAssistantToolAvailability, useExtensionToolCou
 import { AVAILABLE_TOOLS } from '../../services/tools';
 import { useOpenProTools } from '../../hooks/useOpenProTools';
 import { useIsProActive } from '../../hooks/useIsProActive';
-import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { getSlot, useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
@@ -221,6 +220,8 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   // inset value keeps this correct on both iOS and Android without any
   // Platform.OS layout branching.
   const insets = useSafeAreaInsets();
+  // Video is Pro: its live status fills this slot; free builds render nothing here.
+  const VideoStatus = useSlot(SLOTS.videoStatus);
   const keyboardVisible = useKeyboardVisible();
   const footerPaddingBottom = computeFooterPaddingBottom(
     keyboardVisible,
@@ -280,7 +281,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           keyExtractor={item => item.id}
           extraData={interfaceMode}
           ListFooterComponent={
-            <VideoGenerationStatus conversationId={chat.activeConversationId} />
+            VideoStatus ? <VideoStatus conversationId={chat.activeConversationId} /> : null
           }
           contentContainerStyle={styles.messageList}
           onScroll={handleScroll}
@@ -461,6 +462,10 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             tabNav.navigate('ProDetail');
           }}
           onAssistantSetupSync={() => tabNav.navigate('Sync')}
+          onVideoUpgrade={() => {
+            proGateShown('video');
+            tabNav.navigate('ProDetail');
+          }}
         />
       </View>
     </>

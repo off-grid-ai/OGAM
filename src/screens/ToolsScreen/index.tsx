@@ -6,7 +6,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import IconMC from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTheme, useThemedStyles } from '../../theme';
 import { FONTS, TYPOGRAPHY, SPACING } from '../../constants';
-import { AVAILABLE_TOOLS } from '../../services/tools';
+import { offeredTools } from '../../services/tools';
 import { useAppStore } from '../../stores';
 import { useOpenProTools } from '../../hooks/useOpenProTools';
 import type { ThemeColors, ThemeShadows } from '../../theme';
@@ -86,7 +86,7 @@ export const ToolsScreen: React.FC = () => {
           </View>
         )}
 
-        {AVAILABLE_TOOLS.map(tool => {
+        {offeredTools().map(tool => {
           const isEnabled = enabledTools.includes(tool.id);
           return (
             <View key={tool.id} style={styles.toolRow} testID={`tool-picker-row-${tool.id}`}>

@@ -1,4 +1,5 @@
 import { ToolDefinition } from './types';
+import { videoSeam } from '../../bootstrap/videoSeam';
 
 export const AVAILABLE_TOOLS: ToolDefinition[] = [
   {
@@ -101,8 +102,13 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   },
 ];
 
+/** Tools this build can run now. Video is Pro: its tool is offered only while Pro video is on. */
+export function offeredTools(): ToolDefinition[] {
+  return AVAILABLE_TOOLS.filter(tool => tool.id !== 'generate_video' || videoSeam.available());
+}
+
 export function getToolsAsOpenAISchema(enabledToolIds: readonly string[]) {
-  return AVAILABLE_TOOLS.filter(tool => enabledToolIds.includes(tool.id)).map(
+  return offeredTools().filter(tool => enabledToolIds.includes(tool.id)).map(
     tool => ({
       type: 'function' as const,
       function: {
@@ -130,7 +136,7 @@ export function getToolsAsOpenAISchema(enabledToolIds: readonly string[]) {
 }
 
 export function buildToolSystemPromptHint(enabledToolIds: string[]): string {
-  const enabledTools = AVAILABLE_TOOLS.filter(t => enabledToolIds.includes(t.id));
+  const enabledTools = offeredTools().filter(t => enabledToolIds.includes(t.id));
   if (enabledTools.length === 0) return '';
 
   const toolList = enabledTools.map(t => `- ${t.name}: ${t.description}`).join('\n');

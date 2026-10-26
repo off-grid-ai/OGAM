@@ -1,4 +1,4 @@
-import { videoGenerationService } from '../../services/videoGenerationService';
+import { videoSeam } from '../../bootstrap/videoSeam';
 /* eslint-disable max-lines -- cohesive generation-action orchestrator (send/regenerate/dispatch/route share the same GenerationDeps + session state); splitting it would scatter tightly-coupled turn logic. */
 import { Dispatch, SetStateAction } from 'react';
 import RNFS from 'react-native-fs';
@@ -986,7 +986,7 @@ async function dispatchResolvedTurn(
         turnKind: 'video',
       });
     try {
-      await videoGenerationService.generate({
+      await videoSeam.generate({
         prompt: opts.text,
         conversationId: opts.conversationId,
       });
@@ -1137,7 +1137,7 @@ export async function handleSendFn(
   // Cross-modality serialization: queue if any generation is running (routed later).
   if (
     generationService.getState().isGenerating ||
-    videoGenerationService.getState().phase === 'running' ||
+    videoSeam.isBusy() ||
     imageGenerationService.getState().isGenerating
   ) {
     const messageText = text;
@@ -1192,7 +1192,7 @@ export async function handleStopFn(
   // engine first leaves every paired device showing image progress while that stop call drains.
   const stops: Promise<unknown>[] = [
     generationService.stopGeneration(),
-    videoGenerationService.cancelGeneration(),
+    videoSeam.cancel(),
   ];
   const taskStop = callHook<Promise<void>>(HOOKS.taskStopActive);
   if (taskStop !== undefined) stops.push(taskStop);

@@ -1,4 +1,4 @@
-import { videoGenerationService } from './videoGenerationService';
+import { videoSeam } from '../bootstrap/videoSeam';
 /** GenerationService - Handles LLM generation independently of UI lifecycle */
 import { llmService } from './llm';
 import { getActiveEngineService, prepareActiveConversation, stopAllTextEngines } from './engines';
@@ -464,14 +464,14 @@ class GenerationService {
             this.checkSharePrompt();
             this.resetState();
           }
-          await videoGenerationService.finishDeferred(
+          await videoSeam.finishDeferred(
             conversationId,
             outcome.interrupted,
           );
           this.drainQueue();
           return outcome;
         } catch (error) {
-          videoGenerationService.discardDeferred(conversationId);
+          videoSeam.discardDeferred(conversationId);
           if (this.abortRequested) return;
           logger.error('[GenerationService] Tool generation error:', error);
           throw error;
@@ -637,13 +637,13 @@ class GenerationService {
    */
   drainQueue(signal?: ChatQueueSignal): void {
     if (signal) this.state = { ...this.state, queueHold: chatQueueHoldAfter(signal) };
-    if (this.state.isGenerating || videoGenerationService.hasPending()) return;
+    if (this.state.isGenerating || videoSeam.hasPending()) return;
     this.processNextInQueue();
   }
 
   private processNextInQueue(): void {
     const queue = this.state.queuedMessages;
-    if (queue.length === 0 || !this.queueProcessor || videoGenerationService.hasPending()) return;
+    if (queue.length === 0 || !this.queueProcessor || videoSeam.hasPending()) return;
     // One turn at a time. A stopped reply settles twice (the Stop, then the native stop), and each
     // schedules a drain: the second must not start another turn while the first is still starting.
     if (this.state.isGenerating || this.sendingQueuedTurn) {

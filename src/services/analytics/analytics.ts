@@ -410,6 +410,8 @@ export interface GenerationMetrics {
   durationMs?: number;
   /** The backend that ran, when it is known only at the end (video). */
   backend?: string;
+  /** Video only: the clip started from a photo. */
+  hasInitImage?: boolean;
   error?: unknown;
 }
 
@@ -445,6 +447,7 @@ export function generationStarted(modality: Modality, facts: ModelFacts): Genera
           battery_pct: batteryPct(power?.batteryLevel),
           charging: power?.batteryState ? power.batteryState === 'charging' || power.batteryState === 'full' : undefined,
           error_code: outcome === 'failed' ? errorCode(metrics.error) : undefined,
+          has_init_image: modality === 'video' ? metrics.hasInitImage === true : undefined,
         });
       })
       .catch(ignore);

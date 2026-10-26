@@ -1,6 +1,6 @@
 import { exportGeneratedMedia } from '../../services/exportGeneratedMedia';
-import { videoGenerationService } from '../../services/videoGenerationService';
-import { VideoGenerationStatus } from '../../components/VideoGenerationStatus';
+import { deleteGeneratedVideo } from '../../services/generatedVideoFiles';
+import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import React, { useMemo, useState } from 'react';
 import { Alert, Modal } from 'react-native';
 import Video from 'react-native-video';
@@ -30,6 +30,9 @@ export const GalleryScreen: React.FC = () => {
   const [kind, setKind] = useState<'images' | 'videos'>('images');
   const [selectedVideo, setSelectedVideo] = useState<GeneratedVideo | null>(null);
   const videos = useAppStore(state => state.generatedVideos);
+  // Video is Pro: making and tracking videos fills these slots. Watching saved videos stays free.
+  const VideoStatus = useSlot(SLOTS.videoStatus);
+  const VideoSection = useSlot(SLOTS.galleryVideoSection);
   const displayVideos = useMemo(
     () =>
       conversationId
@@ -158,9 +161,10 @@ export const GalleryScreen: React.FC = () => {
         </TouchableOpacity>)}
       </View>
 
-      {kind === 'videos' && (
-        <VideoGenerationStatus conversationId={conversationId} />
+      {kind === 'videos' && VideoStatus && (
+        <VideoStatus conversationId={conversationId} />
       )}
+      {kind === 'videos' && VideoSection && !conversationId && <VideoSection />}
       {imageGenState.isGenerating && (
         <View style={styles.genBanner}>
           <View style={styles.genBannerRow}>
@@ -319,8 +323,7 @@ export const GalleryScreen: React.FC = () => {
               </Text>
               <TouchableOpacity
                 onPress={() => {
-                  void videoGenerationService
-                    .deleteVideo(selectedVideo.id)
+                  void deleteGeneratedVideo(selectedVideo.id)
                     .then(() => setSelectedVideo(null))
                     .catch(error =>
                       Alert.alert(

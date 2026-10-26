@@ -1,4 +1,7 @@
-import { VideoTab } from './VideoTab';
+import { useNavigation } from '@react-navigation/native';
+import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { VideoUpsell } from '../models/VideoUpsell';
+import { proGateShown } from '../../services/analytics/analytics';
 import React, { useEffect, useState, useMemo } from 'react';
 import { Text, ScrollView, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -90,6 +93,9 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   onBrowseModels,
 }) => {
   const { colors } = useTheme();
+  const navigation = useNavigation();
+  // Video is Pro: the picker body fills this slot; free builds show the upgrade screen.
+  const VideoTab = useSlot(SLOTS.modelSelectorVideoTab);
   const styles = useThemedStyles(createAllStyles);
   const {
     downloadedModels,
@@ -308,12 +314,22 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
         contentContainerStyle={styles.contentContainer}
       >
         {activeTab === 'video' ? (
-          <VideoTab
-            onSelect={() => {
-              onSelectionComplete?.();
-              onClose();
-            }}
-          />
+          VideoTab ? (
+            <VideoTab
+              onSelect={() => {
+                onSelectionComplete?.();
+                onClose();
+              }}
+            />
+          ) : (
+            <VideoUpsell
+              onGetPro={() => {
+                proGateShown('video');
+                onClose();
+                (navigation as unknown as { navigate: (name: string) => void }).navigate('ProDetail');
+              }}
+            />
+          )
         ) : activeTab === 'text' ? (
           <TextTab
             downloadedModels={filteredDownloadedModels}

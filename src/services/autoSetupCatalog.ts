@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { videoSeam } from '../bootstrap/videoSeam';
 import { CATALOG, isVideoWeightAvailableOn, videoPackError } from '@offgrid/models';
 import { recommendedModelsForDevice, ramFitScore } from '../utils/recommendedModels';
 import { fileExceedsBudget, textModelBudget } from './memoryBudget';
@@ -97,8 +98,10 @@ export async function loadAutoSetupCompatibleCatalog(
     payload: { modelId: model.id },
   }));
 
+  // Video is Pro: without it Auto Setup offers no video model.
+  const videoOn = videoSeam.available();
   const completeVideoPacks = CATALOG.filter(model =>
-    model.kind === 'video' && model.availability !== 'coming_soon' &&
+    videoOn && model.kind === 'video' && model.availability !== 'coming_soon' &&
     !!model.minRamGb && !videoPackError(model.files) &&
     isVideoWeightAvailableOn(model.files.find(file => file.role === 'primary')?.name ?? '', Platform.OS) &&
     model.files.every(file => !!file.sizeBytes),
@@ -114,6 +117,7 @@ export async function loadAutoSetupCompatibleCatalog(
     };
   });
   const videoExclusionReason = video.length ? undefined
+    : !videoOn ? 'Video needs Off Grid AI Pro.'
     : completeVideoPacks.length
       ? "No video model meets Auto Setup's memory limit."
       : 'Auto Setup has no complete video model to download.';

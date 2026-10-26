@@ -1,4 +1,3 @@
-import { VideoGenerationSection } from '../../components/GenerationSettingsModal/VideoGenerationSection';
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -44,6 +43,7 @@ export const ModelSettingsScreen: React.FC = () => {
   // TTS is a pro feature injected via a slot (same as the in-chat generation settings). Free builds have no
   // slot → the section is not shown at all.
   const TtsSection = getSlot(SLOTS.generationSettingsTts);
+  const VideoSettings = getSlot(SLOTS.generationSettingsVideo);
   const { modelName: sttModelName, isRemote: isRemoteTranscription } =
     useTranscriptionModelSetting();
 
@@ -125,7 +125,7 @@ export const ModelSettingsScreen: React.FC = () => {
           />
         </TouchableOpacity>
         {imageOpen && <ImageGenerationSection />}
-        <VideoGenerationSection />
+        {VideoSettings && <VideoSettings />}
 
         <TouchableOpacity
           style={styles.accordionHeader}

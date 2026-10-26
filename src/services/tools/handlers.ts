@@ -1,4 +1,4 @@
-import { videoGenerationService } from '../videoGenerationService';
+import { videoSeam } from '../../bootstrap/videoSeam';
 import { Platform } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import { describeTurnStatus } from '@offgrid/rag/documents';
@@ -45,7 +45,7 @@ async function dispatchTool(call: ToolCall): Promise<string> {
       const prompt = requireString(call, 'prompt');
       if (!prompt || !call.context?.conversationId)
         throw new Error('A video prompt and chat are required.');
-      videoGenerationService.defer(call.context.conversationId, { prompt });
+      videoSeam.defer(call.context.conversationId, { prompt });
       return 'Video generation is queued after this reply. The video will appear in this chat when complete.';
     }
     case 'web_search': {

@@ -1,5 +1,4 @@
 import { EmbeddingModelsTab } from './EmbeddingModelsTab';
-import { VideoModelsTab } from './VideoModelsTab';
 import type { HFSearchResult } from '@offgrid/models';
 import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
@@ -15,6 +14,7 @@ import { createStyles } from './styles';
 import { TextModelsTab } from './TextModelsTab';
 import { ImageModelsTab } from './ImageModelsTab';
 import { VoiceModelsUpsell } from '../../components/models/VoiceModelsUpsell';
+import { VideoUpsell } from '../../components/models/VideoUpsell';
 import { TranscriptionModelsTab } from './TranscriptionModelsTab';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import type { ModelTab } from './types';
@@ -69,6 +69,8 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({
   // The Voice tab always renders; when the slot is empty (free / non-pro) we
   // show an upsell so users can see what Pro adds.
   const VoiceModelsPanel = useSlot(SLOTS.modelsScreenVoiceTab);
+  // Video is Pro: same pattern as Voice.
+  const VideoModelsPanel = useSlot(SLOTS.modelsScreenVideoTab);
   const route = useRoute<RouteProp<MainTabParamList, 'ModelsTab'>>();
   const isCheckingCatalog = useModelCatalogStore(s => s.isChecking);
   // What the last "check for new models" found, shown in a sheet until dismissed.
@@ -256,7 +258,16 @@ export const ModelsScreen: React.FC<ModelsScreenProps> = ({
       {vm.activeTab === 'embedding' && <EmbeddingModelsTab />}
 
       {/* Image Models Tab */}
-      {vm.activeTab === 'video' && <VideoModelsTab selected={selectedVideoModel} setSelected={setSelectedVideoModel} />}
+      {vm.activeTab === 'video' && (
+        VideoModelsPanel
+          ? <VideoModelsPanel selected={selectedVideoModel} setSelected={setSelectedVideoModel} />
+          : <VideoUpsell
+              onGetPro={() => {
+                proGateShown('video');
+                vm.navigation.navigate('ProDetail');
+              }}
+            />
+      )}
       {vm.activeTab === 'image' && (
         <ImageModelsTab
           imageSearchQuery={vm.imageSearchQuery}
