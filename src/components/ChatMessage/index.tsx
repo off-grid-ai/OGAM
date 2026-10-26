@@ -263,6 +263,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const showVideoActions = Boolean(
     VideoActions && !isUser && !isStreaming && (isGeneratedVideo || message.videoStoryId),
   );
+  // With Pro, the slot draws a generated clip as its own card; core's player is the free fallback.
   const hasVisibleAnswer = Boolean(
     hasAttachments || answerParsedContent.response.trim(),
   );
@@ -347,7 +348,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </View>
       )}
 
-      {(!hideProse || hasAttachments) && showAnswerBubble && (
+      {(!hideProse || hasAttachments) && showAnswerBubble && !(showVideoActions && isGeneratedVideo) && (
         <View
           testID={message.isThinking ? undefined : 'message-bubble'}
           style={

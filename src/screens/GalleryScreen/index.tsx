@@ -16,6 +16,7 @@ import { CustomAlert, hideAlert } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
 import { GeneratedImage } from '../../types';
 import { RootStackParamList } from '../../navigation/types';
+import { useHasRegisteredScreen } from '../../navigation/screenRegistry';
 import { createStyles, COLUMN_COUNT } from './styles';
 import { useGalleryActions } from './useGalleryActions';
 import { GalleryGridItem } from './GridItem';
@@ -33,6 +34,8 @@ export const GalleryScreen: React.FC = () => {
   // Video is Pro: making and tracking videos fills these slots. Watching saved videos stays free.
   const VideoStatus = useSlot(SLOTS.videoStatus);
   const VideoSection = useSlot(SLOTS.galleryVideoSection);
+  // With Pro, videos have their own Library route (stories and clips); without it, this tab lists them.
+  const hasVideoLibrary = useHasRegisteredScreen('VideoLibrary');
   const displayVideos = useMemo(
     () =>
       conversationId
@@ -155,7 +158,7 @@ export const GalleryScreen: React.FC = () => {
       </View>
 
       <View style={styles.mediaTabs}>
-        {(['images', 'videos'] as const).map(tab => <TouchableOpacity key={tab} onPress={() => setKind(tab)} accessibilityRole="button"
+        {(['images', 'videos'] as const).map(tab => <TouchableOpacity key={tab} onPress={() => (tab === 'videos' && hasVideoLibrary ? navigation.navigate('VideoLibrary' as never) : setKind(tab))} accessibilityRole="button"
           style={[styles.mediaTab, kind === tab && styles.mediaTabActive]}>
           <Text style={kind === tab ? styles.mediaTabTextActive : styles.mediaTabText}>{tab === 'images' ? `Images (${displayImages.length})` : `Videos (${displayVideos.length})`}</Text>
         </TouchableOpacity>)}
