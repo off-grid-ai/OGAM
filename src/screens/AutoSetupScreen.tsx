@@ -23,6 +23,7 @@ import {
 } from '../services/analytics/analytics';
 import { ignore } from '../services/analytics/values';
 import { useAppStore } from '../stores/appStore';
+import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 
@@ -56,6 +57,10 @@ export const AutoSetupScreen: React.FC<Props> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const VoiceIndicator = useSlot(SLOTS.autoSetupVoiceIndicator);
+  // A paired Off Grid AI Desktop makes videos for a phone that cannot run a video model itself.
+  const pairedComputer = useRemoteServerStore(state =>
+    state.servers.find(server => server.modelManagement === 'offgrid-desktop-v1'),
+  );
   const [expandedTier, setExpandedTier] = useState<AutoSetupTier | null>(
     () => session.snapshot().selectedTier,
   );
@@ -270,11 +275,22 @@ export const AutoSetupScreen: React.FC<Props> = ({
                       );
                     })}
                     {!plan.items[3] && (
-                      <View style={styles.unavailableItem}>
+                      <View style={styles.unavailableItem} testID="auto-setup-video-row">
                         <Text style={styles.itemKind}>VIDEO</Text>
                         <Text style={styles.itemSize}>
-                          {plan.videoExclusionReason ?? 'No video model is included in this Auto Setup plan.'}
+                          {plan.videoOnComputer && pairedComputer
+                            ? `Videos are made on ${pairedComputer.name}.`
+                            : plan.videoExclusionReason ?? 'No video model is included in this Auto Setup plan.'}
                         </Text>
+                        {plan.videoOnComputer && !pairedComputer && (
+                          <Button
+                            title="Find my computer"
+                            variant="outline"
+                            size="small"
+                            onPress={() => navigation.push('RemoteServers')}
+                            testID="auto-setup-find-computer"
+                          />
+                        )}
                       </View>
                     )}
                   </View>

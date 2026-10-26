@@ -133,7 +133,7 @@ export async function loadAutoSetupCompatibleCatalog(
   const videoExclusionReason = video.length ? undefined
     : !videoOn ? 'Video needs Off Grid AI Pro.'
     : completeVideoPacks.length
-      ? "No video model meets Auto Setup's memory limit."
+      ? 'Videos are made on your computer with Off Grid AI Desktop.'
       : 'Auto Setup has no complete video model to download.';
   const embedding = [BUNDLED_EMBEDDING_MODEL, ...RECOMMENDED_EMBEDDING_MODELS]
     .map((model, index) => ({
@@ -144,5 +144,7 @@ export async function loadAutoSetupCompatibleCatalog(
       fitScore: index === 1 ? 0 : index,
       payload: model,
     }));
-  return { text, image, stt, video, videoExclusionReason, embedding };
+  // Too little memory for any pack here: the phone makes videos on a paired computer instead.
+  const videoOnComputer = !video.length && videoOn && completeVideoPacks.length > 0;
+  return { text, image, stt, video, videoExclusionReason, videoOnComputer, embedding };
 }

@@ -39,6 +39,8 @@ export interface AutoSetupPlan {
   ];
   totalBytes: number;
   videoExclusionReason?: string;
+  /** No video model runs on this phone, but videos can be made on a paired computer. */
+  videoOnComputer?: boolean;
   embedding?: AutoSetupCandidate<AutoSetupEmbeddingModel>;
 }
 
@@ -47,6 +49,7 @@ export type AutoSetupItem = AutoSetupPlan['items'][number] | NonNullable<AutoSet
 export interface AutoSetupCompatibleCatalog {
   video?: AutoSetupCandidate<ModelEntry>[];
   videoExclusionReason?: string;
+  videoOnComputer?: boolean;
   embedding?: AutoSetupCandidate<AutoSetupEmbeddingModel>[];
   text: AutoSetupCandidate<{ modelId: string; file: ModelFile }>[];
   image: AutoSetupCandidate<ImageModelDescriptor>[];
@@ -126,7 +129,10 @@ function selectAutoSetupPlan(
     items,
     totalBytes: items.reduce((total, item) => total + item.sizeBytes, embedding?.sizeBytes ?? 0),
     ...(embedding ? { embedding } : {}),
-    ...(video ? {} : { videoExclusionReason: catalog.videoExclusionReason }),
+    ...(video ? {} : {
+      videoExclusionReason: catalog.videoExclusionReason,
+      ...(catalog.videoOnComputer ? { videoOnComputer: true } : {}),
+    }),
   };
 }
 
