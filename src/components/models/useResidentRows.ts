@@ -14,7 +14,9 @@ import type { Resident, ResidentType } from '@offgrid/models';
 /** The manager sheet's modality rows. Defined HERE (the lower-level projection) rather than in
  *  ModelsManagerSheet so the hook doesn't import the component — that was a dependency cycle
  *  (ModelsManagerSheet → useResidentRows → ModelsManagerSheet). The sheet re-exports it. */
-export type ModelRowType = 'text' | 'image' | 'video' | 'voice' | 'speech';
+export type ModelRowType = 'text' | 'image' | 'video' | 'voice' | 'speech' | 'search';
+/** Each row's active model name. Search is optional: the built-in model is shown when omitted. */
+export type ModelRowLabels = Record<Exclude<ModelRowType, 'search'>, string> & { search?: string };
 
 /** Sheet row → residency type. Voice is the TTS output engine; Speech is the Whisper STT input. */
 const ROW_RESIDENT_TYPE: Record<ModelRowType, ResidentType> = {
@@ -23,6 +25,7 @@ const ROW_RESIDENT_TYPE: Record<ModelRowType, ResidentType> = {
   video: 'video',
   voice: 'tts',
   speech: 'whisper',
+  search: 'embedding',
 };
 
 /** Pure: pick the resident (if any) backing each sheet row. */

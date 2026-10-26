@@ -25,7 +25,7 @@ type ChatModalSectionProps = {
   setShowModelSelector: (v: boolean) => void;
   onModelSelectorClosed?: () => void;
   onBackToModels?: () => void;
-  modelSelectorTab?: 'text' | 'image' | 'video';
+  modelSelectorTab?: 'text' | 'image' | 'video' | 'search';
   showSettingsPanel: boolean;
   setShowSettingsPanel: (v: boolean) => void;
   debugInfo: any;

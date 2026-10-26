@@ -19,7 +19,7 @@ import { splitGgufModelName } from '@offgrid/models';
 
 export type DownloadItem = {
   type: 'active' | 'completed';
-  modelType: 'text' | 'image' | 'video' | 'tts' | 'stt';
+  modelType: 'text' | 'image' | 'video' | 'tts' | 'stt' | 'embedding';
   downloadId?: string;
   modelKey?: string;
   modelId: string;

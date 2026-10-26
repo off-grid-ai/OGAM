@@ -370,7 +370,7 @@ export const ChatsListScreen: React.FC = () => {
         }}
         onBrowseModels={(tab) => {
           setShowModelSelector(false);
-          navigation.navigate('ModelsTab', { initialTab: tab });
+          navigation.navigate('ModelsTab', { initialTab: tab === 'search' ? 'embedding' : tab });
         }}
         onSelectionComplete={() => {
           setShowModelSelector(false);

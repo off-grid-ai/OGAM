@@ -16,7 +16,7 @@
  * See docs/design/MODEL_DOWNLOAD_SERVICE.md.
  */
 
-export type ModelDownloadType = 'text' | 'image' | 'video' | 'stt' | 'tts';
+export type ModelDownloadType = 'text' | 'image' | 'video' | 'stt' | 'tts' | 'embedding';
 
 export type ModelDownloadStatus =
   | 'queued' // accepted, not yet transferring

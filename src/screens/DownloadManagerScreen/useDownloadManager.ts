@@ -26,6 +26,7 @@ import logger from '../../utils/logger';
 import { cancelSyntheticImageDownload } from '../../services/imageDownloadActions';
 import { retryImageDownload } from './retryHandlers';
 import { modelDownloadService } from '../../services/modelDownloadService';
+import { useSearchDownloadItems } from './useSearchDownloadItems';
 import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
 import { setImageDownloadOps } from '../../services/modelDownloadService/providers/imageProvider';
 import { useEffect } from 'react';
@@ -89,6 +90,9 @@ export function useDownloadManager(): UseDownloadManagerResult {
     // tore down + rebuilt the subscription and interval on EVERY progress tick — pure
     // churn while a download runs — and refresh reads from the service, not `downloads`.
   }, []);
+
+  // Search (embedding) models: the one being installed and the downloaded ones.
+  const searchItems = useSearchDownloadItems();
 
   // Voice (TTS) + transcription (STT) downloaded models, loaded from disk.
   const { voiceItems, buildDeleteAlert: buildVoiceDeleteAlert } =
@@ -154,6 +158,7 @@ export function useDownloadManager(): UseDownloadManagerResult {
   const completedItems: DownloadItem[] = [
     ...modelStoreCompletedItems(downloadedModels, downloadedImageModels),
     ...voiceCompleted,
+    ...searchItems.filter(item => item.type === 'completed'),
     ...downloadedVideoModels.map(model => ({
       type: 'completed' as const,
       modelType: 'video' as const,
@@ -200,6 +205,7 @@ export function useDownloadManager(): UseDownloadManagerResult {
     ...startedItems,
     ...queuedActive,
     ...voiceActiveDeduped,
+    ...searchItems.filter(item => item.type === 'active'),
   ];
 
   const totalStorageUsed = completedItems.reduce(
@@ -315,6 +321,23 @@ export function useDownloadManager(): UseDownloadManagerResult {
   };
 
   const handleDeleteItem = (item: DownloadItem) => {
+    if (item.modelType === 'embedding') {
+      setAlertState(
+        showAlert('Delete Search Model', `Delete "${item.fileName}" and free ${formatBytes(item.fileSize)}?`, [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              modelDownloadService
+                .remove(idOf(item))
+                .catch(error => setAlertState(showAlert('Could not delete model', String(error.message))));
+            },
+          },
+        ]),
+      );
+      return;
+    }
     if (item.modelType === 'video') {
       setAlertState(
         showAlert(

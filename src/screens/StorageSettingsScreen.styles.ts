@@ -97,6 +97,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     ...TYPOGRAPHY.body,
     color: colors.primary,
   },
+  indented: { flex: 1, marginLeft: SPACING.xl + SPACING.xs, color: colors.textSecondary },
   modelRow: {
     flexDirection: 'row' as const,
     justifyContent: 'space-between' as const,

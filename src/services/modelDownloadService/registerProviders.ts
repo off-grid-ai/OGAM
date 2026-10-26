@@ -7,6 +7,7 @@ import { modelDownloadService } from './index';
 import { textProvider } from './providers/textProvider';
 import { imageProvider } from './providers/imageProvider';
 import { sttProvider } from './providers/sttProvider';
+import { embeddingProvider } from './providers/embeddingProvider';
 
 let registered = false;
 
@@ -16,4 +17,5 @@ export function registerCoreDownloadProviders(): void {
   modelDownloadService.register(textProvider);
   modelDownloadService.register(imageProvider);
   modelDownloadService.register(sttProvider);
+  modelDownloadService.register(embeddingProvider);
 }

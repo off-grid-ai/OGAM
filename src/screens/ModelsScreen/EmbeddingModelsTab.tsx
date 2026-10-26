@@ -5,6 +5,7 @@ import { Button, ModelCard } from '../../components';
 import { CustomAlert, initialAlertState, showAlert, hideAlert } from '../../components/CustomAlert';
 import { searchEmbeddingModels, RECOMMENDED_EMBEDDING_MODELS } from '../../services/huggingFaceModelBrowser';
 import { embeddingModelChanger } from '../../services/documents/embeddingModel';
+import { embeddingService } from '../../services/rag/embedding';
 import { activeEmbeddingModel, type EmbeddingModelSelection } from '../../services/documents/store';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
@@ -61,6 +62,7 @@ export const EmbeddingModelsTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [alert, setAlert] = useState(initialAlertState);
+  const [downloaded, setDownloaded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     try {
@@ -101,6 +103,24 @@ export const EmbeddingModelsTab: React.FC = () => {
     ]));
   };
   const candidates = query.trim() ? results : RECOMMENDED_EMBEDDING_MODELS;
+  // Which of these are already on the phone, so they can be deleted when not in use.
+  useEffect(() => {
+    let current = true;
+    Promise.all(candidates.map(async candidate => ((await embeddingService.hasModelFile(candidate)) ? candidate.id : null)))
+      .then(ids => { if (current) setDownloaded(new Set(ids.filter((id): id is string => !!id))); })
+      .catch(() => undefined);
+    return () => { current = false; };
+  }, [candidates, status.busy]);
+  const remove = (candidate: Candidate) => {
+    setAlert(showAlert('Delete search model?', `Delete ${candidate.name} from this phone?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => {
+        embeddingService.deleteModelFile(candidate)
+          .then(() => setDownloaded(previous => { const next = new Set(previous); next.delete(candidate.id); return next; }))
+          .catch(e => setError(String(e.message)));
+      } },
+    ]));
+  };
   const activeInCandidates = active && candidates.some(candidate => candidate.id === active.id);
 
   return (
@@ -139,6 +159,10 @@ export const EmbeddingModelsTab: React.FC = () => {
             `${Math.round(candidate.size / 1024 / 1024)} MB download`,
           ].filter((fact): fact is string => !!fact)}
           isActive={active?.id === candidate.id}
+          isDownloaded={downloaded.has(candidate.id)}
+          isDownloading={status.busy && status.candidateId === candidate.id}
+          downloadProgress={status.busy && status.candidateId === candidate.id ? status.fraction : undefined}
+          onDelete={downloaded.has(candidate.id) && active?.id !== candidate.id && !status.busy ? () => remove(candidate) : undefined}
           disabled={status.busy || !ready || active?.id === candidate.id}
           onPress={() => select(candidate)}
           trailing={active?.id === candidate.id ? undefined : <View style={embeddingStyles.rowAction}><Icon name="arrow-right" size={18} color={colors.primary} /></View>}

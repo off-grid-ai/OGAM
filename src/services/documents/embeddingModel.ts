@@ -16,12 +16,16 @@ interface EmbeddingModelChange {
   busy: boolean;
   message: string;
   error: string;
+  /** The model being installed, and how much of its file has arrived (0..1). */
+  candidateId?: string;
+  fraction?: number;
 }
 
 class EmbeddingModelChanger {
   private change: EmbeddingModelChange = { busy: false, message: '', error: '' };
   private listeners = new Set<() => void>();
   private abort: AbortController | null = null;
+  private last: EmbeddingModelCandidate | null | undefined;
 
   getChange = (): EmbeddingModelChange => this.change;
 
@@ -36,21 +40,29 @@ class EmbeddingModelChanger {
     this.abort?.abort();
   };
 
-  private report(busy: boolean, message: string, error = ''): void {
-    this.change = { busy, message, error };
+  private report(busy: boolean, message: string, error = '', fraction?: number): void {
+    this.change = { busy, message, error, candidateId: busy || error ? this.last?.id : undefined, fraction };
     this.listeners.forEach(listener => listener());
   }
+
+  /** Try the last model change again (the Download Manager's Retry). */
+  retry = (): Promise<void> =>
+    this.last === undefined ? Promise.resolve() : this.install(this.last);
 
   /** null switches back to the built-in model. */
   async install(candidate: EmbeddingModelCandidate | null): Promise<void> {
     if (this.change.busy) throw new Error('An embedding model change is already in progress.');
     const controller = new AbortController();
     this.abort = controller;
-    const progress = (message: string) => this.report(true, message);
+    this.last = candidate;
+    let fraction: number | undefined;
+    const progress = (message: string) => this.report(true, message, '', fraction);
     progress('Preparing model change...');
     try {
       const model: EmbeddingModelSelection | null = candidate
-        ? await embeddingService.downloadModel(candidate, progress, controller.signal)
+        ? await embeddingService.downloadModel(candidate, progress, controller.signal, value => {
+            fraction = value;
+          })
         : null;
       await embeddingService.runExclusive(async () => {
         if (controller.signal.aborted) throw new Error('Model change cancelled');

@@ -1,3 +1,4 @@
+import { useSearchModelLabel } from '../hooks/useSearchModelLabel';
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -64,6 +65,7 @@ async function loadDemoData(): Promise<void> {
 
 export const SettingsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
+  const searchLabel = useSearchModelLabel();
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -195,6 +197,14 @@ export const SettingsScreen: React.FC = () => {
                 testID: 'open-model-settings',
               },
               {
+                // The search model is chosen in one place, Models → Search; this row only goes there.
+                icon: 'search',
+                title: 'Search Model',
+                desc: searchLabel,
+                screen: 'SearchModel' as const,
+                testID: 'open-search-model',
+              },
+              {
                 icon: 'wifi',
                 title: 'Remote Servers',
                 desc: 'Connect to Off Grid AI Desktop, Ollama, LM Studio, and more',
@@ -245,7 +255,12 @@ export const SettingsScreen: React.FC = () => {
                 onPress={() =>
                   item.screen === 'Sync'
                     ? openSync()
-                    : navigation.navigate(item.screen)
+                    : item.screen === 'SearchModel'
+                      ? (navigation as unknown as { navigate: (name: string, params: object) => void }).navigate(
+                          'ModelsTab',
+                          { initialTab: 'embedding' },
+                        )
+                      : navigation.navigate(item.screen)
                 }
                 testID={'testID' in item ? item.testID : undefined}
               >

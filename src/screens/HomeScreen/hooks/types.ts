@@ -14,7 +14,7 @@ export type HomeScreenNavigationProp = CompositeNavigationProp<
   NativeStackNavigationProp<RootStackParamList>
 >;
 
-export type ModelPickerType = 'text' | 'image' | 'video' | null;
+export type ModelPickerType = 'text' | 'image' | 'video' | 'search' | null;
 
 export type LoadingState = {
   isLoading: boolean;

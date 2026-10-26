@@ -33,7 +33,9 @@ import { ChatMessageArea } from './ChatMessageArea';
 import {
   ModelsManagerSheet,
   ModelRowType,
+  type ModelRowLabels,
 } from '../../components/models/ModelsManagerSheet';
+import { useSearchModelLabel } from '../../hooks/useSearchModelLabel';
 import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
@@ -68,7 +70,7 @@ export const ChatScreen: React.FC = () => {
   // Which tab the model selector opens on — set from the manager row the user tapped so
   // tapping "Image" focuses the Image tab (it defaulted to Text regardless of the row).
   const [modelSelectorTab, setModelSelectorTab] = useState<
-    'text' | 'image' | 'video'
+    'text' | 'image' | 'video' | 'search'
   >('text');
   const [whisperOpen, setWhisperOpen] = useState(false);
   const documents = useChatDocumentsSheet(chat.activeConversation, rootNavigation);
@@ -87,7 +89,9 @@ export const ChatScreen: React.FC = () => {
     const model = s.downloadedVideoModels.find(m => m.id === s.activeVideoModelId);
     return model ? videoModelDisplayName(model.id, model.name) : '—';
   });
-  const modelLabels: Record<ModelRowType, string> = {
+  const searchLabel = useSearchModelLabel();
+  const modelLabels: ModelRowLabels = {
+    search: searchLabel,
     video: remoteLabels.video ?? videoLabel,
     text: chat.activeModelName ?? chat.activeModel?.name ?? '—',
     image: remoteLabels.image ?? chat.activeImageModel?.name ?? '—',
@@ -140,7 +144,7 @@ export const ChatScreen: React.FC = () => {
     );
   };
   const openModelRowNow = (type: ModelRowType) => {
-    if (type === 'text' || type === 'image' || type === 'video') {
+    if (type === 'text' || type === 'image' || type === 'video' || type === 'search') {
       setModelSelectorTab(type);
       chat.setShowModelSelector(true);
     } else if (type === 'speech') setWhisperOpen(true);

@@ -16,7 +16,7 @@ import type { ModelType } from '../../stores/downloadStore';
  * unchanged; only STT normalizes, and it normalizes HERE, once.
  */
 export function uniformDownloadId(
-  modelType: ModelType,
+  modelType: ModelType | 'embedding',
   modelId: string,
 ): string {
   // Per-type canonicalization, owned HERE so the providers' list() and the View's

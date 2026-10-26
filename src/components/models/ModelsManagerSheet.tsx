@@ -7,14 +7,14 @@ import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
-import { useResidentRows, ejectResident, type ModelRowType } from './useResidentRows';
+import { useResidentRows, ejectResident, type ModelRowLabels, type ModelRowType } from './useResidentRows';
 import { remoteServerManager } from '../../services/remoteServerManager';
 import { useRemoteServerStore } from '../../stores/remoteServerStore';
 import logger from '../../utils/logger';
 
 // Defined in useResidentRows (breaks the sheet<->hook import cycle); re-exported here so existing
 // consumers (Home, Chat, ModelsSummaryRow) keep importing it from the sheet.
-export type { ModelRowType };
+export type { ModelRowLabels, ModelRowType };
 
 /** Minimal loading shape so this sheet is screen-agnostic (home + chat). */
 type LoadingState = { isLoading: boolean; type?: string | null };
@@ -27,6 +27,7 @@ const ROWS: RowDef[] = [
   { type: 'video', icon: 'video', label: 'Video' },
   { type: 'voice', icon: 'volume-2', label: 'Voice' },
   { type: 'speech', icon: 'mic', label: 'Speech' },
+  { type: 'search', icon: 'search', label: 'Search' },
 ];
 
 type Props = {
@@ -34,7 +35,7 @@ type Props = {
   onClose: () => void;
   /** Fired once the sheet has fully closed — used to open a picker safely after. */
   onClosed?: () => void;
-  labels: Record<ModelRowType, string>;
+  labels: ModelRowLabels;
   /** Rows whose active selection lives on a REMOTE server (gateway) — shown with a cloud marker,
    *  matching the chat header's remote indicator, so a remote model is never mistaken for local. */
   remote?: Partial<Record<ModelRowType, boolean>>;
@@ -128,7 +129,7 @@ export const ModelsManagerSheet: React.FC<Props> = ({
         {ROWS.map(row => {
           const isLoading =
             loadingState.isLoading && loadingState.type === row.type;
-          const value = labels[row.type];
+          const value = (labels[row.type] ?? '—');
           const isSet = value && value !== '—';
           const resident = residentByRow[row.type];
           return (

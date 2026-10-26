@@ -86,6 +86,27 @@ class EmbeddingService {
       (!candidate.sha256 || await RNFS.hash(filePath, 'sha256') === candidate.sha256);
   }
 
+  /** Where a downloaded search model's file lives. */
+  modelPath(id: string): string {
+    return `${RNFS.DocumentDirectoryPath}/embedding-${sha256(id)}.gguf`;
+  }
+
+  /** Cheap check for the Models list: the file is on disk at its expected size (no hash). */
+  async hasModelFile(candidate: { id: string; size: number }): Promise<boolean> {
+    const filePath = `${RNFS.DocumentDirectoryPath}/embedding-${sha256(candidate.id)}.gguf`;
+    if (!await RNFS.exists(filePath)) return false;
+    return Number((await RNFS.stat(filePath)).size) === candidate.size;
+  }
+
+  /** Delete a downloaded search model that is not in use. */
+  async deleteModelFile(candidate: { id: string }): Promise<void> {
+    if (activeEmbeddingModel()?.id === candidate.id)
+      throw new Error('This search model is in use. Choose another one first.');
+    const filePath = `${RNFS.DocumentDirectoryPath}/embedding-${sha256(candidate.id)}.gguf`;
+    await RNFS.unlink(filePath).catch(() => undefined);
+    await RNFS.unlink(`${filePath}.part`).catch(() => undefined);
+  }
+
   /** Download only. Activation and rebuilding require a separate confirmed RAG operation. */
   async downloadModel(
     candidate: { id: string; name: string; size: number; downloadUrl: string; sha256?: string },

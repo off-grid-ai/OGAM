@@ -25,7 +25,9 @@ import { ModelsSummaryRow } from '../../components/models/ModelsSummaryRow';
 import {
   ModelsManagerSheet,
   ModelRowType,
+  type ModelRowLabels,
 } from '../../components/models/ModelsManagerSheet';
+import { useSearchModelLabel } from '../../hooks/useSearchModelLabel';
 import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
@@ -49,13 +51,15 @@ function homeModelLabels(input: {
   transcription?: string | null;
   localVoice?: string | null;
   localTranscription?: string;
-}): Record<ModelRowType, string> {
+  search?: string;
+}): ModelRowLabels {
   return {
     text: input.text ?? '—',
     image: input.image ?? '—',
     video: input.video ?? '—',
     voice: input.voice ?? input.localVoice ?? '—',
     speech: input.transcription ?? input.localTranscription ?? '—',
+    search: input.search,
   };
 }
 
@@ -121,7 +125,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     const model = s.downloadedVideoModels.find(m => m.id === s.activeVideoModelId);
     return model ? videoModelDisplayName(model.id, model.name) : undefined;
   });
+  const searchLabel = useSearchModelLabel();
   const modelLabels = homeModelLabels({
+    search: searchLabel,
     video: remoteLabels.video ?? videoLabel,
     text: activeTextModelId ? activeTextModelName : undefined,
     image: activeImageModel?.name,
@@ -153,6 +159,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     else if (type === 'image') setPickerType('image');
     else if (type === 'video') setPickerType('video');
     else if (type === 'speech') setWhisperOpen(true);
+    else if (type === 'search') setPickerType('search');
     else setVoiceOpen(true);
   };
   const openModelRow = (type: ModelRowType) => {
@@ -360,7 +367,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         onSelectionComplete={() => setPickerType(null)}
         onBrowseModels={tab => {
           setPickerType(null);
-          navigation.navigate('ModelsTab', { initialTab: tab });
+          navigation.navigate('ModelsTab', { initialTab: tab === 'search' ? 'embedding' : tab });
         }}
         onAddServer={() => navigation.navigate('RemoteServers')}
       />

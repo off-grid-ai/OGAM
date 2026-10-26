@@ -1,6 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { VideoUpsell } from '../models/VideoUpsell';
+import { SearchTab } from './SearchTab';
 import { proGateShown } from '../../services/analytics/analytics';
 import React, { useEffect, useState, useMemo } from 'react';
 import { Text, ScrollView, TouchableOpacity } from 'react-native';
@@ -38,7 +39,7 @@ import {
 } from '../../utils/modelSelectorFilters';
 import logger from '../../utils/logger';
 
-type TabType = 'text' | 'image' | 'video';
+type TabType = 'text' | 'image' | 'video' | 'search';
 
 function savedTextModels(
   server: RemoteServer,
@@ -74,7 +75,7 @@ interface ModelSelectorModalProps {
   onSelectionComplete?: () => void;
   onClosed?: () => void;
   onBackToModels?: () => void;
-  onBrowseModels?: (tab: 'text' | 'image' | 'video') => void;
+  onBrowseModels?: (tab: 'text' | 'image' | 'video' | 'search') => void;
 }
 
 export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
@@ -301,7 +302,9 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
       title={
         activeTab === 'video'
           ? 'VIDEO MODEL'
-          : activeTab === 'image'
+          : activeTab === 'search'
+            ? 'SEARCH MODEL'
+            : activeTab === 'image'
             ? 'IMAGE MODEL'
             : 'TEXT MODEL'
       }
@@ -313,7 +316,14 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
       >
-        {activeTab === 'video' ? (
+        {activeTab === 'search' ? (
+          <SearchTab
+            onSelect={() => {
+              onSelectionComplete?.();
+              onClose();
+            }}
+          />
+        ) : activeTab === 'video' ? (
           VideoTab ? (
             <VideoTab
               onSelect={() => {

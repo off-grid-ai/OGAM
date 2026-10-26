@@ -1,5 +1,12 @@
 import { statFile } from '../utils/fileStat';
 import { videoModelDirectory } from '../services/videoModelFiles';
+import { videoModelDisplayName } from '../utils/modelHelpers';
+import {
+  deleteVideoPack,
+  documentIndexBytes,
+  generatedVideoBytes,
+  searchModelBytes,
+} from '../services/storageBreakdown';
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
@@ -30,6 +37,8 @@ export const StorageSettingsScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const [storageUsed, setStorageUsed] = useState(0);
   const [availableStorage, setAvailableStorage] = useState(0);
+  const [extra, setExtra] = useState({ videos: 0, search: 0, index: 0 });
+  const generatedVideoCount = useAppStore(s => s.generatedVideos.length);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
 
   const { downloadedModels, downloadedImageModels, downloadedVideoModels } =
@@ -63,13 +72,32 @@ export const StorageSettingsScreen: React.FC = () => {
     const videoStorageUsed = videoSizes.reduce((total, size) => total + size, 0);
     const used = await modelManager.getStorageUsed();
     const available = await modelManager.getAvailableStorage();
-    setStorageUsed(used + imageStorageUsed + videoStorageUsed);
+    const [videos, search, index] = await Promise.all([generatedVideoBytes(), searchModelBytes(), documentIndexBytes()]);
+    setExtra({ videos, search, index });
+    setStorageUsed(used + imageStorageUsed + videoStorageUsed + search);
     setAvailableStorage(available);
   }, [imageStorageUsed, downloadedVideoModels]);
 
+  const confirmDeleteVideoPack = (id: string, name: string) => {
+    setAlertState(
+      showAlert('Delete video model?', `Delete "${name}" from this phone?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setAlertState(hideAlert());
+            deleteVideoPack(id).then(loadStorageInfo).catch(() => undefined);
+          },
+        },
+      ]),
+    );
+  };
+
   useEffect(() => {
     loadStorageInfo();
-  }, [loadStorageInfo]);
+    // A new or deleted video changes the Videos and Films row.
+  }, [loadStorageInfo, generatedVideoCount]);
 
   const handleClearStaleDownload = useCallback(
     (modelKey: string) => {
@@ -170,6 +198,28 @@ export const StorageSettingsScreen: React.FC = () => {
             </View>
             <Text style={styles.infoValue}>{downloadedVideoModels.length}</Text>
           </View>
+          {downloadedVideoModels.map(model => (
+            <View key={model.id} style={styles.infoRow}>
+              <Text style={[styles.infoLabel, styles.indented]} numberOfLines={1}>
+                {videoModelDisplayName(model.id, model.name)}
+              </Text>
+              <TouchableOpacity
+                onPress={() => confirmDeleteVideoPack(model.id, videoModelDisplayName(model.id, model.name))}
+                accessibilityRole="button"
+                accessibilityLabel={`Delete ${videoModelDisplayName(model.id, model.name)}`}
+                testID={`storage-delete-video-${model.id}`}
+              >
+                <Icon name="trash-2" size={16} color={colors.error} />
+              </TouchableOpacity>
+            </View>
+          ))}
+          <View style={styles.infoRow}>
+            <View style={styles.infoRowLeft}>
+              <Icon name="search" size={18} color={colors.primary} />
+              <Text style={styles.infoLabel}>Search Models</Text>
+            </View>
+            <Text style={styles.infoValue}>{hardwareService.formatBytes(extra.search)}</Text>
+          </View>
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="mic" size={18} color={colors.primary} />
@@ -190,6 +240,22 @@ export const StorageSettingsScreen: React.FC = () => {
               <Text style={styles.infoLabel}>Model Storage</Text>
             </View>
             <Text style={styles.infoValue}>{hardwareService.formatBytes(storageUsed)}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <View style={styles.infoRowLeft}>
+              <Icon name="film" size={18} color={colors.primary} />
+              <Text style={styles.infoLabel}>Videos and Films</Text>
+            </View>
+            <Text style={styles.infoValue}>
+              {generatedVideoCount} · {hardwareService.formatBytes(extra.videos)}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <View style={styles.infoRowLeft}>
+              <Icon name="file-text" size={18} color={colors.primary} />
+              <Text style={styles.infoLabel}>Document Index</Text>
+            </View>
+            <Text style={styles.infoValue}>{hardwareService.formatBytes(extra.index)}</Text>
           </View>
           <View style={[styles.infoRow, styles.lastRow]}>
             <View style={styles.infoRowLeft}>

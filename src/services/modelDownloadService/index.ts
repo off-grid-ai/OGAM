@@ -244,7 +244,7 @@ class ModelDownloadService {
   private cancelQueuedStart(id: string): boolean {
     const queued = backgroundDownloadService
       .getQueuedItems()
-      .find(q => queuedUniformId({ modelType: q.modelType as ModelDownloadType, modelId: q.modelId, modelKey: q.modelKey }) === id);
+      .find(q => queuedUniformId({ modelType: q.modelType as Parameters<typeof queuedUniformId>[0]['modelType'], modelId: q.modelId, modelKey: q.modelKey }) === id);
     return queued ? backgroundDownloadService.cancelQueued(queued.modelKey) : false;
   }
 

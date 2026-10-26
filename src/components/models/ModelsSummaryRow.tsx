@@ -6,10 +6,10 @@ import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { useTheme, useThemedStyles } from '../../theme';
 import type { ThemeColors, ThemeShadows } from '../../theme';
 import { TYPOGRAPHY, SPACING } from '../../constants';
-import type { ModelRowType } from './ModelsManagerSheet';
+import type { ModelRowLabels, ModelRowType } from './ModelsManagerSheet';
 
 type Props = {
-  labels: Record<ModelRowType, string>;
+  labels: ModelRowLabels;
   /** Count of downloaded models per type — shown under each caption so the card
    *  carries information at a glance (replaces the separate stats row). */
   counts?: Partial<Record<ModelRowType, number>>;
@@ -24,6 +24,7 @@ const TYPE_ICONS: { type: ModelRowType; icon: string; caption: string }[] = [
   { type: 'video', icon: 'video', caption: 'Video' },
   { type: 'voice', icon: 'volume-2', caption: 'Voice' },
   { type: 'speech', icon: 'mic', caption: 'Speech' },
+  { type: 'search', icon: 'search', caption: 'Search' },
 ];
 
 /**
