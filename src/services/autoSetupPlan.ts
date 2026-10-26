@@ -1,4 +1,5 @@
-import type { FitTier, ModelEntry } from '@offgrid/models';
+import type { ModelEntry } from '@offgrid/models';
+import type { PickSlot } from './devicePicks';
 import type { ModelFile } from '../types';
 import type { ImageModelDescriptor } from './imageModelDownloadTypes';
 
@@ -21,8 +22,8 @@ interface AutoSetupCandidate<T = unknown> {
   sizeBytes: number;
   fitScore: number;
   parameterCountB?: number;
-  /** The shared fit verdict on this phone, for chat models. */
-  fit?: FitTier;
+  /** The phone's pick slot this chat model fills (Fast, Balanced or Best). */
+  pick?: PickSlot;
   payload: T;
 }
 
@@ -64,10 +65,11 @@ const PLAN_COPY: Record<
   },
 };
 
-/** How easily the chat model fits this phone's memory, by the shared fit rule. */
-const TEXT_FIT: Record<Exclude<AutoSetupTier, 'extreme'>, FitTier> = {
-  lean: 'easy',
-  balanced: 'fits',
+/** Each plan's chat model is one of the phone's picks, by the shared rule over the catalog pool. */
+const TEXT_PICK: Record<AutoSetupTier, PickSlot> = {
+  lean: 'fast',
+  balanced: 'balanced',
+  extreme: 'best',
 };
 
 function choose<T>(
@@ -86,17 +88,7 @@ function chooseText(
   tier: AutoSetupTier,
   candidates: AutoSetupCompatibleCatalog['text'],
 ): AutoSetupCompatibleCatalog['text'][number] | null {
-  if (candidates.length === 0) return null;
-  // Extreme pushes the phone to its limit: the heaviest chat model that still loads.
-  if (tier === 'extreme') return [...candidates].sort((a, b) => b.sizeBytes - a.sizeBytes)[0];
-  // Lean and Balanced are how easily a model fits this phone, not its size: the strongest model
-  // that is easy to fit, and the strongest that fits with room to spare.
-  return candidates
-    .filter(candidate => candidate.fit === TEXT_FIT[tier])
-    .sort(
-      (a, b) =>
-        (b.parameterCountB ?? 0) - (a.parameterCountB ?? 0) || b.sizeBytes - a.sizeBytes,
-    )[0] ?? null;
+  return candidates.find(candidate => candidate.pick === TEXT_PICK[tier]) ?? null;
 }
 
 /** Pure plan selector. Its input contains only candidates admitted by existing compatibility owners. */

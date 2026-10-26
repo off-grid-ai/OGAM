@@ -2,12 +2,12 @@ import { Platform } from 'react-native';
 import { videoSeam } from '../bootstrap/videoSeam';
 import { CATALOG, isVideoWeightAvailableOn, videoPackError } from '@offgrid/models';
 import { recommendedModelsForDevice, ramFitScore } from '../utils/recommendedModels';
-import { fileExceedsBudget, modelFitTier, textModelBudget } from './memoryBudget';
+import { fileExceedsBudget, textModelBudget } from './memoryBudget';
+import { devicePicks } from './devicePicks';
 import { fetchModelFiles } from './modelCatalogFiles';
 import { hardwareService } from './hardware';
 import { WHISPER_MODELS } from './whisperModels';
 import { withRemoteCatalog } from '../stores/modelCatalogStore';
-import { RECOMMENDED_MODELS } from '../constants';
 import type { AutoSetupCompatibleCatalog } from './autoSetupPlan';
 import { autoSetupImageCatalogProvider } from './autoSetupImageCatalogProvider';
 import { BUNDLED_EMBEDDING_MODEL, RECOMMENDED_EMBEDDING_MODELS } from './huggingFaceModelBrowser';
@@ -49,10 +49,24 @@ export function buildAutoSetupTextCandidates(
       sizeBytes,
       fitScore: ramFitScore(model.minRam, ramGB),
       parameterCountB: model.params,
-      fit: modelFitTier(sizeBytes, ramGB, textModelBudget()),
       payload: { modelId: model.id, file },
     }];
   });
+}
+
+/** Setup's chat models are this phone's Fast, Balanced and Best: the shared picking rule over the
+ *  catalog pool (bundled plus catalog/models.json), the same three the Models screen offers. */
+export function buildAutoSetupPickCandidates(ramGB: number): AutoSetupCompatibleCatalog['text'] {
+  return devicePicks(ramGB).map(pick => ({
+    id: `${pick.model.id}/${pick.file.name}`,
+    name: pick.model.name,
+    kind: 'text' as const,
+    sizeBytes: pick.sizeBytes,
+    fitScore: 0,
+    parameterCountB: pick.model.paramCount,
+    pick: pick.slot,
+    payload: { modelId: pick.model.id, file: pick.file },
+  }));
 }
 
 /** Resolve the live catalogs, then admit candidates through the existing device-fit owners. */
@@ -60,9 +74,7 @@ export async function loadAutoSetupCompatibleCatalog(
   boundaries: AutoSetupCatalogBoundaries = productionCatalogBoundaries,
 ): Promise<AutoSetupCompatibleCatalog> {
   const ramGB = await boundaries.totalMemoryGB();
-  const textModels = recommendedModelsForDevice(ramGB, withRemoteCatalog('text', RECOMMENDED_MODELS)).filter(model => model.type === 'vision');
-  const files = await boundaries.fetchTextFiles(textModels);
-  const text = buildAutoSetupTextCandidates(textModels, files, ramGB);
+  const text = buildAutoSetupPickCandidates(ramGB);
 
   const imageRecommendation = await boundaries.imageRecommendation();
   const imageModels = await boundaries.imageModels();
