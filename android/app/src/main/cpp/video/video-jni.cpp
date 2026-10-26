@@ -56,10 +56,15 @@ extern "C" JNIEXPORT void JNICALL Java_ai_offgridmobile_video_VideoGenerationMod
 }
 extern "C" JNIEXPORT void JNICALL Java_ai_offgridmobile_video_VideoGenerationModule_nativeGenerate(
   JNIEnv *env, jobject self, jstring weight, jstring vae, jstring encoder, jstring prompt, jstring negative,
-  jint width, jint height, jint frames, jint fps, jint steps, jdouble guidance, jdouble seed, jstring llm, jstring embeddings, jstring audioVae, jdouble flowShift, jstring diagnosticBackend) {
+  jint width, jint height, jint frames, jint fps, jint steps, jdouble guidance, jdouble seed, jstring llm, jstring embeddings, jstring audioVae, jdouble flowShift, jstring diagnosticBackend, jbyteArray initImage) {
   jobject owner = nullptr;
   try {
     offgrid::VideoRequest request{string(env, weight), string(env, vae), string(env, encoder), string(env, prompt), string(env, negative), width, height, frames, fps, steps, (float)guidance, (int64_t)seed};
+    // Optional start image: RGB at the clip size, prepared by the host (Animate this photo, Continue).
+    if (initImage && env->GetArrayLength(initImage) == width * height * 3) {
+      request.initImage.resize(static_cast<size_t>(width) * height * 3);
+      env->GetByteArrayRegion(initImage, 0, width * height * 3, reinterpret_cast<jbyte *>(request.initImage.data()));
+    }
     request.llm = string(env, llm);
     request.embeddings = string(env, embeddings);
     request.audioVae = string(env, audioVae);
@@ -163,6 +168,31 @@ extern "C" JNIEXPORT void JNICALL Java_ai_offgridmobile_video_VideoGenerationMod
     if (klass) { env->ThrowNew(klass, error.what()); env->DeleteLocalRef(klass); }
   }
 }
+// sd.cpp's in-process ESRGAN upscaler. One context per clip; frames go through it one by one.
+extern "C" JNIEXPORT jlong JNICALL Java_ai_offgridmobile_video_VideoGenerationModule_nativeUpscalerOpen(
+  JNIEnv *env, jobject, jstring modelPath, jint threads) {
+  try {
+    return reinterpret_cast<jlong>(new_upscaler_ctx(string(env, modelPath).c_str(), false, threads, 128, "cpu", nullptr));
+  } catch (...) { return 0; }
+}
+extern "C" JNIEXPORT void JNICALL Java_ai_offgridmobile_video_VideoGenerationModule_nativeUpscalerClose(JNIEnv *, jobject, jlong handle) {
+  if (handle) free_upscaler_ctx(reinterpret_cast<upscaler_ctx_t *>(handle));
+}
+extern "C" JNIEXPORT jbyteArray JNICALL Java_ai_offgridmobile_video_VideoGenerationModule_nativeUpscale(
+  JNIEnv *env, jobject, jlong handle, jbyteArray rgb, jint width, jint height, jint factor) {
+  if (!handle || !rgb || env->GetArrayLength(rgb) != width * height * 3) return nullptr;
+  std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 3);
+  env->GetByteArrayRegion(rgb, 0, width * height * 3, reinterpret_cast<jbyte *>(pixels.data()));
+  sd_image_t input{static_cast<uint32_t>(width), static_cast<uint32_t>(height), 3, pixels.data()};
+  sd_image_t *out = nullptr; int count = 0;
+  if (!upscale(reinterpret_cast<upscaler_ctx_t *>(handle), input, static_cast<uint32_t>(factor), &out, &count) || !out || count < 1) return nullptr;
+  const uint64_t size = uint64_t(out[0].width) * out[0].height * out[0].channel;
+  jbyteArray result = out[0].channel == 3 && size <= INT32_MAX ? env->NewByteArray(static_cast<jsize>(size)) : nullptr;
+  if (result) env->SetByteArrayRegion(result, 0, static_cast<jsize>(size), reinterpret_cast<jbyte *>(out[0].data));
+  free_sd_images(out, count);
+  return result;
+}
+
 extern "C" JNIEXPORT jbyteArray JNICALL Java_ai_offgridmobile_video_VideoGenerationModule_nativeGenerateImage(
   JNIEnv *env, jobject self, jstring prompt, jstring negative, jint width, jint height, jint steps, jdouble guidance, jdouble seed, jint previewInterval) {
   jbyteArray output = nullptr;

@@ -36,6 +36,8 @@ function getToolIcon(toolName?: string): string {
       return 'shuffle';
     case 'generate_image':
       return 'image';
+    case 'generate_video':
+      return 'video';
     default:
       return 'tool';
   }
@@ -70,6 +72,8 @@ function getToolLabel(toolName?: string, content?: string): string {
       return 'Model changed';
     case 'generate_image':
       return 'Generated image';
+    case 'generate_video':
+      return 'Video requested';
     default:
       return toolName || 'Tool result';
   }

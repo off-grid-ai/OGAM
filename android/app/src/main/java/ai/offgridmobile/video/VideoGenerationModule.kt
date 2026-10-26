@@ -54,7 +54,81 @@ class VideoGenerationModule(private val context: ReactApplicationContext) : Reac
     override fun onHostPause() { releaseScreenFlag() }
     override fun onHostDestroy() { releaseScreenFlag() }
     override fun getName() = "VideoGenerationModule"
-    private external fun nativeGenerate(weight: String, vae: String, encoder: String, prompt: String, negative: String, width: Int, height: Int, frames: Int, fps: Int, steps: Int, guidance: Double, seed: Double, llm: String, embeddings: String, audioVae: String, flowShift: Double, diagnosticBackend: String)
+    // Start images run in sd.cpp; the in-process ESRGAN upscaler sharpens film shots.
+    override fun getConstants(): Map<String, Any> = mapOf("supportsInitImage" to true, "supportsUpscale" to true)
+    private external fun nativeGenerate(weight: String, vae: String, encoder: String, prompt: String, negative: String, width: Int, height: Int, frames: Int, fps: Int, steps: Int, guidance: Double, seed: Double, llm: String, embeddings: String, audioVae: String, flowShift: Double, diagnosticBackend: String, initImage: ByteArray?)
+    private external fun nativeUpscalerOpen(modelPath: String, threads: Int): Long
+    private external fun nativeUpscalerClose(handle: Long)
+    private external fun nativeUpscale(handle: Long, rgb: ByteArray, width: Int, height: Int, factor: Int): ByteArray?
+
+    /** A photo as RGB at the clip size, centre-cropped to fill. */
+    private fun initImageRgb(path: String?, width: Int, height: Int): ByteArray? {
+        if (path.isNullOrEmpty()) return null
+        val source = android.graphics.BitmapFactory.decodeFile(path.removePrefix("file://")) ?: return null
+        val scale = maxOf(width.toFloat() / source.width, height.toFloat() / source.height)
+        val crop = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+        android.graphics.Canvas(crop).apply {
+            translate((width - source.width * scale) / 2f, (height - source.height * scale) / 2f)
+            scale(scale, scale)
+            drawBitmap(source, 0f, 0f, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+        }
+        source.recycle()
+        return toRgb(crop).also { crop.recycle() }
+    }
+
+    private fun toRgb(bitmap: android.graphics.Bitmap): ByteArray {
+        val pixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        val rgb = ByteArray(pixels.size * 3)
+        for (i in pixels.indices) {
+            rgb[i * 3] = (pixels[i] shr 16).toByte(); rgb[i * 3 + 1] = (pixels[i] shr 8).toByte(); rgb[i * 3 + 2] = pixels[i].toByte()
+        }
+        return rgb
+    }
+
+    /** A film owns one foreground service for its whole run; a clip inside it starts none of its own. */
+    private fun filmServiceRunning(): Boolean = runCatching {
+        Class.forName("ai.offgridmobile.film.FilmRenderService").getDeclaredField("running").apply { isAccessible = true }.getBoolean(null)
+    }.getOrDefault(false)
+
+    /** Upscale every frame of a clip with sd.cpp's ESRGAN, and write it at the clip's own rate. */
+    @ReactMethod fun upscaleVideo(input: ReadableMap, promise: Promise) {
+        cancelled.set(false)
+        executor.execute {
+            val retriever = android.media.MediaMetadataRetriever()
+            var handle = 0L
+            try {
+                val inputPath = checkNotNull(input.getString("inputPath")); val outputPath = checkNotNull(input.getString("outputPath"))
+                val factor = input.getInt("scale")
+                retriever.setDataSource(inputPath)
+                val durationUs = (retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L) * 1000
+                val frameCount = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toIntOrNull() ?: 0
+                check(durationUs > 0 && frameCount > 0) { "The clip has no frames." }
+                val fps = maxOf(1, Math.round(frameCount * 1_000_000.0 / durationUs).toInt())
+                handle = nativeUpscalerOpen(checkNotNull(input.getString("modelPath")), Runtime.getRuntime().availableProcessors().coerceIn(2, 6))
+                check(handle != 0L) { "The upscaler model did not load." }
+                var writer: VideoEncoder? = null
+                try {
+                    for (index in 0 until frameCount) {
+                        check(!cancelled.get()) { "Upscaling stopped." }
+                        val frame = retriever.getFrameAtTime(index * 1_000_000L / fps, android.media.MediaMetadataRetriever.OPTION_CLOSEST) ?: continue
+                        val rgb = toRgb(frame); val w = frame.width; val h = frame.height
+                        frame.recycle()
+                        val up = nativeUpscale(handle, rgb, w, h, factor) ?: error("The upscaler failed on a frame.")
+                        val target = writer ?: VideoEncoder(outputPath, w * factor, h * factor, fps).also { writer = it }
+                        target.append(up, 3) { cancelled.get() }
+                    }
+                    writer?.finish { cancelled.get() }
+                } finally { writer?.close() }
+                promise.resolve(Arguments.createMap().apply { putString("path", outputPath) })
+            } catch (error: Throwable) {
+                promise.reject("VIDEO_UPSCALE_FAILED", error.message ?: "Could not upscale the clip.", error)
+            } finally {
+                if (handle != 0L) nativeUpscalerClose(handle)
+                runCatching { retriever.release() }
+            }
+        }
+    }
     private external fun nativeCancel()
     private external fun nativePrepare()
     private external fun nativeSetRuntimeDirectory(path: String)
@@ -139,7 +213,8 @@ class VideoGenerationModule(private val context: ReactApplicationContext) : Reac
                 previewFile = File(destination.path + ".preview.png")
                 VideoGenerationService.admission = CompletableFuture()
                 VideoGenerationService.cancel = { stop() }
-                ContextCompat.startForegroundService(context, Intent(context, VideoGenerationService::class.java))
+                if (filmServiceRunning()) VideoGenerationService.admission.complete(Unit)
+                else ContextCompat.startForegroundService(context, Intent(context, VideoGenerationService::class.java))
                 VideoGenerationService.admission.get(5, TimeUnit.SECONDS)
                 check(!cancelled.get()) { "Video generation stopped." }
                 videoSteps = input.getInt("steps")
@@ -152,7 +227,8 @@ class VideoGenerationModule(private val context: ReactApplicationContext) : Reac
                         if (input.hasKey("llm")) input.getString("llm") ?: "" else "",
                         if (input.hasKey("embeddings")) input.getString("embeddings") ?: "" else "",
                         if (input.hasKey("audioVae")) input.getString("audioVae") ?: "" else "",
-                        input.getDouble("flowShift"), if (BuildConfig.DEBUG && input.hasKey("diagnosticBackend")) input.getString("diagnosticBackend") ?: "auto" else "auto")
+                        input.getDouble("flowShift"), if (BuildConfig.DEBUG && input.hasKey("diagnosticBackend")) input.getString("diagnosticBackend") ?: "auto" else "auto",
+                        initImageRgb(if (input.hasKey("initImage")) input.getString("initImage") else null, input.getInt("width"), input.getInt("height")))
                     writer.finish { cancelled.get() }
                 }
                 check(destination.length() > 0) { "Video encoder produced no file." }

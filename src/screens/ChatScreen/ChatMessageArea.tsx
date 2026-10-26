@@ -30,7 +30,7 @@ import { useTheme } from '../../theme';
 import { useAppStore } from '../../stores';
 import { getToolExtensions } from '../../services/tools/extensions';
 import { enableAssistantTools, useAssistantToolAvailability, useExtensionToolCount } from '../../services/tools/useExtensionToolCount';
-import { AVAILABLE_TOOLS } from '../../services/tools';
+import { offeredTools } from '../../services/tools';
 import { useOpenProTools } from '../../hooks/useOpenProTools';
 import { useIsProActive } from '../../hooks/useIsProActive';
 import { getSlot, useSlot, SLOTS } from '../../bootstrap/slotRegistry';
@@ -199,9 +199,10 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
     chat.enabledTools.includes(id),
   ).length;
   const proToolsCount = proToolsActiveCount + extToolCount;
-  // The free Tools page lists only AVAILABLE_TOOLS, so its badge counts just those
-  // (pro email/calendar ids are surfaced under Pro Tools instead, not double-counted).
-  const freeToolIds = new Set(AVAILABLE_TOOLS.map(t => t.id));
+  // The free Tools page lists only the tools offered now, so its badge counts just those
+  // (pro email/calendar ids are surfaced under Pro Tools instead, not double-counted; the video
+  // tool counts only while Pro video is on).
+  const freeToolIds = new Set(offeredTools().map(t => t.id));
   const freeToolsCount = chat.enabledTools.filter(id =>
     freeToolIds.has(id),
   ).length;

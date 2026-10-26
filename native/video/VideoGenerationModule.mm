@@ -21,6 +21,31 @@ static BOOL OGSaveRgbPng(const sd_image_t &image, NSString *output) {
 
 @interface VideoGenerationModule : RCTEventEmitter <RCTBridgeModule>
 @end
+/// A start image as RGB at the clip size, centre-cropped to fill (Animate this photo, Continue).
+static std::vector<uint8_t> OGInitImageRGB(NSString *path, int width, int height) {
+  UIImage *image = [UIImage imageWithContentsOfFile:[path stringByReplacingOccurrencesOfString:@"file://" withString:@""]];
+  if (!image.CGImage || width <= 0 || height <= 0) return {};
+  std::vector<uint8_t> rgba(static_cast<size_t>(width) * height * 4);
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(rgba.data(), width, height, 8, width * 4, space,
+                                               kCGImageAlphaNoneSkipLast | kCGBitmapByteOrder32Big);
+  CGColorSpaceRelease(space);
+  if (!context) return {};
+  const CGFloat scale = MAX(width / image.size.width, height / image.size.height);
+  const CGSize drawn = CGSizeMake(image.size.width * scale, image.size.height * scale);
+  UIGraphicsPushContext(context);
+  CGContextTranslateCTM(context, 0, height);
+  CGContextScaleCTM(context, 1, -1);
+  [image drawInRect:CGRectMake((width - drawn.width) / 2, (height - drawn.height) / 2, drawn.width, drawn.height)];
+  UIGraphicsPopContext();
+  CGContextRelease(context);
+  std::vector<uint8_t> rgb(static_cast<size_t>(width) * height * 3);
+  for (size_t pixel = 0, count = static_cast<size_t>(width) * height; pixel < count; ++pixel) {
+    rgb[pixel * 3] = rgba[pixel * 4]; rgb[pixel * 3 + 1] = rgba[pixel * 4 + 1]; rgb[pixel * 3 + 2] = rgba[pixel * 4 + 2];
+  }
+  return rgb;
+}
+
 @implementation VideoGenerationModule {
   offgrid::VideoRuntime _runtime;
   dispatch_queue_t _worker;
@@ -36,6 +61,8 @@ static BOOL OGSaveRgbPng(const sd_image_t &image, NSString *output) {
 }
 RCT_EXPORT_MODULE(VideoGenerationModule)
 + (BOOL)requiresMainQueueSetup { return YES; }
+// Start images run here; sd.cpp's upscaler is not exported by this runtime build on iOS yet.
+- (NSDictionary *)constantsToExport { return @{@"supportsInitImage": @YES, @"supportsUpscale": @NO}; }
 - (instancetype)init {
   if ((self = [super init])) {
     _worker = dispatch_queue_create("ai.offgrid.video", DISPATCH_QUEUE_SERIAL);
@@ -171,6 +198,8 @@ RCT_REMAP_METHOD(generate, generate:(NSDictionary *)input resolver:(RCTPromiseRe
           request.embeddings = [(input[@"embeddings"] ?: @"") UTF8String];
           request.audioVae = [(input[@"audioVae"] ?: @"") UTF8String];
           request.flowShift = [input[@"flowShift"] floatValue];
+          if ([input[@"initImage"] isKindOfClass:NSString.class])
+            request.initImage = OGInitImageRGB(input[@"initImage"], request.width, request.height);
           [self emitStage:@"preparing" step:0 total:request.steps];
           self->_runtime.run(request, [&](int step, int total) {
             [self emitStage:@"generating" step:step total:total];
