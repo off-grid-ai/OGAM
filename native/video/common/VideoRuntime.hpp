@@ -55,11 +55,21 @@ class VideoRuntime {
       // Probe the NPU before choosing it. Devices without a usable Hexagon
       // runtime retain Vulkan diffusion and the CPU conditioning fallback.
       sd_list_devices(nullptr, 0);
+      const auto gpuDevice = ggml_backend_dev_by_name("Vulkan0");
+      const std::string gpuDescription = gpuDevice ? ggml_backend_dev_description(gpuDevice) : "";
+      const std::string vaeName = request.vae.substr(request.vae.find_last_of("/\\") + 1);
+      const bool wanVae = vaeName == "wan_2.1_vae.safetensors" || vaeName == "wan2.2_vae.safetensors";
+      const bool adrenoWan = wanVae && gpuDescription.find("Adreno") != std::string::npos;
+      // The Hexagon backend returns a constant Wan DiT output: it ignores the
+      // latent, timestep and prompt, so sampling leaves the start noise intact.
+      // Adreno Vulkan crashes in the same DiT graph. Wan diffusion runs on CPU.
+      const bool wanCpu = adrenoWan || (wanVae && !gpuDevice);
+      const bool skipNpu = request.skipNpu || wanVae;
 
       for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
         auto device = ggml_backend_dev_get(i);
         const char *name = ggml_backend_dev_name(device);
-        if (request.cpuOnly || request.skipNpu || std::string(name).rfind("HTP", 0) != 0) continue;
+        if (request.cpuOnly || skipNpu || std::string(name).rfind("HTP", 0) != 0) continue;
         try {
           auto probe = ggml_backend_dev_init(device, nullptr);
           if (!probe) continue;
@@ -71,13 +81,8 @@ class VideoRuntime {
         }
       }
       // Wan decode still loses the Adreno device between spatial tiles after
-      // the matvec compiler workaround. Keep HTP diffusion/conditioning, but
-      // route this decoder to CPU before it can invalidate the GPU context.
-      const auto gpuDevice = ggml_backend_dev_by_name("Vulkan0");
-      const std::string gpuDescription = gpuDevice ? ggml_backend_dev_description(gpuDevice) : "";
-      const std::string vaeName = request.vae.substr(request.vae.find_last_of("/\\") + 1);
-      const bool wanVae = vaeName == "wan_2.1_vae.safetensors" || vaeName == "wan2.2_vae.safetensors";
-      const bool adrenoWan = wanVae && gpuDescription.find("Adreno") != std::string::npos;
+      // the matvec compiler workaround. Route this decoder to CPU before it can
+      // invalidate the GPU context.
       const std::string vaeBackend = gpuDevice && !adrenoWan ? ",vae=Vulkan0" : ",vae=cpu";
       const std::string npuBackend = preferred + vaeBackend;
       const std::string gpuBackend = "Vulkan0,te=cpu" + vaeBackend;
@@ -94,7 +99,11 @@ class VideoRuntime {
       config.disable_prefetch = true;
 #endif
       config.n_threads = request.threads;
+#ifdef __ANDROID__
+      if (request.cpuOnly || wanCpu) {
+#else
       if (request.cpuOnly) {
+#endif
         config.backend = "cpu"; config.params_backend = nullptr; config.auto_fit = true;
 #ifdef __ANDROID__
         preferred.clear();
