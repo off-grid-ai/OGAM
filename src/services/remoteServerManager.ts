@@ -34,7 +34,12 @@ import {
   initializeProvidersImpl,
 } from './remoteServerManagerUtils';
 import { remoteAuthorizationHeaders } from './remoteTransportPolicy';
-import { activateOffGridDesktopModel } from './offGridDesktopModels';
+import {
+  activateOffGridDesktopModel,
+  readOffGridDesktopDownload,
+  startOffGridDesktopDownload,
+  type OffGridDesktopDownload,
+} from './offGridDesktopModels';
 import { featureUsed, flowFinished, flowStep } from './analytics/analytics';
 
 /** Normalize an endpoint for identity comparison (lowercase, no trailing slashes). */
@@ -245,6 +250,8 @@ class RemoteServerManager {
     };
     store.updateServer(serverId, {
       mediaModels: confirmedModels,
+      // Desktop's installed list as it stands now: a model just downloaded there is in it.
+      ...(confirmedState ? { modelCatalog: confirmedState.catalog } : {}),
     });
     store.setActiveRemoteMediaServerId(category, serverId);
     if (category === 'image') store.setActiveRemoteImageModelId(modelId);
@@ -392,6 +399,22 @@ class RemoteServerManager {
 
   async storeApiKey(serverId: string, apiKey: string): Promise<void> {
     return storeApiKeyImpl(serverId, apiKey);
+  }
+
+  /** Download a catalog model on an Off Grid AI Desktop, through its gateway. */
+  async startDesktopDownload(serverId: string, modelId: string): Promise<void> {
+    await startOffGridDesktopDownload(await this.desktopServer(serverId), modelId);
+  }
+
+  /** How a download on an Off Grid AI Desktop is going. */
+  async readDesktopDownload(serverId: string, modelId: string): Promise<OffGridDesktopDownload> {
+    return readOffGridDesktopDownload(await this.desktopServer(serverId), modelId);
+  }
+
+  private async desktopServer(serverId: string): Promise<RemoteServer> {
+    const server = useRemoteServerStore.getState().getServerById(serverId);
+    if (server?.modelManagement !== 'offgrid-desktop-v1') throw new Error('Connect Off Grid AI Desktop first.');
+    return { ...server, apiKey: (await this.getApiKey(serverId)) ?? undefined };
   }
 
   async getApiKey(serverId: string): Promise<string | null> {

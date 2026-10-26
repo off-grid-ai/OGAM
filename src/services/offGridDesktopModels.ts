@@ -324,3 +324,58 @@ export async function activateOffGridDesktopModel(
   }
   return refreshed;
 }
+
+/** How a download on the Desktop is going, as its gateway reports it. */
+export interface OffGridDesktopDownload {
+  status: 'idle' | 'queued' | 'downloading' | 'completed' | 'failed' | 'cancelled';
+  percent: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
+  error?: string;
+  /** On completion: the installed package to activate. */
+  installedId?: string;
+}
+
+function gatewayError(server: Pick<RemoteServer, 'apiKey'>, status: number, fallback: string, body: Record<string, unknown> | null): Error {
+  if (status === 401) {
+    return new Error(
+      server.apiKey
+        ? 'Desktop did not accept this API key. Copy a current one from Off Grid AI Desktop, Gateway, API keys, and paste it in Remote servers, Edit.'
+        : 'Desktop asks for an API key. Copy one from Off Grid AI Desktop, Gateway, API keys, and paste it in Remote servers, Edit.',
+    );
+  }
+  return new Error(typeof body?.error === 'string' ? body.error : fallback);
+}
+
+/** Start downloading one catalog model on the Desktop. Desktop resolves its weights and companion files. */
+export async function startOffGridDesktopDownload(server: RemoteServer, modelId: string): Promise<void> {
+  const response = await gatewayFetch(server, '/v1/models/pull', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: modelId }),
+  });
+  if (!response.ok) {
+    throw gatewayError(server, response.status, 'Desktop could not start the download.', record(await response.json().catch(() => null)));
+  }
+}
+
+/** Read how a Desktop download is going. */
+export async function readOffGridDesktopDownload(server: RemoteServer, modelId: string): Promise<OffGridDesktopDownload> {
+  const response = await gatewayFetch(server, `/v1/models/pull/status?id=${encodeURIComponent(modelId)}`);
+  const body = record(await response.json().catch(() => null));
+  if (!response.ok || !body) {
+    throw gatewayError(server, response.status, 'Desktop did not say how the download is going.', body);
+  }
+  const status = typeof body.status === 'string' ? body.status : 'idle';
+  const number = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
+  return {
+    status: (['queued', 'downloading', 'completed', 'failed', 'cancelled'].includes(status)
+      ? status
+      : 'idle') as OffGridDesktopDownload['status'],
+    percent: Math.max(0, Math.min(100, number(body.percent) ?? 0)),
+    downloadedBytes: number(body.downloadedBytes),
+    totalBytes: number(body.totalBytes),
+    error: typeof body.error === 'string' ? body.error : undefined,
+    installedId: typeof body.installedId === 'string' && body.installedId ? body.installedId : undefined,
+  };
+}
