@@ -11,6 +11,22 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
       'Request a short silent video from the selected video model. Generation starts after this text reply finishes. Describe the requested subject and motion.',
     parameters: {
       prompt: { type: 'string', description: 'Video prompt', required: true },
+      start_image: {
+        type: 'string',
+        description: 'Start from the last image or video frame in this chat',
+        enum: ['last_image'],
+      },
+    },
+  },
+  {
+    id: 'make_film',
+    name: 'make_film',
+    displayName: 'Make Film',
+    icon: 'film',
+    description:
+      'Turn one sentence into a short narrated film. The person sees a draft shot list first and chooses when it renders. Use when they ask for a story, a film, or anything longer than a few seconds.',
+    parameters: {
+      sentence: { type: 'string', description: 'The film in one sentence', required: true },
     },
   },
   {
@@ -102,9 +118,11 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   },
 ];
 
+const VIDEO_TOOLS = new Set(['generate_video', 'make_film']);
+
 /** Tools this build can run now. Video is Pro: its tool is offered only while Pro video is on. */
 export function offeredTools(): ToolDefinition[] {
-  return AVAILABLE_TOOLS.filter(tool => tool.id !== 'generate_video' || videoSeam.available());
+  return AVAILABLE_TOOLS.filter(tool => !VIDEO_TOOLS.has(tool.id) || videoSeam.available());
 }
 
 export function getToolsAsOpenAISchema(enabledToolIds: readonly string[]) {

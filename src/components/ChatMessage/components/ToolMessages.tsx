@@ -38,6 +38,8 @@ function getToolIcon(toolName?: string): string {
       return 'image';
     case 'generate_video':
       return 'video';
+    case 'make_film':
+      return 'film';
     default:
       return 'tool';
   }
@@ -74,6 +76,8 @@ function getToolLabel(toolName?: string, content?: string): string {
       return 'Generated image';
     case 'generate_video':
       return 'Video requested';
+    case 'make_film':
+      return 'Film started';
     default:
       return toolName || 'Tool result';
   }

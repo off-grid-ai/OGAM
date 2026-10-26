@@ -228,6 +228,8 @@ export function messagePutMutation(
       content: message.content,
       context: serializeMessageContext(message),
       created_at: new Date(message.timestamp).toISOString(),
+      // A Video Studio film card names its story, so it shows as a card on every device.
+      ...(message.videoStoryId ? { video_story_id: message.videoStoryId } : {}),
     },
   };
 }

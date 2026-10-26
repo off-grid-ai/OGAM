@@ -17,7 +17,10 @@ export const videoSeam = {
   }): Promise<unknown> =>
     callHook<Promise<unknown>>(HOOKS.videoGenerate, input) ??
     Promise.reject(new Error('Video needs Off Grid AI Pro.')),
-  defer: (conversationId: string, input: { prompt: string }): void => {
+  defer: (
+    conversationId: string,
+    input: { prompt: string; film?: boolean; startImage?: 'last_image' },
+  ): void => {
     if (!hasHook(HOOKS.videoDefer))
       throw new Error('Video needs Off Grid AI Pro.');
     callHook(HOOKS.videoDefer, conversationId, input);

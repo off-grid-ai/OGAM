@@ -116,8 +116,9 @@ export const HOOKS = {
   /** (input: { prompt: string; conversationId: string; initImagePath?: string }) => Promise<unknown>
    *  — make one clip in the chat. */
   videoGenerate: 'video.generate',
-  /** (conversationId: string, input: { prompt: string }) => void — the model asked for a video;
-   *  start it after this reply. */
+  /** (conversationId: string, input: { prompt: string; film?: boolean; startImage?: 'last_image' })
+   *  => void — the model asked for a clip (generate_video) or a film (make_film); start it after
+   *  this reply. */
   videoDefer: 'video.defer',
   /** (conversationId: string, stopped: boolean) => Promise<void> — the reply ended; start the
    *  requested video unless the person stopped. */

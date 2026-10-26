@@ -45,8 +45,18 @@ async function dispatchTool(call: ToolCall): Promise<string> {
       const prompt = requireString(call, 'prompt');
       if (!prompt || !call.context?.conversationId)
         throw new Error('A video prompt and chat are required.');
-      videoSeam.defer(call.context.conversationId, { prompt });
+      videoSeam.defer(call.context.conversationId, {
+        prompt,
+        ...(call.arguments.start_image === 'last_image' ? { startImage: 'last_image' as const } : {}),
+      });
       return 'Video generation is queued after this reply. The video will appear in this chat when complete.';
+    }
+    case 'make_film': {
+      const sentence = requireString(call, 'sentence');
+      if (!sentence || !call.context?.conversationId)
+        throw new Error('A film sentence and chat are required.');
+      videoSeam.defer(call.context.conversationId, { prompt: sentence, film: true });
+      return 'A draft film is created after this reply. The person reviews its shots before it renders.';
     }
     case 'web_search': {
       const q = requireString(call, 'query');
