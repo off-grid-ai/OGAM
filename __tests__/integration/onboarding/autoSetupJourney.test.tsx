@@ -222,14 +222,15 @@ describe('Auto Setup release journey', () => {
 
     // Only the chosen plan is expanded.
     expect(ui.getAllByTestId('auto-setup-selected-plan')).toHaveLength(1);
-    // Balanced aims at 4B: the catalog now offers Qwen 3.5 4B, which leads Gemma 4 E4B.
-    expect(ui.getByText('Qwen 3.5 4B')).toBeTruthy();
+    // Lean, Balanced and Extreme are this 12 GB phone's Fast, Balanced and Best picks (37759c684),
+    // ranked by quality alone (shared afdb05f).
+    expect(ui.getByText('MiniCPM5 2B')).toBeTruthy();
     fireEvent.press(ui.getByTestId('auto-setup-plan-heading-lean'));
-    expect(ui.getByText('Qwen 3.5 2B')).toBeTruthy();
+    expect(ui.getByText('LFM2.5 8B A1B')).toBeTruthy();
     expect(ui.queryByText('SmolVLM 2B')).toBeNull();
     fireEvent.press(ui.getByTestId('auto-setup-plan-heading-extreme'));
     expect(ui.getByText('Qwen 3.5 9B')).toBeTruthy();
-    expect(ui.queryByText('Qwen 3.5 4B')).toBeNull();
+    expect(ui.queryByText('MiniCPM5 2B')).toBeNull();
     // A tier only previews downloads; it never changes the live loading policy.
     expect(useAppStore.getState().settings.modelLoadingMode).toBe('balanced');
 
@@ -378,7 +379,7 @@ describe('Auto Setup release journey', () => {
     );
     fireEvent.press(ui.getByTestId('auto-setup-plan-heading-extreme'));
 
-    expect(ui.getByText('Qwen 3.5 4B')).toBeTruthy();
+    expect(ui.getByText('MiniCPM5 2B')).toBeTruthy();
     expect(ui.queryByText('Qwen 3.5 9B')).toBeNull();
     expect(useAppStore.getState().settings.modelLoadingMode).toBe('balanced');
     ui.unmount();
@@ -387,7 +388,8 @@ describe('Auto Setup release journey', () => {
   it('ends a stalled catalog request at its deadline', async () => {
     const stalledCatalog: AutoSetupCatalogBoundaries = {
       ...catalogBoundaries,
-      fetchTextFiles: () => new Promise(() => undefined),
+      // Chat plans come from the bundled picks (37759c684); the image catalog is still a live load.
+      imageModels: () => new Promise(() => undefined),
     };
     const ui = render(
       <AutoSetupScreen
