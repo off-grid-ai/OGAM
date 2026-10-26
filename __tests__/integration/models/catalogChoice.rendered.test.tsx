@@ -28,10 +28,11 @@ describe('Model choice on the phone', () => {
     const screen = render(React.createElement(ModelsScreen));
 
     await waitFor(() => {
-      const minicpm = within(screen.getByLabelText('MiniCPM5 2B'));
-      expect(minicpm.getByText('MiniCPM5 2B')).toBeTruthy();
-      expect(minicpm.getByLabelText('Thinking likely')).toBeTruthy();
-      expect(minicpm.getByLabelText('Tool calling likely')).toBeTruthy();
+      // MiniCPM5 2B is now a pick on this phone (afdb05f, ddaa6c1), shown above the cards.
+      const qwen = within(screen.getByLabelText('Qwen 3.5 2B'));
+      expect(qwen.getByText('Qwen 3.5 2B')).toBeTruthy();
+      expect(qwen.getByLabelText('Thinking likely')).toBeTruthy();
+      expect(qwen.getByLabelText('Tool calling likely')).toBeTruthy();
 
       const gemma = within(screen.getByLabelText('Gemma 4 E2B'));
       expect(gemma.getByText('Gemma 4 E2B')).toBeTruthy();
