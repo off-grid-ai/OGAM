@@ -23,6 +23,8 @@ jest.mock('../../../../src/services', () => ({
   },
   hardwareService: {
     getSoCInfo: jest.fn().mockResolvedValue({ hasNPU: true }),
+    // The phone's memory picks which sd.cpp models are recommended (9061db452).
+    getTotalMemoryGB: () => 8,
     getImageModelRecommendation: jest.fn().mockResolvedValue({
       recommendedBackend: 'all',
       bannerText: 'ok',
@@ -41,6 +43,8 @@ jest.mock('../../../../src/screens/ModelsScreen/imageDownloadResume', () => ({
 jest.mock('../../../../src/services/huggingFaceModelBrowser', () => ({
   fetchAvailableModels: jest.fn().mockResolvedValue([]),
   guessStyle: jest.fn(() => 'all'),
+  // No sd.cpp catalog models in this suite (9061db452 reads the recommended ones).
+  getRecommendedSDImageModels: jest.fn(() => []),
 }));
 
 jest.mock('../../../../src/services/coreMLModelBrowser', () => ({

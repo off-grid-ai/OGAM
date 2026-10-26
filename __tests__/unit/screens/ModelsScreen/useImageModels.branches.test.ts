@@ -49,6 +49,8 @@ jest.mock('../../../../src/services', () => ({
   },
   hardwareService: {
     getSoCInfo: (...a: any[]) => mockGetSoCInfo(...a),
+    // The phone's memory picks which sd.cpp models are recommended (9061db452).
+    getTotalMemoryGB: () => 8,
     getImageModelRecommendation: (...a: any[]) => mockGetImageModelRecommendation(...a),
   },
   backgroundDownloadService: {
@@ -64,6 +66,9 @@ jest.mock('../../../../src/services/huggingFaceModelBrowser', () => ({
   fetchAvailableModels: (...a: any[]) => mockFetchAvailableModels(...a),
   guessStyle: (...a: any[]) => mockGuessStyle(...a),
   getSDImageModels: () => mockSDImageModels,
+  // The sd.cpp models whose memory need fits the phone (9061db452).
+  getRecommendedSDImageModels: (ramGB: number) =>
+    mockSDImageModels.filter((model: any) => !model.minRamGb || model.minRamGb <= ramGB),
 }));
 
 jest.mock('../../../../src/services/coreMLModelBrowser', () => ({
