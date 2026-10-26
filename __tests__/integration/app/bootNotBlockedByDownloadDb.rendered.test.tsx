@@ -12,6 +12,7 @@
  * artifact: the boot loader ('app-loading') CLEARS anyway. RED on HEAD: the loader stays
  * forever because initializeApp awaits hydrateDownloadStore/reattach before first paint.
  */
+import { proIsPresent } from '../../pro/helpers/requirePro';
 import {
   installNativeBoundary,
   requireRTL,
@@ -65,10 +66,12 @@ describe('app boot is not blocked by the download DB (rendered)', () => {
       releaseDownloadDb([]);
       await pendingDownloadDb;
     });
+    // The core boot reads the download DB twice; with Pro checked out, Pro's video downloads
+    // reconcile at launch too (pro 6fb3b12e), one read more.
     await rtl.waitFor(() => {
       expect(
         NativeModules.DownloadManagerModule.getActiveDownloads,
-      ).toHaveBeenCalledTimes(2);
+      ).toHaveBeenCalledTimes(proIsPresent() ? 3 : 2);
     });
 
     view.unmount();
