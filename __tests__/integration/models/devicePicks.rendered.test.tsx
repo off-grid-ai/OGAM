@@ -73,29 +73,30 @@ describe('Fast, Balanced and Best on the Models screen', () => {
     const { render, fireEvent, waitFor, within, act } = requireRTL();
     await clearStorage();
     const { CATALOG } = require('@offgrid/models');
-    const fastEntry = CATALOG.find((e: { name: string }) => e.name === 'Qwen 3.5 0.8B');
+    const fastEntry = CATALOG.find((e: { name: string }) => e.name === 'LFM2.5 8B A1B');
     const primary = fastEntry.files.find((f: { role?: string }) => f.role === 'primary');
     const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
 
     const models = render(React.createElement(ModelsScreen));
     await waitFor(() => expect(models.getByTestId('device-picks')).toBeTruthy());
     expect(within(models.getByTestId('device-picks')).getByText('For this phone')).toBeTruthy();
-    // Ranked by the catalog's quality score among models that run well here, from makers people
-    // know; replaced models (Qwen3-VL, the Qwen 3.8 distills) are never picked.
-    expect(within(models.getByTestId('pick-fast')).getByText('Qwen 3.5 0.8B')).toBeTruthy();
-    expect(within(models.getByTestId('pick-balanced')).getByText('Qwen 3.5 2B')).toBeTruthy();
-    expect(within(models.getByTestId('pick-best')).getByText('Qwen 3.5 4B')).toBeTruthy();
+    // Ranked by the catalog's quality score alone among models that run well here, whoever made
+    // them (afdb05f), on Android's budget (ddaa6c1); replaced models (Qwen3-VL, the Qwen 3.8
+    // distills) are never picked.
+    expect(within(models.getByTestId('pick-fast')).getByText('LFM2.5 8B A1B')).toBeTruthy();
+    expect(within(models.getByTestId('pick-balanced')).getByText('Qwen 3.5 4B')).toBeTruthy();
+    expect(within(models.getByTestId('pick-best')).getByText('MiniCPM5 2B')).toBeTruthy();
     expect(models.queryByText('Qwen3-VL 2B')).toBeNull();
-    // A lesser-known lab's model stays in the list below, not in the picks.
-    expect(within(models.getByTestId('device-picks')).queryByText('MiniCPM5 2B')).toBeNull();
-    expect(models.getByText('MiniCPM5 2B')).toBeTruthy();
+    // A model that is not picked stays in the list below, not in the picks.
+    expect(within(models.getByTestId('device-picks')).queryByText('Qwen 3.5 0.8B')).toBeNull();
+    expect(models.getByText('Qwen 3.5 0.8B')).toBeTruthy();
     // The old RAM banner is gone.
     expect(models.queryByText(/RAM — models up to/)).toBeNull();
 
     // BEFORE: nothing downloading, the Fast pick offers a download and no "Chat now".
     expect(boundary.download!.active()).toHaveLength(0);
     expect(models.queryByTestId('pick-fast-next')).toBeNull();
-    expect(models.getByTestId('pick-fast-download').props.accessibilityLabel).toBe('Download Qwen 3.5 0.8B');
+    expect(models.getByTestId('pick-fast-download').props.accessibilityLabel).toBe('Download LFM2.5 8B A1B');
 
     fireEvent.press(models.getByTestId('pick-fast-download'));
 
@@ -160,11 +161,12 @@ describe('Fast, Balanced and Best on the Models screen', () => {
 
     const models = render(React.createElement(ModelsScreen));
     await waitFor(() => expect(models.getByTestId('device-picks')).toBeTruthy());
-    expect(within(models.getByTestId('pick-best')).getByText('Qwen 3.5 0.8B')).toBeTruthy();
-    expect(models.queryByTestId('pick-fast')).toBeNull();
-    expect(models.queryByTestId('pick-balanced')).toBeNull();
-    // None of the 12 GB picks is offered to this phone.
-    expect(within(models.getByTestId('device-picks')).queryByText('MiniCPM5 2B')).toBeNull();
+    // Android runs well up to 52% of RAM (ddaa6c1): 2.1 GB here, so three small models qualify.
+    expect(within(models.getByTestId('pick-fast')).getByText('Qwen 3.5 0.8B')).toBeTruthy();
+    expect(within(models.getByTestId('pick-balanced')).getByText('Qwen 3.5 2B')).toBeTruthy();
+    expect(within(models.getByTestId('pick-best')).getByText('MiniCPM5 2B')).toBeTruthy();
+    // None of the 12 GB phone's larger picks is offered to this phone.
+    expect(within(models.getByTestId('device-picks')).queryByText('LFM2.5 8B A1B')).toBeNull();
     expect(within(models.getByTestId('device-picks')).queryByText('Qwen 3.5 4B')).toBeNull();
   });
 
@@ -306,8 +308,9 @@ describe('Text search answers from the catalog first', () => {
     expect(within(gemma).getByLabelText('MTP: replies faster')).toBeTruthy();
     // A screen reader focuses the whole card, so the card itself says it.
     expect(gemma.props.accessibilityHint).toContain('MTP: replies faster');
-    const minicpm = models.getByLabelText('MiniCPM5 2B');
-    expect(within(minicpm).queryByLabelText('MTP: replies faster')).toBeNull();
+    // MiniCPM5 2B is now one of this phone's picks (afdb05f), so the card without an MTP head is Qwen 3.5 4B's.
+    const qwen = models.getByLabelText('Qwen 3.5 4B');
+    expect(within(qwen).queryByLabelText('MTP: replies faster')).toBeNull();
   });
 });
 
