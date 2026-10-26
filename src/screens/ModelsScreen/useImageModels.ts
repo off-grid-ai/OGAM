@@ -6,7 +6,7 @@ import { useDownloadStore } from '../../stores/downloadStore';
 import { useModelCatalogStore } from '../../stores/modelCatalogStore';
 import { makeImageModelKey } from '../../utils/modelKey';
 import { modelManager, hardwareService, backgroundDownloadService } from '../../services';
-import { fetchAvailableModels, getSDImageModels, searchSDImageModels, HFImageModel, guessStyle } from '../../services/huggingFaceModelBrowser';
+import { fetchAvailableModels, getSDImageModels, getRecommendedSDImageModels, searchSDImageModels, HFImageModel, guessStyle } from '../../services/huggingFaceModelBrowser';
 import { fetchAvailableCoreMLModels } from '../../services/coreMLModelBrowser';
 import { ImageModelRecommendation } from '../../types';
 import { BackendFilter, ImageFilterDimension, ImageModelDescriptor } from './types';
@@ -177,8 +177,12 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
     setStyleFilter('all'); setSdVersionFilter('all'); setImageFilterExpanded(null);
   }, []);
 
+  // sd.cpp models that fit this phone sit after the device's fastest engine (QNN/MNN, Core ML).
+  const sdRecommended = useMemo(() => getRecommendedSDImageModels(hardwareService.getTotalMemoryGB()), []);
   const isRecommendedModel = useCallback((model: HFImageModel): boolean => {
     if (!imageRec) return false;
+    // sd.cpp runs on every phone; it is recommended when the catalog says it fits this one.
+    if (model.backend === 'sd') return sdRecommended.some(candidate => candidate.id === model.id);
     if (model.backend !== imageRec.recommendedBackend && imageRec.recommendedBackend !== 'all') return false;
     if (imageRec.qnnVariant && model.variant) return model.variant.includes(imageRec.qnnVariant);
     if (imageRec.recommendedModels?.length) {
@@ -186,15 +190,20 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
       return imageRec.recommendedModels.some(p => fields.some(f => f.includes(p)));
     }
     return true;
-  }, [imageRec]);
+  }, [imageRec, sdRecommended]);
 
-  const allHFModels = useMemo(() => [...new Map([...availableHFModels, ...sdSearchModels].map(model => [model.id, model])).values()], [availableHFModels, sdSearchModels]);
+  const allHFModels = useMemo(
+    () => [...new Map([...availableHFModels, ...sdRecommended, ...sdSearchModels].map(model => [model.id, model])).values()],
+    [availableHFModels, sdRecommended, sdSearchModels],
+  );
   const filteredHFModels = useMemo(() => {
     const query = imageSearchQuery.toLowerCase().trim();
     const searchedIds = new Set(sdSearchModels.map(model => model.id));
     const filtered = allHFModels.filter(m => {
       if (!query && showRecommendedOnly && imageRec && !isRecommendedModel(m)) return false;
-      if ((!query || userChangedBackendFilter) && backendFilter !== 'all' && m.backend !== backendFilter) return false;
+      // The automatic QNN/MNN filter does not hide sd.cpp models; a filter the person picks does.
+      const automaticFilter = !userChangedBackendFilter && m.backend === 'sd';
+      if ((!query || userChangedBackendFilter) && backendFilter !== 'all' && m.backend !== backendFilter && !automaticFilter) return false;
       if (styleFilter !== 'all' && guessStyle(m.name) !== styleFilter) return false;
       if (!matchesSdVersionFilter(m.name, sdVersionFilter)) return false;
       return !query || searchedIds.has(m.id) || m.displayName.toLowerCase().includes(query) || m.name.toLowerCase().includes(query);

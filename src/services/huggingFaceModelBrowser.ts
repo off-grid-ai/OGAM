@@ -26,6 +26,8 @@ export interface HFImageModel {
   fileName: string;
   size: number;
   repo: string;
+  /** sd.cpp catalog models: the memory the shared catalog says the model needs. */
+  minRamGb?: number;
 }
 
 interface HFTreeEntry {
@@ -176,7 +178,16 @@ export function getSDImageModels(): HFImageModel[] {
       fileName: model.files[0].name, downloadUrl: model.files[0].url,
       size: model.files.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0),
       huggingFaceFiles: model.files.map(file => ({ path: file.name, size: file.sizeBytes ?? 0, downloadUrl: file.url, sha256: file.sha256 })),
+      minRamGb: model.minRamGb,
     }));
+}
+
+/**
+ * The sd.cpp catalog models this phone can run: those whose catalog memory need fits its RAM.
+ * The one list the Image tab's recommendations and Auto Setup both read.
+ */
+export function getRecommendedSDImageModels(ramGB: number): HFImageModel[] {
+  return getSDImageModels().filter(model => !model.minRamGb || model.minRamGb <= ramGB);
 }
 
 /** Filename candidates only. New checkpoint candidates must pass tensor validation. */

@@ -65,8 +65,9 @@ export async function loadAutoSetupCompatibleCatalog(
 
   const imageRecommendation = await boundaries.imageRecommendation();
   const imageModels = await boundaries.imageModels();
+  // sd.cpp runs on every phone; the fast engine is still preferred below when it has a fit.
   const compatibleImages = imageModels.filter(model =>
-    imageRecommendation.compatibleBackends.includes(model.backend) &&
+    (model.backend === 'sd' || imageRecommendation.compatibleBackends.includes(model.backend)) &&
     (!imageRecommendation.qnnVariant || model.backend !== 'qnn' || model.variant === imageRecommendation.qnnVariant) &&
     !fileExceedsBudget(model.size, ramGB),
   );
