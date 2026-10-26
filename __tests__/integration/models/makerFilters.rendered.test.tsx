@@ -61,9 +61,17 @@ describe('Maker filters on the Models screen', () => {
     const models = render(React.createElement(ModelsScreen));
     await waitFor(() => expect(models.getByTestId('device-picks')).toBeTruthy());
 
-    // BEFORE: no maker chosen, both models are offered (a device pick sits above the list).
+    // BEFORE: no maker chosen, both models are offered (a device pick sits above the list). The
+    // list draws a window of cards; with today's larger phone picks (ddaa6c1, afdb05f) the largest
+    // models sit past it, so the person scrolls to the end.
     const list = () => within(models.getByTestId('models-list'));
-    expect(models.getAllByText(model).length).toBeGreaterThan(0);
+    const scroller = models.getByTestId('models-list');
+    fireEvent(scroller, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 800 } } });
+    fireEvent(scroller, 'contentSizeChange', 400, 4000);
+    fireEvent.scroll(scroller, {
+      nativeEvent: { contentOffset: { x: 0, y: 3200 }, contentSize: { width: 400, height: 4000 }, layoutMeasurement: { width: 400, height: 800 } },
+    });
+    await waitFor(() => expect(models.getAllByText(model).length).toBeGreaterThan(0));
     expect(models.getAllByText(otherMaker).length).toBeGreaterThan(0);
     expect(models.queryByText(chip)).toBeNull();
 
