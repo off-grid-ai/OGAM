@@ -413,6 +413,10 @@ export interface GenerationMetrics {
   backend?: string;
   /** Video only: the clip started from a photo. */
   hasInitImage?: boolean;
+  /** Video only: a draft or a final render. */
+  quality?: 'draft' | 'final';
+  /** Video only: the clip is a shot of a film. */
+  story?: boolean;
   error?: unknown;
 }
 
@@ -449,6 +453,8 @@ export function generationStarted(modality: Modality, facts: ModelFacts): Genera
           charging: power?.batteryState ? power.batteryState === 'charging' || power.batteryState === 'full' : undefined,
           error_code: outcome === 'failed' ? errorCode(metrics.error) : undefined,
           has_init_image: modality === 'video' ? metrics.hasInitImage === true : undefined,
+          quality: modality === 'video' ? metrics.quality ?? 'final' : undefined,
+          story: modality === 'video' ? metrics.story === true : undefined,
         });
       })
       .catch(ignore);

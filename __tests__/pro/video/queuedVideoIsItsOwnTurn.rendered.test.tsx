@@ -6,7 +6,7 @@
  * questions are answered together (the shared queue rule, as on Off Grid Desktop), and the clip is
  * made from my description alone — never from my questions mixed into it.
  *
- * Real ChatScreen, generation service, queue and video service. Fakes only at the boundaries: the
+ * Real ChatScreen, generation service, queue and Pro's video service. Fakes only at the boundaries: the
  * llama.rn engine (held so the first reply stays running) and Off Grid Desktop's video gateway at
  * fetch, whose saved server record is what pairing leaves behind.
  */
@@ -57,6 +57,8 @@ it('queued questions go together and a queued video prompt goes alone', async ()
   await rtl.waitFor(() => expect(picker.getByTestId(rowId).props.accessibilityState?.selected).toBe(true));
   picker.unmount();
 
+  // Video is Pro: the app activates it before the chat opens.
+  await require('../../harness/proHarness').installPro();
   h.render();
   const view = h.view!;
   const toggleVideoMode = async () => {

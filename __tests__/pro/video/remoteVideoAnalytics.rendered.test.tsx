@@ -65,6 +65,8 @@ it('a Desktop video in a chat sends a video generation_finished, never the promp
   const { view, rtl, endpoint, boundary } = current;
   desktop = serveDesktopVideoJobs(boundary.fs!);
   await passOnboarding(current, true);
+  // Video is Pro: the person activates it, as with a key.
+  await require('../../harness/proHarness').installPro();
   await chooseDesktopVideoModel(current);
   // A video model alone is enough to start a chat.
   rtl.fireEvent.press(await view.findByTestId('new-chat-button'));

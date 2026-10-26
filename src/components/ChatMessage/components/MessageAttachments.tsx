@@ -15,7 +15,7 @@ import Animated, {
 import Icon from 'react-native-vector-icons/Feather';
 import VideoPlayer, { type VideoPlayerRef } from 'react-native-video-player';
 import { ResizeMode } from 'react-native-video';
-import { useTheme } from '../../../theme';
+import { useTheme, useThemedStyles, type ThemeColors, type ThemeShadows } from '../../../theme';
 import { SPACING, TYPOGRAPHY } from '../../../constants';
 import { Button } from '../../Button';
 // Imported directly, not through the barrel: a component that reaches its sibling via the index
@@ -73,8 +73,16 @@ export function FadeInImage({ uri, imageStyle, testID, wrapperTestID, onPress, a
   );
 }
 
-const videoAttachmentStyles = StyleSheet.create({
-  container: { width: '100%', gap: SPACING.xs },
+/** The same card as the other chat bubbles: surface, radius and the small shadow, in both themes. */
+const createVideoAttachmentStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+  container: {
+    width: '100%' as const,
+    gap: SPACING.xs,
+    padding: SPACING.sm,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    ...shadows.small,
+  },
   pictureInPicture: { width: SPACING.xl * 2, height: SPACING.xl * 2, paddingHorizontal: 0 },
 });
 
@@ -114,6 +122,7 @@ interface MessageAttachmentsProps {
 /** The library owns playback and controls; this adapter supplies attachment data and theme. */
 function VideoAttachment({ attachment }: { attachment: MediaAttachment }) {
   const { colors } = useTheme();
+  const videoAttachmentStyles = useThemedStyles(createVideoAttachmentStyles);
   const player = React.useRef<VideoPlayerRef>(null);
   const reducedMotion = useReducedMotion();
   const [size, setSize] = React.useState({

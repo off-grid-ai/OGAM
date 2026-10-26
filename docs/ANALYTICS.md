@@ -73,7 +73,7 @@ A video model pack reports downloads once for the whole pack: `model` is its cat
 
 | Event | Properties |
 |---|---|
-| `generation_finished` | `modality` (`text`, `vision`, `image`, `video`, `stt`, `tts`, `embedding`), `model`, `engine`, `backend`, `outcome` (`done`, `stopped`, `failed`), `ttft_ms`, `tokens_per_sec`, `context_tokens_bucket` (`<2k`, `2-8k`, `8-32k`, `>32k`), `battery_pct` (rounded to 10), `charging`, `error_code`, `source` (`app`, `api`, `extension`; OGAD only). Video sends `duration_ms` (the whole generation) instead of `ttft_ms`, `tokens_per_sec` and `context_tokens_bucket`, and `has_init_image` (the clip started from a photo). |
+| `generation_finished` | `modality` (`text`, `vision`, `image`, `video`, `stt`, `tts`, `embedding`), `model`, `engine`, `backend`, `outcome` (`done`, `stopped`, `failed`), `ttft_ms`, `tokens_per_sec`, `context_tokens_bucket` (`<2k`, `2-8k`, `8-32k`, `>32k`), `battery_pct` (rounded to 10), `charging`, `error_code`, `source` (`app`, `api`, `extension`; OGAD only). Video sends `duration_ms` (the whole generation) instead of `ttft_ms`, `tokens_per_sec` and `context_tokens_bucket`, `has_init_image` (the clip started from a photo), `quality` (`draft`, `final`) and `story` (the clip is a shot of a film). |
 
 ### Actions
 
@@ -107,7 +107,7 @@ All multi-step journeys use three events with a `flow` property, so every funnel
 | `voice_setup` | `opened`, `model_picked`, `downloaded` |
 | `image_setup` | `opened`, `model_picked`, `downloaded` |
 | `video_setup` | `opened`, `model_picked`, `downloaded` |
-| `video_story` | `story` (a sentence became a shot list; `from_template` true when no text model wrote it), `draft` (the draft was shown), `final` (Make it real) or `tonight`, `film_ready` (`target`: `computer` or `phone`). Pro only. Never the sentence or any prompt. |
+| `video_story` | `storyboard_shown` (`from_template`: true when no text model wrote it), `draft_started`, `draft_finished`, `final_started` (`schedule`: `now` or `tonight`), `final_finished` (`target`: `computer` or `phone`), `exported`. Pro only. Never the sentence or any prompt. |
 | `connector_add` | `opened`, `connector_picked` (`catalog_id` or `custom`), `authorised` |
 | `pro_upgrade` | `gate_shown` (`feature`), `paywall_viewed`, `trial_started`, `purchased` |
 
