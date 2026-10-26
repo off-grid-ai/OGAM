@@ -301,6 +301,11 @@ export function useRemoteServerForm({
             textModelId.trim(),
           );
         }
+        // Check the edited server before closing, as an added one is, so the list shows its new
+        // status (a new key or address) instead of the one from before the edit.
+        await remoteServerManager
+          .testConnection(server.id)
+          .catch(() => undefined);
         onSave?.(server);
       } else {
         const newServer = await remoteServerManager.addServer({
