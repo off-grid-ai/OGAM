@@ -2,6 +2,8 @@ import { Buffer } from 'buffer';
 import {
   CATALOG,
   searchHuggingFace,
+  resolveHuggingFaceModel,
+  type MobileWhisperCatalogModel,
   extractQuantization,
   imageEngineSettings,
   isCompleteSDCheckpointHeader,
@@ -284,6 +286,33 @@ export async function resolveSDImagePack(_modelId: string, modelPath: string) {
   return { family: 'qwen-image-2.1', weight: `${modelPath}/${weight}`,
     vae: required(QWEN_IMAGE_21_COMPANIONS.vae), llm: required(QWEN_IMAGE_21_COMPANIONS.llm),
     sampler: defaults.sampler, scheduler: defaults.scheduler };
+}
+
+/**
+ * Speech-to-text models from Hugging Face that whisper.rn can run: speech-recognition repos (the
+ * shared search scopes by task) whose files include a whisper GGML weight (ggml-*.bin, resolved by
+ * the shared resolver). Anything else is left out.
+ */
+export async function searchWhisperModels(query: string): Promise<MobileWhisperCatalogModel[]> {
+  const repos = await searchHuggingFace(query, { kind: 'transcription', limit: 12 });
+  const resolved = await Promise.allSettled(
+    repos.map(repo => resolveHuggingFaceModel(repo.id, { kind: 'transcription' })),
+  );
+  return resolved.flatMap(result => {
+    const model = result.status === 'fulfilled' ? result.value : null;
+    const file = model?.kind === 'transcription' ? model.files[0] : undefined;
+    if (!model || !file?.sizeBytes || !/\.bin$/i.test(file.name)) return [];
+    if (!/whisper/i.test(model.id) && !/ggml-(?:tiny|base|small|medium|large)/i.test(file.name)) return [];
+    const stem = file.name.replace(/^ggml-/i, '').replace(/\.bin$/i, '');
+    return [{
+      id: `hf-${model.id}-${stem}`.replace(/[^\w.-]+/g, '-'),
+      name: `${model.name} ${stem}`,
+      size: Math.ceil(file.sizeBytes / 1e6),
+      lang: /(?:^|[._-])en(?:[._-]|$)/i.test(stem) ? 'en' : 'multi',
+      url: file.url,
+      description: `From ${model.id}`,
+    }];
+  });
 }
 
 export const BUNDLED_EMBEDDING_MODEL = {

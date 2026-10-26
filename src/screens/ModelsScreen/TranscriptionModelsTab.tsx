@@ -11,7 +11,7 @@
  * the active one.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { ModelCard } from '../../components';
@@ -29,7 +29,8 @@ import { useWhisperStore, useAppStore } from '../../stores';
 import { useSttDownloadState } from '../../hooks/useSttDownloadState';
 import type { MobileWhisperCatalogModel } from '@offgrid/models';
 import { WHISPER_MODELS } from '../../services';
-import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
+import { addCatalogEntry, useWithRemoteCatalog } from '../../stores/modelCatalogStore';
+import { searchWhisperModels } from '../../services/huggingFaceModelBrowser';
 import { createStyles as createModelsScreenStyles } from './styles';
 import logger from '../../utils/logger';
 import { RemoteModelOptionsSection } from '../../components/models/RemoteModelOptionsSection';
@@ -155,6 +156,25 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
   const shared = useThemedStyles(createModelsScreenStyles);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const remoteLabels = useActiveRemoteModelLabels();
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<MobileWhisperCatalogModel[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  // Hugging Face search, 350 ms after the last keystroke; only models whisper.rn can run come back.
+  useEffect(() => {
+    let current = true;
+    setResults([]);
+    setSearchError('');
+    if (!query.trim()) { setSearching(false); return; }
+    setSearching(true);
+    const timer = setTimeout(() => {
+      searchWhisperModels(query.trim())
+        .then(rows => { if (current) setResults(rows.filter(row => !whisperModels.some(model => model.id === row.id))); })
+        .catch(e => { if (current) setSearchError(String(e.message)); })
+        .finally(() => { if (current) setSearching(false); });
+    }, 350);
+    return () => { current = false; clearTimeout(timer); };
+  }, [query, whisperModels]);
 
   const {
     downloadedModelId,
@@ -193,6 +213,9 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
 
   const handleDownload = useCallback(
     (id: string) => {
+      // A search result joins the catalog first, so download, pickers and Fastest settings see it.
+      const found = results.find(model => model.id === id);
+      if (found) addCatalogEntry('transcription', found);
     // The store owns downloadingId (set/cleared in downloadModel), so a download
     // started here — or from the chat voice button — shows progress on this tab.
       remoteServerManager.clearActiveRemoteMediaModel('transcription');
@@ -200,7 +223,7 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
         logger.error('[Transcription] download failed:', err),
       );
     },
-    [downloadModel],
+    [downloadModel, results],
   );
 
   const handleSelect = useCallback(
@@ -322,6 +345,29 @@ export const TranscriptionModelsTab: React.FC<TranscriptionModelsTabProps> = ({
         <RemoteModelOptionsSection category="transcription" />
       )}
 
+      <TextInput
+        style={styles.search}
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search Hugging Face"
+        placeholderTextColor={colors.textMuted}
+        accessibilityLabel="Search speech models on Hugging Face"
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="search"
+        testID="speech-search-input"
+      />
+      {query.trim() ? (
+        <>
+          {searching ? <Text style={styles.status}>Searching…</Text> : null}
+          {!searching && !searchError && results.length === 0 ? (
+            <Text style={styles.status}>No models this phone can run. Try another name.</Text>
+          ) : null}
+          {searchError ? <Text style={styles.error}>{searchError}</Text> : null}
+          {results.map((m, i) => renderWhisperCard(m, whisperModels.length + i))}
+        </>
+      ) : null}
+
       <PicksRow testID="speech-picks" items={speechPicks.map(({ slot, item }) => ({
         slot,
         name: item.name,
@@ -352,4 +398,10 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) =>
       letterSpacing: 0.3, marginBottom: SPACING.sm, marginTop: SPACING.xs,
     },
     error: { ...TYPOGRAPHY.bodySmall, color: colors.error, textAlign: 'center' as const, marginBottom: SPACING.md },
+    status: { ...TYPOGRAPHY.bodySmall, color: colors.textSecondary, marginBottom: SPACING.sm },
+    search: {
+      ...TYPOGRAPHY.body, color: colors.text, backgroundColor: colors.surfaceLight,
+      borderColor: colors.border, borderWidth: 1, borderRadius: SPACING.sm,
+      paddingHorizontal: SPACING.md, paddingVertical: SPACING.md, marginBottom: SPACING.sm,
+    },
   });
