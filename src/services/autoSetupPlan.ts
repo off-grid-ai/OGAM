@@ -58,14 +58,13 @@ const PLAN_COPY: Record<
   balanced: { title: 'Balanced', summary: 'Models near the middle of each list.' },
   extreme: {
     title: 'Extreme',
-    summary: 'Largest model downloads.',
+    summary: 'The largest models this phone can run.',
   },
 };
 
-const AUTO_SETUP_TEXT_TARGET_BILLIONS: Record<AutoSetupTier, number> = {
+const AUTO_SETUP_TEXT_TARGET_BILLIONS: Record<Exclude<AutoSetupTier, 'extreme'>, number> = {
   lean: 2,
   balanced: 4,
-  extreme: 9,
 };
 
 function choose<T>(
@@ -90,6 +89,13 @@ function chooseText(
       candidate.id.startsWith('unsloth/Qwen3.5-2B-GGUF/'),
     );
     if (qwen2b) return qwen2b;
+  }
+  // Extreme pushes the device to its limit: the largest chat model it can run, not a fixed size.
+  if (tier === 'extreme') {
+    return [...candidates].sort(
+      (a, b) =>
+        (b.parameterCountB ?? 0) - (a.parameterCountB ?? 0) || b.sizeBytes - a.sizeBytes,
+    )[0];
   }
   const target = AUTO_SETUP_TEXT_TARGET_BILLIONS[tier];
   return [...candidates].sort((a, b) => {
@@ -148,9 +154,12 @@ export function selectAutoSetupPlans(
   const plans = (['lean', 'balanced', 'extreme'] as const)
     .map(tier => selectAutoSetupPlan(tier, catalog))
     .filter((plan): plan is AutoSetupPlan => plan !== null);
-  // A bigger plan that lands on the same chat model as a smaller one offers nothing new: a phone
-  // without room for a larger model sees fewer plans, never the same model twice.
+  // Extreme is always offered as the device's limit. Lean and Balanced each need their own chat
+  // model; one that repeats a smaller plan's model, or Extreme's, offers nothing new.
+  const extreme = plans.find(plan => plan.tier === 'extreme');
   return plans.filter((plan, index) =>
-    plans.findIndex(other => other.items[0].id === plan.items[0].id) === index,
+    plan.tier === 'extreme' ||
+    (plans.findIndex(other => other.items[0].id === plan.items[0].id) === index &&
+      plan.items[0].id !== extreme?.items[0].id),
   );
 }
