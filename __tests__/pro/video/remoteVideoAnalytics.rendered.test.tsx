@@ -86,10 +86,9 @@ it('a Desktop video in a chat sends a video generation_finished, never the promp
   // The prompt reached Desktop, and the finished clip shows in the chat.
   await rtl.waitFor(() => expect(desktop!.submissions).toHaveLength(1), { timeout: 10_000 });
   expect(desktop!.submissions[0].prompt).toBe(PROMPT);
-  await rtl.waitFor(
-    () => expect(view.queryAllByTestId('message-bubble').length).toBeGreaterThanOrEqual(2),
-    { timeout: 15_000 },
-  );
+  // A finished clip shows as its clip card in the reply (this release's chat clip card).
+  expect(view.queryByTestId('chat-clip-card')).toBeNull();
+  await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
 
   await sendToBackground(current);
   await rtl.waitFor(() => expect(endpoint.named('generation_finished')).toHaveLength(1), { timeout: 10_000 });
