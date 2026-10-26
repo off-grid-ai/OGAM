@@ -135,7 +135,8 @@ describe('Model cards say when a newer model replaces them and when the licence 
     // BEFORE: the bundled list is there, the two catalog models are not, and no card says
     // "Research licence" (no bundled chat model has a research licence).
     const list = () => within(models.getByTestId('models-list'));
-    expect(list().getByText('MiniCPM5 2B')).toBeTruthy();
+    // A bundled model shown as a card (MiniCPM5 2B is now one of this phone's picks, afdb05f).
+    expect(list().getByText('Qwen 3.5 2B')).toBeTruthy();
     expect(models.queryByText('Labonly 3B')).toBeNull();
     expect(models.queryByText('Openuse 3B')).toBeNull();
     expect(screenText(models.toJSON())).not.toMatch(/Research licence/);
@@ -146,7 +147,7 @@ describe('Model cards say when a newer model replaces them and when the licence 
 
     // The research model says so on its card; the normal one and a bundled one do not.
     expect(cardText(models, 'Labonly 3B')).toMatch(/Research licence/);
-    for (const name of ['Openuse 3B', 'MiniCPM5 2B']) {
+    for (const name of ['Openuse 3B', 'Qwen 3.5 2B']) {
       const text = cardText(models, name);
       expect(text).not.toMatch(/Research licence/);
       expect(text).not.toMatch(/Newer:/);
