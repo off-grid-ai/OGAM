@@ -71,7 +71,7 @@ describe('curated models offered by what loads on the phone', () => {
     jest.clearAllMocks();
   });
 
-  // A 12 GB iPhone reports about 11.2 GB. The shared phone budget loads a download up to half of it.
+  // A 12 GB iPhone reports about 11.2 GB. The shared iPhone budget loads a download up to 0.70 of it.
   const TWELVE_GB_IPHONE = 11.2;
 
   it('offers a 12 GB iPhone the 9B class it loads, above any parameter cap, and hides what it cannot', () => {
@@ -84,8 +84,10 @@ describe('curated models offered by what loads on the phone', () => {
     expect(offered).toContain('unsloth/Qwen3.5-9B-GGUF');
     expect(offered).toContain('unsloth/gemma-4-E4B-it-GGUF');
     expect(offered).toContain('LiquidAI/LFM2.5-8B-A1B-GGUF');
-    // Gemma 4 12B is 7.3 GB with its projector: past 0.62 of this phone's RAM.
-    expect(offered).not.toContain('unsloth/gemma-4-12b-it-GGUF');
+    // The iPhone loads up to 0.70 of its RAM (ddaa6c1): Gemma 4 12B, 7.3 GB with its projector,
+    // loads; Gemma 4 26B A4B is past it.
+    expect(offered).toContain('unsloth/gemma-4-12b-it-GGUF');
+    expect(offered).not.toContain('unsloth/gemma-4-26B-A4B-it-GGUF');
   });
 
   it('picks the trending model per family from what loads on a 12 GB iPhone', () => {
