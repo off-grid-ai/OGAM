@@ -664,6 +664,8 @@ jest.mock('@op-engineering/op-sqlite', () => {
     execute: jest.fn(() => Promise.resolve(mockResults)),
     close: jest.fn(),
     delete: jest.fn(),
+    // op-sqlite's real DB answers where its file lives (Storage sizes the document index, 8bc6073e3).
+    getDbPath: jest.fn(() => '/mock/databases/rag.db'),
   };
   return {
     open: jest.fn(() => mockDb),
