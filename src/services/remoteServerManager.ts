@@ -37,8 +37,10 @@ import { remoteAuthorizationHeaders } from './remoteTransportPolicy';
 import {
   activateOffGridDesktopModel,
   readOffGridDesktopDownload,
+  readOffGridDesktopRoom,
   startOffGridDesktopDownload,
   type OffGridDesktopDownload,
+  type OffGridDesktopRoom,
 } from './offGridDesktopModels';
 import { featureUsed, flowFinished, flowStep } from './analytics/analytics';
 
@@ -409,6 +411,11 @@ class RemoteServerManager {
   /** How a download on an Off Grid AI Desktop is going. */
   async readDesktopDownload(serverId: string, modelId: string): Promise<OffGridDesktopDownload> {
     return readOffGridDesktopDownload(await this.desktopServer(serverId), modelId);
+  }
+
+  /** The Desktop's memory and installed models. */
+  async readDesktopRoom(serverId: string): Promise<OffGridDesktopRoom> {
+    return readOffGridDesktopRoom(await this.desktopServer(serverId));
   }
 
   private async desktopServer(serverId: string): Promise<RemoteServer> {

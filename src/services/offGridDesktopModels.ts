@@ -379,3 +379,30 @@ export async function readOffGridDesktopDownload(server: RemoteServer, modelId: 
     installedId: typeof body.installedId === 'string' && body.installedId ? body.installedId : undefined,
   };
 }
+
+/** What the Desktop can take: its memory (absent on an older Desktop) and the catalog ids installed there. */
+export interface OffGridDesktopRoom {
+  memoryGb?: number;
+  installed: string[];
+}
+
+/** Read the Desktop's memory and installed models, as its Models screen judges them. */
+export async function readOffGridDesktopRoom(server: RemoteServer): Promise<OffGridDesktopRoom> {
+  const [catalogResponse, installedResponse] = await Promise.all([
+    gatewayFetch(server, '/v1/models/catalog'),
+    gatewayFetch(server, '/v1/models/installed'),
+  ]);
+  const catalog = record(await catalogResponse.json().catch(() => null));
+  const installedBody = record(await installedResponse.json().catch(() => null));
+  const installed = parseInstalled(installedBody);
+  if (!catalogResponse.ok || !installed) {
+    throw gatewayError(
+      server,
+      catalogResponse.ok ? installedResponse.status : catalogResponse.status,
+      'Desktop did not say which models it has.',
+      catalogResponse.ok ? installedBody : catalog,
+    );
+  }
+  const memoryGb = typeof catalog?.memoryGb === 'number' && catalog.memoryGb > 0 ? catalog.memoryGb : undefined;
+  return { ...(memoryGb ? { memoryGb } : {}), installed: [...installed] };
+}
