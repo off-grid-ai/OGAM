@@ -249,11 +249,8 @@ export const AppNavigator: React.FC = () => {
           component={DownloadManagerScreen}
           options={{ presentation: 'modal', animation: 'slide_from_bottom', gestureDirection: 'vertical' }}
         />
-        <RootStack.Screen
-          name="Gallery"
-          component={GalleryScreen}
-          options={{ presentation: 'modal', animation: 'slide_from_bottom', gestureDirection: 'vertical' }}
-        />
+        {/* A stack screen, not a modal: its Videos, Animate and player screens push on top of it full screen. */}
+        <RootStack.Screen name="Gallery" component={GalleryScreen} />
         {registeredScreens.map(s => (
           <RootStack.Screen key={s.name} name={s.name as any} component={s.component} />
         ))}

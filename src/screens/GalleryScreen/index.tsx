@@ -136,12 +136,13 @@ export const GalleryScreen: React.FC = () => {
         ) : (
           <>
             <TouchableOpacity
-              accessibilityLabel="Close gallery"
+              accessibilityLabel="Back"
               accessibilityRole="button"
+              testID="gallery-back"
               style={styles.closeButton}
               onPress={() => navigation.goBack()}
             >
-              <Icon name="x" size={24} color={colors.text} />
+              <Icon name="arrow-left" size={24} color={colors.text} />
             </TouchableOpacity>
             <Text style={styles.title}>{screenTitle}</Text>
             <Text style={styles.countBadge}>{kind === 'images' ? displayImages.length : displayVideos.length}</Text>
