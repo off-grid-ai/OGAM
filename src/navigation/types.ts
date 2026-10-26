@@ -24,7 +24,8 @@ export type RootStackParamList = {
   // Former SettingsStack
   ModelSettings: undefined;
   RemoteServers: undefined;
-  RemoteServerEditor: { serverId?: string } | undefined;
+  /** `needsKey`: the scan found Off Grid AI Desktop, and it asks for an API key. */
+  RemoteServerEditor: { serverId?: string; needsKey?: boolean } | undefined;
   DeviceInfo: undefined;
   StorageSettings: undefined;
   SecuritySettings: undefined;

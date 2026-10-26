@@ -102,6 +102,7 @@ export const RemoteServersScreen: React.FC = () => {
     setScanFound(0);
     try {
       const pendingAdds: Array<Promise<unknown>> = [];
+      let keyServerId: string | null = null;
       const { found: newServers } = await remoteServerManager.scanAndReconcile({
         kinds: scanKinds,
         onProgress: (completed, total) => setScanProgress({ completed, total }),
@@ -112,11 +113,20 @@ export const RemoteServersScreen: React.FC = () => {
               name: server.name,
               endpoint: server.endpoint,
               providerType: 'openai-compatible',
-            }).then(saved => remoteServerManager.testConnection(saved.id)),
+            }).then(saved => {
+              if (server.needsKey) {
+                keyServerId ??= saved.id;
+                return undefined;
+              }
+              return remoteServerManager.testConnection(saved.id);
+            }),
           );
         },
       });
       await Promise.allSettled(pendingAdds);
+      if (keyServerId) {
+        navigation.navigate('RemoteServerEditor', { serverId: keyServerId, needsKey: true });
+      }
       if (newServers.length === 0) {
         setScanNote(
           `No new servers answered. Check ${SCAN_KINDS.filter(item => scanKinds.includes(item.kind)).map(item => `${item.label} on port ${item.port}`).join(', ')}.`,
@@ -133,7 +143,7 @@ export const RemoteServersScreen: React.FC = () => {
     } finally {
       setIsScanning(false);
     }
-  }, [scanKinds]);
+  }, [scanKinds, navigation]);
 
   const handleDeleteServer = useCallback(
     (server: (typeof servers)[0]) => {

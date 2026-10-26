@@ -13,6 +13,8 @@ export interface DiscoveredServer {
   endpoint: string;
   type: 'ollama' | 'lmstudio' | 'gateway';
   name: string;
+  /** Off Grid AI Desktop answered, but it requires an API key before it lists models. */
+  needsKey?: boolean;
 }
 
 export type DiscoverableServerKind = DiscoveredServer['type'];
@@ -60,16 +62,41 @@ const TIMEOUT_MS = 2000;
  */
 const MAX_IN_FLIGHT = 48;
 
-/** Probe a single host:port — resolves true if it responds with an HTTP status */
-async function probe(ip: string, port: number, path: string): Promise<boolean> {
+/** GET a LAN URL with the probe deadline. Resolves the response, or null when silent or refused. */
+function fetchWithDeadline(url: string): Promise<Response | null> {
   return new Promise(resolve => {
     const controller = new AbortController();
-    const timer = setTimeout(() => { controller.abort(); resolve(false); }, TIMEOUT_MS);
+    const timer = setTimeout(() => { controller.abort(); resolve(null); }, TIMEOUT_MS);
 
-    fetch(`http://${ip}:${port}${path}`, { signal: controller.signal }) // NOSONAR — LAN-only probe; HTTPS requires certs on private IPs
-      .then(res => { clearTimeout(timer); resolve(res.status === 200); })
-      .catch(() => { clearTimeout(timer); resolve(false); });
+    fetch(url, { signal: controller.signal }) // NOSONAR — LAN-only probe; HTTPS requires certs on private IPs
+      .then(res => { clearTimeout(timer); resolve(res); })
+      .catch(() => { clearTimeout(timer); resolve(null); });
   });
+}
+
+type ProbeResult = 'found' | 'needs-key' | 'none';
+
+/**
+ * Probe a single host:port. A 200 on the provider's model path is a server we can use as it is.
+ *
+ * Off Grid AI Desktop can require an API key, and then /v1/models answers 401 to a phone that has
+ * none. Its /health page stays open in that mode, so a 401 on the gateway port is confirmed there:
+ * the phone still finds the desktop and asks the person for the key, instead of reporting an empty
+ * network.
+ */
+async function probe(ip: string, provider: typeof PROVIDERS[number]): Promise<ProbeResult> {
+  const base = `http://${ip}:${provider.port}`; // NOSONAR — LAN endpoint
+  const res = await fetchWithDeadline(`${base}${provider.probePath}`);
+  if (res?.status === 200) return 'found';
+  if (res?.status !== 401 || provider.type !== 'gateway') return 'none';
+  const health = await fetchWithDeadline(`${base}/health`);
+  if (health?.status !== 200) return 'none';
+  try {
+    const body = await health.json();
+    return typeof body?.name === 'string' && body.name.startsWith('Off Grid AI') ? 'needs-key' : 'none';
+  } catch {
+    return 'none';
+  }
 }
 
 /**
@@ -224,13 +251,19 @@ export async function discoverLANServers(
     const discovered: DiscoveredServer[] = [];
     const seenEndpoints = new Set<string>();
 
-    const recordIfFound = (target: string, provider: typeof PROVIDERS[0]) => (found: boolean) => {
-      if (!found) return;
+    const recordIfFound = (target: string, provider: typeof PROVIDERS[0]) => (result: ProbeResult) => {
+      if (result === 'none') return;
       const endpoint = `http://${target}:${provider.port}`; // NOSONAR — LAN endpoint
       if (!seenEndpoints.has(endpoint)) {
         seenEndpoints.add(endpoint);
-        log(`Found ${provider.name} at ${target}:${provider.port}`);
-        const server = { endpoint, type: provider.type, name: `${provider.name} (${target})` };
+        const keyNote = result === 'needs-key' ? ' (API key required)' : '';
+        log(`Found ${provider.name} at ${target}:${provider.port}${keyNote}`);
+        const server: DiscoveredServer = {
+          endpoint,
+          type: provider.type,
+          name: `${provider.name} (${target})`,
+          ...(result === 'needs-key' ? { needsKey: true } : {}),
+        };
         discovered.push(server);
         options.onFound?.(server);
       }
@@ -252,7 +285,7 @@ export async function discoverLANServers(
           const target = `${base}.${i + 1}`;
           return async () => {
             try {
-              recordIfFound(target, provider)(await probe(target, provider.port, provider.probePath));
+              recordIfFound(target, provider)(await probe(target, provider));
             } finally {
               options.onProgress?.(++completed, total);
             }
