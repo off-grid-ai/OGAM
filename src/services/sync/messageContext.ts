@@ -44,9 +44,12 @@ export function serializeMessageContext(
     | 'parent'
     | 'selectedAt'
     | 'turnKind'
+    | 'videoStoryId'
   >,
 ): string | null {
   return serializeSyncedMessageContext({
+    // A Video Studio film card names its story, so every device draws it as a film card.
+    videoStoryId: message.videoStoryId,
     // Its place among versions (utils/chatThread), so every device shows the same thread.
     parent: message.parent,
     selectedAt: message.selectedAt,

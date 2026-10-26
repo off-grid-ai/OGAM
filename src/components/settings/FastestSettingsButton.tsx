@@ -9,6 +9,8 @@ import { useTheme } from '../../theme';
 
 const MODALITY_LABEL: Record<ModalityPlacement['modality'], string> = {
   llm: 'Text', image: 'Image', video: 'Video', stt: 'Speech', tts: 'Voice', embeddings: 'Search',
+  // Desktop-only modalities; a phone never places these.
+  grounding: 'Grounding', decision: 'Decision',
 };
 import { createTextGenAdvancedStyles } from './textGenAdvancedStyles';
 

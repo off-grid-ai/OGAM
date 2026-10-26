@@ -16,7 +16,7 @@ import type { ModalityPlacement, ProcessorPlace } from './modalityBackends';
 const LLM_PLACE: Record<MobileBackend, ProcessorPlace> = { cpu: 'cpu', opencl: 'gpu', metal: 'gpu', htp: 'npu' };
 
 export function llmPlacement(backend: MobileBackend): ModalityPlacement {
-  return { modality: 'llm', place: LLM_PLACE[backend] };
+  return { modality: 'llm', place: LLM_PLACE[backend], engine: 'llama.cpp' };
 }
 
 function cosine(a: number[], b: number[]): number {
@@ -33,15 +33,15 @@ function cosine(a: number[], b: number[]): number {
 /** The GPU only when it gives the same vectors as the CPU (cosine >= 0.99) and is faster. */
 async function placeEmbeddings(signal?: AbortSignal): Promise<ModalityPlacement> {
   const gpuPossible = Platform.OS === 'ios' || (await hardwareService.getOpenCLCapability()).supported;
-  if (!gpuPossible || signal?.aborted) return { modality: 'embeddings', place: 'cpu' };
+  if (!gpuPossible || signal?.aborted) return { modality: 'embeddings', place: 'cpu', engine: 'llama.cpp' };
   const cpu = await embeddingService.measure('cpu');
-  if (!cpu || signal?.aborted) return { modality: 'embeddings', place: 'cpu' };
+  if (!cpu || signal?.aborted) return { modality: 'embeddings', place: 'cpu', engine: 'llama.cpp' };
   const gpu = await embeddingService.measure('gpu');
   const agrees = !!gpu && cosine(gpu.vector, cpu.vector) >= 0.99;
   logger.log(`[SPEED] embeddings cpu=${cpu.ms}ms gpu=${gpu?.ms ?? 'failed'}ms agrees=${agrees}`);
-  if (!gpu) return { modality: 'embeddings', place: 'cpu' };
-  if (!agrees) return { modality: 'embeddings', place: 'cpu', reason: 'The GPU gave different results here.' };
-  return { modality: 'embeddings', place: gpu.ms < cpu.ms ? 'gpu' : 'cpu' };
+  if (!gpu) return { modality: 'embeddings', place: 'cpu', engine: 'llama.cpp' };
+  if (!agrees) return { modality: 'embeddings', place: 'cpu', engine: 'llama.cpp', reason: 'The GPU gave different results here.' };
+  return { modality: 'embeddings', place: gpu.ms < cpu.ms ? 'gpu' : 'cpu', engine: 'llama.cpp' };
 }
 
 /**
@@ -50,11 +50,11 @@ async function placeEmbeddings(signal?: AbortSignal): Promise<ModalityPlacement>
  * runs on the CPU there; other Android GPUs use Vulkan.
  */
 async function placeVideo(): Promise<ModalityPlacement> {
-  if (Platform.OS === 'ios') return { modality: 'video', place: 'gpu' };
+  if (Platform.OS === 'ios') return { modality: 'video', place: 'gpu', engine: 'sd.cpp' };
   const adreno = (await hardwareService.getOpenCLCapability()).supported;
   return adreno
-    ? { modality: 'video', place: 'cpu', reason: 'This phone’s NPU and GPU give wrong video output, so video runs on the CPU.' }
-    : { modality: 'video', place: 'gpu' };
+    ? { modality: 'video', place: 'cpu', engine: 'sd.cpp', reason: 'This phone’s NPU and GPU give wrong video output, so video runs on the CPU.' }
+    : { modality: 'video', place: 'gpu', engine: 'sd.cpp' };
 }
 
 /** Image runs where its installed variant was built for: Core ML or QNN on the NPU, MNN on the CPU. */
@@ -62,9 +62,12 @@ function placeImage(): ModalityPlacement | null {
   const app = useAppStore.getState();
   const model = app.downloadedImageModels.find(item => item.id === app.activeImageModelId);
   if (!model) return null;
-  if (model.backend === 'qnn' || model.backend === 'coreml') return { modality: 'image', place: 'npu' };
-  if (model.backend === 'sd') return { modality: 'image', place: Platform.OS === 'ios' ? 'gpu' : 'cpu' };
-  return { modality: 'image', place: Platform.OS === 'ios' ? 'npu' : 'cpu' };
+  if (model.backend === 'qnn') return { modality: 'image', place: 'npu', engine: 'QNN' };
+  if (model.backend === 'coreml') return { modality: 'image', place: 'npu', engine: 'Core ML' };
+  if (model.backend === 'sd') return { modality: 'image', place: Platform.OS === 'ios' ? 'gpu' : 'cpu', engine: 'sd.cpp' };
+  return Platform.OS === 'ios'
+    ? { modality: 'image', place: 'npu', engine: 'Core ML' }
+    : { modality: 'image', place: 'cpu', engine: 'MNN' };
 }
 
 /**
@@ -74,13 +77,13 @@ function placeImage(): ModalityPlacement | null {
 export async function placeOtherModalities(signal?: AbortSignal): Promise<ModalityPlacement[]> {
   const app = useAppStore.getState();
   const placements: ModalityPlacement[] = [];
-  placements.push(await placeEmbeddings(signal).catch(() => ({ modality: 'embeddings' as const, place: 'cpu' as const })));
+  placements.push(await placeEmbeddings(signal).catch(() => ({ modality: 'embeddings' as const, place: 'cpu' as const, engine: 'llama.cpp' })));
   if (app.downloadedVideoModels.length) placements.push(await placeVideo());
   const image = placeImage();
   if (image) placements.push(image);
   if (useWhisperStore.getState().presentModelIds.length)
-    placements.push({ modality: 'stt', place: Platform.OS === 'ios' ? 'gpu' : 'cpu' });
+    placements.push({ modality: 'stt', place: Platform.OS === 'ios' ? 'gpu' : 'cpu', engine: 'whisper.cpp' });
   // On-device voices (Kokoro) run on the CPU through ExecuTorch on both platforms.
-  placements.push({ modality: 'tts', place: 'cpu' });
+  placements.push({ modality: 'tts', place: 'cpu', engine: 'ExecuTorch' });
   return placements;
 }
