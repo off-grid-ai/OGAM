@@ -6,3 +6,7 @@ _generate_video
 _generate_image
 _str_to_sample_method
 _str_to_scheduler
+_new_upscaler_ctx
+_free_upscaler_ctx
+_upscale
+_get_upscale_factor

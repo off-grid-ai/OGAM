@@ -1,6 +1,7 @@
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventEmitter.h>
 #import <UIKit/UIKit.h>
+#import <AVFoundation/AVFoundation.h>
 #import <BackgroundTasks/BackgroundTasks.h>
 #import "VideoEncoder.h"
 #include "common/VideoRuntime.hpp"
@@ -61,8 +62,8 @@ static std::vector<uint8_t> OGInitImageRGB(NSString *path, int width, int height
 }
 RCT_EXPORT_MODULE(VideoGenerationModule)
 + (BOOL)requiresMainQueueSetup { return YES; }
-// Start images run here; sd.cpp's upscaler is not exported by this runtime build on iOS yet.
-- (NSDictionary *)constantsToExport { return @{@"supportsInitImage": @YES, @"supportsUpscale": @NO}; }
+// Start images and sd.cpp's in-process ESRGAN upscaler (exported by this runtime build) run here.
+- (NSDictionary *)constantsToExport { return @{@"supportsInitImage": @YES, @"supportsUpscale": @YES}; }
 - (instancetype)init {
   if ((self = [super init])) {
     _worker = dispatch_queue_create("ai.offgrid.video", DISPATCH_QUEUE_SERIAL);
@@ -154,6 +155,56 @@ RCT_EXPORT_MODULE(VideoGenerationModule)
     }
     if (self->_listeners) [self sendEventWithName:@"VideoGenerationProgress"
       body:@{@"stage":stage, @"step":@(step), @"total":@(total)}];
+  });
+}
+/// Upscale every frame of a clip with sd.cpp's ESRGAN, then write it at the clip's own rate.
+RCT_REMAP_METHOD(upscaleVideo, upscaleVideo:(NSDictionary *)input resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+  NSString *inputPath = input[@"inputPath"], *outputPath = input[@"outputPath"], *modelPath = input[@"modelPath"];
+  const uint32_t factor = [input[@"scale"] unsignedIntValue] ?: 2;
+  self->_runtime.cancelled.store(false);
+  dispatch_async(self->_worker, ^{
+    @autoreleasepool {
+      AVAsset *asset = [AVAsset assetWithURL:[NSURL fileURLWithPath:inputPath]];
+      AVAssetTrack *track = [[asset tracksWithMediaType:AVMediaTypeVideo] firstObject];
+      NSError *error = nil;
+      AVAssetReader *reader = track ? [AVAssetReader assetReaderWithAsset:asset error:&error] : nil;
+      if (!reader) { reject(@"VIDEO_UPSCALE_FAILED", @"The clip has no video.", error); return; }
+      AVAssetReaderTrackOutput *output = [AVAssetReaderTrackOutput assetReaderTrackOutputWithTrack:track
+        outputSettings:@{(id)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA)}];
+      [reader addOutput:output];
+      upscaler_ctx_t *upscaler = new_upscaler_ctx(modelPath.UTF8String, false, 4, 128, nullptr, nullptr);
+      if (!upscaler) { reject(@"VIDEO_UPSCALE_FAILED", @"The upscaler model did not load.", nil); return; }
+      std::vector<sd_image_t> frames;
+      const int fps = MAX(1, (int)lroundf(track.nominalFrameRate));
+      BOOL ok = [reader startReading];
+      while (ok && !self->_runtime.cancelled.load()) {
+        CMSampleBufferRef sample = [output copyNextSampleBuffer];
+        if (!sample) break;
+        CVPixelBufferRef pixels = CMSampleBufferGetImageBuffer(sample);
+        CVPixelBufferLockBaseAddress(pixels, kCVPixelBufferLock_ReadOnly);
+        const size_t w = CVPixelBufferGetWidth(pixels), h = CVPixelBufferGetHeight(pixels), stride = CVPixelBufferGetBytesPerRow(pixels);
+        const uint8_t *bgra = static_cast<const uint8_t *>(CVPixelBufferGetBaseAddress(pixels));
+        std::vector<uint8_t> rgb(w * h * 3);
+        for (size_t y = 0; y < h; ++y) for (size_t x = 0; x < w; ++x) {
+          const uint8_t *p = bgra + y * stride + x * 4;
+          rgb[(y * w + x) * 3] = p[2]; rgb[(y * w + x) * 3 + 1] = p[1]; rgb[(y * w + x) * 3 + 2] = p[0];
+        }
+        CVPixelBufferUnlockBaseAddress(pixels, kCVPixelBufferLock_ReadOnly);
+        CFRelease(sample);
+        sd_image_t *up = nullptr; int count = 0;
+        if (!upscale(upscaler, {static_cast<uint32_t>(w), static_cast<uint32_t>(h), 3, rgb.data()}, factor, &up, &count) || !up || count < 1) { ok = NO; break; }
+        frames.push_back(up[0]);
+        free(up);
+      }
+      free_upscaler_ctx(upscaler);
+      NSError *encodeError = nil;
+      if (ok && !frames.empty() && !self->_runtime.cancelled.load())
+        ok = OGEncodeVideo(frames.data(), static_cast<int>(frames.size()), fps, outputPath, self->_runtime.cancelled, &encodeError);
+      else ok = NO;
+      for (auto &frame : frames) free(frame.data);
+      if (ok) resolve(@{@"path": outputPath});
+      else reject(@"VIDEO_UPSCALE_FAILED", encodeError.localizedDescription ?: @"Could not upscale the clip.", encodeError);
+    }
   });
 }
 RCT_REMAP_METHOD(cancel, cancelWithResolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
