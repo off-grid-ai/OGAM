@@ -256,7 +256,10 @@ export const ImageViewerModal: React.FC<{
   viewerImageUri: string | null;
   onClose: () => void;
   onSave: () => void;
-}> = ({ styles, colors, viewerImageUri, onClose, onSave }) => (
+  /** Video is Pro: "Animate this photo" fills this slot. */
+  AnimateAction?: React.ComponentType<any>;
+  conversationId?: string | null;
+}> = ({ styles, colors, viewerImageUri, onClose, onSave, AnimateAction, conversationId }) => (
   <Modal visible={!!viewerImageUri} transparent animationType="fade" onRequestClose={onClose}>
     <View style={styles.imageViewerContainer}>
       <TouchableOpacity style={styles.imageViewerBackdrop} activeOpacity={1} onPress={onClose} />
@@ -264,6 +267,16 @@ export const ImageViewerModal: React.FC<{
         <View style={styles.imageViewerContent}>
           <Image source={{ uri: viewerImageUri }} style={styles.fullscreenImage} resizeMode="contain" />
           <View style={styles.imageViewerActions}>
+            {AnimateAction && (
+              <AnimateAction
+                imagePath={viewerImageUri}
+                conversationId={conversationId}
+                onStarted={onClose}
+                buttonStyle={styles.imageViewerButton}
+                textStyle={styles.imageViewerButtonText}
+                iconColor={colors.text}
+              />
+            )}
             <TouchableOpacity style={styles.imageViewerButton} onPress={onSave}>
               <Icon name="download" size={24} color={colors.text} />
               <Text style={styles.imageViewerButtonText}>Save</Text>

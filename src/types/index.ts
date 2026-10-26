@@ -326,6 +326,8 @@ export interface Message {
    *  that made the retry a TEXT turn (device-confirmed on Android and iOS). Absent on turns recorded
    *  before this field existed; those still fall back to the reply scan. */
   turnKind?: 'text' | 'image' | 'video';
+  /** ASSISTANT video messages: the film (Pro Video Studio story) this card shows. */
+  videoStoryId?: string;
   /** Indicates this is a system info message (model loaded/unloaded, etc.) */
   isSystemInfo?: boolean;
   attachments?: MediaAttachment[];

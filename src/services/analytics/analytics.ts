@@ -43,6 +43,7 @@ export type Flow =
   | 'voice_setup'
   | 'image_setup'
   | 'video_setup'
+  | 'video_story'
   | 'connector_add'
   | 'pro_upgrade';
 export type Feature =

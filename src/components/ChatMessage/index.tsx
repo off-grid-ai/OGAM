@@ -18,6 +18,7 @@ import { ThinkingIndicator } from '../ThinkingIndicator';
 import { triggerHaptic } from '../../utils/haptics';
 import { createStyles } from './styles';
 import { MessageAttachments } from './components/MessageAttachments';
+import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { MessageContent } from './components/MessageContent';
 import { GenerationMeta } from './components/GenerationMeta';
 import { MessageOverlays } from './components/MessageOverlays';
@@ -257,6 +258,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       message.attachments?.length &&
       message.attachments.every(attachment => attachment.type === 'video'),
   );
+  // Video is Pro: Continue / New shot / Make it a story, and film cards, fill this slot.
+  const VideoActions = useSlot(SLOTS.messageVideoActions);
+  const showVideoActions = Boolean(
+    VideoActions && !isUser && !isStreaming && (isGeneratedVideo || message.videoStoryId),
+  );
   const hasVisibleAnswer = Boolean(
     hasAttachments || answerParsedContent.response.trim(),
   );
@@ -378,6 +384,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
         </View>
       )}
+
+      {showVideoActions && VideoActions && <VideoActions message={message} />}
 
       {!message.isThinking && !isStreaming && !hideProse && hasVisibleAnswer && (
         <MessageMetaRow

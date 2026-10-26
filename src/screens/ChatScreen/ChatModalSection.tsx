@@ -9,6 +9,7 @@ import { createStyles } from './styles';
 import { useTheme } from '../../theme';
 import { ImageViewerModal } from './ChatScreenComponents';
 import { useAppStore } from '../../stores/appStore';
+import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 
 type StylesType = ReturnType<typeof createStyles>;
 type ColorsType = ReturnType<typeof useTheme>['colors'];
@@ -78,6 +79,7 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
   handleSaveImage,
   isRemote,
 }) => {
+  const AnimateAction = useSlot(SLOTS.imageAnimateAction);
   const videoCount = useAppStore(state => state.generatedVideos.filter(video => video.conversationId === activeConversationId).length);
   const mediaCount = imageCount + videoCount;
   return (
@@ -123,6 +125,8 @@ export const ChatModalSection: React.FC<ChatModalSectionProps> = ({
       viewerImageUri={viewerImageUri}
       onClose={() => setViewerImageUri(null)}
       onSave={handleSaveImage}
+      AnimateAction={AnimateAction}
+      conversationId={activeConversationId}
     />
   </>
   );
