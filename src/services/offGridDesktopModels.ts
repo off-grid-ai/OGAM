@@ -313,6 +313,13 @@ export async function activateOffGridDesktopModel(
     body: JSON.stringify({ id: modelId, kind: category }),
   });
   const result = record(await response.json().catch(() => null));
+  if (response.status === 401) {
+    throw new Error(
+      server.apiKey
+        ? 'Desktop did not accept this API key. Copy a current one from Off Grid AI Desktop, Gateway, API keys, and paste it in Remote servers, Edit.'
+        : 'Desktop asks for an API key. Copy one from Off Grid AI Desktop, Gateway, API keys, and paste it in Remote servers, Edit.',
+    );
+  }
   if (!response.ok || result?.success !== true) {
     throw new Error(
       typeof result?.error === 'string'
