@@ -219,6 +219,14 @@ RCT_REMAP_METHOD(cancel, cancelWithResolver:(RCTPromiseResolveBlock)resolve reje
   });
 }
 RCT_REMAP_METHOD(generate, generate:(NSDictionary *)input resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+  // The request's paths and prompt become std::string; a missing one ([nil UTF8String] is NULL) is
+  // undefined behaviour there, so it is refused here instead.
+  for (NSString *key in @[@"weight", @"vae", @"prompt", @"outputPath"]) {
+    if (![input[key] isKindOfClass:NSString.class]) {
+      reject(@"VIDEO_BAD_REQUEST", [NSString stringWithFormat:@"The video request has no %@.", key], nil);
+      return;
+    }
+  }
   dispatch_async(dispatch_get_main_queue(), ^{
     if (self->_busy) { reject(@"VIDEO_BUSY", @"Video generation is already running.", nil); return; }
     self->_busy = YES; self->_runtime.cancelled.store(false);
@@ -241,7 +249,7 @@ RCT_REMAP_METHOD(generate, generate:(NSDictionary *)input resolver:(RCTPromiseRe
         try {
           offgrid::VideoRequest request{
             [input[@"weight"] UTF8String], [input[@"vae"] UTF8String], [(input[@"encoder"] ?: @"") UTF8String],
-            [input[@"prompt"] UTF8String], [input[@"negativePrompt"] UTF8String],
+            [input[@"prompt"] UTF8String], [(input[@"negativePrompt"] ?: @"") UTF8String],
             [input[@"width"] intValue], [input[@"height"] intValue], [input[@"frames"] intValue],
             [input[@"fps"] intValue], [input[@"steps"] intValue], [input[@"guidance"] floatValue], [input[@"seed"] longLongValue]
           };
