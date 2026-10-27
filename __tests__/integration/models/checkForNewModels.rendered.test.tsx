@@ -177,7 +177,7 @@ describe('Check for new models on the Models screen', () => {
     await waitFor(() => expect(models.getByTestId('device-picks')).toBeTruthy());
     fireEvent.press(models.getByText('Image'));
     // BEFORE: a bundled sd.cpp model is listed; the catalog's new one is not.
-    await waitFor(() => expect(models.getByText('SDXL Lightning')).toBeTruthy(), { timeout: 4000 });
+    await waitFor(() => expect(models.getAllByText(/^FLUX\.2 klein 4B/).length).toBeGreaterThan(0), { timeout: 4000 });
     expect(models.queryByText('Brandnew Image')).toBeNull();
 
     fireEvent.press(models.getByTestId('check-new-models-button'));
@@ -187,6 +187,6 @@ describe('Check for new models on the Models screen', () => {
     const sheet = await waitFor(() => models.getByTestId('catalog-check-sheet'));
     expect(within(sheet).getByText('Brandnew Image')).toBeTruthy();
     await waitFor(() => expect(models.getAllByText('Brandnew Image')).toHaveLength(2), { timeout: 4000 });
-    expect(models.getAllByText(/SDXL Lightning/).length).toBeGreaterThan(0);
+    expect(models.getAllByText(/^FLUX\.2 klein 4B/).length).toBeGreaterThan(0);
   });
 });

@@ -70,6 +70,12 @@ function setupLiteRTImportMocks() {
 }
 
 describe('ModelManager', () => {
+  // Some groups pin Platform with a getter spy; resetAllMocks would leave that getter answering
+  // undefined for every later test, so each test starts from the real Platform.
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   beforeEach(() => {
     jest.resetAllMocks();
 

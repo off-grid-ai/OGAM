@@ -178,8 +178,9 @@ export function getSDImageModels(): HFImageModel[] {
   const listed = new Set((useModelCatalogStore.getState().remote.models ?? [])
     .filter(model => model.kind === 'image').map(model => model.id));
   return withRemoteCatalog('models', CATALOG).filter(model => {
-    if (model.kind !== 'image' || !isImageWeightAvailableOn(model.files[0].name, Platform.OS)) return false;
-    const pack = sdImagePackFor(model.files[0].name);
+    const weight = model.files?.[0]?.name;
+    if (model.kind !== 'image' || !weight || !isImageWeightAvailableOn(weight, Platform.OS)) return false;
+    const pack = sdImagePackFor(weight);
     // Qwen-Image's Off Grid AI builds need 24 GB or more: phones list leejet's pack only.
     if (pack) return pack.family !== 'qwen-image-2.1' || model.id === 'leejet/Qwen-Image-2.1-GGUF';
     return model.files.length === 1 &&
