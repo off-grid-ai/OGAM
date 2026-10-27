@@ -259,9 +259,11 @@ export async function searchSDImageModels(query: string, signal?: AbortSignal): 
       if (!/^[a-f0-9]{40}$/i.test(data.sha)) continue;
       readableRepos++;
       // Bound header work per repo. Unsupported files remain absent from downloads.
-      const candidates = (data.siblings ?? []).filter(file => isSDImageWeight(file.rfilename) && (file.lfs?.size ?? file.size ?? 0) > 0).slice(0, 8);
+      // Root-level weights only: a pack is read from the top of its folder, so a nested checkpoint
+      // would download in full and then not be found.
+      const candidates = (data.siblings ?? []).filter(file => !file.rfilename.includes('/') && isSDImageWeight(file.rfilename) && (file.lfs?.size ?? file.size ?? 0) > 0).slice(0, 8);
       for (const file of candidates) {
-        const downloadUrl = `https://huggingface.co/${repo.id}/resolve/${data.sha}/${encodeURIComponent(file.rfilename)}`;
+        const downloadUrl = `https://huggingface.co/${repo.id}/resolve/${data.sha}/${file.rfilename.split('/').map(encodeURIComponent).join('/')}`;
         const qwen = QWEN_IMAGE_WEIGHT.test(file.rfilename);
         if (!qwen) {
           const header = await fetch(downloadUrl, { signal, headers: { Range: `bytes=0-${SD_CHECKPOINT_HEADER_BYTES - 1}` } });
