@@ -141,6 +141,9 @@ jobs:
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
           IOS_PROVISION_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          # uat.sh refuses a beta with no TestFlight external groups; locally it reads them from
+          # fastlane/.env, which CI does not have. Not a secret, so it is a repo variable.
+          TESTFLIGHT_EXTERNAL_GROUPS: ${{ vars.TESTFLIGHT_EXTERNAL_GROUPS }}
           FASTLANE_SKIP_UPDATE_CHECK: '1'
           FASTLANE_HIDE_CHANGELOG: '1'
           # uat.sh announces the beta in Slack; without this it falls back to .env.keygen, which
