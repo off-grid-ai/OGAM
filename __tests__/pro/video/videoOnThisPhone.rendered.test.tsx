@@ -352,7 +352,8 @@ it('Retry after a dropped download keeps the files already on the phone', async 
     finished += await current.downloads.finishRunning();
     expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0);
   }, { timeout: 15_000 });
-  // Only the two files not yet on the phone were fetched again.
+  // The retry really finished downloads, and only the two files not yet on the phone were fetched again.
+  expect(finished).toBeGreaterThan(0);
   expect(boundary.download!.module.startDownload.mock.calls.length - startedBefore).toBe(MODEL.files - 1);
 }, 90_000);
 
