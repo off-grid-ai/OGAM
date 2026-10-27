@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { LoadingDots } from './LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
@@ -16,12 +16,14 @@ const OFF_GRID_LOGO = require('../assets/logo.png');
 const MadeByOffGrid: React.FC = () => (
   <Image
     source={OFF_GRID_LOGO}
-    style={{ width: 12, height: 12, borderRadius: 3 }}
+    style={markStyles.mark}
     accessibilityLabel="Made by Off Grid AI"
     accessibilityRole="image"
     testID="made-by-off-grid"
   />
 );
+
+const markStyles = StyleSheet.create({ mark: { width: 12, height: 12, borderRadius: 3 } });
 
 interface CredibilityInfo {
   color: string;
