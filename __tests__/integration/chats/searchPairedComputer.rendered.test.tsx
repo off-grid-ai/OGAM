@@ -163,3 +163,30 @@ it('says the computer refused the phone’s key, and Enter key brings the result
   await view.findByText('Budget review', {}, { timeout: 10_000 });
   expect(view.queryByText(/didn't accept this phone's key/)).toBeNull();
 }, 60_000);
+
+it('lets a phone with no chats yet search its paired computer', async () => {
+  app = await launchApp({ release: false });
+  await passOnboarding(app, false);
+  const { view, rtl } = app;
+  rtl.fireEvent.press(await view.findByTestId('chats-tab'));
+  // BEFORE: nothing paired, no chats: the empty state and no search.
+  await view.findByText('No Chats Yet');
+  expect(view.queryByTestId('chat-search-input')).toBeNull();
+
+  desktop = serveDesktopSearch({ apiKey: KEY, records: [MEETING] });
+  await rtl.act(async () => {
+    await require('../../../src/services/remoteServerManager').remoteServerManager.addServer({
+      name: COMPUTER,
+      endpoint: DESKTOP_SEARCH_ENDPOINT,
+      providerType: 'openai-compatible',
+      modelManagement: 'offgrid-desktop-v1',
+      apiKey: KEY,
+    });
+  });
+
+  // Paired: the search is there even with no chats, and it finds what is on the computer.
+  rtl.fireEvent.changeText(await view.findByTestId('chat-search-input'), 'budget');
+  await view.findByText(`On ${COMPUTER}`);
+  await view.findByText('Budget review', {}, { timeout: 5000 });
+  expect(view.queryByText('No Chats Yet')).toBeNull();
+}, 60_000);

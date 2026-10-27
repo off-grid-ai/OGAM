@@ -15,6 +15,7 @@ import { AnimatedListItem } from '../components/AnimatedListItem';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ListSearchBar } from '../components/ListSearchBar';
 import { PairedComputerSearchFooter } from '../components/PairedComputerSearchFooter';
+import { pairedComputer } from '../services/pairedComputerSearch';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
@@ -32,6 +33,8 @@ type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ChatsTab'>,
   NativeStackNavigationProp<RootStackParamList>
 >;
+
+const SEARCH_BAR = { placeholder: 'Search chats', clearLabel: 'Clear chat search', testID: 'chat-search-input' };
 
 export const ChatsListScreen: React.FC = () => {
   const previewLine = useConversationPreviewLine();
@@ -243,6 +246,9 @@ export const ChatsListScreen: React.FC = () => {
       }}
     />
   );
+  // With no chats yet, a paired computer is still worth searching: the bar stays.
+  const hasComputer = useRemoteServerStore(s => !!pairedComputer(s.servers, s.activeServerId));
+  const searchBar = <ListSearchBar value={searchQuery} onChangeText={setSearchQuery} {...SEARCH_BAR} />;
   const allVisibleSelected =
     visibleConversations.length > 0 &&
     visibleConversations.every(conversation => selectedIds.has(conversation.id));
@@ -287,7 +293,9 @@ export const ChatsListScreen: React.FC = () => {
         }
       />
 
-      {sortedConversations.length === 0 ? (
+      {sortedConversations.length === 0 && hasComputer ? searchBar : null}
+      {sortedConversations.length === 0 && hasComputer && searchQuery.trim() ? computerResults : null}
+      {sortedConversations.length === 0 ? (hasComputer && searchQuery.trim() ? null : (
         <View style={styles.emptyState}>
           <AnimatedEntry index={0} staggerMs={60} trigger={focusTrigger}>
             <View style={styles.emptyIcon}>
@@ -311,15 +319,9 @@ export const ChatsListScreen: React.FC = () => {
             </AnimatedListItem>
           )}
         </View>
-      ) : (
+      )) : (
         <>
-          <ListSearchBar
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search chats"
-            clearLabel="Clear chat search"
-            testID="chat-search-input"
-          />
+          {searchBar}
           {selecting ? (
             <View style={styles.selectionBar}>
               <Text style={styles.selectionCount}>{selectedIds.size} selected</Text>
