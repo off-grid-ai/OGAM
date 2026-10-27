@@ -16,7 +16,7 @@ import {
   DEFAULT_SILENCE_AFTER_SPEECH_MS,
   DEFAULT_SPEAKER_DRAIN_MS,
 } from '@offgrid/speech';
-import { DEFAULT_MAX_TOOL_CALLS, REASONING_BUDGET_AUTO } from '@offgrid/models';
+import { DEFAULT_MAX_TOOL_CALLS, MOBILE_MTP_DRAFT_TOKENS, REASONING_BUDGET_AUTO } from '@offgrid/models';
 import { APP_CONFIG } from '../constants';
 import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
 import {
@@ -90,7 +90,7 @@ export type AppSettings = {
   /** MTP speculative decoding: the model drafts several tokens per step and verifies them in one
    *  pass. Only models carrying MTP draft layers benefit; the engine ignores it on the rest. */
   speculativeDecoding: boolean;
-  /** MTP draft tokens per step. llama.cpp's default is 3. */
+  /** MTP draft tokens per step: the shared, cited default (llama.cpp's own 3). */
   speculativeDraftMax: number;
   /** Aggressive model loading: commit more RAM + a smaller reserve so large models
    *  load (with a "Load Anyway" override when the budget still blocks). Off by
@@ -285,7 +285,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   nThreads: 0,
   nBatch: 0,
   speculativeDecoding: false,
-  speculativeDraftMax: 3,
+  speculativeDraftMax: MOBILE_MTP_DRAFT_TOKENS,
   imageGenerationMode: 'auto' as ImageGenerationMode,
   autoDetectMethod: 'pattern' as AutoDetectMethod,
   classifierModelId: null,
