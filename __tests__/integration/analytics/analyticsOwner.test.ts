@@ -340,3 +340,24 @@ it('time on a screen stops while the app is in the background', async () => {
   await waitFor(() => expect(endpoint.named('$screen')).toHaveLength(2));
   expect(endpoint.named('$screen')[1].properties).toMatchObject({ screen: 'Chat', prev_screen: 'HomeTab' });
 });
+
+it('a failed model download asks someone who has not opted in, and sends nothing', async () => {
+  const { endpoint, flush } = await setup(null);
+  const React = require('react');
+  const { render, act } = requireRTL();
+  const { AnalyticsConsentPrompt } = require('../../../src/components/AnalyticsConsentPrompt');
+  const prompt = render(React.createElement(AnalyticsConsentPrompt));
+  expect(prompt.queryByText('Help us fix this?')).toBeNull();
+  const { useDownloadStore } = require('../../../src/stores/downloadStore');
+  await act(async () => {
+    useDownloadStore.getState().add({
+      modelKey: 'text:b', downloadId: 'd9', modelId: 'ggml-org/SmolVLM-GGUF', fileName: 'f', quantization: 'Q4_K_M',
+      modelType: 'text', status: 'pending', bytesDownloaded: 0, totalBytes: GB, combinedTotalBytes: 0, progress: 0, createdAt: 0,
+    });
+    useDownloadStore.getState().setStatus('d9', 'failed', { message: 'network lost', code: 'network' });
+  });
+  expect(await prompt.findByText('Help us fix this?')).toBeTruthy();
+  await flush();
+  expect(endpoint.named('model_download_failed')).toHaveLength(0);
+  prompt.unmount();
+});

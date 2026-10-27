@@ -503,6 +503,9 @@ export function downloadStarted(key: string, facts: DownloadFacts): void {
 }
 
 export function downloadEnded(key: string, outcome: 'done' | 'failed', error?: unknown): void {
+  // Before the early return: a person who has not opted in has no download entry, and they are
+  // the ones the failure prompt is for.
+  if (outcome === 'failed') maybePromptAfterFailure();
   const entry = downloads.get(key);
   if (!entry) return;
   downloads.delete(key);
@@ -525,5 +528,4 @@ export function downloadEnded(key: string, outcome: 'done' | 'failed', error?: u
     flowStep(flow, 'downloaded');
     flowFinished(flow, 'done');
   }
-  if (outcome === 'failed') maybePromptAfterFailure();
 }
