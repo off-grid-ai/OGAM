@@ -144,3 +144,64 @@ it('pauses, resumes and cancels a video model download, and deletes an installed
   rtl.fireEvent.press(view.getAllByLabelText('Delete model')[0]);
   await view.findByLabelText(`Download ${MODEL.name}`, {}, { timeout: 10_000 });
 }, 90_000);
+
+/** A clip on the phone, then Make it a story: the storyboard of a film made here. */
+async function phoneStoryboard(current: PhoneVideoApp, prompt: string): Promise<void> {
+  const { view, rtl } = current;
+  await downloadVideoModel(current);
+  await describeClipOnPhone(current, prompt);
+  rtl.fireEvent.press(await view.findByTestId('video-make-story', {}, { timeout: 15_000 }));
+  await view.findByText('Renders on this phone, also with the screen off.', {}, { timeout: 15_000 });
+}
+
+it('a shot the engine cannot make stops the film with its reason; Try again finishes it', async () => {
+  const current = await launch();
+  const { view, rtl } = current;
+  await phoneStoryboard(current, 'a sailboat crossing a calm bay');
+  current.engine.failNext('The video engine ran out of memory.');
+  rtl.fireEvent.press(view.getByTestId('film-make-real'));
+  await view.findByTestId('video-making', {}, { timeout: 10_000 });
+  await view.findByText('The video engine ran out of memory.', {}, { timeout: 15_000 });
+  expect(view.queryByTestId('making-watch')).toBeNull();
+  // The storyboard names the shot that failed.
+  rtl.fireEvent.press(view.getAllByLabelText('Back').pop()!);
+  await rtl.waitFor(() => expect(view.getAllByText('The video engine ran out of memory.').length).toBeGreaterThan(0));
+  rtl.fireEvent.press(view.getByTestId('film-make-real'));
+  rtl.fireEvent.press(await view.findByTestId('making-watch', {}, { timeout: 30_000 }));
+  await view.findByTestId('video-viewer', {}, { timeout: 10_000 });
+  expect(current.engine.films).toHaveLength(1);
+}, 90_000);
+
+it('Tonight on the phone, off the charger, waits for it and can be stopped', async () => {
+  const current = await launch();
+  const { view, rtl } = current;
+  await phoneStoryboard(current, 'fireflies over a summer field');
+  expect(view.queryByText('Waiting for the charger')).toBeNull();
+  rtl.fireEvent.press(view.getByTestId('film-tonight'));
+  await view.findByText('Waiting for the charger', {}, { timeout: 10_000 });
+  // Nothing renders while it waits.
+  expect(current.engine.generations).toHaveLength(1);
+  rtl.fireEvent.press(view.getByTestId('film-cancel'));
+  await view.findByTestId('film-make-real', {}, { timeout: 10_000 });
+  expect(view.queryByText('Waiting for the charger')).toBeNull();
+}, 90_000);
+
+it('the film\'s card in the chat opens its storyboard as a draft, and Making while it is made', async () => {
+  const current = await launch();
+  const { view, rtl } = current;
+  await phoneStoryboard(current, 'a hot air balloon over the desert');
+  rtl.fireEvent.press(view.getAllByLabelText('Back').pop()!);
+  const card = (await view.findAllByTestId('film-card', {}, { timeout: 10_000 })).pop()!;
+  rtl.fireEvent.press(rtl.within(card).getAllByRole('button')[0]);
+  await view.findByTestId('film-make-real', {}, { timeout: 10_000 });
+  current.engine.hold();
+  rtl.fireEvent.press(view.getByTestId('film-make-real'));
+  await view.findByTestId('video-making', {}, { timeout: 10_000 });
+  rtl.fireEvent.press(view.getAllByLabelText('Back').pop()!);
+  rtl.fireEvent.press(view.getAllByLabelText('Back').pop()!);
+  const working = (await view.findAllByTestId('film-card', {}, { timeout: 10_000 })).pop()!;
+  rtl.fireEvent.press(rtl.within(working).getAllByRole('button')[0]);
+  await view.findByTestId('making-stop', {}, { timeout: 10_000 });
+  rtl.fireEvent.press(view.getByTestId('making-stop'));
+  await view.findByTestId('making-retry', {}, { timeout: 10_000 });
+}, 90_000);
