@@ -19,7 +19,12 @@ if $COMPLETE && [ "$(cat "$READY" 2>/dev/null || true)" = "$REVISION:$SDK_VERSIO
 mkdir -p "$BUILD/hexagon-sdk" "$BUILD/hexagon-runtime" "$BUILD/hexagon-assets/video-hexagon"
 if [ ! -f "$SDK/hexagon_sdk.json" ]; then
   curl -fL --retry 3 -C - "https://github.com/snapdragon-toolchain/hexagon-sdk/releases/download/v$SDK_VERSION/hexagon-sdk-v$SDK_VERSION-amd64-lnx.tar.xz" -o "$BUILD/hexagon-sdk.tar.xz"
-  printf '%s  %s\n' "$SDK_SHA256" "$BUILD/hexagon-sdk.tar.xz" | shasum -a 256 -c -
+  # A bad archive is removed: `curl -C -` would otherwise resume from the same bad bytes every build.
+  if ! printf '%s  %s\n' "$SDK_SHA256" "$BUILD/hexagon-sdk.tar.xz" | shasum -a 256 -c -; then
+    rm -f "$BUILD/hexagon-sdk.tar.xz"
+    echo "Hexagon SDK archive failed its checksum and was removed; run the build again." >&2
+    exit 1
+  fi
   tar -xJf "$BUILD/hexagon-sdk.tar.xz" -C "$BUILD/hexagon-sdk"
 fi
 # The official Hexagon tools run on Linux. Only this build directory is mounted.
