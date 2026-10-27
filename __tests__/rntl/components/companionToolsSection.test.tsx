@@ -29,6 +29,11 @@ const mockRequestTools = jest.fn();
 jest.mock('../../../pro/sync/syncStore', () => ({
   useSyncStore: (selector: (s: unknown) => unknown) =>
     selector({ knownDevices: mockState.knownDevices }),
+  // The section reads the shared roster now, not knownDevices. This stands in for the projection
+  // so these cases keep testing what they are about: the switch and the grant it sends.
+  selectSyncControlCenter: (state: { knownDevices: unknown[] }) => ({
+    allDevices: state.knownDevices,
+  }),
 }));
 jest.mock('../../../pro/mcp/mcpStore', () => ({
   useMcpStore: (selector: (s: unknown) => unknown) => selector({ servers: mockState.servers }),

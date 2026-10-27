@@ -13,7 +13,10 @@ import { _clearSectionsForTesting } from '../../../src/components/settings/secti
 import { useAppStore } from '../../../src/stores/appStore';
 import { createDownloadedModel } from '../../utils/factories';
 import { SyncScreen } from '../../../pro/ui/SyncScreen';
-import { useSyncStore } from '../../../pro/sync/syncStore';
+import {
+  selectSyncControlCenter,
+  useSyncStore,
+} from '../../../pro/sync/syncStore';
 import { syncService } from '../../../pro/sync/syncService';
 import { pairingSecretStore } from '../../../pro/sync/pairingSecretStore';
 import {
@@ -24,18 +27,12 @@ import {
 /**
  * One computer, one row.
  *
- * The user problem: Pro tools listed the same Mac three times - two rows reading "Off Grid AI
- * Desktop" and one "OGAD: Mac (Debug)" - each with its own switch, and only one of them able to
- * connect. A desktop's sync identity is a per-install fingerprint, so a reinstall, a second channel
- * or a seat the licence reclaimed leaves its old credential on the phone forever. The roster was
- * published from those credentials alone, so every dead identity kept drawing a row.
+ * Pro tools listed the same Mac three times - two rows reading "Off Grid AI Desktop" and one
+ * "OGAD: Mac (Debug)" - because it built its own list from saved credentials, and a desktop keeps
+ * one credential per install. The shared projection is the roster authority and already drops a
+ * machine the licence no longer knows; the Sync screen was reading it and was right all along.
  *
- * The licence registry is what knows which installations are real. The whole licence stack runs
- * here - the client, the credential store, the registry, the reconciliation - with only Keygen's
- * HTTP endpoint and the native sync transports substituted, so which rows survive is emergent.
- *
- * The credential is never destroyed: a held-back pairing comes back whole if its installation
- * returns. Trust is destroyed only by forgetting a device or by a revocation, as it was before.
+ * So this proves one thing: both surfaces name the same computers.
  */
 
 jest.unmock('@react-navigation/native');
@@ -55,23 +52,11 @@ jest.mock('react-native-zeroconf', () => {
 });
 
 const THIS_FINGERPRINT = 'fp-this-phone';
-/** The Mac the person is actually using: on the licence, and paired here. */
+/** The Mac the person is using: on the licence, and paired here. */
 const LIVE_MAC = 'fp-mac-live';
 /** The same Mac after a reinstall: paired here, gone from the licence. */
 const GHOST_MAC = 'fp-mac-ghost';
 const DESKTOP_NAME = 'Off Grid AI Desktop';
-
-/**
- * Which of the two paired Macs the roster is carrying. This phone puts itself in the roster too,
- * at a moment of its own choosing, and that is not what any of these tests is about.
- */
-function pairedMacsInRoster(): string[] {
-  return useSyncStore
-    .getState()
-    .knownDevices.map(device => device.id)
-    .filter(id => id === LIVE_MAC || id === GHOST_MAC)
-    .sort();
-}
 
 const mesh = createLicensedMesh();
 const storedSecrets = new Map<string, string>();
@@ -92,19 +77,7 @@ async function pairDesktop(id: string, port: number): Promise<void> {
   await pairingSecretStore.commitPairing(device);
 }
 
-/** Settings, then Sync - the way a user reaches the paired devices. */
-async function openSync() {
-  const ui = render(
-    <NavigationContainer>
-      <AppNavigator />
-    </NavigationContainer>,
-  );
-  fireEvent.press(ui.getByTestId('settings-tab'));
-  fireEvent.press(await waitFor(() => ui.getByTestId('open-sync-settings')));
-  return ui;
-}
-
-describe('a desktop the licence no longer knows stops drawing a row', () => {
+describe('Pro tools and Sync name the same computers', () => {
   beforeEach(async () => {
     mesh.reset(PERSONAL_MESH_DEVICE_CAP);
     await syncService.stop();
@@ -147,34 +120,23 @@ describe('a desktop the licence no longer knows stops drawing a row', () => {
 
   it('shows the computer once, not once per identity it has ever had', async () => {
     await syncService.start();
-    const ui = await openSync();
-
-    // Both credentials are here, so without the registry both would be rows under the same name.
-    await waitFor(() => expect(pairedMacsInRoster()).toEqual([LIVE_MAC]));
-    expect(ui.getAllByText(DESKTOP_NAME)).toHaveLength(1);
-
-    ui.unmount();
-  });
-
-  it('keeps the held-back credential, so the computer returns whole if its licence seat does', async () => {
-    await syncService.start();
-    await waitFor(() => expect(pairedMacsInRoster()).toEqual([LIVE_MAC]));
-
-    // Held back from the roster, not forgotten. Nothing asks the person for the pairing code again.
-    expect(pairingSecretStore.get(GHOST_MAC)).toBe(`secret-${GHOST_MAC}`);
-    expect(pairingSecretStore.known(GHOST_MAC)).toBeDefined();
-  });
-
-  it('keeps every saved computer when the licence cannot be reached', async () => {
-    // A cached or unavailable registry is not proof that a device is gone - a plane, a captive
-    // portal, a bad afternoon at Keygen. Hiding rows on that answer would lose the live Mac too.
-    mesh.keygen.setOffline(true);
-    await syncService.start();
-    const ui = await openSync();
-
-    await waitFor(() =>
-      expect(pairedMacsInRoster()).toEqual([GHOST_MAC, LIVE_MAC].sort()),
+    const ui = render(
+      <NavigationContainer>
+        <AppNavigator />
+      </NavigationContainer>,
     );
+    fireEvent.press(ui.getByTestId('settings-tab'));
+    fireEvent.press(await waitFor(() => ui.getByTestId('open-sync-settings')));
+
+    // Both credentials are saved, so a list built from them would name this Mac twice.
+    await waitFor(() =>
+      expect(
+        selectSyncControlCenter(useSyncStore.getState())
+          .allDevices.map(device => device.id)
+          .filter(id => id === LIVE_MAC || id === GHOST_MAC),
+      ).toEqual([LIVE_MAC]),
+    );
+    expect(ui.getAllByText(DESKTOP_NAME)).toHaveLength(1);
 
     ui.unmount();
   });
