@@ -26,6 +26,7 @@ import { ensureDefaultClassifier } from '../../services/classifierProvisioning';
 import { abortPreload } from '../../services/modelPreloader';
 import { modelResidencyManager } from '../../services/modelResidency';
 import { reportModelFailure } from '../../services/modelFailureHandler';
+import { useModelFailureStore } from '../../stores/modelFailureStore';
 import { remoteToolCapabilityIssue } from '../../services/toolCapabilityPreflight';
 import {
   useChatStore,
@@ -950,6 +951,10 @@ type ResolvedDispatch =
  * activeImageModel guard) and had no text-provision path, so the same prompt behaved differently on
  * resend vs send when no image model / no text model was loaded. This is now decided in ONE place.
  */
+/** The video failure card on screen now, if any (Pro reports a clip that ran and failed there). */
+const videoFailureShown = () =>
+  useModelFailureStore.getState().failures.find(failure => failure.modelType === 'video');
+
 async function dispatchResolvedTurn(
   deps: GenerationDeps,
   kind: TurnKind,
@@ -983,11 +988,20 @@ async function dispatchResolvedTurn(
         attachments: opts.attachments,
         turnKind: 'video',
       });
+    const shownBefore = videoFailureShown();
     try {
       await videoSeam.generate({
         prompt: opts.text,
         conversationId: opts.conversationId,
       });
+    } catch (error) {
+      // A clip that ran and failed is on its own failure card. One refused before it started (the
+      // video rules, a film already being made) is said here; it is never left unhandled.
+      logger.warn('[ROUTE-SM] video turn did not run:', error);
+      if (videoFailureShown() === shownBefore)
+        deps.setAlertState(
+          showAlert('Could not make the video', error instanceof Error ? error.message : String(error)),
+        );
     } finally {
       generationService.drainQueue();
     }
