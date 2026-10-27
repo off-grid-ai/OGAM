@@ -18,6 +18,8 @@ import { ImagePicksRow, imagePicks, imageFamilyName } from './ImagePicksRow';
 import { ImageFilterBar } from './ImageFilterBar';
 import { BackendFilter, ImageFilterDimension } from './types';
 import { formatBytes, getImageModelCompatibility, hfModelToDescriptor } from './utils';
+import { standardImageModelDefaults } from '@offgrid/models';
+import { sdCppCpuMinutesPerImage } from '../../services/sdCppPlacement';
 import { modelDownloadService } from '../../services/modelDownloadService';
 import { uniformDownloadId } from '../../services/modelDownloadService/uniformId';
 import logger from '../../utils/logger';
@@ -82,6 +84,11 @@ export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
   // own builds carry its mark.
   const source = determineCredibility((model.repo ?? '').split('/')[0] ?? '');
   const variantSuffix = model.variant ? ` \u00B7 ${getVariantLabel(model.variant)}` : '';
+  // Where sd.cpp can only use the CPU, say how long an image takes, so nobody starts a long render
+  // by surprise (measured: services/sdCppPlacement).
+  const cpuTime = model.backend === 'sd' && imageRec?.sdCppOnCpu
+    ? ` \u00B7 About ${sdCppCpuMinutesPerImage(model.size, standardImageModelDefaults(model.displayName).defaultSteps)} min per image on this phone`
+    : '';
   return (
     <View>
       <ModelCard
@@ -91,7 +98,7 @@ export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
           id: model.id,
           name: model.displayName,
           author: authorLabel,
-          description: `${formatBytes(model.size)}${variantSuffix}`,
+          description: `${formatBytes(model.size)}${variantSuffix}${cpuTime}`,
           credibility: {
             source,
             isOfficial: source === 'official',
@@ -175,7 +182,9 @@ const ImageModelsScrollContent: React.FC<ScrollContentProps> = ({
   const styles = useThemedStyles(createStyles);
 
   // A pick is shown once, in the row above; the list leaves out every variant of a picked model.
-  const compatible = availableHFModels.filter(model => getImageModelCompatibility(model, imageRec).isCompatible);
+  // Where sd.cpp runs only on the CPU, its models stay listed but are not picks: Local Dream is.
+  const compatible = availableHFModels.filter(model =>
+    getImageModelCompatibility(model, imageRec).isCompatible && !(model.backend === 'sd' && imageRec?.sdCppOnCpu));
   const pickedFamilies = new Set(imagePicks(compatible, ramGB, isRecommendedModel).map(({ item }) => imageFamilyName(item.displayName)));
   const listedModels = filteredHFModels.filter(model => !pickedFamilies.has(imageFamilyName(model.displayName)));
 

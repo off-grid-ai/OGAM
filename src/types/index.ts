@@ -186,6 +186,8 @@ export interface ImageModelRecommendation {
   bannerText: string;
   warning?: string;
   compatibleBackends: Array<'mnn' | 'qnn' | 'coreml' | 'sd'>;
+  /** sd.cpp runs only on the CPU here (services/sdCppPlacement): its models are listed, not picks. */
+  sdCppOnCpu?: boolean;
 }
 
 // Hardware-related types

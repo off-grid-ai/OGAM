@@ -17,6 +17,7 @@ import {
 import { MODEL_RECOMMENDATIONS, RECOMMENDED_MODELS } from '../constants';
 import { withRemoteCatalog } from '../stores/modelCatalogStore';
 import { HTP_ENABLED } from '../config/featureFlags';
+import { sdCppRunsOnCpu } from './sdCppPlacement';
 
 /** sd.cpp image memory per byte of pack file, measured on device (see estimateImageModelRam). */
 export const SD_CPP_RAM_MULTIPLIER = 1.3;
@@ -449,6 +450,7 @@ class HardwareService {
     if (ramGB < 4) {
       rec.warning = 'Low RAM \u2014 expect slower performance';
     }
+    rec.sdCppOnCpu = sdCppRunsOnCpu(Platform.OS, socInfo.vendor);
     this.cachedImageRecommendation = rec;
     return rec;
   }
