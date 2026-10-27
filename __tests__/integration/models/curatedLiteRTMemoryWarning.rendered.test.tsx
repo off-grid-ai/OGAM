@@ -96,6 +96,7 @@ jest.mock('../../../src/services/huggingFaceModelBrowser', () => ({
   fetchAvailableModels: jest.fn(() => Promise.resolve([])),
   getVariantLabel: jest.fn(() => 'Standard'),
   guessStyle: jest.fn(() => 'creative'),
+  getRecommendedSDImageModels: jest.fn(() => []),
 }));
 
 jest.mock('../../../src/services/coreMLModelBrowser', () => ({
