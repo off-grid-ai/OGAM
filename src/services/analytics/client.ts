@@ -36,6 +36,8 @@ export interface AnalyticsClient {
   close(): Promise<void>;
   /** Opt-out: drop what is queued, reset the anonymous ID and stop. */
   forget(): Promise<void>;
+  /** Drop queued events that `keep` rejects, without stopping or resetting the anonymous ID. */
+  dropQueued(keep: (event: string) => boolean): void;
 }
 
 /** Debug builds and a missing key never create the SDK. */
@@ -84,6 +86,12 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
       posthog.register(properties as never).catch(ignore);
     },
     close: () => posthog.shutdown(),
+    dropQueued: keep => {
+      // before_send runs before an event is queued, so a queued event was allowed when it was taken;
+      // this removes the ones a later consent change no longer allows.
+      const queue = posthog.getPersistedProperty<Array<{ message?: { event?: string } }>>(PostHogPersistedProperty.Queue) ?? [];
+      posthog.setPersistedProperty(PostHogPersistedProperty.Queue, queue.filter(item => keep(item.message?.event ?? '')));
+    },
     forget: async () => {
       await posthog.optOut();
       posthog.setPersistedProperty(PostHogPersistedProperty.Queue, null);

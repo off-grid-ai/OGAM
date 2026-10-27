@@ -361,3 +361,18 @@ it('a failed model download asks someone who has not opted in, and sends nothing
   expect(endpoint.named('model_download_failed')).toHaveLength(0);
   prompt.unmount();
 });
+
+it('withdrawing Usage drops usage events still queued, and a crash still arrives on the same ID', async () => {
+  const { analytics, endpoint, flush, errorHandler } = await setup({ usage: true, crashes: true });
+  analytics.track('project_created');
+  await flush();
+  await waitFor(() => expect(endpoint.named('project_created')).toHaveLength(1));
+  // Taken while Usage was on, still queued when it is turned off.
+  analytics.track('chat_created');
+  await analytics.setAnalyticsConsent({ usage: false }, 'settings');
+  errorHandler()(new TypeError('Cannot read the file'), false);
+  await flush();
+  await waitFor(() => expect(endpoint.named('$exception')).toHaveLength(1));
+  expect(endpoint.named('chat_created')).toEqual([]);
+  expect(endpoint.named('$exception')[0].distinct_id).toBe(endpoint.named('project_created')[0].distinct_id);
+});

@@ -79,6 +79,7 @@ const moduleLoadedAt = Date.now();
 
 let client: AnalyticsClient | null = null;
 let clientCrashes = false;
+let clientUsage = false;
 let consentChain: Promise<void> = Promise.resolve();
 let stopListening: (() => void) | null = null;
 /** Set by startAnalytics, before any snapshot can run. */
@@ -123,9 +124,14 @@ async function applyConsent(): Promise<void> {
   if (!usage && !crashes) {
     const previous = client;
     client = null;
+    clientUsage = false;
     if (previous) await previous.forget();
     return;
   }
+  // Usage withdrawn with Crash reports kept: usage events already queued must not upload later.
+  // Crash events, the client and the anonymous ID stay (forget() is for a full opt-out).
+  if (client && clientUsage && !usage) client.dropQueued(event => CRASH_EVENTS.has(event));
+  clientUsage = usage;
   if (!analyticsBuildAllowed() || (client && clientCrashes === crashes)) return;
   if (client) {
     const previous = client;
