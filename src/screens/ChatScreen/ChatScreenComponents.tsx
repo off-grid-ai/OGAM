@@ -180,7 +180,7 @@ export const EmptyChat: React.FC<{
     <AnimatedEntry index={4} staggerMs={60}>
       <Text style={styles.privacyText}>
         {isRemote
-          ? 'This conversation uses a remote model. Your messages will be sent to the remote server.'
+          ? 'This chat runs on a remote server, not on this phone.'
           : 'This conversation is completely private. All processing happens on your device.'}
       </Text>
     </AnimatedEntry>
