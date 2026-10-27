@@ -5,7 +5,8 @@
  * clip I made, newest first, with All / Stories / Clips. A tab with nothing says so. Opening a clip
  * plays it full screen; New shot there makes the next clip on my computer and shows it being made,
  * then Watch plays it. Delete asks first and removes the clip from the list. The + starts a new
- * video in a chat.
+ * video in a chat. The Studio sits at its top: one sentence starts a film, and New character opens
+ * the character screen.
  *
  * The real App runs. Device boundaries only: the llama.rn engine, the disk, the RAM sensor, the OS
  * dialog, and Desktop's gateway at `fetch`.
@@ -112,4 +113,16 @@ it('the viewer pauses on a tap and saves the clip to Downloads', async () => {
   await rtl.waitFor(() => expect(app.dialog()?.title).toBe('Video saved'));
   expect(app.dialog()?.message).toBe('The video is in Downloads.');
   expect(saved).toEqual([{ name: expect.stringMatching(/\.mp4$/), mime: 'video/mp4' }]);
+}, 60_000);
+
+it('the Studio is at the top: one sentence starts a film, and New character opens a character', async () => {
+  const app = await launchStudioApp();
+  const { view, rtl } = app;
+  await makeClipInChat(app, CLIP);
+  await openLibrary(app);
+
+  expect(view.getByTestId('new-film-sentence')).toBeTruthy();
+  expect(view.getByTestId('new-film-go')).toBeTruthy();
+  rtl.fireEvent.press(view.getByLabelText('New character'));
+  await view.findByTestId('character-name', {}, { timeout: 10_000 });
 }, 60_000);

@@ -2,7 +2,7 @@
  * Video settings in a chat shape the next clip.
  *
  * SPEC (OGAM user's view): a chat's settings have a Video generation section, named for the video
- * model in use. A fixed seed and what to avoid that I set there are what my next clip is
+ * model in use (the name the computer gives it, not its id). A fixed seed and what to avoid that I set there are what my next clip is
  * made with on my computer. A seed that is not a whole
  * number is not kept.
  *
@@ -11,6 +11,7 @@
 jest.unmock('@react-navigation/native');
 
 import { closeStudioApp, launchStudioApp, type StudioApp } from '../../harness/videoStudioApp';
+import { DESKTOP_VIDEO_MODEL } from '../../harness/desktopVideoServer';
 
 afterEach(() => closeStudioApp(), 90_000);
 
@@ -49,6 +50,13 @@ it('a fixed seed and what to avoid reach the computer with the next clip', async
   rtl.fireEvent.changeText(view.getByLabelText('Video negative prompt'), 'blurry, text');
   await sendClip(app, CLIP);
   expect(app.jobs.submissions[0]).toMatchObject({ prompt: CLIP, seed: 42, negativePrompt: 'blurry, text' });
+}, 90_000);
+
+it('is named for the computer\'s video model, never its id', async () => {
+  const app = await videoSettings();
+  const { view, rtl } = app;
+  await rtl.waitFor(() => expect(view.getByText(DESKTOP_VIDEO_MODEL.name)).toBeTruthy());
+  expect(view.queryByText(DESKTOP_VIDEO_MODEL.id)).toBeNull();
 }, 90_000);
 
 it('a seed that is not a whole number is not kept', async () => {
