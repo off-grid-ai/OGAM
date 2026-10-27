@@ -7,7 +7,9 @@
  * phone, shows its progress while it runs, and lands as a clip card. I can stop a clip midway. A whole film
  * is made here too, shot by shot, then joined. A download can be paused, resumed or cancelled, and
  * an installed model deleted; a download the network drops says so and can be retried or removed, and one cut off by the app
- * closing says so and can be retried. While a clip is made, the engine's first frame shows; a phone short of free
+ * closing says so and can be retried. A clip still being made when the app opens again carries on; one the phone stopped with the
+ * app says so and Retry makes it again; one the worker could not finish shows why. While a clip is
+ * made, the engine's first frame shows; a phone short of free
  * memory says so before it starts and can run it anyway.
  *
  * The real App runs. Device boundaries only: the llama.rn engine, the disk, the RAM sensor, the
@@ -39,12 +41,27 @@ interface PhoneVideoApp extends AnalyticsApp {
 }
 
 /** By default a phone with room for a 6.3 GB video model: 24 GB, 20 GB of it free (the RAM sensor). */
-async function launch(options: { ram?: { totalBytes: number; availBytes: number }; relaunch?: boolean } = {}): Promise<PhoneVideoApp> {
+async function launch(
+  options: {
+    ram?: { totalBytes: number; availBytes: number };
+    relaunch?: boolean;
+    /** The video model a finished download left on the phone's disk, which a relaunch keeps. */
+    installedModel?: boolean;
+    carryOver?: NativeVideoEngine;
+  } = {},
+): Promise<PhoneVideoApp> {
   let engine!: NativeVideoEngine;
   const ram = options.ram ?? { totalBytes: 24 * GB, availBytes: 20 * GB };
   app = await launchApp({ release: false, download: true, relaunch: options.relaunch, beforeApp: boundary => {
     boundary.setRam({ platform: 'android', ...ram });
-    engine = installNativeVideoEngine(boundary);
+    // A relaunch keeps the phone's disk; this harness's disk is new per launch, so the video model a
+    // finished download left there is put back, file by file, at its real size.
+    if (options.installedModel) {
+      const { videoModelDirectory } = require('../../../src/services/videoModelFiles');
+      const entry = require('@offgrid/models').CATALOG.find((model: { id: string }) => model.id === MODEL.id);
+      for (const file of entry.files) boundary.fs!.seedFile(`${videoModelDirectory(MODEL.id)}/${file.name}`, file.sizeBytes);
+    }
+    engine = installNativeVideoEngine(boundary, options.carryOver);
   } });
   if (options.relaunch) await app.view.findByTestId('home-screen', {}, { timeout: 10_000 });
   else await passOnboarding(app, false);
@@ -337,4 +354,67 @@ it('Retry after a dropped download keeps the files already on the phone', async 
   }, { timeout: 15_000 });
   // Only the two files not yet on the phone were fetched again.
   expect(boundary.download!.module.startDownload.mock.calls.length - startedBefore).toBe(MODEL.files - 1);
+}, 90_000);
+
+it('a clip still being made when the app is opened again carries on and lands in its chat', async () => {
+  const first = await launch();
+  await downloadVideoModel(first);
+  first.engine.hold();
+  await describeClipOnPhone(first, 'a lantern floating down a dark river');
+  await first.view.findByText(/Step 1 of \d+/, {}, { timeout: 15_000 });
+  first.view.unmount();
+  first.endpoint.restore();
+
+  // The app's JS starts again; Android's video worker kept making the clip.
+  const current = await launch({ relaunch: true, installedModel: true, carryOver: first.engine });
+  const { view, rtl } = current;
+  rtl.fireEvent.press(await view.findByTestId('chats-tab'));
+  rtl.fireEvent.press(await view.findByText('a lantern floating down a dark river', {}, { timeout: 10_000 }));
+  await view.findByTestId('video-progress', {}, { timeout: 10_000 });
+  expect(view.queryByTestId('chat-clip-card')).toBeNull();
+  current.engine.release();
+  await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
+  // The same job, found again: no second clip was started.
+  expect(current.engine.generations).toHaveLength(1);
+}, 90_000);
+
+it('a clip lost with the app (the phone stopped the worker) says so, and Retry makes it again', async () => {
+  const first = await launch();
+  await downloadVideoModel(first);
+  first.engine.hold();
+  await describeClipOnPhone(first, 'a paper plane over the rooftops');
+  await first.view.findByText(/Step 1 of \d+/, {}, { timeout: 15_000 });
+  first.view.unmount();
+  first.endpoint.restore();
+
+  // Opened again after the phone ended the whole app, video worker included: a fresh engine knows no job.
+  const current = await launch({ relaunch: true, installedModel: true });
+  const { view, rtl } = current;
+  rtl.fireEvent.press(await view.findByTestId('chats-tab'));
+  rtl.fireEvent.press(await view.findByText('a paper plane over the rooftops', {}, { timeout: 10_000 }));
+  await view.findByText(/Video generation was interrupted\. Retry to start it again\./, {}, { timeout: 10_000 });
+  expect(current.engine.generations).toHaveLength(0);
+  rtl.fireEvent.press(view.getByText('Retry'));
+  await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
+  expect(current.engine.generations).toHaveLength(1);
+  expect(current.engine.generations[0].prompt).toBe('a paper plane over the rooftops');
+}, 90_000);
+
+it('a clip the worker could not finish while the app was away shows the engine\'s reason', async () => {
+  const first = await launch();
+  await downloadVideoModel(first);
+  first.engine.hold();
+  await describeClipOnPhone(first, 'a whale breaching at sunset');
+  await first.view.findByText(/Step 1 of \d+/, {}, { timeout: 15_000 });
+  first.view.unmount();
+  first.endpoint.restore();
+
+  const current = await launch({ relaunch: true, installedModel: true, carryOver: first.engine });
+  const { view, rtl } = current;
+  current.engine.failNext('The video engine ran out of memory.');
+  current.engine.release();
+  rtl.fireEvent.press(await view.findByTestId('chats-tab'));
+  rtl.fireEvent.press(await view.findByText('a whale breaching at sunset', {}, { timeout: 10_000 }));
+  await view.findByText(/The video engine ran out of memory\./, {}, { timeout: 15_000 });
+  expect(view.queryByTestId('chat-clip-card')).toBeNull();
 }, 90_000);

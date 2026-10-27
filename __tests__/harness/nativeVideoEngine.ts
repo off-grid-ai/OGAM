@@ -29,55 +29,85 @@ export interface NativeVideoEngine {
   showPreviews: () => void;
 }
 
-/** Install both modules. Call from launchApp's `beforeApp`, before anything requires Pro. */
-export function installNativeVideoEngine(boundary: NativeBoundary): NativeVideoEngine {
-  const fs = boundary.fs!;
-  const events = boundary.litertEvents;
+/** What the native side keeps across a JS reload: the job it is running, and its status. */
+interface EngineCore {
+  fs: NonNullable<NativeBoundary['fs']>;
+  events: NativeBoundary['litertEvents'];
+  holdNext: boolean;
+  parked: (() => void) | null;
+  failure: string | null;
+  previews: boolean;
+  running: { reject: (error: Error) => void; output: string } | null;
+  status: Record<string, unknown> | null;
+  /** The JS context that asked for the running job is still there to hear how it ends. */
+  jsAttached: boolean;
+}
+
+const cores = new WeakMap<NativeVideoEngine, EngineCore>();
+
+/**
+ * Install both modules. Call from launchApp's `beforeApp`, before anything requires Pro.
+ *
+ * `carryOver`: the app's JS was started again while the native side kept running (Android keeps the
+ * video worker alive under its foreground service). The engine keeps its job and status; the old JS
+ * context is gone, so the old promise is never settled, and the new launch finds the job by status.
+ */
+export function installNativeVideoEngine(boundary: NativeBoundary, carryOver?: NativeVideoEngine): NativeVideoEngine {
   const RN = require('react-native');
-  let holdNext = false;
-  let parked: (() => void) | null = null;
-  let failure: string | null = null;
-  let previews = false;
-  let running: { reject: (error: Error) => void; output: string } | null = null;
-  let status: Record<string, unknown> | null = null;
+  const previous = carryOver ? cores.get(carryOver) : undefined;
+  const core: EngineCore = previous ?? {
+    fs: boundary.fs!,
+    events: boundary.litertEvents,
+    holdNext: false,
+    parked: null,
+    failure: null,
+    previews: false,
+    running: null,
+    status: null,
+    jsAttached: true,
+  };
+  core.fs = boundary.fs!;
+  core.events = boundary.litertEvents;
+  if (previous) core.jsAttached = false;
   const engine: NativeVideoEngine = {
-    generations: [],
-    films: [],
+    generations: carryOver?.generations ?? [],
+    films: carryOver?.films ?? [],
     hold: () => {
-      holdNext = true;
+      core.holdNext = true;
     },
     release: () => {
-      holdNext = false;
-      parked?.();
-      parked = null;
+      core.holdNext = false;
+      core.parked?.();
+      core.parked = null;
     },
     failNext: message => {
-      failure = message;
+      core.failure = message;
     },
     showPreviews: () => {
-      previews = true;
+      core.previews = true;
     },
   };
+  cores.set(engine, core);
   const coded = (code: string, message: string) => Object.assign(new Error(message), { code });
   const progress = (stage: string, step: number, total: number, backend?: string) => {
-    status = { ...status, stage, step, total, ...(backend ? { backend } : {}) };
-    events.emit('VideoGenerationProgress', { stage, step, total, ...(backend ? { backend } : {}) });
+    core.status = { ...core.status, stage, step, total, ...(backend ? { backend } : {}) };
+    core.events.emit('VideoGenerationProgress', { stage, step, total, ...(backend ? { backend } : {}) });
   };
 
   RN.NativeModules.VideoGenerationModule = {
     getConstants: () => ({ supportsInitImage: true, supportsUpscale: false }),
     addListener: () => undefined,
     removeListeners: () => undefined,
-    getVideoStatus: async (outputPath: string) => (status && status.path === outputPath ? status : null),
+    getVideoStatus: async (outputPath: string) => (core.status && core.status.path === outputPath ? core.status : null),
     cancel: async () => {
-      parked?.();
-      parked = null;
-      running?.reject(coded('VIDEO_CANCELLED', 'Video generation stopped.'));
+      core.parked?.();
+      core.parked = null;
+      core.running?.reject(coded('VIDEO_CANCELLED', 'Video generation stopped.'));
       return null;
     },
     generate: (input: Record<string, unknown>) =>
       new Promise<{ path: string }>((resolve, reject) => {
-        if (running) {
+        if (core.running) {
           reject(coded('VIDEO_BUSY', 'Video generation is already running.'));
           return;
         }
@@ -87,47 +117,50 @@ export function installNativeVideoEngine(boundary: NativeBoundary): NativeVideoE
         const finish = (error?: Error) => {
           if (settled) return;
           settled = true;
-          running = null;
+          core.running = null;
+          const heard = core.jsAttached;
           if (error) {
-            status = { ...status, phase: 'failed', code: (error as Error & { code?: string }).code, error: error.message };
-            reject(error);
+            core.status = { ...core.status, phase: 'failed', code: (error as Error & { code?: string }).code, error: error.message };
+            if (heard) reject(error);
           } else {
-            status = { ...status, phase: 'succeeded' };
-            resolve({ path: output });
+            core.status = { ...core.status, phase: 'succeeded' };
+            if (heard) resolve({ path: output });
           }
         };
-        running = { reject: error => finish(error), output };
-        status = { path: output, phase: 'running', stage: 'preparing', step: 0, total: 0 };
+        core.jsAttached = true;
+        core.running = { reject: error => finish(error), output };
+        core.status = { path: output, phase: 'running', stage: 'preparing', step: 0, total: 0 };
         const steps = Number(input.steps) || 4;
         (async () => {
           progress('preparing', 0, steps);
           progress('conditioning', 0, 0, 'cpu');
           progress('generating', 0, steps);
           progress('generating', 1, steps);
-          if (previews) {
+          if (core.previews) {
             // The native preview: a PNG beside the clip, announced on the encoding stage (VideoGenerationModule.preview).
             const preview = { path: `${output}.preview.png`, width: Number(input.width) || 320, height: Number(input.height) || 192 };
-            fs.seedFile(preview.path, 2048);
-            status = { ...status, stage: 'encoding', step: 0, total: 0, preview };
-            events.emit('VideoGenerationProgress', { stage: 'encoding', step: 0, total: 0, preview });
+            core.fs.seedFile(preview.path, 2048);
+            core.status = { ...core.status, stage: 'encoding', step: 0, total: 0, preview };
+            core.events.emit('VideoGenerationProgress', { stage: 'encoding', step: 0, total: 0, preview });
           }
-          if (holdNext) {
-            holdNext = false;
+          if (core.holdNext) {
+            core.holdNext = false;
             await new Promise<void>(go => {
-              parked = go;
+              core.parked = go;
             });
           }
           if (settled) return;
-          if (failure) {
-            const message = failure;
-            failure = null;
+          if (core.failure) {
+            const message = core.failure;
+            core.failure = null;
             finish(coded('VIDEO_FAILED', message));
             return;
           }
           for (let step = 2; step <= steps; step += 1) progress('generating', step, steps);
           progress('decoding', 1, 1);
           progress('encoding', 0, 0);
-          fs.seedFile(output, 64 * 1024);
+          // The clip is written where the app asked, on the disk of the launch that is running now.
+          core.fs.seedFile(output, 64 * 1024);
           finish();
         })().catch(error => finish(error as Error));
       }),
@@ -144,11 +177,11 @@ export function installNativeVideoEngine(boundary: NativeBoundary): NativeVideoE
     askToNotify: async () => true,
     compose: async (input: { clips: Array<{ path: string; caption?: string }>; outputPath: string; crossfadeSeconds: number }) => {
       engine.films.push(input);
-      fs.seedFile(input.outputPath, 256 * 1024);
+      core.fs.seedFile(input.outputPath, 256 * 1024);
       return { path: input.outputPath, durationSeconds: input.clips.length * 5 - (input.clips.length - 1) * input.crossfadeSeconds };
     },
     lastFrame: async (_videoPath: string, outputPath: string) => {
-      fs.seedFile(outputPath, 4096);
+      core.fs.seedFile(outputPath, 4096);
       return outputPath;
     },
   };
