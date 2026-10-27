@@ -40,11 +40,14 @@ class VideoRuntime {
   // backend can reload one step down and try once more.
   VideoRequest imageLoad;
   enum class ImagePlace { npu, gpu, cpu } imagePlace = ImagePlace::gpu;
+  // Whether the last loadContext placed the model on the CPU (by request, by rule or as its fallback).
+  bool lastLoadOnCpu = false;
   sample_method_t imageSampler = EULER_SAMPLE_METHOD;
   scheduler_t imageScheduler = SCHEDULER_COUNT;
   sd_ctx_t *loadContext(const VideoRequest &request, std::string &preferred, bool image = false) {
       sd_ctx_params_t config;
       sd_ctx_params_init(&config);
+      lastLoadOnCpu = false;
       if (request.imageFamily == "checkpoint") config.model_path = request.weight.c_str();
       else config.diffusion_model_path = request.weight.c_str();
       config.vae_path = request.vae.c_str();
@@ -69,6 +72,10 @@ class VideoRuntime {
       // latent, timestep and prompt, so sampling leaves the start noise intact.
       // Adreno Vulkan crashes in the same DiT graph. Wan diffusion runs on CPU.
       const bool wanCpu = adrenoWan || (wanVae && !gpuDevice);
+      // Adreno Vulkan also crashes in the SD/SDXL UNet graph (SIGSEGV in ggml_vk_build_graph,
+      // ggml-vulkan.cpp:12252; OnePlus SM8635, RealVisXL Lightning Q4, 2026-10-27), and a crash ends the
+      // process before any fallback can run. SD images on Adreno run on the CPU, as Wan diffusion does.
+      const bool imageCpu = image && gpuDescription.find("Adreno") != std::string::npos;
       // An SD/SDXL image UNet does not fit the HTP0 cap, so the scheduler splits it across HTP0 and
       // Vulkan0, and Hexagon cannot compute on a view Vulkan holds ("HTP0 cannot execute MUL: tensor
       // (view) uses Vulkan0 buffer"; OnePlus SM8635, RealVisXL Lightning Q4, 2026-10-27). No sd.cpp
@@ -109,11 +116,12 @@ class VideoRuntime {
 #endif
       config.n_threads = request.threads;
 #ifdef __ANDROID__
-      if (request.cpuOnly || wanCpu) {
+      if (request.cpuOnly || wanCpu || imageCpu) {
 #else
       if (request.cpuOnly) {
 #endif
         config.backend = "cpu"; config.params_backend = nullptr; config.auto_fit = true;
+        lastLoadOnCpu = true;
 #ifdef __ANDROID__
         preferred.clear();
 #endif
@@ -136,6 +144,7 @@ class VideoRuntime {
       }
       if (!loaded && !cancelled.load()) {
         config.backend = "cpu";
+        lastLoadOnCpu = true;
         loaded = new_sd_ctx(&config);
       }
 #else
@@ -179,7 +188,7 @@ public:
     if (cancelled.load()) { free_sd_ctx(loaded); throw std::runtime_error("Image loading stopped."); }
     imageContext = loaded; imagePath = path;
     imageLoad = request;
-    imagePlace = !preferred.empty() ? ImagePlace::npu : request.cpuOnly ? ImagePlace::cpu : ImagePlace::gpu;
+    imagePlace = !preferred.empty() ? ImagePlace::npu : lastLoadOnCpu ? ImagePlace::cpu : ImagePlace::gpu;
     imageSampler = sampler;
     imageScheduler = scheduler == SCHEDULER_COUNT ? sd_get_default_scheduler(loaded, sampler) : scheduler;
   }
@@ -245,7 +254,7 @@ public:
           free_sd_ctx(imageContext);
           imageContext = reloaded;
           imageLoad = retry;
-          imagePlace = retry.cpuOnly ? ImagePlace::cpu : ImagePlace::gpu;
+          imagePlace = lastLoadOnCpu ? ImagePlace::cpu : ImagePlace::gpu;
           made = generate_image(imageContext, &params, &images, &count) && images && count == 1;
         }
       }
