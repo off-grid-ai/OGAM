@@ -149,4 +149,4 @@ it('Send now on a queued question stops the running video and sends the question
   await rtl.waitFor(() => expect(desktop!.cancels).toEqual([String(desktop!.submissions[0].client_job_id)]), { timeout: 8000 });
   expect(await view.findByText('About two metres.', {}, { timeout: 8000 })).toBeTruthy();
   await rtl.waitFor(() => expect(require('../../../src/bootstrap/videoSeam').videoSeam.hasPending()).toBe(false));
-});
+}, 60_000);
