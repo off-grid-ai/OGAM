@@ -34,7 +34,8 @@ describe('Off Grid AI mark on image models', () => {
       const named = (node: any) => within(node).queryAllByText(/./).map((t: any) => String(t.props.children)).join(' ');
       const shown = [
         ...models.queryAllByTestId(/^image-model-card-\d+$/),
-        ...['fast', 'balanced', 'best'].map(slot => models.queryByTestId(`pick-${slot}`)).filter(Boolean),
+        ...['fast', 'balanced', 'best'].map(slot => models.queryByTestId(`pick-${slot}`))
+          .filter((node): node is NonNullable<typeof node> => node !== null),
       ];
       let ourCount = 0;
       for (const node of shown) {
