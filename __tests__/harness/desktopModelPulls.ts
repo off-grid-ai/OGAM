@@ -7,11 +7,13 @@
  * GET /v1/models/installed is { installed }; POST /v1/models/pull { id } answers 202 and starts one
  * download; GET /v1/models/pull/status?id= is the last progress { status, percent, totalBytes } or
  * { status: 'idle' }; POST /v1/models/activate { id, kind } succeeds for an installed model.
+ * POST /v1/stories/storyboard { sentence } is the storyboard Desktop writes with no text model loaded
+ * (desktop/pro/main/video/studio/gateway.ts): the shared template, marked `source: 'template'`.
  *
  * A download really runs: each status read moves it on, until it completes and its model is installed.
  * `hold()` keeps it where it is, so a test can see it in flight, and `release()` lets it go on.
  */
-import { CATALOG } from '@offgrid/models';
+import { CATALOG, templateStoryboard } from '@offgrid/models';
 import { DESKTOP_VIDEO_ENDPOINT, DESKTOP_VIDEO_MODEL } from './desktopVideoServer';
 
 interface Progress {
@@ -120,6 +122,10 @@ export function serveDesktopModelPulls(options: {
       if (!downloads.has(id) || downloads.get(id)!.status === 'failed')
         downloads.set(id, { status: 'queued', percent: downloads.get(id)?.percent ?? 0, totalBytes: sizeOf(id) });
       return json({ status: 'started', id, poll: `/v1/models/pull/status?id=${encodeURIComponent(id)}` }, 202);
+    }
+    if (route === 'POST /v1/stories/storyboard') {
+      const { sentence } = JSON.parse(String(init?.body ?? '{}')) as { sentence: string };
+      return json({ ...templateStoryboard(sentence.trim()), source: 'template' });
     }
     if (route === 'GET /v1/models/pull/status') {
       const progress = advance(url.searchParams.get('id') ?? '');

@@ -15,6 +15,9 @@
  * Desktop's gateway at `fetch` (its video jobs and its model manager). The clip is made the way a
  * person makes one: video mode in a chat, then Send.
  */
+// The real navigator: studio screens open from chat (the default setup mocks useNavigation to a no-op).
+jest.unmock('@react-navigation/native');
+
 import {
   launchApp,
   passOnboarding,
@@ -160,4 +163,31 @@ it('uses a start-picture build installed on the computer since the phone last lo
   await rtl.waitFor(() =>
     expect(view.getAllByTestId('video-continue')[0].props.accessibilityState?.disabled).toBe(false),
   );
+}, 60_000);
+
+it('the storyboard\'s muted Start from a photo opens the sheet, with the shot kept from its description', async () => {
+  const current = await clipInChat({ memoryGb: 34 });
+  const { view, rtl } = current;
+  rtl.fireEvent.press(await view.findByTestId('video-make-story'));
+  const photo = await view.findByTestId('shot-photo-0', {}, { timeout: 15_000 });
+  expect(photo.props.accessibilityState?.disabled).toBe(true);
+  expect(view.queryByTestId('start-picture-sheet')).toBeNull();
+  rtl.fireEvent.press(photo);
+  await view.findByText(
+    'Starting from a photo needs Wan 2.2 (5B), Light, a 7.9 GB download.',
+    {},
+    { timeout: 10_000 },
+  );
+  expect(view.getByText('Keep this shot from its description')).toBeTruthy();
+}, 60_000);
+
+it('the viewer\'s muted Continue opens the same sheet', async () => {
+  const current = await clipInChat({ memoryGb: 34 });
+  const { view, rtl } = current;
+  rtl.fireEvent.press(view.getByTestId('chat-clip-card'));
+  const continueAction = await view.findByTestId('viewer-continue', {}, { timeout: 10_000 });
+  expect(continueAction.props.accessibilityState?.disabled).toBe(true);
+  expect(view.queryByTestId('start-picture-sheet')).toBeNull();
+  rtl.fireEvent.press(continueAction);
+  await view.findByText('Continue needs Wan 2.2 (5B), Light, a 7.9 GB download.', {}, { timeout: 10_000 });
 }, 60_000);
