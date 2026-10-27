@@ -36,21 +36,11 @@ export interface OsDialog {
 }
 
 let current: StudioApp | undefined;
+/** PostHog endpoints of earlier launches in this test, put back last (they sit under the Desktop fakes). */
+let earlierEndpoints: Array<{ restore: () => void }> = [];
 
-/** Home with Pro and the paired computer's video model picked. */
-export async function launchStudioApp(
-  computer: Parameters<typeof serveDesktopModelPulls>[0] = { memoryGb: 34 },
-  options: { imageModel?: boolean } = {},
-): Promise<StudioApp> {
-  const app = await launchApp({
-    release: false,
-    beforeApp: options.imageModel ? placeImageModel : undefined,
-  });
-  const { view, rtl, boundary } = app;
-  const jobs = serveDesktopVideoJobs(boundary.fs!);
-  const models = serveDesktopModelPulls(computer);
-  const stories = serveDesktopStoryJobs(boundary.fs!);
-  // The OS dialog is a device surface: remember what it offers so the test can answer it like a person.
+/** The OS dialog is a device surface: remember what it offers so the test can answer it like a person. */
+function osDialog(rtl: AnalyticsApp['rtl']): Pick<StudioApp, 'dialog' | 'answer'> {
   let dialog: OsDialog | null = null;
   require('react-native').Alert.alert = (title: string, message?: string, buttons?: OsDialog['buttons']) => {
     dialog = { title, message, buttons: buttons ?? [{ text: 'OK' }] };
@@ -65,7 +55,23 @@ export async function launchStudioApp(
       choice.onPress?.();
     });
   };
-  current = { ...app, jobs, models, stories, dialog: () => dialog, answer };
+  return { dialog: () => dialog, answer };
+}
+
+/** Home with Pro and the paired computer's video model picked. */
+export async function launchStudioApp(
+  computer: Parameters<typeof serveDesktopModelPulls>[0] = { memoryGb: 34 },
+  options: { imageModel?: boolean } = {},
+): Promise<StudioApp> {
+  const app = await launchApp({
+    release: false,
+    beforeApp: options.imageModel ? placeImageModel : undefined,
+  });
+  const { view, rtl, boundary } = app;
+  const jobs = serveDesktopVideoJobs(boundary.fs!);
+  const models = serveDesktopModelPulls(computer);
+  const stories = serveDesktopStoryJobs(boundary.fs!);
+  current = { ...app, jobs, models, stories, ...osDialog(rtl) };
   await passOnboarding(app, false);
   await require('./proHarness').installPro();
   // What pairing leaves behind; the person picks the computer's video model on Home.
@@ -113,6 +119,23 @@ export async function makeClipInChat(app: StudioApp, prompt: string): Promise<vo
   await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
 }
 
+/**
+ * The app is closed and opened again: the phone's storage stays (its disk is a new one), and the
+ * paired computer keeps every job it was running. Opens on Home.
+ */
+export async function relaunchStudioApp(): Promise<StudioApp> {
+  const before = current!;
+  before.view.unmount();
+  earlierEndpoints.push(before.endpoint);
+  const app = await launchApp({ release: false, relaunch: true });
+  before.jobs.useDisk(app.boundary.fs!);
+  before.stories.useDisk(app.boundary.fs!);
+  await require('./proHarness').installPro();
+  current = { ...app, jobs: before.jobs, models: before.models, stories: before.stories, ...osDialog(app.rtl) };
+  await app.view.findByTestId('home-screen', {}, { timeout: 10_000 });
+  return current;
+}
+
 /** afterEach: unmount and put every boundary back. */
 export function closeStudioApp(): void {
   if (!current) return;
@@ -121,6 +144,8 @@ export function closeStudioApp(): void {
   current.stories.restore();
   current.models.restore();
   current.jobs.restore();
+  for (const endpoint of earlierEndpoints.reverse()) endpoint.restore();
+  earlierEndpoints = [];
   require('../../src/stores/remoteServerStore').useRemoteServerStore.getState().clearAllServers();
   current = undefined;
   restoreBuildFlavor();

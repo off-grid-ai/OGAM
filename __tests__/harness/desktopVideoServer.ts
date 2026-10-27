@@ -21,10 +21,15 @@ export interface DesktopVideoJobs {
   hold: () => void;
   release: () => void;
   restore: () => void;
+  /** After a relaunch: content downloads are served to the new launch's disk too. Jobs carry on. */
+  useDisk: (fs: NativeFileSystemBoundary) => void;
 }
 
-export function serveDesktopVideoJobs(fs: NativeFileSystemBoundary): DesktopVideoJobs {
+export function serveDesktopVideoJobs(disk: NativeFileSystemBoundary): DesktopVideoJobs {
   const original = globalThis.fetch;
+  // Every launch's disk: a launch the test closed still finishes what it was downloading, as a
+  // killed process would simply never ask; serving it keeps that stale launch from failing loudly.
+  const disks = [disk];
   const jobs = new Map<string, { body: Record<string, unknown>; polls: number; cancelled?: boolean }>();
   let activeVideo: string | null = null;
   let held = false;
@@ -39,6 +44,9 @@ export function serveDesktopVideoJobs(fs: NativeFileSystemBoundary): DesktopVide
     },
     restore: () => {
       globalThis.fetch = original;
+    },
+    useDisk: next => {
+      disks.push(next);
     },
   };
   const json = (body: unknown, status = 200) =>
@@ -71,7 +79,8 @@ export function serveDesktopVideoJobs(fs: NativeFileSystemBoundary): DesktopVide
       const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
       state.submissions.push(body);
       const id = String(body.client_job_id);
-      jobs.set(id, { body, polls: 0 });
+      // The same client_job_id recovers the job Desktop already has; it never starts a second clip.
+      if (!jobs.has(id)) jobs.set(id, { body, polls: 0 });
       return json({ request_id: id, object: 'request', kind: 'video', status: 'queued', poll_url: `/v1/videos/${id}` }, 202);
     }
     const cancel = url.pathname.match(/^\/v1\/videos\/([^/]+)\/cancel$/);
@@ -98,7 +107,7 @@ export function serveDesktopVideoJobs(fs: NativeFileSystemBoundary): DesktopVide
         return json({ ...base, status: 'running', stage: 'generating', progress: { step: 1, total: 4 } });
       }
       const contentUrl = `${DESKTOP_VIDEO_ENDPOINT}/v1/videos/${id}/content`;
-      fs.serveRemoteFile(contentUrl, { body: 'mp4-bytes' });
+      for (const fs of disks) fs.serveRemoteFile(contentUrl, { body: 'mp4-bytes' });
       // Desktop returns its job output without the local path (VideoGenerationOutputContract).
       const { prompt, negativePrompt, width, height, frames, fps, steps, guidance, seed } = job.body;
       return json({

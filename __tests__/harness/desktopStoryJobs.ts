@@ -33,10 +33,15 @@ export interface DesktopStoryJobs {
   release: () => void;
   failNext: (message: string) => void;
   restore: () => void;
+  /** After a relaunch: film downloads are served to the new launch's disk too. Films carry on. */
+  useDisk: (fs: NativeFileSystemBoundary) => void;
 }
 
-export function serveDesktopStoryJobs(fs: NativeFileSystemBoundary): DesktopStoryJobs {
+export function serveDesktopStoryJobs(disk: NativeFileSystemBoundary): DesktopStoryJobs {
   const inner = globalThis.fetch;
+  // Every launch's disk: a launch the test closed still finishes what it was downloading, as a
+  // killed process would simply never ask; serving it keeps that stale launch from failing loudly.
+  const disks = [disk];
   const films = new Map<string, Film>();
   let held = false;
   let failure: string | null = null;
@@ -54,6 +59,9 @@ export function serveDesktopStoryJobs(fs: NativeFileSystemBoundary): DesktopStor
     },
     restore: () => {
       globalThis.fetch = inner;
+    },
+    useDisk: next => {
+      disks.push(next);
     },
   };
   const json = (body: unknown, status = 200) =>
@@ -97,7 +105,7 @@ export function serveDesktopStoryJobs(fs: NativeFileSystemBoundary): DesktopStor
     if (!action && method === 'GET') {
       advance(film);
       const contentUrl = `/v1/stories/${film.story.id}/content`;
-      if (film.status === 'done') fs.serveRemoteFile(`${DESKTOP_VIDEO_ENDPOINT}${contentUrl}`, { body: 'film-mp4-bytes' });
+      if (film.status === 'done') for (const fs of disks) fs.serveRemoteFile(`${DESKTOP_VIDEO_ENDPOINT}${contentUrl}`, { body: 'film-mp4-bytes' });
       const running = film.status === 'queued' || film.status === 'rendering';
       return json({
         request_id: film.story.id,
