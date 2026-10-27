@@ -18,7 +18,7 @@ import { closeStudioApp, launchStudioApp, type StudioApp } from '../../harness/v
 const LIGHT = 'off-grid-ai/Wan2.2-TI2V-5B-GGUF-Q4';
 const PICTURE = 'a lighthouse on a cliff at dusk';
 
-afterEach(() => closeStudioApp());
+afterEach(() => closeStudioApp(), 90_000);
 
 /** A picture made in a chat by the image model on the phone, opened in its viewer. */
 async function pictureInViewer(): Promise<StudioApp> {

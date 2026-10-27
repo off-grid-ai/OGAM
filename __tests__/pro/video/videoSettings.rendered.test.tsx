@@ -12,7 +12,7 @@ jest.unmock('@react-navigation/native');
 
 import { closeStudioApp, launchStudioApp, type StudioApp } from '../../harness/videoStudioApp';
 
-afterEach(() => closeStudioApp());
+afterEach(() => closeStudioApp(), 90_000);
 
 const CLIP = 'a red fox trotting through fresh snow';
 

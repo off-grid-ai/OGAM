@@ -15,7 +15,7 @@ jest.unmock('@react-navigation/native');
 
 import { closeStudioApp, launchStudioApp, makeClipInChat, type StudioApp } from '../../harness/videoStudioApp';
 
-afterEach(() => closeStudioApp());
+afterEach(() => closeStudioApp(), 90_000);
 
 const LIGHT = 'off-grid-ai/Wan2.2-TI2V-5B-GGUF-Q4';
 

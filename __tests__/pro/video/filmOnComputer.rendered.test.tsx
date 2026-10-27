@@ -15,7 +15,7 @@ jest.unmock('@react-navigation/native');
 
 import { closeStudioApp, launchStudioApp, makeClipInChat, type StudioApp } from '../../harness/videoStudioApp';
 
-afterEach(() => closeStudioApp());
+afterEach(() => closeStudioApp(), 90_000);
 
 const SENTENCE = 'a red fox trotting through fresh snow';
 

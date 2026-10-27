@@ -35,6 +35,8 @@ export interface DesktopStoryJobs {
   restore: () => void;
   /** After a relaunch: film downloads are served to the new launch's disk too. Films carry on. */
   useDisk: (fs: NativeFileSystemBoundary) => void;
+  /** When the phone last asked this fake anything (ms since epoch), so a test can end once it is quiet. */
+  lastRequestAt: () => number;
 }
 
 export function serveDesktopStoryJobs(disk: NativeFileSystemBoundary): DesktopStoryJobs {
@@ -42,6 +44,7 @@ export function serveDesktopStoryJobs(disk: NativeFileSystemBoundary): DesktopSt
   // Every launch's disk: a launch the test closed still finishes what it was downloading, as a
   // killed process would simply never ask; serving it keeps that stale launch from failing loudly.
   const disks = [disk];
+  let lastRequest = 0;
   const films = new Map<string, Film>();
   let held = false;
   let failure: string | null = null;
@@ -63,6 +66,7 @@ export function serveDesktopStoryJobs(disk: NativeFileSystemBoundary): DesktopSt
     useDisk: next => {
       disks.push(next);
     },
+    lastRequestAt: () => lastRequest,
   };
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -89,6 +93,7 @@ export function serveDesktopStoryJobs(disk: NativeFileSystemBoundary): DesktopSt
     const href = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     const url = new URL(href);
     if (url.origin !== DESKTOP_VIDEO_ENDPOINT) return inner(input, init);
+    lastRequest = Date.now();
     const method = (init?.method ?? 'GET').toUpperCase();
     if (url.pathname === '/v1/stories' && method === 'POST') {
       const body = JSON.parse(String(init?.body ?? '{}')) as { story: Film['story'] };

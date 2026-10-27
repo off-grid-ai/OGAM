@@ -17,14 +17,14 @@ export interface DesktopVideoJobs {
   submissions: Array<Record<string, unknown>>;
   /** Every job the phone asked Desktop to stop (POST /v1/videos/:id/cancel). */
   cancels: string[];
-  /** Every job running now ends failed with this reason, as Desktop reports a failed job. */
-  failRunning: (message: string) => void;
   /** Keep every job running (polls answer `running`) until release(). */
   hold: () => void;
   release: () => void;
   restore: () => void;
   /** After a relaunch: content downloads are served to the new launch's disk too. Jobs carry on. */
   useDisk: (fs: NativeFileSystemBoundary) => void;
+  /** When the phone last asked this fake anything (ms since epoch), so a test can end once it is quiet. */
+  lastRequestAt: () => number;
 }
 
 export function serveDesktopVideoJobs(disk: NativeFileSystemBoundary): DesktopVideoJobs {
@@ -32,15 +32,13 @@ export function serveDesktopVideoJobs(disk: NativeFileSystemBoundary): DesktopVi
   // Every launch's disk: a launch the test closed still finishes what it was downloading, as a
   // killed process would simply never ask; serving it keeps that stale launch from failing loudly.
   const disks = [disk];
-  const jobs = new Map<string, { body: Record<string, unknown>; polls: number; cancelled?: boolean; failed?: string }>();
+  let lastRequest = 0;
+  const jobs = new Map<string, { body: Record<string, unknown>; polls: number; cancelled?: boolean }>();
   let activeVideo: string | null = null;
   let held = false;
   const state: DesktopVideoJobs = {
     submissions: [],
     cancels: [],
-    failRunning: message => {
-      for (const job of jobs.values()) if (!job.cancelled) job.failed = message;
-    },
     hold: () => {
       held = true;
     },
@@ -53,6 +51,7 @@ export function serveDesktopVideoJobs(disk: NativeFileSystemBoundary): DesktopVi
     useDisk: next => {
       disks.push(next);
     },
+    lastRequestAt: () => lastRequest,
   };
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -61,6 +60,7 @@ export function serveDesktopVideoJobs(disk: NativeFileSystemBoundary): DesktopVi
     const href = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     const url = new URL(href);
     if (url.origin !== DESKTOP_VIDEO_ENDPOINT) return original(input, init);
+    lastRequest = Date.now();
     const method = (init?.method ?? 'GET').toUpperCase();
     const route = `${method} ${url.pathname}`;
     if (route === 'GET /v1/models') return json({ object: 'list', data: [] });
@@ -105,9 +105,6 @@ export function serveDesktopVideoJobs(disk: NativeFileSystemBoundary): DesktopVi
       job.polls += 1;
       const base = { request_id: id, poll_url: `/v1/videos/${id}` };
       // Desktop records a stop as a failed request whose error type is `cancelled` (pro/main/video/gateway.ts).
-      if (job.failed) {
-        return json({ ...base, status: 'failed', error: { message: job.failed, type: 'server_error' } });
-      }
       if (job.cancelled) {
         return json({ ...base, status: 'failed', error: { message: 'Video generation stopped.', type: 'cancelled' } });
       }

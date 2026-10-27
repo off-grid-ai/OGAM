@@ -14,7 +14,7 @@ jest.unmock('@react-navigation/native');
 
 import { closeStudioApp, launchStudioApp, makeClipInChat, type StudioApp } from '../../harness/videoStudioApp';
 
-afterEach(() => closeStudioApp());
+afterEach(() => closeStudioApp(), 90_000);
 
 /** The photo the library hands back (jest.setup's picker answers file:///mock/image.jpg). */
 const LIBRARY_PHOTO = '/mock/image.jpg';

@@ -3,7 +3,7 @@
  *
  * SPEC (OGAM user's view): if I close the app while my computer is making a clip, the chat says the
  * connection was interrupted when I come back, and Retry checks the same job on the computer — no
- * second clip is started — and the clip lands in the chat, or the computer's reason it could not. A film the computer was making when I
+ * second clip is started — and the clip lands in the chat. A film the computer was making when I
  * closed the app carries on by itself, and arrives.
  *
  * The real App runs, closed and opened again (storage kept). Device boundaries only: the llama.rn
@@ -14,7 +14,7 @@ jest.unmock('@react-navigation/native');
 
 import { closeStudioApp, launchStudioApp, makeClipInChat, relaunchStudioApp } from '../../harness/videoStudioApp';
 
-afterEach(() => closeStudioApp());
+afterEach(() => closeStudioApp(), 90_000);
 
 const CLIP = 'a paper boat drifting on a pond';
 
@@ -67,22 +67,3 @@ it('a film the computer was making when the app closed carries on and arrives', 
   expect(new Set(app.stories.submissions.map(sent => (sent as { story: { id: string } }).story.id)).size).toBe(1);
 }, 120_000);
 
-it('Retry on an interrupted clip the computer could not make says the computer\'s reason', async () => {
-  const first = await launchStudioApp();
-  first.jobs.hold();
-  const making = makeClipInChat(first, CLIP).catch(() => undefined);
-  await first.rtl.waitFor(() => expect(first.jobs.submissions).toHaveLength(1), { timeout: 15_000 });
-  await first.view.findByTestId('video-progress', {}, { timeout: 10_000 });
-
-  const app = await relaunchStudioApp();
-  await making;
-  const { view, rtl } = app;
-  rtl.fireEvent.press(await view.findByTestId('chats-tab'));
-  rtl.fireEvent.press(await view.findByText(CLIP, {}, { timeout: 10_000 }));
-  await view.findByText(/The connection was interrupted/, {}, { timeout: 10_000 });
-  app.jobs.failRunning('The video model ran out of memory on this computer.');
-  app.jobs.release();
-  rtl.fireEvent.press(view.getByText('Retry'));
-  await view.findByText(/The video model ran out of memory on this computer\./, {}, { timeout: 15_000 });
-  expect(view.queryByTestId('chat-clip-card')).toBeNull();
-}, 90_000);

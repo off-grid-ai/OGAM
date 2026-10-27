@@ -136,14 +136,33 @@ export async function relaunchStudioApp(): Promise<StudioApp> {
   return current;
 }
 
-/** afterEach: unmount and put every boundary back. */
-export function closeStudioApp(): void {
+/** How long the paired computer must go unasked before a test may put its fakes away (polls run every 1-3 s). */
+const QUIET_MS = 4000;
+
+/**
+ * afterEach: let every clip and film still on its way settle, then unmount and put every boundary
+ * back. Held jobs are released first, so nothing a test left running polls a restored `fetch` (the
+ * real network) after it ends — including a launch the test closed with relaunchStudioApp.
+ */
+export async function closeStudioApp(): Promise<void> {
   if (!current) return;
-  current.view.unmount();
-  current.endpoint.restore();
-  current.stories.restore();
-  current.models.restore();
-  current.jobs.restore();
+  const app = current;
+  app.jobs.release();
+  app.stories.release();
+  app.models.release();
+  const { videoSeam } = require('../../src/bootstrap/videoSeam');
+  await app.rtl.waitFor(() => expect(videoSeam.hasPending() || videoSeam.isBusy()).toBe(false), { timeout: 30_000 });
+  await app.rtl.waitFor(
+    () => expect(Date.now() - Math.max(app.jobs.lastRequestAt(), app.stories.lastRequestAt())).toBeGreaterThan(QUIET_MS),
+    { timeout: 30_000, interval: 250 },
+  );
+  // What ending Pro does: stop every render and the charger watch, so no timer outlives the test.
+  require('../../pro/video/studio/filmRenderer').stopAllRenders();
+  app.view.unmount();
+  app.endpoint.restore();
+  app.stories.restore();
+  app.models.restore();
+  app.jobs.restore();
   for (const endpoint of earlierEndpoints.reverse()) endpoint.restore();
   earlierEndpoints = [];
   require('../../src/stores/remoteServerStore').useRemoteServerStore.getState().clearAllServers();

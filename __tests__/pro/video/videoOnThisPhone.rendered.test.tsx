@@ -23,6 +23,8 @@ const MODEL = { id: 'Comfy-Org/Wan_2.1_ComfyUI_repackaged', name: 'Wan 2.1 (1.3B
 let app: AnalyticsApp | undefined;
 
 afterEach(() => {
+  // What ending Pro does: stop every render and the charger watch, so no timer outlives the test.
+  if (app) require('../../../pro/video/studio/filmRenderer').stopAllRenders();
   app?.view.unmount();
   app?.endpoint.restore();
   app = undefined;
