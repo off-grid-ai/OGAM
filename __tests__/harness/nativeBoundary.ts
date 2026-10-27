@@ -419,6 +419,7 @@ function makeLlamaFake(
   modelInfo?: Record<string, unknown>,
   fs?: NativeFileSystemBoundary,
   vision = false,
+  audio = false,
 ): LlamaFake {
   const calls: LlamaFake['calls'] = {
     completion: [],
@@ -703,7 +704,25 @@ function makeLlamaFake(
       setTimeout(() => onRelease?.(), 50);
     }),
     tokenize: jest.fn().mockResolvedValue({ tokens: [1, 2, 3] }),
-    initMultimodal: jest.fn().mockResolvedValue(vision),
+    initMultimodal: jest.fn().mockResolvedValue(vision || audio),
+    // llama.rn renders the chat with the model's template; each media part becomes its marker and
+    // its path joins media_paths, in order.
+    getFormattedChat: jest.fn(async (messages: Array<{ role: string; content?: unknown }>) => {
+      const mediaPaths: string[] = [];
+      const turns = messages.map(message => {
+        const parts = Array.isArray(message.content) ? message.content : [{ type: 'text', text: message.content }];
+        const body = parts.map((part: { type: string; text?: string; input_audio?: { url?: string }; image_url?: { url?: string } }) => {
+          if (part.type === 'input_audio' || part.type === 'image_url') {
+            mediaPaths.push(String(part.input_audio?.url ?? part.image_url?.url ?? '').replace(/^file:\/\//, ''));
+            return '<__media__>';
+          }
+          return part.text ?? '';
+        }).join('');
+        return `<|im_start|>${message.role}\n${body}<|im_end|>\n`;
+      }).join('');
+      const prompt = `${turns}<|im_start|>assistant\n`;
+      return { type: 'jinja', prompt, has_media: mediaPaths.length > 0, media_paths: mediaPaths };
+    }),
     // The post-init multimodal probe. A scripted hold parks the caller here — the real device's
     // window between context init and capability detection — until releaseMultimodalHold().
     getMultimodalSupport: jest.fn(async () => {
@@ -715,7 +734,7 @@ function makeLlamaFake(
         });
         mmHoldEngaged = false;
       }
-      return { vision, audio: false };
+      return { vision, audio };
     }),
     // Embedding boundary (embedding-model contexts, initLlama({embedding:true})): return a device-shaped
     // 384-dim vector derived from the text so RAG cosine ranking is real. Matches all-MiniLM-L6-v2 (384).
@@ -1240,6 +1259,8 @@ export interface InstallOpts {
   llamaModelInfo?: Record<string, unknown>;
   /** The projector starts: initMultimodal resolves true and the context reports vision support. */
   llamaVision?: boolean;
+  /** An audio projector starts: initMultimodal resolves true and the context reports audio support. */
+  llamaAudio?: boolean;
   /** Seed a stateful background-download native module (boundary.download). */
   download?: boolean;
   /** Replace the global whisper.rn stub with a driveable STT context (boundary.whisper). */
@@ -1324,7 +1345,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
 
   // Scriptable llama.rn: override the global stub so completion output is under test control.
   const llamaFake = opts.llama
-    ? makeLlamaFake(freeModelMemory, opts.llamaChatTemplate, opts.llamaModelInfo, fsFake, opts.llamaVision)
+    ? makeLlamaFake(freeModelMemory, opts.llamaChatTemplate, opts.llamaModelInfo, fsFake, opts.llamaVision, opts.llamaAudio)
     : undefined;
   if (llamaFake) jest.doMock('llama.rn', () => llamaFake.module);
 
