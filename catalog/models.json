@@ -28,7 +28,182 @@
         ]
       },
       {
+        "id": "leejet/FLUX.2-klein-4B-GGUF",
+        "quantLabel": "Full quality",
+        "sourceModelId": "black-forest-labs/FLUX.2-klein-4B",
+        "name": "FLUX.2 klein 4B",
+        "kind": "image",
+        "tags": [
+          "2026",
+          "Fast",
+          "Image editing"
+        ],
+        "org": "Black Forest Labs",
+        "description": "The small FLUX from Black Forest Labs: 4 steps, sharp detail and text, edits with a reference image. Apache-2.0. The Qwen3 text encoder and VAE are included in the download.",
+        "minRamGb": 11,
+        "quant": "Q8_0",
+        "releaseDate": "2026-01-15",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "flux-2-klein-4b-Q8_0.gguf",
+            "url": "https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/3b1f5a9dc3abb32238b053aeb3d823c30afdacbd/flux-2-klein-4b-Q8_0.gguf",
+            "role": "primary",
+            "sizeBytes": 4300629440,
+            "sha256": "0bba6951258ec8f92d51114a8fa13e66828297bfff58a738f52729b3ef66fa28"
+          },
+          {
+            "name": "Qwen3-4B-Q4_K_M.gguf",
+            "url": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/22c9fc8a8c7700b76a1789366280a6a5a1ad1120/Qwen3-4B-Q4_K_M.gguf",
+            "role": "aux",
+            "sizeBytes": 2497281312,
+            "sha256": "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a"
+          },
+          {
+            "name": "flux2-vae.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/resolve/533c4cbc3d3b89af1743d9466c434e89810391c0/split_files/vae/flux2-vae.safetensors",
+            "role": "aux",
+            "sizeBytes": 336211292,
+            "sha256": "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3"
+          }
+        ]
+      },
+      {
+        "id": "leejet/FLUX.2-klein-4B-GGUF-Q4",
+        "quantOf": "leejet/FLUX.2-klein-4B-GGUF",
+        "quantLabel": "Light",
+        "sourceModelId": "black-forest-labs/FLUX.2-klein-4B",
+        "name": "FLUX.2 klein 4B (Light)",
+        "kind": "image",
+        "tags": [
+          "2026",
+          "Light",
+          "Fast",
+          "Image editing"
+        ],
+        "org": "Black Forest Labs",
+        "description": "The small FLUX from Black Forest Labs: 4 steps, sharp detail and text, edits with a reference image. Apache-2.0. The Qwen3 text encoder and VAE are included in the download.",
+        "minRamGb": 7,
+        "quant": "Q4_0",
+        "releaseDate": "2026-01-15",
+        "imageModes": [
+          "txt2img",
+          "img2img"
+        ],
+        "files": [
+          {
+            "name": "flux-2-klein-4b-Q4_0.gguf",
+            "url": "https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/3b1f5a9dc3abb32238b053aeb3d823c30afdacbd/flux-2-klein-4b-Q4_0.gguf",
+            "role": "primary",
+            "sizeBytes": 2460378560,
+            "sha256": "d1023499ef3f2f82ff7c50e6778495195c1b6cc34835741778868428111f9ff4"
+          },
+          {
+            "name": "Qwen3-4B-Q4_K_M.gguf",
+            "url": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/22c9fc8a8c7700b76a1789366280a6a5a1ad1120/Qwen3-4B-Q4_K_M.gguf",
+            "role": "aux",
+            "sizeBytes": 2497281312,
+            "sha256": "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a"
+          },
+          {
+            "name": "flux2-vae.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/Flux-2-Klein-4B/resolve/533c4cbc3d3b89af1743d9466c434e89810391c0/split_files/vae/flux2-vae.safetensors",
+            "role": "aux",
+            "sizeBytes": 336211292,
+            "sha256": "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3"
+          }
+        ]
+      },
+      {
+        "id": "leejet/Z-Image-Turbo-GGUF",
+        "quantLabel": "Full quality",
+        "sourceModelId": "Tongyi-MAI/Z-Image-Turbo",
+        "name": "Z-Image Turbo (2026)",
+        "kind": "image",
+        "tags": [
+          "Recommended",
+          "2026",
+          "Top quality"
+        ],
+        "org": "Alibaba Tongyi",
+        "description": "1024px in 8 steps, strong bilingual text. Apache-2.0. The Qwen3 text encoder and VAE are included in the download.",
+        "minRamGb": 15,
+        "quant": "Q4_K",
+        "imageModes": [
+          "txt2img"
+        ],
+        "files": [
+          {
+            "name": "z_image_turbo-Q4_K.gguf",
+            "url": "https://huggingface.co/leejet/Z-Image-Turbo-GGUF/resolve/c61c0e422dc8b541b7548cf33a4ef8302b0f8085/z_image_turbo-Q4_K.gguf",
+            "role": "primary",
+            "sizeBytes": 3864250304,
+            "sha256": "14b375ab4f226bc5378f68f37e899ef3c2242b8541e61e2bc1aff40976086fbd"
+          },
+          {
+            "name": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+            "url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+            "role": "aux",
+            "sizeBytes": 2497281120,
+            "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597"
+          },
+          {
+            "name": "ae.safetensors",
+            "url": "https://huggingface.co/second-state/FLUX.1-schnell-GGUF/resolve/8c45a2ba25e2d02bd34230989fb54983f39e44ec/ae.safetensors",
+            "role": "aux",
+            "sizeBytes": 335304388,
+            "sha256": "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38"
+          }
+        ]
+      },
+      {
+        "id": "leejet/Z-Image-Turbo-GGUF-Q3",
+        "quantOf": "leejet/Z-Image-Turbo-GGUF",
+        "quantLabel": "Light",
+        "sourceModelId": "Tongyi-MAI/Z-Image-Turbo",
+        "name": "Z-Image Turbo (Light)",
+        "kind": "image",
+        "tags": [
+          "2026",
+          "Light"
+        ],
+        "org": "Alibaba Tongyi",
+        "description": "1024px in 8 steps, strong bilingual text. Apache-2.0. The Qwen3 text encoder and VAE are included in the download.",
+        "minRamGb": 11,
+        "quant": "Q3_K",
+        "imageModes": [
+          "txt2img"
+        ],
+        "files": [
+          {
+            "name": "z_image_turbo-Q3_K.gguf",
+            "url": "https://huggingface.co/leejet/Z-Image-Turbo-GGUF/resolve/c61c0e422dc8b541b7548cf33a4ef8302b0f8085/z_image_turbo-Q3_K.gguf",
+            "role": "primary",
+            "sizeBytes": 3143559104,
+            "sha256": "4b44bdaa7814f20d7cf144e3939bd93aa32f50660204dd0c2aea5c5376232980"
+          },
+          {
+            "name": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+            "url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+            "role": "aux",
+            "sizeBytes": 2497281120,
+            "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597"
+          },
+          {
+            "name": "ae.safetensors",
+            "url": "https://huggingface.co/second-state/FLUX.1-schnell-GGUF/resolve/8c45a2ba25e2d02bd34230989fb54983f39e44ec/ae.safetensors",
+            "role": "aux",
+            "sizeBytes": 335304388,
+            "sha256": "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38"
+          }
+        ]
+      },
+      {
         "id": "mzwing/SDXL-Lightning-GGUF",
+        "supersededBy": "leejet/FLUX.2-klein-4B-GGUF",
         "name": "SDXL Lightning (4-step)",
         "kind": "image",
         "tags": [
@@ -53,6 +228,7 @@
       },
       {
         "id": "OlegSkutte/sdxl-turbo-GGUF",
+        "supersededBy": "leejet/FLUX.2-klein-4B-GGUF",
         "name": "SDXL Turbo (fast drafts)",
         "kind": "image",
         "tags": [
@@ -400,61 +576,6 @@
           {
             "name": "illustrious-xl-v2.0-Q4_K.gguf",
             "url": "https://huggingface.co/off-grid-ai/illustrious-xl-v2.0-GGUF/resolve/main/illustrious-xl-v2.0-Q4_K.gguf",
-            "role": "primary",
-            "sizeBytes": 2797752960
-          }
-        ]
-      },
-      {
-        "id": "offgrid-ai/pony-diffusion-v6-xl-GGUF",
-        "quantLabel": "Full quality",
-        "name": "Pony Diffusion V6 XL (stylized)",
-        "kind": "image",
-        "tags": [
-          "High quality",
-          "Stylized"
-        ],
-        "org": "PurpleSmartAI",
-        "description": "Dominant SDXL for stylized characters & illustration; highly promptable. Off Grid GGUF build of Pony Diffusion V6 XL.",
-        "minRamGb": 8,
-        "quant": "Q8_0",
-        "releaseDate": "2024-05-25",
-        "imageModes": [
-          "txt2img",
-          "img2img"
-        ],
-        "files": [
-          {
-            "name": "pony-diffusion-v6-xl-Q8_0.gguf",
-            "url": "https://huggingface.co/off-grid-ai/pony-diffusion-v6-xl-GGUF/resolve/main/pony-diffusion-v6-xl-Q8_0.gguf",
-            "role": "primary",
-            "sizeBytes": 4180186816
-          }
-        ]
-      },
-      {
-        "id": "offgrid-ai/pony-diffusion-v6-xl-GGUF-Q4",
-        "quantOf": "offgrid-ai/pony-diffusion-v6-xl-GGUF",
-        "quantLabel": "Light",
-        "name": "Pony Diffusion V6 XL (Light)",
-        "kind": "image",
-        "tags": [
-          "Stylized",
-          "Light"
-        ],
-        "org": "PurpleSmartAI",
-        "description": "Dominant SDXL for stylized characters & illustration. Q4 quant: ~35% less memory, small quality trade-off. Runs on a 16GB Mac. Off Grid GGUF build of Pony Diffusion V6 XL.",
-        "minRamGb": 8,
-        "quant": "Q4_K",
-        "releaseDate": "2024-05-25",
-        "imageModes": [
-          "txt2img",
-          "img2img"
-        ],
-        "files": [
-          {
-            "name": "pony-diffusion-v6-xl-Q4_K.gguf",
-            "url": "https://huggingface.co/off-grid-ai/pony-diffusion-v6-xl-GGUF/resolve/main/pony-diffusion-v6-xl-Q4_K.gguf",
             "role": "primary",
             "sizeBytes": 2797752960
           }
