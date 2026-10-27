@@ -1,8 +1,6 @@
 import { videoSeam } from '../../bootstrap/videoSeam';
 /* eslint-disable max-lines -- cohesive generation-action orchestrator (send/regenerate/dispatch/route share the same GenerationDeps + session state); splitting it would scatter tightly-coupled turn logic. */
 import { Dispatch, SetStateAction } from 'react';
-import RNFS from 'react-native-fs';
-import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
 import { AlertState, showAlert, hideAlert } from '../../components';
 import { generationSession } from '../../services/generationSession';
 import { APP_CONFIG } from '../../constants';
@@ -1229,9 +1227,6 @@ export async function executeDeleteConversationFn(
   }
   // Files first; a record goes only once its file is gone (shared with the chats list).
   const notDeleted = await deleteChatImages(deps.activeConversationId);
-  const videos = useAppStore.getState().generatedVideos.filter(video => video.conversationId === deps.activeConversationId);
-  useAppStore.getState().removeVideosByConversationId(deps.activeConversationId);
-  for (const video of videos) await RNFS.unlink(resolveDocumentPath(video.videoPath)).catch(() => {});
   contextCompactionService.clearSummary(deps.activeConversationId);
   deps.deleteConversation(deps.activeConversationId);
   deps.setActiveConversation(null);
