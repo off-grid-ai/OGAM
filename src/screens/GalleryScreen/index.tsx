@@ -146,10 +146,14 @@ export const GalleryScreen: React.FC = () => {
             </TouchableOpacity>
             <Text style={styles.title}>{screenTitle}</Text>
             <Text style={styles.countBadge}>{kind === 'images' ? displayImages.length : displayVideos.length}</Text>
-            {displayImages.length > 0 && (
+            {/* Select mode picks images only, so it is offered on the Images tab alone. */}
+            {kind === 'images' && displayImages.length > 0 && (
               <TouchableOpacity
                 style={styles.headerButton}
                 onPress={toggleSelectMode}
+                accessibilityRole="button"
+                accessibilityLabel="Select images"
+                testID="gallery-select"
               >
                 <Icon name="check-square" size={20} color={colors.text} />
               </TouchableOpacity>
@@ -159,7 +163,12 @@ export const GalleryScreen: React.FC = () => {
       </View>
 
       <View style={styles.mediaTabs}>
-        {(['images', 'videos'] as const).map(tab => <TouchableOpacity key={tab} onPress={() => (tab === 'videos' && hasVideoLibrary ? navigation.navigate('VideoLibrary' as never) : setKind(tab))} accessibilityRole="button"
+        {(['images', 'videos'] as const).map(tab => <TouchableOpacity key={tab} onPress={() => {
+          // Leaving Images ends image select mode: the Videos list cannot show what is selected.
+          if (tab === 'videos' && isSelectMode) toggleSelectMode();
+          if (tab === 'videos' && hasVideoLibrary) navigation.navigate('VideoLibrary' as never);
+          else setKind(tab);
+        }} accessibilityRole="button"
           style={[styles.mediaTab, kind === tab && styles.mediaTabActive]}>
           <Text style={kind === tab ? styles.mediaTabTextActive : styles.mediaTabText}>{tab === 'images' ? `Images (${displayImages.length})` : `Videos (${displayVideos.length})`}</Text>
         </TouchableOpacity>)}
