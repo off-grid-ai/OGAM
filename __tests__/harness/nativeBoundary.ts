@@ -1205,6 +1205,8 @@ export interface RamProfile {
   totalBytes: number;
   /** Truly-free RAM right now, in bytes (os_proc_available). */
   availBytes: number;
+  /** iOS only: pages the whole phone can still hand out (free + inactive + purgeable). Unset: not reported. */
+  systemAvailBytes?: number;
 }
 
 export const GB = 1024 * 1024 * 1024;
@@ -1298,7 +1300,8 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
   // context FREES memory (footprint drops, available rises), so the post-unload reclaim barrier
   // (memoryBudget.awaitMemoryReclaim) observes the drop and resolves — instead of timing out on a
   // frozen snapshot. A released llama context frees roughly a heavy model's worth (~3GB).
-  const memState = {
+  const memState: { availBytes: number; footprintBytes: number; systemAvailBytes?: number } = {
+    systemAvailBytes: ram.systemAvailBytes,
     availBytes: ram.availBytes,
     footprintBytes: ram.totalBytes - ram.availBytes,
   };
@@ -1306,6 +1309,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     const freed = Math.min(memState.footprintBytes, 3 * GB);
     memState.footprintBytes -= freed;
     memState.availBytes += freed;
+    if (memState.systemAvailBytes !== undefined) memState.systemAvailBytes += freed;
   };
 
   const litert = makeLiteRTFake(handle);
@@ -1359,6 +1363,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
     // must be able to SEE the footprint drop, exactly as it does on device.
     getMemoryInfo: jest.fn(async () => ({
       processAvailableBytes: memState.availBytes,
+      ...(memState.systemAvailBytes === undefined ? {} : { systemAvailableBytes: memState.systemAvailBytes }),
       footprintBytes: memState.footprintBytes,
     })),
   };
@@ -1428,6 +1433,7 @@ export function installNativeBoundary(opts: InstallOpts = {}): NativeBoundary {
 
   const setRam = (profile: RamProfile) => {
     memState.availBytes = profile.availBytes;
+    memState.systemAvailBytes = profile.systemAvailBytes;
     memState.footprintBytes = profile.totalBytes - profile.availBytes;
     (DeviceInfo.getTotalMemory as jest.Mock).mockResolvedValue(
       profile.totalBytes,

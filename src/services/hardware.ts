@@ -92,7 +92,12 @@ class HardwareService {
       const info = await mod.getMemoryInfo();
       logger.log(`[WIRE-RAM] ${JSON.stringify({ platform: Platform.OS, info })}`); // [WIRE] raw DeviceMemoryModule shape from-device
       const bytes = Number(info?.processAvailableBytes);
-      return Number.isFinite(bytes) && bytes > 0 ? bytes : null;
+      if (!Number.isFinite(bytes) || bytes <= 0) return null;
+      // iOS also reports what the whole phone can still hand out. The app's own headroom can be
+      // large while the phone is short of pages, and then the OS kills the app: never fit past
+      // the smaller of the two.
+      const system = Number(info?.systemAvailableBytes);
+      return Number.isFinite(system) && system > 0 ? Math.min(bytes, system) : bytes;
     } catch {
       return null;
     }
