@@ -24,6 +24,7 @@ import type {
   OpenAIStreamState,
 } from './openAICompatibleTypes';
 import { remoteAuthorizationHeaders } from '../remoteTransportPolicy';
+import { isMiniMaxEndpoint, MINIMAX_DEFAULT_MODEL } from './minimax';
 
 export type { OpenAIChatMessage, OpenAIConfig } from './openAICompatibleTypes';
 
@@ -97,6 +98,9 @@ export class OpenAICompatibleProvider implements LLMProvider {
       model: this.config.modelId,
       messages: openaiMessages,
       stream: true,
+      ...(isMiniMaxEndpoint(this.config.endpoint) && this.config.modelId === 'MiniMax-M3'
+        ? { thinking: { type: thinkingEnabled ? 'adaptive' : 'disabled' } }
+        : {}),
       ...(options.temperature !== undefined && { temperature: options.temperature }),
       // max_tokens intentionally omitted — the remote server owns output limits.
       // A client-side cap (default 1024) silently truncates reasoning models that
@@ -141,6 +145,9 @@ export class OpenAICompatibleProvider implements LLMProvider {
     try {
       const openaiMessages = await this.buildOpenAIMessages(messages, options);
       const thinkingEnabled =
+        (isMiniMaxEndpoint(this.config.endpoint) && this.config.modelId === MINIMAX_DEFAULT_MODEL) ||
+        (new URL(this.config.endpoint).hostname === 'openrouter.ai' &&
+          this.config.modelId === 'minimax/minimax-m3.1-flash:free') ||
         this.modelCapabilities.thinkingLevelsOnly ||
         options.enableThinking !== false;
 

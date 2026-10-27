@@ -30,6 +30,12 @@ import {
 } from '../services/remoteTransportPolicy';
 import { readOffGridDesktopModelState } from '../services/offGridDesktopModels';
 import { displayModelName } from '../utils/displayModelName';
+import {
+  currentMiniMaxTextModels,
+  isMiniMaxEndpoint,
+  MINIMAX_MODELS,
+  MINIMAX_OPENROUTER_MODELS,
+} from '../services/providers/minimax';
 
 /** Timeout for model discovery fetches (non-critical, background operation) */
 const DISCOVERY_FETCH_TIMEOUT_MS = 5000;
@@ -145,6 +151,7 @@ async function fetchGatewayModelCatalog(
         result[category] = options;
       }
     }
+    if (result.text) result.text = currentMiniMaxTextModels(url, result.text);
     return result;
   } catch {
     return {};
@@ -394,9 +401,9 @@ export async function fetchModelsFromServer(
 
       // OpenAI format: { object: "list", data: [{ id, object, owned_by, ... }] }
       if ((data?.object === 'list' || isOpenRouter) && Array.isArray(data.data)) {
-        const generativeModels = data.data.filter(
+        const generativeModels = currentMiniMaxTextModels(url, data.data.filter(
           (model: { id: string; kind?: unknown }) => isTextModel(model),
-        );
+        ));
         const modelInfos = await Promise.all(
           generativeModels.map((model: {
             id: string;
@@ -410,10 +417,20 @@ export async function fetchModelsFromServer(
                   contextLength: model.context_length ?? 4096,
                   supportsVision: model.architecture?.input_modalities?.includes('image') === true,
                   supportsToolCalling: model.supported_parameters?.includes('tools') === true,
-                  supportsThinking: !!model.reasoning,
-                  thinkingLevelsOnly: model.reasoning?.mandatory === true,
+                  supportsThinking: !!model.reasoning || MINIMAX_OPENROUTER_MODELS.some(id => id === model.id),
+                  thinkingLevelsOnly: model.id === MINIMAX_OPENROUTER_MODELS[0] || model.reasoning?.mandatory === true,
+                  acceptsThinkingKwarg: MINIMAX_OPENROUTER_MODELS.some(id => id === model.id) ? false : undefined,
                 }
-              : fetchModelCapabilities(probeBase, model.id, nameDetect, server.apiKey),
+              : isMiniMaxEndpoint(url) && MINIMAX_MODELS.some(preset => preset.id === model.id)
+                ? {
+                    contextLength: 1_000_000,
+                    supportsVision: true,
+                    supportsToolCalling: true,
+                    supportsThinking: true,
+                    thinkingLevelsOnly: model.id === 'MiniMax-M3.1-Flash',
+                    acceptsThinkingKwarg: false,
+                  }
+                : fetchModelCapabilities(probeBase, model.id, nameDetect, server.apiKey),
           ),
         );
         return generativeModels.map(
