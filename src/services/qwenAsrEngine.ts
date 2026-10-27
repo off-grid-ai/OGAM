@@ -25,7 +25,7 @@ const QWEN_ASR_LANGUAGES: Readonly<Record<string, string>> = {
 };
 
 /** The transcript in a Qwen3-ASR reply: the text after `<asr_text>`, without special tokens. */
-export function parseQwenAsrText(raw: string): string {
+function parseQwenAsrText(raw: string): string {
   const at = raw.lastIndexOf(ASR_TEXT);
   const body = at >= 0 ? raw.slice(at + ASR_TEXT.length) : raw.replace(/^\s*language\s+\S+\s*/i, '');
   return body.replace(/<\|[^|>]*\|>/g, '').replace(/<\/?asr_text>/g, '').trim();

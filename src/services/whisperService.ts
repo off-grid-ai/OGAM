@@ -35,8 +35,8 @@ interface TranscriptionResult {
 type TranscriptionCallback = (result: TranscriptionResult) => void;
 
 /** What the person reads when Qwen3-ASR could not transcribe a recording. */
-export const ASR_FELL_BACK_NOTICE = "Qwen3-ASR couldn't transcribe that, so Whisper did.";
-export const ASR_FAILED_NOTICE = "Qwen3-ASR couldn't transcribe that. Try again, or download a Whisper model.";
+const ASR_FELL_BACK_NOTICE = "Qwen3-ASR couldn't transcribe that, so Whisper did.";
+const ASR_FAILED_NOTICE = "Qwen3-ASR couldn't transcribe that. Try again, or download a Whisper model.";
 
 /** A recording transcribed by Qwen3-ASR, or by Whisper after Qwen3-ASR failed. */
 interface AsrOutcome {

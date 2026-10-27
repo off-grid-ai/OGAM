@@ -19,7 +19,7 @@ import { loadsOnPhone } from './devicePicks';
 /** The phone-sized Qwen3-ASR build. The 1.7B build is Desktop's. */
 export const QWEN_ASR_MODEL_ID = 'ggml-org/Qwen3-ASR-0.6B-GGUF';
 
-export interface QwenAsrFile {
+interface QwenAsrFile {
   name: string;
   url: string;
   sizeBytes: number;

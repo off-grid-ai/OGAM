@@ -20,7 +20,7 @@ import { HTP_ENABLED } from '../config/featureFlags';
 import { sdCppRunsOnCpu } from './sdCppPlacement';
 
 /** sd.cpp image memory per byte of pack file, measured on device (see estimateImageModelRam). */
-export const SD_CPP_RAM_MULTIPLIER = 1.3;
+const SD_CPP_RAM_MULTIPLIER = 1.3;
 
 /**
  * QNN variant tiers — mirrors local-dream's chipsetModelSuffixes map exactly.
