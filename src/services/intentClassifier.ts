@@ -52,6 +52,11 @@ const IMAGE_PATTERNS = [
   /\b(4k|8k|hd|high resolution|ultra detailed)\b.*\b(image|picture|art|render)\b/i,
   /\b(photorealistic|hyperrealistic)\b.*\b(image|render|of)\b/i,
 
+  // Prompt-style descriptions: a scene followed by a trailing medium/style tag, the way
+  // people write an image prompt ("a red fox in fresh snow at dawn, photo"). A comma
+  // right before a medium word at the END of the message is a style tag, not prose.
+  /\S+\s+\S+.*,\s*(?:a\s+)?(?:photo|photograph|photography|photorealistic|illustration|painting|digital art|3d render|cinematic|watercolor|oil painting|concept art|anime|4k|8k)\s*$/i,
+
   // SD/AI tools - strong signals
   /\bstable diffusion\b/i,
   /\bdall-?e\b/i,
