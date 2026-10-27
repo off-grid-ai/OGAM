@@ -28,17 +28,23 @@ describe('Off Grid AI mark on image models', () => {
       await waitFor(() => expect(models.getAllByText(/SDXL Lightning/).length).toBeGreaterThan(0), { timeout: 4000 });
 
       // In the list: an Off Grid AI build carries the mark; SDXL Turbo (OlegSkutte) does not.
-      const cardOf = (name: RegExp) =>
-        models.queryAllByTestId(/^image-model-card-\d+$/).find((node: any) => within(node).queryAllByText(name).length > 0);
+      const cardOf = (name: RegExp) => {
+        const card = models.queryAllByTestId(/^image-model-card-\d+$/).find((node: any) => within(node).queryAllByText(name).length > 0);
+        if (!card) throw new Error(`No image card named ${name}`);
+        return card;
+      };
       const ours = cardOf(/^RealVisXL v5\.0 \(photoreal\)/);
       const theirs = cardOf(/^SDXL Turbo/);
       expect(within(ours).getByTestId('made-by-off-grid')).toBeTruthy();
       expect(within(theirs).queryByTestId('made-by-off-grid')).toBeNull();
 
       // In the picks for this phone: the same rule per pick card.
-      const pickOf = (name: RegExp) =>
-        ['fast', 'balanced', 'best'].map(slot => models.queryByTestId(`pick-${slot}`))
+      const pickOf = (name: RegExp) => {
+        const pick = ['fast', 'balanced', 'best'].map(slot => models.queryByTestId(`pick-${slot}`))
           .find((node: any) => node && within(node).queryAllByText(name).length > 0);
+        if (!pick) throw new Error(`No pick named ${name}`);
+        return pick;
+      };
       expect(within(pickOf(/Juggernaut/)).getByTestId('made-by-off-grid')).toBeTruthy();
       expect(within(pickOf(/SDXL Lightning/)).queryByTestId('made-by-off-grid')).toBeNull();
     } finally {
