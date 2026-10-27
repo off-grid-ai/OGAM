@@ -25,16 +25,16 @@ describe('Off Grid AI mark on image models', () => {
 
       const models = render(React.createElement(ModelsScreen));
       fireEvent.press(models.getByText('Image'));
-      await waitFor(() => expect(models.getAllByText(/SDXL Lightning/).length).toBeGreaterThan(0), { timeout: 4000 });
+      await waitFor(() => expect(models.getAllByText(/FLUX\.2 klein 4B/).length).toBeGreaterThan(0), { timeout: 4000 });
 
-      // In the list: an Off Grid AI build carries the mark; SDXL Turbo (OlegSkutte) does not.
+      // In the list: an Off Grid AI build carries the mark; FLUX.2 klein (leejet's build) does not.
       const cardOf = (name: RegExp) => {
         const card = models.queryAllByTestId(/^image-model-card-\d+$/).find((node: any) => within(node).queryAllByText(name).length > 0);
         if (!card) throw new Error(`No image card named ${name}`);
         return card;
       };
       const ours = cardOf(/^RealVisXL v5\.0 \(photoreal\)/);
-      const theirs = cardOf(/^SDXL Turbo/);
+      const theirs = cardOf(/^FLUX\.2 klein 4B \(Light\)/);
       expect(within(ours).getByTestId('made-by-off-grid')).toBeTruthy();
       expect(within(theirs).queryByTestId('made-by-off-grid')).toBeNull();
 
@@ -46,7 +46,7 @@ describe('Off Grid AI mark on image models', () => {
         return pick;
       };
       expect(within(pickOf(/Juggernaut/)).getByTestId('made-by-off-grid')).toBeTruthy();
-      expect(within(pickOf(/SDXL Lightning/)).queryByTestId('made-by-off-grid')).toBeNull();
+      expect(within(pickOf(/Z-Image Turbo/)).queryByTestId('made-by-off-grid')).toBeNull();
     } finally {
       globalThis.fetch = originalFetch;
     }
