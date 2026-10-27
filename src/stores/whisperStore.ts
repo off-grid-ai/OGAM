@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { whisperService, WHISPER_MODELS } from '../services/whisperService';
-import { withRemoteCatalog } from './modelCatalogStore';
+import { whisperService } from '../services/whisperService';
+import { transcriptionResidentSizeMB } from '../services/whisperModels';
 import { modelResidencyManager } from '../services/modelResidency';
 import logger from '../utils/logger';
 import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
@@ -151,7 +151,7 @@ export const useWhisperStore = create<WhisperState>()(
 
         try {
           const modelPath = whisperService.getModelPath(downloadedModelId);
-          const sizeMB = withRemoteCatalog('transcription', WHISPER_MODELS).find(m => m.id === downloadedModelId)?.size ?? 200;
+          const sizeMB = transcriptionResidentSizeMB(downloadedModelId);
           // Load through the residency manager's global lock so STT never loads
           // alongside another model. Make room for it first (evict to budget),
           // then register so future loads can evict it.
