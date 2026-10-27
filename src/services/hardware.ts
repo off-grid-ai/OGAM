@@ -17,6 +17,10 @@ import {
 import { MODEL_RECOMMENDATIONS, RECOMMENDED_MODELS } from '../constants';
 import { withRemoteCatalog } from '../stores/modelCatalogStore';
 import { HTP_ENABLED } from '../config/featureFlags';
+
+/** sd.cpp image memory per byte of pack file, measured on device (see estimateImageModelRam). */
+export const SD_CPP_RAM_MULTIPLIER = 1.3;
+
 /**
  * QNN variant tiers — mirrors local-dream's chipsetModelSuffixes map exactly.
  * Source: https://github.com/xororz/local-dream — Model.kt getChipsetSuffix()
@@ -303,7 +307,11 @@ class HardwareService {
    * OOMs). Android (ONNX/QNN reserves accelerator memory up front) keeps 2.5×.
    */
   estimateImageModelRam(model: { fileSize?: number; size?: number; mmProjFileSize?: number; backend?: string }): number {
-    const multiplier = model.backend !== 'sd' && Platform.OS === 'ios' && !this.preferGpuForImageGen() ? 1.8 : 2.5;
+    // sd.cpp packs carry their text encoders and VAE in the file and stream compute in segments:
+    // RealVisXL Lightning Q4 (2.67 GB) peaked at 3.33 GB app memory on a OnePlus (SM8635, 2026-10-27),
+    // 1.25x its file. 1.3x keeps that measurement with a little headroom; 2.5x refused it at 6.7 GB.
+    if (model.backend === 'sd') return this.estimateModelRam(model, SD_CPP_RAM_MULTIPLIER);
+    const multiplier = Platform.OS === 'ios' && !this.preferGpuForImageGen() ? 1.8 : 2.5;
     return this.estimateModelRam(model, multiplier);
   }
   formatModelRam(model: { fileSize?: number; size?: number; mmProjFileSize?: number }, multiplier = 1.5): string {

@@ -15,6 +15,8 @@ import {
   sdImagePackFor,
 } from '@offgrid/models';
 import RNFS from 'react-native-fs';
+import { hardwareService } from './hardware';
+import { computeBudgetMB } from './modelResidency/budget';
 import type { ImageModelDescriptor } from './imageModelDownloadTypes';
 import { useModelCatalogStore, withRemoteCatalog } from '../stores/modelCatalogStore';
 
@@ -209,7 +211,11 @@ export function getOfferedSDImageModels(): HFImageModel[] {
  * The one list the Image tab's recommendations and Auto Setup both read.
  */
 export function getRecommendedSDImageModels(ramGB: number): HFImageModel[] {
-  return getOfferedSDImageModels().filter(model => !model.minRamGb || model.minRamGb <= ramGB);
+  // The same estimate and budget the load guard uses, so a recommended model is not then refused.
+  const budgetBytes = computeBudgetMB(ramGB * 1024) * 1024 * 1024;
+  return getOfferedSDImageModels().filter(model =>
+    (!model.minRamGb || model.minRamGb <= ramGB) &&
+    hardwareService.estimateImageModelRam({ size: model.size, backend: 'sd' }) <= budgetBytes);
 }
 
 /** Filename candidates only. New checkpoint candidates must pass tensor validation. */
