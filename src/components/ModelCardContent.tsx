@@ -13,7 +13,7 @@ import { triggerHaptic } from '../utils/haptics';
 const OFF_GRID_LOGO = require('../assets/logo.png');
 
 /** The app's own mark beside a model Off Grid AI made: small, no words on the row. */
-const MadeByOffGrid: React.FC = () => (
+export const MadeByOffGrid: React.FC = () => (
   <Image
     source={OFF_GRID_LOGO}
     style={markStyles.mark}

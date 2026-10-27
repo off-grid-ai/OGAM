@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-nativ
 import { LoadingDots } from '../../components/LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
+import { determineCredibility } from '@offgrid/models';
 import { ModelCard } from '../../components';
 import { useTheme, useThemedStyles } from '../../theme';
 import { HFImageModel, getVariantLabel } from '../../services/huggingFaceModelBrowser';
@@ -77,6 +78,9 @@ export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
   const isDownloaded = useAppStore(s => s.downloadedImageModels.some(d => d.id === model.id));
   const isActiveModel = useAppStore(s => s.activeImageModelId === model.id);
   const authorLabel = model._coreml ? 'Core ML' : imageBackendLabel(model.backend);
+  // Who publishes the files (the repo's owner), as on the Text and Video tabs: Off Grid AI's
+  // own builds carry its mark.
+  const source = determineCredibility((model.repo ?? '').split('/')[0] ?? '');
   const variantSuffix = model.variant ? ` \u00B7 ${getVariantLabel(model.variant)}` : '';
   return (
     <View>
@@ -88,6 +92,11 @@ export const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
           name: model.displayName,
           author: authorLabel,
           description: `${formatBytes(model.size)}${variantSuffix}`,
+          credibility: {
+            source,
+            isOfficial: source === 'official',
+            isVerifiedQuantizer: source === 'verified-quantizer',
+          },
         }}
         isDownloaded={isDownloaded}
         isActive={isDownloaded && isActiveModel}
