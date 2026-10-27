@@ -9,6 +9,7 @@
 #include <limits>
 #include <functional>
 #include <mutex>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -149,7 +150,10 @@ public:
   void loadImage(const VideoRequest &request, const std::string &path) {
     std::unique_lock<std::mutex> execution(executionMutex, std::try_to_lock);
     if (!execution.owns_lock()) throw std::runtime_error("Image or video generation is running.");
-    if (!request.imageFamily.empty() && request.imageFamily != "checkpoint" && request.imageFamily != "qwen-image-2.1")
+    // Packs (a diffusion transformer, its LLM text encoder and VAE) load the same way; FLUX 3
+    // Klein needs a newer engine than this one (stable-diffusion.cpp 8cd731e).
+    static const std::set<std::string> families{"checkpoint", "qwen-image-2.1", "z-image", "flux2-klein"};
+    if (!request.imageFamily.empty() && !families.count(request.imageFamily))
       throw std::runtime_error("This image model family is not supported.");
     const auto sampler = request.imageSampler.empty() ? EULER_SAMPLE_METHOD : str_to_sample_method(request.imageSampler.c_str());
     const auto scheduler = request.imageScheduler.empty() ? SCHEDULER_COUNT : str_to_scheduler(request.imageScheduler.c_str());

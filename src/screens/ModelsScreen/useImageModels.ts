@@ -6,7 +6,7 @@ import { useDownloadStore } from '../../stores/downloadStore';
 import { useModelCatalogStore } from '../../stores/modelCatalogStore';
 import { makeImageModelKey } from '../../utils/modelKey';
 import { modelManager, hardwareService, backgroundDownloadService } from '../../services';
-import { fetchAvailableModels, getSDImageModels, getRecommendedSDImageModels, searchSDImageModels, HFImageModel, guessStyle } from '../../services/huggingFaceModelBrowser';
+import { fetchAvailableModels, getOfferedSDImageModels, getRecommendedSDImageModels, searchSDImageModels, HFImageModel, guessStyle } from '../../services/huggingFaceModelBrowser';
 import { fetchAvailableCoreMLModels } from '../../services/coreMLModelBrowser';
 import { ImageModelRecommendation } from '../../types';
 import { BackendFilter, ImageFilterDimension, ImageModelDescriptor } from './types';
@@ -78,7 +78,7 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
     try {
       if (Platform.OS === 'ios') {
         const coremlModels = await fetchAvailableCoreMLModels(forceRefresh);
-        setAvailableHFModels([...getSDImageModels(), ...coremlModels.map(m => ({
+        setAvailableHFModels([...getOfferedSDImageModels(), ...coremlModels.map(m => ({
           id: m.id, name: m.name, displayName: m.displayName, backend: 'coreml' as any,
           fileName: m.fileName, downloadUrl: m.downloadUrl, size: m.size, repo: m.repo,
           _coreml: true, _coremlFiles: m.files,
@@ -86,7 +86,7 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
         }))]);
       } else {
         const socInfo = await hardwareService.getSoCInfo();
-        setAvailableHFModels([...getSDImageModels(), ...await fetchAvailableModels(forceRefresh, { skipQnn: !socInfo.hasNPU })]);
+        setAvailableHFModels([...getOfferedSDImageModels(), ...await fetchAvailableModels(forceRefresh, { skipQnn: !socInfo.hasNPU })]);
       }
     } catch (error: any) {
       setHfModelsError(error?.message || 'Failed to fetch models');

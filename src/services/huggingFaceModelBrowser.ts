@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer';
+import { Platform } from 'react-native';
 import {
   CATALOG,
   searchHuggingFace,
@@ -7,10 +8,11 @@ import {
   extractQuantization,
   imageEngineSettings,
   isCompleteSDCheckpointHeader,
+  isImageWeightAvailableOn,
   isSDImageWeight,
-  QWEN_IMAGE_21_COMPANIONS,
   QWEN_IMAGE_21_WEIGHT,
   SD_CHECKPOINT_HEADER_BYTES,
+  sdImagePackFor,
 } from '@offgrid/models';
 import RNFS from 'react-native-fs';
 import type { ImageModelDescriptor } from './imageModelDownloadTypes';
@@ -29,6 +31,8 @@ export interface HFImageModel {
   repo: string;
   /** sd.cpp catalog models: the memory the shared catalog says the model needs. */
   minRamGb?: number;
+  /** A newer catalog model replaces it: an install keeps working, but it is not offered. */
+  supersededBy?: string;
 }
 
 interface HFTreeEntry {
@@ -165,16 +169,22 @@ export function guessStyle(name: string): string {
 
 const QWEN_IMAGE_WEIGHT = QWEN_IMAGE_21_WEIGHT;
 
-/** Bundled complete checkpoints share the Desktop catalog. Split diffusion packs
- * need an explicit companion contract before they can be offered on mobile. */
+/** The sd.cpp image models this phone's runtime loads: complete checkpoints and the diffusion-transformer
+ * packs (FLUX.2 klein, Z-Image, Qwen-Image 2.1) whose companion files the shared pack rules name.
+ * Replaced models stay in this list so an install keeps its name and files; see getOfferedSDImageModels. */
 export function getSDImageModels(): HFImageModel[] {
   // The bundled sd.cpp packs, plus every single-file image model the phone's catalog file
   // (OGAM catalog/models.json) lists: a new image model ships without an app update.
   const listed = new Set((useModelCatalogStore.getState().remote.models ?? [])
     .filter(model => model.kind === 'image').map(model => model.id));
-  return withRemoteCatalog('models', CATALOG).filter(model => model.id === 'leejet/Qwen-Image-2.1-GGUF' ||
-    (model.kind === 'image' && model.files.length === 1 &&
-      (listed.has(model.id) || /^(off-?grid-ai\/|mzwing\/SDXL-Lightning|OlegSkutte\/sdxl-turbo)/i.test(model.id))))
+  return withRemoteCatalog('models', CATALOG).filter(model => {
+    if (model.kind !== 'image' || !isImageWeightAvailableOn(model.files[0].name, Platform.OS)) return false;
+    const pack = sdImagePackFor(model.files[0].name);
+    // Qwen-Image's Off Grid AI builds need 24 GB or more: phones list leejet's pack only.
+    if (pack) return pack.family !== 'qwen-image-2.1' || model.id === 'leejet/Qwen-Image-2.1-GGUF';
+    return model.files.length === 1 &&
+      (listed.has(model.id) || /^(off-?grid-ai\/|mzwing\/SDXL-Lightning|OlegSkutte\/sdxl-turbo)/i.test(model.id));
+  })
     .map(model => ({
       id: `sd-${model.id.replaceAll('/', '--')}`,
       name: model.name, displayName: model.name, backend: 'sd' as const,
@@ -184,7 +194,13 @@ export function getSDImageModels(): HFImageModel[] {
       size: model.files.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0),
       huggingFaceFiles: model.files.map(file => ({ path: file.name, size: file.sizeBytes ?? 0, downloadUrl: file.url, sha256: file.sha256 })),
       minRamGb: model.minRamGb,
+      supersededBy: model.supersededBy,
     }));
+}
+
+/** The sd.cpp image models offered for download: every runnable one a newer model does not replace. */
+export function getOfferedSDImageModels(): HFImageModel[] {
+  return getSDImageModels().filter(model => !model.supersededBy);
 }
 
 /**
@@ -192,7 +208,7 @@ export function getSDImageModels(): HFImageModel[] {
  * The one list the Image tab's recommendations and Auto Setup both read.
  */
 export function getRecommendedSDImageModels(ramGB: number): HFImageModel[] {
-  return getSDImageModels().filter(model => !model.minRamGb || model.minRamGb <= ramGB);
+  return getOfferedSDImageModels().filter(model => !model.minRamGb || model.minRamGb <= ramGB);
 }
 
 /** Filename candidates only. New checkpoint candidates must pass tensor validation. */
@@ -208,11 +224,15 @@ export function getSDImagePackFiles(names: string[], modelId?: string): NonNulla
   const weights = names.filter(isSDImageWeight);
   if (weights.length !== 1) return null;
   const templates = getSDImageModels();
-  if (!QWEN_IMAGE_WEIGHT.test(weights[0])) {
+  const pack = sdImagePackFor(weights[0]);
+  if (!pack) {
     const template = templates.find(model => model.id === modelId && model.fileName === weights[0]);
     return [{ path: weights[0], size: 0, sha256: template?.huggingFaceFiles?.[0].sha256 }];
   }
-  const template = templates.find(model => model.repo === 'leejet/Qwen-Image-2.1-GGUF');
+  // The pack's own catalog entry, else one of its family (a Qwen-Image pack found by search uses leejet's companions).
+  const family = templates.filter(model => sdImagePackFor(model.fileName)?.family === pack.family);
+  const template = family.find(model => model.id === modelId) ?? family.find(model => model.fileName === weights[0]) ??
+    family.find(model => model.repo === 'leejet/Qwen-Image-2.1-GGUF');
   if (!template?.huggingFaceFiles) return null;
   return template.huggingFaceFiles.map(file => file.path === template.fileName
     ? { path: weights[0], size: 0, sha256: modelId === template.id && weights[0] === file.path ? file.sha256 : undefined }
@@ -289,10 +309,11 @@ export async function searchSDImageModels(query: string, signal?: AbortSignal): 
 
 export async function resolveSDImagePack(_modelId: string, modelPath: string) {
   const files = getSDImagePackFiles((await RNFS.readDir(modelPath)).filter(file => file.isFile()).map(file => file.name));
-  if (!files) throw new Error('Select one complete SD checkpoint or a Qwen Image 2.1 pack.');
+  if (!files) throw new Error('Select one complete SD checkpoint or a complete image model pack.');
   const weight = files[0].path;
   const defaults = imageEngineSettings(weight);
-  if (!QWEN_IMAGE_WEIGHT.test(weight)) {
+  const pack = sdImagePackFor(weight);
+  if (!pack) {
     if (!await validateSDCheckpointFile(`${modelPath}/${weight}`)) throw new Error('This checkpoint is unsupported or incomplete. It must include the SD image model, text encoder, and VAE.');
     return { family: 'checkpoint', weight: `${modelPath}/${weight}`, vae: '', llm: '', sampler: defaults.sampler, scheduler: defaults.scheduler };
   }
@@ -301,8 +322,8 @@ export async function resolveSDImagePack(_modelId: string, modelPath: string) {
     if (!file) throw new Error('The image model pack is incomplete.');
     return `${modelPath}/${file.path}`;
   };
-  return { family: 'qwen-image-2.1', weight: `${modelPath}/${weight}`,
-    vae: required(QWEN_IMAGE_21_COMPANIONS.vae), llm: required(QWEN_IMAGE_21_COMPANIONS.llm),
+  return { family: pack.family, weight: `${modelPath}/${weight}`,
+    vae: required(pack.vae), llm: required(pack.llm),
     sampler: defaults.sampler, scheduler: defaults.scheduler };
 }
 

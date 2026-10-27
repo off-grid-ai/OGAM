@@ -65,7 +65,7 @@ jest.mock('../../../../src/screens/ModelsScreen/imageDownloadResume', () => ({
 jest.mock('../../../../src/services/huggingFaceModelBrowser', () => ({
   fetchAvailableModels: (...a: any[]) => mockFetchAvailableModels(...a),
   guessStyle: (...a: any[]) => mockGuessStyle(...a),
-  getSDImageModels: () => mockSDImageModels,
+  getOfferedSDImageModels: () => mockSDImageModels,
   // The sd.cpp models whose memory need fits the phone (9061db452).
   getRecommendedSDImageModels: (ramGB: number) =>
     mockSDImageModels.filter((model: any) => !model.minRamGb || model.minRamGb <= ramGB),
