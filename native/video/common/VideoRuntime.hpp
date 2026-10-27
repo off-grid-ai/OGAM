@@ -36,9 +36,13 @@ class VideoRuntime {
   sd_ctx_t *context = nullptr;
   sd_ctx_t *imageContext = nullptr;
   std::string imagePath;
+  // What the image context was loaded from and on, so a generation that fails on an accelerated
+  // backend can reload one step down and try once more.
+  VideoRequest imageLoad;
+  enum class ImagePlace { npu, gpu, cpu } imagePlace = ImagePlace::gpu;
   sample_method_t imageSampler = EULER_SAMPLE_METHOD;
   scheduler_t imageScheduler = SCHEDULER_COUNT;
-  sd_ctx_t *loadContext(const VideoRequest &request, std::string &preferred) {
+  sd_ctx_t *loadContext(const VideoRequest &request, std::string &preferred, bool image = false) {
       sd_ctx_params_t config;
       sd_ctx_params_init(&config);
       if (request.imageFamily == "checkpoint") config.model_path = request.weight.c_str();
@@ -65,7 +69,11 @@ class VideoRuntime {
       // latent, timestep and prompt, so sampling leaves the start noise intact.
       // Adreno Vulkan crashes in the same DiT graph. Wan diffusion runs on CPU.
       const bool wanCpu = adrenoWan || (wanVae && !gpuDevice);
-      const bool skipNpu = request.skipNpu || wanVae;
+      // An SD/SDXL image UNet does not fit the HTP0 cap, so the scheduler splits it across HTP0 and
+      // Vulkan0, and Hexagon cannot compute on a view Vulkan holds ("HTP0 cannot execute MUL: tensor
+      // (view) uses Vulkan0 buffer"; OnePlus SM8635, RealVisXL Lightning Q4, 2026-10-27). No sd.cpp
+      // image has generated on HTP0, so images skip the NPU, as Wan does.
+      const bool skipNpu = request.skipNpu || wanVae || image;
 
       for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
         auto device = ggml_backend_dev_get(i);
@@ -165,11 +173,13 @@ public:
       imageContext = nullptr; imagePath.clear();
     }
     std::string preferred;
-    auto loaded = loadContext(request, preferred);
+    auto loaded = loadContext(request, preferred, true);
     if (!loaded) throw std::runtime_error("Could not load the image model pack.");
     std::lock_guard<std::mutex> guard(contextMutex);
     if (cancelled.load()) { free_sd_ctx(loaded); throw std::runtime_error("Image loading stopped."); }
     imageContext = loaded; imagePath = path;
+    imageLoad = request;
+    imagePlace = !preferred.empty() ? ImagePlace::npu : request.cpuOnly ? ImagePlace::cpu : ImagePlace::gpu;
     imageSampler = sampler;
     imageScheduler = scheduler == SCHEDULER_COUNT ? sd_get_default_scheduler(loaded, sampler) : scheduler;
   }
@@ -221,8 +231,25 @@ public:
       params.sample_params.sample_method = imageSampler;
       params.sample_params.scheduler = imageScheduler;
       params.vae_tiling_params.enabled = true;
-      if (!generate_image(imageContext, &params, &images, &count) || !images || count != 1)
-        throw std::runtime_error("The image engine produced no image.");
+      bool made = generate_image(imageContext, &params, &images, &count) && images && count == 1;
+      // A graph that fails on an accelerated backend gets one more try one step down (NPU -> GPU,
+      // GPU -> CPU), as loading falls back: the person gets an image, not an error.
+      if (!made && imagePlace != ImagePlace::cpu && !cancelled.load()) {
+        if (images) { free_sd_images(images, count); images = nullptr; count = 0; }
+        VideoRequest retry = imageLoad;
+        if (imagePlace == ImagePlace::npu) retry.skipNpu = true; else retry.cpuOnly = true;
+        std::string preferred;
+        sd_ctx_t *reloaded = loadContext(retry, preferred, true);
+        if (reloaded) {
+          std::lock_guard<std::mutex> guard(contextMutex);
+          free_sd_ctx(imageContext);
+          imageContext = reloaded;
+          imageLoad = retry;
+          imagePlace = retry.cpuOnly ? ImagePlace::cpu : ImagePlace::gpu;
+          made = generate_image(imageContext, &params, &images, &count) && images && count == 1;
+        }
+      }
+      if (!made) throw std::runtime_error("The image engine produced no image.");
       if (cancelled.load()) throw std::runtime_error("Image generation stopped.");
       save(images[0]);
     } catch (...) { cleanup(); throw; }
