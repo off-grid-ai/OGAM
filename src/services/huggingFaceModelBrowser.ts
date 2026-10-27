@@ -14,6 +14,7 @@ import {
 } from '@offgrid/models';
 import RNFS from 'react-native-fs';
 import type { ImageModelDescriptor } from './imageModelDownloadTypes';
+import { useModelCatalogStore, withRemoteCatalog } from '../stores/modelCatalogStore';
 
 export interface HFImageModel {
   id: string;
@@ -167,9 +168,13 @@ const QWEN_IMAGE_WEIGHT = QWEN_IMAGE_21_WEIGHT;
 /** Bundled complete checkpoints share the Desktop catalog. Split diffusion packs
  * need an explicit companion contract before they can be offered on mobile. */
 export function getSDImageModels(): HFImageModel[] {
-  return CATALOG.filter(model => model.id === 'leejet/Qwen-Image-2.1-GGUF' ||
+  // The bundled sd.cpp packs, plus every single-file image model the phone's catalog file
+  // (OGAM catalog/models.json) lists: a new image model ships without an app update.
+  const listed = new Set((useModelCatalogStore.getState().remote.models ?? [])
+    .filter(model => model.kind === 'image').map(model => model.id));
+  return withRemoteCatalog('models', CATALOG).filter(model => model.id === 'leejet/Qwen-Image-2.1-GGUF' ||
     (model.kind === 'image' && model.files.length === 1 &&
-      /^(offgrid-ai\/|mzwing\/SDXL-Lightning|OlegSkutte\/sdxl-turbo)/i.test(model.id)))
+      (listed.has(model.id) || /^(off-?grid-ai\/|mzwing\/SDXL-Lightning|OlegSkutte\/sdxl-turbo)/i.test(model.id))))
     .map(model => ({
       id: `sd-${model.id.replaceAll('/', '--')}`,
       name: model.name, displayName: model.name, backend: 'sd' as const,

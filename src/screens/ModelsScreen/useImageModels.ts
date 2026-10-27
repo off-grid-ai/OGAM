@@ -95,12 +95,13 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
     }
   }, []);
 
-  // A remote catalog update can add a Core ML repo: reload a list already shown.
+  // A remote catalog update can add a Core ML repo or an sd.cpp model: reload a list already shown.
   const remoteCoreML = useModelCatalogStore(s => s.remote.coreml);
+  const remoteModels = useModelCatalogStore(s => s.remote.models);
   useEffect(() => {
-    if (Platform.OS === 'ios' && availableHFModels.length > 0) loadHFModels();
+    if (availableHFModels.length > 0) loadHFModels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remoteCoreML]);
+  }, [remoteCoreML, remoteModels]);
 
   useEffect(() => {
     const init = async () => {
@@ -178,7 +179,8 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
   }, []);
 
   // sd.cpp models that fit this phone sit after the device's fastest engine (QNN/MNN, Core ML).
-  const sdRecommended = useMemo(() => getRecommendedSDImageModels(hardwareService.getTotalMemoryGB()), []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- remoteModels: a catalog check can add one
+  const sdRecommended = useMemo(() => getRecommendedSDImageModels(hardwareService.getTotalMemoryGB()), [remoteModels]);
   const isRecommendedModel = useCallback((model: HFImageModel): boolean => {
     if (!imageRec) return false;
     // sd.cpp runs on every phone; it is recommended when the catalog says it fits this one.

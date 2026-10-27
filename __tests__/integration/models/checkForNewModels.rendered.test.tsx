@@ -14,13 +14,28 @@ import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBound
 const CATALOG_URL = 'https://raw.githubusercontent.com/off-grid-ai/OGAM/main/catalog/models.json';
 
 /** The catalog file as it is published: the envelope with the sections the app reads. */
-function catalogFile(text: unknown[]): string {
+function catalogFile(text: unknown[], models: unknown[] = []): string {
   return JSON.stringify({
     schemaVersion: 1,
     updatedAt: '2026-10-22',
-    sections: { models: [], text, transcription: [], coreml: [], litert: [] },
+    sections: { models, text, transcription: [], coreml: [], litert: [] },
   });
 }
+
+/** An sd.cpp image model added to the catalog after this build shipped (the full `models` shape). */
+const NEW_IMAGE_MODEL = {
+  id: 'someone/Brandnew-Image-GGUF',
+  name: 'Brandnew Image',
+  kind: 'image',
+  org: 'Someone',
+  minRamGb: 8,
+  files: [{
+    name: 'brandnew-image-q4_0.gguf',
+    url: 'https://huggingface.co/someone/Brandnew-Image-GGUF/resolve/main/brandnew-image-q4_0.gguf',
+    sizeBytes: 2_000_000_000,
+    role: 'primary',
+  }],
+};
 
 /** A chat model added to the catalog after this build shipped (the README's `text` shape). */
 const NEW_MODEL = {
@@ -148,5 +163,30 @@ describe('Check for new models on the Models screen', () => {
     expect(models.queryByText('Brandnew 3B')).toBeNull();
     const listAfter = within(models.getByTestId('models-list')).getAllByText(/./).map(n => n.props.children);
     expect(listAfter).toEqual(listBefore);
+  });
+
+  it('lists an sd.cpp image model the catalog adds on the Image tab, without an app update', async () => {
+    installNativeBoundary({ fs: true, ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
+    network = installNetwork(catalogFile([], [NEW_IMAGE_MODEL]));
+    const React = require('react');
+    const { render, fireEvent, waitFor, within } = requireRTL();
+    await freshLaunch();
+    const { ModelsScreen } = require('../../../src/screens/ModelsScreen');
+
+    const models = render(React.createElement(ModelsScreen));
+    await waitFor(() => expect(models.getByTestId('device-picks')).toBeTruthy());
+    fireEvent.press(models.getByText('Image'));
+    // BEFORE: a bundled sd.cpp model is listed; the catalog's new one is not.
+    await waitFor(() => expect(models.getByText('SDXL Lightning')).toBeTruthy(), { timeout: 4000 });
+    expect(models.queryByText('Brandnew Image')).toBeNull();
+
+    fireEvent.press(models.getByTestId('check-new-models-button'));
+
+    // AFTER: the sheet names it, and the Image tab lists it now (a second copy, outside the sheet),
+    // beside the bundled ones.
+    const sheet = await waitFor(() => models.getByTestId('catalog-check-sheet'));
+    expect(within(sheet).getByText('Brandnew Image')).toBeTruthy();
+    await waitFor(() => expect(models.getAllByText('Brandnew Image')).toHaveLength(2), { timeout: 4000 });
+    expect(models.getAllByText(/SDXL Lightning/).length).toBeGreaterThan(0);
   });
 });
