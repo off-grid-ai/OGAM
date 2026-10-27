@@ -76,7 +76,7 @@ it('queued questions go together and a queued video prompt goes alone', async ()
   await toggleVideoMode();
   await h.tapSend(CLIP);
   await h.settle(30);
-  await toggleVideoMode();
+  // Video mode is for one message: the input is back to text after the clip is sent.
   await h.tapSend('and how cold is it');
   await h.settle(50);
   // Nothing has left the queue while the first reply holds.
@@ -86,9 +86,22 @@ it('queued questions go together and a queued video prompt goes alone', async ()
   h.boundary.llama!.scriptCompletion({ text: COMBINED_REPLY });
   h.boundary.llama!.releaseStream();
 
-  // The two questions are answered in one reply.
+  // The two questions are answered in one reply: one text request carries both, and not the clip.
   await rtl.waitFor(() => expect(view.getAllByText(COMBINED_REPLY)).toHaveLength(1), { timeout: 8000 });
+  const lastUserTurn = (call: unknown[]) => {
+    const messages = (call[0] as { messages?: Array<{ role: string; content?: unknown }> }).messages ?? [];
+    const user = messages.filter(message => message.role === 'user').pop();
+    return typeof user?.content === 'string' ? user.content : JSON.stringify(user?.content ?? '');
+  };
+  const textTurns = h.boundary.llama!.calls.completion.map(lastUserTurn);
+  const combined = textTurns.filter(turn => turn.includes('how deep is the pond'));
+  expect(combined).toHaveLength(1);
+  expect(combined[0]).toContain('and how cold is it');
+  expect(combined[0]).not.toContain(CLIP);
   // The clip is made from the description alone.
   await rtl.waitFor(() => expect(desktop!.submissions).toHaveLength(1), { timeout: 8000 });
   expect(desktop.submissions[0].prompt).toBe(CLIP);
+  // The clip finishes before the test ends, so no poll outlives the fake Desktop.
+  await rtl.waitFor(() => expect(view.getByTestId('chat-clip-card')).toBeTruthy(), { timeout: 8000 });
+  expect(require('../../../src/bootstrap/videoSeam').videoSeam.hasPending()).toBe(false);
 });
