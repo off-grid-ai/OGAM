@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useAppStore } from '../../stores';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { makeModelKey } from '../../utils/modelKey';
-import { CATALOG } from '@offgrid/models';
+import { CATALOG, determineCredibility } from '@offgrid/models';
 import { devicePicks, type DevicePick } from '../../services/devicePicks';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { startModelDownload } from '../../services/startModelDownload';
@@ -39,6 +39,9 @@ export const DevicePicksRow: React.FC<{ ramGB: number; onChat: () => void }> = (
     };
   };
 
-  const items: PickItem[] = picks.map(pick => ({ slot: pick.slot, name: pick.model.name, sizeBytes: pick.sizeBytes, state: stateFor(pick) }));
+  const items: PickItem[] = picks.map(pick => ({
+    slot: pick.slot, name: pick.model.name, sizeBytes: pick.sizeBytes, state: stateFor(pick),
+    madeByOffGrid: determineCredibility(pick.model.id.split('/')[0] ?? '') === 'offgrid',
+  }));
   return <PicksRow items={items} />;
 };

@@ -7,6 +7,7 @@ import { formatFileSize } from '@offgrid/models';
 import { TYPOGRAPHY, SPACING } from '../../constants';
 import { AnimatedPressable } from '../AnimatedPressable';
 import type { PickSlot } from '../../services/devicePicks';
+import { MadeByOffGrid } from '../ModelCardContent';
 
 /**
  * Fast, Balanced and Best for this phone, at the top of a models tab: three small cards side by
@@ -32,6 +33,8 @@ export interface PickItem {
   name: string;
   sizeBytes: number;
   state: PickState;
+  /** Off Grid AI built these files: its mark sits beside the size, as on the model cards. */
+  madeByOffGrid?: boolean;
 }
 
 export const PicksRow: React.FC<{ items: PickItem[]; testID?: string }> = ({ items, testID = 'device-picks' }) => {
@@ -73,7 +76,10 @@ const PickCard: React.FC<{ item: PickItem }> = ({ item }) => {
         {action}
       </View>
       <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
-      <Text style={styles.size}>{formatFileSize(item.sizeBytes)}</Text>
+      <View style={styles.meta}>
+        {item.madeByOffGrid && <MadeByOffGrid />}
+        <Text style={styles.size}>{formatFileSize(item.sizeBytes)}</Text>
+      </View>
     </View>
   );
 };
@@ -104,6 +110,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   cardTop: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: SPACING.xs },
   slot: { ...TYPOGRAPHY.labelSmall, textTransform: 'uppercase' as const, color: colors.textMuted, letterSpacing: 0.3 },
   name: { ...TYPOGRAPHY.bodySmall, color: colors.text, minHeight: 34 },
-  size: { ...TYPOGRAPHY.metaSmall, color: colors.textMuted, marginTop: 2 },
+  meta: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: SPACING.xs, marginTop: 2 },
+  size: { ...TYPOGRAPHY.metaSmall, color: colors.textMuted },
   progress: { ...TYPOGRAPHY.meta, color: colors.textSecondary },
 });
