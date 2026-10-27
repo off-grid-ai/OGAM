@@ -9,6 +9,7 @@
  * Callers unmock '@react-navigation/native' so the studio screens open on the real navigator.
  */
 import { launchApp, passOnboarding, restoreBuildFlavor, type AnalyticsApp } from './analyticsApp';
+import type { NativeBoundary } from './nativeBoundary';
 import {
   DESKTOP_VIDEO_ENDPOINT,
   DESKTOP_VIDEO_MODEL,
@@ -37,8 +38,14 @@ export interface OsDialog {
 let current: StudioApp | undefined;
 
 /** Home with Pro and the paired computer's video model picked. */
-export async function launchStudioApp(computer: Parameters<typeof serveDesktopModelPulls>[0] = { memoryGb: 34 }): Promise<StudioApp> {
-  const app = await launchApp({ release: false });
+export async function launchStudioApp(
+  computer: Parameters<typeof serveDesktopModelPulls>[0] = { memoryGb: 34 },
+  options: { imageModel?: boolean } = {},
+): Promise<StudioApp> {
+  const app = await launchApp({
+    release: false,
+    beforeApp: options.imageModel ? placeImageModel : undefined,
+  });
   const { view, rtl, boundary } = app;
   const jobs = serveDesktopVideoJobs(boundary.fs!);
   const models = serveDesktopModelPulls(computer);
@@ -75,6 +82,23 @@ export async function launchStudioApp(computer: Parameters<typeof serveDesktopMo
     await view.findByTestId(`remote-video-model-${server.id}:${DESKTOP_VIDEO_MODEL.id}`, {}, { timeout: 5000 }),
   );
   return current;
+}
+
+/**
+ * A downloaded image model, as a finished download leaves it: its files on disk (MNN, the Android
+ * runtime) and its record in storage. It is picked in the chat with the image-mode toggle.
+ */
+function placeImageModel(boundary: NativeBoundary): void {
+  const directory = `${boundary.fs!.DocumentDirectoryPath}/image_models/sd`;
+  for (const name of [
+    'pos_emb.bin', 'token_emb.bin', 'tokenizer.json', 'unet.mnn', 'unet.mnn.weight',
+    'vae_decoder.mnn', 'vae_decoder.mnn.weight', 'clip_v2.mnn', 'clip_v2.mnn.weight',
+  ])
+    boundary.fs!.seedFile(`${directory}/${name}`, 8 * 1024 * 1024);
+  const { createONNXImageModel } = require('../utils/factories');
+  const model = createONNXImageModel({ id: 'sd', name: 'SD', modelPath: directory, backend: 'mnn' });
+  const storage = require('@react-native-async-storage/async-storage');
+  storage.setItem('@local_llm/downloaded_image_models', JSON.stringify([model]));
 }
 
 /** From Home: a new chat, video mode, a description, Send — and the clip card it leaves. */
