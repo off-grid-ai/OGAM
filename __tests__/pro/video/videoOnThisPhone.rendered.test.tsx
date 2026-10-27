@@ -1,0 +1,146 @@
+/**
+ * A video model downloaded to the phone, and clips made on the phone with it.
+ *
+ * SPEC (OGAM user's view): in Models › Video I find a video model, see its size and the memory it
+ * suggests, and download it: every file of it, with progress, until the card says it is on the
+ * phone. I pick it on Home and describe a clip in a chat in video mode: the clip is made on this
+ * phone, shows its progress while it runs, and lands as a clip card. I can stop a clip midway. A whole film
+ * is made here too, shot by shot, then joined. A download can be paused, resumed or cancelled, and
+ * an installed model deleted.
+ *
+ * The real App runs. Device boundaries only: the llama.rn engine, the disk, the RAM sensor, the
+ * native background downloads, the phone's video engine and film composer (nativeVideoEngine).
+ */
+jest.unmock('@react-navigation/native');
+
+import { GB } from '../../harness/nativeBoundary';
+import { launchApp, passOnboarding, restoreBuildFlavor, type AnalyticsApp } from '../../harness/analyticsApp';
+import { installNativeVideoEngine, phoneDownloads, type NativeVideoEngine, type PhoneDownloads } from '../../harness/nativeVideoEngine';
+
+/** Wan 2.1 (1.3B), FP16: the catalog build Android runs whose files carry no published checksum. */
+const MODEL = { id: 'Comfy-Org/Wan_2.1_ComfyUI_repackaged', name: 'Wan 2.1 (1.3B), FP16', files: 3 };
+
+let app: AnalyticsApp | undefined;
+
+afterEach(() => {
+  app?.view.unmount();
+  app?.endpoint.restore();
+  app = undefined;
+  restoreBuildFlavor();
+});
+
+interface PhoneVideoApp extends AnalyticsApp {
+  engine: NativeVideoEngine;
+  downloads: PhoneDownloads;
+}
+
+/** A phone with room for a 6.3 GB video model: 24 GB, 20 GB of it free (the RAM sensor). */
+async function launch(): Promise<PhoneVideoApp> {
+  let engine!: NativeVideoEngine;
+  app = await launchApp({ release: false, download: true, beforeApp: boundary => {
+    boundary.setRam({ platform: 'android', totalBytes: 24 * GB, availBytes: 20 * GB });
+    engine = installNativeVideoEngine(boundary);
+  } });
+  await passOnboarding(app, false);
+  await require('../../harness/proHarness').installPro();
+  return { ...app, engine, downloads: phoneDownloads(app.boundary, app.rtl.act) };
+}
+
+/** Models tab › Video › Download, then every file of the pack finishes. */
+async function downloadVideoModel(current: PhoneVideoApp): Promise<void> {
+  const { view, rtl } = current;
+  rtl.fireEvent.press(await view.findByTestId('models-tab'));
+  rtl.fireEvent.press(await view.findByText('Video'));
+  await view.findByText(MODEL.name, {}, { timeout: 10_000 });
+  rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
+  let finished = 0;
+  await rtl.waitFor(async () => {
+    finished += await current.downloads.finishRunning();
+    expect(finished).toBe(MODEL.files);
+  }, { timeout: 15_000 });
+  await rtl.waitFor(() => expect(view.queryByLabelText(`Download ${MODEL.name}`)).toBeNull());
+  await rtl.waitFor(() => expect(view.getAllByLabelText('Delete model').length).toBeGreaterThan(0), { timeout: 10_000 });
+}
+
+/** Home's video summary › the downloaded model, then a new chat in video mode, and Send. */
+async function describeClipOnPhone(current: PhoneVideoApp, prompt: string): Promise<void> {
+  const { view, rtl } = current;
+  rtl.fireEvent.press(await view.findByTestId('home-tab'));
+  rtl.fireEvent.press(await view.findByTestId('model-summary-video-open'));
+  rtl.fireEvent.press(await view.findByTestId(`video-model-row-${MODEL.id}-select`, {}, { timeout: 5000 }));
+  rtl.fireEvent.press(await view.findByTestId('new-chat-button', {}, { timeout: 5000 }));
+  await view.findByTestId('chat-input');
+  rtl.fireEvent.press(view.getByTestId('quick-settings-button'));
+  rtl.fireEvent.press(await view.findByTestId('quick-video-mode'));
+  rtl.fireEvent.changeText(view.getByTestId('chat-input'), prompt);
+  rtl.fireEvent.press(view.getByTestId('send-button'));
+}
+
+it('downloads every file of a video model, then makes a clip on the phone', async () => {
+  const current = await launch();
+  const { view, rtl } = current;
+  await downloadVideoModel(current);
+  current.engine.hold();
+  await describeClipOnPhone(current, 'a hummingbird hovering over a red flower');
+  // In flight on the phone: the engine's step count, and no clip card yet.
+  await view.findByText(/Step 1 of \d+/, {}, { timeout: 15_000 });
+  expect(view.queryByTestId('chat-clip-card')).toBeNull();
+  current.engine.release();
+  await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
+  await rtl.waitFor(() => expect(view.queryByTestId('video-progress')).toBeNull());
+  expect(current.engine.generations).toHaveLength(1);
+  expect(current.engine.generations[0].prompt).toBe('a hummingbird hovering over a red flower');
+}, 90_000);
+
+it('stops a clip midway', async () => {
+  const current = await launch();
+  const { view, rtl } = current;
+  await downloadVideoModel(current);
+  current.engine.hold();
+  await describeClipOnPhone(current, 'waves rolling onto a sandy beach');
+  await view.findByText(/Step 1 of \d+/, {}, { timeout: 15_000 });
+  rtl.fireEvent.press(view.getByTestId('stop-button'));
+  await rtl.waitFor(() => expect(view.queryByTestId('video-progress')).toBeNull(), { timeout: 10_000 });
+  expect(view.queryByTestId('chat-clip-card')).toBeNull();
+
+}, 90_000);
+
+it('makes a whole film on the phone: each shot, then the shots joined', async () => {
+  const current = await launch();
+  const { view, rtl } = current;
+  await downloadVideoModel(current);
+  await describeClipOnPhone(current, 'a cat chasing a butterfly through a garden');
+  rtl.fireEvent.press(await view.findByTestId('video-make-story', {}, { timeout: 15_000 }));
+  await view.findByText('Renders on this phone, also with the screen off.', {}, { timeout: 15_000 });
+  current.engine.hold();
+  rtl.fireEvent.press(view.getByTestId('film-make-real'));
+  await view.findByTestId('video-making', {}, { timeout: 10_000 });
+  // The film is being made here: a shot in flight, nothing joined yet.
+  await view.findByText(/Shot \d+ of \d+/, {}, { timeout: 15_000 });
+  expect(view.getByText('You can leave the app. We send a notification when it is ready.')).toBeTruthy();
+  expect(current.engine.films).toHaveLength(0);
+  current.engine.release();
+  rtl.fireEvent.press(await view.findByTestId('making-watch', {}, { timeout: 30_000 }));
+  await view.findByTestId('video-viewer', {}, { timeout: 10_000 });
+  // Every shot was made on the phone and the composer joined them into one film.
+  expect(current.engine.films).toHaveLength(1);
+  expect(current.engine.films[0].clips.length).toBeGreaterThan(1);
+}, 90_000);
+
+it('pauses, resumes and cancels a video model download, and deletes an installed one', async () => {
+  const current = await launch();
+  const { view, rtl } = current;
+  rtl.fireEvent.press(await view.findByTestId('models-tab'));
+  rtl.fireEvent.press(await view.findByText('Video'));
+  await view.findByText(MODEL.name, {}, { timeout: 10_000 });
+  rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
+  rtl.fireEvent.press(await view.findByLabelText('Pause download', {}, { timeout: 10_000 }));
+  rtl.fireEvent.press(await view.findByLabelText('Resume download', {}, { timeout: 10_000 }));
+  rtl.fireEvent.press(await view.findByLabelText('Cancel download', {}, { timeout: 10_000 }));
+  await view.findByLabelText(`Download ${MODEL.name}`, {}, { timeout: 10_000 });
+  expect(view.queryByLabelText('Cancel download')).toBeNull();
+
+  await downloadVideoModel(current);
+  rtl.fireEvent.press(view.getAllByLabelText('Delete model')[0]);
+  await view.findByLabelText(`Download ${MODEL.name}`, {}, { timeout: 10_000 });
+}, 90_000);

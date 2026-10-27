@@ -35,11 +35,16 @@ export async function launchApp(options: {
   /** Installed before this version: onboarding was finished on an earlier launch. */
   returningUser?: boolean;
   platform?: 'ios' | 'android';
+  /** The native background-download module, for journeys that download a model. */
+  download?: boolean;
+  /** More device boundaries, placed after the native boundary and before the App loads. */
+  beforeApp?: (boundary: NativeBoundary) => void;
 }): Promise<AnalyticsApp> {
   (global as DevGlobal).__DEV__ = !options.release;
   const boundary = installNativeBoundary({
     llama: true,
     fs: true,
+    download: options.download,
     ram: { platform: options.platform ?? 'android', totalBytes: 12 * GB, availBytes: 8 * GB },
   });
   const endpoint = installPostHogEndpoint();
@@ -70,6 +75,7 @@ export async function launchApp(options: {
       );
     }
   }
+  options.beforeApp?.(boundary);
   const g = globalThis as unknown as { window?: Record<string, unknown> };
   if (!g.window) g.window = { dispatchEvent: () => true, addEventListener: () => {}, removeEventListener: () => {} };
   const React = require('react');
