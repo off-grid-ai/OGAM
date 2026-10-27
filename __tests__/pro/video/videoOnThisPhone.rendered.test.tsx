@@ -240,5 +240,7 @@ it('a video model download the network drops says so; Retry finishes it, and Rem
     finished += await current.downloads.finishRunning();
     expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0);
   }, { timeout: 15_000 });
+  // The retry really downloaded the files, not just cleared the error.
+  expect(finished).toBeGreaterThan(0);
   expect(view.queryByLabelText('Retry download')).toBeNull();
 }, 90_000);
