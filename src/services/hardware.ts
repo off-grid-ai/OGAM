@@ -87,6 +87,17 @@ class HardwareService {
     const sys = await this.readSystemAvailableBytes();
     return sys != null ? sys : totalMemory - usedMemory;
   }
+  /** Pages the whole phone can still hand out (iOS). null when the native module does not report it. */
+  async getSystemAvailableBytes(): Promise<number | null> {
+    const mod = NativeModules.DeviceMemoryModule;
+    if (!mod?.getMemoryInfo) return null;
+    try {
+      const bytes = Number((await mod.getMemoryInfo())?.systemAvailableBytes);
+      return Number.isFinite(bytes) && bytes > 0 ? bytes : null;
+    } catch {
+      return null;
+    }
+  }
   /** Real per-process available memory (bytes) via the native module — same on
    *  iOS and Android. null when the module is unavailable. */
   private async readProcessAvailableBytes(): Promise<number | null> {

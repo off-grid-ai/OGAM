@@ -148,7 +148,8 @@ class LLMService {
     };
     // Every iPhone load maps its weights (mobileUseMmap); Android keeps its copied-weights check.
     const weightsMapped = Platform.OS === 'ios';
-    let memCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: params.ctxLen, getAvailableMemory: getMem, quantizedCache, weightsMapped, projectorFileSize });
+    const systemAvailableBytes = weightsMapped ? await hardwareService.getSystemAvailableBytes() : null;
+    let memCheck = await checkMemoryForModel({ modelFileSize: fileSize, contextLength: params.ctxLen, getAvailableMemory: getMem, quantizedCache, weightsMapped, projectorFileSize, systemAvailableBytes });
     if (!memCheck.safe) {
       // Keep the selected context. A failed estimate asks for Load Anyway; an explicit
       // override passes the selected value to native init even when memory is tight.

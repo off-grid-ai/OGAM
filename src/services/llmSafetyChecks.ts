@@ -148,6 +148,9 @@ export interface MemoryCheckArgs {
   /** The weights are memory-mapped and paged in from the file (every iPhone load): they are not
    *  charged against the app's free memory but bounded by the fit rule against total RAM. */
   weightsMapped?: boolean;
+  /** iOS: pages the whole phone can still hand out. Mapped weights are not charged to the app's own
+   *  limit, but the GPU wires them, so they still need that many free pages or the OS kills the app. */
+  systemAvailableBytes?: number | null;
   /** A vision projector loaded beside mapped weights: it is copied into memory, so it counts against
    *  what is free and within the fit rule's bound. */
   projectorFileSize?: number;
@@ -163,7 +166,7 @@ export async function checkMemoryForModel(
   requiredMB: number;
   availableMB: number;
 }> {
-  const { modelFileSize, contextLength, getAvailableMemory, quantizedCache, weightsMapped, projectorFileSize = 0 } =
+  const { modelFileSize, contextLength, getAvailableMemory, quantizedCache, weightsMapped, projectorFileSize = 0, systemAvailableBytes } =
     args;
   try {
     const { available, total } = await getAvailableMemory();
@@ -186,7 +189,9 @@ export async function checkMemoryForModel(
     const projectorMB = weightsMapped ? projectorFileSize / (1024 * 1024) : 0;
     const weightsFit = !weightsMapped || isLoadableOnDevice((modelFileSize + projectorFileSize) / 1e9, total / 1024 ** 3, textModelBudget());
     const requiredMB = weightsMapped && weightsFit ? kvCacheMB + projectorMB + MIN_HEADROOM_MB : estimatedMB + projectorMB + MIN_HEADROOM_MB;
-    const safe = weightsFit && availableMB > requiredMB;
+    const systemAvailableMB = systemAvailableBytes ? systemAvailableBytes / (1024 * 1024) : null;
+    const systemFits = !weightsMapped || systemAvailableMB === null || systemAvailableMB > estimatedMB + projectorMB + MIN_HEADROOM_MB;
+    const safe = weightsFit && systemFits && availableMB > requiredMB;
     // [MEM-SM] the pre-load fit decision — kept (surfaces the exact "it needs ~X but only Y" call
     // on-device AND in tests via DEBUG_LOGS=1). This is the gate the qwythos refusal came from.
     logger.log(
@@ -197,18 +202,19 @@ export async function checkMemoryForModel(
       )} availMB=${Math.round(availableMB)} ctx=${contextLength} mapped=${!!weightsMapped} safe=${safe}`,
     );
     if (!safe) {
+      const shortOnPages = weightsFit && !systemFits;
       return {
         safe: false,
         reason: `Not enough memory: model needs ~${Math.round(
-          requiredMB,
+          shortOnPages ? estimatedMB + projectorMB + MIN_HEADROOM_MB : requiredMB,
         )}MB but only ${Math.round(
-          availableMB,
+          shortOnPages ? systemAvailableMB! : availableMB,
         )}MB available (device total: ${Math.round(
           totalMB,
         )}MB). Try closing other apps or using a smaller model.`,
         estimatedMB,
-        requiredMB,
-        availableMB,
+        requiredMB: shortOnPages ? estimatedMB + projectorMB + MIN_HEADROOM_MB : requiredMB,
+        availableMB: shortOnPages ? systemAvailableMB! : availableMB,
       };
     }
     return { safe: true, estimatedMB, requiredMB, availableMB };
