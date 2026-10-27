@@ -274,7 +274,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
                         </View>
                       );
                     })}
-                    {!plan.items[3] && (
+                    {!plan.items.some(item => item.kind === 'video') && (
                       <View style={styles.unavailableItem} testID="auto-setup-video-row">
                         <Text style={styles.itemKind}>VIDEO</Text>
                         <Text style={styles.itemSize}>
