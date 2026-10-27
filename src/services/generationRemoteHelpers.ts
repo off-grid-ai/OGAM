@@ -186,12 +186,14 @@ export async function generateRemoteWithToolsImpl(
         );
       svc.checkSharePrompt();
       svc.resetState();
-      await videoSeam.finishDeferred(
-        conversationId,
-        outcome.interrupted,
-      );
-      svc.drainQueue();
     }
+    // Aborted or not, as the local path does: a clip this turn deferred is settled (dropped when the
+    // turn was stopped) and the queue moves on, so a pending clip never holds queued messages.
+    await videoSeam.finishDeferred(
+      conversationId,
+      outcome.interrupted,
+    );
+    svc.drainQueue();
   } catch (error) {
     videoSeam.discardDeferred(conversationId);
     if (svc.abortRequested) return;
