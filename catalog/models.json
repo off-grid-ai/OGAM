@@ -680,7 +680,16 @@
         "isNew": true
       }
     ],
-    "transcription": [],
+    "transcription": [
+      {
+        "id": "large-v3-turbo-q5_0",
+        "name": "Large v3 Turbo (Light)",
+        "size": 574,
+        "lang": "multi",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
+        "description": "Large v3 Turbo at a third of the download, 99 languages"
+      }
+    ],
     "coreml": [],
     "litert": []
   }
