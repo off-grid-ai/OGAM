@@ -8,7 +8,7 @@
 import { installNativeBoundary, requireRTL, GB } from '../../harness/nativeBoundary';
 
 describe('Off Grid AI mark on image models', () => {
-  it('marks Off Grid AI builds in the list and the picks, and leaves other sources unmarked', async () => {
+  it('marks exactly Off Grid AI builds, in the list and the picks', async () => {
     installNativeBoundary({ fs: true, ram: { platform: 'android', totalBytes: 12 * GB, availBytes: 8 * GB } });
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () => new Response('[]', { status: 200 })) as typeof fetch;
@@ -25,28 +25,24 @@ describe('Off Grid AI mark on image models', () => {
 
       const models = render(React.createElement(ModelsScreen));
       fireEvent.press(models.getByText('Image'));
-      await waitFor(() => expect(models.getAllByText(/FLUX\.2 klein 4B/).length).toBeGreaterThan(0), { timeout: 4000 });
+      // Off Grid AI's own image builds (huggingface.co/offgrid-ai): the SDXL style family.
+      const OURS = /\b(RealVisXL|Juggernaut|DreamShaper|Animagine|Illustrious)\b/;
+      await waitFor(() => expect(models.queryAllByTestId(/^image-model-card-\d+$/).length).toBeGreaterThan(0), { timeout: 4000 });
 
-      // In the list: an Off Grid AI build carries the mark; FLUX.2 klein (leejet's build) does not.
-      const cardOf = (name: RegExp) => {
-        const card = models.queryAllByTestId(/^image-model-card-\d+$/).find((node: any) => within(node).queryAllByText(name).length > 0);
-        if (!card) throw new Error(`No image card named ${name}`);
-        return card;
-      };
-      const ours = cardOf(/^RealVisXL v5\.0 \(photoreal\)/);
-      const theirs = cardOf(/^FLUX\.2 klein 4B \(Light\)/);
-      expect(within(ours).getByTestId('made-by-off-grid')).toBeTruthy();
-      expect(within(theirs).queryByTestId('made-by-off-grid')).toBeNull();
-
-      // In the picks for this phone: the same rule per pick card.
-      const pickOf = (name: RegExp) => {
-        const pick = ['fast', 'balanced', 'best'].map(slot => models.queryByTestId(`pick-${slot}`))
-          .find((node: any) => node && within(node).queryAllByText(name).length > 0);
-        if (!pick) throw new Error(`No pick named ${name}`);
-        return pick;
-      };
-      expect(within(pickOf(/Juggernaut/)).getByTestId('made-by-off-grid')).toBeTruthy();
-      expect(within(pickOf(/Z-Image Turbo/)).queryByTestId('made-by-off-grid')).toBeNull();
+      // Every card and pick shown: the mark appears exactly on Off Grid AI's builds, whatever this
+      // phone is offered (the offer follows the phone's memory).
+      const named = (node: any) => within(node).queryAllByText(/./).map((t: any) => String(t.props.children)).join(' ');
+      const shown = [
+        ...models.queryAllByTestId(/^image-model-card-\d+$/),
+        ...['fast', 'balanced', 'best'].map(slot => models.queryByTestId(`pick-${slot}`)).filter(Boolean),
+      ];
+      let ourCount = 0;
+      for (const node of shown) {
+        const ours = OURS.test(named(node).trim());
+        if (ours) ourCount++;
+        expect([named(node), within(node).queryAllByTestId('made-by-off-grid').length > 0]).toEqual([named(node), ours]);
+      }
+      expect(ourCount).toBeGreaterThan(0);
     } finally {
       globalThis.fetch = originalFetch;
     }
