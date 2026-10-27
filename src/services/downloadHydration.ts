@@ -67,8 +67,15 @@ function isImageRow(r: NativeDownloadRow): boolean {
   return r.modelType === 'image' || (r.modelId?.startsWith('image:') ?? false);
 }
 
+/**
+ * The native key of one file of a video pack. Those rows belong to the video provider, which shows the
+ * pack as one row (`video:<id>`); the Download Manager never shows a file of it on its own.
+ */
+export const VIDEO_FILE_KEY_PREFIX = 'video-file:';
+
 function getParentRows(rows: NativeDownloadRow[], mmProjIds: Set<string>): NativeDownloadRow[] {
   return rows.filter(r =>
+    !r.modelKey?.startsWith(VIDEO_FILE_KEY_PREFIX) &&
     !mmProjIds.has(r.downloadId) &&
     !isMmProjFileName(r.fileName) &&
     r.status !== 'cancelled' &&

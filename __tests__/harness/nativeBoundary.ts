@@ -978,6 +978,9 @@ export interface DownloadRow {
   bytesDownloaded?: number;
   totalBytes?: number;
   reason?: string;
+  modelKey?: string;
+  combinedTotalBytes?: number;
+  createdAt?: number;
 }
 
 export interface DownloadFake {
