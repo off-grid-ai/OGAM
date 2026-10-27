@@ -142,10 +142,11 @@ describe('checkMemoryForModel', () => {
     expect((await checkMemoryForModel({ ...args, projectorFileSize: 0.92e9 })).safe).toBe(true);
   });
 
-  it('refuses mapped weights past what the fit rule allows on this RAM (Gemma 4 12B on 12 GB)', async () => {
+  it('refuses mapped weights past what the fit rule allows on this RAM (8.5 GB on 12 GB)', async () => {
+    // The iPhone's chat ceiling is 70% of 11.2 GB (7.8 GB): Gemma 4 12B (7.3 GB) loads, 8.5 GB does not.
     mockGetMemory.mockResolvedValue(IPHONE_12GB);
     const result = await checkMemoryForModel({
-      modelFileSize: 7.3e9, contextLength: 4096, getAvailableMemory: mockGetMemory, quantizedCache: true, weightsMapped: true,
+      modelFileSize: 8.5e9, contextLength: 4096, getAvailableMemory: mockGetMemory, quantizedCache: true, weightsMapped: true,
     });
     expect(result.safe).toBe(false);
   });
