@@ -61,11 +61,18 @@ function osDialog(rtl: AnalyticsApp['rtl']): Pick<StudioApp, 'dialog' | 'answer'
 /** Home with Pro and the paired computer's video model picked. */
 export async function launchStudioApp(
   computer: Parameters<typeof serveDesktopModelPulls>[0] = { memoryGb: 34 },
-  options: { imageModel?: boolean } = {},
+  options: {
+    imageModel?: boolean;
+    /** The phone's native video engine and film composer (a phone build that has them). */
+    phoneEngine?: boolean;
+  } = {},
 ): Promise<StudioApp> {
   const app = await launchApp({
     release: false,
-    beforeApp: options.imageModel ? placeImageModel : undefined,
+    beforeApp: boundary => {
+      if (options.imageModel) placeImageModel(boundary);
+      if (options.phoneEngine) require('./nativeVideoEngine').installNativeVideoEngine(boundary);
+    },
   });
   const { view, rtl, boundary } = app;
   const jobs = serveDesktopVideoJobs(boundary.fs!);
