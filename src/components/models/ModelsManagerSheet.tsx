@@ -101,7 +101,7 @@ export const ModelsManagerSheet: React.FC<Props> = ({
           if (selection.activeServerId === server.id) {
             remoteServerManager.clearActiveRemoteTextModel();
           }
-          (['image', 'transcription', 'voice'] as const).forEach(category => {
+          (['image', 'video', 'transcription', 'voice'] as const).forEach(category => {
             if (selection.activeRemoteMediaServerIds[category] === server.id) {
               remoteServerManager.clearActiveRemoteMediaModel(category);
             }
