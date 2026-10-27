@@ -138,6 +138,8 @@ class ImageGenerationService {
 
   /** Own the terminal error state and its retry actions. */
   private _fail(error: string, opts?: { cause?: unknown; remote?: boolean }): null {
+    // Where it failed decides the title: a model that loaded and then could not draw did not fail to load.
+    const failedWhileDrawing = this.state.phase === 'generating';
     this.updateState({
       phase: 'error',
       progress: null,
@@ -172,9 +174,10 @@ class ImageGenerationService {
         : undefined;
     // Report with the typed cause (not the wrapped string) so the overridable
     // discriminant survives; `message` keeps the user-facing wrapped text.
+    const drawFailed = failedWhileDrawing && !opts?.remote && !memoryPressure;
     reportModelFailure('image', opts?.cause ?? error, {
       message: error,
-      title: opts?.remote ? 'Remote image error' : undefined,
+      title: opts?.remote ? 'Remote image error' : drawFailed ? "Image model: Couldn't make the image" : undefined,
       remote: opts?.remote,
       onRetry,
       onLoadAnyway,
