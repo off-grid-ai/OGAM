@@ -6,7 +6,7 @@
  * phone. I pick it on Home and describe a clip in a chat in video mode: the clip is made on this
  * phone, shows its progress while it runs, and lands as a clip card. I can stop a clip midway. A whole film
  * is made here too, shot by shot, then joined. A download can be paused, resumed or cancelled, and
- * an installed model deleted.
+ * an installed model deleted; a download the network drops says so and can be retried or removed.
  *
  * The real App runs. Device boundaries only: the llama.rn engine, the disk, the RAM sensor, the
  * native background downloads, the phone's video engine and film composer (nativeVideoEngine).
@@ -204,4 +204,39 @@ it('the film\'s card in the chat opens its storyboard as a draft, and Making whi
   await view.findByTestId('making-stop', {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByTestId('making-stop'));
   await view.findByTestId('making-retry', {}, { timeout: 10_000 });
+}, 90_000);
+
+it('a video model download the network drops says so; Retry finishes it, and Remove clears it', async () => {
+  const current = await launch();
+  const { view, rtl, boundary } = current;
+  rtl.fireEvent.press(await view.findByTestId('models-tab'));
+  rtl.fireEvent.press(await view.findByText('Video'));
+  await view.findByText(MODEL.name, {}, { timeout: 10_000 });
+  const dropNetwork = async () => {
+    await rtl.waitFor(() => expect(boundary.download!.active().some(row => row.status === 'running')).toBe(true));
+    const row = boundary.download!.active().filter(item => item.status === 'running').pop()!;
+    await rtl.act(async () => {
+      boundary.download!.events.emit('DownloadError', {
+        downloadId: row.downloadId, fileName: row.fileName, modelId: row.modelId,
+        status: 'failed', reason: 'Network connection lost',
+      });
+    });
+  };
+
+  rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
+  await dropNetwork();
+  await view.findByText(/Network connection lost/, {}, { timeout: 10_000 });
+  rtl.fireEvent.press(await view.findByLabelText('Remove download', {}, { timeout: 10_000 }));
+  await view.findByLabelText(`Download ${MODEL.name}`, {}, { timeout: 10_000 });
+  expect(view.queryByLabelText('Retry download')).toBeNull();
+
+  rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
+  await dropNetwork();
+  rtl.fireEvent.press(await view.findByLabelText('Retry download', {}, { timeout: 10_000 }));
+  let finished = 0;
+  await rtl.waitFor(async () => {
+    finished += await current.downloads.finishRunning();
+    expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0);
+  }, { timeout: 15_000 });
+  expect(view.queryByLabelText('Retry download')).toBeNull();
 }, 90_000);
