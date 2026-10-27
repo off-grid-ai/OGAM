@@ -17,6 +17,8 @@ export interface DesktopVideoJobs {
   submissions: Array<Record<string, unknown>>;
   /** Every job the phone asked Desktop to stop (POST /v1/videos/:id/cancel). */
   cancels: string[];
+  /** From now on a running job carries Desktop's live preview (its poll's `preview`, and GET .../preview). */
+  showPreviews: () => void;
   /** Every job running now ends failed with this reason, as Desktop reports a failed job. */
   failRunning: (message: string) => void;
   /** Keep every job running (polls answer `running`) until release(). */
@@ -38,9 +40,13 @@ export function serveDesktopVideoJobs(disk: NativeFileSystemBoundary): DesktopVi
   const jobs = new Map<string, { body: Record<string, unknown>; polls: number; cancelled?: boolean; failed?: string }>();
   let activeVideo: string | null = null;
   let held = false;
+  let previews = false;
   const state: DesktopVideoJobs = {
     submissions: [],
     cancels: [],
+    showPreviews: () => {
+      previews = true;
+    },
     failRunning: message => {
       for (const job of jobs.values()) if (!job.cancelled) job.failed = message;
     },
@@ -102,6 +108,17 @@ export function serveDesktopVideoJobs(disk: NativeFileSystemBoundary): DesktopVi
       state.cancels.push(id);
       return json({ request_id: id, status: 'running', poll_url: `/v1/videos/${id}` });
     }
+    const preview = url.pathname.match(/^\/v1\/videos\/([^/]+)\/preview$/);
+    if (preview && method === 'GET') {
+      // Desktop streams the running job's first decoded frame as a PNG (gateway.ts, resource 'preview').
+      const job = jobs.get(decodeURIComponent(preview[1]));
+      if (!job || !previews || job.cancelled || job.failed)
+        return json({ error: { message: 'Video preview is not available.', type: 'invalid_request_error' } }, 404);
+      return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), {
+        status: 200,
+        headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' },
+      });
+    }
     const poll = url.pathname.match(/^\/v1\/videos\/([^/]+)$/);
     if (poll && method === 'GET') {
       const id = decodeURIComponent(poll[1]);
@@ -117,7 +134,13 @@ export function serveDesktopVideoJobs(disk: NativeFileSystemBoundary): DesktopVi
         return json({ ...base, status: 'failed', error: { message: 'Video generation stopped.', type: 'cancelled' } });
       }
       if (job.polls === 1 || held) {
-        return json({ ...base, status: 'running', stage: 'generating', progress: { step: 1, total: 4 } });
+        return json({
+          ...base,
+          status: 'running',
+          stage: 'generating',
+          ...(previews ? { preview: { url: `/v1/videos/${id}/preview`, width: 320, height: 192 } } : {}),
+          progress: { step: 1, total: 4 },
+        });
       }
       const contentUrl = `${DESKTOP_VIDEO_ENDPOINT}/v1/videos/${id}/content`;
       for (const fs of disks) fs.serveRemoteFile(contentUrl, { body: 'mp4-bytes' });
