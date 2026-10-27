@@ -18,6 +18,8 @@ import { remoteMediaRuntime } from './remoteMediaRuntime';
 import { featureUsed, generationStarted } from './analytics/analytics';
 import { modelRef } from './analytics/values';
 import { fileName } from './analytics/scrub';
+import { QwenAsrEngine } from './qwenAsrEngine';
+import { isQwenAsrModelId, QWEN_ASR_MODEL_ID } from './qwenAsrModel';
 
 // Re-export the model catalog + transcription normalizer (moved to whisperModels.ts
 // to keep this file within the max-lines budget). Behavior-neutral: every existing
@@ -31,6 +33,16 @@ interface TranscriptionResult {
   recordingTime: number;
 }
 type TranscriptionCallback = (result: TranscriptionResult) => void;
+
+/** What the person reads when Qwen3-ASR could not transcribe a recording. */
+export const ASR_FELL_BACK_NOTICE = "Qwen3-ASR couldn't transcribe that, so Whisper did.";
+export const ASR_FAILED_NOTICE = "Qwen3-ASR couldn't transcribe that. Try again, or download a Whisper model.";
+
+/** A recording transcribed by Qwen3-ASR, or by Whisper after Qwen3-ASR failed. */
+interface AsrOutcome {
+  text: string;
+  notice?: string;
+}
 
 class WhisperService {
   private context: WhisperContext | null = null;
@@ -53,6 +65,23 @@ class WhisperService {
    */
   private nativeLane: Promise<void> = Promise.resolve();
   private readonly modelDownloads = new WhisperModelDownloads();
+  /** The selected model when it is Qwen3-ASR: a llama.rn context with the audio projector. */
+  private readonly asrEngine = new QwenAsrEngine();
+  /** A live Qwen3-ASR recording; cancel drops its result and ends the session. */
+  private asrSession: { cancel: () => void } | null = null;
+  private readonly noticeListeners = new Set<(notice: string) => void>();
+
+  /** Hear every one-line notice about a transcription (shown in the composer). */
+  onNotice(listener: (notice: string) => void): () => void {
+    this.noticeListeners.add(listener);
+    return () => {
+      this.noticeListeners.delete(listener);
+    };
+  }
+
+  private notify(notice: string): void {
+    this.noticeListeners.forEach(listener => listener(notice));
+  }
 
   /** Wait for every earlier native job, then hold the context until the returned leave() is called. */
   private enterNativeLane(): Promise<() => void> {
@@ -110,6 +139,12 @@ class WhisperService {
   }
 
   async loadModel(modelPath: string): Promise<void> {
+    const asrFiles = whisperModelFiles.getQwenAsrFilesForPath(modelPath);
+    if (asrFiles) {
+      await this.loadAsrModel(modelPath, asrFiles);
+      return;
+    }
+    if (this.asrEngine.isLoaded()) await this.unloadModel();
     if (this.context && this.currentModelPath !== modelPath)
       await this.unloadModel();
     if (this.context && this.currentModelPath === modelPath) return;
@@ -137,8 +172,28 @@ class WhisperService {
     }
   }
 
+  /** Load the selected Qwen3-ASR model in place of any Whisper context. */
+  private async loadAsrModel(
+    modelPath: string,
+    files: NonNullable<ReturnType<typeof whisperModelFiles.getQwenAsrFilesForPath>>,
+  ): Promise<void> {
+    if (this.asrEngine.isLoaded() && this.currentModelPath === modelPath) return;
+    if (this.context || this.asrEngine.isLoaded()) await this.unloadModel();
+    if (this.isReleasingContext) await this.contextReleasePromise;
+    await whisperModelFiles.validateQwenAsrFiles(files);
+    try {
+      await this.asrEngine.load(files);
+      this.currentModelPath = modelPath;
+      logger.log('[Whisper] Qwen3-ASR model loaded');
+    } catch (error) {
+      logger.error('[Whisper] Failed to load Qwen3-ASR model:', error);
+      this.currentModelPath = null;
+      throw error;
+    }
+  }
+
   async unloadModel(): Promise<void> {
-    if (!this.context) return;
+    if (!this.context && !this.asrEngine.isLoaded()) return;
     // Stop active transcription to prevent SIGSEGV on freed context
     if (this.isTranscribing || this.stopFn) {
       logger.log(
@@ -158,6 +213,7 @@ class WhisperService {
       const leave = await this.enterNativeLane();
       try {
         await this.context?.release();
+        await this.asrEngine.release();
       } catch (error) {
         logger.error('[WhisperService] Error releasing context:', error);
       } finally {
@@ -170,7 +226,7 @@ class WhisperService {
     await this.contextReleasePromise;
   }
   isModelLoaded(): boolean {
-    return this.context !== null;
+    return this.context !== null || this.asrEngine.isLoaded();
   }
   getLoadedModelPath(): string | null {
     return this.currentModelPath;
@@ -219,6 +275,11 @@ class WhisperService {
     const language = options?.language || 'en';
     logger.log(`[WhisperService] start (context=${!!this.context})`);
     logger.log('[WhisperService] isTranscribing:', this.isTranscribing);
+
+    if (this.asrEngine.isLoaded()) {
+      await this.startAsrSession(onResult, language);
+      return;
+    }
 
     if (!this.context) {
       throw new Error('No Whisper model loaded');
@@ -423,7 +484,7 @@ class WhisperService {
       if (fn) {
         // Guard: only call stop if context still exists
         // Calling stop on a freed context causes SIGSEGV
-        if (this.context) {
+        if (this.context || this.asrSession) {
           await fn();
         } else {
           logger.log(
@@ -452,6 +513,11 @@ class WhisperService {
     // Atomic grab-and-clear to match stopTranscription's pattern and prevent double-stop
     const fn = this.stopFn;
     this.stopFn = null;
+    if (this.asrSession) {
+      // A Qwen3-ASR session holds only the recorder: drop it, and drop any result still coming.
+      this.asrSession.cancel();
+      return;
+    }
     const activeTranscriptionStopped = this.transcriptionFullyStopped;
     const nativeStop =
       fn && this.context
@@ -528,6 +594,12 @@ class WhisperService {
       onProgress?: (progress: number) => void;
     },
   ): Promise<string> {
+    if (this.asrEngine.isLoaded()) {
+      const { text, notice } = await this.transcribeWithAsr(filePath, options?.language);
+      // Nothing came back and nothing could stand in: a failure, not silence.
+      if (!text && notice === ASR_FAILED_NOTICE) throw new Error(notice);
+      return text;
+    }
     if (!this.context) {
       throw new Error('No Whisper model loaded');
     }
@@ -548,6 +620,127 @@ class WhisperService {
     logger.log(`[WIRE-STT] ${JSON.stringify({ textLength: __res?.result?.length ?? 0 })}`);
     const { result } = __res;
     return cleanTranscription(result);
+  }
+
+  /**
+   * Qwen3-ASR has no live stream: record the utterance to a file, and on stop transcribe that file
+   * and deliver it as the session's one final result.
+   */
+  private async startAsrSession(onResult: TranscriptionCallback, language: string): Promise<void> {
+    if (this.isTranscribing || this.stopFn) await this.stopTranscription();
+    this.realtimeStart.begin();
+    this.isTranscribing = true;
+    const session = ++this.realtimeSession;
+    featureUsed('voice_input');
+    const endAnalytics = generationStarted('stt', {
+      model: modelRef(QWEN_ASR_MODEL_ID),
+      engine: 'qwen3-asr',
+      backend: Platform.OS === 'ios' ? 'metal' : 'cpu',
+    });
+    let resolveStopped: () => void = () => {};
+    this.transcriptionFullyStopped = new Promise<void>(resolve => {
+      resolveStopped = resolve;
+    });
+    let ended = false;
+    const end = () => {
+      if (ended) return;
+      ended = true;
+      // A newer session may already be recording: its state is not ours to clear.
+      if (session === this.realtimeSession) {
+        this.isTranscribing = false;
+        this.stopFn = null;
+        this.asrSession = null;
+      }
+      resolveStopped();
+    };
+    const deliver = (outcome: AsrOutcome) => {
+      if (ended) return;
+      onResult({ text: outcome.text, isCapturing: false, processTime: 0, recordingTime: 0 });
+      end();
+    };
+    try {
+      if (!(await this.requestPermissions())) {
+        endAnalytics('stopped');
+        throw new Error('Microphone permission denied');
+      }
+      await audioRecorderService.startRecording();
+      this.asrSession = {
+        cancel: () => {
+          if (audioRecorderService.isCurrentlyRecording()) audioRecorderService.cancelRecording();
+          endAnalytics('stopped');
+          end();
+        },
+      };
+      this.stopFn = async () => {
+        try {
+          const { path } = await audioRecorderService.stopRecording();
+          // The transcription outlives stop(), as whisper.rn's final event does.
+          // eslint-disable-next-line no-void
+          void this.enterNativeLane().then(async leave => {
+            try {
+              const outcome = await this.transcribeWithAsr(path, language);
+              endAnalytics(outcome.notice === ASR_FAILED_NOTICE ? 'failed' : 'done');
+              deliver(outcome);
+            } catch (error) {
+              logger.error('[WhisperService] Qwen3-ASR transcription did not finish:', error);
+              endAnalytics('failed', { error });
+              deliver({ text: '' });
+            } finally {
+              leave();
+            }
+          });
+        } catch (error) {
+          logger.error('[WhisperService] Qwen3-ASR recording failed to stop:', error);
+          endAnalytics('failed', { error });
+          deliver({ text: '' });
+        }
+      };
+      this.realtimeStart.settle();
+    } catch (error) {
+      this.realtimeStart.settle();
+      endAnalytics('failed', { error });
+      end();
+      throw error;
+    }
+  }
+
+  /**
+   * Transcribe a recording with Qwen3-ASR. When it fails, a downloaded Whisper model transcribes it
+   * instead. Either way the person is told in one line. The caller holds the native lane.
+   */
+  private async transcribeWithAsr(filePath: string, language?: string): Promise<AsrOutcome> {
+    const outcome = await this.transcribeWithAsrOrWhisper(filePath, language);
+    if (outcome.notice) this.notify(outcome.notice);
+    return outcome;
+  }
+
+  private async transcribeWithAsrOrWhisper(filePath: string, language?: string): Promise<AsrOutcome> {
+    try {
+      return { text: cleanTranscription(await this.asrEngine.transcribe(filePath, language)) };
+    } catch (error) {
+      logger.error('[WhisperService] Qwen3-ASR transcription failed:', error);
+    }
+    const fallback = await this.whisperFallbackPath(language);
+    if (!fallback) return { text: '', notice: ASR_FAILED_NOTICE };
+    try {
+      // Free Qwen3-ASR first: the two never share memory. The next turn loads it again.
+      await this.asrEngine.release();
+      this.currentModelPath = null;
+      await this.loadModel(fallback);
+      return { text: await this.transcribeLocalFile(filePath, { language }), notice: ASR_FELL_BACK_NOTICE };
+    } catch (error) {
+      logger.error('[WhisperService] Whisper fallback failed:', error);
+      return { text: '', notice: ASR_FAILED_NOTICE };
+    }
+  }
+
+  /** The smallest downloaded Whisper model that speaks the language, for a Qwen3-ASR fallback. */
+  private async whisperFallbackPath(language?: string): Promise<string | null> {
+    const whisper = (await whisperModelFiles.listDownloadedModels())
+      .filter(model => !isQwenAsrModelId(model.modelId))
+      .filter(model => language === 'en' || !model.modelId.endsWith('.en'))
+      .sort((a, b) => a.sizeBytes - b.sizeBytes);
+    return whisper[0]?.filePath ?? null;
   }
 }
 

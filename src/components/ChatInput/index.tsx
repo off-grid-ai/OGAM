@@ -253,6 +253,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     isTranscribing,
     partialResult,
     error,
+    transcriptionNotice,
     voiceAvailable,
     isAwaitingSpeech,
     startRecording,
@@ -585,6 +586,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     <View style={styles.container}>
       <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
       <QueueRow queue={queue} actions={queueActions} />
+      {transcriptionNotice ? (
+        <Text style={styles.transcriptionNotice} testID="transcription-notice">
+          {transcriptionNotice}
+        </Text>
+      ) : null}
       <View style={styles.mainRow}>
         <View style={styles.pill}>
           {showVoiceStatus ? (
