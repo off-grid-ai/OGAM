@@ -6,6 +6,7 @@
  */
 
 import { getIpAddress, isEmulator } from 'react-native-device-info';
+import { readGatewayComputerId } from '@offgrid/sync';
 import { isPrivateIPv4, isIPv6 } from '../utils/network';
 import logger from '../utils/logger';
 
@@ -15,6 +16,8 @@ export interface DiscoveredServer {
   name: string;
   /** Off Grid AI Desktop answered, but it requires an API key before it lists models. */
   needsKey?: boolean;
+  /** The Sync device id an Off Grid AI Desktop names on /health: the same computer at any address. */
+  computerId?: string;
 }
 
 export type DiscoverableServerKind = DiscoveredServer['type'];
@@ -74,7 +77,24 @@ function fetchWithDeadline(url: string): Promise<Response | null> {
   });
 }
 
-type ProbeResult = 'found' | 'needs-key' | 'none';
+type ProbeResult =
+  | { kind: 'found' | 'needs-key'; computerId?: string }
+  | { kind: 'none' };
+
+const NONE: ProbeResult = { kind: 'none' };
+
+/** An Off Grid AI Desktop's /health answer, or undefined when the gateway port is something else. */
+async function readOffGridHealth(base: string): Promise<{ computerId?: string } | undefined> {
+  const health = await fetchWithDeadline(`${base}/health`);
+  if (health?.status !== 200) return undefined;
+  try {
+    const body = await health.json();
+    if (typeof body?.name !== 'string' || !body.name.startsWith('Off Grid AI')) return undefined;
+    return { computerId: readGatewayComputerId(body) };
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Probe a single host:port. A 200 on the provider's model path is a server we can use as it is.
@@ -82,21 +102,18 @@ type ProbeResult = 'found' | 'needs-key' | 'none';
  * Off Grid AI Desktop can require an API key, and then /v1/models answers 401 to a phone that has
  * none. Its /health page stays open in that mode, so a 401 on the gateway port is confirmed there:
  * the phone still finds the desktop and asks the person for the key, instead of reporting an empty
- * network.
+ * network. /health also names the computer, so a desktop found at a new address is still known.
  */
 async function probe(ip: string, provider: typeof PROVIDERS[number]): Promise<ProbeResult> {
   const base = `http://${ip}:${provider.port}`; // NOSONAR — LAN endpoint
   const res = await fetchWithDeadline(`${base}${provider.probePath}`);
-  if (res?.status === 200) return 'found';
-  if (res?.status !== 401 || provider.type !== 'gateway') return 'none';
-  const health = await fetchWithDeadline(`${base}/health`);
-  if (health?.status !== 200) return 'none';
-  try {
-    const body = await health.json();
-    return typeof body?.name === 'string' && body.name.startsWith('Off Grid AI') ? 'needs-key' : 'none';
-  } catch {
-    return 'none';
+  if (res?.status === 200) {
+    if (provider.type !== 'gateway') return { kind: 'found' };
+    return { kind: 'found', computerId: (await readOffGridHealth(base))?.computerId };
   }
+  if (res?.status !== 401 || provider.type !== 'gateway') return NONE;
+  const health = await readOffGridHealth(base);
+  return health ? { kind: 'needs-key', computerId: health.computerId } : NONE;
 }
 
 /**
@@ -252,17 +269,18 @@ export async function discoverLANServers(
     const seenEndpoints = new Set<string>();
 
     const recordIfFound = (target: string, provider: typeof PROVIDERS[0]) => (result: ProbeResult) => {
-      if (result === 'none') return;
+      if (result.kind === 'none') return;
       const endpoint = `http://${target}:${provider.port}`; // NOSONAR — LAN endpoint
       if (!seenEndpoints.has(endpoint)) {
         seenEndpoints.add(endpoint);
-        const keyNote = result === 'needs-key' ? ' (API key required)' : '';
+        const keyNote = result.kind === 'needs-key' ? ' (API key required)' : '';
         log(`Found ${provider.name} at ${target}:${provider.port}${keyNote}`);
         const server: DiscoveredServer = {
           endpoint,
           type: provider.type,
           name: `${provider.name} (${target})`,
-          ...(result === 'needs-key' ? { needsKey: true } : {}),
+          ...(result.kind === 'needs-key' ? { needsKey: true } : {}),
+          ...(result.computerId ? { computerId: result.computerId } : {}),
         };
         discovered.push(server);
         options.onFound?.(server);

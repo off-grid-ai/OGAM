@@ -23,6 +23,7 @@ export function useLANDiscovery({ navigation, setAlertState }: LANDiscoveryParam
         name: server.name,
         endpoint: server.endpoint,
         providerType: 'openai-compatible',
+        ...(server.computerId ? { computerId: server.computerId } : {}),
       });
       if (server.needsKey) keyServer ??= { id: added.id, name: server.name };
       else remoteServerManager.testConnection(added.id).catch(() => { });

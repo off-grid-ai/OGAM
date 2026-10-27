@@ -65,6 +65,8 @@ export interface RemoteServer {
   modelCatalog?: RemoteModelCatalog;
   /** A detected model-management contract. Generic OpenAI-compatible servers leave this unset. */
   modelManagement?: 'offgrid-desktop-v1';
+  /** An Off Grid AI Desktop's Sync device id: the same computer whatever address it has today. */
+  computerId?: string;
 }
 
 /** Model presence is the one source of truth for available remote media work. */

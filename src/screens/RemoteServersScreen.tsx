@@ -113,6 +113,7 @@ export const RemoteServersScreen: React.FC = () => {
               name: server.name,
               endpoint: server.endpoint,
               providerType: 'openai-compatible',
+              ...(server.computerId ? { computerId: server.computerId } : {}),
             }).then(saved => {
               if (server.needsKey) {
                 keyServerId ??= saved.id;

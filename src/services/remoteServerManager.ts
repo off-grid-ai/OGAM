@@ -61,11 +61,13 @@ class RemoteServerManager {
   ): Promise<RemoteServer> {
     const store = useRemoteServerStore.getState();
 
-    // Deduplicate: if a server with the same endpoint already exists, return it
+    // Deduplicate: the same computer (by its Sync id), or the same endpoint, is the server already saved
     const normalizedEndpoint = trimSlash(config.endpoint);
-    const existing = store.servers.find(
-      s => trimSlash(s.endpoint) === normalizedEndpoint,
-    );
+    const existing =
+      (config.computerId
+        ? store.servers.find(s => s.computerId === config.computerId)
+        : undefined) ??
+      store.servers.find(s => trimSlash(s.endpoint) === normalizedEndpoint);
     if (existing) {
       logger.log('[RemoteServerManager] Server already exists:', existing.name);
       return existing;
@@ -318,16 +320,20 @@ class RemoteServerManager {
     found: DiscoveredServer[];
   }> {
     let discovered: DiscoveredServer[];
-    const savedEndpoints = new Set(
-      useRemoteServerStore
-        .getState()
-        .servers.map(server => trimSlash(server.endpoint)),
+    const saved = useRemoteServerStore.getState().servers;
+    const savedEndpoints = new Set(saved.map(server => trimSlash(server.endpoint)));
+    const savedComputers = new Set(
+      saved.flatMap(server => (server.computerId ? [server.computerId] : [])),
     );
+    // A computer already saved at another address is not new: one row per computer.
+    const isNew = (server: DiscoveredServer): boolean =>
+      !savedEndpoints.has(trimSlash(server.endpoint)) &&
+      !(server.computerId && savedComputers.has(server.computerId));
     try {
       discovered = await discoverLANServers(undefined, {
         ...options,
         onFound: server => {
-          if (!savedEndpoints.has(trimSlash(server.endpoint))) options.onFound?.(server);
+          if (isNew(server)) options.onFound?.(server);
         },
       });
     } catch (error) {
@@ -339,9 +345,7 @@ class RemoteServerManager {
     }
     return {
       moved: [],
-      found: discovered.filter(
-        server => !savedEndpoints.has(trimSlash(server.endpoint)),
-      ),
+      found: discovered.filter(isNew),
     };
   }
 
