@@ -253,6 +253,33 @@ it('sends a daily features snapshot once per day and survives unreadable storage
   expect(typeof settings.prev_ms).toBe('number');
 });
 
+it('withdrawing Usage before anything is queued still lets a crash arrive', async () => {
+  // Both were turned on in an earlier launch, so this launch queues no opt-in: the queue is empty.
+  const AsyncStorage = require('@react-native-async-storage/async-storage');
+  await AsyncStorage.setItem(
+    'local-llm-app-storage',
+    JSON.stringify({ state: { settings: { analyticsUsage: true, analyticsCrashes: true } }, version: 0 }),
+  );
+  const { analytics, endpoint, flush, errorHandler } = await setup(null);
+  await analytics.setAnalyticsConsent({ usage: false }, 'settings');
+  errorHandler()(new TypeError('Cannot read the file'), false);
+  await flush();
+  await waitFor(() => expect(endpoint.named('$exception')).toHaveLength(1));
+  expect(endpoint.named('feature_used')).toEqual([]);
+});
+
+it('withdrawing Usage drops a queued entry that names no event, and a crash still arrives', async () => {
+  // The SDK's queue from the last launch, on disk: its queue item type allows an entry with no message.
+  const AsyncStorage = require('@react-native-async-storage/async-storage');
+  await AsyncStorage.setItem('.posthog-rn.json', JSON.stringify({ version: 'v1', content: { queue: [{}] } }));
+  const { analytics, endpoint, flush, errorHandler } = await setup({ usage: true, crashes: true });
+  await analytics.setAnalyticsConsent({ usage: false }, 'settings');
+  errorHandler()(new TypeError('Cannot read the file'), false);
+  await flush();
+  await waitFor(() => expect(endpoint.named('$exception')).toHaveLength(1));
+  expect(endpoint.named('chat_created')).toEqual([]);
+});
+
 it('a corrupt unclean-exit marker from the last launch is ignored and cleared', async () => {
   const AsyncStorage = require('@react-native-async-storage/async-storage');
   await AsyncStorage.setItem('offgrid.analytics.uncleanExit', '{not json');
