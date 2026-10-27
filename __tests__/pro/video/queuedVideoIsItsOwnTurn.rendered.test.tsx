@@ -105,3 +105,48 @@ it('queued questions go together and a queued video prompt goes alone', async ()
   await rtl.waitFor(() => expect(view.getByTestId('chat-clip-card')).toBeTruthy(), { timeout: 8000 });
   expect(require('../../../src/bootstrap/videoSeam').videoSeam.hasPending()).toBe(false);
 });
+
+it('Send now on a queued question stops the running video and sends the question', async () => {
+  const h = await setupChatScreen({ engine: 'llama', platform: 'android' });
+  const { rtl } = h;
+  desktop = serveDesktopVideoJobs(h.boundary.fs!);
+  const { remoteServerManager } = require('../../../src/services/remoteServerManager');
+  const { RemoteModelOptionsSection } = require('../../../src/components/models/RemoteModelOptionsSection');
+  const server = await remoteServerManager.addServer({
+    name: 'Studio Mac',
+    endpoint: DESKTOP_VIDEO_ENDPOINT,
+    providerType: 'openai-compatible',
+    modelManagement: 'offgrid-desktop-v1',
+    modelCatalog: { video: [DESKTOP_VIDEO_MODEL] },
+  });
+  const rowId = `remote-video-model-${server.id}:${DESKTOP_VIDEO_MODEL.id}`;
+  const picker = rtl.render(React.createElement(RemoteModelOptionsSection, { category: 'video' }));
+  rtl.fireEvent.press(picker.getByTestId(rowId));
+  await rtl.waitFor(() => expect(picker.getByTestId(rowId).props.accessibilityState?.selected).toBe(true));
+  picker.unmount();
+  await require('../../harness/proHarness').installPro();
+  h.render();
+  const view = h.view!;
+  const toggleVideoMode = async () => {
+    rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('quick-settings-button')));
+    rtl.fireEvent.press(await rtl.waitFor(() => view.getByTestId('quick-video-mode')));
+  };
+
+  // A clip is being made on the computer, and it keeps running.
+  desktop.hold();
+  await toggleVideoMode();
+  await h.tapSend(CLIP);
+  await rtl.waitFor(() => expect(desktop!.submissions).toHaveLength(1), { timeout: 8000 });
+  // A question sent meanwhile (video mode is for one message) waits behind the clip.
+  h.boundary.llama!.scriptCompletion({ text: 'About two metres.' });
+  await h.tapSend('how deep is the pond');
+  await rtl.waitFor(() => expect(view.getByTestId('queued-message-0')).toBeTruthy(), { timeout: 4000 });
+  expect(view.queryByText('About two metres.')).toBeNull();
+
+  rtl.fireEvent.press(view.getByTestId('queued-send-now-0'));
+
+  // The clip is stopped on the computer, and the question is answered now.
+  await rtl.waitFor(() => expect(desktop!.cancels).toEqual([String(desktop!.submissions[0].client_job_id)]), { timeout: 8000 });
+  expect(await view.findByText('About two metres.', {}, { timeout: 8000 })).toBeTruthy();
+  await rtl.waitFor(() => expect(require('../../../src/bootstrap/videoSeam').videoSeam.hasPending()).toBe(false));
+});

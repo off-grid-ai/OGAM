@@ -1169,7 +1169,7 @@ export async function handleSendFn(
   );
 }
 /**
- * Send one queued message at once: it moves to the front, the running reply (text or image) stops,
+ * Send one queued message at once: it moves to the front, the running reply (text, image or video) stops,
  * and the stop's drain sends it on its own. With nothing running it goes straight away.
  */
 export async function sendQueuedNowFn(
@@ -1177,8 +1177,11 @@ export async function sendQueuedNowFn(
   id: string,
 ): Promise<void> {
   generationService.sendQueuedNow(id);
+  // The same "is anything running" rule as a send: a running video is stopped too, or the sent
+  // turn would race the native video worker for memory.
   const running =
     generationService.getState().isGenerating ||
+    videoSeam.isBusy() ||
     imageGenerationService.getState().isGenerating;
   if (running) await handleStopFn(deps);
   else generationService.drainQueue();

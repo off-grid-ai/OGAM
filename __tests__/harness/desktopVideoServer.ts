@@ -15,15 +15,28 @@ export const DESKTOP_VIDEO_MODEL = { id: 'wan2.1-1.3b', name: 'Wan 2.1 1.3B' };
 export interface DesktopVideoJobs {
   /** Every video submission Desktop received: the JSON body the phone sent. */
   submissions: Array<Record<string, unknown>>;
+  /** Every job the phone asked Desktop to stop (POST /v1/videos/:id/cancel). */
+  cancels: string[];
+  /** Keep every job running (polls answer `running`) until release(). */
+  hold: () => void;
+  release: () => void;
   restore: () => void;
 }
 
 export function serveDesktopVideoJobs(fs: NativeFileSystemBoundary): DesktopVideoJobs {
   const original = globalThis.fetch;
-  const jobs = new Map<string, { body: Record<string, unknown>; polls: number }>();
+  const jobs = new Map<string, { body: Record<string, unknown>; polls: number; cancelled?: boolean }>();
   let activeVideo: string | null = null;
+  let held = false;
   const state: DesktopVideoJobs = {
     submissions: [],
+    cancels: [],
+    hold: () => {
+      held = true;
+    },
+    release: () => {
+      held = false;
+    },
     restore: () => {
       globalThis.fetch = original;
     },
@@ -61,6 +74,15 @@ export function serveDesktopVideoJobs(fs: NativeFileSystemBoundary): DesktopVide
       jobs.set(id, { body, polls: 0 });
       return json({ request_id: id, object: 'request', kind: 'video', status: 'queued', poll_url: `/v1/videos/${id}` }, 202);
     }
+    const cancel = url.pathname.match(/^\/v1\/videos\/([^/]+)\/cancel$/);
+    if (cancel && method === 'POST') {
+      const id = decodeURIComponent(cancel[1]);
+      const job = jobs.get(id);
+      if (!job) return json({ error: { message: 'Video job was not found.', type: 'not_found' } }, 404);
+      job.cancelled = true;
+      state.cancels.push(id);
+      return json({ request_id: id, status: 'running', poll_url: `/v1/videos/${id}` });
+    }
     const poll = url.pathname.match(/^\/v1\/videos\/([^/]+)$/);
     if (poll && method === 'GET') {
       const id = decodeURIComponent(poll[1]);
@@ -68,7 +90,11 @@ export function serveDesktopVideoJobs(fs: NativeFileSystemBoundary): DesktopVide
       if (!job) return json({ error: { message: 'Video job was not found.', type: 'not_found' } }, 404);
       job.polls += 1;
       const base = { request_id: id, poll_url: `/v1/videos/${id}` };
-      if (job.polls === 1) {
+      // Desktop records a stop as a failed request whose error type is `cancelled` (pro/main/video/gateway.ts).
+      if (job.cancelled) {
+        return json({ ...base, status: 'failed', error: { message: 'Video generation stopped.', type: 'cancelled' } });
+      }
+      if (job.polls === 1 || held) {
         return json({ ...base, status: 'running', stage: 'generating', progress: { step: 1, total: 4 } });
       }
       const contentUrl = `${DESKTOP_VIDEO_ENDPOINT}/v1/videos/${id}/content`;
