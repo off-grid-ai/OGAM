@@ -75,3 +75,19 @@ it('a film the computer cannot make says why, and Try again sends it again', asy
   await rtl.waitFor(() => expect(app.stories.submissions).toHaveLength(2), { timeout: 10_000 });
   await view.findByTestId('making-watch', {}, { timeout: 30_000 });
 }, 90_000);
+
+it('the finished film plays under its title, made on the computer, and Delete there removes it', async () => {
+  const app = await filmUnderway();
+  const { view, rtl } = app;
+  app.stories.release();
+  rtl.fireEvent.press(await view.findByTestId('making-watch', {}, { timeout: 30_000 }));
+  await view.findByTestId('video-viewer', {}, { timeout: 10_000 });
+  expect(view.getByText(/^Made with AI · on /)).toBeTruthy();
+  rtl.fireEvent.press(view.getByTestId('viewer-delete'));
+  expect(app.dialog()?.title).toBe('Delete this video?');
+  await app.answer('Delete');
+  await rtl.waitFor(() => expect(view.queryByTestId('video-viewer')).toBeNull(), { timeout: 10_000 });
+  // Back on Making, the film and its story are gone.
+  await view.findByText('This video was deleted.', {}, { timeout: 10_000 });
+  expect(view.queryByTestId('making-watch')).toBeNull();
+}, 90_000);

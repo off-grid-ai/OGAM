@@ -297,3 +297,44 @@ it('a video model download cut off by the app closing says so, and Retry finishe
   }, { timeout: 15_000 });
   expect(view.queryByLabelText('Retry download')).toBeNull();
 }, 90_000);
+
+it('a video model too big for the space left says how much to free, and starts nothing', async () => {
+  const current = await launch();
+  const { view, rtl, boundary } = current;
+  boundary.fs!.setFreeBytes(2 * GB);
+  rtl.fireEvent.press(await view.findByTestId('models-tab'));
+  rtl.fireEvent.press(await view.findByText('Video'));
+  await view.findByText(MODEL.name, {}, { timeout: 10_000 });
+  rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
+  await view.findByText(/^Not enough space for this video model\. Free about \d+ GB and try again\.$/, {}, { timeout: 10_000 });
+  expect(boundary.download!.active()).toHaveLength(0);
+  expect(view.getByLabelText(`Download ${MODEL.name}`)).toBeTruthy();
+}, 90_000);
+
+it('Retry after a dropped download keeps the files already on the phone', async () => {
+  const current = await launch();
+  const { view, rtl, boundary } = current;
+  rtl.fireEvent.press(await view.findByTestId('models-tab'));
+  rtl.fireEvent.press(await view.findByText('Video'));
+  await view.findByText(MODEL.name, {}, { timeout: 10_000 });
+  rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
+  // The first file lands; the network drops during the second.
+  await rtl.waitFor(async () => expect(await current.downloads.finishRunning()).toBe(1), { timeout: 10_000 });
+  await rtl.waitFor(() => expect(boundary.download!.active().filter(row => row.status === 'running')).toHaveLength(2));
+  const second = boundary.download!.active().filter(row => row.status === 'running').pop()!;
+  await rtl.act(async () => {
+    boundary.download!.events.emit('DownloadError', {
+      downloadId: second.downloadId, fileName: second.fileName, modelId: second.modelId,
+      status: 'failed', reason: 'Network connection lost',
+    });
+  });
+  const startedBefore = boundary.download!.module.startDownload.mock.calls.length;
+  rtl.fireEvent.press(await view.findByLabelText('Retry download', {}, { timeout: 10_000 }));
+  let finished = 0;
+  await rtl.waitFor(async () => {
+    finished += await current.downloads.finishRunning();
+    expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0);
+  }, { timeout: 15_000 });
+  // Only the two files not yet on the phone were fetched again.
+  expect(boundary.download!.module.startDownload.mock.calls.length - startedBefore).toBe(MODEL.files - 1);
+}, 90_000);

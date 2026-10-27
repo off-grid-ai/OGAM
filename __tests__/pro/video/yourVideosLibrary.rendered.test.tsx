@@ -87,3 +87,29 @@ it('Delete asks first, then removes the clip; + opens a chat', async () => {
   rtl.fireEvent.press(view.getByTestId('library-new'));
   await view.findByTestId('chat-input', {}, { timeout: 10_000 });
 }, 60_000);
+
+it('the viewer pauses on a tap and saves the clip to Downloads', async () => {
+  const app = await launchStudioApp();
+  const { view, rtl } = app;
+  // Android's Downloads, at the native boundary (MediaStore through SyncDownloadsModule).
+  const saved: Array<{ name: string; mime: string }> = [];
+  require('react-native').NativeModules.SyncDownloadsModule = {
+    saveFileToDownloads: async (_source: string, name: string, mime: string) => {
+      saved.push({ name, mime });
+      return true;
+    },
+  };
+  await makeClipInChat(app, CLIP);
+  await openLibrary(app);
+  rtl.fireEvent.press(view.getAllByTestId(/^library-item-/)[0]);
+  const toggle = await view.findByTestId('viewer-toggle', {}, { timeout: 10_000 });
+  expect(toggle.props.accessibilityLabel).toBe('Pause');
+  rtl.fireEvent.press(toggle);
+  await rtl.waitFor(() => expect(view.getByTestId('viewer-toggle').props.accessibilityLabel).toBe('Play'));
+
+  expect(saved).toHaveLength(0);
+  rtl.fireEvent.press(view.getByTestId('viewer-save'));
+  await rtl.waitFor(() => expect(app.dialog()?.title).toBe('Video saved'));
+  expect(app.dialog()?.message).toBe('The video is in Downloads.');
+  expect(saved).toEqual([{ name: expect.stringMatching(/\.mp4$/), mime: 'video/mp4' }]);
+}, 60_000);
