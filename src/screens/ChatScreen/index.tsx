@@ -40,6 +40,7 @@ import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services';
+import { findTranscriptionModel } from '../../services/whisperModels';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useActiveRemoteModelLabels } from '../../hooks/useActiveRemoteModelLabels';
 import { useChatStore } from '../../stores';
@@ -98,7 +99,7 @@ export const ChatScreen: React.FC = () => {
     voice: remoteLabels.voice ?? voiceSummary ?? '—',
     speech:
       remoteLabels.transcription ??
-      whisperModels.find(m => m.id === whisperModelId)?.name ??
+      findTranscriptionModel(whisperModels, whisperModelId)?.name ??
       '—',
   };
   const pendingModelRowRef = useRef<ModelRowType | null>(null);

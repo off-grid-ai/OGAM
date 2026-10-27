@@ -32,6 +32,7 @@ import { WhisperPickerSheet } from '../../components/models/WhisperPickerSheet';
 import { VoiceModelsSheet } from '../../components/models/VoiceModelsSheet';
 import { useWhisperStore } from '../../stores/whisperStore';
 import { WHISPER_MODELS } from '../../services';
+import { findTranscriptionModel } from '../../services/whisperModels';
 import { useWithRemoteCatalog } from '../../stores/modelCatalogStore';
 import { useUiModeStore } from '../../stores/uiModeStore';
 import { SLOTS, useSlot } from '../../bootstrap/slotRegistry';
@@ -134,7 +135,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     voice: remoteLabels.voice,
     transcription: remoteLabels.transcription,
     localVoice: voiceSummary,
-    localTranscription: whisperModels.find(m => m.id === whisperModelId)?.name,
+    localTranscription: findTranscriptionModel(whisperModels, whisperModelId)?.name,
   });
 
   // Downloaded-model counts shown in the Models card (replaces the old stats row).

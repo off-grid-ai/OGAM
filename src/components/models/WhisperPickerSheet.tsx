@@ -15,12 +15,19 @@ import { useSttDownloadState } from '../../hooks/useSttDownloadState';
 import { RemoteModelOptionsSection } from './RemoteModelOptionsSection';
 import { remoteServerManager } from '../../services/remoteServerManager';
 import { ModelCard } from '../ModelCard';
+import { hardwareService } from '../../services/hardware';
+import { isQwenAsrModelId, isQwenAsrOffered, qwenAsrCardFor, QWEN_ASR_MODEL_ID } from '../../services/qwenAsrModel';
 
 type Props = {
   visible: boolean;
   onClose: () => void;
   onClosed?: () => void;
   onBackToModels?: () => void;
+};
+
+const languagesFact = (model: { id: string; lang: 'en' | 'multi' }): string => {
+  if (isQwenAsrModelId(model.id)) return '30 languages';
+  return model.lang === 'multi' ? '99 languages' : 'English';
 };
 
 /**
@@ -40,6 +47,11 @@ export const WhisperPickerSheet: React.FC<Props> = ({
   const isModelLoading = useWhisperStore(s => s.isModelLoading);
   const presentModelIds = useWhisperStore(s => s.presentModelIds);
   const whisperModels = useWithRemoteCatalog('transcription', WHISPER_MODELS);
+  // Qwen3-ASR joins the list where this platform runs it and the phone memory guard admits it.
+  const asrModel = visible && isQwenAsrOffered(hardwareService.getTotalMemoryGB())
+    ? qwenAsrCardFor(QWEN_ASR_MODEL_ID)
+    : undefined;
+  const models = asrModel ? [...whisperModels, asrModel] : whisperModels;
   const downloadModel = useWhisperStore(s => s.downloadModel);
   const selectModel = useWhisperStore(s => s.selectModel);
   const deleteModelById = useWhisperStore(s => s.deleteModelById);
@@ -74,7 +86,7 @@ export const WhisperPickerSheet: React.FC<Props> = ({
           onSelect={onClose}
         />
         <Text style={styles.sectionLabel}>On-device models</Text>
-        {whisperModels.map(m => {
+        {models.map(m => {
           const active = downloadedModelId === m.id;
           const present = presentModelIds.includes(m.id);
           // Per-model in-flight state from the shared owner: this row's own progress, disabled only
@@ -87,7 +99,7 @@ export const WhisperPickerSheet: React.FC<Props> = ({
               compact
               model={{ id: m.id, name: m.name, author: 'On device', description: m.description }}
               file={{ name: m.name, size: m.size * 1024 * 1024, quantization: '', downloadUrl: '' }}
-              facts={[m.lang === 'multi' ? '99 languages' : 'English', 'Transcription']}
+              facts={[languagesFact(m), 'Transcription']}
               isActive={active}
               isDownloaded={present}
               isDownloading={!!dl?.downloading}
