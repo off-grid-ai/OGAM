@@ -22,6 +22,16 @@ export interface StudioApp extends AnalyticsApp {
   jobs: DesktopVideoJobs;
   models: DesktopModelPulls;
   stories: DesktopStoryJobs;
+  /** The OS dialog on screen now (Alert.alert), or null. */
+  dialog: () => OsDialog | null;
+  /** Tap a button on the OS dialog on screen, as a person would. */
+  answer: (button: string) => Promise<void>;
+}
+
+export interface OsDialog {
+  title: string;
+  message?: string;
+  buttons: Array<{ text?: string; onPress?: () => void }>;
 }
 
 let current: StudioApp | undefined;
@@ -33,7 +43,22 @@ export async function launchStudioApp(computer: Parameters<typeof serveDesktopMo
   const jobs = serveDesktopVideoJobs(boundary.fs!);
   const models = serveDesktopModelPulls(computer);
   const stories = serveDesktopStoryJobs(boundary.fs!);
-  current = { ...app, jobs, models, stories };
+  // The OS dialog is a device surface: remember what it offers so the test can answer it like a person.
+  let dialog: OsDialog | null = null;
+  require('react-native').Alert.alert = (title: string, message?: string, buttons?: OsDialog['buttons']) => {
+    dialog = { title, message, buttons: buttons ?? [{ text: 'OK' }] };
+  };
+  const answer = async (button: string) => {
+    const shown = dialog;
+    if (!shown) throw new Error(`No dialog is on screen to answer "${button}".`);
+    const choice = shown.buttons.find(item => item.text === button);
+    if (!choice) throw new Error(`The dialog "${shown.title}" has no "${button}" button.`);
+    dialog = null;
+    await rtl.act(async () => {
+      choice.onPress?.();
+    });
+  };
+  current = { ...app, jobs, models, stories, dialog: () => dialog, answer };
   await passOnboarding(app, false);
   await require('./proHarness').installPro();
   // What pairing leaves behind; the person picks the computer's video model on Home.

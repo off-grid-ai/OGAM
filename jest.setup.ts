@@ -639,6 +639,7 @@ jest.mock('react-native-reanimated', () => {
     },
     FadeIn: { duration: jest.fn().mockReturnThis(), delay: jest.fn().mockReturnThis() },
     FadeOut: { duration: jest.fn().mockReturnThis(), delay: jest.fn().mockReturnThis() },
+    FadeInDown: { duration: jest.fn().mockReturnThis(), delay: jest.fn().mockReturnThis() },
     SlideInDown: { duration: jest.fn().mockReturnThis() },
     SlideOutDown: { duration: jest.fn().mockReturnThis() },
     LinearTransition: { duration: jest.fn().mockReturnThis() },
