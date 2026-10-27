@@ -14,6 +14,8 @@ import { AnimatedEntry } from '../components/AnimatedEntry';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ListSearchBar } from '../components/ListSearchBar';
+import { PairedComputerResults } from '../components/PairedComputerResults';
+import { usePairedComputerSearch } from '../hooks/usePairedComputerSearch';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
@@ -231,6 +233,31 @@ export const ChatsListScreen: React.FC = () => {
       conversation.messages.some(message => message.content.toLowerCase().includes(query)),
     );
   }, [searchQuery, sortedConversations]);
+  const computerSearch = usePairedComputerSearch(searchQuery);
+  const chatsListed = useMemo(
+    () => new Set(searchQuery.trim() ? visibleConversations.map(conversation => conversation.id) : []),
+    [searchQuery, visibleConversations],
+  );
+  const chatsOnPhone = useMemo(() => new Set(conversations.map(conversation => conversation.id)), [conversations]);
+  const openChat = (conversationId: string) => {
+    setActiveConversation(conversationId);
+    navigation.navigate('Chat', { conversationId });
+  };
+  const computerResults = computerSearch.computer && !selecting ? (
+    <PairedComputerResults
+      computer={computerSearch.computer}
+      outcome={computerSearch.outcome}
+      chatsListed={chatsListed}
+      chatsOnPhone={chatsOnPhone}
+      onOpenChat={openChat}
+      onRetry={computerSearch.retry}
+      onEnterKey={() => {
+        if (computerSearch.computer) {
+          navigation.navigate('RemoteServerEditor', { serverId: computerSearch.computer.id, needsKey: true });
+        }
+      }}
+    />
+  ) : null;
   const allVisibleSelected =
     visibleConversations.length > 0 &&
     visibleConversations.every(conversation => selectedIds.has(conversation.id));
@@ -346,6 +373,7 @@ export const ChatsListScreen: React.FC = () => {
             ListEmptyComponent={
               <Text style={styles.noMatches}>No chats match your search.</Text>
             }
+            ListFooterComponent={computerResults}
             testID="conversation-list"
           />
         </>
