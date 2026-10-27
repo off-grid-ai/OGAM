@@ -2,9 +2,11 @@
  * The Image tab offers this phone the 2026 image models it can run.
  *
  * A model is offered only where the memory guard will load it (934ffd377: one estimate decides both).
- * An 8 GB phone (it reports about 7.4 GB) has about 4.5 GB for a model, and FLUX.2 klein 4B (Light) needs
- * about 6.4 GB, so it is not offered there. A 12 GB phone (about 11.2 GB) gets it as a pick, and Z-Image
- * Turbo (Light) too. SDXL Lightning and SDXL Turbo, which FLUX.2 klein replaces, are no longer offered.
+ * An 8 GB Snapdragon phone (it reports about 7.4 GB) has about 4.5 GB for a model, and FLUX.2 klein 4B
+ * (Light) needs about 6.4 GB, so it is not offered there. A 12 GB Snapdragon phone (about 11.2 GB) lists
+ * it, and Z-Image Turbo (Light), with how long an image takes; they are not "For this phone" picks,
+ * because sd.cpp runs only on the CPU on Snapdragon (fb5ab710f) and Local Dream is the pick there.
+ * SDXL Lightning and SDXL Turbo, which FLUX.2 klein replaces, are no longer offered.
  *
  * Real ModelsScreen, Image tab, the shared catalog and pack rules, the sd.cpp model list and the
  * memory recommendation. Fakes only at the device boundary: the RAM sensor, the file system and the
@@ -25,8 +27,8 @@ describe('2026 image models on the Image tab', () => {
   it.each([
     { phone: '8 GB', reportedBytes: 7.4 * GB, flux: false, zImageLight: false },
     { phone: '12 GB', reportedBytes: 11.2 * GB, flux: true, zImageLight: true },
-  ])('a $phone Android phone is offered only what it can load, never SDXL Lightning or Turbo', async ({ reportedBytes, flux, zImageLight }) => {
-    installNativeBoundary({ fs: true, ram: { platform: 'android', totalBytes: reportedBytes, availBytes: reportedBytes / 2 } });
+  ])('a $phone Snapdragon phone is offered only what it can load, never SDXL Lightning or Turbo', async ({ reportedBytes, flux, zImageLight }) => {
+    installNativeBoundary({ fs: true, deviceHardware: 'qcom', socModel: 'SM8635', ram: { platform: 'android', totalBytes: reportedBytes, availBytes: reportedBytes / 2 } });
     const React = require('react');
     const { render, fireEvent, waitFor } = requireRTL();
     const AsyncStorage =
@@ -42,10 +44,15 @@ describe('2026 image models on the Image tab', () => {
     expect(models.queryAllByText(/FLUX\.2 klein 4B/)).toHaveLength(0);
 
     fireEvent.press(models.getByText('Image'));
-    // FLUX.2 klein 4B (Light) shows as a pick ("For this phone" names the model, not its quant).
-    if (flux) await waitFor(() => expect(models.getAllByText(/^FLUX\.2 klein 4B/).length).toBeGreaterThan(0), { timeout: 4000 });
-    else {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+    if (flux) {
+      // Listed with its honest time on this phone, and not a pick.
+      await waitFor(() => expect(models.getByText('FLUX.2 klein 4B (Light)')).toBeTruthy(), { timeout: 4000 });
+      expect(models.getAllByText(/About \d+ min per image on this phone/).length).toBeGreaterThan(0);
+      expect(models.queryByTestId('image-picks')).toBeNull();
+    } else {
+      // The tab has finished loading and rendered its (empty) list before absence is checked: the empty
+      // state shows only once loading is over.
+      await waitFor(() => expect(models.getByText(/^No models (available|match your filters)$/)).toBeTruthy(), { timeout: 4000 });
       expect(models.queryAllByText(/FLUX\.2 klein/)).toHaveLength(0);
     }
 
