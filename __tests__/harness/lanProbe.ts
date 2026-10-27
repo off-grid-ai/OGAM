@@ -19,6 +19,11 @@ interface LiveHost {
   paths: string[];
   /** The body it returns, device-shaped for an OpenAI-compatible server. */
   body: unknown;
+  /**
+   * Off Grid AI Desktop with API keys on: every API path answers 401, while /health stays open and
+   * names the gateway, as Desktop's gateway does.
+   */
+  locked?: boolean;
 }
 
 export interface LanProbeHandle {
@@ -60,9 +65,17 @@ export function installLanProbe(live: Record<string, LiveHost>): LanProbeHandle 
     const path = match?.[2] ?? '/';
     const host = live[authority];
 
-    if (!host || !host.paths.some(allowed => path.startsWith(allowed))) {
+    if (!host || !(host.paths.some(allowed => path.startsWith(allowed)) || (host.locked && path.startsWith('/health')))) {
       // A closed port refuses at once. This is what the great majority of a /24 does.
       return Promise.reject(new Error('Network request failed'));
+    }
+
+    if (host.locked && path.startsWith('/v1/')) {
+      return Promise.resolve({ ok: false, status: 401, json: async () => ({ error: 'unauthorized' }) } as unknown as Response);
+    }
+    if (host.locked && path.startsWith('/health')) {
+      const health = { name: 'Off Grid AI — local model gateway' };
+      return Promise.resolve({ ok: true, status: 200, json: async () => health, text: async () => JSON.stringify(health) } as unknown as Response);
     }
 
     return Promise.resolve({
