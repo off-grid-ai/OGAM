@@ -25,6 +25,8 @@ export interface NativeVideoEngine {
   hold: () => void;
   release: () => void;
   failNext: (message: string) => void;
+  /** From now on the engine also hands back its first decoded frame, as sd.cpp's preview callback does. */
+  showPreviews: () => void;
 }
 
 /** Install both modules. Call from launchApp's `beforeApp`, before anything requires Pro. */
@@ -35,6 +37,7 @@ export function installNativeVideoEngine(boundary: NativeBoundary): NativeVideoE
   let holdNext = false;
   let parked: (() => void) | null = null;
   let failure: string | null = null;
+  let previews = false;
   let running: { reject: (error: Error) => void; output: string } | null = null;
   let status: Record<string, unknown> | null = null;
   const engine: NativeVideoEngine = {
@@ -50,6 +53,9 @@ export function installNativeVideoEngine(boundary: NativeBoundary): NativeVideoE
     },
     failNext: message => {
       failure = message;
+    },
+    showPreviews: () => {
+      previews = true;
     },
   };
   const coded = (code: string, message: string) => Object.assign(new Error(message), { code });
@@ -98,6 +104,13 @@ export function installNativeVideoEngine(boundary: NativeBoundary): NativeVideoE
           progress('conditioning', 0, 0, 'cpu');
           progress('generating', 0, steps);
           progress('generating', 1, steps);
+          if (previews) {
+            // The native preview: a PNG beside the clip, announced on the encoding stage (VideoGenerationModule.preview).
+            const preview = { path: `${output}.preview.png`, width: Number(input.width) || 320, height: Number(input.height) || 192 };
+            fs.seedFile(preview.path, 2048);
+            status = { ...status, stage: 'encoding', step: 0, total: 0, preview };
+            events.emit('VideoGenerationProgress', { stage: 'encoding', step: 0, total: 0, preview });
+          }
           if (holdNext) {
             holdNext = false;
             await new Promise<void>(go => {

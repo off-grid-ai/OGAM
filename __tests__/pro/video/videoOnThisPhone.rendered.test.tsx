@@ -6,7 +6,9 @@
  * phone. I pick it on Home and describe a clip in a chat in video mode: the clip is made on this
  * phone, shows its progress while it runs, and lands as a clip card. I can stop a clip midway. A whole film
  * is made here too, shot by shot, then joined. A download can be paused, resumed or cancelled, and
- * an installed model deleted; a download the network drops says so and can be retried or removed.
+ * an installed model deleted; a download the network drops says so and can be retried or removed, and one cut off by the app
+ * closing says so and can be retried. While a clip is made, the engine's first frame shows; a phone short of free
+ * memory says so before it starts and can run it anyway.
  *
  * The real App runs. Device boundaries only: the llama.rn engine, the disk, the RAM sensor, the
  * native background downloads, the phone's video engine and film composer (nativeVideoEngine).
@@ -36,14 +38,16 @@ interface PhoneVideoApp extends AnalyticsApp {
   downloads: PhoneDownloads;
 }
 
-/** A phone with room for a 6.3 GB video model: 24 GB, 20 GB of it free (the RAM sensor). */
-async function launch(): Promise<PhoneVideoApp> {
+/** By default a phone with room for a 6.3 GB video model: 24 GB, 20 GB of it free (the RAM sensor). */
+async function launch(options: { ram?: { totalBytes: number; availBytes: number }; relaunch?: boolean } = {}): Promise<PhoneVideoApp> {
   let engine!: NativeVideoEngine;
-  app = await launchApp({ release: false, download: true, beforeApp: boundary => {
-    boundary.setRam({ platform: 'android', totalBytes: 24 * GB, availBytes: 20 * GB });
+  const ram = options.ram ?? { totalBytes: 24 * GB, availBytes: 20 * GB };
+  app = await launchApp({ release: false, download: true, relaunch: options.relaunch, beforeApp: boundary => {
+    boundary.setRam({ platform: 'android', ...ram });
     engine = installNativeVideoEngine(boundary);
   } });
-  await passOnboarding(app, false);
+  if (options.relaunch) await app.view.findByTestId('home-screen', {}, { timeout: 10_000 });
+  else await passOnboarding(app, false);
   await require('../../harness/proHarness').installPro();
   return { ...app, engine, downloads: phoneDownloads(app.boundary, app.rtl.act) };
 }
@@ -242,5 +246,54 @@ it('a video model download the network drops says so; Retry finishes it, and Rem
   }, { timeout: 15_000 });
   // The retry really downloaded the files, not just cleared the error.
   expect(finished).toBeGreaterThan(0);
+  expect(view.queryByLabelText('Retry download')).toBeNull();
+}, 90_000);
+
+it('shows the engine\'s first frame while the clip is still being made', async () => {
+  const current = await launch();
+  const { view, rtl } = current;
+  await downloadVideoModel(current);
+  current.engine.showPreviews();
+  current.engine.hold();
+  await describeClipOnPhone(current, 'a red kite over a hillside');
+  await view.findByLabelText('Live preview of the clip', {}, { timeout: 15_000 });
+  expect(view.queryByTestId('chat-clip-card')).toBeNull();
+  current.engine.release();
+  await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
+  await rtl.waitFor(() => expect(view.queryByLabelText('Live preview of the clip')).toBeNull());
+}, 90_000);
+
+it('on a phone short of free memory, says so before it starts, and Run anyway makes the clip', async () => {
+  const current = await launch({ ram: { totalBytes: 12 * GB, availBytes: 8 * GB } });
+  const { view } = current;
+  await downloadVideoModel(current);
+  await describeClipOnPhone(current, 'a hummingbird hovering over a red flower');
+  const runAnyway = await view.findByText('Run anyway', {}, { timeout: 15_000 });
+  expect(current.engine.generations).toHaveLength(0);
+  current.rtl.fireEvent.press(runAnyway);
+  await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
+  expect(current.engine.generations).toHaveLength(1);
+}, 90_000);
+
+it('a video model download cut off by the app closing says so, and Retry finishes it', async () => {
+  const first = await launch();
+  first.rtl.fireEvent.press(await first.view.findByTestId('models-tab'));
+  first.rtl.fireEvent.press(await first.view.findByText('Video'));
+  await first.view.findByText(MODEL.name, {}, { timeout: 10_000 });
+  first.rtl.fireEvent.press(first.view.getByLabelText(`Download ${MODEL.name}`));
+  await first.view.findByLabelText('Cancel download', {}, { timeout: 10_000 });
+  first.view.unmount();
+  first.endpoint.restore();
+
+  const current = await launch({ relaunch: true });
+  const { view, rtl } = current;
+  rtl.fireEvent.press(await view.findByTestId('models-tab'));
+  rtl.fireEvent.press(await view.findByText('Video'));
+  await view.findByText(/Interrupted — app closed\./, {}, { timeout: 10_000 });
+  rtl.fireEvent.press(view.getByLabelText('Retry download'));
+  await rtl.waitFor(async () => {
+    await current.downloads.finishRunning();
+    expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0);
+  }, { timeout: 15_000 });
   expect(view.queryByLabelText('Retry download')).toBeNull();
 }, 90_000);
