@@ -463,6 +463,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             tabNav.navigate('ProDetail');
           }}
           onAssistantSetupSync={() => tabNav.navigate('Sync')}
+          onFindComputer={() => tabNav.navigate('RemoteServers')}
           onVideoUpgrade={() => {
             proGateShown('video');
             tabNav.navigate('ProDetail');

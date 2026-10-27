@@ -19,6 +19,7 @@ import { QuickSettingsPopover, AttachPickerPopover } from './Popovers';
 import { useKeyboardAwarePopover } from './useKeyboardAwarePopover';
 import { useAppStore } from '../../stores';
 import { useRemoteServerStore } from '../../stores/remoteServerStore';
+import { remoteServerCapabilities } from '../../types/remoteServer';
 import { useUiModeStore } from '../../stores';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { videoSeam } from '../../bootstrap/videoSeam';
@@ -40,6 +41,8 @@ interface ChatInputProps {
   onImageModeChange?: (mode: ImageModeState) => void;
   /** Video is Pro. Called instead of turning video on when Pro is not active. */
   onVideoUpgrade?: () => void;
+  /** Opens the screen where a computer is paired. Offered when no video model is reachable. */
+  onFindComputer?: () => void;
   onOpenSettings?: () => void;
   queue?: QueueView;
   queueActions?: QueueActions;
@@ -158,6 +161,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   imageModelLoaded = false,
   onImageModeChange,
   onVideoUpgrade,
+  onFindComputer,
   onOpenSettings: _onOpenSettings,
   queue,
   queueActions,
@@ -347,17 +351,38 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       );
       if (!remoteVideoId && !localVideoSelected) {
         if (downloadedVideoModels.length === 0) {
-          setAlertState(
-            showAlert(
-              'No Video Model',
-              'Download a video generation model from the Models screen to enable this feature.',
-              [{ text: 'OK' }],
-            ),
-          );
-          quickSettings.hide();
-          return;
+          const remote = useRemoteServerStore.getState();
+          const computer = [
+            ...remote.servers.filter(server => server.id === remote.activeServerId),
+            ...remote.servers,
+          ].find(server => remoteServerCapabilities(server).videoGeneration);
+          if (computer) {
+            remote.setActiveRemoteMediaServerId('video', computer.id);
+          } else {
+            setAlertState(
+              showAlert(
+                'Videos are made on your computer',
+                'Find your computer running Off Grid AI Desktop, and videos are made there.',
+                onFindComputer
+                  ? [
+                      { text: 'Not now' },
+                      {
+                        text: 'Find my computer',
+                        onPress: () => {
+                          setAlertState(hideAlert());
+                          onFindComputer();
+                        },
+                      },
+                    ]
+                  : [{ text: 'OK' }],
+              ),
+            );
+            quickSettings.hide();
+            return;
+          }
+        } else {
+          setActiveVideoModelId(downloadedVideoModels[0].id);
         }
-        setActiveVideoModelId(downloadedVideoModels[0].id);
       }
     }
     const newMode: ImageModeState = imageMode === 'video' ? 'auto' : 'video';
