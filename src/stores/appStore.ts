@@ -1,3 +1,4 @@
+import type { ImageParameterStore } from '@offgrid/models';
 import type { ModalityName, ProcessorPlace } from '../types';
 import { videoModelDisplayName } from '../utils/modelHelpers';
 import type {
@@ -74,6 +75,9 @@ export type AppSettings = {
   videoNegative: string;
   enhanceVideoPrompts: boolean;
   imageSteps: number;
+  /** sd.cpp models keep their own steps, guidance and size, as on Off Grid Desktop (shared
+   *  ImageParameterStore): one global value would give a 4-step Lightning model 50 steps. */
+  imageParameterOverrides?: ImageParameterStore;
   imageGuidanceScale: number;
   imageThreads: number;
   imageWidth: number;

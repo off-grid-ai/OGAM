@@ -21,6 +21,7 @@ export function mobileImageSizeLimit(model: ImageParameterModel): number {
 }
 
 export interface MobileImageParameterSettings {
+  imageParameterOverrides?: ImageParameterStore | null;
   imageSteps?: number | null;
   imageGuidanceScale?: number | null;
   imageWidth?: number | null;
@@ -42,14 +43,9 @@ export function resolveMobileImageParameters(
   settings: MobileImageParameterSettings,
   request: MobileImageParameterRequest = {},
 ): { steps: number; guidanceScale: number; size: number } {
-  const store: ImageParameterStore = {
-    [model.id]: {
-      steps: positiveFinite(settings.imageSteps),
-      cfgScale: positiveFinite(settings.imageGuidanceScale),
-      size: positiveFinite(settings.imageWidth),
-    },
-  };
-  const resolved = resolveImageParameters(model, store);
+  // sd.cpp models read their own overrides (the shared per-model store); the global settings belong
+  // to the native engines, whose packs share one step count.
+  const resolved = resolveImageParameters(model, model.backend === 'sd' ? settings.imageParameterOverrides : null);
   if (model.backend !== 'sd') {
     const defaults = mobileImageParameterDefaults(model, Platform.OS);
     resolved.steps = positiveFinite(settings.imageSteps) ?? defaults.steps;

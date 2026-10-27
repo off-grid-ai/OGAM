@@ -31,8 +31,7 @@ const ClearGPUCacheButton: React.FC = () => {
 
 /** Basic controls: Image Steps + Image Size */
 export const ImageQualityBasicSliders: React.FC = () => {
-  const { parameters, defaults, maxSize, applyDefaults } = useImageParameterSettings();
-  const { updateSettings } = useAppStore();
+  const { parameters, defaults, maxSize, applyDefaults, setParameter } = useImageParameterSettings();
 
   return (
     <>
@@ -43,7 +42,7 @@ export const ImageQualityBasicSliders: React.FC = () => {
         description="4-8 steps for speed, 20-50 for quality"
         value={parameters.steps}
         min={4} max={MAX_IMAGE_STEPS} step={1}
-        onChange={(value) => updateSettings({ imageSteps: value })}
+        onChange={(value) => setParameter('steps', value)}
       />
 
       <SliderSetting
@@ -54,7 +53,7 @@ export const ImageQualityBasicSliders: React.FC = () => {
         value={parameters.size}
         min={SWEET_SPOT_SIZE} max={maxSize} step={64}
         formatValue={(v) => `${v}x${v}`}
-        onChange={(value) => updateSettings({ imageWidth: value, imageHeight: value })}
+        onChange={(value) => setParameter('size', value)}
       />
       <Button title="Use model defaults" variant="secondary" size="small" onPress={applyDefaults} testID="image-model-defaults" />
     </>
@@ -63,7 +62,7 @@ export const ImageQualityBasicSliders: React.FC = () => {
 
 /** Advanced controls: Guidance Scale, Image Threads, GPU Acceleration */
 export const ImageQualityAdvancedSliders: React.FC = () => {
-  const { parameters } = useImageParameterSettings();
+  const { parameters, setParameter } = useImageParameterSettings();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
@@ -77,7 +76,7 @@ export const ImageQualityAdvancedSliders: React.FC = () => {
         description="Higher = follows prompt more strictly (5-15 range)"
         value={parameters.guidanceScale}
         min={1} max={20} step={0.5} decimals={1}
-        onChange={(value) => updateSettings({ imageGuidanceScale: value })}
+        onChange={(value) => setParameter('cfgScale', value)}
       />
 
       <SliderSetting
