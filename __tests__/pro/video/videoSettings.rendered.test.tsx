@@ -2,7 +2,7 @@
  * Video settings in a chat shape the next clip.
  *
  * SPEC (OGAM user's view): a chat's settings have a Video generation section, named for the video
- * model in use. The steps, a fixed seed and what to avoid that I set there are what my next clip is
+ * model in use. A fixed seed and what to avoid that I set there are what my next clip is
  * made with on my computer. A seed that is not a whole
  * number is not kept.
  *
@@ -23,9 +23,9 @@ async function videoSettings(): Promise<StudioApp> {
   rtl.fireEvent.press(await view.findByTestId('new-chat-button', {}, { timeout: 5000 }));
   await view.findByTestId('chat-input');
   rtl.fireEvent.press(view.getByTestId('chat-settings-icon'));
-  expect(view.queryByTestId('video-setting-steps-slider')).toBeNull();
+  expect(view.queryByLabelText('Video seed')).toBeNull();
   rtl.fireEvent.press(await view.findByLabelText('Video generation'));
-  await view.findByTestId('video-setting-steps-slider');
+  await view.findByLabelText('Video seed');
   return app;
 }
 
@@ -40,17 +40,15 @@ async function sendClip(app: StudioApp, prompt: string): Promise<void> {
   await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
 }
 
-it('steps, a fixed seed and what to avoid reach the computer with the next clip', async () => {
+it('a fixed seed and what to avoid reach the computer with the next clip', async () => {
   const app = await videoSettings();
   const { view, rtl } = app;
-  rtl.fireEvent(view.getByTestId('video-setting-steps-slider'), 'slidingStart');
-  rtl.fireEvent(view.getByTestId('video-setting-steps-slider'), 'slidingComplete', 30);
   const seed = view.getByLabelText('Video seed');
   rtl.fireEvent.changeText(seed, '42');
   rtl.fireEvent(seed, 'endEditing');
   rtl.fireEvent.changeText(view.getByLabelText('Video negative prompt'), 'blurry, text');
   await sendClip(app, CLIP);
-  expect(app.jobs.submissions[0]).toMatchObject({ prompt: CLIP, steps: 30, seed: 42, negativePrompt: 'blurry, text' });
+  expect(app.jobs.submissions[0]).toMatchObject({ prompt: CLIP, seed: 42, negativePrompt: 'blurry, text' });
 }, 90_000);
 
 it('a seed that is not a whole number is not kept', async () => {
