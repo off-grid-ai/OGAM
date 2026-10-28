@@ -66,8 +66,6 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Off Grid AI uses the camera when you take a photo to attach to a conversation or to turn into a video, and when you scan a pairing code to connect your computer.</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>Off Grid AI uses Face ID to unlock the API keys and licence it keeps for you in this phone’s keychain.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Off Grid AI uses your local network to find Off Grid AI Desktop and other AI servers on your Wi‑Fi, and to send your requests to them.</string>
 	<key>NSMicrophoneUsageDescription</key>
