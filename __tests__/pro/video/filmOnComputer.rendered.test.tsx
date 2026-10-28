@@ -46,7 +46,7 @@ it('shows the film being made on the computer, then plays it when it comes to th
   rtl.fireEvent.press(view.getAllByLabelText('Back').pop()!);
   await view.findByTestId('film-progress');
   expect(view.getByTestId('shot-strip')).toBeTruthy();
-  expect(view.getByLabelText('On your computer')).toBeTruthy();
+  expect(view.getByLabelText('On your Mac')).toBeTruthy();
   expect(view.getAllByLabelText(/^Shot 1, /).length).toBeGreaterThan(0);
 
   app.stories.release();

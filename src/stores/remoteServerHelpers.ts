@@ -83,6 +83,7 @@ function modelCategories(model: {
   const inputs = Array.isArray(model.architecture?.input_modalities)
     ? model.architecture.input_modalities
     : [];
+  if (outputs.includes('video')) return ['video'];
   if (outputs.includes('image')) return ['image'];
   if (outputs.includes('transcription')) return ['transcription'];
   if (outputs.includes('speech')) return ['voice'];
@@ -117,7 +118,7 @@ async function fetchGatewayModelCatalog(
     DISCOVERY_FETCH_TIMEOUT_MS,
   );
   try {
-    const modelListUrl = `${url}${url.endsWith('/v1') ? '' : '/v1'}/models${isOpenRouter ? '?output_modalities=text,image,transcription,speech' : ''}`;
+    const modelListUrl = `${url}${url.endsWith('/v1') ? '' : '/v1'}/models${isOpenRouter ? '?output_modalities=text,image,video,transcription,speech' : ''}`;
     const response = await fetch(modelListUrl, {
       headers,
       signal: controller.signal,
