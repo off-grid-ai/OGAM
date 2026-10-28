@@ -150,6 +150,13 @@ export interface ProjectChatAppOptions extends DocumentEngineOptions {
    * earlier run left, with nothing seeded again.
    */
   relaunchFrom?: DiskImage;
+  /** The driveable whisper.rn context (boundary.whisper), for journeys that transcribe speech. */
+  whisper?: boolean;
+  /**
+   * Put more of what the phone holds in place (files, databases, saved settings) after the device
+   * boundaries are installed and before the App loads, e.g. what an earlier version left behind.
+   */
+  beforeApp?: (boundary: NativeBoundary, engine: DocumentEngineBoundary) => void | Promise<void>;
 }
 
 const RENDER_WAIT = { timeout: 8000 };
@@ -170,6 +177,7 @@ export async function launchProjectChatApp(options: ProjectChatAppOptions = {}) 
   const boundary: NativeBoundary = installNativeBoundary({
     llama: true,
     fs: true,
+    whisper: options.whisper,
     ram: { platform: 'ios', totalBytes: 8 * GB, availBytes: 6 * GB },
   });
   const fs = boundary.fs!;
@@ -197,6 +205,8 @@ export async function launchProjectChatApp(options: ProjectChatAppOptions = {}) 
       version: 0,
     }));
   }
+
+  await options.beforeApp?.(boundary, engine);
 
   const App = require('../../App').default;
   const view = rtl.render(React.createElement(App));

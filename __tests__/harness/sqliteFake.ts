@@ -83,7 +83,9 @@ export function realSqliteModule(
 ): { open: (config?: { name?: string }) => unknown } {
   const { DatabaseSync } = require('node:sqlite');
 
-  const wrap = (db: any) => ({
+  const wrap = (db: any, path: string) => ({
+    // Where the database file is (op-sqlite's getDbPath); ':memory:' for one kept in memory.
+    getDbPath: () => path,
     executeSync: (sql: string, params: unknown[] = []) => {
       if (options.withoutFts5 && /USING\s+fts5/i.test(sql)) {
         throw new Error('no such module: fts5');
@@ -156,11 +158,12 @@ export function realSqliteModule(
     open: (config?: { name?: string }) => {
       if (options.only && !options.only.includes(config?.name ?? ''))
         return inert();
-      const db = new DatabaseSync(
-        options.persistAt ? require('node:path').join(options.persistAt, config?.name ?? 'default.db') : ':memory:',
-      );
+      const path = options.persistAt
+        ? require('node:path').join(options.persistAt, config?.name ?? 'default.db')
+        : ':memory:';
+      const db = new DatabaseSync(path);
       if (options.setupSql) db.exec(options.setupSql);
-      return wrap(db);
+      return wrap(db, path);
     },
   };
 }
