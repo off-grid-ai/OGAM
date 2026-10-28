@@ -103,3 +103,31 @@ it('offers the person already made on the next film', async () => {
   rtl.fireEvent.press(await view.findByText('Leo', {}, { timeout: 10_000 }));
   await view.findByLabelText('Stop keeping Leo', {}, { timeout: 10_000 });
 }, 90_000);
+
+it('deleting a person asks first; Cancel keeps them, Delete removes them', async () => {
+  const app = await launchStudioApp();
+  const { view, rtl, boundary } = app;
+  boundary.fs!.seedFile(LIBRARY_PHOTO, 2048);
+  await makeClipInChat(app, 'a boy skipping stones on a lake');
+  await storyboard(app);
+  await makeCharacter(app, 'Leo');
+
+  // From the storyboard: back Home, the Gallery card, its Videos tab, where the people made so far are listed.
+  while (view.queryAllByLabelText('Back').length > 0) rtl.fireEvent.press(view.getAllByLabelText('Back').pop()!);
+  rtl.fireEvent.press(await view.findByText('Image Gallery', {}, { timeout: 10_000 }));
+  await view.findByTestId('gallery-screen');
+  rtl.fireEvent.press(view.getByText(/^Videos \(/));
+  rtl.fireEvent.press(await view.findByLabelText('Character Leo', {}, { timeout: 10_000 }));
+  const remove = await view.findByLabelText('Delete character', {}, { timeout: 10_000 });
+
+  expect(app.dialog()).toBeNull();
+  rtl.fireEvent.press(remove);
+  expect(app.dialog()?.title).toBe('Delete Leo?');
+  await app.answer('Cancel');
+  expect(view.getByLabelText('Delete character')).toBeTruthy();
+
+  rtl.fireEvent.press(view.getByLabelText('Delete character'));
+  await app.answer('Delete');
+  await rtl.waitFor(() => expect(view.queryByLabelText('Character Leo')).toBeNull());
+  expect(view.queryByLabelText('Delete character')).toBeNull();
+}, 90_000);
