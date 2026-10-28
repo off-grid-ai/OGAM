@@ -394,7 +394,9 @@ interface ModelCardActionsProps {
   onResume?: () => void;
 }
 
-const HIT_SLOP = { top: 14, bottom: 14, left: 14, right: 14 };
+// Action icons sit side by side (Resume beside Cancel), so the touch area grows only up and down: a sideways
+// slop spilled onto the neighbour, and the button drawn later (Cancel) took taps aimed at Resume.
+const HIT_SLOP = { top: 10, bottom: 10, left: 0, right: 0 };
 
 function ActionButton({ icon, color, haptic, onPress, disabled, testID, accessibilityLabel, styles }: {
   icon: string; color: string; haptic: string; onPress: () => void;

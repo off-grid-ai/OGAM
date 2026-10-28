@@ -263,16 +263,19 @@ const FailedSection: React.FC<{
         </View>
       </View>
       <View style={styles.failedActionsRow}>
-        <TouchableOpacity style={styles.iconButton} onPress={onRetry} hitSlop={14} accessibilityRole="button" accessibilityLabel="Retry download">
+        <TouchableOpacity style={styles.iconButton} onPress={onRetry} hitSlop={VERTICAL_HIT_SLOP} accessibilityRole="button" accessibilityLabel="Retry download">
           <Icon name="refresh-cw" size={13} color={colors.primary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.iconButton} onPress={onRemove} hitSlop={14} accessibilityRole="button" accessibilityLabel="Remove download">
+        <TouchableOpacity style={styles.iconButton} onPress={onRemove} hitSlop={VERTICAL_HIT_SLOP} accessibilityRole="button" accessibilityLabel="Remove download">
           <Icon name="trash-2" size={13} color={colors.error} />
         </TouchableOpacity>
       </View>
     </View>
   );
 };
+
+/** Retry and Remove sit side by side: the touch area grows only up and down, so neither takes the other's tap. */
+const VERTICAL_HIT_SLOP = { top: 10, bottom: 10, left: 0, right: 0 };
 
 export const ModelCard: React.FC<ModelCardProps> = ({
   model,

@@ -299,7 +299,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexShrink: 1,
   },
   iconButton: {
-    padding: 4,
+    padding: 10,
     flexShrink: 0,
   },
   failedSection: {
