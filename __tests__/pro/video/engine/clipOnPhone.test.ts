@@ -15,7 +15,7 @@ import { bootPhoneVideo, closePhoneVideo, until, type PhoneVideo } from '../../.
 let phone: PhoneVideo | undefined;
 
 afterEach(async () => {
-  await closePhoneVideo(phone);
+  await closePhoneVideo();
   phone = undefined;
 });
 

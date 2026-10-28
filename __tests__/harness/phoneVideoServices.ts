@@ -41,7 +41,12 @@ export interface PhoneVideo {
   messages: (conversationId: string) => Array<{ id: string; uuid?: string; content: string; attachments?: Array<{ id: string; type: string; uri: string }>; videoStoryId?: string }>;
   /** The saved clip or film with this id. */
   video: (id: string) => GeneratedVideo | undefined;
+  /** What the app does as it closes: download polling stops. */
+  shutdown: () => void;
 }
+
+/** Every launch in this test, so the closing test stops the ones a relaunch left behind too. */
+const launches: PhoneVideo[] = [];
 
 type DevGlobal = { __DEV__?: boolean };
 
@@ -99,7 +104,8 @@ export async function bootPhoneVideo(options: {
     await work();
   };
   const provider = require('../../pro/video/videoProvider').videoProvider;
-  return {
+  const { backgroundDownloadService } = require('../../src/services/backgroundDownloadService');
+  const phone: PhoneVideo = {
     boundary,
     engine,
     seam: require('../../src/bootstrap/videoSeam').videoSeam,
@@ -128,15 +134,26 @@ export async function bootPhoneVideo(options: {
     messages: conversationId =>
       useChatStore.getState().conversations.find((item: { id: string }) => item.id === conversationId)?.messages ?? [],
     video: id => useAppStore.getState().generatedVideos.find((item: GeneratedVideo) => item.id === id),
+    shutdown: () => backgroundDownloadService.cleanup(),
   };
+  launches.push(phone);
+  return phone;
 }
 
-/** afterEach: stop every render and clip, so nothing outlives the test. */
-export async function closePhoneVideo(phone: PhoneVideo | undefined): Promise<void> {
-  if (!phone) return;
-  phone.films.stopAllRenders();
-  phone.engine.release();
-  phone.engine.releaseImages();
-  await phone.service.cancelGeneration().catch(() => undefined);
-  await phone.service.whenIdle();
+/**
+ * afterEach: stop every render, clip and download poll, so nothing outlives the test. Only the last
+ * launch is still the app: an earlier one's JS is gone (a clip it was waiting for never answers it),
+ * so it is only stopped, not waited for.
+ */
+export async function closePhoneVideo(): Promise<void> {
+  const all = launches.splice(0);
+  const current = all[all.length - 1];
+  for (const phone of all) phone.films.stopAllRenders();
+  if (current) {
+    current.engine.release();
+    current.engine.releaseImages();
+    await current.service.cancelGeneration().catch(() => undefined);
+    await current.service.whenIdle();
+  }
+  for (const phone of all) phone.shutdown();
 }

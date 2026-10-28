@@ -16,7 +16,7 @@ import { bootPhoneVideo, closePhoneVideo, until, type PhoneVideo } from '../../.
 let phone: PhoneVideo | undefined;
 
 afterEach(async () => {
-  await closePhoneVideo(phone);
+  await closePhoneVideo();
   phone = undefined;
 });
 
@@ -38,7 +38,7 @@ it('counts only the working set on iOS: 3 GB free is enough there, but not on An
   const clip = (await ios.phone.seam.generate({ prompt: 'a candle in the dark', conversationId: ios.chat })) as { id: string };
   expect(ios.phone.video(clip.id)).toBeDefined();
   expect(ios.phone.failure()).toBeUndefined();
-  await closePhoneVideo(ios.phone);
+  await closePhoneVideo();
 
   const android = await phoneWith('android', 12, 3);
   await expect(android.phone.seam.generate({ prompt: 'a candle in the dark', conversationId: android.chat })).rejects.toThrow(
