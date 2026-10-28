@@ -71,7 +71,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Off Grid AI uses your local network to find Off Grid AI Desktop and other AI servers on your Wi‑Fi, and to send your requests to them.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Off Grid AI uses the microphone when you dictate a message, record a voice note, or talk to the assistant hands-free. Your speech is turned into text on this phone.</string>
+	<string>Off Grid AI uses the microphone when you dictate a message, record a voice note, or talk to the assistant hands-free. Your speech is turned into text on this phone, or on your own computer when you choose its transcription model.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Off Grid AI saves the images and videos it makes to your photo library when you choose to save or share them.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
