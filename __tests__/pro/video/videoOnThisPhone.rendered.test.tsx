@@ -26,6 +26,16 @@ const MODEL = { id: 'Comfy-Org/Wan_2.1_ComfyUI_repackaged', name: 'Wan 2.1 (1.3B
 
 let app: AnalyticsApp | undefined;
 
+/** The OS confirmation dialog, answered by the test as a person would. */
+interface OsDialog { title: string; buttons: Array<{ text?: string; onPress?: () => void }> }
+function watchDialogs(): { last: () => OsDialog | null } {
+  let dialog: OsDialog | null = null;
+  require('react-native').Alert.alert = (title: string, _message?: string, buttons?: OsDialog['buttons']) => {
+    dialog = { title, buttons: buttons ?? [] };
+  };
+  return { last: () => dialog };
+}
+
 afterEach(() => {
   // What ending Pro does: stop every render and the charger watch, so no timer outlives the test.
   if (app) require('../../../pro/video/studio/filmRenderer').stopAllRenders();
@@ -339,12 +349,17 @@ it('a cancelled video model download leaves nothing to resume after the app open
   first.rtl.fireEvent.press(await first.view.findByText('Video'));
   await first.view.findByText(MODEL.name, {}, { timeout: 10_000 });
   first.rtl.fireEvent.press(first.view.getByLabelText(`Download ${MODEL.name}`));
-  // One file lands, then the person cancels.
+  // One file lands, then the person cancels; with files on the phone, Cancel asks first.
   await first.rtl.waitFor(async () => expect(await first.downloads.finishRunning()).toBe(1), { timeout: 10_000 });
   const { videoModelDirectory } = require('../../../src/services/videoModelFiles');
   const folder = videoModelDirectory(MODEL.id);
   await first.rtl.waitFor(() => expect(first.boundary.fs!.listFiles(folder).length).toBeGreaterThan(0));
+  const dialogs = watchDialogs();
   first.rtl.fireEvent.press(await first.view.findByLabelText('Cancel download', {}, { timeout: 10_000 }));
+  await first.rtl.waitFor(() => expect(dialogs.last()?.title).toMatch(/^Delete the .+ downloaded so far\?$/));
+  await first.rtl.act(async () => {
+    dialogs.last()!.buttons.find(button => button.text === 'Delete')!.onPress!();
+  });
   await first.view.findByLabelText(`Download ${MODEL.name}`, {}, { timeout: 10_000 });
   // The phone's disk carries over to the next launch: whatever the pack's folder still holds.
   const keptFiles = first.boundary.fs!.listFiles(folder).map(path => ({ path, size: 1024 }));
@@ -357,6 +372,32 @@ it('a cancelled video model download leaves nothing to resume after the app open
   rtl.fireEvent.press(await view.findByText('Video'));
   await view.findByLabelText(`Download ${MODEL.name}`, {}, { timeout: 10_000 });
   expect(view.queryByLabelText('Resume download')).toBeNull();
+}, 90_000);
+
+it('Cancel on a download with files on the phone asks first, and Keep keeps the download and its files', async () => {
+  const current = await launch();
+  const { view, rtl, boundary } = current;
+  rtl.fireEvent.press(await view.findByTestId('models-tab'));
+  rtl.fireEvent.press(await view.findByText('Video'));
+  await view.findByText(MODEL.name, {}, { timeout: 10_000 });
+  rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
+  await rtl.waitFor(async () => expect(await current.downloads.finishRunning()).toBe(1), { timeout: 10_000 });
+  const { videoModelDirectory } = require('../../../src/services/videoModelFiles');
+  const folder = videoModelDirectory(MODEL.id);
+  await rtl.waitFor(() => expect(boundary.fs!.listFiles(folder).length).toBeGreaterThan(0));
+  const filesBefore = boundary.fs!.listFiles(folder);
+
+  const dialogs = watchDialogs();
+  expect(dialogs.last()).toBeNull();
+  rtl.fireEvent.press(await view.findByLabelText('Cancel download', {}, { timeout: 10_000 }));
+  await rtl.waitFor(() => expect(dialogs.last()?.title).toMatch(/^Delete the .+ downloaded so far\?$/));
+  const keep = dialogs.last()!.buttons.find(button => button.text === 'Keep')!;
+  await rtl.act(async () => keep.onPress?.());
+
+  // The download carries on, with every file it had.
+  expect(view.getByLabelText('Cancel download')).toBeTruthy();
+  expect(view.queryByLabelText(`Download ${MODEL.name}`)).toBeNull();
+  expect(boundary.fs!.listFiles(folder)).toEqual(filesBefore);
 }, 90_000);
 
 it('a video model too big for the space left says how much to free, and starts nothing', async () => {
