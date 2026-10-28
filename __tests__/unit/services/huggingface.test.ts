@@ -430,8 +430,9 @@ describe('HuggingFaceService', () => {
     it('does not append pipeline_tag when option is not provided', async () => {
       await huggingFaceService.searchModels('test');
 
-      const url = mockFetch.mock.calls[0][0];
-      expect(url).not.toContain('pipeline_tag');
+      // No task filter on the query. (The search asks for each repo's pipeline_tag field.)
+      const url = new URL(mockFetch.mock.calls[0][0]);
+      expect(url.searchParams.has('pipeline_tag')).toBe(false);
     });
 
     it('sends the query with the GGUF filter', async () => {
