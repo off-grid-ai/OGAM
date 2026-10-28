@@ -47,6 +47,8 @@ async function launch(
     relaunch?: boolean;
     /** The video model a finished download left on the phone's disk, which a relaunch keeps. */
     installedModel?: boolean;
+    /** Files the previous launch left on its disk (path and size), which a relaunch keeps. */
+    keptFiles?: Array<{ path: string; size: number }>;
     carryOver?: NativeVideoEngine;
   } = {},
 ): Promise<PhoneVideoApp> {
@@ -61,6 +63,7 @@ async function launch(
       const entry = require('@offgrid/models').CATALOG.find((model: { id: string }) => model.id === MODEL.id);
       for (const file of entry.files) boundary.fs!.seedFile(`${videoModelDirectory(MODEL.id)}/${file.name}`, file.sizeBytes);
     }
+    for (const file of options.keptFiles ?? []) boundary.fs!.seedFile(file.path, file.size);
     engine = installNativeVideoEngine(boundary, options.carryOver);
   } });
   if (options.relaunch) await app.view.findByTestId('home-screen', {}, { timeout: 10_000 });
@@ -313,6 +316,47 @@ it('a video model download cut off by the app closing says so, and Retry finishe
     expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0);
   }, { timeout: 15_000 });
   expect(view.queryByLabelText('Retry download')).toBeNull();
+}, 90_000);
+
+it('a video model whose files are on the phone with no record of them is offered to resume, and Resume installs it from those files', async () => {
+  // What an earlier build left (seen on a OnePlus, 2026-10-28): a pack's three files complete in its folder, but
+  // no installed model and no download owning them, so Models offered a 7 GB download of files already there.
+  const current = await launch({ installedModel: true });
+  const { view, rtl, boundary } = current;
+  rtl.fireEvent.press(await view.findByTestId('models-tab'));
+  rtl.fireEvent.press(await view.findByText('Video'));
+  await view.findByText(MODEL.name, {}, { timeout: 10_000 });
+  rtl.fireEvent.press(await view.findByLabelText('Resume download', {}, { timeout: 10_000 }));
+  await rtl.waitFor(() => expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0), { timeout: 15_000 });
+  expect(view.queryByLabelText(`Download ${MODEL.name}`)).toBeNull();
+  // Every file was already on the phone: nothing was fetched.
+  expect(boundary.download!.module.startDownload).not.toHaveBeenCalled();
+}, 90_000);
+
+it('a cancelled video model download leaves nothing to resume after the app opens again', async () => {
+  const first = await launch();
+  first.rtl.fireEvent.press(await first.view.findByTestId('models-tab'));
+  first.rtl.fireEvent.press(await first.view.findByText('Video'));
+  await first.view.findByText(MODEL.name, {}, { timeout: 10_000 });
+  first.rtl.fireEvent.press(first.view.getByLabelText(`Download ${MODEL.name}`));
+  // One file lands, then the person cancels.
+  await first.rtl.waitFor(async () => expect(await first.downloads.finishRunning()).toBe(1), { timeout: 10_000 });
+  const { videoModelDirectory } = require('../../../src/services/videoModelFiles');
+  const folder = videoModelDirectory(MODEL.id);
+  await first.rtl.waitFor(() => expect(first.boundary.fs!.listFiles(folder).length).toBeGreaterThan(0));
+  first.rtl.fireEvent.press(await first.view.findByLabelText('Cancel download', {}, { timeout: 10_000 }));
+  await first.view.findByLabelText(`Download ${MODEL.name}`, {}, { timeout: 10_000 });
+  // The phone's disk carries over to the next launch: whatever the pack's folder still holds.
+  const keptFiles = first.boundary.fs!.listFiles(folder).map(path => ({ path, size: 1024 }));
+  first.view.unmount();
+  first.endpoint.restore();
+
+  const current = await launch({ relaunch: true, keptFiles });
+  const { view, rtl } = current;
+  rtl.fireEvent.press(await view.findByTestId('models-tab'));
+  rtl.fireEvent.press(await view.findByText('Video'));
+  await view.findByLabelText(`Download ${MODEL.name}`, {}, { timeout: 10_000 });
+  expect(view.queryByLabelText('Resume download')).toBeNull();
 }, 90_000);
 
 it('a video model too big for the space left says how much to free, and starts nothing', async () => {
