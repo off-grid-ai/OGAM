@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 import {
   createJSONStorage,
   type PersistStorage,
@@ -10,6 +11,26 @@ import { mergeSessionIntoSaved } from './mergeSessionIntoSaved';
 
 /** Waits between read attempts after a failed load. The first write made meanwhile tries at once. */
 const LOAD_RETRY_DELAYS_MS = [250, 1000, 4000, 15000, 60000];
+
+// Every gated store's flush. A store writes one snapshot at a time, so a change made while a write is on
+// its way waits for that write. iOS and Android kill a backgrounded app without warning, so on leaving
+// the foreground the waiting change is written at once instead. AsyncStorage runs writes in the order
+// they are issued on both platforms, so it still lands after the one on its way.
+const flushes = new Set<() => void>();
+let listening = false;
+
+/** Start writing every store's waiting change now (the app is leaving the foreground). */
+export function flushPersistedWrites(): void {
+  for (const flush of flushes) flush();
+}
+
+function flushWhenLeavingForeground(): void {
+  if (listening) return;
+  listening = true;
+  AppState.addEventListener?.('change', state => {
+    if (state === 'background' || state === 'inactive') flushPersistedWrites();
+  });
+}
 
 /** The parts of a persisted zustand store the gate drives. */
 interface GatedStore {
@@ -130,6 +151,18 @@ export function createHydrationGatedStorage<S>(
     settle();
     lastSaved = value.state;
   };
+
+  flushWhenLeavingForeground();
+  flushes.add(() => {
+    if (!waiting || !draining) return;
+    const { name, value } = waiting;
+    waiting = null;
+    const write = writeNow(name, value).catch(error => {
+      logger.warn('[STORAGE-SM] flushing a waiting write failed:', error);
+    });
+    pendingWrites.add(write);
+    write.finally(() => pendingWrites.delete(write));
+  });
 
   const drain = async (): Promise<void> => {
     let failure: unknown;
