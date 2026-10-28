@@ -3,6 +3,7 @@ import {
   createJSONStorage,
   type PersistStorage,
   type StateStorage,
+  type StorageValue,
 } from 'zustand/middleware';
 import logger from './logger';
 import { mergeSessionIntoSaved } from './mergeSessionIntoSaved';
@@ -106,6 +107,48 @@ export function createHydrationGatedStorage<S>(
   const pendingWrites = new Set<Promise<void>>();
   const json = createJSONStorage<S>(() => base);
   if (!json) throw new Error('JSON storage is unavailable');
+  // One write per store at a time. Each write serializes the whole store (a phone's chats are
+  // megabytes), so a store changing at token rate issued a full copy per token, all in flight at once,
+  // and the app outgrew its memory limit. While a write is on its way only the newest snapshot waits
+  // behind it; the ones it replaces were never going to be the saved state anyway.
+  let waiting: { name: string; value: StorageValue<S> } | null = null;
+  let draining: Promise<void> | null = null;
+
+  const writeNow = async (name: string, value: StorageValue<S>): Promise<void> => {
+    const issued = { state: value.state };
+    lastIssued = issued;
+    const settle = () => {
+      if (lastIssued === issued) lastIssued = undefined;
+    };
+    try {
+      await json.setItem(name, value);
+    } catch (error) {
+      // Only a committed snapshot counts as saved, so the same content is written again later.
+      settle();
+      throw error;
+    }
+    settle();
+    lastSaved = value.state;
+  };
+
+  const drain = async (): Promise<void> => {
+    let failure: unknown;
+    try {
+      while (waiting) {
+        const { name, value } = waiting;
+        waiting = null;
+        try {
+          await writeNow(name, value);
+          failure = undefined;
+        } catch (error) {
+          failure = error;
+        }
+      }
+    } finally {
+      draining = null;
+    }
+    if (failure) throw failure;
+  };
 
   return {
     storage: {
@@ -123,32 +166,14 @@ export function createHydrationGatedStorage<S>(
           }
           return undefined;
         }
-        const previous = lastIssued ? lastIssued.state : lastSaved;
+        const previous = waiting ? waiting.value.state : lastIssued ? lastIssued.state : lastSaved;
         if (previous !== undefined && unchanged?.(previous, value.state)) {
           return undefined;
         }
-        const issued = { state: value.state };
-        lastIssued = issued;
-        const settle = () => {
-          if (lastIssued === issued) lastIssued = undefined;
-        };
-        const result = json.setItem(name, value);
-        if (!result) {
-          settle();
-          lastSaved = value.state;
-          return undefined;
-        }
-        const write = Promise.resolve(result).then(
-          () => {
-            settle();
-            lastSaved = value.state;
-          },
-          error => {
-            // Only a committed snapshot counts as saved, so the same content is written again later.
-            settle();
-            throw error;
-          },
-        );
+        waiting = { name, value };
+        if (draining) return draining;
+        const write = drain();
+        draining = write;
         pendingWrites.add(write);
         return write.finally(() => pendingWrites.delete(write));
       },

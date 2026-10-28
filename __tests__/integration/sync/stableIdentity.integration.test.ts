@@ -74,6 +74,8 @@ describe('sync identity persistence', () => {
     expect(message.id).toMatch(UUID_V4);
     expect(message.uuid).toBe(message.id);
 
+    // A relaunch reads what was written: the store saves one snapshot at a time, so wait for the last.
+    await require('../../../src/stores/chatStore').waitForChatPersistence();
     const secondLaunch = await loadStores();
     const restoredLegacy = secondLaunch.useChatStore
       .getState()
