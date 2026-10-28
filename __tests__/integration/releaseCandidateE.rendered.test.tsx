@@ -159,7 +159,7 @@ it.each(['Home', 'ProjectDetail', 'ProjectChats'] as const)(
       rtl.fireEvent.press(view.getByTestId('projects-tab'));
       rtl.fireEvent.press(await view.findByTestId('project-row-trip'));
       await view.findByTestId('project-detail-screen');
-      if (surface === 'ProjectChats') rtl.fireEvent.press(view.getByText('Chats'));
+      if (surface === 'ProjectChats') rtl.fireEvent.press(view.getByTestId('project-chats-open'));
       rtl.fireEvent.press(await view.findByLabelText('Delete Trip photos'));
     } else {
       rtl.fireEvent.press(view.getByTestId('delete-conversation-button'));
@@ -184,7 +184,7 @@ it.each(['Home', 'ProjectDetail', 'ProjectChats'] as const)(
     if (surface !== 'Home') {
       rtl.fireEvent.press(view.getByTestId('projects-tab'));
       rtl.fireEvent.press(await view.findByTestId('project-row-trip'));
-      if (surface === 'ProjectChats') rtl.fireEvent.press(await view.findByText('Chats'));
+      if (surface === 'ProjectChats') rtl.fireEvent.press(await view.findByTestId('project-chats-open'));
       rtl.fireEvent.press(await view.findByLabelText('Delete Trip photos'));
     } else rtl.fireEvent.press(view.getByTestId('delete-conversation-button'));
     await view.findByText(/Delete "Trip photos"/);
@@ -399,7 +399,7 @@ it.each(['Home', 'ProjectDetail', 'ProjectChats'] as const)(
       if (surface !== 'Home') {
         rtl.fireEvent.press(view.getByTestId('projects-tab'));
         rtl.fireEvent.press(await view.findByTestId('project-row-trip'));
-        if (surface === 'ProjectChats') rtl.fireEvent.press(await view.findByText('Chats'));
+        if (surface === 'ProjectChats') rtl.fireEvent.press(await view.findByTestId('project-chats-open'));
       }
       rtl.fireEvent.press(await view.findByText('Trip photos'));
       await draw(app);

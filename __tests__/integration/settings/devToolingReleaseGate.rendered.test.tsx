@@ -231,14 +231,17 @@ describe('Load demo data in a developer build (rendered, real App)', () => {
     await view.findByTestId('project-detail-screen');
     expect(await view.findByText(String(chats))).toBeTruthy();
     await rtl.waitFor(() => expect(view.getByTestId('project-knowledge-base-count')).toHaveTextContent(String(documents)));
+    // The project opens on Chats; its documents are behind the Knowledge base tab.
+    rtl.fireEvent.press(view.getByTestId('project-tab-knowledge'));
     expect(view.getByLabelText('Knowledge document Promises to Sam.txt')).toBeTruthy();
     expect(view.getByLabelText('Knowledge document Acme pilot brief.txt')).toBeTruthy();
     expect(view.getByLabelText('Knowledge document Acme_rollout_v3.pdf')).toBeTruthy();
+    // Every document reached the paired Mac: none says it could not sync.
+    expect(view.queryByText(/Couldn't sync to/)).toBeNull();
+    rtl.fireEvent.press(view.getByTestId('project-tab-chats'));
     // The chats are the demo's own conversations, newest first.
     expect(view.getByText('Pilot email draft ready')).toBeTruthy();
     expect(view.getByText('Pilot seat-days result')).toBeTruthy();
-    // Every document reached the paired Mac: none says it could not sync.
-    expect(view.queryByText(/Couldn't sync to/)).toBeNull();
 
     // The chat titles use the theme's text colour, in light and, after switching, in dark.
     const { getTheme } = require('../../../src/theme');
