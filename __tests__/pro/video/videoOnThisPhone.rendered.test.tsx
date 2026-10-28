@@ -405,6 +405,35 @@ it('Cancel on a download with files on the phone asks first, and Keep keeps the 
   expect(boundary.fs!.listFiles(folder)).toEqual(filesBefore);
 }, 90_000);
 
+it('Cancel while the first file is still downloading asks first: its bytes count before any file lands', async () => {
+  const current = await launch();
+  const { view, rtl, boundary } = current;
+  rtl.fireEvent.press(await view.findByTestId('models-tab'));
+  rtl.fireEvent.press(await view.findByText('Video'));
+  await view.findByText(MODEL.name, {}, { timeout: 10_000 });
+  rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
+  await view.findByLabelText('Cancel download', {}, { timeout: 10_000 });
+  // 278 MB of the first file is in the native download's own temp file; the pack's folder is still empty.
+  const { videoModelDirectory } = require('../../../src/services/videoModelFiles');
+  expect(boundary.fs!.listFiles(videoModelDirectory(MODEL.id))).toEqual([]);
+  const row = boundary.download!.active().find(item => item.status === 'running')!;
+  await rtl.act(async () => {
+    boundary.download!.events.emit('DownloadProgress', {
+      downloadId: row.downloadId, fileName: row.fileName, modelId: row.modelId,
+      bytesDownloaded: 278 * 1024 * 1024, totalBytes: Number(row.totalBytes) || 2 * GB, status: 'running',
+    });
+  });
+
+  const dialogs = watchDialogs();
+  rtl.fireEvent.press(view.getByLabelText('Cancel download'));
+  await view.findByText(/^Delete the .+ downloaded so far\?$/, {}, { timeout: 10_000 });
+  expect(dialogs.last()).toBeNull();
+  await rtl.act(() => new Promise(resolve => setTimeout(resolve, 400)));
+  rtl.fireEvent.press(view.getByRole('button', { name: 'Keep' }));
+  await rtl.waitFor(() => expect(view.queryByText(/^Delete the .+ downloaded so far\?$/)).toBeNull());
+  expect(view.getByLabelText('Cancel download')).toBeTruthy();
+}, 90_000);
+
 it('a video model download carries on after the app restarts while Android keeps downloading, without starting a file again', async () => {
   const first = await launch();
   first.rtl.fireEvent.press(await first.view.findByTestId('models-tab'));
