@@ -108,6 +108,11 @@
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
+	<!-- `audio` is here for Picture in Picture, which Apple requires it for: a video
+	     attachment is played with playInBackground / enterPictureInPictureOnLeave, so it
+	     keeps playing in the PiP window after the app leaves the foreground. It was removed
+	     once (Feb 2026, Guideline 2.5.4) when nothing played in the background; PiP arrived
+	     afterwards. Remove it again only if PiP and background playback go. -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
