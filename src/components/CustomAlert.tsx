@@ -56,11 +56,11 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
       title={title}
       closeLabel={closeLabel}
     >
-      <View style={styles.content}>
+      <View style={styles.content} testID="app-alert">
         {loading ? (
           <LoadingDots color={colors.primary} style={styles.loadingIndicator} />
         ) : null}
-        {message ? <Text style={[styles.message, prominentMessage && styles.messageProminent]}>{message}</Text> : null}
+        {message ? <Text style={[styles.message, prominentMessage && styles.messageProminent]} testID="app-alert-message">{message}</Text> : null}
         <View style={styles.buttonContainer}>
           {buttons.map((button, index) => (
             <TouchableOpacity

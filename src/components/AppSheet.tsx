@@ -421,7 +421,7 @@ export const AppSheet: React.FC<AppSheetProps> = ({
                   <Icon name="chevron-left" size={18} style={styles.headerBackIcon} />
                 </TouchableOpacity>
               ) : null}
-              <Text style={styles.headerTitle} numberOfLines={1}>
+              <Text style={styles.headerTitle} numberOfLines={1} testID="app-sheet-title">
                 {title}
               </Text>
               <TouchableOpacity

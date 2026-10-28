@@ -23,9 +23,9 @@ export interface StudioApp extends AnalyticsApp {
   jobs: DesktopVideoJobs;
   models: DesktopModelPulls;
   stories: DesktopStoryJobs;
-  /** The OS dialog on screen now (Alert.alert), or null. */
+  /** The app's alert sheet on screen now, or null. Throws if the app raised a system alert instead. */
   dialog: () => OsDialog | null;
-  /** Tap a button on the OS dialog on screen, as a person would. */
+  /** Tap a button on the alert sheet on screen, as a person would. */
   answer: (button: string) => Promise<void>;
 }
 
@@ -39,23 +39,43 @@ let current: StudioApp | undefined;
 /** PostHog endpoints of earlier launches in this test, put back last (they sit under the Desktop fakes). */
 let earlierEndpoints: Array<{ restore: () => void }> = [];
 
-/** The OS dialog is a device surface: remember what it offers so the test can answer it like a person. */
-function osDialog(rtl: AnalyticsApp['rtl']): Pick<StudioApp, 'dialog' | 'answer'> {
-  let dialog: OsDialog | null = null;
-  require('react-native').Alert.alert = (title: string, message?: string, buttons?: OsDialog['buttons']) => {
-    dialog = { title, message, buttons: buttons ?? [{ text: 'OK' }] };
+/**
+ * The app asks in its own bottom sheet, never a system alert (Alert.alert, a device surface): the
+ * test reads the sheet on screen and taps its buttons like a person, and a system alert fails it.
+ */
+function osDialog({ view, rtl }: Pick<AnalyticsApp, 'view' | 'rtl'>): Pick<StudioApp, 'dialog' | 'answer'> {
+  const systemAlerts: string[] = [];
+  require('react-native').Alert.alert = (title: string) => {
+    systemAlerts.push(title);
+  };
+  const sheet = () => {
+    if (systemAlerts.length) throw new Error(`The app raised a system alert: "${systemAlerts.join('", "')}".`);
+    return view.queryByTestId('app-alert');
+  };
+  const dialog = (): OsDialog | null => {
+    const alert = sheet();
+    if (!alert) return null;
+    let around = alert;
+    while (around.parent && !rtl.within(around).queryByTestId('app-sheet-title')) around = around.parent;
+    const buttons = rtl.within(alert).queryAllByRole('button').map(item => ({ text: item.props.accessibilityLabel as string }));
+    return {
+      title: String(rtl.within(around).getByTestId('app-sheet-title').props.children),
+      message: rtl.within(alert).queryByTestId('app-alert-message')?.props.children,
+      buttons,
+    };
   };
   const answer = async (button: string) => {
-    const shown = dialog;
-    if (!shown) throw new Error(`No dialog is on screen to answer "${button}".`);
-    const choice = shown.buttons.find(item => item.text === button);
-    if (!choice) throw new Error(`The dialog "${shown.title}" has no "${button}" button.`);
-    dialog = null;
+    const alert = sheet();
+    if (!alert) throw new Error(`No dialog is on screen to answer "${button}".`);
+    // A person taps once the sheet has slid up (AppSheet opens in 320 ms), never mid-open.
     await rtl.act(async () => {
-      choice.onPress?.();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+    await rtl.act(async () => {
+      rtl.fireEvent.press(rtl.within(alert).getByRole('button', { name: button }));
     });
   };
-  return { dialog: () => dialog, answer };
+  return { dialog, answer };
 }
 
 /** Home with Pro and the paired computer's video model picked. */
@@ -78,7 +98,7 @@ export async function launchStudioApp(
   const jobs = serveDesktopVideoJobs(boundary.fs!);
   const models = serveDesktopModelPulls(computer);
   const stories = serveDesktopStoryJobs(boundary.fs!);
-  current = { ...app, jobs, models, stories, ...osDialog(rtl) };
+  current = { ...app, jobs, models, stories, ...osDialog(app) };
   await passOnboarding(app, false);
   await require('./proHarness').installPro();
   // What pairing leaves behind; the person picks the computer's video model on Home.
@@ -138,7 +158,7 @@ export async function relaunchStudioApp(): Promise<StudioApp> {
   before.jobs.useDisk(app.boundary.fs!);
   before.stories.useDisk(app.boundary.fs!);
   await require('./proHarness').installPro();
-  current = { ...app, jobs: before.jobs, models: before.models, stories: before.stories, ...osDialog(app.rtl) };
+  current = { ...app, jobs: before.jobs, models: before.models, stories: before.stories, ...osDialog(app) };
   await app.view.findByTestId('home-screen', {}, { timeout: 10_000 });
   return current;
 }

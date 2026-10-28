@@ -110,8 +110,8 @@ it('the viewer pauses on a tap and saves the clip to Downloads', async () => {
 
   expect(saved).toHaveLength(0);
   rtl.fireEvent.press(view.getByTestId('viewer-save'));
-  await rtl.waitFor(() => expect(app.dialog()?.title).toBe('Video saved'));
-  expect(app.dialog()?.message).toBe('The video is in Downloads.');
+  await rtl.waitFor(() => expect(app.dialog()?.title).toBe('Saved to Downloads'));
+  expect(app.dialog()?.message).toBeUndefined();
   expect(saved).toEqual([{ name: expect.stringMatching(/\.mp4$/), mime: 'video/mp4' }]);
 }, 60_000);
 

@@ -2,7 +2,7 @@ import { exportGeneratedMedia } from '../../services/exportGeneratedMedia';
 import { deleteGeneratedVideo } from '../../services/generatedVideoFiles';
 import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import React, { useMemo, useState } from 'react';
-import { Alert, Modal } from 'react-native';
+import { Modal } from 'react-native';
 import Video from 'react-native-video';
 import { useAppStore } from '../../stores/appStore';
 import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
@@ -12,7 +12,7 @@ import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import Icon from 'react-native-vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { CustomAlert, hideAlert } from '../../components/CustomAlert';
+import { CustomAlert, hideAlert, showAlert, type AlertState } from '../../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../../theme';
 import { GeneratedImage } from '../../types';
 import { RootStackParamList } from '../../navigation/types';
@@ -23,6 +23,27 @@ import { GalleryGridItem } from './GridItem';
 import { FullscreenViewer } from './FullscreenViewer';
 
 type GalleryScreenRouteProp = RouteProp<RootStackParamList, 'Gallery'>;
+
+/** The alert, shown only in the place it belongs: over the open video, or over the Gallery. */
+const shownWhere = (state: AlertState, here: boolean): AlertState => ({ ...state, visible: state.visible && here });
+
+/** Deleting a video asks first, as the Studio's viewer does; a failure says so in the same sheet. */
+function askDeleteVideo(videoId: string, setAlertState: (state: AlertState) => void, onDeleted: () => void): void {
+  setAlertState(
+    showAlert('Delete this video?', 'It is removed from this phone and its chat.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          deleteGeneratedVideo(videoId)
+            .then(onDeleted)
+            .catch(error => setAlertState(showAlert('Could not delete video', String(error.message))));
+        },
+      },
+    ]),
+  );
+}
 
 export const GalleryScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -301,13 +322,12 @@ export const GalleryScreen: React.FC = () => {
                   )
                     .then(() => {
                       if (Platform.OS === 'android')
-                        Alert.alert(
-                          'Video saved',
-                          'The video is in Downloads.',
-                        );
+                        setAlertState(showAlert('Saved to Downloads'));
                     })
                     .catch(error =>
-                      Alert.alert('Save failed', String(error.message)),
+                      setAlertState(
+                        showAlert('Save failed', String(error.message)),
+                      ),
                     );
                 }}
               >
@@ -335,16 +355,9 @@ export const GalleryScreen: React.FC = () => {
                 {selectedVideo.prompt}
               </Text>
               <TouchableOpacity
-                onPress={() => {
-                  void deleteGeneratedVideo(selectedVideo.id)
-                    .then(() => setSelectedVideo(null))
-                    .catch(error =>
-                      Alert.alert(
-                        'Could not delete video',
-                        String(error.message),
-                      ),
-                    );
-                }}
+                onPress={() =>
+                  askDeleteVideo(selectedVideo.id, setAlertState, () => setSelectedVideo(null))
+                }
                 style={styles.videoDelete}
               >
                 <Text style={styles.videoDeleteText}>Delete video</Text>
@@ -352,6 +365,8 @@ export const GalleryScreen: React.FC = () => {
             </>
           ) : null}
         </SafeAreaView>
+        {/* Inside the video's Modal, so its sheet shows above the video, not behind it. */}
+        <CustomAlert {...shownWhere(alertState, !!selectedVideo)} onClose={() => setAlertState(hideAlert())} />
       </Modal>
       <FullscreenViewer
         image={selectedImage}
@@ -361,13 +376,7 @@ export const GalleryScreen: React.FC = () => {
         onSave={handleSaveImage}
         onDelete={handleDelete}
       />
-      <CustomAlert
-        visible={alertState.visible}
-        title={alertState.title}
-        message={alertState.message}
-        buttons={alertState.buttons}
-        onClose={() => setAlertState(hideAlert())}
-      />
+      <CustomAlert {...shownWhere(alertState, !selectedVideo)} onClose={() => setAlertState(hideAlert())} />
     </SafeAreaView>
   );
 };

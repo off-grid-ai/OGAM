@@ -26,7 +26,7 @@ const MODEL = { id: 'Comfy-Org/Wan_2.1_ComfyUI_repackaged', name: 'Wan 2.1 (1.3B
 
 let app: AnalyticsApp | undefined;
 
-/** The OS confirmation dialog, answered by the test as a person would. */
+/** The OS dialog (Alert.alert): the app uses its own sheet instead, so a test asserts none is raised. */
 interface OsDialog { title: string; buttons: Array<{ text?: string; onPress?: () => void }> }
 function watchDialogs(): { last: () => OsDialog | null } {
   let dialog: OsDialog | null = null;
@@ -359,10 +359,10 @@ it('a cancelled video model download leaves nothing to resume after the app open
   await first.rtl.waitFor(() => expect(first.boundary.fs!.listFiles(folder).length).toBeGreaterThan(0));
   const dialogs = watchDialogs();
   first.rtl.fireEvent.press(await first.view.findByLabelText('Cancel download', {}, { timeout: 10_000 }));
-  await first.rtl.waitFor(() => expect(dialogs.last()?.title).toMatch(/^Delete the .+ downloaded so far\?$/));
-  await first.rtl.act(async () => {
-    dialogs.last()!.buttons.find(button => button.text === 'Delete')!.onPress!();
-  });
+  await first.view.findByText(/^Delete the .+ downloaded so far\?$/, {}, { timeout: 10_000 });
+  await first.rtl.act(() => new Promise(resolve => setTimeout(resolve, 400)));
+  first.rtl.fireEvent.press(first.view.getByRole('button', { name: 'Delete' }));
+  expect(dialogs.last()).toBeNull();
   await first.view.findByLabelText(`Download ${MODEL.name}`, {}, { timeout: 10_000 });
   // The phone's disk carries over to the next launch: whatever the pack's folder still holds.
   const keptFiles = first.boundary.fs!.listFiles(folder).map(path => ({ path, size: 1024 }));
@@ -393,9 +393,11 @@ it('Cancel on a download with files on the phone asks first, and Keep keeps the 
   const dialogs = watchDialogs();
   expect(dialogs.last()).toBeNull();
   rtl.fireEvent.press(await view.findByLabelText('Cancel download', {}, { timeout: 10_000 }));
-  await rtl.waitFor(() => expect(dialogs.last()?.title).toMatch(/^Delete the .+ downloaded so far\?$/));
-  const keep = dialogs.last()!.buttons.find(button => button.text === 'Keep')!;
-  await rtl.act(async () => keep.onPress?.());
+  await view.findByText(/^Delete the .+ downloaded so far\?$/, {}, { timeout: 10_000 });
+  expect(dialogs.last()).toBeNull();
+  await rtl.act(() => new Promise(resolve => setTimeout(resolve, 400)));
+  rtl.fireEvent.press(view.getByRole('button', { name: 'Keep' }));
+  await rtl.waitFor(() => expect(view.queryByText(/^Delete the .+ downloaded so far\?$/)).toBeNull());
 
   // The download carries on, with every file it had.
   expect(view.getByLabelText('Cancel download')).toBeTruthy();
