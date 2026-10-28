@@ -1,12 +1,11 @@
-import { Platform } from 'react-native';
 import { videoSeam } from '../bootstrap/videoSeam';
-import { CATALOG, isVideoWeightAvailableOn, videoPackError } from '@offgrid/models';
 import { ramFitScore } from '../utils/recommendedModels';
 import { fileExceedsBudget } from './memoryBudget';
 import { devicePicks } from './devicePicks';
 import { fetchModelFiles } from './modelCatalogFiles';
 import { hardwareService } from './hardware';
 import { WHISPER_MODELS } from './whisperModels';
+import { completeVideoPacks, videoPacksForPhone } from './phoneVideoPacks';
 import { withRemoteCatalog } from '../stores/modelCatalogStore';
 import type { AutoSetupCompatibleCatalog } from './autoSetupPlan';
 import { autoSetupImageCatalogProvider } from './autoSetupImageCatalogProvider';
@@ -91,17 +90,8 @@ export async function loadAutoSetupCompatibleCatalog(
 
   // Video is Pro: without it Auto Setup offers no video model.
   const videoOn = videoSeam.available();
-  const completeVideoPacks = CATALOG.filter(model =>
-    videoOn && model.kind === 'video' && model.availability !== 'coming_soon' &&
-    !!model.minRamGb && !videoPackError(model.files) &&
-    isVideoWeightAvailableOn(model.files.find(file => file.role === 'primary')?.name ?? '', Platform.OS) &&
-    model.files.every(file => !!file.sizeBytes),
-  );
-  const video = completeVideoPacks.filter(model =>
-    model.minRamGb! <= ramGB ||
-    // 11 GB+ phones also get Off Grid AI's Light builds to try (below the packs' desktop minimum).
-    (ramGB >= 11 && (model.id === 'off-grid-ai/Wan2.1-T2V-1.3B-GGUF-Q4' || model.id === 'off-grid-ai/Wan2.2-TI2V-5B-GGUF-Q4')),
-  ).map(model => {
+  const packs = videoOn ? completeVideoPacks() : [];
+  const video = (videoOn ? videoPacksForPhone(ramGB) : []).map(model => {
     const sizeBytes = model.files.reduce((sum, file) => sum + (file.sizeBytes ?? 0), 0);
     return {
       id: model.id, name: model.name, kind: 'video' as const, sizeBytes,
@@ -110,7 +100,7 @@ export async function loadAutoSetupCompatibleCatalog(
   });
   const videoExclusionReason = video.length ? undefined
     : !videoOn ? 'Video needs Off Grid AI Pro.'
-    : completeVideoPacks.length
+    : packs.length
       ? 'Videos are made on your computer with Off Grid AI Desktop.'
       : 'Auto Setup has no complete video model to download.';
   const embedding = [BUNDLED_EMBEDDING_MODEL, ...RECOMMENDED_EMBEDDING_MODELS]
@@ -123,6 +113,6 @@ export async function loadAutoSetupCompatibleCatalog(
       payload: model,
     }));
   // Too little memory for any pack here: the phone makes videos on a paired computer instead.
-  const videoOnComputer = !video.length && videoOn && completeVideoPacks.length > 0;
+  const videoOnComputer = !video.length && packs.length > 0;
   return { text, image, stt, video, videoExclusionReason, videoOnComputer, embedding };
 }

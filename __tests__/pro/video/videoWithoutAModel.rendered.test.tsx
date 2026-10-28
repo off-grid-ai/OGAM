@@ -3,8 +3,10 @@
  *
  * SPEC (OGAM user's view): I never meet a dead end.
  *  - A paired computer that makes videos: video turns on and the clip is made there. No question.
- *  - No computer paired: a sheet says videos are made on a computer and offers "Find my computer",
- *    which opens the screen where I pair one.
+ *  - No computer paired, and this phone can run a video model: a sheet offers "Get a video model",
+ *    which opens the video models to download one.
+ *  - No computer paired, and this phone is too small for any: a sheet says videos are made on a
+ *    computer and offers "Find my computer", which opens the screen where I pair one.
  *
  * The real App runs. Device boundaries only: the llama.rn engine, the disk and the RAM sensor.
  */
@@ -23,8 +25,12 @@ afterEach(() => {
   restoreBuildFlavor();
 });
 
-async function chatWithVideoOff(paired: boolean): Promise<AnalyticsApp> {
-  app = await launchApp({ release: false });
+const GB = 1024 ** 3;
+
+async function chatWithVideoOff(paired: boolean, ramGb = 12): Promise<AnalyticsApp> {
+  app = await launchApp({ release: false, beforeApp: boundary => {
+    boundary.setRam({ platform: 'android', totalBytes: ramGb * GB, availBytes: (ramGb * GB) / 2 });
+  } });
   const { view, rtl } = app;
   await passOnboarding(app, false);
   await require('../../harness/proHarness').installPro();
@@ -45,8 +51,17 @@ async function chatWithVideoOff(paired: boolean): Promise<AnalyticsApp> {
   return app;
 }
 
-it('with no computer paired, video offers "Find my computer", which opens where I pair one', async () => {
-  const { view, rtl } = await chatWithVideoOff(false);
+it('on a 12 GB phone with no computer paired, video offers "Get a video model", which opens the video models', async () => {
+  const { view, rtl } = await chatWithVideoOff(false, 12);
+  rtl.fireEvent.press(view.getByTestId('quick-video-mode'));
+  await view.findByText('Make videos on this phone');
+  expect(view.queryByText('Videos are made on your computer')).toBeNull();
+  rtl.fireEvent.press(view.getByText('Get a video model'));
+  expect((await view.findAllByLabelText(/^Download /, {}, { timeout: 10_000 })).length).toBeGreaterThan(0);
+}, 90_000);
+
+it('on a 6 GB phone with no computer paired, video offers "Find my computer", which opens where I pair one', async () => {
+  const { view, rtl } = await chatWithVideoOff(false, 6);
   rtl.fireEvent.press(view.getByTestId('quick-video-mode'));
   await view.findByText('Videos are made on your computer');
   expect(view.queryByText(/Run models this phone cannot hold/)).toBeNull();

@@ -23,6 +23,8 @@ import { remoteServerCapabilities } from '../../types/remoteServer';
 import { useUiModeStore } from '../../stores';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { videoSeam } from '../../bootstrap/videoSeam';
+import { hardwareService } from '../../services/hardware';
+import { videoPacksForPhone } from '../../services/phoneVideoPacks';
 import { AppSheet } from '../AppSheet';
 import { Button } from '../Button';
 
@@ -43,6 +45,8 @@ interface ChatInputProps {
   onVideoUpgrade?: () => void;
   /** Opens the screen where a computer is paired. Offered when no video model is reachable. */
   onFindComputer?: () => void;
+  /** Opens the video models to download one. Offered instead when this phone can run one. */
+  onGetVideoModel?: () => void;
   onOpenSettings?: () => void;
   queue?: QueueView;
   queueActions?: QueueActions;
@@ -162,6 +166,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onImageModeChange,
   onVideoUpgrade,
   onFindComputer,
+  onGetVideoModel,
   onOpenSettings: _onOpenSettings,
   queue,
   queueActions,
@@ -336,6 +341,45 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     onImageModeChange?.(newMode);
   };
 
+  /** No video model and no computer: download one when this phone can run it, else find the computer. */
+  const offerVideoStart = async () => {
+    await hardwareService.getDeviceInfo();
+    const phoneCanMakeVideo = videoPacksForPhone(hardwareService.getTotalMemoryGB()).length > 0;
+    if (phoneCanMakeVideo && onGetVideoModel) {
+      setAlertState(
+        showAlert('Make videos on this phone', 'Download a video model, and videos are made right here.', [
+          { text: 'Not now' },
+          {
+            text: 'Get a video model',
+            onPress: () => {
+              setAlertState(hideAlert());
+              onGetVideoModel();
+            },
+          },
+        ]),
+      );
+      return;
+    }
+    setAlertState(
+      showAlert(
+        'Videos are made on your computer',
+        'Find your computer running Off Grid AI Desktop, and videos are made there.',
+        onFindComputer
+          ? [
+              { text: 'Not now' },
+              {
+                text: 'Find my computer',
+                onPress: () => {
+                  setAlertState(hideAlert());
+                  onFindComputer();
+                },
+              },
+            ]
+          : [{ text: 'OK' }],
+      ),
+    );
+  };
+
   const handleVideoModeToggle = () => {
     if (imageMode !== 'video' && !videoSeam.available()) {
       quickSettings.hide();
@@ -360,25 +404,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           if (computer) {
             remote.setActiveRemoteMediaServerId('video', computer.id);
           } else {
-            setAlertState(
-              showAlert(
-                'Videos are made on your computer',
-                'Find your computer running Off Grid AI Desktop, and videos are made there.',
-                onFindComputer
-                  ? [
-                      { text: 'Not now' },
-                      {
-                        text: 'Find my computer',
-                        onPress: () => {
-                          setAlertState(hideAlert());
-                          onFindComputer();
-                        },
-                      },
-                    ]
-                  : [{ text: 'OK' }],
-              ),
-            );
             quickSettings.hide();
+            offerVideoStart().catch(() => {});
             return;
           }
         } else {

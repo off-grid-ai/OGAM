@@ -465,6 +465,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           }}
           onAssistantSetupSync={() => tabNav.navigate('Sync')}
           onFindComputer={() => tabNav.navigate('RemoteServers')}
+          onGetVideoModel={() => tabNav.navigate('Main', { screen: 'ModelsTab', params: { initialTab: 'video' } })}
           onVideoUpgrade={() => {
             proGateShown('video');
             tabNav.navigate('ProDetail');
