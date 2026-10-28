@@ -13,6 +13,7 @@ import ai.offgridmobile.localdream.LocalDreamPackage
 import ai.offgridmobile.pdf.PDFExtractorPackage
 import ai.offgridmobile.litert.LiteRTPackage
 import ai.offgridmobile.devicememory.DeviceMemoryPackage
+import ai.offgridmobile.problemreport.ProblemReportPackage
 import ai.offgridmobile.clipboard.SyncClipboardPackage
 import ai.offgridmobile.directory.SyncDirectorySourcePackage
 import ai.offgridmobile.downloads.SyncDownloadsPackage
@@ -34,6 +35,7 @@ class MainApplication : Application(), ReactApplication {
           add(PDFExtractorPackage())
           add(LiteRTPackage())
           add(DeviceMemoryPackage())
+          add(ProblemReportPackage())
           add(SyncClipboardPackage())
           add(SyncDirectorySourcePackage())
           add(MeshResidencyPackage())

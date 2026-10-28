@@ -19,6 +19,7 @@
 		0A7B3D072F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D082F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift */; };
 		0ADE3D052F3A0B1200CC5FA1 /* DeviceMemoryModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0ADE3D012F3A0B1200CC5FA1 /* DeviceMemoryModule.m */; };
 		0ADE3D062F3A0B1200CC5FA1 /* DeviceMemoryModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ADE3D022F3A0B1200CC5FA1 /* DeviceMemoryModule.swift */; };
+		0ADE3D152F3A0B1200CC5FA1 /* ProblemReportModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0ADE3D112F3A0B1200CC5FA1 /* ProblemReportModule.m */; };
 		0C1A00012F44000100C11A00 /* SyncClipboardModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0C1A00032F44000100C11A00 /* SyncClipboardModule.m */; };
 		0C1A00022F44000100C11A00 /* SyncClipboardModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1A00042F44000100C11A00 /* SyncClipboardModule.swift */; };
 		0D2B00012F45000100C11A00 /* SyncProximityModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 0D2B00032F45000100C11A00 /* SyncProximityModule.m */; };
@@ -68,6 +69,7 @@
 		0A7B3D082F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddingModelBundleTests.swift; sourceTree = "<group>"; };
 		0ADE3D012F3A0B1200CC5FA1 /* DeviceMemoryModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DeviceMemoryModule.m; sourceTree = "<group>"; };
 		0ADE3D022F3A0B1200CC5FA1 /* DeviceMemoryModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceMemoryModule.swift; sourceTree = "<group>"; };
+		0ADE3D112F3A0B1200CC5FA1 /* ProblemReportModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ProblemReportModule.m; sourceTree = "<group>"; };
 		0C1A00032F44000100C11A00 /* SyncClipboardModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SyncClipboardModule.m; sourceTree = "<group>"; };
 		0C1A00042F44000100C11A00 /* SyncClipboardModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncClipboardModule.swift; sourceTree = "<group>"; };
 		0D2B00032F45000100C11A00 /* SyncProximityModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SyncProximityModule.m; sourceTree = "<group>"; };
@@ -134,6 +136,7 @@
 				0A7B3D022F3A0B1200CC5FA1 /* PDFExtractorModule.swift */,
 				0ADE3D012F3A0B1200CC5FA1 /* DeviceMemoryModule.m */,
 				0ADE3D022F3A0B1200CC5FA1 /* DeviceMemoryModule.swift */,
+				0ADE3D112F3A0B1200CC5FA1 /* ProblemReportModule.m */,
 				0C1A00032F44000100C11A00 /* SyncClipboardModule.m */,
 				0C1A00042F44000100C11A00 /* SyncClipboardModule.swift */,
 				0D2B00032F45000100C11A00 /* SyncProximityModule.m */,
@@ -438,6 +441,7 @@
 				0A7B3D042F3A0B1200CC5FA1 /* PDFExtractorModule.swift in Sources */,
 				0ADE3D052F3A0B1200CC5FA1 /* DeviceMemoryModule.m in Sources */,
 				0ADE3D062F3A0B1200CC5FA1 /* DeviceMemoryModule.swift in Sources */,
+				0ADE3D152F3A0B1200CC5FA1 /* ProblemReportModule.m in Sources */,
 				0C1A00012F44000100C11A00 /* SyncClipboardModule.m in Sources */,
 				0C1A00022F44000100C11A00 /* SyncClipboardModule.swift in Sources */,
 				0D2B00012F45000100C11A00 /* SyncProximityModule.m in Sources */,
