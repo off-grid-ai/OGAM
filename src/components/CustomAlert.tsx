@@ -54,7 +54,8 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
       onClose={() => onClose?.()}
       enableDynamicSizing
       title={title}
-      closeLabel={closeLabel}
+      // A question with its own Cancel needs no header Done: it would read as a second answer.
+      closeLabel={buttons.some(button => button.style === 'cancel') ? '' : closeLabel}
     >
       <View style={styles.content} testID="app-alert">
         {loading ? (

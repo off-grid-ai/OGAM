@@ -123,6 +123,8 @@ it('deleting a person asks first; Cancel keeps them, Delete removes them', async
   expect(app.dialog()).toBeNull();
   rtl.fireEvent.press(remove);
   expect(app.dialog()?.title).toBe('Delete Leo?');
+  // Cancel and Delete are the only answers: no header Done beside them.
+  expect(view.queryByTestId('app-sheet-close')).toBeNull();
   await app.answer('Cancel');
   expect(view.getByLabelText('Delete character')).toBeTruthy();
 

@@ -39,6 +39,7 @@ export interface AppSheetProps {
   snapPoints?: (string | number)[];
   enableDynamicSizing?: boolean;
   title?: string;
+  /** The header's dismiss button; empty hides it (the sheet still closes by swipe or backdrop). */
   closeLabel?: string;
   showHeader?: boolean;
   showHandle?: boolean;
@@ -424,16 +425,18 @@ export const AppSheet: React.FC<AppSheetProps> = ({
               <Text style={styles.headerTitle} numberOfLines={1} testID="app-sheet-title">
                 {title}
               </Text>
-              <TouchableOpacity
-                testID="app-sheet-close"
-                onPress={() => {
-                  if (!dismissibleRef.current) return;
-                  (onHeaderClosePress || dismiss)();
-                }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={styles.headerClose}>{closeLabel}</Text>
-              </TouchableOpacity>
+              {closeLabel ? (
+                <TouchableOpacity
+                  testID="app-sheet-close"
+                  onPress={() => {
+                    if (!dismissibleRef.current) return;
+                    (onHeaderClosePress || dismiss)();
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.headerClose}>{closeLabel}</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           ) : null}
 
