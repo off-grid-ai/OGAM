@@ -49,7 +49,7 @@ it('a fixed seed and what to avoid reach the computer with the next clip', async
   rtl.fireEvent(seed, 'endEditing');
   rtl.fireEvent.changeText(view.getByLabelText('Video negative prompt'), 'blurry, text');
   await sendClip(app, CLIP);
-  expect(app.jobs.submissions[0]).toMatchObject({ prompt: CLIP, seed: 42, negativePrompt: 'blurry, text' });
+  expect(app.jobs.submissions[0]).toMatchObject({ prompt: CLIP, seed: 42, negative_prompt: 'blurry, text' });
 }, 90_000);
 
 it('is named for the computer\'s video model, never its id', async () => {
