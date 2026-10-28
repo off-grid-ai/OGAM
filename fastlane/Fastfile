@@ -209,6 +209,8 @@ platform :android do
     upload_to_play_store(
       track: "production",
       aab: "android/app/build/outputs/bundle/release/app-release.aab",
+      # The release workflow builds an APK for the GitHub release first; Play takes only the AAB.
+      skip_upload_apk: true,
       json_key: ENV["PLAY_STORE_JSON_KEY_PATH"],
       skip_upload_changelogs: false,
       release_status: "draft" # human confirms rollout in Play Console
