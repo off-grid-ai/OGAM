@@ -13,6 +13,8 @@
  * A film really runs: each poll moves it one shot on, until every shot is final and the film is done.
  * `hold()` keeps it where it is, so a test can see it in flight; `release()` lets it go on.
  * `failNext(message)` makes the next film fail on the computer, the way Desktop reports a failure.
+ * `goSilent()` is a computer that stops answering: every film request waits until the phone closes it (a
+ * cancel, sent with nothing to close it, never ends). `answer()` brings it back.
  */
 import type { NativeFileSystemBoundary } from './nativeFileSystem';
 import { DESKTOP_VIDEO_ENDPOINT } from './desktopVideoServer';
@@ -32,6 +34,8 @@ export interface DesktopStoryJobs {
   hold: () => void;
   release: () => void;
   failNext: (message: string) => void;
+  goSilent: () => void;
+  answer: () => void;
   restore: () => void;
   /** After a relaunch: film downloads are served to the new launch's disk too. Films carry on. */
   useDisk: (fs: NativeFileSystemBoundary) => void;
@@ -48,6 +52,7 @@ export function serveDesktopStoryJobs(disk: NativeFileSystemBoundary): DesktopSt
   const films = new Map<string, Film>();
   let held = false;
   let failure: string | null = null;
+  let silent = false;
   const state: DesktopStoryJobs = {
     submissions: [],
     cancels: [],
@@ -59,6 +64,12 @@ export function serveDesktopStoryJobs(disk: NativeFileSystemBoundary): DesktopSt
     },
     failNext: message => {
       failure = message;
+    },
+    goSilent: () => {
+      silent = true;
+    },
+    answer: () => {
+      silent = false;
     },
     restore: () => {
       globalThis.fetch = inner;
@@ -95,6 +106,12 @@ export function serveDesktopStoryJobs(disk: NativeFileSystemBoundary): DesktopSt
     if (url.origin !== DESKTOP_VIDEO_ENDPOINT) return inner(input, init);
     lastRequest = Date.now();
     const method = (init?.method ?? 'GET').toUpperCase();
+    if (silent && url.pathname.startsWith('/v1/stories')) {
+      if (url.pathname.endsWith('/cancel')) state.cancels.push(url.pathname.split('/')[3]);
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('Aborted')), { once: true });
+      });
+    }
     if (url.pathname === '/v1/stories' && method === 'POST') {
       const body = JSON.parse(String(init?.body ?? '{}')) as { story: Film['story'] };
       state.submissions.push(body as unknown as Record<string, unknown>);

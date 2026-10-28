@@ -110,6 +110,28 @@ it('follows the download already running on the computer, then Continue turns on
   );
 }, 60_000);
 
+it('stops waiting on a computer that stopped answering, and follows the download again once it answers', async () => {
+  const current = await clipInChat({ memoryGb: 34, downloading: { id: LIGHT, percent: 40 } });
+  const { view, rtl } = current;
+  models!.hold();
+  await tapMutedContinue(current);
+  await view.findByText('Downloading Wan 2.2 (5B), Light on your computer', {}, { timeout: 10_000 });
+  // The computer stops answering while the phone follows the download.
+  models!.goSilent();
+  // The next status read goes out and gets no answer.
+  await new Promise(resolve => setTimeout(resolve, 2_500));
+  expect(view.getByText('Downloading Wan 2.2 (5B), Light on your computer')).toBeTruthy();
+  rtl.fireEvent.press(view.getByTestId('start-picture-stop'));
+  await rtl.waitFor(() => expect(view.queryByTestId('start-picture-sheet')).toBeNull());
+  expect(models!.aborted).toEqual(['GET /v1/models/pull/status']);
+  // Back, and the download carried on there: the next opening follows it to the end.
+  models!.answer();
+  models!.release();
+  await tapMutedContinue(current);
+  await view.findByText('Wan 2.2 (5B), Light is ready.', {}, { timeout: 15_000 });
+  expect(models!.pulls).toEqual([]);
+}, 60_000);
+
 it('offers the Light build on a computer without clear room for Full quality, and downloads it once', async () => {
   const current = await clipInChat({ memoryGb: 34 });
   const { view, rtl } = current;

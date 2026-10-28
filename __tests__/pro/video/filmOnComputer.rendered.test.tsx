@@ -65,6 +65,24 @@ it('Stop on the Making screen stops the film on the computer and offers Try agai
   expect(app.stories.cancels).toHaveLength(1);
 }, 60_000);
 
+it('Stop works when the computer has stopped answering, and Try again makes the film once it answers', async () => {
+  const app = await filmUnderway();
+  const { view, rtl } = app;
+  app.stories.goSilent();
+  // The next progress read goes out and gets no answer.
+  await new Promise(resolve => setTimeout(resolve, 3_500));
+  expect(view.getByTestId('making-stop')).toBeTruthy();
+  rtl.fireEvent.press(view.getByTestId('making-stop'));
+  await view.findByTestId('making-retry', {}, { timeout: 10_000 });
+  expect(view.queryByTestId('making-stop')).toBeNull();
+  expect(app.stories.cancels).toHaveLength(1);
+
+  app.stories.answer();
+  app.stories.release();
+  rtl.fireEvent.press(view.getByTestId('making-retry'));
+  await view.findByTestId('making-watch', {}, { timeout: 30_000 });
+}, 90_000);
+
 it('a film the computer cannot make says why, and Try again sends it again', async () => {
   const app = await filmUnderway();
   const { view, rtl } = app;

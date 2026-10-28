@@ -12,6 +12,8 @@
  *
  * A download really runs: each status read moves it on, until it completes and its model is installed.
  * `hold()` keeps it where it is, so a test can see it in flight, and `release()` lets it go on.
+ * `goSilent()` is a computer that stops answering (asleep, off the network): every request waits until the
+ * phone closes it, as a real fetch does, and `answer()` brings it back. `aborted` lists what the phone closed.
  */
 import { CATALOG, templateStoryboard } from '@offgrid/models';
 import { DESKTOP_VIDEO_ENDPOINT, DESKTOP_VIDEO_MODEL } from './desktopVideoServer';
@@ -31,6 +33,10 @@ export interface DesktopModelPulls {
   release: () => void;
   /** A model installed on the computer itself (its own Models screen), after the phone last asked. */
   install: (id: string) => void;
+  goSilent: () => void;
+  answer: () => void;
+  /** Requests the phone closed while the computer was silent, as `METHOD /path`. */
+  aborted: string[];
   restore: () => void;
 }
 
@@ -48,6 +54,7 @@ export function serveDesktopModelPulls(options: {
   const installed = new Set<string>([DESKTOP_VIDEO_MODEL.id, ...(options.installed ?? [])]);
   const downloads = new Map<string, Progress>();
   let held = false;
+  let silent = false;
   let activeVideo: string | null = DESKTOP_VIDEO_MODEL.id;
   const videoEntries = CATALOG.filter(model => model.kind === 'video');
   const sizeOf = (id: string) =>
@@ -71,6 +78,13 @@ export function serveDesktopModelPulls(options: {
     install: (id: string) => {
       installed.add(id);
     },
+    goSilent: () => {
+      silent = true;
+    },
+    answer: () => {
+      silent = false;
+    },
+    aborted: [],
     restore: () => {
       globalThis.fetch = inner;
     },
@@ -93,6 +107,14 @@ export function serveDesktopModelPulls(options: {
     if (url.origin !== DESKTOP_VIDEO_ENDPOINT) return inner(input, init);
     const method = (init?.method ?? 'GET').toUpperCase();
     const route = `${method} ${url.pathname}`;
+    if (silent) {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          state.aborted.push(route);
+          reject(new Error('Aborted'));
+        }, { once: true });
+      });
+    }
     if (route === 'GET /v1/models/catalog') {
       return json({
         kinds: ['text', 'vision', 'image', 'video', 'speech', 'transcription'],
