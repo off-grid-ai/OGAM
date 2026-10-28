@@ -22,7 +22,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   denseTitleRow: {
     flexDirection: 'row' as const,
-    alignItems: 'baseline' as const,
+    alignItems: 'center' as const,
     gap: SPACING.sm,
   },
   denseName: {

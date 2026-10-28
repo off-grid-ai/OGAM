@@ -127,11 +127,11 @@ export const DenseModelCardContent: React.FC<DenseModelCardContentProps> = ({
   return (
     <>
       <View style={styles.denseTitleRow}>
+        {credibilitySource === 'offgrid' && <MadeByOffGrid />}
         <Text style={styles.denseName} numberOfLines={1} testID={nameTestID}>{model.name}</Text>
         <View style={styles.denseSourceGroup}>
           {sourceBadge === 'Remote' ? <Icon name="cloud" size={14} color={colors.textMuted} accessibilityLabel="Remote model" />
             : sourceBadge ? <Text style={styles.denseSource}>{sourceBadge}</Text> : null}
-          {credibilitySource === 'offgrid' && <MadeByOffGrid />}
           {hasVerifiedMark && (
             <MaterialIcon
               name="verified"
