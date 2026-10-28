@@ -108,6 +108,9 @@ describe.each([
 
     await stop(phone, story.id);
     expect(storyOf(phone, story.id).state).toBe('draft');
+    // The film lets go at once, while the stills are still drawn: a chat clip is no longer told
+    // "A film is being made".
+    await until(() => phone.films.renderingStoryId() === null, 2_000, 'the film to let go after Stop');
 
     phone.engine.releaseImages();
     await until(() => storyOf(phone, story.id).shots.every(item => !!item.stillPath), 10_000, 'the stills to finish');
