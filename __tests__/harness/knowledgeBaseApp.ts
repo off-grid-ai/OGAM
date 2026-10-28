@@ -242,6 +242,8 @@ export async function launchProjectChatApp(options: ProjectChatAppOptions = {}) 
      * until each one has been read to the end ("<size> · <n> pages"), then go back to the project.
      */
     async addKnowledge(files: Array<PickedFile & { pages: number }>) {
+      // The project opens on Chats; the knowledge base is behind its tab.
+      fireEvent.press(view.getByTestId('project-tab-knowledge'));
       fireEvent.press(view.getByTestId('project-knowledge-base-open'));
       await view.findByTestId('knowledge-base-screen', {}, RENDER_WAIT);
       picker.pick.mockResolvedValue(
@@ -262,6 +264,7 @@ export async function launchProjectChatApp(options: ProjectChatAppOptions = {}) 
 
     /** The project page's New chat button. */
     async newProjectChat() {
+      fireEvent.press(await waitFor(() => view.getByTestId('project-tab-chats'), RENDER_WAIT));
       fireEvent.press(await waitFor(
         () => view.queryByTestId('project-start-chat') ?? view.getByTestId('project-new-chat'),
         RENDER_WAIT,

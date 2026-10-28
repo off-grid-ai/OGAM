@@ -156,6 +156,7 @@ describe('demo email-draft handoff scenes (rendered, real App)', () => {
     await view.findByTestId('project-detail-screen');
     await rtl.waitFor(() => expect(view.getByTestId('project-knowledge-base-count')).toHaveTextContent('3'));
     expect(view.queryByText(/Sam Okafor is the customer contact at Acme Corp/)).toBeNull();
+    rtl.fireEvent.press(view.getByTestId('project-tab-knowledge'));
     rtl.fireEvent.press(view.getByLabelText('Knowledge document Acme pilot brief.txt'));
     expect(await view.findByText(/Sam Okafor is the customer contact at Acme Corp/)).toBeTruthy();
     rtl.fireEvent.press(view.getByTestId('document-preview-back'));

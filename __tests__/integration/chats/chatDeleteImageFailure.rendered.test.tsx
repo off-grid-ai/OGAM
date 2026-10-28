@@ -208,8 +208,8 @@ describe.each<DeleteSurface>(['Home recents', 'project detail', 'project chats']
       const { ProjectDetailScreen } = require('../../../src/screens/ProjectDetailScreen');
       screen = rtl.render(React.createElement(ProjectDetailScreen, {}));
       if (surface === 'project chats') {
-        // The project's Chats header opens its full chat list.
-        rtl.fireEvent.press(await screen.findByText('Chats'));
+        // The Chats tab's header row opens its full chat list.
+        rtl.fireEvent.press(await screen.findByTestId('project-chats-open'));
         screen.unmount();
         expect(navigatedTo().screen).toBe('ProjectChats');
         harness.routeHolder.params = navigatedTo().params!;

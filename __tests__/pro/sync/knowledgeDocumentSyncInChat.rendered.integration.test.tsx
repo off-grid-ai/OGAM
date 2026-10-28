@@ -116,6 +116,7 @@ describe('a knowledge document synced from Desktop, in the project chat', () => 
     rtl.fireEvent.press(view.getByTestId('projects-tab'));
     rtl.fireEvent.press(await view.findByText('OGAD', {}, { timeout: 8000 }));
     await view.findByTestId('project-detail-screen');
+    rtl.fireEvent.press(view.getByTestId('project-tab-knowledge'));
     await view.findByText(FILE_NAME, {}, { timeout: 8000 });
     await rtl.waitFor(() => expect(view.getByText(/Reading \d+%/)).toBeTruthy(), { timeout: 8000 });
     expect(view.queryByText(/· 60 pages$/)).toBeNull();
@@ -126,6 +127,7 @@ describe('a knowledge document synced from Desktop, in the project chat', () => 
     expect(view.queryByText(/Reading \d+%/)).toBeNull();
 
     // Ask in the project's chat. BEFORE: no answer, no citation.
+    rtl.fireEvent.press(view.getByTestId('project-tab-chats'));
     rtl.fireEvent.press(view.getByTestId('project-start-chat'));
     await view.findByTestId('chat-input');
     expect(view.queryByText('p. 1')).toBeNull();

@@ -36,6 +36,9 @@ export const ProjectDetailScreen: React.FC = () => {
   const route = useRoute<RouteProps>();
   const { projectId } = route.params;
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
+  // People open a project to chat, so Chats comes first; the knowledge base is one tap away.
+  const [tab, setTab] = useState<'chats' | 'knowledge'>('chats');
+  const [kbCount, setKbCount] = useState(0);
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
@@ -230,14 +233,44 @@ export const ProjectDetailScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.tabs} accessibilityRole="tablist">
+        {(['chats', 'knowledge'] as const).map(id => (
+          <TouchableOpacity
+            key={id}
+            onPress={() => setTab(id)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === id }}
+            testID={id === 'chats' ? 'project-tab-chats' : 'project-tab-knowledge'}
+            style={[styles.tab, tab === id && styles.tabActive]}
+          >
+            <Text style={tab === id ? styles.tabTextActive : styles.tabText}>
+              {id === 'chats' ? 'Chats' : 'Knowledge base'} (
+              <Text
+                testID={id === 'chats' ? 'project-chats-count' : 'project-knowledge-base-count'}
+                accessibilityLabel={
+                  id === 'chats'
+                    ? `${projectChats.length} chats`
+                    : `Knowledge Base has ${kbCount} documents`
+                }
+              >
+                {id === 'chats' ? projectChats.length : kbCount}
+              </Text>
+              )
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <View style={styles.sectionsContainer}>
-        {/* Knowledge Base Section */}
-        <View style={styles.sectionHalf}>
+        {/* Both stay mounted so the knowledge base's count shows on its tab before it is opened. */}
+        <View style={[styles.sectionContent, tab !== 'knowledge' && styles.hidden]}>
           <KnowledgeBaseSection
             projectId={projectId}
             colors={colors}
             styles={styles}
             setAlertState={setAlertState}
+            inTab
+            onCountChange={setKbCount}
             onNavigateToKb={() =>
               navigation.navigate('KnowledgeBase', { projectId })
             }
@@ -250,19 +283,13 @@ export const ProjectDetailScreen: React.FC = () => {
           />
         </View>
 
-        {/* Chats Section */}
-        <View style={styles.sectionHalf}>
+        <View style={[styles.sectionContent, tab !== 'chats' && styles.hidden]}>
           <TouchableOpacity
-            style={styles.sectionHeader}
+            style={styles.sectionActionsHeader}
             onPress={() => navigation.navigate('ProjectChats', { projectId })}
             activeOpacity={0.7}
+            testID="project-chats-open"
           >
-            <View style={styles.sectionTitleRow}>
-              <Text style={styles.sectionTitle}>Chats</Text>
-              {projectChats.length > 0 && (
-                <Text style={styles.sectionCount}>{projectChats.length}</Text>
-              )}
-            </View>
             <View style={styles.sectionActions}>
               <Button
                 title="New"

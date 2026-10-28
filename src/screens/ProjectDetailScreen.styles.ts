@@ -112,10 +112,30 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   sectionsContainer: {
     flex: 1,
   },
-  sectionHalf: {
-    flex: 1,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+  // Same tabs as the Gallery's Images / Videos.
+  tabs: {
+    flexDirection: 'row' as const,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  tab: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 6,
+    backgroundColor: colors.surface,
+  },
+  tabActive: { backgroundColor: colors.primary },
+  tabText: { color: colors.text },
+  tabTextActive: { color: colors.background },
+  hidden: { display: 'none' as const },
+  // A tab names the section, so its header carries only the actions, on the right.
+  sectionActionsHeader: {
+    flexDirection: 'row' as const,
+    justifyContent: 'flex-end' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
   },
   sectionContent: {
     flex: 1,

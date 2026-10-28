@@ -43,6 +43,10 @@ export interface KBSectionProps {
   onNavigateToKb: () => void;
   /** Opens the file's pages; only called for a file the document index knows. */
   onDocumentPress: (doc: KnowledgeDocument & { document_id: string }) => void;
+  /** A tab already names this section and shows its count, so the header keeps only its actions. */
+  inTab?: boolean;
+  /** The number of documents, for the tab that names this section. */
+  onCountChange?: (count: number) => void;
 }
 
 export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
@@ -52,6 +56,8 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
   setAlertState,
   onNavigateToKb,
   onDocumentPress,
+  inTab = false,
+  onCountChange,
 }) => {
   const [kbDocs, setKbDocs] = useState<KnowledgeDocument[]>([]);
   const [addingFile, setAddingFile] = useState<string | null>(null);
@@ -79,6 +85,10 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
       loadKbDocs();
     }, [loadKbDocs]),
   );
+
+  useEffect(() => {
+    onCountChange?.(kbDocs.length);
+  }, [kbDocs.length, onCountChange]);
 
   // Files moving to or from paired devices. A received file reloads the list so its own row shows.
   const { transfers, dismiss: dismissTransfer } = useKnowledgeDocumentTransfers(
@@ -201,23 +211,25 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
   return (
     <View style={styles.sectionContent} testID="project-knowledge-base-section">
       <TouchableOpacity
-        style={styles.sectionHeader}
+        style={inTab ? styles.sectionActionsHeader : styles.sectionHeader}
         onPress={onNavigateToKb}
         activeOpacity={0.7}
         testID="project-knowledge-base-open"
       >
-        <View style={styles.sectionTitleRow}>
-          <Text style={styles.sectionTitle}>Knowledge Base</Text>
-          {kbDocs.length > 0 && (
-            <Text
-              style={styles.sectionCount}
-              accessibilityLabel={`Knowledge Base has ${kbDocs.length} documents`}
-              testID="project-knowledge-base-count"
-            >
-              {kbDocs.length}
-            </Text>
-          )}
-        </View>
+        {!inTab && (
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionTitle}>Knowledge Base</Text>
+            {kbDocs.length > 0 && (
+              <Text
+                style={styles.sectionCount}
+                accessibilityLabel={`Knowledge Base has ${kbDocs.length} documents`}
+                testID="project-knowledge-base-count"
+              >
+                {kbDocs.length}
+              </Text>
+            )}
+          </View>
+        )}
         <View style={styles.sectionActions}>
           {/* Text you paste and files you import are the same kind of thing once saved, so they sit
               side by side here rather than one being buried behind the other. */}
