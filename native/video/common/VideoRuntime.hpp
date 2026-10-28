@@ -113,6 +113,12 @@ class VideoRuntime {
       }
       config.max_vram = "HTP0=1.5";
       config.disable_prefetch = true;
+#else
+      // A Metal budget for the managed weights. Without one the Wan text encoder's 3.5 GB buffer
+      // stayed resident through sampling and the VAE decode: on an iPhone 17 Pro Max (6 GB limit)
+      // the decode ran under critical memory warnings, two clips ended with no frames and a third
+      // took 798 s to decode. Within the budget the model manager releases it once it is used.
+      if (!image) config.max_vram = "MTL0=4";
 #endif
       config.n_threads = request.threads;
 #ifdef __ANDROID__
