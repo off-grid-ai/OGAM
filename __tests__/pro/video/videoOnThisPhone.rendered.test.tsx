@@ -59,6 +59,8 @@ async function launch(
     installedModel?: boolean;
     /** Files the previous launch left on its disk (path and size), which a relaunch keeps. */
     keptFiles?: Array<{ path: string; size: number }>;
+    /** Native downloads still running across the restart (Android keeps them), as the native layer lists them. */
+    nativeRows?: Array<Record<string, unknown>>;
     carryOver?: NativeVideoEngine;
   } = {},
 ): Promise<PhoneVideoApp> {
@@ -74,6 +76,7 @@ async function launch(
       for (const file of entry.files) boundary.fs!.seedFile(`${videoModelDirectory(MODEL.id)}/${file.name}`, file.sizeBytes);
     }
     for (const file of options.keptFiles ?? []) boundary.fs!.seedFile(file.path, file.size);
+    for (const row of options.nativeRows ?? []) boundary.download!.seedActive(row as never);
     engine = installNativeVideoEngine(boundary, options.carryOver);
   } });
   if (options.relaunch) await app.view.findByTestId('home-screen', {}, { timeout: 10_000 });
@@ -398,6 +401,45 @@ it('Cancel on a download with files on the phone asks first, and Keep keeps the 
   expect(view.getByLabelText('Cancel download')).toBeTruthy();
   expect(view.queryByLabelText(`Download ${MODEL.name}`)).toBeNull();
   expect(boundary.fs!.listFiles(folder)).toEqual(filesBefore);
+}, 90_000);
+
+it('a video model download carries on after the app restarts while Android keeps downloading, without starting a file again', async () => {
+  const first = await launch();
+  first.rtl.fireEvent.press(await first.view.findByTestId('models-tab'));
+  first.rtl.fireEvent.press(await first.view.findByText('Video'));
+  await first.view.findByText(MODEL.name, {}, { timeout: 10_000 });
+  first.rtl.fireEvent.press(first.view.getByLabelText(`Download ${MODEL.name}`));
+  // The first file lands; the second is still downloading when the app restarts.
+  await first.rtl.waitFor(async () => expect(await first.downloads.finishRunning()).toBe(1), { timeout: 10_000 });
+  const { videoModelDirectory } = require('../../../src/services/videoModelFiles');
+  const folder = videoModelDirectory(MODEL.id);
+  // The native download of a file not yet on the disk: the one still under way.
+  const underWay = () => first.boundary.download!.active().filter(row =>
+    row.status === 'running' &&
+    !first.boundary.fs!.listFiles(folder).some(path => String(row.modelKey ?? '').endsWith(`/${path.split('/').pop()}`)));
+  await first.rtl.waitFor(() => expect(underWay()).toHaveLength(1));
+  const stillRunning = underWay();
+  const entry = require('@offgrid/models').CATALOG.find((model: { id: string }) => model.id === MODEL.id);
+  const sizeOf = (path: string) => entry.files.find((file: { name: string }) => path.endsWith(`/${file.name}`)).sizeBytes;
+  const keptFiles = first.boundary.fs!.listFiles(folder).map(path => ({ path, size: sizeOf(path) }));
+  first.view.unmount();
+  first.endpoint.restore();
+
+  const current = await launch({ relaunch: true, keptFiles, nativeRows: stillRunning as never });
+  const { view, rtl, boundary } = current;
+  rtl.fireEvent.press(await view.findByTestId('models-tab'));
+  rtl.fireEvent.press(await view.findByText('Video'));
+  await view.findByText(MODEL.name, {}, { timeout: 10_000 });
+  // Carrying on, not stranded.
+  await view.findByLabelText('Cancel download', {}, { timeout: 10_000 });
+  expect(view.queryByText(/Interrupted — app closed\./)).toBeNull();
+
+  await rtl.waitFor(async () => {
+    await current.downloads.finishRunning();
+    expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0);
+  }, { timeout: 15_000 });
+  // After the restart only the file never started was fetched: the running one was followed, not restarted.
+  expect(boundary.download!.module.startDownload).toHaveBeenCalledTimes(MODEL.files - 2);
 }, 90_000);
 
 it('a video model too big for the space left says how much to free, and starts nothing', async () => {

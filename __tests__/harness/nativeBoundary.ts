@@ -1015,6 +1015,12 @@ export interface DownloadFake {
 
 function makeDownloadFake(handle: FakeEmitterHandle): DownloadFake {
   const rows = new Map<string, DownloadRow>();
+  // A new id no row has, seeded ones included (a row kept across a restart may hold "dl-2").
+  const nextDownloadId = () => {
+    let n = rows.size + 1;
+    while (rows.has(`dl-${n}`)) n += 1;
+    return `dl-${n}`;
+  };
   const module: Record<string, jest.Mock> = {
     startDownload: jest.fn(async (params: DownloadRow) => {
       const row: DownloadRow = {
@@ -1022,7 +1028,7 @@ function makeDownloadFake(handle: FakeEmitterHandle): DownloadFake {
         bytesDownloaded: 0,
         totalBytes: 0,
         ...params,
-        downloadId: params.downloadId ?? `dl-${rows.size + 1}`,
+        downloadId: params.downloadId ?? nextDownloadId(),
       };
       rows.set(row.downloadId, row);
       return row;

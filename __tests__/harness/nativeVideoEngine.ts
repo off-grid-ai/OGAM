@@ -209,8 +209,11 @@ export function phoneDownloads(boundary: NativeBoundary, act: (work: () => Promi
     sizes.set(row.downloadId, Number(params.totalBytes) || 1024);
     return row;
   });
+  // A download started before a restart (seeded, as Android keeps it) is sized by its own native row.
+  const sizeOf = (id: string) =>
+    sizes.get(id) ?? (Number(download.active().find(row => row.downloadId === id)?.totalBytes) || 1024);
   download.module.moveCompletedDownload.mockImplementation(async (id: string, target: string) => {
-    fs.seedFile(target, sizes.get(id) ?? 1024);
+    fs.seedFile(target, sizeOf(id));
     return target;
   });
   return {
@@ -218,7 +221,7 @@ export function phoneDownloads(boundary: NativeBoundary, act: (work: () => Promi
       const rows = download.active().filter(row => row.status === 'running' && !finished.has(row.downloadId));
       for (const row of rows) {
         finished.add(row.downloadId);
-        const total = sizes.get(row.downloadId) ?? 1024;
+        const total = sizeOf(row.downloadId);
         await act(async () => {
           download.events.emit('DownloadComplete', {
             downloadId: row.downloadId,
