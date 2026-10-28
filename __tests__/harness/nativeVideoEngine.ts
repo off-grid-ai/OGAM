@@ -14,6 +14,10 @@
  *
  * `hold()` parks the next clip after its first sampling step, so a test can see it in flight;
  * `release()` lets it finish. `failNext(message)` makes the next clip fail as the engine reports it.
+ *
+ * The same module draws sd.cpp images (VideoGenerationModule.mm loadImageModel / generateImage): one
+ * engine, so while an image is drawn a clip is refused (VIDEO_BUSY) and while a clip runs an image is
+ * refused (IMAGE_BUSY). `holdImages()` parks the images being drawn until `releaseImages()`.
  */
 import type { NativeBoundary } from './nativeBoundary';
 
@@ -27,6 +31,10 @@ export interface NativeVideoEngine {
   failNext: (message: string) => void;
   /** From now on the engine also hands back its first decoded frame, as sd.cpp's preview callback does. */
   showPreviews: () => void;
+  /** Every sd.cpp image the engine was asked to draw. */
+  images: Array<Record<string, unknown>>;
+  holdImages: () => void;
+  releaseImages: () => void;
 }
 
 /** What the native side keeps across a JS reload: the job it is running, and its status. */
@@ -41,6 +49,9 @@ interface EngineCore {
   status: Record<string, unknown> | null;
   /** The JS context that asked for the running job is still there to hear how it ends. */
   jsAttached: boolean;
+  imagePath: string | null;
+  holdImages: boolean;
+  parkedImages: Array<() => void>;
 }
 
 const cores = new WeakMap<NativeVideoEngine, EngineCore>();
@@ -65,6 +76,9 @@ export function installNativeVideoEngine(boundary: NativeBoundary, carryOver?: N
     running: null,
     status: null,
     jsAttached: true,
+    imagePath: null,
+    holdImages: false,
+    parkedImages: [],
   };
   core.fs = boundary.fs!;
   core.events = boundary.litertEvents;
@@ -86,6 +100,14 @@ export function installNativeVideoEngine(boundary: NativeBoundary, carryOver?: N
     showPreviews: () => {
       core.previews = true;
     },
+    images: carryOver?.images ?? [],
+    holdImages: () => {
+      core.holdImages = true;
+    },
+    releaseImages: () => {
+      core.holdImages = false;
+      for (const go of core.parkedImages.splice(0)) go();
+    },
   };
   cores.set(engine, core);
   const coded = (code: string, message: string) => Object.assign(new Error(message), { code });
@@ -99,6 +121,40 @@ export function installNativeVideoEngine(boundary: NativeBoundary, carryOver?: N
     addListener: () => undefined,
     removeListeners: () => undefined,
     getVideoStatus: async (outputPath: string) => (core.status && core.status.path === outputPath ? core.status : null),
+    getLoadedImagePath: async () => core.imagePath,
+    loadImageModel: async (input: { modelPath: string }) => {
+      if (core.running) throw coded('IMAGE_BUSY', 'Image or video generation is running.');
+      core.imagePath = input.modelPath;
+      return true;
+    },
+    unloadImageModel: async () => {
+      core.imagePath = null;
+      return true;
+    },
+    generateImage: (input: Record<string, unknown>) =>
+      new Promise<Record<string, unknown>>((resolve, reject) => {
+        if (core.running) {
+          reject(coded('IMAGE_BUSY', 'Image or video generation is running.'));
+          return;
+        }
+        engine.images.push(input);
+        const output = String(input.outputPath);
+        core.running = {
+          reject: error => {
+            core.running = null;
+            reject(error);
+          },
+          output,
+        };
+        const draw = () => {
+          if (core.running?.output !== output) return;
+          core.running = null;
+          core.fs.seedFile(output, 4096);
+          resolve({ id: input.id, imagePath: output, width: input.width, height: input.height, seed: input.seed });
+        };
+        if (core.holdImages) core.parkedImages.push(draw);
+        else setTimeout(draw, 0);
+      }),
     cancel: async () => {
       core.parked?.();
       core.parked = null;
