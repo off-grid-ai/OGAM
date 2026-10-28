@@ -230,15 +230,12 @@ export function useRemoteServerForm({
     }
   }, [endpoint, apiKey, applySuccessfulConnection, validateForm]);
 
-  // eslint-disable-next-line complexity
   const saveServer = useCallback(async () => {
     try {
       const mediaModels = {
         ...(textModelId.trim() ? { text: textModelId.trim() } : {}),
         ...(imageModelId.trim() ? { image: imageModelId.trim() } : {}),
-        ...(modelManagement === 'offgrid-desktop-v1' && videoModelId.trim()
-          ? { video: videoModelId.trim() }
-          : {}),
+        ...(videoModelId.trim() ? { video: videoModelId.trim() } : {}),
         ...(transcriptionModelId.trim()
           ? { transcription: transcriptionModelId.trim() }
           : {}),

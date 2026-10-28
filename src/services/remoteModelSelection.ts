@@ -22,17 +22,15 @@ function configuredOption(
 
 /**
  * Project the server-reported catalogue into picker rows. A manually configured
- * model remains selectable when the server does not publish model kinds.
+ * model remains selectable when the server does not publish model kinds. Video
+ * rows come from any server that reports video models (a paired Desktop,
+ * OpenRouter, an OpenAI-shaped server): the remote video client speaks each.
  */
 export function remoteServerModelOptions(
   servers: RemoteServer[],
   category: RemoteModelCategory,
 ): RemoteServerModelOption[] {
   return servers
-    .filter(
-      server =>
-        category !== 'video' || server.modelManagement === 'offgrid-desktop-v1',
-    )
     .flatMap(server => {
       const reported = server.modelCatalog?.[category] ?? [];
       const options =
