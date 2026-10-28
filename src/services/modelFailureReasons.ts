@@ -18,7 +18,8 @@ export type ModelNotReadyReason =
 export function reasonFromLoadError(err: unknown): ModelNotReadyReason {
   const msg = err instanceof Error ? err.message : String(err);
   if (/not found|no such file|missing|does not exist/i.test(msg)) return 'not-downloaded';
-  if (/memory|insufficient|\boom\b|jetsam|out of/i.test(msg)) return 'insufficient-memory';
+  // "Insufficient credits" from a remote server is not memory: only memory or RAM words count.
+  if (/memory|\bram\b|\boom\b|jetsam/i.test(msg)) return 'insufficient-memory';
   return 'load-threw';
 }
 
