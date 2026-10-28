@@ -54,19 +54,12 @@ export async function request<T>(
 ): Promise<T> {
   const { server, path, init, signal } = input;
   const controller = new AbortController();
-  // An async image submission must receive its ID before it can cancel the Desktop job.
-  const needsRequestId = server.modelManagement === 'offgrid-desktop-v1' &&
-    path === '/v1/images/generations' && init.method === 'POST';
-  let sent = false;
-  const abort = () => {
-    if (!needsRequestId || !sent) controller.abort();
-  };
-  const unlinkAbort = onAbort(signal, abort);
+  // Calls to a paired server have no deadline, so Stop must close the request at once: a server that
+  // never answers would otherwise hold the phone.
+  const unlinkAbort = onAbort(signal, () => controller.abort());
   try {
     const apiKey = await remoteServerManager.getApiKey(server.id);
-    if (signal?.aborted) controller.abort();
     if (controller.signal.aborted) throw new Error('Remote request cancelled');
-    sent = true;
     const response = await fetch(endpoint(server, path), {
       ...init,
       headers: {
@@ -86,14 +79,58 @@ export async function request<T>(
     // consumed. A successful header is not a completed image/audio transfer.
     return await consume(response);
   } catch (error) {
-    if (needsRequestId && sent && signal?.aborted) {
-      logger.warn('[RemoteImage] no Desktop request ID received; remote cancellation is unconfirmed:', error);
-    }
     if (controller.signal.aborted) throw new Error('Remote request cancelled');
     throw error;
   } finally {
     unlinkAbort();
   }
+}
+
+/**
+ * Ask Desktop to cancel one image job. Sent, never awaited: a Desktop that stopped answering must not
+ * hold the phone after Stop.
+ */
+function cancelDesktopImageJob(server: RemoteServer, requestId: string): void {
+  request({
+    server,
+    path: `/v1/requests/${encodeURIComponent(requestId)}`,
+    init: { method: 'DELETE' },
+  }, response => response.json() as Promise<{ cancelled: boolean; status: string }>)
+    .then(state => {
+      if (!state.cancelled) {
+        logger.log('[RemoteImage] Desktop request was not cancelled:', requestId, state.status);
+      }
+    })
+    .catch(error => logger.warn('[RemoteImage] could not confirm Desktop cancellation:', error));
+}
+
+/**
+ * Desktop's job ID is how its job is cancelled, so the submission is not closed on Stop. The person is
+ * released at once instead, and a job ID that arrives after Stop is cancelled then.
+ */
+function untilStopped<T extends { request_id?: string }>(
+  server: RemoteServer,
+  submission: Promise<T>,
+  signal: AbortSignal | undefined,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let stopped = false;
+    const unlink = onAbort(signal, () => {
+      stopped = true;
+      reject(new Error('Remote request cancelled'));
+    });
+    submission.then(
+      payload => {
+        unlink();
+        if (!stopped) resolve(payload);
+        else if (payload.request_id) cancelDesktopImageJob(server, payload.request_id);
+      },
+      error => {
+        unlink();
+        if (!stopped) reject(error);
+      },
+    );
+  });
 }
 
 export function requiredModel(
@@ -120,7 +157,8 @@ export const remoteMediaRuntime = {
         message?: { images?: Array<{ image_url?: { url?: string } }> };
       }>;
     };
-    const payload = await request(
+    if (options.signal?.aborted) throw new Error('Remote request cancelled');
+    const submission = request(
       {
         server,
         path: openRouter ? '/v1/chat/completions' : '/v1/images/generations',
@@ -147,29 +185,20 @@ export const remoteMediaRuntime = {
                 },
           ),
         },
-        signal: options.signal,
+        signal: desktop ? undefined : options.signal,
       },
       response =>
         response.json() as Promise<ImagePayload & { request_id?: string }>,
     );
+    const payload = desktop ? await untilStopped(server, submission, options.signal) : await submission;
     let result: ImagePayload = payload;
     if (desktop && payload.request_id) {
       const requestId = payload.request_id;
-      let cancellation: Promise<void> | undefined;
+      let cancelled = false;
       const cancelDesktopRequest = () => {
-        if (cancellation) return;
-        // The caller's signal is already aborted. Cleanup needs a fresh request.
-        cancellation = request({
-          server,
-          path: `/v1/requests/${encodeURIComponent(requestId)}`,
-          init: { method: 'DELETE' },
-        }, response => response.json() as Promise<{ cancelled: boolean; status: string }>)
-          .then(state => {
-            if (!state.cancelled) {
-              logger.log('[RemoteImage] Desktop request was not cancelled:', requestId, state.status);
-            }
-          })
-          .catch(error => logger.warn('[RemoteImage] could not confirm Desktop cancellation:', error));
+        if (cancelled) return;
+        cancelled = true;
+        cancelDesktopImageJob(server, requestId);
       };
       const unlinkCancel = onAbort(options.signal, cancelDesktopRequest);
       try {
@@ -209,7 +238,6 @@ export const remoteMediaRuntime = {
         }
       } finally {
         unlinkCancel();
-        if (cancellation) await cancellation;
       }
     }
     const image = result.data?.[0];

@@ -12,6 +12,7 @@
  * `honorsStop: true` — a held poll ends when the phone aborts it, as a real socket does.
  * `honorsStop: false` — the held poll ignores the abort; `finish()` then answers it `completed` with an
  * image, which is the job finishing at the same moment the user pressed Stop.
+ * `cancelAnswers: false` — Desktop never answers the cancel (it went to sleep as Stop was pressed).
  */
 import { DESKTOP_IMAGE_ENDPOINT, serveDesktopImageJobs } from './remoteImageServer';
 
@@ -31,7 +32,7 @@ export interface HeldDesktopImageJob {
   restore: () => void;
 }
 
-export function holdDesktopImageJob(options: { honorsStop: boolean }): HeldDesktopImageJob {
+export function holdDesktopImageJob(options: { honorsStop: boolean; cancelAnswers?: boolean }): HeldDesktopImageJob {
   const management = serveDesktopImageJobs({ memoryReason: 'unused' });
   const underlying = globalThis.fetch;
   const polls = new Map<string, number>();
@@ -67,6 +68,7 @@ export function holdDesktopImageJob(options: { honorsStop: boolean }): HeldDeskt
     const base = { request_id: id, object: 'request', kind: 'image', poll_url: `/v1/images/${id}` };
     if (method === 'DELETE') {
       state.cancels.push(id);
+      if (options.cancelAnswers === false) return new Promise<Response>(() => {});
       return json({ request_id: id, status: 'failed', cancelled: true });
     }
     const count = (polls.get(id) ?? 0) + 1;

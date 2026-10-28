@@ -178,7 +178,7 @@ describe('Desktop image cancellation through HTTP', () => {
     expect(requests).toEqual([]);
   });
 
-  it('receives a delayed request ID after Stop and cancels that job once', async () => {
+  it('settles Stop before Desktop sends the request ID, then cancels that job once', async () => {
     holdSubmission = true;
     const stop = new AbortController();
     const outcome = remoteMediaRuntime.generateImage(
@@ -192,8 +192,10 @@ describe('Desktop image cancellation through HTTP', () => {
     const response = await submitted.promise;
     stop.abort();
     stop.abort();
-    json(response, { request_id: 'image-job' }, 202);
+    // Desktop has not answered the submission, and Stop has already let go.
     expect(await settled).toEqual(new Error('Remote request cancelled'));
+    json(response, { request_id: 'image-job' }, 202);
+    await deleted.promise;
     expect(jobStatus).toBe('failed');
     expect(requests).toEqual([
       'POST /v1/images/generations',
@@ -243,6 +245,7 @@ describe('Desktop image cancellation through HTTP', () => {
     await polled.promise;
     stop.abort();
     expect(await settled).toEqual(new Error('Remote request cancelled'));
+    await deleted.promise;
     expect(jobStatus).toBe('running');
     expect(requests.at(-1)).toBe('DELETE /v1/requests/image-job');
   });
@@ -260,6 +263,7 @@ describe('Desktop image cancellation through HTTP', () => {
         },
       ),
     ).rejects.toThrow('Remote request cancelled');
+    await deleted.promise;
     expect(requests.at(-1)).toBe('DELETE /v1/requests/image-job');
   });
 

@@ -41,9 +41,9 @@ describe('Stop during a Desktop image job', () => {
   });
 
   /** Pick the Desktop image model, send the prompt, and wait until the job is running on Desktop. */
-  async function startRunningJob(honorsStop: boolean): Promise<HeldDesktopImageJob> {
+  async function startRunningJob(honorsStop: boolean, cancelAnswers = true): Promise<HeldDesktopImageJob> {
     h = await setupChatScreen({ engine: 'llama' });
-    const job = holdDesktopImageJob({ honorsStop });
+    const job = holdDesktopImageJob({ honorsStop, cancelAnswers });
     desktop = job;
     await chooseDesktopImageModel(h);
     expect(h.view!.queryByTestId('generated-image')).toBeNull();
@@ -90,6 +90,23 @@ describe('Stop during a Desktop image job', () => {
       'GET /v1/requests/img-1',
       'DELETE /v1/requests/img-1',
     ]);
+  }, 30000);
+
+  it('stops at once when Desktop never answers the cancel, and the next image is drawn', async () => {
+    const job = await startRunningJob(true, false);
+
+    await h.pressImageCardStop();
+
+    await h.rtl.waitFor(() => { expect(h.view!.queryByText('Generating Image')).toBeNull(); });
+    expect(job.cancels).toEqual(['img-1']);
+    await expectNothingSaved();
+
+    // The phone is not held by the unanswered cancel: the next image goes through.
+    await h.tapSend('draw a harbour at dawn');
+    await h.rtl.waitFor(() => { expect(job.held()).toBe(true); }, { timeout: 8000 });
+    await h.rtl.act(async () => { job.finish(); });
+    await h.rtl.waitFor(() => { expect(h.view!.queryByTestId('generated-image')).not.toBeNull(); }, { timeout: 8000 });
+    expect(h.view!.queryByTestId('model-failure-image')).toBeNull();
   }, 30000);
 
   it('a job that completes as Stop lands is not saved or shown', async () => {
