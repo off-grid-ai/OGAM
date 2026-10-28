@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LoadingDots } from '../LoadingDots';
+import { ModelSwitchStop } from '../models/ModelSwitchStop';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import { ONNXImageModel, RemoteModel } from '../../types';
@@ -187,7 +188,7 @@ export const ImageTab: React.FC<ImageTabProps> = ({
                 isActive={isCurrent || isLoadingThis}
                 onPress={() => onSelectRemoteVisionModel(model, serverId)}
                 disabled={isAnyLoading || isCurrent}
-                trailing={isLoadingThis ? <LoadingDots color={colors.primary} testID="remote-image-model-loading" />
+                trailing={isLoadingThis ? <ModelSwitchStop testID="remote-image-model-loading" />
                   : isCurrent ? <View style={styles.checkmark}><Icon name="check" size={16} color={colors.background} /></View>
                   : null}
               />

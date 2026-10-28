@@ -338,6 +338,7 @@ class GenerationService {
             if (this.abortRequested) return;
           }
         } catch (error) {
+          if (this.abortRequested) return;
           lastError = error;
           continue;
         }
@@ -517,6 +518,8 @@ class GenerationService {
     // failed completion has reset `isGenerating`; Stop/Eject must still prevent its retry.
     this.abortRequested = true;
     this.generationAttempt += 1;
+    // A fallback to a Desktop model may still be loading there: close that request too.
+    remoteServerManager.stopModelSwitch();
     // A Stop holds what is queued (except a send-now message), whichever kind of run it stopped.
     this.state = { ...this.state, queueHold: chatQueueHoldAfter('stop') };
     if (!this.state.isGenerating) {

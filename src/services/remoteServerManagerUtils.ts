@@ -101,6 +101,7 @@ export async function createProviderForServerImpl(
 export async function setActiveRemoteTextModelImpl(
   serverId: string,
   modelId: string,
+  signal?: AbortSignal,
 ): Promise<void> {
   const store = useRemoteServerStore.getState();
   logger.log('[RemoteServerManager] setActiveRemoteTextModel called:', {
@@ -121,6 +122,7 @@ export async function setActiveRemoteTextModelImpl(
           },
           'text',
           modelId,
+          signal,
         )
       : null;
   const confirmedModels = confirmedState?.active ?? {

@@ -2,9 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { ModelCard } from '../ModelCard';
-import { LoadingDots } from '../LoadingDots';
+import { ModelSwitchStop } from './ModelSwitchStop';
 import { SPACING, TYPOGRAPHY } from '../../constants';
-import { remoteServerManager } from '../../services/remoteServerManager';
+import { ModelSwitchStopped, remoteServerManager } from '../../services/remoteServerManager';
 import { remoteServerModelOptions } from '../../services/remoteModelSelection';
 import { useRemoteServerStore } from '../../stores/remoteServerStore';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -75,7 +75,7 @@ export const RemoteModelOptionsSection: React.FC<Props> = ({
             isActive={active}
             trailing={
               selecting === key ? (
-                <LoadingDots color={colors.primary} />
+                <ModelSwitchStop />
               ) : active ? (
                 <Icon name="check" size={16} color={colors.primary} />
               ) : null
@@ -92,6 +92,7 @@ export const RemoteModelOptionsSection: React.FC<Props> = ({
                 );
                 onSelect?.();
               } catch (reason) {
+                if (reason instanceof ModelSwitchStopped) return;
                 if (option.serverId === activeServerId && option.id === activeModelId) return;
                 const serverName = servers.find(server => server.id === option.serverId)?.name ?? 'Remote server';
                 setError(

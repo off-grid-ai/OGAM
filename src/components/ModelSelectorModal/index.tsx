@@ -3,6 +3,7 @@ import { useSlot, SLOTS } from '../../bootstrap/slotRegistry';
 import { VideoUpsell } from '../models/VideoUpsell';
 import { SearchTab } from './SearchTab';
 import { proGateShown } from '../../services/analytics/analytics';
+import { ModelSwitchStopped } from '../../services/remoteServerManager';
 import React, { useEffect, useState, useMemo } from 'react';
 import { Text, ScrollView, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -235,6 +236,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
       await remoteServerManager.setActiveRemoteTextModel(serverId, model.id);
       onSelectionComplete?.();
     } catch (error) {
+      if (error instanceof ModelSwitchStopped) return;
       logger.error(
         '[ModelSelectorModal] Failed to set remote text model:',
         error,
@@ -264,6 +266,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
       }
       onSelectionComplete?.();
     } catch (error) {
+      if (error instanceof ModelSwitchStopped) return;
       logger.error(
         '[ModelSelectorModal] Failed to set remote vision model:',
         error,

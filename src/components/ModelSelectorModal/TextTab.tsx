@@ -13,6 +13,7 @@ import { fileExceedsBudget, textModelBudget } from '../../services/memoryBudget'
 import { useResidentRows } from '../models/useResidentRows';
 import { predictGgufCapabilities } from '../../utils/ggufCapabilities';
 import { LoadingDots } from '../LoadingDots';
+import { ModelSwitchStop } from '../models/ModelSwitchStop';
 import { textRowState } from './rowState';
 import { useDownloadedSpeedBadges } from './useDownloadedSpeedBadges';
 
@@ -268,7 +269,7 @@ export const TextTab: React.FC<TextTabProps> = ({
                 isActive={isCurrent || isLoadingThis}
                 onPress={() => onSelectRemoteModel(model, serverId)}
                 disabled={isAnyLoading || isCurrent}
-                trailing={isLoadingThis ? <LoadingDots color={colors.primary} testID="remote-text-model-loading" />
+                trailing={isLoadingThis ? <ModelSwitchStop testID="remote-text-model-loading" />
                   : isCurrent ? <View style={styles.checkmarkRemote}><Icon name="check" size={16} color={colors.background} /></View>
                   : null}
               />

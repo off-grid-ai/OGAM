@@ -51,7 +51,36 @@ const trimSlash = (url: string): string => {
   return s;
 };
 
+/** A Desktop model switch the person stopped. Their selection stays as it was. */
+export class ModelSwitchStopped extends Error {
+  constructor() {
+    super('Model switch stopped');
+    this.name = 'ModelSwitchStopped';
+  }
+}
+
 class RemoteServerManager {
+  /** Desktop model switches still loading. Desktop takes as long as the model needs, so Stop is the way out. */
+  private readonly modelSwitches = new Set<AbortController>();
+
+  /** Run one Desktop model switch that `stopModelSwitch` can stop, whatever Desktop does. */
+  private async switching<T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    this.modelSwitches.add(controller);
+    try {
+      return await work(controller.signal);
+    } catch (error) {
+      throw controller.signal.aborted ? new ModelSwitchStopped() : error;
+    } finally {
+      this.modelSwitches.delete(controller);
+    }
+  }
+
+  /** Stop every Desktop model switch still loading. Nothing is selected; the request to Desktop is closed. */
+  stopModelSwitch(): void {
+    for (const controller of this.modelSwitches) controller.abort();
+  }
+
   /**
    * Add a new remote server
    */
@@ -214,7 +243,7 @@ class RemoteServerManager {
     modelId: string,
   ): Promise<void> {
     featureUsed('remote_server');
-    return setActiveRemoteTextModelImpl(serverId, modelId);
+    return this.switching(signal => setActiveRemoteTextModelImpl(serverId, modelId, signal));
   }
 
   /** Set the active remote vision/image model */
@@ -239,13 +268,16 @@ class RemoteServerManager {
     if (!server) throw new Error(`Server not found: ${serverId}`);
     const confirmedState =
       server.modelManagement === 'offgrid-desktop-v1'
-        ? await activateOffGridDesktopModel(
-            {
-              ...server,
-              apiKey: (await this.getApiKey(serverId)) ?? undefined,
-            },
-            category,
-            modelId,
+        ? await this.switching(async signal =>
+            activateOffGridDesktopModel(
+              {
+                ...server,
+                apiKey: (await this.getApiKey(serverId)) ?? undefined,
+              },
+              category,
+              modelId,
+              signal,
+            ),
           )
         : null;
     const confirmedModels = confirmedState?.active ?? {
@@ -408,18 +440,18 @@ class RemoteServerManager {
   }
 
   /** Download a catalog model on an Off Grid AI Desktop, through its gateway. */
-  async startDesktopDownload(serverId: string, modelId: string): Promise<void> {
-    await startOffGridDesktopDownload(await this.desktopServer(serverId), modelId);
+  async startDesktopDownload(serverId: string, modelId: string, signal?: AbortSignal): Promise<void> {
+    await startOffGridDesktopDownload(await this.desktopServer(serverId), modelId, signal);
   }
 
   /** How a download on an Off Grid AI Desktop is going. */
-  async readDesktopDownload(serverId: string, modelId: string): Promise<OffGridDesktopDownload> {
-    return readOffGridDesktopDownload(await this.desktopServer(serverId), modelId);
+  async readDesktopDownload(serverId: string, modelId: string, signal?: AbortSignal): Promise<OffGridDesktopDownload> {
+    return readOffGridDesktopDownload(await this.desktopServer(serverId), modelId, signal);
   }
 
   /** The Desktop's memory and installed models. */
-  async readDesktopRoom(serverId: string): Promise<OffGridDesktopRoom> {
-    return readOffGridDesktopRoom(await this.desktopServer(serverId));
+  async readDesktopRoom(serverId: string, signal?: AbortSignal): Promise<OffGridDesktopRoom> {
+    return readOffGridDesktopRoom(await this.desktopServer(serverId), signal);
   }
 
   private async desktopServer(serverId: string): Promise<RemoteServer> {

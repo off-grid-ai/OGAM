@@ -256,14 +256,15 @@ function textModels(
 /** Detect and read the complete installed-model contract exposed by Off Grid Desktop. */
 export async function readOffGridDesktopModelState(
   server: Pick<RemoteServer, 'id' | 'endpoint' | 'apiKey'>,
+  signal?: AbortSignal,
 ): Promise<OffGridDesktopModelState | null> {
   try {
     const [catalogResponse, installedResponse, activeResponse, liveResponse] =
       await Promise.all([
-        gatewayFetch(server, '/v1/models/catalog'),
-        gatewayFetch(server, '/v1/models/installed'),
-        gatewayFetch(server, '/v1/models/active'),
-        gatewayFetch(server, '/v1/models'),
+        gatewayFetch(server, '/v1/models/catalog', { signal }),
+        gatewayFetch(server, '/v1/models/installed', { signal }),
+        gatewayFetch(server, '/v1/models/active', { signal }),
+        gatewayFetch(server, '/v1/models', { signal }),
       ]);
     if (!catalogResponse.ok || !installedResponse.ok || !activeResponse.ok) {
       return null;
@@ -287,21 +288,27 @@ export async function readOffGridDesktopModelState(
       active: projectActive(catalog, activeValues),
       textModels: textModels(server.id, models, installed, liveModels),
     };
-  } catch {
+  } catch (error) {
+    if (signal?.aborted) throw error;
     return null;
   }
 }
 
-/** Activate one installed Desktop model, then confirm Desktop reports that exact selection. */
+/**
+ * Activate one installed Desktop model, then confirm Desktop reports that exact selection.
+ * Loading a large model takes as long as it takes, so there is no deadline: `signal` is how the person stops it.
+ */
 export async function activateOffGridDesktopModel(
   server: RemoteServer,
   category: RemoteModelCategory,
   modelId: string,
+  signal?: AbortSignal,
 ): Promise<OffGridDesktopModelState> {
   const response = await gatewayFetch(server, '/v1/models/activate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: modelId, kind: category }),
+    signal,
   });
   const result = record(await response.json().catch(() => null));
   if (response.status === 401) {
@@ -318,7 +325,7 @@ export async function activateOffGridDesktopModel(
         : 'Desktop could not activate this model.',
     );
   }
-  const refreshed = await readOffGridDesktopModelState(server);
+  const refreshed = await readOffGridDesktopModelState(server, signal);
   if (!refreshed || refreshed.active[category] !== modelId) {
     throw new Error('Desktop did not confirm the selected model.');
   }
@@ -348,11 +355,12 @@ function gatewayError(server: Pick<RemoteServer, 'apiKey'>, status: number, fall
 }
 
 /** Start downloading one catalog model on the Desktop. Desktop resolves its weights and companion files. */
-export async function startOffGridDesktopDownload(server: RemoteServer, modelId: string): Promise<void> {
+export async function startOffGridDesktopDownload(server: RemoteServer, modelId: string, signal?: AbortSignal): Promise<void> {
   const response = await gatewayFetch(server, '/v1/models/pull', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: modelId }),
+    signal,
   });
   if (!response.ok) {
     throw gatewayError(server, response.status, 'Desktop could not start the download.', record(await response.json().catch(() => null)));
@@ -360,8 +368,8 @@ export async function startOffGridDesktopDownload(server: RemoteServer, modelId:
 }
 
 /** Read how a Desktop download is going. */
-export async function readOffGridDesktopDownload(server: RemoteServer, modelId: string): Promise<OffGridDesktopDownload> {
-  const response = await gatewayFetch(server, `/v1/models/pull/status?id=${encodeURIComponent(modelId)}`);
+export async function readOffGridDesktopDownload(server: RemoteServer, modelId: string, signal?: AbortSignal): Promise<OffGridDesktopDownload> {
+  const response = await gatewayFetch(server, `/v1/models/pull/status?id=${encodeURIComponent(modelId)}`, { signal });
   const body = record(await response.json().catch(() => null));
   if (!response.ok || !body) {
     throw gatewayError(server, response.status, 'Desktop did not say how the download is going.', body);
@@ -387,10 +395,10 @@ export interface OffGridDesktopRoom {
 }
 
 /** Read the Desktop's memory and installed models, as its Models screen judges them. */
-export async function readOffGridDesktopRoom(server: RemoteServer): Promise<OffGridDesktopRoom> {
+export async function readOffGridDesktopRoom(server: RemoteServer, signal?: AbortSignal): Promise<OffGridDesktopRoom> {
   const [catalogResponse, installedResponse] = await Promise.all([
-    gatewayFetch(server, '/v1/models/catalog'),
-    gatewayFetch(server, '/v1/models/installed'),
+    gatewayFetch(server, '/v1/models/catalog', { signal }),
+    gatewayFetch(server, '/v1/models/installed', { signal }),
   ]);
   const catalog = record(await catalogResponse.json().catch(() => null));
   const installedBody = record(await installedResponse.json().catch(() => null));
