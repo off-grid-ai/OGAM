@@ -217,6 +217,13 @@ export async function hydrateDownloadStore(): Promise<void> {
   // silently disappears from the Download Manager — including across a cold app-kill, where
   // the prior entry survives only in the durably-persisted snapshot (loadActiveDownloads).
   const hydratedKeys = new Set(entries.map(e => e.modelKey));
+  // A video pack has one row per file natively; while any of them is still live the pack is not
+  // interrupted (its provider carries it on), so it is not stranded as failed.
+  for (const row of rows) {
+    if (row.modelKey?.startsWith(VIDEO_FILE_KEY_PREFIX) && row.status !== 'failed' && row.status !== 'cancelled') {
+      hydratedKeys.add(row.modelId as ModelKey);
+    }
+  }
   const persistedPrior = await loadActiveDownloads();
   entries.push(...strandInterruptedEntries(hydratedKeys, persistedPrior));
 

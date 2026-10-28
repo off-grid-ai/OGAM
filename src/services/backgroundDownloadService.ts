@@ -554,30 +554,42 @@ class BackgroundDownloadService {
         hideNotification: opts.silent,
       });
       resolveId(info.downloadId);
-      await new Promise<void>((resolve, reject) => {
-        const removeProgress = this.onProgress(info.downloadId, event => {
-          opts.onProgress?.(event.bytesDownloaded, event.totalBytes);
-        });
-        const done = () => { removeProgress(); removeComplete(); removeError(); };
-        const removeComplete = this.onComplete(info.downloadId, async () => {
-          done();
-          try { await this.moveCompletedDownload(info.downloadId, opts.destPath); } catch { /* may already be moved */ }
-          resolve();
-        });
-        const removeError = this.onError(info.downloadId, err => {
-          done();
-          const error = new Error(err.reason || 'Download failed') as Error & { cancelled?: boolean };
-          // Let callers distinguish a user cancel from a real failure so they can
-          // clean up quietly instead of surfacing a "download failed" error.
-          if (err.reasonCode === 'user_cancelled') error.cancelled = true;
-          reject(error);
-        });
-        this.startProgressPolling();
-      });
+      await this.followDownload(info.downloadId, opts.destPath, opts.onProgress);
     })();
 
     promise.catch(err => rejectId(err));
     return { downloadIdPromise, promise };
+  }
+
+  /**
+   * Follow a native download already under way (one started before the JS restarted: Android keeps it
+   * running) to its end, and move the finished file to `destPath`. Settles like downloadFileTo.
+   */
+  followDownload(
+    downloadId: string,
+    destPath: string,
+    onProgress?: (bytesDownloaded: number, totalBytes: number) => void,
+  ): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const removeProgress = this.onProgress(downloadId, event => {
+        onProgress?.(event.bytesDownloaded, event.totalBytes);
+      });
+      const done = () => { removeProgress(); removeComplete(); removeError(); };
+      const removeComplete = this.onComplete(downloadId, async () => {
+        done();
+        try { await this.moveCompletedDownload(downloadId, destPath); } catch { /* may already be moved */ }
+        resolve();
+      });
+      const removeError = this.onError(downloadId, err => {
+        done();
+        const error = new Error(err.reason || 'Download failed') as Error & { cancelled?: boolean };
+        // Let callers distinguish a user cancel from a real failure so they can
+        // clean up quietly instead of surfacing a "download failed" error.
+        if (err.reasonCode === 'user_cancelled') error.cancelled = true;
+        reject(error);
+      });
+      this.startProgressPolling();
+    });
   }
 
   async excludeFromBackup(path: string): Promise<boolean> {

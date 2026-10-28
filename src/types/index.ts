@@ -562,6 +562,8 @@ export interface BackgroundDownloadInfo {
   reasonCode?: BackgroundDownloadReasonCode;
   /** Raw JSON persisted with the download row by the JS layer at start time. */
   metadataJson?: string;
+  /** The key the JS layer gave the download (a video pack's file: `video-file:<pack>/<file>`). */
+  modelKey?: string;
 }
 export interface DebugInfo {
   systemPrompt: string;
