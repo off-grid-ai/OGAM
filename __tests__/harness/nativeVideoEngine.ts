@@ -239,7 +239,9 @@ export function installNativeVideoEngine(boundary: NativeBoundary, carryOver?: N
       core.fs.seedFile(input.outputPath, 256 * 1024);
       return { path: input.outputPath, durationSeconds: input.clips.length * 5 - (input.clips.length - 1) * input.crossfadeSeconds };
     },
-    lastFrame: async (_videoPath: string, outputPath: string) => {
+    lastFrame: async (videoPath: string, outputPath: string) => {
+      // AVAssetImageGenerator cannot read a clip that is not there (FilmModule.swift lastFrame).
+      if (!(await core.fs.exists(videoPath))) throw coded('FILM_FRAME', 'The operation could not be completed.');
       core.fs.seedFile(outputPath, 4096);
       return outputPath;
     },

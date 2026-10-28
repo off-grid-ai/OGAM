@@ -150,11 +150,25 @@ export async function makeClipInChat(app: StudioApp, prompt: string): Promise<vo
  * The app is closed and opened again: the phone's storage stays (its disk is a new one), and the
  * paired computer keeps every job it was running. Opens on Home.
  */
-export async function relaunchStudioApp(): Promise<StudioApp> {
+export async function relaunchStudioApp(
+  options: {
+    /** The phone's native video engine and film composer, as the first launch had them. */
+    phoneEngine?: boolean;
+    /** Files the previous launch left on its disk (path and size), which a relaunch keeps. */
+    keptFiles?: Array<{ path: string; size: number }>;
+  } = {},
+): Promise<StudioApp> {
   const before = current!;
   before.view.unmount();
   earlierEndpoints.push(before.endpoint);
-  const app = await launchApp({ release: false, relaunch: true });
+  const app = await launchApp({
+    release: false,
+    relaunch: true,
+    beforeApp: boundary => {
+      for (const file of options.keptFiles ?? []) boundary.fs!.seedFile(file.path, file.size);
+      if (options.phoneEngine) require('./nativeVideoEngine').installNativeVideoEngine(boundary);
+    },
+  });
   before.jobs.useDisk(app.boundary.fs!);
   before.stories.useDisk(app.boundary.fs!);
   await require('./proHarness').installPro();
