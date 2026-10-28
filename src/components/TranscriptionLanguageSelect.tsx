@@ -3,6 +3,7 @@ import { transcriptionLanguages } from '@offgrid/speech';
 import { useWhisperStore } from '../stores/whisperStore';
 import { SettingsOptionSelect } from './SettingsOptionSelect';
 import { callHook, HOOKS } from '../bootstrap/hookRegistry';
+import { isQwenAsrModelId } from '../services/qwenAsrModel';
 
 interface TranscriptionLanguageSelectProps {
   testID?: string;
@@ -16,7 +17,7 @@ export const TranscriptionLanguageSelect: React.FC<TranscriptionLanguageSelectPr
   const language = useWhisperStore((state) => state.transcriptionLanguage);
   const setLanguage = useWhisperStore((state) => state.setTranscriptionLanguage);
   const languages = useMemo(
-    () => transcriptionLanguages('whisper', downloadedModelId),
+    () => transcriptionLanguages(isQwenAsrModelId(downloadedModelId) ? 'qwen3-asr' : 'whisper', downloadedModelId),
     [downloadedModelId],
   );
   const options = useMemo(

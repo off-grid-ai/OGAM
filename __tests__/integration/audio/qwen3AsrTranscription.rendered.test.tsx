@@ -174,6 +174,31 @@ describe('dictation with Qwen3-ASR selected', () => {
     expect(view.queryByTestId('transcription-notice')).toBeNull();
   });
 
+  it('offers Qwen3-ASR\'s own languages, and a pinned one reaches the model by the name it writes', async () => {
+    const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true, llamaAudio: true });
+    engineReportsShippedBuild();
+    await selectQwenAsr(h);
+    // Filipino and Cantonese are Qwen3-ASR languages the Whisper list does not offer.
+    const React = require('react');
+    const { TranscriptionLanguageSelect } = require('../../../src/components/TranscriptionLanguageSelect');
+    const select = h.rtl.render(React.createElement(TranscriptionLanguageSelect));
+    h.rtl.fireEvent.press(select.getByTestId('transcription-language-select'));
+    await h.rtl.waitFor(() => expect(select.getByTestId('transcription-language-select-yue')).toBeTruthy());
+    select.unmount();
+    await chooseLanguage(h, 'fil');
+    h.render();
+    const view = h.view!;
+
+    h.boundary.llama!.scriptCompletion({ text: 'magandang umaga' });
+    await dictate(h);
+
+    await h.rtl.waitFor(() => {
+      expect(view.getByTestId('chat-input').props.value ?? '').toBe('magandang umaga');
+    }, { timeout: 4000 });
+    const prompts = h.boundary.llama!.calls.completion.map(([params]) => String((params as { prompt?: string }).prompt ?? ''));
+    expect(prompts.some(prompt => prompt.endsWith('language Filipino<asr_text>'))).toBe(true);
+  });
+
   it('says so in one line and lets Whisper transcribe when Qwen3-ASR fails', async () => {
     const h = await setupChatScreen({ engine: 'llama', platform: 'android', whisper: true, llamaAudio: true });
     engineReportsShippedBuild();

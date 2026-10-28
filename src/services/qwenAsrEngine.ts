@@ -8,21 +8,21 @@
 import { Platform } from 'react-native';
 import { initLlama, type LlamaContext } from 'llama.rn';
 import logger from '../utils/logger';
-import type { QwenAsrFiles } from './qwenAsrModel';
+import { transcriptionLanguages } from '@offgrid/speech';
+import { QWEN_ASR_MODEL_ID, type QwenAsrFiles } from './qwenAsrModel';
 
 /** Room for a few minutes of audio (the encoder emits about 13 tokens a second) and the transcript. */
 const ASR_CONTEXT_TOKENS = 4096;
 const ASR_MAX_TRANSCRIPT_TOKENS = 1024;
 const ASR_TEXT = '<asr_text>';
 
-/** The languages Qwen3-ASR names, by the codes the language setting stores. */
-const QWEN_ASR_LANGUAGES: Readonly<Record<string, string>> = {
-  zh: 'Chinese', en: 'English', yue: 'Cantonese', ar: 'Arabic', de: 'German', fr: 'French',
-  es: 'Spanish', pt: 'Portuguese', id: 'Indonesian', it: 'Italian', ko: 'Korean', ru: 'Russian',
-  th: 'Thai', vi: 'Vietnamese', ja: 'Japanese', tr: 'Turkish', hi: 'Hindi', ms: 'Malay',
-  nl: 'Dutch', sv: 'Swedish', da: 'Danish', fi: 'Finnish', pl: 'Polish', cs: 'Czech',
-  tl: 'Filipino', fa: 'Persian', el: 'Greek', ro: 'Romanian', hu: 'Hungarian', mk: 'Macedonian',
-};
+/** The languages Qwen3-ASR names, by the codes the language setting stores: the shared list's label
+ *  is the name the model writes before its transcript, so the picker and the prompt cannot disagree. */
+const QWEN_ASR_LANGUAGES: Readonly<Record<string, string>> = Object.fromEntries(
+  transcriptionLanguages('qwen3-asr', QWEN_ASR_MODEL_ID)
+    .filter(({ code }) => code !== 'auto')
+    .map(({ code, label }) => [code, label]),
+);
 
 /** The transcript in a Qwen3-ASR reply: the text after `<asr_text>`, without special tokens. */
 function parseQwenAsrText(raw: string): string {
