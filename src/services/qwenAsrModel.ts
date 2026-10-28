@@ -78,12 +78,14 @@ export function qwenAsrCardFor(modelId: string | null | undefined): MobileWhispe
 
 /**
  * Whether this phone offers Qwen3-ASR: its engine runs on this platform, the app's llama.cpp build
- * loads it, and the phone memory guard (the shared fit rule) admits its download.
+ * loads it, the phone has the memory the catalog measured for it (minRamGb: the audio encoder and
+ * its context need more than the weights' size suggests), and the phone memory guard admits it.
  */
 export function isQwenAsrOffered(ramGB: number): boolean {
   const entry = entryFor(QWEN_ASR_MODEL_ID);
   return !!entry &&
     isTranscriptionEngineAvailableOn('qwen3-asr', Platform.OS) &&
     engineLoadsCatalogModel(entry) &&
+    ramGB >= (entry.minRamGb ?? 0) &&
     loadsOnPhone(entry.id, ramGB) === true;
 }

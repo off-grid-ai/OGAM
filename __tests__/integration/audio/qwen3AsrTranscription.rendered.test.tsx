@@ -4,7 +4,8 @@
  * From the person's side:
  *  - On a phone the memory guard admits, Models > Transcription lists Qwen3-ASR 0.6B. Downloading it
  *    fetches its weights and audio projector (checksummed) and makes it the speech model.
- *  - On a phone the guard refuses, it is not listed; the Whisper models still are.
+ *  - On a phone the guard refuses, or with less than the 3 GB its catalog entry measured, it is not
+ *    listed; the Whisper models still are.
  *  - With it selected, dictation in a chat puts what they said in the composer.
  *  - When Qwen3-ASR fails, the composer says so in one line, and a downloaded Whisper model
  *    transcribes the recording instead.
@@ -104,6 +105,19 @@ describe('Qwen3-ASR on the Transcription tab', () => {
     expect(screen.getByTestId('transcription-model-card-0')).toBeTruthy();
     expect(screen.queryByText('Qwen3-ASR 0.6B')).toBeNull();
     expect(screen.queryByTestId(CARD)).toBeNull();
+  });
+
+  it('is not listed on a 2 GB phone: Qwen3-ASR 0.6B needs the 3 GB its catalog entry measured', async () => {
+    installNativeBoundary({ download: true, fs: true, ram: { platform: 'android', totalBytes: 2 * GB, availBytes: 1 * GB } });
+    engineReportsShippedBuild();
+    await launchReadsDevice();
+    const React = require('react');
+    const { render } = requireRTL();
+    const { TranscriptionModelsTab } = require('../../../src/screens/ModelsScreen/TranscriptionModelsTab');
+
+    const screen = render(React.createElement(TranscriptionModelsTab, { showRemoteModels: false }));
+    expect(screen.getByTestId('transcription-model-card-0')).toBeTruthy();
+    expect(screen.queryByText('Qwen3-ASR 0.6B')).toBeNull();
   });
 });
 
