@@ -7,6 +7,7 @@ import {
   FlatList,
   Platform,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { LoadingDots } from '../components/LoadingDots';
 import Icon from 'react-native-vector-icons/Feather';
@@ -71,6 +72,13 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
   useEffect(() => {
     loadKbDocs();
   }, [loadKbDocs]);
+
+  // Documents are added and removed on the Knowledge Base screen, so coming back reloads the list.
+  useFocusEffect(
+    useCallback(() => {
+      loadKbDocs();
+    }, [loadKbDocs]),
+  );
 
   // Files moving to or from paired devices. A received file reloads the list so its own row shows.
   const { transfers, dismiss: dismissTransfer } = useKnowledgeDocumentTransfers(
