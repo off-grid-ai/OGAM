@@ -308,6 +308,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             style={styles.galleryCard}
             onPress={() => navigation.navigate('Gallery')}
             hapticType="selection"
+            testID="home-gallery-card"
           >
             <Icon name="grid" size={18} color={colors.primary} />
             <View style={styles.galleryCardInfo}>

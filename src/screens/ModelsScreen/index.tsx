@@ -31,7 +31,7 @@ const MODEL_TABS: ReadonlyArray<{
   { key: 'text', label: 'Text' },
   { key: 'embedding', label: 'Search', testID: 'embedding-tab' },
   { key: 'image', label: 'Image' },
-  { key: 'video', label: 'Video' },
+  { key: 'video', label: 'Video', testID: 'video-models-tab' },
   { key: 'voice', label: 'Voice', testID: 'voice-models-tab' },
   { key: 'transcription', label: 'Speech', testID: 'transcription-models-tab' },
 ];

@@ -189,7 +189,7 @@ export const GalleryScreen: React.FC = () => {
           if (tab === 'videos' && isSelectMode) toggleSelectMode();
           if (tab === 'videos' && hasVideoLibrary) navigation.navigate('VideoLibrary' as never);
           else setKind(tab);
-        }} accessibilityRole="button"
+        }} accessibilityRole="button" testID={`gallery-tab-${tab}`}
           style={[styles.mediaTab, kind === tab && styles.mediaTabActive]}>
           <Text style={kind === tab ? styles.mediaTabTextActive : styles.mediaTabText}>{tab === 'images' ? `Images (${displayImages.length})` : `Videos (${displayVideos.length})`}</Text>
         </TouchableOpacity>)}
