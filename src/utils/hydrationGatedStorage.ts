@@ -27,7 +27,7 @@ export function flushPersistedWrites(): void {
 function flushWhenLeavingForeground(): void {
   if (listening) return;
   listening = true;
-  AppState.addEventListener?.('change', state => {
+  AppState?.addEventListener?.('change', state => {
     if (state === 'background' || state === 'inactive') flushPersistedWrites();
   });
 }
