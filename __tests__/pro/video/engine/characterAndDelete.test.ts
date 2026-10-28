@@ -18,15 +18,10 @@
  */
 import { bootPhoneVideo, closePhoneVideo, until, WAN, type PhoneVideo } from '../../../harness/phoneVideoServices';
 
-let phone: PhoneVideo | undefined;
-
-afterEach(async () => {
-  await closePhoneVideo();
-  phone = undefined;
-});
+afterEach(() => closePhoneVideo());
 
 async function ready() {
-  phone = await bootPhoneVideo();
+  const phone = await bootPhoneVideo();
   await phone.installPack();
   const chat = phone.newChat();
   return { phone, chat };
@@ -144,8 +139,7 @@ describe('delete', () => {
   });
 
   it('cancelling a video model download removes every file it put on the phone', async () => {
-    phone = await bootPhoneVideo();
-    const current = phone;
+    const current = await bootPhoneVideo();
     const { CATALOG } = require('@offgrid/models');
     const model = CATALOG.find((entry: { id: string }) => entry.id === WAN);
     const { videoModelDirectory } = require('../../../../src/services/videoModelFiles');

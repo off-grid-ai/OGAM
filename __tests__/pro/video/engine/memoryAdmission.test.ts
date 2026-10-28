@@ -11,17 +11,12 @@
  * Device boundary only: the RAM sensor, the native video engine, the disk, the native downloads.
  */
 import { GB } from '../../../harness/nativeBoundary';
-import { bootPhoneVideo, closePhoneVideo, until, type PhoneVideo } from '../../../harness/phoneVideoServices';
+import { bootPhoneVideo, closePhoneVideo, until } from '../../../harness/phoneVideoServices';
 
-let phone: PhoneVideo | undefined;
-
-afterEach(async () => {
-  await closePhoneVideo();
-  phone = undefined;
-});
+afterEach(() => closePhoneVideo());
 
 async function phoneWith(platform: 'ios' | 'android', totalGb: number, freeGb: number) {
-  phone = await bootPhoneVideo({ ram: { platform, totalBytes: totalGb * GB, availBytes: freeGb * GB } });
+  const phone = await bootPhoneVideo({ ram: { platform, totalBytes: totalGb * GB, availBytes: freeGb * GB } });
   await phone.installPack();
   return { phone, chat: phone.newChat() };
 }

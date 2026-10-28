@@ -14,18 +14,13 @@
 import { GB } from '../../../harness/nativeBoundary';
 import { bootPhoneVideo, closePhoneVideo, until, type PhoneVideo } from '../../../harness/phoneVideoServices';
 
-let phone: PhoneVideo | undefined;
-
-afterEach(async () => {
-  await closePhoneVideo();
-  phone = undefined;
-});
+afterEach(() => closePhoneVideo());
 
 const IMAGE_ID = 'phone-sd-pack';
 
 /** An iPhone with Wan 2.1 downloaded and picked; with `stills`, an sd.cpp image pack picked too. */
 async function ready(stills = false) {
-  phone = await bootPhoneVideo({ ram: { platform: 'ios', totalBytes: 12 * GB, availBytes: 5.9 * GB } });
+  const phone = await bootPhoneVideo({ ram: { platform: 'ios', totalBytes: 12 * GB, availBytes: 5.9 * GB } });
   await phone.installPack();
   if (stills) {
     // The disk a finished image download leaves: every file of an sd.cpp catalog pack, and its record.

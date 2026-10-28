@@ -12,15 +12,10 @@
  */
 import { bootPhoneVideo, closePhoneVideo, until, type PhoneVideo } from '../../../harness/phoneVideoServices';
 
-let phone: PhoneVideo | undefined;
-
-afterEach(async () => {
-  await closePhoneVideo();
-  phone = undefined;
-});
+afterEach(() => closePhoneVideo());
 
 async function ready(): Promise<{ phone: PhoneVideo; chat: string }> {
-  phone = await bootPhoneVideo();
+  const phone = await bootPhoneVideo();
   await phone.installPack();
   return { phone, chat: phone.newChat() };
 }

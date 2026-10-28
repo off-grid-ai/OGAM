@@ -10,15 +10,10 @@
  * Pro activation (which recovers work on launch). Device boundary only: the native video engine (whose
  * worker Android keeps alive across a restart), the disk, the RAM sensor, the native downloads.
  */
-import { bootPhoneVideo, closePhoneVideo, until, WAN, type PhoneVideo } from '../../../harness/phoneVideoServices';
+import { bootPhoneVideo, closePhoneVideo, until, WAN } from '../../../harness/phoneVideoServices';
 import { phoneDownloads } from '../../../harness/nativeVideoEngine';
 
-let phone: PhoneVideo | undefined;
-
-afterEach(async () => {
-  await closePhoneVideo();
-  phone = undefined;
-});
+afterEach(() => closePhoneVideo());
 
 /** A clip held on its first step, in a new chat. */
 async function clipInFlight(prompt: string) {
@@ -36,12 +31,12 @@ it('a clip the native worker kept making while the app was closed lands in its c
   const { first, chat } = await clipInFlight('a hummingbird over a red flower');
 
   // Closed and opened again; Android kept the video worker running.
-  phone = await bootPhoneVideo({ relaunch: true, keptPack: WAN, carryOver: first.engine });
-  await until(() => phone!.service.getState().phase === 'running', 10_000, 'the clip to be picked up');
+  const phone = await bootPhoneVideo({ relaunch: true, keptPack: WAN, carryOver: first.engine });
+  await until(() => phone.service.getState().phase === 'running', 10_000, 'the clip to be picked up');
   expect(phone.seam.isBusy()).toBe(true);
   phone.engine.release();
 
-  await until(() => phone!.service.getState().phase === 'succeeded', 15_000, 'the clip to finish');
+  await until(() => phone.service.getState().phase === 'succeeded', 15_000, 'the clip to finish');
   const [clip] = phone.app().generatedVideos;
   expect(clip.prompt).toBe('a hummingbird over a red flower');
   expect(await phone.onDisk(clip.videoPath)).toBe(true);
@@ -55,15 +50,15 @@ it('a clip the phone stopped with the app is shown interrupted, and Retry makes 
   await clipInFlight('a lantern on a dark river');
 
   // Closed and opened again; the OS ended the video worker with the app.
-  phone = await bootPhoneVideo({ relaunch: true, keptPack: WAN });
-  await until(() => phone!.service.getState().phase === 'failed', 10_000, 'the interrupted clip');
+  const phone = await bootPhoneVideo({ relaunch: true, keptPack: WAN });
+  await until(() => phone.service.getState().phase === 'failed', 10_000, 'the interrupted clip');
   expect(phone.service.getState().error).toMatch(/interrupted/i);
   expect(phone.seam.isBusy()).toBe(false);
   const card = phone.failure()!;
   expect(card.onRetry).toEqual(expect.any(Function));
 
   card.onRetry!();
-  await until(() => phone!.service.getState().phase === 'succeeded', 15_000, 'the retried clip');
+  await until(() => phone.service.getState().phase === 'succeeded', 15_000, 'the retried clip');
   const [clip] = phone.app().generatedVideos;
   expect(clip.prompt).toBe('a lantern on a dark river');
   expect(await phone.onDisk(clip.videoPath)).toBe(true);
@@ -90,7 +85,7 @@ it('a video model download carries on after a restart: kept files stay, none is 
   expect(first.app().downloadedVideoModels).toHaveLength(0);
 
   // Android keeps the native download still running; the disk keeps the file that finished.
-  phone = await bootPhoneVideo({
+  const phone = await bootPhoneVideo({
     relaunch: true,
     keptFiles: [{ path: `${directory}/${model.files[0].name}`, size: model.files[0].sizeBytes }],
     nativeRows: first.boundary.download!.active().filter(row => row.modelKey?.endsWith(model.files[1].name)),
@@ -102,7 +97,7 @@ it('a video model download carries on after a restart: kept files stay, none is 
   let finished = 0;
   await until(async () => {
     finished += await after.finishRunning();
-    return phone!.app().downloadedVideoModels.some(item => item.id === WAN);
+    return phone.app().downloadedVideoModels.some(item => item.id === WAN);
   }, 15_000, 'the pack to install');
 
   for (const file of model.files) {
