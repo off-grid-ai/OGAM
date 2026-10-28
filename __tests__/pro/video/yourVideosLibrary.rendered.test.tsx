@@ -23,9 +23,9 @@ const CLIP = 'a paper boat drifting on a pond';
 async function openLibrary(app: StudioApp): Promise<void> {
   const { view, rtl } = app;
   rtl.fireEvent.press(view.getAllByLabelText('Back').pop()!);
-  rtl.fireEvent.press(await view.findByText('Image Gallery', {}, { timeout: 10_000 }));
+  rtl.fireEvent.press(await view.findByTestId('home-gallery-card', {}, { timeout: 10_000 }));
   await view.findByTestId('gallery-screen');
-  rtl.fireEvent.press(view.getByText(/^Videos \(/));
+  rtl.fireEvent.press(view.getByTestId('gallery-tab-videos'));
   await view.findByTestId('library-grid', {}, { timeout: 10_000 });
 }
 

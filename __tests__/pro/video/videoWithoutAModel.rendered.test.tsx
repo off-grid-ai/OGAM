@@ -56,7 +56,7 @@ it('on a 12 GB phone with no computer paired, video offers "Get a video model", 
   rtl.fireEvent.press(view.getByTestId('quick-video-mode'));
   await view.findByText('Make videos on this phone');
   expect(view.queryByText('Videos are made on your computer')).toBeNull();
-  rtl.fireEvent.press(view.getByText('Get a video model'));
+  rtl.fireEvent.press(view.getByRole('button', { name: 'Get a video model' }));
   expect((await view.findAllByLabelText(/^Download /, {}, { timeout: 10_000 })).length).toBeGreaterThan(0);
 }, 90_000);
 
@@ -65,7 +65,7 @@ it('on a 6 GB phone with no computer paired, video offers "Find my computer", wh
   rtl.fireEvent.press(view.getByTestId('quick-video-mode'));
   await view.findByText('Videos are made on your computer');
   expect(view.queryByText(/Run models this phone cannot hold/)).toBeNull();
-  rtl.fireEvent.press(view.getByText('Find my computer'));
+  rtl.fireEvent.press(view.getByRole('button', { name: 'Find my computer' }));
   await view.findByText(/Run models this phone cannot hold/);
 }, 90_000);
 

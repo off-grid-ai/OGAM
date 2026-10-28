@@ -41,7 +41,7 @@ it('an iPhone with 5.9 GB free makes a clip without asking to run anyway', async
 
   // Models › Video › Download: every file of the pack finishes.
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(MODEL.name, {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
   let finished = 0;

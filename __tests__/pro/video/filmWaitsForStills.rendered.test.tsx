@@ -56,7 +56,7 @@ it('Make it real while the stills are drawn waits for them, then makes the film'
 
   // Models › Video › Download: every file of the pack finishes.
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(VIDEO.name, {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByLabelText(`Download ${VIDEO.name}`));
   let finished = 0;

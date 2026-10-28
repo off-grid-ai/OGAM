@@ -42,7 +42,7 @@ it('the film made is the storyboard as I shaped it', async () => {
   const before = shotCount(app);
   expect(before).toBeGreaterThan(1);
 
-  rtl.fireEvent.press(view.getByText('Landscape'));
+  rtl.fireEvent.press(view.getByTestId('film-format-landscape'));
   rtl.fireEvent.press(view.getByTestId('add-shot'));
   await rtl.waitFor(() => expect(shotCount(app)).toBe(before + 1));
   const removes = view.getAllByLabelText('Remove this shot');
@@ -98,7 +98,7 @@ it('a shot starts from my photo once the computer can, after I say yes', async (
   rtl.fireEvent.press(view.getByTestId('shot-photo-1'));
   rtl.fireEvent.press(await view.findByTestId('start-picture-use', {}, { timeout: 10_000 }));
   await view.findByText('Wan 2.2 (5B), Light is ready.', {}, { timeout: 15_000 });
-  rtl.fireEvent.press(view.getByText('Choose a photo'));
+  rtl.fireEvent.press(view.getByTestId('start-picture-carry-on'));
   await rtl.waitFor(() => expect(app.dialog()?.title).toBe('Is this you, or someone who agreed?'), { timeout: 10_000 });
   await app.answer('Yes');
   await rtl.waitFor(() => expect(view.getByTestId('shot-photo-1').props.accessibilityState?.selected).toBe(true));

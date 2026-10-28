@@ -100,7 +100,9 @@ it('offers the person already made on the next film', async () => {
   await storyboard(app);
   const offer = await view.findByTestId('add-character', {}, { timeout: 10_000 });
   rtl.fireEvent.press(offer);
-  rtl.fireEvent.press(await view.findByText('Leo', {}, { timeout: 10_000 }));
+  const [known] = await view.findAllByTestId(/^character-offer-/, {}, { timeout: 10_000 });
+  expect(rtl.within(known).getByText('Leo')).toBeTruthy();
+  rtl.fireEvent.press(known);
   await view.findByLabelText('Stop keeping Leo', {}, { timeout: 10_000 });
 }, 90_000);
 
@@ -114,9 +116,9 @@ it('deleting a person asks first; Cancel keeps them, Delete removes them', async
 
   // From the storyboard: back Home, the Gallery card, its Videos tab, where the people made so far are listed.
   while (view.queryAllByLabelText('Back').length > 0) rtl.fireEvent.press(view.getAllByLabelText('Back').pop()!);
-  rtl.fireEvent.press(await view.findByText('Image Gallery', {}, { timeout: 10_000 }));
+  rtl.fireEvent.press(await view.findByTestId('home-gallery-card', {}, { timeout: 10_000 }));
   await view.findByTestId('gallery-screen');
-  rtl.fireEvent.press(view.getByText(/^Videos \(/));
+  rtl.fireEvent.press(view.getByTestId('gallery-tab-videos'));
   rtl.fireEvent.press(await view.findByLabelText('Character Leo', {}, { timeout: 10_000 }));
   const remove = await view.findByLabelText('Delete character', {}, { timeout: 10_000 });
 

@@ -85,11 +85,20 @@ async function launch(
   return { ...app, engine, downloads: phoneDownloads(app.boundary, app.rtl.act) };
 }
 
+/** On the Chats list, the one chat there: it shows its title, and opens. */
+async function openOnlyChat(current: { view: AnalyticsApp['view']; rtl: AnalyticsApp['rtl'] }, title: string): Promise<void> {
+  const { view, rtl } = current;
+  const row = await view.findByTestId('conversation-item-0', {}, { timeout: 10_000 });
+  expect(view.queryByTestId('conversation-item-1')).toBeNull();
+  expect(rtl.within(row).getByText(title)).toBeTruthy();
+  rtl.fireEvent.press(row);
+}
+
 /** Models tab › Video › Download, then every file of the pack finishes. */
 async function downloadVideoModel(current: PhoneVideoApp): Promise<void> {
   const { view, rtl } = current;
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(MODEL.name, {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
   let finished = 0;
@@ -170,7 +179,7 @@ it('pauses, resumes and cancels a video model download, and deletes an installed
   const current = await launch();
   const { view, rtl } = current;
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(MODEL.name, {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
   rtl.fireEvent.press(await view.findByLabelText('Pause download', {}, { timeout: 10_000 }));
@@ -249,7 +258,7 @@ it('a video model download the network drops says so; Retry finishes it, and Rem
   const current = await launch();
   const { view, rtl, boundary } = current;
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(MODEL.name, {}, { timeout: 10_000 });
   const dropNetwork = async () => {
     await rtl.waitFor(() => expect(boundary.download!.active().some(row => row.status === 'running')).toBe(true));
@@ -301,7 +310,7 @@ it('on a phone short of free memory, says so before it starts, and Run anyway ma
   const { view } = current;
   await downloadVideoModel(current);
   await describeClipOnPhone(current, 'a hummingbird hovering over a red flower');
-  const runAnyway = await view.findByText('Run anyway', {}, { timeout: 15_000 });
+  const runAnyway = await view.findByTestId('model-failure-load-anyway-video', {}, { timeout: 15_000 });
   expect(current.engine.generations).toHaveLength(0);
   current.rtl.fireEvent.press(runAnyway);
   await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
@@ -311,7 +320,7 @@ it('on a phone short of free memory, says so before it starts, and Run anyway ma
 it('a video model download cut off by the app closing says so, and Retry finishes it', async () => {
   const first = await launch();
   first.rtl.fireEvent.press(await first.view.findByTestId('models-tab'));
-  first.rtl.fireEvent.press(await first.view.findByText('Video'));
+  first.rtl.fireEvent.press(await first.view.findByTestId('video-models-tab'));
   await first.view.findByText(MODEL.name, {}, { timeout: 10_000 });
   first.rtl.fireEvent.press(first.view.getByLabelText(`Download ${MODEL.name}`));
   await first.view.findByLabelText('Cancel download', {}, { timeout: 10_000 });
@@ -321,7 +330,7 @@ it('a video model download cut off by the app closing says so, and Retry finishe
   const current = await launch({ relaunch: true });
   const { view, rtl } = current;
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(/Interrupted — app closed\./, {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByLabelText('Retry download'));
   await rtl.waitFor(async () => {
@@ -337,7 +346,7 @@ it('a video model whose files are on the phone with no record of them is offered
   const current = await launch({ installedModel: true });
   const { view, rtl, boundary } = current;
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(MODEL.name, {}, { timeout: 10_000 });
   rtl.fireEvent.press(await view.findByLabelText('Resume download', {}, { timeout: 10_000 }));
   await rtl.waitFor(() => expect(view.queryAllByLabelText('Delete model').length).toBeGreaterThan(0), { timeout: 15_000 });
@@ -349,7 +358,7 @@ it('a video model whose files are on the phone with no record of them is offered
 it('a cancelled video model download leaves nothing to resume after the app opens again', async () => {
   const first = await launch();
   first.rtl.fireEvent.press(await first.view.findByTestId('models-tab'));
-  first.rtl.fireEvent.press(await first.view.findByText('Video'));
+  first.rtl.fireEvent.press(await first.view.findByTestId('video-models-tab'));
   await first.view.findByText(MODEL.name, {}, { timeout: 10_000 });
   first.rtl.fireEvent.press(first.view.getByLabelText(`Download ${MODEL.name}`));
   // One file lands, then the person cancels; with files on the phone, Cancel asks first.
@@ -372,7 +381,7 @@ it('a cancelled video model download leaves nothing to resume after the app open
   const current = await launch({ relaunch: true, keptFiles });
   const { view, rtl } = current;
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByLabelText(`Download ${MODEL.name}`, {}, { timeout: 10_000 });
   expect(view.queryByLabelText('Resume download')).toBeNull();
 }, 90_000);
@@ -381,7 +390,7 @@ it('Cancel on a download with files on the phone asks first, and Keep keeps the 
   const current = await launch();
   const { view, rtl, boundary } = current;
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(MODEL.name, {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
   await rtl.waitFor(async () => expect(await current.downloads.finishRunning()).toBe(1), { timeout: 10_000 });
@@ -409,7 +418,7 @@ it('Cancel while the first file is still downloading asks first: its bytes count
   const current = await launch();
   const { view, rtl, boundary } = current;
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(MODEL.name, {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
   await view.findByLabelText('Cancel download', {}, { timeout: 10_000 });
@@ -437,7 +446,7 @@ it('Cancel while the first file is still downloading asks first: its bytes count
 it('a video model download carries on after the app restarts while Android keeps downloading, without starting a file again', async () => {
   const first = await launch();
   first.rtl.fireEvent.press(await first.view.findByTestId('models-tab'));
-  first.rtl.fireEvent.press(await first.view.findByText('Video'));
+  first.rtl.fireEvent.press(await first.view.findByTestId('video-models-tab'));
   await first.view.findByText(MODEL.name, {}, { timeout: 10_000 });
   first.rtl.fireEvent.press(first.view.getByLabelText(`Download ${MODEL.name}`));
   // The first file lands; the second is still downloading when the app restarts.
@@ -459,7 +468,7 @@ it('a video model download carries on after the app restarts while Android keeps
   const current = await launch({ relaunch: true, keptFiles, nativeRows: stillRunning as never });
   const { view, rtl, boundary } = current;
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(MODEL.name, {}, { timeout: 10_000 });
   // Carrying on, not stranded.
   await view.findByLabelText('Cancel download', {}, { timeout: 10_000 });
@@ -478,7 +487,7 @@ it('a video model too big for the space left says how much to free, and starts n
   const { view, rtl, boundary } = current;
   boundary.fs!.setFreeBytes(2 * GB);
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(MODEL.name, {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
   await view.findByText(/^Not enough space for this video model\. Free about \d+ GB and try again\.$/, {}, { timeout: 10_000 });
@@ -490,7 +499,7 @@ it('Retry after a dropped download keeps the files already on the phone', async 
   const current = await launch();
   const { view, rtl, boundary } = current;
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(MODEL.name, {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByLabelText(`Download ${MODEL.name}`));
   // The first file lands; the network drops during the second.
@@ -528,7 +537,7 @@ it('a clip still being made when the app is opened again carries on and lands in
   const current = await launch({ relaunch: true, installedModel: true, carryOver: first.engine });
   const { view, rtl } = current;
   rtl.fireEvent.press(await view.findByTestId('chats-tab'));
-  rtl.fireEvent.press(await view.findByText('a lantern floating down a dark river', {}, { timeout: 10_000 }));
+  await openOnlyChat(current, 'a lantern floating down a dark river');
   await view.findByTestId('video-progress', {}, { timeout: 10_000 });
   expect(view.queryByTestId('chat-clip-card')).toBeNull();
   current.engine.release();
@@ -550,10 +559,10 @@ it('a clip lost with the app (the phone stopped the worker) says so, and Retry m
   const current = await launch({ relaunch: true, installedModel: true });
   const { view, rtl } = current;
   rtl.fireEvent.press(await view.findByTestId('chats-tab'));
-  rtl.fireEvent.press(await view.findByText('a paper plane over the rooftops', {}, { timeout: 10_000 }));
+  await openOnlyChat(current, 'a paper plane over the rooftops');
   await view.findByText(/Video generation was interrupted\. Retry to start it again\./, {}, { timeout: 10_000 });
   expect(current.engine.generations).toHaveLength(0);
-  rtl.fireEvent.press(view.getByText('Retry'));
+  rtl.fireEvent.press(view.getByTestId('model-failure-retry-video'));
   await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
   expect(current.engine.generations).toHaveLength(1);
   expect(current.engine.generations[0].prompt).toBe('a paper plane over the rooftops');
@@ -573,7 +582,7 @@ it('a clip the worker could not finish while the app was away shows the engine\'
   current.engine.failNext('The video engine ran out of memory.');
   current.engine.release();
   rtl.fireEvent.press(await view.findByTestId('chats-tab'));
-  rtl.fireEvent.press(await view.findByText('a whale breaching at sunset', {}, { timeout: 10_000 }));
+  await openOnlyChat(current, 'a whale breaching at sunset');
   await view.findByText(/The video engine ran out of memory\./, {}, { timeout: 15_000 });
   expect(view.queryByTestId('chat-clip-card')).toBeNull();
 }, 90_000);

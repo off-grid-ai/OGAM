@@ -19,14 +19,12 @@ afterEach(() => {
   restoreBuildFlavor();
 });
 
-type Node = { parent: Node | null };
-
-/** The model card around a name: six levels up from the name is its card, one card and no more. */
-function cardOf(current: AnalyticsApp, name: string): Node {
+/** A model's card on Models, Video, by the model's id; its name is checked as what the card says. */
+function cardOf(current: AnalyticsApp, id: string, name: string) {
   const { view, rtl } = current;
-  let node = view.getByText(name) as unknown as Node;
-  for (let depth = 0; depth < 6 && node.parent; depth += 1) node = node.parent;
-  return rtl.within(node as never) as unknown as Node;
+  const card = rtl.within(view.getByTestId(`video-model-card-${id}`));
+  expect(card.getByText(name)).toBeTruthy();
+  return card;
 }
 
 it('Off Grid AI builds carry the Off Grid AI mark on Models, Video; other uploads do not', async () => {
@@ -37,15 +35,15 @@ it('Off Grid AI builds carry the Off Grid AI mark on Models, Video; other upload
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
   await view.findByTestId('models-screen');
   expect(view.queryByTestId('made-by-off-grid')).toBeNull();
-  rtl.fireEvent.press(view.getByText('Video'));
+  rtl.fireEvent.press(view.getByTestId('video-models-tab'));
   const light = await view.findByText('Wan 2.2 (5B), Light', {}, { timeout: 10_000 });
   expect(light).toBeTruthy();
   const marks = await view.findAllByLabelText('Made by Off Grid AI');
   expect(marks.length).toBeGreaterThan(0);
-  const within = cardOf(app, 'Wan 2.2 (5B), Light') as unknown as ReturnType<typeof rtl.within>;
+  const within = cardOf(app, 'off-grid-ai/Wan2.2-TI2V-5B-GGUF-Q4', 'Wan 2.2 (5B), Light');
   expect(within.getByTestId('made-by-off-grid')).toBeTruthy();
   // The row says nothing more: the mark is the only sign of who made it.
   expect(view.queryByText('Off Grid AI')).toBeNull();
-  const other = cardOf(app, 'Wan 2.2 (5B), Q5_K_M') as unknown as ReturnType<typeof rtl.within>;
+  const other = cardOf(app, 'QuantStack/Wan2.2-TI2V-5B-GGUF', 'Wan 2.2 (5B), Q5_K_M');
   expect(other.queryByTestId('made-by-off-grid')).toBeNull();
 }, 60_000);

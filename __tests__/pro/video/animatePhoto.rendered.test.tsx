@@ -109,7 +109,7 @@ it('the Gallery\'s full-screen picture offers the same muted Animate and sheet',
   // Leave the chat's viewer and the chat, then open the picture from the Gallery.
   rtl.fireEvent.press(view.getAllByLabelText('Back').pop()!);
   rtl.fireEvent.press(await view.findByTestId('home-tab'));
-  rtl.fireEvent.press(await view.findByText('Image Gallery', {}, { timeout: 10_000 }));
+  rtl.fireEvent.press(await view.findByTestId('home-gallery-card', {}, { timeout: 10_000 }));
   rtl.fireEvent.press((await view.findAllByTestId(/^gallery-image-/, {}, { timeout: 10_000 }))[0]);
   const animate = (await view.findAllByTestId('animate-photo', {}, { timeout: 10_000 })).pop()!;
   expect(animate.props.accessibilityState?.disabled).toBe(true);

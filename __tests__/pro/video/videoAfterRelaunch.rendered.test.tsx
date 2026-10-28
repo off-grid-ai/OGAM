@@ -12,11 +12,20 @@
  */
 jest.unmock('@react-navigation/native');
 
-import { closeStudioApp, launchStudioApp, makeClipInChat, relaunchStudioApp } from '../../harness/videoStudioApp';
+import { closeStudioApp, launchStudioApp, makeClipInChat, relaunchStudioApp, type StudioApp } from '../../harness/videoStudioApp';
 
 afterEach(() => closeStudioApp(), 90_000);
 
 const CLIP = 'a paper boat drifting on a pond';
+
+/** On the Chats list, the one chat there: it shows its title, and opens. */
+async function openOnlyChat(current: StudioApp, title: string): Promise<void> {
+  const { view, rtl } = current;
+  const row = await view.findByTestId('conversation-item-0', {}, { timeout: 10_000 });
+  expect(view.queryByTestId('conversation-item-1')).toBeNull();
+  expect(rtl.within(row).getByText(title)).toBeTruthy();
+  rtl.fireEvent.press(row);
+}
 
 it('a clip interrupted by closing the app is picked up again with Retry, from the same job', async () => {
   const first = await launchStudioApp();
@@ -30,10 +39,10 @@ it('a clip interrupted by closing the app is picked up again with Retry, from th
   const { view, rtl } = app;
   app.jobs.release();
   rtl.fireEvent.press(await view.findByTestId('chats-tab'));
-  rtl.fireEvent.press(await view.findByText(CLIP, {}, { timeout: 10_000 }));
+  await openOnlyChat(app, CLIP);
   await view.findByText(/The connection was interrupted/, {}, { timeout: 10_000 });
   expect(view.queryByTestId('chat-clip-card')).toBeNull();
-  rtl.fireEvent.press(view.getByText('Retry'));
+  rtl.fireEvent.press(view.getByTestId('model-failure-retry-video'));
   await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
   // The same job on the computer (its client job id), not a second clip.
   expect(new Set(app.jobs.submissions.map(sent => sent.client_job_id)).size).toBe(1);
@@ -50,8 +59,8 @@ it('a film the computer was making when the app closed carries on and arrives', 
   const app = await relaunchStudioApp();
   const { view, rtl } = app;
   app.stories.release();
-  rtl.fireEvent.press(await view.findByText('Image Gallery', {}, { timeout: 10_000 }));
-  rtl.fireEvent.press(await view.findByText(/^Videos \(/));
+  rtl.fireEvent.press(await view.findByTestId('home-gallery-card', {}, { timeout: 10_000 }));
+  rtl.fireEvent.press(await view.findByTestId('gallery-tab-videos'));
   await view.findByTestId('library-grid', {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByTestId('library-tab-stories'));
   rtl.fireEvent.press((await view.findAllByTestId(/^library-item-/, {}, { timeout: 10_000 }))[0]);
@@ -78,11 +87,11 @@ it('Retry on an interrupted clip the computer could not make says the computer\'
   await making;
   const { view, rtl } = app;
   rtl.fireEvent.press(await view.findByTestId('chats-tab'));
-  rtl.fireEvent.press(await view.findByText(CLIP, {}, { timeout: 10_000 }));
+  await openOnlyChat(app, CLIP);
   await view.findByText(/The connection was interrupted/, {}, { timeout: 10_000 });
   app.jobs.failRunning('The video model ran out of memory on this computer.');
   app.jobs.release();
-  rtl.fireEvent.press(view.getByText('Retry'));
+  rtl.fireEvent.press(view.getByTestId('model-failure-retry-video'));
   await view.findByText(/The video model ran out of memory on this computer\./, {}, { timeout: 15_000 });
   expect(view.queryByTestId('chat-clip-card')).toBeNull();
 }, 90_000);

@@ -62,7 +62,7 @@ async function videoTab(): Promise<AnalyticsApp> {
   await require('../../harness/proHarness').installPro();
   const { view, rtl } = app;
   rtl.fireEvent.press(await view.findByTestId('models-tab'));
-  rtl.fireEvent.press(await view.findByText('Video'));
+  rtl.fireEvent.press(await view.findByTestId('video-models-tab'));
   await view.findByText(REPO_NAME, {}, { timeout: 10_000 });
   return app;
 }
@@ -78,7 +78,7 @@ it('a model shows its versions, standard first; a version downloads and can be c
   serveHuggingFace({});
   const { view, rtl } = await videoTab();
   expect(view.queryByText('Available versions')).toBeNull();
-  rtl.fireEvent.press(view.getByText(REPO_NAME));
+  rtl.fireEvent.press(view.getByTestId(`video-model-card-${REPO}`));
   await view.findByText('Available versions', {}, { timeout: 10_000 });
   // 16 GB suggested against this 12 GB phone.
   expect(view.getByText('16 GB memory suggested · This phone: 12 GB')).toBeTruthy();
