@@ -232,6 +232,9 @@ export function installNativeVideoEngine(boundary: NativeBoundary, carryOver?: N
     notifyReady: async () => null,
     askToNotify: async () => true,
     compose: async (input: { clips: Array<{ path: string; caption?: string }>; outputPath: string; crossfadeSeconds: number }) => {
+      // AVFoundation finds no video track in a file that is not there (FilmModule.swift makeExport).
+      for (const clip of input.clips)
+        if (!(await core.fs.exists(clip.path))) throw coded('FILM_FAILED', 'A clip has no video.');
       engine.films.push(input);
       core.fs.seedFile(input.outputPath, 256 * 1024);
       return { path: input.outputPath, durationSeconds: input.clips.length * 5 - (input.clips.length - 1) * input.crossfadeSeconds };
