@@ -65,23 +65,23 @@
 		<string>_offgrid-sync._udp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs access to your camera to take photos and attach them to conversations.</string>
+	<string>Off Grid AI uses the camera when you take a photo to attach to a conversation or to turn into a video, and when you scan a pairing code to connect your computer.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>This app may use Face ID to protect access to your stored credentials.</string>
+	<string>Off Grid AI uses Face ID to unlock the API keys and licence it keeps for you in this phone’s keychain.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Off Grid uses your local network to find your devices and local LLM servers.</string>
+	<string>Off Grid AI uses your local network to find Off Grid AI Desktop and other AI servers on your Wi‑Fi, and to send your requests to them.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>This app needs access to your microphone for voice-to-text transcription using Whisper.</string>
+	<string>Off Grid AI uses the microphone when you dictate a message, record a voice note, or talk to the assistant hands-free. Your speech is turned into text on this phone.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>This app needs permission to save generated images to your photo library.</string>
+	<string>Off Grid AI saves the images and videos it makes to your photo library when you choose to save or share them.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app needs access to your photo library to attach images to conversations.</string>
+	<string>Off Grid AI opens your photo library when you choose a photo to attach to a conversation, to animate into a video, or to keep a character looking the same in every shot. If you turn on screenshot sharing, it also watches for new screenshots to send to your paired devices.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>Used to read and create calendar events on your request.</string>
+	<string>Off Grid AI reads and creates calendar events only when you ask it to in a conversation.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Used to read and create calendar events on your request.</string>
+	<string>Off Grid AI reads and creates calendar events only when you ask it to in a conversation.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>This app uses on-device speech recognition to transcribe voice input.</string>
+	<string>Off Grid AI can use this phone’s own speech recognition to turn what you say into text.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIAppFonts</key>
