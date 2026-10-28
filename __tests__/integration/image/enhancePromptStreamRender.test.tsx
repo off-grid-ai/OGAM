@@ -79,9 +79,23 @@ describe('the Enhanced prompt card renders as a card from the first token', () =
     expect(view.queryByText(/\*\*/)).toBeNull();
     expect(view.queryByText(/an energetic dog running/)).not.toBeNull();
 
+    // On screen only: the saved chats (the phone's storage) do not take the stream token by token. Saving
+    // the whole chat store per token outgrew an iPhone's memory limit (2026-10-28).
+    const storage = require('@react-native-async-storage/async-storage');
+    const AsyncStorage = storage.default ?? storage;
+    const { waitForChatPersistence } = require('../../../src/stores/chatStore');
+    const saved = async () => {
+      await waitForChatPersistence();
+      return String(await AsyncStorage.getItem('local-llm-chat-storage'));
+    };
+    expect(await saved()).not.toMatch(/an energetic dog running/);
+
     // Release the stream: the turn finishes and the image the enhancement was for is drawn.
     h.boundary.llama!.releaseStream();
     await h.rtl.waitFor(() => { expect(view.queryByTestId('generated-image')).not.toBeNull(); }, { timeout: 8000 });
+
+    // The final prompt is saved once the enhancement is done.
+    await h.rtl.waitFor(async () => expect(await saved()).toMatch(/an energetic dog running/));
 
     // The card survives the finish clean — the same header, still no wrapper.
     expect(view.getAllByTestId('assistant-work-toggle')).toHaveLength(1);

@@ -1,6 +1,7 @@
 import { PROMPT_ENHANCEMENT_STATUS } from '@offgrid/sync';
 import { useAppStore, useChatStore } from '../stores';
 import logger from '../utils/logger';
+import { useLiveMessageStore } from '../stores/liveMessageStore';
 import { activeModelService } from './activeModelService';
 import {
   generateStandalone,
@@ -36,6 +37,7 @@ function finishEnhancementMessage(input: {
 }): void {
   const { conversationId, tempMessageId, enhancedPrompt, originalPrompt } = input;
   if (!conversationId || !tempMessageId) return;
+  useLiveMessageStore.getState().clear(tempMessageId);
   const chatStore = useChatStore.getState();
   if (enhancedPrompt && enhancedPrompt !== originalPrompt) {
     chatStore.updateMessageThinking(conversationId, tempMessageId, false);
@@ -92,21 +94,16 @@ function enhancementTokenWriter(
   tempMessageId: string | null,
 ): (token: string) => void {
   let streamed = '';
-  let renderingAsCard = false;
   return token => {
     streamed += token;
     if (!conversationId || !tempMessageId) return;
     if (/^\s*(?:<think>[\s\S]*?<\/think>\s*)?Generated image for:/i.test(streamed)) return;
-    const chatStore = useChatStore.getState();
-    if (!renderingAsCard) {
-      renderingAsCard = true;
-      chatStore.updateMessageThinking(conversationId, tempMessageId, false);
-    }
-    chatStore.updateMessageContent(
-      conversationId,
-      tempMessageId,
-      buildEnhancementCardContent(streamed),
-    );
+    // Streamed to the screen only. The saved message changes once, when the prompt is final
+    // (finishEnhancementMessage): saving the chat store per token re-wrote megabytes per token.
+    useLiveMessageStore.getState().show(tempMessageId, {
+      content: buildEnhancementCardContent(streamed),
+      isThinking: false,
+    });
   };
 }
 
@@ -161,6 +158,7 @@ export async function enhanceImagePrompt(
   } catch (error) {
     logger.error('[ImageGen] Prompt enhancement failed:', error);
     await resetTextEngine();
+    if (tempMessageId) useLiveMessageStore.getState().clear(tempMessageId);
     if (params.conversationId && tempMessageId) {
       const reason = error instanceof Error ? error.message : 'the text model did not respond';
       const chatStore = useChatStore.getState();

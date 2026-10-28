@@ -50,6 +50,7 @@ import {
 import { useChatScreenActions } from './useChatScreenActions';
 import { shownMessages } from '../../utils/chatThread';
 import { chatQueueView } from './chatQueueView';
+import { useLiveMessageStore, withLiveMessages } from '../../stores/liveMessageStore';
 
 export type { AlertState };
 export type { ChatMessageItem } from './types';
@@ -326,8 +327,10 @@ export const useChatScreen = () => {
   const pendingVersionParent = useChatStore(s =>
     activeConversationId ? s.pendingVersionParents[activeConversationId] : undefined,
   );
+  // A message still being written (image prompt enhancement) shows its live text until it is saved.
+  const liveMessages = useLiveMessageStore(s => s.byId);
   const displayMessages = useMemo(
-    () => getDisplayMessages(shownMessages(activeConversation?.messages || [], pendingVersionParent), {
+    () => getDisplayMessages(shownMessages(withLiveMessages(activeConversation?.messages || [], liveMessages), pendingVersionParent), {
       isThinking,
       streamingMessage: '',
       streamingReasoningContent: '',
@@ -340,7 +343,7 @@ export const useChatScreen = () => {
       remotePreviews,
       localDeviceId,
     }),
-    [activeConversation?.messages, pendingVersionParent, isThinking, hasStreamingText,
+    [activeConversation?.messages, liveMessages, pendingVersionParent, isThinking, hasStreamingText,
       isStreamingForThisConversation, isModelLoading, loadingModel?.name,
       isGeneratingForThisConversation, documentStatus, remotePreviews, localDeviceId],
   );
