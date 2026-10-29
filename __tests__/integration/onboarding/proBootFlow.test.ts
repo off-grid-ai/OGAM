@@ -31,6 +31,8 @@ jest.mock(
     const { proLicenseProvider } = require('../../../pro/licensing/proLicenseProvider');
     return {
       activate: jest.fn(),
+      activateSyncBootstrap: jest.fn(),
+      prepareLicenseActivation: jest.fn(() => Promise.resolve()),
       configureProEntitlementProvider: (register: (provider: unknown) => void) => {
         register(proLicenseProvider);
       },
@@ -156,6 +158,31 @@ describe('opening the app as a Pro user, and as a free one', () => {
       hasSavedProCredential: true,
       hasExpiredProCredential: true,
     });
+  });
+
+  it('keeps Sync off on an expired credential, but readies activation for a renewed key', async () => {
+    vault.set(
+      'off-grid-pro-license',
+      JSON.stringify({
+        isPro: true,
+        key: LICENCE_KEY,
+        licenseId: licenceId,
+        expiry: new Date(Date.now() - 1).toISOString(),
+        verifiedAt: Date.now() - 10_000,
+      }),
+    );
+
+    await launch();
+
+    const pro = require('@offgrid/pro');
+    expect(pro.activateSyncBootstrap).not.toHaveBeenCalled();
+    // Without this, Activate on the Pro screen waited 30 s and said activation was not ready.
+    expect(pro.prepareLicenseActivation).toHaveBeenCalledTimes(1);
+  });
+
+  it('readies no activation on a phone with no licence', async () => {
+    await launch();
+    expect(require('@offgrid/pro').prepareLicenseActivation).not.toHaveBeenCalled();
   });
 
   it('switches the licensed half on for a phone that already holds one', async () => {
