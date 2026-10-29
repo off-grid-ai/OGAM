@@ -9,7 +9,7 @@ import { createAllStyles } from '../ModelSelectorModal/styles';
 type CardModel = React.ComponentProps<typeof ModelCard>['model'];
 type CardCapabilities = React.ComponentProps<typeof ModelCard>['capabilities'];
 
-export interface RemoteModelRow {
+interface RemoteModelRow {
   id: string;
   testID: string;
   model: CardModel;

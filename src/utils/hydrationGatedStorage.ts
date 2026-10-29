@@ -20,7 +20,7 @@ const flushes = new Set<() => void>();
 let listening = false;
 
 /** Start writing every store's waiting change now (the app is leaving the foreground). */
-export function flushPersistedWrites(): void {
+function flushPersistedWrites(): void {
   for (const flush of flushes) flush();
 }
 
