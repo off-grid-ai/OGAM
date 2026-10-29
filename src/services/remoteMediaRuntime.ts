@@ -151,17 +151,14 @@ export const remoteMediaRuntime = {
   ): Promise<RemoteImageResult> {
     const openRouter = new URL(server.endpoint).hostname === 'openrouter.ai';
     const desktop = server.modelManagement === 'offgrid-desktop-v1';
-    type ImagePayload = {
-      data?: Array<{ b64_json?: string; url?: string }>;
-      choices?: Array<{
-        message?: { images?: Array<{ image_url?: { url?: string } }> };
-      }>;
-    };
+    type ImagePayload = { data?: Array<{ b64_json?: string; url?: string }> };
     if (options.signal?.aborted) throw new Error('Remote request cancelled');
     const submission = request(
       {
         server,
-        path: openRouter ? '/v1/chat/completions' : '/v1/images/generations',
+        // OpenRouter's Images API serves every image model it lists. Its chat endpoint refuses the
+        // pure image models (Qwen Image, FLUX, Seedream), so it is not used for images.
+        path: openRouter ? '/v1/images' : '/v1/images/generations',
         init: {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -169,9 +166,10 @@ export const remoteMediaRuntime = {
             openRouter
               ? {
                   model: requiredModel(server, 'image'),
-                  messages: [{ role: 'user', content: input.prompt }],
-                  modalities: ['image', 'text'],
-                  stream: false,
+                  prompt: input.prompt,
+                  // A ratio, not pixels: OpenRouter refuses a pixel size the model does not offer.
+                  aspect_ratio: '1:1',
+                  n: 1,
                 }
               : {
                   model: requiredModel(server, 'image'),
@@ -241,7 +239,7 @@ export const remoteMediaRuntime = {
       }
     }
     const image = result.data?.[0];
-    const imageUrl = image?.url ?? result.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    const imageUrl = image?.url;
     if (!image?.b64_json && !imageUrl) throw new Error('Remote server returned no image');
     return { base64: image?.b64_json, url: imageUrl };
   },
