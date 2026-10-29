@@ -10,6 +10,8 @@ import type { RootStackParamList } from './types';
 export const appNavigationRef =
   createNavigationContainerRef<RootStackParamList>();
 
+const SETUP_ROUTES = new Set<string>(['Onboarding', 'AutoSetup', 'AdvancedSetup']);
+
 /**
  * Show an expired installation the purchase route, with the app's home under it so Back leaves.
  *
@@ -26,7 +28,12 @@ export function useProExpiryRedirect(
 
   const redirectIfExpired = useCallback(() => {
     if (!redirectPending.current || !navigation.isReady()) return;
-    if (navigation.getCurrentRoute?.()?.name === 'ProDetail') {
+    const current = navigation.getCurrentRoute?.()?.name;
+    // Setup runs first. A reinstall finds the old credential (the keychain outlives the app), and
+    // resetting the root from setup skipped it, leaving the person on home with no model. The
+    // redirect stays pending and runs on the navigation change that leaves setup.
+    if (current && SETUP_ROUTES.has(current)) return;
+    if (current === 'ProDetail') {
       redirectPending.current = false;
       return;
     }

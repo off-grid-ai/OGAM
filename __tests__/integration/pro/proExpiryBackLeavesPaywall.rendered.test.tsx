@@ -40,7 +40,11 @@ import { createDeviceInfo, createDownloadedModel } from '../../utils/factories';
 function AppShell(): React.JSX.Element {
   const applyPendingProRedirect = useProExpiryRedirect();
   return (
-    <NavigationContainer ref={appNavigationRef} onReady={applyPendingProRedirect}>
+    <NavigationContainer
+      ref={appNavigationRef}
+      onReady={applyPendingProRedirect}
+      onStateChange={applyPendingProRedirect}
+    >
       <AppNavigator />
     </NavigationContainer>
   );
@@ -84,6 +88,45 @@ describe('expired Pro credential → Pro screen → Back', () => {
     await waitFor(() => expect(ui.queryByText('Off Grid AI Pro')).toBeNull());
     expect(ui.getByTestId('home-screen')).toBeTruthy();
     expect(ui.getByTestId('home-tab')).toBeTruthy();
+
+    ui.unmount();
+  });
+});
+
+describe('a reinstall that finds an expired Pro credential', () => {
+  beforeEach(() => {
+    const app = useAppStore.getState();
+    // A fresh install: setup not done, no model. The keychain outlived the app and still holds the
+    // old, expired credential.
+    app.setOnboardingComplete(false);
+    app.setDeviceInfo(createDeviceInfo());
+    app.setDownloadedModels([]);
+    useAppStore.setState({
+      hasRegisteredPro: false,
+      isProActive: false,
+      proDeviceAdmission: 'unknown',
+    });
+    app.setHasExpiredProCredential(true);
+  });
+
+  afterEach(() => {
+    const app = useAppStore.getState();
+    app.setHasExpiredProCredential(false);
+    app.setOnboardingComplete(false);
+  });
+
+  it('runs setup first, then shows the Pro screen over home', async () => {
+    const ui = render(<AppShell />);
+
+    await waitFor(() => expect(ui.getByTestId('onboarding-screen')).toBeTruthy());
+    expect(ui.queryByText('Off Grid AI Pro')).toBeNull();
+
+    fireEvent.press(ui.getByTestId('onboarding-skip'));
+    fireEvent.press(await ui.findByTestId('auto-setup-skip'));
+
+    await waitFor(() => expect(ui.getByText('Off Grid AI Pro')).toBeTruthy());
+    fireEvent.press(ui.getByLabelText('Back'));
+    await waitFor(() => expect(ui.getByTestId('home-screen')).toBeTruthy());
 
     ui.unmount();
   });
