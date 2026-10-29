@@ -21,7 +21,7 @@ class VideoGenerationService : Service() {
             if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(CHANNEL, "Media generation", NotificationManager.IMPORTANCE_LOW))
             val stop = PendingIntent.getService(this, 0, Intent(this, VideoGenerationService::class.java).setAction("cancel"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL) else Notification.Builder(this)
-            val notification = builder.setContentTitle(if (intent?.getStringExtra("modality") == "image") "Generating image" else "Generating video").setContentText("Off Grid is using this device.")
+            val notification = builder.setContentTitle(if (intent?.getStringExtra("modality") == "image") "Generating image" else "Generating video").setContentText("Off Grid AI is using this device.")
                 .setSmallIcon(android.R.drawable.ic_menu_slideshow).setOngoing(true)
                 .addAction(Notification.Action.Builder(null, "Stop", stop).build()).build()
             if (Build.VERSION.SDK_INT >= 35) startForeground(7413, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING)

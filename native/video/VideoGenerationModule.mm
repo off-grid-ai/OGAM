@@ -139,7 +139,7 @@ RCT_EXPORT_MODULE(VideoGenerationModule)
   // are admitted separately by the background coordinator on supported systems.
   [self logLifecycle:[NSString stringWithFormat:@"background busy=%d admittedGPU=%d", _busy, _continued != nil]];
   if (_busy && !_continued) {
-    [self interruptVideo:@"Video generation stopped when the app went into the background. Keep Off Grid open and try again."];
+    [self interruptVideo:@"Video generation stopped when the app went into the background. Keep Off Grid AI open and try again."];
   }
 }
 - (void)emitStage:(NSString *)stage step:(int)step total:(int)total {
@@ -420,7 +420,7 @@ RCT_REMAP_METHOD(generateImage, generateImage:(NSDictionary *)input resolver:(RC
               VideoGenerationModule *active = weakSelf;
               if (active && active->_continued == expiringTask && active->_busy) {
                 [active logLifecycle:[NSString stringWithFormat:@"continued GPU task expired %@", expiringTask.identifier]];
-                [active interruptVideo:@"iOS stopped background video generation. Keep Off Grid open and try again."];
+                [active interruptVideo:@"iOS stopped background video generation. Keep Off Grid AI open and try again."];
               }
             });
           };
