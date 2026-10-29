@@ -229,43 +229,6 @@ export async function setActiveRemoteTextModelImpl(
   );
 }
 
-export async function setActiveRemoteImageModelImpl(
-  serverId: string,
-  modelId: string,
-): Promise<void> {
-  const store = useRemoteServerStore.getState();
-  store.setActiveRemoteMediaServerId('image', serverId);
-  store.setActiveRemoteImageModelId(modelId);
-
-  let provider = providerRegistry.getProvider(serverId);
-  if (!provider) {
-    const server = store.getServerById(serverId);
-    if (server) {
-      logger.log(
-        '[RemoteServerManager] Creating provider for server:',
-        serverId,
-      );
-      await createProviderForServerImpl(server);
-      provider = providerRegistry.getProvider(serverId);
-    }
-  }
-
-  if (provider) {
-    await provider.loadModel(modelId);
-  } else {
-    logger.warn(
-      '[RemoteServerManager] Could not create provider for server:',
-      serverId,
-    );
-  }
-
-  logger.log(
-    '[RemoteServerManager] Active remote image model set:',
-    serverId,
-    modelId,
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Bulk initialization
 // ---------------------------------------------------------------------------

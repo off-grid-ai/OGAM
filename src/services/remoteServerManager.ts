@@ -30,7 +30,6 @@ import {
   removeApiKeyImpl,
   createProviderForServerImpl,
   setActiveRemoteTextModelImpl,
-  setActiveRemoteImageModelImpl,
   initializeProvidersImpl,
 } from './remoteServerManagerUtils';
 import { remoteAuthorizationHeaders } from './remoteTransportPolicy';
@@ -251,10 +250,10 @@ class RemoteServerManager {
     serverId: string,
     modelId: string,
   ): Promise<void> {
-    const server = useRemoteServerStore.getState().getServerById(serverId);
-    return server?.modelManagement === 'offgrid-desktop-v1'
-      ? this.setActiveRemoteMediaModel(serverId, 'image', modelId)
-      : setActiveRemoteImageModelImpl(serverId, modelId);
+    // One write path for every server. Image generation reads the server's mediaModels.image; the
+    // older path for other servers wrote only the picker's id, and set the server's chat model to the
+    // image model, so a pick never reached generation and remote chat asked an image model for text.
+    return this.setActiveRemoteMediaModel(serverId, 'image', modelId);
   }
 
   /** Select one remote model for image, transcription, or voice work. */

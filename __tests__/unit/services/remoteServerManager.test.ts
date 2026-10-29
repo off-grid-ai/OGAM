@@ -361,37 +361,32 @@ describe('remoteServerManager', () => {
   });
 
   describe('setActiveRemoteImageModel', () => {
-    it('should set active server and vision model', async () => {
+    it('puts the picked model where image generation reads it, and leaves the chat model alone', async () => {
       const mockLoadModel = jest.fn().mockResolvedValue(undefined);
-      const mockProvider = {
-        loadModel: mockLoadModel,
-        unloadModel: jest.fn(),
-        isModelLoaded: jest.fn().mockReturnValue(true),
-        getLoadedModelId: jest.fn().mockReturnValue('llava'),
-        isReady: jest.fn().mockResolvedValue(true),
-      };
-
-      (providerRegistry.getProvider as jest.Mock).mockReturnValue(mockProvider);
-      (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
+      (providerRegistry.getProvider as jest.Mock).mockReturnValue({ loadModel: mockLoadModel });
+      const store = {
         setActiveServerId: jest.fn(),
         setActiveRemoteMediaServerId: jest.fn(),
         setActiveRemoteTextModelId: jest.fn(),
         setActiveRemoteImageModelId: jest.fn(),
-        getServerById: jest.fn().mockReturnValue(null),
+        updateServer: jest.fn(),
+        getServerById: jest.fn().mockReturnValue({
+          id: 'server-123',
+          name: 'OpenRouter',
+          endpoint: 'https://openrouter.ai/api/v1',
+          mediaModels: { video: 'heygen/heygen-video-1' },
+        }),
+      };
+      (useRemoteServerStore.getState as jest.Mock).mockReturnValue(store);
+
+      await remoteServerManager.setActiveRemoteImageModel('server-123', 'llava');
+
+      expect(store.updateServer).toHaveBeenCalledWith('server-123', {
+        mediaModels: { video: 'heygen/heygen-video-1', image: 'llava' },
       });
-
-      await remoteServerManager.setActiveRemoteImageModel(
-        'server-123',
-        'llava',
-      );
-
-      expect(
-        useRemoteServerStore.getState().setActiveRemoteMediaServerId,
-      ).toHaveBeenCalledWith('image', 'server-123');
-      expect(
-        useRemoteServerStore.getState().setActiveRemoteImageModelId,
-      ).toHaveBeenCalledWith('llava');
-      expect(mockLoadModel).toHaveBeenCalledWith('llava');
+      expect(store.setActiveRemoteMediaServerId).toHaveBeenCalledWith('image', 'server-123');
+      expect(store.setActiveRemoteImageModelId).toHaveBeenCalledWith('llava');
+      expect(mockLoadModel).not.toHaveBeenCalled();
     });
   });
 
@@ -825,67 +820,6 @@ describe('remoteServerManager', () => {
 
       expect(providerRegistry.registerProvider).toHaveBeenCalled();
       expect(mockLoadModel).toHaveBeenCalledWith('llama2');
-    });
-  });
-
-  describe('setActiveRemoteImageModel - provider creation', () => {
-    it('should create provider when it does not exist', async () => {
-      const mockLoadModel = jest.fn().mockResolvedValue(undefined);
-      const mockProvider = {
-        loadModel: mockLoadModel,
-        unloadModel: jest.fn(),
-        isModelLoaded: jest.fn().mockReturnValue(true),
-        isReady: jest.fn().mockResolvedValue(true),
-      };
-      const mockServer = {
-        id: 'server-1',
-        name: 'Test',
-        endpoint: 'http://localhost:11434',
-      };
-
-      (providerRegistry.getProvider as jest.Mock)
-        .mockReturnValueOnce(null)
-        .mockReturnValueOnce(mockProvider);
-      (providerRegistry.registerProvider as jest.Mock).mockReturnValue(
-        undefined,
-      );
-      (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
-        setActiveServerId: jest.fn(),
-        setActiveRemoteMediaServerId: jest.fn(),
-        setActiveRemoteTextModelId: jest.fn(),
-        setActiveRemoteImageModelId: jest.fn(),
-        getServerById: jest.fn().mockReturnValue(mockServer),
-      });
-      (Keychain.getGenericPassword as jest.Mock).mockResolvedValue(null);
-
-      await remoteServerManager.setActiveRemoteImageModel('server-1', 'llava');
-
-      expect(providerRegistry.registerProvider).toHaveBeenCalled();
-      expect(mockLoadModel).toHaveBeenCalledWith('llava');
-    });
-
-    it('should warn when provider cannot be created', async () => {
-      const _mockServer = {
-        id: 'server-1',
-        name: 'Test',
-        endpoint: 'http://localhost:11434',
-      };
-      const _mockLogger = { warn: jest.fn() };
-      jest.spyOn(console, 'warn').mockImplementation(() => {});
-
-      (providerRegistry.getProvider as jest.Mock).mockReturnValue(null);
-      (useRemoteServerStore.getState as jest.Mock).mockReturnValue({
-        setActiveServerId: jest.fn(),
-        setActiveRemoteMediaServerId: jest.fn(),
-        setActiveRemoteTextModelId: jest.fn(),
-        setActiveRemoteImageModelId: jest.fn(),
-        getServerById: jest.fn().mockReturnValue(null), // No server found
-      });
-
-      await remoteServerManager.setActiveRemoteImageModel('server-1', 'llava');
-
-      // No provider created because server not found
-      expect(providerRegistry.registerProvider).not.toHaveBeenCalled();
     });
   });
 });
