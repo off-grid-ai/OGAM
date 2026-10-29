@@ -287,12 +287,13 @@ export const AppSheet: React.FC<AppSheetProps> = ({
       }
       showModal();
     } else if (modalVisible) {
-      animateOut(() => {
-        setModalVisible(false);
-        onClosedRef.current?.();
-      });
+      // The Modal shows only while `visible`, so its view is already gone here: animating it out
+      // targets a view that no longer exists. Close at once, as the screen already shows it.
+      backdropEnabled.current = false;
+      setModalVisible(false);
+      onClosedRef.current?.();
     }
-  }, [animateOut, modalVisible, showModal, visible]);
+  }, [modalVisible, showModal, visible]);
 
   // Track keyboard height so the sheet lifts above the keyboard
   useEffect(() => {
