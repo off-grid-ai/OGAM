@@ -25,6 +25,9 @@ export const VideoUpsell: React.FC<{ onGetPro: () => void }> = ({ onGetPro }) =>
   );
 };
 
+/** The icon circle's diameter. */
+const ICON_CIRCLE = 64;
+
 const createStyles = (colors: ThemeColors) =>
   ({
     container: {
@@ -35,9 +38,9 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: SPACING.xl,
     },
     iconCircle: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
+      width: ICON_CIRCLE,
+      height: ICON_CIRCLE,
+      borderRadius: ICON_CIRCLE / 2,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
       backgroundColor: colors.surfaceLight,
