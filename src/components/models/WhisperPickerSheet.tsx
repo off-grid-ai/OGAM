@@ -193,7 +193,7 @@ const createStyles = (colors: ThemeColors) => ({
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xl,
-    gap: SPACING.sm as number,
+    // No gap: each card brings its own bottom margin, the same spacing as the text and image pickers.
   },
   row: {
     flexDirection: 'row' as const,
@@ -215,5 +215,6 @@ const createStyles = (colors: ThemeColors) => ({
     color: colors.textMuted,
     textTransform: 'uppercase' as const,
     letterSpacing: 0.3,
+    marginBottom: SPACING.sm,
   },
 });
