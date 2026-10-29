@@ -162,6 +162,9 @@ export const AppSheet: React.FC<AppSheetProps> = ({
   // (translateY=SCREEN_HEIGHT) so there is nothing to guard against.
   // animateIn() sets it to false, then back to true on completion.
   const backdropEnabled = useRef(true);
+  // A sheet can be asked to animate after it has gone (a keyboard timer, a close racing an unmount).
+  // Starting a native-driver animation then fails to find its view, so an unmounted sheet never animates.
+  const mounted = useRef(true);
 
   // Calculate sheet max height from largest snap point
   const sheetMaxHeight = enableDynamicSizing
@@ -176,6 +179,7 @@ export const AppSheet: React.FC<AppSheetProps> = ({
   // 1–2 s, leaving backdropEnabled=false the whole time and silently eating
   // every tap that lands even slightly outside a button's hit area.
   const animateIn = useCallback(() => {
+    if (!mounted.current) return;
     backdropEnabled.current = false;
     Animated.parallel([
       Animated.timing(translateY, {
@@ -197,6 +201,10 @@ export const AppSheet: React.FC<AppSheetProps> = ({
   // Animate out then callback
   const animateOut = useCallback(
     (cb?: () => void) => {
+      if (!mounted.current) {
+        cb?.();
+        return;
+      }
       backdropEnabled.current = false;
       Animated.parallel([
         Animated.timing(translateY, {
@@ -238,14 +246,15 @@ export const AppSheet: React.FC<AppSheetProps> = ({
     });
   }, [animateInIfPending]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       if (pendingAnimationFrame.current !== null) {
         cancelAnimationFrame(pendingAnimationFrame.current);
       }
-    },
-    [],
-  );
+    };
+  }, []);
 
   useEffect(() => {
     if (visible) {
