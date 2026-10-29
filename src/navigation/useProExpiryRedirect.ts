@@ -25,6 +25,7 @@ export function useProExpiryRedirect(
   const hasProAccess = useAppStore(selectHasProAccess);
   const hadProAccess = useRef(hasProAccess);
   const redirectPending = useRef(expired);
+  const waitedForSetup = useRef(false);
 
   const redirectIfExpired = useCallback(() => {
     if (!redirectPending.current || !navigation.isReady()) return;
@@ -32,12 +33,22 @@ export function useProExpiryRedirect(
     // Setup runs first. A reinstall finds the old credential (the keychain outlives the app), and
     // resetting the root from setup skipped it, leaving the person on home with no model. The
     // redirect stays pending and runs on the navigation change that leaves setup.
-    if (current && SETUP_ROUTES.has(current)) return;
+    if (current && SETUP_ROUTES.has(current)) {
+      waitedForSetup.current = true;
+      return;
+    }
     if (current === 'ProDetail') {
       redirectPending.current = false;
       return;
     }
     redirectPending.current = false;
+    if (waitedForSetup.current) {
+      waitedForSetup.current = false;
+      // Leaving setup already put home at the root, so the Pro screen is pushed over it. A root
+      // reset here raced the screen change that leaves setup, and the person stayed on setup.
+      navigation.navigate?.('ProDetail');
+      return;
+    }
     // The app's home stays under the purchase screen: with ProDetail as the only route, its Back
     // had nothing to pop and silently did nothing, trapping the person on the paywall.
     navigation.resetRoot({
@@ -69,4 +80,5 @@ type ProExpiryNavigation = Pick<
   'isReady' | 'resetRoot'
 > & {
   getCurrentRoute?: NavigationContainerRef<RootStackParamList>['getCurrentRoute'];
+  navigate?: (name: 'ProDetail') => void;
 };
