@@ -216,7 +216,7 @@ it('the viewer\'s muted Continue opens the same sheet', async () => {
 
 it('says to connect a computer when none is paired, instead of checking one forever', async () => {
   const current = await clipInChat({ memoryGb: 34 });
-  const { view, rtl } = current;
+  const { view } = current;
   // The computer goes away between the clip and the tap: nothing is left to ask.
   require('../../../src/stores/remoteServerStore').useRemoteServerStore.getState().clearAllServers();
   await tapMutedContinue(current);
