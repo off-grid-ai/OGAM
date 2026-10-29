@@ -29,6 +29,8 @@ const VIDEO_INFO = [
     supported_aspect_ratios: OPENROUTER_ASPECTS,
     supported_resolutions: OPENROUTER_RESOLUTIONS,
     supported_frame_images: ['first_frame', 'last_frame'],
+    // As OpenRouter publishes Veo 3.1 Fast: it takes generate_audio, so clips can be asked silent.
+    generate_audio: true,
   },
   {
     ...OPENROUTER_WORDS_ONLY_VIDEO_MODEL,
@@ -36,6 +38,8 @@ const VIDEO_INFO = [
     supported_aspect_ratios: OPENROUTER_ASPECTS,
     supported_resolutions: OPENROUTER_RESOLUTIONS,
     supported_frame_images: [] as string[],
+    // Like HeyGen Video 1: always renders sound and refuses the field.
+    generate_audio: false,
   },
 ];
 
