@@ -100,7 +100,8 @@ it('the finished film plays under its title, made on the computer, and Delete th
   app.stories.release();
   rtl.fireEvent.press(await view.findByTestId('making-watch', {}, { timeout: 30_000 }));
   await view.findByTestId('video-viewer', {}, { timeout: 10_000 });
-  expect(view.getByText(/^Made with AI · on /)).toBeTruthy();
+  expect(view.getByText(/^On /)).toBeTruthy();
+  expect(view.queryByText(/Made with AI/)).toBeNull();
   rtl.fireEvent.press(view.getByTestId('viewer-delete'));
   expect(app.dialog()?.title).toBe('Delete this video?');
   await app.answer('Delete');
