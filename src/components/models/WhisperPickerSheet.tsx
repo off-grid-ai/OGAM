@@ -75,7 +75,9 @@ export const WhisperPickerSheet: React.FC<Props> = ({
       onClosed={onClosed}
       onBackPress={onBackToModels}
       title="TRANSCRIPTION MODEL"
-      enableDynamicSizing
+      // The same sizing as the text, image and video picker. Sized to its content, a long remote list
+      // pushed the on-device models below a scroll view that could not reach them.
+      snapPoints={['40%', '75%']}
     >
       <ScrollView
         style={styles.scrollView}
