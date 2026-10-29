@@ -392,6 +392,8 @@ export async function readOffGridDesktopDownload(server: RemoteServer, modelId: 
 export interface OffGridDesktopRoom {
   memoryGb?: number;
   installed: string[];
+  /** What a download would still fetch, by catalog id, where another model already brought some files (a shared encoder or VAE). */
+  missingBytes?: Record<string, number>;
 }
 
 /** Read the Desktop's memory and installed models, as its Models screen judges them. */
@@ -412,5 +414,11 @@ export async function readOffGridDesktopRoom(server: RemoteServer, signal?: Abor
     );
   }
   const memoryGb = typeof catalog?.memoryGb === 'number' && catalog.memoryGb > 0 ? catalog.memoryGb : undefined;
-  return { ...(memoryGb ? { memoryGb } : {}), installed: [...installed] };
+  const missingBytes = Object.fromEntries(
+    (Array.isArray(catalog?.models) ? catalog.models : []).flatMap(model => {
+      const entry = record(model);
+      return typeof entry?.id === 'string' && typeof entry.missingBytes === 'number' ? [[entry.id, entry.missingBytes]] : [];
+    }),
+  );
+  return { ...(memoryGb ? { memoryGb } : {}), installed: [...installed], missingBytes };
 }
