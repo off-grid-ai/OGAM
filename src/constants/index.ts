@@ -251,3 +251,9 @@ export const SPACING = {
   xl: 24,
   xxl: 32,
 };
+
+// Corner radius (@offgrid/design RADIUS): md for cards and controls, sm for hairline tracks.
+export const RADIUS = {
+  sm: 2,
+  md: 8,
+};
