@@ -42,6 +42,8 @@ PODS:
   - MMKV (2.4.0):
     - MMKVCore (~> 2.4.0)
   - MMKVCore (2.4.0)
+  - OffgridFilm (0.1.0):
+    - React-Core
   - OffgridVideo (0.1.0):
     - React-Core
   - op-sqlite (15.2.5):
@@ -3594,6 +3596,7 @@ DEPENDENCIES:
   - glog (from `../node_modules/react-native/third-party-podspecs/glog.podspec`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
   - llama-rn (from `../node_modules/llama.rn`)
+  - OffgridFilm (from `../pro/native/film`)
   - OffgridVideo (from `../native/video`)
   - "op-sqlite (from `../node_modules/@op-engineering/op-sqlite`)"
   - RCT-Folly (from `../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec`)
@@ -3726,6 +3729,8 @@ EXTERNAL SOURCES:
     :tag: hermes-v0.14.0
   llama-rn:
     :path: "../node_modules/llama.rn"
+  OffgridFilm:
+    :path: "../pro/native/film"
   OffgridVideo:
     :path: "../native/video"
   op-sqlite:
@@ -3939,10 +3944,11 @@ SPEC CHECKSUMS:
   FBLazyVector: 309703e71d3f2f1ed7dc7889d58309c9d77a95a4
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
-  hermes-engine: 9dc108855bf9303b9eb77035684065901459b954
+  hermes-engine: 3de70ea2100f1780402cf146bb8110a0cdb2f34e
   llama-rn: dd60415f7ae47554b7498aed4f4e39b522bb19c3
   MMKV: 86859fdfa2b0b21db1fd6e48788474a6416a2c77
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
+  OffgridFilm: d93b098e7b123a8f4b3d10145a3736cf38ff1481
   OffgridVideo: 3a0d4acebd54e2ab315c9ff737aa017ccc3d36b8
   op-sqlite: ab292d8057b994f220b8c61f2683f5ff9286958e
   opencv-rne: 2305807573b6e29c8c87e3416ab096d09047a7a0
@@ -3985,7 +3991,7 @@ SPEC CHECKSUMS:
   react-native-background-downloader: b02d12c3961322ce1c85fa0f8b3e4adb5b652106
   react-native-document-picker: dc2d83366e47e89e7c51e8a41eab99c1d54e941c
   react-native-document-viewer: 8c6ed07e7e27352743fa98e8dd6d288ad925b884
-  react-native-executorch: b868c3f6db3791ace32df3cc59785e7818e54ff2
+  react-native-executorch: 863673cf458ceec5df61012fa30981ffa3ee8fc4
   react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
   react-native-image-picker: 0314366753615115fa55c3cc937ac44cb7e75702
   react-native-keyboard-controller: 7534b5a39d1e8b2b79f86e8e998ed71c7154f69f
