@@ -248,18 +248,17 @@ export async function launchProjectChatApp(options: ProjectChatAppOptions = {}) 
     },
 
     /**
-     * From the project page: open its knowledge base, pick these files (seeded on the disk first), wait
-     * until each one has been read to the end ("<size> · <n> pages"), then go back to the project.
+     * From the project page: on its Knowledge base tab, + then File, pick these files (seeded on the
+     * disk first), and wait until each one has been read to the end ("<size> · <n> pages").
      */
     async addKnowledge(files: Array<PickedFile & { pages: number }>) {
       // The project opens on Chats; the knowledge base is behind its tab.
       fireEvent.press(view.getByTestId('project-tab-knowledge'));
-      fireEvent.press(view.getByTestId('project-knowledge-base-open'));
-      await view.findByTestId('knowledge-base-screen', {}, RENDER_WAIT);
       picker.pick.mockResolvedValue(
         files.map(file => ({ uri: `file://${file.path}`, name: file.name, size: file.size ?? 0 })),
       );
-      fireEvent.press(view.queryByText('Add Document') ?? view.getByLabelText('Add documents'));
+      fireEvent.press(view.getByTestId('kb-add'));
+      fireEvent.press(await view.findByText('File', {}, RENDER_WAIT));
       for (const file of files) {
         const status = await view.findByTestId(
           `knowledge-document-status-${await engine.documentIdOf(file.path)}`, {}, RENDER_WAIT,
@@ -267,9 +266,6 @@ export async function launchProjectChatApp(options: ProjectChatAppOptions = {}) 
         const pages = file.pages === 1 ? '1 page' : `${file.pages} pages`;
         await waitFor(() => expect(status.props.children).toMatch(new RegExp(`· ${pages}$`)), RENDER_WAIT);
       }
-      expect(view.queryByTestId('kb-index-error-card')).toBeNull();
-      fireEvent.press(view.getByTestId('knowledge-base-back'));
-      await view.findByTestId('project-detail-screen', {}, RENDER_WAIT);
     },
 
     /** The project page's New chat button. */

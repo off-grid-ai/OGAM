@@ -151,7 +151,7 @@ async function confirmDelete(app: App) {
   });
 }
 
-it.each(['Home', 'ProjectDetail', 'ProjectChats'] as const)(
+it.each(['Home', 'ProjectDetail'] as const)(
   'M5: deleting a saved chat from %s also removes its synced image', async surface => {
     const app = await launch({ images: [{ id: 'synced', directory: 'shared_files' }] });
     const { view, rtl } = app;
@@ -159,7 +159,6 @@ it.each(['Home', 'ProjectDetail', 'ProjectChats'] as const)(
       rtl.fireEvent.press(view.getByTestId('projects-tab'));
       rtl.fireEvent.press(await view.findByTestId('project-row-trip'));
       await view.findByTestId('project-detail-screen');
-      if (surface === 'ProjectChats') rtl.fireEvent.press(view.getByTestId('project-chats-open'));
       rtl.fireEvent.press(await view.findByLabelText('Delete Trip photos'));
     } else {
       rtl.fireEvent.press(view.getByTestId('delete-conversation-button'));
@@ -177,14 +176,13 @@ it.each(['Home', 'ProjectDetail', 'ProjectChats'] as const)(
   },
 );
 
-it.each(['Home', 'ProjectDetail', 'ProjectChats'] as const)(
+it.each(['Home', 'ProjectDetail'] as const)(
   'M5/M6: %s reports an image it cannot remove', async surface => {
     const app = await launch({ images: [{ id: 'outside', directory: 'attachments' }] });
     const { view, rtl } = app;
     if (surface !== 'Home') {
       rtl.fireEvent.press(view.getByTestId('projects-tab'));
       rtl.fireEvent.press(await view.findByTestId('project-row-trip'));
-      if (surface === 'ProjectChats') rtl.fireEvent.press(await view.findByTestId('project-chats-open'));
       rtl.fireEvent.press(await view.findByLabelText('Delete Trip photos'));
     } else rtl.fireEvent.press(view.getByTestId('delete-conversation-button'));
     await view.findByText(/Delete "Trip photos"/);
@@ -389,7 +387,7 @@ it.each([
   }
 });
 
-it.each(['Home', 'ProjectDetail', 'ProjectChats'] as const)(
+it.each(['Home', 'ProjectDetail'] as const)(
   'M5: %s stops an image job before deleting its chat', async surface => {
     const app = await launch({ remoteImage: true });
     const desktop = desktopImageServer({ message: 'Unused' }, true);
@@ -399,7 +397,6 @@ it.each(['Home', 'ProjectDetail', 'ProjectChats'] as const)(
       if (surface !== 'Home') {
         rtl.fireEvent.press(view.getByTestId('projects-tab'));
         rtl.fireEvent.press(await view.findByTestId('project-row-trip'));
-        if (surface === 'ProjectChats') rtl.fireEvent.press(await view.findByTestId('project-chats-open'));
       }
       rtl.fireEvent.press(await view.findByText('Trip photos'));
       await draw(app);
@@ -410,7 +407,6 @@ it.each(['Home', 'ProjectDetail', 'ProjectChats'] as const)(
       await view.findByText(/Delete "Trip photos"/);
       await confirmDelete(app);
       await rtl.waitFor(() => expect(view.queryByText('Trip photos')).toBeNull());
-      if (surface === 'ProjectChats') rtl.fireEvent.press(view.getByLabelText('Back'));
       if (surface !== 'Home') {
         rtl.fireEvent.press(view.getByLabelText('Back'));
         rtl.fireEvent.press(view.getByTestId('home-tab'));

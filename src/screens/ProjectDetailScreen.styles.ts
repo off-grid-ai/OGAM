@@ -112,22 +112,31 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   sectionsContainer: {
     flex: 1,
   },
-  // Same tabs as the Gallery's Images / Videos.
-  tabs: {
+  // The Models screen's tabs: body text, muted until chosen, an emerald line under the open one.
+  tabRow: {
     flexDirection: 'row' as const,
+    alignItems: 'center' as const,
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    gap: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  tab: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 6,
-    backgroundColor: colors.surface,
+  tabs: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    gap: SPACING.lg,
   },
-  tabActive: { backgroundColor: colors.primary },
-  tabText: { color: colors.text },
-  tabTextActive: { color: colors.background },
+  tab: { paddingTop: SPACING.md, alignItems: 'center' as const },
+  tabText: { ...TYPOGRAPHY.body, color: colors.textMuted },
+  tabTextActive: { color: colors.text },
+  tabCount: { ...TYPOGRAPHY.meta, color: colors.textMuted },
+  tabIndicator: {
+    height: 2,
+    backgroundColor: colors.primary,
+    marginTop: SPACING.sm,
+    alignSelf: 'stretch' as const,
+  },
+  tabIndicatorOff: { backgroundColor: 'transparent' },
+  tabAdd: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
   hidden: { display: 'none' as const },
   // A tab names the section, so its header carries only the actions, on the right.
   sectionActionsHeader: {

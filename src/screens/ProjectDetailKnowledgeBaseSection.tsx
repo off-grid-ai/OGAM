@@ -47,6 +47,8 @@ export interface KBSectionProps {
   inTab?: boolean;
   /** The number of documents, for the tab that names this section. */
   onCountChange?: (count: number) => void;
+  /** In a tab, the tab row's + asks to add: each new value opens the File or Text choice. */
+  addRequest?: number;
 }
 
 export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
@@ -58,12 +60,14 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
   onDocumentPress,
   inTab = false,
   onCountChange,
+  addRequest = 0,
 }) => {
   const [kbDocs, setKbDocs] = useState<KnowledgeDocument[]>([]);
   const [addingFile, setAddingFile] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
   const [pasting, setPasting] = useState(false);
   const isPickingRef = useRef(false);
+  const handleAddRef = useRef<() => void>(() => undefined);
 
   const loadKbDocs = useCallback(async () => {
     try {
@@ -208,10 +212,23 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
     );
   };
 
+  handleAddRef.current = handleAddDocument;
+  useEffect(() => {
+    if (!addRequest) return;
+    setAlertState(
+      showAlert('Add to knowledge base', undefined, [
+        { text: 'File', onPress: () => handleAddRef.current() },
+        { text: 'Text', onPress: () => setPasting(true) },
+        { text: 'Cancel', style: 'cancel' },
+      ]),
+    );
+  }, [addRequest, setAlertState]);
+
   return (
     <View style={styles.sectionContent} testID="project-knowledge-base-section">
+{inTab ? null : (
       <TouchableOpacity
-        style={inTab ? styles.sectionActionsHeader : styles.sectionHeader}
+        style={styles.sectionHeader}
         onPress={onNavigateToKb}
         activeOpacity={0.7}
         testID="project-knowledge-base-open"
@@ -259,6 +276,7 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({
           />
         </View>
       </TouchableOpacity>
+      )}
 
       {addingFile && (
         <View style={styles.kbIndexing}>

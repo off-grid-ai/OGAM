@@ -35,12 +35,14 @@ describe('project screen tabs', () => {
     expect(view.getByTestId('project-knowledge-base-count')).toHaveTextContent('0');
     // A hidden tab is left out of the queries, as it is out of the person's sight.
     expect(view.getByTestId('project-start-chat')).toBeVisible();
-    expect(view.queryByTestId('kb-add-document')).toBeNull();
+    // One + in the tab row, for the open tab.
+    expect(view.getByLabelText('New chat')).toBeVisible();
+    expect(view.queryByTestId('kb-add')).toBeNull();
 
     // Knowledge base tab: only the knowledge base shows.
     rtl.fireEvent.press(view.getByTestId('project-tab-knowledge'));
     expect(view.getByTestId('project-tab-knowledge')).toHaveProp('accessibilityState', { selected: true });
-    expect(view.getByTestId('kb-add-document')).toBeVisible();
+    expect(view.getByLabelText('Add to knowledge base')).toBeVisible();
     expect(view.queryByTestId('project-start-chat')).toBeNull();
 
     // A document added there is counted on its tab.
@@ -50,7 +52,7 @@ describe('project screen tabs', () => {
     // Back to Chats.
     rtl.fireEvent.press(view.getByTestId('project-tab-chats'));
     expect(view.getByTestId('project-start-chat')).toBeVisible();
-    expect(view.queryByTestId('kb-add-document')).toBeNull();
+    expect(view.queryByTestId('kb-add')).toBeNull();
 
     await app.close();
   });

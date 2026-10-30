@@ -128,9 +128,9 @@ describe.each<DeleteGesture>(['swipe delete', 'select and delete'])('Deleting a 
  * lists. Here the chat and its images are made the way the user makes them - a chat (in a project for
  * the project rows) where two images are drawn - so the images carry the chat they were drawn in.
  */
-type DeleteSurface = 'Home recents' | 'project detail' | 'project chats';
+type DeleteSurface = 'Home recents' | 'project detail';
 
-describe.each<DeleteSurface>(['Home recents', 'project detail', 'project chats'])('Deleting a chat from %s', surface => {
+describe.each<DeleteSurface>(['Home recents', 'project detail'])('Deleting a chat from %s', surface => {
   it('removes its images from the Gallery and the disk, and reports an image that could not be removed', async () => {
     const h = await setupChatScreen({ engine: 'llama' });
     const { rtl, React } = h;
@@ -207,15 +207,6 @@ describe.each<DeleteSurface>(['Home recents', 'project detail', 'project chats']
       harness.routeHolder.params = { projectId };
       const { ProjectDetailScreen } = require('../../../src/screens/ProjectDetailScreen');
       screen = rtl.render(React.createElement(ProjectDetailScreen, {}));
-      if (surface === 'project chats') {
-        // The Chats tab's header row opens its full chat list.
-        rtl.fireEvent.press(await screen.findByTestId('project-chats-open'));
-        screen.unmount();
-        expect(navigatedTo().screen).toBe('ProjectChats');
-        harness.routeHolder.params = navigatedTo().params!;
-        const { ProjectChatsScreen } = require('../../../src/screens/ProjectChatsScreen');
-        screen = rtl.render(React.createElement(ProjectChatsScreen, {}));
-      }
       expect(await screen.findByText(title)).toBeTruthy();
       rtl.fireEvent.press(screen.getByLabelText(`Delete ${title}`));
     }
