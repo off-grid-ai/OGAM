@@ -1,6 +1,8 @@
+diff --git a/src/core/ggml_runner.cpp b/src/core/ggml_runner.cpp
+index dbf2385..c1baff9 100644
 --- a/src/core/ggml_runner.cpp
 +++ b/src/core/ggml_runner.cpp
-@@ -210,6 +210,29 @@
+@@ -215,6 +215,29 @@ void GGMLRunner::pin_multi_device_nodes(ggml_backend_sched_t sched, ggml_cgraph*
      if (sched == nullptr || gf == nullptr) {
          return;
      }
@@ -30,7 +32,7 @@
      ggml_backend_t current = runtime_backend;
      const int n_nodes      = ggml_graph_n_nodes(gf);
      for (int i = 0; i < n_nodes; i++) {
-@@ -230,6 +253,28 @@
+@@ -235,6 +258,28 @@ void GGMLRunner::pin_multi_device_nodes(ggml_backend_sched_t sched, ggml_cgraph*
              node->op == GGML_OP_PERMUTE || node->op == GGML_OP_TRANSPOSE) {
              continue;
          }
@@ -59,7 +61,7 @@
          // In-place operations must follow the device chosen for their source.
          // Its buffer may not exist yet when this graph is assigned.
          if (node->view_src != nullptr) continue;
-@@ -239,6 +284,9 @@
+@@ -244,6 +289,9 @@ void GGMLRunner::pin_multi_device_nodes(ggml_backend_sched_t sched, ggml_cgraph*
              ggml_backend_sched_set_tensor_backend(sched, node, current);
          }
      }

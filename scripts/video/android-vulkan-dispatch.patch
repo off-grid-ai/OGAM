@@ -27,3 +27,16 @@
  
      return vk11_features.storageBuffer16BitAccess;
  }
+--- a/src/ggml-vulkan/ggml-vulkan-buffers.cpp
++++ b/src/ggml-vulkan/ggml-vulkan-buffers.cpp
+@@ -9,6 +9,10 @@
+ static void * portable_aligned_malloc(size_t align, size_t size) {
+ #ifdef _WIN32
+     return _aligned_malloc(size, align);
++#elif defined(__ANDROID__) && __ANDROID_API__ < 28
++    // aligned_alloc arrives in Android API 28; posix_memalign exists on API 24.
++    void * ptr = nullptr;
++    return posix_memalign(&ptr, align, size) == 0 ? ptr : nullptr;
+ #else
+     return std::aligned_alloc(align, size);
+ #endif

@@ -1,9 +1,11 @@
+diff --git a/src/core/ggml_extend.cpp b/src/core/ggml_extend.cpp
+index d9a06c6..e99525e 100644
 --- a/src/core/ggml_extend.cpp
 +++ b/src/core/ggml_extend.cpp
-@@ -802,11 +802,21 @@
+@@ -797,11 +797,21 @@ ggml_tensor* ggml_ext_attention_ext(ggml_context* ctx,
  
          auto kq = ggml_mul_mat(ctx, k, q);  // [N * n_head, L_q, L_k]
-         ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
+         ggml_prec_set_acc(kq, GGML_PREC_F32);
 +#ifdef __ANDROID__
 +        // F32 attention matmul can fall back from HTP to Vulkan. In-place
 +        // outputs would retain that device's buffer across scheduler splits.
