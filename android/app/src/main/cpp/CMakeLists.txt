@@ -15,6 +15,14 @@ set(SD_VULKAN ON CACHE BOOL "" FORCE)
 set(SD_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../.video-build/source")
 set(GGML_HEXAGON ON CACHE BOOL "" FORCE)
 set(OFFGRID_VIDEO_HEXAGON_CMAKE "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../scripts/video/hexagon-prebuilt.cmake")
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+  # Adreno GPU through Qualcomm's OpenCL backend. It links llama.rn's libOpenCL stub; the phone's own
+  # libOpenCL.so loads at run time (uses-native-library in the manifest).
+  set(VIDEO_LLAMA_RN "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../node_modules/llama.rn")
+  set(GGML_OPENCL ON CACHE BOOL "" FORCE)
+  set(OpenCL_INCLUDE_DIR "${VIDEO_LLAMA_RN}/vendor/OpenCL-Headers" CACHE PATH "" FORCE)
+  set(OpenCL_LIBRARY "${VIDEO_LLAMA_RN}/bin/${ANDROID_ABI}/libOpenCL.so" CACHE FILEPATH "" FORCE)
+endif()
 if(NOT EXISTS "${SD_SOURCE}/CMakeLists.txt")
   message(FATAL_ERROR "Run scripts/prepare-video-runtime.sh before building Android.")
 endif()
@@ -43,7 +51,7 @@ file(WRITE "${GGML_VULKAN_SHADERS_GEN_TOOLCHAIN}"
 add_subdirectory("${SD_SOURCE}" runtime)
 # Keep model execution representative in debug apps. Unoptimized tensor kernels
 # make CPU conditioning take minutes even though the app remains responsive.
-foreach(VIDEO_RUNTIME_TARGET stable-diffusion ggml-base ggml-cpu ggml-vulkan ggml-hexagon)
+foreach(VIDEO_RUNTIME_TARGET stable-diffusion ggml-base ggml-cpu ggml-vulkan ggml-hexagon ggml-opencl)
   if(TARGET ${VIDEO_RUNTIME_TARGET})
     target_compile_options(${VIDEO_RUNTIME_TARGET} PRIVATE $<$<CONFIG:Debug>:-O3>)
   endif()

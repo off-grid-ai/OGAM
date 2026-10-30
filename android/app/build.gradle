@@ -148,6 +148,8 @@ android {
             // stores .so files inside the APK zip — File.exists() returns false for them and
             // exec() fails with EACCES (error=13) because you can't fork-exec from a zip entry.
             useLegacyPackaging = true
+            // The OpenCL engines link a Khronos loader stub; the phone's own libOpenCL.so must load instead.
+            excludes += ["**/libOpenCL.so"]
         }
     }
     aaptOptions {

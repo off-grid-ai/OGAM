@@ -6,6 +6,8 @@
 #include "ggml-backend.h"
 #endif
 #include <atomic>
+#include <cstdio>
+#include <sys/stat.h>
 #include <limits>
 #include <functional>
 #include <mutex>
@@ -15,6 +17,49 @@
 #include <vector>
 
 namespace offgrid {
+#ifdef __ANDROID__
+// Phone GPUs share the phone's RAM, yet drivers report it as free GPU memory: Adreno Vulkan said 15 GB on
+// a 12 GB OnePlus Nord 5 with 4.4 GB free, auto-fit kept the 3.5 GB Wan text encoder there, and Android
+// killed the app for low memory (2026-10-30). Only the device that runs the model gets a budget, capped
+// at the RAM the phone really has available; auto-fit streams from disk whatever fits neither.
+inline long availableRamKb() {
+  long availableKb = 0;
+  if (FILE *meminfo = fopen("/proc/meminfo", "r")) {
+    char line[128];
+    while (fgets(line, sizeof line, meminfo)) {
+      if (sscanf(line, "MemAvailable: %ld kB", &availableKb) == 1) break;
+    }
+    fclose(meminfo);
+  }
+  return availableKb;
+}
+inline double fileGib(const std::string &path) {
+  struct stat info {};
+  return stat(path.c_str(), &info) == 0 ? info.st_size / (1024.0 * 1024.0 * 1024.0) : 0;
+}
+// Where the Wan text encoder runs beside an OpenCL DiT. On the GPU it read the prompt in 43 s, not 195 s,
+// but a GPU copy of an encoder that does not fit is streamed in pieces: the Nord 5 (4.3 GB free) swapped
+// 1.6 GB and Android killed the app (2026-10-30). It runs on the GPU only when the encoder, the DiT and
+// their 2 GB working space fit in free RAM with 1.5 GB to spare; otherwise on the CPU, memory-mapped.
+inline bool wanEncoderFitsGpu(const std::string &weight, const std::string &encoder) {
+  const double availableGib = availableRamKb() / (1024.0 * 1024.0);
+  return fileGib(encoder) + fileGib(weight) + 2 + 1.5 <= availableGib;
+}
+inline std::string phoneGpuBudgets(const std::string &computeDevice) {
+  const long availableKb = availableRamKb();
+  std::string budgets = "HTP0=1.5";
+  for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+    auto device = ggml_backend_dev_get(i);
+    const auto type = ggml_backend_dev_type(device);
+    if (type != GGML_BACKEND_DEVICE_TYPE_GPU && type != GGML_BACKEND_DEVICE_TYPE_IGPU) continue;
+    const std::string name = ggml_backend_dev_name(device);
+    // A positive budget is capped at what the driver reports; -1024 GiB leaves a device none.
+    const double gib = name == computeDevice && availableKb > 0 ? availableKb / (1024.0 * 1024.0) : -1024;
+    budgets += "," + name + "=" + std::to_string(gib);
+  }
+  return budgets;
+}
+#endif
 struct VideoRequest {
   std::string weight, vae, encoder, prompt, negative;
   int width, height, frames, fps, steps;
@@ -79,6 +124,9 @@ class VideoRuntime {
       // ggml-vulkan.cpp:12252; OnePlus SM8635, RealVisXL Lightning Q4, 2026-10-27), and a crash ends the
       // process before any fallback can run. SD images on Adreno run on the CPU, as Wan diffusion does.
       const bool imageCpu = image && gpuDescription.find("Adreno") != std::string::npos;
+      // Qualcomm's OpenCL backend runs Wan on Adreno, where Vulkan crashes. The decoder stays on the CPU.
+      // A load that fails falls back to the CPU below.
+      const bool wanOpenCl = adrenoWan && !request.cpuOnly && ggml_backend_dev_by_name("GPUOpenCL");
       // An SD/SDXL image UNet does not fit the HTP0 cap, so the scheduler splits it across HTP0 and
       // Vulkan0, and Hexagon cannot compute on a view Vulkan holds ("HTP0 cannot execute MUL: tensor
       // (view) uses Vulkan0 buffer"; OnePlus SM8635, RealVisXL Lightning Q4, 2026-10-27). No sd.cpp
@@ -114,7 +162,9 @@ class VideoRuntime {
         config.params_backend = "disk";
         config.auto_fit = false;
       }
-      config.max_vram = "HTP0=1.5";
+      // The NPU path places weights itself (auto-fit off); GPU paths let auto-fit place them within budgets.
+      const std::string gpuBudgets = preferred.empty() ? phoneGpuBudgets(wanOpenCl ? "GPUOpenCL" : "Vulkan0") : "HTP0=1.5";
+      config.max_vram = gpuBudgets.c_str();
       config.disable_prefetch = true;
 #else
       // A Metal budget for the managed weights. Without one the Wan text encoder's 3.5 GB buffer
@@ -125,7 +175,16 @@ class VideoRuntime {
 #endif
       config.n_threads = request.threads;
 #ifdef __ANDROID__
-      if (request.cpuOnly || wanCpu || imageCpu) {
+      if (wanOpenCl) {
+        const bool encoderOnGpu = wanEncoderFitsGpu(request.weight, request.encoder);
+        config.backend = encoderOnGpu ? "GPUOpenCL,vae=cpu" : "GPUOpenCL,te=cpu,vae=cpu";
+        // ggml's OpenCL Q4_K matmul is wrong on Adreno and faults the GPU on large matrices: test-backend-ops
+        // on a OnePlus Nord 5 (Adreno 735) failed MUL_MAT q4_K m=4096 k=1024 (err 338), then the process was
+        // killed, as the Q4_K Wan DiT was in the app (2026-10-30). Q4_0, Q8_0 and F16 pass, and Q4_0 has
+        // Qualcomm's Adreno kernels. What runs on the GPU is requantized to Q4_0 as it loads.
+        config.tensor_type_rules = encoderOnGpu ? "diffusion_model=q4_0,text_encoders=q4_0" : "diffusion_model=q4_0";
+      }
+      if (request.cpuOnly || (wanCpu && !wanOpenCl) || imageCpu) {
 #else
       if (request.cpuOnly) {
 #endif
