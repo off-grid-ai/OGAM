@@ -1,6 +1,6 @@
 name: Engine updates
 
-# Every day, moves the app's native engines (llama.rn, whisper.rn, ExecuTorch, LiteRT-LM; see
+# Every day, moves the app's native engines (llama.rn, whisper.rn, ExecuTorch, LiteRT-LM, stable-diffusion.cpp; see
 # scripts/lib/engines.js) to their newest upstream releases and opens one PR for CI to test.
 # A phone app cannot download new native code (App Store 2.5.2, Google Play's policy), so a new
 # engine reaches people only in an app release; so every beta carries the newest engines.
@@ -75,9 +75,12 @@ jobs:
 
       - name: Move engines to their newest releases
         id: engines
+        env:
+          # stable-diffusion.cpp is read from GitHub's API; the token lifts the anonymous rate limit.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           node scripts/update-engines.js --pods --summary "$RUNNER_TEMP/engines.md" | tee "$RUNNER_TEMP/engines.json"
-          git status --porcelain -- package.json package-lock.json ios/Podfile.lock android/app/build.gradle > "$RUNNER_TEMP/changed.txt"
+          git status --porcelain -- package.json package-lock.json ios/Podfile.lock android/app/build.gradle scripts/video/revision > "$RUNNER_TEMP/changed.txt"
           if [ -s "$RUNNER_TEMP/changed.txt" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; else echo "changed=false" >> "$GITHUB_OUTPUT"; fi
 
       - name: Open or update the engine PR
@@ -89,7 +92,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -C "$BRANCH"
-          git add package.json package-lock.json ios/Podfile.lock android/app/build.gradle
+          git add package.json package-lock.json ios/Podfile.lock android/app/build.gradle scripts/video/revision
           git commit -m "$TITLE"
           git push --force origin "$BRANCH"
           if gh pr view "$BRANCH" --json state -q .state 2>/dev/null | grep -q OPEN; then
