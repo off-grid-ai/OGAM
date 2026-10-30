@@ -15,13 +15,21 @@ function gateway(catalog: [number, unknown], installed: [number, unknown]) {
 
 describe('readOffGridDesktopRoom', () => {
   it('reads the computer memory and its installed models', async () => {
-    gateway([200, { memoryGb: 34, kinds: [], models: [] }], [200, { installed: ['a', ' ', 'b'] }]);
-    await expect(readOffGridDesktopRoom(server)).resolves.toEqual({ memoryGb: 34, installed: ['a', 'b'] });
+    gateway(
+      [200, { memoryGb: 34, kinds: [], models: [{ id: 'wan', missingBytes: 5 }, { id: 'c' }] }],
+      [200, { installed: ['a', ' ', 'b'] }],
+    );
+    // What a download still fetches is kept per catalog id, only where the computer reports it.
+    await expect(readOffGridDesktopRoom(server)).resolves.toEqual({
+      memoryGb: 34,
+      installed: ['a', 'b'],
+      missingBytes: { wan: 5 },
+    });
   });
 
   it('leaves the memory unknown for an older Desktop', async () => {
     gateway([200, { kinds: [], models: [] }], [200, { installed: [] }]);
-    await expect(readOffGridDesktopRoom(server)).resolves.toEqual({ installed: [] });
+    await expect(readOffGridDesktopRoom(server)).resolves.toEqual({ installed: [], missingBytes: {} });
   });
 
   it('says why when the Desktop refuses the key', async () => {
