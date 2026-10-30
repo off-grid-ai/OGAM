@@ -28,6 +28,7 @@ import {
   contextBucket,
   errorCode,
   ignore,
+  modelRef,
   screenName,
   settingChangeKey,
   languageOnly,
@@ -78,6 +79,7 @@ export interface ModelFacts {
 const CRASH_EVENTS = new Set(['$exception', 'unclean_exit']);
 const SNAPSHOT_DAY_KEY = 'offgrid.analytics.snapshotDay';
 const PENDING_SESSION_KEY = 'offgrid.analytics.pendingSession';
+const FIRST_MESSAGE_KEY = 'offgrid.analytics.firstMessageSent';
 /** The open session's counters reach the disk this long after a change, so a crash loses at most this much. */
 const PERSIST_DELAY_MS = 1_000;
 const GB = 1024 * 1024 * 1024;
@@ -219,6 +221,12 @@ export function startAnalytics(
     if (pro !== selectHasProAccess(prev)) client?.register({ pro });
     if (now !== was) countSettingChanges(now as unknown as Properties, was as unknown as Properties);
     if (state.themeMode !== prev.themeMode) countSetting(settingChangeKey('theme', state.themeMode));
+    if (state.activeImageModelId && state.activeImageModelId !== prev.activeImageModelId) {
+      modelSelected('image', state.activeImageModelId);
+    }
+    if (state.activeVideoModelId && state.activeVideoModelId !== prev.activeVideoModelId) {
+      modelSelected('video', state.activeVideoModelId);
+    }
   });
   setScreenSink({ subScreen: trackSubScreen, sheetShown, sheetHidden });
   foregroundAt = Date.now();
@@ -521,8 +529,76 @@ export function messageSent(facts: { hasImage: boolean; hasDocument: boolean; to
     has_document: facts.hasDocument,
     tools_enabled: facts.toolsEnabled,
   });
+  noteFirstMessage();
   flowStep('onboarding', 'first_message');
   flowFinished('onboarding', 'done');
+}
+
+let firstMessageNoted = false;
+
+/** `first_message`: once per launch, the time from launch, and from install for the first ever. */
+function noteFirstMessage(): void {
+  if (firstMessageNoted || !usageOn()) return;
+  firstMessageNoted = true;
+  const now = Date.now();
+  (async () => {
+    const before = await AsyncStorage.getItem(FIRST_MESSAGE_KEY).catch(ignore);
+    const firstEver = !before;
+    if (firstEver) await AsyncStorage.setItem(FIRST_MESSAGE_KEY, '1').catch(ignore);
+    const installedAt = firstEver
+      ? await Promise.resolve()
+          .then(() => DeviceInfo.getFirstInstallTime())
+          .catch(ignore)
+      : undefined;
+    capture('first_message', {
+      since_launch_ms: ms(now - moduleLoadedAt),
+      first_ever: firstEver,
+      since_install_ms: installedAt && installedAt > 0 && installedAt <= now ? ms(now - installedAt) : undefined,
+    });
+  })().catch(ignore);
+}
+
+export type MessageAction = 'copy' | 'edit' | 'delete';
+export type DeletedItem = 'chat' | 'project' | 'document';
+export type VideoAction = 'extend' | 'make_story' | 'save';
+type ModelPickSource =
+  | 'model_picker'
+  | 'models_screen'
+  | 'setup'
+  | 'chat'
+  | 'home'
+  | 'settings'
+  | 'video'
+  | 'unknown';
+
+export function messageAction(action: MessageAction): void {
+  capture('message_action', { action });
+}
+
+export function itemDeleted(item: DeletedItem): void {
+  capture('item_deleted', { item });
+}
+
+/** A video clip's follow-on: Extend, Make it a story, Save. */
+export function videoAction(action: VideoAction): void {
+  capture('video_action', { action });
+}
+
+/** Where the person was when they picked a model, from the screen and any sheet over it. */
+function pickSource(): ModelPickSource {
+  if (openSheets.includes('model-selector')) return 'model_picker';
+  const screen = routeScreen ?? '';
+  if (screen === 'models') return 'models_screen';
+  if (screen === 'onboarding' || screen === 'auto-setup' || screen === 'advanced-setup') return 'setup';
+  if (screen === 'chat' || screen === 'home') return screen;
+  if (screen.startsWith('settings') || screen === 'model-settings') return 'settings';
+  if (screen.startsWith('video') || screen.startsWith('studio')) return 'video';
+  return 'unknown';
+}
+
+/** A model was picked (switched to). Image and video picks are seen on the store; text through here. */
+export function modelSelected(modality: 'text' | 'image' | 'video', modelId: string): void {
+  capture('model_selected', { modality, model: modelRef(modelId), source: pickSource() });
 }
 
 export function documentAdded(extension: string | undefined, sizeBytes: number | undefined): void {

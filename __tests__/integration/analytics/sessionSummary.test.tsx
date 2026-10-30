@@ -179,3 +179,32 @@ it('sends a daily usage snapshot of bucketed counts and appearance, never names'
   expect(typeof snapshot.font_scale).toBe('number');
   expect(JSON.stringify(snapshot)).not.toMatch(/Divorce|secret/);
 });
+
+it('reports model picks with where they were made, message copy and edit, deletes and the first message', async () => {
+  const { analytics, endpoint, background } = await launch({ usage: true });
+  const { activeModelService } = require('../../../src/services/activeModelService');
+  analytics.trackScreen('ModelsTab');
+  activeModelService.selectTextModel('local_import/My secret model.gguf');
+  activeModelService.selectTextModel('local_import/My secret model.gguf');
+  analytics.trackScreen('Chat');
+  const { sheetShown } = require('../../../src/services/analytics/interactions');
+  sheetShown('model-selector');
+  activeModelService.selectTextModel('qwen3-0.6b');
+  analytics.messageAction('copy');
+  analytics.messageAction('edit');
+  analytics.itemDeleted('chat');
+  analytics.messageSent({ hasImage: false, hasDocument: false, toolsEnabled: false });
+  analytics.messageSent({ hasImage: false, hasDocument: false, toolsEnabled: false });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  await background();
+
+  await waitFor(() => expect(endpoint.named('first_message')).toHaveLength(1));
+  expect(endpoint.named('model_selected').map(e => e.properties)).toEqual([
+    expect.objectContaining({ modality: 'text', model: 'custom', source: 'models_screen' }),
+    expect.objectContaining({ modality: 'text', model: 'qwen3-0.6b', source: 'model_picker' }),
+  ]);
+  expect(endpoint.named('message_action').map(e => e.properties.action)).toEqual(['copy', 'edit']);
+  expect(endpoint.named('item_deleted')[0].properties.item).toBe('chat');
+  expect(endpoint.named('first_message')[0].properties).toMatchObject({ first_ever: true });
+  expect(typeof endpoint.named('first_message')[0].properties.since_launch_ms).toBe('number');
+});

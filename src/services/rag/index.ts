@@ -18,6 +18,7 @@ import {
   emitKnowledgeDocumentMutation,
   type KnowledgeDocumentSnapshot,
 } from '../sync/knowledgeDocument';
+import { itemDeleted } from '../analytics/analytics';
 
 export type { KnowledgeDocument } from './database';
 
@@ -120,6 +121,7 @@ class KnowledgeBase {
     const document = ragDatabase.getDocument(docId);
     ragDatabase.deleteDocument(docId);
     if (!document) return;
+    itemDeleted('document');
     emitKnowledgeDocumentMutation({ kind: 'deleted', syncId: document.sync_id });
     await this.afterRemoval([document]);
   }

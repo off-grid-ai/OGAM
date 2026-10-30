@@ -16,7 +16,7 @@ import {
   emitSyncMutation,
   projectPutMutation,
 } from '../services/sync/mutation';
-import { track } from '../services/analytics/analytics';
+import { itemDeleted, track } from '../services/analytics/analytics';
 
 interface ProjectState {
   projects: Project[];
@@ -165,6 +165,7 @@ export const useProjectStore = create<ProjectState>()(
           entityId: id,
           kind: 'delete',
         });
+        itemDeleted('project');
         return { ok: true };
       },
 
