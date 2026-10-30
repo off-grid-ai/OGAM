@@ -477,7 +477,9 @@ describe('Pro mobile knowledge document sync journey', () => {
           size: 65,
         },
       ]);
-      rtl.fireEvent.press(view.getByText('Add'));
+      // The tab row's + adds to the open tab: File, then the picker.
+      rtl.fireEvent.press(view.getByTestId('kb-add'));
+      rtl.fireEvent.press(await view.findByText('File'));
       await rtl.waitFor(
         () => {
           expect(view!.queryByText('phone-notes.txt')).not.toBeNull();
