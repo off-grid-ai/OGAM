@@ -159,11 +159,11 @@ it('offers the Light build to an older Desktop that does not report its memory',
 }, 60_000);
 
 it('says a computer is too small, and offers a new clip from a description', async () => {
-  const current = await clipInChat({ memoryGb: 16 });
+  const current = await clipInChat({ memoryGb: 8 });
   const { view } = current;
   await tapMutedContinue(current);
   await view.findByText(
-    'Starting from a picture needs 24 GB of memory. Your computer has 16 GB.',
+    'Starting from a picture needs 12 GB of memory. Your computer has 8 GB.',
     {},
     { timeout: 10_000 },
   );

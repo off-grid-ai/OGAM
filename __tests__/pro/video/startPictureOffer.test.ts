@@ -44,10 +44,17 @@ describe('chooseStartPicture', () => {
   });
 
   it('says the computer is too small when nothing fits', () => {
-    expect(chooseStartPicture({ memoryGb: 16, installed: none, downloading: none })).toEqual({
+    expect(chooseStartPicture({ memoryGb: 8, installed: none, downloading: none })).toEqual({
       kind: 'tooSmall',
-      memoryGb: 16,
-      needsGb: 24,
+      memoryGb: 8,
+      needsGb: 12,
+    });
+  });
+
+  it('offers Wan 2.2 Turbo to a 16 GB computer, which the 24 GB builds do not fit', () => {
+    expect(chooseStartPicture({ memoryGb: 16, installed: none, downloading: none })).toMatchObject({
+      kind: 'download',
+      offer: { id: 'hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF' },
     });
   });
 
