@@ -51,6 +51,38 @@ Off Grid AI Mobile (OGAM) and Off Grid AI Desktop (OGAD) send anonymous stats (c
 | `app_backgrounded` | `session_ms` |
 | `$screen` (OGAM, SDK `screen()`) / `screen_viewed` (OGAD) | `screen`, `prev_screen`, `prev_ms` |
 
+`screen` is a route name in lowercase with dashes (`home`, `project-detail`), never its params. A tab inside a screen is `<screen>:<tab>` (`models:image`). A sheet or modal over a screen is `<screen>:<sheet>` (`chat:model-selector`); when it closes, the screen under it is shown again. Each name matches `^[a-z0-9][a-z0-9:_-]{0,47}$`.
+
+### Session summary
+
+Taps, long-presses, scrolling, errors shown and settings changed are counted on the device, never sent one by one. One `session_summary` goes when the session ends: on `app_backgrounded`, or on the next launch with `recovered: true` when the app was killed or crashed (the counters are kept on disk while the session runs, and only while Anonymous stats is on).
+
+| Property | Values |
+|---|---|
+| `session_ms` | time in the foreground |
+| `screens` | how many different screens were shown |
+| `screen_views` | how many times a screen was shown |
+| `actions` | `{ "<screen>:<id>": count }`, the 50 most used. `<id>` is the control's test id, never its label or any visible text. A test id with a variable part (`kb-document-remove-${id}`) is sent as its fixed part only (`kb-document-remove`), so ids and names never leave the device. Only ids written in the app's source can be sent; anything else counts as `other`. Each id matches `^[a-z0-9][a-z0-9:_-]{0,63}$`. A switch counts like a tap. |
+| `long_press` | OGAM: `{ "<screen>:<id>": count }`, the same ids |
+| `max_scroll_pct` | `{ "<screen>": 0 \| 25 \| 50 \| 75 \| 100 }`: how far down the screen's main list the person got, rounded down to a quarter. Up to 50 screens. |
+| `errors_shown` | `{ "<key>": count }`. OGAD: an error toast's `error_code`. OGAM: `<screen>:alert` for an alert that reports a failure (only that yes/no is taken from it, never its words). |
+| `settings_changed` | `{ "<setting>": count }`: the setting's name, plus `=<value>` only when the value is a switch or one of a fixed list (`theme=dark`, `flash_attn=true`). A number or text the person typed is never sent. |
+| `recovered` | `true` when sent on the launch after the session it counts |
+| `shortcuts`, `commands`, `error_responses`, `empty_states`, `notifications_clicked`, `chat_inputs` | OGAD only |
+
+Each map is capped: 50 keys sent, 200 held while the session runs.
+
+### Event budget
+
+The PostHog free plan (about 1M events a month) also keeps the 12-month retention promise, so the event count is designed in:
+
+- Per session: `app_opened`, `app_backgrounded`, `session_summary`, plus one `$screen` per screen, tab or sheet shown.
+- Per message: `message_sent` and `generation_finished`.
+- Once a day: `features_snapshot` and `usage_snapshot`.
+- Everything a person does many times a minute (taps, scrolls, errors shown) is inside `session_summary`.
+
+Estimate for an active user: 2 sessions (6), 12 screen views, 5 messages (10), 2 snapshots, 2 other actions: about 30 events a day. 30,000 active users a month at that rate stay under the free plan.
+
 ### Consent
 
 | Event | Properties |
@@ -81,11 +113,17 @@ A video model pack reports downloads once for the whole pack: `model` is its cat
 |---|---|
 | `chat_created` | none |
 | `message_sent` | `has_image`, `has_document`, `tools_enabled` |
+| `first_message` | once per launch, at the first message: `since_launch_ms`, `first_ever` (the first message on this install), `since_install_ms` (only when `first_ever`) |
+| `message_action` | `action`: `copy`, `edit`, `delete` (OGAM has no message delete) |
+| `item_deleted` | `item`: `chat`, `project`, `document` |
+| `model_selected` | a model was picked: `modality` (`text`, `image`, `video`), `model`, `source` (`model_picker`, `models_screen`, `setup`, `chat`, `home`, `settings`, `video`, `unknown`) |
+| `video_action` | `action`: `extend`, `make_story`, `save` |
 | `reply_regenerated` | none |
 | `project_created` | none |
 | `document_added` | `file_type` (an extension the app opens, else `other`; `none` without one), `size_bucket` |
 | `feature_used` | `feature`: `voice_input`, `tts`, `image_generation`, `video_generation`, `vision`, `web_search`, `tools`, `mcp_tool`, `remote_server`, `browser_action`, `clipboard`, `meetings`, `sync` |
 | `features_snapshot` | once a day: one `true`/`false` property per feature that is switched on. `video_generation` is true when a local video model is active or a remote video model is picked. |
+| `usage_snapshot` | once a day, beside `features_snapshot`: how much the person has. Counts: `chats`, `messages`, `user_messages`, `projects`, `knowledge_documents`, `generated_images`, `generated_videos`, `films`, `models_text`, `models_image`, `models_video`, `models_stt`, `models_tts`, `mcp_servers`, `paired_devices`, `remote_servers`. Each count is rounded down to the nearest of 0, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000. Appearance: `theme` (`system`, `light`, `dark`), `font_scale` (OGAM: the system text size, one decimal). Never a name or a word. |
 | `problem_reported` | none |
 
 ### Flows (funnels)
@@ -100,7 +138,7 @@ All multi-step journeys use three events with a `flow` property, so every funnel
 
 | `flow` | Steps |
 |---|---|
-| `onboarding` | `setup_shown`, `download_started`, `download_done`, `model_loaded`, `first_message` |
+| `onboarding` | `setup_shown`, `download_started`, `download_done`, `model_loaded`, `first_message`. Setup is shown before the person can opt in, so `flow_started` and `setup_shown` are sent when they opt in on that screen. |
 | `model_transfer` | `opened`, `device_picked`, `model_picked`, `started` |
 | `sync_pairing` | `opened`, `code_shown`, `code_entered`, `paired` |
 | `remote_server` | `opened`, `address_entered`, `tested`, `connected` |
@@ -109,7 +147,7 @@ All multi-step journeys use three events with a `flow` property, so every funnel
 | `video_setup` | `opened`, `model_picked`, `downloaded` |
 | `video_story` | `storyboard_shown`, `draft_started`, `draft_finished`, `final_started` (`detail`: `now`, `tonight`), `final_finished`, `exported`. A film made on another device reports on the device that rendered it. Never the sentence, shot text or narration. |
 | `connector_add` | `opened`, `connector_picked` (`catalog_id` or `custom`), `authorised` |
-| `pro_upgrade` | `gate_shown` (`feature`), `paywall_viewed`, `trial_started`, `purchased` |
+| `pro_upgrade` | `gate_shown` (`feature`), `paywall_viewed`, `purchased` |
 
 ### Crashes
 
