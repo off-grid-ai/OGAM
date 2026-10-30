@@ -22,6 +22,7 @@ import { useRemoteServerStore } from '../../stores/remoteServerStore';
 import { remoteServerCapabilities } from '../../types/remoteServer';
 import { useUiModeStore } from '../../stores';
 import { getSlot, SLOTS } from '../../bootstrap/slotRegistry';
+import { callHook, HOOKS } from '../../bootstrap/hookRegistry';
 import { videoSeam } from '../../bootstrap/videoSeam';
 import { hardwareService } from '../../services/hardware';
 import { videoPacksForPhone } from '../../services/phoneVideoPacks';
@@ -190,6 +191,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const [message, setMessage] = useState('');
+  const [selection, setSelection] = useState({ start: 0, end: 0 });
   const [localAssistantEnabled, setLocalAssistantEnabled] = useState(false);
   const assistantEnabled = assistantSelected ?? localAssistantEnabled;
   const setAssistantEnabled = (selected: boolean) => {
@@ -244,11 +246,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     addAudioAttachment,
     clearAttachments,
     onHaptic: () => triggerHaptic('impactMedium'),
-    appendTranscript: text =>
+    appendTranscript: heard => {
+      const text = callHook<string>(HOOKS.dictationFormat, heard, 'plain') ?? heard;
       setMessage(prev => {
         const prefix = prev.trim() ? `${prev.trim()} ` : '';
         return prefix + text;
-      }),
+      });
+    },
   });
 
   const {
@@ -504,6 +508,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // Free builds have no audio slot, so interfaceMode never becomes 'audio' and
   // this branch is skipped entirely.
   const AudioInput = getSlot(SLOTS.chatInputAudioMode);
+  // Scribe (Pro): underlines in the composer and the fix for the word at the caret.
+  const ScribeText = getSlot(SLOTS.scribeInputText);
+  const ScribeBar = getSlot(SLOTS.scribeInputBar);
   if (isAudioMode && AudioInput) {
     return (
       <>
@@ -613,6 +620,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     <View style={styles.container}>
       <AttachmentPreview attachments={attachments} onRemove={removeAttachment} onImagePress={onImagePress} />
       <QueueRow queue={queue} actions={queueActions} />
+      {ScribeBar && !showVoiceStatus ? (
+        <ScribeBar text={message} selection={selection} onChangeText={setMessage} />
+      ) : null}
       {transcriptionNotice ? (
         <Text style={styles.transcriptionNotice} testID="transcription-notice">
           {transcriptionNotice}
@@ -654,8 +664,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 ref={inputRef}
                 testID="chat-input"
                 style={styles.pillInput}
-                value={message}
+                value={ScribeText ? undefined : message}
                 onChangeText={setMessage}
+                onSelectionChange={e => setSelection(e.nativeEvent.selection)}
                 placeholder={
                   imageMode === 'video' ? 'Describe a video' : placeholder
                 }
@@ -665,7 +676,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 editable={!disabled}
                 blurOnSubmit={false}
                 returnKeyType="default"
-              />
+              >
+                {ScribeText ? <ScribeText text={message} /> : null}
+              </TextInput>
               <ComposerIconsRow
                 hasText={hasText}
                 iconsAnim={iconsAnim}
