@@ -81,7 +81,7 @@ The PostHog free plan (about 1M events a month) also keeps the 12-month retentio
 - Once a day: `features_snapshot` and `usage_snapshot`.
 - Everything a person does many times a minute (taps, scrolls, errors shown) is inside `session_summary`.
 
-Estimate for an active user: 2 sessions (6), 12 screen views, 5 messages (10), 2 snapshots, 2 other actions: about 30 events a day. 30,000 active users a month at that rate stay under the free plan.
+Estimate for an active user: 2 sessions (6), 12 screen views, 5 messages (10), 2 snapshots, 2 other actions: about 30 events a day. The free plan then covers about 33,000 active user-days a month, for example 1,100 people who use the app every day.
 
 ### Consent
 
