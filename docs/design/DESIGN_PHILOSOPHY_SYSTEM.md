@@ -17,6 +17,7 @@ Styling, UI/UX, consistency, ease of use, finesse, animation, and interactions a
 - Check the result in the real app on each affected platform. A source change alone does not establish visual or interaction quality.
 
 These rules apply to new features and changes to existing screens. Fix concrete feedback within the affected area; this is not a request for unrelated redesigns.
+Fix style at its shared source (tokens, `useThemedStyles`, a shared card or hook) so every screen that uses it follows. Do not rewrite screens to fix style.
 
 ### Mobile design decisions
 
@@ -28,7 +29,7 @@ This document is the source of truth for Off Grid AI Mobile layout and interacti
 - Use the screen area well. Align headings, inputs, cards, and actions to the same content edge. Avoid repeated copy and empty space that makes a list harder to scan.
 - Use standard `SPACING` tokens for gaps and padding. Keep the same spacing between equivalent parts across screens.
 - Give cards useful depth with restrained, theme-aware shadows. Use the same depth pattern across related screens; keep borders crisp and avoid heavy elevation.
-- One card everywhere: the elevated card of the chat list (`ChatsListScreen` `chatItem`): `colors.surface`, `shadows.small`, no border, a 10px radius, `SPACING.md` across and `SPACING.sm + 2` down, `SPACING.md` between cards. Title `bodySmall`, detail `meta`, date `metaSmall`. No screen keeps a private card style (no glass, no blur, no custom shadow).
+- One card everywhere: the elevated card of the chat list (`ChatsListScreen` `chatItem`): `colors.surface`, `shadows.small`, no border, `RADIUS.md` (8px), `SPACING.md` across and `SPACING.sm + 2` down, `SPACING.md` between cards. Title `bodySmall`, detail `meta`, date `metaSmall`. No screen keeps a private card style (no glass, no blur, no custom shadow).
 - A thing with no content yet (a draft, a failed or empty item) is one short row, not a large placeholder frame.
 - Size media to its own shape and the screen width. No fixed pixel heights or widths for posters, cards, or players.
 
