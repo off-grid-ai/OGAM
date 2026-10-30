@@ -68,6 +68,9 @@ module.exports = {
     '^@offgrid/sync/rn$': '<rootDir>/../shared/packages/sync/src/adapters/rn-tcp.ts',
     '^@offgrid/sync/rn-discovery$': '<rootDir>/../shared/packages/sync/src/adapters/rn-discovery.ts',
     '^@offgrid/sync/portable$': '<rootDir>/../shared/packages/sync/src/portable/index.ts',
+    // Scribe and Notes logic, also tested against SOURCE for the same reason as @offgrid/sync.
+    '^@offgrid/writing$': '<rootDir>/../shared/packages/writing/src/index.ts',
+    '^@offgrid/notes$': '<rootDir>/../shared/packages/notes/src/index.ts',
     // The sync source lives out-of-root; when jest transforms it, babel injects @babel/runtime
     // helper imports that would otherwise resolve from ../shared (where they aren't installed).
     // Pin them to mobile's own copy.
