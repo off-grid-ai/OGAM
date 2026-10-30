@@ -44,7 +44,7 @@ This document is the source of truth for Off Grid AI Mobile layout and interacti
 - Silence over noise
 
 ### 2. **Terminal-Inspired Aesthetic**
-- Monospace typography throughout: `Menlo` on iOS, `Meslo LG` (an open-licence Menlo derivative, bundled) on Android, through `FONTS.mono`
+- Monospace typography (`Menlo`) throughout
 - Dark mode: Pure black background (`#0A0A0A`), light mode: clean white (`#FFFFFF`)
 - Single accent color (emerald green — `#34D399` dark, `#059669` light)
 - High contrast for readability in both themes
@@ -74,7 +74,7 @@ This document is the source of truth for Off Grid AI Mobile layout and interacti
 
 ### Typography Scale
 
-All text uses one monospace family through `FONTS.mono`: **Menlo** on iOS and the bundled **Meslo LG** on Android, so both phones look the same.
+All text uses **Menlo** (monospace) for consistency and readability.
 
 | Token | Size | Weight | Use Case | Example |
 |-------|------|--------|----------|---------|
@@ -306,7 +306,7 @@ header: {
 ❌ **Multiple accent colors** — Emerald only
 ❌ **Rounded pill shapes** — Use minimal `8px` radius
 ❌ **Decorative animations** — Only functional animations (loading, state transitions)
-❌ **Mixed font families** — `FONTS.mono` only (Menlo on iOS, Meslo LG on Android)
+❌ **Mixed font families** — Menlo only
 ❌ **Private styles** — a screen's own card, glass, type scale, or shadow instead of the shared tokens
 ❌ **Placeholder frames** — a large empty box for something with no content yet
 ❌ **Heavy borders or 3D effects** — Keep edges crisp and elevation restrained
@@ -434,7 +434,7 @@ As the app evolves:
 - **Theme System:** `src/theme/` (palettes, hooks, style factory)
 - **Design Tokens:** `src/constants/index.ts` (typography, spacing, fonts)
 - **Codebase Guide:** `docs/standards/CODEBASE_GUIDE.md`
-- **Typography:** `FONTS.mono` (Menlo on iOS, Meslo LG on Android), weights 200-400 only
+- **Typography:** All Menlo, weights 200-400 only
 - **Inspiration:** Terminal UIs, Linear, Vercel, brutalist web design
 
 ---
