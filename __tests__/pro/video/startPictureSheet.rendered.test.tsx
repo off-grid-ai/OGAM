@@ -222,8 +222,7 @@ it('says to connect a computer when none is paired, instead of checking one fore
   // The computer goes away between the clip and the tap: nothing is left to ask.
   require('../../../src/stores/remoteServerStore').useRemoteServerStore.getState().clearAllServers();
   await tapMutedContinue(current);
-  await view.findByText('Connect Off Grid AI Desktop first.', {}, { timeout: 10_000 });
+  await view.findByTestId('start-picture-connect', {}, { timeout: 10_000 });
   expect(view.queryByTestId('start-picture-checking')).toBeNull();
-  expect(view.getByTestId('start-picture-retry')).toBeTruthy();
   expect(view.getByTestId('start-picture-describe')).toBeTruthy();
 }, 60_000);

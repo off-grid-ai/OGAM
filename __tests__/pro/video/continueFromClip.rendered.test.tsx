@@ -49,3 +49,22 @@ it('Extend asks what happens next, sends the clip\'s last frame with those words
   expect(view.getAllByTestId('video-continue')).toHaveLength(1);
   await rtl.waitFor(() => expect(view.getAllByTestId('video-continue')).toHaveLength(2), { timeout: 30_000 });
 }, 90_000);
+
+it('Extend uses a model on this phone that starts from a picture, when the computer has none', async () => {
+  const app = await launchStudioApp(undefined, { phoneEngine: true });
+  const { view, rtl } = app;
+  await makeClipInChat(app, CLIP);
+  // What a finished download leaves on the phone: Wan 2.2 Turbo, installed but not the model in use.
+  const { CATALOG } = require('@offgrid/models');
+  const turbo = CATALOG.find((model: { id: string }) => model.id === 'hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF');
+  const { useAppStore } = require('../../../src/stores');
+  rtl.act(() => {
+    useAppStore.setState({ downloadedVideoModels: [...useAppStore.getState().downloadedVideoModels, turbo] });
+  });
+  rtl.fireEvent.press(await view.findByTestId('video-continue'));
+  rtl.fireEvent.press(await view.findByTestId('start-picture-use-phone', {}, { timeout: 10_000 }));
+  // The phone's model is now the one in use, and Extend asks what happens next before anything starts.
+  expect(useAppStore.getState().activeVideoModelId).toBe(turbo.id);
+  await view.findByTestId('extend-prompt', {}, { timeout: 10_000 });
+  expect(app.stories.submissions).toHaveLength(0);
+}, 90_000);
