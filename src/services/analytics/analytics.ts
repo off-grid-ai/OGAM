@@ -198,7 +198,10 @@ export function setAnalyticsConsent(
   // Never rejects: a consent change must not surface as an error in the UI that made it.
   return syncClient()
     .then(() => {
-      if (!before.usage && after.usage) capture('analytics_opted_in', { source });
+      if (before.usage || !after.usage) return;
+      capture('analytics_opted_in', { source });
+      // Auto Setup was shown before the person could opt in, so its start was not sent then.
+      if (source === 'setup') replayFlowStart('onboarding');
     })
     .catch(ignore);
 }
@@ -472,6 +475,14 @@ export function flowStarted(flow: Flow, firstStep?: string, properties?: Propert
   flows.set(flow, { startedAt: Date.now() });
   capture('flow_started', { flow });
   if (firstStep) flowStep(flow, firstStep, properties);
+}
+
+/** Send a flow's start again, keeping its clock: it began before the person opted in. */
+function replayFlowStart(flow: Flow): void {
+  const state = flows.get(flow);
+  if (!state) return;
+  capture('flow_started', { flow });
+  if (state.lastStep) capture('flow_step', { flow, step: state.lastStep });
 }
 
 /** A step counts only inside a flow that started. */

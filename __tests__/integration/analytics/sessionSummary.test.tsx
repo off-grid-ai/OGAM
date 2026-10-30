@@ -208,3 +208,13 @@ it('reports model picks with where they were made, message copy and edit, delete
   expect(endpoint.named('first_message')[0].properties).toMatchObject({ first_ever: true });
   expect(typeof endpoint.named('first_message')[0].properties.since_launch_ms).toBe('number');
 });
+
+it('Auto Setup shown before opt-in is sent when the person opts in there', async () => {
+  const { analytics, endpoint, background } = await launch(null);
+  analytics.flowStarted('onboarding', 'setup_shown');
+  await analytics.setAnalyticsConsent({ usage: true, crashes: true }, 'setup');
+  await background();
+  await waitFor(() => expect(endpoint.named('flow_step')).toHaveLength(1));
+  expect(endpoint.named('flow_started')[0].properties.flow).toBe('onboarding');
+  expect(endpoint.named('flow_step')[0].properties).toMatchObject({ flow: 'onboarding', step: 'setup_shown' });
+});
