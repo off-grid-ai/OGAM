@@ -157,3 +157,14 @@ export function settingChangeKey(key: string, value: unknown): string | null {
   }
   return name;
 }
+
+/**
+ * `usage_snapshot` counts, rounded down to a fixed step so a total never fingerprints a person:
+ * 0, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000.
+ */
+const COUNT_STEPS = [1000, 500, 250, 100, 50, 25, 10, 5, 2, 1];
+
+export function countBucket(count: number | null | undefined): number {
+  if (typeof count !== 'number' || !Number.isFinite(count) || count < 1) return 0;
+  return COUNT_STEPS.find(step => count >= step) ?? 0;
+}

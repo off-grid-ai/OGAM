@@ -106,6 +106,9 @@ export const HOOKS = {
   /** () => Record<string, boolean> — Pro features switched on, for the daily analytics
    *  `features_snapshot` (tts, mcp_tool, sync, clipboard, meetings, browser_action). */
   analyticsProFeatures: 'analytics.proFeatures',
+  /** () => Record<string, number> — Pro counts for the daily analytics `usage_snapshot`, raw (core
+   *  buckets them): films, models_tts, mcp_servers, paired_devices. */
+  analyticsProUsage: 'analytics.proUsage',
   /** Video is Pro. Core asks these through `videoSeam`; free builds register none of them. */
   /** () => boolean — a video job (clip or film) is running. */
   videoIsBusy: 'video.isBusy',

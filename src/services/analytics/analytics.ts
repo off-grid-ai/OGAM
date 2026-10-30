@@ -91,6 +91,7 @@ let consentChain: Promise<void> = Promise.resolve();
 let stopListening: (() => void) | null = null;
 /** Set by startAnalytics, before any snapshot can run. */
 let featureSnapshot: () => Record<string, boolean>;
+let usageSnapshot: (() => Promise<Properties>) | undefined;
 let foregroundAt = Date.now();
 let ramGb: number | undefined;
 
@@ -201,8 +202,12 @@ export function setAnalyticsConsent(
 }
 
 /** Called once the app has finished starting and its settings are hydrated. */
-export function startAnalytics(features: () => Record<string, boolean>): () => void {
+export function startAnalytics(
+  features: () => Record<string, boolean>,
+  usage?: () => Promise<Properties>,
+): () => void {
   featureSnapshot = features;
+  usageSnapshot = usage;
   stopListening?.();
   stopListening = useAppStore.subscribe((state, prev) => {
     const now = state.settings;
@@ -448,6 +453,7 @@ async function snapshotFeaturesDaily(): Promise<void> {
   if (last === today) return;
   await AsyncStorage.setItem(SNAPSHOT_DAY_KEY, today).catch(ignore);
   capture('features_snapshot', featureSnapshot());
+  if (usageSnapshot) capture('usage_snapshot', await usageSnapshot().catch(() => ({})));
 }
 
 // ── flows ──────────────────────────────────────────────────────────────────────

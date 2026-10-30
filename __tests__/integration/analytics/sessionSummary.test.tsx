@@ -149,3 +149,33 @@ it('counts nothing and keeps nothing on disk before the person opts in', async (
   expect(await AsyncStorage.getItem('offgrid.analytics.pendingSession')).toBeNull();
   expect(endpoint.events).toEqual([]);
 });
+
+it('sends a daily usage snapshot of bucketed counts and appearance, never names', async () => {
+  const rig = await launch(null);
+  const { useChatStore } = require('../../../src/stores/chatStore');
+  const { useAppStore } = require('../../../src/stores/appStore');
+  const chat = useChatStore.getState().createConversation('m', 'Divorce lawyer notes');
+  for (let i = 0; i < 6; i += 1) {
+    useChatStore.getState().addMessage(chat, { role: i % 2 ? 'assistant' : 'user', content: `secret ${i}` });
+  }
+  useAppStore.getState().setThemeMode('light');
+  await rig.analytics.setAnalyticsConsent({ usage: true }, 'settings');
+  // The snapshot goes when the app next comes to the front.
+  await rig.background();
+  rig.boundary.emitAppStateChange('active');
+  await new Promise(resolve => setTimeout(resolve, 300));
+  await rig.background();
+  await waitFor(() => expect(rig.endpoint.named('usage_snapshot')).toHaveLength(1));
+  const snapshot = rig.endpoint.named('usage_snapshot')[0].properties;
+  expect(snapshot).toMatchObject({
+    chats: 1,
+    messages: 5,
+    user_messages: 2,
+    knowledge_documents: 0,
+    generated_images: 0,
+    models_text: 0,
+    theme: 'light',
+  });
+  expect(typeof snapshot.font_scale).toBe('number');
+  expect(JSON.stringify(snapshot)).not.toMatch(/Divorce|secret/);
+});

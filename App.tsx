@@ -46,6 +46,7 @@ import {
   trackScreen,
 } from './src/services/analytics/analytics';
 import { featureSnapshot } from './src/services/analytics/featureSnapshot';
+import { usageSnapshot } from './src/services/analytics/usageSnapshot';
 
 LogBox.ignoreAllLogs(); // Suppress all logs
 
@@ -383,7 +384,7 @@ function App() {
       setIsInitializing(false);
 
       // Settings are hydrated: analytics starts only now, and only if the person opted in.
-      stopAnalytics = startAnalytics(featureSnapshot);
+      stopAnalytics = startAnalytics(featureSnapshot, usageSnapshot);
 
       // Reconcile downloaded Whisper models against disk at startup. presentModelIds
       // isn't persisted (the filesystem is the source of truth), so it rehydrates
