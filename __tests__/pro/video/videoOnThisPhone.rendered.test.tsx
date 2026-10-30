@@ -131,7 +131,7 @@ it('downloads every file of a video model, then makes a clip on the phone', asyn
   current.engine.hold();
   await describeClipOnPhone(current, 'a hummingbird hovering over a red flower');
   // In flight on the phone: the engine's step count, and no clip card yet.
-  await view.findByText(/Step 1 of \d+/, {}, { timeout: 15_000 });
+  await view.findByText(/Making frames · 1 of \d+/, {}, { timeout: 15_000 });
   expect(view.queryByTestId('chat-clip-card')).toBeNull();
   current.engine.release();
   await view.findByTestId('chat-clip-card', {}, { timeout: 15_000 });
@@ -146,7 +146,7 @@ it('stops a clip midway', async () => {
   await downloadVideoModel(current);
   current.engine.hold();
   await describeClipOnPhone(current, 'waves rolling onto a sandy beach');
-  await view.findByText(/Step 1 of \d+/, {}, { timeout: 15_000 });
+  await view.findByText(/Making frames · 1 of \d+/, {}, { timeout: 15_000 });
   rtl.fireEvent.press(view.getByTestId('stop-button'));
   await rtl.waitFor(() => expect(view.queryByTestId('video-progress')).toBeNull(), { timeout: 10_000 });
   expect(view.queryByTestId('chat-clip-card')).toBeNull();
@@ -306,7 +306,7 @@ it('shows the engine\'s first frame while the clip is still being made', async (
 }, 90_000);
 
 it('on a phone short of free memory, says so before it starts, and Run anyway makes the clip', async () => {
-  const current = await launch({ ram: { totalBytes: 12 * GB, availBytes: 8 * GB } });
+  const current = await launch({ ram: { totalBytes: 12 * GB, availBytes: 3 * GB } });
   const { view } = current;
   await downloadVideoModel(current);
   await describeClipOnPhone(current, 'a hummingbird hovering over a red flower');
@@ -529,7 +529,7 @@ it('a clip still being made when the app is opened again carries on and lands in
   await downloadVideoModel(first);
   first.engine.hold();
   await describeClipOnPhone(first, 'a lantern floating down a dark river');
-  await first.view.findByText(/Step 1 of \d+/, {}, { timeout: 15_000 });
+  await first.view.findByText(/Making frames · 1 of \d+/, {}, { timeout: 15_000 });
   first.view.unmount();
   first.endpoint.restore();
 
@@ -551,7 +551,7 @@ it('a clip lost with the app (the phone stopped the worker) says so, and Retry m
   await downloadVideoModel(first);
   first.engine.hold();
   await describeClipOnPhone(first, 'a paper plane over the rooftops');
-  await first.view.findByText(/Step 1 of \d+/, {}, { timeout: 15_000 });
+  await first.view.findByText(/Making frames · 1 of \d+/, {}, { timeout: 15_000 });
   first.view.unmount();
   first.endpoint.restore();
 
@@ -573,7 +573,7 @@ it('a clip the worker could not finish while the app was away shows the engine\'
   await downloadVideoModel(first);
   first.engine.hold();
   await describeClipOnPhone(first, 'a whale breaching at sunset');
-  await first.view.findByText(/Step 1 of \d+/, {}, { timeout: 15_000 });
+  await first.view.findByText(/Making frames · 1 of \d+/, {}, { timeout: 15_000 });
   first.view.unmount();
   first.endpoint.restore();
 
