@@ -16,12 +16,14 @@ set(SD_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../.video-build/source")
 set(GGML_HEXAGON ON CACHE BOOL "" FORCE)
 set(OFFGRID_VIDEO_HEXAGON_CMAKE "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../scripts/video/hexagon-prebuilt.cmake")
 if(ANDROID_ABI STREQUAL "arm64-v8a")
-  # Adreno GPU through Qualcomm's OpenCL backend. It links llama.rn's libOpenCL stub; the phone's own
-  # libOpenCL.so loads at run time (uses-native-library in the manifest).
-  set(VIDEO_LLAMA_RN "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../node_modules/llama.rn")
+  # Adreno GPU through Qualcomm's OpenCL backend. It links video/opencl-loader.c, which finds the
+  # phone's own libOpenCL.so at run time (uses-native-library in the manifest), so the engine still
+  # loads on a phone with none. The headers are llama.rn's.
+  add_library(offgrid_opencl STATIC video/opencl-loader.c)
+  target_link_libraries(offgrid_opencl PRIVATE dl)
   set(GGML_OPENCL ON CACHE BOOL "" FORCE)
-  set(OpenCL_INCLUDE_DIR "${VIDEO_LLAMA_RN}/vendor/OpenCL-Headers" CACHE PATH "" FORCE)
-  set(OpenCL_LIBRARY "${VIDEO_LLAMA_RN}/bin/${ANDROID_ABI}/libOpenCL.so" CACHE FILEPATH "" FORCE)
+  set(OpenCL_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../node_modules/llama.rn/vendor/OpenCL-Headers" CACHE PATH "" FORCE)
+  set(OpenCL_LIBRARY offgrid_opencl CACHE STRING "" FORCE)
 endif()
 if(NOT EXISTS "${SD_SOURCE}/CMakeLists.txt")
   message(FATAL_ERROR "Run scripts/prepare-video-runtime.sh before building Android.")
