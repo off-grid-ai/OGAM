@@ -20,7 +20,8 @@ import { analyticsBuildAllowed, createAnalyticsClient, type AnalyticsClient } fr
 import { scrubExceptionProperties } from './scrub';
 import { markForeground, markStageEnded, markStageStarted, takeUncleanExit } from './uncleanExit';
 import { maybePromptAfterFailure, maybePromptAfterFirstChat } from './consentPrompt';
-import { setScreenSink } from './interactions';
+import { SessionTally, type ScrollBucket, type SummaryCounter } from './sessionTally';
+import { setInteractionSink, setScreenSink } from './interactions';
 import {
   batteryPct,
   bytesToGb,
@@ -28,6 +29,7 @@ import {
   errorCode,
   ignore,
   screenName,
+  settingChangeKey,
   languageOnly,
   ms,
   oneDecimal,
@@ -75,6 +77,9 @@ export interface ModelFacts {
 
 const CRASH_EVENTS = new Set(['$exception', 'unclean_exit']);
 const SNAPSHOT_DAY_KEY = 'offgrid.analytics.snapshotDay';
+const PENDING_SESSION_KEY = 'offgrid.analytics.pendingSession';
+/** The open session's counters reach the disk this long after a change, so a crash loses at most this much. */
+const PERSIST_DELAY_MS = 1_000;
 const GB = 1024 * 1024 * 1024;
 const MB = 1024 * 1024;
 const moduleLoadedAt = Date.now();
@@ -153,7 +158,10 @@ async function applyConsent(): Promise<void> {
 
 /** Bring the client in line with the stored consent. Calls run one at a time, in order. */
 function syncClient(): Promise<void> {
-  consentChain = consentChain.then(applyConsent).catch(ignore);
+  consentChain = consentChain
+    .then(applyConsent)
+    .then(refreshSession)
+    .catch(ignore);
   return consentChain;
 }
 
@@ -204,14 +212,18 @@ export function startAnalytics(features: () => Record<string, boolean>): () => v
     }
     const pro = selectHasProAccess(state);
     if (pro !== selectHasProAccess(prev)) client?.register({ pro });
+    if (now !== was) countSettingChanges(now as unknown as Properties, was as unknown as Properties);
+    if (state.themeMode !== prev.themeMode) countSetting(settingChangeKey('theme', state.themeMode));
   });
   setScreenSink({ subScreen: trackSubScreen, sheetShown, sheetHidden });
   foregroundAt = Date.now();
   stopAppState?.();
   const appStateSubscription = AppState.addEventListener('change', onAppStateChange);
   stopAppState = () => appStateSubscription.remove();
+  session = SessionTally.start(Date.now());
   syncClient()
     .then(async () => {
+      await reportPreviousSession();
       capture('app_opened', { cold_start_ms: ms(Date.now() - moduleLoadedAt) });
       const unclean = await takeUncleanExit(appVersion());
       if (unclean) {
@@ -233,7 +245,9 @@ export function startAnalytics(features: () => Record<string, boolean>): () => v
     stopListening = null;
     stopAppState?.();
     stopAppState = null;
+    setInteractionSink(null);
     setScreenSink(null);
+    cancelPersist();
     const previous = client;
     client = null;
     previous?.close().catch(ignore);
@@ -265,6 +279,8 @@ function onAppStateChange(next: AppStateStatus): void {
 
 function appForegrounded(): void {
   foregroundAt = Date.now();
+  session = SessionTally.start(foregroundAt);
+  if (currentScreen) session.screenViewed(currentScreen, foregroundAt);
   markForeground(true);
   if (currentScreen) screenShownAt = Date.now();
   capture('app_opened');
@@ -276,6 +292,7 @@ function appBackgrounded(): void {
   if (screenShownAt !== null) screenElapsed += Date.now() - screenShownAt;
   screenShownAt = null;
   capture('app_backgrounded', { session_ms: ms(Date.now() - foregroundAt) });
+  endSession();
 }
 
 /** Show a view: the route, a tab inside it (`models:text`) or a sheet over it (`chat:model-selector`). */
@@ -285,6 +302,10 @@ function showView(name: string): void {
   const shownMs = screenShownAt === null ? 0 : now - screenShownAt;
   const prevMs = currentScreen ? screenElapsed + shownMs : undefined;
   client?.screen(name, { screen: name, prev_screen: currentScreen ?? undefined, prev_ms: ms(prevMs) });
+  if (usageOn()) {
+    session?.screenViewed(name, now);
+    persistSoon();
+  }
   currentScreen = name;
   screenShownAt = now;
   screenElapsed = 0;
@@ -330,6 +351,94 @@ function sheetHidden(sheet: string): void {
   const top = openSheets[openSheets.length - 1];
   const next = top && routeScreen ? `${routeScreen}:${top}` : routeView;
   if (next) showView(next);
+}
+
+// ── session summary ────────────────────────────────────────────────────────────
+
+let session: SessionTally | null = null;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+function usageOn(): boolean {
+  return client !== null && consent().usage;
+}
+
+/** Taps, long-presses and errors are counted per screen: `<screen>:<id>`. */
+const SCREEN_SCOPED = new Set<SummaryCounter>(['actions', 'long_press', 'errors_shown']);
+
+const sink = {
+  count(counter: SummaryCounter, key: string): void {
+    if (!session) return;
+    const scoped = SCREEN_SCOPED.has(counter) ? `${routeScreen ?? 'app'}:${key}` : key;
+    session.count(counter, scoped, Date.now());
+    persistSoon();
+  },
+  scrolled(pct: ScrollBucket): void {
+    if (session && currentScreen && session.scrolled(currentScreen, pct, Date.now())) persistSoon();
+  },
+};
+
+/** Counters run only while Anonymous stats is on; turning it off forgets the open session's. */
+function refreshSession(): void {
+  if (usageOn()) {
+    setInteractionSink(sink);
+    return;
+  }
+  setInteractionSink(null);
+  if (session) session = SessionTally.start(Date.now());
+  AsyncStorage.removeItem(PENDING_SESSION_KEY).catch(ignore);
+}
+
+function persist(): void {
+  persistTimer = null;
+  if (!session || !usageOn()) return;
+  AsyncStorage.setItem(PENDING_SESSION_KEY, JSON.stringify(session.toJSON())).catch(ignore);
+}
+
+/** One disk write per burst of interactions, not one per tap. */
+function persistSoon(): void {
+  if (persistTimer) return;
+  persistTimer = setTimeout(persist, PERSIST_DELAY_MS);
+}
+
+function cancelPersist(): void {
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = null;
+}
+
+/** The trip to the background closes the session: one `session_summary`, then its counters go. */
+function endSession(): void {
+  const ended = session;
+  session = null;
+  if (ended && usageOn()) capture('session_summary', ended.summary(Date.now()));
+  cancelPersist();
+  AsyncStorage.removeItem(PENDING_SESSION_KEY).catch(ignore);
+}
+
+/** On launch: a session the previous launch never closed (it was killed or crashed) is sent now. */
+async function reportPreviousSession(): Promise<void> {
+  const raw = await AsyncStorage.getItem(PENDING_SESSION_KEY).catch(ignore);
+  if (!raw) return;
+  await AsyncStorage.removeItem(PENDING_SESSION_KEY).catch(ignore);
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  const previous = SessionTally.restore(parsed);
+  if (previous && usageOn()) {
+    capture('session_summary', { ...previous.summary(previous.state.lastAt), recovered: true });
+  }
+}
+
+function countSetting(key: string | null): void {
+  if (key && usageOn()) sink.count('settings_changed', key);
+}
+
+function countSettingChanges(now: Properties, was: Properties): void {
+  for (const key of Object.keys(now)) {
+    if (now[key] !== was[key]) countSetting(settingChangeKey(key, now[key]));
+  }
 }
 
 async function snapshotFeaturesDaily(): Promise<void> {

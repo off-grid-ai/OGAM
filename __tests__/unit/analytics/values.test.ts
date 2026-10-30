@@ -16,6 +16,7 @@ import {
   oneDecimal,
   releaseChannel,
   screenName,
+  settingChangeKey,
   sizeBucket,
   toolFeature,
 } from '../../../src/services/analytics/values';
@@ -129,5 +130,18 @@ describe('screen names, setting keys and usage counts', () => {
     [undefined, null],
   ])('screen %s → %s', (name, screen) => {
     expect(screenName(name)).toBe(screen);
+  });
+
+  it.each([
+    ['theme', 'dark', 'theme=dark'],
+    ['flashAttn', true, 'flash_attn=true'],
+    ['cacheType', 'q8_0', 'cache_type=q8_0'],
+    ['temperature', 0.7, 'temperature'],
+    ['systemPrompt', 'You are my lawyer', 'system_prompt'],
+    ['classifierModelId', 'my-secret-model', 'classifier_model_id'],
+    ['analyticsUsage', true, null],
+    ['analyticsLastPromptAt', 123, null],
+  ])('setting %s = %p counts as %p', (key, value, expected) => {
+    expect(settingChangeKey(key, value)).toBe(expected);
   });
 });

@@ -128,3 +128,32 @@ export function screenName(name: string | null | undefined): string | null {
     .replace(/^[-:_]+|[-:_]+$/g, '');
   return SCREEN_NAME.test(screen) ? screen : null;
 }
+
+/** Settings whose value is one of a fixed list, so `key=value` says nothing the person typed. */
+const FIXED_VALUE_SETTINGS = new Set([
+  'theme',
+  'imageGenerationMode',
+  'autoDetectMethod',
+  'modelLoadingMode',
+  'cacheType',
+  'voiceTurnMode',
+  'inferenceBackend',
+  'liteRTBackend',
+]);
+const FIXED_VALUE = /^[a-z0-9_-]{1,24}$/i;
+/** Consent itself, and the app's own bookkeeping, are not choices the person made in Settings. */
+const UNCOUNTED_SETTINGS = /^analytics/;
+
+/**
+ * `session_summary.settings_changed` key: the setting's name, plus its value only when that value is
+ * a switch or one of a fixed list (`theme=dark`, `flashAttn=true`). A number or text is never sent.
+ */
+export function settingChangeKey(key: string, value: unknown): string | null {
+  if (UNCOUNTED_SETTINGS.test(key) || !/^[A-Za-z][A-Za-z0-9]{0,47}$/.test(key)) return null;
+  const name = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+  if (typeof value === 'boolean') return `${name}=${value}`;
+  if (typeof value === 'string' && FIXED_VALUE_SETTINGS.has(key) && FIXED_VALUE.test(value)) {
+    return `${name}=${value.toLowerCase()}`;
+  }
+  return name;
+}
