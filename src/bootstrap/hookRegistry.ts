@@ -125,4 +125,7 @@ export const HOOKS = {
   videoFinishDeferred: 'video.finishDeferred',
   /** (conversationId: string) => void — the reply failed; forget the requested video. */
   videoDiscardDeferred: 'video.discardDeferred',
+  /** (text: string, target: 'plain' | 'markdown') => string — Scribe formats dictated text
+   *  (spoken lists, quotes, corrections). Free builds insert the transcript as heard. */
+  dictationFormat: 'dictation.format',
 } as const;
