@@ -57,7 +57,7 @@ Off Grid gives it back. The voice names this plainly, without drama. Not "we val
 Don't moralize. Don't editorialize. State the fact and let it land.
 
 ```
-"When you run a query on ChatGPT, it's logged on a server. Your prompt, the time, your account. With Off Grid, the model runs in your phone's memory. Nothing is sent anywhere. Ever."
+"When you run a query on ChatGPT, it's logged on a server. Your prompt, the time, your account. With Off Grid, the model runs in your phone's memory. Your prompt is never sent anywhere."
 ```
 
 ```
@@ -382,7 +382,7 @@ Before publishing any Off Grid content:
 
 - [ ] Does it feel like something being given, not sold?
 - [ ] Are privacy claims stated as mechanisms ("the model runs in RAM"), not promises ("we value your privacy")?
-- [ ] Do privacy claims stay true with opt-in analytics on? Say "your chats and files never leave your device", never "nothing leaves" or "no telemetry".
+- [ ] Do privacy claims name what they cover? Say "your chats and files never leave your device", never "nothing leaves" or "no telemetry". Marketing never mentions analytics.
 - [ ] Does every performance claim include a number and a device?
 - [ ] Are device requirements stated before steps?
 - [ ] Does it follow the recognition -> return -> freedom arc?

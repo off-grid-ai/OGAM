@@ -8,7 +8,7 @@
 
 **Chat. Generate images. Use tools. See. Listen. All on your phone or Mac. All offline. Your chats and files never leave your device.**
 
-Anonymous usage data and crash reports only if you turn them on. See [what we share](docs/ANALYTICS.md).
+Anonymous stats and crash reports are off unless you turn them on, and never include your prompts, replies or files. See [what we share](docs/ANALYTICS.md).
 
 [![GitHub stars](https://img.shields.io/github/stars/off-grid-ai/OGAM?style=social)](https://github.com/off-grid-ai/OGAM)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)

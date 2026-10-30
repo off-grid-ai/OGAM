@@ -1,6 +1,6 @@
 # Opt-in analytics
 
-Off Grid AI Mobile (OGAM) and Off Grid AI Desktop (OGAD) send anonymous usage data and crash reports to PostHog Cloud EU, only after the user opts in. This file is the single list of what we send. OGAM and OGAD keep an identical copy; change both together.
+Off Grid AI Mobile (OGAM) and Off Grid AI Desktop (OGAD) send anonymous stats (counts of what was used and how fast models run) and crash reports to PostHog Cloud EU, only after the user opts in. This file is the single list of what we send. OGAM and OGAD keep an identical copy; change both together.
 
 ## Rules
 
