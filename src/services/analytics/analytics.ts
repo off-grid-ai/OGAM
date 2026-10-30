@@ -3,9 +3,9 @@
  * flows and the events in docs/ANALYTICS.md. Every other module reports facts through the
  * functions here; none of them imports the SDK.
  *
- * - Off by default. The client exists only while Usage data or Crash reports is on, and only in a
+ * - Off by default. The client exists only while Anonymous stats or Crash reports is on, and only in a
  *   release build with a key. Before that, every call here is a no-op and nothing is queued.
- * - Usage data gates every event except `$exception` and `unclean_exit`, which Crash reports gates.
+ * - Anonymous stats gates every event except `$exception` and `unclean_exit`, which Crash reports gates.
  * - Turning both off opts out: what is queued is dropped and the anonymous ID is reset.
  */
 import { AppState, Platform, type AppStateStatus } from 'react-native';

@@ -1,7 +1,7 @@
 /**
  * Opting out in Settings (docs/ANALYTICS.md, Rules).
  *
- * SPEC (OGAM user's view): turning off both Usage data and Crash reports stops every send, drops
+ * SPEC (OGAM user's view): turning off both Anonymous stats and Crash reports stops every send, drops
  * what is queued and resets the anonymous ID. Turning analytics back on later starts a new,
  * unrelated anonymous ID.
  *
@@ -59,14 +59,14 @@ it('turning both toggles off stops sending and a later opt-in uses a new anonymo
 
   await bringToForeground(current);
   await openSettings(current);
-  const usage = view.getByLabelText('Usage data');
+  const usage = view.getByLabelText('Anonymous stats');
   const crashes = view.getByLabelText('Crash reports');
   expect(isOn(usage)).toBe(true);
   expect(isOn(crashes)).toBe(true);
   rtl.fireEvent(usage, 'valueChange', false);
   rtl.fireEvent(crashes, 'valueChange', false);
   await rtl.waitFor(() => {
-    expect(isOn(view.getByLabelText('Usage data'))).toBe(false);
+    expect(isOn(view.getByLabelText('Anonymous stats'))).toBe(false);
     expect(isOn(view.getByLabelText('Crash reports'))).toBe(false);
   });
 
@@ -80,8 +80,8 @@ it('turning both toggles off stops sending and a later opt-in uses a new anonymo
   // Back on: a fresh anonymous ID, unrelated to the first one.
   await bringToForeground(current);
   await openSettings(current);
-  rtl.fireEvent(view.getByLabelText('Usage data'), 'valueChange', true);
-  await rtl.waitFor(() => expect(isOn(view.getByLabelText('Usage data'))).toBe(true));
+  rtl.fireEvent(view.getByLabelText('Anonymous stats'), 'valueChange', true);
+  await rtl.waitFor(() => expect(isOn(view.getByLabelText('Anonymous stats'))).toBe(true));
   await chatFromHome(current, 'third question', 'Third answer.');
   await sendToBackground(current);
   await rtl.waitFor(() => expect(endpoint.named('generation_finished')).toHaveLength(2));

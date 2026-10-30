@@ -156,7 +156,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
             onPress={toggleShareAnalytics}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: shareAnalytics }}
-            accessibilityLabel="Share anonymous usage and crash reports"
+            accessibilityLabel="Share anonymous stats and crash reports"
             testID="auto-setup-share-analytics"
           >
             <Icon
@@ -166,7 +166,7 @@ export const AutoSetupScreen: React.FC<Props> = ({
             />
             <View style={styles.consentText}>
               <Text style={styles.consentLabel}>
-                Share anonymous usage and crash reports
+                Share anonymous stats and crash reports
               </Text>
               <Text style={styles.consentHint}>
                 Helps us fix what breaks on your device. Your chats never leave it.

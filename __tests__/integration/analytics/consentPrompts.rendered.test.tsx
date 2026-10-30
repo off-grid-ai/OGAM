@@ -55,7 +55,7 @@ it('an existing user is asked once after their first reply, and Share opts them 
   expect(view.queryByText('Help us fix what breaks')).toBeNull();
   await sendMessage(current, 'first', 'First reply.');
   expect(await view.findByText('Help us fix what breaks')).toBeTruthy();
-  expect(view.getByText('Send anonymous crash reports and usage. Your chats stay on this device.')).toBeTruthy();
+  expect(view.getByText('Send anonymous stats and crash reports. We never see your prompts, replies or files.')).toBeTruthy();
   rtl.fireEvent.press(view.getByLabelText('Share'));
   await rtl.waitFor(() => expect(view.queryByText('Help us fix what breaks')).toBeNull());
 

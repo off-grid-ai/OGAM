@@ -47,7 +47,7 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
     <AnimatedEntry index={10} staggerMs={40} trigger={focusTrigger}>
       <Text style={styles.sectionLabel}>Analytics</Text>
       <View style={styles.navSection} testID="settings-analytics">
-        {toggle('Usage data', usage, next => {
+        {toggle('Anonymous stats', usage, next => {
           setAnalyticsConsent({ usage: next }, 'settings').catch(ignore);
         })}
         {toggle('Crash reports', crashes, next => {

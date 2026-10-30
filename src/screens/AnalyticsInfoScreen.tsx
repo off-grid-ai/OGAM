@@ -22,7 +22,7 @@ const WE_NEVER_SHARE = [
   'Your chats, prompts, replies, transcripts or reasoning.',
   'What tools read or return.',
   'File names, document names or anything inside your files.',
-  'Web addresses, server addresses or IP addresses.',
+  'Web addresses or server addresses.',
   'What you search for.',
   'Names of models you imported yourself.',
   'Your email, license key, account or device ID.',
@@ -71,9 +71,9 @@ export const AnalyticsInfoScreen: React.FC = () => {
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.intro}>
-          Off by default. If you turn on Usage data or Crash reports, Off Grid AI sends anonymous
-          reports that help us fix what breaks on your device. Your chats and files never leave it.
-          Turn it off any time in Settings.
+          Off by default. If you turn on Anonymous stats or Crash reports, Off Grid AI sends counts of
+          what was used and error reports that help us fix what breaks. We never see your prompts, replies or
+          files. Turn it off any time in Settings.
         </Text>
         <ListBlock title="We share" icon="check" items={WE_SHARE} testID="analytics-we-share" />
         <ListBlock title="We never share" icon="x" items={WE_NEVER_SHARE} testID="analytics-we-never-share" />

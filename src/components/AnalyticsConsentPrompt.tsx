@@ -12,7 +12,7 @@ const COPY = {
   first_chat: { title: 'Help us fix what breaks', source: 'first_chat_prompt' },
 } as const;
 
-const BODY = 'Send anonymous crash reports and usage. Your chats stay on this device.';
+const BODY = 'Send anonymous stats and crash reports. We never see your prompts, replies or files.';
 
 /** The one consent prompt shown outside Auto Setup. Mounted once at the app root. */
 export const AnalyticsConsentPrompt: React.FC = () => {

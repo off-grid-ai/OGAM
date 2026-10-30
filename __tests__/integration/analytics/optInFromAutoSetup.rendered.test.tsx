@@ -2,7 +2,7 @@
  * Opt-in analytics from Auto Setup (docs/ANALYTICS.md, Rules + Consent).
  *
  * SPEC (OGAM user's view): analytics is off by default. A person who passes Auto Setup without
- * ticking "Share anonymous usage and crash reports" and then chats sends nothing to PostHog. A
+ * ticking "Share anonymous stats and crash reports" and then chats sends nothing to PostHog. A
  * person who ticks it sends `analytics_opted_in` (source `setup`) and a `generation_finished` for
  * the reply, and neither their prompt nor the reply ever leaves the device.
  *

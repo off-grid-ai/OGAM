@@ -468,7 +468,7 @@ describe('an install upgraded from v0.0.119', () => {
     // ── Settings → Analytics: both switches off. v0.0.119 never asked, so nothing is shared.
     fireEvent.press(await waitFor(() => view.getByTestId('settings-tab'), WAIT));
     await view.findByTestId('settings-analytics', {}, WAIT);
-    expect(view.getByLabelText('Usage data').props.value).toBe(false);
+    expect(view.getByLabelText('Anonymous stats').props.value).toBe(false);
     expect(view.getByLabelText('Crash reports').props.value).toBe(false);
 
     // ── Settings → Model Settings → Image Generation: the custom Image Steps value is kept.
