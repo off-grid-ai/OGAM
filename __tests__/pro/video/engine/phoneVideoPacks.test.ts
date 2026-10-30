@@ -14,7 +14,7 @@ import { completeVideoPacks, videoPacksForPhone } from '../../../../src/services
 
 const ids = (packs: ModelEntry[]) => packs.map(pack => pack.id);
 const primary = (pack: ModelEntry) => pack.files.find(file => file.role === 'primary')?.name ?? '';
-const LIGHT = ['off-grid-ai/Wan2.1-T2V-1.3B-GGUF-Q4', 'hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF'];
+const LIGHT = ['off-grid-ai/Wan2.1-T2V-1.3B-GGUF-Q4', 'off-grid-ai/Wan2.2-TI2V-5B-GGUF-Q4', 'hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF'];
 
 describe.each(['ios', 'android'])('on %s', os => {
   it('a phone with 8 GB has no pack of its own: video goes to a computer', () => {
@@ -54,9 +54,8 @@ describe.each(['ios', 'android'])('on %s', os => {
   });
 });
 
-it('Wan 2.2 Turbo is offered on 12 GB phones on both OSes, and the 20-step builds it replaced on neither', () => {
-  for (const os of ['ios', 'android']) {
-    expect(ids(videoPacksForPhone(12, os))).toContain('hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF');
-    expect(ids(videoPacksForPhone(128, os)).filter(id => id.startsWith('off-grid-ai/Wan2.2'))).toEqual([]);
-  }
+it('Wan 2.2 Turbo is offered on 12 GB phones on both OSes; the 20-step Wan 2.2 builds on Android only', () => {
+  for (const os of ['ios', 'android']) expect(ids(videoPacksForPhone(12, os))).toContain('hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF');
+  expect(ids(videoPacksForPhone(24, 'android'))).toContain('off-grid-ai/Wan2.2-TI2V-5B-GGUF');
+  expect(ids(videoPacksForPhone(128, 'ios')).filter(id => id.startsWith('off-grid-ai/Wan2.2'))).toEqual([]);
 });

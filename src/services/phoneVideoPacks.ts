@@ -4,16 +4,19 @@ import { CATALOG, isVideoWeightAvailableOn, videoPackError, type ModelEntry } fr
 /** Light and Turbo builds: offered on 11 GB+ phones, below the packs' desktop minimum. */
 const LIGHT_BUILDS_ON_11GB = new Set([
   'off-grid-ai/Wan2.1-T2V-1.3B-GGUF-Q4',
+  'off-grid-ai/Wan2.2-TI2V-5B-GGUF-Q4',
   // A 12 GB phone reports about 11 GB; Turbo runs on a 12 GB iPhone 17 Pro Max.
   'hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF',
 ]);
 
-/** Video packs a phone on this OS can download whole: current (not superseded), sized, with a weight this OS runs. */
+/** Video packs a phone on this OS can download whole: listed, sized, with a weight this OS runs. */
 export function completeVideoPacks(os: string = Platform.OS): ModelEntry[] {
   return CATALOG.filter(model =>
-    model.kind === 'video' && model.availability !== 'coming_soon' && !model.supersededBy &&
+    model.kind === 'video' && model.availability !== 'coming_soon' &&
     !!model.minRamGb && !videoPackError(model.files) &&
     isVideoWeightAvailableOn(model.files.find(file => file.role === 'primary')?.name ?? '', os) &&
+    // iOS holds Wan 2.2 only as Turbo: the 20-step builds with the full decoder did not fit there.
+    !(os === 'ios' && /wan2[._]2/i.test(model.id) && !/turbo/i.test(model.id)) &&
     model.files.every(file => !!file.sizeBytes),
   );
 }
