@@ -73,6 +73,7 @@ describe('the files this phone offers the rest of the mesh', () => {
     chats: true,
     projects: true,
     settings: true,
+    notes: true,
     screenshots: false,
     downloads: false,
     generatedMedia: false,
