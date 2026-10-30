@@ -8,7 +8,7 @@
 //
 //   --check     report only; change nothing (scripts/uat.sh runs this before a beta)
 //   --pods      after a bump, run `pod install` so ios/Podfile.lock matches
-//   --summary   write a Markdown summary (the weekly PR's body)
+//   --summary   write a Markdown summary (the daily PR's body)
 //
 // Prints one line of JSON: { "changed": [...], "held": [...], "current": [...] }.
 

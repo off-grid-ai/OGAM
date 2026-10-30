@@ -1,6 +1,6 @@
 'use strict';
 // The native inference engines the app ships, and the rule that decides whether a newer upstream
-// release may replace the pinned one. Used by scripts/update-engines.js (the weekly engine PR) and
+// release may replace the pinned one. Used by scripts/update-engines.js (the daily engine PR) and
 // scripts/uat.sh (a beta warns when a newer engine exists). Plain CommonJS so node runs it
 // directly; typed via engines.d.ts so the jest test and `tsc --noEmit` resolve it.
 //

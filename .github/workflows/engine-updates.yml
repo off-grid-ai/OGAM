@@ -1,9 +1,9 @@
 name: Engine updates
 
-# Every Monday, moves the app's native engines (llama.rn, whisper.rn, ExecuTorch, LiteRT-LM; see
+# Every day, moves the app's native engines (llama.rn, whisper.rn, ExecuTorch, LiteRT-LM; see
 # scripts/lib/engines.js) to their newest upstream releases and opens one PR for CI to test.
 # A phone app cannot download new native code (App Store 2.5.2, Google Play's policy), so a new
-# engine reaches people only in an app release; this keeps every beta on the newest engines.
+# engine reaches people only in an app release; so every beta carries the newest engines.
 # A release that needs peer dependencies the app does not meet is held and listed in the PR.
 #
 # The PR is pushed with PRO_SUBMODULE_PAT, not GITHUB_TOKEN: a push made with GITHUB_TOKEN does
@@ -11,7 +11,7 @@ name: Engine updates
 
 on:
   schedule:
-    - cron: '0 6 * * 1'
+    - cron: '0 6 * * *'
   workflow_dispatch:
 
 permissions:
