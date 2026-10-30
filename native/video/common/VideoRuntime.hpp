@@ -220,11 +220,14 @@ public:
     std::unique_lock<std::mutex> execution(executionMutex, std::try_to_lock);
     if (!execution.owns_lock()) throw std::runtime_error("Image or video generation is running.");
     if (!imageContext) throw std::runtime_error("Image model is unloaded.");
-    sd_image_t *images = nullptr; int count = 0;
+    // The engine owns the result; free it whole, never its parts.
+    sd_image_generation_result_t *result = nullptr;
+    auto produced = [&] { return result && result->count == 1 && result->items[0].image.data; };
     auto cleanup = [&] {
       sd_set_progress_callback(nullptr, nullptr);
       sd_set_preview_callback(nullptr, PREVIEW_NONE, 0, false, false, nullptr);
-      if (images) free_sd_images(images, count);
+      free_sd_image_generation_result(result);
+      result = nullptr;
     };
     try {
       if (cancelled.load()) throw std::runtime_error("Image generation stopped.");
@@ -249,11 +252,11 @@ public:
       params.sample_params.sample_method = imageSampler;
       params.sample_params.scheduler = imageScheduler;
       params.vae_tiling_params.enabled = true;
-      bool made = generate_image(imageContext, &params, &images, &count) && images && count == 1;
+      bool made = generate_image(imageContext, &params, &result) && produced();
       // A graph that fails on an accelerated backend gets one more try one step down (NPU -> GPU,
       // GPU -> CPU), as loading falls back: the person gets an image, not an error.
       if (!made && imagePlace != ImagePlace::cpu && !cancelled.load()) {
-        if (images) { free_sd_images(images, count); images = nullptr; count = 0; }
+        free_sd_image_generation_result(result); result = nullptr;
         VideoRequest retry = imageLoad;
         if (imagePlace == ImagePlace::npu) retry.skipNpu = true; else retry.cpuOnly = true;
         std::string preferred;
@@ -264,12 +267,12 @@ public:
           imageContext = reloaded;
           imageLoad = retry;
           imagePlace = lastLoadOnCpu ? ImagePlace::cpu : ImagePlace::gpu;
-          made = generate_image(imageContext, &params, &images, &count) && images && count == 1;
+          made = generate_image(imageContext, &params, &result) && produced();
         }
       }
       if (!made) throw std::runtime_error("The image engine produced no image.");
       if (cancelled.load()) throw std::runtime_error("Image generation stopped.");
-      save(images[0]);
+      save(result->items[0].image);
     } catch (...) { cleanup(); throw; }
     cleanup();
   }
@@ -281,14 +284,14 @@ public:
            const std::function<void(const sd_image_t &)> &preview) {
     std::unique_lock<std::mutex> execution(executionMutex, std::try_to_lock);
     if (!execution.owns_lock()) throw std::runtime_error("Video generation is already running.");
-    sd_image_t *frames = nullptr;
-    int count = 0, fps = request.fps;
+    sd_video_generation_result_t *result = nullptr;
     struct DecodeObserver {
       const std::function<void(int, int)> &progress;
       const std::function<void(const sd_image_t &)> &frame;
     } observer{decodeProgress, preview};
     auto cleanup = [&] {
-      if (frames) free_sd_images(frames, count);
+      free_sd_video_generation_result(result);
+      result = nullptr;
       sd_set_video_decode_callback(nullptr, nullptr, nullptr);
       sd_set_progress_callback(nullptr, nullptr);
       std::lock_guard<std::mutex> guard(contextMutex);
@@ -351,10 +354,10 @@ public:
       }
       conditioning("");
 #endif
-      if (!generate_video(loaded, &params, &frames, &count, nullptr, &fps) || !frames || count == 0)
+      if (!generate_video(loaded, &params, &result) || !result || !result->frames || result->frame_count == 0)
         throw std::runtime_error(cancelled.load() ? "Video generation stopped." : "The video engine produced no frames.");
       if (cancelled.load()) throw std::runtime_error("Video generation stopped.");
-      encode(frames, count, fps);
+      encode(result->frames, result->frame_count, result->fps > 0 ? result->fps : request.fps);
     } catch (...) { cleanup(); throw; }
     cleanup();
   }

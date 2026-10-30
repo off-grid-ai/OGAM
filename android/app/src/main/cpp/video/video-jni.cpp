@@ -185,12 +185,17 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_ai_offgridmobile_video_VideoGenerat
   std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 3);
   env->GetByteArrayRegion(rgb, 0, width * height * 3, reinterpret_cast<jbyte *>(pixels.data()));
   sd_image_t input{static_cast<uint32_t>(width), static_cast<uint32_t>(height), 3, pixels.data()};
-  sd_image_t *out = nullptr; int count = 0;
-  if (!upscale(reinterpret_cast<upscaler_ctx_t *>(handle), input, static_cast<uint32_t>(factor), &out, &count) || !out || count < 1) return nullptr;
-  const uint64_t size = uint64_t(out[0].width) * out[0].height * out[0].channel;
-  jbyteArray result = out[0].channel == 3 && size <= INT32_MAX ? env->NewByteArray(static_cast<jsize>(size)) : nullptr;
-  if (result) env->SetByteArrayRegion(result, 0, static_cast<jsize>(size), reinterpret_cast<jbyte *>(out[0].data));
-  free_sd_images(out, count);
+  sd_image_generation_result_t *upscaled = nullptr;
+  if (!upscale(reinterpret_cast<upscaler_ctx_t *>(handle), input, static_cast<uint32_t>(factor), &upscaled) || !upscaled ||
+      upscaled->count < 1 || !upscaled->items[0].image.data) {
+    free_sd_image_generation_result(upscaled);
+    return nullptr;
+  }
+  const sd_image_t &out = upscaled->items[0].image;
+  const uint64_t size = uint64_t(out.width) * out.height * out.channel;
+  jbyteArray result = out.channel == 3 && size <= INT32_MAX ? env->NewByteArray(static_cast<jsize>(size)) : nullptr;
+  if (result) env->SetByteArrayRegion(result, 0, static_cast<jsize>(size), reinterpret_cast<jbyte *>(out.data));
+  free_sd_image_generation_result(upscaled);
   return result;
 }
 

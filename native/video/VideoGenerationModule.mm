@@ -191,10 +191,14 @@ RCT_REMAP_METHOD(upscaleVideo, upscaleVideo:(NSDictionary *)input resolver:(RCTP
         }
         CVPixelBufferUnlockBaseAddress(pixels, kCVPixelBufferLock_ReadOnly);
         CFRelease(sample);
-        sd_image_t *up = nullptr; int count = 0;
-        if (!upscale(upscaler, {static_cast<uint32_t>(w), static_cast<uint32_t>(h), 3, rgb.data()}, factor, &up, &count) || !up || count < 1) { ok = NO; break; }
-        frames.push_back(up[0]);
-        free(up);
+        sd_image_generation_result_t *up = nullptr;
+        if (!upscale(upscaler, {static_cast<uint32_t>(w), static_cast<uint32_t>(h), 3, rgb.data()}, factor, &up) || !up || up->count < 1 || !up->items[0].image.data) {
+          free_sd_image_generation_result(up); ok = NO; break;
+        }
+        // Keep the pixels for encoding (freed below with the other frames); release the rest.
+        frames.push_back(up->items[0].image);
+        up->items[0].image.data = nullptr;
+        free_sd_image_generation_result(up);
       }
       free_upscaler_ctx(upscaler);
       NSError *encodeError = nil;
