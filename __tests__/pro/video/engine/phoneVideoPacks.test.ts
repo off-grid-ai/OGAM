@@ -54,8 +54,9 @@ describe.each(['ios', 'android'])('on %s', os => {
   });
 });
 
-it('Wan 2.2 Turbo is offered on 12 GB phones on both OSes; the 20-step Wan 2.2 builds on Android only', () => {
-  for (const os of ['ios', 'android']) expect(ids(videoPacksForPhone(12, os))).toContain('hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF');
+it('Wan 2.2 Turbo is offered from 11 GB on iPhones, not on an 11 GB Android phone; the 20-step Wan 2.2 builds on Android only', () => {
+  expect(ids(videoPacksForPhone(11, 'ios'))).toContain('hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF');
+  expect(ids(videoPacksForPhone(11, 'android'))).not.toContain('hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF');
   expect(ids(videoPacksForPhone(24, 'android'))).toContain('off-grid-ai/Wan2.2-TI2V-5B-GGUF');
   expect(ids(videoPacksForPhone(128, 'ios')).filter(id => id.startsWith('off-grid-ai/Wan2.2'))).toEqual([]);
 });
