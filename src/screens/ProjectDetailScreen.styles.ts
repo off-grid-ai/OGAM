@@ -12,11 +12,9 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    // The tab row below continues this surface and casts the bar's shadow.
     backgroundColor: colors.surface,
-    ...shadows.small,
-    zIndex: 1,
+    zIndex: 2,
   },
   backButton: {
     padding: SPACING.xs,
@@ -108,6 +106,7 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   },
   sectionList: {
     flex: 1,
+    paddingTop: SPACING.md,
   },
   sectionsContainer: {
     flex: 1,
@@ -117,8 +116,10 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     paddingHorizontal: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    // One raised bar with the header: the header's surface, a shadow under it, above the list.
+    backgroundColor: colors.surface,
+    ...shadows.edge,
+    zIndex: 1,
   },
   tabs: {
     flex: 1,
