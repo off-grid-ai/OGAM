@@ -21,6 +21,8 @@ struct VideoRequest {
   float guidance;
   int64_t seed;
   std::string llm, embeddings, audioVae;
+  // The model's tiny decoder (taew2_1 / taew2_2), when it is on disk: frames in seconds, no tiling.
+  std::string taesd;
   float flowShift = 0;
   bool cpuOnly = false;
   bool skipNpu = false;
@@ -55,6 +57,7 @@ class VideoRuntime {
       config.llm_path = request.llm.c_str();
       config.embeddings_connectors_path = request.embeddings.c_str();
       config.audio_vae_path = request.audioVae.c_str();
+      config.taesd_path = request.taesd.c_str();
       config.enable_mmap = true;
       config.diffusion_flash_attn = true;
       config.auto_fit = true;
@@ -321,7 +324,9 @@ public:
       params.sample_params.flow_shift = request.flowShift > 0 ? request.flowShift : std::numeric_limits<float>::infinity();
       params.sample_params.sample_method = EULER_SAMPLE_METHOD;
       params.sample_params.scheduler = sd_get_default_scheduler(loaded, EULER_SAMPLE_METHOD);
-      params.vae_tiling_params.enabled = true;
+      // The tiny decoder needs no tiling: it decodes the whole clip in one small graph.
+      const bool tiny = !request.taesd.empty();
+      params.vae_tiling_params.enabled = !tiny;
       if (request.initImage.size() == static_cast<size_t>(request.width) * request.height * 3)
         params.init_image = {static_cast<uint32_t>(request.width), static_cast<uint32_t>(request.height), 3,
                              const_cast<uint8_t *>(request.initImage.data())};
@@ -329,16 +334,18 @@ public:
       // Mobile Vulkan drivers can lose the device on a full temporal decode.
       // Keep each decode graph small instead of waiting for allocation failure:
       // a lost GPU cannot recover through the allocator's tiling retry.
-      params.vae_tiling_params.temporal_tiling = true;
-      params.vae_tiling_params.tile_size_w = 128;
-      params.vae_tiling_params.tile_size_h = 128;
-      params.vae_tiling_params.extra_tiling_args = "temporal_tile_frames=1";
+      if (!tiny) {
+        params.vae_tiling_params.temporal_tiling = true;
+        params.vae_tiling_params.tile_size_w = 128;
+        params.vae_tiling_params.tile_size_h = 128;
+        params.vae_tiling_params.extra_tiling_args = "temporal_tile_frames=1";
+      }
       conditioning(preferred.empty() ? "cpu" : "npu");
 #else
       // Wan's stateful decoder retains causal feature caches between temporal
       // chunks. Bound the graph without dropping frames or changing resolution.
       const std::string vaeName = request.vae.substr(request.vae.find_last_of("/\\") + 1);
-      if (vaeName == "wan_2.1_vae.safetensors" || vaeName == "wan2.2_vae.safetensors") {
+      if (!tiny && (vaeName == "wan_2.1_vae.safetensors" || vaeName == "wan2.2_vae.safetensors")) {
         params.vae_tiling_params.temporal_tiling = true;
         params.vae_tiling_params.extra_tiling_args = "temporal_tile_frames=1";
       }

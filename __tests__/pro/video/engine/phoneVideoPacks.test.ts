@@ -2,8 +2,8 @@
  * Which video models this phone makes videos with itself, and when it needs a computer.
  *
  * SPEC (OGAM): one rule, from the phone's memory, decides whether video is made "on this phone" or the
- * app offers "Find my computer". A pack is offered when the phone has the memory the pack asks for; Off
- * Grid AI's Light builds are offered from 11 GB, below that minimum. A phone with none is sent to a
+ * app offers "Find my computer". A pack is offered when the phone has the memory the pack asks for; the
+ * Light builds and Wan 2.2 Turbo are offered from 11 GB, below that minimum. A phone with none is sent to a
  * computer. A pack is never offered on an OS its weights do not run on, nor one that cannot be
  * downloaded whole (every file sized).
  *
@@ -14,7 +14,7 @@ import { completeVideoPacks, videoPacksForPhone } from '../../../../src/services
 
 const ids = (packs: ModelEntry[]) => packs.map(pack => pack.id);
 const primary = (pack: ModelEntry) => pack.files.find(file => file.role === 'primary')?.name ?? '';
-const LIGHT = ['off-grid-ai/Wan2.1-T2V-1.3B-GGUF-Q4', 'off-grid-ai/Wan2.2-TI2V-5B-GGUF-Q4'];
+const LIGHT = ['off-grid-ai/Wan2.1-T2V-1.3B-GGUF-Q4', 'hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF'];
 
 describe.each(['ios', 'android'])('on %s', os => {
   it('a phone with 8 GB has no pack of its own: video goes to a computer', () => {
@@ -25,7 +25,7 @@ describe.each(['ios', 'android'])('on %s', os => {
     expect(videoPacksForPhone(10, os)).toEqual([]);
   });
 
-  it('a 12 GB phone is offered only the Light builds', () => {
+  it('a 12 GB phone is offered only the Light and Turbo builds', () => {
     const offered = ids(videoPacksForPhone(12, os));
     expect(offered.length).toBeGreaterThan(0);
     for (const id of offered) expect(LIGHT).toContain(id);
@@ -54,7 +54,9 @@ describe.each(['ios', 'android'])('on %s', os => {
   });
 });
 
-it('Wan 2.2 is made on an Android phone with 24 GB, never on an iPhone', () => {
-  expect(ids(videoPacksForPhone(24, 'android'))).toContain('off-grid-ai/Wan2.2-TI2V-5B-GGUF');
-  expect(ids(videoPacksForPhone(128, 'ios')).some(id => id.includes('Wan2.2'))).toBe(false);
+it('Wan 2.2 Turbo is offered on 12 GB phones on both OSes, and the 20-step builds it replaced on neither', () => {
+  for (const os of ['ios', 'android']) {
+    expect(ids(videoPacksForPhone(12, os))).toContain('hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF');
+    expect(ids(videoPacksForPhone(128, os)).filter(id => id.startsWith('off-grid-ai/Wan2.2'))).toEqual([]);
+  }
 });

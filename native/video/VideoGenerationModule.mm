@@ -256,6 +256,7 @@ RCT_REMAP_METHOD(generate, generate:(NSDictionary *)input resolver:(RCTPromiseRe
           request.llm = [(input[@"llm"] ?: @"") UTF8String];
           request.embeddings = [(input[@"embeddings"] ?: @"") UTF8String];
           request.audioVae = [(input[@"audioVae"] ?: @"") UTF8String];
+          request.taesd = [(input[@"taesd"] ?: @"") UTF8String];
           request.flowShift = [input[@"flowShift"] floatValue];
           // Fastest settings' choice: the CPU when it was placed there, Metal otherwise.
           request.cpuOnly = [input[@"backend"] isEqual:@"cpu"];

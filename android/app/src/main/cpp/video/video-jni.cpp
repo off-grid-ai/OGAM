@@ -56,7 +56,7 @@ extern "C" JNIEXPORT void JNICALL Java_ai_offgridmobile_video_VideoGenerationMod
 }
 extern "C" JNIEXPORT void JNICALL Java_ai_offgridmobile_video_VideoGenerationModule_nativeGenerate(
   JNIEnv *env, jobject self, jstring weight, jstring vae, jstring encoder, jstring prompt, jstring negative,
-  jint width, jint height, jint frames, jint fps, jint steps, jdouble guidance, jdouble seed, jstring llm, jstring embeddings, jstring audioVae, jdouble flowShift, jstring diagnosticBackend, jbyteArray initImage) {
+  jint width, jint height, jint frames, jint fps, jint steps, jdouble guidance, jdouble seed, jstring llm, jstring embeddings, jstring audioVae, jstring taesd, jdouble flowShift, jstring diagnosticBackend, jbyteArray initImage) {
   jobject owner = nullptr;
   try {
     offgrid::VideoRequest request{string(env, weight), string(env, vae), string(env, encoder), string(env, prompt), string(env, negative), width, height, frames, fps, steps, (float)guidance, (int64_t)seed};
@@ -68,6 +68,7 @@ extern "C" JNIEXPORT void JNICALL Java_ai_offgridmobile_video_VideoGenerationMod
     request.llm = string(env, llm);
     request.embeddings = string(env, embeddings);
     request.audioVae = string(env, audioVae);
+    request.taesd = string(env, taesd);
     request.flowShift = (float)flowShift;
     const auto backend = string(env, diagnosticBackend);
     request.cpuOnly = backend == "cpu";

@@ -56,7 +56,7 @@ class VideoGenerationModule(private val context: ReactApplicationContext) : Reac
     override fun getName() = "VideoGenerationModule"
     // Start images run in sd.cpp; the in-process ESRGAN upscaler sharpens film shots.
     override fun getConstants(): Map<String, Any> = mapOf("supportsInitImage" to true, "supportsUpscale" to true)
-    private external fun nativeGenerate(weight: String, vae: String, encoder: String, prompt: String, negative: String, width: Int, height: Int, frames: Int, fps: Int, steps: Int, guidance: Double, seed: Double, llm: String, embeddings: String, audioVae: String, flowShift: Double, diagnosticBackend: String, initImage: ByteArray?)
+    private external fun nativeGenerate(weight: String, vae: String, encoder: String, prompt: String, negative: String, width: Int, height: Int, frames: Int, fps: Int, steps: Int, guidance: Double, seed: Double, llm: String, embeddings: String, audioVae: String, taesd: String, flowShift: Double, diagnosticBackend: String, initImage: ByteArray?)
     private external fun nativeUpscalerOpen(modelPath: String, threads: Int): Long
     private external fun nativeUpscalerClose(handle: Long)
     private external fun nativeUpscale(handle: Long, rgb: ByteArray, width: Int, height: Int, factor: Int): ByteArray?
@@ -227,6 +227,7 @@ class VideoGenerationModule(private val context: ReactApplicationContext) : Reac
                         if (input.hasKey("llm")) input.getString("llm") ?: "" else "",
                         if (input.hasKey("embeddings")) input.getString("embeddings") ?: "" else "",
                         if (input.hasKey("audioVae")) input.getString("audioVae") ?: "" else "",
+                        if (input.hasKey("taesd")) input.getString("taesd") ?: "" else "",
                         input.getDouble("flowShift"), when {
                             BuildConfig.DEBUG && input.hasKey("diagnosticBackend") -> input.getString("diagnosticBackend") ?: "auto"
                             // Fastest settings' choice: "cpu" runs on the CPU, "gpu" skips the NPU.
