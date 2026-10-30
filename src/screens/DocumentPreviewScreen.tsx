@@ -15,7 +15,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import RNFS from 'react-native-fs';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
-import { FONTS, TYPOGRAPHY, SPACING } from '../constants';
+import { TYPOGRAPHY, SPACING } from '../constants';
 import { documentStore } from '../services/documents/store';
 import { RootStackParamList } from '../navigation/types';
 import logger from '../utils/logger';
@@ -99,7 +99,7 @@ const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
   contentText: {
     ...TYPOGRAPHY.body,
     color: colors.text,
-    fontFamily: FONTS.mono,
+    fontFamily: 'Menlo',
     fontSize: 13,
     lineHeight: 20,
   },

@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 export {
   MODEL_RECOMMENDATIONS,
   RECOMMENDED_MODELS,
@@ -169,10 +168,9 @@ export const ONBOARDING_SLIDES: readonly OnboardingSlide[] = [
   },
 ];
 
-// Fonts: one monospace face. Android has no Menlo, so it ships Meslo LG S (a Menlo derivative,
-// android/app/src/main/assets/fonts) under that family name.
+// Fonts
 export const FONTS = {
-  mono: Platform.OS === 'android' ? 'MesloLGS' : 'Menlo',
+  mono: 'Menlo',
 };
 
 // Typography Scale - Centralized font sizes and styles

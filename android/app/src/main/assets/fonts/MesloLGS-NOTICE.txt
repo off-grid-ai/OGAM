@@ -1,1 +1,0 @@
-Meslo LG S v1.2.1 by André Berg (github.com/andreberg/Meslo-Font), a customized Menlo. Apache License 2.0 (MesloLGS-LICENSE.txt). Menlo is a trademark of Apple Inc.
