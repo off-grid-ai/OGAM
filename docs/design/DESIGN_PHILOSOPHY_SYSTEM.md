@@ -28,6 +28,9 @@ This document is the source of truth for Off Grid AI Mobile layout and interacti
 - Use the screen area well. Align headings, inputs, cards, and actions to the same content edge. Avoid repeated copy and empty space that makes a list harder to scan.
 - Use standard `SPACING` tokens for gaps and padding. Keep the same spacing between equivalent parts across screens.
 - Give cards useful depth with restrained, theme-aware shadows. Use the same depth pattern across related screens; keep borders crisp and avoid heavy elevation.
+- One card recipe everywhere: `colors.surface`, a 1px `colors.border`, `shadows.small`, an 8px radius. No screen keeps a private card style (no glass, no blur, no custom shadow).
+- A thing with no content yet (a draft, a failed or empty item) is one short row, not a large placeholder frame.
+- Size media to its own shape and the screen width. No fixed pixel heights or widths for posters, cards, or players.
 
 ---
 
@@ -40,7 +43,7 @@ This document is the source of truth for Off Grid AI Mobile layout and interacti
 - Silence over noise
 
 ### 2. **Terminal-Inspired Aesthetic**
-- Monospace typography (`Menlo`) throughout
+- Monospace typography throughout: `Menlo` on iOS, `Meslo LG` (an open-licence Menlo derivative, bundled) on Android, through `FONTS.mono`
 - Dark mode: Pure black background (`#0A0A0A`), light mode: clean white (`#FFFFFF`)
 - Single accent color (emerald green — `#34D399` dark, `#059669` light)
 - High contrast for readability in both themes
@@ -70,13 +73,13 @@ This document is the source of truth for Off Grid AI Mobile layout and interacti
 
 ### Typography Scale
 
-All text uses **Menlo** (monospace) for consistency and readability.
+All text uses one monospace family through `FONTS.mono`: **Menlo** on iOS and the bundled **Meslo LG** on Android, so both phones look the same.
 
 | Token | Size | Weight | Use Case | Example |
 |-------|------|--------|----------|---------|
 | `TYPOGRAPHY.display` | 22px | 200 | Hero numbers, RAM display | "8.2 GB" |
-| `TYPOGRAPHY.h1` | 24px | 300 | Screen titles | "Conversations" |
-| `TYPOGRAPHY.h2` | 16px | 400 | Section headers | "Downloaded Models" |
+| `TYPOGRAPHY.h1` | 24px | 300 | Rare hero text only | Onboarding headline |
+| `TYPOGRAPHY.h2` | 16px | 400 | Screen titles, section headers | "Conversations" |
 | `TYPOGRAPHY.h3` | 13px | 400 | Subsection headers | "Text Models" |
 | `TYPOGRAPHY.body` | 14px | 400 | Primary body text | Message content |
 | `TYPOGRAPHY.bodySmall` | 13px | 400 | Secondary body text | Descriptions |
@@ -87,8 +90,8 @@ All text uses **Menlo** (monospace) for consistency and readability.
 
 **Typography Rules:**
 - Use `display` for large numeric displays (memory, performance metrics)
-- Use `h1` for screen titles
-- Use `h2` for major sections
+- Use `h1` only for rare hero text, never for a screen title or a state such as "Ready"
+- Use `h2` for screen titles and major sections
 - Use `h3` for subsections within cards
 - Use `label` for uppercase labels and section markers ("whispers")
 - Use `meta` for secondary information (timestamps, performance data)
@@ -265,7 +268,7 @@ header: {
 
 ### Information Hierarchy
 
-1. **Primary:** Screen title (h1) or main content (body)
+1. **Primary:** Screen title (h2) or main content (body)
 2. **Secondary:** Section headers (h2, h3) or descriptions (bodySmall)
 3. **Tertiary:** Labels (label), metadata (meta), timestamps (metaSmall)
 
@@ -302,7 +305,9 @@ header: {
 ❌ **Multiple accent colors** — Emerald only
 ❌ **Rounded pill shapes** — Use minimal `8px` radius
 ❌ **Decorative animations** — Only functional animations (loading, state transitions)
-❌ **Mixed font families** — Menlo only
+❌ **Mixed font families** — `FONTS.mono` only (Menlo on iOS, Meslo LG on Android)
+❌ **Private styles** — a screen's own card, glass, type scale, or shadow instead of the shared tokens
+❌ **Placeholder frames** — a large empty box for something with no content yet
 ❌ **Heavy borders or 3D effects** — Keep edges crisp and elevation restrained
 ❌ **Large empty spaces without purpose** — Dense when appropriate
 ❌ **Color-coded information** — Use hierarchy, not color
@@ -376,7 +381,7 @@ When building or refactoring a component:
 - Mixed fonts
 
 **After (brutalist, minimal):**
-- Flat `COLORS.surface` background
+- `colors.surface` background with the shared card depth (border + `shadows.small`)
 - Single emerald accent for active state
 - Sharp `8px` border radius
 - Monospace font throughout
@@ -428,7 +433,7 @@ As the app evolves:
 - **Theme System:** `src/theme/` (palettes, hooks, style factory)
 - **Design Tokens:** `src/constants/index.ts` (typography, spacing, fonts)
 - **Codebase Guide:** `docs/standards/CODEBASE_GUIDE.md`
-- **Typography:** All Menlo, weights 200-400 only
+- **Typography:** `FONTS.mono` (Menlo on iOS, Meslo LG on Android), weights 200-400 only
 - **Inspiration:** Terminal UIs, Linear, Vercel, brutalist web design
 
 ---
