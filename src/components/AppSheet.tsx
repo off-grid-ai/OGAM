@@ -8,7 +8,6 @@ import React, {
 import {
   View,
   Text,
-  TouchableOpacity,
   TouchableWithoutFeedback,
   Modal,
   Animated,
@@ -18,6 +17,7 @@ import {
   Platform,
   Keyboard,
 } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, Switch, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, Platform } from 'react-native';
+import { Switch, TouchableOpacity } from '../../components/Touchable';
 import { AdvancedToggle, Card } from '../../components';
 import { SliderSetting } from '../../components/SliderSetting';
 import { Button } from '../../components/Button';

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, TouchableOpacity, Animated } from 'react-native';
+import { View, Animated } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../../theme';
 import { createStyles } from './styles';

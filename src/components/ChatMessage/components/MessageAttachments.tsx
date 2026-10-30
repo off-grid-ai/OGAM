@@ -3,9 +3,9 @@ import {
   View,
   Text,
   Image,
-  TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import { TouchableOpacity } from '../../Touchable';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,

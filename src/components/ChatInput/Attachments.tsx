@@ -5,10 +5,10 @@ import {
   Text,
   Image,
   ScrollView,
-  TouchableOpacity,
   Platform,
   ActionSheetIOS,
 } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import {
   launchImageLibrary,
   launchCamera,

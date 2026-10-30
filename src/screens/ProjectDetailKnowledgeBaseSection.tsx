@@ -2,11 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
-  Switch,
   FlatList,
   Platform,
 } from 'react-native';
+import { TouchableOpacity, Switch } from '../components/Touchable';
 import { useFocusEffect } from '@react-navigation/native';
 import { LIST_CLIPPING_PROPS } from '../constants/listClipping';
 import { LoadingDots } from '../components/LoadingDots';

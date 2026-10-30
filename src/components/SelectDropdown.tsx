@@ -3,10 +3,10 @@ import {
   Dimensions,
   Modal,
   Text,
-  TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { SPACING, TYPOGRAPHY } from '../constants';
 import type { ThemeColors, ThemeShadows } from '../theme';

@@ -7,7 +7,8 @@ import Video from 'react-native-video';
 import { useAppStore } from '../../stores/appStore';
 import { resolveDocumentPath } from '../../utils/resolveDocumentPath';
 import type { GeneratedVideo } from '../../types';
-import { View, Text, Image, TouchableOpacity, FlatList, Platform } from 'react-native';
+import { View, Text, Image, FlatList, Platform } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import { LIST_CLIPPING_PROPS } from '../../constants/listClipping';
 import Icon from 'react-native-vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +22,7 @@ import { createStyles, COLUMN_COUNT } from './styles';
 import { useGalleryActions } from './useGalleryActions';
 import { GalleryGridItem } from './GridItem';
 import { FullscreenViewer } from './FullscreenViewer';
+import { SCROLL_DEPTH_PROPS } from '../../constants/scrollDepth';
 
 type GalleryScreenRouteProp = RouteProp<RootStackParamList, 'Gallery'>;
 
@@ -253,6 +255,7 @@ export const GalleryScreen: React.FC = () => {
           </View>
         ) : (
           <FlatList
+            {...SCROLL_DEPTH_PROPS}
             data={displayVideos}
             keyExtractor={item => item.id}
             contentContainerStyle={styles.videoList}

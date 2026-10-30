@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Switch, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, Platform } from 'react-native';
+import { Switch, TouchableOpacity } from '../Touchable';
 import { Button } from '../Button';
 import { SliderSetting } from '../SliderSetting';
 import { useTheme, useThemedStyles } from '../../theme';

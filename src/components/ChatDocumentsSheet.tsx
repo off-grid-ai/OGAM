@@ -2,7 +2,8 @@
 // has been read, and a switch to leave one out of the answers. Tapping a row opens its pages.
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
+import { TouchableOpacity } from './Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import type { StoredDocument } from '@offgrid/rag/documents';
 import { AppSheet } from './AppSheet';

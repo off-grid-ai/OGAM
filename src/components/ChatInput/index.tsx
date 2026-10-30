@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Animated, Platform, ActionSheetIOS } from 'react-native';
+import { View, Text, TextInput, Animated, Platform, ActionSheetIOS } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { GodIcon } from '../GodIcon';
 import { useTheme, useThemedStyles } from '../../theme';

@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   TextInput,
   Linking,
   ScrollView,
 } from 'react-native';
+import { TouchableOpacity } from '../../components/Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import {
   projectPersonalMeshActivationFailure,

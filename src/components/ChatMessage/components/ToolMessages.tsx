@@ -7,7 +7,8 @@
  * bubble beyond the styles object.
  */
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { TouchableOpacity } from '../../Touchable';
 import Icon from 'react-native-vector-icons/Feather';
 import { parseSearchBlock } from '@offgrid/rag/documents';
 import { useTheme } from '../../../theme';

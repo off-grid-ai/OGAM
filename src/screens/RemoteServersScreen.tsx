@@ -10,10 +10,9 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   Linking,
-  Switch,
 } from 'react-native';
+import { TouchableOpacity, Switch } from '../components/Touchable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';

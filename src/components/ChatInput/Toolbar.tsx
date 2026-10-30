@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text } from 'react-native';
+import { TouchableOpacity } from '../Touchable';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/Feather';
 import type { ChatQueueHold } from '@offgrid/sync';

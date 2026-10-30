@@ -5,7 +5,8 @@
 
 import 'react-native-gesture-handler';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, Pressable, StyleSheet, LogBox } from 'react-native';
+import { View, Text, StyleSheet, LogBox } from 'react-native';
+import { Pressable } from './src/components/Touchable';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
