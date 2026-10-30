@@ -33,6 +33,7 @@ import {
   settingChangeKey,
   languageOnly,
   ms,
+  msSince,
   oneDecimal,
   releaseChannel,
   sizeBucket,
@@ -364,9 +365,9 @@ function sheetHidden(sheet: string): void {
   const index = part ? openSheets.lastIndexOf(part) : -1;
   if (index < 0) return;
   openSheets.splice(index, 1);
+  // A sheet opens only over a route, so the route and its view are known here.
   const top = openSheets[openSheets.length - 1];
-  const next = top && routeScreen ? `${routeScreen}:${top}` : routeView;
-  if (next) showView(next);
+  showView(top ? `${routeScreen}:${top}` : (routeView as string));
 }
 
 // ── session summary ────────────────────────────────────────────────────────────
@@ -426,7 +427,6 @@ function endSession(): void {
   const ended = session;
   session = null;
   if (ended && usageOn()) capture('session_summary', ended.summary(Date.now()));
-  cancelPersist();
   AsyncStorage.removeItem(PENDING_SESSION_KEY).catch(ignore);
 }
 
@@ -464,7 +464,9 @@ async function snapshotFeaturesDaily(): Promise<void> {
   if (last === today) return;
   await AsyncStorage.setItem(SNAPSHOT_DAY_KEY, today).catch(ignore);
   capture('features_snapshot', featureSnapshot());
-  if (usageSnapshot) capture('usage_snapshot', await usageSnapshot().catch(() => ({})));
+  // A snapshot that cannot be read is skipped, not sent empty.
+  const usage = usageSnapshot ? await usageSnapshot().catch(ignore) : undefined;
+  if (usage) capture('usage_snapshot', usage);
 }
 
 // ── flows ──────────────────────────────────────────────────────────────────────
@@ -564,7 +566,7 @@ function noteFirstMessage(): void {
     capture('first_message', {
       since_launch_ms: ms(now - moduleLoadedAt),
       first_ever: firstEver,
-      since_install_ms: installedAt && installedAt > 0 && installedAt <= now ? ms(now - installedAt) : undefined,
+      since_install_ms: msSince(installedAt, now),
     });
   })().catch(ignore);
 }

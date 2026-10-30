@@ -166,5 +166,12 @@ const COUNT_STEPS = [1000, 500, 250, 100, 50, 25, 10, 5, 2, 1];
 
 export function countBucket(count: number | null | undefined): number {
   if (typeof count !== 'number' || !Number.isFinite(count) || count < 1) return 0;
-  return COUNT_STEPS.find(step => count >= step) ?? 0;
+  // count >= 1 here, so the last step always matches.
+  return COUNT_STEPS.find(step => count >= step) as number;
+}
+
+/** Time from `start` to `now`, only when `start` is a real moment before now (a clock or an OS may say 0, -1 or later). */
+export function msSince(start: number | null | undefined, now: number): number | undefined {
+  if (typeof start !== 'number' || start <= 0 || start > now) return undefined;
+  return ms(now - start);
 }

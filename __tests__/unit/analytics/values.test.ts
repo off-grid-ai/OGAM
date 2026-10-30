@@ -14,6 +14,7 @@ import {
   languageOnly,
   modelRef,
   ms,
+  msSince,
   oneDecimal,
   releaseChannel,
   screenName,
@@ -150,5 +151,18 @@ describe('screen names, setting keys and usage counts', () => {
     expect([undefined, -3, 0, 1, 2, 4, 5, 9, 24, 26, 99, 101, 499, 999, 5000].map(countBucket)).toEqual([
       0, 0, 0, 1, 2, 2, 5, 5, 10, 25, 50, 100, 250, 500, 1000,
     ]);
+  });
+});
+
+describe('time since a moment the OS reports', () => {
+  it.each([
+    [1_000, 5_000, 4_000],
+    [undefined, 5_000, undefined],
+    [null, 5_000, undefined],
+    [0, 5_000, undefined],
+    [-1, 5_000, undefined],
+    [9_000, 5_000, undefined],
+  ])('from %p to %p is %p', (start, now, expected) => {
+    expect(msSince(start as number | null | undefined, now)).toBe(expected);
   });
 });

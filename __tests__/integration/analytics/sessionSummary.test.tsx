@@ -30,7 +30,11 @@ afterEach(async () => {
 });
 
 /** Launch analytics as a store build. `relaunch` keeps the disk of the previous launch. */
-async function launch(consent: { usage?: boolean; crashes?: boolean } | null, relaunch = false): Promise<Rig> {
+async function launch(
+  consent: { usage?: boolean; crashes?: boolean } | null,
+  relaunch = false,
+  usage?: () => Promise<Record<string, unknown>>,
+): Promise<Rig> {
   (global as unknown as { __DEV__: boolean }).__DEV__ = false;
   const AsyncStorageBefore = require('@react-native-async-storage/async-storage');
   if (!relaunch) await AsyncStorageBefore.clear();
@@ -43,7 +47,7 @@ async function launch(consent: { usage?: boolean; crashes?: boolean } | null, re
   const analytics: Analytics = require('../../../src/services/analytics/analytics');
   const { featureSnapshot } = require('../../../src/services/analytics/featureSnapshot');
   const { usageSnapshot } = require('../../../src/services/analytics/usageSnapshot');
-  const stop = analytics.startAnalytics(featureSnapshot, usageSnapshot);
+  const stop = analytics.startAnalytics(featureSnapshot, usage ?? usageSnapshot);
   if (consent) await analytics.setAnalyticsConsent(consent, 'settings');
   await new Promise(resolve => setTimeout(resolve, 20));
   const background = async () => {
@@ -217,4 +221,180 @@ it('Auto Setup shown before opt-in is sent when the person opts in there', async
   await waitFor(() => expect(endpoint.named('flow_step')).toHaveLength(1));
   expect(endpoint.named('flow_started')[0].properties.flow).toBe('onboarding');
   expect(endpoint.named('flow_step')[0].properties).toMatchObject({ flow: 'onboarding', step: 'setup_shown' });
+});
+
+const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+it('tabs, nested sheets and a tab picked under a sheet each show the right view; a tap before any screen counts as app', async () => {
+  const { analytics, endpoint, background } = await launch({ usage: true });
+  const { countPress, sheetShown, sheetHidden, subScreenShown } = require('../../../src/services/analytics/interactions');
+  // Nothing is on screen yet: a sheet or a tab has no screen to belong to.
+  sheetShown('model-selector');
+  subScreenShown('text');
+  countPress('send-button');
+  analytics.trackScreen('ModelsTab');
+  subScreenShown('text');
+  subScreenShown('text');
+  subScreenShown('');
+  sheetShown('');
+  sheetShown('catalog-check');
+  sheetShown('model-selector');
+  sheetHidden('model-selector');
+  sheetHidden('never-opened');
+  sheetHidden('');
+  sheetHidden('catalog-check');
+  subScreenShown('image');
+  sheetShown('voice-models');
+  subScreenShown('video');
+  sheetHidden('voice-models');
+  await background();
+
+  await waitFor(() => expect(endpoint.named('session_summary')).toHaveLength(1));
+  expect(endpoint.named('$screen').map(e => e.properties.screen)).toEqual([
+    'models',
+    'models:text',
+    'models:catalog-check',
+    'models:model-selector',
+    'models:catalog-check',
+    'models:text',
+    'models:image',
+    'models:voice-models',
+    'models:video',
+  ]);
+  expect(endpoint.named('session_summary')[0].properties.actions).toEqual({ 'app:send-button': 1 });
+});
+
+it('a tap in the background is not counted, and a session that ended leaves nothing on disk', async () => {
+  const { analytics, endpoint, background, boundary } = await launch({ usage: true });
+  const { countPress } = require('../../../src/services/analytics/interactions');
+  const AsyncStorage = require('@react-native-async-storage/async-storage');
+  analytics.trackScreen('Chat');
+  countPress('send-button');
+  await background();
+  countPress('send-button');
+  await pause(1_100);
+  expect(await AsyncStorage.getItem('offgrid.analytics.pendingSession')).toBeNull();
+  boundary.emitAppStateChange('active');
+  await background();
+  await waitFor(() => expect(endpoint.named('session_summary')).toHaveLength(2));
+  const [first, second] = endpoint.named('session_summary').map(e => e.properties);
+  expect(first.actions).toEqual({ 'chat:send-button': 1 });
+  expect(second.actions).toEqual({});
+});
+
+it('turning Anonymous stats off forgets the open session: nothing reaches the disk or PostHog', async () => {
+  const { analytics, endpoint, background } = await launch({ usage: true });
+  const { countPress } = require('../../../src/services/analytics/interactions');
+  const AsyncStorage = require('@react-native-async-storage/async-storage');
+  analytics.trackScreen('Chat');
+  countPress('send-button');
+  await analytics.setAnalyticsConsent({ usage: false, crashes: false }, 'settings');
+  await pause(1_100);
+  expect(await AsyncStorage.getItem('offgrid.analytics.pendingSession')).toBeNull();
+  await background();
+  expect(endpoint.named('session_summary')).toEqual([]);
+});
+
+it('a left-over session that is unreadable, empty, or from before opting out is dropped, not sent', async () => {
+  const AsyncStorage = require('@react-native-async-storage/async-storage');
+  const first = await launch({ usage: true });
+  await first.background();
+  for (const raw of ['{not json', '{}']) {
+    await AsyncStorage.setItem('offgrid.analytics.pendingSession', raw);
+    const next = await launch(null, true);
+    await next.background();
+    await waitFor(() => expect(next.endpoint.named('session_summary')).toHaveLength(1));
+    expect(next.endpoint.named('session_summary')[0].properties.recovered).toBeUndefined();
+    expect(await AsyncStorage.getItem('offgrid.analytics.pendingSession')).toBeNull();
+  }
+  // Opted out since: the counts of the old session are not sent.
+  await first.analytics.setAnalyticsConsent({ usage: false, crashes: false }, 'settings');
+  const left = { startedAt: 1_000, lastAt: 2_000, foregroundMs: 0, foregroundSince: 1_000, screens: ['chat'], screenViews: 1, maxScroll: {}, counters: { actions: { 'chat:send-button': 1 } } };
+  await AsyncStorage.setItem('offgrid.analytics.pendingSession', JSON.stringify(left));
+  const optedOut = await launch(null, true);
+  await optedOut.background();
+  await pause(50);
+  expect(optedOut.endpoint.events).toEqual([]);
+  expect(await AsyncStorage.getItem('offgrid.analytics.pendingSession')).toBeNull();
+});
+
+it('a usage snapshot that cannot be read is skipped; the features snapshot still goes', async () => {
+  const rig = await launch(null, false, () => Promise.reject(new Error('database locked')));
+  await rig.analytics.setAnalyticsConsent({ usage: true }, 'settings');
+  await rig.background();
+  rig.boundary.emitAppStateChange('active');
+  await pause(300);
+  await rig.background();
+  await waitFor(() => expect(rig.endpoint.named('features_snapshot')).toHaveLength(1));
+  expect(rig.endpoint.named('usage_snapshot')).toEqual([]);
+});
+
+it('opting in on Auto Setup sends only what the onboarding flow had: nothing, or its start without a step', async () => {
+  const none = await launch(null);
+  await none.analytics.setAnalyticsConsent({ usage: true }, 'setup');
+  await none.background();
+  await waitFor(() => expect(none.endpoint.named('analytics_opted_in')).toHaveLength(1));
+  expect(none.endpoint.named('flow_started')).toEqual([]);
+
+  const started = await launch(null);
+  started.analytics.flowStarted('onboarding');
+  await started.analytics.setAnalyticsConsent({ usage: true }, 'setup');
+  await started.background();
+  await waitFor(() => expect(started.endpoint.named('flow_started')).toHaveLength(1));
+  expect(started.endpoint.named('flow_step')).toEqual([]);
+});
+
+it('image and video picks report where they were made, from setup, home, settings, video and elsewhere', async () => {
+  const { analytics, endpoint, background } = await launch({ usage: true });
+  const { useAppStore } = require('../../../src/stores/appStore');
+  const pick = (screen: string, kind: 'image' | 'video', id: string) => {
+    analytics.trackScreen(screen);
+    if (kind === 'image') useAppStore.getState().setActiveImageModelId(id);
+    else useAppStore.getState().setActiveVideoModelId(id);
+  };
+  // Before any screen is shown (a pick restored at launch).
+  useAppStore.getState().setActiveVideoModelId('wan2.2-5b');
+  pick('AutoSetup', 'image', 'sd-turbo');
+  pick('HomeTab', 'image', 'anythingv5_cpu');
+  pick('SettingsTab', 'video', 'wan2.2-5b-final');
+  pick('ModelSettings', 'image', 'sd-turbo');
+  pick('VideoStudio', 'video', 'ltx-video');
+  pick('Gallery', 'image', 'local_my_import');
+  useAppStore.getState().setActiveImageModelId(null);
+  useAppStore.getState().setActiveVideoModelId(null);
+  await background();
+  await waitFor(() => expect(endpoint.named('model_selected')).toHaveLength(7));
+  expect(endpoint.named('model_selected').map(e => [e.properties.modality, e.properties.model, e.properties.source])).toEqual([
+    ['video', 'wan2.2-5b', 'unknown'],
+    ['image', 'sd-turbo', 'setup'],
+    ['image', 'anythingv5_cpu', 'home'],
+    ['video', 'wan2.2-5b-final', 'settings'],
+    ['image', 'sd-turbo', 'settings'],
+    ['video', 'ltx-video', 'video'],
+    ['image', 'custom', 'unknown'],
+  ]);
+});
+
+it('the first message of a later launch is not the first ever; a video follow-on and a video clip report their facts', async () => {
+  const first = await launch({ usage: true });
+  first.analytics.messageSent({ hasImage: false, hasDocument: false, toolsEnabled: false });
+  await pause(20);
+  await first.background();
+  await waitFor(() => expect(first.endpoint.named('first_message')).toHaveLength(1));
+
+  const later = await launch(null, true);
+  later.analytics.messageSent({ hasImage: false, hasDocument: false, toolsEnabled: false });
+  later.analytics.videoAction('extend');
+  const facts = { model: 'wan2.2-5b', engine: 'sd.cpp', backend: 'gpu' };
+  later.analytics.generationStarted('video', facts)('done', { durationMs: 61_000, hasInitImage: true, quality: 'draft', story: true });
+  later.analytics.generationStarted('video', facts)('failed', { error: Object.assign(new Error('x'), { code: 'out_of_memory' }) });
+  await pause(50);
+  await later.background();
+  await waitFor(() => expect(later.endpoint.named('generation_finished')).toHaveLength(2));
+  expect(later.endpoint.named('first_message')[0].properties).toMatchObject({ first_ever: false });
+  expect(later.endpoint.named('first_message')[0].properties.since_install_ms).toBeUndefined();
+  expect(later.endpoint.named('video_action')[0].properties.action).toBe('extend');
+  const [done, failed] = later.endpoint.named('generation_finished').map(e => e.properties);
+  expect(done).toMatchObject({ modality: 'video', duration_ms: 61_000, has_init_image: true, quality: 'draft', story: true });
+  expect(failed).toMatchObject({ modality: 'video', outcome: 'failed', error_code: 'out_of_memory', has_init_image: false, quality: 'final', story: false });
 });
