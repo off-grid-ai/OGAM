@@ -2,7 +2,7 @@
  * A clip made before an iOS update still continues and still saves.
  *
  * SPEC (OGAM user's view): I made a clip. The app is updated (iOS gives it a new container; the clip moves
- * with it). Under the clip, Continue starts the next clip from its last frame, and Save in the viewer saves
+ * with it). Under the clip, Extend starts the next clip from its last frame, and Save in the viewer saves
  * that clip. (iPhone 17 Pro Max, 2026-10-28: the clip's saved path still named the old container, so reads
  * that used it as it was found no file.)
  *
@@ -22,7 +22,7 @@ const CLIP = 'a red fox trotting through fresh snow';
 /** The app container the clip was made in. iOS gives the updated app a new one. */
 const OLD_CONTAINER = '/var/mobile/Containers/Data/Application/F2899DBD-0000-4000-8000-000000000000/Documents';
 
-it('after an update, Continue starts from the clip\'s last frame and Save saves the clip', async () => {
+it('after an update, Extend starts from the clip\'s last frame and Save saves the clip', async () => {
   const first = await launchStudioApp(undefined, { phoneEngine: true });
   await makeClipInChat(first, CLIP);
   const docs = first.boundary.fs!.DocumentDirectoryPath;
@@ -48,14 +48,15 @@ it('after an update, Continue starts from the clip\'s last frame and Save saves 
   rtl.fireEvent.press(await view.findByTestId('chats-tab'));
   rtl.fireEvent.press(await view.findByTestId('conversation-item-0', {}, { timeout: 10_000 }));
 
-  // Continue: the clip's last frame goes to the computer.
+  // Extend: the clip's last frame goes to the computer.
   app.models.install(LIGHT);
   rtl.fireEvent.press(await view.findByTestId('video-continue', {}, { timeout: 10_000 }));
   rtl.fireEvent.press(await view.findByTestId('start-picture-use', {}, { timeout: 10_000 }));
+  rtl.fireEvent.press(await view.findByTestId('start-picture-carry-on', {}, { timeout: 15_000 }));
+  rtl.fireEvent.press(await view.findByTestId('extend-go', {}, { timeout: 10_000 }));
   await rtl.waitFor(() => expect(app.stories.submissions).toHaveLength(1), { timeout: 15_000 });
   const sent = app.stories.submissions[0] as { init_images: Record<string, string> };
   expect(Object.values(sent.init_images)[0]).toMatch(/^data:image\/png;base64,/);
-  rtl.fireEvent.press(view.getByTestId('start-picture-done'));
 
   // Save, from the viewer: the clip in this container is what is saved.
   rtl.fireEvent.press(view.getAllByLabelText('Back').pop()!);

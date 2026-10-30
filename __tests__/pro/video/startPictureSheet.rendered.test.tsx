@@ -104,7 +104,8 @@ it('follows the download already running on the computer, then Continue turns on
   // No second download was started; the computer switched to the build that landed.
   expect(models!.pulls).toEqual([]);
   expect(models!.activations).toEqual([DESKTOP_VIDEO_MODEL.id, LIGHT]);
-  rtl.fireEvent.press(view.getByTestId('start-picture-done'));
+  rtl.fireEvent.press(view.getByTestId('start-picture-carry-on'));
+  await view.findByTestId('extend-sheet', {}, { timeout: 10_000 });
   await rtl.waitFor(() =>
     expect(view.getAllByTestId('video-continue')[0].props.accessibilityState?.disabled).toBe(false),
   );
@@ -136,7 +137,7 @@ it('offers the Light build on a computer without clear room for Full quality, an
   const current = await clipInChat({ memoryGb: 34 });
   const { view, rtl } = current;
   await tapMutedContinue(current);
-  await view.findByText('Continue needs Wan 2.2 (5B), Light, a 7.9 GB download.', {}, { timeout: 10_000 });
+  await view.findByText('Extend needs Wan 2.2 (5B), Light, a 7.9 GB download.', {}, { timeout: 10_000 });
   expect(view.getByTestId('start-picture-describe')).toBeTruthy();
   models!.hold();
   rtl.fireEvent.press(view.getByTestId('start-picture-download'));
@@ -149,13 +150,13 @@ it('offers the Light build on a computer without clear room for Full quality, an
 it('offers Full quality on a computer with clear room', async () => {
   const current = await clipInChat({ memoryGb: 64 });
   await tapMutedContinue(current);
-  await current.view.findByText('Continue needs Wan 2.2 (5B), a 10.4 GB download.', {}, { timeout: 10_000 });
+  await current.view.findByText('Extend needs Wan 2.2 (5B), a 10.4 GB download.', {}, { timeout: 10_000 });
 }, 60_000);
 
 it('offers the Light build to an older Desktop that does not report its memory', async () => {
   const current = await clipInChat({});
   await tapMutedContinue(current);
-  await current.view.findByText('Continue needs Wan 2.2 (5B), Light, a 7.9 GB download.', {}, { timeout: 10_000 });
+  await current.view.findByText('Extend needs Wan 2.2 (5B), Light, a 7.9 GB download.', {}, { timeout: 10_000 });
 }, 60_000);
 
 it('says a computer is too small, and offers a new clip from a description', async () => {
@@ -176,12 +177,13 @@ it('uses a start-picture build installed on the computer since the phone last lo
   const { view, rtl } = current;
   models!.install(LIGHT);
   await tapMutedContinue(current);
-  await view.findByText('Continue needs Wan 2.2 (5B), Light. It is on your computer.', {}, { timeout: 10_000 });
+  await view.findByText('Extend needs Wan 2.2 (5B), Light. It is on your computer.', {}, { timeout: 10_000 });
   rtl.fireEvent.press(view.getByTestId('start-picture-use'));
   await view.findByText('Wan 2.2 (5B), Light is ready.', {}, { timeout: 15_000 });
   expect(models!.pulls).toEqual([]);
   expect(models!.activations).toEqual([DESKTOP_VIDEO_MODEL.id, LIGHT]);
-  rtl.fireEvent.press(view.getByTestId('start-picture-done'));
+  rtl.fireEvent.press(view.getByTestId('start-picture-carry-on'));
+  await view.findByTestId('extend-sheet', {}, { timeout: 10_000 });
   await rtl.waitFor(() =>
     expect(view.getAllByTestId('video-continue')[0].props.accessibilityState?.disabled).toBe(false),
   );
@@ -211,7 +213,7 @@ it('the viewer\'s muted Continue opens the same sheet', async () => {
   expect(continueAction.props.accessibilityState?.disabled).toBe(true);
   expect(view.queryByTestId('start-picture-sheet')).toBeNull();
   rtl.fireEvent.press(continueAction);
-  await view.findByText('Continue needs Wan 2.2 (5B), Light, a 7.9 GB download.', {}, { timeout: 10_000 });
+  await view.findByText('Extend needs Wan 2.2 (5B), Light, a 7.9 GB download.', {}, { timeout: 10_000 });
 }, 60_000);
 
 it('says to connect a computer when none is paired, instead of checking one forever', async () => {

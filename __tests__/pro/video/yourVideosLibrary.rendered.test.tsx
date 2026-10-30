@@ -47,30 +47,8 @@ it('lists the clip under All and Clips, not Stories, and plays it full screen', 
   expect(item).toHaveLength(1);
   rtl.fireEvent.press(item[0]);
   await view.findByTestId('video-viewer', {}, { timeout: 10_000 });
-  expect(view.getByTestId('viewer-new-shot')).toBeTruthy();
-}, 60_000);
-
-it('New shot from the viewer is made on the computer, then Watch plays it', async () => {
-  const app = await launchStudioApp();
-  const { view, rtl } = app;
-  await makeClipInChat(app, CLIP);
-  await openLibrary(app);
-  rtl.fireEvent.press(view.getAllByTestId(/^library-item-/)[0]);
-  await view.findByTestId('video-viewer', {}, { timeout: 10_000 });
-
-  app.stories.hold();
-  rtl.fireEvent.press(view.getByTestId('viewer-new-shot'));
-  await view.findByTestId('video-making', {}, { timeout: 10_000 });
-  // The next clip is a one-shot film on the computer, from this clip's description.
-  await rtl.waitFor(() => expect(app.stories.submissions).toHaveLength(1), { timeout: 10_000 });
-  expect(JSON.stringify(app.stories.submissions[0])).toContain(CLIP);
-  expect(view.queryByTestId('making-watch')).toBeNull();
-  app.stories.release();
-  rtl.fireEvent.press(await view.findByTestId('making-watch', {}, { timeout: 20_000 }));
-  // Watch goes back to the viewer, now on the new clip.
-  await rtl.waitFor(() => expect(view.queryByTestId('video-making')).toBeNull());
-  expect(view.getByTestId('video-viewer')).toBeTruthy();
-  expect(view.getByText(/new camera angle/i)).toBeTruthy();
+  expect(view.getByTestId('viewer-continue')).toBeTruthy();
+  expect(view.queryByTestId('viewer-new-shot')).toBeNull();
 }, 60_000);
 
 it('Delete asks first, then removes the clip; + opens a chat', async () => {
