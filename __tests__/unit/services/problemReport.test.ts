@@ -31,9 +31,11 @@ interface Shared {
 const composed: Composed[] = [];
 const shared: Shared[] = [];
 let mailApp = true;
+let mailAppCrashes = false;
 const rn = require('react-native');
 rn.NativeModules.ProblemReportModule = {
   composeEmail: async (to: string, subject: string, body: string, attachmentPath?: string) => {
+    if (mailAppCrashes) throw new Error('No activity found to handle the mail intent');
     if (!mailApp) return false;
     composed.push({ to, subject, body, attachmentPath });
     return true;
@@ -74,6 +76,7 @@ describe('Report a problem', () => {
     modelTransferFsBoundary.seedDir(modelTransferFsBoundary.DocumentDirectoryPath);
     composed.length = 0;
     shared.length = 0;
+    mailAppCrashes = false;
   });
 
   afterEach(() => {
@@ -127,5 +130,71 @@ describe('Report a problem', () => {
     expect(options.subject).toBe('[Problem] Off Grid AI v0.0.103');
     expect(content.message).toContain('support@getoffgridai.co');
     expect(content.message).toContain('download stopped at 40%');
+  });
+
+  it('when the mail app fails to open, the share sheet takes over with the log file on iOS', async () => {
+    const app = load('ios', true);
+    stop = app.stop;
+    app.log('model load timed out');
+    mailAppCrashes = true;
+
+    await app.sendProblemReport();
+
+    expect(app.composed).toHaveLength(0);
+    expect(app.shared).toHaveLength(1);
+    const [{ content }] = app.shared;
+    expect(content.message).toContain('support@getoffgridai.co');
+    expect(content.url).toBe(`file://${app.logPath}`);
+  });
+
+  it('a log the phone cannot read still sends the report, without the log', async () => {
+    const app = load('android', true);
+    stop = app.stop;
+    app.log('this line cannot be read back');
+    // The disk refuses the read (the file-system boundary).
+    modelTransferFsBoundary.module.readFile.mockRejectedValueOnce(new Error('EIO: i/o error'));
+
+    await app.sendProblemReport();
+
+    const [mail] = app.composed;
+    expect(mail.subject).toBe('[Problem] Off Grid AI v0.0.103');
+    expect(mail.body).toContain('What went wrong:');
+    expect(mail.body).not.toContain('this line cannot be read back');
+  });
+
+  it('with no log on disk, iOS still opens the mail, with nothing attached', async () => {
+    const app = load('ios', true);
+    stop = app.stop;
+    app.stop();
+    stop = undefined;
+    await modelTransferFsBoundary.module.unlink(app.logPath).catch(() => undefined);
+
+    await app.sendProblemReport();
+
+    const [mail] = app.composed;
+    expect(mail.to).toBe('support@getoffgridai.co');
+    expect(mail.attachmentPath).toBe('');
+    expect(mail.body).toContain('What went wrong:');
+  });
+
+  it('an app build without the mail module goes straight to the share sheet', async () => {
+    const app = load('android', true);
+    stop = app.stop;
+    app.log('older build');
+    const module = rn.NativeModules.ProblemReportModule;
+    delete rn.NativeModules.ProblemReportModule;
+    try {
+      let sendWithoutMail: () => Promise<void> = async () => undefined;
+      jest.isolateModules(() => {
+        sendWithoutMail = require('../../../src/services/problemReport').sendProblemReport;
+      });
+      await sendWithoutMail();
+    } finally {
+      rn.NativeModules.ProblemReportModule = module;
+    }
+
+    expect(app.composed).toHaveLength(0);
+    expect(app.shared).toHaveLength(1);
+    expect(app.shared[0].content.message).toContain('support@getoffgridai.co');
   });
 });
