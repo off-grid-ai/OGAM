@@ -22,6 +22,11 @@ const uiPackagePath = path.resolve(__dirname, '../shared/packages/ui');
 // @offgrid/speech: voice-turn decisions (when a spoken turn begins and ends) shared with desktop.
 // Out-of-root like sync, so Metro must watch it and be pointed at its built entry.
 const speechPackagePath = path.resolve(__dirname, '../shared/packages/speech');
+// @offgrid/writing (Scribe engine) and @offgrid/notes (links, history rules): pure TS, prebuilt
+// CJS. Writing loads its dictionary lazily from a sibling chunk in dist/, so map the entry file and
+// let Metro resolve the chunk beside it.
+const writingPackagePath = path.resolve(__dirname, '../shared/packages/writing');
+const notesPackagePath = path.resolve(__dirname, '../shared/packages/notes');
 const sharedNodeModulesPath = path.resolve(__dirname, '../shared/node_modules');
 const syncRuntimeModules = {
   '@noble/hashes/hkdf': path.resolve(sharedNodeModulesPath, '@noble/hashes/hkdf.js'),
@@ -38,6 +43,8 @@ const config = {
     ragPackagePath,
     modelsPackagePath,
     speechPackagePath,
+    writingPackagePath,
+    notesPackagePath,
     uiPackagePath,
     sharedNodeModulesPath,
   ],
@@ -65,6 +72,8 @@ const config = {
       '@offgrid/models': path.resolve(modelsPackagePath, 'dist/index.js'),
       '@offgrid/speech': path.resolve(speechPackagePath, 'dist/index.cjs'),
       '@offgrid/ui': path.resolve(uiPackagePath, 'dist/index.js'),
+      '@offgrid/writing': path.resolve(writingPackagePath, 'dist/index.cjs'),
+      '@offgrid/notes': path.resolve(notesPackagePath, 'dist/index.cjs'),
       // @offgrid/sync owns this dependency in its package manifest. Metro still needs the
       // out-of-root file dependency mapped to a watched, built CommonJS entry.
       '@offgrid/automation': path.resolve(automationPackagePath, 'dist/index.js'),
