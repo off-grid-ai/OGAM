@@ -15,6 +15,7 @@ import {
   ms,
   oneDecimal,
   releaseChannel,
+  screenName,
   sizeBucket,
   toolFeature,
 } from '../../../src/services/analytics/values';
@@ -113,5 +114,20 @@ describe('analytics value rules', () => {
 
   it('a dropped failure resolves to nothing', () => {
     expect(ignore()).toBeUndefined();
+  });
+});
+
+describe('screen names, setting keys and usage counts', () => {
+  it.each([
+    ['HomeTab', 'home'],
+    ['ModelsTab', 'models'],
+    ['ProjectDetail', 'project-detail'],
+    ['AutoSetup', 'auto-setup'],
+    ['text', 'text'],
+    ['model-selector', 'model-selector'],
+    ['', null],
+    [undefined, null],
+  ])('screen %s → %s', (name, screen) => {
+    expect(screenName(name)).toBe(screen);
   });
 });

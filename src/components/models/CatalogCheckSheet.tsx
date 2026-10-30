@@ -20,7 +20,7 @@ export const CatalogCheckSheet: React.FC<{ result: CatalogCheckResult | null; on
           ? 'Up to date'
           : "Couldn't check for new models";
   return (
-    <AppSheet visible={result !== null} onClose={onClose} enableDynamicSizing title={title}>
+    <AppSheet sheet="catalog-check" visible={result !== null} onClose={onClose} enableDynamicSizing title={title}>
       <ScrollView contentContainerStyle={styles.content} testID="catalog-check-sheet">
         {result?.status === 'new' && result.names.map(name => (
           <View key={name} style={styles.row}>

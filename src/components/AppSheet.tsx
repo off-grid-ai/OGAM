@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import { createStyles } from './AppSheet.styles';
+import { sheetHidden, sheetShown } from '../services/analytics/interactions';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -46,6 +47,11 @@ export interface AppSheetProps {
   elevation?: 'level3' | 'level4';
   /** Prevent every user-driven dismissal path while a critical action runs. */
   dismissible?: boolean;
+  /**
+   * A fixed name for analytics (docs/ANALYTICS.md): while open, the sheet counts as the screen
+   * `<screen>:<sheet>`. Never the title or anything the person typed.
+   */
+  sheet?: string;
   children: React.ReactNode;
 }
 
@@ -117,6 +123,15 @@ function createSheetPanResponder({
   });
 }
 
+/** While the named sheet is open it counts as the screen `<screen>:<sheet>` (docs/ANALYTICS.md). */
+function useSheetAnalytics(visible: boolean, sheet: string | undefined): void {
+  useEffect(() => {
+    if (!visible || !sheet) return undefined;
+    sheetShown(sheet);
+    return () => sheetHidden(sheet);
+  }, [visible, sheet]);
+}
+
 export const AppSheet: React.FC<AppSheetProps> = ({
   visible,
   onClose,
@@ -131,8 +146,10 @@ export const AppSheet: React.FC<AppSheetProps> = ({
   showHandle = true,
   elevation = 'level3',
   dismissible = true,
+  sheet,
   children,
 }) => {
+  useSheetAnalytics(visible, sheet);
   const { elevation: elevationTokens } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { bottom: bottomInset } = useSafeAreaInsets();

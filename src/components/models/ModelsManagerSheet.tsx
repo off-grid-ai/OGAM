@@ -120,6 +120,7 @@ export const ModelsManagerSheet: React.FC<Props> = ({
 
   return (
     <AppSheet
+      sheet="models-manager"
       visible={visible}
       onClose={onClose}
       onClosed={onClosed}

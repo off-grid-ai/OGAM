@@ -553,6 +553,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onAssistantPress={handleAssistantPress}
       />
       <AppSheet
+        sheet="assistant-gate"
         visible={assistantGateOpen}
         onClose={() => setAssistantGateOpen(false)}
         title={assistantGate.title}
@@ -721,6 +722,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onClose={() => setAlertState(hideAlert())}
       />
       <AppSheet
+        sheet="assistant-gate"
         visible={assistantGateOpen}
         onClose={() => setAssistantGateOpen(false)}
         title={assistantGate.title}

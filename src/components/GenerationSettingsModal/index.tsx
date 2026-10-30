@@ -65,6 +65,7 @@ export const GenerationSettingsModal: React.FC<
 
   return (
     <AppSheet
+      sheet="generation-settings"
       visible={visible}
       onClose={onClose}
       snapPoints={['50%', '90%']}

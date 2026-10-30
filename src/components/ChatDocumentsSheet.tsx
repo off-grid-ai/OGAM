@@ -80,7 +80,7 @@ const ChatDocumentsSheet: React.FC<ChatDocumentsSheetProps> = ({
   };
 
   return (
-    <AppSheet visible={visible} onClose={onClose} snapPoints={['45%']} title="Documents in this chat">
+    <AppSheet sheet="chat-documents" visible={visible} onClose={onClose} snapPoints={['45%']} title="Documents in this chat">
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {documents.map((document) => {
           const out = excluded.has(document.documentId);

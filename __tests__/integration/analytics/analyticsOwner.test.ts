@@ -247,9 +247,9 @@ it('sends a daily features snapshot once per day and survives unreadable storage
   expect(snapshots.length).toBeGreaterThanOrEqual(1);
   expect(snapshots[0].properties).toMatchObject({ voice_input: false, image_generation: false, vision: false, web_search: true, tools: true, remote_server: false });
   const [home, settings] = endpoint.named('$screen').map(e => e.properties);
-  expect(home).toMatchObject({ screen: 'HomeTab' });
+  expect(home).toMatchObject({ screen: 'home' });
   expect(home.prev_screen).toBeUndefined();
-  expect(settings).toMatchObject({ screen: 'Settings', prev_screen: 'HomeTab' });
+  expect(settings).toMatchObject({ screen: 'settings', prev_screen: 'home' });
   expect(typeof settings.prev_ms).toBe('number');
 });
 
@@ -365,7 +365,7 @@ it('time on a screen stops while the app is in the background', async () => {
   analytics.trackScreen('Chat');
   await flush();
   await waitFor(() => expect(endpoint.named('$screen')).toHaveLength(2));
-  expect(endpoint.named('$screen')[1].properties).toMatchObject({ screen: 'Chat', prev_screen: 'HomeTab' });
+  expect(endpoint.named('$screen')[1].properties).toMatchObject({ screen: 'chat', prev_screen: 'home' });
 });
 
 it('a failed model download asks someone who has not opted in, and sends nothing', async () => {

@@ -39,3 +39,29 @@ export function countErrorShown(where: string): void {
 export function reportScroll(fraction: number): void {
   sink?.scrolled(scrollBucket(fraction));
 }
+
+export interface ScreenSink {
+  subScreen(name: string): void;
+  sheetShown(name: string): void;
+  sheetHidden(name: string): void;
+}
+
+let screens: ScreenSink | null = null;
+
+export function setScreenSink(next: ScreenSink | null): void {
+  screens = next;
+}
+
+/** A tab inside the current screen opened: reported as `<screen>:<tab>`. */
+export function subScreenShown(name: string): void {
+  screens?.subScreen(name);
+}
+
+/** A sheet or modal opened over the current screen: reported as `<screen>:<sheet>`. */
+export function sheetShown(name: string): void {
+  screens?.sheetShown(name);
+}
+
+export function sheetHidden(name: string): void {
+  screens?.sheetHidden(name);
+}

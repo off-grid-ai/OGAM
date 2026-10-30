@@ -20,12 +20,14 @@ import { analyticsBuildAllowed, createAnalyticsClient, type AnalyticsClient } fr
 import { scrubExceptionProperties } from './scrub';
 import { markForeground, markStageEnded, markStageStarted, takeUncleanExit } from './uncleanExit';
 import { maybePromptAfterFailure, maybePromptAfterFirstChat } from './consentPrompt';
+import { setScreenSink } from './interactions';
 import {
   batteryPct,
   bytesToGb,
   contextBucket,
   errorCode,
   ignore,
+  screenName,
   languageOnly,
   ms,
   oneDecimal,
@@ -203,6 +205,7 @@ export function startAnalytics(features: () => Record<string, boolean>): () => v
     const pro = selectHasProAccess(state);
     if (pro !== selectHasProAccess(prev)) client?.register({ pro });
   });
+  setScreenSink({ subScreen: trackSubScreen, sheetShown, sheetHidden });
   foregroundAt = Date.now();
   stopAppState?.();
   const appStateSubscription = AppState.addEventListener('change', onAppStateChange);
@@ -230,6 +233,7 @@ export function startAnalytics(features: () => Record<string, boolean>): () => v
     stopListening = null;
     stopAppState?.();
     stopAppState = null;
+    setScreenSink(null);
     const previous = client;
     client = null;
     previous?.close().catch(ignore);
@@ -274,9 +278,9 @@ function appBackgrounded(): void {
   capture('app_backgrounded', { session_ms: ms(Date.now() - foregroundAt) });
 }
 
-/** A route name only (never params). */
-export function trackScreen(name: string | undefined): void {
-  if (!name || name === currentScreen) return;
+/** Show a view: the route, a tab inside it (`models:text`) or a sheet over it (`chat:model-selector`). */
+function showView(name: string): void {
+  if (name === currentScreen) return;
   const now = Date.now();
   const shownMs = screenShownAt === null ? 0 : now - screenShownAt;
   const prevMs = currentScreen ? screenElapsed + shownMs : undefined;
@@ -284,6 +288,48 @@ export function trackScreen(name: string | undefined): void {
   currentScreen = name;
   screenShownAt = now;
   screenElapsed = 0;
+}
+
+/** The route the person is on (never params), in the spec's form: `ProjectDetail` → `project-detail`. */
+let routeScreen: string | null = null;
+/** The route, or the tab shown inside it. */
+let routeView: string | null = null;
+const openSheets: string[] = [];
+
+/** A route name only (never params). */
+export function trackScreen(name: string | undefined): void {
+  const screen = screenName(name);
+  if (!screen || screen === routeScreen) return;
+  routeScreen = screen;
+  routeView = screen;
+  openSheets.length = 0;
+  showView(screen);
+}
+
+/** A tab inside the current route, e.g. the Models screen's tabs: `models:<tab>`. */
+function trackSubScreen(sub: string): void {
+  const part = screenName(sub);
+  if (!routeScreen || !part) return;
+  routeView = `${routeScreen}:${part}`;
+  if (openSheets.length === 0) showView(routeView);
+}
+
+/** A sheet or modal over the current route: `<screen>:<sheet>`. */
+function sheetShown(sheet: string): void {
+  const part = screenName(sheet);
+  if (!routeScreen || !part) return;
+  openSheets.push(part);
+  showView(`${routeScreen}:${part}`);
+}
+
+function sheetHidden(sheet: string): void {
+  const part = screenName(sheet);
+  const index = part ? openSheets.lastIndexOf(part) : -1;
+  if (index < 0) return;
+  openSheets.splice(index, 1);
+  const top = openSheets[openSheets.length - 1];
+  const next = top && routeScreen ? `${routeScreen}:${top}` : routeView;
+  if (next) showView(next);
 }
 
 async function snapshotFeaturesDaily(): Promise<void> {

@@ -48,7 +48,7 @@ export const SettingsOptionSelect: React.FC<SettingsOptionSelectProps> = ({
       </TouchableOpacity>
       {description ? <Text style={styles.description}>{description}</Text> : null}
 
-      <AppSheet visible={open} onClose={() => setOpen(false)} title={`Select ${label}`} enableDynamicSizing>
+      <AppSheet sheet="option-select" visible={open} onClose={() => setOpen(false)} title={`Select ${label}`} enableDynamicSizing>
         <ScrollView contentContainerStyle={styles.options} keyboardShouldPersistTaps="handled">
           {options.map((option) => {
             const active = option.value === value;

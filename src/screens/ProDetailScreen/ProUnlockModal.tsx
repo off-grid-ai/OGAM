@@ -122,6 +122,7 @@ export const ProUnlockModal: React.FC<Props> = ({
 
   return (
     <AppSheet
+      sheet="pro-unlock"
       visible={sheetVisible}
       onClose={success ? finishSuccess : close}
       onHeaderClosePress={success ? finishSuccess : close}

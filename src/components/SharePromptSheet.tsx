@@ -32,7 +32,7 @@ export const SharePromptSheet: React.FC<SharePromptSheetProps> = ({ visible, onC
   };
 
   return (
-    <AppSheet visible={visible} onClose={onClose} enableDynamicSizing title="Support Open-Source AI">
+    <AppSheet sheet="share-prompt" visible={visible} onClose={onClose} enableDynamicSizing title="Support Open-Source AI">
       <View style={styles.content}>
         <Text style={styles.message}>
           Off Grid AI is completely free, open-source, and private - your chats and files never leave your device. Help grow the movement for accessible, private AI by spreading the word.

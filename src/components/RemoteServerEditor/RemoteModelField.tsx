@@ -67,6 +67,7 @@ export const RemoteModelField: React.FC<Props> = ({
             <Icon name="chevron-right" size={16} color={colors.textMuted} />
           </AnimatedPressable>
           <AppSheet
+            sheet="remote-model-picker"
             visible={open}
             onClose={() => setOpen(false)}
             title={label.toUpperCase()}

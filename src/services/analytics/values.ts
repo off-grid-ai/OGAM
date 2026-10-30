@@ -112,3 +112,19 @@ export function computeBackend(setting: string | undefined): 'cpu' | 'gpu' | 'np
   if (setting === 'metal' || setting === 'opencl' || setting === 'gpu' || setting === 'coreml') return 'gpu';
   return 'cpu';
 }
+
+const SCREEN_NAME = /^[a-z0-9][a-z0-9:_-]{0,47}$/;
+
+/**
+ * A route, tab or sheet name in the spec's form (the same as OGAD): `ProjectDetail` → `project-detail`,
+ * `ModelsTab` → `models`. Null when nothing usable is left.
+ */
+export function screenName(name: string | null | undefined): string | null {
+  const screen = (name ?? '')
+    .replace(/(Tab|Screen)$/, '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .toLowerCase()
+    .replace(/[^a-z0-9:_-]+/g, '-')
+    .replace(/^[-:_]+|[-:_]+$/g, '');
+  return SCREEN_NAME.test(screen) ? screen : null;
+}

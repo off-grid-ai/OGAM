@@ -35,6 +35,7 @@ export const ProjectSelectorSheet: React.FC<ProjectSelectorSheetProps> = ({
 
   return (
     <AppSheet
+      sheet="project-selector"
       visible={visible}
       onClose={onClose}
       snapPoints={['45%']}

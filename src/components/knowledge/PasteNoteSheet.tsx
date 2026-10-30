@@ -83,6 +83,7 @@ export const PasteNoteSheet: React.FC<PasteNoteSheetProps> = ({
 
   return (
     <AppSheet
+      sheet="paste-note"
       visible={visible}
       onClose={close}
       onHeaderClosePress={close}

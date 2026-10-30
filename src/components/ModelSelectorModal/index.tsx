@@ -298,6 +298,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
     isLoading || isLoadingImage || loadingRemoteTextModelKey !== null;
   return (
     <AppSheet
+      sheet="model-selector"
       visible={visible}
       onClose={onClose}
       onClosed={onClosed}

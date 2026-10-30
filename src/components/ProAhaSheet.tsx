@@ -24,7 +24,7 @@ export const ProAhaSheet: React.FC<ProAhaSheetProps> = ({ visible, onClose, onRe
   };
 
   return (
-    <AppSheet visible={visible} onClose={onClose} enableDynamicSizing title="Off Grid AI Pro">
+    <AppSheet sheet="pro-aha" visible={visible} onClose={onClose} enableDynamicSizing title="Off Grid AI Pro">
       <View style={styles.content}>
         <Text style={styles.headline}>It already knows what you did today.</Text>
         <Text style={styles.subheadline}>{pricing.sheetSubheadline}</Text>
