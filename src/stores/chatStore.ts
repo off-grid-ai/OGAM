@@ -6,6 +6,7 @@ import {
 } from '../utils/messageContent';
 import { generateId } from '../utils/generateId';
 import { createHydrationGatedStorage } from '../utils/hydrationGatedStorage';
+import { createChunkedStorage, readOversizedRow } from '../utils/chunkedStorage';
 import {
   finalizeStreamedReply,
   type ReplyEnd,
@@ -193,8 +194,9 @@ const NO_REPLY_FORMING: StreamingFields = {
   isThinking: false,
 };
 
+// Chunked: a long chat history outgrows the single row Android can read back.
 const chatStorage = createHydrationGatedStorage<PersistedChatState>(
-  undefined,
+  createChunkedStorage(undefined, readOversizedRow),
   (previous, next) =>
     previous.conversations === next.conversations &&
     previous.activeConversationId === next.activeConversationId,
