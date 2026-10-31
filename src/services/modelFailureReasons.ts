@@ -41,7 +41,8 @@ export function modelNotReadyAlert(
         title: 'Not Enough Memory',
         message:
           `${detail ? `${detail}\n\n` : ''}` +
-          'Close other apps to free up memory, then tap Retry. You can also unload other models from the Home screen.',
+          // The card's own button frees our models; no button is named here, because its label differs.
+          'Close other apps to free up memory, then try again.',
       };
     case 'load-in-progress':
       return {
