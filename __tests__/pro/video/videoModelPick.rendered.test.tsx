@@ -40,3 +40,18 @@ it('the model in use shows a check, another an empty circle, and a tap on the ro
   rtl.fireEvent.press(view.getByTestId(`video-model-row-${TURBO}`));
   expect(store.getState().activeVideoModelId).toBe(TURBO);
 }, 60_000);
+
+it('lists the models on this phone first, the one in use on top, with no repeated subtitle', async () => {
+  const app = await launchStudioApp(undefined, { phoneEngine: true });
+  const { view, rtl } = app;
+  installOnPhone(rtl, [LIGHT21, TURBO], TURBO);
+  rtl.fireEvent.press(await view.findByTestId('home-tab'));
+  rtl.fireEvent.press(await view.findByTestId('model-summary-video-open'));
+  await view.findByTestId(`video-model-row-${TURBO}`);
+  const rows = view.UNSAFE_root
+    .findAll((node: { props: { testID?: unknown } }) => [LIGHT21, TURBO].some(id => node.props.testID === `video-model-row-${id}`))
+    .map((node: { props: { testID: string } }) => node.props.testID)
+    .filter((id: string, index: number, all: string[]) => all.indexOf(id) === index);
+  expect(rows).toEqual([`video-model-row-${TURBO}`, `video-model-row-${LIGHT21}`]);
+  expect(view.queryByText(/Loads when generation starts/)).toBeNull();
+}, 60_000);
