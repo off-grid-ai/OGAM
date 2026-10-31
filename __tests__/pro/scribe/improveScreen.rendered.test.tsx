@@ -1,7 +1,8 @@
 /**
  * The Improve screen, as the person meets it from another app's selection.
  *
- * SPEC: with no text model, Improve says rewrites need one. With the phone's model, three versions
+ * SPEC: with no text model, Improve says rewrites need one; when I come back with a model picked,
+ * the versions fill in without another tap. With the phone's model, three versions
  * fill in; I pick one and Copy puts exactly that text on the clipboard and says it was copied. When
  * the Android selection menu opened Improve (a native entry injected how to give text back), Replace
  * hands exactly the picked text back to the app it came from.
@@ -47,18 +48,19 @@ async function loadTextModel(boundary: NativeBoundary): Promise<void> {
   });
 }
 
-/** Improve opened on `params`, inside a real stack navigator. */
+/** Improve opened on `params`, inside a real stack navigator with one other screen to visit. */
 function openImprove(params: { text: string; apply: 'copy' | 'replace' }) {
   const rtl = requireRTL();
   const ReactRuntime = require('react') as typeof React;
-  const { NavigationContainer } = require('@react-navigation/native');
+  const { NavigationContainer, createNavigationContainerRef } = require('@react-navigation/native');
+  const navigation = createNavigationContainerRef();
   const { createNativeStackNavigator } = require('@react-navigation/native-stack');
   const { ImproveScreen } = requirePro<ScreenModule>('@offgrid/pro/scribe/ui/ImproveScreen')!;
   const Stack = createNativeStackNavigator();
   const view = rtl.render(
     ReactRuntime.createElement(
       NavigationContainer,
-      null,
+      { ref: navigation },
       ReactRuntime.createElement(
         Stack.Navigator,
         { screenOptions: { headerShown: false } },
@@ -67,10 +69,11 @@ function openImprove(params: { text: string; apply: 'copy' | 'replace' }) {
           component: ImproveScreen,
           initialParams: params,
         }),
+        ReactRuntime.createElement(Stack.Screen, { name: 'Elsewhere', component: () => null }),
       ),
     ),
   );
-  return { rtl, view };
+  return { rtl, view, navigation };
 }
 
 describePro('Improve screen', () => {
@@ -83,6 +86,26 @@ describePro('Improve screen', () => {
 
     expect(await view.findByTestId('improve-no-model')).toBeTruthy();
     expect(view.queryByTestId('improve-copied')).toBeNull();
+  });
+
+  it('coming back with a model picked fills in the versions', async () => {
+    const boundary = installPhone();
+    const { useAppStore } = require('../../../src/stores');
+    useAppStore.setState({ downloadedModels: [], activeModelId: null });
+
+    const { rtl, view, navigation } = openImprove({ text: DRAFT, apply: 'copy' });
+    expect(await view.findByTestId('improve-no-model')).toBeTruthy();
+
+    rtl.act(() => navigation.navigate('Elsewhere'));
+    await loadTextModel(boundary);
+    boundary.llama!.scriptCompletion({ text: VERSIONS });
+    rtl.act(() => navigation.goBack());
+
+    await rtl.waitFor(() =>
+      expect(view.getByTestId('improve-option-0').props.accessibilityState?.busy).toBe(false),
+    );
+    expect(view.queryByTestId('improve-no-model')).toBeNull();
+    expect(view.getByTestId('improve-option-0')).toHaveTextContent('Could you send the report today?');
   });
 
   it('Copy puts the version I picked on the clipboard and says so', async () => {
