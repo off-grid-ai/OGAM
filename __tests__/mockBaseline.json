@@ -271,7 +271,6 @@
   "__tests__/unit/hooks/useEjectAllModels.test.ts": 1,
   "__tests__/unit/hooks/useImageGenerationSettings.test.ts": 2,
   "__tests__/unit/hooks/useModelLoading.test.ts": 3,
-  "__tests__/unit/hooks/useOpenProTools.test.tsx": 1,
   "__tests__/unit/hooks/useVoiceRecording.test.ts": 1,
   "__tests__/unit/mcp/McpToolExtension.test.ts": 5,
   "__tests__/unit/screens/ChatScreen/useSaveImage.test.ts": 2,
