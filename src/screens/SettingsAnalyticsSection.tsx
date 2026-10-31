@@ -29,8 +29,12 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
   const crashes = useAppStore(s => s.settings.analyticsCrashes);
   const [showLog, setShowLog] = useState(false);
 
-  const toggle = (label: string, value: boolean, onChange: (next: boolean) => void) => (
+  // Each toggle carries an icon so its words line up with the rows below.
+  const toggle = (label: string, icon: string, value: boolean, onChange: (next: boolean) => void) => (
     <View style={styles.navItem}>
+      <View style={styles.navItemIcon}>
+        <Icon name={icon} size={16} color={colors.textSecondary} />
+      </View>
       <View style={styles.navItemContent}>
         <Text style={styles.navItemTitle}>{label}</Text>
       </View>
@@ -48,10 +52,10 @@ export const SettingsAnalyticsSection: React.FC<SettingsAnalyticsSectionProps> =
     <AnimatedEntry index={10} staggerMs={40} trigger={focusTrigger}>
       <Text style={styles.sectionLabel}>Analytics</Text>
       <View style={styles.navSection} testID="settings-analytics">
-        {toggle('Anonymous stats', usage, next => {
+        {toggle('Anonymous stats', 'bar-chart-2', usage, next => {
           setAnalyticsConsent({ usage: next }, 'settings').catch(ignore);
         })}
-        {toggle('Crash reports', crashes, next => {
+        {toggle('Crash reports', 'activity', crashes, next => {
           setAnalyticsConsent({ crashes: next }, 'settings').catch(ignore);
         })}
         <TouchableOpacity style={styles.navItem} onPress={onWhatWeShare} testID="settings-what-we-share">
