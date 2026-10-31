@@ -83,7 +83,8 @@ jobs:
           path: _shared
           ref: main
           fetch-depth: 0
-          persist-credentials: false
+          # uat.sh --plan fetches shared's origin/main to check it is current; shared is private.
+          persist-credentials: true
       - run: mv _shared ../shared
       - name: Pin the commit
         id: sha
